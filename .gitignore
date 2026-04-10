@@ -2,6 +2,7 @@
 Thumbs.db
 
 # Python
+*.egg-info/
 __pycache__/
 *.py[cod]
 .pytest_cache/
@@ -19,6 +20,11 @@ coverage.xml
 node_modules/
 dist/
 .vite/
+frontend/test-results/
+frontend/playwright-report/
+
+# Local e2e sqlite
+e2e.db
 
 # IDE
 .vscode/

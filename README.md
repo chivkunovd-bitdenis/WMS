@@ -13,6 +13,14 @@ Monorepo:
 docker compose up -d --build
 ```
 
+Миграции БД (после изменений схемы):
+
+```bash
+cd backend && pip install -e ".[dev]" && alembic upgrade head
+```
+
+Первый запуск API в Docker выполняет `alembic upgrade head` перед `uvicorn`.
+
 ## CI gates (Definition of Done)
 
 - `ruff check .`
