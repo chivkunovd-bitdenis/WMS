@@ -5,8 +5,9 @@ services:
       POSTGRES_DB: wms
       POSTGRES_USER: postgres
       POSTGRES_PASSWORD: postgres
+    # Host 5433: избегаем конфликта с локальным PostgreSQL на :5432
     ports:
-      - "5432:5432"
+      - "5433:5432"
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U postgres -d wms"]
       interval: 5s
