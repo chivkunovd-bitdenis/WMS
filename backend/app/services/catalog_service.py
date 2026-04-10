@@ -50,6 +50,22 @@ async def get_warehouse(
     return wh
 
 
+async def get_storage_location_in_warehouse(
+    session: AsyncSession,
+    tenant_id: uuid.UUID,
+    warehouse_id: uuid.UUID,
+    location_id: uuid.UUID,
+) -> StorageLocation | None:
+    loc = await session.get(StorageLocation, location_id)
+    if (
+        loc is None
+        or loc.tenant_id != tenant_id
+        or loc.warehouse_id != warehouse_id
+    ):
+        return None
+    return loc
+
+
 async def list_locations(
     session: AsyncSession, tenant_id: uuid.UUID, warehouse_id: uuid.UUID
 ) -> list[StorageLocation]:

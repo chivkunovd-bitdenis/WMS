@@ -52,6 +52,10 @@ class InboundIntakeRequestOut(BaseModel):
     lines: list[InboundIntakeLineOut]
 
 
+class InboundIntakePostBody(BaseModel):
+    storage_location_id: uuid.UUID
+
+
 def _line_out_from_orm(line: InboundIntakeLine, product: Product) -> InboundIntakeLineOut:
     return InboundIntakeLineOut(
         id=str(line.id),
@@ -206,6 +210,51 @@ async def submit_inbound_request(
             raise HTTPException(
                 status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
                 detail="submit_empty",
+            ) from None
+        raise
+    r2 = await svc.get_request(session, user.tenant_id, r.id)
+    if r2 is None:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="request_missing",
+        )
+    return InboundIntakeRequestOut(
+        id=str(r2.id),
+        warehouse_id=str(r2.warehouse_id),
+        status=r2.status,
+        lines=[_line_out_from_orm(ln, ln.product) for ln in r2.lines],
+    )
+
+
+@router.post("/{request_id}/post", response_model=InboundIntakeRequestOut)
+async def post_inbound_request(
+    request_id: uuid.UUID,
+    body: InboundIntakePostBody,
+    user: Annotated[User, Depends(get_current_user)],
+    session: Annotated[AsyncSession, Depends(get_db)],
+) -> InboundIntakeRequestOut:
+    try:
+        r = await svc.post_request(
+            session,
+            user.tenant_id,
+            request_id,
+            storage_location_id=body.storage_location_id,
+        )
+    except InboundIntakeError as exc:
+        if exc.code == "request_not_found":
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="request_not_found",
+            ) from None
+        if exc.code == "not_submitted":
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail="not_submitted",
+            ) from None
+        if exc.code == "location_not_found":
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="location_not_found",
             ) from None
         raise
     r2 = await svc.get_request(session, user.tenant_id, r.id)

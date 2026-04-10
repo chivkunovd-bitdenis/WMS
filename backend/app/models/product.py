@@ -19,6 +19,7 @@ from app.models.base import Base
 
 if TYPE_CHECKING:
     from app.models.inbound_intake import InboundIntakeLine
+    from app.models.inventory_balance import InventoryBalance
     from app.models.seller import Seller
     from app.models.tenant import Tenant
 
@@ -54,5 +55,9 @@ class Product(Base):
     seller: Mapped[Seller | None] = relationship("Seller", back_populates="products")
     inbound_intake_lines: Mapped[list[InboundIntakeLine]] = relationship(
         "InboundIntakeLine",
+        back_populates="product",
+    )
+    inventory_balances: Mapped[list[InventoryBalance]] = relationship(
+        "InventoryBalance",
         back_populates="product",
     )

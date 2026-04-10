@@ -10,6 +10,7 @@ from sqlalchemy.orm import Mapped, mapped_column, relationship
 from app.models.base import Base
 
 if TYPE_CHECKING:
+    from app.models.inventory_balance import InventoryBalance
     from app.models.tenant import Tenant
     from app.models.warehouse import Warehouse
 
@@ -39,4 +40,8 @@ class StorageLocation(Base):
     tenant: Mapped[Tenant] = relationship("Tenant", back_populates="locations")
     warehouse: Mapped[Warehouse] = relationship(
         "Warehouse", back_populates="locations"
+    )
+    inventory_balances: Mapped[list[InventoryBalance]] = relationship(
+        "InventoryBalance",
+        back_populates="storage_location",
     )

@@ -11,6 +11,7 @@ from app.models.base import Base
 
 if TYPE_CHECKING:
     from app.models.inbound_intake import InboundIntakeRequest
+    from app.models.inventory_balance import InventoryBalance
     from app.models.product import Product
     from app.models.seller import Seller
     from app.models.storage_location import StorageLocation
@@ -41,5 +42,9 @@ class Tenant(Base):
     products: Mapped[list[Product]] = relationship("Product", back_populates="tenant")
     inbound_intake_requests: Mapped[list[InboundIntakeRequest]] = relationship(
         "InboundIntakeRequest",
+        back_populates="tenant",
+    )
+    inventory_balances: Mapped[list[InventoryBalance]] = relationship(
+        "InventoryBalance",
         back_populates="tenant",
     )

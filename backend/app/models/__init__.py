@@ -2,6 +2,7 @@
 
 from app.models.base import Base
 from app.models.inbound_intake import InboundIntakeLine, InboundIntakeRequest
+from app.models.inventory_balance import InventoryBalance
 from app.models.product import Product
 from app.models.seller import Seller
 from app.models.storage_location import StorageLocation
@@ -13,6 +14,7 @@ __all__ = [
     "Base",
     "InboundIntakeLine",
     "InboundIntakeRequest",
+    "InventoryBalance",
     "Product",
     "Seller",
     "StorageLocation",

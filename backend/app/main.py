@@ -11,6 +11,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from app.api.auth import router as auth_router
 from app.api.health import router as health_router
 from app.api.inbound_intake import router as inbound_intake_router
+from app.api.inventory_balances import router as inventory_balances_router
 from app.api.products import router as products_router
 from app.api.warehouses import router as warehouses_router
 from app.db.session import engine
@@ -48,6 +49,7 @@ def create_app() -> FastAPI:
     app.include_router(warehouses_router)
     app.include_router(products_router)
     app.include_router(inbound_intake_router)
+    app.include_router(inventory_balances_router)
     return app
 
 

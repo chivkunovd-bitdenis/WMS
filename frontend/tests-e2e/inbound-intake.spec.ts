@@ -1,6 +1,10 @@
 import { test, expect } from '@playwright/test';
 
-import { waitForGetOk, waitForPostOk } from './api-waits';
+import {
+  waitForGetOk,
+  waitForLocationsListGet,
+  waitForPostOk,
+} from './api-waits';
 
 test('create inbound request, add line, submit — UI and API', async ({ page }) => {
   const slug = `ff-inb-${Date.now()}`;
@@ -32,6 +36,13 @@ test('create inbound request, add line, submit — UI and API', async ({ page })
 
   await page.getByTestId('warehouse-list').getByTestId('warehouse-item').first().click();
   await expect(page.getByTestId('inbound-create-submit')).toBeEnabled();
+
+  await page.getByTestId('location-code').fill('RCV-E2E');
+  await Promise.all([
+    waitForPostOk(page, '/api/warehouses', (u) => u.includes('/locations')),
+    waitForLocationsListGet(page),
+    page.getByTestId('location-submit').click(),
+  ]);
 
   await page.getByTestId('product-name').fill('Товар');
   await page.getByTestId('product-sku').fill(sku);
@@ -82,4 +93,20 @@ test('create inbound request, add line, submit — UI and API', async ({ page })
   await expect(
     page.getByTestId('inbound-requests-list').getByTestId('inbound-request-item').first(),
   ).toContainText('submitted');
+
+  await page.getByTestId('inbound-post-location').selectOption({ label: 'RCV-E2E' });
+  const [postRes] = await Promise.all([
+    waitForPostOk(page, '/api/operations/inbound-intake-requests', (u) =>
+      u.includes('/post'),
+    ),
+    page.getByTestId('inbound-post-submit').click(),
+  ]);
+  expect(postRes.ok()).toBeTruthy();
+  await expect(page.getByTestId('inbound-detail-status')).toContainText('posted');
+  const invRow = page
+    .getByTestId('inventory-balance-list')
+    .getByTestId('inventory-balance-row')
+    .first();
+  await expect(invRow).toContainText(sku);
+  await expect(invRow).toContainText('4');
 });

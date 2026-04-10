@@ -46,6 +46,9 @@ class InboundIntakeRequest(Base):
     submitted_at: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True), nullable=True
     )
+    posted_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
 
     tenant: Mapped[Tenant] = relationship("Tenant", back_populates="inbound_intake_requests")
     warehouse: Mapped[Warehouse] = relationship(

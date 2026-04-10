@@ -90,6 +90,15 @@ export default function App() {
   )
   const [opsError, setOpsError] = useState<string | null>(null)
   const [opsBusy, setOpsBusy] = useState(false)
+  const [postingLocations, setPostingLocations] = useState<LocationRow[]>([])
+  const [postedInventoryRows, setPostedInventoryRows] = useState<
+    {
+      product_id: string
+      sku_code: string
+      product_name: string
+      quantity: number
+    }[]
+  >([])
 
   const loadMe = useCallback(async (t: string) => {
     setLoading(true)
@@ -223,6 +232,8 @@ export default function App() {
       setInboundSummaries([])
       setSelectedInboundId(null)
       setInboundDetail(null)
+      setPostingLocations([])
+      setPostedInventoryRows([])
       setCatalogError(null)
       setOpsError(null)
       return
@@ -233,10 +244,18 @@ export default function App() {
       try {
         await refreshWarehouses(token)
         await refreshProducts(token)
-        await refreshInboundList(token)
       } catch (e) {
         setCatalogError(
           e instanceof Error ? e.message : 'Не удалось загрузить каталог.',
+        )
+      }
+    })()
+    void (async () => {
+      try {
+        await refreshInboundList(token)
+      } catch (e) {
+        setOpsError(
+          e instanceof Error ? e.message : 'Не удалось загрузить заявки.',
         )
       }
     })()
@@ -258,6 +277,38 @@ export default function App() {
       }
     })()
   }, [token, selectedInboundId, refreshInboundDetail])
+
+  useEffect(() => {
+    setPostedInventoryRows([])
+  }, [selectedInboundId])
+
+  useEffect(() => {
+    if (!token || !inboundDetail || inboundDetail.status !== 'submitted') {
+      setPostingLocations([])
+      return
+    }
+    void (async () => {
+      try {
+        const res = await fetch(
+          apiUrl(`/warehouses/${inboundDetail.warehouse_id}/locations`),
+          { headers: authHeaders(token) },
+        )
+        if (!res.ok) {
+          setPostingLocations([])
+          return
+        }
+        setPostingLocations((await res.json()) as LocationRow[])
+      } catch {
+        setPostingLocations([])
+      }
+    })()
+  }, [
+    token,
+    inboundDetail?.id,
+    inboundDetail?.status,
+    inboundDetail?.warehouse_id,
+    authHeaders,
+  ])
 
   useEffect(() => {
     if (!token || !selectedWarehouseId) {
@@ -374,6 +425,8 @@ export default function App() {
     setSelectedInboundId(null)
     setInboundDetail(null)
     setOpsError(null)
+    setPostingLocations([])
+    setPostedInventoryRows([])
   }
 
   async function onCreateWarehouse(e: React.FormEvent<HTMLFormElement>) {
@@ -620,6 +673,63 @@ export default function App() {
     }
   }
 
+  async function onPostInboundRequest(e: React.FormEvent<HTMLFormElement>) {
+    e.preventDefault()
+    const form = e.currentTarget
+    if (!token || !selectedInboundId) {
+      return
+    }
+    setOpsError(null)
+    setOpsBusy(true)
+    try {
+      const fd = new FormData(form)
+      const storage_location_id = String(
+        fd.get('inbound_post_location_id') ?? '',
+      )
+      const res = await fetch(
+        apiUrl(
+          `/operations/inbound-intake-requests/${selectedInboundId}/post`,
+        ),
+        {
+          method: 'POST',
+          headers: {
+            ...authHeaders(token),
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({ storage_location_id }),
+        },
+      )
+      if (!res.ok) {
+        setOpsError(await readApiErrorMessage(res))
+        return
+      }
+      await refreshInboundList(token)
+      await refreshInboundDetail(token, selectedInboundId)
+      const br = await fetch(
+        apiUrl(
+          `/operations/inventory-balances?storage_location_id=${encodeURIComponent(storage_location_id)}`,
+        ),
+        { headers: authHeaders(token) },
+      )
+      if (br.ok) {
+        setPostedInventoryRows(
+          (await br.json()) as {
+            product_id: string
+            sku_code: string
+            product_name: string
+            quantity: number
+          }[],
+        )
+      }
+    } catch (e) {
+      setOpsError(
+        e instanceof Error ? e.message : 'Не удалось провести приёмку.',
+      )
+    } finally {
+      setOpsBusy(false)
+    }
+  }
+
   if (token && me) {
     return (
       <main data-testid="app-root" className="shell">
@@ -824,8 +934,9 @@ export default function App() {
           <section className="card">
             <h2>Приёмка</h2>
             <p className="subtle">
-              Заявка создаётся для выбранного склада. Остатки на складе не
-              меняются до отдельной операции проведения.
+              Заявка создаётся для выбранного склада. Остатки в ячейке
+              появляются после проведения (все строки заявки в одну выбранную
+              ячейку).
             </p>
             <form
               data-testid="inbound-create-form"
@@ -942,6 +1053,54 @@ export default function App() {
                   >
                     {opsBusy ? '…' : 'Отправить заявку'}
                   </button>
+                ) : null}
+                {inboundDetail.status === 'submitted' ? (
+                  <form
+                    data-testid="inbound-post-form"
+                    noValidate
+                    onSubmit={(e) => void onPostInboundRequest(e)}
+                  >
+                    <label>
+                      Ячейка для оприходования
+                      <select
+                        name="inbound_post_location_id"
+                        data-testid="inbound-post-location"
+                        required
+                        defaultValue=""
+                      >
+                        <option value="" disabled>
+                          Выберите ячейку
+                        </option>
+                        {postingLocations.map((loc) => (
+                          <option key={loc.id} value={loc.id}>
+                            {loc.code}
+                          </option>
+                        ))}
+                      </select>
+                    </label>
+                    <button
+                      type="submit"
+                      data-testid="inbound-post-submit"
+                      disabled={opsBusy || postingLocations.length === 0}
+                    >
+                      {opsBusy ? '…' : 'Провести приёмку'}
+                    </button>
+                  </form>
+                ) : null}
+                {postedInventoryRows.length > 0 ? (
+                  <ul
+                    className="list-plain"
+                    data-testid="inventory-balance-list"
+                  >
+                    {postedInventoryRows.map((row) => (
+                      <li
+                        key={row.product_id}
+                        data-testid="inventory-balance-row"
+                      >
+                        {row.sku_code} — {row.quantity} шт
+                      </li>
+                    ))}
+                  </ul>
                 ) : null}
               </div>
             ) : null}

@@ -23,7 +23,8 @@ export default defineConfig({
   },
   webServer: [
     {
-      command: `python3 -m uvicorn app.main:app --host 127.0.0.1 --port ${e2eApiPort}`,
+      // Fresh DB file: SQLAlchemy create_all does not migrate existing tables; stale e2e.db breaks schema.
+      command: `rm -f e2e.db && python3 -m uvicorn app.main:app --host 127.0.0.1 --port ${e2eApiPort}`,
       cwd: backendDir,
       env: {
         ...process.env,
