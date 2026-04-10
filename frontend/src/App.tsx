@@ -20,6 +20,28 @@ type ProductRow = {
   volume_liters: number
 }
 
+type InboundSummaryRow = {
+  id: string
+  warehouse_id: string
+  status: string
+  line_count: number
+}
+
+type InboundLineRow = {
+  id: string
+  product_id: string
+  sku_code: string
+  product_name: string
+  expected_qty: number
+}
+
+type InboundDetailRow = {
+  id: string
+  warehouse_id: string
+  status: string
+  lines: InboundLineRow[]
+}
+
 async function readApiErrorMessage(res: Response): Promise<string> {
   try {
     const text = await res.text()
@@ -57,6 +79,17 @@ export default function App() {
   const [products, setProducts] = useState<ProductRow[]>([])
   const [catalogError, setCatalogError] = useState<string | null>(null)
   const [catalogBusy, setCatalogBusy] = useState(false)
+  const [inboundSummaries, setInboundSummaries] = useState<InboundSummaryRow[]>(
+    [],
+  )
+  const [selectedInboundId, setSelectedInboundId] = useState<string | null>(
+    null,
+  )
+  const [inboundDetail, setInboundDetail] = useState<InboundDetailRow | null>(
+    null,
+  )
+  const [opsError, setOpsError] = useState<string | null>(null)
+  const [opsBusy, setOpsBusy] = useState(false)
 
   const loadMe = useCallback(async (t: string) => {
     setLoading(true)
@@ -146,6 +179,33 @@ export default function App() {
     [authHeaders],
   )
 
+  const refreshInboundList = useCallback(
+    async (t: string) => {
+      const res = await fetch(apiUrl('/operations/inbound-intake-requests'), {
+        headers: authHeaders(t),
+      })
+      if (!res.ok) {
+        throw new Error(await readApiErrorMessage(res))
+      }
+      setInboundSummaries((await res.json()) as InboundSummaryRow[])
+    },
+    [authHeaders],
+  )
+
+  const refreshInboundDetail = useCallback(
+    async (t: string, requestId: string) => {
+      const res = await fetch(
+        apiUrl(`/operations/inbound-intake-requests/${requestId}`),
+        { headers: authHeaders(t) },
+      )
+      if (!res.ok) {
+        throw new Error(await readApiErrorMessage(res))
+      }
+      setInboundDetail((await res.json()) as InboundDetailRow)
+    },
+    [authHeaders],
+  )
+
   useEffect(() => {
     if (token) {
       void loadMe(token)
@@ -160,21 +220,44 @@ export default function App() {
       setLocations([])
       setProducts([])
       setSelectedWarehouseId(null)
+      setInboundSummaries([])
+      setSelectedInboundId(null)
+      setInboundDetail(null)
       setCatalogError(null)
+      setOpsError(null)
       return
     }
     setCatalogError(null)
+    setOpsError(null)
     void (async () => {
       try {
         await refreshWarehouses(token)
         await refreshProducts(token)
+        await refreshInboundList(token)
       } catch (e) {
         setCatalogError(
           e instanceof Error ? e.message : 'Не удалось загрузить каталог.',
         )
       }
     })()
-  }, [token, me, refreshWarehouses, refreshProducts])
+  }, [token, me, refreshWarehouses, refreshProducts, refreshInboundList])
+
+  useEffect(() => {
+    if (!token || !selectedInboundId) {
+      setInboundDetail(null)
+      return
+    }
+    void (async () => {
+      try {
+        setOpsError(null)
+        await refreshInboundDetail(token, selectedInboundId)
+      } catch (e) {
+        setOpsError(
+          e instanceof Error ? e.message : 'Не удалось загрузить заявку.',
+        )
+      }
+    })()
+  }, [token, selectedInboundId, refreshInboundDetail])
 
   useEffect(() => {
     if (!token || !selectedWarehouseId) {
@@ -287,6 +370,10 @@ export default function App() {
     setToken(null)
     setMe(null)
     setError(null)
+    setInboundSummaries([])
+    setSelectedInboundId(null)
+    setInboundDetail(null)
+    setOpsError(null)
   }
 
   async function onCreateWarehouse(e: React.FormEvent<HTMLFormElement>) {
@@ -417,6 +504,119 @@ export default function App() {
       )
     } finally {
       setCatalogBusy(false)
+    }
+  }
+
+  async function onCreateInboundRequest(e: React.FormEvent<HTMLFormElement>) {
+    e.preventDefault()
+    const form = e.currentTarget
+    if (!token) {
+      return
+    }
+    setOpsError(null)
+    setOpsBusy(true)
+    try {
+      const warehouseId =
+        selectedWarehouseId ??
+        (warehouses.length === 1 ? warehouses[0]!.id : null)
+      if (!warehouseId) {
+        setOpsError('Выберите склад в списке выше.')
+        return
+      }
+      const res = await fetch(apiUrl('/operations/inbound-intake-requests'), {
+        method: 'POST',
+        headers: {
+          ...authHeaders(token),
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ warehouse_id: warehouseId }),
+      })
+      if (!res.ok) {
+        setOpsError(await readApiErrorMessage(res))
+        return
+      }
+      const created = (await res.json()) as InboundDetailRow
+      form.reset()
+      await refreshInboundList(token)
+      setSelectedInboundId(created.id)
+    } catch (e) {
+      setOpsError(
+        e instanceof Error ? e.message : 'Не удалось создать заявку.',
+      )
+    } finally {
+      setOpsBusy(false)
+    }
+  }
+
+  async function onAddInboundLine(e: React.FormEvent<HTMLFormElement>) {
+    e.preventDefault()
+    const form = e.currentTarget
+    if (!token || !selectedInboundId) {
+      return
+    }
+    setOpsError(null)
+    setOpsBusy(true)
+    try {
+      const fd = new FormData(form)
+      const product_id = String(fd.get('inbound_product_id') ?? '')
+      const expected_qty = Number(fd.get('inbound_qty'))
+      const res = await fetch(
+        apiUrl(
+          `/operations/inbound-intake-requests/${selectedInboundId}/lines`,
+        ),
+        {
+          method: 'POST',
+          headers: {
+            ...authHeaders(token),
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({ product_id, expected_qty }),
+        },
+      )
+      if (!res.ok) {
+        setOpsError(await readApiErrorMessage(res))
+        return
+      }
+      form.reset()
+      await refreshInboundList(token)
+      await refreshInboundDetail(token, selectedInboundId)
+    } catch (e) {
+      setOpsError(
+        e instanceof Error ? e.message : 'Не удалось добавить строку.',
+      )
+    } finally {
+      setOpsBusy(false)
+    }
+  }
+
+  async function onSubmitInboundRequest() {
+    if (!token || !selectedInboundId) {
+      return
+    }
+    setOpsError(null)
+    setOpsBusy(true)
+    try {
+      const res = await fetch(
+        apiUrl(
+          `/operations/inbound-intake-requests/${selectedInboundId}/submit`,
+        ),
+        {
+          method: 'POST',
+          headers: authHeaders(token),
+        },
+      )
+      if (!res.ok) {
+        setOpsError(await readApiErrorMessage(res))
+        return
+      }
+      await refreshInboundList(token)
+      await refreshInboundDetail(token, selectedInboundId)
+    } catch (e) {
+      setOpsError(
+        e instanceof Error ? e.message : 'Не удалось отправить заявку.',
+      )
+    } finally {
+      setOpsBusy(false)
     }
   }
 
@@ -613,6 +813,138 @@ export default function App() {
                 </li>
               ))}
             </ul>
+          </section>
+        </div>
+        <div className="stack" data-testid="operations-section">
+          {opsError ? (
+            <p className="error" data-testid="operations-error">
+              {opsError}
+            </p>
+          ) : null}
+          <section className="card">
+            <h2>Приёмка</h2>
+            <p className="subtle">
+              Заявка создаётся для выбранного склада. Остатки на складе не
+              меняются до отдельной операции проведения.
+            </p>
+            <form
+              data-testid="inbound-create-form"
+              noValidate
+              onSubmit={(e) => void onCreateInboundRequest(e)}
+            >
+              <button
+                type="submit"
+                data-testid="inbound-create-submit"
+                disabled={
+                  opsBusy ||
+                  (!selectedWarehouseId && warehouses.length !== 1)
+                }
+              >
+                {opsBusy ? '…' : 'Новая заявка на приёмку'}
+              </button>
+            </form>
+            <ul className="list-plain" data-testid="inbound-requests-list">
+              {inboundSummaries.map((row) => (
+                <li key={row.id}>
+                  <button
+                    type="button"
+                    data-testid="inbound-request-item"
+                    data-status={row.status}
+                    onClick={() => setSelectedInboundId(row.id)}
+                    style={{
+                      width: '100%',
+                      textAlign: 'left',
+                      background:
+                        row.id === selectedInboundId
+                          ? 'rgba(91, 79, 212, 0.12)'
+                          : 'transparent',
+                      border: '1px solid rgba(0,0,0,0.08)',
+                      borderRadius: 8,
+                      padding: '8px 10px',
+                      cursor: 'pointer',
+                    }}
+                  >
+                    <span data-testid="inbound-request-status">{row.status}</span>
+                    {' · '}
+                    строк: {row.line_count}
+                  </button>
+                </li>
+              ))}
+            </ul>
+            {inboundDetail ? (
+              <div data-testid="inbound-detail">
+                <p className="subtle" data-testid="inbound-detail-status">
+                  Статус: {inboundDetail.status}
+                </p>
+                <ul
+                  className="list-plain"
+                  data-testid="inbound-detail-lines"
+                >
+                  {inboundDetail.lines.map((ln) => (
+                    <li
+                      key={ln.id}
+                      data-testid="inbound-detail-line"
+                    >
+                      {ln.product_name} ({ln.sku_code}) — {ln.expected_qty} шт
+                    </li>
+                  ))}
+                </ul>
+                {inboundDetail.status === 'draft' ? (
+                  <form
+                    data-testid="inbound-line-form"
+                    noValidate
+                    onSubmit={(e) => void onAddInboundLine(e)}
+                  >
+                    <label>
+                      Товар
+                      <select
+                        name="inbound_product_id"
+                        data-testid="inbound-line-product"
+                        required
+                        defaultValue=""
+                      >
+                        <option value="" disabled>
+                          Выберите SKU
+                        </option>
+                        {products.map((p) => (
+                          <option key={p.id} value={p.id}>
+                            {p.sku_code} — {p.name}
+                          </option>
+                        ))}
+                      </select>
+                    </label>
+                    <label>
+                      Количество, шт
+                      <input
+                        name="inbound_qty"
+                        data-testid="inbound-line-qty"
+                        type="number"
+                        min={1}
+                        required
+                      />
+                    </label>
+                    <button
+                      type="submit"
+                      data-testid="inbound-line-submit"
+                      disabled={opsBusy || products.length === 0}
+                    >
+                      {opsBusy ? '…' : 'Добавить строку'}
+                    </button>
+                  </form>
+                ) : null}
+                {inboundDetail.status === 'draft' &&
+                inboundDetail.lines.length > 0 ? (
+                  <button
+                    type="button"
+                    data-testid="inbound-submit-request"
+                    disabled={opsBusy}
+                    onClick={() => void onSubmitInboundRequest()}
+                  >
+                    {opsBusy ? '…' : 'Отправить заявку'}
+                  </button>
+                ) : null}
+              </div>
+            ) : null}
           </section>
         </div>
       </main>

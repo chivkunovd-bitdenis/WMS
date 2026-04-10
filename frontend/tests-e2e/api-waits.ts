@@ -12,7 +12,8 @@ function isPostOk(r: Response, pathIncludes: string, urlFilter?: (url: string) =
   if (urlFilter && !urlFilter(url)) {
     return false;
   }
-  return r.status() === 200;
+  const s = r.status();
+  return s >= 200 && s < 300;
 }
 
 export function waitForPostOk(

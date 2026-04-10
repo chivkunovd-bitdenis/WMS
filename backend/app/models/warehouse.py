@@ -10,6 +10,7 @@ from sqlalchemy.orm import Mapped, mapped_column, relationship
 from app.models.base import Base
 
 if TYPE_CHECKING:
+    from app.models.inbound_intake import InboundIntakeRequest
     from app.models.storage_location import StorageLocation
     from app.models.tenant import Tenant
 
@@ -35,4 +36,8 @@ class Warehouse(Base):
     tenant: Mapped[Tenant] = relationship("Tenant", back_populates="warehouses")
     locations: Mapped[list[StorageLocation]] = relationship(
         "StorageLocation", back_populates="warehouse"
+    )
+    inbound_intake_requests: Mapped[list[InboundIntakeRequest]] = relationship(
+        "InboundIntakeRequest",
+        back_populates="warehouse",
     )

@@ -30,6 +30,7 @@ test('register then see dashboard', async ({ page }) => {
   await expect(page.getByTestId('org-name')).toHaveText('E2E FF');
 
   await expect(page.getByTestId('catalog-section')).toBeVisible();
+  await expect(page.getByTestId('operations-section')).toBeVisible();
   await expect(page.getByTestId('warehouse-form')).toBeVisible();
   await expect(page.getByTestId('location-form')).toHaveCount(0);
   await expect(page.getByTestId('product-form')).toBeVisible();
