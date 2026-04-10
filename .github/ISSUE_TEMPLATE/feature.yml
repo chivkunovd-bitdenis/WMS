@@ -1,0 +1,46 @@
+name: Feature
+description: A vertical slice feature with acceptance criteria and e2e scenarios
+title: "[FEAT] "
+labels: ["needs-spec"]
+body:
+  - type: textarea
+    id: user_story
+    attributes:
+      label: User story
+      description: "As a <role>, I want <goal>, so that <value>."
+      placeholder: "As a warehouse operator, I want to receive inbound shipment, so that stock becomes available."
+    validations:
+      required: true
+  - type: textarea
+    id: acceptance
+    attributes:
+      label: Acceptance criteria (Given/When/Then)
+      placeholder: |
+        - Given ..., When ..., Then ...
+        - Given ..., When ..., Then ...
+    validations:
+      required: true
+  - type: textarea
+    id: e2e
+    attributes:
+      label: E2E scenarios (user journeys)
+      description: "1–3 scenarios that must pass via UI (Playwright)."
+      placeholder: |
+        1) Login -> Open Receiving -> Create Receipt -> See it in list
+        2) ...
+    validations:
+      required: true
+  - type: textarea
+    id: ui_states
+    attributes:
+      label: UI states
+      description: "loading / empty / error / success, plus key validation messages"
+    validations:
+      required: false
+  - type: textarea
+    id: out_of_scope
+    attributes:
+      label: Out of scope
+    validations:
+      required: false
+

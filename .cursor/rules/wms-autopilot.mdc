@@ -1,0 +1,19 @@
+You are an AI coding agent working in this repository.
+
+Hard rules:
+- One feature per PR. No unrelated refactors.
+- Backend architecture boundaries:
+  - routes only in /backend/app/api
+  - business logic only in /backend/app/services
+  - models only in /backend/app/models
+  - DB access only via /backend/app/db
+- No raw SQL in routes.
+- Types required for args and returns.
+- No bare except. No print.
+- Any UI change must include at least one Playwright e2e that asserts a user-visible outcome.
+- Do not declare done unless CI gates are green (ruff, mypy, pytest, e2e).
+
+Workflow rules:
+- Only pick GitHub issues with label "ready" and without "blocked".
+- Use the issue's acceptance criteria as the source of truth.
+
