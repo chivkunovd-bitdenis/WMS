@@ -1,3 +1,6 @@
+# Порты на хосте по умолчанию вынесены из «типичных» 8000/5173/5432 — см. README.
+# Переопределение: WMS_DB_PORT, WMS_API_PORT, WMS_WEB_PORT в .env или в shell.
+
 services:
   db:
     image: postgres:16
@@ -5,9 +8,8 @@ services:
       POSTGRES_DB: wms
       POSTGRES_USER: postgres
       POSTGRES_PASSWORD: postgres
-    # Host 5433: избегаем конфликта с локальным PostgreSQL на :5432
     ports:
-      - "5433:5432"
+      - "${WMS_DB_PORT:-5433}:5432"
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U postgres -d wms"]
       interval: 5s
@@ -23,13 +25,15 @@ services:
       db:
         condition: service_healthy
     ports:
-      - "8000:8000"
+      - "${WMS_API_PORT:-18080}:8000"
 
   web:
     build:
       context: ./frontend
+    environment:
+      # Прокси Vite внутри сети compose (браузер → :15173 → /api → api:8000)
+      VITE_API_PROXY: http://api:8000
     depends_on:
       - api
     ports:
-      - "5173:5173"
-
+      - "${WMS_WEB_PORT:-15173}:5173"
