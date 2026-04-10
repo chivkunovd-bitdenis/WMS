@@ -33,3 +33,5 @@ Every feature that changes UI flow must ship with at least one Playwright scenar
 - asserts visible UI state and primary outcomes
 - uses stable selectors (`data-testid`)
 
+The scenario must match the real user path (e.g. register → screen that uses the new API), not an isolated HTTP check. With the default Playwright web server (one API + sqlite file), CI runs **`workers: 1`** to avoid DB lock flakes. In React async submit handlers, capture `const form = e.currentTarget` **before** any `await`, then call `form.reset()` — otherwise Strict Mode can leave `currentTarget` null after awaits.
+

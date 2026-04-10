@@ -10,8 +10,11 @@ from sqlalchemy.orm import Mapped, mapped_column, relationship
 from app.models.base import Base
 
 if TYPE_CHECKING:
+    from app.models.product import Product
     from app.models.seller import Seller
+    from app.models.storage_location import StorageLocation
     from app.models.user import User
+    from app.models.warehouse import Warehouse
 
 
 class Tenant(Base):
@@ -28,3 +31,10 @@ class Tenant(Base):
 
     users: Mapped[list[User]] = relationship("User", back_populates="tenant")
     sellers: Mapped[list[Seller]] = relationship("Seller", back_populates="tenant")
+    warehouses: Mapped[list[Warehouse]] = relationship(
+        "Warehouse", back_populates="tenant"
+    )
+    locations: Mapped[list[StorageLocation]] = relationship(
+        "StorageLocation", back_populates="tenant"
+    )
+    products: Mapped[list[Product]] = relationship("Product", back_populates="tenant")

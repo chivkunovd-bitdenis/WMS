@@ -33,6 +33,10 @@ async def get_current_user(
         if not isinstance(sub, str):
             raise jwt.InvalidTokenError("missing sub")
         user_id = uuid.UUID(sub)
+        tenant_raw = payload.get("tenant_id")
+        if not isinstance(tenant_raw, str):
+            raise jwt.InvalidTokenError("missing tenant_id")
+        token_tenant_id = uuid.UUID(tenant_raw)
     except (jwt.PyJWTError, ValueError):
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
@@ -43,5 +47,10 @@ async def get_current_user(
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="user_not_found",
+        )
+    if user.tenant_id != token_tenant_id:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="tenant_mismatch",
         )
     return user

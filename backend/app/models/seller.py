@@ -10,6 +10,7 @@ from sqlalchemy.orm import Mapped, mapped_column, relationship
 from app.models.base import Base
 
 if TYPE_CHECKING:
+    from app.models.product import Product
     from app.models.tenant import Tenant
     from app.models.user import User
 
@@ -30,3 +31,4 @@ class Seller(Base):
 
     tenant: Mapped[Tenant] = relationship("Tenant", back_populates="sellers")
     users: Mapped[list[User]] = relationship("User", back_populates="seller")
+    products: Mapped[list[Product]] = relationship("Product", back_populates="seller")

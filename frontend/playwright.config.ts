@@ -15,6 +15,8 @@ export default defineConfig({
   timeout: 60_000,
   expect: { timeout: 10_000 },
   retries: process.env.CI ? 2 : 0,
+  // One API + shared sqlite file: parallel workers cause DB locks and flaky catalog writes.
+  workers: process.env.CI ? 1 : undefined,
   use: {
     baseURL: process.env.E2E_BASE_URL ?? 'http://localhost:5173',
     trace: 'on-first-retry',
