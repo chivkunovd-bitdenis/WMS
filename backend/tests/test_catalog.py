@@ -96,6 +96,18 @@ async def test_warehouse_duplicate_code(async_client: AsyncClient) -> None:
 
 
 @pytest.mark.asyncio
+async def test_catalog_endpoints_require_auth(async_client: AsyncClient) -> None:
+    assert (await async_client.get("/warehouses")).status_code == 401
+    assert (await async_client.get("/products")).status_code == 401
+    assert (
+        await async_client.post(
+            "/warehouses",
+            json={"name": "X", "code": "x1"},
+        )
+    ).status_code == 401
+
+
+@pytest.mark.asyncio
 async def test_list_locations_unknown_warehouse(async_client: AsyncClient) -> None:
     suffix = str(int(time.time() * 1000))
     reg = await async_client.post(
