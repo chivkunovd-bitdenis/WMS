@@ -8,11 +8,35 @@ type Me = {
   role: string
 }
 
+async function readApiErrorMessage(res: Response): Promise<string> {
+  try {
+    const text = await res.text()
+    if (!text) {
+      return `Ошибка ${res.status}`
+    }
+    const data = JSON.parse(text) as { detail?: unknown }
+    const d = data.detail
+    if (typeof d === 'string') {
+      return d
+    }
+    if (Array.isArray(d)) {
+      const parts = d.map((x: { msg?: string; loc?: unknown }) =>
+        typeof x?.msg === 'string' ? x.msg : JSON.stringify(x),
+      )
+      return parts.join('; ')
+    }
+    return text.slice(0, 200)
+  } catch {
+    return `Ошибка ${res.status}`
+  }
+}
+
 export default function App() {
   const [token, setToken] = useState<string | null>(() => getStoredToken())
   const [me, setMe] = useState<Me | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [loading, setLoading] = useState(false)
+  const [authBusy, setAuthBusy] = useState(false)
 
   const loadMe = useCallback(async (t: string) => {
     setLoading(true)
@@ -22,14 +46,26 @@ export default function App() {
         headers: { Authorization: `Bearer ${t}` },
       })
       if (!res.ok) {
-        throw new Error(await res.text())
+        const msg = await readApiErrorMessage(res)
+        if (res.status === 401) {
+          throw new Error(
+            `Не удалось загрузить профиль (401). ${msg}. Попробуйте войти снова.`,
+          )
+        }
+        throw new Error(
+          `Не удалось загрузить профиль (${res.status}). ${msg}`,
+        )
       }
       setMe((await res.json()) as Me)
-    } catch {
+    } catch (e) {
       setStoredToken(null)
       setToken(null)
       setMe(null)
-      setError('Сессия недействительна. Войдите снова.')
+      setError(
+        e instanceof Error
+          ? e.message
+          : 'Не удалось связаться с сервером. Проверьте, что API запущен.',
+      )
     } finally {
       setLoading(false)
     }
@@ -46,53 +82,98 @@ export default function App() {
   async function onRegister(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault()
     setError(null)
-    const fd = new FormData(e.currentTarget)
-    const body = {
-      organization_name: String(fd.get('organization_name') ?? ''),
-      slug: String(fd.get('slug') ?? ''),
-      admin_email: String(fd.get('admin_email') ?? ''),
-      password: String(fd.get('password') ?? ''),
+    setAuthBusy(true)
+    try {
+      const fd = new FormData(e.currentTarget)
+      const rawSlug = String(fd.get('slug') ?? '').trim()
+      const slug = rawSlug.toLowerCase().replace(/\s+/g, '-')
+      if (slug.length < 2) {
+        setError('Slug слишком короткий (минимум 2 символа, латиница и дефис).')
+        return
+      }
+      if (!/^[a-z0-9-]+$/.test(slug)) {
+        setError(
+          'Slug: только строчные латинские буквы, цифры и дефис (например my-fulfillment).',
+        )
+        return
+      }
+      const body = {
+        organization_name: String(fd.get('organization_name') ?? '').trim(),
+        slug,
+        admin_email: String(fd.get('admin_email') ?? '').trim(),
+        password: String(fd.get('password') ?? ''),
+      }
+      const res = await fetch(apiUrl('/auth/register'), {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body),
+      })
+      if (!res.ok) {
+        if (res.status === 409) {
+          setError('Такой slug или email уже заняты. Выберите другие.')
+        } else if (res.status === 422) {
+          setError(await readApiErrorMessage(res))
+        } else {
+          setError(await readApiErrorMessage(res))
+        }
+        return
+      }
+      const data = (await res.json()) as { access_token: string }
+      if (!data.access_token) {
+        setError('Сервер не вернул токен. Обратитесь к разработчику.')
+        return
+      }
+      setStoredToken(data.access_token)
+      setToken(data.access_token)
+    } catch {
+      setError(
+        'Сеть: не удалось достучаться до API. Проверьте адрес и что контейнер api запущен.',
+      )
+    } finally {
+      setAuthBusy(false)
     }
-    const res = await fetch(apiUrl('/auth/register'), {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(body),
-    })
-    if (!res.ok) {
-      setError('Регистрация не удалась (slug или email заняты).')
-      return
-    }
-    const data = (await res.json()) as { access_token: string }
-    setStoredToken(data.access_token)
-    setToken(data.access_token)
   }
 
   async function onLogin(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault()
     setError(null)
-    const fd = new FormData(e.currentTarget)
-    const body = {
-      email: String(fd.get('email') ?? ''),
-      password: String(fd.get('password') ?? ''),
+    setAuthBusy(true)
+    try {
+      const fd = new FormData(e.currentTarget)
+      const body = {
+        email: String(fd.get('email') ?? '').trim(),
+        password: String(fd.get('password') ?? ''),
+      }
+      const res = await fetch(apiUrl('/auth/login'), {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body),
+      })
+      if (!res.ok) {
+        if (res.status === 401) {
+          setError('Неверный email или пароль.')
+        } else {
+          setError(await readApiErrorMessage(res))
+        }
+        return
+      }
+      const data = (await res.json()) as { access_token: string }
+      setStoredToken(data.access_token)
+      setToken(data.access_token)
+    } catch {
+      setError(
+        'Сеть: не удалось достучаться до API. Проверьте, что контейнер api запущен.',
+      )
+    } finally {
+      setAuthBusy(false)
     }
-    const res = await fetch(apiUrl('/auth/login'), {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(body),
-    })
-    if (!res.ok) {
-      setError('Неверный email или пароль.')
-      return
-    }
-    const data = (await res.json()) as { access_token: string }
-    setStoredToken(data.access_token)
-    setToken(data.access_token)
   }
 
   function onLogout() {
     setStoredToken(null)
     setToken(null)
     setMe(null)
+    setError(null)
   }
 
   if (token && me) {
@@ -118,7 +199,9 @@ export default function App() {
       <header className="top">
         <h1>WMS</h1>
       </header>
-      {loading ? <p data-testid="loading">Загрузка…</p> : null}
+      {token && loading ? (
+        <p data-testid="loading">Загрузка профиля…</p>
+      ) : null}
       {error ? (
         <p className="error" data-testid="auth-error">
           {error}
@@ -127,14 +210,28 @@ export default function App() {
       <div className="grid2">
         <section className="card">
           <h2>Регистрация фулфилмента</h2>
-          <form data-testid="register-form" onSubmit={(e) => void onRegister(e)}>
+          <p className="hint">
+            Slug — короткое имя на латинице (например <code>acme-ff</code>), без
+            пробелов.
+          </p>
+          <form
+            data-testid="register-form"
+            noValidate
+            onSubmit={(e) => void onRegister(e)}
+          >
             <label>
               Организация
               <input name="organization_name" required />
             </label>
             <label>
               Slug (латиница)
-              <input name="slug" data-testid="register-slug" required pattern="[a-z0-9-]+" />
+              <input
+                name="slug"
+                data-testid="register-slug"
+                required
+                placeholder="acme-ff"
+                autoComplete="off"
+              />
             </label>
             <label>
               Email админа
@@ -144,12 +241,18 @@ export default function App() {
               Пароль
               <input name="password" type="password" minLength={8} required />
             </label>
-            <button type="submit">Создать аккаунт</button>
+            <button type="submit" disabled={authBusy}>
+              {authBusy ? 'Отправка…' : 'Создать аккаунт'}
+            </button>
           </form>
         </section>
         <section className="card">
           <h2>Вход</h2>
-          <form data-testid="login-form" onSubmit={(e) => void onLogin(e)}>
+          <form
+            data-testid="login-form"
+            noValidate
+            onSubmit={(e) => void onLogin(e)}
+          >
             <label>
               Email
               <input name="email" type="email" required />
@@ -158,7 +261,9 @@ export default function App() {
               Пароль
               <input name="password" type="password" required />
             </label>
-            <button type="submit">Войти</button>
+            <button type="submit" disabled={authBusy}>
+              {authBusy ? 'Вход…' : 'Войти'}
+            </button>
           </form>
         </section>
       </div>

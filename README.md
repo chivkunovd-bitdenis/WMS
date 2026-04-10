@@ -37,6 +37,8 @@ cd backend && pip install -e ".[dev]" && alembic upgrade head
 
 Первый запуск API в Docker выполняет `alembic upgrade head` перед `uvicorn`.
 
+Интерактивная документация API (Swagger UI): **http://localhost:18080/docs** — это штатно для FastAPI, к регистрации в интерфейсе не привязано.
+
 ## CI gates (Definition of Done)
 
 - `ruff check .`
