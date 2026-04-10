@@ -2,6 +2,12 @@
 
 This repo is optimized for an “autopilot” development loop.
 
+## Product decisions (source of truth)
+
+Before picking an issue, read **[docs/MVP_DECISIONS_RU.md](docs/MVP_DECISIONS_RU.md)** (RU): tenants, billing liter‑day, WB import‑only, portal scope, printer 58×40.
+
+Epic map for splitting work: **[docs/BACKLOG_EPICS_RU.md](docs/BACKLOG_EPICS_RU.md)**.
+
 ## Autopilot loop (single feature at a time)
 
 1. Pick the next GitHub Issue with label `ready` (skip `blocked`).

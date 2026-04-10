@@ -5,6 +5,8 @@ Monorepo:
 - `backend/`: FastAPI + SQLAlchemy + Alembic
 - `frontend/`: React (Vite) + Playwright e2e
 
+Решения по MVP и интеграциям: **[docs/MVP_DECISIONS_RU.md](docs/MVP_DECISIONS_RU.md)**.
+
 ## Local dev
 
 ```bash
