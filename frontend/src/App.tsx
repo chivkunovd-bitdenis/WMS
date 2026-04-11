@@ -106,6 +106,13 @@ type OutboundMovementRow = {
   created_at: string
 }
 
+type WbImportedCardRow = {
+  nm_id: number
+  vendor_code: string | null
+  title: string | null
+  updated_at: string
+}
+
 async function readApiErrorMessage(res: Response): Promise<string> {
   try {
     const text = await res.text()
@@ -200,6 +207,7 @@ export default function App() {
   const [wbSyncBusy, setWbSyncBusy] = useState(false)
   const [wbJobStatus, setWbJobStatus] = useState<string | null>(null)
   const [wbJobResult, setWbJobResult] = useState<string | null>(null)
+  const [wbImportedCards, setWbImportedCards] = useState<WbImportedCardRow[]>([])
 
   const loadMe = useCallback(async (t: string) => {
     setLoading(true)
@@ -237,6 +245,25 @@ export default function App() {
   const authHeaders = useCallback(
     (t: string) => ({ Authorization: `Bearer ${t}` }),
     [],
+  )
+
+  const refreshWbImportedCards = useCallback(
+    async (t: string, sellerId: string) => {
+      try {
+        const res = await fetch(
+          apiUrl(`/integrations/wildberries/sellers/${sellerId}/imported-cards`),
+          { headers: authHeaders(t) },
+        )
+        if (!res.ok) {
+          setWbImportedCards([])
+          return
+        }
+        setWbImportedCards((await res.json()) as WbImportedCardRow[])
+      } catch {
+        setWbImportedCards([])
+      }
+    },
+    [authHeaders],
   )
 
   const refreshWarehouses = useCallback(
@@ -430,6 +457,7 @@ export default function App() {
       setWbSyncBusy(false)
       setWbJobStatus(null)
       setWbJobResult(null)
+      setWbImportedCards([])
       setCatalogError(null)
       setOpsError(null)
       return
@@ -624,6 +652,14 @@ export default function App() {
       cancelled = true
     }
   }, [token, me?.role, wbSellerId, authHeaders])
+
+  useEffect(() => {
+    if (!token || me?.role !== 'fulfillment_admin' || !wbSellerId) {
+      setWbImportedCards([])
+      return
+    }
+    void refreshWbImportedCards(token, wbSellerId)
+  }, [token, me?.role, wbSellerId, refreshWbImportedCards])
 
   async function onRegister(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault()
@@ -1723,6 +1759,7 @@ export default function App() {
         if (j.status === 'done') {
           const n = j.result_json?.cards_received ?? 0
           setWbJobResult(`Карточек получено: ${n}`)
+          await refreshWbImportedCards(token, wbSellerId)
           break
         }
         if (j.status === 'failed') {
@@ -2045,6 +2082,23 @@ export default function App() {
               {wbJobResult ? (
                 <p data-testid="wb-sync-result">{wbJobResult}</p>
               ) : null}
+              <h3 className="subtle" style={{ marginTop: 16 }}>
+                Импортированные карточки
+              </h3>
+              {wbImportedCards.length === 0 ? (
+                <p className="subtle" data-testid="wb-imported-cards-empty">
+                  Пока нет — выполните синхронизацию.
+                </p>
+              ) : (
+                <ul className="list-plain" data-testid="wb-imported-cards-list">
+                  {wbImportedCards.map((c) => (
+                    <li key={String(c.nm_id)} data-testid="wb-imported-card-item">
+                      nmID {c.nm_id}
+                      {c.vendor_code ? ` · ${c.vendor_code}` : ''}
+                    </li>
+                  ))}
+                </ul>
+              )}
             </section>
           ) : null}
           <section className="card">

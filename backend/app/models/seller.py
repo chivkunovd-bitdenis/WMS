@@ -12,6 +12,7 @@ from app.models.base import Base
 if TYPE_CHECKING:
     from app.models.product import Product
     from app.models.seller_wildberries_credentials import SellerWildberriesCredentials
+    from app.models.seller_wildberries_imported_card import SellerWildberriesImportedCard
     from app.models.tenant import Tenant
     from app.models.user import User
 
@@ -37,5 +38,10 @@ class Seller(Base):
         "SellerWildberriesCredentials",
         back_populates="seller",
         uselist=False,
+        cascade="all, delete-orphan",
+    )
+    wildberries_imported_cards: Mapped[list[SellerWildberriesImportedCard]] = relationship(
+        "SellerWildberriesImportedCard",
+        back_populates="seller",
         cascade="all, delete-orphan",
     )

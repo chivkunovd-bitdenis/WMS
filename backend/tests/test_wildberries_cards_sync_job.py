@@ -68,8 +68,17 @@ async def test_wb_cards_sync_job_happy_path(
         if body["status"] in ("done", "failed"):
             assert body["status"] == "done"
             assert body["result_json"]["cards_received"] == 2
+            assert body["result_json"]["cards_saved"] == 2
             assert body["result_json"]["seller_id"] == sid
             assert body["result_json"]["cursor_present"] is True
+            ic = await async_client.get(
+                f"/integrations/wildberries/sellers/{sid}/imported-cards",
+                headers=h,
+            )
+            assert ic.status_code == 200
+            rows = ic.json()
+            assert len(rows) == 2
+            assert {r["nm_id"] for r in rows} == {1, 2}
             return
     raise AssertionError("job did not finish")
 

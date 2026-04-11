@@ -20,6 +20,7 @@ from app.services.wildberries_credentials_service import (
     get_public_token_status,
     patch_seller_tokens,
 )
+from app.services.wildberries_import_cards_service import list_imported_cards_for_seller
 
 router = APIRouter(prefix="/integrations/wildberries", tags=["integrations"])
 
@@ -35,6 +36,13 @@ class WildberriesSellerTokensOut(BaseModel):
     has_content_token: bool
     has_supplies_token: bool
     updated_at: datetime | None
+
+
+class WildberriesImportedCardOut(BaseModel):
+    nm_id: int
+    vendor_code: str | None
+    title: str | None
+    updated_at: datetime
 
 
 def _parse_token_merge_patch(raw: object) -> tuple[TokenPatchValue, TokenPatchValue]:
@@ -89,6 +97,30 @@ async def wildberries_status(
         content_api_base=settings.wildberries_content_api_base,
         supplies_api_base=settings.wildberries_supplies_api_base,
     )
+
+
+@router.get(
+    "/sellers/{seller_id}/imported-cards",
+    response_model=list[WildberriesImportedCardOut],
+)
+async def list_seller_wildberries_imported_cards(
+    seller_id: uuid.UUID,
+    user: Annotated[User, Depends(require_fulfillment_admin)],
+    session: Annotated[AsyncSession, Depends(get_db)],
+) -> list[WildberriesImportedCardOut]:
+    """Импортированные карточки WB (последний снимок синка)."""
+    rows = await list_imported_cards_for_seller(session, user.tenant_id, seller_id)
+    if rows is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="seller_not_found")
+    return [
+        WildberriesImportedCardOut(
+            nm_id=int(r.nm_id),
+            vendor_code=r.vendor_code,
+            title=r.title,
+            updated_at=r.updated_at,
+        )
+        for r in rows
+    ]
 
 
 @router.get("/sellers/{seller_id}/tokens", response_model=WildberriesSellerTokensOut)

@@ -13,7 +13,7 @@ Epic map for splitting work: **[docs/BACKLOG_EPICS_RU.md](docs/BACKLOG_EPICS_RU.
 1. Pick the next GitHub Issue with label `ready` (skip `blocked`).
 2. Re-state the acceptance criteria (Given/When/Then) and identify impacted modules.
 3. Implement **vertical slice**:
-   - API routes only in `backend/app/api` (в т.ч. интеграции: `wildberries_integration.py` → `/integrations/wildberries/...`, в т.ч. `status` и `sellers/{id}/tokens` для админа)
+   - API routes only in `backend/app/api` (в т.ч. интеграции: `wildberries_integration.py` → `/integrations/wildberries/...`, в т.ч. `status`, `sellers/{id}/tokens`, `sellers/{id}/imported-cards` для админа)
    - business logic only in `backend/app/services`
    - data models only in `backend/app/models`
    - DB access only via `backend/app/db`

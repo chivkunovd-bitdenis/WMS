@@ -38,7 +38,7 @@
   1. ~~**Токены селлера**~~: таблица `seller_wildberries_credentials`, Fernet (`integration_fernet.py`), `GET/PATCH /integrations/wildberries/sellers/{id}/tokens` (только `fulfillment_admin`; в ответе — только флаги наличия, не значения). Миграция `0011`.
   2. ~~**Sync job (карточки, первая страница)**~~: `job_type: wildberries_cards_sync` + `seller_id` в `POST /operations/background-jobs`, `payload_json` на `background_jobs` (миграция `0012`), `wildberries_sync_service`, Celery task `wms.wildberries_cards_sync` / `BackgroundTasks`; результат в `result_json` (`cards_received`, `cursor_present`). Без UI. Идемпотентность/дедупликация импорта — в срезе с маппингом/таблицами сущностей.
   3. ~~**UI**~~: блок «Wildberries (импорт)» у админа — токены, «Обновить карточки из WB», e2e `wildberries-admin-ui.spec.ts`; API e2e: `E2E_MOCK_WB_CARDS` в `playwright.config` → заглушка в `fetch_cards_list`.
-  4. **Маппинг**: `nmID` / `vendorCode` к SKU, список импортированных поставок (read-only).
+  4. **Маппинг / импорт в данные**: ~~снимок карточек в БД~~ (`seller_wildberries_imported_cards`, `GET .../imported-cards`, UI список); дальше — связь с SKU `products`, импорт поставок FBW (read-only).
 - Уже есть: `wildberries_client.fetch_cards_list`, `GET /integrations/wildberries/status`, pytest с `httpx.MockTransport`.
 - Биллинг литр‑день (E3), события от проведённых операций.
 

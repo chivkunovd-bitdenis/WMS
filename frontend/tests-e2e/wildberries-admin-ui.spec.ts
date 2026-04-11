@@ -43,4 +43,6 @@ test('admin saves WB tokens and runs cards sync job', async ({ page }) => {
   ]);
   await expect(page.getByTestId('wb-sync-status')).toContainText('done', { timeout: 25_000 });
   await expect(page.getByTestId('wb-sync-result')).toContainText('Карточек получено: 1');
+  await expect(page.getByTestId('wb-imported-cards-list')).toBeVisible({ timeout: 15_000 });
+  await expect(page.getByTestId('wb-imported-card-item').first()).toContainText('424242');
 });
