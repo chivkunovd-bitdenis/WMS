@@ -4,6 +4,7 @@
 
 ## Сделано в последнем срезе
 
+- **E4 Wildberries (срез 4, 2026-04-11):** привязка SKU к карточке WB (`products.wb_nm_id`, `wb_vendor_code`, миграция `0014`, `POST .../link-product`); импорт поставок FBW (таблица `seller_wildberries_imported_supplies`, миграция `0015`, `wildberries_supplies_sync`, `GET .../imported-supplies`); UI — синк поставок, список поставок, форма привязки, отображение nmID в каталоге; Playwright: `E2E_MOCK_WB_SUPPLIES` + расширенный `wildberries-admin-ui.spec.ts` (токены, карточки, поставки **888001**, link **424242**). Коммит `ae01e0e`, CI зелёный.
 - E5 закрыт: селлер приёмка/outbound draft, фильтр outbound по селлеру (e2e `seller-outbound-filter.spec.ts`), миграция `seller_id` на заявках.
 - E2e: `seller-cabinet` — после `form.reset()` при втором товаре снова заполнять габариты; `transfer-and-outbound` — `waitForGetOk` для журнала движений в `Promise.all` с кликом «Обновить», иначе гонка и таймаут.
 - Celery + Redis: `CELERY_BROKER_URL`, worker в compose, без брокера — `BackgroundTasks`.
@@ -38,7 +39,7 @@
   1. ~~**Токены селлера**~~: таблица `seller_wildberries_credentials`, Fernet (`integration_fernet.py`), `GET/PATCH /integrations/wildberries/sellers/{id}/tokens` (только `fulfillment_admin`; в ответе — только флаги наличия, не значения). Миграция `0011`.
   2. ~~**Sync job (карточки, первая страница)**~~: `job_type: wildberries_cards_sync` + `seller_id` в `POST /operations/background-jobs`, `payload_json` на `background_jobs` (миграция `0012`), `wildberries_sync_service`, Celery task `wms.wildberries_cards_sync` / `BackgroundTasks`; результат в `result_json` (`cards_received`, `cursor_present`). Без UI. Идемпотентность/дедупликация импорта — в срезе с маппингом/таблицами сущностей.
   3. ~~**UI**~~: блок «Wildberries (импорт)» у админа — токены, «Обновить карточки из WB», e2e `wildberries-admin-ui.spec.ts`; API e2e: `E2E_MOCK_WB_CARDS` в `playwright.config` → заглушка в `fetch_cards_list`.
-  4. **Маппинг / импорт в данные**: ~~снимок карточек в БД~~ (`seller_wildberries_imported_cards`, `GET .../imported-cards`, UI список); дальше — связь с SKU `products`, импорт поставок FBW (read-only).
+  4. ~~**Маппинг / импорт в данные (MVP-срез)**~~: ~~снимок карточек в БД~~; ~~связь с SKU~~ (`POST .../link-product`, поля на `products`); ~~импорт поставок FBW (первая страница, read-only)~~ (`wildberries_supplies_sync`, список в UI). **Дальше по WB (не MVP-срез):** пагинация карточек/поставок, обогащение полей, печать этикеток 58×40 — по `docs/BACKLOG_EPICS_RU.md` / issues.
 - Уже есть: `wildberries_client.fetch_cards_list`, `GET /integrations/wildberries/status`, pytest с `httpx.MockTransport`.
 - Биллинг литр‑день (E3), события от проведённых операций.
 

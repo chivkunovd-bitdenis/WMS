@@ -13,12 +13,12 @@ Epic map for splitting work: **[docs/BACKLOG_EPICS_RU.md](docs/BACKLOG_EPICS_RU.
 1. Pick the next GitHub Issue with label `ready` (skip `blocked`).
 2. Re-state the acceptance criteria (Given/When/Then) and identify impacted modules.
 3. Implement **vertical slice**:
-   - API routes only in `backend/app/api` (в т.ч. интеграции: `wildberries_integration.py` → `/integrations/wildberries/...`, в т.ч. `status`, `sellers/{id}/tokens`, `sellers/{id}/imported-cards` для админа)
+   - API routes only in `backend/app/api` (в т.ч. интеграции: `wildberries_integration.py` → `/integrations/wildberries/...`, в т.ч. `status`, `sellers/{id}/tokens`, `sellers/{id}/imported-cards`, `sellers/{id}/imported-supplies`, `sellers/{id}/link-product` для админа)
    - business logic only in `backend/app/services`
    - data models only in `backend/app/models`
    - DB access only via `backend/app/db`
-   - Celery tasks only in `backend/app/tasks` (enqueue from API; broker via `CELERY_BROKER_URL`; unset `CELERY_BROKER_URL` uses FastAPI `BackgroundTasks` for local/tests; типы джоб: `movements_digest`, `wildberries_cards_sync` + `seller_id` в теле)
-   - Playwright webServer для API: в `frontend/playwright.config.ts` задаётся `E2E_MOCK_WB_CARDS=1` — заглушка ответа WB в `fetch_cards_list` (без сети наружу).
+   - Celery tasks only in `backend/app/tasks` (enqueue from API; broker via `CELERY_BROKER_URL`; unset `CELERY_BROKER_URL` uses FastAPI `BackgroundTasks` for local/tests; типы джоб: `movements_digest`, `wildberries_cards_sync`, `wildberries_supplies_sync` + `seller_id` в теле)
+   - Playwright webServer для API: в `frontend/playwright.config.ts` задаётся `E2E_MOCK_WB_CARDS=1` и `E2E_MOCK_WB_SUPPLIES=1` — заглушки в `fetch_cards_list` / `fetch_supplies_list` (без сети наружу).
 4. Add tests:
    - backend: pytest for core logic/validation
    - frontend: Playwright e2e that verifies **user-visible outcome** (not just HTTP 200)
