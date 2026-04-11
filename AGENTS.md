@@ -17,7 +17,7 @@ Epic map for splitting work: **[docs/BACKLOG_EPICS_RU.md](docs/BACKLOG_EPICS_RU.
    - business logic only in `backend/app/services`
    - data models only in `backend/app/models`
    - DB access only via `backend/app/db`
-   - Celery tasks only in `backend/app/tasks` (enqueue from API; broker via `CELERY_BROKER_URL`; unset `CELERY_BROKER_URL` uses FastAPI `BackgroundTasks` for local/tests)
+   - Celery tasks only in `backend/app/tasks` (enqueue from API; broker via `CELERY_BROKER_URL`; unset `CELERY_BROKER_URL` uses FastAPI `BackgroundTasks` for local/tests; типы джоб: `movements_digest`, `wildberries_cards_sync` + `seller_id` в теле)
 4. Add tests:
    - backend: pytest for core logic/validation
    - frontend: Playwright e2e that verifies **user-visible outcome** (not just HTTP 200)
