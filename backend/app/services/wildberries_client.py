@@ -26,6 +26,11 @@ async def fetch_cards_list(
     limit: int = 100,
 ) -> dict[str, Any]:
     """POST /content/v2/get/cards/list — first page (import-only, MVP)."""
+    if settings.e2e_mock_wb_cards:
+        return {
+            "cards": [{"nmID": 424242, "vendorCode": "E2E-MOCK"}],
+            "cursor": {"total": 1},
+        }
     base = (content_api_base or settings.wildberries_content_api_base).rstrip("/")
     url = f"{base}{CARDS_LIST_PATH}"
     headers = {

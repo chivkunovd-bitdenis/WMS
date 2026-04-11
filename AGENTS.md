@@ -18,6 +18,7 @@ Epic map for splitting work: **[docs/BACKLOG_EPICS_RU.md](docs/BACKLOG_EPICS_RU.
    - data models only in `backend/app/models`
    - DB access only via `backend/app/db`
    - Celery tasks only in `backend/app/tasks` (enqueue from API; broker via `CELERY_BROKER_URL`; unset `CELERY_BROKER_URL` uses FastAPI `BackgroundTasks` for local/tests; типы джоб: `movements_digest`, `wildberries_cards_sync` + `seller_id` в теле)
+   - Playwright webServer для API: в `frontend/playwright.config.ts` задаётся `E2E_MOCK_WB_CARDS=1` — заглушка ответа WB в `fetch_cards_list` (без сети наружу).
 4. Add tests:
    - backend: pytest for core logic/validation
    - frontend: Playwright e2e that verifies **user-visible outcome** (not just HTTP 200)

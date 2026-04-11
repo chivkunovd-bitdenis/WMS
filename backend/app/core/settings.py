@@ -35,6 +35,10 @@ class Settings(BaseSettings):
         description="Optional Fernet key (urlsafe base64) for integration tokens. "
         "Unset: derive from jwt_secret_key (dev/tests only; set explicitly in prod).",
     )
+    e2e_mock_wb_cards: bool = Field(
+        default=False,
+        description="Playwright/e2e: return stub WB cards JSON without calling the network.",
+    )
 
     @property
     def database_url_sync(self) -> str:

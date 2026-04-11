@@ -193,6 +193,13 @@ export default function App() {
   const [backgroundJobResult, setBackgroundJobResult] = useState<string | null>(
     null,
   )
+  const [wbSellerId, setWbSellerId] = useState<string | null>(null)
+  const [wbHasContentToken, setWbHasContentToken] = useState(false)
+  const [wbHasSuppliesToken, setWbHasSuppliesToken] = useState(false)
+  const [wbTokensBusy, setWbTokensBusy] = useState(false)
+  const [wbSyncBusy, setWbSyncBusy] = useState(false)
+  const [wbJobStatus, setWbJobStatus] = useState<string | null>(null)
+  const [wbJobResult, setWbJobResult] = useState<string | null>(null)
 
   const loadMe = useCallback(async (t: string) => {
     setLoading(true)
@@ -416,6 +423,13 @@ export default function App() {
       setOutboundMovements([])
       setBackgroundJobStatus(null)
       setBackgroundJobResult(null)
+      setWbSellerId(null)
+      setWbHasContentToken(false)
+      setWbHasSuppliesToken(false)
+      setWbTokensBusy(false)
+      setWbSyncBusy(false)
+      setWbJobStatus(null)
+      setWbJobResult(null)
       setCatalogError(null)
       setOpsError(null)
       return
@@ -556,6 +570,60 @@ export default function App() {
       }
     })()
   }, [token, me?.role, selectedWarehouseId, refreshLocations])
+
+  useEffect(() => {
+    if (!me || me.role !== 'fulfillment_admin') {
+      setWbSellerId(null)
+      return
+    }
+    if (sellers.length === 0) {
+      setWbSellerId(null)
+      return
+    }
+    setWbSellerId((prev) => {
+      if (prev && sellers.some((s) => s.id === prev)) {
+        return prev
+      }
+      return sellers[0].id
+    })
+  }, [me, sellers])
+
+  useEffect(() => {
+    if (!token || me?.role !== 'fulfillment_admin' || !wbSellerId) {
+      setWbHasContentToken(false)
+      setWbHasSuppliesToken(false)
+      return
+    }
+    let cancelled = false
+    void (async () => {
+      try {
+        const res = await fetch(
+          apiUrl(`/integrations/wildberries/sellers/${wbSellerId}/tokens`),
+          { headers: authHeaders(token) },
+        )
+        if (!res.ok || cancelled) {
+          return
+        }
+        const j = (await res.json()) as {
+          has_content_token: boolean
+          has_supplies_token: boolean
+        }
+        if (cancelled) {
+          return
+        }
+        setWbHasContentToken(Boolean(j.has_content_token))
+        setWbHasSuppliesToken(Boolean(j.has_supplies_token))
+      } catch {
+        if (!cancelled) {
+          setWbHasContentToken(false)
+          setWbHasSuppliesToken(false)
+        }
+      }
+    })()
+    return () => {
+      cancelled = true
+    }
+  }, [token, me?.role, wbSellerId, authHeaders])
 
   async function onRegister(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault()
@@ -1556,6 +1624,122 @@ export default function App() {
     }
   }
 
+  async function onSaveWbTokens(e: React.FormEvent<HTMLFormElement>) {
+    e.preventDefault()
+    if (!token || !wbSellerId) {
+      return
+    }
+    const form = e.currentTarget
+    setWbTokensBusy(true)
+    setOpsError(null)
+    try {
+      const fd = new FormData(form)
+      const content = String(fd.get('wb_content_token') ?? '').trim()
+      const supplies = String(fd.get('wb_supplies_token') ?? '').trim()
+      const body: Record<string, string> = {}
+      if (content) {
+        body.content_api_token = content
+      }
+      if (supplies) {
+        body.supplies_api_token = supplies
+      }
+      if (Object.keys(body).length === 0) {
+        setOpsError('Укажите хотя бы один токен для сохранения.')
+        return
+      }
+      const res = await fetch(
+        apiUrl(`/integrations/wildberries/sellers/${wbSellerId}/tokens`),
+        {
+          method: 'PATCH',
+          headers: {
+            ...authHeaders(token),
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify(body),
+        },
+      )
+      if (!res.ok) {
+        setOpsError(await readApiErrorMessage(res))
+        return
+      }
+      const j = (await res.json()) as {
+        has_content_token: boolean
+        has_supplies_token: boolean
+      }
+      setWbHasContentToken(Boolean(j.has_content_token))
+      setWbHasSuppliesToken(Boolean(j.has_supplies_token))
+      form.reset()
+    } catch (err) {
+      setOpsError(
+        err instanceof Error ? err.message : 'Не удалось сохранить токены WB.',
+      )
+    } finally {
+      setWbTokensBusy(false)
+    }
+  }
+
+  async function onStartWbCardsSyncJob() {
+    if (!token || !wbSellerId) {
+      return
+    }
+    setOpsError(null)
+    setWbSyncBusy(true)
+    setWbJobStatus('pending')
+    setWbJobResult(null)
+    try {
+      const res = await fetch(apiUrl('/operations/background-jobs'), {
+        method: 'POST',
+        headers: {
+          ...authHeaders(token),
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          job_type: 'wildberries_cards_sync',
+          seller_id: wbSellerId,
+        }),
+      })
+      if (!res.ok) {
+        setOpsError(await readApiErrorMessage(res))
+        setWbJobStatus(null)
+        return
+      }
+      const started = (await res.json()) as { id: string; status: string }
+      const jobId = started.id
+      setWbJobStatus(started.status)
+      for (let i = 0; i < 60; i++) {
+        await new Promise((r) => setTimeout(r, 200))
+        const st = await fetch(apiUrl(`/operations/background-jobs/${jobId}`), {
+          headers: authHeaders(token),
+        })
+        if (!st.ok) {
+          continue
+        }
+        const j = (await st.json()) as {
+          status: string
+          result_json: { cards_received?: number } | null
+          error_message: string | null
+        }
+        setWbJobStatus(j.status)
+        if (j.status === 'done') {
+          const n = j.result_json?.cards_received ?? 0
+          setWbJobResult(`Карточек получено: ${n}`)
+          break
+        }
+        if (j.status === 'failed') {
+          setWbJobResult(j.error_message ?? 'failed')
+          break
+        }
+      }
+    } catch (err) {
+      setOpsError(
+        err instanceof Error ? err.message : 'Не удалось запустить синхронизацию WB.',
+      )
+      setWbJobStatus(null)
+    } finally {
+      setWbSyncBusy(false)
+    }
+  }
+
   if (token && me) {
     const isFulfillmentAdmin = me.role === 'fulfillment_admin'
     const isFulfillmentSeller = me.role === 'fulfillment_seller'
@@ -1789,6 +1973,80 @@ export default function App() {
               ))}
             </ul>
           </section>
+          {isFulfillmentAdmin && sellers.length > 0 && wbSellerId ? (
+            <section className="card" data-testid="wildberries-integration-section">
+              <h2>Wildberries (импорт)</h2>
+              <p className="subtle">
+                Токены хранятся зашифрованно. Синхронизация — только чтение карточек
+                (первая страница), без создания данных в WB.
+              </p>
+              <label>
+                Селлер для интеграции
+                <select
+                  data-testid="wb-seller-select"
+                  value={wbSellerId}
+                  onChange={(ev) => setWbSellerId(ev.target.value)}
+                >
+                  {sellers.map((s) => (
+                    <option key={s.id} value={s.id}>
+                      {s.name}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <p className="subtle" data-testid="wb-token-flags">
+                Контент API: {wbHasContentToken ? 'токен есть' : 'нет токена'} ·
+                Поставки API: {wbHasSuppliesToken ? 'токен есть' : 'нет токена'}
+              </p>
+              <form
+                data-testid="wb-tokens-form"
+                noValidate
+                onSubmit={(e) => void onSaveWbTokens(e)}
+              >
+                <label>
+                  Токен контента WB
+                  <input
+                    name="wb_content_token"
+                    data-testid="wb-content-token"
+                    type="password"
+                    autoComplete="off"
+                    placeholder="вставьте токен категории «Контент»"
+                  />
+                </label>
+                <label>
+                  Токен поставок WB (необязательно)
+                  <input
+                    name="wb_supplies_token"
+                    data-testid="wb-supplies-token"
+                    type="password"
+                    autoComplete="off"
+                    placeholder="опционально для будущего импорта поставок"
+                  />
+                </label>
+                <button
+                  type="submit"
+                  data-testid="wb-save-tokens"
+                  disabled={wbTokensBusy}
+                >
+                  {wbTokensBusy ? '…' : 'Сохранить токены'}
+                </button>
+              </form>
+              <button
+                type="button"
+                data-testid="wb-sync-cards"
+                disabled={wbSyncBusy || !wbHasContentToken}
+                onClick={() => void onStartWbCardsSyncJob()}
+              >
+                {wbSyncBusy ? '…' : 'Обновить карточки из WB'}
+              </button>
+              <p className="subtle" data-testid="wb-sync-status">
+                Синхронизация: {wbJobStatus ?? '—'}
+              </p>
+              {wbJobResult ? (
+                <p data-testid="wb-sync-result">{wbJobResult}</p>
+              ) : null}
+            </section>
+          ) : null}
           <section className="card">
             <h2>Товары (SKU)</h2>
             {isFulfillmentAdmin ? (
