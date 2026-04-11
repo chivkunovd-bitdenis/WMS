@@ -10,6 +10,7 @@ from app.models.product import Product
 from app.models.seller import Seller
 from app.models.seller_wildberries_credentials import SellerWildberriesCredentials
 from app.models.seller_wildberries_imported_card import SellerWildberriesImportedCard
+from app.models.seller_wildberries_imported_supply import SellerWildberriesImportedSupply
 from app.models.storage_location import StorageLocation
 from app.models.tenant import Tenant
 from app.models.user import User
@@ -28,6 +29,7 @@ __all__ = [
     "Seller",
     "SellerWildberriesCredentials",
     "SellerWildberriesImportedCard",
+    "SellerWildberriesImportedSupply",
     "StorageLocation",
     "Tenant",
     "User",

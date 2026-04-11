@@ -22,6 +22,8 @@ type ProductRow = {
   volume_liters: number
   seller_id: string | null
   seller_name: string | null
+  wb_nm_id?: number | null
+  wb_vendor_code?: string | null
 }
 
 type SellerRow = { id: string; name: string }
@@ -110,6 +112,14 @@ type WbImportedCardRow = {
   nm_id: number
   vendor_code: string | null
   title: string | null
+  updated_at: string
+}
+
+type WbImportedSupplyRow = {
+  external_key: string
+  wb_supply_id: number | null
+  wb_preorder_id: number | null
+  status_id: number | null
   updated_at: string
 }
 
@@ -208,6 +218,11 @@ export default function App() {
   const [wbJobStatus, setWbJobStatus] = useState<string | null>(null)
   const [wbJobResult, setWbJobResult] = useState<string | null>(null)
   const [wbImportedCards, setWbImportedCards] = useState<WbImportedCardRow[]>([])
+  const [wbImportedSupplies, setWbImportedSupplies] = useState<WbImportedSupplyRow[]>([])
+  const [wbSuppliesSyncBusy, setWbSuppliesSyncBusy] = useState(false)
+  const [wbSuppliesJobStatus, setWbSuppliesJobStatus] = useState<string | null>(null)
+  const [wbSuppliesJobResult, setWbSuppliesJobResult] = useState<string | null>(null)
+  const [wbLinkBusy, setWbLinkBusy] = useState(false)
 
   const loadMe = useCallback(async (t: string) => {
     setLoading(true)
@@ -261,6 +276,25 @@ export default function App() {
         setWbImportedCards((await res.json()) as WbImportedCardRow[])
       } catch {
         setWbImportedCards([])
+      }
+    },
+    [authHeaders],
+  )
+
+  const refreshWbImportedSupplies = useCallback(
+    async (t: string, sellerId: string) => {
+      try {
+        const res = await fetch(
+          apiUrl(`/integrations/wildberries/sellers/${sellerId}/imported-supplies`),
+          { headers: authHeaders(t) },
+        )
+        if (!res.ok) {
+          setWbImportedSupplies([])
+          return
+        }
+        setWbImportedSupplies((await res.json()) as WbImportedSupplyRow[])
+      } catch {
+        setWbImportedSupplies([])
       }
     },
     [authHeaders],
@@ -458,6 +492,11 @@ export default function App() {
       setWbJobStatus(null)
       setWbJobResult(null)
       setWbImportedCards([])
+      setWbImportedSupplies([])
+      setWbSuppliesSyncBusy(false)
+      setWbSuppliesJobStatus(null)
+      setWbSuppliesJobResult(null)
+      setWbLinkBusy(false)
       setCatalogError(null)
       setOpsError(null)
       return
@@ -660,6 +699,14 @@ export default function App() {
     }
     void refreshWbImportedCards(token, wbSellerId)
   }, [token, me?.role, wbSellerId, refreshWbImportedCards])
+
+  useEffect(() => {
+    if (!token || me?.role !== 'fulfillment_admin' || !wbSellerId) {
+      setWbImportedSupplies([])
+      return
+    }
+    void refreshWbImportedSupplies(token, wbSellerId)
+  }, [token, me?.role, wbSellerId, refreshWbImportedSupplies])
 
   async function onRegister(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault()
@@ -1777,6 +1824,123 @@ export default function App() {
     }
   }
 
+  async function onStartWbSuppliesSyncJob() {
+    if (!token || !wbSellerId) {
+      return
+    }
+    setOpsError(null)
+    setWbSuppliesSyncBusy(true)
+    setWbSuppliesJobStatus('pending')
+    setWbSuppliesJobResult(null)
+    try {
+      const res = await fetch(apiUrl('/operations/background-jobs'), {
+        method: 'POST',
+        headers: {
+          ...authHeaders(token),
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          job_type: 'wildberries_supplies_sync',
+          seller_id: wbSellerId,
+        }),
+      })
+      if (!res.ok) {
+        setOpsError(await readApiErrorMessage(res))
+        setWbSuppliesJobStatus(null)
+        return
+      }
+      const started = (await res.json()) as { id: string; status: string }
+      const jobId = started.id
+      setWbSuppliesJobStatus(started.status)
+      for (let i = 0; i < 60; i++) {
+        await new Promise((r) => setTimeout(r, 200))
+        const st = await fetch(apiUrl(`/operations/background-jobs/${jobId}`), {
+          headers: authHeaders(token),
+        })
+        if (!st.ok) {
+          continue
+        }
+        const j = (await st.json()) as {
+          status: string
+          result_json: {
+            supplies_received?: number
+            supplies_saved?: number
+          } | null
+          error_message: string | null
+        }
+        setWbSuppliesJobStatus(j.status)
+        if (j.status === 'done') {
+          const got = j.result_json?.supplies_received ?? 0
+          const saved = j.result_json?.supplies_saved ?? 0
+          setWbSuppliesJobResult(`Поставок получено: ${got}, сохранено: ${saved}`)
+          await refreshWbImportedSupplies(token, wbSellerId)
+          break
+        }
+        if (j.status === 'failed') {
+          setWbSuppliesJobResult(j.error_message ?? 'failed')
+          break
+        }
+      }
+    } catch (err) {
+      setOpsError(
+        err instanceof Error
+          ? err.message
+          : 'Не удалось запустить синхронизацию поставок WB.',
+      )
+      setWbSuppliesJobStatus(null)
+    } finally {
+      setWbSuppliesSyncBusy(false)
+    }
+  }
+
+  async function onLinkProductToWb(e: React.FormEvent<HTMLFormElement>) {
+    e.preventDefault()
+    if (!token || !wbSellerId) {
+      return
+    }
+    const form = e.currentTarget
+    const fd = new FormData(form)
+    const productId = String(fd.get('wb_link_product_id') ?? '').trim()
+    const nmRaw = String(fd.get('wb_link_nm_id') ?? '').trim()
+    setOpsError(null)
+    setCatalogError(null)
+    if (!productId) {
+      setOpsError('Выберите товар для привязки.')
+      return
+    }
+    const nm = Number(nmRaw)
+    if (!Number.isInteger(nm) || nm < 1) {
+      setOpsError('Укажите целый nm_id ≥ 1.')
+      return
+    }
+    setWbLinkBusy(true)
+    try {
+      const res = await fetch(
+        apiUrl(`/integrations/wildberries/sellers/${wbSellerId}/link-product`),
+        {
+          method: 'POST',
+          headers: {
+            ...authHeaders(token),
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({ product_id: productId, nm_id: nm }),
+        },
+      )
+      if (!res.ok) {
+        setOpsError(await readApiErrorMessage(res))
+        return
+      }
+      await refreshProducts(token)
+      form.reset()
+    } catch (err) {
+      setOpsError(
+        err instanceof Error ? err.message : 'Не удалось привязать товар к WB.',
+      )
+    } finally {
+      setWbLinkBusy(false)
+    }
+  }
+
   if (token && me) {
     const isFulfillmentAdmin = me.role === 'fulfillment_admin'
     const isFulfillmentSeller = me.role === 'fulfillment_seller'
@@ -2014,8 +2178,9 @@ export default function App() {
             <section className="card" data-testid="wildberries-integration-section">
               <h2>Wildberries (импорт)</h2>
               <p className="subtle">
-                Токены хранятся зашифрованно. Синхронизация — только чтение карточек
-                (первая страница), без создания данных в WB.
+                Токены хранятся зашифрованно. Синхронизация — только чтение: карточки
+                (первая страница) и список поставок FBW (первая страница), без записи в
+                WB.
               </p>
               <label>
                 Селлер для интеграции
@@ -2057,7 +2222,7 @@ export default function App() {
                     data-testid="wb-supplies-token"
                     type="password"
                     autoComplete="off"
-                    placeholder="опционально для будущего импорта поставок"
+                    placeholder="для импорта поставок FBW (первая страница)"
                   />
                 </label>
                 <button
@@ -2082,6 +2247,21 @@ export default function App() {
               {wbJobResult ? (
                 <p data-testid="wb-sync-result">{wbJobResult}</p>
               ) : null}
+              <button
+                type="button"
+                data-testid="wb-sync-supplies"
+                disabled={wbSuppliesSyncBusy || !wbHasSuppliesToken}
+                onClick={() => void onStartWbSuppliesSyncJob()}
+                style={{ marginTop: 12 }}
+              >
+                {wbSuppliesSyncBusy ? '…' : 'Обновить поставки из WB'}
+              </button>
+              <p className="subtle" data-testid="wb-supplies-sync-status">
+                Синхронизация поставок: {wbSuppliesJobStatus ?? '—'}
+              </p>
+              {wbSuppliesJobResult ? (
+                <p data-testid="wb-supplies-sync-result">{wbSuppliesJobResult}</p>
+              ) : null}
               <h3 className="subtle" style={{ marginTop: 16 }}>
                 Импортированные карточки
               </h3>
@@ -2099,6 +2279,79 @@ export default function App() {
                   ))}
                 </ul>
               )}
+              <h3 className="subtle" style={{ marginTop: 16 }}>
+                Импортированные поставки
+              </h3>
+              {wbImportedSupplies.length === 0 ? (
+                <p className="subtle" data-testid="wb-imported-supplies-empty">
+                  Пока нет — сохраните токен поставок и выполните синхронизацию.
+                </p>
+              ) : (
+                <ul className="list-plain" data-testid="wb-imported-supplies-list">
+                  {wbImportedSupplies.map((s) => (
+                    <li
+                      key={s.external_key}
+                      data-testid="wb-imported-supply-item"
+                    >
+                      {s.wb_supply_id != null ? `supply ${s.wb_supply_id}` : ''}
+                      {s.wb_supply_id != null && s.wb_preorder_id != null ? ' · ' : ''}
+                      {s.wb_preorder_id != null ? `preorder ${s.wb_preorder_id}` : ''}
+                      {s.status_id != null ? ` · статус ${s.status_id}` : ''}
+                    </li>
+                  ))}
+                </ul>
+              )}
+              <h3 className="subtle" style={{ marginTop: 16 }}>
+                Привязка SKU к карточке WB
+              </h3>
+              <p className="subtle">
+                Товар должен быть привязан к тому же селлеру, что выбран выше; nm_id —
+                из списка импортированных карточек.
+              </p>
+              <form
+                data-testid="wb-link-product-form"
+                noValidate
+                onSubmit={(e) => void onLinkProductToWb(e)}
+              >
+                <label>
+                  Товар
+                  <select
+                    name="wb_link_product_id"
+                    data-testid="wb-link-product-id"
+                    required
+                    defaultValue=""
+                  >
+                    <option value="" disabled>
+                      — выберите —
+                    </option>
+                    {products
+                      .filter((p) => p.seller_id === wbSellerId)
+                      .map((p) => (
+                        <option key={p.id} value={p.id}>
+                          {p.sku_code} — {p.name}
+                        </option>
+                      ))}
+                  </select>
+                </label>
+                <label>
+                  nm_id (WB)
+                  <input
+                    name="wb_link_nm_id"
+                    data-testid="wb-link-nm-id"
+                    type="number"
+                    min={1}
+                    required
+                    autoComplete="off"
+                  />
+                </label>
+                <button
+                  type="submit"
+                  data-testid="wb-link-submit"
+                  disabled={wbLinkBusy}
+                >
+                  {wbLinkBusy ? '…' : 'Привязать'}
+                </button>
+              </form>
             </section>
           ) : null}
           <section className="card">
@@ -2184,7 +2437,11 @@ export default function App() {
             ) : null}
             <ul className="list-plain" data-testid="product-list">
               {products.map((p) => (
-                <li key={p.id} data-testid="product-item">
+                <li
+                  key={p.id}
+                  data-testid="product-item"
+                  data-product-id={p.id}
+                >
                   <strong>{p.name}</strong> — {p.sku_code},{' '}
                   <span data-testid="product-volume">
                     {p.volume_liters.toFixed(1)} л
@@ -2193,6 +2450,13 @@ export default function App() {
                     <span data-testid="product-seller-name">
                       {' '}
                       · селлер: {p.seller_name}
+                    </span>
+                  ) : null}
+                  {p.wb_nm_id != null ? (
+                    <span data-testid="product-wb-nm">
+                      {' '}
+                      · WB nmID {p.wb_nm_id}
+                      {p.wb_vendor_code ? ` (${p.wb_vendor_code})` : ''}
                     </span>
                   ) : null}
                 </li>

@@ -32,6 +32,7 @@ export default defineConfig({
         DATABASE_URL: 'sqlite+aiosqlite:///./e2e.db',
         JWT_SECRET_KEY: 'ci-jwt-secret-key-minimum-32-characters-long',
         E2E_MOCK_WB_CARDS: '1',
+        E2E_MOCK_WB_SUPPLIES: '1',
       },
       port: e2eApiPort,
       reuseExistingServer: reuse,

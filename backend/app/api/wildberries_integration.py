@@ -6,7 +6,7 @@ from datetime import datetime
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException, Request, status
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.deps import require_fulfillment_admin
@@ -21,6 +21,11 @@ from app.services.wildberries_credentials_service import (
     patch_seller_tokens,
 )
 from app.services.wildberries_import_cards_service import list_imported_cards_for_seller
+from app.services.wildberries_import_supplies_service import list_imported_supplies_for_seller
+from app.services.wildberries_product_link_service import (
+    WildberriesLinkError,
+    link_product_to_wb_card,
+)
 
 router = APIRouter(prefix="/integrations/wildberries", tags=["integrations"])
 
@@ -43,6 +48,26 @@ class WildberriesImportedCardOut(BaseModel):
     vendor_code: str | None
     title: str | None
     updated_at: datetime
+
+
+class WildberriesImportedSupplyOut(BaseModel):
+    external_key: str
+    wb_supply_id: int | None
+    wb_preorder_id: int | None
+    status_id: int | None
+    updated_at: datetime
+
+
+class LinkProductWbBody(BaseModel):
+    product_id: uuid.UUID
+    nm_id: int = Field(ge=1)
+
+
+class LinkProductWbOut(BaseModel):
+    product_id: str
+    sku_code: str
+    wb_nm_id: int
+    wb_vendor_code: str | None
 
 
 def _parse_token_merge_patch(raw: object) -> tuple[TokenPatchValue, TokenPatchValue]:
@@ -121,6 +146,81 @@ async def list_seller_wildberries_imported_cards(
         )
         for r in rows
     ]
+
+
+@router.get(
+    "/sellers/{seller_id}/imported-supplies",
+    response_model=list[WildberriesImportedSupplyOut],
+)
+async def list_seller_wildberries_imported_supplies(
+    seller_id: uuid.UUID,
+    user: Annotated[User, Depends(require_fulfillment_admin)],
+    session: Annotated[AsyncSession, Depends(get_db)],
+) -> list[WildberriesImportedSupplyOut]:
+    """Импортированные поставки FBW (последний снимок синка)."""
+    rows = await list_imported_supplies_for_seller(session, user.tenant_id, seller_id)
+    if rows is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="seller_not_found")
+    return [
+        WildberriesImportedSupplyOut(
+            external_key=r.external_key,
+            wb_supply_id=int(r.wb_supply_id) if r.wb_supply_id is not None else None,
+            wb_preorder_id=int(r.wb_preorder_id) if r.wb_preorder_id is not None else None,
+            status_id=r.status_id,
+            updated_at=r.updated_at,
+        )
+        for r in rows
+    ]
+
+
+@router.post(
+    "/sellers/{seller_id}/link-product",
+    response_model=LinkProductWbOut,
+)
+async def link_product_to_wildberries(
+    seller_id: uuid.UUID,
+    body: LinkProductWbBody,
+    user: Annotated[User, Depends(require_fulfillment_admin)],
+    session: Annotated[AsyncSession, Depends(get_db)],
+) -> LinkProductWbOut:
+    """Привязать SKU к импортированной карточке WB (nm_id) для селлера."""
+    try:
+        p = await link_product_to_wb_card(
+            session,
+            user.tenant_id,
+            seller_id,
+            body.product_id,
+            body.nm_id,
+        )
+    except WildberriesLinkError as exc:
+        if exc.code == "product_not_found":
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="product_not_found",
+            ) from exc
+        if exc.code == "wb_card_not_found":
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="wb_card_not_found",
+            ) from exc
+        if exc.code == "wb_nm_already_linked":
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail="wb_nm_already_linked",
+            ) from exc
+        if exc.code in ("product_must_have_seller", "product_seller_mismatch"):
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                detail=exc.code,
+            ) from exc
+        raise
+    assert p.wb_nm_id is not None
+    return LinkProductWbOut(
+        product_id=str(p.id),
+        sku_code=p.sku_code,
+        wb_nm_id=int(p.wb_nm_id),
+        wb_vendor_code=p.wb_vendor_code,
+    )
 
 
 @router.get("/sellers/{seller_id}/tokens", response_model=WildberriesSellerTokensOut)

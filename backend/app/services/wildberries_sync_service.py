@@ -8,9 +8,14 @@ from typing import Any
 import httpx
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.services.wildberries_client import WildberriesClientError, fetch_cards_list
+from app.services.wildberries_client import (
+    WildberriesClientError,
+    fetch_cards_list,
+    fetch_supplies_list,
+)
 from app.services.wildberries_credentials_service import get_decrypted_tokens_for_seller
 from app.services.wildberries_import_cards_service import upsert_imported_cards
+from app.services.wildberries_import_supplies_service import upsert_imported_supplies
 
 
 class WildberriesSyncError(Exception):
@@ -46,4 +51,33 @@ async def sync_cards_list_first_page(
         "cards_received": n_cards,
         "cards_saved": saved,
         "cursor_present": data.get("cursor") is not None,
+    }
+
+
+async def sync_supplies_list_first_page(
+    session: AsyncSession,
+    tenant_id: uuid.UUID,
+    seller_id: uuid.UUID,
+    http_client: httpx.AsyncClient,
+) -> dict[str, Any]:
+    """Fetch first page of WB FBW supplies (supplies API token required)."""
+    pair = await get_decrypted_tokens_for_seller(session, tenant_id, seller_id)
+    if pair is None:
+        raise WildberriesSyncError("seller_not_found")
+    _content, supplies_token = pair
+    if not supplies_token:
+        raise WildberriesSyncError("missing_supplies_token")
+    try:
+        rows = await fetch_supplies_list(
+            http_client, api_token=supplies_token, limit=100, offset=0
+        )
+    except WildberriesClientError as exc:
+        suffix = f"_{exc.status_code}" if exc.status_code else ""
+        raise WildberriesSyncError(f"wb_{exc.code}{suffix}") from exc
+    n = len(rows)
+    saved = await upsert_imported_supplies(session, tenant_id, seller_id, rows)
+    return {
+        "seller_id": str(seller_id),
+        "supplies_received": n,
+        "supplies_saved": saved,
     }

@@ -38,6 +38,8 @@ class ProductOut(BaseModel):
     height_mm: int
     seller_id: str | None
     seller_name: str | None
+    wb_nm_id: int | None = None
+    wb_vendor_code: str | None = None
 
     @computed_field  # type: ignore[prop-decorator]
     @property
@@ -62,6 +64,8 @@ async def get_products(
             height_mm=p.height_mm,
             seller_id=str(p.seller_id) if p.seller_id else None,
             seller_name=p.seller.name if p.seller is not None else None,
+            wb_nm_id=int(p.wb_nm_id) if p.wb_nm_id is not None else None,
+            wb_vendor_code=p.wb_vendor_code,
         )
         for p in rows
     ]
@@ -111,4 +115,6 @@ async def post_product(
         height_mm=p.height_mm,
         seller_id=str(p.seller_id) if p.seller_id else None,
         seller_name=p.seller.name if p.seller is not None else None,
+        wb_nm_id=int(p.wb_nm_id) if p.wb_nm_id is not None else None,
+        wb_vendor_code=p.wb_vendor_code,
     )

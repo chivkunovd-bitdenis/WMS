@@ -7,6 +7,7 @@ from app.core.settings import settings
 from app.services.wildberries_client import (
     WildberriesClientError,
     fetch_cards_list,
+    fetch_supplies_list,
 )
 
 
@@ -44,6 +45,14 @@ async def test_fetch_cards_list_upstream_error() -> None:
             )
     assert excinfo.value.code == "upstream_error"
     assert excinfo.value.status_code == 401
+
+
+@pytest.mark.asyncio
+async def test_fetch_supplies_list_e2e_stub(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(settings, "e2e_mock_wb_supplies", True)
+    async with httpx.AsyncClient() as client:
+        rows = await fetch_supplies_list(client, api_token="x")
+    assert rows[0]["supplyID"] == 888001
 
 
 @pytest.mark.asyncio

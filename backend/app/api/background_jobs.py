@@ -17,6 +17,7 @@ from app.services import background_job_service as job_svc
 from app.services.background_job_service import (
     JOB_TYPE_MOVEMENTS_DIGEST,
     JOB_TYPE_WILDBERRIES_CARDS_SYNC,
+    JOB_TYPE_WILDBERRIES_SUPPLIES_SYNC,
 )
 
 router = APIRouter(
@@ -113,6 +114,30 @@ async def start_background_job(
             run_wildberries_cards_sync_task.delay(str(job.id))
         else:
             background_tasks.add_task(job_svc.run_wildberries_cards_sync_job, job.id)
+    elif body.job_type == JOB_TYPE_WILDBERRIES_SUPPLIES_SYNC:
+        if body.seller_id is None:
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                detail="seller_id_required",
+            )
+        seller = await session.get(Seller, body.seller_id)
+        if seller is None or seller.tenant_id != user.tenant_id:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="seller_not_found",
+            )
+        job = await job_svc.create_pending_job(
+            session,
+            user.tenant_id,
+            job_type=body.job_type,
+            payload_json={"seller_id": str(body.seller_id)},
+        )
+        if settings.celery_broker_url:
+            from app.tasks.background_jobs import run_wildberries_supplies_sync_task
+
+            run_wildberries_supplies_sync_task.delay(str(job.id))
+        else:
+            background_tasks.add_task(job_svc.run_wildberries_supplies_sync_job, job.id)
     else:
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
