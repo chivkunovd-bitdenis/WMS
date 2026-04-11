@@ -11,6 +11,7 @@ from app.models.base import Base
 
 if TYPE_CHECKING:
     from app.models.product import Product
+    from app.models.seller_wildberries_credentials import SellerWildberriesCredentials
     from app.models.tenant import Tenant
     from app.models.user import User
 
@@ -32,3 +33,9 @@ class Seller(Base):
     tenant: Mapped[Tenant] = relationship("Tenant", back_populates="sellers")
     users: Mapped[list[User]] = relationship("User", back_populates="seller")
     products: Mapped[list[Product]] = relationship("Product", back_populates="seller")
+    wildberries_credentials: Mapped[SellerWildberriesCredentials | None] = relationship(
+        "SellerWildberriesCredentials",
+        back_populates="seller",
+        uselist=False,
+        cascade="all, delete-orphan",
+    )

@@ -34,7 +34,12 @@
 
 ## P2 — интеграции и биллинг
 
-- Wildberries импорт с моками в CI (E4) — начато: `app/services/wildberries_client.py` (`fetch_cards_list`), `GET /integrations/wildberries/status` (admin, без секретов), pytest с `httpx.MockTransport`; дальше: хранение токена селлера, sync job, UI «Обновить».
+- Wildberries импорт с моками в CI (E4) — по срезам:
+  1. ~~**Токены селлера**~~: таблица `seller_wildberries_credentials`, Fernet (`integration_fernet.py`), `GET/PATCH /integrations/wildberries/sellers/{id}/tokens` (только `fulfillment_admin`; в ответе — только флаги наличия, не значения). Миграция `0011`.
+  2. **Sync job**: Celery/BackgroundTasks, вызов `wildberries_client` с сохранённым токеном, идемпотентность.
+  3. **UI**: кабинет/админка — «Сохранить токены», «Обновить из WB», e2e.
+  4. **Маппинг**: `nmID` / `vendorCode` к SKU, список импортированных поставок (read-only).
+- Уже есть: `wildberries_client.fetch_cards_list`, `GET /integrations/wildberries/status`, pytest с `httpx.MockTransport`.
 - Биллинг литр‑день (E3), события от проведённых операций.
 
 ## P3 — качество e2e

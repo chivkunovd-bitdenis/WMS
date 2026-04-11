@@ -8,6 +8,7 @@ from app.models.inventory_movement import InventoryMovement
 from app.models.outbound_shipment import OutboundShipmentLine, OutboundShipmentRequest
 from app.models.product import Product
 from app.models.seller import Seller
+from app.models.seller_wildberries_credentials import SellerWildberriesCredentials
 from app.models.storage_location import StorageLocation
 from app.models.tenant import Tenant
 from app.models.user import User
@@ -24,6 +25,7 @@ __all__ = [
     "OutboundShipmentRequest",
     "Product",
     "Seller",
+    "SellerWildberriesCredentials",
     "StorageLocation",
     "Tenant",
     "User",

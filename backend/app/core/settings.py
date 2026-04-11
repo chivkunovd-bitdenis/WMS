@@ -30,6 +30,11 @@ class Settings(BaseSettings):
         default="https://supplies-api.wildberries.ru",
         description="WB Supplies API host (override in tests/mocks).",
     )
+    wms_secrets_fernet_key: str | None = Field(
+        default=None,
+        description="Optional Fernet key (urlsafe base64) for integration tokens. "
+        "Unset: derive from jwt_secret_key (dev/tests only; set explicitly in prod).",
+    )
 
     @property
     def database_url_sync(self) -> str:
