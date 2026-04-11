@@ -16,16 +16,49 @@ services:
       timeout: 3s
       retries: 30
 
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "${WMS_REDIS_PORT:-16379}:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
   api:
     build:
       context: ./backend
     environment:
       DATABASE_URL: postgresql+psycopg_async://postgres:postgres@db:5432/wms
+      CELERY_BROKER_URL: redis://redis:6379/0
     depends_on:
       db:
         condition: service_healthy
+      redis:
+        condition: service_healthy
     ports:
       - "${WMS_API_PORT:-18080}:8000"
+
+  celery_worker:
+    build:
+      context: ./backend
+    command:
+      [
+        "sh",
+        "-c",
+        "alembic upgrade head && celery -A app.celery_app worker --loglevel=info",
+      ]
+    environment:
+      DATABASE_URL: postgresql+psycopg_async://postgres:postgres@db:5432/wms
+      CELERY_BROKER_URL: redis://redis:6379/0
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      api:
+        condition: service_started
 
   web:
     build:

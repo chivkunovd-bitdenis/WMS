@@ -7,7 +7,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query, status
 from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.api.deps import get_current_user
+from app.api.deps import get_current_user, seller_line_product_scope
 from app.db.session import get_db
 from app.models.user import User
 from app.services import inventory_service
@@ -30,9 +30,13 @@ async def get_inventory_balances(
     user: Annotated[User, Depends(get_current_user)],
     session: Annotated[AsyncSession, Depends(get_db)],
     storage_location_id: Annotated[uuid.UUID, Query()],
+    seller_scope: Annotated[uuid.UUID | None, Depends(seller_line_product_scope)],
 ) -> list[InventoryBalanceRowOut]:
     rows = await inventory_service.list_balances_at_location(
-        session, user.tenant_id, storage_location_id
+        session,
+        user.tenant_id,
+        storage_location_id,
+        seller_product_owner_id=seller_scope,
     )
     if rows is None:
         raise HTTPException(

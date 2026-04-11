@@ -25,6 +25,8 @@ frontend/playwright-report/
 
 # Local e2e sqlite
 e2e.db
+backend/wms_pytest.sqlite
+backend/tests/wms_pytest.sqlite
 
 # IDE
 .vscode/

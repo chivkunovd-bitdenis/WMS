@@ -11,6 +11,7 @@ from app.models.base import Base
 
 if TYPE_CHECKING:
     from app.models.inbound_intake import InboundIntakeRequest
+    from app.models.outbound_shipment import OutboundShipmentRequest
     from app.models.storage_location import StorageLocation
     from app.models.tenant import Tenant
 
@@ -39,5 +40,9 @@ class Warehouse(Base):
     )
     inbound_intake_requests: Mapped[list[InboundIntakeRequest]] = relationship(
         "InboundIntakeRequest",
+        back_populates="warehouse",
+    )
+    outbound_shipment_requests: Mapped[list[OutboundShipmentRequest]] = relationship(
+        "OutboundShipmentRequest",
         back_populates="warehouse",
     )

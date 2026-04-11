@@ -18,7 +18,10 @@ from sqlalchemy.orm import Mapped, mapped_column, relationship
 from app.models.base import Base
 
 if TYPE_CHECKING:
+    from app.models.inventory_movement import InventoryMovement
     from app.models.product import Product
+    from app.models.seller import Seller
+    from app.models.storage_location import StorageLocation
     from app.models.tenant import Tenant
     from app.models.warehouse import Warehouse
 
@@ -39,6 +42,12 @@ class InboundIntakeRequest(Base):
         ForeignKey("warehouses.id", ondelete="CASCADE"),
         index=True,
     )
+    seller_id: Mapped[uuid.UUID | None] = mapped_column(
+        Uuid(as_uuid=True),
+        ForeignKey("sellers.id", ondelete="SET NULL"),
+        nullable=True,
+        index=True,
+    )
     status: Mapped[str] = mapped_column(String(32), nullable=False)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), nullable=False
@@ -54,6 +63,7 @@ class InboundIntakeRequest(Base):
     warehouse: Mapped[Warehouse] = relationship(
         "Warehouse", back_populates="inbound_intake_requests"
     )
+    seller: Mapped[Seller | None] = relationship("Seller")
     lines: Mapped[list[InboundIntakeLine]] = relationship(
         "InboundIntakeLine",
         back_populates="request",
@@ -83,6 +93,13 @@ class InboundIntakeLine(Base):
         index=True,
     )
     expected_qty: Mapped[int] = mapped_column(Integer, nullable=False)
+    posted_qty: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    storage_location_id: Mapped[uuid.UUID | None] = mapped_column(
+        Uuid(as_uuid=True),
+        ForeignKey("storage_locations.id", ondelete="SET NULL"),
+        nullable=True,
+        index=True,
+    )
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), nullable=False
     )
@@ -92,4 +109,11 @@ class InboundIntakeLine(Base):
     )
     product: Mapped[Product] = relationship(
         "Product", back_populates="inbound_intake_lines"
+    )
+    storage_location: Mapped[StorageLocation | None] = relationship(
+        "StorageLocation", back_populates="inbound_intake_lines"
+    )
+    inventory_movements: Mapped[list[InventoryMovement]] = relationship(
+        "InventoryMovement",
+        back_populates="inbound_line",
     )

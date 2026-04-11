@@ -10,8 +10,11 @@ from sqlalchemy.orm import Mapped, mapped_column, relationship
 from app.models.base import Base
 
 if TYPE_CHECKING:
+    from app.models.background_job import BackgroundJob
     from app.models.inbound_intake import InboundIntakeRequest
     from app.models.inventory_balance import InventoryBalance
+    from app.models.inventory_movement import InventoryMovement
+    from app.models.outbound_shipment import OutboundShipmentRequest
     from app.models.product import Product
     from app.models.seller import Seller
     from app.models.storage_location import StorageLocation
@@ -46,5 +49,17 @@ class Tenant(Base):
     )
     inventory_balances: Mapped[list[InventoryBalance]] = relationship(
         "InventoryBalance",
+        back_populates="tenant",
+    )
+    inventory_movements: Mapped[list[InventoryMovement]] = relationship(
+        "InventoryMovement",
+        back_populates="tenant",
+    )
+    outbound_shipment_requests: Mapped[list[OutboundShipmentRequest]] = relationship(
+        "OutboundShipmentRequest",
+        back_populates="tenant",
+    )
+    background_jobs: Mapped[list[BackgroundJob]] = relationship(
+        "BackgroundJob",
         back_populates="tenant",
     )

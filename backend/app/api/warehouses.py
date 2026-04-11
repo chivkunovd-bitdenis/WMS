@@ -7,7 +7,7 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel, Field
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.api.deps import get_current_user
+from app.api.deps import get_current_user, require_fulfillment_admin
 from app.db.session import get_db
 from app.models.user import User
 from app.services.catalog_service import (
@@ -63,7 +63,7 @@ async def list_warehouses(
 @router.post("", response_model=WarehouseOut)
 async def post_warehouse(
     body: WarehouseCreate,
-    user: Annotated[User, Depends(get_current_user)],
+    user: Annotated[User, Depends(require_fulfillment_admin)],
     session: Annotated[AsyncSession, Depends(get_db)],
 ) -> WarehouseOut:
     try:
@@ -108,7 +108,7 @@ async def list_locations(
 async def post_location(
     warehouse_id: uuid.UUID,
     body: LocationCreate,
-    user: Annotated[User, Depends(get_current_user)],
+    user: Annotated[User, Depends(require_fulfillment_admin)],
     session: Annotated[AsyncSession, Depends(get_db)],
 ) -> LocationOut:
     try:

@@ -20,6 +20,8 @@ from app.models.base import Base
 if TYPE_CHECKING:
     from app.models.inbound_intake import InboundIntakeLine
     from app.models.inventory_balance import InventoryBalance
+    from app.models.inventory_movement import InventoryMovement
+    from app.models.outbound_shipment import OutboundShipmentLine
     from app.models.seller import Seller
     from app.models.tenant import Tenant
 
@@ -59,5 +61,13 @@ class Product(Base):
     )
     inventory_balances: Mapped[list[InventoryBalance]] = relationship(
         "InventoryBalance",
+        back_populates="product",
+    )
+    inventory_movements: Mapped[list[InventoryMovement]] = relationship(
+        "InventoryMovement",
+        back_populates="product",
+    )
+    outbound_shipment_lines: Mapped[list[OutboundShipmentLine]] = relationship(
+        "OutboundShipmentLine",
         back_populates="product",
     )

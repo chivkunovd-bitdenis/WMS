@@ -7,12 +7,15 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel, Field
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.api.deps import get_current_user
+from app.api.deps import get_current_user, require_fulfillment_admin, seller_line_product_scope
+from app.core.roles import FULFILLMENT_ADMIN, FULFILLMENT_SELLER
 from app.db.session import get_db
 from app.models.inbound_intake import InboundIntakeLine
+from app.models.inventory_movement import InventoryMovement
 from app.models.product import Product
 from app.models.user import User
 from app.services import inbound_intake_service as svc
+from app.services import inventory_service as inv_svc
 from app.services.inbound_intake_service import InboundIntakeError
 
 router = APIRouter(
@@ -28,6 +31,15 @@ class InboundIntakeRequestCreate(BaseModel):
 class InboundIntakeLineCreate(BaseModel):
     product_id: uuid.UUID
     expected_qty: int = Field(ge=1, le=1_000_000_000)
+    storage_location_id: uuid.UUID | None = None
+
+
+class InboundIntakeLineStoragePatch(BaseModel):
+    storage_location_id: uuid.UUID
+
+
+class InboundIntakeLineReceiveBody(BaseModel):
+    quantity: int = Field(ge=1, le=1_000_000_000)
 
 
 class InboundIntakeLineOut(BaseModel):
@@ -36,6 +48,9 @@ class InboundIntakeLineOut(BaseModel):
     sku_code: str
     product_name: str
     expected_qty: int
+    posted_qty: int
+    storage_location_id: str | None
+    storage_location_code: str | None
 
 
 class InboundIntakeRequestSummaryOut(BaseModel):
@@ -52,17 +67,43 @@ class InboundIntakeRequestOut(BaseModel):
     lines: list[InboundIntakeLineOut]
 
 
-class InboundIntakePostBody(BaseModel):
-    storage_location_id: uuid.UUID
+class InventoryMovementOut(BaseModel):
+    id: str
+    product_id: str
+    storage_location_id: str
+    quantity_delta: int
+    movement_type: str
+    inbound_intake_line_id: str | None
+    created_at: str
 
 
 def _line_out_from_orm(line: InboundIntakeLine, product: Product) -> InboundIntakeLineOut:
+    loc = line.storage_location
     return InboundIntakeLineOut(
         id=str(line.id),
         product_id=str(line.product_id),
         sku_code=product.sku_code,
         product_name=product.name,
         expected_qty=line.expected_qty,
+        posted_qty=line.posted_qty,
+        storage_location_id=str(line.storage_location_id)
+        if line.storage_location_id
+        else None,
+        storage_location_code=loc.code if loc is not None else None,
+    )
+
+
+def _movement_out(m: InventoryMovement) -> InventoryMovementOut:
+    return InventoryMovementOut(
+        id=str(m.id),
+        product_id=str(m.product_id),
+        storage_location_id=str(m.storage_location_id),
+        quantity_delta=m.quantity_delta,
+        movement_type=m.movement_type,
+        inbound_intake_line_id=str(m.inbound_intake_line_id)
+        if m.inbound_intake_line_id
+        else None,
+        created_at=m.created_at.isoformat(),
     )
 
 
@@ -70,8 +111,13 @@ def _line_out_from_orm(line: InboundIntakeLine, product: Product) -> InboundInta
 async def list_inbound_requests(
     user: Annotated[User, Depends(get_current_user)],
     session: Annotated[AsyncSession, Depends(get_db)],
+    seller_scope: Annotated[uuid.UUID | None, Depends(seller_line_product_scope)],
 ) -> list[InboundIntakeRequestSummaryOut]:
-    rows = await svc.list_requests(session, user.tenant_id)
+    rows = await svc.list_requests(
+        session,
+        user.tenant_id,
+        seller_product_owner_id=seller_scope,
+    )
     return [
         InboundIntakeRequestSummaryOut(
             id=str(r.id),
@@ -89,15 +135,37 @@ async def create_inbound_request(
     user: Annotated[User, Depends(get_current_user)],
     session: Annotated[AsyncSession, Depends(get_db)],
 ) -> InboundIntakeRequestOut:
+    if user.role == FULFILLMENT_ADMIN:
+        owning_seller_id: uuid.UUID | None = None
+    elif user.role == FULFILLMENT_SELLER:
+        if user.seller_id is None:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="seller_not_linked",
+            )
+        owning_seller_id = user.seller_id
+    else:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="forbidden",
+        )
     try:
         r = await svc.create_request(
-            session, user.tenant_id, warehouse_id=body.warehouse_id
+            session,
+            user.tenant_id,
+            warehouse_id=body.warehouse_id,
+            seller_id=owning_seller_id,
         )
     except InboundIntakeError as exc:
         if exc.code == "warehouse_not_found":
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
                 detail="warehouse_not_found",
+            ) from None
+        if exc.code == "seller_not_found":
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="seller_not_found",
             ) from None
         raise
     return InboundIntakeRequestOut(
@@ -113,8 +181,14 @@ async def get_inbound_request(
     request_id: uuid.UUID,
     user: Annotated[User, Depends(get_current_user)],
     session: Annotated[AsyncSession, Depends(get_db)],
+    seller_scope: Annotated[uuid.UUID | None, Depends(seller_line_product_scope)],
 ) -> InboundIntakeRequestOut:
-    r = await svc.get_request(session, user.tenant_id, request_id)
+    r = await svc.get_request(
+        session,
+        user.tenant_id,
+        request_id,
+        seller_product_owner_id=seller_scope,
+    )
     if r is None:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
@@ -132,6 +206,36 @@ async def get_inbound_request(
     )
 
 
+@router.get(
+    "/{request_id}/movements",
+    response_model=list[InventoryMovementOut],
+)
+async def list_inbound_movements(
+    request_id: uuid.UUID,
+    user: Annotated[User, Depends(get_current_user)],
+    session: Annotated[AsyncSession, Depends(get_db)],
+    seller_scope: Annotated[uuid.UUID | None, Depends(seller_line_product_scope)],
+) -> list[InventoryMovementOut]:
+    r = await svc.get_request(
+        session,
+        user.tenant_id,
+        request_id,
+        seller_product_owner_id=seller_scope,
+    )
+    if r is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="request_not_found",
+        )
+    movements = await inv_svc.list_movements_for_request(
+        session,
+        user.tenant_id,
+        request_id,
+        seller_product_owner_id=seller_scope,
+    )
+    return [_movement_out(m) for m in movements]
+
+
 @router.post(
     "/{request_id}/lines",
     response_model=InboundIntakeLineOut,
@@ -142,7 +246,16 @@ async def add_inbound_line(
     body: InboundIntakeLineCreate,
     user: Annotated[User, Depends(get_current_user)],
     session: Annotated[AsyncSession, Depends(get_db)],
+    seller_scope: Annotated[uuid.UUID | None, Depends(seller_line_product_scope)],
 ) -> InboundIntakeLineOut:
+    if user.role not in (FULFILLMENT_ADMIN, FULFILLMENT_SELLER):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="forbidden",
+        )
+    line_seller_scope: uuid.UUID | None = (
+        None if user.role == FULFILLMENT_ADMIN else seller_scope
+    )
     try:
         line = await svc.add_line(
             session,
@@ -150,6 +263,8 @@ async def add_inbound_line(
             request_id,
             product_id=body.product_id,
             expected_qty=body.expected_qty,
+            storage_location_id=body.storage_location_id,
+            seller_product_owner_id=line_seller_scope,
         )
     except InboundIntakeError as exc:
         if exc.code == "request_not_found":
@@ -177,6 +292,21 @@ async def add_inbound_line(
                 status_code=status.HTTP_409_CONFLICT,
                 detail="duplicate_line",
             ) from None
+        if exc.code == "location_not_found":
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="location_not_found",
+            ) from None
+        if exc.code == "product_seller_mismatch":
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                detail="product_seller_mismatch",
+            ) from None
+        if exc.code == "mixed_seller_lines":
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                detail="mixed_seller_lines",
+            ) from None
         raise
     prod = await session.get(Product, line.product_id)
     if prod is None:
@@ -184,13 +314,130 @@ async def add_inbound_line(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="product_missing",
         )
+    await session.refresh(line, attribute_names=["storage_location"])
     return _line_out_from_orm(line, prod)
+
+
+@router.patch(
+    "/{request_id}/lines/{line_id}",
+    response_model=InboundIntakeLineOut,
+)
+async def patch_inbound_line_storage(
+    request_id: uuid.UUID,
+    line_id: uuid.UUID,
+    body: InboundIntakeLineStoragePatch,
+    user: Annotated[User, Depends(require_fulfillment_admin)],
+    session: Annotated[AsyncSession, Depends(get_db)],
+) -> InboundIntakeLineOut:
+    try:
+        line = await svc.set_line_storage_location(
+            session,
+            user.tenant_id,
+            request_id,
+            line_id,
+            storage_location_id=body.storage_location_id,
+        )
+    except InboundIntakeError as exc:
+        if exc.code == "line_not_found":
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="line_not_found",
+            ) from None
+        if exc.code == "not_editable":
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail="not_editable",
+            ) from None
+        if exc.code == "line_closed":
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail="line_closed",
+            ) from None
+        if exc.code == "location_not_found":
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="location_not_found",
+            ) from None
+        raise
+    prod = await session.get(Product, line.product_id)
+    if prod is None:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="product_missing",
+        )
+    await session.refresh(line, attribute_names=["storage_location"])
+    return _line_out_from_orm(line, prod)
+
+
+@router.post(
+    "/{request_id}/lines/{line_id}/receive",
+    response_model=InboundIntakeRequestOut,
+)
+async def receive_inbound_line(
+    request_id: uuid.UUID,
+    line_id: uuid.UUID,
+    body: InboundIntakeLineReceiveBody,
+    user: Annotated[User, Depends(require_fulfillment_admin)],
+    session: Annotated[AsyncSession, Depends(get_db)],
+) -> InboundIntakeRequestOut:
+    try:
+        r = await svc.receive_line(
+            session,
+            user.tenant_id,
+            request_id,
+            line_id,
+            quantity=body.quantity,
+        )
+    except InboundIntakeError as exc:
+        if exc.code == "line_not_found":
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="line_not_found",
+            ) from None
+        if exc.code == "already_posted":
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail="already_posted",
+            ) from None
+        if exc.code == "not_submitted":
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail="not_submitted",
+            ) from None
+        if exc.code == "nothing_to_receive":
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                detail="nothing_to_receive",
+            ) from None
+        if exc.code == "storage_not_assigned":
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                detail="storage_not_assigned",
+            ) from None
+        if exc.code == "invalid_qty":
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                detail="invalid_qty",
+            ) from None
+        raise
+    r2 = await svc.get_request(session, user.tenant_id, r.id)
+    if r2 is None:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="request_missing",
+        )
+    return InboundIntakeRequestOut(
+        id=str(r2.id),
+        warehouse_id=str(r2.warehouse_id),
+        status=r2.status,
+        lines=[_line_out_from_orm(ln, ln.product) for ln in r2.lines],
+    )
 
 
 @router.post("/{request_id}/submit", response_model=InboundIntakeRequestOut)
 async def submit_inbound_request(
     request_id: uuid.UUID,
-    user: Annotated[User, Depends(get_current_user)],
+    user: Annotated[User, Depends(require_fulfillment_admin)],
     session: Annotated[AsyncSession, Depends(get_db)],
 ) -> InboundIntakeRequestOut:
     try:
@@ -229,17 +476,11 @@ async def submit_inbound_request(
 @router.post("/{request_id}/post", response_model=InboundIntakeRequestOut)
 async def post_inbound_request(
     request_id: uuid.UUID,
-    body: InboundIntakePostBody,
-    user: Annotated[User, Depends(get_current_user)],
+    user: Annotated[User, Depends(require_fulfillment_admin)],
     session: Annotated[AsyncSession, Depends(get_db)],
 ) -> InboundIntakeRequestOut:
     try:
-        r = await svc.post_request(
-            session,
-            user.tenant_id,
-            request_id,
-            storage_location_id=body.storage_location_id,
-        )
+        r = await svc.post_all_remaining(session, user.tenant_id, request_id)
     except InboundIntakeError as exc:
         if exc.code == "request_not_found":
             raise HTTPException(
@@ -251,10 +492,20 @@ async def post_inbound_request(
                 status_code=status.HTTP_409_CONFLICT,
                 detail="not_submitted",
             ) from None
-        if exc.code == "location_not_found":
+        if exc.code == "already_posted":
             raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail="location_not_found",
+                status_code=status.HTTP_409_CONFLICT,
+                detail="already_posted",
+            ) from None
+        if exc.code == "lines_missing_storage":
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                detail="lines_missing_storage",
+            ) from None
+        if exc.code == "nothing_to_receive":
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                detail="nothing_to_receive",
             ) from None
         raise
     r2 = await svc.get_request(session, user.tenant_id, r.id)

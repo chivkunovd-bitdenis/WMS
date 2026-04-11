@@ -13,10 +13,11 @@ Epic map for splitting work: **[docs/BACKLOG_EPICS_RU.md](docs/BACKLOG_EPICS_RU.
 1. Pick the next GitHub Issue with label `ready` (skip `blocked`).
 2. Re-state the acceptance criteria (Given/When/Then) and identify impacted modules.
 3. Implement **vertical slice**:
-   - API routes only in `backend/app/api`
+   - API routes only in `backend/app/api` (в т.ч. интеграции: `wildberries_integration.py` → `/integrations/wildberries/...`)
    - business logic only in `backend/app/services`
    - data models only in `backend/app/models`
    - DB access only via `backend/app/db`
+   - Celery tasks only in `backend/app/tasks` (enqueue from API; broker via `CELERY_BROKER_URL`; unset `CELERY_BROKER_URL` uses FastAPI `BackgroundTasks` for local/tests)
 4. Add tests:
    - backend: pytest for core logic/validation
    - frontend: Playwright e2e that verifies **user-visible outcome** (not just HTTP 200)
@@ -34,4 +35,6 @@ Every feature that changes UI flow must ship with at least one Playwright scenar
 - uses stable selectors (`data-testid`)
 
 The scenario must match the real user path (e.g. register → screen that uses the new API), not an isolated HTTP check. With the default Playwright web server (one API + sqlite file), CI runs **`workers: 1`** to avoid DB lock flakes. In React async submit handlers, capture `const form = e.currentTarget` **before** any `await`, then call `form.reset()` — otherwise Strict Mode can leave `currentTarget` null after awaits.
+
+When asserting on network: subscribe with `page.waitForResponse` **in parallel** with the UI action (`Promise.all([waitForPostOk(...), locator.click()])`). If you `click()` first and only then await the response, the request may already have finished and the test will time out. After a successful submit that resets the form, the next step must refill **all** required fields (e.g. product dimensions), not only the fields that differ from defaults.
 

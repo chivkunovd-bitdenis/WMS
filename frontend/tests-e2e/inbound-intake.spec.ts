@@ -71,6 +71,9 @@ test('create inbound request, add line, submit — UI and API', async ({ page })
     .getByTestId('inbound-line-product')
     .selectOption({ label: `${sku} — Товар` });
   await page.getByTestId('inbound-line-qty').fill('4');
+  await page
+    .getByTestId('inbound-line-location')
+    .selectOption({ label: 'RCV-E2E' });
 
   const [lineRes] = await Promise.all([
     waitForPostOk(page, '/api/operations/inbound-intake-requests', (u) =>
@@ -94,7 +97,6 @@ test('create inbound request, add line, submit — UI and API', async ({ page })
     page.getByTestId('inbound-requests-list').getByTestId('inbound-request-item').first(),
   ).toContainText('submitted');
 
-  await page.getByTestId('inbound-post-location').selectOption({ label: 'RCV-E2E' });
   const [postRes] = await Promise.all([
     waitForPostOk(page, '/api/operations/inbound-intake-requests', (u) =>
       u.includes('/post'),
@@ -103,6 +105,9 @@ test('create inbound request, add line, submit — UI and API', async ({ page })
   ]);
   expect(postRes.ok()).toBeTruthy();
   await expect(page.getByTestId('inbound-detail-status')).toContainText('posted');
+  await expect(
+    page.getByTestId('inbound-movements-list').getByTestId('inbound-movement-row').first(),
+  ).toContainText('+4');
   const invRow = page
     .getByTestId('inventory-balance-list')
     .getByTestId('inventory-balance-row')

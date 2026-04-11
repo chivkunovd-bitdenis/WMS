@@ -2,32 +2,33 @@ from __future__ import annotations
 
 import os
 from collections.abc import AsyncIterator
+from pathlib import Path
 
 import pytest_asyncio
 from httpx import ASGITransport, AsyncClient
-from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
+from sqlalchemy.ext.asyncio import AsyncSession
 
+# Before importing app.db.session: same DATABASE_URL for routes and BackgroundTasks.
 os.environ.setdefault(
     "JWT_SECRET_KEY", "test-jwt-secret-key-at-least-32-characters-long"
 )
+_TEST_DB_PATH = Path(__file__).resolve().parent / "wms_pytest.sqlite"
+os.environ["DATABASE_URL"] = f"sqlite+aiosqlite:///{_TEST_DB_PATH}"
 
-from app.db.session import get_db
+from app.db.session import SessionLocal, engine, get_db
 from app.main import create_app
 from app.models import Base
-
-TEST_DB_URL = "sqlite+aiosqlite:///:memory:"
 
 
 @pytest_asyncio.fixture
 async def async_client() -> AsyncIterator[AsyncClient]:
-    engine = create_async_engine(TEST_DB_URL, connect_args={"check_same_thread": False})
+    async with engine.begin() as conn:
+        await conn.run_sync(Base.metadata.drop_all)
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
 
-    session_factory = async_sessionmaker(engine, expire_on_commit=False)
-
     async def override_get_db() -> AsyncIterator[AsyncSession]:
-        async with session_factory() as session:
+        async with SessionLocal() as session:
             yield session
 
     app = create_app()
@@ -37,4 +38,6 @@ async def async_client() -> AsyncIterator[AsyncClient]:
     async with AsyncClient(transport=transport, base_url="http://test") as client:
         yield client
 
-    await engine.dispose()
+    app.dependency_overrides.clear()
+    async with engine.begin() as conn:
+        await conn.run_sync(Base.metadata.drop_all)

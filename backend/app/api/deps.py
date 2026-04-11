@@ -8,6 +8,7 @@ from fastapi import Depends, HTTPException, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.roles import FULFILLMENT_ADMIN, FULFILLMENT_SELLER
 from app.db.session import get_db
 from app.models.user import User
 from app.services.auth_service import get_user_by_id
@@ -54,3 +55,28 @@ async def get_current_user(
             detail="tenant_mismatch",
         )
     return user
+
+
+async def require_fulfillment_admin(
+    user: Annotated[User, Depends(get_current_user)],
+) -> User:
+    if user.role != FULFILLMENT_ADMIN:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="forbidden",
+        )
+    return user
+
+
+async def seller_line_product_scope(
+    user: Annotated[User, Depends(get_current_user)],
+) -> uuid.UUID | None:
+    """For fulfillment_seller: filter operations to lines with these products."""
+    if user.role == FULFILLMENT_SELLER:
+        if user.seller_id is None:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="seller_not_linked",
+            )
+        return user.seller_id
+    return None

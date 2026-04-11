@@ -6,6 +6,8 @@ type Me = {
   email: string
   organization_name: string
   role: string
+  seller_id?: string | null
+  seller_name?: string | null
 }
 
 type WarehouseRow = { id: string; name: string; code: string }
@@ -18,7 +20,11 @@ type ProductRow = {
   width_mm: number
   height_mm: number
   volume_liters: number
+  seller_id: string | null
+  seller_name: string | null
 }
+
+type SellerRow = { id: string; name: string }
 
 type InboundSummaryRow = {
   id: string
@@ -33,6 +39,9 @@ type InboundLineRow = {
   sku_code: string
   product_name: string
   expected_qty: number
+  posted_qty: number
+  storage_location_id: string | null
+  storage_location_code: string | null
 }
 
 type InboundDetailRow = {
@@ -40,6 +49,61 @@ type InboundDetailRow = {
   warehouse_id: string
   status: string
   lines: InboundLineRow[]
+}
+
+type InboundMovementRow = {
+  id: string
+  product_id: string
+  storage_location_id: string
+  quantity_delta: number
+  movement_type: string
+  inbound_intake_line_id: string | null
+  created_at: string
+}
+
+type GlobalMovementRow = {
+  id: string
+  product_id: string
+  sku_code: string
+  storage_location_id: string
+  quantity_delta: number
+  movement_type: string
+  created_at: string
+}
+
+type OutboundSummaryRow = {
+  id: string
+  warehouse_id: string
+  status: string
+  line_count: number
+}
+
+type OutboundLineRow = {
+  id: string
+  product_id: string
+  sku_code: string
+  product_name: string
+  quantity: number
+  shipped_qty: number
+  storage_location_id: string | null
+  storage_location_code: string | null
+}
+
+type OutboundDetailRow = {
+  id: string
+  warehouse_id: string
+  status: string
+  lines: OutboundLineRow[]
+}
+
+type OutboundMovementRow = {
+  id: string
+  product_id: string
+  storage_location_id: string
+  quantity_delta: number
+  movement_type: string
+  outbound_shipment_line_id: string
+  created_at: string
 }
 
 async function readApiErrorMessage(res: Response): Promise<string> {
@@ -77,6 +141,7 @@ export default function App() {
   )
   const [locations, setLocations] = useState<LocationRow[]>([])
   const [products, setProducts] = useState<ProductRow[]>([])
+  const [sellers, setSellers] = useState<SellerRow[]>([])
   const [catalogError, setCatalogError] = useState<string | null>(null)
   const [catalogBusy, setCatalogBusy] = useState(false)
   const [inboundSummaries, setInboundSummaries] = useState<InboundSummaryRow[]>(
@@ -90,7 +155,12 @@ export default function App() {
   )
   const [opsError, setOpsError] = useState<string | null>(null)
   const [opsBusy, setOpsBusy] = useState(false)
-  const [postingLocations, setPostingLocations] = useState<LocationRow[]>([])
+  const [inboundRequestLocations, setInboundRequestLocations] = useState<
+    LocationRow[]
+  >([])
+  const [inboundMovements, setInboundMovements] = useState<
+    InboundMovementRow[]
+  >([])
   const [postedInventoryRows, setPostedInventoryRows] = useState<
     {
       product_id: string
@@ -99,6 +169,30 @@ export default function App() {
       quantity: number
     }[]
   >([])
+  const [globalMovements, setGlobalMovements] = useState<GlobalMovementRow[]>(
+    [],
+  )
+  const [outboundSummaries, setOutboundSummaries] = useState<
+    OutboundSummaryRow[]
+  >([])
+  const [selectedOutboundId, setSelectedOutboundId] = useState<string | null>(
+    null,
+  )
+  const [outboundDetail, setOutboundDetail] = useState<OutboundDetailRow | null>(
+    null,
+  )
+  const [outboundRequestLocations, setOutboundRequestLocations] = useState<
+    LocationRow[]
+  >([])
+  const [outboundMovements, setOutboundMovements] = useState<
+    OutboundMovementRow[]
+  >([])
+  const [backgroundJobStatus, setBackgroundJobStatus] = useState<string | null>(
+    null,
+  )
+  const [backgroundJobResult, setBackgroundJobResult] = useState<string | null>(
+    null,
+  )
 
   const loadMe = useCallback(async (t: string) => {
     setLoading(true)
@@ -188,6 +282,19 @@ export default function App() {
     [authHeaders],
   )
 
+  const refreshSellers = useCallback(
+    async (t: string) => {
+      const res = await fetch(apiUrl('/sellers'), {
+        headers: authHeaders(t),
+      })
+      if (!res.ok) {
+        throw new Error(await readApiErrorMessage(res))
+      }
+      setSellers((await res.json()) as SellerRow[])
+    },
+    [authHeaders],
+  )
+
   const refreshInboundList = useCallback(
     async (t: string) => {
       const res = await fetch(apiUrl('/operations/inbound-intake-requests'), {
@@ -203,14 +310,79 @@ export default function App() {
 
   const refreshInboundDetail = useCallback(
     async (t: string, requestId: string) => {
+      const [dRes, mRes] = await Promise.all([
+        fetch(apiUrl(`/operations/inbound-intake-requests/${requestId}`), {
+          headers: authHeaders(t),
+        }),
+        fetch(
+          apiUrl(`/operations/inbound-intake-requests/${requestId}/movements`),
+          { headers: authHeaders(t) },
+        ),
+      ])
+      if (!dRes.ok) {
+        throw new Error(await readApiErrorMessage(dRes))
+      }
+      setInboundDetail((await dRes.json()) as InboundDetailRow)
+      if (mRes.ok) {
+        setInboundMovements((await mRes.json()) as InboundMovementRow[])
+      } else {
+        setInboundMovements([])
+      }
+    },
+    [authHeaders],
+  )
+
+  const refreshGlobalMovements = useCallback(
+    async (t: string) => {
       const res = await fetch(
-        apiUrl(`/operations/inbound-intake-requests/${requestId}`),
+        apiUrl('/operations/inventory-movements?limit=80'),
         { headers: authHeaders(t) },
       )
       if (!res.ok) {
         throw new Error(await readApiErrorMessage(res))
       }
-      setInboundDetail((await res.json()) as InboundDetailRow)
+      setGlobalMovements((await res.json()) as GlobalMovementRow[])
+    },
+    [authHeaders],
+  )
+
+  const refreshOutboundList = useCallback(
+    async (t: string) => {
+      const res = await fetch(
+        apiUrl('/operations/outbound-shipment-requests'),
+        { headers: authHeaders(t) },
+      )
+      if (!res.ok) {
+        throw new Error(await readApiErrorMessage(res))
+      }
+      setOutboundSummaries((await res.json()) as OutboundSummaryRow[])
+    },
+    [authHeaders],
+  )
+
+  const refreshOutboundDetail = useCallback(
+    async (t: string, requestId: string) => {
+      const [dRes, mRes] = await Promise.all([
+        fetch(
+          apiUrl(`/operations/outbound-shipment-requests/${requestId}`),
+          { headers: authHeaders(t) },
+        ),
+        fetch(
+          apiUrl(
+            `/operations/outbound-shipment-requests/${requestId}/movements`,
+          ),
+          { headers: authHeaders(t) },
+        ),
+      ])
+      if (!dRes.ok) {
+        throw new Error(await readApiErrorMessage(dRes))
+      }
+      setOutboundDetail((await dRes.json()) as OutboundDetailRow)
+      if (mRes.ok) {
+        setOutboundMovements((await mRes.json()) as OutboundMovementRow[])
+      } else {
+        setOutboundMovements([])
+      }
     },
     [authHeaders],
   )
@@ -228,12 +400,22 @@ export default function App() {
       setWarehouses([])
       setLocations([])
       setProducts([])
+      setSellers([])
       setSelectedWarehouseId(null)
       setInboundSummaries([])
       setSelectedInboundId(null)
       setInboundDetail(null)
-      setPostingLocations([])
+      setInboundRequestLocations([])
+      setInboundMovements([])
       setPostedInventoryRows([])
+      setGlobalMovements([])
+      setOutboundSummaries([])
+      setSelectedOutboundId(null)
+      setOutboundDetail(null)
+      setOutboundRequestLocations([])
+      setOutboundMovements([])
+      setBackgroundJobStatus(null)
+      setBackgroundJobResult(null)
       setCatalogError(null)
       setOpsError(null)
       return
@@ -243,7 +425,12 @@ export default function App() {
     void (async () => {
       try {
         await refreshWarehouses(token)
+        if (me.role !== 'fulfillment_admin') {
+          setLocations([])
+          setSelectedWarehouseId(null)
+        }
         await refreshProducts(token)
+        await refreshSellers(token)
       } catch (e) {
         setCatalogError(
           e instanceof Error ? e.message : 'Не удалось загрузить каталог.',
@@ -253,13 +440,24 @@ export default function App() {
     void (async () => {
       try {
         await refreshInboundList(token)
+        await refreshOutboundList(token)
+        await refreshGlobalMovements(token)
       } catch (e) {
         setOpsError(
           e instanceof Error ? e.message : 'Не удалось загрузить заявки.',
         )
       }
     })()
-  }, [token, me, refreshWarehouses, refreshProducts, refreshInboundList])
+  }, [
+    token,
+    me,
+    refreshWarehouses,
+    refreshProducts,
+    refreshSellers,
+    refreshInboundList,
+    refreshOutboundList,
+    refreshGlobalMovements,
+  ])
 
   useEffect(() => {
     if (!token || !selectedInboundId) {
@@ -279,12 +477,51 @@ export default function App() {
   }, [token, selectedInboundId, refreshInboundDetail])
 
   useEffect(() => {
+    if (!token || !selectedOutboundId) {
+      setOutboundDetail(null)
+      return
+    }
+    void (async () => {
+      try {
+        setOpsError(null)
+        await refreshOutboundDetail(token, selectedOutboundId)
+      } catch (e) {
+        setOpsError(
+          e instanceof Error ? e.message : 'Не удалось загрузить отгрузку.',
+        )
+      }
+    })()
+  }, [token, selectedOutboundId, refreshOutboundDetail])
+
+  useEffect(() => {
+    if (!token || !outboundDetail?.warehouse_id) {
+      setOutboundRequestLocations([])
+      return
+    }
+    void (async () => {
+      try {
+        const res = await fetch(
+          apiUrl(`/warehouses/${outboundDetail.warehouse_id}/locations`),
+          { headers: authHeaders(token) },
+        )
+        if (!res.ok) {
+          setOutboundRequestLocations([])
+          return
+        }
+        setOutboundRequestLocations((await res.json()) as LocationRow[])
+      } catch {
+        setOutboundRequestLocations([])
+      }
+    })()
+  }, [token, outboundDetail?.warehouse_id, authHeaders])
+
+  useEffect(() => {
     setPostedInventoryRows([])
   }, [selectedInboundId])
 
   useEffect(() => {
-    if (!token || !inboundDetail || inboundDetail.status !== 'submitted') {
-      setPostingLocations([])
+    if (!token || !inboundDetail?.warehouse_id) {
+      setInboundRequestLocations([])
       return
     }
     void (async () => {
@@ -294,24 +531,18 @@ export default function App() {
           { headers: authHeaders(token) },
         )
         if (!res.ok) {
-          setPostingLocations([])
+          setInboundRequestLocations([])
           return
         }
-        setPostingLocations((await res.json()) as LocationRow[])
+        setInboundRequestLocations((await res.json()) as LocationRow[])
       } catch {
-        setPostingLocations([])
+        setInboundRequestLocations([])
       }
     })()
-  }, [
-    token,
-    inboundDetail?.id,
-    inboundDetail?.status,
-    inboundDetail?.warehouse_id,
-    authHeaders,
-  ])
+  }, [token, inboundDetail?.warehouse_id, authHeaders])
 
   useEffect(() => {
-    if (!token || !selectedWarehouseId) {
+    if (!token || !selectedWarehouseId || me?.role !== 'fulfillment_admin') {
       setLocations([])
       return
     }
@@ -324,7 +555,7 @@ export default function App() {
         )
       }
     })()
-  }, [token, selectedWarehouseId, refreshLocations])
+  }, [token, me?.role, selectedWarehouseId, refreshLocations])
 
   async function onRegister(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault()
@@ -425,8 +656,89 @@ export default function App() {
     setSelectedInboundId(null)
     setInboundDetail(null)
     setOpsError(null)
-    setPostingLocations([])
+    setInboundRequestLocations([])
+    setInboundMovements([])
     setPostedInventoryRows([])
+    setGlobalMovements([])
+    setOutboundSummaries([])
+    setSelectedOutboundId(null)
+    setOutboundDetail(null)
+    setOutboundRequestLocations([])
+    setOutboundMovements([])
+    setSellers([])
+    setBackgroundJobStatus(null)
+    setBackgroundJobResult(null)
+  }
+
+  async function onCreateSeller(e: React.FormEvent<HTMLFormElement>) {
+    e.preventDefault()
+    const form = e.currentTarget
+    if (!token) {
+      return
+    }
+    setCatalogError(null)
+    setCatalogBusy(true)
+    try {
+      const fd = new FormData(form)
+      const name = String(fd.get('seller_name') ?? '').trim()
+      const res = await fetch(apiUrl('/sellers'), {
+        method: 'POST',
+        headers: {
+          ...authHeaders(token),
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ name }),
+      })
+      if (!res.ok) {
+        setCatalogError(await readApiErrorMessage(res))
+        return
+      }
+      form.reset()
+      await refreshSellers(token)
+    } catch (err) {
+      setCatalogError(
+        err instanceof Error ? err.message : 'Не удалось создать селлера.',
+      )
+    } finally {
+      setCatalogBusy(false)
+    }
+  }
+
+  async function onCreateSellerAccount(e: React.FormEvent<HTMLFormElement>) {
+    e.preventDefault()
+    const form = e.currentTarget
+    if (!token) {
+      return
+    }
+    setCatalogError(null)
+    setCatalogBusy(true)
+    try {
+      const fd = new FormData(form)
+      const seller_id = String(fd.get('acc_seller_id') ?? '')
+      const email = String(fd.get('acc_email') ?? '').trim()
+      const password = String(fd.get('acc_password') ?? '')
+      const res = await fetch(apiUrl('/auth/seller-accounts'), {
+        method: 'POST',
+        headers: {
+          ...authHeaders(token),
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ seller_id, email, password }),
+      })
+      if (!res.ok) {
+        setCatalogError(await readApiErrorMessage(res))
+        return
+      }
+      form.reset()
+    } catch (err) {
+      setCatalogError(
+        err instanceof Error
+          ? err.message
+          : 'Не удалось создать аккаунт селлера.',
+      )
+    } finally {
+      setCatalogBusy(false)
+    }
   }
 
   async function onCreateWarehouse(e: React.FormEvent<HTMLFormElement>) {
@@ -529,19 +841,24 @@ export default function App() {
       const length_mm = Number(fd.get('product_length_mm'))
       const width_mm = Number(fd.get('product_width_mm'))
       const height_mm = Number(fd.get('product_height_mm'))
+      const seller_raw = String(fd.get('product_seller_id') ?? '').trim()
+      const body: Record<string, unknown> = {
+        name,
+        sku_code,
+        length_mm,
+        width_mm,
+        height_mm,
+      }
+      if (seller_raw) {
+        body.seller_id = seller_raw
+      }
       const res = await fetch(apiUrl('/products'), {
         method: 'POST',
         headers: {
           ...authHeaders(token),
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({
-          name,
-          sku_code,
-          length_mm,
-          width_mm,
-          height_mm,
-        }),
+        body: JSON.stringify(body),
       })
       if (!res.ok) {
         setCatalogError(await readApiErrorMessage(res))
@@ -563,17 +880,24 @@ export default function App() {
   async function onCreateInboundRequest(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault()
     const form = e.currentTarget
-    if (!token) {
+    if (!token || !me) {
       return
     }
     setOpsError(null)
     setOpsBusy(true)
     try {
+      const fd = new FormData(form)
+      const whFromForm = String(fd.get('inbound_warehouse_id') ?? '').trim()
       const warehouseId =
-        selectedWarehouseId ??
+        whFromForm ||
+        selectedWarehouseId ||
         (warehouses.length === 1 ? warehouses[0]!.id : null)
       if (!warehouseId) {
-        setOpsError('Выберите склад в списке выше.')
+        setOpsError(
+          me.role === 'fulfillment_seller' && warehouses.length > 1
+            ? 'Выберите склад для новой заявки.'
+            : 'Выберите склад в списке выше.',
+        )
         return
       }
       const res = await fetch(apiUrl('/operations/inbound-intake-requests'), {
@@ -613,6 +937,13 @@ export default function App() {
       const fd = new FormData(form)
       const product_id = String(fd.get('inbound_product_id') ?? '')
       const expected_qty = Number(fd.get('inbound_qty'))
+      const storage_raw = String(
+        fd.get('inbound_line_storage_id') ?? '',
+      ).trim()
+      const body: Record<string, unknown> = { product_id, expected_qty }
+      if (storage_raw) {
+        body.storage_location_id = storage_raw
+      }
       const res = await fetch(
         apiUrl(
           `/operations/inbound-intake-requests/${selectedInboundId}/lines`,
@@ -623,7 +954,7 @@ export default function App() {
             ...authHeaders(token),
             'Content-Type': 'application/json',
           },
-          body: JSON.stringify({ product_id, expected_qty }),
+          body: JSON.stringify(body),
         },
       )
       if (!res.ok) {
@@ -673,25 +1004,92 @@ export default function App() {
     }
   }
 
-  async function onPostInboundRequest(e: React.FormEvent<HTMLFormElement>) {
-    e.preventDefault()
-    const form = e.currentTarget
+  async function onPostInboundRequest() {
     if (!token || !selectedInboundId) {
       return
     }
     setOpsError(null)
     setOpsBusy(true)
     try {
-      const fd = new FormData(form)
-      const storage_location_id = String(
-        fd.get('inbound_post_location_id') ?? '',
-      )
       const res = await fetch(
         apiUrl(
           `/operations/inbound-intake-requests/${selectedInboundId}/post`,
         ),
         {
           method: 'POST',
+          headers: authHeaders(token),
+        },
+      )
+      if (!res.ok) {
+        setOpsError(await readApiErrorMessage(res))
+        return
+      }
+      const data = (await res.json()) as InboundDetailRow
+      await refreshInboundList(token)
+      await refreshInboundDetail(token, selectedInboundId)
+      const storageIds = [
+        ...new Set(
+          data.lines
+            .map((l) => l.storage_location_id)
+            .filter((x): x is string => Boolean(x)),
+        ),
+      ]
+      const merged: {
+        product_id: string
+        sku_code: string
+        product_name: string
+        quantity: number
+      }[] = []
+      for (const sid of storageIds) {
+        const br = await fetch(
+          apiUrl(
+            `/operations/inventory-balances?storage_location_id=${encodeURIComponent(sid)}`,
+          ),
+          { headers: authHeaders(token) },
+        )
+        if (br.ok) {
+          merged.push(
+            ...(await br.json()) as {
+              product_id: string
+              sku_code: string
+              product_name: string
+              quantity: number
+            }[],
+          )
+        }
+      }
+      setPostedInventoryRows(merged)
+      await refreshGlobalMovements(token)
+    } catch (e) {
+      setOpsError(
+        e instanceof Error ? e.message : 'Не удалось провести приёмку.',
+      )
+    } finally {
+      setOpsBusy(false)
+    }
+  }
+
+  async function onSaveInboundLineStorage(e: React.FormEvent<HTMLFormElement>) {
+    e.preventDefault()
+    const form = e.currentTarget
+    if (!token || !selectedInboundId) {
+      return
+    }
+    const lineId = form.getAttribute('data-line-id')
+    if (!lineId) {
+      return
+    }
+    setOpsError(null)
+    setOpsBusy(true)
+    try {
+      const fd = new FormData(form)
+      const storage_location_id = String(fd.get('line_storage_id') ?? '')
+      const res = await fetch(
+        apiUrl(
+          `/operations/inbound-intake-requests/${selectedInboundId}/lines/${lineId}`,
+        ),
+        {
+          method: 'PATCH',
           headers: {
             ...authHeaders(token),
             'Content-Type': 'application/json',
@@ -703,34 +1101,466 @@ export default function App() {
         setOpsError(await readApiErrorMessage(res))
         return
       }
-      await refreshInboundList(token)
       await refreshInboundDetail(token, selectedInboundId)
-      const br = await fetch(
-        apiUrl(
-          `/operations/inventory-balances?storage_location_id=${encodeURIComponent(storage_location_id)}`,
-        ),
-        { headers: authHeaders(token) },
-      )
-      if (br.ok) {
-        setPostedInventoryRows(
-          (await br.json()) as {
-            product_id: string
-            sku_code: string
-            product_name: string
-            quantity: number
-          }[],
-        )
-      }
-    } catch (e) {
+      await refreshInboundList(token)
+      form.reset()
+    } catch (err) {
       setOpsError(
-        e instanceof Error ? e.message : 'Не удалось провести приёмку.',
+        err instanceof Error ? err.message : 'Не удалось сохранить ячейку.',
       )
     } finally {
       setOpsBusy(false)
     }
   }
 
+  async function onReceiveInboundLine(e: React.FormEvent<HTMLFormElement>) {
+    e.preventDefault()
+    const form = e.currentTarget
+    if (!token || !selectedInboundId) {
+      return
+    }
+    const lineId = form.getAttribute('data-line-id')
+    if (!lineId) {
+      return
+    }
+    setOpsError(null)
+    setOpsBusy(true)
+    try {
+      const fd = new FormData(form)
+      const quantity = Number(fd.get('receive_qty'))
+      const res = await fetch(
+        apiUrl(
+          `/operations/inbound-intake-requests/${selectedInboundId}/lines/${lineId}/receive`,
+        ),
+        {
+          method: 'POST',
+          headers: {
+            ...authHeaders(token),
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({ quantity }),
+        },
+      )
+      if (!res.ok) {
+        setOpsError(await readApiErrorMessage(res))
+        return
+      }
+      const data = (await res.json()) as InboundDetailRow
+      await refreshInboundList(token)
+      await refreshInboundDetail(token, selectedInboundId)
+      const storageIds = [
+        ...new Set(
+          data.lines
+            .map((l) => l.storage_location_id)
+            .filter((x): x is string => Boolean(x)),
+        ),
+      ]
+      const merged: {
+        product_id: string
+        sku_code: string
+        product_name: string
+        quantity: number
+      }[] = []
+      for (const sid of storageIds) {
+        const br = await fetch(
+          apiUrl(
+            `/operations/inventory-balances?storage_location_id=${encodeURIComponent(sid)}`,
+          ),
+          { headers: authHeaders(token) },
+        )
+        if (br.ok) {
+          merged.push(
+            ...(await br.json()) as {
+              product_id: string
+              sku_code: string
+              product_name: string
+              quantity: number
+            }[],
+          )
+        }
+      }
+      setPostedInventoryRows(merged)
+      await refreshGlobalMovements(token)
+      form.reset()
+    } catch (err) {
+      setOpsError(
+        err instanceof Error ? err.message : 'Не удалось принять количество.',
+      )
+    } finally {
+      setOpsBusy(false)
+    }
+  }
+
+  async function onStockTransfer(e: React.FormEvent<HTMLFormElement>) {
+    e.preventDefault()
+    const form = e.currentTarget
+    if (!token) {
+      return
+    }
+    setOpsError(null)
+    setOpsBusy(true)
+    try {
+      const fd = new FormData(form)
+      const from_storage_location_id = String(
+        fd.get('transfer_from_loc') ?? '',
+      )
+      const to_storage_location_id = String(fd.get('transfer_to_loc') ?? '')
+      const product_id = String(fd.get('transfer_product_id') ?? '')
+      const quantity = Number(fd.get('transfer_qty'))
+      const res = await fetch(apiUrl('/operations/stock-transfers'), {
+        method: 'POST',
+        headers: {
+          ...authHeaders(token),
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          from_storage_location_id,
+          to_storage_location_id,
+          product_id,
+          quantity,
+        }),
+      })
+      if (!res.ok) {
+        setOpsError(await readApiErrorMessage(res))
+        return
+      }
+      form.reset()
+      await refreshGlobalMovements(token)
+    } catch (err) {
+      setOpsError(
+        err instanceof Error ? err.message : 'Не удалось переместить остаток.',
+      )
+    } finally {
+      setOpsBusy(false)
+    }
+  }
+
+  async function onCreateOutboundRequest(e: React.FormEvent<HTMLFormElement>) {
+    e.preventDefault()
+    const form = e.currentTarget
+    if (!token || !me) {
+      return
+    }
+    const fd = new FormData(form)
+    const whFromForm = String(fd.get('outbound_warehouse_id') ?? '').trim()
+    const warehouseId =
+      whFromForm ||
+      selectedWarehouseId ||
+      (warehouses.length === 1 ? warehouses[0]!.id : null)
+    if (!warehouseId) {
+      setOpsError(
+        me.role === 'fulfillment_seller' && warehouses.length > 1
+          ? 'Выберите склад для новой заявки на отгрузку.'
+          : 'Выберите склад в каталоге.',
+      )
+      return
+    }
+    setOpsError(null)
+    setOpsBusy(true)
+    try {
+      const res = await fetch(
+        apiUrl('/operations/outbound-shipment-requests'),
+        {
+          method: 'POST',
+          headers: {
+            ...authHeaders(token),
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({ warehouse_id: warehouseId }),
+        },
+      )
+      if (!res.ok) {
+        setOpsError(await readApiErrorMessage(res))
+        return
+      }
+      const created = (await res.json()) as OutboundDetailRow
+      await refreshOutboundList(token)
+      setSelectedOutboundId(created.id)
+    } catch (err) {
+      setOpsError(
+        err instanceof Error ? err.message : 'Не удалось создать отгрузку.',
+      )
+    } finally {
+      setOpsBusy(false)
+    }
+  }
+
+  async function onAddOutboundLine(e: React.FormEvent<HTMLFormElement>) {
+    e.preventDefault()
+    const form = e.currentTarget
+    if (!token || !selectedOutboundId) {
+      return
+    }
+    setOpsError(null)
+    setOpsBusy(true)
+    try {
+      const fd = new FormData(form)
+      const product_id = String(fd.get('outbound_product_id') ?? '')
+      const quantity = Number(fd.get('outbound_qty'))
+      const storage_raw = String(
+        fd.get('outbound_line_storage_id') ?? '',
+      ).trim()
+      const body: Record<string, unknown> = { product_id, quantity }
+      if (storage_raw) {
+        body.storage_location_id = storage_raw
+      }
+      const res = await fetch(
+        apiUrl(
+          `/operations/outbound-shipment-requests/${selectedOutboundId}/lines`,
+        ),
+        {
+          method: 'POST',
+          headers: {
+            ...authHeaders(token),
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify(body),
+        },
+      )
+      if (!res.ok) {
+        setOpsError(await readApiErrorMessage(res))
+        return
+      }
+      form.reset()
+      await refreshOutboundList(token)
+      await refreshOutboundDetail(token, selectedOutboundId)
+    } catch (err) {
+      setOpsError(
+        err instanceof Error ? err.message : 'Не удалось добавить строку.',
+      )
+    } finally {
+      setOpsBusy(false)
+    }
+  }
+
+  async function onSubmitOutboundRequest() {
+    if (!token || !selectedOutboundId) {
+      return
+    }
+    setOpsError(null)
+    setOpsBusy(true)
+    try {
+      const res = await fetch(
+        apiUrl(
+          `/operations/outbound-shipment-requests/${selectedOutboundId}/submit`,
+        ),
+        { method: 'POST', headers: authHeaders(token) },
+      )
+      if (!res.ok) {
+        setOpsError(await readApiErrorMessage(res))
+        return
+      }
+      await refreshOutboundList(token)
+      await refreshOutboundDetail(token, selectedOutboundId)
+    } catch (err) {
+      setOpsError(
+        err instanceof Error ? err.message : 'Не удалось отправить отгрузку.',
+      )
+    } finally {
+      setOpsBusy(false)
+    }
+  }
+
+  async function onSaveOutboundLineStorage(e: React.FormEvent<HTMLFormElement>) {
+    e.preventDefault()
+    const form = e.currentTarget
+    if (!token || !selectedOutboundId) {
+      return
+    }
+    const lineId = form.getAttribute('data-line-id')
+    if (!lineId) {
+      return
+    }
+    setOpsError(null)
+    setOpsBusy(true)
+    try {
+      const fd = new FormData(form)
+      const storage_location_id = String(fd.get('out_line_storage_id') ?? '')
+      const res = await fetch(
+        apiUrl(
+          `/operations/outbound-shipment-requests/${selectedOutboundId}/lines/${lineId}`,
+        ),
+        {
+          method: 'PATCH',
+          headers: {
+            ...authHeaders(token),
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({ storage_location_id }),
+        },
+      )
+      if (!res.ok) {
+        setOpsError(await readApiErrorMessage(res))
+        return
+      }
+      await refreshOutboundDetail(token, selectedOutboundId)
+      await refreshOutboundList(token)
+      form.reset()
+    } catch (err) {
+      setOpsError(
+        err instanceof Error ? err.message : 'Не удалось сохранить ячейку.',
+      )
+    } finally {
+      setOpsBusy(false)
+    }
+  }
+
+  async function onShipOutboundLine(e: React.FormEvent<HTMLFormElement>) {
+    e.preventDefault()
+    const form = e.currentTarget
+    if (!token || !selectedOutboundId) {
+      return
+    }
+    const lineId = form.getAttribute('data-line-id')
+    if (!lineId) {
+      return
+    }
+    setOpsError(null)
+    setOpsBusy(true)
+    try {
+      const fd = new FormData(form)
+      const quantity = Number(fd.get('ship_qty'))
+      const res = await fetch(
+        apiUrl(
+          `/operations/outbound-shipment-requests/${selectedOutboundId}/lines/${lineId}/ship`,
+        ),
+        {
+          method: 'POST',
+          headers: {
+            ...authHeaders(token),
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({ quantity }),
+        },
+      )
+      if (!res.ok) {
+        setOpsError(await readApiErrorMessage(res))
+        return
+      }
+      await refreshOutboundList(token)
+      await refreshOutboundDetail(token, selectedOutboundId)
+      await refreshGlobalMovements(token)
+      form.reset()
+    } catch (err) {
+      setOpsError(
+        err instanceof Error ? err.message : 'Не удалось отгрузить количество.',
+      )
+    } finally {
+      setOpsBusy(false)
+    }
+  }
+
+  async function onPostOutboundRequest() {
+    if (!token || !selectedOutboundId) {
+      return
+    }
+    setOpsError(null)
+    setOpsBusy(true)
+    try {
+      const res = await fetch(
+        apiUrl(
+          `/operations/outbound-shipment-requests/${selectedOutboundId}/post`,
+        ),
+        { method: 'POST', headers: authHeaders(token) },
+      )
+      if (!res.ok) {
+        setOpsError(await readApiErrorMessage(res))
+        return
+      }
+      await refreshOutboundList(token)
+      await refreshOutboundDetail(token, selectedOutboundId)
+      await refreshGlobalMovements(token)
+    } catch (err) {
+      setOpsError(
+        err instanceof Error ? err.message : 'Не удалось провести отгрузку.',
+      )
+    } finally {
+      setOpsBusy(false)
+    }
+  }
+
+  async function onRefreshGlobalMovementsClick() {
+    if (!token) {
+      return
+    }
+    setOpsError(null)
+    try {
+      await refreshGlobalMovements(token)
+    } catch (err) {
+      setOpsError(
+        err instanceof Error
+          ? err.message
+          : 'Не удалось обновить журнал движений.',
+      )
+    }
+  }
+
+  async function onStartMovementsDigestJob() {
+    if (!token) {
+      return
+    }
+    setOpsError(null)
+    setOpsBusy(true)
+    setBackgroundJobStatus('pending')
+    setBackgroundJobResult(null)
+    try {
+      const res = await fetch(apiUrl('/operations/background-jobs'), {
+        method: 'POST',
+        headers: {
+          ...authHeaders(token),
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ job_type: 'movements_digest' }),
+      })
+      if (!res.ok) {
+        setOpsError(await readApiErrorMessage(res))
+        setBackgroundJobStatus(null)
+        return
+      }
+      const started = (await res.json()) as { id: string; status: string }
+      const jobId = started.id
+      setBackgroundJobStatus(started.status)
+      for (let i = 0; i < 60; i++) {
+        await new Promise((r) => setTimeout(r, 200))
+        const st = await fetch(
+          apiUrl(`/operations/background-jobs/${jobId}`),
+          { headers: authHeaders(token) },
+        )
+        if (!st.ok) {
+          continue
+        }
+        const j = (await st.json()) as {
+          status: string
+          result_json: { total_movements?: number } | null
+          error_message: string | null
+        }
+        setBackgroundJobStatus(j.status)
+        if (j.status === 'done') {
+          const n = j.result_json?.total_movements ?? 0
+          setBackgroundJobResult(`Всего движений: ${n}`)
+          await refreshGlobalMovements(token)
+          break
+        }
+        if (j.status === 'failed') {
+          setBackgroundJobResult(j.error_message ?? 'failed')
+          break
+        }
+      }
+    } catch (err) {
+      setOpsError(
+        err instanceof Error ? err.message : 'Не удалось выполнить задачу.',
+      )
+      setBackgroundJobStatus(null)
+    } finally {
+      setOpsBusy(false)
+    }
+  }
+
   if (token && me) {
+    const isFulfillmentAdmin = me.role === 'fulfillment_admin'
+    const isFulfillmentSeller = me.role === 'fulfillment_seller'
+    const canEditInboundDraft = isFulfillmentAdmin || isFulfillmentSeller
+    const canEditOutboundDraft = isFulfillmentAdmin || isFulfillmentSeller
     return (
       <main data-testid="app-root" className="shell">
         <header className="top">
@@ -743,6 +1573,67 @@ export default function App() {
           <p data-testid="user-email">{me.email}</p>
           <p data-testid="org-name">{me.organization_name}</p>
           <p data-testid="user-role">{me.role}</p>
+          {me.seller_name ? (
+            <p data-testid="seller-cabinet-label">Селлер: {me.seller_name}</p>
+          ) : null}
+          {isFulfillmentAdmin && sellers.length > 0 ? (
+            <form
+              data-testid="seller-account-form"
+              style={{ marginTop: 12 }}
+              noValidate
+              onSubmit={(e) => void onCreateSellerAccount(e)}
+            >
+              <h3 className="subtle" style={{ marginTop: 0 }}>
+                Аккаунт селлера (вход по email)
+              </h3>
+              <label>
+                Селлер
+                <select
+                  name="acc_seller_id"
+                  data-testid="seller-account-seller"
+                  required
+                  defaultValue=""
+                >
+                  <option value="" disabled>
+                    Выберите
+                  </option>
+                  {sellers.map((s) => (
+                    <option key={s.id} value={s.id}>
+                      {s.name}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <label>
+                Email
+                <input
+                  name="acc_email"
+                  data-testid="seller-account-email"
+                  type="email"
+                  required
+                  autoComplete="off"
+                />
+              </label>
+              <label>
+                Пароль
+                <input
+                  name="acc_password"
+                  data-testid="seller-account-password"
+                  type="password"
+                  minLength={8}
+                  required
+                  autoComplete="new-password"
+                />
+              </label>
+              <button
+                type="submit"
+                data-testid="seller-account-submit"
+                disabled={catalogBusy}
+              >
+                {catalogBusy ? '…' : 'Создать аккаунт селлера'}
+              </button>
+            </form>
+          ) : null}
         </section>
         <div className="stack" data-testid="catalog-section">
           {catalogError ? (
@@ -750,6 +1641,13 @@ export default function App() {
               {catalogError}
             </p>
           ) : null}
+          {!isFulfillmentAdmin ? (
+            <p className="subtle" data-testid="seller-cabinet-notice">
+              Режим селлера: доступны ваши SKU, заявки с вашими товарами и
+              журнал движений. Управление складом — у фулфилмента.
+            </p>
+          ) : null}
+          {isFulfillmentAdmin ? (
           <section className="card">
             <h2>Склады</h2>
             <p className="subtle">
@@ -815,6 +1713,8 @@ export default function App() {
               ))}
             </ul>
           </section>
+          ) : null}
+          {isFulfillmentAdmin ? (
           <section className="card">
             <h2>Ячейки</h2>
             {!selectedWarehouseId ? (
@@ -851,8 +1751,47 @@ export default function App() {
               ))}
             </ul>
           </section>
+          ) : null}
+          <section className="card" data-testid="sellers-section">
+            <h2>Селлеры</h2>
+            <p className="subtle">
+              Клиенты фулфилмента; можно привязать к SKU при создании товара.
+            </p>
+            {isFulfillmentAdmin ? (
+            <form
+              data-testid="seller-form"
+              noValidate
+              onSubmit={(e) => void onCreateSeller(e)}
+            >
+              <label>
+                Название селлера
+                <input
+                  name="seller_name"
+                  data-testid="seller-name"
+                  required
+                  autoComplete="off"
+                />
+              </label>
+              <button
+                type="submit"
+                data-testid="seller-submit"
+                disabled={catalogBusy}
+              >
+                {catalogBusy ? '…' : 'Добавить селлера'}
+              </button>
+            </form>
+            ) : null}
+            <ul className="list-plain" data-testid="seller-list">
+              {sellers.map((s) => (
+                <li key={s.id} data-testid="seller-item">
+                  {s.name}
+                </li>
+              ))}
+            </ul>
+          </section>
           <section className="card">
             <h2>Товары (SKU)</h2>
+            {isFulfillmentAdmin ? (
             <form
               data-testid="product-form"
               noValidate
@@ -905,6 +1844,23 @@ export default function App() {
                   required
                 />
               </label>
+              {sellers.length > 0 ? (
+                <label>
+                  Селлер (необязательно)
+                  <select
+                    name="product_seller_id"
+                    data-testid="product-seller"
+                    defaultValue=""
+                  >
+                    <option value="">— нет —</option>
+                    {sellers.map((s) => (
+                      <option key={s.id} value={s.id}>
+                        {s.name}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+              ) : null}
               <button
                 type="submit"
                 data-testid="product-submit"
@@ -913,6 +1869,7 @@ export default function App() {
                 {catalogBusy ? '…' : 'Добавить товар'}
               </button>
             </form>
+            ) : null}
             <ul className="list-plain" data-testid="product-list">
               {products.map((p) => (
                 <li key={p.id} data-testid="product-item">
@@ -920,6 +1877,12 @@ export default function App() {
                   <span data-testid="product-volume">
                     {p.volume_liters.toFixed(1)} л
                   </span>
+                  {p.seller_name ? (
+                    <span data-testid="product-seller-name">
+                      {' '}
+                      · селлер: {p.seller_name}
+                    </span>
+                  ) : null}
                 </li>
               ))}
             </ul>
@@ -931,29 +1894,78 @@ export default function App() {
               {opsError}
             </p>
           ) : null}
+          {isFulfillmentAdmin ? (
+          <section className="card" data-testid="background-job-section">
+            <h2>Фоновая задача</h2>
+            <p className="subtle">
+              Сервер считает сводку по журналу движений в фоне; статус
+              обновляется после запуска (как отчёт / тяжёлая операция).
+            </p>
+            <button
+              type="button"
+              data-testid="background-job-start"
+              disabled={opsBusy}
+              onClick={() => void onStartMovementsDigestJob()}
+            >
+              {opsBusy ? '…' : 'Сводка по движениям'}
+            </button>
+            <p className="subtle" data-testid="background-job-status">
+              Статус: {backgroundJobStatus ?? '—'}
+            </p>
+            {backgroundJobResult ? (
+              <p data-testid="background-job-result">{backgroundJobResult}</p>
+            ) : null}
+          </section>
+          ) : null}
           <section className="card">
             <h2>Приёмка</h2>
             <p className="subtle">
-              Заявка создаётся для выбранного склада. Остатки в ячейке
-              появляются после проведения (все строки заявки в одну выбранную
-              ячейку).
+              Ячейку можно указать при добавлении строки или позже. Частичный
+              приём — по строке; «Провести весь остаток» оприходует всё
+              непринятое по строкам с назначенной ячейкой. Движения пишутся в
+              журнал.
             </p>
+            {canEditInboundDraft ? (
             <form
               data-testid="inbound-create-form"
               noValidate
               onSubmit={(e) => void onCreateInboundRequest(e)}
             >
+              {isFulfillmentSeller && warehouses.length > 1 ? (
+                <label style={{ display: 'block', marginBottom: 8 }}>
+                  Склад для заявки
+                  <select
+                    name="inbound_warehouse_id"
+                    data-testid="inbound-create-warehouse"
+                    required
+                    defaultValue=""
+                  >
+                    <option value="" disabled>
+                      Выберите склад
+                    </option>
+                    {warehouses.map((w) => (
+                      <option key={w.id} value={w.id}>
+                        {w.code} — {w.name}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+              ) : null}
               <button
                 type="submit"
                 data-testid="inbound-create-submit"
                 disabled={
                   opsBusy ||
-                  (!selectedWarehouseId && warehouses.length !== 1)
+                  warehouses.length === 0 ||
+                  (!isFulfillmentSeller &&
+                    !selectedWarehouseId &&
+                    warehouses.length !== 1)
                 }
               >
                 {opsBusy ? '…' : 'Новая заявка на приёмку'}
               </button>
             </form>
+            ) : null}
             <ul className="list-plain" data-testid="inbound-requests-list">
               {inboundSummaries.map((row) => (
                 <li key={row.id}>
@@ -996,11 +2008,15 @@ export default function App() {
                       key={ln.id}
                       data-testid="inbound-detail-line"
                     >
-                      {ln.product_name} ({ln.sku_code}) — {ln.expected_qty} шт
+                      {ln.product_name} ({ln.sku_code}) — принято{' '}
+                      {ln.posted_qty} из {ln.expected_qty}
+                      {ln.storage_location_code
+                        ? ` · ячейка: ${ln.storage_location_code}`
+                        : ''}
                     </li>
                   ))}
                 </ul>
-                {inboundDetail.status === 'draft' ? (
+                {inboundDetail.status === 'draft' && canEditInboundDraft ? (
                   <form
                     data-testid="inbound-line-form"
                     noValidate
@@ -1034,6 +2050,23 @@ export default function App() {
                         required
                       />
                     </label>
+                    {inboundRequestLocations.length > 0 ? (
+                      <label>
+                        Ячейка (необязательно)
+                        <select
+                          name="inbound_line_storage_id"
+                          data-testid="inbound-line-location"
+                          defaultValue=""
+                        >
+                          <option value="">— позже —</option>
+                          {inboundRequestLocations.map((loc) => (
+                            <option key={loc.id} value={loc.id}>
+                              {loc.code}
+                            </option>
+                          ))}
+                        </select>
+                      </label>
+                    ) : null}
                     <button
                       type="submit"
                       data-testid="inbound-line-submit"
@@ -1044,7 +2077,8 @@ export default function App() {
                   </form>
                 ) : null}
                 {inboundDetail.status === 'draft' &&
-                inboundDetail.lines.length > 0 ? (
+                inboundDetail.lines.length > 0 &&
+                isFulfillmentAdmin ? (
                   <button
                     type="button"
                     data-testid="inbound-submit-request"
@@ -1055,39 +2089,127 @@ export default function App() {
                   </button>
                 ) : null}
                 {inboundDetail.status === 'submitted' ? (
-                  <form
-                    data-testid="inbound-post-form"
-                    noValidate
-                    onSubmit={(e) => void onPostInboundRequest(e)}
-                  >
-                    <label>
-                      Ячейка для оприходования
-                      <select
-                        name="inbound_post_location_id"
-                        data-testid="inbound-post-location"
-                        required
-                        defaultValue=""
-                      >
-                        <option value="" disabled>
-                          Выберите ячейку
-                        </option>
-                        {postingLocations.map((loc) => (
-                          <option key={loc.id} value={loc.id}>
-                            {loc.code}
-                          </option>
-                        ))}
-                      </select>
-                    </label>
+                  <div data-testid="inbound-receiving-panel">
+                    <p className="subtle">Строки в работе</p>
+                    {isFulfillmentAdmin ? (
+                    <>
+                    {inboundDetail.lines.map((ln) =>
+                      ln.posted_qty < ln.expected_qty ? (
+                        <div
+                          key={ln.id}
+                          style={{
+                            border: '1px solid rgba(0,0,0,0.08)',
+                            borderRadius: 8,
+                            padding: '10px 12px',
+                            marginBottom: 10,
+                          }}
+                        >
+                          <p className="subtle" style={{ marginTop: 0 }}>
+                            {ln.sku_code} — осталось{' '}
+                            {ln.expected_qty - ln.posted_qty} из{' '}
+                            {ln.expected_qty}
+                          </p>
+                          <form
+                            data-testid="inbound-line-storage-form"
+                            data-line-id={ln.id}
+                            noValidate
+                            onSubmit={(e) =>
+                              void onSaveInboundLineStorage(e)
+                            }
+                          >
+                            <label>
+                              Ячейка
+                              <select
+                                name="line_storage_id"
+                                data-testid="inbound-line-storage-select"
+                                defaultValue={ln.storage_location_id ?? ''}
+                                required
+                              >
+                                <option value="" disabled>
+                                  Выберите ячейку
+                                </option>
+                                {inboundRequestLocations.map((loc) => (
+                                  <option key={loc.id} value={loc.id}>
+                                    {loc.code}
+                                  </option>
+                                ))}
+                              </select>
+                            </label>
+                            <button
+                              type="submit"
+                              data-testid="inbound-line-storage-save"
+                              disabled={
+                                opsBusy || inboundRequestLocations.length === 0
+                              }
+                            >
+                              Сохранить ячейку
+                            </button>
+                          </form>
+                          <form
+                            data-testid="inbound-line-receive-form"
+                            data-line-id={ln.id}
+                            noValidate
+                            onSubmit={(e) => void onReceiveInboundLine(e)}
+                          >
+                            <label>
+                              Принять, шт
+                              <input
+                                name="receive_qty"
+                                data-testid="inbound-line-receive-qty"
+                                type="number"
+                                min={1}
+                                max={ln.expected_qty - ln.posted_qty}
+                                required
+                              />
+                            </label>
+                            <button
+                              type="submit"
+                              data-testid="inbound-line-receive-submit"
+                              disabled={opsBusy}
+                            >
+                              Принять
+                            </button>
+                          </form>
+                        </div>
+                      ) : null,
+                    )}
                     <button
-                      type="submit"
+                      type="button"
                       data-testid="inbound-post-submit"
-                      disabled={opsBusy || postingLocations.length === 0}
+                      disabled={opsBusy}
+                      onClick={() => void onPostInboundRequest()}
                     >
-                      {opsBusy ? '…' : 'Провести приёмку'}
+                      {opsBusy ? '…' : 'Провести весь остаток'}
                     </button>
-                  </form>
+                    </>
+                    ) : (
+                    <p className="subtle" data-testid="inbound-seller-read-only">
+                      Приёмку ведёт фулфилмент; доступен просмотр строк и
+                      статуса.
+                    </p>
+                    )}
+                  </div>
                 ) : null}
-                {postedInventoryRows.length > 0 ? (
+                {inboundMovements.length > 0 ? (
+                  <div data-testid="inbound-movements-block">
+                    <p className="subtle">Журнал движений по заявке</p>
+                    <ul
+                      className="list-plain"
+                      data-testid="inbound-movements-list"
+                    >
+                      {inboundMovements.map((m) => (
+                        <li
+                          key={m.id}
+                          data-testid="inbound-movement-row"
+                        >
+                          {m.quantity_delta > 0 ? '+' : ''}
+                          {m.quantity_delta} · {m.movement_type}
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                ) : null}
+                {isFulfillmentAdmin && postedInventoryRows.length > 0 ? (
                   <ul
                     className="list-plain"
                     data-testid="inventory-balance-list"
@@ -1101,6 +2223,403 @@ export default function App() {
                       </li>
                     ))}
                   </ul>
+                ) : null}
+              </div>
+            ) : null}
+          </section>
+          <section className="card" data-testid="global-movements-section">
+            <h2>Журнал движений</h2>
+            <p className="subtle">
+              Последние операции по складу (приёмка, перемещение, отгрузка).
+            </p>
+            <button
+              type="button"
+              data-testid="global-movements-refresh"
+              onClick={() => void onRefreshGlobalMovementsClick()}
+            >
+              Обновить
+            </button>
+            <ul
+              className="list-plain"
+              data-testid="global-movements-list"
+              style={{ marginTop: 12 }}
+            >
+              {globalMovements.map((m) => (
+                <li key={m.id} data-testid="global-movement-row">
+                  {m.sku_code}: {m.quantity_delta > 0 ? '+' : ''}
+                  {m.quantity_delta} · {m.movement_type}
+                </li>
+              ))}
+            </ul>
+          </section>
+          {isFulfillmentAdmin ? (
+          <section className="card" data-testid="stock-transfer-section">
+            <h2>Перемещение между ячейками</h2>
+            <p className="subtle">
+              Списание с ячейки «откуда» и оприходование в «куда» на одном складе.
+            </p>
+            <form
+              data-testid="stock-transfer-form"
+              noValidate
+              onSubmit={(e) => void onStockTransfer(e)}
+            >
+              <label>
+                Откуда (ячейка)
+                <select
+                  name="transfer_from_loc"
+                  data-testid="transfer-from-loc"
+                  required
+                  defaultValue=""
+                >
+                  <option value="" disabled>
+                    Выберите
+                  </option>
+                  {locations.map((loc) => (
+                    <option key={loc.id} value={loc.id}>
+                      {loc.code}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <label>
+                Куда (ячейка)
+                <select
+                  name="transfer_to_loc"
+                  data-testid="transfer-to-loc"
+                  required
+                  defaultValue=""
+                >
+                  <option value="" disabled>
+                    Выберите
+                  </option>
+                  {locations.map((loc) => (
+                    <option key={loc.id} value={loc.id}>
+                      {loc.code}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <label>
+                Товар
+                <select
+                  name="transfer_product_id"
+                  data-testid="transfer-product"
+                  required
+                  defaultValue=""
+                >
+                  <option value="" disabled>
+                    SKU
+                  </option>
+                  {products.map((p) => (
+                    <option key={p.id} value={p.id}>
+                      {p.sku_code} — {p.name}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <label>
+                Количество
+                <input
+                  name="transfer_qty"
+                  data-testid="transfer-qty"
+                  type="number"
+                  min={1}
+                  required
+                />
+              </label>
+              <button
+                type="submit"
+                data-testid="transfer-submit"
+                disabled={opsBusy || locations.length < 2}
+              >
+                {opsBusy ? '…' : 'Переместить'}
+              </button>
+            </form>
+          </section>
+          ) : null}
+          <section className="card" data-testid="outbound-section">
+            <h2>Отгрузка</h2>
+            <p className="subtle">
+              Заявка на списание остатков из выбранных ячеек. Назначьте ячейку
+              на строке; отгрузка по строке частями; «Провести весь остаток»
+              списывает всё неотгруженное.
+            </p>
+            {canEditOutboundDraft ? (
+            <form
+              data-testid="outbound-create-form"
+              noValidate
+              onSubmit={(e) => void onCreateOutboundRequest(e)}
+            >
+              {isFulfillmentSeller && warehouses.length > 1 ? (
+                <label style={{ display: 'block', marginBottom: 8 }}>
+                  Склад для отгрузки
+                  <select
+                    name="outbound_warehouse_id"
+                    data-testid="outbound-create-warehouse"
+                    required
+                    defaultValue=""
+                  >
+                    <option value="" disabled>
+                      Выберите склад
+                    </option>
+                    {warehouses.map((w) => (
+                      <option key={w.id} value={w.id}>
+                        {w.code} — {w.name}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+              ) : null}
+              <button
+                type="submit"
+                data-testid="outbound-create-submit"
+                disabled={
+                  opsBusy ||
+                  warehouses.length === 0 ||
+                  (!isFulfillmentSeller &&
+                    !selectedWarehouseId &&
+                    warehouses.length !== 1)
+                }
+              >
+                {opsBusy ? '…' : 'Новая заявка на отгрузку'}
+              </button>
+            </form>
+            ) : null}
+            <ul className="list-plain" data-testid="outbound-requests-list">
+              {outboundSummaries.map((row) => (
+                <li key={row.id}>
+                  <button
+                    type="button"
+                    data-testid="outbound-request-item"
+                    data-status={row.status}
+                    onClick={() => setSelectedOutboundId(row.id)}
+                    style={{
+                      width: '100%',
+                      textAlign: 'left',
+                      background:
+                        row.id === selectedOutboundId
+                          ? 'rgba(91, 79, 212, 0.12)'
+                          : 'transparent',
+                      border: '1px solid rgba(0,0,0,0.08)',
+                      borderRadius: 8,
+                      padding: '8px 10px',
+                      cursor: 'pointer',
+                    }}
+                  >
+                    <span data-testid="outbound-request-status">{row.status}</span>
+                    {' · '}
+                    строк: {row.line_count}
+                  </button>
+                </li>
+              ))}
+            </ul>
+            {outboundDetail ? (
+              <div data-testid="outbound-detail">
+                <p className="subtle" data-testid="outbound-detail-status">
+                  Статус: {outboundDetail.status}
+                </p>
+                <ul
+                  className="list-plain"
+                  data-testid="outbound-detail-lines"
+                >
+                  {outboundDetail.lines.map((ln) => (
+                    <li key={ln.id} data-testid="outbound-detail-line">
+                      {ln.product_name} ({ln.sku_code}) — отгружено{' '}
+                      {ln.shipped_qty} из {ln.quantity}
+                      {ln.storage_location_code
+                        ? ` · ячейка: ${ln.storage_location_code}`
+                        : ''}
+                    </li>
+                  ))}
+                </ul>
+                {outboundDetail.status === 'draft' && canEditOutboundDraft ? (
+                  <form
+                    data-testid="outbound-line-form"
+                    noValidate
+                    onSubmit={(e) => void onAddOutboundLine(e)}
+                  >
+                    <label>
+                      Товар
+                      <select
+                        name="outbound_product_id"
+                        data-testid="outbound-line-product"
+                        required
+                        defaultValue=""
+                      >
+                        <option value="" disabled>
+                          Выберите SKU
+                        </option>
+                        {products.map((p) => (
+                          <option key={p.id} value={p.id}>
+                            {p.sku_code} — {p.name}
+                          </option>
+                        ))}
+                      </select>
+                    </label>
+                    <label>
+                      Количество, шт
+                      <input
+                        name="outbound_qty"
+                        data-testid="outbound-line-qty"
+                        type="number"
+                        min={1}
+                        required
+                      />
+                    </label>
+                    {outboundRequestLocations.length > 0 ? (
+                      <label>
+                        Ячейка (необязательно)
+                        <select
+                          name="outbound_line_storage_id"
+                          data-testid="outbound-line-location"
+                          defaultValue=""
+                        >
+                          <option value="">— позже —</option>
+                          {outboundRequestLocations.map((loc) => (
+                            <option key={loc.id} value={loc.id}>
+                              {loc.code}
+                            </option>
+                          ))}
+                        </select>
+                      </label>
+                    ) : null}
+                    <button
+                      type="submit"
+                      data-testid="outbound-line-submit"
+                      disabled={opsBusy || products.length === 0}
+                    >
+                      {opsBusy ? '…' : 'Добавить строку'}
+                    </button>
+                  </form>
+                ) : null}
+                {outboundDetail.status === 'draft' &&
+                outboundDetail.lines.length > 0 &&
+                isFulfillmentAdmin ? (
+                  <button
+                    type="button"
+                    data-testid="outbound-submit-request"
+                    disabled={opsBusy}
+                    onClick={() => void onSubmitOutboundRequest()}
+                  >
+                    {opsBusy ? '…' : 'Отправить заявку'}
+                  </button>
+                ) : null}
+                {outboundDetail.status === 'submitted' ? (
+                  <div data-testid="outbound-ship-panel">
+                    <p className="subtle">Строки в работе</p>
+                    {isFulfillmentAdmin ? (
+                    <>
+                    {outboundDetail.lines.map((ln) =>
+                      ln.shipped_qty < ln.quantity ? (
+                        <div
+                          key={ln.id}
+                          style={{
+                            border: '1px solid rgba(0,0,0,0.08)',
+                            borderRadius: 8,
+                            padding: '10px 12px',
+                            marginBottom: 10,
+                          }}
+                        >
+                          <p className="subtle" style={{ marginTop: 0 }}>
+                            {ln.sku_code} — осталось отгрузить{' '}
+                            {ln.quantity - ln.shipped_qty} из {ln.quantity}
+                          </p>
+                          <form
+                            data-testid="outbound-line-storage-form"
+                            data-line-id={ln.id}
+                            noValidate
+                            onSubmit={(e) => void onSaveOutboundLineStorage(e)}
+                          >
+                            <label>
+                              Ячейка отбора
+                              <select
+                                name="out_line_storage_id"
+                                data-testid="outbound-line-storage-select"
+                                defaultValue={ln.storage_location_id ?? ''}
+                                required
+                              >
+                                <option value="" disabled>
+                                  Выберите ячейку
+                                </option>
+                                {outboundRequestLocations.map((loc) => (
+                                  <option key={loc.id} value={loc.id}>
+                                    {loc.code}
+                                  </option>
+                                ))}
+                              </select>
+                            </label>
+                            <button
+                              type="submit"
+                              data-testid="outbound-line-storage-save"
+                              disabled={
+                                opsBusy || outboundRequestLocations.length === 0
+                              }
+                            >
+                              Сохранить ячейку
+                            </button>
+                          </form>
+                          <form
+                            data-testid="outbound-line-ship-form"
+                            data-line-id={ln.id}
+                            noValidate
+                            onSubmit={(e) => void onShipOutboundLine(e)}
+                          >
+                            <label>
+                              Отгрузить, шт
+                              <input
+                                name="ship_qty"
+                                data-testid="outbound-line-ship-qty"
+                                type="number"
+                                min={1}
+                                max={ln.quantity - ln.shipped_qty}
+                                required
+                              />
+                            </label>
+                            <button
+                              type="submit"
+                              data-testid="outbound-line-ship-submit"
+                              disabled={opsBusy}
+                            >
+                              Отгрузить
+                            </button>
+                          </form>
+                        </div>
+                      ) : null,
+                    )}
+                    <button
+                      type="button"
+                      data-testid="outbound-post-submit"
+                      disabled={opsBusy}
+                      onClick={() => void onPostOutboundRequest()}
+                    >
+                      {opsBusy ? '…' : 'Провести весь остаток'}
+                    </button>
+                    </>
+                    ) : (
+                    <p className="subtle" data-testid="outbound-seller-read-only">
+                      Отгрузку ведёт фулфилмент; доступен просмотр строк и
+                      статуса.
+                    </p>
+                    )}
+                  </div>
+                ) : null}
+                {outboundMovements.length > 0 ? (
+                  <div data-testid="outbound-movements-block">
+                    <p className="subtle">Движения по отгрузке</p>
+                    <ul
+                      className="list-plain"
+                      data-testid="outbound-movements-list"
+                    >
+                      {outboundMovements.map((m) => (
+                        <li
+                          key={m.id}
+                          data-testid="outbound-movement-row"
+                        >
+                          {m.quantity_delta} · {m.movement_type}
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
                 ) : null}
               </div>
             ) : null}
