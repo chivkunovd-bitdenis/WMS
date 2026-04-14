@@ -6,6 +6,21 @@ on:
     branches: ["main"]
 
 jobs:
+  tc-coverage-report:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Generate TC automation coverage report
+        run: python3 scripts/tc_automation_coverage.py
+      - name: Upload coverage report artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: tc-automation-coverage
+          path: docs/TC_AUTOMATION_COVERAGE.md
+
   pr-quality-contracts:
     if: github.event_name == 'pull_request'
     runs-on: ubuntu-latest
