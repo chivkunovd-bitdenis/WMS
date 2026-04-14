@@ -2,6 +2,8 @@ import { test, expect } from '@playwright/test';
 
 import { waitForGetOk, waitForPostOk } from './api-waits';
 
+// TC-S01-001 — успешная регистрация (админ) с переходом на дашборд.
+// TC-S15-001 — навигация по разделам после входа.
 test('register then see dashboard', async ({ page }) => {
   const slug = `ff-e2e-${Date.now()}`;
   const email = `e2e-${Date.now()}@example.com`;

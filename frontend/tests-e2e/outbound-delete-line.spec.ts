@@ -6,6 +6,8 @@ import {
   waitForLocationsListGet,
 } from './api-waits';
 
+// TC-S10-001 — админ удаляет строку в draft отгрузке.
+// TC-S09-004 — резерв освобождается при удалении строки draft.
 test('удаление строки отгрузки в draft снимает резерв', async ({ page }) => {
   const slug = `ff-odl-${Date.now()}`;
   const email = `e2e-odl-${Date.now()}@example.com`;
