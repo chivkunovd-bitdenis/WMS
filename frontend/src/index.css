@@ -50,11 +50,12 @@
   }
 }
 
+/* Приложение WMS: выравнивание и ширина под рабочий UI (не маркетинговый шаблон). */
 #root {
-  width: 1126px;
-  max-width: 100%;
+  width: 100%;
+  max-width: 960px;
   margin: 0 auto;
-  text-align: center;
+  text-align: left;
   border-inline: 1px solid var(--border);
   min-height: 100svh;
   display: flex;
@@ -73,13 +74,14 @@ h2 {
   color: var(--text-h);
 }
 
+/* Глобальный гигантский h1 ломал шапку WMS; размер шапки задаётся в App.css (.top h1). */
 h1 {
-  font-size: 56px;
-  letter-spacing: -1.68px;
-  margin: 32px 0;
+  font-size: 1.5rem;
+  letter-spacing: -0.02em;
+  margin: 0 0 0.5rem;
+  line-height: 1.2;
   @media (max-width: 1024px) {
-    font-size: 36px;
-    margin: 20px 0;
+    font-size: 1.35rem;
   }
 }
 h2 {

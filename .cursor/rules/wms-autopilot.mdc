@@ -16,4 +16,7 @@ Hard rules:
 Workflow rules:
 - Only pick GitHub issues with label "ready" and without "blocked".
 - Use the issue's acceptance criteria as the source of truth.
+- PRs must satisfy `AGENTS.md` and green CI (ruff, mypy, pytest, build, e2e). Product-path PRs need `### Test coverage` + `TC-` in the PR body (`scripts/ci/check_pr_test_coverage.py`); changed e2e specs need TC mentions (`scripts/ci/check_e2e_tc_mentions.py`). Escape hatch: label `skip-test-coverage-check`.
+- Playwright tests must reference TC-IDs where applicable (`AGENTS.md` step 4).
+- No required Cursor subagent chain — automation is CI + branch protection, not who you click in Task UI.
 

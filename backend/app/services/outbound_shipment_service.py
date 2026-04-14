@@ -3,7 +3,7 @@ from __future__ import annotations
 import uuid
 from datetime import UTC, datetime
 
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
@@ -178,10 +178,17 @@ async def add_line(
     )
     session.add(line)
     try:
+        await session.flush()
+        await inv_svc.sync_outbound_line_reservation(session, tenant_id, req, line)
         await session.commit()
     except IntegrityError as exc:
         await session.rollback()
         raise OutboundShipmentError("duplicate_line") from exc
+    except ValueError as exc:
+        await session.rollback()
+        if str(exc) == inv_svc.RESERVATION_ERROR:
+            raise OutboundShipmentError("insufficient_available") from exc
+        raise
     await session.refresh(line)
     return line
 
@@ -208,9 +215,50 @@ async def set_line_storage_location(
     if loc is None:
         raise OutboundShipmentError("location_not_found")
     line.storage_location_id = storage_location_id
-    await session.commit()
+    try:
+        await inv_svc.sync_outbound_line_reservation(session, tenant_id, req, line)
+        await session.commit()
+    except ValueError as exc:
+        await session.rollback()
+        if str(exc) == inv_svc.RESERVATION_ERROR:
+            raise OutboundShipmentError("insufficient_available") from exc
+        raise
     await session.refresh(line)
     return line
+
+
+async def delete_line(
+    session: AsyncSession,
+    tenant_id: uuid.UUID,
+    request_id: uuid.UUID,
+    line_id: uuid.UUID,
+) -> OutboundShipmentRequest:
+    pair = await _line_on_request(session, tenant_id, request_id, line_id)
+    if pair is None:
+        raise OutboundShipmentError("line_not_found")
+    req, line = pair
+    if req.status != STATUS_DRAFT:
+        raise OutboundShipmentError("not_draft")
+    await session.delete(line)
+    await session.flush()
+    remaining = int(
+        await session.scalar(
+            select(func.count())
+            .select_from(OutboundShipmentLine)
+            .where(OutboundShipmentLine.request_id == request_id),
+        )
+        or 0,
+    )
+    if remaining == 0:
+        root = await session.get(OutboundShipmentRequest, request_id)
+        if root is not None:
+            root.seller_id = None
+    await session.commit()
+    session.expire_all()
+    out = await get_request(session, tenant_id, request_id)
+    if out is None:
+        raise OutboundShipmentError("request_not_found")
+    return out
 
 
 async def submit_request(
@@ -223,6 +271,14 @@ async def submit_request(
         raise OutboundShipmentError("not_draft")
     if len(req.lines) == 0:
         raise OutboundShipmentError("submit_empty")
+    try:
+        for ln in req.lines:
+            await inv_svc.sync_outbound_line_reservation(session, tenant_id, req, ln)
+    except ValueError as exc:
+        await session.rollback()
+        if str(exc) == inv_svc.RESERVATION_ERROR:
+            raise OutboundShipmentError("insufficient_available") from exc
+        raise
     req.status = STATUS_SUBMITTED
     await session.commit()
     await session.refresh(req)
@@ -273,6 +329,13 @@ async def ship_line(
         raise OutboundShipmentError("insufficient_stock") from None
     line.shipped_qty += quantity
     _maybe_complete_request(req)
+    try:
+        await inv_svc.sync_outbound_line_reservation(session, tenant_id, req, line)
+    except ValueError as exc:
+        await session.rollback()
+        if str(exc) == inv_svc.RESERVATION_ERROR:
+            raise OutboundShipmentError("insufficient_available") from exc
+        raise
     await session.commit()
     await session.refresh(req)
     return req
@@ -315,6 +378,14 @@ async def post_request(
         except ValueError:
             raise OutboundShipmentError("insufficient_stock") from None
         line.shipped_qty += rem
+    try:
+        for line in req.lines:
+            await inv_svc.sync_outbound_line_reservation(session, tenant_id, req, line)
+    except ValueError as exc:
+        await session.rollback()
+        if str(exc) == inv_svc.RESERVATION_ERROR:
+            raise OutboundShipmentError("insufficient_available") from exc
+        raise
     _maybe_complete_request(req)
     await session.commit()
     await session.refresh(req)

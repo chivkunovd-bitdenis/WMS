@@ -21,6 +21,19 @@ body:
     validations:
       required: true
   - type: textarea
+    id: test_coverage
+    attributes:
+      label: Test coverage (TC-ID table)
+      description: "Блок ### Test coverage по AGENTS.md: строки из docs/IMPLEMENTED_PRODUCT_SCENARIOS_TEST_CASES_EN.md (TC-Sxx-yyy) и TC-NEW-* для новых правил."
+      placeholder: |
+        ### Test coverage
+
+        | TC-ID | Title (short) | Applies (Y/N) | Notes |
+        |-------|-----------------|---------------|-------|
+        | TC-S06-001 | ... | Y | |
+    validations:
+      required: true
+  - type: textarea
     id: e2e
     attributes:
       label: E2E scenarios (user journeys)

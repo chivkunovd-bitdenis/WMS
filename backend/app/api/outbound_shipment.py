@@ -130,6 +130,10 @@ def _map_out_err(exc: OutboundShipmentError) -> HTTPException:
             status.HTTP_422_UNPROCESSABLE_ENTITY,
             "insufficient_stock",
         ),
+        "insufficient_available": (
+            status.HTTP_422_UNPROCESSABLE_ENTITY,
+            "insufficient_available",
+        ),
         "nothing_to_ship": (
             status.HTTP_422_UNPROCESSABLE_ENTITY,
             "nothing_to_ship",
@@ -342,6 +346,28 @@ async def ship_outbound_line(
         warehouse_id=str(r2.warehouse_id),
         status=r2.status,
         lines=[_line_out(ln, ln.product) for ln in r2.lines],
+    )
+
+
+@router.delete(
+    "/{request_id}/lines/{line_id}",
+    response_model=OutboundShipmentRequestOut,
+)
+async def delete_outbound_line(
+    request_id: uuid.UUID,
+    line_id: uuid.UUID,
+    user: Annotated[User, Depends(require_fulfillment_admin)],
+    session: Annotated[AsyncSession, Depends(get_db)],
+) -> OutboundShipmentRequestOut:
+    try:
+        r = await svc.delete_line(session, user.tenant_id, request_id, line_id)
+    except OutboundShipmentError as exc:
+        raise _map_out_err(exc) from None
+    return OutboundShipmentRequestOut(
+        id=str(r.id),
+        warehouse_id=str(r.warehouse_id),
+        status=r.status,
+        lines=[_line_out(ln, ln.product) for ln in r.lines],
     )
 
 

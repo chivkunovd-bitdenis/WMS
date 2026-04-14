@@ -9,7 +9,39 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
+  gap: 12px;
   margin-bottom: 16px;
+  flex-wrap: wrap;
+}
+
+.top h1 {
+  font-size: 1.35rem;
+  font-weight: 600;
+  margin: 0;
+  line-height: 1.2;
+}
+
+.app-nav {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 14px;
+  margin: 0 0 16px;
+  padding: 10px 12px;
+  border-radius: 10px;
+  background: rgba(91, 79, 212, 0.08);
+  border: 1px solid rgba(0, 0, 0, 0.08);
+  font-size: 14px;
+}
+
+.app-nav a {
+  color: #4338ca;
+  font-weight: 500;
+  text-decoration: none;
+}
+
+.app-nav a:hover {
+  text-decoration: underline;
 }
 
 .grid2 {
@@ -79,6 +111,11 @@
   flex-direction: column;
   gap: 16px;
   margin-top: 16px;
+}
+
+#catalog-section,
+#operations-section {
+  scroll-margin-top: 8px;
 }
 
 .list-plain {
