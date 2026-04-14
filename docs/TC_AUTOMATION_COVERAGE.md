@@ -1,17 +1,17 @@
 # TC automation coverage (Playwright e2e)
 
 - Catalog: `docs/IMPLEMENTED_PRODUCT_SCENARIOS_TEST_CASES_EN.md` (61 TC headings)
-- Covered by e2e (TC mentioned in `frontend/tests-e2e/*.spec.ts`): 8/61
+- Covered by e2e (TC mentioned in `frontend/tests-e2e/*.spec.ts`): 12/61
 
 ## Coverage table
 
 | TC-ID | Title | Automated (e2e) | Specs |
 |------|-------|------------------|-------|
 | `TC-S01-001` | Successful first-time registration (admin) | Y | `auth.spec.ts` |
-| `TC-S01-002` | Registration rejected — duplicate or invalid slug / email | N |  |
+| `TC-S01-002` | Registration rejected — duplicate or invalid slug / email | Y | `auth-core.spec.ts` |
 | `TC-S02-001` | Successful login | Y | `admin-shell-layout.spec.ts` |
-| `TC-S02-002` | Login failure — wrong password | N |  |
-| `TC-S02-003` | Logout | N |  |
+| `TC-S02-002` | Login failure — wrong password | Y | `auth-core.spec.ts` |
+| `TC-S02-003` | Logout | Y | `auth-core.spec.ts` |
 | `TC-S03-001` | Admin creates warehouse | N |  |
 | `TC-S03-002` | Admin creates locations (cells) under a warehouse | N |  |
 | `TC-S03-003` | Seller cannot manage warehouses in current UI | N |  |
@@ -66,14 +66,11 @@
 | `TC-S14-001` | Movements digest job lifecycle | N |  |
 | `TC-S14-002` | WB sync jobs lifecycle | N |  |
 | `TC-S14-003` | Environment boundary (informational for test design) | N |  |
-| `TC-S15-001` | Section navigation after login | Y | `admin-shell-layout.spec.ts`, `auth.spec.ts` |
-| `TC-S15-002` | Profile loading state | N |  |
+| `TC-S15-001` | Section navigation after login | Y | `admin-shell-layout.spec.ts`, `auth-core.spec.ts`, `auth.spec.ts` |
+| `TC-S15-002` | Profile loading state | Y | `auth-core.spec.ts` |
 
 ## Gaps (not yet automated)
 
-- `TC-S01-002` — Registration rejected — duplicate or invalid slug / email
-- `TC-S02-002` — Login failure — wrong password
-- `TC-S02-003` — Logout
 - `TC-S03-001` — Admin creates warehouse
 - `TC-S03-002` — Admin creates locations (cells) under a warehouse
 - `TC-S03-003` — Seller cannot manage warehouses in current UI
@@ -123,7 +120,6 @@
 - `TC-S14-001` — Movements digest job lifecycle
 - `TC-S14-002` — WB sync jobs lifecycle
 - `TC-S14-003` — Environment boundary (informational for test design)
-- `TC-S15-002` — Profile loading state
 
 ## Notes
 
