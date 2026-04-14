@@ -2,6 +2,9 @@ import { test, expect } from '@playwright/test';
 
 import { waitForGetOk, waitForLocationsListGet, waitForPostOk } from './api-waits';
 
+// TC-S03-001 — админ создаёт склад.
+// TC-S03-002 — админ создаёт ячейку (локацию) в складе.
+// TC-S05-001 — админ создаёт товар с обязательными полями.
 test('register then create warehouse, location, and product', async ({ page }) => {
   const slug = `ff-cat-${Date.now()}`;
   const email = `e2e-cat-${Date.now()}@example.com`;
