@@ -5,6 +5,7 @@ from app.models.base import Base
 from app.models.inbound_intake import InboundIntakeLine, InboundIntakeRequest
 from app.models.inventory_balance import InventoryBalance
 from app.models.inventory_movement import InventoryMovement
+from app.models.inventory_reservation import InventoryReservation
 from app.models.outbound_shipment import OutboundShipmentLine, OutboundShipmentRequest
 from app.models.product import Product
 from app.models.seller import Seller
@@ -23,6 +24,7 @@ __all__ = [
     "InboundIntakeRequest",
     "InventoryBalance",
     "InventoryMovement",
+    "InventoryReservation",
     "OutboundShipmentLine",
     "OutboundShipmentRequest",
     "Product",

@@ -26,6 +26,7 @@ test('register then see dashboard', async ({ page }) => {
 
   await expect(page.getByTestId('auth-error')).toHaveCount(0);
   await expect(page.getByTestId('dashboard')).toBeVisible();
+  await expect(page.getByTestId('app-section-nav')).toBeVisible();
   await expect(page.getByTestId('user-email')).toHaveText(email);
   await expect(page.getByTestId('org-name')).toHaveText('E2E FF');
 

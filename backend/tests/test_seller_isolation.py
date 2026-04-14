@@ -141,6 +141,30 @@ async def test_outbound_rejects_second_line_from_different_seller(
     pid1 = p1.json()["id"]
     pid2 = p2.json()["id"]
 
+    ir = await async_client.post(
+        "/operations/inbound-intake-requests",
+        headers=h,
+        json={"warehouse_id": wid},
+    )
+    in_id = ir.json()["id"]
+    await async_client.post(
+        f"/operations/inbound-intake-requests/{in_id}/lines",
+        headers=h,
+        json={
+            "product_id": pid1,
+            "expected_qty": 10,
+            "storage_location_id": lid,
+        },
+    )
+    await async_client.post(
+        f"/operations/inbound-intake-requests/{in_id}/submit", headers=h
+    )
+    assert (
+        await async_client.post(
+            f"/operations/inbound-intake-requests/{in_id}/post", headers=h
+        )
+    ).status_code == 200
+
     base = "/operations/outbound-shipment-requests"
     rid = (
         await async_client.post(base, headers=h, json={"warehouse_id": wid})

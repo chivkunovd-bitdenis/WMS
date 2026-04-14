@@ -4,6 +4,8 @@
 
 ## Сделано в последнем срезе
 
+- **Удаление строки отгрузки в draft (2026-04-12):** `DELETE /operations/outbound-shipment-requests/{id}/lines/{lineId}` (только `fulfillment_admin`), сброс `seller_id` при пустой заявке, снятие резерва; pytest `test_outbound_delete_line.py`, e2e `outbound-delete-line.spec.ts`; GitHub [#12](https://github.com/chivkunovd-bitdenis/WMS/issues/12) закрыт.
+- **Резерв остатков под отгрузку (2026-04-11):** таблица `inventory_reservations`, миграция `0016`; резерв при строке отгрузки с ячейкой в `draft`/`submitted` (`quantity - shipped_qty`); проверка при `POST /operations/stock-transfers`; `GET /operations/inventory-balances` — поля `reserved`, `available`; UI после приёмки — подсказка «доступно N» (`data-testid="inventory-balance-available-hint"`); pytest `test_inventory_reservation.py`, e2e `outbound-reservation.spec.ts`.
 - **E4 Wildberries (срез 4, 2026-04-11):** привязка SKU к карточке WB (`products.wb_nm_id`, `wb_vendor_code`, миграция `0014`, `POST .../link-product`); импорт поставок FBW (таблица `seller_wildberries_imported_supplies`, миграция `0015`, `wildberries_supplies_sync`, `GET .../imported-supplies`); UI — синк поставок, список поставок, форма привязки, отображение nmID в каталоге; Playwright: `E2E_MOCK_WB_SUPPLIES` + расширенный `wildberries-admin-ui.spec.ts` (токены, карточки, поставки **888001**, link **424242**). Коммит `ae01e0e`, CI зелёный.
 - E5 закрыт: селлер приёмка/outbound draft, фильтр outbound по селлеру (e2e `seller-outbound-filter.spec.ts`), миграция `seller_id` на заявках.
 - E2e: `seller-cabinet` — после `form.reset()` при втором товаре снова заполнять габариты; `transfer-and-outbound` — `waitForGetOk` для журнала движений в `Promise.all` с кликом «Обновить», иначе гонка и таймаут.
@@ -20,8 +22,17 @@
 ## P1 — операции и кабинет
 
 - ~~Частичная отгрузка по строке~~: `shipped_qty`, `POST .../lines/{id}/ship`, «Провести весь остаток», e2e в `transfer-and-outbound.spec.ts`.
-- Резервирование остатков под заказ.
+- ~~Резервирование остатков под заказ~~: см. срез выше (`inventory_reservations`, блокировка transfer, балансы `reserved`/`available`).
 - ~~Кабинет селлера (MVP)~~: роль `fulfillment_seller`, `POST /auth/seller-accounts`, фильтр по `seller_id` (товары, селлеры, приёмка/отгрузка/движения/остатки), мутации только `fulfillment_admin`; UI и e2e `seller-cabinet.spec.ts`.
+
+### Кандидаты в GitHub issues (после MVP-среза резерва)
+
+Созданы как `enhancement` + `needs-spec` — перевести в `ready`, когда будут полные AC и e2e (если есть UI):
+
+1. ~~[#12 — Удаление строки outbound в draft](https://github.com/chivkunovd-bitdenis/WMS/issues/12)~~ — сделано (см. срез выше).
+2. [#13 — Резерв без ячейки / политика submit](https://github.com/chivkunovd-bitdenis/WMS/issues/13).
+3. [#14 — Приоритет резервов / FIFO-FEFO](https://github.com/chivkunovd-bitdenis/WMS/issues/14).
+4. [#15 — Селлер: доступный остаток в UI](https://github.com/chivkunovd-bitdenis/WMS/issues/15).
 
 ### ~~Следующие issues (E5 после MVP)~~ — сделано (в GitHub закрыты #9, #10, #11)
 

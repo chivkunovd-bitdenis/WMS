@@ -19,6 +19,7 @@ from app.models.base import Base
 
 if TYPE_CHECKING:
     from app.models.inventory_movement import InventoryMovement
+    from app.models.inventory_reservation import InventoryReservation
     from app.models.product import Product
     from app.models.seller import Seller
     from app.models.storage_location import StorageLocation
@@ -115,4 +116,10 @@ class OutboundShipmentLine(Base):
     inventory_movements: Mapped[list[InventoryMovement]] = relationship(
         "InventoryMovement",
         back_populates="outbound_line",
+    )
+    inventory_reservation: Mapped[InventoryReservation | None] = relationship(
+        "InventoryReservation",
+        back_populates="outbound_line",
+        uselist=False,
+        cascade="all, delete-orphan",
     )

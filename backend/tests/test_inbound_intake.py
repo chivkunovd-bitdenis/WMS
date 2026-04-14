@@ -394,6 +394,10 @@ async def test_inbound_requires_auth(async_client: AsyncClient) -> None:
         json={"quantity": 1},
     )
     assert r6b.status_code == 401
+    r6c = await async_client.delete(
+        f"/operations/outbound-shipment-requests/{uuid.uuid4()}/lines/{uuid.uuid4()}",
+    )
+    assert r6c.status_code == 401
     r7 = await async_client.get("/sellers")
     assert r7.status_code == 401
     r8 = await async_client.post(

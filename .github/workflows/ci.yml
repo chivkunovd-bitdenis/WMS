@@ -6,6 +6,41 @@ on:
     branches: ["main"]
 
 jobs:
+  pr-quality-contracts:
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: dorny/paths-filter@v3
+        id: filter
+        with:
+          filters: |
+            product:
+              - 'frontend/src/**'
+              - 'frontend/tests-e2e/**'
+              - 'backend/app/api/**'
+              - 'backend/app/services/**'
+            e2e_specs:
+              - 'frontend/tests-e2e/**'
+      - name: Paths filter result
+        run: |
+          echo "product=${{ steps.filter.outputs.product }}"
+          echo "e2e_specs=${{ steps.filter.outputs.e2e_specs }}"
+      - name: PR body contains Test coverage (AGENTS.md)
+        if: steps.filter.outputs.product == 'true'
+        env:
+          PR_BODY: ${{ github.event.pull_request.body }}
+          PR_LABELS: ${{ join(github.event.pull_request.labels.*.name, ',') }}
+        run: python3 scripts/ci/check_pr_test_coverage.py
+      - name: Changed Playwright specs reference TC-ID
+        if: steps.filter.outputs.e2e_specs == 'true'
+        env:
+          PR_BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          PR_HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        run: python3 scripts/ci/check_e2e_tc_mentions.py
+
   backend:
     runs-on: ubuntu-latest
     defaults:

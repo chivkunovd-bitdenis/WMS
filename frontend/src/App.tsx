@@ -108,6 +108,15 @@ type OutboundMovementRow = {
   created_at: string
 }
 
+type PostedInventoryBalanceRow = {
+  product_id: string
+  sku_code: string
+  product_name: string
+  quantity: number
+  reserved: number
+  available: number
+}
+
 type WbImportedCardRow = {
   nm_id: number
   vendor_code: string | null
@@ -179,12 +188,7 @@ export default function App() {
     InboundMovementRow[]
   >([])
   const [postedInventoryRows, setPostedInventoryRows] = useState<
-    {
-      product_id: string
-      sku_code: string
-      product_name: string
-      quantity: number
-    }[]
+    PostedInventoryBalanceRow[]
   >([])
   const [globalMovements, setGlobalMovements] = useState<GlobalMovementRow[]>(
     [],
@@ -1185,12 +1189,7 @@ export default function App() {
             .filter((x): x is string => Boolean(x)),
         ),
       ]
-      const merged: {
-        product_id: string
-        sku_code: string
-        product_name: string
-        quantity: number
-      }[] = []
+      const merged: PostedInventoryBalanceRow[] = []
       for (const sid of storageIds) {
         const br = await fetch(
           apiUrl(
@@ -1199,14 +1198,7 @@ export default function App() {
           { headers: authHeaders(token) },
         )
         if (br.ok) {
-          merged.push(
-            ...(await br.json()) as {
-              product_id: string
-              sku_code: string
-              product_name: string
-              quantity: number
-            }[],
-          )
+          merged.push(...((await br.json()) as PostedInventoryBalanceRow[]))
         }
       }
       setPostedInventoryRows(merged)
@@ -1306,12 +1298,7 @@ export default function App() {
             .filter((x): x is string => Boolean(x)),
         ),
       ]
-      const merged: {
-        product_id: string
-        sku_code: string
-        product_name: string
-        quantity: number
-      }[] = []
+      const merged: PostedInventoryBalanceRow[] = []
       for (const sid of storageIds) {
         const br = await fetch(
           apiUrl(
@@ -1320,14 +1307,7 @@ export default function App() {
           { headers: authHeaders(token) },
         )
         if (br.ok) {
-          merged.push(
-            ...(await br.json()) as {
-              product_id: string
-              sku_code: string
-              product_name: string
-              quantity: number
-            }[],
-          )
+          merged.push(...((await br.json()) as PostedInventoryBalanceRow[]))
         }
       }
       setPostedInventoryRows(merged)
@@ -1478,6 +1458,34 @@ export default function App() {
     } catch (err) {
       setOpsError(
         err instanceof Error ? err.message : 'Не удалось добавить строку.',
+      )
+    } finally {
+      setOpsBusy(false)
+    }
+  }
+
+  async function onDeleteOutboundLine(lineId: string) {
+    if (!token || !selectedOutboundId) {
+      return
+    }
+    setOpsError(null)
+    setOpsBusy(true)
+    try {
+      const res = await fetch(
+        apiUrl(
+          `/operations/outbound-shipment-requests/${selectedOutboundId}/lines/${lineId}`,
+        ),
+        { method: 'DELETE', headers: authHeaders(token) },
+      )
+      if (!res.ok) {
+        setOpsError(await readApiErrorMessage(res))
+        return
+      }
+      await refreshOutboundList(token)
+      await refreshOutboundDetail(token, selectedOutboundId)
+    } catch (err) {
+      setOpsError(
+        err instanceof Error ? err.message : 'Не удалось удалить строку.',
       )
     } finally {
       setOpsBusy(false)
@@ -1941,6 +1949,26 @@ export default function App() {
     }
   }
 
+  if (token && !me) {
+    return (
+      <main data-testid="app-root" className="shell">
+        <header className="top">
+          <h1>WMS</h1>
+          <button type="button" data-testid="logout" onClick={onLogout}>
+            Выйти
+          </button>
+        </header>
+        <p className="hint" data-testid="loading">
+          {loading
+            ? 'Загрузка профиля…'
+            : 'Получаем данные аккаунта…'}{' '}
+          Если экран не меняется, проверьте, что API доступен (прокси Vite /
+          контейнер api в docker).
+        </p>
+      </main>
+    )
+  }
+
   if (token && me) {
     const isFulfillmentAdmin = me.role === 'fulfillment_admin'
     const isFulfillmentSeller = me.role === 'fulfillment_seller'
@@ -1954,6 +1982,18 @@ export default function App() {
             Выйти
           </button>
         </header>
+        <nav
+          className="app-nav"
+          aria-label="Основные разделы"
+          data-testid="app-section-nav"
+        >
+          <a href="#catalog-section">Каталог и товары</a>
+          <span aria-hidden="true">
+            {' '}
+            ·{' '}
+          </span>
+          <a href="#operations-section">Операции склада</a>
+        </nav>
         <section className="card" data-testid="dashboard">
           <p data-testid="user-email">{me.email}</p>
           <p data-testid="org-name">{me.organization_name}</p>
@@ -2020,7 +2060,11 @@ export default function App() {
             </form>
           ) : null}
         </section>
-        <div className="stack" data-testid="catalog-section">
+        <div
+          id="catalog-section"
+          className="stack"
+          data-testid="catalog-section"
+        >
           {catalogError ? (
             <p className="error" data-testid="catalog-error">
               {catalogError}
@@ -2464,7 +2508,11 @@ export default function App() {
             </ul>
           </section>
         </div>
-        <div className="stack" data-testid="operations-section">
+        <div
+          id="operations-section"
+          className="stack"
+          data-testid="operations-section"
+        >
           {opsError ? (
             <p className="error" data-testid="operations-error">
               {opsError}
@@ -2796,6 +2844,12 @@ export default function App() {
                         data-testid="inventory-balance-row"
                       >
                         {row.sku_code} — {row.quantity} шт
+                        {row.reserved > 0 ? (
+                          <span data-testid="inventory-balance-available-hint">
+                            {' '}
+                            (доступно {row.available})
+                          </span>
+                        ) : null}
                       </li>
                     ))}
                   </ul>
@@ -2999,12 +3053,26 @@ export default function App() {
                   data-testid="outbound-detail-lines"
                 >
                   {outboundDetail.lines.map((ln) => (
-                    <li key={ln.id} data-testid="outbound-detail-line">
+                    <li
+                      key={ln.id}
+                      data-testid="outbound-detail-line"
+                      data-line-id={ln.id}
+                    >
                       {ln.product_name} ({ln.sku_code}) — отгружено{' '}
                       {ln.shipped_qty} из {ln.quantity}
                       {ln.storage_location_code
                         ? ` · ячейка: ${ln.storage_location_code}`
                         : ''}
+                      {outboundDetail.status === 'draft' && isFulfillmentAdmin ? (
+                        <button
+                          type="button"
+                          data-testid="outbound-line-delete"
+                          disabled={opsBusy}
+                          onClick={() => void onDeleteOutboundLine(ln.id)}
+                        >
+                          Удалить строку
+                        </button>
+                      ) : null}
                     </li>
                   ))}
                 </ul>
@@ -3210,9 +3278,6 @@ export default function App() {
       <header className="top">
         <h1>WMS</h1>
       </header>
-      {token && loading ? (
-        <p data-testid="loading">Загрузка профиля…</p>
-      ) : null}
       {error ? (
         <p className="error" data-testid="auth-error">
           {error}

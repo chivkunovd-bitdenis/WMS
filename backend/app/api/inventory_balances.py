@@ -23,6 +23,8 @@ class InventoryBalanceRowOut(BaseModel):
     sku_code: str
     product_name: str
     quantity: int
+    reserved: int
+    available: int
 
 
 @router.get("", response_model=list[InventoryBalanceRowOut])
@@ -49,6 +51,8 @@ async def get_inventory_balances(
             sku_code=p.sku_code,
             product_name=p.name,
             quantity=b.quantity,
+            reserved=rsv,
+            available=b.quantity - rsv,
         )
-        for b, p in rows
+        for b, p, rsv in rows
     ]
