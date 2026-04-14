@@ -5,6 +5,8 @@ import { waitForGetOk, waitForPostOk } from './api-waits';
 /**
  * Реальный путь: экраны каталога и операций, кнопки, фоновая задача до статуса done.
  */
+// TC-S04-001 — админ создаёт селлера.
+// TC-S14-001 — жизненный цикл джобы movements digest (до done) с видимым результатом.
 test('create seller, product with seller, run movements digest job', async ({ page }) => {
   const slug = `ff-sbj-${Date.now()}`;
   const email = `e2e-sbj-${Date.now()}@example.com`;
