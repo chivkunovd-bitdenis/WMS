@@ -22,6 +22,13 @@ npm --prefix frontend install
 npm --prefix frontend run dev
 ```
 
+Если API поднят через `docker compose` (дефолтный порт **18080**), Vite сам проксирует `/api/*` на `http://127.0.0.1:18080`.
+Если у тебя другой порт API — задай `VITE_API_PROXY`, например:
+
+```bash
+VITE_API_PROXY="http://127.0.0.1:28080" npm --prefix frontend run dev
+```
+
 Важно: после логина UI по умолчанию открывается в **v2 shell** (маршруты `/app/*`, стартовая — `/app/dashboard`).
 Порты **на хосте** (чтобы не пересекаться с другими проектами на том же Mac):
 
