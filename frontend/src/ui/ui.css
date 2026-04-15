@@ -1,0 +1,200 @@
+:root {
+  --radius-sm: 10px;
+  --radius-md: 14px;
+  --radius-lg: 18px;
+
+  --space-1: 6px;
+  --space-2: 10px;
+  --space-3: 14px;
+  --space-4: 18px;
+  --space-5: 24px;
+
+  --surface-0: var(--bg);
+  --surface-1: rgba(255, 255, 255, 0.7);
+  --surface-2: rgba(255, 255, 255, 0.92);
+  --border-1: var(--border);
+
+  --text-1: var(--text);
+  --text-0: var(--text-h);
+
+  --focus: rgba(170, 59, 255, 0.38);
+  --shadow-1: var(--shadow);
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --surface-1: rgba(22, 23, 29, 0.72);
+    --surface-2: rgba(22, 23, 29, 0.92);
+    --focus: rgba(192, 132, 252, 0.45);
+  }
+}
+
+.ui-card {
+  border: 1px solid color-mix(in oklab, var(--border-1) 70%, transparent);
+  background: linear-gradient(
+    180deg,
+    color-mix(in oklab, var(--surface-2) 88%, transparent),
+    color-mix(in oklab, var(--surface-1) 88%, transparent)
+  );
+  border-radius: var(--radius-md);
+  padding: var(--space-4);
+  box-shadow: var(--shadow-1);
+}
+
+.ui-input {
+  width: 100%;
+  padding: 10px 12px;
+  border-radius: 12px;
+  border: 1px solid color-mix(in oklab, var(--border-1) 70%, transparent);
+  background: color-mix(in oklab, var(--surface-0) 92%, transparent);
+  color: var(--text-0);
+  outline: none;
+}
+
+.ui-input::placeholder {
+  color: color-mix(in oklab, var(--text-1) 70%, transparent);
+}
+
+.ui-input:focus {
+  border-color: var(--accent-border);
+  box-shadow: 0 0 0 4px var(--focus);
+}
+
+.ui-select {
+  width: 100%;
+  padding: 10px 12px;
+  border-radius: 12px;
+  border: 1px solid color-mix(in oklab, var(--border-1) 70%, transparent);
+  background: color-mix(in oklab, var(--surface-0) 92%, transparent);
+  color: var(--text-0);
+  outline: none;
+}
+
+.ui-select:focus {
+  border-color: var(--accent-border);
+  box-shadow: 0 0 0 4px var(--focus);
+}
+
+.ui-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  border-radius: 12px;
+  border: 1px solid transparent;
+  padding: 10px 14px;
+  font-weight: 600;
+  cursor: pointer;
+  user-select: none;
+  transition:
+    transform 120ms ease,
+    background-color 120ms ease,
+    border-color 120ms ease,
+    box-shadow 120ms ease,
+    opacity 120ms ease;
+}
+
+.ui-button:active {
+  transform: translateY(1px);
+}
+
+.ui-button:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.ui-button--md {
+  min-height: 40px;
+}
+
+.ui-button--sm {
+  min-height: 34px;
+  padding: 8px 12px;
+  border-radius: 10px;
+}
+
+.ui-button--primary {
+  background: linear-gradient(
+    180deg,
+    color-mix(in oklab, var(--accent) 85%, white),
+    color-mix(in oklab, var(--accent) 85%, black)
+  );
+  color: white;
+  box-shadow: 0 10px 25px -12px color-mix(in oklab, var(--accent) 50%, transparent);
+}
+
+.ui-button--primary:hover:not(:disabled) {
+  box-shadow: 0 16px 35px -16px color-mix(in oklab, var(--accent) 62%, transparent);
+}
+
+.ui-button--secondary {
+  background: color-mix(in oklab, var(--accent-bg) 55%, var(--surface-0));
+  border-color: color-mix(in oklab, var(--accent-border) 80%, transparent);
+  color: var(--text-0);
+}
+
+.ui-button--ghost {
+  background: transparent;
+  border-color: color-mix(in oklab, var(--border-1) 70%, transparent);
+  color: var(--text-0);
+}
+
+.ui-button--danger {
+  background: color-mix(in oklab, #ef4444 25%, var(--surface-0));
+  border-color: color-mix(in oklab, #ef4444 45%, transparent);
+  color: var(--text-0);
+}
+
+.ui-table {
+  width: 100%;
+  border-collapse: separate;
+  border-spacing: 0;
+  overflow: hidden;
+  border-radius: var(--radius-md);
+  border: 1px solid color-mix(in oklab, var(--border-1) 70%, transparent);
+  background: color-mix(in oklab, var(--surface-2) 88%, transparent);
+  box-shadow: var(--shadow-1);
+  font-size: 14px;
+}
+
+.ui-table th,
+.ui-table td {
+  padding: 10px 12px;
+  border-bottom: 1px solid color-mix(in oklab, var(--border-1) 65%, transparent);
+  vertical-align: middle;
+}
+
+.ui-table th {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  text-align: left;
+  font-weight: 650;
+  color: var(--text-0);
+  background: color-mix(in oklab, var(--surface-2) 95%, transparent);
+}
+
+.ui-table tbody tr {
+  cursor: pointer;
+}
+
+.ui-table tbody tr:hover td {
+  background: color-mix(in oklab, var(--accent-bg) 55%, transparent);
+}
+
+.ui-table tbody tr[data-selected='true'] td {
+  background: color-mix(in oklab, var(--accent-bg) 85%, transparent);
+}
+
+.ui-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 8px;
+  border-radius: 999px;
+  font-size: 12px;
+  border: 1px solid color-mix(in oklab, var(--border-1) 70%, transparent);
+  background: color-mix(in oklab, var(--surface-0) 92%, transparent);
+  color: var(--text-0);
+}
+
