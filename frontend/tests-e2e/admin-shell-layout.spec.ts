@@ -24,9 +24,15 @@ test('admin shell: single app root, nav, dashboard and main sections visible', a
   ]);
 
   await expect(page.getByTestId('dashboard')).toBeVisible();
-  await expect(page.getByTestId('app-root')).toHaveCount(1);
-  await expect(page.getByTestId('app-section-nav')).toBeVisible();
+  await expect(page.getByTestId('app-frame')).toBeVisible();
+  await expect(page.getByTestId('app-sidebar')).toBeVisible();
+  await expect(page.getByTestId('app-topbar')).toBeVisible();
+  await expect(page.getByTestId('topbar-user')).toBeVisible();
   await expect(page.getByTestId('user-email')).toBeVisible();
+
+  await page.goto('/app/catalog');
   await expect(page.getByTestId('catalog-section')).toBeVisible();
+
+  await page.goto('/app/ops');
   await expect(page.getByTestId('operations-section')).toBeVisible();
 });

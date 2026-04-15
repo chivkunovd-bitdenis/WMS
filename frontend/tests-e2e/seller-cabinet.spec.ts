@@ -33,6 +33,7 @@ test('admin creates seller user; seller sees filtered catalog and inbound', asyn
     page.getByTestId('register-form').getByRole('button', { name: 'Создать аккаунт' }).click(),
   ]);
 
+  await page.goto('/app/catalog');
   await page.getByTestId('seller-name').fill('Brand A');
   await Promise.all([
     waitForPostOk(page, '/api/sellers'),
@@ -86,6 +87,7 @@ test('admin creates seller user; seller sees filtered catalog and inbound', asyn
   ]);
 
   const baseIn = '/api/operations/inbound-intake-requests';
+  await page.goto('/app/ops/inbound');
   await Promise.all([
     waitForPostOk(page, baseIn, (u) => !u.includes('/lines') && !u.includes('/submit')),
     page.getByTestId('inbound-create-submit').click(),
@@ -106,6 +108,7 @@ test('admin creates seller user; seller sees filtered catalog and inbound', asyn
     page.getByTestId('inbound-post-submit').click(),
   ]);
 
+  await page.goto('/app/dashboard');
   await page.getByTestId('seller-account-seller').selectOption({ label: 'Brand A' });
   await page.getByTestId('seller-account-email').fill(sellerEmail);
   await page.getByTestId('seller-account-password').fill('password123');
@@ -127,14 +130,18 @@ test('admin creates seller user; seller sees filtered catalog and inbound', asyn
     page.getByTestId('login-form').getByRole('button', { name: 'Войти' }).click(),
   ]);
 
+  await page.goto('/app/catalog');
   await expect(page.getByTestId('seller-cabinet-notice')).toBeVisible();
-  await expect(page.getByTestId('seller-cabinet-label')).toContainText('Brand A');
   await expect(page.getByTestId('warehouse-form')).toHaveCount(0);
   await expect(page.getByTestId('product-item')).toHaveCount(1);
   await expect(page.getByTestId('product-list').getByTestId('product-item').first()).toContainText(
     skuA,
   );
 
+  await page.goto('/app/dashboard');
+  await expect(page.getByTestId('seller-cabinet-label')).toContainText('Brand A');
+
+  await page.goto('/app/ops/inbound');
   await Promise.all([
     waitForPostOk(page, baseIn, (u) => !u.includes('/lines') && !u.includes('/submit')),
     page.getByTestId('inbound-create-submit').click(),
@@ -153,6 +160,7 @@ test('admin creates seller user; seller sees filtered catalog and inbound', asyn
   await expect(page.getByTestId('inbound-detail-lines').getByTestId('inbound-detail-line')).toHaveCount(1);
 
   const baseOut = '/api/operations/outbound-shipment-requests';
+  await page.goto('/app/ops/outbound');
   await Promise.all([
     waitForPostOk(page, baseOut, (u) => !u.includes('/lines') && !u.includes('/submit')),
     page.getByTestId('outbound-create-submit').click(),

@@ -24,6 +24,7 @@ test('create seller, product with seller, run movements digest job', async ({ pa
     page.getByTestId('register-form').getByRole('button', { name: 'Создать аккаунт' }).click(),
   ]);
 
+  await page.goto('/app/catalog');
   await expect(page.getByTestId('sellers-section')).toBeVisible();
   await page.getByTestId('seller-name').fill('ACME Seller');
   await Promise.all([
@@ -60,6 +61,7 @@ test('create seller, product with seller, run movements digest job', async ({ pa
   await expect(prodRow).toBeVisible();
   await expect(prodRow.getByTestId('product-seller-name')).toContainText('ACME Seller');
 
+  await page.goto('/app/ops');
   await expect(page.getByTestId('background-job-section')).toBeVisible();
   const jobPost = page.waitForResponse(
     (r) =>

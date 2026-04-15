@@ -18,6 +18,7 @@ test('admin saves WB tokens, syncs cards and supplies, links SKU', async ({ page
     page.getByTestId('register-form').getByRole('button', { name: 'Создать аккаунт' }).click(),
   ]);
 
+  await page.goto('/app/catalog');
   await expect(page.getByTestId('sellers-section')).toBeVisible();
   await page.getByTestId('seller-name').fill('WB Seller Co');
   await Promise.all([
@@ -26,6 +27,7 @@ test('admin saves WB tokens, syncs cards and supplies, links SKU', async ({ page
     page.getByTestId('seller-submit').click(),
   ]);
 
+  await page.goto('/app/integrations/wb');
   await expect(page.getByTestId('wildberries-integration-section')).toBeVisible();
   await expect(page.getByTestId('wb-token-flags')).toContainText('нет токена');
 
@@ -65,6 +67,7 @@ test('admin saves WB tokens, syncs cards and supplies, links SKU', async ({ page
   await expect(page.getByTestId('wb-imported-supplies-list')).toBeVisible({ timeout: 15_000 });
   await expect(page.getByTestId('wb-imported-supply-item').first()).toContainText('888001');
 
+  await page.goto('/app/catalog');
   await page.getByTestId('product-name').fill('WB link item');
   await page.getByTestId('product-sku').fill(linkSku);
   await page.getByTestId('product-length-mm').fill('10');
@@ -77,6 +80,7 @@ test('admin saves WB tokens, syncs cards and supplies, links SKU', async ({ page
     page.getByTestId('product-submit').click(),
   ]);
 
+  await page.goto('/app/integrations/wb');
   await page.getByTestId('wb-link-product-id').selectOption({ label: `${linkSku} — WB link item` });
   await page.getByTestId('wb-link-nm-id').fill('424242');
   await Promise.all([
@@ -84,6 +88,7 @@ test('admin saves WB tokens, syncs cards and supplies, links SKU', async ({ page
     waitForGetOk(page, '/api/products'),
     page.getByTestId('wb-link-submit').click(),
   ]);
+  await page.goto('/app/catalog');
   const prodRow = page
     .getByTestId('product-list')
     .getByTestId('product-item')

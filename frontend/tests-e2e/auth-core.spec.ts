@@ -101,14 +101,12 @@ test('logout returns to public screen and hides private sections', async ({ page
     page.getByTestId('register-form').getByRole('button', { name: 'Создать аккаунт' }).click(),
   ]);
 
-  await expect(page.getByTestId('app-section-nav')).toBeVisible();
-  await expect(page.getByTestId('catalog-section')).toBeVisible();
-  await expect(page.getByTestId('operations-section')).toBeVisible();
+  await expect(page.getByTestId('dashboard')).toBeVisible();
+  await expect(page.getByTestId('app-frame')).toBeVisible();
 
   await page.getByTestId('logout').click();
   await expect(page.getByTestId('login-form')).toBeVisible();
-  await expect(page.getByTestId('catalog-section')).toHaveCount(0);
-  await expect(page.getByTestId('operations-section')).toHaveCount(0);
+  await expect(page.getByTestId('app-frame')).toHaveCount(0);
 });
 
 // TC-S15-002 — состояние загрузки профиля (индикатор loading виден, затем исчезает).

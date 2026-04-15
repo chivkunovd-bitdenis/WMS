@@ -23,8 +23,8 @@ test('create inbound request, add line, submit — UI and API', async ({ page })
     page.getByTestId('register-form').getByRole('button', { name: 'Создать аккаунт' }).click(),
   ]);
 
-  await expect(page.getByTestId('operations-section')).toBeVisible();
-  await expect(page.getByTestId('inbound-create-form')).toBeVisible();
+  await page.goto('/app/catalog');
+  await expect(page.getByTestId('catalog-section')).toBeVisible();
 
   await page.getByTestId('warehouse-name').fill('Склад');
   await page.getByTestId('warehouse-code').fill(whCode);
@@ -35,7 +35,6 @@ test('create inbound request, add line, submit — UI and API', async ({ page })
   ]);
 
   await page.getByTestId('warehouse-list').getByTestId('warehouse-item').first().click();
-  await expect(page.getByTestId('inbound-create-submit')).toBeEnabled();
 
   await page.getByTestId('location-code').fill('RCV-E2E');
   await Promise.all([
@@ -54,6 +53,10 @@ test('create inbound request, add line, submit — UI and API', async ({ page })
     waitForGetOk(page, '/api/products'),
     page.getByTestId('product-submit').click(),
   ]);
+
+  await page.getByRole('link', { name: 'Приёмка' }).click();
+  await expect(page.getByTestId('inbound-create-form')).toBeVisible();
+  await expect(page.getByTestId('inbound-create-submit')).toBeEnabled();
 
   const [createRes] = await Promise.all([
     waitForPostOk(

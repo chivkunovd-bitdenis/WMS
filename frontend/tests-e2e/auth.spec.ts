@@ -28,12 +28,13 @@ test('register then see dashboard', async ({ page }) => {
 
   await expect(page.getByTestId('auth-error')).toHaveCount(0);
   await expect(page.getByTestId('dashboard')).toBeVisible();
-  await expect(page.getByTestId('app-section-nav')).toBeVisible();
+  await expect(page.getByTestId('app-frame')).toBeVisible();
+  await expect(page.getByTestId('app-sidebar')).toBeVisible();
   await expect(page.getByTestId('user-email')).toHaveText(email);
   await expect(page.getByTestId('org-name')).toHaveText('E2E FF');
 
+  await page.goto('/app/catalog');
   await expect(page.getByTestId('catalog-section')).toBeVisible();
-  await expect(page.getByTestId('operations-section')).toBeVisible();
   await expect(page.getByTestId('warehouse-form')).toBeVisible();
   await expect(page.getByTestId('location-form')).toHaveCount(0);
   await expect(page.getByTestId('product-form')).toBeVisible();

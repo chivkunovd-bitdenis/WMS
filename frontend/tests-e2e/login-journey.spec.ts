@@ -38,8 +38,8 @@ test('logout then login reaches catalog UI and loads catalog via API', async ({ 
   expect(meAfterLogin.ok()).toBeTruthy();
   expect(whListRes.ok()).toBeTruthy();
 
+  await page.goto('/app/catalog');
   await expect(page.getByTestId('catalog-section')).toBeVisible();
-  await expect(page.getByTestId('operations-section')).toBeVisible();
   await expect(page.getByTestId('warehouse-form')).toBeVisible();
   await expect(page.getByTestId('product-form')).toBeVisible();
   await expect(page.getByTestId('catalog-error')).toHaveCount(0);

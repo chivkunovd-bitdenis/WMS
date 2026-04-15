@@ -31,8 +31,8 @@ test.describe('Full WMS user journey', () => {
       page.getByTestId('register-form').getByRole('button', { name: 'Создать аккаунт' }).click(),
     ]);
 
+    await page.goto('/app/catalog');
     await expect(page.getByTestId('catalog-section')).toBeVisible();
-    await expect(page.getByTestId('operations-section')).toBeVisible();
 
     await page.getByTestId('warehouse-name').fill('Склад A');
     await page.getByTestId('warehouse-code').fill(whCode);
@@ -62,6 +62,7 @@ test.describe('Full WMS user journey', () => {
       page.getByTestId('product-submit').click(),
     ]);
 
+    await page.goto('/app/ops/inbound');
     await Promise.all([
       waitForPostOk(
         page,
@@ -134,6 +135,7 @@ test.describe('Full WMS user journey', () => {
       page.getByTestId('register-form').getByRole('button', { name: 'Создать аккаунт' }).click(),
     ]);
 
+    await page.goto('/app/catalog');
     await page.getByTestId('warehouse-name').fill('Склад B');
     await page.getByTestId('warehouse-code').fill(whCode);
     await Promise.all([
@@ -161,6 +163,7 @@ test.describe('Full WMS user journey', () => {
       page.getByTestId('product-submit').click(),
     ]);
 
+    await page.goto('/app/ops/inbound');
     await Promise.all([
       waitForPostOk(
         page,

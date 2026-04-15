@@ -24,6 +24,7 @@ test('stock transfer and outbound shipment — UI', async ({ page }) => {
     page.getByTestId('register-form').getByRole('button', { name: 'Создать аккаунт' }).click(),
   ]);
 
+  await page.goto('/app/catalog');
   await page.getByTestId('warehouse-name').fill('Склад');
   await page.getByTestId('warehouse-code').fill(whCode);
   await Promise.all([
@@ -58,6 +59,7 @@ test('stock transfer and outbound shipment — UI', async ({ page }) => {
   ]);
 
   const baseIn = '/api/operations/inbound-intake-requests';
+  await page.goto('/app/ops/inbound');
   await Promise.all([
     waitForPostOk(page, baseIn, (u) => !u.includes('/lines') && !u.includes('/submit')),
     page.getByTestId('inbound-create-submit').click(),
@@ -78,6 +80,7 @@ test('stock transfer and outbound shipment — UI', async ({ page }) => {
     page.getByTestId('inbound-post-submit').click(),
   ]);
 
+  await page.goto('/app/ops/movements');
   await expect(page.getByTestId('global-movements-section')).toBeVisible();
   await Promise.all([
     waitForGetOk(page, '/api/operations/inventory-movements'),
@@ -87,6 +90,7 @@ test('stock transfer and outbound shipment — UI', async ({ page }) => {
     page.getByTestId('global-movements-list').getByTestId('global-movement-row').first(),
   ).toContainText(sku);
 
+  await page.goto('/app/ops/transfers');
   await page.getByTestId('transfer-from-loc').selectOption({ label: 'FROM-01' });
   await page.getByTestId('transfer-to-loc').selectOption({ label: 'TO-01' });
   await page.getByTestId('transfer-product').selectOption({ label: `${sku} — Товар` });
@@ -97,6 +101,7 @@ test('stock transfer and outbound shipment — UI', async ({ page }) => {
   ]);
   expect(trRes.ok()).toBeTruthy();
 
+  await page.goto('/app/ops/movements');
   await Promise.all([
     waitForGetOk(page, '/api/operations/inventory-movements'),
     page.getByTestId('global-movements-refresh').click(),
@@ -104,6 +109,7 @@ test('stock transfer and outbound shipment — UI', async ({ page }) => {
   await expect(page.getByTestId('global-movements-list')).toContainText('stock_transfer_out');
 
   const baseOut = '/api/operations/outbound-shipment-requests';
+  await page.goto('/app/ops/outbound');
   await Promise.all([
     waitForPostOk(page, baseOut, (u) => !u.includes('/lines') && !u.includes('/submit')),
     page.getByTestId('outbound-create-submit').click(),

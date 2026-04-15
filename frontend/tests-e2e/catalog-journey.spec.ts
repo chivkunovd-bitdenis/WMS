@@ -25,6 +25,7 @@ test('register then create warehouse, location, and product', async ({ page }) =
   ]);
 
   await expect(page.getByTestId('dashboard')).toBeVisible();
+  await page.goto('/app/catalog');
   await expect(page.getByTestId('catalog-section')).toBeVisible();
   await expect(page.getByTestId('warehouse-form')).toBeVisible();
   await expect(page.getByTestId('catalog-error')).toHaveCount(0);
