@@ -54,6 +54,9 @@ export function PublicAuthScreen({
             <label>
               Пароль
               <Input name="password" type="password" minLength={8} required />
+              <div className="hint" style={{ marginTop: 6 }}>
+                Минимум 8 символов.
+              </div>
             </label>
             <Button type="submit" disabled={authBusy}>
               {authBusy ? 'Отправка…' : 'Создать аккаунт'}

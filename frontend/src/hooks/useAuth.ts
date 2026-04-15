@@ -66,6 +66,7 @@ export function useAuth() {
       const fd = new FormData(e.currentTarget)
       const rawSlug = String(fd.get('slug') ?? '').trim()
       const slug = rawSlug.toLowerCase().replace(/\s+/g, '-')
+      const password = String(fd.get('password') ?? '')
       // Локальная подсказка, но финальная валидация на сервере.
       if (slug.length < 2) {
         setError('Slug слишком короткий (минимум 2 символа, латиница и дефис).')
@@ -74,11 +75,14 @@ export function useAuth() {
           'Slug: только строчные латинские буквы, цифры и дефис (например my-fulfillment).',
         )
       }
+      if (password.length > 0 && password.length < 8) {
+        setError('Пароль: минимум 8 символов.')
+      }
       const body = {
         organization_name: String(fd.get('organization_name') ?? '').trim(),
         slug,
         admin_email: String(fd.get('admin_email') ?? '').trim(),
-        password: String(fd.get('password') ?? ''),
+        password,
       }
       const res = await fetch(apiUrl('/auth/register'), {
         method: 'POST',
@@ -89,7 +93,12 @@ export function useAuth() {
         if (res.status === 409) {
           setError('Такой slug или email уже заняты. Выберите другие.')
         } else {
-          setError(await readApiErrorMessage(res))
+          const msg = await readApiErrorMessage(res)
+          setError(
+            res.status === 422
+              ? `Проверьте поля: ${msg}`
+              : msg,
+          )
         }
         return
       }
