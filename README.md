@@ -7,6 +7,8 @@ Monorepo:
 
 Решения по MVP и интеграциям: **[docs/MVP_DECISIONS_RU.md](docs/MVP_DECISIONS_RU.md)**.
 
+Целевой бизнес‑процесс (source of truth): **[docs/BUSINESS_PROCESS_SELLER_INBOUND_OUTBOUND_RU.md](docs/BUSINESS_PROCESS_SELLER_INBOUND_OUTBOUND_RU.md)**.
+
 ## Local dev
 
 Поднять всё в Docker:
@@ -14,6 +16,16 @@ Monorepo:
 ```bash
 docker compose up -d --build
 ```
+
+**Важно про «старый» UI в `docker compose`:** сервис `web` собирается из `frontend/Dockerfile` командой `COPY .` и внутри контейнера крутит **`npm run dev` (Vite)**. Исходники **не монтируются** с хоста: после `git pull` или смены ветки фронт в контейнере обновится **только** после пересборки образа, например:
+
+```bash
+docker compose build --no-cache web && docker compose up -d web
+```
+
+или одной командой `docker compose up -d --build`. Если всё ещё видите старый бандл — сначала `docker compose build --no-cache web`.
+
+**Прод** (`docker-compose.prod.yml`): фронт — это **статический билд** (`npm run build` в `frontend/Dockerfile.prod` + Caddy). После изменений фронта достаточно `docker compose -f docker-compose.prod.yml up -d --build web` (или полного стека). Корневой `.dockerignore` исключает `frontend/node_modules` и `frontend/dist`, чтобы в образ не попали артефакты с машины разработчика.
 
 Фронт для разработки (Vite) запускать **локально** (из `frontend/`):
 
@@ -56,13 +68,73 @@ cd backend && pip install -e ".[dev]" && alembic upgrade head
 
 Интерактивная документация API (Swagger UI): **http://localhost:18080/docs** — это штатно для FastAPI, к регистрации в интерфейсе не привязано.
 
+## Production (Docker Compose)
+
+В проде фронт **собирается внутри Docker** и отдаётся как статика через Caddy (Node на сервере не нужен).
+API доступен только через тот же домен/порт по пути `/api/*`.
+
+### Первичный запуск
+
+1) На сервере в корне репозитория создать `.env` (в git не коммитить), минимум:
+
+```env
+# внешний порт (Caddy) — 80 внутри контейнера
+WMS_HTTP_PORT=8080
+
+# БД
+POSTGRES_DB=wms
+POSTGRES_USER=postgres
+POSTGRES_PASSWORD=change-me
+
+# API security (обязательно в проде)
+JWT_SECRET_KEY=change-me-use-long-random-secret
+WMS_SECRETS_FERNET_KEY=change-me-urlsafe-base64-fernet-key
+```
+
+2) Поднять стек:
+
+```bash
+docker compose -f docker-compose.prod.yml up -d --build
+```
+
+### Обновление (канонично)
+
+```bash
+git pull
+docker compose -f docker-compose.prod.yml up -d --build
+docker compose -f docker-compose.prod.yml ps
+```
+
+### Доступ
+
+- UI (Fulfillment): `http://<server>:${WMS_HTTP_PORT:-8080}/`
+- UI (Seller portal, отдельное SPA): `http://<server>:${WMS_HTTP_PORT:-8080}/seller/`
+- API: `http://<server>:${WMS_HTTP_PORT:-8080}/api/...`
+
+Примечание по reverse proxy: в проде Caddy проксирует **`/api/*` → FastAPI**, при этом префикс **`/api` снимается** (внутри API маршруты как в Swagger: `/health`, `/auth/login`, …).
+
 ## Frontend routes (v2)
 
-- Public: `/` (регистрация / логин)
-- Authed default: `/app/dashboard`
-- Каталог: `/app/catalog`, `/app/catalog/products`
+### Fulfillment portal (бандл `index.html`, публичный путь `/`)
+
+- Public: `/` (регистрация фулфилмента / логин)
+- Authed shell (MUI): `/app/*`; стартовая точка **`/app/dashboard` → `/app/ff/dashboard`**
+- Дашборд ФФ: `/app/ff/dashboard` (недельный календарь, сводки inbound/outbound)
+- Поставки и загрузки / Supply and Load (единый список): `/app/ff/supplies-shipments`
+- Заглушки: `/app/ff/products`, `/app/ff/honest-sign`
+- Каталог (склады и ячейки): `/app/catalog`, `/app/catalog/products` (в сайдбаре ФФ также ведёт сюда пункт «Склады и ячейки»)
 - Операции: `/app/ops`, `/app/ops/inbound`, `/app/ops/outbound`, `/app/ops/movements`, `/app/ops/transfers`
-- Интеграции: `/app/integrations/wb`
+- Интеграции WB: `/app/integrations/wb` (редирект с `/app/ff/integrations/wb`)
+
+### Seller portal (отдельный бандл `seller/index.html`, публичный путь `/seller/`)
+
+- Public/auth: `/seller/` (логин/регистрация — как в текущем seller UI)
+- Документы: `/seller/documents`
+- Товары: `/seller/products`
+- Настройки: `/seller/settings`
+- Черновик inbound: `/seller/inbound/new` и `/seller/inbound/:id`
+
+Локально в Vite (multi-page) удобная точка входа seller-приложения: `http://localhost:15173/seller/index.html` (если поднят `npm --prefix frontend run dev`).
 
 ## CI gates (Definition of Done)
 

@@ -60,12 +60,16 @@ services:
       api:
         condition: service_started
 
+  # Vite dev server; sources are baked at image build (no bind mount). Rebuild after frontend changes:
+  #   docker compose build --no-cache web && docker compose up -d web
   web:
     build:
       context: ./frontend
     environment:
       # Прокси Vite внутри сети compose (браузер → :15173 → /api → api:8000)
       VITE_API_PROXY: http://api:8000
+      # Порт, с которого браузер ходит на Vite (см. WMS_WEB_PORT) — для HMR WebSocket.
+      VITE_DEV_CLIENT_PORT: ${WMS_WEB_PORT:-15173}
     depends_on:
       - api
     ports:

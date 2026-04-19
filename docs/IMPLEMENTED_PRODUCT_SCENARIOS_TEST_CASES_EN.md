@@ -503,6 +503,21 @@ This document expands **[IMPLEMENTED_PRODUCT_SCENARIOS_EN.md](./IMPLEMENTED_PROD
 - **Steps:** load app while profile (`/auth/me` equivalent user journey) is loading.
 - **Expected:** **loading** state visible; **no** overlapping login and register forms during load.
 
+### TC-S15-003 Fulfillment admin dashboard — week planning and combined supplies/shipments
+
+- **Actor:** fulfillment admin.
+- **Preconditions:** logged-in session after registration or login (tenant exists).
+- **Steps:**
+  1. Land on the **fulfillment admin dashboard** (default post-auth landing for that shell).
+  2. Confirm a **week-oriented planning** area is shown together with **short summaries** of inbound and outbound documents (may be empty for a new tenant).
+  3. Use navigation to open **Supplies and Load** (Russian UI: *Поставки и загрузки*; combined list of inbound and outbound-to-MP requests).
+  4. On that page, use **Create marketplace unload** (Russian: *Создать выгрузку* — product term *download* for FC→marketplace unload document; stub only).
+- **Expected:**
+  - Week planning and document summary areas are **visible** and usable (e.g. change week if the UI offers it).
+  - The combined list view opens without error; **Create diverge** (*Создать расхождение*) is visible; stub action shows an **informational** notice (Given/When/Then: no backend document yet — **restriction**).
+  - User can proceed to document flows consistent with **operations** for the same document types (per scenario scope).
+- **Negative / restrictions:** stub buttons do **not** create persisted documents yet; deeper document rules remain covered by S06/S08 cases.
+
 ---
 
 ## Cross-scenario matrix (acceptance checklist for role tests)
