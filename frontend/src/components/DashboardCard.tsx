@@ -18,7 +18,10 @@ type Props = {
   isFulfillmentAdmin: boolean
   sellers: SellerRow[]
   catalogBusy: boolean
+  catalogError: string | null
   onCreateSellerAccount: FormEventHandler<HTMLFormElement>
+  /** Вложенный блок (без дублирующего data-testid на корне карточки) */
+  embedded?: boolean
 }
 
 export function DashboardCard({
@@ -26,16 +29,22 @@ export function DashboardCard({
   isFulfillmentAdmin,
   sellers,
   catalogBusy,
+  catalogError,
   onCreateSellerAccount,
+  embedded = false,
 }: Props) {
   return (
-    <Card className="card" data-testid="dashboard">
-      <p data-testid="user-email">{me.email}</p>
-      <p data-testid="org-name">{me.organization_name}</p>
-      <p data-testid="user-role">{me.role}</p>
-      {me.seller_name ? (
-        <p data-testid="seller-cabinet-label">Селлер: {me.seller_name}</p>
-      ) : null}
+    <Card className="card" data-testid={embedded ? undefined : 'dashboard'}>
+      {embedded ? null : (
+        <>
+          <p data-testid="user-email">{me.email}</p>
+          <p data-testid="org-name">{me.organization_name}</p>
+          <p data-testid="user-role">{me.role}</p>
+          {me.seller_name ? (
+            <p data-testid="seller-cabinet-label">Селлер: {me.seller_name}</p>
+          ) : null}
+        </>
+      )}
 
       {isFulfillmentAdmin && sellers.length > 0 ? (
         <form
@@ -45,8 +54,16 @@ export function DashboardCard({
           onSubmit={onCreateSellerAccount}
         >
           <h3 className="subtle" style={{ marginTop: 0 }}>
-            Аккаунт селлера (вход по email)
+            Аккаунт селлера
           </h3>
+          <p className="subtle" style={{ marginTop: 4, fontSize: 13 }}>
+            Укажите email — селлер задаёт пароль при первом входе в кабинет.
+          </p>
+          {catalogError ? (
+            <p className="error" data-testid="seller-account-error">
+              {catalogError}
+            </p>
+          ) : null}
           <label>
             Селлер
             <Select
@@ -73,17 +90,6 @@ export function DashboardCard({
               type="email"
               required
               autoComplete="off"
-            />
-          </label>
-          <label>
-            Пароль
-            <Input
-              name="acc_password"
-              data-testid="seller-account-password"
-              type="password"
-              minLength={8}
-              required
-              autoComplete="new-password"
             />
           </label>
           <Button

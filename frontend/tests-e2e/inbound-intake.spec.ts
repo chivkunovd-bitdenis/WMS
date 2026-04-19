@@ -5,17 +5,18 @@ import {
   waitForLocationsListGet,
   waitForPostOk,
 } from './api-waits';
+import { openFulfillmentRegistration } from './auth-flow';
 
+// TC-S06-001, TC-S06-002, TC-S06-004 — черновик приёмки, строка, submit (UI + API).
 test('create inbound request, add line, submit — UI and API', async ({ page }) => {
-  const slug = `ff-inb-${Date.now()}`;
   const email = `e2e-inb-${Date.now()}@example.com`;
   const sku = `SKU-IN-${Date.now()}`;
   const whCode = `wh-${Date.now()}`;
 
   await page.goto('/');
+  await openFulfillmentRegistration(page);
   await page.getByTestId('register-form').getByLabel('Организация').fill('E2E Inbound');
-  await page.getByTestId('register-slug').fill(slug);
-  await page.getByTestId('register-form').getByLabel('Email админа').fill(email);
+  await page.getByTestId('register-form').getByLabel('Email администратора').fill(email);
   await page.getByTestId('register-form').getByLabel('Пароль').fill('password123');
   await Promise.all([
     waitForPostOk(page, '/api/auth/register'),
@@ -54,7 +55,7 @@ test('create inbound request, add line, submit — UI and API', async ({ page })
     page.getByTestId('product-submit').click(),
   ]);
 
-  await page.getByRole('link', { name: 'Приёмка' }).click();
+  await page.goto('/app/ops/inbound');
   await expect(page.getByTestId('inbound-create-form')).toBeVisible();
   await expect(page.getByTestId('inbound-create-submit')).toBeEnabled();
 
@@ -69,6 +70,7 @@ test('create inbound request, add line, submit — UI and API', async ({ page })
   expect(createRes.ok()).toBeTruthy();
   await expect(page.getByTestId('operations-error')).toHaveCount(0);
   await expect(page.getByTestId('inbound-detail-status')).toContainText('draft');
+  await expect(page.getByTestId('inbound-detail-planned-date')).toBeVisible();
 
   await page
     .getByTestId('inbound-line-product')
@@ -99,6 +101,37 @@ test('create inbound request, add line, submit — UI and API', async ({ page })
   await expect(
     page.getByTestId('inbound-requests-list').getByTestId('inbound-request-item').first(),
   ).toContainText('submitted');
+
+  const [primRes] = await Promise.all([
+    waitForPostOk(page, '/api/operations/inbound-intake-requests', (u) =>
+      u.includes('/primary-accept'),
+    ),
+    page.getByTestId('inbound-primary-accept').click(),
+  ]);
+  expect(primRes.ok()).toBeTruthy();
+  await expect(page.getByTestId('inbound-detail-status')).toContainText('primary_accepted');
+
+  await page.getByTestId('inbound-line-actual-qty').fill('4');
+  const [actualRes] = await Promise.all([
+    page.waitForResponse(
+      (r) =>
+        r.request().method() === 'PATCH' &&
+        r.url().includes('/api/operations/inbound-intake-requests') &&
+        r.url().includes('/actual') &&
+        r.status() === 200,
+    ),
+    page.getByTestId('inbound-line-actual-save').click(),
+  ]);
+  expect(actualRes.ok()).toBeTruthy();
+
+  const [verifyRes] = await Promise.all([
+    waitForPostOk(page, '/api/operations/inbound-intake-requests', (u) =>
+      u.includes('/verify'),
+    ),
+    page.getByTestId('inbound-verify-complete').click(),
+  ]);
+  expect(verifyRes.ok()).toBeTruthy();
+  await expect(page.getByTestId('inbound-detail-status')).toContainText('verified');
 
   const [postRes] = await Promise.all([
     waitForPostOk(page, '/api/operations/inbound-intake-requests', (u) =>

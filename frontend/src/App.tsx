@@ -6,18 +6,31 @@ import { ProfileLoadingScreen } from './screens/ProfileLoadingScreen'
 import { PublicAuthScreen } from './screens/PublicAuthScreen'
 import { AuthedAppLayout } from './layouts/AuthedAppLayout'
 import { CatalogSection } from './sections/CatalogSection'
-import { OperationsSection } from './sections/OperationsSection'
-import { DashboardCard } from './components/DashboardCard'
 import { readApiErrorMessage } from './utils/readApiErrorMessage'
 import { useAuth } from './hooks/useAuth'
-import { PlaceholderCard, Screen } from './screens/AppV2Screens'
+import { Screen } from './screens/AppV2Screens'
 import { ProductsScreen } from './screens/v2/ProductsScreen'
 import { InboundScreen } from './screens/v2/InboundScreen'
 import { OutboundScreen } from './screens/v2/OutboundScreen'
 import { WildberriesScreen } from './screens/v2/WildberriesScreen'
 import { MovementsScreen } from './screens/v2/MovementsScreen'
 import { TransfersScreen } from './screens/v2/TransfersScreen'
-import { StatCard } from './components/StatCard'
+import {
+  AppBar as MuiAppBar,
+  Box as MuiBox,
+  Dialog,
+  IconButton,
+  Toolbar as MuiToolbar,
+  Typography as MuiTypography,
+} from '@mui/material'
+import CloseIcon from '@mui/icons-material/Close'
+import { FfDashboard } from './screens/ff/FfDashboard'
+import {
+  FfSuppliesShipmentsPage,
+  type FfDiscrepancyActSummary,
+  type FfMarketplaceUnloadSummary,
+} from './screens/ff/FfSuppliesShipmentsPage'
+import { FfPlaceholderPage } from './screens/ff/FfPlaceholderPage'
 
 type WarehouseRow = { id: string; name: string; code: string }
 type LocationRow = { id: string; code: string; warehouse_id: string }
@@ -42,6 +55,10 @@ type InboundSummaryRow = {
   warehouse_id: string
   status: string
   line_count: number
+  planned_delivery_date: string | null
+  seller_id?: string | null
+  seller_name?: string | null
+  created_at?: string
 }
 
 type InboundLineRow = {
@@ -50,6 +67,7 @@ type InboundLineRow = {
   sku_code: string
   product_name: string
   expected_qty: number
+  actual_qty: number | null
   posted_qty: number
   storage_location_id: string | null
   storage_location_code: string | null
@@ -59,6 +77,8 @@ type InboundDetailRow = {
   id: string
   warehouse_id: string
   status: string
+  planned_delivery_date: string | null
+  has_discrepancy?: boolean
   lines: InboundLineRow[]
 }
 
@@ -87,6 +107,13 @@ type OutboundSummaryRow = {
   warehouse_id: string
   status: string
   line_count: number
+  warehouse_name?: string
+  goods_qty_total?: number
+  planned_shipment_date?: string | null
+  created_at?: string
+  marketplace_label?: string
+  seller_id?: string | null
+  seller_name?: string | null
 }
 
 type OutboundLineRow = {
@@ -104,6 +131,7 @@ type OutboundDetailRow = {
   id: string
   warehouse_id: string
   status: string
+  planned_shipment_date?: string | null
   lines: OutboundLineRow[]
 }
 
@@ -126,6 +154,8 @@ type PostedInventoryBalanceRow = {
   available: number
 }
 
+// (StockSummaryRow moved into SellerProductsStockScreen)
+
 type WbImportedCardRow = {
   nm_id: number
   vendor_code: string | null
@@ -142,8 +172,19 @@ type WbImportedSupplyRow = {
 }
 
 export default function App() {
-  const { token, me, error, loading, authBusy, onRegister, onLogin, logout } =
-    useAuth()
+  const {
+    token,
+    me,
+    error,
+    loading,
+    authBusy,
+    pendingPasswordSetupEmail,
+    onRegister,
+    onLogin,
+    onSetInitialPassword,
+    onCancelPasswordSetup,
+    logout,
+  } = useAuth('fulfillment')
   const [warehouses, setWarehouses] = useState<WarehouseRow[]>([])
   const [selectedWarehouseId, setSelectedWarehouseId] = useState<string | null>(
     null,
@@ -173,6 +214,7 @@ export default function App() {
   const [postedInventoryRows, setPostedInventoryRows] = useState<
     PostedInventoryBalanceRow[]
   >([])
+  // Seller stock is loaded by SellerProductsStockScreen directly (WB catalog + summary).
   const [globalMovements, setGlobalMovements] = useState<GlobalMovementRow[]>(
     [],
   )
@@ -185,6 +227,14 @@ export default function App() {
   const [outboundDetail, setOutboundDetail] = useState<OutboundDetailRow | null>(
     null,
   )
+  const [ffDocModal, setFfDocModal] = useState<null | 'inbound' | 'outbound'>(null)
+  const [marketplaceUnloadSummaries, setMarketplaceUnloadSummaries] = useState<
+    FfMarketplaceUnloadSummary[]
+  >([])
+  const [discrepancyActSummaries, setDiscrepancyActSummaries] = useState<
+    FfDiscrepancyActSummary[]
+  >([])
+  const [ffSuppliesNotice, setFfSuppliesNotice] = useState<string | null>(null)
   const [outboundRequestLocations, setOutboundRequestLocations] = useState<
     LocationRow[]
   >([])
@@ -382,6 +432,34 @@ export default function App() {
     [authHeaders],
   )
 
+  const refreshMarketplaceUnloadList = useCallback(
+    async (t: string) => {
+      const res = await fetch(apiUrl('/operations/marketplace-unload-requests'), {
+        headers: authHeaders(t),
+      })
+      if (!res.ok) {
+        throw new Error(await readApiErrorMessage(res))
+      }
+      setMarketplaceUnloadSummaries(
+        (await res.json()) as FfMarketplaceUnloadSummary[],
+      )
+    },
+    [authHeaders],
+  )
+
+  const refreshDiscrepancyActList = useCallback(
+    async (t: string) => {
+      const res = await fetch(apiUrl('/operations/discrepancy-acts'), {
+        headers: authHeaders(t),
+      })
+      if (!res.ok) {
+        throw new Error(await readApiErrorMessage(res))
+      }
+      setDiscrepancyActSummaries((await res.json()) as FfDiscrepancyActSummary[])
+    },
+    [authHeaders],
+  )
+
   const refreshOutboundDetail = useCallback(
     async (t: string, requestId: string) => {
       const [dRes, mRes] = await Promise.all([
@@ -424,6 +502,9 @@ export default function App() {
       setPostedInventoryRows([])
       setGlobalMovements([])
       setOutboundSummaries([])
+      setMarketplaceUnloadSummaries([])
+      setDiscrepancyActSummaries([])
+      setFfSuppliesNotice(null)
       setSelectedOutboundId(null)
       setOutboundDetail(null)
       setOutboundRequestLocations([])
@@ -468,6 +549,8 @@ export default function App() {
       try {
         await refreshInboundList(token)
         await refreshOutboundList(token)
+        await refreshMarketplaceUnloadList(token)
+        await refreshDiscrepancyActList(token)
         await refreshGlobalMovements(token)
       } catch (e) {
         setOpsError(
@@ -483,6 +566,8 @@ export default function App() {
     refreshSellers,
     refreshInboundList,
     refreshOutboundList,
+    refreshMarketplaceUnloadList,
+    refreshDiscrepancyActList,
     refreshGlobalMovements,
   ])
 
@@ -545,6 +630,20 @@ export default function App() {
   useEffect(() => {
     setPostedInventoryRows([])
   }, [selectedInboundId])
+
+  useEffect(() => {
+    if (ffDocModal !== 'inbound' || !inboundDetail?.warehouse_id) {
+      return
+    }
+    setSelectedWarehouseId(inboundDetail.warehouse_id)
+  }, [ffDocModal, inboundDetail?.warehouse_id])
+
+  useEffect(() => {
+    if (ffDocModal !== 'outbound' || !outboundDetail?.warehouse_id) {
+      return
+    }
+    setSelectedWarehouseId(outboundDetail.warehouse_id)
+  }, [ffDocModal, outboundDetail?.warehouse_id])
 
   useEffect(() => {
     if (!token || !inboundDetail?.warehouse_id) {
@@ -654,6 +753,8 @@ export default function App() {
     void refreshWbImportedSupplies(token, wbSellerId)
   }, [token, me?.role, wbSellerId, refreshWbImportedSupplies])
 
+  // Seller stock is loaded by SellerProductsStockScreen directly.
+
   function onLogout() {
     logout()
     setInboundSummaries([])
@@ -720,14 +821,21 @@ export default function App() {
       const fd = new FormData(form)
       const seller_id = String(fd.get('acc_seller_id') ?? '')
       const email = String(fd.get('acc_email') ?? '').trim()
-      const password = String(fd.get('acc_password') ?? '')
+      if (!seller_id) {
+        setCatalogError('Выберите селлера для создания аккаунта.')
+        return
+      }
+      if (!email) {
+        setCatalogError('Укажите email для аккаунта селлера.')
+        return
+      }
       const res = await fetch(apiUrl('/auth/seller-accounts'), {
         method: 'POST',
         headers: {
           ...authHeaders(token),
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({ seller_id, email, password }),
+        body: JSON.stringify({ seller_id, email }),
       })
       if (!res.ok) {
         setCatalogError(await readApiErrorMessage(res))
@@ -892,6 +1000,10 @@ export default function App() {
     try {
       const fd = new FormData(form)
       const whFromForm = String(fd.get('inbound_warehouse_id') ?? '').trim()
+      const planned_delivery_date_raw = String(
+        fd.get('inbound_planned_delivery_date') ?? '',
+      ).trim()
+      const planned_delivery_date = planned_delivery_date_raw || null
       const warehouseId =
         whFromForm ||
         selectedWarehouseId ||
@@ -910,7 +1022,7 @@ export default function App() {
           ...authHeaders(token),
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({ warehouse_id: warehouseId }),
+        body: JSON.stringify({ warehouse_id: warehouseId, planned_delivery_date }),
       })
       if (!res.ok) {
         setOpsError(await readApiErrorMessage(res))
@@ -1003,6 +1115,96 @@ export default function App() {
       setOpsError(
         e instanceof Error ? e.message : 'Не удалось отправить заявку.',
       )
+    } finally {
+      setOpsBusy(false)
+    }
+  }
+
+  async function onPrimaryAcceptInboundRequest() {
+    if (!token || !selectedInboundId) {
+      return
+    }
+    setOpsError(null)
+    setOpsBusy(true)
+    try {
+      const res = await fetch(
+        apiUrl(`/operations/inbound-intake-requests/${selectedInboundId}/primary-accept`),
+        { method: 'POST', headers: authHeaders(token) },
+      )
+      if (!res.ok) {
+        setOpsError(await readApiErrorMessage(res))
+        return
+      }
+      await refreshInboundList(token)
+      await refreshInboundDetail(token, selectedInboundId)
+    } catch (e) {
+      setOpsError(e instanceof Error ? e.message : 'Не удалось выполнить первичную приёмку.')
+    } finally {
+      setOpsBusy(false)
+    }
+  }
+
+  async function onSetInboundLineActualQty(e: React.FormEvent<HTMLFormElement>) {
+    e.preventDefault()
+    const form = e.currentTarget
+    if (!token || !selectedInboundId) {
+      return
+    }
+    const lineId = form.getAttribute('data-line-id')
+    if (!lineId) {
+      return
+    }
+    setOpsError(null)
+    setOpsBusy(true)
+    try {
+      const fd = new FormData(form)
+      const actual_qty = Number(fd.get('actual_qty'))
+      const res = await fetch(
+        apiUrl(
+          `/operations/inbound-intake-requests/${selectedInboundId}/lines/${lineId}/actual`,
+        ),
+        {
+          method: 'PATCH',
+          headers: {
+            ...authHeaders(token),
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({ actual_qty }),
+        },
+      )
+      if (!res.ok) {
+        setOpsError(await readApiErrorMessage(res))
+        return
+      }
+      await refreshInboundList(token)
+      await refreshInboundDetail(token, selectedInboundId)
+      form.reset()
+    } catch (e) {
+      setOpsError(e instanceof Error ? e.message : 'Не удалось сохранить факт.')
+    } finally {
+      setOpsBusy(false)
+    }
+  }
+
+  async function onCompleteInboundVerification() {
+    if (!token || !selectedInboundId) {
+      return
+    }
+    setOpsError(null)
+    setOpsBusy(true)
+    try {
+      const res = await fetch(
+        apiUrl(`/operations/inbound-intake-requests/${selectedInboundId}/verify`),
+        { method: 'POST', headers: authHeaders(token) },
+      )
+      if (!res.ok) {
+        setOpsError(await readApiErrorMessage(res))
+        return
+      }
+      await refreshInboundList(token)
+      await refreshInboundDetail(token, selectedInboundId)
+    } catch (e) {
+      setOpsError(e instanceof Error ? e.message : 'Не удалось завершить пересчёт.')
     } finally {
       setOpsBusy(false)
     }
@@ -1798,14 +2000,102 @@ export default function App() {
     }
   }
 
+  const onCreateFfMarketplaceUnload = useCallback(async () => {
+    if (!token) {
+      return
+    }
+    let wid: string | null = selectedWarehouseId ?? warehouses[0]?.id ?? null
+    if (!wid) {
+      try {
+        const res = await fetch(apiUrl('/warehouses'), {
+          headers: authHeaders(token),
+        })
+        if (res.ok) {
+          const list = (await res.json()) as WarehouseRow[]
+          wid = list[0]?.id ?? null
+        }
+      } catch {
+        wid = null
+      }
+    }
+    if (!wid) {
+      setOpsError('Сначала создайте склад в каталоге.')
+      return
+    }
+    setFfSuppliesNotice(null)
+    setOpsError(null)
+    setOpsBusy(true)
+    try {
+      const res = await fetch(apiUrl('/operations/marketplace-unload-requests'), {
+        method: 'POST',
+        headers: {
+          ...authHeaders(token),
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ warehouse_id: wid }),
+      })
+      if (!res.ok) {
+        setOpsError(await readApiErrorMessage(res))
+        return
+      }
+      await refreshMarketplaceUnloadList(token)
+      setFfSuppliesNotice(
+        'Выгрузка на склад МП создана (черновик). Состав по строкам — на следующем этапе.',
+      )
+    } catch (e) {
+      setOpsError(
+        e instanceof Error ? e.message : 'Не удалось создать выгрузку.',
+      )
+    } finally {
+      setOpsBusy(false)
+    }
+  }, [token, selectedWarehouseId, warehouses, authHeaders, refreshMarketplaceUnloadList])
+
+  const onCreateFfDiscrepancyAct = useCallback(async () => {
+    if (!token) {
+      return
+    }
+    setFfSuppliesNotice(null)
+    setOpsError(null)
+    setOpsBusy(true)
+    try {
+      const res = await fetch(apiUrl('/operations/discrepancy-acts'), {
+        method: 'POST',
+        headers: {
+          ...authHeaders(token),
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({}),
+      })
+      if (!res.ok) {
+        setOpsError(await readApiErrorMessage(res))
+        return
+      }
+      await refreshDiscrepancyActList(token)
+      setFfSuppliesNotice(
+        'Акт расхождения создан (черновик). Связь с приёмкой и строки — на следующем этапе.',
+      )
+    } catch (e) {
+      setOpsError(
+        e instanceof Error ? e.message : 'Не удалось создать акт расхождения.',
+      )
+    } finally {
+      setOpsBusy(false)
+    }
+  }, [token, authHeaders, refreshDiscrepancyActList])
+
   const rootElement = (() => {
     if (!token) {
       return (
         <PublicAuthScreen
+          variant="fulfillment"
           error={error}
           authBusy={authBusy}
+          pendingPasswordSetupEmail={pendingPasswordSetupEmail}
           onRegister={(e) => void onRegister(e)}
           onLogin={(e) => void onLogin(e)}
+          onSetInitialPassword={(e) => void onSetInitialPassword(e)}
+          onCancelPasswordSetup={onCancelPasswordSetup}
         />
       )
     }
@@ -1818,76 +2108,128 @@ export default function App() {
 
     const isFulfillmentAdmin = me.role === 'fulfillment_admin'
     const isFulfillmentSeller = me.role === 'fulfillment_seller'
-    const canEditInboundDraft = isFulfillmentAdmin || isFulfillmentSeller
-    const canEditOutboundDraft = isFulfillmentAdmin || isFulfillmentSeller
+    if (isFulfillmentSeller) {
+      // In Vite dev (MPA), the seller app is served from `/seller/index.html`.
+      // In prod (Caddy), `/seller/*` is the canonical public path.
+      window.location.assign(import.meta.env.PROD ? '/seller/' : '/seller/index.html')
+      return null
+    }
+    const portal: 'seller' | 'ff' = 'ff'
+    const base = '/app/ff'
+
+    // seller stock should always be available on products tab
+    // (refreshed lazily by screens via this helper)
 
     const v2 = (
-      <AuthedAppLayout
+        <AuthedAppLayout
         onLogout={onLogout}
-        title="WMS"
+          title="Портал ФФ"
         userLabel={me.email}
         userRoleLabel={me.role}
+        portal={portal}
       >
+        <>
         <Routes>
           <Route
             path="dashboard"
-            element={
-              <Screen title="Дашборд" subtitle="Ключевые статусы и быстрые действия">
-                <div className="kpi-grid" data-testid="kpi-grid">
-                  <StatCard
-                    label="Склады"
-                    value={warehouses.length}
-                    hint="Количество складов"
-                    tone="accent"
-                    data-testid="kpi-warehouses"
-                  />
-                  <StatCard
-                    label="Ячейки"
-                    value={locations.length}
-                    hint="По выбранному складу"
-                    data-testid="kpi-locations"
-                  />
-                  <StatCard
-                    label="SKU"
-                    value={products.length}
-                    hint="Товары в каталоге"
-                    data-testid="kpi-products"
-                  />
-                  <StatCard
-                    label="Селлеры"
-                    value={sellers.length}
-                    hint="Клиенты фулфилмента"
-                    data-testid="kpi-sellers"
-                  />
-                </div>
+            element={<Navigate to={`${base}/dashboard`} replace />}
+          />
 
-                <div className="screen-grid">
-                  <div className="stack">
-                    <DashboardCard
-                      me={me}
-                      isFulfillmentAdmin={isFulfillmentAdmin}
-                      sellers={sellers}
-                      catalogBusy={catalogBusy}
-                      onCreateSellerAccount={(e) => void onCreateSellerAccount(e)}
-                    />
-                    <PlaceholderCard
-                      title="Сводка по операциям"
-                      hint={`Inbound: ${inboundSummaries.length} · Outbound: ${outboundSummaries.length} · Movements: ${globalMovements.length}`}
-                    />
-                  </div>
-                  <div className="stack">
-                    <PlaceholderCard
-                      title="Быстрый старт"
-                      hint="Слева выбери экран: Products / Inbound / Outbound / WB. Это новый структурный UI (v2)."
-                    />
-                    <PlaceholderCard
-                      title="Интеграции"
-                      hint="Wildberries — отдельный экран в разделе Integrations."
-                    />
-                  </div>
-                </div>
-              </Screen>
+          <Route
+            path="ff/dashboard"
+            element={
+              <FfDashboard
+                me={me}
+                isFulfillmentAdmin={isFulfillmentAdmin}
+                sellers={sellers}
+                catalogBusy={catalogBusy}
+                catalogError={catalogError}
+                onCreateSellerAccount={(e) => void onCreateSellerAccount(e)}
+                inboundSummaries={inboundSummaries}
+                outboundSummaries={outboundSummaries}
+                onOpenInbound={(id) => {
+                  setSelectedOutboundId(null)
+                  setSelectedInboundId(id)
+                  setFfDocModal('inbound')
+                }}
+                onOpenOutbound={(id) => {
+                  setSelectedInboundId(null)
+                  setSelectedOutboundId(id)
+                  setFfDocModal('outbound')
+                }}
+              />
             }
+          />
+
+          <Route
+            path="ff/supplies-shipments"
+            element={
+              <FfSuppliesShipmentsPage
+                busy={opsBusy}
+                error={opsError}
+                infoNotice={ffSuppliesNotice}
+                onDismissInfoNotice={() => setFfSuppliesNotice(null)}
+                token={token}
+                productPicklist={products.map((p) => ({
+                  id: p.id,
+                  sku_code: p.sku_code,
+                  name: p.name,
+                }))}
+                onRefreshFfSupplyExtras={async () => {
+                  if (!token) {
+                    return
+                  }
+                  await refreshMarketplaceUnloadList(token)
+                  await refreshDiscrepancyActList(token)
+                }}
+                inboundSummaries={inboundSummaries}
+                outboundSummaries={outboundSummaries}
+                marketplaceUnloadSummaries={marketplaceUnloadSummaries}
+                discrepancyActSummaries={discrepancyActSummaries}
+                onOpenInbound={(id) => {
+                  setSelectedOutboundId(null)
+                  setSelectedInboundId(id)
+                  setFfDocModal('inbound')
+                }}
+                onOpenOutbound={(id) => {
+                  setSelectedInboundId(null)
+                  setSelectedOutboundId(id)
+                  setFfDocModal('outbound')
+                }}
+                onCreateMarketplaceDownload={() => void onCreateFfMarketplaceUnload()}
+                onCreateDiverge={() => void onCreateFfDiscrepancyAct()}
+              />
+            }
+          />
+
+          <Route
+            path="ff/products"
+            element={
+              <FfPlaceholderPage
+                title="Товары"
+                hint="Раздел в разработке."
+                testId="ff-products-placeholder"
+              />
+            }
+          />
+
+          <Route
+            path="ff/honest-sign"
+            element={
+              <FfPlaceholderPage
+                title="Честный знак"
+                hint="Раздел в разработке."
+                testId="ff-honest-sign-placeholder"
+              />
+            }
+          />
+
+          <Route path="ff/inbound" element={<Navigate to="/app/ops/inbound" replace />} />
+          <Route path="ff/outbound" element={<Navigate to="/app/ops/outbound" replace />} />
+          <Route path="ff/warehouses" element={<Navigate to="/app/catalog" replace />} />
+          <Route
+            path="ff/integrations/wb"
+            element={<Navigate to="/app/integrations/wb" replace />}
           />
 
           <Route
@@ -1947,54 +2289,7 @@ export default function App() {
 
           <Route
             path="ops"
-            element={
-              <Screen title="Операции склада" subtitle="Приёмка, отгрузка, движения и перемещения">
-                <OperationsSection
-                  opsError={opsError}
-                  opsBusy={opsBusy}
-                  isFulfillmentAdmin={isFulfillmentAdmin}
-                  isFulfillmentSeller={isFulfillmentSeller}
-                  canEditInboundDraft={canEditInboundDraft}
-                  canEditOutboundDraft={canEditOutboundDraft}
-                  warehouses={warehouses}
-                  selectedWarehouseId={selectedWarehouseId}
-                  locations={locations}
-                  products={products}
-                  inboundSummaries={inboundSummaries}
-                  selectedInboundId={selectedInboundId}
-                  setSelectedInboundId={setSelectedInboundId}
-                  inboundDetail={inboundDetail}
-                  inboundRequestLocations={inboundRequestLocations}
-                  inboundMovements={inboundMovements}
-                  postedInventoryRows={postedInventoryRows}
-                  globalMovements={globalMovements}
-                  outboundSummaries={outboundSummaries}
-                  selectedOutboundId={selectedOutboundId}
-                  setSelectedOutboundId={setSelectedOutboundId}
-                  outboundDetail={outboundDetail}
-                  outboundRequestLocations={outboundRequestLocations}
-                  outboundMovements={outboundMovements}
-                  backgroundJobStatus={backgroundJobStatus}
-                  backgroundJobResult={backgroundJobResult}
-                  onStartMovementsDigestJob={() => void onStartMovementsDigestJob()}
-                  onCreateInboundRequest={(e) => void onCreateInboundRequest(e)}
-                  onAddInboundLine={(e) => void onAddInboundLine(e)}
-                  onSubmitInboundRequest={() => void onSubmitInboundRequest()}
-                  onSaveInboundLineStorage={(e) => void onSaveInboundLineStorage(e)}
-                  onReceiveInboundLine={(e) => void onReceiveInboundLine(e)}
-                  onPostInboundRequest={() => void onPostInboundRequest()}
-                  onRefreshGlobalMovementsClick={() => void onRefreshGlobalMovementsClick()}
-                  onStockTransfer={(e) => void onStockTransfer(e)}
-                  onCreateOutboundRequest={(e) => void onCreateOutboundRequest(e)}
-                  onAddOutboundLine={(e) => void onAddOutboundLine(e)}
-                  onDeleteOutboundLine={(lineId) => void onDeleteOutboundLine(lineId)}
-                  onSubmitOutboundRequest={() => void onSubmitOutboundRequest()}
-                  onSaveOutboundLineStorage={(e) => void onSaveOutboundLineStorage(e)}
-                  onShipOutboundLine={(e) => void onShipOutboundLine(e)}
-                  onPostOutboundRequest={() => void onPostOutboundRequest()}
-                />
-              </Screen>
-            }
+            element={<Navigate to="/app/ops/inbound" replace />}
           />
 
           <Route
@@ -2005,7 +2300,7 @@ export default function App() {
                 opsBusy={opsBusy}
                 isFulfillmentAdmin={isFulfillmentAdmin}
                 isFulfillmentSeller={isFulfillmentSeller}
-                canEditInboundDraft={canEditInboundDraft}
+                canEditInboundDraft={isFulfillmentAdmin}
                 warehouses={warehouses}
                 selectedWarehouseId={selectedWarehouseId}
                 products={products}
@@ -2019,6 +2314,9 @@ export default function App() {
                 onCreateInboundRequest={(e) => void onCreateInboundRequest(e)}
                 onAddInboundLine={(e) => void onAddInboundLine(e)}
                 onSubmitInboundRequest={() => void onSubmitInboundRequest()}
+                onPrimaryAcceptInboundRequest={() => void onPrimaryAcceptInboundRequest()}
+                onSetInboundLineActualQty={(e) => void onSetInboundLineActualQty(e)}
+                onCompleteInboundVerification={() => void onCompleteInboundVerification()}
                 onSaveInboundLineStorage={(e) => void onSaveInboundLineStorage(e)}
                 onReceiveInboundLine={(e) => void onReceiveInboundLine(e)}
                 onPostInboundRequest={() => void onPostInboundRequest()}
@@ -2034,7 +2332,7 @@ export default function App() {
                 opsBusy={opsBusy}
                 isFulfillmentAdmin={isFulfillmentAdmin}
                 isFulfillmentSeller={isFulfillmentSeller}
-                canEditOutboundDraft={canEditOutboundDraft}
+                canEditOutboundDraft={isFulfillmentAdmin}
                 warehouses={warehouses}
                 selectedWarehouseId={selectedWarehouseId}
                 products={products}
@@ -2061,6 +2359,11 @@ export default function App() {
               <MovementsScreen
                 globalMovements={globalMovements}
                 onRefreshGlobalMovementsClick={() => void onRefreshGlobalMovementsClick()}
+                isFulfillmentAdmin={isFulfillmentAdmin}
+                opsBusy={opsBusy}
+                backgroundJobStatus={backgroundJobStatus}
+                backgroundJobResult={backgroundJobResult}
+                onStartMovementsDigestJob={() => void onStartMovementsDigestJob()}
               />
             }
           />
@@ -2107,16 +2410,103 @@ export default function App() {
             }
           />
 
-          <Route path="*" element={<Navigate to="/app/dashboard" replace />} />
+          <Route path="*" element={<Navigate to={`${base}/dashboard`} replace />} />
         </Routes>
+
+        <Dialog
+          fullScreen
+          open={ffDocModal !== null}
+          onClose={() => {
+            setFfDocModal(null)
+            setSelectedInboundId(null)
+            setSelectedOutboundId(null)
+          }}
+          data-testid="ff-doc-dialog"
+        >
+          <MuiAppBar position="sticky" color="inherit" elevation={1}>
+            <MuiToolbar>
+              <IconButton
+                edge="start"
+                color="inherit"
+                aria-label="Закрыть"
+                onClick={() => {
+                  setFfDocModal(null)
+                  setSelectedInboundId(null)
+                  setSelectedOutboundId(null)
+                }}
+                data-testid="ff-doc-dialog-close"
+              >
+                <CloseIcon />
+              </IconButton>
+              <MuiTypography variant="h6" sx={{ flex: 1 }}>
+                Документ
+              </MuiTypography>
+            </MuiToolbar>
+          </MuiAppBar>
+          <MuiBox sx={{ p: 2, overflow: 'auto', maxHeight: 'calc(100vh - 64px)' }}>
+            {ffDocModal === 'inbound' ? (
+              <InboundScreen
+                opsError={opsError}
+                opsBusy={opsBusy}
+                isFulfillmentAdmin={isFulfillmentAdmin}
+                isFulfillmentSeller={isFulfillmentSeller}
+                canEditInboundDraft={isFulfillmentAdmin}
+                warehouses={warehouses}
+                selectedWarehouseId={selectedWarehouseId}
+                products={products}
+                inboundSummaries={inboundSummaries}
+                selectedInboundId={selectedInboundId}
+                setSelectedInboundId={setSelectedInboundId}
+                inboundDetail={inboundDetail}
+                inboundRequestLocations={inboundRequestLocations}
+                inboundMovements={inboundMovements}
+                postedInventoryRows={postedInventoryRows}
+                onCreateInboundRequest={(e) => void onCreateInboundRequest(e)}
+                onAddInboundLine={(e) => void onAddInboundLine(e)}
+                onSubmitInboundRequest={() => void onSubmitInboundRequest()}
+                onPrimaryAcceptInboundRequest={() => void onPrimaryAcceptInboundRequest()}
+                onSetInboundLineActualQty={(e) => void onSetInboundLineActualQty(e)}
+                onCompleteInboundVerification={() => void onCompleteInboundVerification()}
+                onSaveInboundLineStorage={(e) => void onSaveInboundLineStorage(e)}
+                onReceiveInboundLine={(e) => void onReceiveInboundLine(e)}
+                onPostInboundRequest={() => void onPostInboundRequest()}
+              />
+            ) : ffDocModal === 'outbound' ? (
+              <OutboundScreen
+                opsError={opsError}
+                opsBusy={opsBusy}
+                isFulfillmentAdmin={isFulfillmentAdmin}
+                isFulfillmentSeller={isFulfillmentSeller}
+                canEditOutboundDraft={isFulfillmentAdmin}
+                warehouses={warehouses}
+                selectedWarehouseId={selectedWarehouseId}
+                products={products}
+                outboundSummaries={outboundSummaries}
+                selectedOutboundId={selectedOutboundId}
+                setSelectedOutboundId={setSelectedOutboundId}
+                outboundDetail={outboundDetail}
+                outboundRequestLocations={outboundRequestLocations}
+                outboundMovements={outboundMovements}
+                onCreateOutboundRequest={(e) => void onCreateOutboundRequest(e)}
+                onAddOutboundLine={(e) => void onAddOutboundLine(e)}
+                onDeleteOutboundLine={(lineId) => void onDeleteOutboundLine(lineId)}
+                onSubmitOutboundRequest={() => void onSubmitOutboundRequest()}
+                onSaveOutboundLineStorage={(e) => void onSaveOutboundLineStorage(e)}
+                onShipOutboundLine={(e) => void onShipOutboundLine(e)}
+                onPostOutboundRequest={() => void onPostOutboundRequest()}
+              />
+            ) : null}
+          </MuiBox>
+        </Dialog>
+        </>
       </AuthedAppLayout>
     )
 
     return (
       <Routes>
-        <Route path="/" element={<Navigate to="/app/dashboard" replace />} />
+        <Route path="/" element={<Navigate to={`${base}/dashboard`} replace />} />
         <Route path="/app/*" element={v2} />
-        <Route path="*" element={<Navigate to="/app/dashboard" replace />} />
+        <Route path="*" element={<Navigate to={`${base}/dashboard`} replace />} />
       </Routes>
     )
   })()
@@ -2124,7 +2514,6 @@ export default function App() {
   return (
     <Routes>
       <Route path="*" element={rootElement} />
-      <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>
   )
 }

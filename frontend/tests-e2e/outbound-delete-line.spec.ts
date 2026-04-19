@@ -5,19 +5,19 @@ import {
   waitForPostOk,
   waitForLocationsListGet,
 } from './api-waits';
+import { openFulfillmentRegistration } from './auth-flow';
 
 // TC-S10-001 — админ удаляет строку в draft отгрузке.
 // TC-S09-004 — резерв освобождается при удалении строки draft.
 test('удаление строки отгрузки в draft снимает резерв', async ({ page }) => {
-  const slug = `ff-odl-${Date.now()}`;
   const email = `e2e-odl-${Date.now()}@example.com`;
   const sku = `SKU-ODL-${Date.now()}`;
   const whCode = `wh-odl-${Date.now()}`;
 
   await page.goto('/');
+  await openFulfillmentRegistration(page);
   await page.getByTestId('register-form').getByLabel('Организация').fill('E2E ODL');
-  await page.getByTestId('register-slug').fill(slug);
-  await page.getByTestId('register-form').getByLabel('Email админа').fill(email);
+  await page.getByTestId('register-form').getByLabel('Email администратора').fill(email);
   await page.getByTestId('register-form').getByLabel('Пароль').fill('password123');
   await Promise.all([
     waitForPostOk(page, '/api/auth/register'),
@@ -75,6 +75,25 @@ test('удаление строки отгрузки в draft снимает р�
   await Promise.all([
     waitForPostOk(page, baseIn, (u) => u.includes('/submit')),
     page.getByTestId('inbound-submit-request').click(),
+  ]);
+  await Promise.all([
+    waitForPostOk(page, baseIn, (u) => u.includes('/primary-accept')),
+    page.getByTestId('inbound-primary-accept').click(),
+  ]);
+  await page.getByTestId('inbound-line-actual-qty').fill('10');
+  await Promise.all([
+    page.waitForResponse(
+      (r) =>
+        r.request().method() === 'PATCH' &&
+        r.url().includes('/api/operations/inbound-intake-requests') &&
+        r.url().includes('/actual') &&
+        r.status() === 200,
+    ),
+    page.getByTestId('inbound-line-actual-save').click(),
+  ]);
+  await Promise.all([
+    waitForPostOk(page, baseIn, (u) => u.includes('/verify')),
+    page.getByTestId('inbound-verify-complete').click(),
   ]);
   await Promise.all([
     waitForPostOk(page, baseIn, (u) => u.includes('/post')),

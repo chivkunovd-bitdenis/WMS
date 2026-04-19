@@ -4,15 +4,16 @@ import { BrowserRouter } from 'react-router-dom'
 import { ThemeProvider } from '@mui/material/styles'
 import './index.css'
 import './ui/ui.css'
-import App from './App.tsx'
 import { muiTheme } from './mui/theme'
+import { SellerApp } from './apps/seller/SellerApp'
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
     <ThemeProvider theme={muiTheme}>
-      <BrowserRouter>
-        <App />
+      <BrowserRouter basename="/seller">
+        <SellerApp />
       </BrowserRouter>
     </ThemeProvider>
   </StrictMode>,
 )
+

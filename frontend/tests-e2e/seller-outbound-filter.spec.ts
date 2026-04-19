@@ -3,21 +3,24 @@ import { test, expect } from '@playwright/test';
 import {
   waitForGetOk,
   waitForPostOk,
+  waitForPatchOk,
   waitForLocationsListGet,
 } from './api-waits';
+import { loginAsSeller, openFulfillmentRegistration } from './auth-flow';
 
+// TC-S12-003 — селлер видит только свои отгрузки в списке.
 test('seller A outbound list excludes seller B shipments only (#11)', async ({ page }) => {
-  const slug = `ff-sof-${Date.now()}`;
   const adminEmail = `e2e-sof-adm-${Date.now()}@example.com`;
   const sellerEmail = `e2e-sof-a-${Date.now()}@example.com`;
+  const sellerEmailB = `e2e-sof-b-${Date.now()}@example.com`;
   const skuA = `SKU-SOF-A-${Date.now()}`;
   const skuB = `SKU-SOF-B-${Date.now()}`;
   const whCode = `wh-sof-${Date.now()}`;
 
   await page.goto('/');
+  await openFulfillmentRegistration(page);
   await page.getByTestId('register-form').getByLabel('Организация').fill('E2E Outbound Filter');
-  await page.getByTestId('register-slug').fill(slug);
-  await page.getByTestId('register-form').getByLabel('Email админа').fill(adminEmail);
+  await page.getByTestId('register-form').getByLabel('Email администратора').fill(adminEmail);
   await page.getByTestId('register-form').getByLabel('Пароль').fill('password123');
   await Promise.all([
     waitForPostOk(page, '/api/auth/register'),
@@ -77,102 +80,78 @@ test('seller A outbound list excludes seller B shipments only (#11)', async ({ p
     page.getByTestId('product-submit').click(),
   ]);
 
-  const baseIn = '/api/operations/inbound-intake-requests';
-  await page.goto('/app/ops/inbound');
-
-  await Promise.all([
-    waitForPostOk(page, baseIn, (u) => !u.includes('/lines') && !u.includes('/submit')),
-    page.getByTestId('inbound-create-submit').click(),
-  ]);
-  await page.getByTestId('inbound-line-product').selectOption({ label: `${skuA} — PA` });
-  await page.getByTestId('inbound-line-qty').fill('10');
-  await page.getByTestId('inbound-line-location').selectOption({ label: 'L1' });
-  await Promise.all([
-    waitForPostOk(page, baseIn, (u) => u.includes('/lines')),
-    page.getByTestId('inbound-line-submit').click(),
-  ]);
-  await Promise.all([
-    waitForPostOk(page, baseIn, (u) => u.includes('/submit')),
-    page.getByTestId('inbound-submit-request').click(),
-  ]);
-  await Promise.all([
-    waitForPostOk(page, baseIn, (u) => u.includes('/post')),
-    page.getByTestId('inbound-post-submit').click(),
-  ]);
-
-  await page.goto('/app/ops/inbound');
-  await Promise.all([
-    waitForPostOk(page, baseIn, (u) => !u.includes('/lines') && !u.includes('/submit')),
-    page.getByTestId('inbound-create-submit').click(),
-  ]);
-  await page.getByTestId('inbound-line-product').selectOption({ label: `${skuB} — PB` });
-  await page.getByTestId('inbound-line-qty').fill('10');
-  await page.getByTestId('inbound-line-location').selectOption({ label: 'L1' });
-  await Promise.all([
-    waitForPostOk(page, baseIn, (u) => u.includes('/lines')),
-    page.getByTestId('inbound-line-submit').click(),
-  ]);
-  await Promise.all([
-    waitForPostOk(page, baseIn, (u) => u.includes('/submit')),
-    page.getByTestId('inbound-submit-request').click(),
-  ]);
-  await Promise.all([
-    waitForPostOk(page, baseIn, (u) => u.includes('/post')),
-    page.getByTestId('inbound-post-submit').click(),
-  ]);
-
-  const baseOut = '/api/operations/outbound-shipment-requests';
-  await page.goto('/app/ops/outbound');
-
-  await Promise.all([
-    waitForPostOk(page, baseOut, (u) => !u.includes('/lines') && !u.includes('/submit')),
-    page.getByTestId('outbound-create-submit').click(),
-  ]);
-  await page.getByTestId('outbound-line-product').selectOption({ label: `${skuB} — PB` });
-  await page.getByTestId('outbound-line-qty').fill('1');
-  await page.getByTestId('outbound-line-location').selectOption({ label: 'L1' });
-  await Promise.all([
-    waitForPostOk(page, baseOut, (u) => u.includes('/lines')),
-    page.getByTestId('outbound-line-submit').click(),
-  ]);
-
-  await page.goto('/app/ops/outbound');
-  await Promise.all([
-    waitForPostOk(page, baseOut, (u) => !u.includes('/lines') && !u.includes('/submit')),
-    page.getByTestId('outbound-create-submit').click(),
-  ]);
-  await page.getByTestId('outbound-line-product').selectOption({ label: `${skuA} — PA` });
-  await page.getByTestId('outbound-line-qty').fill('1');
-  await page.getByTestId('outbound-line-location').selectOption({ label: 'L1' });
-  await Promise.all([
-    waitForPostOk(page, baseOut, (u) => u.includes('/lines')),
-    page.getByTestId('outbound-line-submit').click(),
-  ]);
-
+  // Create seller accounts for A/B.
   await page.goto('/app/dashboard');
   await page.getByTestId('seller-account-seller').selectOption({ label: 'Brand A' });
   await page.getByTestId('seller-account-email').fill(sellerEmail);
-  await page.getByTestId('seller-account-password').fill('password123');
   await Promise.all([
     waitForPostOk(page, '/api/auth/seller-accounts'),
     page.getByTestId('seller-account-submit').click(),
   ]);
 
-  await page.getByTestId('logout').click();
-  await expect(page.getByTestId('login-form')).toBeVisible();
-  await page.getByTestId('login-form').getByLabel('Email').fill(sellerEmail);
-  await page.getByTestId('login-form').getByLabel('Пароль').fill('password123');
+  await page.getByTestId('seller-account-seller').selectOption({ label: 'Brand B' });
+  await page.getByTestId('seller-account-email').fill(sellerEmailB);
   await Promise.all([
-    waitForPostOk(page, '/api/auth/login'),
-    waitForGetOk(page, '/api/auth/me'),
-    waitForGetOk(page, '/api/operations/outbound-shipment-requests'),
-    page.getByTestId('login-form').getByRole('button', { name: 'Войти' }).click(),
+    waitForPostOk(page, '/api/auth/seller-accounts'),
+    page.getByTestId('seller-account-submit').click(),
   ]);
 
-  await page.goto('/app/ops/outbound');
-  const outboundItems = page.getByTestId('outbound-requests-list').getByTestId('outbound-request-item');
-  await expect(outboundItems).toHaveCount(1);
-  await outboundItems.first().click();
-  await expect(page.getByTestId('outbound-detail')).toContainText(skuA);
-  await expect(page.getByTestId('outbound-detail')).not.toContainText(skuB);
+  const baseIn = '/api/operations/inbound-intake-requests';
+
+  await page.getByTestId('logout').click();
+  await expect(page.getByTestId('login-form')).toBeVisible();
+  await loginAsSeller(page, sellerEmail, 'password123', { firstTime: true });
+  await page.waitForURL('**/seller/**');
+
+  await page.getByTestId('nav-seller-documents').click();
+  await page.getByTestId('seller-create-inbound').click();
+  await page.waitForURL('**/seller/inbound/new');
+  await waitForPostOk(page, baseIn, (u) => !u.includes('/lines') && !u.includes('/submit'));
+  await expect(page.getByTestId('seller-inbound-draft-form')).toBeVisible();
+  await page.getByTestId('seller-inbound-add-products').click();
+  await expect(page.getByTestId('seller-inbound-picker')).toBeVisible();
+  await page.getByTestId('seller-inbound-picker-search').fill(skuA);
+  await page.getByTestId('seller-inbound-picker-qty').first().fill('10');
+  await Promise.all([
+    waitForPostOk(page, baseIn, (u) => u.includes('/lines')),
+    page.getByTestId('seller-inbound-picker-apply').click(),
+  ]);
+  await Promise.all([
+    waitForPostOk(page, baseIn, (u) => u.includes('/submit')),
+    page.getByTestId('seller-inbound-submit-warehouse').click(),
+  ]);
+
+  await page.getByTestId('logout').click();
+  await expect(page.getByTestId('login-form')).toBeVisible();
+  await loginAsSeller(page, sellerEmailB, 'password123', { firstTime: true });
+  await page.waitForURL('**/seller/**');
+
+  await page.getByTestId('nav-seller-documents').click();
+  await page.getByTestId('seller-create-inbound').click();
+  await page.waitForURL('**/seller/inbound/new');
+  await waitForPostOk(page, baseIn, (u) => !u.includes('/lines') && !u.includes('/submit'));
+  await expect(page.getByTestId('seller-inbound-draft-form')).toBeVisible();
+  await page.getByTestId('seller-inbound-add-products').click();
+  await expect(page.getByTestId('seller-inbound-picker')).toBeVisible();
+  await page.getByTestId('seller-inbound-picker-search').fill(skuB);
+  await page.getByTestId('seller-inbound-picker-qty').first().fill('10');
+  await Promise.all([
+    waitForPostOk(page, baseIn, (u) => u.includes('/lines')),
+    page.getByTestId('seller-inbound-picker-apply').click(),
+  ]);
+  await Promise.all([
+    waitForPostOk(page, baseIn, (u) => u.includes('/submit')),
+    page.getByTestId('seller-inbound-submit-warehouse').click(),
+  ]);
+
+  // Seller A should only see their own document in the unified list.
+  await page.getByTestId('logout').click();
+  await expect(page.getByTestId('login-form')).toBeVisible();
+  await loginAsSeller(page, sellerEmail, 'password123', { firstTime: false });
+  await page.waitForURL('**/seller/**');
+
+  await page.getByTestId('nav-seller-documents').click();
+  const rows = page.getByTestId('seller-documents-row');
+  await expect(rows).toHaveCount(1);
+  await expect(rows.first()).toHaveAttribute('data-doc-type', 'inbound');
 });

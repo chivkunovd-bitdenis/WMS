@@ -1,6 +1,19 @@
 import type { ReactNode } from 'react'
 import { NavLink } from 'react-router-dom'
-import { Button } from '../ui/Button'
+import {
+  AppBar,
+  Box,
+  Button as MuiButton,
+  CssBaseline,
+  Drawer,
+  List,
+  ListItemButton,
+  ListItemText,
+  ListSubheader,
+  Toolbar,
+  Typography,
+} from '@mui/material'
+import { alpha } from '@mui/material/styles'
 
 type Props = {
   children: ReactNode
@@ -9,6 +22,7 @@ type Props = {
   subtitle?: string
   userLabel?: string
   userRoleLabel?: string
+  portal: 'seller' | 'ff'
 }
 
 export function AuthedAppLayout({
@@ -18,136 +32,206 @@ export function AuthedAppLayout({
   subtitle,
   userLabel,
   userRoleLabel,
+  portal,
 }: Props) {
-  return (
-    <div className="app-frame" data-testid="app-frame">
-      <aside className="app-sidebar" aria-label="Навигация" data-testid="app-sidebar">
-        <div className="app-brand">
-          <div className="app-brand-title">{title}</div>
-          {subtitle ? <div className="app-brand-sub">{subtitle}</div> : null}
-        </div>
-        <nav className="app-navlist" aria-label="Разделы">
-          <NavLink to="/app/dashboard" className="app-navitem" data-testid="nav-dashboard">
-            Дашборд
-          </NavLink>
-          <div className="app-navgroup" aria-label="Каталог">
-            <div className="app-navgroup-title">Каталог</div>
-            <NavLink
-              to="/app/catalog"
-              end
-              className="app-navitem"
-              data-testid="nav-catalog"
-            >
-              Обзор
-            </NavLink>
-            <NavLink
-              to="/app/catalog/products"
-              className="app-navitem"
-              data-testid="nav-products"
-            >
-              Товары (SKU)
-            </NavLink>
-            <NavLink
-              to="/app/catalog/warehouses"
-              className="app-navitem"
-              data-testid="nav-warehouses"
-            >
-              Склады
-            </NavLink>
-            <NavLink
-              to="/app/catalog/locations"
-              className="app-navitem"
-              data-testid="nav-locations"
-            >
-              Ячейки
-            </NavLink>
-            <NavLink
-              to="/app/catalog/sellers"
-              className="app-navitem"
-              data-testid="nav-sellers"
-            >
-              Селлеры
-            </NavLink>
-          </div>
-          <div className="app-navgroup" aria-label="Операции">
-            <div className="app-navgroup-title">Операции</div>
-            <NavLink
-              to="/app/ops"
-              end
-              className="app-navitem"
-              data-testid="nav-ops"
-            >
-              Обзор
-            </NavLink>
-            <NavLink
-              to="/app/ops/inbound"
-              className="app-navitem"
-              data-testid="nav-inbound"
-            >
-              Приёмка
-            </NavLink>
-            <NavLink
-              to="/app/ops/outbound"
-              className="app-navitem"
-              data-testid="nav-outbound"
-            >
-              Отгрузка
-            </NavLink>
-            <NavLink
-              to="/app/ops/movements"
-              className="app-navitem"
-              data-testid="nav-movements"
-            >
-              Движения
-            </NavLink>
-            <NavLink
-              to="/app/ops/transfers"
-              className="app-navitem"
-              data-testid="nav-transfers"
-            >
-              Перемещения
-            </NavLink>
-          </div>
-          <div className="app-navgroup" aria-label="Интеграции">
-            <div className="app-navgroup-title">Интеграции</div>
-            <NavLink to="/app/integrations/wb" className="app-navitem" data-testid="nav-wb">
-              Wildberries
-            </NavLink>
-          </div>
-        </nav>
-      </aside>
+  const base = portal === 'seller' ? '/app/seller' : '/app/ff'
+  if (portal === 'seller') {
+    const drawerWidth = 240
+    return (
+      <Box sx={{ display: 'flex', minHeight: '100vh' }} data-testid="app-frame">
+        <CssBaseline />
+        <AppBar
+          position="fixed"
+          color="inherit"
+          elevation={0}
+          sx={{
+            zIndex: (t) => t.zIndex.drawer + 1,
+            borderBottom: '1px solid',
+            borderColor: 'divider',
+          }}
+          data-testid="app-topbar"
+        >
+          <Toolbar sx={{ display: 'flex', justifyContent: 'space-between', gap: 2 }}>
+            <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, minWidth: 0 }}>
+              <Typography variant="h6" noWrap>
+                {title}
+              </Typography>
+            </Box>
+            <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+              {userLabel ? (
+                <Box data-testid="topbar-user" sx={{ color: 'text.secondary', fontSize: 14 }}>
+                  <span data-testid="user-email">{userLabel}</span>
+                  {userRoleLabel ? <span> · {userRoleLabel}</span> : null}
+                </Box>
+              ) : null}
+              <MuiButton
+                type="button"
+                variant="outlined"
+                size="small"
+                data-testid="logout"
+                onClick={onLogout}
+              >
+                Выйти
+              </MuiButton>
+            </Box>
+          </Toolbar>
+        </AppBar>
 
-      <div className="app-main">
-        <header className="app-topbar" data-testid="app-topbar">
-          <div className="app-topbar-left">
-            <div className="app-topbar-title">{title}</div>
-          </div>
-          <div className="app-topbar-right">
-            {userLabel ? (
-              <div className="topbar-user" data-testid="topbar-user">
-                <span>{userLabel}</span>
-                {userRoleLabel ? (
-                  <span className="topbar-user-role">· {userRoleLabel}</span>
-                ) : null}
-              </div>
+        <Drawer
+          variant="permanent"
+          sx={{
+            width: drawerWidth,
+            flexShrink: 0,
+            [`& .MuiDrawer-paper`]: {
+              width: drawerWidth,
+              boxSizing: 'border-box',
+              borderRight: '1px solid',
+              borderColor: 'divider',
+              backgroundImage: 'none',
+            },
+          }}
+          data-testid="app-sidebar"
+        >
+          <Toolbar />
+          <Box sx={{ p: 1 }}>
+            <List dense aria-label="Разделы">
+              <ListItemButton
+                component={NavLink}
+                to={`${base}/documents`}
+                data-testid="nav-seller-documents"
+              >
+                <ListItemText primary="Документы" />
+              </ListItemButton>
+              <ListItemButton
+                component={NavLink}
+                to={`${base}/products`}
+                data-testid="nav-seller-products"
+              >
+                <ListItemText primary="Товары" />
+              </ListItemButton>
+              <ListItemButton
+                component={NavLink}
+                to={`${base}/settings`}
+                data-testid="nav-seller-settings"
+              >
+                <ListItemText primary="Настройки" />
+              </ListItemButton>
+            </List>
+          </Box>
+        </Drawer>
+
+        <Box component="main" sx={{ flexGrow: 1, p: 3 }} data-testid="app-content">
+          <Toolbar />
+          {children}
+        </Box>
+      </Box>
+    )
+  }
+  const ffDrawerWidth = 260
+  return (
+    <Box sx={{ display: 'flex', minHeight: '100vh' }} data-testid="app-frame">
+      <CssBaseline />
+      <AppBar
+        position="fixed"
+        color="inherit"
+        elevation={0}
+        sx={{
+          zIndex: (t) => t.zIndex.drawer + 1,
+          borderBottom: '1px solid',
+          borderColor: 'divider',
+        }}
+        data-testid="app-topbar"
+      >
+        <Toolbar sx={{ display: 'flex', justifyContent: 'space-between', gap: 2 }}>
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, minWidth: 0 }}>
+            <Typography variant="h6" noWrap>
+              {title}
+            </Typography>
+            {subtitle ? (
+              <Typography variant="body2" color="text.secondary" noWrap>
+                {subtitle}
+              </Typography>
             ) : null}
-            <Button
+          </Box>
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+            {userLabel ? (
+              <Box data-testid="topbar-user" sx={{ color: 'text.secondary', fontSize: 14 }}>
+                <span data-testid="user-email">{userLabel}</span>
+                {userRoleLabel ? <span> · {userRoleLabel}</span> : null}
+              </Box>
+            ) : null}
+            <MuiButton
               type="button"
-              variant="secondary"
-              size="sm"
+              variant="outlined"
+              size="small"
               data-testid="logout"
               onClick={onLogout}
             >
               Выйти
-            </Button>
-          </div>
-        </header>
+            </MuiButton>
+          </Box>
+        </Toolbar>
+      </AppBar>
 
-        <main className="app-content" data-testid="app-content">
-          {children}
-        </main>
-      </div>
-    </div>
+      <Drawer
+        variant="permanent"
+        sx={{
+          width: ffDrawerWidth,
+          flexShrink: 0,
+          [`& .MuiDrawer-paper`]: {
+            width: ffDrawerWidth,
+            boxSizing: 'border-box',
+            borderRight: '1px solid',
+            borderColor: 'divider',
+            backgroundImage: 'none',
+          },
+        }}
+        data-testid="app-sidebar"
+      >
+        <Toolbar />
+        <Box sx={{ p: 1 }}>
+          <List dense aria-label="Разделы ФФ">
+            <ListItemButton component={NavLink} to={`${base}/dashboard`} data-testid="nav-dashboard">
+              <ListItemText primary="Дашборд" />
+            </ListItemButton>
+            <ListItemButton
+              component={NavLink}
+              to={`${base}/supplies-shipments`}
+              data-testid="nav-ff-supplies-shipments"
+            >
+              <ListItemText primary="Поставки и загрузки" />
+            </ListItemButton>
+            <ListItemButton component={NavLink} to="/app/catalog" data-testid="nav-ff-warehouses">
+              <ListItemText primary="Склады и ячейки" />
+            </ListItemButton>
+            <ListSubheader sx={{ bgcolor: 'transparent', lineHeight: 2 }}>Каталог</ListSubheader>
+            <ListItemButton component={NavLink} to={`${base}/products`} data-testid="nav-ff-products">
+              <ListItemText primary="Товары" />
+            </ListItemButton>
+            <ListItemButton
+              component={NavLink}
+              to={`${base}/honest-sign`}
+              data-testid="nav-ff-honest-sign"
+            >
+              <ListItemText primary="Честный знак" />
+            </ListItemButton>
+          </List>
+        </Box>
+      </Drawer>
+
+      <Box
+        component="main"
+        sx={(theme) => ({
+          flexGrow: 1,
+          p: 3,
+          background: `linear-gradient(165deg, ${alpha(theme.palette.primary.main, 0.07)} 0%, ${theme.palette.background.default} 32%, ${theme.palette.background.default} 100%)`,
+        })}
+        data-testid="app-content"
+      >
+        <Toolbar />
+        {children}
+      </Box>
+    </Box>
   )
 }
 

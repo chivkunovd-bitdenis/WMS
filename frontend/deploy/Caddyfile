@@ -1,0 +1,26 @@
+:80 {
+  encode gzip zstd
+
+  # API is mounted under /api/* on the public origin, but FastAPI routes are rooted at /.
+  handle_path /api/* {
+    reverse_proxy api:8000
+  }
+
+  # Normalize seller base path (avoid missing trailing slash surprises).
+  redir /seller /seller/
+
+  # Seller portal (separate SPA under /seller/*)
+  handle /seller/* {
+    root * /srv
+    try_files {path} /seller/index.html
+    file_server
+  }
+
+  # Default (Fulfillment) SPA
+  handle {
+    root * /srv
+    try_files {path} /index.html
+    file_server
+  }
+}
+

@@ -1,16 +1,17 @@
 import { test, expect } from '@playwright/test';
 
 import { waitForGetOk, waitForPatchOk, waitForPostOk } from './api-waits';
+import { openFulfillmentRegistration } from './auth-flow';
 
+// TC-S11-002, TC-S11-003, TC-S11-004, TC-S11-006 — токены WB, синхронизация, привязка SKU.
 test('admin saves WB tokens, syncs cards and supplies, links SKU', async ({ page }) => {
-  const slug = `ff-wb-${Date.now()}`;
   const email = `e2e-wb-${Date.now()}@example.com`;
   const linkSku = `SKU-WB-LINK-${Date.now()}`;
 
   await page.goto('/');
+  await openFulfillmentRegistration(page);
   await page.getByTestId('register-form').getByLabel('Организация').fill('E2E WB Org');
-  await page.getByTestId('register-slug').fill(slug);
-  await page.getByTestId('register-form').getByLabel('Email админа').fill(email);
+  await page.getByTestId('register-form').getByLabel('Email администратора').fill(email);
   await page.getByTestId('register-form').getByLabel('Пароль').fill('password123');
   await Promise.all([
     waitForPostOk(page, '/api/auth/register'),

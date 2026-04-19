@@ -12,11 +12,46 @@ type GlobalMovementRow = {
 type Props = {
   globalMovements: GlobalMovementRow[]
   onRefreshGlobalMovementsClick: () => void
+  isFulfillmentAdmin: boolean
+  opsBusy: boolean
+  backgroundJobStatus: string | null
+  backgroundJobResult: string | null
+  onStartMovementsDigestJob: () => void
 }
 
-export function MovementsScreen({ globalMovements, onRefreshGlobalMovementsClick }: Props) {
+export function MovementsScreen({
+  globalMovements,
+  onRefreshGlobalMovementsClick,
+  isFulfillmentAdmin,
+  opsBusy,
+  backgroundJobStatus,
+  backgroundJobResult,
+  onStartMovementsDigestJob,
+}: Props) {
   return (
     <Screen title="Журнал движений" subtitle="Последние операции по складу">
+      {isFulfillmentAdmin ? (
+        <Card className="card" data-testid="background-job-section">
+          <p className="subtle">
+            Сервер считает сводку по журналу движений в фоне; статус обновляется после запуска.
+          </p>
+          <Button
+            type="button"
+            data-testid="background-job-start"
+            disabled={opsBusy}
+            onClick={onStartMovementsDigestJob}
+          >
+            {opsBusy ? '…' : 'Сводка по движениям'}
+          </Button>
+          <p className="subtle" data-testid="background-job-status">
+            Статус: {backgroundJobStatus ?? '—'}
+          </p>
+          {backgroundJobResult ? (
+            <p data-testid="background-job-result">{backgroundJobResult}</p>
+          ) : null}
+        </Card>
+      ) : null}
+
       <Card className="card" data-testid="global-movements-section">
         <p className="subtle">
           Последние операции по складу (приёмка, перемещение, отгрузка).

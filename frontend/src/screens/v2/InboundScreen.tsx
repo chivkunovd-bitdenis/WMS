@@ -1,3 +1,4 @@
+import { useMemo, useState } from 'react'
 import type { FormEventHandler } from 'react'
 import { Button } from '../../ui/Button'
 import { Card } from '../../ui/Card'
@@ -14,6 +15,8 @@ type InboundSummaryRow = {
   warehouse_id: string
   status: string
   line_count: number
+  planned_delivery_date: string | null
+  has_discrepancy?: boolean
 }
 
 type InboundLineRow = {
@@ -22,6 +25,7 @@ type InboundLineRow = {
   sku_code: string
   product_name: string
   expected_qty: number
+  actual_qty: number | null
   posted_qty: number
   storage_location_id: string | null
   storage_location_code: string | null
@@ -31,6 +35,8 @@ type InboundDetailRow = {
   id: string
   warehouse_id: string
   status: string
+  planned_delivery_date: string | null
+  has_discrepancy?: boolean
   lines: InboundLineRow[]
 }
 
@@ -70,6 +76,9 @@ type Props = {
   onCreateInboundRequest: FormEventHandler<HTMLFormElement>
   onAddInboundLine: FormEventHandler<HTMLFormElement>
   onSubmitInboundRequest: () => void
+  onPrimaryAcceptInboundRequest: () => void
+  onSetInboundLineActualQty: FormEventHandler<HTMLFormElement>
+  onCompleteInboundVerification: () => void
   onSaveInboundLineStorage: FormEventHandler<HTMLFormElement>
   onReceiveInboundLine: FormEventHandler<HTMLFormElement>
   onPostInboundRequest: () => void
@@ -95,10 +104,33 @@ export function InboundScreen(props: Props) {
     onCreateInboundRequest,
     onAddInboundLine,
     onSubmitInboundRequest,
+    onPrimaryAcceptInboundRequest,
+    onSetInboundLineActualQty,
+    onCompleteInboundVerification,
     onSaveInboundLineStorage,
     onReceiveInboundLine,
     onPostInboundRequest,
   } = props
+
+  const todayIso = new Date().toISOString().slice(0, 10)
+  const [productQuery, setProductQuery] = useState('')
+
+  const filteredProducts = useMemo(() => {
+    const q = productQuery.trim().toLowerCase()
+    if (!q) {
+      return products
+    }
+    return products.filter((p) => {
+      const anyP = p as unknown as {
+        seller_name?: string | null
+        wb_vendor_code?: string | null
+        wb_nm_id?: number | null
+      }
+      const hay =
+        `${p.sku_code} ${p.name} ${anyP.seller_name ?? ''} ${anyP.wb_vendor_code ?? ''} ${anyP.wb_nm_id ?? ''}`.toLowerCase()
+      return hay.includes(q)
+    })
+  }, [productQuery, products])
 
   return (
     <Screen title="Приёмка" subtitle="Список заявок → детали → приём по строкам">
@@ -120,6 +152,16 @@ export function InboundScreen(props: Props) {
 
             {canEditInboundDraft ? (
               <form data-testid="inbound-create-form" noValidate onSubmit={onCreateInboundRequest}>
+                <label>
+                  Дата привоза (план)
+                  <Input
+                    name="inbound_planned_delivery_date"
+                    data-testid="inbound-create-planned-date"
+                    type="date"
+                    required
+                    defaultValue={todayIso}
+                  />
+                </label>
                 {isFulfillmentSeller && warehouses.length > 1 ? (
                   <label>
                     Склад для заявки
@@ -158,6 +200,7 @@ export function InboundScreen(props: Props) {
               <table className="ui-table" data-testid="inbound-requests-table">
               <thead>
                 <tr>
+                  <th>Дата</th>
                   <th>Статус</th>
                   <th>Строк</th>
                 </tr>
@@ -172,6 +215,11 @@ export function InboundScreen(props: Props) {
                     data-status={row.status}
                   >
                     <td>
+                      <span className="subtle" data-testid="inbound-request-date">
+                        {row.planned_delivery_date ?? '—'}
+                      </span>
+                    </td>
+                    <td>
                       <span className="ui-badge" data-testid="inbound-request-status">
                         {row.status}
                       </span>
@@ -181,7 +229,7 @@ export function InboundScreen(props: Props) {
                 ))}
                 {inboundSummaries.length === 0 ? (
                   <tr>
-                    <td colSpan={2}>
+                    <td colSpan={3}>
                       <span className="subtle">Пока нет заявок.</span>
                     </td>
                   </tr>
@@ -204,11 +252,17 @@ export function InboundScreen(props: Props) {
                 <p className="subtle" data-testid="inbound-detail-status">
                   Статус: {inboundDetail.status}
                 </p>
+                <p className="subtle" data-testid="inbound-detail-planned-date">
+                  Дата привоза (план): {inboundDetail.planned_delivery_date ?? '—'}
+                </p>
 
                 <ul className="list-plain" data-testid="inbound-detail-lines">
                   {inboundDetail.lines.map((ln) => (
                     <li key={ln.id} data-testid="inbound-detail-line">
-                      {ln.product_name} ({ln.sku_code}) — принято {ln.posted_qty} из {ln.expected_qty}
+                      {ln.product_name} ({ln.sku_code}) — план {ln.expected_qty}
+                      {typeof ln.actual_qty === 'number' ? ` · факт ${ln.actual_qty}` : ''}
+                      {' · '}
+                      принято {ln.posted_qty}
                       {ln.storage_location_code ? ` · ячейка: ${ln.storage_location_code}` : ''}
                     </li>
                   ))}
@@ -216,6 +270,16 @@ export function InboundScreen(props: Props) {
 
                 {inboundDetail.status === 'draft' && canEditInboundDraft ? (
                   <form data-testid="inbound-line-form" noValidate onSubmit={onAddInboundLine}>
+                    <label>
+                      Поиск SKU
+                      <Input
+                        value={productQuery}
+                        onChange={(e) => setProductQuery(e.target.value)}
+                        placeholder="Введи SKU или часть названия…"
+                        aria-label="Поиск SKU для приёмки"
+                        data-testid="inbound-line-product-search"
+                      />
+                    </label>
                     <label>
                       Товар
                       <Select
@@ -227,7 +291,7 @@ export function InboundScreen(props: Props) {
                         <option value="" disabled>
                           Выберите SKU
                         </option>
-                        {products.map((p) => (
+                        {filteredProducts.map((p) => (
                           <option key={p.id} value={p.id}>
                             {p.sku_code} — {p.name}
                           </option>
@@ -273,7 +337,7 @@ export function InboundScreen(props: Props) {
 
                 {inboundDetail.status === 'draft' &&
                 inboundDetail.lines.length > 0 &&
-                isFulfillmentAdmin ? (
+                (isFulfillmentAdmin || isFulfillmentSeller) ? (
                   <Button
                     type="button"
                     data-testid="inbound-submit-request"
@@ -285,12 +349,102 @@ export function InboundScreen(props: Props) {
                 ) : null}
 
                 {inboundDetail.status === 'submitted' ? (
-                  <div data-testid="inbound-receiving-panel">
-                    <p className="subtle">Строки в работе</p>
+                  <div data-testid="inbound-primary-accept-panel">
                     {isFulfillmentAdmin ? (
                       <>
-                        {inboundDetail.lines.map((ln) =>
-                          ln.posted_qty < ln.expected_qty ? (
+                        <p className="subtle">Привоз принят без пересчёта.</p>
+                        <Button
+                          type="button"
+                          data-testid="inbound-primary-accept"
+                          disabled={opsBusy}
+                          onClick={onPrimaryAcceptInboundRequest}
+                        >
+                          {opsBusy ? '…' : 'Принято первично'}
+                        </Button>
+                      </>
+                    ) : (
+                      <p className="subtle" data-testid="inbound-seller-read-only">
+                        Ожидает первичной приёмки фулфилментом.
+                      </p>
+                    )}
+                  </div>
+                ) : null}
+
+                {inboundDetail.status === 'primary_accepted' || inboundDetail.status === 'verifying' ? (
+                  <div data-testid="inbound-verify-panel">
+                    {isFulfillmentAdmin ? (
+                      <>
+                        <p className="subtle">Пересчёт: укажи факт по строкам.</p>
+                        {inboundDetail.lines.map((ln) => (
+                          <Card
+                            key={ln.id}
+                            as="div"
+                            className="card"
+                            style={{ marginBottom: 10 }}
+                            data-testid="inbound-verify-line"
+                          >
+                            <p className="subtle" style={{ marginTop: 0 }}>
+                              {ln.sku_code} — план {ln.expected_qty}
+                            </p>
+                            <form
+                              data-testid="inbound-line-actual-form"
+                              data-line-id={ln.id}
+                              noValidate
+                              onSubmit={onSetInboundLineActualQty}
+                            >
+                              <label>
+                                Факт, шт
+                                <Input
+                                  name="actual_qty"
+                                  data-testid="inbound-line-actual-qty"
+                                  type="number"
+                                  min={0}
+                                  required
+                                  defaultValue={String(ln.actual_qty ?? ln.expected_qty)}
+                                />
+                              </label>
+                              <Button
+                                type="submit"
+                                data-testid="inbound-line-actual-save"
+                                disabled={opsBusy}
+                              >
+                                Сохранить факт
+                              </Button>
+                            </form>
+                          </Card>
+                        ))}
+                        <Button
+                          type="button"
+                          data-testid="inbound-verify-complete"
+                          disabled={opsBusy}
+                          onClick={onCompleteInboundVerification}
+                        >
+                          {opsBusy ? '…' : 'Завершить пересчёт'}
+                        </Button>
+                      </>
+                    ) : (
+                      <p className="subtle" data-testid="inbound-seller-read-only">
+                        Идёт пересчёт на фулфилменте; доступен просмотр.
+                      </p>
+                    )}
+                  </div>
+                ) : null}
+
+                {inboundDetail.status === 'verified' ? (
+                  <div data-testid="inbound-receiving-panel">
+                    {inboundDetail.has_discrepancy ? (
+                      <p className="error" data-testid="inbound-discrepancy-flag">
+                        Есть расхождения (план ≠ факт)
+                      </p>
+                    ) : (
+                      <p className="subtle">Факт подтверждён, можно проводить остатки.</p>
+                    )}
+                    {isFulfillmentAdmin ? (
+                      <>
+                        {inboundDetail.lines.map((ln) => {
+                          const target = ln.actual_qty ?? ln.expected_qty
+                          const remaining = target - ln.posted_qty
+                          return remaining > 0 ? (
                             <Card
                               key={ln.id}
                               as="div"
@@ -298,8 +452,7 @@ export function InboundScreen(props: Props) {
                               style={{ marginBottom: 10 }}
                             >
                               <p className="subtle" style={{ marginTop: 0 }}>
-                                {ln.sku_code} — осталось {ln.expected_qty - ln.posted_qty} из{' '}
-                                {ln.expected_qty}
+                                {ln.sku_code} — осталось {remaining} из {target}
                               </p>
                               <form
                                 data-testid="inbound-line-storage-form"
@@ -346,7 +499,7 @@ export function InboundScreen(props: Props) {
                                     data-testid="inbound-line-receive-qty"
                                     type="number"
                                     min={1}
-                                    max={ln.expected_qty - ln.posted_qty}
+                                    max={remaining}
                                     required
                                   />
                                 </label>
@@ -359,8 +512,8 @@ export function InboundScreen(props: Props) {
                                 </Button>
                               </form>
                             </Card>
-                          ) : null,
-                        )}
+                          ) : null
+                        })}
                         <Button
                           type="button"
                           data-testid="inbound-post-submit"
@@ -372,7 +525,7 @@ export function InboundScreen(props: Props) {
                       </>
                     ) : (
                       <p className="subtle" data-testid="inbound-seller-read-only">
-                        Приёмку ведёт фулфилмент; доступен просмотр строк и статуса.
+                        Проведение остатков выполняет фулфилмент; доступен просмотр.
                       </p>
                     )}
                   </div>

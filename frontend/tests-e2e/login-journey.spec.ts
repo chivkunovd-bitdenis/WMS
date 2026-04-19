@@ -1,18 +1,19 @@
 import { test, expect } from '@playwright/test';
 
 import { waitForGetOk, waitForPostOk } from './api-waits';
+import { openFulfillmentRegistration } from './auth-flow';
 
+// TC-S02-001 — после регистрации и повторного входа каталог доступен (API + UI).
 test('logout then login reaches catalog UI and loads catalog via API', async ({ page }) => {
-  const slug = `ff-login-${Date.now()}`;
   const email = `e2e-login-${Date.now()}@example.com`;
   const password = 'password123';
 
   await page.goto('/');
-  await expect(page.getByTestId('register-form')).toBeVisible();
+  await expect(page.getByTestId('login-form')).toBeVisible();
+  await openFulfillmentRegistration(page);
 
   await page.getByTestId('register-form').getByLabel('Организация').fill('Login Journey FF');
-  await page.getByTestId('register-slug').fill(slug);
-  await page.getByTestId('register-form').getByLabel('Email админа').fill(email);
+  await page.getByTestId('register-form').getByLabel('Email администратора').fill(email);
   await page.getByTestId('register-form').getByLabel('Пароль').fill(password);
 
   await Promise.all([

@@ -94,6 +94,21 @@
     opacity 120ms ease;
 }
 
+.ui-modal-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.45);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  z-index: 50;
+}
+
+.ui-modal {
+  width: min(720px, 100%);
+}
+
 .ui-button:active {
   transform: translateY(1px);
 }

@@ -7,23 +7,25 @@ import {
   waitForPatchOk,
   waitForPostOk,
 } from './api-waits';
+import { openFulfillmentRegistration } from './auth-flow';
 
 /**
  * Полный путь пользователя с нуля: регистрация → справочники → приёмка.
  * Сценарий A: ячейка назначается после submit (PATCH), затем «Провести весь остаток».
  * Сценарий B: ячейка при создании строки → частичный приём → проведение остатка → два движения в журнале.
+ *
+ * TC-S06-004, TC-S06-007 — submit и проведение приёмки; TC-S03-001–S05 — справочники перед операцией.
  */
 test.describe('Full WMS user journey', () => {
   test('inbound: assign cell after submit, then post all remaining', async ({ page }) => {
-    const slug = `ff-full-a-${Date.now()}`;
     const email = `e2e-full-a-${Date.now()}@example.com`;
     const sku = `SKU-FA-${Date.now()}`;
     const whCode = `wh-fa-${Date.now()}`;
 
     await page.goto('/');
+    await openFulfillmentRegistration(page);
     await page.getByTestId('register-form').getByLabel('Организация').fill('E2E Full A');
-    await page.getByTestId('register-slug').fill(slug);
-    await page.getByTestId('register-form').getByLabel('Email админа').fill(email);
+    await page.getByTestId('register-form').getByLabel('Email администратора').fill(email);
     await page.getByTestId('register-form').getByLabel('Пароль').fill('password123');
     await Promise.all([
       waitForPostOk(page, '/api/auth/register'),
@@ -83,13 +85,30 @@ test.describe('Full WMS user journey', () => {
       page.getByTestId('inbound-line-submit').click(),
     ]);
     expect(lineRes.ok()).toBeTruthy();
-    await expect(page.getByTestId('inbound-detail-line')).toContainText('принято 0 из 5');
+    await expect(page.getByTestId('inbound-detail-line')).toContainText('принято 0');
 
     await Promise.all([
       waitForPostOk(page, '/api/operations/inbound-intake-requests', (u) => u.includes('/submit')),
       page.getByTestId('inbound-submit-request').click(),
     ]);
     await expect(page.getByTestId('inbound-detail-status')).toContainText('submitted');
+
+    await Promise.all([
+      waitForPostOk(page, '/api/operations/inbound-intake-requests', (u) => u.includes('/primary-accept')),
+      page.getByTestId('inbound-primary-accept').click(),
+    ]);
+    await expect(page.getByTestId('inbound-detail-status')).toContainText('primary_accepted');
+
+    await page.getByTestId('inbound-line-actual-qty').fill('5');
+    await Promise.all([
+      waitForPatchOk(page, '/api/operations/inbound-intake-requests', (u) => u.includes('/actual')),
+      page.getByTestId('inbound-line-actual-save').click(),
+    ]);
+    await Promise.all([
+      waitForPostOk(page, '/api/operations/inbound-intake-requests', (u) => u.includes('/verify')),
+      page.getByTestId('inbound-verify-complete').click(),
+    ]);
+    await expect(page.getByTestId('inbound-detail-status')).toContainText('verified');
 
     await page.getByTestId('inbound-line-storage-select').selectOption({ label: 'BIN-A1' });
     const [patchRes] = await Promise.all([
@@ -119,15 +138,14 @@ test.describe('Full WMS user journey', () => {
   });
 
   test('inbound: cell on line create, partial receive, then post remainder', async ({ page }) => {
-    const slug = `ff-full-b-${Date.now()}`;
     const email = `e2e-full-b-${Date.now()}@example.com`;
     const sku = `SKU-FB-${Date.now()}`;
     const whCode = `wh-fb-${Date.now()}`;
 
     await page.goto('/');
+    await openFulfillmentRegistration(page);
     await page.getByTestId('register-form').getByLabel('Организация').fill('E2E Full B');
-    await page.getByTestId('register-slug').fill(slug);
-    await page.getByTestId('register-form').getByLabel('Email админа').fill(email);
+    await page.getByTestId('register-form').getByLabel('Email администратора').fill(email);
     await page.getByTestId('register-form').getByLabel('Пароль').fill('password123');
     await Promise.all([
       waitForPostOk(page, '/api/auth/register'),
@@ -189,14 +207,37 @@ test.describe('Full WMS user journey', () => {
     ]);
     await expect(page.getByTestId('inbound-detail-status')).toContainText('submitted');
 
+    await Promise.all([
+      waitForPostOk(page, '/api/operations/inbound-intake-requests', (u) => u.includes('/primary-accept')),
+      page.getByTestId('inbound-primary-accept').click(),
+    ]);
+    await expect(page.getByTestId('inbound-detail-status')).toContainText('primary_accepted');
+
+    await page.getByTestId('inbound-line-actual-qty').fill('8');
+    await Promise.all([
+      page.waitForResponse(
+        (r) =>
+          r.request().method() === 'PATCH' &&
+          r.url().includes('/api/operations/inbound-intake-requests') &&
+          r.url().includes('/actual') &&
+          r.status() === 200,
+      ),
+      page.getByTestId('inbound-line-actual-save').click(),
+    ]);
+    await Promise.all([
+      waitForPostOk(page, '/api/operations/inbound-intake-requests', (u) => u.includes('/verify')),
+      page.getByTestId('inbound-verify-complete').click(),
+    ]);
+    await expect(page.getByTestId('inbound-detail-status')).toContainText('verified');
+
     await page.getByTestId('inbound-line-receive-qty').fill('3');
     const [recv1] = await Promise.all([
       waitForInboundReceiveOk(page),
       page.getByTestId('inbound-line-receive-submit').click(),
     ]);
     expect(recv1.ok()).toBeTruthy();
-    await expect(page.getByTestId('inbound-detail-status')).toContainText('submitted');
-    await expect(page.getByTestId('inbound-detail-line')).toContainText('принято 3 из 8');
+    await expect(page.getByTestId('inbound-detail-status')).toContainText('verified');
+    await expect(page.getByTestId('inbound-detail-line')).toContainText('принято 3');
     await expect(
       page.getByTestId('inbound-movements-list').getByTestId('inbound-movement-row').filter({ hasText: '+3' }),
     ).toHaveCount(1);
@@ -207,7 +248,7 @@ test.describe('Full WMS user journey', () => {
     ]);
     expect(postRes.ok()).toBeTruthy();
     await expect(page.getByTestId('inbound-detail-status')).toContainText('posted');
-    await expect(page.getByTestId('inbound-detail-line')).toContainText('принято 8 из 8');
+    await expect(page.getByTestId('inbound-detail-line')).toContainText('принято 8');
 
     const movements = page.getByTestId('inbound-movements-list').getByTestId('inbound-movement-row');
     await expect(movements.filter({ hasText: '+3' })).toHaveCount(1);

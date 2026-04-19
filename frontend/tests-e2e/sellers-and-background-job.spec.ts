@@ -1,6 +1,7 @@
 import { test, expect } from '@playwright/test';
 
 import { waitForGetOk, waitForPostOk } from './api-waits';
+import { openFulfillmentRegistration } from './auth-flow';
 
 /**
  * Реальный путь: экраны каталога и операций, кнопки, фоновая задача до статуса done.
@@ -8,15 +9,14 @@ import { waitForGetOk, waitForPostOk } from './api-waits';
 // TC-S04-001 — админ создаёт селлера.
 // TC-S14-001 — жизненный цикл джобы movements digest (до done) с видимым результатом.
 test('create seller, product with seller, run movements digest job', async ({ page }) => {
-  const slug = `ff-sbj-${Date.now()}`;
   const email = `e2e-sbj-${Date.now()}@example.com`;
   const sku = `SKU-SBJ-${Date.now()}`;
   const whCode = `wh-sbj-${Date.now()}`;
 
   await page.goto('/');
+  await openFulfillmentRegistration(page);
   await page.getByTestId('register-form').getByLabel('Организация').fill('E2E SB');
-  await page.getByTestId('register-slug').fill(slug);
-  await page.getByTestId('register-form').getByLabel('Email админа').fill(email);
+  await page.getByTestId('register-form').getByLabel('Email администратора').fill(email);
   await page.getByTestId('register-form').getByLabel('Пароль').fill('password123');
   await Promise.all([
     waitForPostOk(page, '/api/auth/register'),
@@ -61,7 +61,7 @@ test('create seller, product with seller, run movements digest job', async ({ pa
   await expect(prodRow).toBeVisible();
   await expect(prodRow.getByTestId('product-seller-name')).toContainText('ACME Seller');
 
-  await page.goto('/app/ops');
+  await page.goto('/app/ops/movements');
   await expect(page.getByTestId('background-job-section')).toBeVisible();
   const jobPost = page.waitForResponse(
     (r) =>

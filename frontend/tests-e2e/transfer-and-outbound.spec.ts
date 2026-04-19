@@ -6,17 +6,18 @@ import {
   waitForLocationsListGet,
   waitForOutboundShipOk,
 } from './api-waits';
+import { openFulfillmentRegistration } from './auth-flow';
 
+// TC-S07-001, TC-S08-001 — перемещение остатка и отгрузка (UI).
 test('stock transfer and outbound shipment — UI', async ({ page }) => {
-  const slug = `ff-tro-${Date.now()}`;
   const email = `e2e-tro-${Date.now()}@example.com`;
   const sku = `SKU-TRO-${Date.now()}`;
   const whCode = `wh-tro-${Date.now()}`;
 
   await page.goto('/');
+  await openFulfillmentRegistration(page);
   await page.getByTestId('register-form').getByLabel('Организация').fill('E2E TRO');
-  await page.getByTestId('register-slug').fill(slug);
-  await page.getByTestId('register-form').getByLabel('Email админа').fill(email);
+  await page.getByTestId('register-form').getByLabel('Email администратора').fill(email);
   await page.getByTestId('register-form').getByLabel('Пароль').fill('password123');
   await Promise.all([
     waitForPostOk(page, '/api/auth/register'),
@@ -74,6 +75,25 @@ test('stock transfer and outbound shipment — UI', async ({ page }) => {
   await Promise.all([
     waitForPostOk(page, baseIn, (u) => u.includes('/submit')),
     page.getByTestId('inbound-submit-request').click(),
+  ]);
+  await Promise.all([
+    waitForPostOk(page, baseIn, (u) => u.includes('/primary-accept')),
+    page.getByTestId('inbound-primary-accept').click(),
+  ]);
+  await page.getByTestId('inbound-line-actual-qty').fill('10');
+  await Promise.all([
+    page.waitForResponse(
+      (r) =>
+        r.request().method() === 'PATCH' &&
+        r.url().includes('/api/operations/inbound-intake-requests') &&
+        r.url().includes('/actual') &&
+        r.status() === 200,
+    ),
+    page.getByTestId('inbound-line-actual-save').click(),
+  ]);
+  await Promise.all([
+    waitForPostOk(page, baseIn, (u) => u.includes('/verify')),
+    page.getByTestId('inbound-verify-complete').click(),
   ]);
   await Promise.all([
     waitForPostOk(page, baseIn, (u) => u.includes('/post')),
