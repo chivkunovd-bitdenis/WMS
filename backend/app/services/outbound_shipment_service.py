@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import uuid
-from datetime import UTC, datetime
+from datetime import UTC, date, datetime
 
 from sqlalchemy import func, select
 from sqlalchemy.exc import IntegrityError
@@ -64,7 +64,11 @@ async def list_requests(
     stmt = (
         select(OutboundShipmentRequest)
         .where(OutboundShipmentRequest.tenant_id == tenant_id)
-        .options(selectinload(OutboundShipmentRequest.lines))
+        .options(
+            selectinload(OutboundShipmentRequest.lines),
+            selectinload(OutboundShipmentRequest.warehouse),
+            selectinload(OutboundShipmentRequest.seller),
+        )
         .order_by(OutboundShipmentRequest.created_at.desc())
     )
     if seller_product_owner_id is not None:
@@ -262,7 +266,11 @@ async def delete_line(
 
 
 async def submit_request(
-    session: AsyncSession, tenant_id: uuid.UUID, request_id: uuid.UUID
+    session: AsyncSession,
+    tenant_id: uuid.UUID,
+    request_id: uuid.UUID,
+    *,
+    planned_shipment_date: date | None = None,
 ) -> OutboundShipmentRequest:
     req = await get_request(session, tenant_id, request_id)
     if req is None:
@@ -280,6 +288,11 @@ async def submit_request(
             raise OutboundShipmentError("insufficient_available") from exc
         raise
     req.status = STATUS_SUBMITTED
+    req.planned_shipment_date = (
+        planned_shipment_date
+        if planned_shipment_date is not None
+        else datetime.now(UTC).date()
+    )
     await session.commit()
     await session.refresh(req)
     return req

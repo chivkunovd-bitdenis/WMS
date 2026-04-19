@@ -25,6 +25,8 @@ async def fetch_cards_list(
     api_token: str,
     content_api_base: str | None = None,
     limit: int = 100,
+    cursor_updated_at: str | None = None,
+    cursor_nm_id: int | None = None,
 ) -> dict[str, Any]:
     """POST /content/v2/get/cards/list — first page (import-only, MVP)."""
     if settings.e2e_mock_wb_cards:
@@ -38,10 +40,19 @@ async def fetch_cards_list(
         "Authorization": api_token,
         "Content-Type": "application/json",
     }
+    cursor: dict[str, Any] = {"limit": min(limit, 100)}
+    if cursor_updated_at:
+        cursor["updatedAt"] = cursor_updated_at
+    if cursor_nm_id is not None:
+        cursor["nmID"] = int(cursor_nm_id)
+    # WB docs: settings.filter.textSearch can match barcode/vendorCode/nmID.
+    # For full sync we rely on cursor-based paging with withPhoto=-1 (all cards).
     payload: dict[str, Any] = {
         "settings": {
-            "cursor": {"limit": min(limit, 100)},
-        },
+            "sort": {"ascending": False},
+            "filter": {"withPhoto": -1},
+            "cursor": cursor,
+        }
     }
     try:
         response = await client.post(url, headers=headers, json=payload, timeout=60.0)

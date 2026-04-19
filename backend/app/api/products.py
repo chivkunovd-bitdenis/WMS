@@ -8,6 +8,7 @@ from pydantic import BaseModel, Field, computed_field
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.deps import get_current_user, require_fulfillment_admin, seller_line_product_scope
+from app.core.roles import FULFILLMENT_SELLER
 from app.db.session import get_db
 from app.models.user import User
 from app.services.catalog_service import (
@@ -16,6 +17,7 @@ from app.services.catalog_service import (
     list_products,
     volume_liters_from_mm,
 )
+from app.services.seller_wb_catalog_service import list_seller_wb_catalog_rows
 
 router = APIRouter(prefix="/products", tags=["products"])
 
@@ -27,6 +29,20 @@ class ProductCreate(BaseModel):
     width_mm: int = Field(ge=1, le=10_000_000)
     height_mm: int = Field(ge=1, le=10_000_000)
     seller_id: uuid.UUID | None = None
+
+
+class SellerWbCatalogOut(BaseModel):
+    """Product row for seller UI: WB subject, first photo, barcodes (ШК) from card JSON."""
+
+    id: str
+    name: str
+    sku_code: str
+    wb_nm_id: int | None = None
+    wb_vendor_code: str | None = None
+    wb_subject_name: str | None = None
+    wb_primary_image_url: str | None = None
+    wb_barcodes: list[str]
+    wb_primary_barcode: str | None = None
 
 
 class ProductOut(BaseModel):
@@ -71,6 +87,25 @@ async def get_products(
     ]
 
 
+@router.get("/wb-catalog", response_model=list[SellerWbCatalogOut])
+async def get_seller_wb_catalog(
+    user: Annotated[User, Depends(get_current_user)],
+    session: Annotated[AsyncSession, Depends(get_db)],
+) -> list[SellerWbCatalogOut]:
+    if user.role != FULFILLMENT_SELLER:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="forbidden",
+        )
+    if user.seller_id is None:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="seller_not_linked",
+        )
+    rows = await list_seller_wb_catalog_rows(session, user.tenant_id, user.seller_id)
+    return [SellerWbCatalogOut(**r.as_dict()) for r in rows]
+
+
 @router.post("", response_model=ProductOut)
 async def post_product(
     body: ProductCreate,
@@ -91,7 +126,7 @@ async def post_product(
     except CatalogError as exc:
         if exc.code == "invalid_dimensions":
             raise HTTPException(
-                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
                 detail="invalid_dimensions",
             ) from None
         if exc.code == "sku_taken":

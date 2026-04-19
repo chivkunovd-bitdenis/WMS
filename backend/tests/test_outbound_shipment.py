@@ -60,6 +60,19 @@ async def test_outbound_shipment_decrements_stock(async_client: AsyncClient) -> 
     await async_client.post(
         f"/operations/inbound-intake-requests/{rid}/submit", headers=h
     )
+    await async_client.post(
+        f"/operations/inbound-intake-requests/{rid}/primary-accept", headers=h
+    )
+    inb = await async_client.get(f"/operations/inbound-intake-requests/{rid}", headers=h)
+    line_id = inb.json()["lines"][0]["id"]
+    await async_client.patch(
+        f"/operations/inbound-intake-requests/{rid}/lines/{line_id}/actual",
+        headers=h,
+        json={"actual_qty": 20},
+    )
+    await async_client.post(
+        f"/operations/inbound-intake-requests/{rid}/verify", headers=h
+    )
     assert (
         await async_client.post(
             f"/operations/inbound-intake-requests/{rid}/post", headers=h
@@ -146,6 +159,21 @@ async def test_outbound_partial_ship_then_post_rest(async_client: AsyncClient) -
     )
     await async_client.post(
         f"/operations/inbound-intake-requests/{rid}/submit", headers=h
+    )
+    await async_client.post(
+        f"/operations/inbound-intake-requests/{rid}/primary-accept", headers=h
+    )
+    inb = await async_client.get(
+        f"/operations/inbound-intake-requests/{rid}", headers=h
+    )
+    line_id = inb.json()["lines"][0]["id"]
+    await async_client.patch(
+        f"/operations/inbound-intake-requests/{rid}/lines/{line_id}/actual",
+        headers=h,
+        json={"actual_qty": 10},
+    )
+    await async_client.post(
+        f"/operations/inbound-intake-requests/{rid}/verify", headers=h
     )
     assert (
         await async_client.post(
@@ -248,6 +276,21 @@ async def test_outbound_post_duplicate_after_fully_shipped_returns_409(
     )
     await async_client.post(
         f"/operations/inbound-intake-requests/{rid}/submit", headers=h
+    )
+    await async_client.post(
+        f"/operations/inbound-intake-requests/{rid}/primary-accept", headers=h
+    )
+    inb = await async_client.get(
+        f"/operations/inbound-intake-requests/{rid}", headers=h
+    )
+    line_id_in = inb.json()["lines"][0]["id"]
+    await async_client.patch(
+        f"/operations/inbound-intake-requests/{rid}/lines/{line_id_in}/actual",
+        headers=h,
+        json={"actual_qty": 4},
+    )
+    await async_client.post(
+        f"/operations/inbound-intake-requests/{rid}/verify", headers=h
     )
     await async_client.post(
         f"/operations/inbound-intake-requests/{rid}/post", headers=h

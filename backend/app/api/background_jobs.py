@@ -8,6 +8,7 @@ from pydantic import BaseModel, Field
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.deps import get_current_user, require_fulfillment_admin
+from app.core.roles import FULFILLMENT_SELLER
 from app.core.settings import settings
 from app.db.session import get_db
 from app.models.background_job import BackgroundJob
@@ -76,7 +77,7 @@ async def start_background_job(
     if body.job_type == JOB_TYPE_MOVEMENTS_DIGEST:
         if body.seller_id is not None:
             raise HTTPException(
-                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
                 detail="seller_id_not_allowed",
             )
         job = await job_svc.create_pending_job(
@@ -93,7 +94,7 @@ async def start_background_job(
     elif body.job_type == JOB_TYPE_WILDBERRIES_CARDS_SYNC:
         if body.seller_id is None:
             raise HTTPException(
-                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
                 detail="seller_id_required",
             )
         seller = await session.get(Seller, body.seller_id)
@@ -117,7 +118,7 @@ async def start_background_job(
     elif body.job_type == JOB_TYPE_WILDBERRIES_SUPPLIES_SYNC:
         if body.seller_id is None:
             raise HTTPException(
-                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
                 detail="seller_id_required",
             )
         seller = await session.get(Seller, body.seller_id)
@@ -140,9 +141,45 @@ async def start_background_job(
             background_tasks.add_task(job_svc.run_wildberries_supplies_sync_job, job.id)
     else:
         raise HTTPException(
-            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
             detail="unknown_job_type",
         )
+    return BackgroundJobStartOut(id=str(job.id), status=job.status)
+
+
+@router.post(
+    "/wildberries-cards-sync-self",
+    response_model=BackgroundJobStartOut,
+    status_code=status.HTTP_202_ACCEPTED,
+)
+async def start_wildberries_cards_sync_self(
+    background_tasks: BackgroundTasks,
+    user: Annotated[User, Depends(get_current_user)],
+    session: Annotated[AsyncSession, Depends(get_db)],
+) -> BackgroundJobStartOut:
+    if user.role != FULFILLMENT_SELLER or user.seller_id is None:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="forbidden",
+        )
+    seller = await session.get(Seller, user.seller_id)
+    if seller is None or seller.tenant_id != user.tenant_id:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="seller_not_found",
+        )
+    job = await job_svc.create_pending_job(
+        session,
+        user.tenant_id,
+        job_type=JOB_TYPE_WILDBERRIES_CARDS_SYNC,
+        payload_json={"seller_id": str(user.seller_id)},
+    )
+    if settings.celery_broker_url:
+        from app.tasks.background_jobs import run_wildberries_cards_sync_task
+
+        run_wildberries_cards_sync_task.delay(str(job.id))
+    else:
+        background_tasks.add_task(job_svc.run_wildberries_cards_sync_job, job.id)
     return BackgroundJobStartOut(id=str(job.id), status=job.status)
 
 

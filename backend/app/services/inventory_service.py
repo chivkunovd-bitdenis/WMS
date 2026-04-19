@@ -84,6 +84,76 @@ async def reserved_totals_by_product_at_location(
     return {pid: int(s or 0) for pid, s in res.all()}
 
 
+async def reserved_totals_by_product(
+    session: AsyncSession,
+    tenant_id: uuid.UUID,
+    product_ids: list[uuid.UUID],
+) -> dict[uuid.UUID, int]:
+    if not product_ids:
+        return {}
+    stmt = (
+        select(
+            InventoryReservation.product_id,
+            func.coalesce(func.sum(InventoryReservation.quantity), 0),
+        )
+        .join(
+            OutboundShipmentLine,
+            OutboundShipmentLine.id == InventoryReservation.outbound_shipment_line_id,
+        )
+        .join(
+            OutboundShipmentRequest,
+            OutboundShipmentRequest.id == OutboundShipmentLine.request_id,
+        )
+        .where(
+            InventoryReservation.tenant_id == tenant_id,
+            InventoryReservation.product_id.in_(product_ids),
+            OutboundShipmentRequest.status.in_(OUTBOUND_RESERVE_STATUSES),
+        )
+        .group_by(InventoryReservation.product_id)
+    )
+    res = await session.execute(stmt)
+    return {pid: int(s or 0) for pid, s in res.all()}
+
+
+async def list_balances_total(
+    session: AsyncSession,
+    tenant_id: uuid.UUID,
+    *,
+    seller_product_owner_id: uuid.UUID | None = None,
+) -> list[tuple[uuid.UUID, str, str, int, int]]:
+    """Итоговые остатки по SKU (сумма по всем ячейкам).
+
+    Возвращает: (product_id, sku_code, product_name, quantity_total, reserved_total)
+    """
+    stmt = (
+        select(
+            Product.id,
+            Product.sku_code,
+            Product.name,
+            func.coalesce(func.sum(InventoryBalance.quantity), 0),
+        )
+        .join(InventoryBalance, InventoryBalance.product_id == Product.id)
+        .where(
+            Product.tenant_id == tenant_id,
+            InventoryBalance.tenant_id == tenant_id,
+        )
+        .group_by(Product.id, Product.sku_code, Product.name)
+        .order_by(Product.sku_code)
+    )
+    if seller_product_owner_id is not None:
+        stmt = stmt.where(Product.seller_id == seller_product_owner_id)
+    res = await session.execute(stmt)
+    rows = [(pid, sku, name, int(q or 0)) for pid, sku, name, q in res.all()]
+    if not rows:
+        return []
+    pids = [pid for pid, *_ in rows]
+    rsv_map = await reserved_totals_by_product(session, tenant_id, pids)
+    return [
+        (pid, sku, name, qty, int(rsv_map.get(pid, 0)))
+        for pid, sku, name, qty in rows
+    ]
+
+
 async def reserved_qty_excluding_line(
     session: AsyncSession,
     tenant_id: uuid.UUID,

@@ -86,6 +86,21 @@ async def test_seller_sees_only_own_products_and_filtered_inbound(
     await async_client.post(
         f"/operations/inbound-intake-requests/{rid}/submit", headers=ah
     )
+    await async_client.post(
+        f"/operations/inbound-intake-requests/{rid}/primary-accept", headers=ah
+    )
+    inb = await async_client.get(
+        f"/operations/inbound-intake-requests/{rid}", headers=ah
+    )
+    line_id = inb.json()["lines"][0]["id"]
+    await async_client.patch(
+        f"/operations/inbound-intake-requests/{rid}/lines/{line_id}/actual",
+        headers=ah,
+        json={"actual_qty": 5},
+    )
+    await async_client.post(
+        f"/operations/inbound-intake-requests/{rid}/verify", headers=ah
+    )
 
     seller_email = f"slr-{suffix}@example.com"
     acc = await async_client.post(
@@ -94,10 +109,28 @@ async def test_seller_sees_only_own_products_and_filtered_inbound(
         json={
             "seller_id": sid1,
             "email": seller_email,
-            "password": "password123",
         },
     )
     assert acc.status_code == 201, acc.text
+
+    need_pw = await async_client.post(
+        "/auth/login",
+        json={"email": seller_email, "password": ""},
+    )
+    assert need_pw.status_code == 403
+    assert need_pw.json()["detail"] == "password_setup_required"
+
+    bad_guess = await async_client.post(
+        "/auth/login",
+        json={"email": seller_email, "password": "wrong"},
+    )
+    assert bad_guess.status_code == 401
+
+    set_pw = await async_client.post(
+        "/auth/set-initial-password",
+        json={"email": seller_email, "password": "password123"},
+    )
+    assert set_pw.status_code == 200, set_pw.text
 
     login = await async_client.post(
         "/auth/login",

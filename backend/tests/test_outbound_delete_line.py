@@ -60,6 +60,22 @@ async def test_delete_draft_line_releases_reservation(async_client: AsyncClient)
         f"/operations/inbound-intake-requests/{rid}/submit", headers=h
     )
     await async_client.post(
+        f"/operations/inbound-intake-requests/{rid}/primary-accept", headers=h
+    )
+    lines = await async_client.get(
+        f"/operations/inbound-intake-requests/{rid}",
+        headers=h,
+    )
+    line_id = lines.json()["lines"][0]["id"]
+    await async_client.patch(
+        f"/operations/inbound-intake-requests/{rid}/lines/{line_id}/actual",
+        headers=h,
+        json={"actual_qty": 10},
+    )
+    await async_client.post(
+        f"/operations/inbound-intake-requests/{rid}/verify", headers=h
+    )
+    await async_client.post(
         f"/operations/inbound-intake-requests/{rid}/post", headers=h
     )
 
@@ -165,6 +181,21 @@ async def test_delete_line_not_draft_returns_409(async_client: AsyncClient) -> N
     )
     await async_client.post(
         f"/operations/inbound-intake-requests/{rid}/submit", headers=h
+    )
+    await async_client.post(
+        f"/operations/inbound-intake-requests/{rid}/primary-accept", headers=h
+    )
+    inb = await async_client.get(
+        f"/operations/inbound-intake-requests/{rid}", headers=h
+    )
+    line_id = inb.json()["lines"][0]["id"]
+    await async_client.patch(
+        f"/operations/inbound-intake-requests/{rid}/lines/{line_id}/actual",
+        headers=h,
+        json={"actual_qty": 5},
+    )
+    await async_client.post(
+        f"/operations/inbound-intake-requests/{rid}/verify", headers=h
     )
     await async_client.post(
         f"/operations/inbound-intake-requests/{rid}/post", headers=h

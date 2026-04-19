@@ -4,7 +4,7 @@ import uuid
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException, status
-from pydantic import BaseModel, EmailStr, Field
+from pydantic import BaseModel, EmailStr, Field, field_validator
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.deps import get_current_user, require_fulfillment_admin
@@ -16,6 +16,7 @@ from app.services.auth_service import (
     create_seller_user,
     login,
     register_fulfillment,
+    set_initial_password,
 )
 from app.services.tokens import create_access_token
 
@@ -31,7 +32,7 @@ class RegisterBody(BaseModel):
 
 class LoginBody(BaseModel):
     email: EmailStr
-    password: str = Field(min_length=1, max_length=128)
+    password: str = Field(default="", max_length=128)
 
 
 class TokenResponse(BaseModel):
@@ -51,6 +52,23 @@ class UserMeResponse(BaseModel):
 
 class SellerAccountCreate(BaseModel):
     seller_id: uuid.UUID
+    email: EmailStr
+    password: str | None = Field(default=None, max_length=128)
+
+    @field_validator("password")
+    @classmethod
+    def normalize_optional_password(cls, v: str | None) -> str | None:
+        if v is None:
+            return None
+        s = v.strip()
+        if not s:
+            return None
+        if len(s) < 8:
+            raise ValueError("password must be at least 8 characters")
+        return s
+
+
+class SetInitialPasswordBody(BaseModel):
     email: EmailStr
     password: str = Field(min_length=8, max_length=128)
 
@@ -140,11 +158,53 @@ async def login_route(
         _user, token = await login(
             session, email=str(body.email), password=body.password
         )
-    except AuthError:
+    except AuthError as exc:
+        code = exc.args[0] if exc.args else ""
+        if code == "password_setup_required":
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="password_setup_required",
+            ) from None
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="invalid_credentials",
         ) from None
+    return TokenResponse(access_token=token)
+
+
+@router.post("/set-initial-password", response_model=TokenResponse)
+async def set_initial_password_route(
+    body: SetInitialPasswordBody,
+    session: Annotated[AsyncSession, Depends(get_db)],
+) -> TokenResponse:
+    try:
+        user = await set_initial_password(
+            session,
+            email=str(body.email),
+            password=body.password,
+        )
+    except AuthError as exc:
+        code = exc.args[0] if exc.args else ""
+        if code == "forbidden":
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="forbidden",
+            ) from None
+        if code == "password_already_set":
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail="password_already_set",
+            ) from None
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="invalid_credentials",
+        ) from None
+    token = create_access_token(
+        user_id=user.id,
+        tenant_id=user.tenant_id,
+        role=user.role,
+        seller_id=user.seller_id,
+    )
     return TokenResponse(access_token=token)
 
 

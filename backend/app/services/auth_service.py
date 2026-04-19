@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import secrets
 import uuid
 
 from sqlalchemy import select
@@ -31,6 +32,7 @@ async def register_fulfillment(
         tenant=tenant,
         email=admin_email.strip().lower(),
         password_hash=hash_password(password),
+        must_set_password=False,
         role=FULFILLMENT_ADMIN,
         seller_id=None,
     )
@@ -50,7 +52,13 @@ async def login(session: AsyncSession, *, email: str, password: str) -> tuple[Us
     stmt = select(User).where(User.email == email.strip().lower())
     result = await session.execute(stmt)
     user = result.scalar_one_or_none()
-    if user is None or not verify_password(password, user.password_hash):
+    if user is None:
+        raise AuthError("invalid_credentials")
+    if user.must_set_password:
+        if password.strip() == "":
+            raise AuthError("password_setup_required")
+        raise AuthError("invalid_credentials")
+    if not verify_password(password, user.password_hash):
         raise AuthError("invalid_credentials")
     token = create_access_token(
         user_id=user.id,
@@ -67,18 +75,25 @@ async def create_seller_user(
     acting_user: User,
     seller_id: uuid.UUID,
     email: str,
-    password: str,
+    password: str | None,
 ) -> User:
     if acting_user.role != FULFILLMENT_ADMIN:
         raise AuthError("forbidden")
     seller = await session.get(Seller, seller_id)
     if seller is None or seller.tenant_id != acting_user.tenant_id:
         raise AuthError("seller_not_found")
+    if password and password.strip():
+        password_hash = hash_password(password)
+        must_set_password = False
+    else:
+        password_hash = hash_password(secrets.token_urlsafe(64))
+        must_set_password = True
     user = User(
         tenant_id=acting_user.tenant_id,
         seller_id=seller_id,
         email=email.strip().lower(),
-        password_hash=hash_password(password),
+        password_hash=password_hash,
+        must_set_password=must_set_password,
         role=FULFILLMENT_SELLER,
     )
     session.add(user)
@@ -87,6 +102,28 @@ async def create_seller_user(
     except IntegrityError as exc:
         await session.rollback()
         raise AuthError("email_taken") from exc
+    await session.refresh(user)
+    return user
+
+
+async def set_initial_password(
+    session: AsyncSession,
+    *,
+    email: str,
+    password: str,
+) -> User:
+    stmt = select(User).where(User.email == email.strip().lower())
+    result = await session.execute(stmt)
+    user = result.scalar_one_or_none()
+    if user is None:
+        raise AuthError("invalid_credentials")
+    if user.role != FULFILLMENT_SELLER:
+        raise AuthError("forbidden")
+    if not user.must_set_password:
+        raise AuthError("password_already_set")
+    user.password_hash = hash_password(password)
+    user.must_set_password = False
+    await session.commit()
     await session.refresh(user)
     return user
 

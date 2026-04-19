@@ -1,10 +1,12 @@
 from __future__ import annotations
 
 import uuid
-from datetime import datetime
+from datetime import date, datetime
 from typing import TYPE_CHECKING
 
 from sqlalchemy import (
+    Boolean,
+    Date,
     DateTime,
     ForeignKey,
     Integer,
@@ -55,9 +57,15 @@ class InboundIntakeRequest(Base):
     submitted_at: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True), nullable=True
     )
+    primary_accepted_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    verified_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     posted_at: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True), nullable=True
     )
+    planned_delivery_date: Mapped[date | None] = mapped_column(Date, nullable=True)
+    has_discrepancy: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
 
     tenant: Mapped[Tenant] = relationship("Tenant", back_populates="inbound_intake_requests")
     warehouse: Mapped[Warehouse] = relationship(
@@ -93,6 +101,7 @@ class InboundIntakeLine(Base):
         index=True,
     )
     expected_qty: Mapped[int] = mapped_column(Integer, nullable=False)
+    actual_qty: Mapped[int | None] = mapped_column(Integer, nullable=True)
     posted_qty: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     storage_location_id: Mapped[uuid.UUID | None] = mapped_column(
         Uuid(as_uuid=True),

@@ -1,9 +1,10 @@
 from __future__ import annotations
 
 import uuid
+from datetime import date
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Body, Depends, HTTPException, status
 from pydantic import BaseModel, Field
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -11,7 +12,7 @@ from app.api.deps import get_current_user, require_fulfillment_admin, seller_lin
 from app.core.roles import FULFILLMENT_ADMIN, FULFILLMENT_SELLER
 from app.db.session import get_db
 from app.models.inventory_movement import InventoryMovement
-from app.models.outbound_shipment import OutboundShipmentLine
+from app.models.outbound_shipment import OutboundShipmentLine, OutboundShipmentRequest
 from app.models.product import Product
 from app.models.user import User
 from app.services import outbound_shipment_service as svc
@@ -55,15 +56,27 @@ class OutboundShipmentLineOut(BaseModel):
 class OutboundShipmentRequestSummaryOut(BaseModel):
     id: str
     warehouse_id: str
+    warehouse_name: str
     status: str
     line_count: int
+    goods_qty_total: int
+    planned_shipment_date: str | None = None
+    created_at: str
+    marketplace_label: str = "Wildberries"
+    seller_id: str | None = None
+    seller_name: str | None = None
 
 
 class OutboundShipmentRequestOut(BaseModel):
     id: str
     warehouse_id: str
     status: str
+    planned_shipment_date: str | None = None
     lines: list[OutboundShipmentLineOut]
+
+
+class OutboundShipmentRequestSubmitBody(BaseModel):
+    planned_shipment_date: date | None = None
 
 
 class OutboundMovementOut(BaseModel):
@@ -89,6 +102,18 @@ def _line_out(line: OutboundShipmentLine, product: Product) -> OutboundShipmentL
         if line.storage_location_id
         else None,
         storage_location_code=loc.code if loc is not None else None,
+    )
+
+
+def _request_out(r: OutboundShipmentRequest) -> OutboundShipmentRequestOut:
+    return OutboundShipmentRequestOut(
+        id=str(r.id),
+        warehouse_id=str(r.warehouse_id),
+        status=r.status,
+        planned_shipment_date=r.planned_shipment_date.isoformat()
+        if r.planned_shipment_date is not None
+        else None,
+        lines=[_line_out(ln, ln.product) for ln in r.lines],
     )
 
 
@@ -120,36 +145,36 @@ def _map_out_err(exc: OutboundShipmentError) -> HTTPException:
         "not_submitted": (status.HTTP_409_CONFLICT, "not_submitted"),
         "already_posted": (status.HTTP_409_CONFLICT, "already_posted"),
         "duplicate_line": (status.HTTP_409_CONFLICT, "duplicate_line"),
-        "invalid_qty": (status.HTTP_422_UNPROCESSABLE_ENTITY, "invalid_qty"),
-        "submit_empty": (status.HTTP_422_UNPROCESSABLE_ENTITY, "submit_empty"),
+        "invalid_qty": (status.HTTP_422_UNPROCESSABLE_CONTENT, "invalid_qty"),
+        "submit_empty": (status.HTTP_422_UNPROCESSABLE_CONTENT, "submit_empty"),
         "lines_missing_storage": (
-            status.HTTP_422_UNPROCESSABLE_ENTITY,
+            status.HTTP_422_UNPROCESSABLE_CONTENT,
             "lines_missing_storage",
         ),
         "insufficient_stock": (
-            status.HTTP_422_UNPROCESSABLE_ENTITY,
+            status.HTTP_422_UNPROCESSABLE_CONTENT,
             "insufficient_stock",
         ),
         "insufficient_available": (
-            status.HTTP_422_UNPROCESSABLE_ENTITY,
+            status.HTTP_422_UNPROCESSABLE_CONTENT,
             "insufficient_available",
         ),
         "nothing_to_ship": (
-            status.HTTP_422_UNPROCESSABLE_ENTITY,
+            status.HTTP_422_UNPROCESSABLE_CONTENT,
             "nothing_to_ship",
         ),
         "storage_not_assigned": (
-            status.HTTP_422_UNPROCESSABLE_ENTITY,
+            status.HTTP_422_UNPROCESSABLE_CONTENT,
             "storage_not_assigned",
         ),
         "line_closed": (status.HTTP_409_CONFLICT, "line_closed"),
         "mixed_seller_lines": (
-            status.HTTP_422_UNPROCESSABLE_ENTITY,
+            status.HTTP_422_UNPROCESSABLE_CONTENT,
             "mixed_seller_lines",
         ),
         "seller_not_found": (status.HTTP_404_NOT_FOUND, "seller_not_found"),
         "product_seller_mismatch": (
-            status.HTTP_422_UNPROCESSABLE_ENTITY,
+            status.HTTP_422_UNPROCESSABLE_CONTENT,
             "product_seller_mismatch",
         ),
     }
@@ -168,15 +193,27 @@ async def list_outbound_requests(
         user.tenant_id,
         seller_product_owner_id=seller_scope,
     )
-    return [
-        OutboundShipmentRequestSummaryOut(
-            id=str(r.id),
-            warehouse_id=str(r.warehouse_id),
-            status=r.status,
-            line_count=len(r.lines),
+    out: list[OutboundShipmentRequestSummaryOut] = []
+    for r in rows:
+        wh = r.warehouse
+        goods_qty_total = sum(ln.quantity for ln in r.lines)
+        out.append(
+            OutboundShipmentRequestSummaryOut(
+                id=str(r.id),
+                warehouse_id=str(r.warehouse_id),
+                warehouse_name=wh.name if wh is not None else "",
+                status=r.status,
+                line_count=len(r.lines),
+                goods_qty_total=goods_qty_total,
+                planned_shipment_date=r.planned_shipment_date.isoformat()
+                if r.planned_shipment_date is not None
+                else None,
+                created_at=r.created_at.isoformat(),
+                seller_id=str(r.seller_id) if r.seller_id is not None else None,
+                seller_name=r.seller.name if r.seller is not None else None,
+            )
         )
-        for r in rows
-    ]
+    return out
 
 
 @router.post("", response_model=OutboundShipmentRequestOut, status_code=status.HTTP_201_CREATED)
@@ -212,6 +249,9 @@ async def create_outbound_request(
         id=str(r.id),
         warehouse_id=str(r.warehouse_id),
         status=r.status,
+        planned_shipment_date=r.planned_shipment_date.isoformat()
+        if r.planned_shipment_date is not None
+        else None,
         lines=[],
     )
 
@@ -234,12 +274,7 @@ async def get_outbound_request(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="request_not_found",
         )
-    return OutboundShipmentRequestOut(
-        id=str(r.id),
-        warehouse_id=str(r.warehouse_id),
-        status=r.status,
-        lines=[_line_out(ln, ln.product) for ln in r.lines],
-    )
+    return _request_out(r)
 
 
 @router.get(
@@ -341,12 +376,7 @@ async def ship_outbound_line(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="request_missing",
         )
-    return OutboundShipmentRequestOut(
-        id=str(r2.id),
-        warehouse_id=str(r2.warehouse_id),
-        status=r2.status,
-        lines=[_line_out(ln, ln.product) for ln in r2.lines],
-    )
+    return _request_out(r2)
 
 
 @router.delete(
@@ -363,12 +393,7 @@ async def delete_outbound_line(
         r = await svc.delete_line(session, user.tenant_id, request_id, line_id)
     except OutboundShipmentError as exc:
         raise _map_out_err(exc) from None
-    return OutboundShipmentRequestOut(
-        id=str(r.id),
-        warehouse_id=str(r.warehouse_id),
-        status=r.status,
-        lines=[_line_out(ln, ln.product) for ln in r.lines],
-    )
+    return _request_out(r)
 
 
 @router.patch(
@@ -407,9 +432,16 @@ async def submit_outbound_request(
     request_id: uuid.UUID,
     user: Annotated[User, Depends(require_fulfillment_admin)],
     session: Annotated[AsyncSession, Depends(get_db)],
+    body: Annotated[OutboundShipmentRequestSubmitBody | None, Body()] = None,
 ) -> OutboundShipmentRequestOut:
+    submit_body = body if body is not None else OutboundShipmentRequestSubmitBody()
     try:
-        r = await svc.submit_request(session, user.tenant_id, request_id)
+        r = await svc.submit_request(
+            session,
+            user.tenant_id,
+            request_id,
+            planned_shipment_date=submit_body.planned_shipment_date,
+        )
     except OutboundShipmentError as exc:
         raise _map_out_err(exc) from None
     r2 = await svc.get_request(session, user.tenant_id, r.id)
@@ -418,12 +450,7 @@ async def submit_outbound_request(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="request_missing",
         )
-    return OutboundShipmentRequestOut(
-        id=str(r2.id),
-        warehouse_id=str(r2.warehouse_id),
-        status=r2.status,
-        lines=[_line_out(ln, ln.product) for ln in r2.lines],
-    )
+    return _request_out(r2)
 
 
 @router.post("/{request_id}/post", response_model=OutboundShipmentRequestOut)
@@ -442,9 +469,4 @@ async def post_outbound_request(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="request_missing",
         )
-    return OutboundShipmentRequestOut(
-        id=str(r2.id),
-        warehouse_id=str(r2.warehouse_id),
-        status=r2.status,
-        lines=[_line_out(ln, ln.product) for ln in r2.lines],
-    )
+    return _request_out(r2)

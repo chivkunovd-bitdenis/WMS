@@ -66,6 +66,19 @@ async def test_stock_transfer_moves_balance_and_journal(async_client: AsyncClien
     await async_client.post(
         f"/operations/inbound-intake-requests/{rid}/submit", headers=h
     )
+    await async_client.post(
+        f"/operations/inbound-intake-requests/{rid}/primary-accept", headers=h
+    )
+    inb = await async_client.get(f"/operations/inbound-intake-requests/{rid}", headers=h)
+    line_id = inb.json()["lines"][0]["id"]
+    await async_client.patch(
+        f"/operations/inbound-intake-requests/{rid}/lines/{line_id}/actual",
+        headers=h,
+        json={"actual_qty": 10},
+    )
+    await async_client.post(
+        f"/operations/inbound-intake-requests/{rid}/verify", headers=h
+    )
     post = await async_client.post(
         f"/operations/inbound-intake-requests/{rid}/post", headers=h
     )
