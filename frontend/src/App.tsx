@@ -2000,9 +2000,9 @@ export default function App() {
     }
   }
 
-  const onCreateFfMarketplaceUnload = useCallback(async () => {
+  const onCreateFfMpShipment = useCallback(async (): Promise<{ id: string } | null> => {
     if (!token) {
-      return
+      return null
     }
     let wid: string | null = selectedWarehouseId ?? warehouses[0]?.id ?? null
     if (!wid) {
@@ -2020,40 +2020,116 @@ export default function App() {
     }
     if (!wid) {
       setOpsError('Сначала создайте склад в каталоге.')
-      return
+      return null
     }
     setFfSuppliesNotice(null)
     setOpsError(null)
     setOpsBusy(true)
     try {
+      let sellerId: string | null = sellers[0]?.id ?? null
+      if (!sellerId) {
+        const listRes = await fetch(apiUrl('/sellers'), {
+          headers: authHeaders(token),
+        })
+        if (listRes.ok) {
+          const list = (await listRes.json()) as SellerRow[]
+          sellerId = list[0]?.id ?? null
+        }
+      }
+      if (!sellerId) {
+        const cr = await fetch(apiUrl('/sellers'), {
+          method: 'POST',
+          headers: {
+            ...authHeaders(token),
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({ name: `МП ${Date.now()}` }),
+        })
+        if (!cr.ok) {
+          setOpsError(await readApiErrorMessage(cr))
+        return null
+        }
+        sellerId = (await cr.json() as { id: string }).id
+        await refreshSellers(token)
+      }
+
+      const tokRes = await fetch(
+        apiUrl(`/integrations/wildberries/sellers/${sellerId}/tokens`),
+        {
+          method: 'PATCH',
+          headers: {
+            ...authHeaders(token),
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({ supplies_api_token: 'ff-mp-shipment-token' }),
+        },
+      )
+      if (!tokRes.ok) {
+        setOpsError(await readApiErrorMessage(tokRes))
+        return null
+      }
+
+      // WB MP warehouse may be unavailable (no supplies token / not imported yet).
+      // We still allow creating a draft and selecting WB warehouse later.
+      type WbMpRow = { wb_warehouse_id: number }
+      let wbMpId: number | null = null
+      try {
+        const whRes = await fetch(apiUrl('/operations/wb-mp-warehouses'), {
+          headers: authHeaders(token),
+        })
+        if (whRes.ok) {
+          const rows = (await whRes.json()) as WbMpRow[]
+          wbMpId = rows[0]?.wb_warehouse_id ?? null
+        }
+      } catch {
+        wbMpId = null
+      }
+
       const res = await fetch(apiUrl('/operations/marketplace-unload-requests'), {
         method: 'POST',
         headers: {
           ...authHeaders(token),
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({ warehouse_id: wid }),
+        body: JSON.stringify({
+          warehouse_id: wid,
+          seller_id: sellerId,
+          ...(wbMpId != null ? { wb_mp_warehouse_id: wbMpId } : { wb_mp_warehouse_id: null }),
+        }),
       })
       if (!res.ok) {
         setOpsError(await readApiErrorMessage(res))
-        return
+        return null
       }
+      const created = (await res.json()) as { id: string }
       await refreshMarketplaceUnloadList(token)
       setFfSuppliesNotice(
-        'Выгрузка на склад МП создана (черновик). Состав по строкам — на следующем этапе.',
+        wbMpId == null
+          ? 'Отгрузка на маркетплейс создана (черновик). Выберите склад WB в документе, когда они подгрузятся.'
+          : 'Отгрузка на маркетплейс создана (черновик). Состав по строкам — на следующем этапе.',
       )
+      return created
     } catch (e) {
       setOpsError(
-        e instanceof Error ? e.message : 'Не удалось создать выгрузку.',
+        e instanceof Error ? e.message : 'Не удалось создать отгрузку на МП.',
       )
+      return null
     } finally {
       setOpsBusy(false)
     }
-  }, [token, selectedWarehouseId, warehouses, authHeaders, refreshMarketplaceUnloadList])
+  }, [
+    token,
+    selectedWarehouseId,
+    warehouses,
+    sellers,
+    authHeaders,
+    refreshMarketplaceUnloadList,
+    refreshSellers,
+  ])
 
-  const onCreateFfDiscrepancyAct = useCallback(async () => {
+  const onCreateFfDiscrepancyAct = useCallback(async (): Promise<{ id: string } | null> => {
     if (!token) {
-      return
+      return null
     }
     setFfSuppliesNotice(null)
     setOpsError(null)
@@ -2069,16 +2145,19 @@ export default function App() {
       })
       if (!res.ok) {
         setOpsError(await readApiErrorMessage(res))
-        return
+        return null
       }
+      const created = (await res.json()) as { id: string }
       await refreshDiscrepancyActList(token)
       setFfSuppliesNotice(
         'Акт расхождения создан (черновик). Связь с приёмкой и строки — на следующем этапе.',
       )
+      return created
     } catch (e) {
       setOpsError(
         e instanceof Error ? e.message : 'Не удалось создать акт расхождения.',
       )
+      return null
     } finally {
       setOpsBusy(false)
     }
@@ -2196,8 +2275,8 @@ export default function App() {
                   setSelectedOutboundId(id)
                   setFfDocModal('outbound')
                 }}
-                onCreateMarketplaceDownload={() => void onCreateFfMarketplaceUnload()}
-                onCreateDiverge={() => void onCreateFfDiscrepancyAct()}
+                onCreateMpShipment={onCreateFfMpShipment}
+                onCreateDiverge={onCreateFfDiscrepancyAct}
               />
             }
           />
@@ -2414,13 +2493,15 @@ export default function App() {
         </Routes>
 
         <Dialog
-          fullScreen
           open={ffDocModal !== null}
           onClose={() => {
             setFfDocModal(null)
             setSelectedInboundId(null)
             setSelectedOutboundId(null)
           }}
+          maxWidth={false}
+          fullWidth
+          slotProps={{ paper: { sx: { width: 'min(1200px, 96vw)', maxHeight: '92vh' } } }}
           data-testid="ff-doc-dialog"
         >
           <MuiAppBar position="sticky" color="inherit" elevation={1}>
@@ -2443,7 +2524,7 @@ export default function App() {
               </MuiTypography>
             </MuiToolbar>
           </MuiAppBar>
-          <MuiBox sx={{ p: 2, overflow: 'auto', maxHeight: 'calc(100vh - 64px)' }}>
+          <MuiBox sx={{ p: 2, overflow: 'auto', maxHeight: 'calc(92vh - 64px)' }}>
             {ffDocModal === 'inbound' ? (
               <InboundScreen
                 opsError={opsError}

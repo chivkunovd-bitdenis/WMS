@@ -17,6 +17,91 @@ Monorepo:
 docker compose up -d --build
 ```
 
+## Dev access (как быстро восстановить логин)
+
+Пароли **не храним в git** (в БД они лежат как bcrypt‑хеш, «вытащить» исходный пароль нельзя).
+Если разлогинился и не можешь войти — делай **reset** на новый пароль, который знаешь.
+
+### Если Docker работает (Postgres в compose)
+
+1) Узнать email пользователей фулфилмента:
+
+```bash
+docker compose exec -T db psql -U postgres -d wms -c "select email, role from users order by created_at desc;"
+```
+
+2) Сбросить пароль для нужного email (пример: `fulfillment_admin@example.com`):
+
+```bash
+docker compose exec -T api python - <<'PY'
+import asyncio
+from sqlalchemy import text
+from sqlalchemy.ext.asyncio import create_async_engine, async_sessionmaker
+from app.core.settings import settings
+from app.services.passwords import hash_password
+
+EMAIL = "fulfillment_admin@example.com"
+NEW_PASSWORD = "CHANGE_ME_NOW_123!"
+
+async def main() -> None:
+    engine = create_async_engine(settings.database_url, pool_pre_ping=True)
+    Session = async_sessionmaker(engine, expire_on_commit=False)
+    async with Session() as s:
+        await s.execute(
+            text("update users set password_hash=:h, must_set_password=false where email=:e"),
+            {"h": hash_password(NEW_PASSWORD), "e": EMAIL},
+        )
+        await s.commit()
+    await engine.dispose()
+    print("OK")
+
+asyncio.run(main())
+PY
+```
+
+### Если Docker не работает (локальный API на SQLite)
+
+Можно поднять API локально с SQLite (порт 18080), затем создать/сбросить доступ.
+
+Запуск API:
+
+```bash
+cd backend
+export DATABASE_URL="sqlite+aiosqlite:////absolute/path/to/backend/dev.db"
+export WMS_AUTO_CREATE_SCHEMA=1
+python3 -m uvicorn app.main:app --host 127.0.0.1 --port 18080
+```
+
+Reset пароля в SQLite:
+
+```bash
+cd backend
+export DATABASE_URL="sqlite+aiosqlite:////absolute/path/to/backend/dev.db"
+python3 - <<'PY'
+import asyncio
+from sqlalchemy import select
+from app.db.session import SessionLocal
+from app.models.user import User
+from app.services.passwords import hash_password
+
+EMAIL = "fulfillment_admin@example.com"
+NEW_PASSWORD = "CHANGE_ME_NOW_123!"
+
+async def main() -> None:
+    async with SessionLocal() as s:
+        res = await s.execute(select(User).where(User.email == EMAIL))
+        u = res.scalar_one_or_none()
+        if u is None:
+            raise SystemExit("NOT_FOUND")
+        u.password_hash = hash_password(NEW_PASSWORD)
+        u.must_set_password = False
+        await s.commit()
+    print("OK")
+
+asyncio.run(main())
+PY
+```
+
 **Важно про «старый» UI в `docker compose`:** сервис `web` собирается из `frontend/Dockerfile` командой `COPY .` и внутри контейнера крутит **`npm run dev` (Vite)**. Исходники **не монтируются** с хоста: после `git pull` или смены ветки фронт в контейнере обновится **только** после пересборки образа, например:
 
 ```bash

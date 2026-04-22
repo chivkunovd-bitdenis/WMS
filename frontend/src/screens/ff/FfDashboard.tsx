@@ -213,7 +213,7 @@ export function FfDashboard({
           {me.organization_name}
         </Typography>
         <Typography variant="body2" sx={{ mt: 1, color: 'text.secondary', fontWeight: 500, lineHeight: 1.5 }}>
-          Поставки селлеров и отгрузки на склад маркетплейса — план по датам.
+          Поставки селлеров (заявки селлер → ФФ) и отгрузки фулфилмента на маркетплейс — план по датам.
         </Typography>
       </Paper>
 

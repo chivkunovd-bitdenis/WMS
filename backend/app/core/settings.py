@@ -43,6 +43,12 @@ class Settings(BaseSettings):
         default=False,
         description="Playwright/e2e: return stub WB supplies list without calling the network.",
     )
+    e2e_mock_wb_warehouses: bool = Field(
+        default=False,
+        description=(
+            "Playwright/e2e: stub WB GET /warehouses JSON without calling the network."
+        ),
+    )
 
     @property
     def database_url_sync(self) -> str:

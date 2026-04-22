@@ -3,8 +3,8 @@ import { test, expect } from '@playwright/test';
 import { waitForGetOk, waitForPostOk } from './api-waits';
 import { openFulfillmentRegistration } from './auth-flow';
 
-// TC-S15-003 — FF дашборд: недельный календарь и «Поставки и загрузки»; создание выгрузки на МП и открытие диалога состава.
-// Given: админ ФФ, склад и товар в API; When: создаёт выгрузку и открывает строку; Then: диалог документа виден (negative: без склада — ошибка вместо успеха).
+// TC-S15-003 — FF дашборд: недельный календарь и «Поставки и отгрузки»; создание отгрузки ФФ→МП и открытие диалога состава.
+// Given: админ ФФ, склад и товар в API; When: создаёт отгрузку на МП и открывает строку; Then: диалог документа виден (negative: без склада — ошибка вместо успеха).
 test('fulfillment admin sees week calendar and supplies-shipments page', async ({ page }) => {
   const email = `e2e-ff-dash-${Date.now()}@example.com`;
   const password = 'password123';
@@ -45,6 +45,31 @@ test('fulfillment admin sees week calendar and supplies-shipments page', async (
     throw new Error(`warehouse create failed: ${whRes.status()} ${await whRes.text()}`);
   }
 
+  const sellerRes = await page.request.post(`${e2eApi}/sellers`, {
+    headers: {
+      Authorization: `Bearer ${token}`,
+      'Content-Type': 'application/json',
+    },
+    data: JSON.stringify({ name: 'E2E FF seller' }),
+  });
+  if (!sellerRes.ok()) {
+    throw new Error(`seller create failed: ${sellerRes.status()} ${await sellerRes.text()}`);
+  }
+  const sellerId = (await sellerRes.json()) as { id: string };
+  const tokRes = await page.request.patch(
+    `${e2eApi}/integrations/wildberries/sellers/${sellerId.id}/tokens`,
+    {
+      headers: {
+        Authorization: `Bearer ${token}`,
+        'Content-Type': 'application/json',
+      },
+      data: JSON.stringify({ supplies_api_token: 'e2e-ff-supplies-token' }),
+    },
+  );
+  if (!tokRes.ok()) {
+    throw new Error(`wb supplies token patch failed: ${tokRes.status()} ${await tokRes.text()}`);
+  }
+
   const prRes = await page.request.post(`${e2eApi}/products`, {
     headers: {
       Authorization: `Bearer ${token}`,
@@ -56,6 +81,7 @@ test('fulfillment admin sees week calendar and supplies-shipments page', async (
       length_mm: 1,
       width_mm: 1,
       height_mm: 1,
+      seller_id: sellerId.id,
     }),
   });
   if (!prRes.ok()) {
@@ -67,12 +93,17 @@ test('fulfillment admin sees week calendar and supplies-shipments page', async (
 
   await page.getByTestId('nav-ff-supplies-shipments').click();
   await expect(page.getByTestId('ff-supplies-shipments-page')).toBeVisible();
-  await expect(page.getByTestId('ff-create-marketplace-download')).toBeVisible();
+  await expect(page.getByTestId('ff-create-mp-shipment')).toBeVisible();
   await expect(page.getByTestId('ff-create-diverge')).toBeVisible();
-  await page.getByTestId('ff-create-marketplace-download').click();
+  await page.getByTestId('ff-create-mp-shipment').click();
   await expect(page.getByTestId('ff-supplies-info-notice')).toBeVisible();
+  // Creating a document opens it immediately; close before interacting with filters.
+  if (await page.getByTestId('ff-supplies-doc-dialog').isVisible().catch(() => false)) {
+    await page.getByTestId('ff-supplies-doc-close').click();
+    await expect(page.getByTestId('ff-supplies-doc-dialog')).toBeHidden();
+  }
 
-  await page.getByTestId('ff-docs-filter-mp-unload').click();
+  await page.getByTestId('ff-docs-filter-mp-shipment').click();
   await Promise.all([
     waitForGetOk(page, '/api/operations/marketplace-unload-requests/'),
     page.locator('[data-doc-kind="marketplace_unload"]').first().click(),

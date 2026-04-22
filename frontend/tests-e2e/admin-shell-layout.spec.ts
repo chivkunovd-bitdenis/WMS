@@ -4,7 +4,7 @@ import { waitForGetOk, waitForPostOk } from './api-waits';
 import { openFulfillmentRegistration } from './auth-flow';
 
 // TC-S15-001 — навигация по разделам после входа (целостность shell: один корень, ключевые области).
-// TC-S15-003 — дашборд ФФ: недельный календарь и пункт «Поставки и загрузки» в сайдбаре.
+// TC-S15-003 — дашборд ФФ: недельный календарь и пункт «Поставки и отгрузки» в сайдбаре.
 // TC-S02-001 — успешный вход в контекст сессии с видимым дашбордом.
 test('admin shell: single app root, nav, dashboard and main sections visible', async ({ page }) => {
   const email = `e2e-shell-${Date.now()}@example.com`;

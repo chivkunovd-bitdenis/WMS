@@ -21,6 +21,7 @@ from app.api.products import router as products_router
 from app.api.sellers import router as sellers_router
 from app.api.stock_transfer import router as stock_transfer_router
 from app.api.warehouses import router as warehouses_router
+from app.api.wb_mp_warehouses import router as wb_mp_warehouses_router
 from app.api.wildberries_integration import router as wildberries_integration_router
 from app.db.session import engine
 from app.models import Base
@@ -63,6 +64,7 @@ def create_app() -> FastAPI:
     app.include_router(stock_transfer_router)
     app.include_router(outbound_shipment_router)
     app.include_router(marketplace_unload_requests_router)
+    app.include_router(wb_mp_warehouses_router)
     app.include_router(discrepancy_acts_router)
     app.include_router(background_jobs_router)
     app.include_router(wildberries_integration_router)

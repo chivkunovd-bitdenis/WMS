@@ -7,10 +7,16 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
-from app.models.marketplace_unload import MarketplaceUnloadLine, MarketplaceUnloadRequest
+from app.models.marketplace_unload import (
+    MarketplaceUnloadBox,
+    MarketplaceUnloadBoxLine,
+    MarketplaceUnloadLine,
+    MarketplaceUnloadRequest,
+)
 from app.models.product import Product
 from app.models.seller import Seller
 from app.services.catalog_service import get_warehouse
+from app.services.wb_mp_warehouse_service import get_cached_mp_warehouse
 
 STATUS_DRAFT = "draft"
 STATUS_CONFIRMED = "confirmed"
@@ -27,25 +33,52 @@ async def create_request(
     tenant_id: uuid.UUID,
     *,
     warehouse_id: uuid.UUID,
-    seller_id: uuid.UUID | None = None,
+    seller_id: uuid.UUID,
+    wb_mp_warehouse_id: int | None,
 ) -> MarketplaceUnloadRequest:
     wh = await get_warehouse(session, tenant_id, warehouse_id)
     if wh is None:
         raise MarketplaceUnloadError("warehouse_not_found")
-    if seller_id is not None:
-        sl = await session.get(Seller, seller_id)
-        if sl is None or sl.tenant_id != tenant_id:
-            raise MarketplaceUnloadError("seller_not_found")
+    sl = await session.get(Seller, seller_id)
+    if sl is None or sl.tenant_id != tenant_id:
+        raise MarketplaceUnloadError("seller_not_found")
+    if wb_mp_warehouse_id is not None:
+        mpw = await get_cached_mp_warehouse(session, tenant_id, wb_mp_warehouse_id)
+        if mpw is None:
+            raise MarketplaceUnloadError("wb_mp_warehouse_unknown")
     req = MarketplaceUnloadRequest(
         tenant_id=tenant_id,
         warehouse_id=warehouse_id,
         seller_id=seller_id,
+        wb_mp_warehouse_id=wb_mp_warehouse_id,
         status=STATUS_DRAFT,
     )
     session.add(req)
     await session.commit()
     await session.refresh(req)
     return req
+
+
+async def set_wb_mp_warehouse(
+    session: AsyncSession,
+    tenant_id: uuid.UUID,
+    request_id: uuid.UUID,
+    *,
+    wb_mp_warehouse_id: int,
+) -> MarketplaceUnloadRequest:
+    req = await get_request(session, tenant_id, request_id)
+    if req is None:
+        raise MarketplaceUnloadError("not_found")
+    if req.status != STATUS_DRAFT:
+        raise MarketplaceUnloadError("not_editable")
+    mpw = await get_cached_mp_warehouse(session, tenant_id, wb_mp_warehouse_id)
+    if mpw is None:
+        raise MarketplaceUnloadError("wb_mp_warehouse_unknown")
+    req.wb_mp_warehouse_id = wb_mp_warehouse_id
+    await session.commit()
+    r2 = await get_request(session, tenant_id, request_id)
+    assert r2 is not None
+    return r2
 
 
 async def get_request(
@@ -63,6 +96,9 @@ async def get_request(
             selectinload(MarketplaceUnloadRequest.lines).selectinload(
                 MarketplaceUnloadLine.product
             ),
+            selectinload(MarketplaceUnloadRequest.boxes)
+            .selectinload(MarketplaceUnloadBox.lines)
+            .selectinload(MarketplaceUnloadBoxLine.product),
         )
     )
     res = await session.execute(stmt)
@@ -103,6 +139,8 @@ async def add_line(
     prod = await session.get(Product, product_id)
     if prod is None or prod.tenant_id != tenant_id:
         raise MarketplaceUnloadError("product_not_found")
+    if req.seller_id is not None and prod.seller_id != req.seller_id:
+        raise MarketplaceUnloadError("product_seller_mismatch")
     line = MarketplaceUnloadLine(
         request_id=req.id,
         product_id=product_id,
@@ -128,6 +166,11 @@ async def submit_request(
         raise MarketplaceUnloadError("not_found")
     if req.status != STATUS_DRAFT:
         raise MarketplaceUnloadError("bad_status")
+    if req.wb_mp_warehouse_id is None:
+        raise MarketplaceUnloadError("wb_mp_warehouse_required")
+    mpw = await get_cached_mp_warehouse(session, tenant_id, int(req.wb_mp_warehouse_id))
+    if mpw is None:
+        raise MarketplaceUnloadError("wb_mp_warehouse_unknown")
     req.status = STATUS_CONFIRMED
     await session.commit()
     r2 = await get_request(session, tenant_id, request_id)

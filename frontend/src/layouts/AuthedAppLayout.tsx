@@ -199,7 +199,7 @@ export function AuthedAppLayout({
               to={`${base}/supplies-shipments`}
               data-testid="nav-ff-supplies-shipments"
             >
-              <ListItemText primary="Поставки и загрузки" />
+              <ListItemText primary="Поставки и отгрузки" />
             </ListItemButton>
             <ListItemButton component={NavLink} to="/app/catalog" data-testid="nav-ff-warehouses">
               <ListItemText primary="Склады и ячейки" />

@@ -6,7 +6,7 @@ from datetime import datetime
 from typing import Annotated
 
 import httpx
-from fastapi import APIRouter, Depends, HTTPException, Request, status
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Request, status
 from pydantic import BaseModel, Field
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -302,6 +302,7 @@ async def patch_seller_wildberries_tokens(
     request: Request,
     user: Annotated[User, Depends(require_fulfillment_admin)],
     session: Annotated[AsyncSession, Depends(get_db)],
+    background_tasks: BackgroundTasks,
 ) -> WildberriesSellerTokensOut:
     """Частичное обновление: только переданные ключи JSON (null = удалить токен)."""
     try:
@@ -332,6 +333,15 @@ async def patch_seller_wildberries_tokens(
     st = await get_public_token_status(session, user.tenant_id, seller_id)
     assert st is not None
     has_c, has_s, upd = st
+    if (
+        supplies is not SKIP
+        and isinstance(supplies, str)
+        and supplies.strip()
+        and has_s
+    ):
+        from app.services.wb_mp_warehouse_service import run_wb_mp_warehouses_sync_task
+
+        background_tasks.add_task(run_wb_mp_warehouses_sync_task, user.tenant_id, seller_id)
     return WildberriesSellerTokensOut(
         seller_id=str(seller_id),
         has_content_token=has_c,

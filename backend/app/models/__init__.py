@@ -7,7 +7,12 @@ from app.models.inbound_intake import InboundIntakeLine, InboundIntakeRequest
 from app.models.inventory_balance import InventoryBalance
 from app.models.inventory_movement import InventoryMovement
 from app.models.inventory_reservation import InventoryReservation
-from app.models.marketplace_unload import MarketplaceUnloadLine, MarketplaceUnloadRequest
+from app.models.marketplace_unload import (
+    MarketplaceUnloadBox,
+    MarketplaceUnloadBoxLine,
+    MarketplaceUnloadLine,
+    MarketplaceUnloadRequest,
+)
 from app.models.outbound_shipment import OutboundShipmentLine, OutboundShipmentRequest
 from app.models.product import Product
 from app.models.seller import Seller
@@ -16,6 +21,7 @@ from app.models.seller_wildberries_imported_card import SellerWildberriesImporte
 from app.models.seller_wildberries_imported_supply import SellerWildberriesImportedSupply
 from app.models.storage_location import StorageLocation
 from app.models.tenant import Tenant
+from app.models.tenant_wb_mp_warehouse import TenantWbMpWarehouse
 from app.models.user import User
 from app.models.warehouse import Warehouse
 
@@ -29,6 +35,8 @@ __all__ = [
     "InventoryBalance",
     "InventoryMovement",
     "InventoryReservation",
+    "MarketplaceUnloadBox",
+    "MarketplaceUnloadBoxLine",
     "MarketplaceUnloadLine",
     "MarketplaceUnloadRequest",
     "OutboundShipmentLine",
@@ -40,6 +48,7 @@ __all__ = [
     "SellerWildberriesImportedSupply",
     "StorageLocation",
     "Tenant",
+    "TenantWbMpWarehouse",
     "User",
     "Warehouse",
 ]

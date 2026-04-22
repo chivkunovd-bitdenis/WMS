@@ -308,7 +308,7 @@ This document describes **what is already built** from a user and process perspe
 **After login**
 
 - User sees **section navigation** (anchors) to jump to **catalog** vs **operations** on the long single-page layout.
-- **Fulfillment admin** shell uses **sidebar + main content**: the default landing shows a **tenant dashboard** with a **week-oriented planning view** (planned inbound arrivals and planned outbound shipments in the “scheduled” business sense) plus **shortlists** of recent inbound/outbound documents; navigation includes **“Supplies and Load”** (Russian: *Поставки и загрузки*) that opens the unified list (plus stub actions for marketplace **download** unload and **diverge** discrepancy act) and the same document detail flows as in **operations** (per product scope).
+- **Fulfillment admin** shell uses **sidebar + main content**: the default landing shows a **tenant dashboard** with a **week-oriented planning view** (planned **seller supplies** to the FC and planned **shipments** in the “scheduled” business sense) plus **shortlists** of recent documents; navigation includes **“Supplies and shipments”** (Russian: *Поставки и отгрузки*) that opens the unified list (including **FC→marketplace shipment** documents and **diverge** discrepancy acts). Russian product terms **поставка** vs **отгрузка на МП** are defined in `docs/MVP_DECISIONS_RU.md` (terminology section).
 - While profile (`/auth/me`) is loading, user sees a **loading** state instead of overlapping login/register forms.
 
 ---

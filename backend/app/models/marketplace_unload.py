@@ -17,7 +17,7 @@ if TYPE_CHECKING:
 
 
 class MarketplaceUnloadRequest(Base):
-    """Выгрузка на склад маркетплейса (product term: download) — заголовок документа."""
+    """Отгрузка ФФ на маркетплейс (RU: «отгрузка»; не «выгрузка»/download в UI)."""
 
     __tablename__ = "marketplace_unload_requests"
 
@@ -38,6 +38,7 @@ class MarketplaceUnloadRequest(Base):
         nullable=True,
         index=True,
     )
+    wb_mp_warehouse_id: Mapped[int | None] = mapped_column(Integer, nullable=True, index=True)
     status: Mapped[str] = mapped_column(String(32), nullable=False)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), nullable=False
@@ -48,6 +49,11 @@ class MarketplaceUnloadRequest(Base):
     seller: Mapped[Seller | None] = relationship("Seller")
     lines: Mapped[list[MarketplaceUnloadLine]] = relationship(
         "MarketplaceUnloadLine",
+        back_populates="request",
+        cascade="all, delete-orphan",
+    )
+    boxes: Mapped[list[MarketplaceUnloadBox]] = relationship(
+        "MarketplaceUnloadBox",
         back_populates="request",
         cascade="all, delete-orphan",
     )
@@ -85,4 +91,66 @@ class MarketplaceUnloadLine(Base):
         "MarketplaceUnloadRequest",
         back_populates="lines",
     )
+    product: Mapped[Product] = relationship("Product")
+
+
+class MarketplaceUnloadBox(Base):
+    """Physical box for MP unload: dimension preset; closed_at when box is closed."""
+
+    __tablename__ = "marketplace_unload_boxes"
+
+    id: Mapped[uuid.UUID] = mapped_column(
+        Uuid(as_uuid=True), primary_key=True, default=uuid.uuid4
+    )
+    request_id: Mapped[uuid.UUID] = mapped_column(
+        Uuid(as_uuid=True),
+        ForeignKey("marketplace_unload_requests.id", ondelete="CASCADE"),
+        index=True,
+    )
+    box_preset: Mapped[str] = mapped_column(String(32), nullable=False)
+    closed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
+    )
+
+    request: Mapped[MarketplaceUnloadRequest] = relationship(
+        "MarketplaceUnloadRequest",
+        back_populates="boxes",
+    )
+    lines: Mapped[list[MarketplaceUnloadBoxLine]] = relationship(
+        "MarketplaceUnloadBoxLine",
+        back_populates="box",
+        cascade="all, delete-orphan",
+    )
+
+
+class MarketplaceUnloadBoxLine(Base):
+    __tablename__ = "marketplace_unload_box_lines"
+    __table_args__ = (
+        UniqueConstraint(
+            "box_id",
+            "product_id",
+            name="uq_marketplace_unload_box_line_box_product",
+        ),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(
+        Uuid(as_uuid=True), primary_key=True, default=uuid.uuid4
+    )
+    box_id: Mapped[uuid.UUID] = mapped_column(
+        Uuid(as_uuid=True),
+        ForeignKey("marketplace_unload_boxes.id", ondelete="CASCADE"),
+        index=True,
+    )
+    product_id: Mapped[uuid.UUID] = mapped_column(
+        Uuid(as_uuid=True),
+        ForeignKey("products.id", ondelete="CASCADE"),
+        index=True,
+    )
+    quantity: Mapped[int] = mapped_column(Integer, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
+    )
+
+    box: Mapped[MarketplaceUnloadBox] = relationship("MarketplaceUnloadBox", back_populates="lines")
     product: Mapped[Product] = relationship("Product")

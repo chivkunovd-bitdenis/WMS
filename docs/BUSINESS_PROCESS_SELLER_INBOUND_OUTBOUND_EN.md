@@ -30,11 +30,11 @@ It is written as **what people do and see** (UX/business rules), not an API spec
   - Packing: boxes count + distribution of shipped quantities by box.
   - Picking confirmation: barcode scanning or manual entry.
 
-### Fulfillment UI vocabulary: “Supply and Load”
+### Fulfillment UI vocabulary: “Supplies and shipments” (RU: *Поставки и отгрузки*)
 
-The fulfillment portal groups **seller supplies** (inbound into the FC) and **load / shipment work** toward the marketplace under the section **Supply and Load** (Russian UI: *Поставки и загрузки*). Two additional document types are planned next to the existing unified list:
+The fulfillment portal groups **seller supplies** (inbound into the FC — Russian **поставка**) and **fulfillment shipments to the marketplace** (Russian **отгрузка на МП**, FC → MP) under one navigation section (Russian UI: *Поставки и отгрузки*). Two additional document types sit next to the unified list:
 
-- **Download** (working product English term): fulfillment **unloads** goods **to the marketplace** (e.g. FC → marketplace warehouse). A dedicated document will be created, lines filled according to seller needs, and progress tracked by **status**. This is **not** the same object as seller→FC inbound; implementation is pending.
+- **Shipment to marketplace** (RU **отгрузка на МП**): fulfillment ships goods **to the marketplace**; tracked as its own document with lines and **status**. **Not** the same as seller→FC **supply**; do **not** use the Russian word «выгрузка» or the label *download* for this meaning in product copy.
 - **Diverge** (working product English term): a **discrepancy act** when plan ≠ fact (or related cases), as a first-class document beyond the inbound `has_discrepancy` flag. Implementation is pending.
 
 ## Inbound lifecycle (what people do and see)
