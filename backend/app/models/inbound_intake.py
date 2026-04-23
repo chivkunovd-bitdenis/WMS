@@ -64,6 +64,9 @@ class InboundIntakeRequest(Base):
     posted_at: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True), nullable=True
     )
+    distribution_completed_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
     planned_delivery_date: Mapped[date | None] = mapped_column(Date, nullable=True)
     has_discrepancy: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
 
@@ -74,6 +77,11 @@ class InboundIntakeRequest(Base):
     seller: Mapped[Seller | None] = relationship("Seller")
     lines: Mapped[list[InboundIntakeLine]] = relationship(
         "InboundIntakeLine",
+        back_populates="request",
+        cascade="all, delete-orphan",
+    )
+    distribution_lines: Mapped[list[InboundIntakeDistributionLine]] = relationship(
+        "InboundIntakeDistributionLine",
         back_populates="request",
         cascade="all, delete-orphan",
     )
@@ -126,3 +134,36 @@ class InboundIntakeLine(Base):
         "InventoryMovement",
         back_populates="inbound_line",
     )
+
+
+class InboundIntakeDistributionLine(Base):
+    __tablename__ = "inbound_intake_distribution_lines"
+
+    id: Mapped[uuid.UUID] = mapped_column(
+        Uuid(as_uuid=True), primary_key=True, default=uuid.uuid4
+    )
+    request_id: Mapped[uuid.UUID] = mapped_column(
+        Uuid(as_uuid=True),
+        ForeignKey("inbound_intake_requests.id", ondelete="CASCADE"),
+        index=True,
+    )
+    product_id: Mapped[uuid.UUID] = mapped_column(
+        Uuid(as_uuid=True),
+        ForeignKey("products.id", ondelete="CASCADE"),
+        index=True,
+    )
+    storage_location_id: Mapped[uuid.UUID] = mapped_column(
+        Uuid(as_uuid=True),
+        ForeignKey("storage_locations.id", ondelete="CASCADE"),
+        index=True,
+    )
+    quantity: Mapped[int] = mapped_column(Integer, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
+    )
+
+    request: Mapped[InboundIntakeRequest] = relationship(
+        "InboundIntakeRequest", back_populates="distribution_lines"
+    )
+    product: Mapped[Product] = relationship("Product")
+    storage_location: Mapped[StorageLocation] = relationship("StorageLocation")

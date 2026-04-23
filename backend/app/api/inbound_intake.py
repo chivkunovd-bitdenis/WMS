@@ -11,9 +11,10 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.api.deps import get_current_user, require_fulfillment_admin, seller_line_product_scope
 from app.core.roles import FULFILLMENT_ADMIN, FULFILLMENT_SELLER
 from app.db.session import get_db
-from app.models.inbound_intake import InboundIntakeLine
+from app.models.inbound_intake import InboundIntakeDistributionLine, InboundIntakeLine
 from app.models.inventory_movement import InventoryMovement
 from app.models.product import Product
+from app.models.storage_location import StorageLocation
 from app.models.user import User
 from app.services import inbound_intake_service as svc
 from app.services import inventory_service as inv_svc
@@ -85,6 +86,7 @@ class InboundIntakeRequestOut(BaseModel):
     status: str
     planned_delivery_date: str | None = None
     has_discrepancy: bool = False
+    distribution_completed_at: str | None = None
     lines: list[InboundIntakeLineOut]
 
 
@@ -126,6 +128,34 @@ def _movement_out(m: InventoryMovement) -> InventoryMovementOut:
         if m.inbound_intake_line_id
         else None,
         created_at=m.created_at.isoformat(),
+    )
+
+
+class InboundDistributionLineIn(BaseModel):
+    product_id: uuid.UUID
+    storage_location_id: uuid.UUID
+    quantity: int = Field(ge=1, le=1_000_000_000)
+
+
+class InboundDistributionLineOut(BaseModel):
+    id: str
+    product_id: str
+    storage_location_id: str
+    storage_location_code: str
+    quantity: int
+    created_at: str
+
+
+def _dist_out(
+    row: InboundIntakeDistributionLine, loc: StorageLocation
+) -> InboundDistributionLineOut:
+    return InboundDistributionLineOut(
+        id=str(row.id),
+        product_id=str(row.product_id),
+        storage_location_id=str(row.storage_location_id),
+        storage_location_code=loc.code,
+        quantity=row.quantity,
+        created_at=row.created_at.isoformat(),
     )
 
 
@@ -206,6 +236,9 @@ async def create_inbound_request(
         if r.planned_delivery_date is not None
         else None,
         has_discrepancy=bool(getattr(r, "has_discrepancy", False)),
+        distribution_completed_at=r.distribution_completed_at.isoformat()
+        if r.distribution_completed_at is not None
+        else None,
         lines=[],
     )
 
@@ -240,6 +273,9 @@ async def get_inbound_request(
         if r.planned_delivery_date is not None
         else None,
         has_discrepancy=bool(getattr(r, "has_discrepancy", False)),
+        distribution_completed_at=r.distribution_completed_at.isoformat()
+        if r.distribution_completed_at is not None
+        else None,
         lines=lines_out,
     )
 
@@ -294,6 +330,9 @@ async def patch_inbound_request_planned(
         if r2.planned_delivery_date is not None
         else None,
         has_discrepancy=bool(getattr(r2, "has_discrepancy", False)),
+        distribution_completed_at=r2.distribution_completed_at.isoformat()
+        if r2.distribution_completed_at is not None
+        else None,
         lines=[_line_out_from_orm(ln, ln.product) for ln in r2.lines],
     )
 
@@ -332,6 +371,9 @@ async def primary_accept_inbound_request(
         if r2.planned_delivery_date is not None
         else None,
         has_discrepancy=bool(getattr(r2, "has_discrepancy", False)),
+        distribution_completed_at=r2.distribution_completed_at.isoformat()
+        if r2.distribution_completed_at is not None
+        else None,
         lines=[_line_out_from_orm(ln, ln.product) for ln in r2.lines],
     )
 
@@ -426,6 +468,9 @@ async def complete_inbound_verification(
         if r2.planned_delivery_date is not None
         else None,
         has_discrepancy=bool(getattr(r2, "has_discrepancy", False)),
+        distribution_completed_at=r2.distribution_completed_at.isoformat()
+        if r2.distribution_completed_at is not None
+        else None,
         lines=[_line_out_from_orm(ln, ln.product) for ln in r2.lines],
     )
 
@@ -776,6 +821,9 @@ async def receive_inbound_line(
         if r2.planned_delivery_date is not None
         else None,
         has_discrepancy=bool(getattr(r2, "has_discrepancy", False)),
+        distribution_completed_at=r2.distribution_completed_at.isoformat()
+        if r2.distribution_completed_at is not None
+        else None,
         lines=[_line_out_from_orm(ln, ln.product) for ln in r2.lines],
     )
 
@@ -830,6 +878,9 @@ async def submit_inbound_request(
         if r2.planned_delivery_date is not None
         else None,
         has_discrepancy=bool(getattr(r2, "has_discrepancy", False)),
+        distribution_completed_at=r2.distribution_completed_at.isoformat()
+        if r2.distribution_completed_at is not None
+        else None,
         lines=[_line_out_from_orm(ln, ln.product) for ln in r2.lines],
     )
 
@@ -893,5 +944,137 @@ async def post_inbound_request(
         if r2.planned_delivery_date is not None
         else None,
         has_discrepancy=bool(getattr(r2, "has_discrepancy", False)),
+        distribution_completed_at=r2.distribution_completed_at.isoformat()
+        if r2.distribution_completed_at is not None
+        else None,
+        lines=[_line_out_from_orm(ln, ln.product) for ln in r2.lines],
+    )
+
+
+@router.get(
+    "/{request_id}/distribution-lines",
+    response_model=list[InboundDistributionLineOut],
+)
+async def list_distribution_lines(
+    request_id: uuid.UUID,
+    user: Annotated[User, Depends(require_fulfillment_admin)],
+    session: Annotated[AsyncSession, Depends(get_db)],
+) -> list[InboundDistributionLineOut]:
+    try:
+        rows = await svc.list_distribution_lines(session, user.tenant_id, request_id)
+    except InboundIntakeError as exc:
+        if exc.code == "request_not_found":
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="request_not_found",
+            ) from None
+        raise
+    out: list[InboundDistributionLineOut] = []
+    for r in rows:
+        loc = await session.get(StorageLocation, r.storage_location_id)
+        if loc is None:
+            continue
+        out.append(_dist_out(r, loc))
+    return out
+
+
+@router.put(
+    "/{request_id}/distribution-lines",
+    response_model=list[InboundDistributionLineOut],
+)
+async def replace_distribution_lines(
+    request_id: uuid.UUID,
+    body: list[InboundDistributionLineIn],
+    user: Annotated[User, Depends(require_fulfillment_admin)],
+    session: Annotated[AsyncSession, Depends(get_db)],
+) -> list[InboundDistributionLineOut]:
+    try:
+        rows = await svc.replace_distribution_lines(
+            session,
+            user.tenant_id,
+            request_id,
+            lines=[(x.product_id, x.storage_location_id, x.quantity) for x in body],
+        )
+    except InboundIntakeError as exc:
+        if exc.code == "request_not_found":
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="request_not_found",
+            ) from None
+        if exc.code == "not_distributable":
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail="not_distributable",
+            ) from None
+        if exc.code == "distribution_completed":
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail="distribution_completed",
+            ) from None
+        if exc.code in ("invalid_qty", "qty_exceeds_accepted", "product_not_accepted"):
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+                detail=exc.code,
+            ) from None
+        if exc.code == "product_not_on_request":
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+                detail="product_not_on_request",
+            ) from None
+        if exc.code == "location_not_found":
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="location_not_found",
+            ) from None
+        raise
+    out: list[InboundDistributionLineOut] = []
+    for r in rows:
+        loc = await session.get(StorageLocation, r.storage_location_id)
+        if loc is None:
+            continue
+        out.append(_dist_out(r, loc))
+    return out
+
+
+@router.post(
+    "/{request_id}/distribution-complete",
+    response_model=InboundIntakeRequestOut,
+)
+async def complete_distribution(
+    request_id: uuid.UUID,
+    user: Annotated[User, Depends(require_fulfillment_admin)],
+    session: Annotated[AsyncSession, Depends(get_db)],
+) -> InboundIntakeRequestOut:
+    try:
+        await svc.complete_distribution(session, user.tenant_id, request_id)
+    except InboundIntakeError as exc:
+        if exc.code == "request_not_found":
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="request_not_found",
+            ) from None
+        if exc.code == "not_distributable":
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail="not_distributable",
+            ) from None
+        raise
+    r2 = await svc.get_request(session, user.tenant_id, request_id)
+    if r2 is None:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="request_missing",
+        )
+    return InboundIntakeRequestOut(
+        id=str(r2.id),
+        warehouse_id=str(r2.warehouse_id),
+        status=r2.status,
+        planned_delivery_date=r2.planned_delivery_date.isoformat()
+        if r2.planned_delivery_date is not None
+        else None,
+        has_discrepancy=bool(getattr(r2, "has_discrepancy", False)),
+        distribution_completed_at=r2.distribution_completed_at.isoformat()
+        if r2.distribution_completed_at is not None
+        else None,
         lines=[_line_out_from_orm(ln, ln.product) for ln in r2.lines],
     )

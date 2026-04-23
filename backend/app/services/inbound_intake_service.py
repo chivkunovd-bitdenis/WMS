@@ -3,12 +3,17 @@ from __future__ import annotations
 import uuid
 from datetime import UTC, date, datetime
 
+import sqlalchemy as sa
 from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
-from app.models.inbound_intake import InboundIntakeLine, InboundIntakeRequest
+from app.models.inbound_intake import (
+    InboundIntakeDistributionLine,
+    InboundIntakeLine,
+    InboundIntakeRequest,
+)
 from app.models.inventory_movement import MOVEMENT_TYPE_INBOUND_INTAKE
 from app.models.product import Product
 from app.models.seller import Seller
@@ -484,6 +489,107 @@ async def post_all_remaining(
         )
         line.posted_qty += rem
     _maybe_complete_request(req)
+    await session.commit()
+    await session.refresh(req)
+    return req
+
+
+def _accepted_qty_for_line(line: InboundIntakeLine) -> int:
+    # Если факт пересчитан — он приоритетен; иначе используем план.
+    return line.actual_qty if line.actual_qty is not None else line.expected_qty
+
+
+async def list_distribution_lines(
+    session: AsyncSession,
+    tenant_id: uuid.UUID,
+    request_id: uuid.UUID,
+) -> list[InboundIntakeDistributionLine]:
+    req = await get_request(session, tenant_id, request_id)
+    if req is None:
+        raise InboundIntakeError("request_not_found")
+    stmt = (
+        select(InboundIntakeDistributionLine)
+        .where(InboundIntakeDistributionLine.request_id == request_id)
+        .order_by(InboundIntakeDistributionLine.created_at, InboundIntakeDistributionLine.id)
+    )
+    res = await session.execute(stmt)
+    return list(res.scalars().all())
+
+
+async def replace_distribution_lines(
+    session: AsyncSession,
+    tenant_id: uuid.UUID,
+    request_id: uuid.UUID,
+    *,
+    lines: list[tuple[uuid.UUID, uuid.UUID, int]],
+) -> list[InboundIntakeDistributionLine]:
+    """
+    Полностью заменяет строки распределения (черновик).
+
+    lines: список (product_id, storage_location_id, quantity).
+    """
+    req = await get_request(session, tenant_id, request_id)
+    if req is None:
+        raise InboundIntakeError("request_not_found")
+    if req.status not in (STATUS_PRIMARY_ACCEPTED, STATUS_VERIFYING, STATUS_VERIFIED):
+        raise InboundIntakeError("not_distributable")
+    if req.distribution_completed_at is not None:
+        raise InboundIntakeError("distribution_completed")
+
+    accepted_by_product: dict[uuid.UUID, int] = {}
+    for ln in req.lines:
+        accepted_by_product[ln.product_id] = _accepted_qty_for_line(ln)
+
+    sum_by_product: dict[uuid.UUID, int] = {}
+    for product_id, storage_location_id, qty in lines:
+        if qty < 1:
+            raise InboundIntakeError("invalid_qty")
+        accepted = accepted_by_product.get(product_id)
+        if accepted is None:
+            raise InboundIntakeError("product_not_on_request")
+        if accepted <= 0:
+            raise InboundIntakeError("product_not_accepted")
+        loc = await get_storage_location_in_warehouse(
+            session, tenant_id, req.warehouse_id, storage_location_id
+        )
+        if loc is None:
+            raise InboundIntakeError("location_not_found")
+        next_sum = sum_by_product.get(product_id, 0) + qty
+        if next_sum > accepted:
+            raise InboundIntakeError("qty_exceeds_accepted")
+        sum_by_product[product_id] = next_sum
+
+    await session.execute(
+        sa.delete(InboundIntakeDistributionLine).where(
+            InboundIntakeDistributionLine.request_id == request_id
+        )
+    )
+    for product_id, storage_location_id, qty in lines:
+        session.add(
+            InboundIntakeDistributionLine(
+                request_id=request_id,
+                product_id=product_id,
+                storage_location_id=storage_location_id,
+                quantity=qty,
+            )
+        )
+    await session.commit()
+    return await list_distribution_lines(session, tenant_id, request_id)
+
+
+async def complete_distribution(
+    session: AsyncSession,
+    tenant_id: uuid.UUID,
+    request_id: uuid.UUID,
+) -> InboundIntakeRequest:
+    req = await get_request(session, tenant_id, request_id)
+    if req is None:
+        raise InboundIntakeError("request_not_found")
+    if req.status not in (STATUS_PRIMARY_ACCEPTED, STATUS_VERIFYING, STATUS_VERIFIED):
+        raise InboundIntakeError("not_distributable")
+    if req.distribution_completed_at is not None:
+        return req
+    req.distribution_completed_at = datetime.now(UTC)
     await session.commit()
     await session.refresh(req)
     return req

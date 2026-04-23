@@ -31,9 +31,10 @@ import {
   type FfMarketplaceUnloadSummary,
 } from './screens/ff/FfSuppliesShipmentsPage'
 import { FfPlaceholderPage } from './screens/ff/FfPlaceholderPage'
+import { FfInboundRequestView } from './screens/ff/FfInboundRequestView'
 
 type WarehouseRow = { id: string; name: string; code: string }
-type LocationRow = { id: string; code: string; warehouse_id: string }
+type LocationRow = { id: string; code: string; warehouse_id: string; barcode: string }
 type ProductRow = {
   id: string
   name: string
@@ -2499,9 +2500,7 @@ export default function App() {
             setSelectedInboundId(null)
             setSelectedOutboundId(null)
           }}
-          maxWidth={false}
-          fullWidth
-          slotProps={{ paper: { sx: { width: 'min(1200px, 96vw)', maxHeight: '92vh' } } }}
+          fullScreen
           data-testid="ff-doc-dialog"
         >
           <MuiAppBar position="sticky" color="inherit" elevation={1}>
@@ -2524,34 +2523,24 @@ export default function App() {
               </MuiTypography>
             </MuiToolbar>
           </MuiAppBar>
-          <MuiBox sx={{ p: 2, overflow: 'auto', maxHeight: 'calc(92vh - 64px)' }}>
+          <MuiBox sx={{ p: 2, overflow: 'auto', height: 'calc(100vh - 64px)' }}>
             {ffDocModal === 'inbound' ? (
-              <InboundScreen
-                opsError={opsError}
-                opsBusy={opsBusy}
-                isFulfillmentAdmin={isFulfillmentAdmin}
-                isFulfillmentSeller={isFulfillmentSeller}
-                canEditInboundDraft={isFulfillmentAdmin}
-                warehouses={warehouses}
-                selectedWarehouseId={selectedWarehouseId}
-                products={products}
-                inboundSummaries={inboundSummaries}
-                selectedInboundId={selectedInboundId}
-                setSelectedInboundId={setSelectedInboundId}
-                inboundDetail={inboundDetail}
-                inboundRequestLocations={inboundRequestLocations}
-                inboundMovements={inboundMovements}
-                postedInventoryRows={postedInventoryRows}
-                onCreateInboundRequest={(e) => void onCreateInboundRequest(e)}
-                onAddInboundLine={(e) => void onAddInboundLine(e)}
-                onSubmitInboundRequest={() => void onSubmitInboundRequest()}
-                onPrimaryAcceptInboundRequest={() => void onPrimaryAcceptInboundRequest()}
-                onSetInboundLineActualQty={(e) => void onSetInboundLineActualQty(e)}
-                onCompleteInboundVerification={() => void onCompleteInboundVerification()}
-                onSaveInboundLineStorage={(e) => void onSaveInboundLineStorage(e)}
-                onReceiveInboundLine={(e) => void onReceiveInboundLine(e)}
-                onPostInboundRequest={() => void onPostInboundRequest()}
-              />
+              token && selectedInboundId ? (
+                <FfInboundRequestView
+                  token={token}
+                  requestId={selectedInboundId}
+                  isFulfillmentAdmin={isFulfillmentAdmin}
+                  onClose={() => {
+                    setFfDocModal(null)
+                    setSelectedInboundId(null)
+                    setSelectedOutboundId(null)
+                  }}
+                />
+              ) : (
+                <MuiTypography variant="body2" color="text.secondary">
+                  Нет выбранной заявки.
+                </MuiTypography>
+              )
             ) : ffDocModal === 'outbound' ? (
               <OutboundScreen
                 opsError={opsError}
