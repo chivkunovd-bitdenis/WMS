@@ -1058,6 +1058,16 @@ async def complete_distribution(
                 status_code=status.HTTP_409_CONFLICT,
                 detail="not_distributable",
             ) from None
+        if exc.code in (
+            "invalid_qty",
+            "qty_exceeds_accepted",
+            "product_not_on_request",
+            "product_not_accepted",
+        ):
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+                detail=exc.code,
+            ) from None
         raise
     r2 = await svc.get_request(session, user.tenant_id, request_id)
     if r2 is None:

@@ -590,6 +590,33 @@ async def complete_distribution(
         raise InboundIntakeError("not_distributable")
     if req.distribution_completed_at is not None:
         return req
+
+    # Safety net: validate saved distribution lines against accepted quantities
+    # right before locking. Even though PUT validates, this protects against races
+    # and inconsistent states.
+    accepted_by_product: dict[uuid.UUID, int] = {}
+    for ln in req.lines:
+        accepted_by_product[ln.product_id] = _accepted_qty_for_line(ln)
+
+    stmt = select(InboundIntakeDistributionLine).where(
+        InboundIntakeDistributionLine.request_id == request_id
+    )
+    res = await session.execute(stmt)
+    rows = list(res.scalars().all())
+
+    sum_by_product: dict[uuid.UUID, int] = {}
+    for r in rows:
+        if r.quantity < 1:
+            raise InboundIntakeError("invalid_qty")
+        accepted = accepted_by_product.get(r.product_id)
+        if accepted is None:
+            raise InboundIntakeError("product_not_on_request")
+        if accepted <= 0:
+            raise InboundIntakeError("product_not_accepted")
+        sum_by_product[r.product_id] = sum_by_product.get(r.product_id, 0) + r.quantity
+        if sum_by_product[r.product_id] > accepted:
+            raise InboundIntakeError("qty_exceeds_accepted")
+
     req.distribution_completed_at = datetime.now(UTC)
     await session.commit()
     await session.refresh(req)
