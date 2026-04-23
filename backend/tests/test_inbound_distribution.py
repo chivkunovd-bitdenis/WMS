@@ -70,6 +70,19 @@ async def test_inbound_distribution_lines_validate_limits_and_lock(
     assert prim.status_code == 200, prim.text
     assert prim.json()["status"] == "primary_accepted"
 
+    got = await async_client.get(f"{base}/{rid}", headers=ah)
+    assert got.status_code == 200, got.text
+    line_id = got.json()["lines"][0]["id"]
+    act = await async_client.patch(
+        f"{base}/{rid}/lines/{line_id}/actual",
+        headers=ah,
+        json={"actual_qty": 5},
+    )
+    assert act.status_code == 200, act.text
+    ver = await async_client.post(f"{base}/{rid}/verify", headers=ah)
+    assert ver.status_code == 200, ver.text
+    assert ver.json()["status"] == "verified"
+
     too_much = await async_client.put(
         f"{base}/{rid}/distribution-lines",
         headers=ah,

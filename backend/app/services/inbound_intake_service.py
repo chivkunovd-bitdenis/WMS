@@ -531,7 +531,8 @@ async def replace_distribution_lines(
     req = await get_request(session, tenant_id, request_id)
     if req is None:
         raise InboundIntakeError("request_not_found")
-    if req.status not in (STATUS_PRIMARY_ACCEPTED, STATUS_VERIFYING, STATUS_VERIFIED):
+    # Распределение по ячейкам доступно только после завершения пересчёта (verified).
+    if req.status != STATUS_VERIFIED:
         raise InboundIntakeError("not_distributable")
     if req.distribution_completed_at is not None:
         raise InboundIntakeError("distribution_completed")
@@ -585,7 +586,7 @@ async def complete_distribution(
     req = await get_request(session, tenant_id, request_id)
     if req is None:
         raise InboundIntakeError("request_not_found")
-    if req.status not in (STATUS_PRIMARY_ACCEPTED, STATUS_VERIFYING, STATUS_VERIFIED):
+    if req.status != STATUS_VERIFIED:
         raise InboundIntakeError("not_distributable")
     if req.distribution_completed_at is not None:
         return req

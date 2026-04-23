@@ -247,7 +247,7 @@ export function FfInboundRequestView({ token, requestId, isFulfillmentAdmin, onC
       setDistLines([])
       return
     }
-    if (!['primary_accepted', 'verifying', 'verified'].includes(detail.status)) {
+    if (!['verified'].includes(detail.status)) {
       setDistOpen(false)
       setDistLines([])
       return
@@ -601,6 +601,7 @@ export function FfInboundRequestView({ token, requestId, isFulfillmentAdmin, onC
         return
       }
       await loadDetail()
+      setDistOpen(true)
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Не удалось завершить пересчёт.')
     } finally {
@@ -796,13 +797,15 @@ export function FfInboundRequestView({ token, requestId, isFulfillmentAdmin, onC
                 </Paper>
               ) : null}
 
-              {detail.status === 'primary_accepted' || detail.status === 'verifying' ? (
+              {detail.status === 'primary_accepted' || detail.status === 'verifying' || detail.status === 'verified' ? (
                 <Paper variant="outlined" sx={{ p: 2 }} data-testid="ff-inbound-admin-verify">
                   <Typography variant="subtitle2" sx={{ fontWeight: 800, mb: 1 }}>
                     Пересчёт (факт)
                   </Typography>
                   <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
-                    Укажи факт по строкам, затем заверши пересчёт.
+                    {detail.status === 'verified'
+                      ? 'Факт зафиксирован. Данные доступны только для просмотра.'
+                      : 'Укажи факт по строкам, затем заверши пересчёт.'}
                   </Typography>
                   <Stack spacing={1.25} sx={{ mb: 2 }}>
                     {detail.lines.map((ln) => (
@@ -819,7 +822,7 @@ export function FfInboundRequestView({ token, requestId, isFulfillmentAdmin, onC
                           type="number"
                           size="small"
                           label="Факт"
-                          disabled={busy}
+                          disabled={busy || detail.status === 'verified'}
                           value={actualDraftByLineId[ln.id] ?? String(ln.actual_qty ?? ln.expected_qty)}
                           onChange={(e) =>
                             setActualDraftByLineId((prev) => ({ ...prev, [ln.id]: e.target.value }))
@@ -836,18 +839,20 @@ export function FfInboundRequestView({ token, requestId, isFulfillmentAdmin, onC
                       </Stack>
                     ))}
                   </Stack>
-                  <Button
-                    variant="contained"
-                    disabled={busy}
-                    onClick={() => void completeVerify()}
-                    data-testid="ff-inbound-verify-complete"
-                  >
-                    Завершить пересчёт
-                  </Button>
+                  {detail.status !== 'verified' ? (
+                    <Button
+                      variant="contained"
+                      disabled={busy}
+                      onClick={() => void completeVerify()}
+                      data-testid="ff-inbound-verify-complete"
+                    >
+                      Завершить пересчёт
+                    </Button>
+                  ) : null}
                 </Paper>
               ) : null}
 
-              {detail.status === 'primary_accepted' ? (
+              {detail.status === 'verified' ? (
                 <Paper variant="outlined" sx={{ p: 2 }} data-testid="ff-inbound-admin-distribution">
                   <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1} sx={{ alignItems: { sm: 'center' } }}>
                     <Box sx={{ flexGrow: 1 }}>
@@ -855,7 +860,7 @@ export function FfInboundRequestView({ token, requestId, isFulfillmentAdmin, onC
                         Распределение по ячейкам
                       </Typography>
                       <Typography variant="body2" color="text.secondary">
-                        Доступно после статуса «Принято на складе». Нераспределённый остаток попадёт в «Без ячейки».
+                        Доступно после завершения пересчёта. Нераспределённый остаток попадёт в «Без ячейки».
                       </Typography>
                     </Box>
                     <Button

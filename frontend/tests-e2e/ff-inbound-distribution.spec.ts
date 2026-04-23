@@ -65,6 +65,16 @@ test('ff inbound distribution: partial, leftover without cell, complete -> reado
   expect(sub.ok()).toBeTruthy();
   const prim = await page.request.post(`${base}/${rid}/primary-accept`, { headers: h });
   expect(prim.ok()).toBeTruthy();
+  const got = await page.request.get(`${base}/${rid}`, { headers: h });
+  expect(got.ok()).toBeTruthy();
+  const lineId = ((await got.json()) as { lines: { id: string }[] }).lines[0]!.id;
+  const act = await page.request.patch(`${base}/${rid}/lines/${lineId}/actual`, {
+    headers: { ...h, 'Content-Type': 'application/json' },
+    data: { actual_qty: 5 },
+  });
+  expect(act.ok()).toBeTruthy();
+  const ver = await page.request.post(`${base}/${rid}/verify`, { headers: h });
+  expect(ver.ok()).toBeTruthy();
 
   await page.goto('/app/ff/dashboard');
   await expect(page.getByTestId('ff-dashboard-inbound-block')).toBeVisible();
@@ -72,7 +82,7 @@ test('ff inbound distribution: partial, leftover without cell, complete -> reado
   await page.getByTestId('ff-dash-inbound-row').filter({ hasText: planned }).first().click();
   await expect(page.getByTestId('ff-doc-dialog')).toBeVisible();
   await expect(page.getByTestId('ff-inbound-doc-root')).toBeVisible();
-  await expect(page.getByTestId('ff-inbound-status-chip')).toContainText('Принято на складе');
+  await expect(page.getByTestId('ff-inbound-status-chip')).toContainText('Проверено на складе');
 
   await expect(page.getByTestId('ff-inbound-admin-distribution')).toBeVisible();
   await page.getByTestId('ff-inbound-distribute-open').click();
