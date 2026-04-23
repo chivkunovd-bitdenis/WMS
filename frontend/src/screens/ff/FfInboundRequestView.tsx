@@ -25,6 +25,7 @@ import {
   TextField,
   Typography,
 } from '@mui/material'
+import { alpha } from '@mui/material/styles'
 import { apiUrl } from '../../api'
 import { readApiErrorMessage } from '../../utils/readApiErrorMessage'
 
@@ -690,6 +691,8 @@ export function FfInboundRequestView({ token, requestId, isFulfillmentAdmin, onC
     }
   }
 
+  const actualEditable = isFulfillmentAdmin && (detail?.status === 'primary_accepted' || detail?.status === 'verifying')
+
   if (busy && !detail) {
     return (
       <Stack sx={{ py: 6, alignItems: 'center' }} data-testid="ff-inbound-doc-loading">
@@ -742,6 +745,28 @@ export function FfInboundRequestView({ token, requestId, isFulfillmentAdmin, onC
             />
             <Box sx={{ flexGrow: 1 }} />
 
+            {isFulfillmentAdmin && (detail.status === 'primary_accepted' || detail.status === 'verifying') ? (
+              <Button
+                variant="contained"
+                disabled={busy}
+                onClick={() => void completeVerify()}
+                data-testid="ff-inbound-verify-complete"
+              >
+                Завершить пересчёт
+              </Button>
+            ) : null}
+
+            {isFulfillmentAdmin && detail.status === 'verified' ? (
+              <Button
+                variant="contained"
+                disabled={distBusy || distributionCompleted}
+                onClick={() => setDistOpen(true)}
+                data-testid="ff-inbound-distribute-open"
+              >
+                Распределить по ячейкам
+              </Button>
+            ) : null}
+
             {detail.status === 'draft' ? (
               <>
                 <Button
@@ -789,7 +814,10 @@ export function FfInboundRequestView({ token, requestId, isFulfillmentAdmin, onC
                   <TableCell sx={{ width: 120, pr: 2 }}>Артикул WB</TableCell>
                   <TableCell sx={{ pl: 2 }}>Наименование</TableCell>
                   <TableCell align="right" sx={{ width: 120 }}>
-                    Кол-во
+                    Заявлено
+                  </TableCell>
+                  <TableCell align="right" sx={{ width: 150 }}>
+                    Принято
                   </TableCell>
                 </TableRow>
               </TableHead>
@@ -800,6 +828,8 @@ export function FfInboundRequestView({ token, requestId, isFulfillmentAdmin, onC
                   const barcode =
                     cat?.wb_primary_barcode ??
                     (cat?.wb_barcodes.length ? cat.wb_barcodes.join(', ') : '—')
+                  const actualIsSet = ln.actual_qty != null
+                  const hasDiscrepancy = actualIsSet && ln.actual_qty !== ln.expected_qty
                   return (
                     <TableRow
                       key={ln.id}
@@ -809,6 +839,12 @@ export function FfInboundRequestView({ token, requestId, isFulfillmentAdmin, onC
                         '& td': { px: 1.25 },
                         '& td:first-of-type': { pl: 1 },
                         '& td:last-of-type': { pr: 1 },
+                        ...(hasDiscrepancy
+                          ? {
+                              backgroundColor: (theme) =>
+                                alpha(theme.palette.error.main, 0.08),
+                            }
+                          : null),
                       }}
                     >
                       <TableCell>
@@ -841,12 +877,42 @@ export function FfInboundRequestView({ token, requestId, isFulfillmentAdmin, onC
                       <TableCell align="right" sx={{ minWidth: 120 }}>
                         {ln.expected_qty}
                       </TableCell>
+                      <TableCell align="right" sx={{ minWidth: 150 }}>
+                        <TextField
+                          type="number"
+                          size="small"
+                          value={
+                            actualDraftByLineId[ln.id] ??
+                            String(ln.actual_qty ?? '')
+                          }
+                          disabled={busy || !actualEditable}
+                          onChange={(e) =>
+                            setActualDraftByLineId((prev) => ({
+                              ...prev,
+                              [ln.id]: e.target.value,
+                            }))
+                          }
+                          onBlur={() => {
+                            const raw = actualDraftByLineId[ln.id]
+                            const v = Number(raw)
+                            if (!Number.isFinite(v) || v < 0) return
+                            if (ln.actual_qty != null && v === ln.actual_qty) return
+                            void setLineActual(ln.id, Math.floor(v))
+                          }}
+                          slotProps={{
+                            htmlInput: {
+                              min: 0,
+                              'data-testid': 'ff-inbound-line-actual',
+                            },
+                          }}
+                        />
+                      </TableCell>
                     </TableRow>
                   )
                 })}
                 {detail.lines.length === 0 ? (
                   <TableRow>
-                    <TableCell colSpan={7}>
+                    <TableCell colSpan={8}>
                       <Typography variant="body2" color="text.secondary">
                         Пока нет строк. Добавьте товары.
                       </Typography>
@@ -878,61 +944,6 @@ export function FfInboundRequestView({ token, requestId, isFulfillmentAdmin, onC
                 </Paper>
               ) : null}
 
-              {detail.status === 'primary_accepted' || detail.status === 'verifying' || detail.status === 'verified' ? (
-                <Paper variant="outlined" sx={{ p: 2 }} data-testid="ff-inbound-admin-verify">
-                  <Typography variant="subtitle2" sx={{ fontWeight: 800, mb: 1 }}>
-                    Пересчёт (факт)
-                  </Typography>
-                  <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
-                    {detail.status === 'verified'
-                      ? 'Факт зафиксирован. Данные доступны только для просмотра.'
-                      : 'Укажи факт по строкам, затем заверши пересчёт.'}
-                  </Typography>
-                  <Stack spacing={1.25} sx={{ mb: 2 }}>
-                    {detail.lines.map((ln) => (
-                      <Stack
-                        key={ln.id}
-                        direction={{ xs: 'column', sm: 'row' }}
-                        spacing={1}
-                        sx={{ alignItems: { sm: 'center' } }}
-                      >
-                        <Typography variant="body2" sx={{ minWidth: 220 }}>
-                          {ln.sku_code} · план {ln.expected_qty}
-                        </Typography>
-                        <TextField
-                          type="number"
-                          size="small"
-                          label="Факт"
-                          disabled={busy || detail.status === 'verified'}
-                          value={actualDraftByLineId[ln.id] ?? String(ln.actual_qty ?? ln.expected_qty)}
-                          onChange={(e) =>
-                            setActualDraftByLineId((prev) => ({ ...prev, [ln.id]: e.target.value }))
-                          }
-                          slotProps={{ htmlInput: { min: 0, 'data-testid': 'ff-inbound-line-actual' } }}
-                          onBlur={() => {
-                            const raw = actualDraftByLineId[ln.id]
-                            const v = Number(raw)
-                            if (!Number.isFinite(v) || v < 0) return
-                            if (ln.actual_qty != null && v === ln.actual_qty) return
-                            void setLineActual(ln.id, Math.floor(v))
-                          }}
-                        />
-                      </Stack>
-                    ))}
-                  </Stack>
-                  {detail.status !== 'verified' ? (
-                    <Button
-                      variant="contained"
-                      disabled={busy}
-                      onClick={() => void completeVerify()}
-                      data-testid="ff-inbound-verify-complete"
-                    >
-                      Завершить пересчёт
-                    </Button>
-                  ) : null}
-                </Paper>
-              ) : null}
-
               {detail.status === 'verified' ? (
                 <Paper variant="outlined" sx={{ p: 2 }} data-testid="ff-inbound-admin-distribution">
                   <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1} sx={{ alignItems: { sm: 'center' } }}>
@@ -944,14 +955,6 @@ export function FfInboundRequestView({ token, requestId, isFulfillmentAdmin, onC
                         Доступно после завершения пересчёта. Нераспределённый остаток попадёт в «Без ячейки».
                       </Typography>
                     </Box>
-                    <Button
-                      variant="contained"
-                      disabled={distBusy || distributionCompleted}
-                      onClick={() => setDistOpen(true)}
-                      data-testid="ff-inbound-distribute-open"
-                    >
-                      Распределить по ячейкам
-                    </Button>
                   </Stack>
 
                   {distError ? (

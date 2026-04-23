@@ -68,13 +68,7 @@ test('ff inbound distribution: partial, leftover without cell, complete -> reado
   const got = await page.request.get(`${base}/${rid}`, { headers: h });
   expect(got.ok()).toBeTruthy();
   const lineId = ((await got.json()) as { lines: { id: string }[] }).lines[0]!.id;
-  const act = await page.request.patch(`${base}/${rid}/lines/${lineId}/actual`, {
-    headers: { ...h, 'Content-Type': 'application/json' },
-    data: { actual_qty: 5 },
-  });
-  expect(act.ok()).toBeTruthy();
-  const ver = await page.request.post(`${base}/${rid}/verify`, { headers: h });
-  expect(ver.ok()).toBeTruthy();
+  // Факт задаём через UI в основной таблице, затем завершаем пересчёт.
 
   await page.goto('/app/ff/dashboard');
   await expect(page.getByTestId('ff-dashboard-inbound-block')).toBeVisible();
@@ -82,6 +76,18 @@ test('ff inbound distribution: partial, leftover without cell, complete -> reado
   await page.getByTestId('ff-dash-inbound-row').filter({ hasText: planned }).first().click();
   await expect(page.getByTestId('ff-doc-dialog')).toBeVisible();
   await expect(page.getByTestId('ff-inbound-doc-root')).toBeVisible();
+  await expect(page.getByTestId('ff-inbound-status-chip')).toContainText('Принято на складе');
+
+  const lineRow = page.getByTestId('ff-inbound-line-row').first();
+  await lineRow.getByTestId('ff-inbound-line-actual').fill('5');
+  // blur to trigger save
+  await page.getByTestId('ff-inbound-status-chip').click();
+
+  const [verifyRes] = await Promise.all([
+    waitForPostOk(page, '/api/operations/inbound-intake-requests', (u) => u.includes('/verify')),
+    page.getByTestId('ff-inbound-verify-complete').click(),
+  ]);
+  expect(verifyRes.ok()).toBeTruthy();
   await expect(page.getByTestId('ff-inbound-status-chip')).toContainText('Проверено на складе');
 
   await expect(page.getByTestId('ff-inbound-admin-distribution')).toBeVisible();
