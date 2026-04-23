@@ -143,12 +143,14 @@ export function FfDashboard({
 }: Props) {
   const [weekOffset, setWeekOffset] = useState(0)
 
-  const plannedInbound = useMemo(
-    () =>
-      inboundSummaries.filter(
-        (r) => r.status !== 'draft' && r.planned_delivery_date,
-      ),
+  const inboundNotDraft = useMemo(
+    () => inboundSummaries.filter((r) => r.status !== 'draft'),
     [inboundSummaries],
+  )
+
+  const plannedInbound = useMemo(
+    () => inboundNotDraft.filter((r) => Boolean(r.planned_delivery_date)),
+    [inboundNotDraft],
   )
 
   const plannedOutbound = useMemo(
@@ -219,19 +221,19 @@ export function FfDashboard({
 
       <FfDashboardSection
         testId="ff-dashboard-inbound-block"
-        title="Запланированные поставки (от селлеров)"
-        subtitle="После выхода из черновика, с плановой датой привоза."
+        title="Поставки (от селлеров)"
+        subtitle="После выхода из черновика. Если плановая дата не задана — показываем дату создания."
       >
         <Table size="small">
           <TableHead>
             <TableRow>
-              <TableCell>Плановая дата привоза</TableCell>
+              <TableCell>Дата привоза</TableCell>
               <TableCell align="right">Строк</TableCell>
               <TableCell>Селлер</TableCell>
             </TableRow>
           </TableHead>
           <TableBody>
-            {plannedInbound.length === 0 ? (
+            {inboundNotDraft.length === 0 ? (
               <TableRow>
                 <TableCell colSpan={3}>
                   <Typography variant="body2" color="text.secondary">
@@ -240,7 +242,7 @@ export function FfDashboard({
                 </TableCell>
               </TableRow>
             ) : (
-              plannedInbound.map((row) => (
+              inboundNotDraft.map((row) => (
                 <TableRow
                   key={row.id}
                   hover
@@ -248,7 +250,10 @@ export function FfDashboard({
                   onClick={() => onOpenInbound(row.id)}
                   data-testid="ff-dash-inbound-row"
                 >
-                  <TableCell>{row.planned_delivery_date ?? '—'}</TableCell>
+                  <TableCell>
+                    {row.planned_delivery_date ??
+                      (row.created_at ? row.created_at.slice(0, 10) : '—')}
+                  </TableCell>
                   <TableCell align="right">{row.line_count}</TableCell>
                   <TableCell>{row.seller_name ?? '—'}</TableCell>
                 </TableRow>
