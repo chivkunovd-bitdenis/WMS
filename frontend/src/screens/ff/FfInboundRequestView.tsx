@@ -353,11 +353,46 @@ export function FfInboundRequestView({ token, requestId, isFulfillmentAdmin, onC
   const distributionCompleted = Boolean(detail?.distribution_completed_at)
   const distributionEditable = isFulfillmentAdmin && !distributionCompleted
 
+  const validateDistributionDraft = (): string | null => {
+    if (!detail) return 'Заявка не загружена.'
+    // allow empty draft: everything goes to "Без ячейки"
+    const acceptedByProductId = new Map(distributableProducts.map((p) => [p.product_id, p.accepted_qty]))
+    const sumByProductId = new Map<string, number>()
+
+    for (const [idx, r] of distLines.entries()) {
+      const rowLabel = `Строка ${idx + 1}`
+      const hasAny = Boolean(r.product_id || r.storage_location_id || r.quantity)
+      if (!hasAny) continue
+
+      if (!r.product_id) return `${rowLabel}: выбери товар.`
+      const accepted = acceptedByProductId.get(r.product_id)
+      if (accepted == null) return `${rowLabel}: товар не относится к заявке.`
+      if (accepted <= 0) return `${rowLabel}: товар не принят (0).`
+
+      if (!r.storage_location_id) return `${rowLabel}: выбери ячейку.`
+
+      const q = Math.floor(Number(r.quantity))
+      if (!Number.isFinite(q) || q <= 0) return `${rowLabel}: количество должно быть целым числом > 0.`
+
+      const nextSum = (sumByProductId.get(r.product_id) ?? 0) + q
+      if (nextSum > accepted) {
+        return `${rowLabel}: превышение. По товару можно максимум ${accepted}, указано суммарно ${nextSum}.`
+      }
+      sumByProductId.set(r.product_id, nextSum)
+    }
+    return null
+  }
+
   const saveDistribution = async () => {
     if (!detail) return
     setDistBusy(true)
     setDistError(null)
     try {
+      const vErr = validateDistributionDraft()
+      if (vErr) {
+        setDistError(vErr)
+        return
+      }
       const payload = distLines
         .filter((r) => r.product_id && r.storage_location_id && r.quantity)
         .map((r) => ({
@@ -375,7 +410,16 @@ export function FfInboundRequestView({ token, requestId, isFulfillmentAdmin, onC
         },
       )
       if (!res.ok) {
-        setDistError(await readApiErrorMessage(res))
+        const code = await readApiErrorMessage(res)
+        if (code === 'qty_exceeds_accepted') {
+          setDistError('Превышено принятие: суммарно по товару нельзя распределить больше, чем принято по заявке.')
+        } else if (code === 'product_not_on_request') {
+          setDistError('Нельзя распределять товар, которого нет в этой заявке.')
+        } else if (code === 'product_not_accepted') {
+          setDistError('Нельзя распределять товар с принятым количеством 0.')
+        } else {
+          setDistError(code)
+        }
         return
       }
       const rows = (await res.json()) as DistributionLineOut[]
@@ -386,6 +430,7 @@ export function FfInboundRequestView({ token, requestId, isFulfillmentAdmin, onC
           quantity: String(r.quantity),
         })),
       )
+      setDistOpen(true)
     } catch (e) {
       setDistError(e instanceof Error ? e.message : 'Не удалось сохранить распределение.')
     } finally {
@@ -398,12 +443,48 @@ export function FfInboundRequestView({ token, requestId, isFulfillmentAdmin, onC
     setDistBusy(true)
     setDistError(null)
     try {
+      const vErr = validateDistributionDraft()
+      if (vErr) {
+        setDistError(vErr)
+        return
+      }
+      // Always persist draft first; completion must lock what is actually saved.
+      const payload = distLines
+        .filter((r) => r.product_id && r.storage_location_id && r.quantity)
+        .map((r) => ({
+          product_id: r.product_id,
+          storage_location_id: r.storage_location_id,
+          quantity: Math.floor(Number(r.quantity)),
+        }))
+        .filter((r) => Number.isFinite(r.quantity) && r.quantity > 0)
+      const putRes = await fetch(
+        apiUrl(`/operations/inbound-intake-requests/${requestId}/distribution-lines`),
+        {
+          method: 'PUT',
+          headers: { ...authHeaders, 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload),
+        },
+      )
+      if (!putRes.ok) {
+        const code = await readApiErrorMessage(putRes)
+        setDistError(code)
+        return
+      }
+      const savedRows = (await putRes.json()) as DistributionLineOut[]
+      setDistLines(
+        savedRows.map((r) => ({
+          product_id: r.product_id,
+          storage_location_id: r.storage_location_id,
+          quantity: String(r.quantity),
+        })),
+      )
       const res = await fetch(
         apiUrl(`/operations/inbound-intake-requests/${requestId}/distribution-complete`),
         { method: 'POST', headers: authHeaders },
       )
       if (!res.ok) {
-        setDistError(await readApiErrorMessage(res))
+        const code = await readApiErrorMessage(res)
+        setDistError(code)
         return
       }
       await loadDetail()
