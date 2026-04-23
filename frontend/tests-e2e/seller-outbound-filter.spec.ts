@@ -3,8 +3,6 @@ import { test, expect } from '@playwright/test';
 import {
   waitForGetOk,
   waitForPostOk,
-  waitForPatchOk,
-  waitForLocationsListGet,
 } from './api-waits';
 import { loginAsSeller, openFulfillmentRegistration } from './auth-flow';
 
@@ -22,63 +20,38 @@ test('seller A outbound list excludes seller B shipments only (#11)', async ({ p
   await page.getByTestId('register-form').getByLabel('Организация').fill('E2E Outbound Filter');
   await page.getByTestId('register-form').getByLabel('Email администратора').fill(adminEmail);
   await page.getByTestId('register-form').getByLabel('Пароль').fill('password123');
-  await Promise.all([
+  const [regRes] = await Promise.all([
     waitForPostOk(page, '/api/auth/register'),
     waitForGetOk(page, '/api/auth/me'),
     page.getByTestId('register-form').getByRole('button', { name: 'Создать аккаунт' }).click(),
   ]);
+  const regJson = (await regRes.json()) as { access_token: string };
+  const token = regJson.access_token;
+  const h = { Authorization: `Bearer ${token}` };
 
-  await page.goto('/app/catalog');
-  await page.getByTestId('seller-name').fill('Brand A');
-  await Promise.all([
-    waitForPostOk(page, '/api/sellers'),
-    waitForGetOk(page, '/api/sellers'),
-    page.getByTestId('seller-submit').click(),
-  ]);
-  await page.getByTestId('seller-name').fill('Brand B');
-  await Promise.all([
-    waitForPostOk(page, '/api/sellers'),
-    waitForGetOk(page, '/api/sellers'),
-    page.getByTestId('seller-submit').click(),
-  ]);
+  const sA = await page.request.post('/api/sellers', { headers: h, data: { name: 'Brand A' } });
+  expect(sA.ok()).toBeTruthy();
+  const sellerAId = String(((await sA.json()) as { id: string }).id);
+  const sB = await page.request.post('/api/sellers', { headers: h, data: { name: 'Brand B' } });
+  expect(sB.ok()).toBeTruthy();
+  const sellerBId = String(((await sB.json()) as { id: string }).id);
 
-  await page.getByTestId('warehouse-name').fill('WH');
-  await page.getByTestId('warehouse-code').fill(whCode);
-  await Promise.all([
-    waitForPostOk(page, '/api/warehouses', (u) => !u.includes('/locations')),
-    waitForGetOk(page, '/api/warehouses'),
-    page.getByTestId('warehouse-submit').click(),
-  ]);
-  await page.getByTestId('warehouse-list').getByTestId('warehouse-item').first().click();
-  await page.getByTestId('location-code').fill('L1');
-  await Promise.all([
-    waitForPostOk(page, '/api/warehouses', (u) => u.includes('/locations')),
-    waitForLocationsListGet(page),
-    page.getByTestId('location-submit').click(),
-  ]);
+  const wh = await page.request.post('/api/warehouses', { headers: h, data: { name: 'WH', code: whCode } });
+  expect(wh.ok()).toBeTruthy();
+  const wid = String(((await wh.json()) as { id: string }).id);
+  const loc = await page.request.post(`/api/warehouses/${wid}/locations`, { headers: h, data: { code: 'L1' } });
+  expect(loc.ok()).toBeTruthy();
 
-  await page.getByTestId('product-name').fill('PA');
-  await page.getByTestId('product-sku').fill(skuA);
-  await page.getByTestId('product-length-mm').fill('10');
-  await page.getByTestId('product-width-mm').fill('10');
-  await page.getByTestId('product-height-mm').fill('10');
-  await page.getByTestId('product-seller').selectOption({ label: 'Brand A' });
-  await Promise.all([
-    waitForPostOk(page, '/api/products'),
-    waitForGetOk(page, '/api/products'),
-    page.getByTestId('product-submit').click(),
-  ]);
-  await page.getByTestId('product-name').fill('PB');
-  await page.getByTestId('product-sku').fill(skuB);
-  await page.getByTestId('product-length-mm').fill('10');
-  await page.getByTestId('product-width-mm').fill('10');
-  await page.getByTestId('product-height-mm').fill('10');
-  await page.getByTestId('product-seller').selectOption({ label: 'Brand B' });
-  await Promise.all([
-    waitForPostOk(page, '/api/products'),
-    waitForGetOk(page, '/api/products'),
-    page.getByTestId('product-submit').click(),
-  ]);
+  const prA = await page.request.post('/api/products', {
+    headers: h,
+    data: { name: 'PA', sku_code: skuA, length_mm: 10, width_mm: 10, height_mm: 10, seller_id: sellerAId },
+  });
+  expect(prA.ok()).toBeTruthy();
+  const prB = await page.request.post('/api/products', {
+    headers: h,
+    data: { name: 'PB', sku_code: skuB, length_mm: 10, width_mm: 10, height_mm: 10, seller_id: sellerBId },
+  });
+  expect(prB.ok()).toBeTruthy();
 
   // Create seller accounts for A/B.
   await page.goto('/app/dashboard');

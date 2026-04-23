@@ -27,6 +27,8 @@ import {
 import { apiUrl } from '../../api'
 import { readApiErrorMessage } from '../../utils/readApiErrorMessage'
 import type { FfInboundSummary, FfOutboundSummary } from './FfDashboard'
+import { PageHeader } from '../../ui/PageHeader'
+import { formatDateTimeLocal } from '../../utils/formatDateTimeLocal'
 
 export type FfMarketplaceUnloadSummary = {
   id: string
@@ -738,14 +740,10 @@ export function FfSuppliesShipmentsPage({
 
   return (
     <Box data-testid="ff-supplies-shipments-page">
-      <Typography variant="h5" gutterBottom>
-        Поставки и отгрузки
-      </Typography>
-      <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
-        Единый список: <strong>поставки</strong> (селлер → ФФ), операционные <strong>отгрузки</strong>, документы{' '}
-        <strong>отгрузки ФФ на маркетплейс</strong> и акты расхождения. По строкам отгрузки на МП и расхождения —
-        клик для состава; поставку и отгрузку из операций открываем в разделе операций.
-      </Typography>
+      <PageHeader
+        title="Поставки и отгрузки"
+        description="Единый список: поставки (селлер → ФФ), операционные отгрузки, документы отгрузки ФФ на маркетплейс и акты расхождения. По строкам отгрузки на МП и расхождения — клик для состава; поставку и отгрузку из операций открываем в разделе операций."
+      />
 
       {error ? (
         <Alert severity="error" sx={{ mb: 2 }}>
@@ -923,7 +921,7 @@ export function FfSuppliesShipmentsPage({
                 <TableCell>{kindRu(row.kind)}</TableCell>
                 <TableCell>{row.plannedDate ?? '—'}</TableCell>
                 <TableCell>
-                  {row.createdAt ? row.createdAt.slice(0, 19).replace('T', ' ') : '—'}
+                  {row.createdAt ? formatDateTimeLocal(row.createdAt) : '—'}
                 </TableCell>
                 <TableCell>{statusRu(row.status)}</TableCell>
                 <TableCell>{row.sellerName ?? '—'}</TableCell>
@@ -938,9 +936,7 @@ export function FfSuppliesShipmentsPage({
       <Dialog
         open={docModal !== null && docModalId !== null}
         onClose={closeDocModal}
-        maxWidth={false}
-        fullWidth
-        slotProps={{ paper: { sx: { width: 'min(1200px, 96vw)', maxHeight: '92vh' } } }}
+        fullScreen
       >
         <DialogTitle>{docTitle}</DialogTitle>
         <DialogContent dividers data-testid="ff-supplies-doc-dialog">

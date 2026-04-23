@@ -1,11 +1,34 @@
 import type { FormEventHandler } from 'react'
-import { Button } from '../ui/Button'
-import { Card } from '../ui/Card'
-import { Input } from '../ui/Input'
-import { Select } from '../ui/Select'
+import { useEffect, useMemo, useState } from 'react'
+import { PrintOutlined } from '@mui/icons-material'
+import JsBarcode from 'jsbarcode'
+import {
+  Alert,
+  Box,
+  Button as MuiButton,
+  Card as MuiCard,
+  CardContent,
+  CardHeader,
+  Dialog,
+  DialogActions,
+  DialogContent,
+  DialogTitle,
+  Divider,
+  IconButton,
+  Stack,
+  Table,
+  TableBody,
+  TableCell,
+  TableContainer,
+  TableHead,
+  TableRow,
+  TextField,
+  Tooltip,
+  Typography,
+} from '@mui/material'
 
 type WarehouseRow = { id: string; name: string; code: string }
-type LocationRow = { id: string; code: string; warehouse_id: string }
+type LocationRow = { id: string; code: string; warehouse_id: string; barcode: string }
 type SellerRow = { id: string; name: string }
 type ProductRow = {
   id: string
@@ -76,416 +99,546 @@ export function CatalogSection(props: Props) {
     isFulfillmentAdmin,
     catalogBusy,
     catalogError,
-    sellers,
     warehouses,
     locations,
     selectedWarehouseId,
     setSelectedWarehouseId,
-    products,
     onCreateWarehouse,
     onCreateLocation,
-    onCreateSeller,
-    onCreateProduct,
-    wbSellerId,
-    setWbSellerId,
-    wbHasContentToken,
-    wbHasSuppliesToken,
-    wbTokensBusy,
-    wbSyncBusy,
-    wbSuppliesSyncBusy,
-    wbLinkBusy,
-    wbJobStatus,
-    wbJobResult,
-    wbSuppliesJobStatus,
-    wbSuppliesJobResult,
-    wbImportedCards,
-    wbImportedSupplies,
-    onSaveWbTokens,
-    onStartWbCardsSyncJob,
-    onStartWbSuppliesSyncJob,
-    onLinkProductToWb,
   } = props
 
+  const [warehouseDialogOpen, setWarehouseDialogOpen] = useState(false)
+  const [locationDialogOpen, setLocationDialogOpen] = useState(false)
+  const [printDialogOpen, setPrintDialogOpen] = useState(false)
+  const [printLocation, setPrintLocation] = useState<LocationRow | null>(null)
+  const [barcodeRenderError, setBarcodeRenderError] = useState<string | null>(null)
+  const [barcodeDataUrl, setBarcodeDataUrl] = useState<string | null>(null)
+
+  const selectedWarehouse = useMemo(
+    () => warehouses.find((w) => w.id === selectedWarehouseId) ?? null,
+    [selectedWarehouseId, warehouses],
+  )
+
+  const visibleLocations = useMemo(() => {
+    if (!selectedWarehouseId) return []
+    return locations.filter((l) => l.warehouse_id === selectedWarehouseId)
+  }, [locations, selectedWarehouseId])
+
+  useEffect(() => {
+    if (!printDialogOpen || !printLocation) {
+      return
+    }
+    setBarcodeRenderError(null)
+    setBarcodeDataUrl(null)
+    const draw =
+      (JsBarcode as unknown as { default?: typeof JsBarcode }).default ?? JsBarcode
+
+    // Render into an offscreen canvas and show as image.
+    // This avoids browser quirks with drawing into a canvas that is being mounted via a Dialog portal.
+    const t = window.setTimeout(() => {
+      try {
+        const c = document.createElement('canvas')
+        c.width = 320
+        c.height = 80
+        const ctx = c.getContext('2d')
+        if (!ctx) {
+          setBarcodeRenderError('Canvas context недоступен.')
+          return
+        }
+        ctx.fillStyle = '#fff'
+        ctx.fillRect(0, 0, c.width, c.height)
+        draw(c, printLocation.barcode, {
+          format: 'CODE128',
+          displayValue: false,
+          height: 64,
+          margin: 8,
+          lineColor: '#111',
+          background: '#fff',
+        })
+        setBarcodeDataUrl(c.toDataURL('image/png'))
+      } catch (e) {
+        setBarcodeRenderError(e instanceof Error ? e.message : 'Не удалось отрисовать штрихкод.')
+      }
+    }, 0)
+
+    return () => window.clearTimeout(t)
+  }, [printDialogOpen, printLocation])
+
   return (
-    <div id="catalog-section" className="stack" data-testid="catalog-section">
+    <Box id="catalog-section" data-testid="catalog-section" sx={{ display: 'grid', gap: 2 }}>
       {catalogError ? (
-        <p className="error" data-testid="catalog-error">
+        <Alert severity="error" data-testid="catalog-error">
           {catalogError}
-        </p>
+        </Alert>
       ) : null}
 
       {!isFulfillmentAdmin ? (
-        <p className="subtle" data-testid="seller-cabinet-notice">
-          Режим селлера: доступны ваши SKU, заявки с вашими товарами и журнал
-          движений. Управление складом — у фулфилмента.
-        </p>
-      ) : null}
+        <Alert severity="info" data-testid="catalog-not-available">
+          Управление складами и ячейками доступно только фулфилменту.
+        </Alert>
+      ) : (
+        <MuiCard
+          variant="outlined"
+          data-testid="warehouses-panel"
+          sx={{
+            height: '33vh',
+            minHeight: 260,
+            display: 'flex',
+            flexDirection: 'column',
+          }}
+        >
+          <CardHeader
+            title="Склады"
+            subheader="Выберите склад — ниже отобразятся ячейки. Код склада: латиница, цифры, _ и -."
+            action={
+              <MuiButton
+                type="button"
+                variant="contained"
+                size="small"
+                data-testid="create-warehouse"
+                onClick={() => setWarehouseDialogOpen(true)}
+              >
+                Создать склад
+              </MuiButton>
+            }
+            sx={{ pb: 1 }}
+          />
+          <Divider />
+          <CardContent sx={{ pt: 0, flex: 1, minHeight: 0 }}>
+            <TableContainer sx={{ height: '100%' }}>
+              <Table size="small" stickyHeader aria-label="Склады" data-testid="warehouse-table">
+                <TableHead>
+                  <TableRow>
+                    <TableCell>Название</TableCell>
+                    <TableCell width={180}>Код</TableCell>
+                  </TableRow>
+                </TableHead>
+                <TableBody>
+                  {warehouses.map((w) => (
+                    <TableRow
+                      key={w.id}
+                      hover
+                      selected={w.id === selectedWarehouseId}
+                      onClick={() => setSelectedWarehouseId(w.id)}
+                      sx={{ cursor: 'pointer' }}
+                      data-testid="warehouse-row"
+                      data-warehouse-id={w.id}
+                    >
+                      <TableCell>
+                        <Typography variant="body2" sx={{ fontWeight: 600 }}>
+                          {w.name}
+                        </Typography>
+                      </TableCell>
+                      <TableCell>
+                        <Typography variant="body2" color="text.secondary">
+                          {w.code}
+                        </Typography>
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                  {warehouses.length === 0 ? (
+                    <TableRow>
+                      <TableCell colSpan={2}>
+                        <Typography variant="body2" color="text.secondary">
+                          Пока нет складов. Создайте первый.
+                        </Typography>
+                      </TableCell>
+                    </TableRow>
+                  ) : null}
+                </TableBody>
+              </Table>
+            </TableContainer>
+          </CardContent>
+        </MuiCard>
+      )}
 
       {isFulfillmentAdmin ? (
-        <Card className="card">
-          <h2>Склады</h2>
-          <p className="subtle">Код склада — латиница, цифры, символы _ и -.</p>
-          <form data-testid="warehouse-form" noValidate onSubmit={onCreateWarehouse}>
-            <label>
-              Название
-              <Input name="warehouse_name" data-testid="warehouse-name" required />
-            </label>
-            <label>
-              Код
-              <Input
+        <MuiCard variant="outlined" data-testid="locations-panel">
+          <CardHeader
+            title="Ячейки"
+            subheader={
+              selectedWarehouse ? (
+                <span>
+                  Склад: <strong>{selectedWarehouse.name}</strong> ({selectedWarehouse.code})
+                </span>
+              ) : (
+                'Ячейку нельзя создать без склада. Сначала выберите склад сверху.'
+              )
+            }
+            action={
+              <MuiButton
+                type="button"
+                variant="contained"
+                size="small"
+                data-testid="create-location"
+                disabled={!selectedWarehouseId}
+                onClick={() => setLocationDialogOpen(true)}
+              >
+                Создать ячейку
+              </MuiButton>
+            }
+            sx={{ pb: 1 }}
+          />
+          <Divider />
+          <CardContent sx={{ pt: 0 }}>
+            <TableContainer>
+              <Table size="small" aria-label="Ячейки" data-testid="location-table">
+                <TableHead>
+                  <TableRow>
+                    <TableCell width={240}>Код ячейки</TableCell>
+                    <TableCell>Штрихкод</TableCell>
+                    <TableCell align="right" width={80} />
+                  </TableRow>
+                </TableHead>
+                <TableBody>
+                  {visibleLocations.map((loc) => (
+                    <TableRow key={loc.id} data-testid="location-row" data-location-id={loc.id}>
+                      <TableCell>{loc.code}</TableCell>
+                      <TableCell sx={{ fontFamily: 'monospace', fontSize: 13 }}>
+                        {loc.barcode}
+                      </TableCell>
+                      <TableCell align="right">
+                        <Tooltip title="Печать ШК">
+                          <span>
+                            <IconButton
+                              size="small"
+                              aria-label="Печать ШК"
+                              data-testid="location-print"
+                              onClick={() => {
+                                setPrintLocation(loc)
+                                setPrintDialogOpen(true)
+                              }}
+                            >
+                              <PrintOutlined fontSize="small" />
+                            </IconButton>
+                          </span>
+                        </Tooltip>
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                  {selectedWarehouseId && visibleLocations.length === 0 ? (
+                    <TableRow>
+                      <TableCell>
+                        <Typography variant="body2" color="text.secondary">
+                          Для этого склада пока нет ячеек. Создайте первую.
+                        </Typography>
+                      </TableCell>
+                    </TableRow>
+                  ) : null}
+                  {!selectedWarehouseId ? (
+                    <TableRow>
+                      <TableCell>
+                        <Typography variant="body2" color="text.secondary">
+                          Выберите склад сверху — ячейки отфильтруются по нему.
+                        </Typography>
+                      </TableCell>
+                    </TableRow>
+                  ) : null}
+                </TableBody>
+              </Table>
+            </TableContainer>
+          </CardContent>
+        </MuiCard>
+      ) : null}
+
+      <Dialog
+        open={warehouseDialogOpen}
+        onClose={() => setWarehouseDialogOpen(false)}
+        fullWidth
+        maxWidth="sm"
+        aria-labelledby="create-warehouse-title"
+      >
+        <DialogTitle id="create-warehouse-title">Создать склад</DialogTitle>
+        <DialogContent>
+          <Box
+            component="form"
+            data-testid="warehouse-form"
+            noValidate
+            onSubmit={(e) => {
+              onCreateWarehouse(e)
+              setWarehouseDialogOpen(false)
+            }}
+            sx={{ pt: 1 }}
+          >
+            <Stack spacing={2}>
+              <TextField
+                name="warehouse_name"
+                data-testid="warehouse-name"
+                label="Название"
+                required
+                autoComplete="off"
+                fullWidth
+              />
+              <TextField
                 name="warehouse_code"
                 data-testid="warehouse-code"
+                label="Код"
                 required
                 autoComplete="off"
+                fullWidth
+                helperText="Латиница, цифры, символы _ и -"
               />
-            </label>
-            <Button
-              type="submit"
-              data-testid="warehouse-submit"
-              disabled={catalogBusy}
-            >
-              {catalogBusy ? '…' : 'Добавить склад'}
-            </Button>
-          </form>
-          <ul className="list-plain" data-testid="warehouse-list">
-            {warehouses.map((w) => (
-              <li key={w.id}>
-                <Button
-                  type="button"
-                  variant="ghost"
-                  className="list-row-button"
-                  data-testid="warehouse-item"
-                  data-selected={w.id === selectedWarehouseId ? 'true' : 'false'}
-                  onClick={() => setSelectedWarehouseId(w.id)}
-                >
-                  <strong>{w.name}</strong>{' '}
-                  <span className="subtle" style={{ margin: 0 }}>
-                    ({w.code})
-                  </span>
-                </Button>
-              </li>
-            ))}
-          </ul>
-        </Card>
-      ) : null}
-
-      {isFulfillmentAdmin ? (
-        <Card className="card">
-          <h2>Ячейки</h2>
-          {!selectedWarehouseId ? (
-            <p className="subtle">Сначала создайте склад.</p>
-          ) : (
-            <form data-testid="location-form" noValidate onSubmit={onCreateLocation}>
-              <label>
-                Код ячейки
-                <Input
-                  name="location_code"
-                  data-testid="location-code"
-                  required
-                  autoComplete="off"
-                />
-              </label>
-              <Button
+            </Stack>
+            <DialogActions sx={{ px: 0, pt: 2 }}>
+              <MuiButton type="button" onClick={() => setWarehouseDialogOpen(false)}>
+                Отмена
+              </MuiButton>
+              <MuiButton
                 type="submit"
-                data-testid="location-submit"
+                variant="contained"
+                data-testid="warehouse-submit"
                 disabled={catalogBusy}
               >
-                {catalogBusy ? '…' : 'Добавить ячейку'}
-              </Button>
-            </form>
-          )}
-          <ul className="list-plain" data-testid="location-list">
-            {locations.map((loc) => (
-              <li key={loc.id} data-testid="location-item">
-                {loc.code}
-              </li>
-            ))}
-          </ul>
-        </Card>
-      ) : null}
+                {catalogBusy ? '…' : 'Создать'}
+              </MuiButton>
+            </DialogActions>
+          </Box>
+        </DialogContent>
+      </Dialog>
 
-      <Card className="card" data-testid="sellers-section">
-        <h2>Селлеры</h2>
-        <p className="subtle">
-          Клиенты фулфилмента; можно привязать к SKU при создании товара.
-        </p>
-        {isFulfillmentAdmin ? (
-          <form data-testid="seller-form" noValidate onSubmit={onCreateSeller}>
-            <label>
-              Название селлера
-              <Input
-                name="seller_name"
-                data-testid="seller-name"
-                required
-                autoComplete="off"
-              />
-            </label>
-            <Button
-              type="submit"
-              data-testid="seller-submit"
-              disabled={catalogBusy}
+      <Dialog
+        open={printDialogOpen}
+        onClose={() => {
+          setPrintDialogOpen(false)
+          setPrintLocation(null)
+        }}
+        fullWidth
+        maxWidth="sm"
+        aria-labelledby="print-location-title"
+      >
+        <DialogTitle id="print-location-title">Печать штрихкода</DialogTitle>
+        <DialogContent>
+          {printLocation ? (
+            <Box
+              data-testid="location-print-preview"
+              sx={{
+                border: '1px solid',
+                borderColor: 'divider',
+                borderRadius: 2,
+                p: 2,
+                mt: 1,
+                display: 'grid',
+                gap: 1,
+                justifyItems: 'center',
+              }}
             >
-              {catalogBusy ? '…' : 'Добавить селлера'}
-            </Button>
-          </form>
-        ) : null}
-        <ul className="list-plain" data-testid="seller-list">
-          {sellers.map((s) => (
-            <li key={s.id} data-testid="seller-item">
-              {s.name}
-            </li>
-          ))}
-        </ul>
-      </Card>
-
-      {isFulfillmentAdmin && sellers.length > 0 && wbSellerId ? (
-        <Card className="card" data-testid="wildberries-integration-section">
-          <h2>Wildberries (импорт)</h2>
-          <p className="subtle">
-            Токены хранятся зашифрованно. Синхронизация — только чтение: карточки
-            (первая страница) и список поставок FBW (первая страница), без записи
-            в WB.
-          </p>
-          <label>
-            Селлер для интеграции
-            <Select
-              data-testid="wb-seller-select"
-              value={wbSellerId}
-              onChange={(ev) => setWbSellerId(ev.target.value)}
-            >
-              {sellers.map((s) => (
-                <option key={s.id} value={s.id}>
-                  {s.name}
-                </option>
-              ))}
-            </Select>
-          </label>
-          <p className="subtle" data-testid="wb-token-flags">
-            Контент API: {wbHasContentToken ? 'токен есть' : 'нет токена'} ·
-            Поставки API: {wbHasSuppliesToken ? 'токен есть' : 'нет токена'}
-          </p>
-          <form data-testid="wb-tokens-form" noValidate onSubmit={onSaveWbTokens}>
-            <label>
-              Токен контента WB
-              <Input
-                name="wb_content_token"
-                data-testid="wb-content-token"
-                type="password"
-                autoComplete="off"
-                placeholder="вставьте токен категории «Контент»"
-              />
-            </label>
-            <label>
-              Токен поставок WB (необязательно)
-              <Input
-                name="wb_supplies_token"
-                data-testid="wb-supplies-token"
-                type="password"
-                autoComplete="off"
-                placeholder="для импорта поставок FBW (первая страница)"
-              />
-            </label>
-            <Button type="submit" data-testid="wb-save-tokens" disabled={wbTokensBusy}>
-              {wbTokensBusy ? '…' : 'Сохранить токены'}
-            </Button>
-          </form>
-          <Button
-            type="button"
-            data-testid="wb-sync-cards"
-            disabled={wbSyncBusy || !wbHasContentToken}
-            onClick={onStartWbCardsSyncJob}
-          >
-            {wbSyncBusy ? '…' : 'Обновить карточки из WB'}
-          </Button>
-          <p className="subtle" data-testid="wb-sync-status">
-            Синхронизация: {wbJobStatus ?? '—'}
-          </p>
-          {wbJobResult ? <p data-testid="wb-sync-result">{wbJobResult}</p> : null}
-          <Button
-            type="button"
-            variant="secondary"
-            data-testid="wb-sync-supplies"
-            disabled={wbSuppliesSyncBusy || !wbHasSuppliesToken}
-            onClick={onStartWbSuppliesSyncJob}
-          >
-            {wbSuppliesSyncBusy ? '…' : 'Обновить поставки из WB'}
-          </Button>
-          <p className="subtle" data-testid="wb-supplies-sync-status">
-            Синхронизация поставок: {wbSuppliesJobStatus ?? '—'}
-          </p>
-          {wbSuppliesJobResult ? (
-            <p data-testid="wb-supplies-sync-result">{wbSuppliesJobResult}</p>
-          ) : null}
-
-          <h3 className="subtle" style={{ marginTop: 16 }}>
-            Импортированные карточки
-          </h3>
-          {wbImportedCards.length === 0 ? (
-            <p className="subtle" data-testid="wb-imported-cards-empty">
-              Пока нет — выполните синхронизацию.
-            </p>
-          ) : (
-            <ul className="list-plain" data-testid="wb-imported-cards-list">
-              {wbImportedCards.map((c) => (
-                <li key={String(c.nm_id)} data-testid="wb-imported-card-item">
-                  nmID {c.nm_id}
-                  {c.vendor_code ? ` · ${c.vendor_code}` : ''}
-                </li>
-              ))}
-            </ul>
-          )}
-
-          <h3 className="subtle" style={{ marginTop: 16 }}>
-            Импортированные поставки
-          </h3>
-          {wbImportedSupplies.length === 0 ? (
-            <p className="subtle" data-testid="wb-imported-supplies-empty">
-              Пока нет — сохраните токен поставок и выполните синхронизацию.
-            </p>
-          ) : (
-            <ul className="list-plain" data-testid="wb-imported-supplies-list">
-              {wbImportedSupplies.map((s) => (
-                <li key={s.external_key} data-testid="wb-imported-supply-item">
-                  {s.wb_supply_id != null ? `supply ${s.wb_supply_id}` : ''}
-                  {s.wb_supply_id != null && s.wb_preorder_id != null ? ' · ' : ''}
-                  {s.wb_preorder_id != null ? `preorder ${s.wb_preorder_id}` : ''}
-                  {s.status_id != null ? ` · статус ${s.status_id}` : ''}
-                </li>
-              ))}
-            </ul>
-          )}
-
-          <h3 className="subtle" style={{ marginTop: 16 }}>
-            Привязка SKU к карточке WB
-          </h3>
-          <p className="subtle">
-            Товар должен быть привязан к тому же селлеру, что выбран выше; nm_id —
-            из списка импортированных карточек.
-          </p>
-          <form data-testid="wb-link-product-form" noValidate onSubmit={onLinkProductToWb}>
-            <label>
-              Товар
-              <Select
-                name="wb_link_product_id"
-                data-testid="wb-link-product-id"
-                required
-                defaultValue=""
+              <Typography variant="subtitle2" sx={{ fontWeight: 700 }}>
+                Ячейка № {printLocation.code}
+              </Typography>
+              {barcodeDataUrl ? (
+                <img
+                  src={barcodeDataUrl}
+                  alt="barcode"
+                  data-testid="barcode-image"
+                  style={{
+                    width: 320,
+                    maxWidth: '100%',
+                    height: 'auto',
+                    border: '1px dashed rgba(0,0,0,0.2)',
+                    borderRadius: 12,
+                    background: '#fff',
+                  }}
+                />
+              ) : (
+                <Box
+                  sx={{
+                    width: 320,
+                    height: 80,
+                    maxWidth: '100%',
+                    border: '1px dashed',
+                    borderColor: 'divider',
+                    borderRadius: 2,
+                    bgcolor: '#fff',
+                  }}
+                />
+              )}
+              <Typography variant="caption" sx={{ fontFamily: 'monospace' }}>
+                {printLocation.barcode}
+              </Typography>
+              <Typography
+                variant="caption"
+                color="text.secondary"
+                data-testid="barcode-render-status"
               >
-                <option value="" disabled>
-                  — выберите —
-                </option>
-                {products
-                  .filter((p) => p.seller_id === wbSellerId)
-                  .map((p) => (
-                    <option key={p.id} value={p.id}>
-                      {p.sku_code} — {p.name}
-                    </option>
-                  ))}
-              </Select>
-            </label>
-            <label>
-              nm_id (WB)
-              <Input
-                name="wb_link_nm_id"
-                data-testid="wb-link-nm-id"
-                type="number"
-                min={1}
-                required
-                autoComplete="off"
-              />
-            </label>
-            <Button type="submit" data-testid="wb-link-submit" disabled={wbLinkBusy}>
-              {wbLinkBusy ? '…' : 'Привязать'}
-            </Button>
-          </form>
-        </Card>
-      ) : null}
-
-      <Card className="card">
-        <h2>Товары (SKU)</h2>
-        {isFulfillmentAdmin ? (
-          <form data-testid="product-form" noValidate onSubmit={onCreateProduct}>
-            <label>
-              Название
-              <Input name="product_name" data-testid="product-name" required />
-            </label>
-            <label>
-              SKU
-              <Input
-                name="product_sku"
-                data-testid="product-sku"
-                required
-                autoComplete="off"
-              />
-            </label>
-            <label>
-              Длина, мм
-              <Input
-                name="product_length_mm"
-                data-testid="product-length-mm"
-                type="number"
-                min={1}
-                required
-              />
-            </label>
-            <label>
-              Ширина, мм
-              <Input
-                name="product_width_mm"
-                data-testid="product-width-mm"
-                type="number"
-                min={1}
-                required
-              />
-            </label>
-            <label>
-              Высота, мм
-              <Input
-                name="product_height_mm"
-                data-testid="product-height-mm"
-                type="number"
-                min={1}
-                required
-              />
-            </label>
-            {sellers.length > 0 ? (
-              <label>
-                Селлер (необязательно)
-                <Select name="product_seller_id" data-testid="product-seller" defaultValue="">
-                  <option value="">— нет —</option>
-                  {sellers.map((s) => (
-                    <option key={s.id} value={s.id}>
-                      {s.name}
-                    </option>
-                  ))}
-                </Select>
-              </label>
-            ) : null}
-            <Button type="submit" data-testid="product-submit" disabled={catalogBusy}>
-              {catalogBusy ? '…' : 'Добавить товар'}
-            </Button>
-          </form>
-        ) : null}
-        <ul className="list-plain" data-testid="product-list">
-          {products.map((p) => (
-            <li key={p.id} data-testid="product-item" data-product-id={p.id}>
-              <strong>{p.name}</strong> — {p.sku_code},{' '}
-              <span data-testid="product-volume">{p.volume_liters.toFixed(1)} л</span>
-              {p.seller_name ? (
-                <span data-testid="product-seller-name"> · селлер: {p.seller_name}</span>
+                {barcodeRenderError
+                  ? 'ошибка рендера'
+                  : barcodeDataUrl
+                    ? `готово (len=${barcodeDataUrl.length})`
+                    : 'генерация…'}
+              </Typography>
+              {barcodeRenderError ? (
+                <Typography variant="caption" color="error" data-testid="barcode-render-error">
+                  {barcodeRenderError}
+                </Typography>
               ) : null}
-              {p.wb_nm_id != null ? (
-                <span data-testid="product-wb-nm">
-                  {' '}
-                  · WB nmID {p.wb_nm_id}
-                  {p.wb_vendor_code ? ` (${p.wb_vendor_code})` : ''}
-                </span>
-              ) : null}
-            </li>
-          ))}
-        </ul>
-      </Card>
+            </Box>
+          ) : (
+            <Typography variant="body2" color="text.secondary">
+              Ячейка не выбрана.
+            </Typography>
+          )}
+        </DialogContent>
+        <DialogActions>
+          <MuiButton
+            type="button"
+            onClick={() => {
+              if (!printLocation || !barcodeDataUrl) {
+                return
+              }
+              // Safari can open a blank window when using window.open + document.write.
+              // Use an offscreen iframe to print reliably.
+              const html = `<!doctype html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Print barcode</title>
+    <style>
+      @page { margin: 10mm; }
+      body { font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif; padding: 0; margin: 0; }
+      .wrap { display: grid; gap: 8px; justify-items: center; }
+      .title { font-size: 14px; font-weight: 700; }
+      .code { font-size: 12px; font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace; }
+      img { width: 320px; height: auto; }
+    </style>
+  </head>
+  <body>
+    <div class="wrap">
+      <div class="title">Ячейка № ${printLocation.code}</div>
+      <img id="barcode" src="${barcodeDataUrl}" alt="barcode" />
+      <div class="code">${printLocation.barcode}</div>
     </div>
+  </body>
+</html>`
+
+              const iframe = document.createElement('iframe')
+              iframe.setAttribute('aria-hidden', 'true')
+              iframe.style.position = 'fixed'
+              iframe.style.right = '0'
+              iframe.style.bottom = '0'
+              iframe.style.width = '0'
+              iframe.style.height = '0'
+              iframe.style.border = '0'
+              document.body.appendChild(iframe)
+
+              const cleanup = () => {
+                try {
+                  document.body.removeChild(iframe)
+                } catch {
+                  // ignore
+                }
+              }
+
+              const printNow = () => {
+                const w = iframe.contentWindow
+                if (!w) {
+                  cleanup()
+                  return
+                }
+                try {
+                  w.focus()
+                } catch {
+                  // ignore
+                }
+                // Delay to ensure image decode/paint.
+                setTimeout(() => {
+                  try {
+                    w.print()
+                  } finally {
+                    setTimeout(cleanup, 500)
+                  }
+                }, 100)
+              }
+
+              iframe.srcdoc = html
+              iframe.onload = () => {
+                const doc = iframe.contentDocument
+                const img = doc?.getElementById('barcode') as HTMLImageElement | null
+                if (!img) {
+                  printNow()
+                  return
+                }
+                if (img.complete) {
+                  printNow()
+                  return
+                }
+                img.addEventListener('load', printNow, { once: true })
+                img.addEventListener('error', printNow, { once: true })
+              }
+            }}
+            variant="contained"
+            disabled={!printLocation || !barcodeDataUrl}
+            data-testid="location-print-action"
+          >
+            Печать
+          </MuiButton>
+          <MuiButton
+            type="button"
+            onClick={() => {
+              setPrintDialogOpen(false)
+              setPrintLocation(null)
+            }}
+          >
+            Закрыть
+          </MuiButton>
+        </DialogActions>
+      </Dialog>
+
+      <Dialog
+        open={locationDialogOpen}
+        onClose={() => setLocationDialogOpen(false)}
+        fullWidth
+        maxWidth="sm"
+        aria-labelledby="create-location-title"
+      >
+        <DialogTitle id="create-location-title">Создать ячейку</DialogTitle>
+        <DialogContent>
+          <Stack spacing={1} sx={{ pt: 1 }}>
+            <Typography variant="body2" color="text.secondary" data-testid="location-dialog-hint">
+              {selectedWarehouse
+                ? `Склад: ${selectedWarehouse.name} (${selectedWarehouse.code})`
+                : 'Склад не выбран.'}
+            </Typography>
+          </Stack>
+          <Box
+            component="form"
+            data-testid="location-form"
+            noValidate
+            onSubmit={(e) => {
+              onCreateLocation(e)
+              setLocationDialogOpen(false)
+            }}
+            sx={{ pt: 2 }}
+          >
+            <Stack spacing={2}>
+              <TextField
+                name="location_code"
+                data-testid="location-code"
+                label="Код ячейки"
+                required
+                autoComplete="off"
+                fullWidth
+                disabled={!selectedWarehouseId}
+              />
+            </Stack>
+            <DialogActions sx={{ px: 0, pt: 2 }}>
+              <MuiButton type="button" onClick={() => setLocationDialogOpen(false)}>
+                Отмена
+              </MuiButton>
+              <MuiButton
+                type="submit"
+                variant="contained"
+                data-testid="location-submit"
+                disabled={catalogBusy || !selectedWarehouseId}
+              >
+                {catalogBusy ? '…' : 'Создать'}
+              </MuiButton>
+            </DialogActions>
+          </Box>
+        </DialogContent>
+      </Dialog>
+
+    </Box>
   )
 }
 

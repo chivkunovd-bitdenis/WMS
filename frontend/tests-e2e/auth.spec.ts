@@ -34,8 +34,9 @@ test('register then see dashboard', async ({ page }) => {
 
   await page.goto('/app/catalog');
   await expect(page.getByTestId('catalog-section')).toBeVisible();
-  await expect(page.getByTestId('warehouse-form')).toBeVisible();
+  await expect(page.getByTestId('warehouses-panel')).toBeVisible();
+  await expect(page.getByTestId('locations-panel')).toBeVisible();
+  await expect(page.getByTestId('create-warehouse')).toBeVisible();
+  await expect(page.getByTestId('warehouse-form')).toHaveCount(0);
   await expect(page.getByTestId('location-form')).toHaveCount(0);
-  await expect(page.getByTestId('product-form')).toBeVisible();
-  await expect(page.getByTestId('warehouse-submit')).toBeEnabled();
 });

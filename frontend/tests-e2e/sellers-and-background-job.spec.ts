@@ -18,48 +18,33 @@ test('create seller, product with seller, run movements digest job', async ({ pa
   await page.getByTestId('register-form').getByLabel('Организация').fill('E2E SB');
   await page.getByTestId('register-form').getByLabel('Email администратора').fill(email);
   await page.getByTestId('register-form').getByLabel('Пароль').fill('password123');
-  await Promise.all([
+  const [regRes] = await Promise.all([
     waitForPostOk(page, '/api/auth/register'),
     waitForGetOk(page, '/api/auth/me'),
     page.getByTestId('register-form').getByRole('button', { name: 'Создать аккаунт' }).click(),
   ]);
+  const regJson = (await regRes.json()) as { access_token: string };
+  const token = regJson.access_token;
+  const h = { Authorization: `Bearer ${token}` };
 
-  await page.goto('/app/catalog');
-  await expect(page.getByTestId('sellers-section')).toBeVisible();
-  await page.getByTestId('seller-name').fill('ACME Seller');
-  await Promise.all([
-    waitForPostOk(page, '/api/sellers'),
-    waitForGetOk(page, '/api/sellers'),
-    page.getByTestId('seller-submit').click(),
-  ]);
-  await expect(page.getByTestId('seller-list').getByTestId('seller-item').first()).toContainText(
-    'ACME Seller',
-  );
+  const sellerRes = await page.request.post('/api/sellers', {
+    headers: h,
+    data: { name: 'ACME Seller' },
+  });
+  expect(sellerRes.ok()).toBeTruthy();
+  const sellerId = String(((await sellerRes.json()) as { id: string }).id);
 
-  await page.getByTestId('warehouse-name').fill('WH');
-  await page.getByTestId('warehouse-code').fill(whCode);
-  await Promise.all([
-    waitForPostOk(page, '/api/warehouses', (u) => !u.includes('/locations')),
-    waitForGetOk(page, '/api/warehouses'),
-    page.getByTestId('warehouse-submit').click(),
-  ]);
-  await page.getByTestId('warehouse-list').getByTestId('warehouse-item').first().click();
+  const whRes = await page.request.post('/api/warehouses', {
+    headers: h,
+    data: { name: 'WH', code: whCode },
+  });
+  expect(whRes.ok()).toBeTruthy();
 
-  await page.getByTestId('product-name').fill('Item');
-  await page.getByTestId('product-sku').fill(sku);
-  await page.getByTestId('product-length-mm').fill('10');
-  await page.getByTestId('product-width-mm').fill('10');
-  await page.getByTestId('product-height-mm').fill('10');
-  await page.getByTestId('product-seller').selectOption({ label: 'ACME Seller' });
-  await Promise.all([
-    waitForPostOk(page, '/api/products'),
-    waitForGetOk(page, '/api/products'),
-    page.getByTestId('product-submit').click(),
-  ]);
-
-  const prodRow = page.getByTestId('product-list').getByTestId('product-item').filter({ hasText: sku });
-  await expect(prodRow).toBeVisible();
-  await expect(prodRow.getByTestId('product-seller-name')).toContainText('ACME Seller');
+  const prodRes = await page.request.post('/api/products', {
+    headers: h,
+    data: { name: 'Item', sku_code: sku, length_mm: 10, width_mm: 10, height_mm: 10, seller_id: sellerId },
+  });
+  expect(prodRes.ok()).toBeTruthy();
 
   await page.goto('/app/ops/movements');
   await expect(page.getByTestId('background-job-section')).toBeVisible();

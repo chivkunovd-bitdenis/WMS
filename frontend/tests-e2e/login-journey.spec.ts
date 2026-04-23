@@ -41,7 +41,10 @@ test('logout then login reaches catalog UI and loads catalog via API', async ({ 
 
   await page.goto('/app/catalog');
   await expect(page.getByTestId('catalog-section')).toBeVisible();
-  await expect(page.getByTestId('warehouse-form')).toBeVisible();
-  await expect(page.getByTestId('product-form')).toBeVisible();
+  await expect(page.getByTestId('warehouses-panel')).toBeVisible();
+  await expect(page.getByTestId('locations-panel')).toBeVisible();
+  await expect(page.getByTestId('create-warehouse')).toBeVisible();
+  // No warehouse selected yet in empty state -> create location is disabled.
+  await expect(page.getByTestId('create-location')).toBeDisabled();
   await expect(page.getByTestId('catalog-error')).toHaveCount(0);
 });

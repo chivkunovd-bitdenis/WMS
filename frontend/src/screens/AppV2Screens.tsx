@@ -1,5 +1,7 @@
 import type { ReactNode } from 'react'
+import { Box } from '@mui/material'
 import { Card } from '../ui/Card'
+import { PageHeader } from '../ui/PageHeader'
 
 type ScreenProps = {
   title: string
@@ -9,15 +11,12 @@ type ScreenProps = {
 
 export function Screen({ title, subtitle, children }: ScreenProps) {
   return (
-    <div className="screen">
-      <div className="screen-head">
-        <div>
-          <h2 className="screen-title">{title}</h2>
-          {subtitle ? <p className="screen-subtitle">{subtitle}</p> : null}
-        </div>
-      </div>
-      <div className="screen-body">{children}</div>
-    </div>
+    <Box>
+      <PageHeader title={title} description={subtitle} />
+      <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+        {children}
+      </Box>
+    </Box>
   )
 }
 
