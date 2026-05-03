@@ -18,7 +18,7 @@ from app.services.catalog_service import (
     volume_liters_from_mm,
 )
 from app.services.seller_wb_catalog_service import (
-    list_admin_wb_catalog_rows,
+    list_ff_catalog_rows,
     list_seller_wb_catalog_rows,
 )
 
@@ -50,8 +50,8 @@ class SellerWbCatalogOut(BaseModel):
     wb_primary_barcode: str | None = None
 
 
-class AdminWbCatalogOut(BaseModel):
-    """Product row for FF admin: seller + WB enrichment (photos/barcodes) when available."""
+class FfCatalogOut(BaseModel):
+    """FF warehouse catalog row: only products with FF stock movements."""
 
     id: str
     seller_id: str | None = None
@@ -127,14 +127,14 @@ async def get_seller_wb_catalog(
     return [SellerWbCatalogOut(**r.as_dict()) for r in rows]
 
 
-@router.get("/wb-catalog-admin", response_model=list[AdminWbCatalogOut])
-async def get_admin_wb_catalog(
+@router.get("/ff-catalog", response_model=list[FfCatalogOut])
+async def get_ff_catalog(
     user: Annotated[User, Depends(require_fulfillment_admin)],
     session: Annotated[AsyncSession, Depends(get_db)],
     seller_id: uuid.UUID | None = _seller_id_query,
-) -> list[AdminWbCatalogOut]:
-    rows = await list_admin_wb_catalog_rows(session, user.tenant_id, seller_id=seller_id)
-    return [AdminWbCatalogOut(**r.as_dict()) for r in rows]
+) -> list[FfCatalogOut]:
+    rows = await list_ff_catalog_rows(session, user.tenant_id, seller_id=seller_id)
+    return [FfCatalogOut(**r.as_dict()) for r in rows]
 
 
 @router.post("", response_model=ProductOut)

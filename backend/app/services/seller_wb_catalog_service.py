@@ -8,7 +8,10 @@ from typing import Any
 
 from sqlalchemy import false, select
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import selectinload
 
+from app.models.inventory_movement import InventoryMovement
+from app.models.product import Product
 from app.models.seller_wildberries_imported_card import SellerWildberriesImportedCard
 from app.services.catalog_service import list_products
 from app.services.wb_card_enrichment import (
@@ -98,7 +101,7 @@ async def list_seller_wb_catalog_rows(
 
 
 @dataclass(frozen=True)
-class AdminWbCatalogRow:
+class FfCatalogRow:
     product_id: uuid.UUID
     seller_id: uuid.UUID | None
     seller_name: str | None
@@ -127,17 +130,35 @@ class AdminWbCatalogRow:
         }
 
 
-async def list_admin_wb_catalog_rows(
+async def list_ff_catalog_rows(
     session: AsyncSession,
     tenant_id: uuid.UUID,
     *,
     seller_id: uuid.UUID | None = None,
-) -> list[AdminWbCatalogRow]:
-    """FF admin: product list enriched from imported WB card snapshots.
+) -> list[FfCatalogRow]:
+    """FF warehouse catalog: products that already have warehouse movements.
 
-    Same enrichment as seller list, but can include multiple sellers.
+    Seller WB/API catalog remains private. FF sees products only after warehouse
+    flow creates stock movements (for example, posted inbound by actual qty).
     """
-    products = await list_products(session, tenant_id, seller_id=seller_id)
+    moved_product_ids = (
+        select(InventoryMovement.product_id)
+        .where(InventoryMovement.tenant_id == tenant_id)
+        .distinct()
+    )
+    product_stmt = (
+        select(Product)
+        .where(
+            Product.tenant_id == tenant_id,
+            Product.id.in_(moved_product_ids),
+        )
+        .options(selectinload(Product.seller))
+        .order_by(Product.sku_code)
+    )
+    if seller_id is not None:
+        product_stmt = product_stmt.where(Product.seller_id == seller_id)
+    res = await session.execute(product_stmt)
+    products = list(res.scalars().unique().all())
     if not products:
         return []
 
@@ -146,25 +167,25 @@ async def list_admin_wb_catalog_rows(
         if p.seller_id is not None:
             seller_ids.add(p.seller_id)
 
-    stmt = select(SellerWildberriesImportedCard).where(
+    card_stmt = select(SellerWildberriesImportedCard).where(
         SellerWildberriesImportedCard.tenant_id == tenant_id,
     )
     if seller_id is not None:
-        stmt = stmt.where(SellerWildberriesImportedCard.seller_id == seller_id)
+        card_stmt = card_stmt.where(SellerWildberriesImportedCard.seller_id == seller_id)
     elif seller_ids:
-        stmt = stmt.where(SellerWildberriesImportedCard.seller_id.in_(seller_ids))
+        card_stmt = card_stmt.where(SellerWildberriesImportedCard.seller_id.in_(seller_ids))
     else:
         # No sellers on products: no point fetching cards.
-        stmt = stmt.where(false())
+        card_stmt = card_stmt.where(false())
 
-    res = await session.execute(stmt)
-    cards = list(res.scalars().all())
+    card_res = await session.execute(card_stmt)
+    cards = list(card_res.scalars().all())
     by_seller_nm: dict[tuple[uuid.UUID, int], dict[str, Any] | None] = {}
     for c in cards:
         raw = c.raw_json if isinstance(c.raw_json, dict) else None
         by_seller_nm[(c.seller_id, int(c.nm_id))] = raw
 
-    rows: list[AdminWbCatalogRow] = []
+    rows: list[FfCatalogRow] = []
     for p in products:
         nm = int(p.wb_nm_id) if p.wb_nm_id is not None else None
         card_raw: dict[str, Any] | None = None
@@ -172,7 +193,7 @@ async def list_admin_wb_catalog_rows(
             card_raw = by_seller_nm.get((p.seller_id, nm))
         subj, img, barcodes = _enrich_from_raw(card_raw)
         rows.append(
-            AdminWbCatalogRow(
+            FfCatalogRow(
                 product_id=p.id,
                 seller_id=p.seller_id,
                 seller_name=p.seller.name if p.seller is not None else None,

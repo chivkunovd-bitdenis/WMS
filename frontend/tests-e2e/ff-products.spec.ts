@@ -3,9 +3,9 @@ import { expect, test } from '@playwright/test'
 import { waitForGetOk, waitForPostOk } from './api-waits'
 import { openFulfillmentRegistration } from './auth-flow'
 
-// TC-NEW-001 — FF каталог «Товары»: фильтр по селлеру, сортировка, фото.
-// Given: FF admin, есть 2 селлера и по товару у каждого; When: открывает «Товары», фильтрует по селлеру, сортирует по остатку/имени;
-// Then: таблица видна, строки фильтруются, сортировка меняет порядок; restriction/negative: без товаров таблица показывает пустое состояние.
+// TC-NEW-001 — FF складской каталог: только товары с движениями ФФ.
+// Given: FF admin, есть товары селлеров, но один товар не принимался на склад; When: открывает «Товары»;
+// Then: видны только товары с движениями, остаток равен actual_qty; restriction/negative: private-only товар не виден ФФ.
 test('ff products: filter by seller and sort by name/quantity', async ({ page }) => {
   const email = `e2e-ff-products-${Date.now()}@example.com`
   const password = 'password123'
@@ -46,12 +46,13 @@ test('ff products: filter by seller and sort by name/quantity', async ({ page })
     return res
   }
 
-  // Seed: 2 sellers + 2 products (one per seller)
+  // Seed: 2 sellers + products; one product stays private-only with no FF movement.
   const sellerA = (await (await apiPost('/sellers', { name: 'E2E Seller A' })).json()) as { id: string }
   const sellerB = (await (await apiPost('/sellers', { name: 'E2E Seller B' })).json()) as { id: string }
 
   const skuA = `e2e-ff-a-${Date.now()}`
   const skuB = `e2e-ff-b-${Date.now()}`
+  const skuPrivate = `e2e-ff-private-${Date.now()}`
   const prodA = (await (
     await apiPost('/products', {
       name: 'Alpha product',
@@ -72,6 +73,14 @@ test('ff products: filter by seller and sort by name/quantity', async ({ page })
       seller_id: sellerB.id,
     })
   ).json()) as { id: string }
+  await apiPost('/products', {
+    name: 'Private only product',
+    sku_code: skuPrivate,
+    length_mm: 1,
+    width_mm: 1,
+    height_mm: 1,
+    seller_id: sellerA.id,
+  })
 
   // Put different stock totals via inbound receive so sorting by остаток is meaningful.
   const whCode = `e2e-wh-${Date.now()}`
@@ -80,7 +89,7 @@ test('ff products: filter by seller and sort by name/quantity', async ({ page })
     id: string
   }
 
-  async function inboundReceive(productId: string, qty: number) {
+  async function inboundReceive(productId: string, expectedQty: number, actualQty: number) {
     const createReq = await apiPost('/operations/inbound-intake-requests', {
       warehouse_id: wh.id,
       planned_delivery_date: new Date().toISOString().slice(0, 10),
@@ -88,7 +97,7 @@ test('ff products: filter by seller and sort by name/quantity', async ({ page })
     const req = (await createReq.json()) as { id: string }
     const addLineRes = await apiPost(`/operations/inbound-intake-requests/${req.id}/lines`, {
       product_id: productId,
-      expected_qty: qty,
+      expected_qty: expectedQty,
     })
     const line = (await addLineRes.json()) as { id: string }
     await apiPost(`/operations/inbound-intake-requests/${req.id}/submit`, {})
@@ -97,14 +106,14 @@ test('ff products: filter by seller and sort by name/quantity', async ({ page })
       storage_location_id: loc.id,
     })
     await apiPatch(`/operations/inbound-intake-requests/${req.id}/lines/${line.id}/actual`, {
-      actual_qty: qty,
+      actual_qty: actualQty,
     })
     await apiPost(`/operations/inbound-intake-requests/${req.id}/verify`, {})
     await apiPost(`/operations/inbound-intake-requests/${req.id}/post`, {})
   }
 
-  await inboundReceive(prodA.id, 2)
-  await inboundReceive(prodB.id, 5)
+  await inboundReceive(prodA.id, 10, 2)
+  await inboundReceive(prodB.id, 10, 5)
 
   // Reload so App re-fetches sellers list for the filter dropdown.
   await page.reload()
@@ -122,6 +131,8 @@ test('ff products: filter by seller and sort by name/quantity', async ({ page })
   await sellerListbox.getByText('E2E Seller A', { exact: true }).click()
   await expect(page.getByTestId('ff-product-row')).toHaveCount(1)
   await expect(page.getByTestId('ff-products-table')).toContainText(skuA)
+  await expect(page.getByTestId('ff-products-table')).not.toContainText(skuPrivate)
+  await expect(page.getByTestId('ff-product-row').first().locator('td').nth(7)).toHaveText('2')
 
   // Switch to All
   await page.getByTestId('ff-products-seller-filter').click()

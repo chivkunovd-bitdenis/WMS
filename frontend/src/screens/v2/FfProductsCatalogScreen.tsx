@@ -24,7 +24,7 @@ import { readApiErrorMessage } from '../../utils/readApiErrorMessage'
 
 type SellerRow = { id: string; name: string }
 
-type AdminWbCatalogRow = {
+type FfCatalogRow = {
   id: string
   seller_id: string | null
   seller_name: string | null
@@ -59,7 +59,7 @@ export function FfProductsCatalogScreen({ token, authHeaders, sellers }: Props) 
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [selectedSellerId, setSelectedSellerId] = useState<string>('__all__')
-  const [catalog, setCatalog] = useState<AdminWbCatalogRow[]>([])
+  const [catalog, setCatalog] = useState<FfCatalogRow[]>([])
   const [stock, setStock] = useState<StockSummaryRow[]>([])
   const [sortKey, setSortKey] = useState<SortKey>('name')
   const [sortDir, setSortDir] = useState<SortDir>('asc')
@@ -73,7 +73,7 @@ export function FfProductsCatalogScreen({ token, authHeaders, sellers }: Props) 
         const sellerFilter = selectedSellerId !== '__all__' ? selectedSellerId : null
         const qs = sellerFilter ? `?seller_id=${encodeURIComponent(sellerFilter)}` : ''
         const [catRes, stRes] = await Promise.all([
-          fetch(apiUrl(`/products/wb-catalog-admin${qs}`), { headers: { ...authHeaders(token) } }),
+          fetch(apiUrl(`/products/ff-catalog${qs}`), { headers: { ...authHeaders(token) } }),
           fetch(apiUrl('/operations/inventory-balances/summary'), { headers: { ...authHeaders(token) } }),
         ])
         if (!catRes.ok) {
@@ -82,7 +82,7 @@ export function FfProductsCatalogScreen({ token, authHeaders, sellers }: Props) 
         if (!stRes.ok) {
           throw new Error(await readApiErrorMessage(stRes))
         }
-        const cat = (await catRes.json()) as AdminWbCatalogRow[]
+        const cat = (await catRes.json()) as FfCatalogRow[]
         const st = (await stRes.json()) as StockSummaryRow[]
         if (cancelled) return
         setCatalog(cat)
@@ -144,7 +144,7 @@ export function FfProductsCatalogScreen({ token, authHeaders, sellers }: Props) 
         Товары
       </Typography>
       <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
-        Каталог товаров: артикулы, фото WB, селлер и актуальный остаток (итого).
+        Складской каталог ФФ: товары всех селлеров, по которым уже были движения на складе.
       </Typography>
 
       {error ? (

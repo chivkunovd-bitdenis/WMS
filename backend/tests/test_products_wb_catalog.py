@@ -131,7 +131,7 @@ async def test_wb_catalog_forbidden_for_admin(async_client: AsyncClient) -> None
 
 
 @pytest.mark.asyncio
-async def test_admin_wb_catalog_filters_by_seller_and_enriches_cards(
+async def test_ff_catalog_shows_only_products_with_warehouse_movements(
     async_client: AsyncClient,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -207,11 +207,11 @@ async def test_admin_wb_catalog_filters_by_seller_and_enriches_cards(
             "seller_id": sid_a,
         },
     )
-    product_b = await async_client.post(
+    product_b_private_only = await async_client.post(
         "/products",
         headers=ah,
         json={
-            "name": "Admin Beta",
+            "name": "Admin Private Only",
             "sku_code": f"ADM-B-{suffix}",
             "length_mm": 10,
             "width_mm": 10,
@@ -219,8 +219,21 @@ async def test_admin_wb_catalog_filters_by_seller_and_enriches_cards(
             "seller_id": sid_b,
         },
     )
+    product_c = await async_client.post(
+        "/products",
+        headers=ah,
+        json={
+            "name": "Admin Moved B",
+            "sku_code": f"ADM-C-{suffix}",
+            "length_mm": 10,
+            "width_mm": 10,
+            "height_mm": 10,
+            "seller_id": sid_b,
+        },
+    )
     pid_a = product_a.json()["id"]
-    pid_b = product_b.json()["id"]
+    pid_b_private_only = product_b_private_only.json()["id"]
+    pid_c = product_c.json()["id"]
     link = await async_client.post(
         f"/integrations/wildberries/sellers/{sid_a}/link-product",
         headers=ah,
@@ -228,10 +241,61 @@ async def test_admin_wb_catalog_filters_by_seller_and_enriches_cards(
     )
     assert link.status_code == 200
 
-    all_rows_res = await async_client.get("/products/wb-catalog-admin", headers=ah)
+    wh = await async_client.post(
+        "/warehouses", headers=ah, json={"name": "WH", "code": f"wh-{suffix}"}
+    )
+    wid = wh.json()["id"]
+    loc = await async_client.post(
+        f"/warehouses/{wid}/locations", headers=ah, json={"code": "A-01"}
+    )
+    loc_id = loc.json()["id"]
+
+    async def post_inbound_actual(product_id: str, actual_qty: int) -> None:
+        req = await async_client.post(
+            "/operations/inbound-intake-requests",
+            headers=ah,
+            json={"warehouse_id": wid},
+        )
+        rid = req.json()["id"]
+        line_res = await async_client.post(
+            f"/operations/inbound-intake-requests/{rid}/lines",
+            headers=ah,
+            json={"product_id": product_id, "expected_qty": 10},
+        )
+        line_id = line_res.json()["id"]
+        await async_client.post(
+            f"/operations/inbound-intake-requests/{rid}/submit", headers=ah
+        )
+        await async_client.post(
+            f"/operations/inbound-intake-requests/{rid}/primary-accept", headers=ah
+        )
+        await async_client.patch(
+            f"/operations/inbound-intake-requests/{rid}/lines/{line_id}",
+            headers=ah,
+            json={"storage_location_id": loc_id},
+        )
+        await async_client.patch(
+            f"/operations/inbound-intake-requests/{rid}/lines/{line_id}/actual",
+            headers=ah,
+            json={"actual_qty": actual_qty},
+        )
+        await async_client.post(
+            f"/operations/inbound-intake-requests/{rid}/verify", headers=ah
+        )
+        await async_client.post(
+            f"/operations/inbound-intake-requests/{rid}/post", headers=ah
+        )
+
+    await post_inbound_actual(pid_a, 7)
+    await post_inbound_actual(pid_c, 3)
+
+    all_rows_res = await async_client.get("/products/ff-catalog", headers=ah)
     assert all_rows_res.status_code == 200, all_rows_res.text
     all_rows = all_rows_res.json()
-    assert {r["id"] for r in all_rows} >= {pid_a, pid_b}
+    row_ids = {r["id"] for r in all_rows}
+    assert pid_a in row_ids
+    assert pid_c in row_ids
+    assert pid_b_private_only not in row_ids
     row_a = next(r for r in all_rows if r["id"] == pid_a)
     assert row_a["seller_id"] == sid_a
     assert row_a["seller_name"] == "Seller A"
@@ -242,17 +306,17 @@ async def test_admin_wb_catalog_filters_by_seller_and_enriches_cards(
     assert row_a["wb_vendor_code"] == "ADM-WB-VC"
 
     filtered_res = await async_client.get(
-        f"/products/wb-catalog-admin?seller_id={sid_b}",
+        f"/products/ff-catalog?seller_id={sid_b}",
         headers=ah,
     )
     assert filtered_res.status_code == 200
     filtered_rows = filtered_res.json()
-    assert {r["id"] for r in filtered_rows} == {pid_b}
+    assert {r["id"] for r in filtered_rows} == {pid_c}
     assert filtered_rows[0]["seller_name"] == "Seller B"
 
 
 @pytest.mark.asyncio
-async def test_admin_wb_catalog_forbidden_for_seller(async_client: AsyncClient) -> None:
+async def test_ff_catalog_forbidden_for_seller(async_client: AsyncClient) -> None:
     suffix = str(int(time.time() * 1000))
     reg = await async_client.post(
         "/auth/register",
@@ -280,5 +344,5 @@ async def test_admin_wb_catalog_forbidden_for_seller(async_client: AsyncClient) 
     )
     sh = {"Authorization": f"Bearer {login.json()['access_token']}"}
 
-    r = await async_client.get("/products/wb-catalog-admin", headers=sh)
+    r = await async_client.get("/products/ff-catalog", headers=sh)
     assert r.status_code == 403
