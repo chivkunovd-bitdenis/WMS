@@ -1,4 +1,4 @@
-:80 {
+{$WMS_PUBLIC_DOMAIN} {
   encode gzip zstd
 
   # API is mounted under /api/* on the public origin, but FastAPI routes are rooted at /.

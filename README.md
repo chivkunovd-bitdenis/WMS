@@ -156,25 +156,19 @@ cd backend && pip install -e ".[dev]" && alembic upgrade head
 ## Production (Docker Compose)
 
 В проде фронт **собирается внутри Docker** и отдаётся как статика через Caddy (Node на сервере не нужен).
-API доступен только через тот же домен/порт по пути `/api/*`.
+API доступен только через тот же HTTPS-домен по пути `/api/*`.
+
+Перед первым запуском DNS A/AAAA для домена должен указывать на сервер, а порты `80` и `443` должны быть открыты.
 
 ### Первичный запуск
 
-1) На сервере в корне репозитория создать `.env` (в git не коммитить), минимум:
+1) На сервере в корне репозитория создать `.env` (в git не коммитить). Можно начать с шаблона:
 
-```env
-# внешний порт (Caddy) — 80 внутри контейнера
-WMS_HTTP_PORT=8080
-
-# БД
-POSTGRES_DB=wms
-POSTGRES_USER=postgres
-POSTGRES_PASSWORD=change-me
-
-# API security (обязательно в проде)
-JWT_SECRET_KEY=change-me-use-long-random-secret
-WMS_SECRETS_FERNET_KEY=change-me-urlsafe-base64-fernet-key
+```bash
+cp deploy/env.prod.example .env
 ```
+
+Затем заменить все `replace-*` значения и указать реальный `WMS_PUBLIC_DOMAIN`.
 
 2) Поднять стек:
 
@@ -192,11 +186,12 @@ docker compose -f docker-compose.prod.yml ps
 
 ### Доступ
 
-- UI (Fulfillment): `http://<server>:${WMS_HTTP_PORT:-8080}/`
-- UI (Seller portal, отдельное SPA): `http://<server>:${WMS_HTTP_PORT:-8080}/seller/`
-- API: `http://<server>:${WMS_HTTP_PORT:-8080}/api/...`
+- UI (Fulfillment): `https://${WMS_PUBLIC_DOMAIN}/`
+- UI (Seller portal, отдельное SPA): `https://${WMS_PUBLIC_DOMAIN}/seller/`
+- API: `https://${WMS_PUBLIC_DOMAIN}/api/...`
 
 Примечание по reverse proxy: в проде Caddy проксирует **`/api/*` → FastAPI**, при этом префикс **`/api` снимается** (внутри API маршруты как в Swagger: `/health`, `/auth/login`, …).
+Caddy хранит сертификаты Let's Encrypt в Docker volume `wms_caddy_data`, поэтому сертификат переживает пересборку контейнера.
 
 ## Frontend routes (v2)
 
