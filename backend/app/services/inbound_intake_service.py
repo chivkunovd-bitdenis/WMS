@@ -531,11 +531,11 @@ async def replace_distribution_lines(
     req = await get_request(session, tenant_id, request_id)
     if req is None:
         raise InboundIntakeError("request_not_found")
+    if req.distribution_completed_at is not None:
+        raise InboundIntakeError("distribution_completed")
     # Распределение по ячейкам доступно только после завершения пересчёта (verified).
     if req.status != STATUS_VERIFIED:
         raise InboundIntakeError("not_distributable")
-    if req.distribution_completed_at is not None:
-        raise InboundIntakeError("distribution_completed")
 
     accepted_by_product: dict[uuid.UUID, int] = {}
     for ln in req.lines:
@@ -588,15 +588,15 @@ async def complete_distribution(
         raise InboundIntakeError("request_not_found")
     if req.status != STATUS_VERIFIED:
         raise InboundIntakeError("not_distributable")
-    if req.distribution_completed_at is not None:
-        return req
 
     # Safety net: validate saved distribution lines against accepted quantities
     # right before locking. Even though PUT validates, this protects against races
     # and inconsistent states.
     accepted_by_product: dict[uuid.UUID, int] = {}
+    lines_by_product: dict[uuid.UUID, InboundIntakeLine] = {}
     for ln in req.lines:
         accepted_by_product[ln.product_id] = _accepted_qty_for_line(ln)
+        lines_by_product[ln.product_id] = ln
 
     stmt = select(InboundIntakeDistributionLine).where(
         InboundIntakeDistributionLine.request_id == request_id
@@ -614,10 +614,36 @@ async def complete_distribution(
         if accepted <= 0:
             raise InboundIntakeError("product_not_accepted")
         sum_by_product[r.product_id] = sum_by_product.get(r.product_id, 0) + r.quantity
-        if sum_by_product[r.product_id] > accepted:
+        line = lines_by_product[r.product_id]
+        if max(line.posted_qty, sum_by_product[r.product_id]) > accepted:
             raise InboundIntakeError("qty_exceeds_accepted")
 
-    req.distribution_completed_at = datetime.now(UTC)
+    distributed_before_by_product: dict[uuid.UUID, int] = {}
+    for r in rows:
+        line = lines_by_product[r.product_id]
+        distributed_before = distributed_before_by_product.get(r.product_id, 0)
+        distributed_after = distributed_before + r.quantity
+        distributed_before_by_product[r.product_id] = distributed_after
+        quantity_to_post = min(
+            r.quantity,
+            max(0, distributed_after - line.posted_qty),
+        )
+        if quantity_to_post < 1:
+            continue
+        await inv_svc.apply_inbound_receive(
+            session,
+            tenant_id=tenant_id,
+            product_id=r.product_id,
+            storage_location_id=r.storage_location_id,
+            quantity=quantity_to_post,
+            movement_type=MOVEMENT_TYPE_INBOUND_INTAKE,
+            inbound_intake_line_id=line.id,
+        )
+        line.posted_qty += quantity_to_post
+
+    if req.distribution_completed_at is None:
+        req.distribution_completed_at = datetime.now(UTC)
+    _maybe_complete_request(req)
     await session.commit()
     await session.refresh(req)
     return req

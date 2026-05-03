@@ -106,6 +106,24 @@ async def test_inbound_distribution_lines_validate_limits_and_lock(
 
     done = await async_client.post(f"{base}/{rid}/distribution-complete", headers=ah)
     assert done.status_code == 200, done.text
+    assert done.json()["status"] == "posted"
+    assert done.json()["lines"][0]["posted_qty"] == 5
+
+    movements = await async_client.get(f"{base}/{rid}/movements", headers=ah)
+    assert movements.status_code == 200, movements.text
+    assert sorted(m["quantity_delta"] for m in movements.json()) == [2, 3]
+
+    balances = await async_client.get(
+        "/operations/inventory-balances/summary",
+        headers=ah,
+    )
+    assert balances.status_code == 200, balances.text
+    balance_row = next(r for r in balances.json() if r["product_id"] == pid)
+    assert balance_row["quantity"] == 5
+
+    ff_catalog = await async_client.get("/products/ff-catalog", headers=ah)
+    assert ff_catalog.status_code == 200, ff_catalog.text
+    assert pid in {r["id"] for r in ff_catalog.json()}
 
     locked = await async_client.put(
         f"{base}/{rid}/distribution-lines",
