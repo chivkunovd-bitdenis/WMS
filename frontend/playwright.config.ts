@@ -7,8 +7,12 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const backendDir = path.resolve(__dirname, '..', 'backend');
 
-const reuse = !process.env.CI;
+// Avoid collisions with locally running dev servers during development.
+// e2e should start with a fresh backend DB and a dedicated Vite instance.
+const reuse = false;
 const e2eApiPort = 18000;
+// Use a non-default port to avoid colliding with a locally running `npm run dev`.
+const e2eWebPort = Number(process.env.E2E_WEB_PORT ?? 5174);
 
 export default defineConfig({
   testDir: './tests-e2e',
@@ -16,9 +20,9 @@ export default defineConfig({
   expect: { timeout: 10_000 },
   retries: process.env.CI ? 2 : 0,
   // One API + shared sqlite file: parallel workers cause DB locks and flaky catalog writes.
-  workers: process.env.CI ? 1 : undefined,
+  workers: 1,
   use: {
-    baseURL: process.env.E2E_BASE_URL ?? 'http://localhost:5173',
+    baseURL: process.env.E2E_BASE_URL ?? `http://localhost:${e2eWebPort}`,
     trace: 'on-first-retry',
   },
   webServer: [
@@ -33,17 +37,18 @@ export default defineConfig({
         JWT_SECRET_KEY: 'ci-jwt-secret-key-minimum-32-characters-long',
         E2E_MOCK_WB_CARDS: '1',
         E2E_MOCK_WB_SUPPLIES: '1',
+        E2E_MOCK_WB_WAREHOUSES: '1',
       },
       port: e2eApiPort,
       reuseExistingServer: reuse,
     },
     {
-      command: 'npm run dev -- --host 0.0.0.0 --port 5173',
+      command: `npm run dev -- --host 0.0.0.0 --port ${e2eWebPort}`,
       env: {
         ...process.env,
         VITE_API_PROXY: `http://127.0.0.1:${e2eApiPort}`,
       },
-      port: 5173,
+      port: e2eWebPort,
       reuseExistingServer: reuse,
     },
   ],

@@ -1,0 +1,20 @@
+# Build context for `docker compose -f docker-compose.prod.yml build web` (context: repository root).
+# Without ignoring local frontend/node_modules, `COPY frontend` can bake a wrong tree and break `npm ci` / `npm run build`.
+
+.git
+.github
+.cursor
+
+backend
+docs
+deploy
+
+frontend/node_modules
+frontend/dist
+frontend/playwright-report
+frontend/test-results
+
+**/__pycache__
+**/.pytest_cache
+**/.mypy_cache
+**/.ruff_cache

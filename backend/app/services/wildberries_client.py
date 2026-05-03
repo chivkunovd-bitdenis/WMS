@@ -10,6 +10,7 @@ from app.core.settings import settings
 
 CARDS_LIST_PATH = "/content/v2/get/cards/list"
 SUPPLIES_LIST_PATH = "/api/v1/supplies"
+MP_WAREHOUSES_PATH = "/api/v1/warehouses"
 
 
 class WildberriesClientError(Exception):
@@ -25,6 +26,8 @@ async def fetch_cards_list(
     api_token: str,
     content_api_base: str | None = None,
     limit: int = 100,
+    cursor_updated_at: str | None = None,
+    cursor_nm_id: int | None = None,
 ) -> dict[str, Any]:
     """POST /content/v2/get/cards/list — first page (import-only, MVP)."""
     if settings.e2e_mock_wb_cards:
@@ -38,10 +41,19 @@ async def fetch_cards_list(
         "Authorization": api_token,
         "Content-Type": "application/json",
     }
+    cursor: dict[str, Any] = {"limit": min(limit, 100)}
+    if cursor_updated_at:
+        cursor["updatedAt"] = cursor_updated_at
+    if cursor_nm_id is not None:
+        cursor["nmID"] = int(cursor_nm_id)
+    # WB docs: settings.filter.textSearch can match barcode/vendorCode/nmID.
+    # For full sync we rely on cursor-based paging with withPhoto=-1 (all cards).
     payload: dict[str, Any] = {
         "settings": {
-            "cursor": {"limit": min(limit, 100)},
-        },
+            "sort": {"ascending": False},
+            "filter": {"withPhoto": -1},
+            "cursor": cursor,
+        }
     }
     try:
         response = await client.post(url, headers=headers, json=payload, timeout=60.0)
@@ -101,4 +113,40 @@ async def fetch_supplies_list(
     sup = data.get("supplies") if isinstance(data, dict) else None
     if isinstance(sup, list):
         return cast(list[dict[str, Any]], sup)
+    return []
+
+
+async def fetch_mp_warehouses_list(
+    client: httpx.AsyncClient,
+    *,
+    api_token: str,
+    supplies_api_base: str | None = None,
+) -> list[dict[str, Any]]:
+    """GET /api/v1/warehouses — FBW warehouse list (supplies API key)."""
+    if settings.e2e_mock_wb_warehouses:
+        return [
+            {
+                "ID": 900001,
+                "name": "E2E WB склад",
+                "address": "E2E",
+                "workTime": "24/7",
+                "isActive": True,
+                "isTransitActive": False,
+            },
+        ]
+    base = (supplies_api_base or settings.wildberries_supplies_api_base).rstrip("/")
+    url = f"{base}{MP_WAREHOUSES_PATH}"
+    headers = {"Authorization": api_token}
+    try:
+        response = await client.get(url, headers=headers, timeout=60.0)
+    except httpx.HTTPError as exc:
+        raise WildberriesClientError("transport_error") from exc
+    if response.status_code >= 400:
+        raise WildberriesClientError(
+            "upstream_error",
+            status_code=response.status_code,
+        )
+    data = response.json()
+    if isinstance(data, list):
+        return cast(list[dict[str, Any]], data)
     return []

@@ -24,6 +24,9 @@ class StorageLocation(Base):
         UniqueConstraint(
             "warehouse_id", "code", name="uq_storage_locations_wh_code"
         ),
+        UniqueConstraint(
+            "tenant_id", "barcode", name="uq_storage_locations_tenant_barcode"
+        ),
     )
 
     id: Mapped[uuid.UUID] = mapped_column(
@@ -36,6 +39,7 @@ class StorageLocation(Base):
         Uuid(as_uuid=True), ForeignKey("warehouses.id", ondelete="CASCADE"), index=True
     )
     code: Mapped[str] = mapped_column(String(64), nullable=False)
+    barcode: Mapped[str] = mapped_column(String(64), nullable=False, index=True)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), nullable=False
     )

@@ -32,6 +32,12 @@ services:
     environment:
       DATABASE_URL: postgresql+psycopg_async://postgres:postgres@db:5432/wms
       CELERY_BROKER_URL: redis://redis:6379/0
+      # Test bootstrap: stable credentials for local docker environment.
+      WMS_BOOTSTRAP_ADMIN: "1"
+      WMS_BOOTSTRAP_ADMIN_EMAIL: "admin@test.example.com"
+      WMS_BOOTSTRAP_ADMIN_PASSWORD: "password123"
+      WMS_BOOTSTRAP_ORG_NAME: "WMS Test"
+      WMS_BOOTSTRAP_ORG_SLUG: "wms-test"
     depends_on:
       db:
         condition: service_healthy
@@ -62,11 +68,11 @@ services:
 
   web:
     build:
-      context: ./frontend
-    environment:
-      # Прокси Vite внутри сети compose (браузер → :15173 → /api → api:8000)
-      VITE_API_PROXY: http://api:8000
+      context: .
+      dockerfile: frontend/Dockerfile.prod
     depends_on:
       - api
     ports:
-      - "${WMS_WEB_PORT:-15173}:5173"
+      - "${WMS_WEB_PORT:-15173}:80"
+    volumes:
+      - ./frontend/deploy/Caddyfile.local:/etc/caddy/Caddyfile:ro

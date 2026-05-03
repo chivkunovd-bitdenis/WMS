@@ -503,6 +503,21 @@ This document expands **[IMPLEMENTED_PRODUCT_SCENARIOS_EN.md](./IMPLEMENTED_PROD
 - **Steps:** load app while profile (`/auth/me` equivalent user journey) is loading.
 - **Expected:** **loading** state visible; **no** overlapping login and register forms during load.
 
+### TC-S15-003 Fulfillment admin dashboard — week planning and combined supplies/shipments
+
+- **Actor:** fulfillment admin.
+- **Preconditions:** logged-in session after registration or login (tenant exists).
+- **Steps:**
+  1. Land on the **fulfillment admin dashboard** (default post-auth landing for that shell).
+  2. Confirm a **week-oriented planning** area is shown together with **short summaries** of supplies and shipments (may be empty for a new tenant).
+  3. Use navigation to open **Supplies and shipments** (Russian UI: *Поставки и отгрузки*; unified list: seller→FC **supply**, operational outbound, **FC→marketplace shipment**, discrepancy acts — see `docs/MVP_DECISIONS_RU.md` terminology).
+  4. On that page, use **Create shipment to MP** (Russian: *Создать отгрузку на МП*; backend `marketplace_unload`).
+- **Expected:**
+  - Week planning and document summary areas are **visible** and usable (e.g. change week if the UI offers it).
+  - The combined list view opens without error; **Create shipment to MP** and **Create diverge** are visible; after create, a **success** notice appears and a draft row shows in the list (**Given/When/Then**).
+  - Opening the FC→MP shipment row shows a line dialog; user can add a line and **confirm** the document (status «Утверждено» / confirmed).
+- **Negative / restrictions:** without a warehouse, creating the FC→MP shipment should show a clear error; deeper inbound / operational outbound rules remain in S06/S08.
+
 ---
 
 ## Cross-scenario matrix (acceptance checklist for role tests)

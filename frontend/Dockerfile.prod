@@ -1,0 +1,17 @@
+FROM node:20-slim AS build
+
+WORKDIR /app/frontend
+
+COPY frontend/package.json frontend/package-lock.json /app/frontend/
+RUN npm ci
+
+COPY frontend /app/frontend
+RUN npm run build
+
+
+FROM caddy:2-alpine
+
+WORKDIR /srv
+COPY --from=build /app/frontend/dist /srv
+COPY frontend/deploy/Caddyfile /etc/caddy/Caddyfile
+

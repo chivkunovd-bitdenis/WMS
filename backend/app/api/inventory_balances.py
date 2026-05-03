@@ -27,6 +27,30 @@ class InventoryBalanceRowOut(BaseModel):
     available: int
 
 
+@router.get("/summary", response_model=list[InventoryBalanceRowOut])
+async def get_inventory_balances_summary(
+    user: Annotated[User, Depends(get_current_user)],
+    session: Annotated[AsyncSession, Depends(get_db)],
+    seller_scope: Annotated[uuid.UUID | None, Depends(seller_line_product_scope)],
+) -> list[InventoryBalanceRowOut]:
+    rows = await inventory_service.list_balances_total(
+        session,
+        user.tenant_id,
+        seller_product_owner_id=seller_scope,
+    )
+    return [
+        InventoryBalanceRowOut(
+            product_id=str(pid),
+            sku_code=sku_code,
+            product_name=product_name,
+            quantity=qty,
+            reserved=rsv,
+            available=qty - rsv,
+        )
+        for pid, sku_code, product_name, qty, rsv in rows
+    ]
+
+
 @router.get("", response_model=list[InventoryBalanceRowOut])
 async def get_inventory_balances(
     user: Annotated[User, Depends(get_current_user)],

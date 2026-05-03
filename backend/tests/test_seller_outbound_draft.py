@@ -78,6 +78,15 @@ async def test_seller_outbound_draft_create_and_line_own_sku_only(
         },
     )
     await async_client.post(f"{base_in}/{rid_in}/submit", headers=ah)
+    await async_client.post(f"{base_in}/{rid_in}/primary-accept", headers=ah)
+    inb = await async_client.get(f"{base_in}/{rid_in}", headers=ah)
+    line_id = inb.json()["lines"][0]["id"]
+    await async_client.patch(
+        f"{base_in}/{rid_in}/lines/{line_id}/actual",
+        headers=ah,
+        json={"actual_qty": 10},
+    )
+    await async_client.post(f"{base_in}/{rid_in}/verify", headers=ah)
     await async_client.post(f"{base_in}/{rid_in}/post", headers=ah)
 
     seller_email = f"out-sl-{suffix}@example.com"

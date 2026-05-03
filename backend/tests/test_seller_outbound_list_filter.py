@@ -79,6 +79,15 @@ async def test_seller_outbound_list_only_own_seller_requests(
             },
         )
         await async_client.post(f"{base_in}/{rid}/submit", headers=ah)
+        await async_client.post(f"{base_in}/{rid}/primary-accept", headers=ah)
+        inb = await async_client.get(f"{base_in}/{rid}", headers=ah)
+        line_id = inb.json()["lines"][0]["id"]
+        await async_client.patch(
+            f"{base_in}/{rid}/lines/{line_id}/actual",
+            headers=ah,
+            json={"actual_qty": qty},
+        )
+        await async_client.post(f"{base_in}/{rid}/verify", headers=ah)
         await async_client.post(f"{base_in}/{rid}/post", headers=ah)
 
     base_out = "/operations/outbound-shipment-requests"

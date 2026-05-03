@@ -159,6 +159,21 @@ async def test_outbound_rejects_second_line_from_different_seller(
     await async_client.post(
         f"/operations/inbound-intake-requests/{in_id}/submit", headers=h
     )
+    await async_client.post(
+        f"/operations/inbound-intake-requests/{in_id}/primary-accept", headers=h
+    )
+    inb = await async_client.get(
+        f"/operations/inbound-intake-requests/{in_id}", headers=h
+    )
+    line_id = inb.json()["lines"][0]["id"]
+    await async_client.patch(
+        f"/operations/inbound-intake-requests/{in_id}/lines/{line_id}/actual",
+        headers=h,
+        json={"actual_qty": 10},
+    )
+    await async_client.post(
+        f"/operations/inbound-intake-requests/{in_id}/verify", headers=h
+    )
     assert (
         await async_client.post(
             f"/operations/inbound-intake-requests/{in_id}/post", headers=h

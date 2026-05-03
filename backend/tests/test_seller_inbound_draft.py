@@ -129,8 +129,9 @@ async def test_seller_inbound_draft_visible_and_own_product_line_only(
     )
     assert ok_line.status_code == 201, ok_line.text
 
-    submit403 = await async_client.post(
+    submit = await async_client.post(
         f"/operations/inbound-intake-requests/{rid}/submit",
         headers=sh,
     )
-    assert submit403.status_code == 403
+    assert submit.status_code == 200, submit.text
+    assert submit.json()["status"] == "submitted"

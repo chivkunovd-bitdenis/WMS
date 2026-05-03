@@ -1,18 +1,20 @@
 from __future__ import annotations
 
 import uuid
+from datetime import date
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Response, status
 from pydantic import BaseModel, Field
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.deps import get_current_user, require_fulfillment_admin, seller_line_product_scope
 from app.core.roles import FULFILLMENT_ADMIN, FULFILLMENT_SELLER
 from app.db.session import get_db
-from app.models.inbound_intake import InboundIntakeLine
+from app.models.inbound_intake import InboundIntakeDistributionLine, InboundIntakeLine
 from app.models.inventory_movement import InventoryMovement
 from app.models.product import Product
+from app.models.storage_location import StorageLocation
 from app.models.user import User
 from app.services import inbound_intake_service as svc
 from app.services import inventory_service as inv_svc
@@ -26,6 +28,11 @@ router = APIRouter(
 
 class InboundIntakeRequestCreate(BaseModel):
     warehouse_id: uuid.UUID
+    planned_delivery_date: date | None = None
+
+
+class InboundIntakeRequestPlannedPatch(BaseModel):
+    planned_delivery_date: date | None = None
 
 
 class InboundIntakeLineCreate(BaseModel):
@@ -38,8 +45,15 @@ class InboundIntakeLineStoragePatch(BaseModel):
     storage_location_id: uuid.UUID
 
 
+class InboundIntakeLineExpectedPatch(BaseModel):
+    expected_qty: int = Field(ge=1, le=1_000_000_000)
+
+
 class InboundIntakeLineReceiveBody(BaseModel):
     quantity: int = Field(ge=1, le=1_000_000_000)
+
+class InboundIntakeLineActualPatch(BaseModel):
+    actual_qty: int = Field(ge=0, le=1_000_000_000)
 
 
 class InboundIntakeLineOut(BaseModel):
@@ -48,6 +62,7 @@ class InboundIntakeLineOut(BaseModel):
     sku_code: str
     product_name: str
     expected_qty: int
+    actual_qty: int | None
     posted_qty: int
     storage_location_id: str | None
     storage_location_code: str | None
@@ -58,12 +73,20 @@ class InboundIntakeRequestSummaryOut(BaseModel):
     warehouse_id: str
     status: str
     line_count: int
+    planned_delivery_date: str | None = None
+    has_discrepancy: bool = False
+    seller_id: str | None = None
+    seller_name: str | None = None
+    created_at: str
 
 
 class InboundIntakeRequestOut(BaseModel):
     id: str
     warehouse_id: str
     status: str
+    planned_delivery_date: str | None = None
+    has_discrepancy: bool = False
+    distribution_completed_at: str | None = None
     lines: list[InboundIntakeLineOut]
 
 
@@ -85,6 +108,7 @@ def _line_out_from_orm(line: InboundIntakeLine, product: Product) -> InboundInta
         sku_code=product.sku_code,
         product_name=product.name,
         expected_qty=line.expected_qty,
+        actual_qty=line.actual_qty,
         posted_qty=line.posted_qty,
         storage_location_id=str(line.storage_location_id)
         if line.storage_location_id
@@ -107,6 +131,34 @@ def _movement_out(m: InventoryMovement) -> InventoryMovementOut:
     )
 
 
+class InboundDistributionLineIn(BaseModel):
+    product_id: uuid.UUID
+    storage_location_id: uuid.UUID
+    quantity: int = Field(ge=1, le=1_000_000_000)
+
+
+class InboundDistributionLineOut(BaseModel):
+    id: str
+    product_id: str
+    storage_location_id: str
+    storage_location_code: str
+    quantity: int
+    created_at: str
+
+
+def _dist_out(
+    row: InboundIntakeDistributionLine, loc: StorageLocation
+) -> InboundDistributionLineOut:
+    return InboundDistributionLineOut(
+        id=str(row.id),
+        product_id=str(row.product_id),
+        storage_location_id=str(row.storage_location_id),
+        storage_location_code=loc.code,
+        quantity=row.quantity,
+        created_at=row.created_at.isoformat(),
+    )
+
+
 @router.get("", response_model=list[InboundIntakeRequestSummaryOut])
 async def list_inbound_requests(
     user: Annotated[User, Depends(get_current_user)],
@@ -124,6 +176,13 @@ async def list_inbound_requests(
             warehouse_id=str(r.warehouse_id),
             status=r.status,
             line_count=len(r.lines),
+            planned_delivery_date=r.planned_delivery_date.isoformat()
+            if r.planned_delivery_date is not None
+            else None,
+            has_discrepancy=bool(getattr(r, "has_discrepancy", False)),
+            seller_id=str(r.seller_id) if r.seller_id is not None else None,
+            seller_name=r.seller.name if r.seller is not None else None,
+            created_at=r.created_at.isoformat(),
         )
         for r in rows
     ]
@@ -155,6 +214,7 @@ async def create_inbound_request(
             user.tenant_id,
             warehouse_id=body.warehouse_id,
             seller_id=owning_seller_id,
+            planned_delivery_date=body.planned_delivery_date,
         )
     except InboundIntakeError as exc:
         if exc.code == "warehouse_not_found":
@@ -172,6 +232,13 @@ async def create_inbound_request(
         id=str(r.id),
         warehouse_id=str(r.warehouse_id),
         status=r.status,
+        planned_delivery_date=r.planned_delivery_date.isoformat()
+        if r.planned_delivery_date is not None
+        else None,
+        has_discrepancy=bool(getattr(r, "has_discrepancy", False)),
+        distribution_completed_at=r.distribution_completed_at.isoformat()
+        if r.distribution_completed_at is not None
+        else None,
         lines=[],
     )
 
@@ -202,7 +269,209 @@ async def get_inbound_request(
         id=str(r.id),
         warehouse_id=str(r.warehouse_id),
         status=r.status,
+        planned_delivery_date=r.planned_delivery_date.isoformat()
+        if r.planned_delivery_date is not None
+        else None,
+        has_discrepancy=bool(getattr(r, "has_discrepancy", False)),
+        distribution_completed_at=r.distribution_completed_at.isoformat()
+        if r.distribution_completed_at is not None
+        else None,
         lines=lines_out,
+    )
+
+
+@router.patch("/{request_id}", response_model=InboundIntakeRequestOut)
+async def patch_inbound_request_planned(
+    request_id: uuid.UUID,
+    body: InboundIntakeRequestPlannedPatch,
+    user: Annotated[User, Depends(get_current_user)],
+    session: Annotated[AsyncSession, Depends(get_db)],
+    seller_scope: Annotated[uuid.UUID | None, Depends(seller_line_product_scope)],
+) -> InboundIntakeRequestOut:
+    if user.role not in (FULFILLMENT_ADMIN, FULFILLMENT_SELLER):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="forbidden",
+        )
+    line_seller_scope: uuid.UUID | None = (
+        None if user.role == FULFILLMENT_ADMIN else seller_scope
+    )
+    try:
+        r = await svc.patch_request_planned_delivery(
+            session,
+            user.tenant_id,
+            request_id,
+            planned_delivery_date=body.planned_delivery_date,
+            seller_product_owner_id=line_seller_scope,
+        )
+    except InboundIntakeError as exc:
+        if exc.code == "request_not_found":
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="request_not_found",
+            ) from None
+        if exc.code == "not_draft":
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail="not_draft",
+            ) from None
+        raise
+    r2 = await svc.get_request(session, user.tenant_id, r.id)
+    if r2 is None:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="request_missing",
+        )
+    return InboundIntakeRequestOut(
+        id=str(r2.id),
+        warehouse_id=str(r2.warehouse_id),
+        status=r2.status,
+        planned_delivery_date=r2.planned_delivery_date.isoformat()
+        if r2.planned_delivery_date is not None
+        else None,
+        has_discrepancy=bool(getattr(r2, "has_discrepancy", False)),
+        distribution_completed_at=r2.distribution_completed_at.isoformat()
+        if r2.distribution_completed_at is not None
+        else None,
+        lines=[_line_out_from_orm(ln, ln.product) for ln in r2.lines],
+    )
+
+
+@router.post("/{request_id}/primary-accept", response_model=InboundIntakeRequestOut)
+async def primary_accept_inbound_request(
+    request_id: uuid.UUID,
+    user: Annotated[User, Depends(require_fulfillment_admin)],
+    session: Annotated[AsyncSession, Depends(get_db)],
+) -> InboundIntakeRequestOut:
+    try:
+        r = await svc.primary_accept_request(session, user.tenant_id, request_id)
+    except InboundIntakeError as exc:
+        if exc.code == "request_not_found":
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="request_not_found",
+            ) from None
+        if exc.code == "not_submitted":
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail="not_submitted",
+            ) from None
+        raise
+    r2 = await svc.get_request(session, user.tenant_id, r.id)
+    if r2 is None:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="request_missing",
+        )
+    return InboundIntakeRequestOut(
+        id=str(r2.id),
+        warehouse_id=str(r2.warehouse_id),
+        status=r2.status,
+        planned_delivery_date=r2.planned_delivery_date.isoformat()
+        if r2.planned_delivery_date is not None
+        else None,
+        has_discrepancy=bool(getattr(r2, "has_discrepancy", False)),
+        distribution_completed_at=r2.distribution_completed_at.isoformat()
+        if r2.distribution_completed_at is not None
+        else None,
+        lines=[_line_out_from_orm(ln, ln.product) for ln in r2.lines],
+    )
+
+
+@router.patch(
+    "/{request_id}/lines/{line_id}/actual",
+    response_model=InboundIntakeLineOut,
+)
+async def patch_inbound_line_actual(
+    request_id: uuid.UUID,
+    line_id: uuid.UUID,
+    body: InboundIntakeLineActualPatch,
+    user: Annotated[User, Depends(require_fulfillment_admin)],
+    session: Annotated[AsyncSession, Depends(get_db)],
+) -> InboundIntakeLineOut:
+    try:
+        line = await svc.set_line_actual_qty(
+            session,
+            user.tenant_id,
+            request_id,
+            line_id,
+            actual_qty=body.actual_qty,
+        )
+    except InboundIntakeError as exc:
+        if exc.code == "line_not_found":
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="line_not_found",
+            ) from None
+        if exc.code == "not_verifying":
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail="not_verifying",
+            ) from None
+        if exc.code == "actual_below_posted":
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail="actual_below_posted",
+            ) from None
+        if exc.code == "invalid_qty":
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+                detail="invalid_qty",
+            ) from None
+        raise
+    prod = await session.get(Product, line.product_id)
+    if prod is None:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="product_missing",
+        )
+    await session.refresh(line, attribute_names=["storage_location"])
+    return _line_out_from_orm(line, prod)
+
+
+@router.post("/{request_id}/verify", response_model=InboundIntakeRequestOut)
+async def complete_inbound_verification(
+    request_id: uuid.UUID,
+    user: Annotated[User, Depends(require_fulfillment_admin)],
+    session: Annotated[AsyncSession, Depends(get_db)],
+) -> InboundIntakeRequestOut:
+    try:
+        r = await svc.complete_verification(session, user.tenant_id, request_id)
+    except InboundIntakeError as exc:
+        if exc.code == "request_not_found":
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="request_not_found",
+            ) from None
+        if exc.code == "not_verifying":
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail="not_verifying",
+            ) from None
+        if exc.code == "actual_missing":
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+                detail="actual_missing",
+            ) from None
+        raise
+    r2 = await svc.get_request(session, user.tenant_id, r.id)
+    if r2 is None:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="request_missing",
+        )
+    return InboundIntakeRequestOut(
+        id=str(r2.id),
+        warehouse_id=str(r2.warehouse_id),
+        status=r2.status,
+        planned_delivery_date=r2.planned_delivery_date.isoformat()
+        if r2.planned_delivery_date is not None
+        else None,
+        has_discrepancy=bool(getattr(r2, "has_discrepancy", False)),
+        distribution_completed_at=r2.distribution_completed_at.isoformat()
+        if r2.distribution_completed_at is not None
+        else None,
+        lines=[_line_out_from_orm(ln, ln.product) for ln in r2.lines],
     )
 
 
@@ -284,7 +553,7 @@ async def add_inbound_line(
             ) from None
         if exc.code == "invalid_qty":
             raise HTTPException(
-                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
                 detail="invalid_qty",
             ) from None
         if exc.code == "duplicate_line":
@@ -299,12 +568,12 @@ async def add_inbound_line(
             ) from None
         if exc.code == "product_seller_mismatch":
             raise HTTPException(
-                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
                 detail="product_seller_mismatch",
             ) from None
         if exc.code == "mixed_seller_lines":
             raise HTTPException(
-                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
                 detail="mixed_seller_lines",
             ) from None
         raise
@@ -316,6 +585,114 @@ async def add_inbound_line(
         )
     await session.refresh(line, attribute_names=["storage_location"])
     return _line_out_from_orm(line, prod)
+
+
+@router.patch(
+    "/{request_id}/lines/{line_id}/expected",
+    response_model=InboundIntakeLineOut,
+)
+async def patch_inbound_line_expected(
+    request_id: uuid.UUID,
+    line_id: uuid.UUID,
+    body: InboundIntakeLineExpectedPatch,
+    user: Annotated[User, Depends(get_current_user)],
+    session: Annotated[AsyncSession, Depends(get_db)],
+    seller_scope: Annotated[uuid.UUID | None, Depends(seller_line_product_scope)],
+) -> InboundIntakeLineOut:
+    if user.role not in (FULFILLMENT_ADMIN, FULFILLMENT_SELLER):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="forbidden",
+        )
+    line_seller_scope: uuid.UUID | None = (
+        None if user.role == FULFILLMENT_ADMIN else seller_scope
+    )
+    try:
+        line = await svc.update_line_expected_qty(
+            session,
+            user.tenant_id,
+            request_id,
+            line_id,
+            expected_qty=body.expected_qty,
+            seller_product_owner_id=line_seller_scope,
+        )
+    except InboundIntakeError as exc:
+        if exc.code == "line_not_found":
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="line_not_found",
+            ) from None
+        if exc.code == "not_draft":
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail="not_draft",
+            ) from None
+        if exc.code == "line_already_posted":
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail="line_already_posted",
+            ) from None
+        if exc.code == "invalid_qty":
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+                detail="invalid_qty",
+            ) from None
+        raise
+    prod = await session.get(Product, line.product_id)
+    if prod is None:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="product_missing",
+        )
+    await session.refresh(line, attribute_names=["storage_location"])
+    return _line_out_from_orm(line, prod)
+
+
+@router.delete(
+    "/{request_id}/lines/{line_id}",
+    status_code=status.HTTP_204_NO_CONTENT,
+)
+async def delete_inbound_draft_line(
+    request_id: uuid.UUID,
+    line_id: uuid.UUID,
+    user: Annotated[User, Depends(get_current_user)],
+    session: Annotated[AsyncSession, Depends(get_db)],
+    seller_scope: Annotated[uuid.UUID | None, Depends(seller_line_product_scope)],
+) -> Response:
+    if user.role not in (FULFILLMENT_ADMIN, FULFILLMENT_SELLER):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="forbidden",
+        )
+    line_seller_scope: uuid.UUID | None = (
+        None if user.role == FULFILLMENT_ADMIN else seller_scope
+    )
+    try:
+        await svc.delete_draft_line(
+            session,
+            user.tenant_id,
+            request_id,
+            line_id,
+            seller_product_owner_id=line_seller_scope,
+        )
+    except InboundIntakeError as exc:
+        if exc.code == "line_not_found":
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="line_not_found",
+            ) from None
+        if exc.code == "not_draft":
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail="not_draft",
+            ) from None
+        if exc.code == "line_already_posted":
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail="line_already_posted",
+            ) from None
+        raise
+    return Response(status_code=status.HTTP_204_NO_CONTENT)
 
 
 @router.patch(
@@ -404,19 +781,29 @@ async def receive_inbound_line(
                 status_code=status.HTTP_409_CONFLICT,
                 detail="not_submitted",
             ) from None
+        if exc.code == "not_verified":
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail="not_verified",
+            ) from None
         if exc.code == "nothing_to_receive":
             raise HTTPException(
-                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
                 detail="nothing_to_receive",
+            ) from None
+        if exc.code == "actual_missing":
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+                detail="actual_missing",
             ) from None
         if exc.code == "storage_not_assigned":
             raise HTTPException(
-                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
                 detail="storage_not_assigned",
             ) from None
         if exc.code == "invalid_qty":
             raise HTTPException(
-                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
                 detail="invalid_qty",
             ) from None
         raise
@@ -430,6 +817,13 @@ async def receive_inbound_line(
         id=str(r2.id),
         warehouse_id=str(r2.warehouse_id),
         status=r2.status,
+        planned_delivery_date=r2.planned_delivery_date.isoformat()
+        if r2.planned_delivery_date is not None
+        else None,
+        has_discrepancy=bool(getattr(r2, "has_discrepancy", False)),
+        distribution_completed_at=r2.distribution_completed_at.isoformat()
+        if r2.distribution_completed_at is not None
+        else None,
         lines=[_line_out_from_orm(ln, ln.product) for ln in r2.lines],
     )
 
@@ -437,11 +831,22 @@ async def receive_inbound_line(
 @router.post("/{request_id}/submit", response_model=InboundIntakeRequestOut)
 async def submit_inbound_request(
     request_id: uuid.UUID,
-    user: Annotated[User, Depends(require_fulfillment_admin)],
+    user: Annotated[User, Depends(get_current_user)],
     session: Annotated[AsyncSession, Depends(get_db)],
+    seller_scope: Annotated[uuid.UUID | None, Depends(seller_line_product_scope)],
 ) -> InboundIntakeRequestOut:
+    if user.role not in (FULFILLMENT_ADMIN, FULFILLMENT_SELLER):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="forbidden",
+        )
     try:
-        r = await svc.submit_request(session, user.tenant_id, request_id)
+        r = await svc.submit_request(
+            session,
+            user.tenant_id,
+            request_id,
+            seller_product_owner_id=seller_scope,
+        )
     except InboundIntakeError as exc:
         if exc.code == "request_not_found":
             raise HTTPException(
@@ -455,7 +860,7 @@ async def submit_inbound_request(
             ) from None
         if exc.code == "submit_empty":
             raise HTTPException(
-                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
                 detail="submit_empty",
             ) from None
         raise
@@ -469,6 +874,13 @@ async def submit_inbound_request(
         id=str(r2.id),
         warehouse_id=str(r2.warehouse_id),
         status=r2.status,
+        planned_delivery_date=r2.planned_delivery_date.isoformat()
+        if r2.planned_delivery_date is not None
+        else None,
+        has_discrepancy=bool(getattr(r2, "has_discrepancy", False)),
+        distribution_completed_at=r2.distribution_completed_at.isoformat()
+        if r2.distribution_completed_at is not None
+        else None,
         lines=[_line_out_from_orm(ln, ln.product) for ln in r2.lines],
     )
 
@@ -492,6 +904,11 @@ async def post_inbound_request(
                 status_code=status.HTTP_409_CONFLICT,
                 detail="not_submitted",
             ) from None
+        if exc.code == "not_verified":
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail="not_verified",
+            ) from None
         if exc.code == "already_posted":
             raise HTTPException(
                 status_code=status.HTTP_409_CONFLICT,
@@ -499,12 +916,17 @@ async def post_inbound_request(
             ) from None
         if exc.code == "lines_missing_storage":
             raise HTTPException(
-                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
                 detail="lines_missing_storage",
+            ) from None
+        if exc.code == "actual_missing":
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+                detail="actual_missing",
             ) from None
         if exc.code == "nothing_to_receive":
             raise HTTPException(
-                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
                 detail="nothing_to_receive",
             ) from None
         raise
@@ -518,5 +940,151 @@ async def post_inbound_request(
         id=str(r2.id),
         warehouse_id=str(r2.warehouse_id),
         status=r2.status,
+        planned_delivery_date=r2.planned_delivery_date.isoformat()
+        if r2.planned_delivery_date is not None
+        else None,
+        has_discrepancy=bool(getattr(r2, "has_discrepancy", False)),
+        distribution_completed_at=r2.distribution_completed_at.isoformat()
+        if r2.distribution_completed_at is not None
+        else None,
+        lines=[_line_out_from_orm(ln, ln.product) for ln in r2.lines],
+    )
+
+
+@router.get(
+    "/{request_id}/distribution-lines",
+    response_model=list[InboundDistributionLineOut],
+)
+async def list_distribution_lines(
+    request_id: uuid.UUID,
+    user: Annotated[User, Depends(require_fulfillment_admin)],
+    session: Annotated[AsyncSession, Depends(get_db)],
+) -> list[InboundDistributionLineOut]:
+    try:
+        rows = await svc.list_distribution_lines(session, user.tenant_id, request_id)
+    except InboundIntakeError as exc:
+        if exc.code == "request_not_found":
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="request_not_found",
+            ) from None
+        raise
+    out: list[InboundDistributionLineOut] = []
+    for r in rows:
+        loc = await session.get(StorageLocation, r.storage_location_id)
+        if loc is None:
+            continue
+        out.append(_dist_out(r, loc))
+    return out
+
+
+@router.put(
+    "/{request_id}/distribution-lines",
+    response_model=list[InboundDistributionLineOut],
+)
+async def replace_distribution_lines(
+    request_id: uuid.UUID,
+    body: list[InboundDistributionLineIn],
+    user: Annotated[User, Depends(require_fulfillment_admin)],
+    session: Annotated[AsyncSession, Depends(get_db)],
+) -> list[InboundDistributionLineOut]:
+    try:
+        rows = await svc.replace_distribution_lines(
+            session,
+            user.tenant_id,
+            request_id,
+            lines=[(x.product_id, x.storage_location_id, x.quantity) for x in body],
+        )
+    except InboundIntakeError as exc:
+        if exc.code == "request_not_found":
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="request_not_found",
+            ) from None
+        if exc.code == "not_distributable":
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail="not_distributable",
+            ) from None
+        if exc.code == "distribution_completed":
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail="distribution_completed",
+            ) from None
+        if exc.code in ("invalid_qty", "qty_exceeds_accepted", "product_not_accepted"):
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+                detail=exc.code,
+            ) from None
+        if exc.code == "product_not_on_request":
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+                detail="product_not_on_request",
+            ) from None
+        if exc.code == "location_not_found":
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="location_not_found",
+            ) from None
+        raise
+    out: list[InboundDistributionLineOut] = []
+    for r in rows:
+        loc = await session.get(StorageLocation, r.storage_location_id)
+        if loc is None:
+            continue
+        out.append(_dist_out(r, loc))
+    return out
+
+
+@router.post(
+    "/{request_id}/distribution-complete",
+    response_model=InboundIntakeRequestOut,
+)
+async def complete_distribution(
+    request_id: uuid.UUID,
+    user: Annotated[User, Depends(require_fulfillment_admin)],
+    session: Annotated[AsyncSession, Depends(get_db)],
+) -> InboundIntakeRequestOut:
+    try:
+        await svc.complete_distribution(session, user.tenant_id, request_id)
+    except InboundIntakeError as exc:
+        if exc.code == "request_not_found":
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="request_not_found",
+            ) from None
+        if exc.code == "not_distributable":
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail="not_distributable",
+            ) from None
+        if exc.code in (
+            "invalid_qty",
+            "qty_exceeds_accepted",
+            "product_not_on_request",
+            "product_not_accepted",
+        ):
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+                detail=exc.code,
+            ) from None
+        raise
+    r2 = await svc.get_request(session, user.tenant_id, request_id)
+    if r2 is None:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="request_missing",
+        )
+    return InboundIntakeRequestOut(
+        id=str(r2.id),
+        warehouse_id=str(r2.warehouse_id),
+        status=r2.status,
+        planned_delivery_date=r2.planned_delivery_date.isoformat()
+        if r2.planned_delivery_date is not None
+        else None,
+        has_discrepancy=bool(getattr(r2, "has_discrepancy", False)),
+        distribution_completed_at=r2.distribution_completed_at.isoformat()
+        if r2.distribution_completed_at is not None
+        else None,
         lines=[_line_out_from_orm(ln, ln.product) for ln in r2.lines],
     )

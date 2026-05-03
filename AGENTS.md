@@ -4,7 +4,7 @@ This repo is optimized for an “autopilot” development loop.
 
 ## Product decisions (source of truth)
 
-Before picking an issue, read **[docs/MVP_DECISIONS_RU.md](docs/MVP_DECISIONS_RU.md)** (RU): tenants, billing liter‑day, WB import‑only, portal scope, printer 58×40.
+Before picking an issue, read **[docs/MVP_DECISIONS_RU.md](docs/MVP_DECISIONS_RU.md)** (RU): tenants, billing liter‑day, WB import‑only, portal scope, printer 58×40, **RU product terms for FF↔MP flows** (поставка vs отгрузка — см. раздел «Терминология» там же).
 
 Epic map for splitting work: **[docs/BACKLOG_EPICS_RU.md](docs/BACKLOG_EPICS_RU.md)**.
 

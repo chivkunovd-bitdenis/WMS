@@ -3,61 +3,54 @@ import { test, expect } from '@playwright/test';
 import {
   waitForGetOk,
   waitForPostOk,
-  waitForLocationsListGet,
   waitForOutboundShipOk,
 } from './api-waits';
+import { openFulfillmentRegistration } from './auth-flow';
 
+// TC-S07-001, TC-S08-001 — перемещение остатка и отгрузка (UI).
 test('stock transfer and outbound shipment — UI', async ({ page }) => {
-  const slug = `ff-tro-${Date.now()}`;
   const email = `e2e-tro-${Date.now()}@example.com`;
   const sku = `SKU-TRO-${Date.now()}`;
   const whCode = `wh-tro-${Date.now()}`;
 
   await page.goto('/');
+  await openFulfillmentRegistration(page);
   await page.getByTestId('register-form').getByLabel('Организация').fill('E2E TRO');
-  await page.getByTestId('register-slug').fill(slug);
-  await page.getByTestId('register-form').getByLabel('Email админа').fill(email);
+  await page.getByTestId('register-form').getByLabel('Email администратора').fill(email);
   await page.getByTestId('register-form').getByLabel('Пароль').fill('password123');
-  await Promise.all([
+  const [regRes] = await Promise.all([
     waitForPostOk(page, '/api/auth/register'),
     waitForGetOk(page, '/api/auth/me'),
     page.getByTestId('register-form').getByRole('button', { name: 'Создать аккаунт' }).click(),
   ]);
+  const regJson = (await regRes.json()) as { access_token: string };
+  const token = regJson.access_token;
+  const h = { Authorization: `Bearer ${token}` };
 
-  await page.getByTestId('warehouse-name').fill('Склад');
-  await page.getByTestId('warehouse-code').fill(whCode);
-  await Promise.all([
-    waitForPostOk(page, '/api/warehouses', (u) => !u.includes('/locations')),
-    waitForGetOk(page, '/api/warehouses'),
-    page.getByTestId('warehouse-submit').click(),
-  ]);
-  await page.getByTestId('warehouse-list').getByTestId('warehouse-item').first().click();
-
-  await page.getByTestId('location-code').fill('FROM-01');
-  await Promise.all([
-    waitForPostOk(page, '/api/warehouses', (u) => u.includes('/locations')),
-    waitForLocationsListGet(page),
-    page.getByTestId('location-submit').click(),
-  ]);
-  await page.getByTestId('location-code').fill('TO-01');
-  await Promise.all([
-    waitForPostOk(page, '/api/warehouses', (u) => u.includes('/locations')),
-    waitForLocationsListGet(page),
-    page.getByTestId('location-submit').click(),
-  ]);
-
-  await page.getByTestId('product-name').fill('Товар');
-  await page.getByTestId('product-sku').fill(sku);
-  await page.getByTestId('product-length-mm').fill('10');
-  await page.getByTestId('product-width-mm').fill('10');
-  await page.getByTestId('product-height-mm').fill('10');
-  await Promise.all([
-    waitForPostOk(page, '/api/products'),
-    waitForGetOk(page, '/api/products'),
-    page.getByTestId('product-submit').click(),
-  ]);
+  const wh = await page.request.post('/api/warehouses', {
+    headers: h,
+    data: { name: 'Склад', code: whCode },
+  });
+  expect(wh.ok()).toBeTruthy();
+  const wid = String(((await wh.json()) as { id: string }).id);
+  const locFrom = await page.request.post(`/api/warehouses/${wid}/locations`, {
+    headers: h,
+    data: { code: 'FROM-01' },
+  });
+  expect(locFrom.ok()).toBeTruthy();
+  const locTo = await page.request.post(`/api/warehouses/${wid}/locations`, {
+    headers: h,
+    data: { code: 'TO-01' },
+  });
+  expect(locTo.ok()).toBeTruthy();
+  const pr = await page.request.post('/api/products', {
+    headers: h,
+    data: { name: 'Товар', sku_code: sku, length_mm: 10, width_mm: 10, height_mm: 10 },
+  });
+  expect(pr.ok()).toBeTruthy();
 
   const baseIn = '/api/operations/inbound-intake-requests';
+  await page.goto('/app/ops/inbound');
   await Promise.all([
     waitForPostOk(page, baseIn, (u) => !u.includes('/lines') && !u.includes('/submit')),
     page.getByTestId('inbound-create-submit').click(),
@@ -74,10 +67,30 @@ test('stock transfer and outbound shipment — UI', async ({ page }) => {
     page.getByTestId('inbound-submit-request').click(),
   ]);
   await Promise.all([
+    waitForPostOk(page, baseIn, (u) => u.includes('/primary-accept')),
+    page.getByTestId('inbound-primary-accept').click(),
+  ]);
+  await page.getByTestId('inbound-line-actual-qty').fill('10');
+  await Promise.all([
+    page.waitForResponse(
+      (r) =>
+        r.request().method() === 'PATCH' &&
+        r.url().includes('/api/operations/inbound-intake-requests') &&
+        r.url().includes('/actual') &&
+        r.status() === 200,
+    ),
+    page.getByTestId('inbound-line-actual-save').click(),
+  ]);
+  await Promise.all([
+    waitForPostOk(page, baseIn, (u) => u.includes('/verify')),
+    page.getByTestId('inbound-verify-complete').click(),
+  ]);
+  await Promise.all([
     waitForPostOk(page, baseIn, (u) => u.includes('/post')),
     page.getByTestId('inbound-post-submit').click(),
   ]);
 
+  await page.goto('/app/ops/movements');
   await expect(page.getByTestId('global-movements-section')).toBeVisible();
   await Promise.all([
     waitForGetOk(page, '/api/operations/inventory-movements'),
@@ -87,6 +100,7 @@ test('stock transfer and outbound shipment — UI', async ({ page }) => {
     page.getByTestId('global-movements-list').getByTestId('global-movement-row').first(),
   ).toContainText(sku);
 
+  await page.goto('/app/ops/transfers');
   await page.getByTestId('transfer-from-loc').selectOption({ label: 'FROM-01' });
   await page.getByTestId('transfer-to-loc').selectOption({ label: 'TO-01' });
   await page.getByTestId('transfer-product').selectOption({ label: `${sku} — Товар` });
@@ -97,6 +111,7 @@ test('stock transfer and outbound shipment — UI', async ({ page }) => {
   ]);
   expect(trRes.ok()).toBeTruthy();
 
+  await page.goto('/app/ops/movements');
   await Promise.all([
     waitForGetOk(page, '/api/operations/inventory-movements'),
     page.getByTestId('global-movements-refresh').click(),
@@ -104,6 +119,7 @@ test('stock transfer and outbound shipment — UI', async ({ page }) => {
   await expect(page.getByTestId('global-movements-list')).toContainText('stock_transfer_out');
 
   const baseOut = '/api/operations/outbound-shipment-requests';
+  await page.goto('/app/ops/outbound');
   await Promise.all([
     waitForPostOk(page, baseOut, (u) => !u.includes('/lines') && !u.includes('/submit')),
     page.getByTestId('outbound-create-submit').click(),

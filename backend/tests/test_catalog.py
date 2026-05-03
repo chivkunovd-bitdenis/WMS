@@ -43,10 +43,13 @@ async def test_catalog_flow(async_client: AsyncClient) -> None:
     )
     assert loc.status_code == 200, loc.text
     assert loc.json()["code"] == "A-01"
+    assert loc.json()["barcode"].startswith("LOC-")
+    assert len(loc.json()["barcode"]) > 6
 
     locs = await async_client.get(f"/warehouses/{wid}/locations", headers=h)
     assert locs.status_code == 200
     assert len(locs.json()) == 1
+    assert locs.json()[0]["barcode"] == loc.json()["barcode"]
 
     pr = await async_client.post(
         "/products",

@@ -96,19 +96,30 @@ async def create_location(
     wh = await get_warehouse(session, tenant_id, warehouse_id)
     if wh is None:
         raise CatalogError("warehouse_not_found")
-    loc = StorageLocation(
-        tenant_id=tenant_id,
-        warehouse_id=warehouse_id,
-        code=code.strip(),
-    )
-    session.add(loc)
-    try:
-        await session.commit()
-    except IntegrityError as exc:
-        await session.rollback()
-        raise CatalogError("location_code_taken") from exc
-    await session.refresh(loc)
-    return loc
+    # CODE128 supports alphanumeric; keep it short and unique.
+    # Persisted in DB and used for printing the barcode label.
+    for _ in range(5):
+        loc = StorageLocation(
+            tenant_id=tenant_id,
+            warehouse_id=warehouse_id,
+            code=code.strip(),
+            barcode=f"LOC-{uuid.uuid4().hex[:12].upper()}",
+        )
+        session.add(loc)
+        try:
+            await session.commit()
+        except IntegrityError as exc:
+            await session.rollback()
+            msg = str(exc.orig).lower() if exc.orig is not None else str(exc).lower()
+            if "uq_storage_locations_wh_code" in msg or "storage_locations_wh_code" in msg:
+                raise CatalogError("location_code_taken") from exc
+            if "uq_storage_locations_tenant_barcode" in msg or "tenant_barcode" in msg:
+                # Retry barcode collision (extremely unlikely).
+                continue
+            raise
+        await session.refresh(loc)
+        return loc
+    raise CatalogError("barcode_collision")
 
 
 def volume_liters_from_mm(l_mm: int, w_mm: int, h_mm: int) -> float:

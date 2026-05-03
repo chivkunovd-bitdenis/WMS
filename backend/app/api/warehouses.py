@@ -47,6 +47,7 @@ class LocationOut(BaseModel):
     id: str
     code: str
     warehouse_id: str
+    barcode: str
 
 
 @router.get("", response_model=list[WarehouseOut])
@@ -98,7 +99,10 @@ async def list_locations(
     rows = await list_locs_svc(session, user.tenant_id, warehouse_id)
     return [
         LocationOut(
-            id=str(x.id), code=x.code, warehouse_id=str(x.warehouse_id)
+            id=str(x.id),
+            code=x.code,
+            warehouse_id=str(x.warehouse_id),
+            barcode=x.barcode,
         )
         for x in rows
     ]
@@ -128,5 +132,8 @@ async def post_location(
             ) from None
         raise
     return LocationOut(
-        id=str(loc.id), code=loc.code, warehouse_id=str(loc.warehouse_id)
+        id=str(loc.id),
+        code=loc.code,
+        warehouse_id=str(loc.warehouse_id),
+        barcode=loc.barcode,
     )

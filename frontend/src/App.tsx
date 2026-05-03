@@ -1,17 +1,41 @@
 import { useCallback, useEffect, useState } from 'react'
 import './App.css'
-import { apiUrl, getStoredToken, setStoredToken } from './api'
-
-type Me = {
-  email: string
-  organization_name: string
-  role: string
-  seller_id?: string | null
-  seller_name?: string | null
-}
+import { apiUrl } from './api'
+import { Navigate, Route, Routes } from 'react-router-dom'
+import { ProfileLoadingScreen } from './screens/ProfileLoadingScreen'
+import { PublicAuthScreen } from './screens/PublicAuthScreen'
+import { AuthedAppLayout } from './layouts/AuthedAppLayout'
+import { CatalogSection } from './sections/CatalogSection'
+import { readApiErrorMessage } from './utils/readApiErrorMessage'
+import { useAuth } from './hooks/useAuth'
+import { Screen } from './screens/AppV2Screens'
+import { ProductsScreen } from './screens/v2/ProductsScreen'
+import { InboundScreen } from './screens/v2/InboundScreen'
+import { OutboundScreen } from './screens/v2/OutboundScreen'
+import { WildberriesScreen } from './screens/v2/WildberriesScreen'
+import { MovementsScreen } from './screens/v2/MovementsScreen'
+import { TransfersScreen } from './screens/v2/TransfersScreen'
+import {
+  AppBar as MuiAppBar,
+  Box as MuiBox,
+  Dialog,
+  IconButton,
+  Toolbar as MuiToolbar,
+  Typography as MuiTypography,
+} from '@mui/material'
+import CloseIcon from '@mui/icons-material/Close'
+import { FfDashboard } from './screens/ff/FfDashboard'
+import {
+  FfSuppliesShipmentsPage,
+  type FfDiscrepancyActSummary,
+  type FfMarketplaceUnloadSummary,
+} from './screens/ff/FfSuppliesShipmentsPage'
+import { FfPlaceholderPage } from './screens/ff/FfPlaceholderPage'
+import { FfInboundRequestView } from './screens/ff/FfInboundRequestView'
+import { FfProductsCatalogScreen } from './screens/v2/FfProductsCatalogScreen'
 
 type WarehouseRow = { id: string; name: string; code: string }
-type LocationRow = { id: string; code: string; warehouse_id: string }
+type LocationRow = { id: string; code: string; warehouse_id: string; barcode: string }
 type ProductRow = {
   id: string
   name: string
@@ -33,6 +57,10 @@ type InboundSummaryRow = {
   warehouse_id: string
   status: string
   line_count: number
+  planned_delivery_date: string | null
+  seller_id?: string | null
+  seller_name?: string | null
+  created_at?: string
 }
 
 type InboundLineRow = {
@@ -41,6 +69,7 @@ type InboundLineRow = {
   sku_code: string
   product_name: string
   expected_qty: number
+  actual_qty: number | null
   posted_qty: number
   storage_location_id: string | null
   storage_location_code: string | null
@@ -50,6 +79,8 @@ type InboundDetailRow = {
   id: string
   warehouse_id: string
   status: string
+  planned_delivery_date: string | null
+  has_discrepancy?: boolean
   lines: InboundLineRow[]
 }
 
@@ -78,6 +109,13 @@ type OutboundSummaryRow = {
   warehouse_id: string
   status: string
   line_count: number
+  warehouse_name?: string
+  goods_qty_total?: number
+  planned_shipment_date?: string | null
+  created_at?: string
+  marketplace_label?: string
+  seller_id?: string | null
+  seller_name?: string | null
 }
 
 type OutboundLineRow = {
@@ -95,6 +133,7 @@ type OutboundDetailRow = {
   id: string
   warehouse_id: string
   status: string
+  planned_shipment_date?: string | null
   lines: OutboundLineRow[]
 }
 
@@ -117,6 +156,8 @@ type PostedInventoryBalanceRow = {
   available: number
 }
 
+// (StockSummaryRow moved into SellerProductsStockScreen)
+
 type WbImportedCardRow = {
   nm_id: number
   vendor_code: string | null
@@ -132,35 +173,20 @@ type WbImportedSupplyRow = {
   updated_at: string
 }
 
-async function readApiErrorMessage(res: Response): Promise<string> {
-  try {
-    const text = await res.text()
-    if (!text) {
-      return `Ошибка ${res.status}`
-    }
-    const data = JSON.parse(text) as { detail?: unknown }
-    const d = data.detail
-    if (typeof d === 'string') {
-      return d
-    }
-    if (Array.isArray(d)) {
-      const parts = d.map((x: { msg?: string; loc?: unknown }) =>
-        typeof x?.msg === 'string' ? x.msg : JSON.stringify(x),
-      )
-      return parts.join('; ')
-    }
-    return text.slice(0, 200)
-  } catch {
-    return `Ошибка ${res.status}`
-  }
-}
-
 export default function App() {
-  const [token, setToken] = useState<string | null>(() => getStoredToken())
-  const [me, setMe] = useState<Me | null>(null)
-  const [error, setError] = useState<string | null>(null)
-  const [loading, setLoading] = useState(false)
-  const [authBusy, setAuthBusy] = useState(false)
+  const {
+    token,
+    me,
+    error,
+    loading,
+    authBusy,
+    pendingPasswordSetupEmail,
+    onRegister,
+    onLogin,
+    onSetInitialPassword,
+    onCancelPasswordSetup,
+    logout,
+  } = useAuth('fulfillment')
   const [warehouses, setWarehouses] = useState<WarehouseRow[]>([])
   const [selectedWarehouseId, setSelectedWarehouseId] = useState<string | null>(
     null,
@@ -190,6 +216,7 @@ export default function App() {
   const [postedInventoryRows, setPostedInventoryRows] = useState<
     PostedInventoryBalanceRow[]
   >([])
+  // Seller stock is loaded by SellerProductsStockScreen directly (WB catalog + summary).
   const [globalMovements, setGlobalMovements] = useState<GlobalMovementRow[]>(
     [],
   )
@@ -202,6 +229,14 @@ export default function App() {
   const [outboundDetail, setOutboundDetail] = useState<OutboundDetailRow | null>(
     null,
   )
+  const [ffDocModal, setFfDocModal] = useState<null | 'inbound' | 'outbound'>(null)
+  const [marketplaceUnloadSummaries, setMarketplaceUnloadSummaries] = useState<
+    FfMarketplaceUnloadSummary[]
+  >([])
+  const [discrepancyActSummaries, setDiscrepancyActSummaries] = useState<
+    FfDiscrepancyActSummary[]
+  >([])
+  const [ffSuppliesNotice, setFfSuppliesNotice] = useState<string | null>(null)
   const [outboundRequestLocations, setOutboundRequestLocations] = useState<
     LocationRow[]
   >([])
@@ -227,39 +262,6 @@ export default function App() {
   const [wbSuppliesJobStatus, setWbSuppliesJobStatus] = useState<string | null>(null)
   const [wbSuppliesJobResult, setWbSuppliesJobResult] = useState<string | null>(null)
   const [wbLinkBusy, setWbLinkBusy] = useState(false)
-
-  const loadMe = useCallback(async (t: string) => {
-    setLoading(true)
-    setError(null)
-    try {
-      const res = await fetch(apiUrl('/auth/me'), {
-        headers: { Authorization: `Bearer ${t}` },
-      })
-      if (!res.ok) {
-        const msg = await readApiErrorMessage(res)
-        if (res.status === 401) {
-          throw new Error(
-            `Не удалось загрузить профиль (401). ${msg}. Попробуйте войти снова.`,
-          )
-        }
-        throw new Error(
-          `Не удалось загрузить профиль (${res.status}). ${msg}`,
-        )
-      }
-      setMe((await res.json()) as Me)
-    } catch (e) {
-      setStoredToken(null)
-      setToken(null)
-      setMe(null)
-      setError(
-        e instanceof Error
-          ? e.message
-          : 'Не удалось связаться с сервером. Проверьте, что API запущен.',
-      )
-    } finally {
-      setLoading(false)
-    }
-  }, [])
 
   const authHeaders = useCallback(
     (t: string) => ({ Authorization: `Bearer ${t}` }),
@@ -432,6 +434,34 @@ export default function App() {
     [authHeaders],
   )
 
+  const refreshMarketplaceUnloadList = useCallback(
+    async (t: string) => {
+      const res = await fetch(apiUrl('/operations/marketplace-unload-requests'), {
+        headers: authHeaders(t),
+      })
+      if (!res.ok) {
+        throw new Error(await readApiErrorMessage(res))
+      }
+      setMarketplaceUnloadSummaries(
+        (await res.json()) as FfMarketplaceUnloadSummary[],
+      )
+    },
+    [authHeaders],
+  )
+
+  const refreshDiscrepancyActList = useCallback(
+    async (t: string) => {
+      const res = await fetch(apiUrl('/operations/discrepancy-acts'), {
+        headers: authHeaders(t),
+      })
+      if (!res.ok) {
+        throw new Error(await readApiErrorMessage(res))
+      }
+      setDiscrepancyActSummaries((await res.json()) as FfDiscrepancyActSummary[])
+    },
+    [authHeaders],
+  )
+
   const refreshOutboundDetail = useCallback(
     async (t: string, requestId: string) => {
       const [dRes, mRes] = await Promise.all([
@@ -460,14 +490,6 @@ export default function App() {
   )
 
   useEffect(() => {
-    if (token) {
-      void loadMe(token)
-    } else {
-      setMe(null)
-    }
-  }, [token, loadMe])
-
-  useEffect(() => {
     if (!token || !me) {
       setWarehouses([])
       setLocations([])
@@ -482,6 +504,9 @@ export default function App() {
       setPostedInventoryRows([])
       setGlobalMovements([])
       setOutboundSummaries([])
+      setMarketplaceUnloadSummaries([])
+      setDiscrepancyActSummaries([])
+      setFfSuppliesNotice(null)
       setSelectedOutboundId(null)
       setOutboundDetail(null)
       setOutboundRequestLocations([])
@@ -526,6 +551,8 @@ export default function App() {
       try {
         await refreshInboundList(token)
         await refreshOutboundList(token)
+        await refreshMarketplaceUnloadList(token)
+        await refreshDiscrepancyActList(token)
         await refreshGlobalMovements(token)
       } catch (e) {
         setOpsError(
@@ -541,6 +568,8 @@ export default function App() {
     refreshSellers,
     refreshInboundList,
     refreshOutboundList,
+    refreshMarketplaceUnloadList,
+    refreshDiscrepancyActList,
     refreshGlobalMovements,
   ])
 
@@ -603,6 +632,20 @@ export default function App() {
   useEffect(() => {
     setPostedInventoryRows([])
   }, [selectedInboundId])
+
+  useEffect(() => {
+    if (ffDocModal !== 'inbound' || !inboundDetail?.warehouse_id) {
+      return
+    }
+    setSelectedWarehouseId(inboundDetail.warehouse_id)
+  }, [ffDocModal, inboundDetail?.warehouse_id])
+
+  useEffect(() => {
+    if (ffDocModal !== 'outbound' || !outboundDetail?.warehouse_id) {
+      return
+    }
+    setSelectedWarehouseId(outboundDetail.warehouse_id)
+  }, [ffDocModal, outboundDetail?.warehouse_id])
 
   useEffect(() => {
     if (!token || !inboundDetail?.warehouse_id) {
@@ -712,101 +755,10 @@ export default function App() {
     void refreshWbImportedSupplies(token, wbSellerId)
   }, [token, me?.role, wbSellerId, refreshWbImportedSupplies])
 
-  async function onRegister(e: React.FormEvent<HTMLFormElement>) {
-    e.preventDefault()
-    setError(null)
-    setAuthBusy(true)
-    try {
-      const fd = new FormData(e.currentTarget)
-      const rawSlug = String(fd.get('slug') ?? '').trim()
-      const slug = rawSlug.toLowerCase().replace(/\s+/g, '-')
-      if (slug.length < 2) {
-        setError('Slug слишком короткий (минимум 2 символа, латиница и дефис).')
-        return
-      }
-      if (!/^[a-z0-9-]+$/.test(slug)) {
-        setError(
-          'Slug: только строчные латинские буквы, цифры и дефис (например my-fulfillment).',
-        )
-        return
-      }
-      const body = {
-        organization_name: String(fd.get('organization_name') ?? '').trim(),
-        slug,
-        admin_email: String(fd.get('admin_email') ?? '').trim(),
-        password: String(fd.get('password') ?? ''),
-      }
-      const res = await fetch(apiUrl('/auth/register'), {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(body),
-      })
-      if (!res.ok) {
-        if (res.status === 409) {
-          setError('Такой slug или email уже заняты. Выберите другие.')
-        } else if (res.status === 422) {
-          setError(await readApiErrorMessage(res))
-        } else {
-          setError(await readApiErrorMessage(res))
-        }
-        return
-      }
-      const data = (await res.json()) as { access_token: string }
-      if (!data.access_token) {
-        setError('Сервер не вернул токен. Обратитесь к разработчику.')
-        return
-      }
-      setStoredToken(data.access_token)
-      setToken(data.access_token)
-    } catch {
-      setError(
-        'Сеть: не удалось достучаться до API. Проверьте адрес и что контейнер api запущен.',
-      )
-    } finally {
-      setAuthBusy(false)
-    }
-  }
-
-  async function onLogin(e: React.FormEvent<HTMLFormElement>) {
-    e.preventDefault()
-    setError(null)
-    setAuthBusy(true)
-    try {
-      const fd = new FormData(e.currentTarget)
-      const body = {
-        email: String(fd.get('email') ?? '').trim(),
-        password: String(fd.get('password') ?? ''),
-      }
-      const res = await fetch(apiUrl('/auth/login'), {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(body),
-      })
-      if (!res.ok) {
-        if (res.status === 401) {
-          setError('Неверный email или пароль.')
-        } else {
-          setError(await readApiErrorMessage(res))
-        }
-        return
-      }
-      const data = (await res.json()) as { access_token: string }
-      setStoredToken(data.access_token)
-      setToken(data.access_token)
-    } catch {
-      setError(
-        'Сеть: не удалось достучаться до API. Проверьте, что контейнер api запущен.',
-      )
-    } finally {
-      setAuthBusy(false)
-    }
-  }
+  // Seller stock is loaded by SellerProductsStockScreen directly.
 
   function onLogout() {
-    setStoredToken(null)
-    setToken(null)
-    setMe(null)
-    setError(null)
+    logout()
     setInboundSummaries([])
     setSelectedInboundId(null)
     setInboundDetail(null)
@@ -871,14 +823,21 @@ export default function App() {
       const fd = new FormData(form)
       const seller_id = String(fd.get('acc_seller_id') ?? '')
       const email = String(fd.get('acc_email') ?? '').trim()
-      const password = String(fd.get('acc_password') ?? '')
+      if (!seller_id) {
+        setCatalogError('Выберите селлера для создания аккаунта.')
+        return
+      }
+      if (!email) {
+        setCatalogError('Укажите email для аккаунта селлера.')
+        return
+      }
       const res = await fetch(apiUrl('/auth/seller-accounts'), {
         method: 'POST',
         headers: {
           ...authHeaders(token),
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({ seller_id, email, password }),
+        body: JSON.stringify({ seller_id, email }),
       })
       if (!res.ok) {
         setCatalogError(await readApiErrorMessage(res))
@@ -1043,6 +1002,10 @@ export default function App() {
     try {
       const fd = new FormData(form)
       const whFromForm = String(fd.get('inbound_warehouse_id') ?? '').trim()
+      const planned_delivery_date_raw = String(
+        fd.get('inbound_planned_delivery_date') ?? '',
+      ).trim()
+      const planned_delivery_date = planned_delivery_date_raw || null
       const warehouseId =
         whFromForm ||
         selectedWarehouseId ||
@@ -1061,7 +1024,7 @@ export default function App() {
           ...authHeaders(token),
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({ warehouse_id: warehouseId }),
+        body: JSON.stringify({ warehouse_id: warehouseId, planned_delivery_date }),
       })
       if (!res.ok) {
         setOpsError(await readApiErrorMessage(res))
@@ -1154,6 +1117,96 @@ export default function App() {
       setOpsError(
         e instanceof Error ? e.message : 'Не удалось отправить заявку.',
       )
+    } finally {
+      setOpsBusy(false)
+    }
+  }
+
+  async function onPrimaryAcceptInboundRequest() {
+    if (!token || !selectedInboundId) {
+      return
+    }
+    setOpsError(null)
+    setOpsBusy(true)
+    try {
+      const res = await fetch(
+        apiUrl(`/operations/inbound-intake-requests/${selectedInboundId}/primary-accept`),
+        { method: 'POST', headers: authHeaders(token) },
+      )
+      if (!res.ok) {
+        setOpsError(await readApiErrorMessage(res))
+        return
+      }
+      await refreshInboundList(token)
+      await refreshInboundDetail(token, selectedInboundId)
+    } catch (e) {
+      setOpsError(e instanceof Error ? e.message : 'Не удалось выполнить первичную приёмку.')
+    } finally {
+      setOpsBusy(false)
+    }
+  }
+
+  async function onSetInboundLineActualQty(e: React.FormEvent<HTMLFormElement>) {
+    e.preventDefault()
+    const form = e.currentTarget
+    if (!token || !selectedInboundId) {
+      return
+    }
+    const lineId = form.getAttribute('data-line-id')
+    if (!lineId) {
+      return
+    }
+    setOpsError(null)
+    setOpsBusy(true)
+    try {
+      const fd = new FormData(form)
+      const actual_qty = Number(fd.get('actual_qty'))
+      const res = await fetch(
+        apiUrl(
+          `/operations/inbound-intake-requests/${selectedInboundId}/lines/${lineId}/actual`,
+        ),
+        {
+          method: 'PATCH',
+          headers: {
+            ...authHeaders(token),
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({ actual_qty }),
+        },
+      )
+      if (!res.ok) {
+        setOpsError(await readApiErrorMessage(res))
+        return
+      }
+      await refreshInboundList(token)
+      await refreshInboundDetail(token, selectedInboundId)
+      form.reset()
+    } catch (e) {
+      setOpsError(e instanceof Error ? e.message : 'Не удалось сохранить факт.')
+    } finally {
+      setOpsBusy(false)
+    }
+  }
+
+  async function onCompleteInboundVerification() {
+    if (!token || !selectedInboundId) {
+      return
+    }
+    setOpsError(null)
+    setOpsBusy(true)
+    try {
+      const res = await fetch(
+        apiUrl(`/operations/inbound-intake-requests/${selectedInboundId}/verify`),
+        { method: 'POST', headers: authHeaders(token) },
+      )
+      if (!res.ok) {
+        setOpsError(await readApiErrorMessage(res))
+        return
+      }
+      await refreshInboundList(token)
+      await refreshInboundDetail(token, selectedInboundId)
+    } catch (e) {
+      setOpsError(e instanceof Error ? e.message : 'Не удалось завершить пересчёт.')
     } finally {
       setOpsBusy(false)
     }
@@ -1949,1400 +2002,589 @@ export default function App() {
     }
   }
 
-  if (token && !me) {
-    return (
-      <main data-testid="app-root" className="shell">
-        <header className="top">
-          <h1>WMS</h1>
-          <button type="button" data-testid="logout" onClick={onLogout}>
-            Выйти
-          </button>
-        </header>
-        <p className="hint" data-testid="loading">
-          {loading
-            ? 'Загрузка профиля…'
-            : 'Получаем данные аккаунта…'}{' '}
-          Если экран не меняется, проверьте, что API доступен (прокси Vite /
-          контейнер api в docker).
-        </p>
-      </main>
-    )
-  }
+  const onCreateFfMpShipment = useCallback(async (): Promise<{ id: string } | null> => {
+    if (!token) {
+      return null
+    }
+    let wid: string | null = selectedWarehouseId ?? warehouses[0]?.id ?? null
+    if (!wid) {
+      try {
+        const res = await fetch(apiUrl('/warehouses'), {
+          headers: authHeaders(token),
+        })
+        if (res.ok) {
+          const list = (await res.json()) as WarehouseRow[]
+          wid = list[0]?.id ?? null
+        }
+      } catch {
+        wid = null
+      }
+    }
+    if (!wid) {
+      setOpsError('Сначала создайте склад в каталоге.')
+      return null
+    }
+    setFfSuppliesNotice(null)
+    setOpsError(null)
+    setOpsBusy(true)
+    try {
+      let sellerId: string | null = sellers[0]?.id ?? null
+      if (!sellerId) {
+        const listRes = await fetch(apiUrl('/sellers'), {
+          headers: authHeaders(token),
+        })
+        if (listRes.ok) {
+          const list = (await listRes.json()) as SellerRow[]
+          sellerId = list[0]?.id ?? null
+        }
+      }
+      if (!sellerId) {
+        const cr = await fetch(apiUrl('/sellers'), {
+          method: 'POST',
+          headers: {
+            ...authHeaders(token),
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({ name: `МП ${Date.now()}` }),
+        })
+        if (!cr.ok) {
+          setOpsError(await readApiErrorMessage(cr))
+        return null
+        }
+        sellerId = (await cr.json() as { id: string }).id
+        await refreshSellers(token)
+      }
 
-  if (token && me) {
+      const tokRes = await fetch(
+        apiUrl(`/integrations/wildberries/sellers/${sellerId}/tokens`),
+        {
+          method: 'PATCH',
+          headers: {
+            ...authHeaders(token),
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({ supplies_api_token: 'ff-mp-shipment-token' }),
+        },
+      )
+      if (!tokRes.ok) {
+        setOpsError(await readApiErrorMessage(tokRes))
+        return null
+      }
+
+      // WB MP warehouse may be unavailable (no supplies token / not imported yet).
+      // We still allow creating a draft and selecting WB warehouse later.
+      type WbMpRow = { wb_warehouse_id: number }
+      let wbMpId: number | null = null
+      try {
+        const whRes = await fetch(apiUrl('/operations/wb-mp-warehouses'), {
+          headers: authHeaders(token),
+        })
+        if (whRes.ok) {
+          const rows = (await whRes.json()) as WbMpRow[]
+          wbMpId = rows[0]?.wb_warehouse_id ?? null
+        }
+      } catch {
+        wbMpId = null
+      }
+
+      const res = await fetch(apiUrl('/operations/marketplace-unload-requests'), {
+        method: 'POST',
+        headers: {
+          ...authHeaders(token),
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          warehouse_id: wid,
+          seller_id: sellerId,
+          ...(wbMpId != null ? { wb_mp_warehouse_id: wbMpId } : { wb_mp_warehouse_id: null }),
+        }),
+      })
+      if (!res.ok) {
+        setOpsError(await readApiErrorMessage(res))
+        return null
+      }
+      const created = (await res.json()) as { id: string }
+      await refreshMarketplaceUnloadList(token)
+      setFfSuppliesNotice(
+        wbMpId == null
+          ? 'Отгрузка на маркетплейс создана (черновик). Выберите склад WB в документе, когда они подгрузятся.'
+          : 'Отгрузка на маркетплейс создана (черновик). Состав по строкам — на следующем этапе.',
+      )
+      return created
+    } catch (e) {
+      setOpsError(
+        e instanceof Error ? e.message : 'Не удалось создать отгрузку на МП.',
+      )
+      return null
+    } finally {
+      setOpsBusy(false)
+    }
+  }, [
+    token,
+    selectedWarehouseId,
+    warehouses,
+    sellers,
+    authHeaders,
+    refreshMarketplaceUnloadList,
+    refreshSellers,
+  ])
+
+  const onCreateFfDiscrepancyAct = useCallback(async (): Promise<{ id: string } | null> => {
+    if (!token) {
+      return null
+    }
+    setFfSuppliesNotice(null)
+    setOpsError(null)
+    setOpsBusy(true)
+    try {
+      const res = await fetch(apiUrl('/operations/discrepancy-acts'), {
+        method: 'POST',
+        headers: {
+          ...authHeaders(token),
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({}),
+      })
+      if (!res.ok) {
+        setOpsError(await readApiErrorMessage(res))
+        return null
+      }
+      const created = (await res.json()) as { id: string }
+      await refreshDiscrepancyActList(token)
+      setFfSuppliesNotice(
+        'Акт расхождения создан (черновик). Связь с приёмкой и строки — на следующем этапе.',
+      )
+      return created
+    } catch (e) {
+      setOpsError(
+        e instanceof Error ? e.message : 'Не удалось создать акт расхождения.',
+      )
+      return null
+    } finally {
+      setOpsBusy(false)
+    }
+  }, [token, authHeaders, refreshDiscrepancyActList])
+
+  const rootElement = (() => {
+    if (!token) {
+      return (
+        <PublicAuthScreen
+          variant="fulfillment"
+          error={error}
+          authBusy={authBusy}
+          pendingPasswordSetupEmail={pendingPasswordSetupEmail}
+          onRegister={(e) => void onRegister(e)}
+          onLogin={(e) => void onLogin(e)}
+          onSetInitialPassword={(e) => void onSetInitialPassword(e)}
+          onCancelPasswordSetup={onCancelPasswordSetup}
+        />
+      )
+    }
+    if (token && !me) {
+      return <ProfileLoadingScreen loading={loading} onLogout={onLogout} />
+    }
+    if (!me) {
+      return null
+    }
+
     const isFulfillmentAdmin = me.role === 'fulfillment_admin'
     const isFulfillmentSeller = me.role === 'fulfillment_seller'
-    const canEditInboundDraft = isFulfillmentAdmin || isFulfillmentSeller
-    const canEditOutboundDraft = isFulfillmentAdmin || isFulfillmentSeller
-    return (
-      <main data-testid="app-root" className="shell">
-        <header className="top">
-          <h1>WMS</h1>
-          <button type="button" data-testid="logout" onClick={onLogout}>
-            Выйти
-          </button>
-        </header>
-        <nav
-          className="app-nav"
-          aria-label="Основные разделы"
-          data-testid="app-section-nav"
-        >
-          <a href="#catalog-section">Каталог и товары</a>
-          <span aria-hidden="true">
-            {' '}
-            ·{' '}
-          </span>
-          <a href="#operations-section">Операции склада</a>
-        </nav>
-        <section className="card" data-testid="dashboard">
-          <p data-testid="user-email">{me.email}</p>
-          <p data-testid="org-name">{me.organization_name}</p>
-          <p data-testid="user-role">{me.role}</p>
-          {me.seller_name ? (
-            <p data-testid="seller-cabinet-label">Селлер: {me.seller_name}</p>
-          ) : null}
-          {isFulfillmentAdmin && sellers.length > 0 ? (
-            <form
-              data-testid="seller-account-form"
-              style={{ marginTop: 12 }}
-              noValidate
-              onSubmit={(e) => void onCreateSellerAccount(e)}
-            >
-              <h3 className="subtle" style={{ marginTop: 0 }}>
-                Аккаунт селлера (вход по email)
-              </h3>
-              <label>
-                Селлер
-                <select
-                  name="acc_seller_id"
-                  data-testid="seller-account-seller"
-                  required
-                  defaultValue=""
-                >
-                  <option value="" disabled>
-                    Выберите
-                  </option>
-                  {sellers.map((s) => (
-                    <option key={s.id} value={s.id}>
-                      {s.name}
-                    </option>
-                  ))}
-                </select>
-              </label>
-              <label>
-                Email
-                <input
-                  name="acc_email"
-                  data-testid="seller-account-email"
-                  type="email"
-                  required
-                  autoComplete="off"
-                />
-              </label>
-              <label>
-                Пароль
-                <input
-                  name="acc_password"
-                  data-testid="seller-account-password"
-                  type="password"
-                  minLength={8}
-                  required
-                  autoComplete="new-password"
-                />
-              </label>
-              <button
-                type="submit"
-                data-testid="seller-account-submit"
-                disabled={catalogBusy}
-              >
-                {catalogBusy ? '…' : 'Создать аккаунт селлера'}
-              </button>
-            </form>
-          ) : null}
-        </section>
-        <div
-          id="catalog-section"
-          className="stack"
-          data-testid="catalog-section"
-        >
-          {catalogError ? (
-            <p className="error" data-testid="catalog-error">
-              {catalogError}
-            </p>
-          ) : null}
-          {!isFulfillmentAdmin ? (
-            <p className="subtle" data-testid="seller-cabinet-notice">
-              Режим селлера: доступны ваши SKU, заявки с вашими товарами и
-              журнал движений. Управление складом — у фулфилмента.
-            </p>
-          ) : null}
-          {isFulfillmentAdmin ? (
-          <section className="card">
-            <h2>Склады</h2>
-            <p className="subtle">
-              Код склада — латиница, цифры, символы _ и -.
-            </p>
-            <form
-              data-testid="warehouse-form"
-              noValidate
-              onSubmit={(e) => void onCreateWarehouse(e)}
-            >
-              <label>
-                Название
-                <input
-                  name="warehouse_name"
-                  data-testid="warehouse-name"
-                  required
-                />
-              </label>
-              <label>
-                Код
-                <input
-                  name="warehouse_code"
-                  data-testid="warehouse-code"
-                  required
-                  autoComplete="off"
-                />
-              </label>
-              <button
-                type="submit"
-                data-testid="warehouse-submit"
-                disabled={catalogBusy}
-              >
-                {catalogBusy ? '…' : 'Добавить склад'}
-              </button>
-            </form>
-            <ul className="list-plain" data-testid="warehouse-list">
-              {warehouses.map((w) => (
-                <li key={w.id}>
-                  <button
-                    type="button"
-                    data-testid="warehouse-item"
-                    data-selected={w.id === selectedWarehouseId ? 'true' : 'false'}
-                    onClick={() => setSelectedWarehouseId(w.id)}
-                    style={{
-                      width: '100%',
-                      textAlign: 'left',
-                      background:
-                        w.id === selectedWarehouseId
-                          ? 'rgba(91, 79, 212, 0.12)'
-                          : 'transparent',
-                      border: '1px solid rgba(0,0,0,0.08)',
-                      borderRadius: 8,
-                      padding: '8px 10px',
-                      cursor: 'pointer',
-                    }}
-                  >
-                    <strong>{w.name}</strong>{' '}
-                    <span className="subtle" style={{ margin: 0 }}>
-                      ({w.code})
-                    </span>
-                  </button>
-                </li>
-              ))}
-            </ul>
-          </section>
-          ) : null}
-          {isFulfillmentAdmin ? (
-          <section className="card">
-            <h2>Ячейки</h2>
-            {!selectedWarehouseId ? (
-              <p className="subtle">Сначала создайте склад.</p>
-            ) : (
-              <form
-                data-testid="location-form"
-                noValidate
-                onSubmit={(e) => void onCreateLocation(e)}
-              >
-                <label>
-                  Код ячейки
-                  <input
-                    name="location_code"
-                    data-testid="location-code"
-                    required
-                    autoComplete="off"
-                  />
-                </label>
-                <button
-                  type="submit"
-                  data-testid="location-submit"
-                  disabled={catalogBusy}
-                >
-                  {catalogBusy ? '…' : 'Добавить ячейку'}
-                </button>
-              </form>
-            )}
-            <ul className="list-plain" data-testid="location-list">
-              {locations.map((loc) => (
-                <li key={loc.id} data-testid="location-item">
-                  {loc.code}
-                </li>
-              ))}
-            </ul>
-          </section>
-          ) : null}
-          <section className="card" data-testid="sellers-section">
-            <h2>Селлеры</h2>
-            <p className="subtle">
-              Клиенты фулфилмента; можно привязать к SKU при создании товара.
-            </p>
-            {isFulfillmentAdmin ? (
-            <form
-              data-testid="seller-form"
-              noValidate
-              onSubmit={(e) => void onCreateSeller(e)}
-            >
-              <label>
-                Название селлера
-                <input
-                  name="seller_name"
-                  data-testid="seller-name"
-                  required
-                  autoComplete="off"
-                />
-              </label>
-              <button
-                type="submit"
-                data-testid="seller-submit"
-                disabled={catalogBusy}
-              >
-                {catalogBusy ? '…' : 'Добавить селлера'}
-              </button>
-            </form>
-            ) : null}
-            <ul className="list-plain" data-testid="seller-list">
-              {sellers.map((s) => (
-                <li key={s.id} data-testid="seller-item">
-                  {s.name}
-                </li>
-              ))}
-            </ul>
-          </section>
-          {isFulfillmentAdmin && sellers.length > 0 && wbSellerId ? (
-            <section className="card" data-testid="wildberries-integration-section">
-              <h2>Wildberries (импорт)</h2>
-              <p className="subtle">
-                Токены хранятся зашифрованно. Синхронизация — только чтение: карточки
-                (первая страница) и список поставок FBW (первая страница), без записи в
-                WB.
-              </p>
-              <label>
-                Селлер для интеграции
-                <select
-                  data-testid="wb-seller-select"
-                  value={wbSellerId}
-                  onChange={(ev) => setWbSellerId(ev.target.value)}
-                >
-                  {sellers.map((s) => (
-                    <option key={s.id} value={s.id}>
-                      {s.name}
-                    </option>
-                  ))}
-                </select>
-              </label>
-              <p className="subtle" data-testid="wb-token-flags">
-                Контент API: {wbHasContentToken ? 'токен есть' : 'нет токена'} ·
-                Поставки API: {wbHasSuppliesToken ? 'токен есть' : 'нет токена'}
-              </p>
-              <form
-                data-testid="wb-tokens-form"
-                noValidate
-                onSubmit={(e) => void onSaveWbTokens(e)}
-              >
-                <label>
-                  Токен контента WB
-                  <input
-                    name="wb_content_token"
-                    data-testid="wb-content-token"
-                    type="password"
-                    autoComplete="off"
-                    placeholder="вставьте токен категории «Контент»"
-                  />
-                </label>
-                <label>
-                  Токен поставок WB (необязательно)
-                  <input
-                    name="wb_supplies_token"
-                    data-testid="wb-supplies-token"
-                    type="password"
-                    autoComplete="off"
-                    placeholder="для импорта поставок FBW (первая страница)"
-                  />
-                </label>
-                <button
-                  type="submit"
-                  data-testid="wb-save-tokens"
-                  disabled={wbTokensBusy}
-                >
-                  {wbTokensBusy ? '…' : 'Сохранить токены'}
-                </button>
-              </form>
-              <button
-                type="button"
-                data-testid="wb-sync-cards"
-                disabled={wbSyncBusy || !wbHasContentToken}
-                onClick={() => void onStartWbCardsSyncJob()}
-              >
-                {wbSyncBusy ? '…' : 'Обновить карточки из WB'}
-              </button>
-              <p className="subtle" data-testid="wb-sync-status">
-                Синхронизация: {wbJobStatus ?? '—'}
-              </p>
-              {wbJobResult ? (
-                <p data-testid="wb-sync-result">{wbJobResult}</p>
-              ) : null}
-              <button
-                type="button"
-                data-testid="wb-sync-supplies"
-                disabled={wbSuppliesSyncBusy || !wbHasSuppliesToken}
-                onClick={() => void onStartWbSuppliesSyncJob()}
-                style={{ marginTop: 12 }}
-              >
-                {wbSuppliesSyncBusy ? '…' : 'Обновить поставки из WB'}
-              </button>
-              <p className="subtle" data-testid="wb-supplies-sync-status">
-                Синхронизация поставок: {wbSuppliesJobStatus ?? '—'}
-              </p>
-              {wbSuppliesJobResult ? (
-                <p data-testid="wb-supplies-sync-result">{wbSuppliesJobResult}</p>
-              ) : null}
-              <h3 className="subtle" style={{ marginTop: 16 }}>
-                Импортированные карточки
-              </h3>
-              {wbImportedCards.length === 0 ? (
-                <p className="subtle" data-testid="wb-imported-cards-empty">
-                  Пока нет — выполните синхронизацию.
-                </p>
+    if (isFulfillmentSeller) {
+      // In Vite dev (MPA), the seller app is served from `/seller/index.html`.
+      // In prod (Caddy), `/seller/*` is the canonical public path.
+      window.location.assign(import.meta.env.PROD ? '/seller/' : '/seller/index.html')
+      return null
+    }
+    const portal: 'seller' | 'ff' = 'ff'
+    const base = '/app/ff'
+
+    // seller stock should always be available on products tab
+    // (refreshed lazily by screens via this helper)
+
+    const v2 = (
+        <AuthedAppLayout
+        onLogout={onLogout}
+          title="Портал ФФ"
+        userLabel={me.email}
+        userRoleLabel={me.role}
+        portal={portal}
+      >
+        <>
+        <Routes>
+          <Route
+            path="dashboard"
+            element={<Navigate to={`${base}/dashboard`} replace />}
+          />
+
+          <Route
+            path="ff/dashboard"
+            element={
+              <FfDashboard
+                me={me}
+                isFulfillmentAdmin={isFulfillmentAdmin}
+                sellers={sellers}
+                catalogBusy={catalogBusy}
+                catalogError={catalogError}
+                onCreateSellerAccount={(e) => void onCreateSellerAccount(e)}
+                inboundSummaries={inboundSummaries}
+                outboundSummaries={outboundSummaries}
+                onOpenInbound={(id) => {
+                  setSelectedOutboundId(null)
+                  setSelectedInboundId(id)
+                  setFfDocModal('inbound')
+                }}
+                onOpenOutbound={(id) => {
+                  setSelectedInboundId(null)
+                  setSelectedOutboundId(id)
+                  setFfDocModal('outbound')
+                }}
+              />
+            }
+          />
+
+          <Route
+            path="ff/supplies-shipments"
+            element={
+              <FfSuppliesShipmentsPage
+                busy={opsBusy}
+                error={opsError}
+                infoNotice={ffSuppliesNotice}
+                onDismissInfoNotice={() => setFfSuppliesNotice(null)}
+                token={token}
+                productPicklist={products.map((p) => ({
+                  id: p.id,
+                  sku_code: p.sku_code,
+                  name: p.name,
+                }))}
+                onRefreshFfSupplyExtras={async () => {
+                  if (!token) {
+                    return
+                  }
+                  await refreshMarketplaceUnloadList(token)
+                  await refreshDiscrepancyActList(token)
+                }}
+                inboundSummaries={inboundSummaries}
+                outboundSummaries={outboundSummaries}
+                marketplaceUnloadSummaries={marketplaceUnloadSummaries}
+                discrepancyActSummaries={discrepancyActSummaries}
+                onOpenInbound={(id) => {
+                  setSelectedOutboundId(null)
+                  setSelectedInboundId(id)
+                  setFfDocModal('inbound')
+                }}
+                onOpenOutbound={(id) => {
+                  setSelectedInboundId(null)
+                  setSelectedOutboundId(id)
+                  setFfDocModal('outbound')
+                }}
+                onCreateMpShipment={onCreateFfMpShipment}
+                onCreateDiverge={onCreateFfDiscrepancyAct}
+              />
+            }
+          />
+
+          <Route
+            path="ff/products"
+            element={
+              token ? (
+                <FfProductsCatalogScreen token={token} authHeaders={authHeaders} sellers={sellers} />
               ) : (
-                <ul className="list-plain" data-testid="wb-imported-cards-list">
-                  {wbImportedCards.map((c) => (
-                    <li key={String(c.nm_id)} data-testid="wb-imported-card-item">
-                      nmID {c.nm_id}
-                      {c.vendor_code ? ` · ${c.vendor_code}` : ''}
-                    </li>
-                  ))}
-                </ul>
-              )}
-              <h3 className="subtle" style={{ marginTop: 16 }}>
-                Импортированные поставки
-              </h3>
-              {wbImportedSupplies.length === 0 ? (
-                <p className="subtle" data-testid="wb-imported-supplies-empty">
-                  Пока нет — сохраните токен поставок и выполните синхронизацию.
-                </p>
-              ) : (
-                <ul className="list-plain" data-testid="wb-imported-supplies-list">
-                  {wbImportedSupplies.map((s) => (
-                    <li
-                      key={s.external_key}
-                      data-testid="wb-imported-supply-item"
-                    >
-                      {s.wb_supply_id != null ? `supply ${s.wb_supply_id}` : ''}
-                      {s.wb_supply_id != null && s.wb_preorder_id != null ? ' · ' : ''}
-                      {s.wb_preorder_id != null ? `preorder ${s.wb_preorder_id}` : ''}
-                      {s.status_id != null ? ` · статус ${s.status_id}` : ''}
-                    </li>
-                  ))}
-                </ul>
-              )}
-              <h3 className="subtle" style={{ marginTop: 16 }}>
-                Привязка SKU к карточке WB
-              </h3>
-              <p className="subtle">
-                Товар должен быть привязан к тому же селлеру, что выбран выше; nm_id —
-                из списка импортированных карточек.
-              </p>
-              <form
-                data-testid="wb-link-product-form"
-                noValidate
-                onSubmit={(e) => void onLinkProductToWb(e)}
-              >
-                <label>
-                  Товар
-                  <select
-                    name="wb_link_product_id"
-                    data-testid="wb-link-product-id"
-                    required
-                    defaultValue=""
-                  >
-                    <option value="" disabled>
-                      — выберите —
-                    </option>
-                    {products
-                      .filter((p) => p.seller_id === wbSellerId)
-                      .map((p) => (
-                        <option key={p.id} value={p.id}>
-                          {p.sku_code} — {p.name}
-                        </option>
-                      ))}
-                  </select>
-                </label>
-                <label>
-                  nm_id (WB)
-                  <input
-                    name="wb_link_nm_id"
-                    data-testid="wb-link-nm-id"
-                    type="number"
-                    min={1}
-                    required
-                    autoComplete="off"
-                  />
-                </label>
-                <button
-                  type="submit"
-                  data-testid="wb-link-submit"
-                  disabled={wbLinkBusy}
-                >
-                  {wbLinkBusy ? '…' : 'Привязать'}
-                </button>
-              </form>
-            </section>
-          ) : null}
-          <section className="card">
-            <h2>Товары (SKU)</h2>
-            {isFulfillmentAdmin ? (
-            <form
-              data-testid="product-form"
-              noValidate
-              onSubmit={(e) => void onCreateProduct(e)}
-            >
-              <label>
-                Название
-                <input
-                  name="product_name"
-                  data-testid="product-name"
-                  required
+                <FfPlaceholderPage title="Товары" hint="Нет токена." testId="ff-products-placeholder" />
+              )
+            }
+          />
+
+          <Route
+            path="ff/honest-sign"
+            element={
+              <FfPlaceholderPage
+                title="Честный знак"
+                hint="Раздел в разработке."
+                testId="ff-honest-sign-placeholder"
+              />
+            }
+          />
+
+          <Route path="ff/inbound" element={<Navigate to="/app/ops/inbound" replace />} />
+          <Route path="ff/outbound" element={<Navigate to="/app/ops/outbound" replace />} />
+          <Route path="ff/warehouses" element={<Navigate to="/app/catalog" replace />} />
+          <Route
+            path="ff/integrations/wb"
+            element={<Navigate to="/app/integrations/wb" replace />}
+          />
+
+          <Route
+            path="catalog"
+            element={
+              <Screen title="Каталог" subtitle="Склады, ячейки, товары, селлеры и интеграции">
+                <CatalogSection
+                  isFulfillmentAdmin={isFulfillmentAdmin}
+                  catalogBusy={catalogBusy}
+                  catalogError={catalogError}
+                  sellers={sellers}
+                  warehouses={warehouses}
+                  locations={locations}
+                  selectedWarehouseId={selectedWarehouseId}
+                  setSelectedWarehouseId={setSelectedWarehouseId}
+                  products={products}
+                  onCreateWarehouse={(e) => void onCreateWarehouse(e)}
+                  onCreateLocation={(e) => void onCreateLocation(e)}
+                  onCreateSeller={(e) => void onCreateSeller(e)}
+                  onCreateProduct={(e) => void onCreateProduct(e)}
+                  wbSellerId={wbSellerId}
+                  setWbSellerId={setWbSellerId}
+                  wbHasContentToken={wbHasContentToken}
+                  wbHasSuppliesToken={wbHasSuppliesToken}
+                  wbTokensBusy={wbTokensBusy}
+                  wbSyncBusy={wbSyncBusy}
+                  wbSuppliesSyncBusy={wbSuppliesSyncBusy}
+                  wbLinkBusy={wbLinkBusy}
+                  wbJobStatus={wbJobStatus}
+                  wbJobResult={wbJobResult}
+                  wbSuppliesJobStatus={wbSuppliesJobStatus}
+                  wbSuppliesJobResult={wbSuppliesJobResult}
+                  wbImportedCards={wbImportedCards}
+                  wbImportedSupplies={wbImportedSupplies}
+                  onSaveWbTokens={(e) => void onSaveWbTokens(e)}
+                  onStartWbCardsSyncJob={() => void onStartWbCardsSyncJob()}
+                  onStartWbSuppliesSyncJob={() => void onStartWbSuppliesSyncJob()}
+                  onLinkProductToWb={(e) => void onLinkProductToWb(e)}
                 />
-              </label>
-              <label>
-                SKU
-                <input
-                  name="product_sku"
-                  data-testid="product-sku"
-                  required
-                  autoComplete="off"
-                />
-              </label>
-              <label>
-                Длина, мм
-                <input
-                  name="product_length_mm"
-                  data-testid="product-length-mm"
-                  type="number"
-                  min={1}
-                  required
-                />
-              </label>
-              <label>
-                Ширина, мм
-                <input
-                  name="product_width_mm"
-                  data-testid="product-width-mm"
-                  type="number"
-                  min={1}
-                  required
-                />
-              </label>
-              <label>
-                Высота, мм
-                <input
-                  name="product_height_mm"
-                  data-testid="product-height-mm"
-                  type="number"
-                  min={1}
-                  required
-                />
-              </label>
-              {sellers.length > 0 ? (
-                <label>
-                  Селлер (необязательно)
-                  <select
-                    name="product_seller_id"
-                    data-testid="product-seller"
-                    defaultValue=""
-                  >
-                    <option value="">— нет —</option>
-                    {sellers.map((s) => (
-                      <option key={s.id} value={s.id}>
-                        {s.name}
-                      </option>
-                    ))}
-                  </select>
-                </label>
-              ) : null}
-              <button
-                type="submit"
-                data-testid="product-submit"
-                disabled={catalogBusy}
-              >
-                {catalogBusy ? '…' : 'Добавить товар'}
-              </button>
-            </form>
-            ) : null}
-            <ul className="list-plain" data-testid="product-list">
-              {products.map((p) => (
-                <li
-                  key={p.id}
-                  data-testid="product-item"
-                  data-product-id={p.id}
-                >
-                  <strong>{p.name}</strong> — {p.sku_code},{' '}
-                  <span data-testid="product-volume">
-                    {p.volume_liters.toFixed(1)} л
-                  </span>
-                  {p.seller_name ? (
-                    <span data-testid="product-seller-name">
-                      {' '}
-                      · селлер: {p.seller_name}
-                    </span>
-                  ) : null}
-                  {p.wb_nm_id != null ? (
-                    <span data-testid="product-wb-nm">
-                      {' '}
-                      · WB nmID {p.wb_nm_id}
-                      {p.wb_vendor_code ? ` (${p.wb_vendor_code})` : ''}
-                    </span>
-                  ) : null}
-                </li>
-              ))}
-            </ul>
-          </section>
-        </div>
-        <div
-          id="operations-section"
-          className="stack"
-          data-testid="operations-section"
+              </Screen>
+            }
+          />
+
+          <Route
+            path="catalog/products"
+            element={
+              <ProductsScreen
+                isFulfillmentAdmin={isFulfillmentAdmin}
+                catalogBusy={catalogBusy}
+                catalogError={catalogError}
+                sellers={sellers}
+                products={products}
+                onCreateProduct={(e) => void onCreateProduct(e)}
+              />
+            }
+          />
+
+          <Route
+            path="ops"
+            element={<Navigate to="/app/ops/inbound" replace />}
+          />
+
+          <Route
+            path="ops/inbound"
+            element={
+              <InboundScreen
+                opsError={opsError}
+                opsBusy={opsBusy}
+                isFulfillmentAdmin={isFulfillmentAdmin}
+                isFulfillmentSeller={isFulfillmentSeller}
+                canEditInboundDraft={isFulfillmentAdmin}
+                warehouses={warehouses}
+                selectedWarehouseId={selectedWarehouseId}
+                products={products}
+                inboundSummaries={inboundSummaries}
+                selectedInboundId={selectedInboundId}
+                setSelectedInboundId={setSelectedInboundId}
+                inboundDetail={inboundDetail}
+                inboundRequestLocations={inboundRequestLocations}
+                inboundMovements={inboundMovements}
+                postedInventoryRows={postedInventoryRows}
+                onCreateInboundRequest={(e) => void onCreateInboundRequest(e)}
+                onAddInboundLine={(e) => void onAddInboundLine(e)}
+                onSubmitInboundRequest={() => void onSubmitInboundRequest()}
+                onPrimaryAcceptInboundRequest={() => void onPrimaryAcceptInboundRequest()}
+                onSetInboundLineActualQty={(e) => void onSetInboundLineActualQty(e)}
+                onCompleteInboundVerification={() => void onCompleteInboundVerification()}
+                onSaveInboundLineStorage={(e) => void onSaveInboundLineStorage(e)}
+                onReceiveInboundLine={(e) => void onReceiveInboundLine(e)}
+                onPostInboundRequest={() => void onPostInboundRequest()}
+              />
+            }
+          />
+
+          <Route
+            path="ops/outbound"
+            element={
+              <OutboundScreen
+                opsError={opsError}
+                opsBusy={opsBusy}
+                isFulfillmentAdmin={isFulfillmentAdmin}
+                isFulfillmentSeller={isFulfillmentSeller}
+                canEditOutboundDraft={isFulfillmentAdmin}
+                warehouses={warehouses}
+                selectedWarehouseId={selectedWarehouseId}
+                products={products}
+                outboundSummaries={outboundSummaries}
+                selectedOutboundId={selectedOutboundId}
+                setSelectedOutboundId={setSelectedOutboundId}
+                outboundDetail={outboundDetail}
+                outboundRequestLocations={outboundRequestLocations}
+                outboundMovements={outboundMovements}
+                onCreateOutboundRequest={(e) => void onCreateOutboundRequest(e)}
+                onAddOutboundLine={(e) => void onAddOutboundLine(e)}
+                onDeleteOutboundLine={(lineId) => void onDeleteOutboundLine(lineId)}
+                onSubmitOutboundRequest={() => void onSubmitOutboundRequest()}
+                onSaveOutboundLineStorage={(e) => void onSaveOutboundLineStorage(e)}
+                onShipOutboundLine={(e) => void onShipOutboundLine(e)}
+                onPostOutboundRequest={() => void onPostOutboundRequest()}
+              />
+            }
+          />
+
+          <Route
+            path="ops/movements"
+            element={
+              <MovementsScreen
+                globalMovements={globalMovements}
+                onRefreshGlobalMovementsClick={() => void onRefreshGlobalMovementsClick()}
+                isFulfillmentAdmin={isFulfillmentAdmin}
+                opsBusy={opsBusy}
+                backgroundJobStatus={backgroundJobStatus}
+                backgroundJobResult={backgroundJobResult}
+                onStartMovementsDigestJob={() => void onStartMovementsDigestJob()}
+              />
+            }
+          />
+
+          <Route
+            path="ops/transfers"
+            element={
+              <TransfersScreen
+                opsError={opsError}
+                opsBusy={opsBusy}
+                isFulfillmentAdmin={isFulfillmentAdmin}
+                locations={locations}
+                products={products}
+                onStockTransfer={(e) => void onStockTransfer(e)}
+              />
+            }
+          />
+
+          <Route
+            path="integrations/wb"
+            element={
+              <WildberriesScreen
+                sellers={sellers}
+                products={products}
+                wbSellerId={wbSellerId}
+                setWbSellerId={setWbSellerId}
+                wbHasContentToken={wbHasContentToken}
+                wbHasSuppliesToken={wbHasSuppliesToken}
+                wbTokensBusy={wbTokensBusy}
+                wbSyncBusy={wbSyncBusy}
+                wbSuppliesSyncBusy={wbSuppliesSyncBusy}
+                wbLinkBusy={wbLinkBusy}
+                wbJobStatus={wbJobStatus}
+                wbJobResult={wbJobResult}
+                wbSuppliesJobStatus={wbSuppliesJobStatus}
+                wbSuppliesJobResult={wbSuppliesJobResult}
+                wbImportedCards={wbImportedCards}
+                wbImportedSupplies={wbImportedSupplies}
+                onSaveWbTokens={(e) => void onSaveWbTokens(e)}
+                onStartWbCardsSyncJob={() => void onStartWbCardsSyncJob()}
+                onStartWbSuppliesSyncJob={() => void onStartWbSuppliesSyncJob()}
+                onLinkProductToWb={(e) => void onLinkProductToWb(e)}
+              />
+            }
+          />
+
+          <Route path="*" element={<Navigate to={`${base}/dashboard`} replace />} />
+        </Routes>
+
+        <Dialog
+          open={ffDocModal !== null}
+          onClose={() => {
+            setFfDocModal(null)
+            setSelectedInboundId(null)
+            setSelectedOutboundId(null)
+          }}
+          fullScreen
+          data-testid="ff-doc-dialog"
         >
-          {opsError ? (
-            <p className="error" data-testid="operations-error">
-              {opsError}
-            </p>
-          ) : null}
-          {isFulfillmentAdmin ? (
-          <section className="card" data-testid="background-job-section">
-            <h2>Фоновая задача</h2>
-            <p className="subtle">
-              Сервер считает сводку по журналу движений в фоне; статус
-              обновляется после запуска (как отчёт / тяжёлая операция).
-            </p>
-            <button
-              type="button"
-              data-testid="background-job-start"
-              disabled={opsBusy}
-              onClick={() => void onStartMovementsDigestJob()}
-            >
-              {opsBusy ? '…' : 'Сводка по движениям'}
-            </button>
-            <p className="subtle" data-testid="background-job-status">
-              Статус: {backgroundJobStatus ?? '—'}
-            </p>
-            {backgroundJobResult ? (
-              <p data-testid="background-job-result">{backgroundJobResult}</p>
-            ) : null}
-          </section>
-          ) : null}
-          <section className="card">
-            <h2>Приёмка</h2>
-            <p className="subtle">
-              Ячейку можно указать при добавлении строки или позже. Частичный
-              приём — по строке; «Провести весь остаток» оприходует всё
-              непринятое по строкам с назначенной ячейкой. Движения пишутся в
-              журнал.
-            </p>
-            {canEditInboundDraft ? (
-            <form
-              data-testid="inbound-create-form"
-              noValidate
-              onSubmit={(e) => void onCreateInboundRequest(e)}
-            >
-              {isFulfillmentSeller && warehouses.length > 1 ? (
-                <label style={{ display: 'block', marginBottom: 8 }}>
-                  Склад для заявки
-                  <select
-                    name="inbound_warehouse_id"
-                    data-testid="inbound-create-warehouse"
-                    required
-                    defaultValue=""
-                  >
-                    <option value="" disabled>
-                      Выберите склад
-                    </option>
-                    {warehouses.map((w) => (
-                      <option key={w.id} value={w.id}>
-                        {w.code} — {w.name}
-                      </option>
-                    ))}
-                  </select>
-                </label>
-              ) : null}
-              <button
-                type="submit"
-                data-testid="inbound-create-submit"
-                disabled={
-                  opsBusy ||
-                  warehouses.length === 0 ||
-                  (!isFulfillmentSeller &&
-                    !selectedWarehouseId &&
-                    warehouses.length !== 1)
-                }
+          <MuiAppBar position="sticky" color="inherit" elevation={1}>
+            <MuiToolbar>
+              <IconButton
+                edge="start"
+                color="inherit"
+                aria-label="Закрыть"
+                onClick={() => {
+                  setFfDocModal(null)
+                  setSelectedInboundId(null)
+                  setSelectedOutboundId(null)
+                }}
+                data-testid="ff-doc-dialog-close"
               >
-                {opsBusy ? '…' : 'Новая заявка на приёмку'}
-              </button>
-            </form>
-            ) : null}
-            <ul className="list-plain" data-testid="inbound-requests-list">
-              {inboundSummaries.map((row) => (
-                <li key={row.id}>
-                  <button
-                    type="button"
-                    data-testid="inbound-request-item"
-                    data-status={row.status}
-                    onClick={() => setSelectedInboundId(row.id)}
-                    style={{
-                      width: '100%',
-                      textAlign: 'left',
-                      background:
-                        row.id === selectedInboundId
-                          ? 'rgba(91, 79, 212, 0.12)'
-                          : 'transparent',
-                      border: '1px solid rgba(0,0,0,0.08)',
-                      borderRadius: 8,
-                      padding: '8px 10px',
-                      cursor: 'pointer',
-                    }}
-                  >
-                    <span data-testid="inbound-request-status">{row.status}</span>
-                    {' · '}
-                    строк: {row.line_count}
-                  </button>
-                </li>
-              ))}
-            </ul>
-            {inboundDetail ? (
-              <div data-testid="inbound-detail">
-                <p className="subtle" data-testid="inbound-detail-status">
-                  Статус: {inboundDetail.status}
-                </p>
-                <ul
-                  className="list-plain"
-                  data-testid="inbound-detail-lines"
-                >
-                  {inboundDetail.lines.map((ln) => (
-                    <li
-                      key={ln.id}
-                      data-testid="inbound-detail-line"
-                    >
-                      {ln.product_name} ({ln.sku_code}) — принято{' '}
-                      {ln.posted_qty} из {ln.expected_qty}
-                      {ln.storage_location_code
-                        ? ` · ячейка: ${ln.storage_location_code}`
-                        : ''}
-                    </li>
-                  ))}
-                </ul>
-                {inboundDetail.status === 'draft' && canEditInboundDraft ? (
-                  <form
-                    data-testid="inbound-line-form"
-                    noValidate
-                    onSubmit={(e) => void onAddInboundLine(e)}
-                  >
-                    <label>
-                      Товар
-                      <select
-                        name="inbound_product_id"
-                        data-testid="inbound-line-product"
-                        required
-                        defaultValue=""
-                      >
-                        <option value="" disabled>
-                          Выберите SKU
-                        </option>
-                        {products.map((p) => (
-                          <option key={p.id} value={p.id}>
-                            {p.sku_code} — {p.name}
-                          </option>
-                        ))}
-                      </select>
-                    </label>
-                    <label>
-                      Количество, шт
-                      <input
-                        name="inbound_qty"
-                        data-testid="inbound-line-qty"
-                        type="number"
-                        min={1}
-                        required
-                      />
-                    </label>
-                    {inboundRequestLocations.length > 0 ? (
-                      <label>
-                        Ячейка (необязательно)
-                        <select
-                          name="inbound_line_storage_id"
-                          data-testid="inbound-line-location"
-                          defaultValue=""
-                        >
-                          <option value="">— позже —</option>
-                          {inboundRequestLocations.map((loc) => (
-                            <option key={loc.id} value={loc.id}>
-                              {loc.code}
-                            </option>
-                          ))}
-                        </select>
-                      </label>
-                    ) : null}
-                    <button
-                      type="submit"
-                      data-testid="inbound-line-submit"
-                      disabled={opsBusy || products.length === 0}
-                    >
-                      {opsBusy ? '…' : 'Добавить строку'}
-                    </button>
-                  </form>
-                ) : null}
-                {inboundDetail.status === 'draft' &&
-                inboundDetail.lines.length > 0 &&
-                isFulfillmentAdmin ? (
-                  <button
-                    type="button"
-                    data-testid="inbound-submit-request"
-                    disabled={opsBusy}
-                    onClick={() => void onSubmitInboundRequest()}
-                  >
-                    {opsBusy ? '…' : 'Отправить заявку'}
-                  </button>
-                ) : null}
-                {inboundDetail.status === 'submitted' ? (
-                  <div data-testid="inbound-receiving-panel">
-                    <p className="subtle">Строки в работе</p>
-                    {isFulfillmentAdmin ? (
-                    <>
-                    {inboundDetail.lines.map((ln) =>
-                      ln.posted_qty < ln.expected_qty ? (
-                        <div
-                          key={ln.id}
-                          style={{
-                            border: '1px solid rgba(0,0,0,0.08)',
-                            borderRadius: 8,
-                            padding: '10px 12px',
-                            marginBottom: 10,
-                          }}
-                        >
-                          <p className="subtle" style={{ marginTop: 0 }}>
-                            {ln.sku_code} — осталось{' '}
-                            {ln.expected_qty - ln.posted_qty} из{' '}
-                            {ln.expected_qty}
-                          </p>
-                          <form
-                            data-testid="inbound-line-storage-form"
-                            data-line-id={ln.id}
-                            noValidate
-                            onSubmit={(e) =>
-                              void onSaveInboundLineStorage(e)
-                            }
-                          >
-                            <label>
-                              Ячейка
-                              <select
-                                name="line_storage_id"
-                                data-testid="inbound-line-storage-select"
-                                defaultValue={ln.storage_location_id ?? ''}
-                                required
-                              >
-                                <option value="" disabled>
-                                  Выберите ячейку
-                                </option>
-                                {inboundRequestLocations.map((loc) => (
-                                  <option key={loc.id} value={loc.id}>
-                                    {loc.code}
-                                  </option>
-                                ))}
-                              </select>
-                            </label>
-                            <button
-                              type="submit"
-                              data-testid="inbound-line-storage-save"
-                              disabled={
-                                opsBusy || inboundRequestLocations.length === 0
-                              }
-                            >
-                              Сохранить ячейку
-                            </button>
-                          </form>
-                          <form
-                            data-testid="inbound-line-receive-form"
-                            data-line-id={ln.id}
-                            noValidate
-                            onSubmit={(e) => void onReceiveInboundLine(e)}
-                          >
-                            <label>
-                              Принять, шт
-                              <input
-                                name="receive_qty"
-                                data-testid="inbound-line-receive-qty"
-                                type="number"
-                                min={1}
-                                max={ln.expected_qty - ln.posted_qty}
-                                required
-                              />
-                            </label>
-                            <button
-                              type="submit"
-                              data-testid="inbound-line-receive-submit"
-                              disabled={opsBusy}
-                            >
-                              Принять
-                            </button>
-                          </form>
-                        </div>
-                      ) : null,
-                    )}
-                    <button
-                      type="button"
-                      data-testid="inbound-post-submit"
-                      disabled={opsBusy}
-                      onClick={() => void onPostInboundRequest()}
-                    >
-                      {opsBusy ? '…' : 'Провести весь остаток'}
-                    </button>
-                    </>
-                    ) : (
-                    <p className="subtle" data-testid="inbound-seller-read-only">
-                      Приёмку ведёт фулфилмент; доступен просмотр строк и
-                      статуса.
-                    </p>
-                    )}
-                  </div>
-                ) : null}
-                {inboundMovements.length > 0 ? (
-                  <div data-testid="inbound-movements-block">
-                    <p className="subtle">Журнал движений по заявке</p>
-                    <ul
-                      className="list-plain"
-                      data-testid="inbound-movements-list"
-                    >
-                      {inboundMovements.map((m) => (
-                        <li
-                          key={m.id}
-                          data-testid="inbound-movement-row"
-                        >
-                          {m.quantity_delta > 0 ? '+' : ''}
-                          {m.quantity_delta} · {m.movement_type}
-                        </li>
-                      ))}
-                    </ul>
-                  </div>
-                ) : null}
-                {isFulfillmentAdmin && postedInventoryRows.length > 0 ? (
-                  <ul
-                    className="list-plain"
-                    data-testid="inventory-balance-list"
-                  >
-                    {postedInventoryRows.map((row) => (
-                      <li
-                        key={row.product_id}
-                        data-testid="inventory-balance-row"
-                      >
-                        {row.sku_code} — {row.quantity} шт
-                        {row.reserved > 0 ? (
-                          <span data-testid="inventory-balance-available-hint">
-                            {' '}
-                            (доступно {row.available})
-                          </span>
-                        ) : null}
-                      </li>
-                    ))}
-                  </ul>
-                ) : null}
-              </div>
-            ) : null}
-          </section>
-          <section className="card" data-testid="global-movements-section">
-            <h2>Журнал движений</h2>
-            <p className="subtle">
-              Последние операции по складу (приёмка, перемещение, отгрузка).
-            </p>
-            <button
-              type="button"
-              data-testid="global-movements-refresh"
-              onClick={() => void onRefreshGlobalMovementsClick()}
-            >
-              Обновить
-            </button>
-            <ul
-              className="list-plain"
-              data-testid="global-movements-list"
-              style={{ marginTop: 12 }}
-            >
-              {globalMovements.map((m) => (
-                <li key={m.id} data-testid="global-movement-row">
-                  {m.sku_code}: {m.quantity_delta > 0 ? '+' : ''}
-                  {m.quantity_delta} · {m.movement_type}
-                </li>
-              ))}
-            </ul>
-          </section>
-          {isFulfillmentAdmin ? (
-          <section className="card" data-testid="stock-transfer-section">
-            <h2>Перемещение между ячейками</h2>
-            <p className="subtle">
-              Списание с ячейки «откуда» и оприходование в «куда» на одном складе.
-            </p>
-            <form
-              data-testid="stock-transfer-form"
-              noValidate
-              onSubmit={(e) => void onStockTransfer(e)}
-            >
-              <label>
-                Откуда (ячейка)
-                <select
-                  name="transfer_from_loc"
-                  data-testid="transfer-from-loc"
-                  required
-                  defaultValue=""
-                >
-                  <option value="" disabled>
-                    Выберите
-                  </option>
-                  {locations.map((loc) => (
-                    <option key={loc.id} value={loc.id}>
-                      {loc.code}
-                    </option>
-                  ))}
-                </select>
-              </label>
-              <label>
-                Куда (ячейка)
-                <select
-                  name="transfer_to_loc"
-                  data-testid="transfer-to-loc"
-                  required
-                  defaultValue=""
-                >
-                  <option value="" disabled>
-                    Выберите
-                  </option>
-                  {locations.map((loc) => (
-                    <option key={loc.id} value={loc.id}>
-                      {loc.code}
-                    </option>
-                  ))}
-                </select>
-              </label>
-              <label>
-                Товар
-                <select
-                  name="transfer_product_id"
-                  data-testid="transfer-product"
-                  required
-                  defaultValue=""
-                >
-                  <option value="" disabled>
-                    SKU
-                  </option>
-                  {products.map((p) => (
-                    <option key={p.id} value={p.id}>
-                      {p.sku_code} — {p.name}
-                    </option>
-                  ))}
-                </select>
-              </label>
-              <label>
-                Количество
-                <input
-                  name="transfer_qty"
-                  data-testid="transfer-qty"
-                  type="number"
-                  min={1}
-                  required
+                <CloseIcon />
+              </IconButton>
+              <MuiTypography variant="h6" sx={{ flex: 1 }}>
+                Документ
+              </MuiTypography>
+            </MuiToolbar>
+          </MuiAppBar>
+          <MuiBox sx={{ p: 2, overflow: 'auto', height: 'calc(100vh - 64px)' }}>
+            {ffDocModal === 'inbound' ? (
+              token && selectedInboundId ? (
+                <FfInboundRequestView
+                  token={token}
+                  requestId={selectedInboundId}
+                  isFulfillmentAdmin={isFulfillmentAdmin}
+                  onClose={() => {
+                    setFfDocModal(null)
+                    setSelectedInboundId(null)
+                    setSelectedOutboundId(null)
+                  }}
                 />
-              </label>
-              <button
-                type="submit"
-                data-testid="transfer-submit"
-                disabled={opsBusy || locations.length < 2}
-              >
-                {opsBusy ? '…' : 'Переместить'}
-              </button>
-            </form>
-          </section>
-          ) : null}
-          <section className="card" data-testid="outbound-section">
-            <h2>Отгрузка</h2>
-            <p className="subtle">
-              Заявка на списание остатков из выбранных ячеек. Назначьте ячейку
-              на строке; отгрузка по строке частями; «Провести весь остаток»
-              списывает всё неотгруженное.
-            </p>
-            {canEditOutboundDraft ? (
-            <form
-              data-testid="outbound-create-form"
-              noValidate
-              onSubmit={(e) => void onCreateOutboundRequest(e)}
-            >
-              {isFulfillmentSeller && warehouses.length > 1 ? (
-                <label style={{ display: 'block', marginBottom: 8 }}>
-                  Склад для отгрузки
-                  <select
-                    name="outbound_warehouse_id"
-                    data-testid="outbound-create-warehouse"
-                    required
-                    defaultValue=""
-                  >
-                    <option value="" disabled>
-                      Выберите склад
-                    </option>
-                    {warehouses.map((w) => (
-                      <option key={w.id} value={w.id}>
-                        {w.code} — {w.name}
-                      </option>
-                    ))}
-                  </select>
-                </label>
-              ) : null}
-              <button
-                type="submit"
-                data-testid="outbound-create-submit"
-                disabled={
-                  opsBusy ||
-                  warehouses.length === 0 ||
-                  (!isFulfillmentSeller &&
-                    !selectedWarehouseId &&
-                    warehouses.length !== 1)
-                }
-              >
-                {opsBusy ? '…' : 'Новая заявка на отгрузку'}
-              </button>
-            </form>
+              ) : (
+                <MuiTypography variant="body2" color="text.secondary">
+                  Нет выбранной заявки.
+                </MuiTypography>
+              )
+            ) : ffDocModal === 'outbound' ? (
+              <OutboundScreen
+                opsError={opsError}
+                opsBusy={opsBusy}
+                isFulfillmentAdmin={isFulfillmentAdmin}
+                isFulfillmentSeller={isFulfillmentSeller}
+                canEditOutboundDraft={isFulfillmentAdmin}
+                warehouses={warehouses}
+                selectedWarehouseId={selectedWarehouseId}
+                products={products}
+                outboundSummaries={outboundSummaries}
+                selectedOutboundId={selectedOutboundId}
+                setSelectedOutboundId={setSelectedOutboundId}
+                outboundDetail={outboundDetail}
+                outboundRequestLocations={outboundRequestLocations}
+                outboundMovements={outboundMovements}
+                onCreateOutboundRequest={(e) => void onCreateOutboundRequest(e)}
+                onAddOutboundLine={(e) => void onAddOutboundLine(e)}
+                onDeleteOutboundLine={(lineId) => void onDeleteOutboundLine(lineId)}
+                onSubmitOutboundRequest={() => void onSubmitOutboundRequest()}
+                onSaveOutboundLineStorage={(e) => void onSaveOutboundLineStorage(e)}
+                onShipOutboundLine={(e) => void onShipOutboundLine(e)}
+                onPostOutboundRequest={() => void onPostOutboundRequest()}
+              />
             ) : null}
-            <ul className="list-plain" data-testid="outbound-requests-list">
-              {outboundSummaries.map((row) => (
-                <li key={row.id}>
-                  <button
-                    type="button"
-                    data-testid="outbound-request-item"
-                    data-status={row.status}
-                    onClick={() => setSelectedOutboundId(row.id)}
-                    style={{
-                      width: '100%',
-                      textAlign: 'left',
-                      background:
-                        row.id === selectedOutboundId
-                          ? 'rgba(91, 79, 212, 0.12)'
-                          : 'transparent',
-                      border: '1px solid rgba(0,0,0,0.08)',
-                      borderRadius: 8,
-                      padding: '8px 10px',
-                      cursor: 'pointer',
-                    }}
-                  >
-                    <span data-testid="outbound-request-status">{row.status}</span>
-                    {' · '}
-                    строк: {row.line_count}
-                  </button>
-                </li>
-              ))}
-            </ul>
-            {outboundDetail ? (
-              <div data-testid="outbound-detail">
-                <p className="subtle" data-testid="outbound-detail-status">
-                  Статус: {outboundDetail.status}
-                </p>
-                <ul
-                  className="list-plain"
-                  data-testid="outbound-detail-lines"
-                >
-                  {outboundDetail.lines.map((ln) => (
-                    <li
-                      key={ln.id}
-                      data-testid="outbound-detail-line"
-                      data-line-id={ln.id}
-                    >
-                      {ln.product_name} ({ln.sku_code}) — отгружено{' '}
-                      {ln.shipped_qty} из {ln.quantity}
-                      {ln.storage_location_code
-                        ? ` · ячейка: ${ln.storage_location_code}`
-                        : ''}
-                      {outboundDetail.status === 'draft' && isFulfillmentAdmin ? (
-                        <button
-                          type="button"
-                          data-testid="outbound-line-delete"
-                          disabled={opsBusy}
-                          onClick={() => void onDeleteOutboundLine(ln.id)}
-                        >
-                          Удалить строку
-                        </button>
-                      ) : null}
-                    </li>
-                  ))}
-                </ul>
-                {outboundDetail.status === 'draft' && canEditOutboundDraft ? (
-                  <form
-                    data-testid="outbound-line-form"
-                    noValidate
-                    onSubmit={(e) => void onAddOutboundLine(e)}
-                  >
-                    <label>
-                      Товар
-                      <select
-                        name="outbound_product_id"
-                        data-testid="outbound-line-product"
-                        required
-                        defaultValue=""
-                      >
-                        <option value="" disabled>
-                          Выберите SKU
-                        </option>
-                        {products.map((p) => (
-                          <option key={p.id} value={p.id}>
-                            {p.sku_code} — {p.name}
-                          </option>
-                        ))}
-                      </select>
-                    </label>
-                    <label>
-                      Количество, шт
-                      <input
-                        name="outbound_qty"
-                        data-testid="outbound-line-qty"
-                        type="number"
-                        min={1}
-                        required
-                      />
-                    </label>
-                    {outboundRequestLocations.length > 0 ? (
-                      <label>
-                        Ячейка (необязательно)
-                        <select
-                          name="outbound_line_storage_id"
-                          data-testid="outbound-line-location"
-                          defaultValue=""
-                        >
-                          <option value="">— позже —</option>
-                          {outboundRequestLocations.map((loc) => (
-                            <option key={loc.id} value={loc.id}>
-                              {loc.code}
-                            </option>
-                          ))}
-                        </select>
-                      </label>
-                    ) : null}
-                    <button
-                      type="submit"
-                      data-testid="outbound-line-submit"
-                      disabled={opsBusy || products.length === 0}
-                    >
-                      {opsBusy ? '…' : 'Добавить строку'}
-                    </button>
-                  </form>
-                ) : null}
-                {outboundDetail.status === 'draft' &&
-                outboundDetail.lines.length > 0 &&
-                isFulfillmentAdmin ? (
-                  <button
-                    type="button"
-                    data-testid="outbound-submit-request"
-                    disabled={opsBusy}
-                    onClick={() => void onSubmitOutboundRequest()}
-                  >
-                    {opsBusy ? '…' : 'Отправить заявку'}
-                  </button>
-                ) : null}
-                {outboundDetail.status === 'submitted' ? (
-                  <div data-testid="outbound-ship-panel">
-                    <p className="subtle">Строки в работе</p>
-                    {isFulfillmentAdmin ? (
-                    <>
-                    {outboundDetail.lines.map((ln) =>
-                      ln.shipped_qty < ln.quantity ? (
-                        <div
-                          key={ln.id}
-                          style={{
-                            border: '1px solid rgba(0,0,0,0.08)',
-                            borderRadius: 8,
-                            padding: '10px 12px',
-                            marginBottom: 10,
-                          }}
-                        >
-                          <p className="subtle" style={{ marginTop: 0 }}>
-                            {ln.sku_code} — осталось отгрузить{' '}
-                            {ln.quantity - ln.shipped_qty} из {ln.quantity}
-                          </p>
-                          <form
-                            data-testid="outbound-line-storage-form"
-                            data-line-id={ln.id}
-                            noValidate
-                            onSubmit={(e) => void onSaveOutboundLineStorage(e)}
-                          >
-                            <label>
-                              Ячейка отбора
-                              <select
-                                name="out_line_storage_id"
-                                data-testid="outbound-line-storage-select"
-                                defaultValue={ln.storage_location_id ?? ''}
-                                required
-                              >
-                                <option value="" disabled>
-                                  Выберите ячейку
-                                </option>
-                                {outboundRequestLocations.map((loc) => (
-                                  <option key={loc.id} value={loc.id}>
-                                    {loc.code}
-                                  </option>
-                                ))}
-                              </select>
-                            </label>
-                            <button
-                              type="submit"
-                              data-testid="outbound-line-storage-save"
-                              disabled={
-                                opsBusy || outboundRequestLocations.length === 0
-                              }
-                            >
-                              Сохранить ячейку
-                            </button>
-                          </form>
-                          <form
-                            data-testid="outbound-line-ship-form"
-                            data-line-id={ln.id}
-                            noValidate
-                            onSubmit={(e) => void onShipOutboundLine(e)}
-                          >
-                            <label>
-                              Отгрузить, шт
-                              <input
-                                name="ship_qty"
-                                data-testid="outbound-line-ship-qty"
-                                type="number"
-                                min={1}
-                                max={ln.quantity - ln.shipped_qty}
-                                required
-                              />
-                            </label>
-                            <button
-                              type="submit"
-                              data-testid="outbound-line-ship-submit"
-                              disabled={opsBusy}
-                            >
-                              Отгрузить
-                            </button>
-                          </form>
-                        </div>
-                      ) : null,
-                    )}
-                    <button
-                      type="button"
-                      data-testid="outbound-post-submit"
-                      disabled={opsBusy}
-                      onClick={() => void onPostOutboundRequest()}
-                    >
-                      {opsBusy ? '…' : 'Провести весь остаток'}
-                    </button>
-                    </>
-                    ) : (
-                    <p className="subtle" data-testid="outbound-seller-read-only">
-                      Отгрузку ведёт фулфилмент; доступен просмотр строк и
-                      статуса.
-                    </p>
-                    )}
-                  </div>
-                ) : null}
-                {outboundMovements.length > 0 ? (
-                  <div data-testid="outbound-movements-block">
-                    <p className="subtle">Движения по отгрузке</p>
-                    <ul
-                      className="list-plain"
-                      data-testid="outbound-movements-list"
-                    >
-                      {outboundMovements.map((m) => (
-                        <li
-                          key={m.id}
-                          data-testid="outbound-movement-row"
-                        >
-                          {m.quantity_delta} · {m.movement_type}
-                        </li>
-                      ))}
-                    </ul>
-                  </div>
-                ) : null}
-              </div>
-            ) : null}
-          </section>
-        </div>
-      </main>
+          </MuiBox>
+        </Dialog>
+        </>
+      </AuthedAppLayout>
     )
-  }
+
+    return (
+      <Routes>
+        <Route path="/" element={<Navigate to={`${base}/dashboard`} replace />} />
+        <Route path="/app/*" element={v2} />
+        <Route path="*" element={<Navigate to={`${base}/dashboard`} replace />} />
+      </Routes>
+    )
+  })()
 
   return (
-    <main data-testid="app-root" className="shell">
-      <header className="top">
-        <h1>WMS</h1>
-      </header>
-      {error ? (
-        <p className="error" data-testid="auth-error">
-          {error}
-        </p>
-      ) : null}
-      <div className="grid2">
-        <section className="card">
-          <h2>Регистрация фулфилмента</h2>
-          <p className="hint">
-            Slug — короткое имя на латинице (например <code>acme-ff</code>), без
-            пробелов.
-          </p>
-          <form
-            data-testid="register-form"
-            noValidate
-            onSubmit={(e) => void onRegister(e)}
-          >
-            <label>
-              Организация
-              <input name="organization_name" required />
-            </label>
-            <label>
-              Slug (латиница)
-              <input
-                name="slug"
-                data-testid="register-slug"
-                required
-                placeholder="acme-ff"
-                autoComplete="off"
-              />
-            </label>
-            <label>
-              Email админа
-              <input name="admin_email" type="email" required />
-            </label>
-            <label>
-              Пароль
-              <input name="password" type="password" minLength={8} required />
-            </label>
-            <button type="submit" disabled={authBusy}>
-              {authBusy ? 'Отправка…' : 'Создать аккаунт'}
-            </button>
-          </form>
-        </section>
-        <section className="card">
-          <h2>Вход</h2>
-          <form
-            data-testid="login-form"
-            noValidate
-            onSubmit={(e) => void onLogin(e)}
-          >
-            <label>
-              Email
-              <input name="email" type="email" required />
-            </label>
-            <label>
-              Пароль
-              <input name="password" type="password" required />
-            </label>
-            <button type="submit" disabled={authBusy}>
-              {authBusy ? 'Вход…' : 'Войти'}
-            </button>
-          </form>
-        </section>
-      </div>
-    </main>
+    <Routes>
+      <Route path="*" element={rootElement} />
+    </Routes>
   )
 }
