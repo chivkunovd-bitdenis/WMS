@@ -1,5 +1,12 @@
 # TASKLOG
 
+## TASK-3 — 2026-05-03 — Post accepted seller inbound distribution into FF stock
+
+- What changed: completing FF inbound distribution now creates inventory movements and balances from distributed actual quantities, so accepted seller products appear in the FF warehouse catalog.
+- What did NOT change: seller private WB catalog import, marketplace shipment flows, billing, migrations, and Docker infrastructure were not changed in this task.
+- Verification: `ruff check app/services/inbound_intake_service.py tests/test_inbound_distribution.py && mypy app/services/inbound_intake_service.py`; `pytest tests/test_inbound_distribution.py tests/test_products_wb_catalog.py`.
+- Commit: d5a954f
+
 ## TASK-2 — 2026-05-03 — Split seller and FF product catalogs
 
 - What changed: renamed the FF products endpoint to `/products/ff-catalog` and changed FF catalog visibility to products with warehouse movements only; seller `/products/wb-catalog` remains private to the seller role.
