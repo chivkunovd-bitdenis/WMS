@@ -3,7 +3,7 @@ from __future__ import annotations
 import uuid
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Query, status
 from pydantic import BaseModel, Field, computed_field
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -17,9 +17,14 @@ from app.services.catalog_service import (
     list_products,
     volume_liters_from_mm,
 )
-from app.services.seller_wb_catalog_service import list_seller_wb_catalog_rows
+from app.services.seller_wb_catalog_service import (
+    list_admin_wb_catalog_rows,
+    list_seller_wb_catalog_rows,
+)
 
 router = APIRouter(prefix="/products", tags=["products"])
+
+_seller_id_query = Query(default=None)
 
 
 class ProductCreate(BaseModel):
@@ -35,6 +40,22 @@ class SellerWbCatalogOut(BaseModel):
     """Product row for seller UI: WB subject, first photo, barcodes (ШК) from card JSON."""
 
     id: str
+    name: str
+    sku_code: str
+    wb_nm_id: int | None = None
+    wb_vendor_code: str | None = None
+    wb_subject_name: str | None = None
+    wb_primary_image_url: str | None = None
+    wb_barcodes: list[str]
+    wb_primary_barcode: str | None = None
+
+
+class AdminWbCatalogOut(BaseModel):
+    """Product row for FF admin: seller + WB enrichment (photos/barcodes) when available."""
+
+    id: str
+    seller_id: str | None = None
+    seller_name: str | None = None
     name: str
     sku_code: str
     wb_nm_id: int | None = None
@@ -104,6 +125,16 @@ async def get_seller_wb_catalog(
         )
     rows = await list_seller_wb_catalog_rows(session, user.tenant_id, user.seller_id)
     return [SellerWbCatalogOut(**r.as_dict()) for r in rows]
+
+
+@router.get("/wb-catalog-admin", response_model=list[AdminWbCatalogOut])
+async def get_admin_wb_catalog(
+    user: Annotated[User, Depends(require_fulfillment_admin)],
+    session: Annotated[AsyncSession, Depends(get_db)],
+    seller_id: uuid.UUID | None = _seller_id_query,
+) -> list[AdminWbCatalogOut]:
+    rows = await list_admin_wb_catalog_rows(session, user.tenant_id, seller_id=seller_id)
+    return [AdminWbCatalogOut(**r.as_dict()) for r in rows]
 
 
 @router.post("", response_model=ProductOut)

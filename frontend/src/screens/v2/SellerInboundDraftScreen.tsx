@@ -2,7 +2,6 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import {
   Alert,
-  Avatar,
   Box,
   Button,
   Chip,
@@ -27,6 +26,7 @@ import {
   Typography,
 } from '@mui/material'
 import { apiUrl } from '../../api'
+import { ProductPhotoThumb } from '../../components/ProductPhotoThumb'
 import { readApiErrorMessage } from '../../utils/readApiErrorMessage'
 
 export type WbCatalogRow = {
@@ -599,13 +599,7 @@ export function SellerInboundDraftScreen({
                       }}
                     >
                       <TableCell>
-                        <Avatar
-                          variant="rounded"
-                          src={img}
-                          alt=""
-                          sx={{ width: 44, height: 44 }}
-                          slotProps={{ img: { loading: 'lazy' } }}
-                        />
+                        <ProductPhotoThumb src={img} />
                       </TableCell>
                       <TableCell
                         sx={{
@@ -768,11 +762,7 @@ export function SellerInboundDraftScreen({
                       data-in-draft={inDraft ? '1' : '0'}
                     >
                       <TableCell>
-                        <Avatar
-                          variant="rounded"
-                          src={r.wb_primary_image_url ?? undefined}
-                          sx={{ width: 44, height: 44 }}
-                        />
+                        <ProductPhotoThumb src={r.wb_primary_image_url} />
                       </TableCell>
                       <TableCell
                         sx={{

@@ -1,7 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import {
   Alert,
-  Avatar,
   Box,
   Button,
   CircularProgress,
@@ -17,6 +16,7 @@ import {
   Typography,
 } from '@mui/material'
 import { apiUrl } from '../../api'
+import { ProductPhotoThumb } from '../../components/ProductPhotoThumb'
 import { readApiErrorMessage } from '../../utils/readApiErrorMessage'
 
 type WbCatalogRow = {
@@ -166,11 +166,7 @@ export function SellerProductsStockScreen({
             {pagedRows.map((p) => (
               <TableRow key={p.id} hover data-testid="seller-product-row">
                 <TableCell>
-                  <Avatar
-                    variant="rounded"
-                    src={p.wb_primary_image_url ?? undefined}
-                    sx={{ width: 44, height: 44 }}
-                  />
+                  <ProductPhotoThumb src={p.wb_primary_image_url} />
                 </TableCell>
                 <TableCell>{p.sku_code}</TableCell>
                 <TableCell>{p.wb_primary_barcode ?? (p.wb_barcodes[0] ?? '—')}</TableCell>

@@ -32,6 +32,7 @@ import {
 } from './screens/ff/FfSuppliesShipmentsPage'
 import { FfPlaceholderPage } from './screens/ff/FfPlaceholderPage'
 import { FfInboundRequestView } from './screens/ff/FfInboundRequestView'
+import { FfProductsCatalogScreen } from './screens/v2/FfProductsCatalogScreen'
 
 type WarehouseRow = { id: string; name: string; code: string }
 type LocationRow = { id: string; code: string; warehouse_id: string; barcode: string }
@@ -2285,11 +2286,11 @@ export default function App() {
           <Route
             path="ff/products"
             element={
-              <FfPlaceholderPage
-                title="Товары"
-                hint="Раздел в разработке."
-                testId="ff-products-placeholder"
-              />
+              token ? (
+                <FfProductsCatalogScreen token={token} authHeaders={authHeaders} sellers={sellers} />
+              ) : (
+                <FfPlaceholderPage title="Товары" hint="Нет токена." testId="ff-products-placeholder" />
+              )
             }
           />
 
