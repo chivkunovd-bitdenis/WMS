@@ -5,7 +5,7 @@
 - What changed: строка товаров FF зелёная при `actual_qty === expected_qty` (`ff-inbound-line-row-match`); блок «Остаток без ячейки» — warning-фон и `data-pending=1` при нераспределённом остатке; e2e TC-NEW-C04/C05 в существующих spec.
 - What did NOT change: v2 InboundScreen; глобальный список остатков (US-E-04).
 - Verification: build ok; e2e box-intake + distribution 3 passed.
-- Commit: pending
+- Commit: 2aaae47
 
 ## TASK-9 — 2026-05-23 — Поштучная приёмка по скану короба INB (US-C-01)
 
