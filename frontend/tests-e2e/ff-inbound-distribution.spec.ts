@@ -116,6 +116,8 @@ test('ff inbound distribution: partial, leftover without cell, complete -> reado
 
   await row.getByTestId('ff-inbound-distribution-location').click();
   await page.getByRole('option', { name: 'A-01' }).click();
+  // TC-NEW-C03 — печать ШК выбранной ячейки
+  await expect(row.getByTestId('ff-inbound-distribution-location-print')).toBeVisible();
 
   const [saveRes] = await Promise.all([
     page.waitForResponse((r) => r.request().method() === 'PUT' && r.url().includes('/distribution-lines') && r.status() === 200),

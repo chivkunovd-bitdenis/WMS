@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
+import PrintOutlined from '@mui/icons-material/PrintOutlined'
 import {
   Alert,
   Avatar,
@@ -11,6 +12,7 @@ import {
   DialogContent,
   DialogTitle,
   FormControl,
+  IconButton,
   InputLabel,
   MenuItem,
   Paper,
@@ -23,6 +25,7 @@ import {
   TableHead,
   TableRow,
   TextField,
+  Tooltip,
   Typography,
 } from '@mui/material'
 import { alpha } from '@mui/material/styles'
@@ -30,6 +33,7 @@ import { apiUrl } from '../../api'
 import { printBarcodeLabel } from '../../utils/printBarcodeLabel'
 import { readApiErrorMessage } from '../../utils/readApiErrorMessage'
 import { renderBarcodeDataUrl } from '../../utils/renderBarcodeDataUrl'
+import { resolveProductIdByBarcode } from '../../utils/resolveProductByBarcode'
 
 type LocationRow = { id: string; code: string; warehouse_id: string; barcode: string }
 
@@ -155,6 +159,7 @@ export function FfInboundRequestView({ token, requestId, isFulfillmentAdmin, onC
   const [actualBoxCountDraft, setActualBoxCountDraft] = useState<string>('')
   const [boxOpenScan, setBoxOpenScan] = useState('')
   const [productScanBarcode, setProductScanBarcode] = useState('')
+  const [lineBarcodeScan, setLineBarcodeScan] = useState('')
 
   const loadDetail = useCallback(async () => {
     const res = await fetch(apiUrl(`/operations/inbound-intake-requests/${requestId}`), {
@@ -166,13 +171,45 @@ export function FfInboundRequestView({ token, requestId, isFulfillmentAdmin, onC
     setDetail((await res.json()) as InboundDetail)
   }, [authHeaders, requestId])
 
-  const loadCatalog = useCallback(async () => {
-    const res = await fetch(apiUrl('/products/wb-catalog'), { headers: authHeaders })
-    if (!res.ok) {
-      throw new Error(await readApiErrorMessage(res))
+  const fetchCatalogRows = useCallback(async (): Promise<WbCatalogRow[]> => {
+    const [productsRes, ffRes] = await Promise.all([
+      fetch(apiUrl('/products'), { headers: authHeaders }),
+      fetch(apiUrl('/products/ff-catalog'), { headers: authHeaders }),
+    ])
+    if (!productsRes.ok) {
+      throw new Error(await readApiErrorMessage(productsRes))
     }
-    setCatalog((await res.json()) as WbCatalogRow[])
+    const products = (await productsRes.json()) as {
+      id: string
+      name: string
+      sku_code: string
+      wb_nm_id?: number | null
+      wb_vendor_code?: string | null
+    }[]
+    const ffRows = ffRes.ok ? ((await ffRes.json()) as WbCatalogRow[]) : []
+    const ffById = new Map(ffRows.map((r) => [r.id, r]))
+    return products.map((p) => {
+      const ff = ffById.get(p.id)
+      if (ff) {
+        return ff
+      }
+      return {
+        id: p.id,
+        name: p.name,
+        sku_code: p.sku_code,
+        wb_nm_id: p.wb_nm_id ?? null,
+        wb_vendor_code: p.wb_vendor_code ?? null,
+        wb_subject_name: null,
+        wb_primary_image_url: null,
+        wb_barcodes: [],
+        wb_primary_barcode: null,
+      }
+    })
   }, [authHeaders])
+
+  const loadCatalog = useCallback(async () => {
+    setCatalog(await fetchCatalogRows())
+  }, [fetchCatalogRows])
 
   const loadLocations = useCallback(
     async (warehouseId: string) => {
@@ -626,6 +663,59 @@ export function FfInboundRequestView({ token, requestId, isFulfillmentAdmin, onC
     }
   }
 
+  const addLineByBarcode = async () => {
+    if (!detail) return
+    const code = lineBarcodeScan.trim()
+    if (!code) return
+    setBusy(true)
+    setError(null)
+    try {
+      let cat = catalog
+      if (cat == null) {
+        cat = await fetchCatalogRows()
+        setCatalog(cat)
+      }
+      const productId = resolveProductIdByBarcode(cat, code)
+      if (!productId) {
+        setError('Товар не найден по штрихкоду или артикулу.')
+        return
+      }
+      const existing = detail.lines.find((ln) => ln.product_id === productId)
+      if (existing) {
+        const res = await fetch(
+          apiUrl(
+            `/operations/inbound-intake-requests/${requestId}/lines/${existing.id}/expected`,
+          ),
+          {
+            method: 'PATCH',
+            headers: { ...authHeaders, 'Content-Type': 'application/json' },
+            body: JSON.stringify({ expected_qty: existing.expected_qty + 1 }),
+          },
+        )
+        if (!res.ok) {
+          setError(await readApiErrorMessage(res))
+          return
+        }
+      } else {
+        const res = await fetch(apiUrl(`/operations/inbound-intake-requests/${requestId}/lines`), {
+          method: 'POST',
+          headers: { ...authHeaders, 'Content-Type': 'application/json' },
+          body: JSON.stringify({ product_id: productId, expected_qty: 1 }),
+        })
+        if (!res.ok) {
+          setError(await readApiErrorMessage(res))
+          return
+        }
+      }
+      setLineBarcodeScan('')
+      await loadDetail()
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Не удалось добавить строку по штрихкоду.')
+    } finally {
+      setBusy(false)
+    }
+  }
+
   const applyPicker = async () => {
     if (!detail) return
     setBusy(true)
@@ -695,6 +785,17 @@ export function FfInboundRequestView({ token, requestId, isFulfillmentAdmin, onC
     } finally {
       setBusy(false)
     }
+  }
+
+  const printDistributionLocationLabel = (locationId: string) => {
+    const loc = locations.find((l) => l.id === locationId)
+    if (!loc) return
+    const dataUrl = renderBarcodeDataUrl(loc.barcode)
+    printBarcodeLabel({
+      title: `Ячейка № ${loc.code}`,
+      barcode: loc.barcode,
+      barcodeDataUrl: dataUrl,
+    })
   }
 
   const printInboundBoxLabel = async (box: InboundBox) => {
@@ -1004,6 +1105,36 @@ export function FfInboundRequestView({ token, requestId, isFulfillmentAdmin, onC
 
             {detail.status === 'draft' ? (
               <>
+                <Stack
+                  direction={{ xs: 'column', sm: 'row' }}
+                  spacing={1}
+                  sx={{ width: '100%', flexBasis: '100%' }}
+                  data-testid="ff-inbound-line-barcode-row"
+                >
+                  <TextField
+                    size="small"
+                    label="Штрихкод / артикул"
+                    value={lineBarcodeScan}
+                    disabled={draftLocked || busy}
+                    onChange={(e) => setLineBarcodeScan(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter') {
+                        e.preventDefault()
+                        void addLineByBarcode()
+                      }
+                    }}
+                    slotProps={{ htmlInput: { 'data-testid': 'ff-inbound-line-barcode-scan' } }}
+                    sx={{ minWidth: 220, flexGrow: 1 }}
+                  />
+                  <Button
+                    variant="outlined"
+                    disabled={draftLocked || busy || !lineBarcodeScan.trim()}
+                    onClick={() => void addLineByBarcode()}
+                    data-testid="ff-inbound-line-barcode-add"
+                  >
+                    Добавить по ШК
+                  </Button>
+                </Stack>
                 <Button
                   variant="outlined"
                   disabled={draftLocked || busy}
@@ -1528,31 +1659,52 @@ export function FfInboundRequestView({ token, requestId, isFulfillmentAdmin, onC
                                     />
                                   </TableCell>
                                   <TableCell>
-                                    <FormControl size="small" fullWidth>
-                                      <InputLabel id={`ff-dist-loc-${idx}`}>Ячейка</InputLabel>
-                                      <Select
-                                        labelId={`ff-dist-loc-${idx}`}
-                                        label="Ячейка"
-                                        value={row.storage_location_id}
-                                        disabled={distBusy || !distributionEditable || locations.length === 0}
-                                        onChange={(e) => {
-                                          const v = String(e.target.value)
-                                          setDistLines((prev) =>
-                                            prev.map((r, i) => (i === idx ? { ...r, storage_location_id: v } : r)),
-                                          )
-                                        }}
-                                        data-testid="ff-inbound-distribution-location"
-                                      >
-                                        <MenuItem value="">
-                                          <em>Выберите ячейку</em>
-                                        </MenuItem>
-                                        {locations.map((loc) => (
-                                          <MenuItem key={loc.id} value={loc.id}>
-                                            {loc.code}
+                                    <Stack direction="row" spacing={0.5} sx={{ alignItems: 'center' }}>
+                                      <FormControl size="small" sx={{ flexGrow: 1 }}>
+                                        <InputLabel id={`ff-dist-loc-${idx}`}>Ячейка</InputLabel>
+                                        <Select
+                                          labelId={`ff-dist-loc-${idx}`}
+                                          label="Ячейка"
+                                          value={row.storage_location_id}
+                                          disabled={distBusy || !distributionEditable || locations.length === 0}
+                                          onChange={(e) => {
+                                            const v = String(e.target.value)
+                                            setDistLines((prev) =>
+                                              prev.map((r, i) =>
+                                                i === idx ? { ...r, storage_location_id: v } : r,
+                                              ),
+                                            )
+                                          }}
+                                          data-testid="ff-inbound-distribution-location"
+                                        >
+                                          <MenuItem value="">
+                                            <em>Выберите ячейку</em>
                                           </MenuItem>
-                                        ))}
-                                      </Select>
-                                    </FormControl>
+                                          {locations.map((loc) => (
+                                            <MenuItem key={loc.id} value={loc.id}>
+                                              {loc.code}
+                                            </MenuItem>
+                                          ))}
+                                        </Select>
+                                      </FormControl>
+                                      {row.storage_location_id ? (
+                                        <Tooltip title="Печать ШК ячейки">
+                                          <span>
+                                            <IconButton
+                                              size="small"
+                                              aria-label="Печать ШК ячейки"
+                                              disabled={distBusy || !distributionEditable}
+                                              onClick={() =>
+                                                printDistributionLocationLabel(row.storage_location_id)
+                                              }
+                                              data-testid="ff-inbound-distribution-location-print"
+                                            >
+                                              <PrintOutlined fontSize="small" />
+                                            </IconButton>
+                                          </span>
+                                        </Tooltip>
+                                      ) : null}
+                                    </Stack>
                                     {row.product_id && (cellHintsByProductId[row.product_id]?.length ?? 0) > 0 ? (
                                       <Stack
                                         direction="row"
@@ -1681,6 +1833,19 @@ export function FfInboundRequestView({ token, requestId, isFulfillmentAdmin, onC
               label="Поиск (артикул, ШК, nm, название, артикул продавца)"
               value={pickerSearch}
               onChange={(e) => setPickerSearch(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key !== 'Enter' || !catalog) return
+                e.preventDefault()
+                const productId = resolveProductIdByBarcode(catalog, pickerSearch)
+                const targetId =
+                  productId ?? (filteredPickerRows.length === 1 ? filteredPickerRows[0]!.id : null)
+                if (!targetId) return
+                setPickerQtyByProduct((prev) => ({
+                  ...prev,
+                  [targetId]: (prev[targetId] ?? 0) + 1,
+                }))
+                setPickerSearch('')
+              }}
               size="small"
               fullWidth
               slotProps={{ htmlInput: { 'data-testid': 'ff-inbound-picker-search' } }}

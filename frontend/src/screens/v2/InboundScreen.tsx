@@ -1,4 +1,5 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
+import { resolveProductIdByBarcode } from '../../utils/resolveProductByBarcode'
 import type { FormEventHandler } from 'react'
 import { Button } from '../../ui/Button'
 import { Card } from '../../ui/Card'
@@ -8,7 +9,15 @@ import { Screen } from '../AppV2Screens'
 
 type WarehouseRow = { id: string; name: string; code: string }
 type LocationRow = { id: string; code: string; warehouse_id: string }
-type ProductRow = { id: string; name: string; sku_code: string }
+type ProductRow = {
+  id: string
+  name: string
+  sku_code: string
+  wb_barcodes?: string[]
+  wb_primary_barcode?: string | null
+  wb_vendor_code?: string | null
+  wb_nm_id?: number | null
+}
 
 type InboundSummaryRow = {
   id: string
@@ -139,6 +148,7 @@ export function InboundScreen(props: Props) {
   const [productQuery, setProductQuery] = useState('')
   const [boxOpenScan, setBoxOpenScan] = useState('')
   const [productScanBarcode, setProductScanBarcode] = useState('')
+  const productSelectRef = useRef<HTMLSelectElement>(null)
 
   const boxIntakeMode = (inboundDetail?.boxes?.length ?? 0) > 0
   const activeIntakeBox = inboundDetail?.boxes?.find((b) => b.is_open) ?? null
@@ -149,15 +159,18 @@ export function InboundScreen(props: Props) {
       return products
     }
     return products.filter((p) => {
-      const anyP = p as unknown as {
-        seller_name?: string | null
-        wb_vendor_code?: string | null
-        wb_nm_id?: number | null
-      }
+      const barcodes = (p.wb_barcodes ?? []).join(' ')
       const hay =
-        `${p.sku_code} ${p.name} ${anyP.seller_name ?? ''} ${anyP.wb_vendor_code ?? ''} ${anyP.wb_nm_id ?? ''}`.toLowerCase()
+        `${p.sku_code} ${p.name} ${p.wb_vendor_code ?? ''} ${p.wb_nm_id ?? ''} ${p.wb_primary_barcode ?? ''} ${barcodes}`.toLowerCase()
       return hay.includes(q)
     })
+  }, [productQuery, products])
+
+  useEffect(() => {
+    const id = resolveProductIdByBarcode(products, productQuery)
+    if (id && productSelectRef.current) {
+      productSelectRef.current.value = id
+    }
   }, [productQuery, products])
 
   return (
@@ -303,7 +316,7 @@ export function InboundScreen(props: Props) {
                       <Input
                         value={productQuery}
                         onChange={(e) => setProductQuery(e.target.value)}
-                        placeholder="Введи SKU или часть названия…"
+                        placeholder="SKU, штрихкод WB или название…"
                         aria-label="Поиск SKU для приёмки"
                         data-testid="inbound-line-product-search"
                       />
@@ -311,6 +324,7 @@ export function InboundScreen(props: Props) {
                     <label>
                       Товар
                       <Select
+                        ref={productSelectRef}
                         name="inbound_product_id"
                         data-testid="inbound-line-product"
                         required

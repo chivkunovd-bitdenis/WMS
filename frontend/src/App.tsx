@@ -48,6 +48,8 @@ type ProductRow = {
   seller_name: string | null
   wb_nm_id?: number | null
   wb_vendor_code?: string | null
+  wb_barcodes?: string[]
+  wb_primary_barcode?: string | null
 }
 
 type SellerRow = { id: string; name: string }
@@ -365,13 +367,33 @@ export default function App() {
 
   const refreshProducts = useCallback(
     async (t: string) => {
-      const res = await fetch(apiUrl('/products'), {
-        headers: authHeaders(t),
-      })
-      if (!res.ok) {
-        throw new Error(await readApiErrorMessage(res))
+      const headers = authHeaders(t)
+      const [productsRes, catalogRes] = await Promise.all([
+        fetch(apiUrl('/products'), { headers }),
+        fetch(apiUrl('/products/ff-catalog'), { headers }),
+      ])
+      if (!productsRes.ok) {
+        throw new Error(await readApiErrorMessage(productsRes))
       }
-      setProducts((await res.json()) as ProductRow[])
+      const base = (await productsRes.json()) as ProductRow[]
+      if (!catalogRes.ok) {
+        setProducts(base)
+        return
+      }
+      const catalog = (await catalogRes.json()) as {
+        id: string
+        wb_barcodes?: string[]
+        wb_primary_barcode?: string | null
+      }[]
+      const barcodesById = new Map(
+        catalog.map((r) => [r.id, { wb_barcodes: r.wb_barcodes ?? [], wb_primary_barcode: r.wb_primary_barcode }]),
+      )
+      setProducts(
+        base.map((p) => {
+          const wb = barcodesById.get(p.id)
+          return wb ? { ...p, ...wb } : p
+        }),
+      )
     },
     [authHeaders],
   )

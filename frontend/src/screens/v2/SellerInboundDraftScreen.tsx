@@ -28,6 +28,7 @@ import {
 import { apiUrl } from '../../api'
 import { ProductPhotoThumb } from '../../components/ProductPhotoThumb'
 import { readApiErrorMessage } from '../../utils/readApiErrorMessage'
+import { resolveProductIdByBarcode } from '../../utils/resolveProductByBarcode'
 
 export type WbCatalogRow = {
   id: string
@@ -746,6 +747,16 @@ export function SellerInboundDraftScreen({
               label="Поиск (артикул, ШК, nm, название, артикул продавца)"
               value={pickerSearch}
               onChange={(e) => setPickerSearch(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key !== 'Enter' || !catalog) return
+                e.preventDefault()
+                const productId = resolveProductIdByBarcode(catalog, pickerSearch)
+                const targetId =
+                  productId ?? (filteredPickerRows.length === 1 ? filteredPickerRows[0]!.id : null)
+                if (!targetId) return
+                setPickerQty(targetId, (pickerQtyByProduct[targetId] ?? 0) + 1)
+                setPickerSearch('')
+              }}
               size="small"
               fullWidth
               slotProps={{ htmlInput: { 'data-testid': 'seller-inbound-picker-search' } }}

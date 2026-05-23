@@ -64,6 +64,7 @@ test('create inbound request, add line, submit — UI and API', async ({ page })
   await expect(page.getByTestId('inbound-detail-status')).toContainText('draft');
   await expect(page.getByTestId('inbound-detail-planned-date')).toBeVisible();
 
+  await page.getByTestId('inbound-line-product-search').fill(sku);
   await page
     .getByTestId('inbound-line-product')
     .selectOption({ label: `${sku} — Товар` });
