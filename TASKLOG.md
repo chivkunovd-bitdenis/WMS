@@ -12,7 +12,7 @@
 - What changed: `GET /operations/inventory-balances/locations-by-product`; чипы «Уже лежит: A-01 (N)» в блоке распределения FF (`FfInboundRequestView`), клик подставляет ячейку; pytest `test_product_location_hints.py`; e2e `ff-inbound-cell-hints.spec.ts` (TC-NEW-C02).
 - What did NOT change: подсказки при поштучном скане в короб (только этап распределения); v2 InboundScreen.
 - Verification: pytest 87 passed; e2e cell-hints 1 passed; build ok.
-- Commit: pending
+- Commit: a453666
 
 ## TASK-8 — 2026-05-22 — Внутренние ШК на короба поставки (US-B-02)
 
