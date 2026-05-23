@@ -70,17 +70,8 @@ test('stock transfer and outbound shipment — UI', async ({ page }) => {
     waitForPostOk(page, baseIn, (u) => u.includes('/primary-accept')),
     page.getByTestId('inbound-primary-accept').click(),
   ]);
-  await page.getByTestId('inbound-line-actual-qty').fill('10');
-  await Promise.all([
-    page.waitForResponse(
-      (r) =>
-        r.request().method() === 'PATCH' &&
-        r.url().includes('/api/operations/inbound-intake-requests') &&
-        r.url().includes('/actual') &&
-        r.status() === 200,
-    ),
-    page.getByTestId('inbound-line-actual-save').click(),
-  ]);
+  const { v2InboundBoxIntakeUi } = await import('./inbound-boxes-helpers');
+  await v2InboundBoxIntakeUi(page, h, sku, 10);
   await Promise.all([
     waitForPostOk(page, baseIn, (u) => u.includes('/verify')),
     page.getByTestId('inbound-verify-complete').click(),

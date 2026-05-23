@@ -73,6 +73,14 @@ export function waitForPatchOk(
 }
 
 /** Inbound line partial receive: POST .../lines/{id}/receive */
+export function waitForInboundBoxLabelPrintedOk(page: Page): Promise<Response> {
+  return page.waitForResponse((r) =>
+    isMethodOk('POST', r, '/api/operations/inbound-intake-requests', (u) =>
+      u.includes('/mark-label-printed'),
+    ),
+  );
+}
+
 export function waitForInboundReceiveOk(page: Page): Promise<Response> {
   return page.waitForResponse((r) =>
     isMethodOk('POST', r, '/api/operations/inbound-intake-requests', (u) =>

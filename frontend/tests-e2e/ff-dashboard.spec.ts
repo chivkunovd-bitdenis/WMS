@@ -28,7 +28,7 @@ test('fulfillment admin sees week calendar and supplies-shipments page', async (
   await expect(page.getByTestId('ff-dashboard-inbound-block')).toBeVisible();
   await expect(page.getByTestId('ff-dashboard-outbound-block')).toBeVisible();
 
-  const token = await page.evaluate(() => localStorage.getItem('wms_token'));
+  const token = await page.evaluate(() => localStorage.getItem('wms_token_ff'));
   expect(token).toBeTruthy();
   const e2eApi = process.env.E2E_API_ORIGIN ?? 'http://127.0.0.1:18000';
   const whRes = await page.request.post(`${e2eApi}/warehouses`, {
@@ -87,6 +87,56 @@ test('fulfillment admin sees week calendar and supplies-shipments page', async (
   if (!prRes.ok()) {
     throw new Error(`product create failed: ${prRes.status()} ${await prRes.text()}`);
   }
+  const productJson = (await prRes.json()) as { id: string; sku_code: string };
+  const productId = String(productJson.id);
+  const productSku = productJson.sku_code;
+  const whId = String(((await whRes.json()) as { id: string }).id);
+  const locRes = await page.request.post(`${e2eApi}/warehouses/${whId}/locations`, {
+    headers: {
+      Authorization: `Bearer ${token}`,
+      'Content-Type': 'application/json',
+    },
+    data: JSON.stringify({ code: 'MP-PICK' }),
+  });
+  if (!locRes.ok()) {
+    throw new Error(`location create failed: ${locRes.status()} ${await locRes.text()}`);
+  }
+  const locId = String(((await locRes.json()) as { id: string }).id);
+  const baseIn = `${e2eApi}/operations/inbound-intake-requests`;
+  const inbound = await page.request.post(baseIn, {
+    headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+    data: JSON.stringify({ warehouse_id: whId }),
+  });
+  if (!inbound.ok()) {
+    throw new Error(`inbound create failed: ${inbound.status()} ${await inbound.text()}`);
+  }
+  const inboundId = String(((await inbound.json()) as { id: string }).id);
+  const inboundLine = await page.request.post(`${baseIn}/${inboundId}/lines`, {
+    headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+    data: JSON.stringify({ product_id: productId, expected_qty: 5, storage_location_id: locId }),
+  });
+  if (!inboundLine.ok()) {
+    throw new Error(`inbound line failed: ${inboundLine.status()} ${await inboundLine.text()}`);
+  }
+  await page.request.post(`${baseIn}/${inboundId}/submit`, { headers: { Authorization: `Bearer ${token}` } });
+  const primRes = await page.request.post(`${baseIn}/${inboundId}/primary-accept`, {
+    headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+    data: { actual_box_count: 1 },
+  });
+  const primBody = (await primRes.json()) as {
+    boxes: { id: string; internal_barcode: string }[];
+  };
+  const { fulfillInboundViaBoxScans } = await import('./inbound-boxes-helpers');
+  await fulfillInboundViaBoxScans(
+    page.request,
+    { Authorization: `Bearer ${token}` },
+    inboundId,
+    primBody.boxes,
+    productSku,
+    [5],
+  );
+  await page.request.post(`${baseIn}/${inboundId}/verify`, { headers: { Authorization: `Bearer ${token}` } });
+  await page.request.post(`${baseIn}/${inboundId}/post`, { headers: { Authorization: `Bearer ${token}` } });
 
   await page.reload();
   await expect(page.getByTestId('dashboard')).toBeVisible();

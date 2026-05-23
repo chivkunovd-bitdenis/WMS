@@ -12,6 +12,7 @@ from app.models.base import Base
 if TYPE_CHECKING:
     from app.models.product import Product
     from app.models.seller import Seller
+    from app.models.storage_location import StorageLocation
     from app.models.tenant import Tenant
     from app.models.warehouse import Warehouse
 
@@ -54,6 +55,11 @@ class MarketplaceUnloadRequest(Base):
     )
     boxes: Mapped[list[MarketplaceUnloadBox]] = relationship(
         "MarketplaceUnloadBox",
+        back_populates="request",
+        cascade="all, delete-orphan",
+    )
+    pick_allocations: Mapped[list[MarketplaceUnloadPickAllocation]] = relationship(
+        "MarketplaceUnloadPickAllocation",
         back_populates="request",
         cascade="all, delete-orphan",
     )
@@ -154,3 +160,47 @@ class MarketplaceUnloadBoxLine(Base):
 
     box: Mapped[MarketplaceUnloadBox] = relationship("MarketplaceUnloadBox", back_populates="lines")
     product: Mapped[Product] = relationship("Product")
+
+
+class MarketplaceUnloadPickAllocation(Base):
+    """Pick qty per storage location for marketplace unload (ship)."""
+
+    __tablename__ = "marketplace_unload_pick_allocations"
+    __table_args__ = (
+        UniqueConstraint(
+            "request_id",
+            "product_id",
+            "storage_location_id",
+            name="uq_mp_unload_pick_req_product_loc",
+        ),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(
+        Uuid(as_uuid=True), primary_key=True, default=uuid.uuid4
+    )
+    request_id: Mapped[uuid.UUID] = mapped_column(
+        Uuid(as_uuid=True),
+        ForeignKey("marketplace_unload_requests.id", ondelete="CASCADE"),
+        index=True,
+    )
+    product_id: Mapped[uuid.UUID] = mapped_column(
+        Uuid(as_uuid=True),
+        ForeignKey("products.id", ondelete="CASCADE"),
+        index=True,
+    )
+    storage_location_id: Mapped[uuid.UUID] = mapped_column(
+        Uuid(as_uuid=True),
+        ForeignKey("storage_locations.id", ondelete="CASCADE"),
+        index=True,
+    )
+    quantity: Mapped[int] = mapped_column(Integer, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
+    )
+
+    request: Mapped[MarketplaceUnloadRequest] = relationship(
+        "MarketplaceUnloadRequest",
+        back_populates="pick_allocations",
+    )
+    product: Mapped[Product] = relationship("Product")
+    storage_location: Mapped[StorageLocation] = relationship("StorageLocation")

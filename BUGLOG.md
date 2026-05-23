@@ -1,5 +1,13 @@
 # BUGLOG
 
+## BUG-2 — 2026-05-03 — FF could add no-stock products to WB shipment
+
+- Symptom: while adding products to a WB marketplace shipment, FF saw catalog products that did not have actual warehouse stock and could add them to the document.
+- Cause: the shipment UI used the full product catalog for the picker, and `marketplace-unload` line creation only checked tenant/seller ownership, not available warehouse stock.
+- Fix: the FF shipment picker is fed from inventory availability, and backend line creation rejects products/quantities without enough available stock in the shipment warehouse.
+- Verification: `pytest tests/test_marketplace_unload_and_discrepancy_acts.py`; targeted `ruff`/`mypy`; `npm run build`; `npm run test:e2e -- ff-dashboard.spec.ts`.
+- Commit: pending
+
 ## BUG-1 — 2026-05-03 — Accepted seller products missing from FF catalog
 
 - Symptom: after FF completed seller inbound acceptance/distribution, products did not appear in the FF products catalog.

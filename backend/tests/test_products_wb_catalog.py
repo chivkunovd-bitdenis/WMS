@@ -5,6 +5,7 @@ import time
 
 import pytest
 from httpx import AsyncClient
+from inbound_box_intake_helpers import fulfill_inbound_via_box_scans
 
 from app.services.background_job_service import JOB_TYPE_WILDBERRIES_CARDS_SYNC
 
@@ -267,18 +268,17 @@ async def test_ff_catalog_shows_only_products_with_warehouse_movements(
             f"/operations/inbound-intake-requests/{rid}/submit", headers=ah
         )
         await async_client.post(
-            f"/operations/inbound-intake-requests/{rid}/primary-accept", headers=ah
+            f"/operations/inbound-intake-requests/{rid}/primary-accept",
+            headers=ah,
+            json={"actual_box_count": 1},
         )
         await async_client.patch(
             f"/operations/inbound-intake-requests/{rid}/lines/{line_id}",
             headers=ah,
             json={"storage_location_id": loc_id},
         )
-        await async_client.patch(
-            f"/operations/inbound-intake-requests/{rid}/lines/{line_id}/actual",
-            headers=ah,
-            json={"actual_qty": actual_qty},
-        )
+        sku = line_res.json()["sku_code"]
+        await fulfill_inbound_via_box_scans(async_client, ah, rid, sku, actual_qty)
         await async_client.post(
             f"/operations/inbound-intake-requests/{rid}/verify", headers=ah
         )

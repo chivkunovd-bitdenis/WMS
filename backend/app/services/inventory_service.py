@@ -10,6 +10,7 @@ from app.models.inbound_intake import InboundIntakeLine, InboundIntakeRequest
 from app.models.inventory_balance import InventoryBalance
 from app.models.inventory_movement import (
     MOVEMENT_TYPE_INBOUND_INTAKE,
+    MOVEMENT_TYPE_MARKETPLACE_UNLOAD,
     MOVEMENT_TYPE_OUTBOUND_SHIPMENT,
     MOVEMENT_TYPE_STOCK_TRANSFER_IN,
     MOVEMENT_TYPE_STOCK_TRANSFER_OUT,
@@ -37,6 +38,19 @@ async def _physical_on_hand(
     )
     q = await session.scalar(stmt)
     return int(q or 0)
+
+
+async def available_at_location(
+    session: AsyncSession,
+    tenant_id: uuid.UUID,
+    product_id: uuid.UUID,
+    storage_location_id: uuid.UUID,
+) -> int:
+    on_hand = await _physical_on_hand(session, tenant_id, product_id, storage_location_id)
+    rsv = await total_reserved_at_location(
+        session, tenant_id, product_id, storage_location_id
+    )
+    return on_hand - rsv
 
 
 async def total_reserved_at_location(
@@ -88,6 +102,8 @@ async def reserved_totals_by_product(
     session: AsyncSession,
     tenant_id: uuid.UUID,
     product_ids: list[uuid.UUID],
+    *,
+    warehouse_id: uuid.UUID | None = None,
 ) -> dict[uuid.UUID, int]:
     if not product_ids:
         return {}
@@ -111,6 +127,14 @@ async def reserved_totals_by_product(
         )
         .group_by(InventoryReservation.product_id)
     )
+    if warehouse_id is not None:
+        stmt = stmt.join(
+            StorageLocation,
+            StorageLocation.id == InventoryReservation.storage_location_id,
+        ).where(
+            StorageLocation.tenant_id == tenant_id,
+            StorageLocation.warehouse_id == warehouse_id,
+        )
     res = await session.execute(stmt)
     return {pid: int(s or 0) for pid, s in res.all()}
 
@@ -120,6 +144,7 @@ async def list_balances_total(
     tenant_id: uuid.UUID,
     *,
     seller_product_owner_id: uuid.UUID | None = None,
+    warehouse_id: uuid.UUID | None = None,
 ) -> list[tuple[uuid.UUID, str, str, int, int]]:
     """Итоговые остатки по SKU (сумма по всем ячейкам).
 
@@ -142,12 +167,22 @@ async def list_balances_total(
     )
     if seller_product_owner_id is not None:
         stmt = stmt.where(Product.seller_id == seller_product_owner_id)
+    if warehouse_id is not None:
+        stmt = stmt.join(
+            StorageLocation,
+            StorageLocation.id == InventoryBalance.storage_location_id,
+        ).where(
+            StorageLocation.tenant_id == tenant_id,
+            StorageLocation.warehouse_id == warehouse_id,
+        )
     res = await session.execute(stmt)
     rows = [(pid, sku, name, int(q or 0)) for pid, sku, name, q in res.all()]
     if not rows:
         return []
     pids = [pid for pid, *_ in rows]
-    rsv_map = await reserved_totals_by_product(session, tenant_id, pids)
+    rsv_map = await reserved_totals_by_product(
+        session, tenant_id, pids, warehouse_id=warehouse_id
+    )
     return [
         (pid, sku, name, qty, int(rsv_map.get(pid, 0)))
         for pid, sku, name, qty in rows
@@ -286,6 +321,7 @@ async def record_movement_and_adjust_balance(
     inbound_intake_line_id: uuid.UUID | None = None,
     outbound_shipment_line_id: uuid.UUID | None = None,
     transfer_group_id: uuid.UUID | None = None,
+    marketplace_unload_request_id: uuid.UUID | None = None,
 ) -> None:
     """Запись в журнал и изменение остатка (delta может быть отрицательным)."""
     if quantity_delta == 0:
@@ -311,6 +347,7 @@ async def record_movement_and_adjust_balance(
         inbound_intake_line_id=inbound_intake_line_id,
         outbound_shipment_line_id=outbound_shipment_line_id,
         transfer_group_id=transfer_group_id,
+        marketplace_unload_request_id=marketplace_unload_request_id,
     )
     session.add(movement)
 
@@ -421,6 +458,63 @@ async def apply_stock_transfer(
         quantity_delta=quantity,
         movement_type=MOVEMENT_TYPE_STOCK_TRANSFER_IN,
         transfer_group_id=group_id,
+    )
+
+
+async def list_location_balances_for_products_in_warehouse(
+    session: AsyncSession,
+    tenant_id: uuid.UUID,
+    warehouse_id: uuid.UUID,
+    product_ids: list[uuid.UUID],
+) -> list[tuple[uuid.UUID, uuid.UUID, str, int, int]]:
+    """product_id, location_id, location_code, on_hand, reserved."""
+    if not product_ids:
+        return []
+    stmt = (
+        select(
+            InventoryBalance.product_id,
+            StorageLocation.id,
+            StorageLocation.code,
+            InventoryBalance.quantity,
+        )
+        .join(StorageLocation, StorageLocation.id == InventoryBalance.storage_location_id)
+        .where(
+            InventoryBalance.tenant_id == tenant_id,
+            StorageLocation.tenant_id == tenant_id,
+            StorageLocation.warehouse_id == warehouse_id,
+            InventoryBalance.product_id.in_(product_ids),
+            InventoryBalance.quantity > 0,
+        )
+        .order_by(StorageLocation.code.asc())
+    )
+    res = await session.execute(stmt)
+    rows: list[tuple[uuid.UUID, uuid.UUID, str, int, int]] = []
+    for pid, loc_id, code, qty in res.all():
+        rsv = await total_reserved_at_location(session, tenant_id, pid, loc_id)
+        rows.append((pid, loc_id, str(code), int(qty), int(rsv)))
+    return rows
+
+
+async def apply_marketplace_unload_pick(
+    session: AsyncSession,
+    *,
+    tenant_id: uuid.UUID,
+    product_id: uuid.UUID,
+    storage_location_id: uuid.UUID,
+    quantity: int,
+    marketplace_unload_request_id: uuid.UUID,
+) -> None:
+    if quantity < 1:
+        msg = "quantity must be positive"
+        raise ValueError(msg)
+    await record_movement_and_adjust_balance(
+        session,
+        tenant_id=tenant_id,
+        product_id=product_id,
+        storage_location_id=storage_location_id,
+        quantity_delta=-quantity,
+        movement_type=MOVEMENT_TYPE_MARKETPLACE_UNLOAD,
+        marketplace_unload_request_id=marketplace_unload_request_id,
     )
 
 

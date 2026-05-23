@@ -14,6 +14,7 @@ MOVEMENT_TYPE_INBOUND_INTAKE = "inbound_intake"
 MOVEMENT_TYPE_STOCK_TRANSFER_OUT = "stock_transfer_out"
 MOVEMENT_TYPE_STOCK_TRANSFER_IN = "stock_transfer_in"
 MOVEMENT_TYPE_OUTBOUND_SHIPMENT = "outbound_shipment"
+MOVEMENT_TYPE_MARKETPLACE_UNLOAD = "marketplace_unload"
 
 if TYPE_CHECKING:
     from app.models.inbound_intake import InboundIntakeLine
@@ -60,6 +61,12 @@ class InventoryMovement(Base):
     )
     transfer_group_id: Mapped[uuid.UUID | None] = mapped_column(
         Uuid(as_uuid=True), nullable=True, index=True
+    )
+    marketplace_unload_request_id: Mapped[uuid.UUID | None] = mapped_column(
+        Uuid(as_uuid=True),
+        ForeignKey("marketplace_unload_requests.id", ondelete="RESTRICT"),
+        nullable=True,
+        index=True,
     )
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), nullable=False

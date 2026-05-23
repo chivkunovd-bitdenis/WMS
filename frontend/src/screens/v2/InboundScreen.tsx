@@ -31,12 +31,29 @@ type InboundLineRow = {
   storage_location_code: string | null
 }
 
+type InboundBoxLineRow = {
+  id: string
+  product_id: string
+  sku_code: string
+  product_name: string
+  quantity: number
+}
+
+type InboundBoxRow = {
+  id: string
+  box_number: number
+  internal_barcode: string
+  is_open: boolean
+  lines: InboundBoxLineRow[]
+}
+
 type InboundDetailRow = {
   id: string
   warehouse_id: string
   status: string
   planned_delivery_date: string | null
   has_discrepancy?: boolean
+  boxes?: InboundBoxRow[]
   lines: InboundLineRow[]
 }
 
@@ -77,6 +94,9 @@ type Props = {
   onAddInboundLine: FormEventHandler<HTMLFormElement>
   onSubmitInboundRequest: () => void
   onPrimaryAcceptInboundRequest: () => void
+  onOpenInboundBoxByBarcode: (barcode: string) => void
+  onScanInboundProductBarcode: (barcode: string) => void
+  onCloseInboundBoxIntake: () => void
   onSetInboundLineActualQty: FormEventHandler<HTMLFormElement>
   onCompleteInboundVerification: () => void
   onSaveInboundLineStorage: FormEventHandler<HTMLFormElement>
@@ -105,6 +125,9 @@ export function InboundScreen(props: Props) {
     onAddInboundLine,
     onSubmitInboundRequest,
     onPrimaryAcceptInboundRequest,
+    onOpenInboundBoxByBarcode,
+    onScanInboundProductBarcode,
+    onCloseInboundBoxIntake,
     onSetInboundLineActualQty,
     onCompleteInboundVerification,
     onSaveInboundLineStorage,
@@ -114,6 +137,11 @@ export function InboundScreen(props: Props) {
 
   const todayIso = new Date().toISOString().slice(0, 10)
   const [productQuery, setProductQuery] = useState('')
+  const [boxOpenScan, setBoxOpenScan] = useState('')
+  const [productScanBarcode, setProductScanBarcode] = useState('')
+
+  const boxIntakeMode = (inboundDetail?.boxes?.length ?? 0) > 0
+  const activeIntakeBox = inboundDetail?.boxes?.find((b) => b.is_open) ?? null
 
   const filteredProducts = useMemo(() => {
     const q = productQuery.trim().toLowerCase()
@@ -374,8 +402,73 @@ export function InboundScreen(props: Props) {
                   <div data-testid="inbound-verify-panel">
                     {isFulfillmentAdmin ? (
                       <>
-                        <p className="subtle">Пересчёт: укажи факт по строкам.</p>
-                        {inboundDetail.lines.map((ln) => (
+                        {boxIntakeMode ? (
+                          <div data-testid="inbound-box-intake-panel" style={{ marginBottom: 16 }}>
+                            <p className="subtle">
+                              Поштучная приёмка: скан короба INB-…, затем штрихкоды товаров.
+                            </p>
+                            {!activeIntakeBox ? (
+                              <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                                <Input
+                                  data-testid="inbound-box-open-scan"
+                                  value={boxOpenScan}
+                                  onChange={(e) => setBoxOpenScan(e.target.value)}
+                                  placeholder="INB-…"
+                                  disabled={opsBusy}
+                                />
+                                <Button
+                                  type="button"
+                                  data-testid="inbound-box-open-submit"
+                                  disabled={opsBusy || !boxOpenScan.trim()}
+                                  onClick={() => {
+                                    onOpenInboundBoxByBarcode(boxOpenScan.trim())
+                                    setBoxOpenScan('')
+                                  }}
+                                >
+                                  Открыть короб
+                                </Button>
+                              </div>
+                            ) : (
+                              <div>
+                                <p data-testid="inbound-active-box">
+                                  Короб № {activeIntakeBox.box_number} ({activeIntakeBox.internal_barcode})
+                                </p>
+                                <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginTop: 8 }}>
+                                  <Input
+                                    data-testid="inbound-product-scan"
+                                    value={productScanBarcode}
+                                    onChange={(e) => setProductScanBarcode(e.target.value)}
+                                    placeholder="ШК товара"
+                                    disabled={opsBusy}
+                                  />
+                                  <Button
+                                    type="button"
+                                    data-testid="inbound-product-scan-submit"
+                                    disabled={opsBusy || !productScanBarcode.trim()}
+                                    onClick={() => {
+                                      onScanInboundProductBarcode(productScanBarcode.trim())
+                                      setProductScanBarcode('')
+                                    }}
+                                  >
+                                    Скан
+                                  </Button>
+                                  <Button
+                                    type="button"
+                                    data-testid="inbound-box-close"
+                                    disabled={opsBusy}
+                                    onClick={() => void onCloseInboundBoxIntake()}
+                                  >
+                                    Закрыть короб
+                                  </Button>
+                                </div>
+                              </div>
+                            )}
+                          </div>
+                        ) : (
+                          <p className="subtle">Пересчёт: укажи факт по строкам.</p>
+                        )}
+                        {!boxIntakeMode
+                          ? inboundDetail.lines.map((ln) => (
                           <Card
                             key={ln.id}
                             as="div"
@@ -412,7 +505,8 @@ export function InboundScreen(props: Props) {
                               </Button>
                             </form>
                           </Card>
-                        ))}
+                        ))
+                          : null}
                         <Button
                           type="button"
                           data-testid="inbound-verify-complete"

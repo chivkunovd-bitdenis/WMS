@@ -27,9 +27,30 @@ import {
 } from '@mui/material'
 import { alpha } from '@mui/material/styles'
 import { apiUrl } from '../../api'
+import { printBarcodeLabel } from '../../utils/printBarcodeLabel'
 import { readApiErrorMessage } from '../../utils/readApiErrorMessage'
+import { renderBarcodeDataUrl } from '../../utils/renderBarcodeDataUrl'
 
 type LocationRow = { id: string; code: string; warehouse_id: string; barcode: string }
+
+type InboundBoxLine = {
+  id: string
+  product_id: string
+  sku_code: string
+  product_name: string
+  quantity: number
+}
+
+type InboundBox = {
+  id: string
+  box_number: number
+  internal_barcode: string
+  label_printed_at: string | null
+  intake_opened_at: string | null
+  intake_closed_at: string | null
+  is_open: boolean
+  lines: InboundBoxLine[]
+}
 
 type InboundLine = {
   id: string
@@ -48,8 +69,12 @@ type InboundDetail = {
   warehouse_id: string
   status: string
   planned_delivery_date: string | null
+  planned_box_count: number | null
+  actual_box_count: number | null
+  boxes_discrepancy: boolean
   has_discrepancy: boolean
   distribution_completed_at: string | null
+  boxes: InboundBox[]
   lines: InboundLine[]
 }
 
@@ -118,6 +143,9 @@ export function FfInboundRequestView({ token, requestId, isFulfillmentAdmin, onC
   const [pickerQtyByProduct, setPickerQtyByProduct] = useState<Record<string, number>>({})
 
   const [plannedDateDraft, setPlannedDateDraft] = useState<string>('')
+  const [actualBoxCountDraft, setActualBoxCountDraft] = useState<string>('')
+  const [boxOpenScan, setBoxOpenScan] = useState('')
+  const [productScanBarcode, setProductScanBarcode] = useState('')
 
   const loadDetail = useCallback(async () => {
     const res = await fetch(apiUrl(`/operations/inbound-intake-requests/${requestId}`), {
@@ -202,6 +230,16 @@ export function FfInboundRequestView({ token, requestId, isFulfillmentAdmin, onC
   useEffect(() => {
     setPlannedDateDraft(detail?.planned_delivery_date ?? '')
   }, [detail?.planned_delivery_date])
+
+  useEffect(() => {
+    if (detail?.actual_box_count != null) {
+      setActualBoxCountDraft(String(detail.actual_box_count))
+    } else if (detail?.planned_box_count != null) {
+      setActualBoxCountDraft(String(detail.planned_box_count))
+    } else {
+      setActualBoxCountDraft('1')
+    }
+  }, [detail?.planned_box_count, detail?.actual_box_count, detail?.status])
 
   useEffect(() => {
     if (!detail) {
@@ -602,13 +640,57 @@ export function FfInboundRequestView({ token, requestId, isFulfillmentAdmin, onC
     }
   }
 
+  const printInboundBoxLabel = async (box: InboundBox) => {
+    setBusy(true)
+    setError(null)
+    try {
+      const dataUrl = renderBarcodeDataUrl(box.internal_barcode)
+      printBarcodeLabel({
+        title: `Короб № ${box.box_number}`,
+        barcode: box.internal_barcode,
+        barcodeDataUrl: dataUrl,
+      })
+      const res = await fetch(
+        apiUrl(
+          `/operations/inbound-intake-requests/${requestId}/boxes/${box.id}/mark-label-printed`,
+        ),
+        { method: 'POST', headers: authHeaders },
+      )
+      if (!res.ok) {
+        setError(await readApiErrorMessage(res))
+        return
+      }
+      await loadDetail()
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Не удалось напечатать этикетку короба.')
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  const printAllInboundBoxLabels = async () => {
+    if (!detail?.boxes?.length) return
+    for (const box of detail.boxes) {
+      await printInboundBoxLabel(box)
+    }
+  }
+
   const primaryAccept = async () => {
+    const actualBoxes = Math.floor(Number(actualBoxCountDraft))
+    if (!Number.isFinite(actualBoxes) || actualBoxes < 0) {
+      setError('Укажите фактическое количество коробов (целое число ≥ 0).')
+      return
+    }
     setBusy(true)
     setError(null)
     try {
       const res = await fetch(
         apiUrl(`/operations/inbound-intake-requests/${requestId}/primary-accept`),
-        { method: 'POST', headers: authHeaders },
+        {
+          method: 'POST',
+          headers: { ...authHeaders, 'Content-Type': 'application/json' },
+          body: JSON.stringify({ actual_box_count: actualBoxes }),
+        },
       )
       if (!res.ok) {
         setError(await readApiErrorMessage(res))
@@ -691,7 +773,92 @@ export function FfInboundRequestView({ token, requestId, isFulfillmentAdmin, onC
     }
   }
 
-  const actualEditable = isFulfillmentAdmin && (detail?.status === 'primary_accepted' || detail?.status === 'verifying')
+  const boxIntakeMode = (detail?.boxes?.length ?? 0) > 0
+  const activeIntakeBox = detail?.boxes.find((b) => b.is_open) ?? null
+  const actualEditable =
+    isFulfillmentAdmin &&
+    (detail?.status === 'primary_accepted' || detail?.status === 'verifying') &&
+    !boxIntakeMode
+
+  const openInboundBoxByScan = async () => {
+    const code = boxOpenScan.trim()
+    if (!code) return
+    setBusy(true)
+    setError(null)
+    try {
+      const res = await fetch(
+        apiUrl(`/operations/inbound-intake-requests/${requestId}/boxes/open`),
+        {
+          method: 'POST',
+          headers: { ...authHeaders, 'Content-Type': 'application/json' },
+          body: JSON.stringify({ barcode: code }),
+        },
+      )
+      if (!res.ok) {
+        setError(await readApiErrorMessage(res))
+        return
+      }
+      setBoxOpenScan('')
+      await loadDetail()
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Не удалось открыть короб.')
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  const scanProductIntoActiveBox = async () => {
+    if (!activeIntakeBox) return
+    const code = productScanBarcode.trim()
+    if (!code) return
+    setBusy(true)
+    setError(null)
+    try {
+      const res = await fetch(
+        apiUrl(
+          `/operations/inbound-intake-requests/${requestId}/boxes/${activeIntakeBox.id}/scan`,
+        ),
+        {
+          method: 'POST',
+          headers: { ...authHeaders, 'Content-Type': 'application/json' },
+          body: JSON.stringify({ barcode: code }),
+        },
+      )
+      if (!res.ok) {
+        setError(await readApiErrorMessage(res))
+        return
+      }
+      setProductScanBarcode('')
+      await loadDetail()
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Не удалось отсканировать товар.')
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  const closeActiveInboundBox = async () => {
+    if (!activeIntakeBox) return
+    setBusy(true)
+    setError(null)
+    try {
+      const res = await fetch(
+        apiUrl(
+          `/operations/inbound-intake-requests/${requestId}/boxes/${activeIntakeBox.id}/close`,
+        ),
+        { method: 'POST', headers: authHeaders },
+      )
+      if (!res.ok) {
+        setError(await readApiErrorMessage(res))
+        return
+      }
+      await loadDetail()
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Не удалось закрыть короб.')
+    } finally {
+      setBusy(false)
+    }
+  }
 
   if (busy && !detail) {
     return (
@@ -743,6 +910,17 @@ export function FfInboundRequestView({ token, requestId, isFulfillmentAdmin, onC
               color={detail.status === 'draft' ? 'default' : 'primary'}
               data-testid="ff-inbound-status-chip"
             />
+            {detail.planned_box_count != null ? (
+              <Typography variant="body2" color="text.secondary" data-testid="ff-inbound-planned-boxes">
+                План коробов: <strong>{detail.planned_box_count}</strong>
+                {detail.actual_box_count != null ? (
+                  <>
+                    {' '}
+                    · факт: <strong>{detail.actual_box_count}</strong>
+                  </>
+                ) : null}
+              </Typography>
+            ) : null}
             <Box sx={{ flexGrow: 1 }} />
 
             {isFulfillmentAdmin && (detail.status === 'primary_accepted' || detail.status === 'verifying') ? (
@@ -928,19 +1106,241 @@ export function FfInboundRequestView({ token, requestId, isFulfillmentAdmin, onC
               {detail.status === 'submitted' ? (
                 <Paper variant="outlined" sx={{ p: 2 }} data-testid="ff-inbound-admin-submitted">
                   <Typography variant="subtitle2" sx={{ fontWeight: 800, mb: 1 }}>
-                    Действия фулфилмента
+                    Приёмка по коробам
                   </Typography>
                   <Typography variant="body2" color="text.secondary" sx={{ mb: 1.5 }}>
-                    Привоз принят без пересчёта.
+                    Сверьте количество коробов с планом селлера. Поштучный пересчёт — на следующем
+                    этапе.
                   </Typography>
+                  {detail.planned_box_count != null ? (
+                    <Typography variant="body2" sx={{ mb: 1 }}>
+                      План селлера: <strong>{detail.planned_box_count}</strong> кор.
+                    </Typography>
+                  ) : null}
+                  <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1.5} sx={{ mb: 1.5 }}>
+                    <TextField
+                      label="Факт коробов"
+                      type="number"
+                      size="small"
+                      value={actualBoxCountDraft}
+                      onChange={(e) => setActualBoxCountDraft(e.target.value)}
+                      slotProps={{
+                        htmlInput: {
+                          min: 0,
+                          'data-testid': 'ff-inbound-actual-box-count',
+                        },
+                      }}
+                    />
+                  </Stack>
+                  {detail.planned_box_count != null &&
+                  Number(actualBoxCountDraft) !== detail.planned_box_count ? (
+                    <Alert severity="warning" sx={{ mb: 1.5 }} data-testid="ff-inbound-boxes-discrepancy">
+                      Расхождение по коробам: план {detail.planned_box_count}, факт{' '}
+                      {actualBoxCountDraft || '—'}.
+                    </Alert>
+                  ) : null}
                   <Button
                     variant="contained"
                     disabled={busy}
                     onClick={() => void primaryAccept()}
                     data-testid="ff-inbound-primary-accept"
                   >
-                    Принято первично
+                    Принято по коробам
                   </Button>
+                </Paper>
+              ) : null}
+              {detail.boxes_discrepancy && detail.status !== 'submitted' ? (
+                <Alert severity="warning" sx={{ mt: 2 }} data-testid="ff-inbound-boxes-discrepancy-badge">
+                  Зафиксировано расхождение по коробам (план {detail.planned_box_count ?? '—'} ≠ факт{' '}
+                  {detail.actual_box_count ?? '—'}).
+                </Alert>
+              ) : null}
+
+              {(detail.boxes?.length ?? 0) > 0 ? (
+                <Paper variant="outlined" sx={{ p: 2, mt: 2 }} data-testid="ff-inbound-boxes-panel">
+                  <Stack
+                    direction={{ xs: 'column', sm: 'row' }}
+                    spacing={1}
+                    sx={{ alignItems: { sm: 'center' }, mb: 1.5 }}
+                  >
+                    <Box sx={{ flexGrow: 1 }}>
+                      <Typography variant="subtitle2" sx={{ fontWeight: 800 }}>
+                        Короба и внутренние ШК
+                      </Typography>
+                      <Typography variant="body2" color="text.secondary">
+                        После приёмки по коробам — печать этикеток 58×40 (CODE128) для поштучной приёмки.
+                      </Typography>
+                    </Box>
+                    {isFulfillmentAdmin ? (
+                      <Button
+                        variant="outlined"
+                        disabled={busy}
+                        onClick={() => void printAllInboundBoxLabels()}
+                        data-testid="ff-inbound-boxes-print-all"
+                      >
+                        Печать всех
+                      </Button>
+                    ) : null}
+                  </Stack>
+                  <TableContainer component={Paper} variant="outlined">
+                    <Table size="small" data-testid="ff-inbound-boxes-table">
+                      <TableHead>
+                        <TableRow>
+                          <TableCell sx={{ width: 80 }}>№</TableCell>
+                          <TableCell>Штрихкод</TableCell>
+                          <TableCell sx={{ width: 140 }}>Этикетка</TableCell>
+                          {isFulfillmentAdmin ? <TableCell sx={{ width: 120 }} /> : null}
+                        </TableRow>
+                      </TableHead>
+                      <TableBody>
+                        {(detail.boxes ?? []).map((box) => (
+                          <TableRow key={box.id} data-testid="ff-inbound-box-row">
+                            <TableCell>{box.box_number}</TableCell>
+                            <TableCell>
+                              <Typography
+                                variant="body2"
+                                component="code"
+                                data-testid="ff-inbound-box-barcode"
+                              >
+                                {box.internal_barcode}
+                              </Typography>
+                            </TableCell>
+                            <TableCell>
+                              {box.label_printed_at ? (
+                                <Chip size="small" label="Напечатано" color="success" variant="outlined" />
+                              ) : (
+                                <Chip size="small" label="Не печатали" variant="outlined" />
+                              )}
+                            </TableCell>
+                            {isFulfillmentAdmin ? (
+                              <TableCell>
+                                <Button
+                                  size="small"
+                                  variant="outlined"
+                                  disabled={busy}
+                                  onClick={() => void printInboundBoxLabel(box)}
+                                  data-testid="ff-inbound-box-print"
+                                >
+                                  Печать
+                                </Button>
+                              </TableCell>
+                            ) : null}
+                          </TableRow>
+                        ))}
+                      </TableBody>
+                    </Table>
+                  </TableContainer>
+                </Paper>
+              ) : null}
+
+              {boxIntakeMode &&
+              isFulfillmentAdmin &&
+              (detail.status === 'primary_accepted' || detail.status === 'verifying') ? (
+                <Paper
+                  variant="outlined"
+                  sx={{ p: 2, mt: 2 }}
+                  data-testid="ff-inbound-box-intake-panel"
+                >
+                  <Typography variant="subtitle2" sx={{ fontWeight: 800, mb: 1 }}>
+                    Поштучная приёмка по коробу
+                  </Typography>
+                  <Typography variant="body2" color="text.secondary" sx={{ mb: 1.5 }}>
+                    Отсканируйте внутренний ШК короба (INB-…), затем штрихкоды товаров. Факт по
+                    строкам заявки обновляется автоматически.
+                  </Typography>
+                  {!activeIntakeBox ? (
+                    <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1} sx={{ mb: 1.5 }}>
+                      <TextField
+                        size="small"
+                        label="ШК короба (INB)"
+                        value={boxOpenScan}
+                        onChange={(e) => setBoxOpenScan(e.target.value)}
+                        disabled={busy}
+                        fullWidth
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter') void openInboundBoxByScan()
+                        }}
+                        slotProps={{
+                          htmlInput: { 'data-testid': 'ff-inbound-box-open-scan' },
+                        }}
+                      />
+                      <Button
+                        variant="contained"
+                        disabled={busy || !boxOpenScan.trim()}
+                        onClick={() => void openInboundBoxByScan()}
+                        data-testid="ff-inbound-box-open-submit"
+                      >
+                        Открыть короб
+                      </Button>
+                    </Stack>
+                  ) : (
+                    <Stack spacing={1.5}>
+                      <Alert severity="info" data-testid="ff-inbound-active-box">
+                        Активный короб № <strong>{activeIntakeBox.box_number}</strong> (
+                        <code>{activeIntakeBox.internal_barcode}</code>)
+                      </Alert>
+                      <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1}>
+                        <TextField
+                          size="small"
+                          label="Штрихкод товара"
+                          value={productScanBarcode}
+                          onChange={(e) => setProductScanBarcode(e.target.value)}
+                          disabled={busy}
+                          fullWidth
+                          onKeyDown={(e) => {
+                            if (e.key === 'Enter') void scanProductIntoActiveBox()
+                          }}
+                          slotProps={{
+                            htmlInput: { 'data-testid': 'ff-inbound-product-scan' },
+                          }}
+                        />
+                        <Button
+                          variant="contained"
+                          disabled={busy || !productScanBarcode.trim()}
+                          onClick={() => void scanProductIntoActiveBox()}
+                          data-testid="ff-inbound-product-scan-submit"
+                        >
+                          Скан
+                        </Button>
+                        <Button
+                          variant="outlined"
+                          disabled={busy}
+                          onClick={() => void closeActiveInboundBox()}
+                          data-testid="ff-inbound-box-close"
+                        >
+                          Закрыть короб
+                        </Button>
+                      </Stack>
+                      <Table size="small" data-testid="ff-inbound-active-box-lines">
+                        <TableHead>
+                          <TableRow>
+                            <TableCell>Артикул</TableCell>
+                            <TableCell>Товар</TableCell>
+                            <TableCell align="right">Кол-во</TableCell>
+                          </TableRow>
+                        </TableHead>
+                        <TableBody>
+                          {activeIntakeBox.lines.length === 0 ? (
+                            <TableRow>
+                              <TableCell colSpan={3}>
+                                <Typography variant="body2" color="text.secondary">
+                                  Пока нет сканов в этом коробе
+                                </Typography>
+                              </TableCell>
+                            </TableRow>
+                          ) : (
+                            activeIntakeBox.lines.map((ln) => (
+                              <TableRow key={ln.id}>
+                                <TableCell>{ln.sku_code}</TableCell>
+                                <TableCell>{ln.product_name}</TableCell>
+                                <TableCell align="right">{ln.quantity}</TableCell>
+                              </TableRow>
+                            ))
+                          )}
+                        </TableBody>
+                      </Table>
+                    </Stack>
+                  )}
                 </Paper>
               ) : null}
 

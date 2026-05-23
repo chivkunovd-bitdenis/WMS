@@ -4,6 +4,7 @@ import time
 
 import pytest
 from httpx import AsyncClient
+from inbound_box_intake_helpers import fulfill_inbound_via_box_scans
 
 
 @pytest.mark.asyncio
@@ -67,6 +68,7 @@ async def test_seller_sees_only_own_products_and_filtered_inbound(
         },
     )
     pid_own = p_own.json()["id"]
+    sku = p_own.json()["sku_code"]
 
     ir = await async_client.post(
         "/operations/inbound-intake-requests",
@@ -88,16 +90,12 @@ async def test_seller_sees_only_own_products_and_filtered_inbound(
     )
     await async_client.post(
         f"/operations/inbound-intake-requests/{rid}/primary-accept", headers=ah
-    )
+    , json={"actual_box_count": 1})
     inb = await async_client.get(
         f"/operations/inbound-intake-requests/{rid}", headers=ah
     )
-    line_id = inb.json()["lines"][0]["id"]
-    await async_client.patch(
-        f"/operations/inbound-intake-requests/{rid}/lines/{line_id}/actual",
-        headers=ah,
-        json={"actual_qty": 5},
-    )
+    inb.json()["lines"][0]["id"]
+    await fulfill_inbound_via_box_scans(async_client, ah, rid, sku, 5)
     await async_client.post(
         f"/operations/inbound-intake-requests/{rid}/verify", headers=ah
     )

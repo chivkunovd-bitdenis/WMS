@@ -4,6 +4,7 @@ import time
 
 import pytest
 from httpx import AsyncClient
+from inbound_box_intake_helpers import fulfill_inbound_via_box_scans
 
 
 @pytest.mark.asyncio
@@ -41,6 +42,7 @@ async def test_outbound_shipment_decrements_stock(async_client: AsyncClient) -> 
         },
     )
     pid = pr.json()["id"]
+    sku = pr.json()["sku_code"]
 
     ir = await async_client.post(
         "/operations/inbound-intake-requests",
@@ -62,14 +64,10 @@ async def test_outbound_shipment_decrements_stock(async_client: AsyncClient) -> 
     )
     await async_client.post(
         f"/operations/inbound-intake-requests/{rid}/primary-accept", headers=h
-    )
+    , json={"actual_box_count": 1})
     inb = await async_client.get(f"/operations/inbound-intake-requests/{rid}", headers=h)
-    line_id = inb.json()["lines"][0]["id"]
-    await async_client.patch(
-        f"/operations/inbound-intake-requests/{rid}/lines/{line_id}/actual",
-        headers=h,
-        json={"actual_qty": 20},
-    )
+    inb.json()["lines"][0]["id"]
+    await fulfill_inbound_via_box_scans(async_client, h, rid, sku, 20)
     await async_client.post(
         f"/operations/inbound-intake-requests/{rid}/verify", headers=h
     )
@@ -141,6 +139,7 @@ async def test_outbound_partial_ship_then_post_rest(async_client: AsyncClient) -
         },
     )
     pid = pr.json()["id"]
+    sku = pr.json()["sku_code"]
 
     ir = await async_client.post(
         "/operations/inbound-intake-requests",
@@ -162,16 +161,12 @@ async def test_outbound_partial_ship_then_post_rest(async_client: AsyncClient) -
     )
     await async_client.post(
         f"/operations/inbound-intake-requests/{rid}/primary-accept", headers=h
-    )
+    , json={"actual_box_count": 1})
     inb = await async_client.get(
         f"/operations/inbound-intake-requests/{rid}", headers=h
     )
     line_id = inb.json()["lines"][0]["id"]
-    await async_client.patch(
-        f"/operations/inbound-intake-requests/{rid}/lines/{line_id}/actual",
-        headers=h,
-        json={"actual_qty": 10},
-    )
+    await fulfill_inbound_via_box_scans(async_client, h, rid, sku, 10)
     await async_client.post(
         f"/operations/inbound-intake-requests/{rid}/verify", headers=h
     )
@@ -258,6 +253,7 @@ async def test_outbound_post_duplicate_after_fully_shipped_returns_409(
         },
     )
     pid = pr.json()["id"]
+    sku = pr.json()["sku_code"]
 
     ir = await async_client.post(
         "/operations/inbound-intake-requests",
@@ -279,16 +275,8 @@ async def test_outbound_post_duplicate_after_fully_shipped_returns_409(
     )
     await async_client.post(
         f"/operations/inbound-intake-requests/{rid}/primary-accept", headers=h
-    )
-    inb = await async_client.get(
-        f"/operations/inbound-intake-requests/{rid}", headers=h
-    )
-    line_id_in = inb.json()["lines"][0]["id"]
-    await async_client.patch(
-        f"/operations/inbound-intake-requests/{rid}/lines/{line_id_in}/actual",
-        headers=h,
-        json={"actual_qty": 4},
-    )
+    , json={"actual_box_count": 1})
+    await fulfill_inbound_via_box_scans(async_client, h, rid, sku, 4)
     await async_client.post(
         f"/operations/inbound-intake-requests/{rid}/verify", headers=h
     )

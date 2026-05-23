@@ -6,6 +6,7 @@ from datetime import date, timedelta
 
 import pytest
 from httpx import AsyncClient
+from inbound_box_intake_helpers import fulfill_inbound_via_box_scans
 
 
 async def _create_seller_headers(
@@ -88,6 +89,7 @@ async def test_inbound_intake_flow_post_all(async_client: AsyncClient) -> None:
     )
     assert pr.status_code == 200, pr.text
     pid = pr.json()["id"]
+    sku = pr.json()["sku_code"]
 
     base = "/operations/inbound-intake-requests"
     cr = await async_client.post(
@@ -120,17 +122,10 @@ async def test_inbound_intake_flow_post_all(async_client: AsyncClient) -> None:
     assert sub.status_code == 200, sub.text
     assert sub.json()["status"] == "submitted"
 
-    prim = await async_client.post(f"{base}/{rid}/primary-accept", headers=ah)
+    prim = await async_client.post(f"{base}/{rid}/primary-accept", headers=ah, json={"actual_box_count": 1})
     assert prim.status_code == 200, prim.text
     assert prim.json()["status"] == "primary_accepted"
-
-    act = await async_client.patch(
-        f"{base}/{rid}/lines/{line_id}/actual",
-        headers=ah,
-        json={"actual_qty": 5},
-    )
-    assert act.status_code == 200, act.text
-    assert act.json()["actual_qty"] == 5
+    await fulfill_inbound_via_box_scans(async_client, ah, rid, sku, 5)
 
     ver = await async_client.post(f"{base}/{rid}/verify", headers=ah)
     assert ver.status_code == 200, ver.text
@@ -225,6 +220,7 @@ async def test_inbound_partial_receive_then_complete(async_client: AsyncClient) 
         },
     )
     pid = pr.json()["id"]
+    sku = pr.json()["sku_code"]
     base = "/operations/inbound-intake-requests"
     rid = (
         await async_client.post(base, headers=sh, json={"warehouse_id": wid})
@@ -236,12 +232,8 @@ async def test_inbound_partial_receive_then_complete(async_client: AsyncClient) 
     )
     line_id = ln.json()["id"]
     await async_client.post(f"{base}/{rid}/submit", headers=sh)
-    await async_client.post(f"{base}/{rid}/primary-accept", headers=ah)
-    await async_client.patch(
-        f"{base}/{rid}/lines/{line_id}/actual",
-        headers=ah,
-        json={"actual_qty": 10},
-    )
+    await async_client.post(f"{base}/{rid}/primary-accept", headers=ah, json={"actual_box_count": 1})
+    await fulfill_inbound_via_box_scans(async_client, ah, rid, sku, 10)
     await async_client.post(f"{base}/{rid}/verify", headers=ah)
 
     r1 = await async_client.post(
@@ -302,6 +294,7 @@ async def test_inbound_patch_storage_after_line_create(async_client: AsyncClient
         },
     )
     pid = pr.json()["id"]
+    sku = pr.json()["sku_code"]
     base = "/operations/inbound-intake-requests"
     rid = (
         await async_client.post(base, headers=h, json={"warehouse_id": wid})
@@ -323,12 +316,8 @@ async def test_inbound_patch_storage_after_line_create(async_client: AsyncClient
     assert patched.json()["storage_location_id"] == lid
 
     await async_client.post(f"{base}/{rid}/submit", headers=h)
-    await async_client.post(f"{base}/{rid}/primary-accept", headers=h)
-    await async_client.patch(
-        f"{base}/{rid}/lines/{line_id}/actual",
-        headers=h,
-        json={"actual_qty": 2},
-    )
+    await async_client.post(f"{base}/{rid}/primary-accept", headers=h, json={"actual_box_count": 1})
+    await fulfill_inbound_via_box_scans(async_client, h, rid, sku, 2)
     await async_client.post(f"{base}/{rid}/verify", headers=h)
     post = await async_client.post(f"{base}/{rid}/post", headers=h)
     assert post.status_code == 200, post.text
@@ -370,6 +359,7 @@ async def test_inbound_post_missing_storage_on_line(async_client: AsyncClient) -
         },
     )
     pid = pr.json()["id"]
+    sku = pr.json()["sku_code"]
     base = "/operations/inbound-intake-requests"
     rid = (
         await async_client.post(base, headers=h, json={"warehouse_id": wid})
@@ -380,14 +370,8 @@ async def test_inbound_post_missing_storage_on_line(async_client: AsyncClient) -
         json={"product_id": pid, "expected_qty": 1},
     )
     await async_client.post(f"{base}/{rid}/submit", headers=h)
-    await async_client.post(f"{base}/{rid}/primary-accept", headers=h)
-    inb = await async_client.get(f"{base}/{rid}", headers=h)
-    line_id = inb.json()["lines"][0]["id"]
-    await async_client.patch(
-        f"{base}/{rid}/lines/{line_id}/actual",
-        headers=h,
-        json={"actual_qty": 1},
-    )
+    await async_client.post(f"{base}/{rid}/primary-accept", headers=h, json={"actual_box_count": 1})
+    await fulfill_inbound_via_box_scans(async_client, h, rid, sku, 1)
     await async_client.post(f"{base}/{rid}/verify", headers=h)
     bad = await async_client.post(f"{base}/{rid}/post", headers=h)
     assert bad.status_code == 422

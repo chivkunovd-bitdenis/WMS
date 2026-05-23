@@ -3,7 +3,12 @@
 from app.models.background_job import BackgroundJob
 from app.models.base import Base
 from app.models.discrepancy_act import DiscrepancyAct, DiscrepancyActLine
-from app.models.inbound_intake import InboundIntakeLine, InboundIntakeRequest
+from app.models.inbound_intake import (
+    InboundIntakeBox,
+    InboundIntakeBoxLine,
+    InboundIntakeLine,
+    InboundIntakeRequest,
+)
 from app.models.inventory_balance import InventoryBalance
 from app.models.inventory_movement import InventoryMovement
 from app.models.inventory_reservation import InventoryReservation
@@ -11,6 +16,7 @@ from app.models.marketplace_unload import (
     MarketplaceUnloadBox,
     MarketplaceUnloadBoxLine,
     MarketplaceUnloadLine,
+    MarketplaceUnloadPickAllocation,
     MarketplaceUnloadRequest,
 )
 from app.models.outbound_shipment import OutboundShipmentLine, OutboundShipmentRequest
@@ -30,6 +36,8 @@ __all__ = [
     "Base",
     "DiscrepancyAct",
     "DiscrepancyActLine",
+    "InboundIntakeBox",
+    "InboundIntakeBoxLine",
     "InboundIntakeLine",
     "InboundIntakeRequest",
     "InventoryBalance",
@@ -38,6 +46,7 @@ __all__ = [
     "MarketplaceUnloadBox",
     "MarketplaceUnloadBoxLine",
     "MarketplaceUnloadLine",
+    "MarketplaceUnloadPickAllocation",
     "MarketplaceUnloadRequest",
     "OutboundShipmentLine",
     "OutboundShipmentRequest",

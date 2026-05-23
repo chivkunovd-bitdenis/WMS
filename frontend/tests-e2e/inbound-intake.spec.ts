@@ -103,18 +103,8 @@ test('create inbound request, add line, submit — UI and API', async ({ page })
   expect(primRes.ok()).toBeTruthy();
   await expect(page.getByTestId('inbound-detail-status')).toContainText('primary_accepted');
 
-  await page.getByTestId('inbound-line-actual-qty').fill('4');
-  const [actualRes] = await Promise.all([
-    page.waitForResponse(
-      (r) =>
-        r.request().method() === 'PATCH' &&
-        r.url().includes('/api/operations/inbound-intake-requests') &&
-        r.url().includes('/actual') &&
-        r.status() === 200,
-    ),
-    page.getByTestId('inbound-line-actual-save').click(),
-  ]);
-  expect(actualRes.ok()).toBeTruthy();
+  const { v2InboundBoxIntakeUi } = await import('./inbound-boxes-helpers');
+  await v2InboundBoxIntakeUi(page, h, sku, 4);
 
   const [verifyRes] = await Promise.all([
     waitForPostOk(page, '/api/operations/inbound-intake-requests', (u) =>

@@ -21,8 +21,9 @@ export default defineConfig({
   retries: process.env.CI ? 2 : 0,
   // One API + shared sqlite file: parallel workers cause DB locks and flaky catalog writes.
   workers: 1,
+  // Always hit the Playwright-managed Vite instance (not docker :15173/:15174) so API proxy → e2e API :18000.
   use: {
-    baseURL: process.env.E2E_BASE_URL ?? `http://localhost:${e2eWebPort}`,
+    baseURL: `http://127.0.0.1:${e2eWebPort}`,
     trace: 'on-first-retry',
   },
   webServer: [
@@ -47,6 +48,9 @@ export default defineConfig({
       env: {
         ...process.env,
         VITE_API_PROXY: `http://127.0.0.1:${e2eApiPort}`,
+        E2E_SELLER_PATH_PREFIX: '/seller',
+        // Keep seller on the same origin during e2e (no redirect to docker :15174).
+        VITE_SELLER_PORTAL_URL: `http://127.0.0.1:${e2eWebPort}/seller/`,
       },
       port: e2eWebPort,
       reuseExistingServer: reuse,

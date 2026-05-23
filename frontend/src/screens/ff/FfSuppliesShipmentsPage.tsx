@@ -74,13 +74,41 @@ type MarketplaceUnloadBox = {
   lines: MarketplaceUnloadBoxLine[]
 }
 
+type MarketplaceUnloadPickAllocation = {
+  id: string
+  product_id: string
+  sku_code: string
+  product_name: string
+  storage_location_id: string
+  location_code: string
+  quantity: number
+}
+
+type MarketplaceUnloadPickOptionLocation = {
+  storage_location_id: string
+  location_code: string
+  quantity: number
+  reserved: number
+  available: number
+}
+
+type MarketplaceUnloadPickOptionProduct = {
+  product_id: string
+  sku_code: string
+  product_name: string
+  scanned_qty: number
+  locations: MarketplaceUnloadPickOptionLocation[]
+}
+
 type MarketplaceUnloadDetail = {
   id: string
+  warehouse_id: string
   warehouse_name: string
   status: string
   wb_mp_warehouse_id: number | null
   lines: DocLineRow[]
   boxes: MarketplaceUnloadBox[]
+  pick_allocations: MarketplaceUnloadPickAllocation[]
 }
 
 type DiscrepancyActDetail = {
@@ -109,6 +137,7 @@ type UnifiedRow = {
 function statusRu(status: string): string {
   if (status === 'draft') return 'Черновик'
   if (status === 'confirmed') return 'Утверждено'
+  if (status === 'shipped') return 'Отгружено'
   if (status === 'submitted') return 'Запланировано'
   if (status === 'primary_accepted') return 'Принято на складе'
   if (status === 'verifying') return 'Проверка'
@@ -125,6 +154,7 @@ function kindRu(kind: DocKind): string {
 }
 
 type ProductPick = { id: string; sku_code: string; name: string }
+type AvailableProductPick = ProductPick & { available: number }
 
 type Props = {
   busy: boolean
@@ -181,8 +211,19 @@ export function FfSuppliesShipmentsPage({
     { id: string; product_id: string; sku_code: string; product_name: string }[]
   >([])
   const [selectedInboundLineId, setSelectedInboundLineId] = useState<string>('')
+  const [warehouseAvailableProductPicklist, setWarehouseAvailableProductPicklist] = useState<
+    AvailableProductPick[]
+  >([])
+
+  const docProductPicklist =
+    docModal === 'marketplace_unload' ? warehouseAvailableProductPicklist : productPicklist
   const [wbMpWarehouses, setWbMpWarehouses] = useState<{ wb_warehouse_id: number; name: string }[]>([])
   const [wbMpWarehousesBusy, setWbMpWarehousesBusy] = useState(false)
+  const [pickDialogOpen, setPickDialogOpen] = useState(false)
+  const [pickOptions, setPickOptions] = useState<MarketplaceUnloadPickOptionProduct[]>([])
+  const [pickQtyByProductLoc, setPickQtyByProductLoc] = useState<Record<string, Record<string, string>>>(
+    {},
+  )
 
   const authHeaders = useMemo(
     () => (token ? { Authorization: `Bearer ${token}` } : null),
@@ -214,6 +255,7 @@ export function FfSuppliesShipmentsPage({
     if (!token || !authHeaders || !docModal || !docModalId) {
       setUnloadDetail(null)
       setDivergeDetail(null)
+      setWarehouseAvailableProductPicklist([])
       return
     }
     setModalBusy(true)
@@ -230,6 +272,7 @@ export function FfSuppliesShipmentsPage({
         }
         const j = (await res.json()) as {
           id: string
+          warehouse_id: string
           warehouse_name: string
           status: string
           wb_mp_warehouse_id?: number | null
@@ -246,9 +289,19 @@ export function FfSuppliesShipmentsPage({
               quantity: number
             }[]
           }[]
+          pick_allocations?: {
+            id: string
+            product_id: string
+            sku_code: string
+            product_name: string
+            storage_location_id: string
+            location_code: string
+            quantity: number
+          }[]
         }
         setUnloadDetail({
           id: j.id,
+          warehouse_id: j.warehouse_id,
           warehouse_name: j.warehouse_name,
           status: j.status,
           wb_mp_warehouse_id: j.wb_mp_warehouse_id ?? null,
@@ -271,9 +324,45 @@ export function FfSuppliesShipmentsPage({
               quantity: ln.quantity,
             })),
           })),
+          pick_allocations: (j.pick_allocations ?? []).map((a) => ({
+            id: a.id,
+            product_id: a.product_id,
+            sku_code: a.sku_code,
+            product_name: a.product_name,
+            storage_location_id: a.storage_location_id,
+            location_code: a.location_code,
+            quantity: a.quantity,
+          })),
         })
+        const stockRes = await fetch(
+          apiUrl(
+            `/operations/inventory-balances/summary?warehouse_id=${encodeURIComponent(j.warehouse_id)}`,
+          ),
+          { headers: authHeaders },
+        )
+        if (stockRes.ok) {
+          const stockRows = (await stockRes.json()) as {
+            product_id: string
+            sku_code: string
+            product_name: string
+            available: number
+          }[]
+          setWarehouseAvailableProductPicklist(
+            stockRows
+              .filter((row) => row.available > 0)
+              .map((row) => ({
+                id: row.product_id,
+                sku_code: row.sku_code,
+                name: row.product_name,
+                available: row.available,
+              })),
+          )
+        } else {
+          setWarehouseAvailableProductPicklist([])
+        }
         setDivergeDetail(null)
       } else {
+        setWarehouseAvailableProductPicklist([])
         const res = await fetch(apiUrl(`/operations/discrepancy-acts/${docModalId}`), {
           headers: authHeaders,
         })
@@ -526,6 +615,105 @@ export function FfSuppliesShipmentsPage({
     }
   }
 
+  const openPickDialog = async () => {
+    if (!token || !authHeaders || !docModalId) {
+      return
+    }
+    setModalBusy(true)
+    setModalError(null)
+    try {
+      const res = await fetch(
+        apiUrl(`/operations/marketplace-unload-requests/${docModalId}/pick-options`),
+        { headers: authHeaders },
+      )
+      if (!res.ok) {
+        setModalError(await readApiErrorMessage(res))
+        return
+      }
+      const opts = (await res.json()) as MarketplaceUnloadPickOptionProduct[]
+      setPickOptions(opts)
+      const seed: Record<string, Record<string, string>> = {}
+      for (const a of unloadDetail?.pick_allocations ?? []) {
+        if (!seed[a.product_id]) {
+          seed[a.product_id] = {}
+        }
+        seed[a.product_id][a.storage_location_id] = String(a.quantity)
+      }
+      setPickQtyByProductLoc(seed)
+      setPickDialogOpen(true)
+    } catch (e) {
+      setModalError(e instanceof Error ? e.message : 'Не удалось загрузить подбор.')
+    } finally {
+      setModalBusy(false)
+    }
+  }
+
+  const savePickAllocations = async () => {
+    if (!token || !authHeaders || !docModalId) {
+      return
+    }
+    const allocations: { product_id: string; storage_location_id: string; quantity: number }[] = []
+    for (const [productId, byLoc] of Object.entries(pickQtyByProductLoc)) {
+      for (const [locId, raw] of Object.entries(byLoc)) {
+        const q = Number(raw)
+        if (Number.isInteger(q) && q > 0) {
+          allocations.push({
+            product_id: productId,
+            storage_location_id: locId,
+            quantity: q,
+          })
+        }
+      }
+    }
+    setModalBusy(true)
+    setModalError(null)
+    try {
+      const res = await fetch(
+        apiUrl(`/operations/marketplace-unload-requests/${docModalId}/pick-allocations`),
+        {
+          method: 'PUT',
+          headers: { ...authHeaders, 'Content-Type': 'application/json' },
+          body: JSON.stringify({ allocations }),
+        },
+      )
+      if (!res.ok) {
+        setModalError(await readApiErrorMessage(res))
+        return
+      }
+      setPickDialogOpen(false)
+      await loadDocDetail()
+      await onRefreshFfSupplyExtras()
+    } catch (e) {
+      setModalError(e instanceof Error ? e.message : 'Не удалось сохранить подбор.')
+    } finally {
+      setModalBusy(false)
+    }
+  }
+
+  const shipMpUnload = async () => {
+    if (!token || !authHeaders || !docModalId) {
+      return
+    }
+    setModalBusy(true)
+    setModalError(null)
+    try {
+      const res = await fetch(
+        apiUrl(`/operations/marketplace-unload-requests/${docModalId}/ship`),
+        { method: 'POST', headers: authHeaders },
+      )
+      if (!res.ok) {
+        setModalError(await readApiErrorMessage(res))
+        return
+      }
+      await loadDocDetail()
+      await onRefreshFfSupplyExtras()
+    } catch (e) {
+      setModalError(e instanceof Error ? e.message : 'Не удалось отгрузить.')
+    } finally {
+      setModalBusy(false)
+    }
+  }
+
   const submitDoc = async () => {
     if (!token || !authHeaders || !docModal || !docModalId) {
       return
@@ -734,9 +922,15 @@ export function FfSuppliesShipmentsPage({
         ? 'Акт расхождения'
         : ''
 
+  const mpDraft = docModal === 'marketplace_unload' && unloadDetail?.status === 'draft'
+  const mpConfirmed = docModal === 'marketplace_unload' && unloadDetail?.status === 'confirmed'
+  const mpPickEditable =
+    (mpDraft || mpConfirmed) &&
+    docModal === 'marketplace_unload' &&
+    unloadDetail?.status !== 'shipped'
+
   const draftDoc =
-    (docModal === 'marketplace_unload' && unloadDetail?.status === 'draft') ||
-    (docModal === 'discrepancy_act' && divergeDetail?.status === 'draft')
+    mpDraft || (docModal === 'discrepancy_act' && divergeDetail?.status === 'draft')
 
   return (
     <Box data-testid="ff-supplies-shipments-page">
@@ -1062,7 +1256,34 @@ export function FfSuppliesShipmentsPage({
               })()}
             </TableBody>
           </Table>
-          {docModal === 'marketplace_unload' && unloadDetail ? (
+          {docModal === 'marketplace_unload' && unloadDetail && unloadDetail.pick_allocations.length > 0 ? (
+            <Paper variant="outlined" sx={{ p: 1.5, mt: 2 }} data-testid="ff-mp-pick-saved">
+              <Typography variant="subtitle2" sx={{ mb: 1 }}>
+                Подбор по ячейкам
+              </Typography>
+              <Table size="small">
+                <TableHead>
+                  <TableRow>
+                    <TableCell>Товар</TableCell>
+                    <TableCell>Ячейка</TableCell>
+                    <TableCell align="right">Снять</TableCell>
+                  </TableRow>
+                </TableHead>
+                <TableBody>
+                  {unloadDetail.pick_allocations.map((a) => (
+                    <TableRow key={a.id}>
+                      <TableCell>
+                        {a.sku_code} — {a.product_name}
+                      </TableCell>
+                      <TableCell>{a.location_code}</TableCell>
+                      <TableCell align="right">{a.quantity}</TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </Paper>
+          ) : null}
+          {docModal === 'marketplace_unload' && unloadDetail && (mpDraft || mpConfirmed) ? (
             <Box sx={{ mt: 2 }} data-testid="ff-mp-boxes">
               {(() => {
                 const openBox = unloadDetail.boxes.find((b) => !b.closed_at) ?? null
@@ -1071,7 +1292,7 @@ export function FfSuppliesShipmentsPage({
                   <Stack spacing={1.5}>
                     <Typography variant="subtitle2">Короба</Typography>
 
-                    {draftDoc ? (
+                    {mpDraft ? (
                       <Paper variant="outlined" sx={{ p: 1.5 }}>
                         <Stack spacing={1.25}>
                           <Typography variant="body2" color="text.secondary">
@@ -1216,7 +1437,7 @@ export function FfSuppliesShipmentsPage({
               })()}
             </Box>
           ) : null}
-          {draftDoc && productPicklist.length > 0 ? (
+          {draftDoc && docProductPicklist.length > 0 ? (
             <Stack spacing={1.5} sx={{ mt: 2 }}>
               {docModal === 'discrepancy_act' && inboundRefLines.length > 0 ? (
                 <FormControl fullWidth size="small">
@@ -1256,9 +1477,10 @@ export function FfSuppliesShipmentsPage({
                   <MenuItem value="" disabled>
                     Выберите SKU
                   </MenuItem>
-                  {productPicklist.map((p) => (
+                  {docProductPicklist.map((p) => (
                     <MenuItem key={p.id} value={p.id}>
                       {p.sku_code} — {p.name}
+                      {'available' in p ? ` · доступно ${p.available}` : ''}
                     </MenuItem>
                   ))}
                 </Select>
@@ -1282,13 +1504,39 @@ export function FfSuppliesShipmentsPage({
               </Button>
             </Stack>
           ) : null}
-          {draftDoc && productPicklist.length === 0 ? (
+          {draftDoc && docProductPicklist.length === 0 ? (
             <Typography variant="caption" color="text.secondary" sx={{ mt: 1, display: 'block' }}>
-              Добавьте товары в каталоге, чтобы оформить строки.
+              {docModal === 'marketplace_unload'
+                ? 'Нет товаров с доступным остатком на складе ФФ.'
+                : 'Добавьте товары в каталоге, чтобы оформить строки.'}
             </Typography>
           ) : null}
         </DialogContent>
         <DialogActions>
+          {mpPickEditable ? (
+            <Button
+              variant="outlined"
+              disabled={modalBusy || (unloadDetail?.lines.length ?? 0) < 1}
+              onClick={() => void openPickDialog()}
+              data-testid="ff-mp-start-picking"
+            >
+              Начать подбор
+            </Button>
+          ) : null}
+          {mpConfirmed ? (
+            <Button
+              variant="contained"
+              color="primary"
+              disabled={
+                modalBusy ||
+                (unloadDetail?.pick_allocations.length ?? 0) < 1
+              }
+              onClick={() => void shipMpUnload()}
+              data-testid="ff-mp-ship"
+            >
+              Отгружено
+            </Button>
+          ) : null}
           {draftDoc ? (
             <Button
               variant="contained"
@@ -1297,11 +1545,96 @@ export function FfSuppliesShipmentsPage({
               onClick={() => void submitDoc()}
               data-testid="ff-supplies-doc-submit"
             >
-              Утвердить
+              Утвердить заявку
             </Button>
           ) : null}
           <Button onClick={closeDocModal} data-testid="ff-supplies-doc-close">
             Закрыть
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      <Dialog
+        open={pickDialogOpen}
+        onClose={() => setPickDialogOpen(false)}
+        maxWidth="md"
+        fullWidth
+        data-testid="ff-mp-picking-dialog"
+      >
+        <DialogTitle>Подбор товара по ячейкам</DialogTitle>
+        <DialogContent dividers>
+          <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+            Укажите, сколько снять с каждой ячейки. Сумма по товару должна совпасть с количеством
+            отсканированным в коробах.
+          </Typography>
+          <Stack spacing={2}>
+            {pickOptions.map((prod) => (
+              <Paper key={prod.product_id} variant="outlined" sx={{ p: 1.5 }}>
+                <Typography variant="subtitle2">
+                  {prod.sku_code} — {prod.product_name}{' '}
+                  <Typography component="span" variant="body2" color="text.secondary">
+                    (скан: {prod.scanned_qty})
+                  </Typography>
+                </Typography>
+                {prod.locations.length === 0 ? (
+                  <Typography variant="body2" color="warning.main" sx={{ mt: 1 }}>
+                    Нет остатка в ячейках на этом складе.
+                  </Typography>
+                ) : (
+                  <Table size="small" sx={{ mt: 1 }}>
+                    <TableHead>
+                      <TableRow>
+                        <TableCell>Ячейка</TableCell>
+                        <TableCell align="right">Доступно</TableCell>
+                        <TableCell align="right">Снять</TableCell>
+                      </TableRow>
+                    </TableHead>
+                    <TableBody>
+                      {prod.locations.map((loc) => (
+                        <TableRow key={loc.storage_location_id}>
+                          <TableCell>{loc.location_code}</TableCell>
+                          <TableCell align="right">{loc.available}</TableCell>
+                          <TableCell align="right">
+                            <TextField
+                              size="small"
+                              type="number"
+                              slotProps={{ htmlInput: { min: 0 } }}
+                              value={
+                                pickQtyByProductLoc[prod.product_id]?.[loc.storage_location_id] ??
+                                ''
+                              }
+                              onChange={(e) => {
+                                const v = e.target.value
+                                setPickQtyByProductLoc((prev) => ({
+                                  ...prev,
+                                  [prod.product_id]: {
+                                    ...(prev[prod.product_id] ?? {}),
+                                    [loc.storage_location_id]: v,
+                                  },
+                                }))
+                              }}
+                              sx={{ width: 88 }}
+                              data-testid={`ff-mp-pick-qty-${loc.location_code}`}
+                            />
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                )}
+              </Paper>
+            ))}
+          </Stack>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setPickDialogOpen(false)}>Отмена</Button>
+          <Button
+            variant="contained"
+            disabled={modalBusy || pickOptions.length < 1}
+            onClick={() => void savePickAllocations()}
+            data-testid="ff-mp-pick-save"
+          >
+            Сохранить подбор
           </Button>
         </DialogActions>
       </Dialog>

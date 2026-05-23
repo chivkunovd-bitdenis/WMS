@@ -75,12 +75,32 @@ type InboundLineRow = {
   storage_location_code: string | null
 }
 
+type InboundBoxLineRow = {
+  id: string
+  product_id: string
+  sku_code: string
+  product_name: string
+  quantity: number
+}
+
+type InboundBoxRow = {
+  id: string
+  box_number: number
+  internal_barcode: string
+  is_open: boolean
+  lines: InboundBoxLineRow[]
+}
+
 type InboundDetailRow = {
   id: string
   warehouse_id: string
   status: string
   planned_delivery_date: string | null
+  planned_box_count?: number | null
+  actual_box_count?: number | null
+  boxes_discrepancy?: boolean
   has_discrepancy?: boolean
+  boxes?: InboundBoxRow[]
   lines: InboundLineRow[]
 }
 
@@ -1129,9 +1149,14 @@ export default function App() {
     setOpsError(null)
     setOpsBusy(true)
     try {
+      const plannedBoxes = inboundDetail?.planned_box_count ?? 1
       const res = await fetch(
         apiUrl(`/operations/inbound-intake-requests/${selectedInboundId}/primary-accept`),
-        { method: 'POST', headers: authHeaders(token) },
+        {
+          method: 'POST',
+          headers: { ...authHeaders(token), 'Content-Type': 'application/json' },
+          body: JSON.stringify({ actual_box_count: plannedBoxes }),
+        },
       )
       if (!res.ok) {
         setOpsError(await readApiErrorMessage(res))
@@ -1141,6 +1166,96 @@ export default function App() {
       await refreshInboundDetail(token, selectedInboundId)
     } catch (e) {
       setOpsError(e instanceof Error ? e.message : 'Не удалось выполнить первичную приёмку.')
+    } finally {
+      setOpsBusy(false)
+    }
+  }
+
+  async function onOpenInboundBoxByBarcode(barcode: string) {
+    if (!token || !selectedInboundId) {
+      return
+    }
+    setOpsError(null)
+    setOpsBusy(true)
+    try {
+      const res = await fetch(
+        apiUrl(`/operations/inbound-intake-requests/${selectedInboundId}/boxes/open`),
+        {
+          method: 'POST',
+          headers: { ...authHeaders(token), 'Content-Type': 'application/json' },
+          body: JSON.stringify({ barcode }),
+        },
+      )
+      if (!res.ok) {
+        setOpsError(await readApiErrorMessage(res))
+        return
+      }
+      await refreshInboundDetail(token, selectedInboundId)
+    } catch (e) {
+      setOpsError(e instanceof Error ? e.message : 'Не удалось открыть короб.')
+    } finally {
+      setOpsBusy(false)
+    }
+  }
+
+  async function onScanInboundProductBarcode(barcode: string) {
+    if (!token || !selectedInboundId) {
+      return
+    }
+    const openBox = inboundDetail?.boxes?.find((b) => b.is_open)
+    if (!openBox) {
+      setOpsError('Сначала отсканируйте короб (INB-…).')
+      return
+    }
+    setOpsError(null)
+    setOpsBusy(true)
+    try {
+      const res = await fetch(
+        apiUrl(
+          `/operations/inbound-intake-requests/${selectedInboundId}/boxes/${openBox.id}/scan`,
+        ),
+        {
+          method: 'POST',
+          headers: { ...authHeaders(token), 'Content-Type': 'application/json' },
+          body: JSON.stringify({ barcode }),
+        },
+      )
+      if (!res.ok) {
+        setOpsError(await readApiErrorMessage(res))
+        return
+      }
+      await refreshInboundDetail(token, selectedInboundId)
+    } catch (e) {
+      setOpsError(e instanceof Error ? e.message : 'Не удалось отсканировать товар.')
+    } finally {
+      setOpsBusy(false)
+    }
+  }
+
+  async function onCloseInboundBoxIntake() {
+    if (!token || !selectedInboundId) {
+      return
+    }
+    const openBox = inboundDetail?.boxes?.find((b) => b.is_open)
+    if (!openBox) {
+      return
+    }
+    setOpsError(null)
+    setOpsBusy(true)
+    try {
+      const res = await fetch(
+        apiUrl(
+          `/operations/inbound-intake-requests/${selectedInboundId}/boxes/${openBox.id}/close`,
+        ),
+        { method: 'POST', headers: authHeaders(token) },
+      )
+      if (!res.ok) {
+        setOpsError(await readApiErrorMessage(res))
+        return
+      }
+      await refreshInboundDetail(token, selectedInboundId)
+    } catch (e) {
+      setOpsError(e instanceof Error ? e.message : 'Не удалось закрыть короб.')
     } finally {
       setOpsBusy(false)
     }
@@ -2190,9 +2305,9 @@ export default function App() {
     const isFulfillmentAdmin = me.role === 'fulfillment_admin'
     const isFulfillmentSeller = me.role === 'fulfillment_seller'
     if (isFulfillmentSeller) {
-      // In Vite dev (MPA), the seller app is served from `/seller/index.html`.
-      // In prod (Caddy), `/seller/*` is the canonical public path.
-      window.location.assign(import.meta.env.PROD ? '/seller/' : '/seller/index.html')
+      const sellerPortalUrl =
+        import.meta.env.VITE_SELLER_PORTAL_URL ?? 'http://localhost:15174'
+      window.location.assign(sellerPortalUrl)
       return null
     }
     const portal: 'seller' | 'ff' = 'ff'
@@ -2396,6 +2511,9 @@ export default function App() {
                 onAddInboundLine={(e) => void onAddInboundLine(e)}
                 onSubmitInboundRequest={() => void onSubmitInboundRequest()}
                 onPrimaryAcceptInboundRequest={() => void onPrimaryAcceptInboundRequest()}
+                onOpenInboundBoxByBarcode={(code) => void onOpenInboundBoxByBarcode(code)}
+                onScanInboundProductBarcode={(code) => void onScanInboundProductBarcode(code)}
+                onCloseInboundBoxIntake={() => void onCloseInboundBoxIntake()}
                 onSetInboundLineActualQty={(e) => void onSetInboundLineActualQty(e)}
                 onCompleteInboundVerification={() => void onCompleteInboundVerification()}
                 onSaveInboundLineStorage={(e) => void onSaveInboundLineStorage(e)}

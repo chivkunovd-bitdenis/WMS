@@ -13,14 +13,17 @@ from app.models.marketplace_unload import (
     MarketplaceUnloadBox,
     MarketplaceUnloadBoxLine,
     MarketplaceUnloadLine,
+    MarketplaceUnloadPickAllocation,
     MarketplaceUnloadRequest,
 )
 from app.models.seller import Seller
 from app.models.user import User
 from app.services import marketplace_unload_box_service as box_svc
+from app.services import marketplace_unload_pick_service as pick_svc
 from app.services import marketplace_unload_service as svc
 from app.services.catalog_service import get_warehouse
 from app.services.marketplace_unload_box_service import MarketplaceUnloadBoxError
+from app.services.marketplace_unload_pick_service import MarketplaceUnloadPickError
 from app.services.marketplace_unload_service import MarketplaceUnloadError
 
 # Продукт (RU): отгрузка фулфилмента на маркетплейс. Имя префикса API — историческое.
@@ -88,6 +91,42 @@ class MarketplaceUnloadRequestSummaryOut(BaseModel):
     created_at: str
 
 
+class MarketplaceUnloadPickAllocationOut(BaseModel):
+    id: str
+    product_id: str
+    sku_code: str
+    product_name: str
+    storage_location_id: str
+    location_code: str
+    quantity: int
+
+
+class MarketplaceUnloadPickOptionLocationOut(BaseModel):
+    storage_location_id: str
+    location_code: str
+    quantity: int
+    reserved: int
+    available: int
+
+
+class MarketplaceUnloadPickOptionProductOut(BaseModel):
+    product_id: str
+    sku_code: str
+    product_name: str
+    scanned_qty: int
+    locations: list[MarketplaceUnloadPickOptionLocationOut]
+
+
+class PickAllocationItemIn(BaseModel):
+    product_id: uuid.UUID
+    storage_location_id: uuid.UUID
+    quantity: int = Field(ge=1, le=1_000_000_000)
+
+
+class PickAllocationsSave(BaseModel):
+    allocations: list[PickAllocationItemIn] = Field(default_factory=list)
+
+
 class MarketplaceUnloadRequestDetailOut(BaseModel):
     id: str
     warehouse_id: str
@@ -99,6 +138,7 @@ class MarketplaceUnloadRequestDetailOut(BaseModel):
     created_at: str
     lines: list[MarketplaceUnloadLineOut]
     boxes: list[MarketplaceUnloadBoxOut] = Field(default_factory=list)
+    pick_allocations: list[MarketplaceUnloadPickAllocationOut] = Field(default_factory=list)
 
 
 def _box_line_out(ln: MarketplaceUnloadBoxLine) -> MarketplaceUnloadBoxLineOut:
@@ -151,6 +191,20 @@ def _summary_out(
     )
 
 
+def _pick_alloc_out(alloc: MarketplaceUnloadPickAllocation) -> MarketplaceUnloadPickAllocationOut:
+    p = alloc.product
+    loc = alloc.storage_location
+    return MarketplaceUnloadPickAllocationOut(
+        id=str(alloc.id),
+        product_id=str(alloc.product_id),
+        sku_code=p.sku_code,
+        product_name=p.name,
+        storage_location_id=str(alloc.storage_location_id),
+        location_code=loc.code,
+        quantity=int(alloc.quantity),
+    )
+
+
 def _detail_out(
     r: MarketplaceUnloadRequest,
     *,
@@ -158,6 +212,7 @@ def _detail_out(
     seller_name: str | None,
 ) -> MarketplaceUnloadRequestDetailOut:
     boxes = [_box_out(b) for b in getattr(r, "boxes", []) or []]
+    picks = [_pick_alloc_out(a) for a in getattr(r, "pick_allocations", []) or []]
     return MarketplaceUnloadRequestDetailOut(
         id=str(r.id),
         warehouse_id=str(r.warehouse_id),
@@ -169,6 +224,7 @@ def _detail_out(
         created_at=r.created_at.isoformat(),
         lines=[_line_out(ln) for ln in r.lines],
         boxes=boxes,
+        pick_allocations=picks,
     )
 
 
@@ -202,6 +258,37 @@ def _map_mu_err(exc: MarketplaceUnloadError) -> HTTPException:
         return HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
             detail="product_seller_mismatch",
+        )
+    if exc.code == "insufficient_available":
+        return HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+            detail="insufficient_available",
+        )
+    if exc.code == "no_lines":
+        return HTTPException(status_code=status.HTTP_409_CONFLICT, detail="no_lines")
+    return HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=exc.code)
+
+
+def _map_pick_err(exc: MarketplaceUnloadPickError) -> HTTPException:
+    if exc.code == "not_found":
+        return HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="not_found")
+    if exc.code in ("not_editable", "bad_status", "open_box_exists"):
+        return HTTPException(status_code=status.HTTP_409_CONFLICT, detail=exc.code)
+    if exc.code in (
+        "invalid_quantity",
+        "product_not_in_shipment",
+        "location_not_found",
+        "product_not_found",
+        "product_seller_mismatch",
+        "insufficient_available",
+        "scans_required",
+        "pick_scan_mismatch",
+        "pick_required",
+        "no_lines",
+    ):
+        return HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+            detail=exc.code,
         )
     return HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=exc.code)
 
@@ -354,6 +441,67 @@ async def add_marketplace_unload_line(
     return _line_out(line)
 
 
+@router.get(
+    "/{request_id}/pick-options",
+    response_model=list[MarketplaceUnloadPickOptionProductOut],
+)
+async def get_marketplace_unload_pick_options(
+    request_id: uuid.UUID,
+    user: Annotated[User, Depends(require_fulfillment_admin)],
+    session: Annotated[AsyncSession, Depends(get_db)],
+) -> list[MarketplaceUnloadPickOptionProductOut]:
+    try:
+        opts = await pick_svc.get_pick_options(session, user.tenant_id, request_id)
+    except MarketplaceUnloadPickError as exc:
+        raise _map_pick_err(exc) from None
+    return [
+        MarketplaceUnloadPickOptionProductOut(
+            product_id=str(o.product_id),
+            sku_code=o.sku_code,
+            product_name=o.product_name,
+            scanned_qty=o.scanned_qty,
+            locations=[
+                MarketplaceUnloadPickOptionLocationOut(
+                    storage_location_id=str(loc.storage_location_id),
+                    location_code=loc.location_code,
+                    quantity=loc.quantity,
+                    reserved=loc.reserved,
+                    available=loc.available,
+                )
+                for loc in o.locations
+            ],
+        )
+        for o in opts
+    ]
+
+
+@router.put(
+    "/{request_id}/pick-allocations",
+    response_model=list[MarketplaceUnloadPickAllocationOut],
+)
+async def save_marketplace_unload_pick_allocations(
+    request_id: uuid.UUID,
+    body: PickAllocationsSave,
+    user: Annotated[User, Depends(require_fulfillment_admin)],
+    session: Annotated[AsyncSession, Depends(get_db)],
+) -> list[MarketplaceUnloadPickAllocationOut]:
+    rows = [
+        pick_svc.PickAllocationRow(
+            product_id=item.product_id,
+            storage_location_id=item.storage_location_id,
+            quantity=item.quantity,
+        )
+        for item in body.allocations
+    ]
+    try:
+        allocs = await pick_svc.save_pick_allocations(
+            session, user.tenant_id, request_id, rows
+        )
+    except MarketplaceUnloadPickError as exc:
+        raise _map_pick_err(exc) from None
+    return [_pick_alloc_out(a) for a in allocs]
+
+
 @router.post(
     "/{request_id}/submit",
     response_model=MarketplaceUnloadRequestDetailOut,
@@ -391,6 +539,29 @@ async def delete_marketplace_unload_line(
         await svc.delete_line(session, user.tenant_id, request_id, line_id)
     except MarketplaceUnloadError as exc:
         raise _map_mu_err(exc) from None
+
+
+@router.post(
+    "/{request_id}/ship",
+    response_model=MarketplaceUnloadRequestDetailOut,
+)
+async def ship_marketplace_unload(
+    request_id: uuid.UUID,
+    user: Annotated[User, Depends(require_fulfillment_admin)],
+    session: Annotated[AsyncSession, Depends(get_db)],
+) -> MarketplaceUnloadRequestDetailOut:
+    try:
+        await pick_svc.ship_request(session, user.tenant_id, request_id)
+    except MarketplaceUnloadPickError as exc:
+        raise _map_pick_err(exc) from None
+    r = await svc.get_request(session, user.tenant_id, request_id)
+    if r is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="not_found")
+    return _detail_out(
+        r,
+        warehouse_name=r.warehouse.name,
+        seller_name=r.seller.name if r.seller is not None else None,
+    )
 
 
 @router.post(

@@ -6,18 +6,27 @@ from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException, Response, status
 from pydantic import BaseModel, Field
+from sqlalchemy import inspect as sa_inspect
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.deps import get_current_user, require_fulfillment_admin, seller_line_product_scope
 from app.core.roles import FULFILLMENT_ADMIN, FULFILLMENT_SELLER
 from app.db.session import get_db
-from app.models.inbound_intake import InboundIntakeDistributionLine, InboundIntakeLine
+from app.models.inbound_intake import (
+    InboundIntakeBox,
+    InboundIntakeBoxLine,
+    InboundIntakeDistributionLine,
+    InboundIntakeLine,
+    InboundIntakeRequest,
+)
 from app.models.inventory_movement import InventoryMovement
 from app.models.product import Product
 from app.models.storage_location import StorageLocation
 from app.models.user import User
+from app.services import inbound_intake_box_service as inbound_box_svc
 from app.services import inbound_intake_service as svc
 from app.services import inventory_service as inv_svc
+from app.services.inbound_intake_box_service import InboundIntakeBoxError
 from app.services.inbound_intake_service import InboundIntakeError
 
 router = APIRouter(
@@ -33,6 +42,11 @@ class InboundIntakeRequestCreate(BaseModel):
 
 class InboundIntakeRequestPlannedPatch(BaseModel):
     planned_delivery_date: date | None = None
+    planned_box_count: int | None = Field(default=None, ge=1, le=100_000)
+
+
+class InboundPrimaryAcceptBody(BaseModel):
+    actual_box_count: int = Field(ge=0, le=100_000)
 
 
 class InboundIntakeLineCreate(BaseModel):
@@ -56,6 +70,33 @@ class InboundIntakeLineActualPatch(BaseModel):
     actual_qty: int = Field(ge=0, le=1_000_000_000)
 
 
+class InboundIntakeBoxLineOut(BaseModel):
+    id: str
+    product_id: str
+    sku_code: str
+    product_name: str
+    quantity: int
+
+
+class InboundIntakeBoxOut(BaseModel):
+    id: str
+    box_number: int
+    internal_barcode: str
+    label_printed_at: str | None = None
+    intake_opened_at: str | None = None
+    intake_closed_at: str | None = None
+    is_open: bool = False
+    lines: list[InboundIntakeBoxLineOut] = Field(default_factory=list)
+
+
+class InboundBoxBarcodeBody(BaseModel):
+    barcode: str = Field(min_length=1, max_length=128)
+
+
+class InboundBoxScanBody(BaseModel):
+    barcode: str = Field(min_length=1, max_length=128)
+
+
 class InboundIntakeLineOut(BaseModel):
     id: str
     product_id: str
@@ -74,6 +115,9 @@ class InboundIntakeRequestSummaryOut(BaseModel):
     status: str
     line_count: int
     planned_delivery_date: str | None = None
+    planned_box_count: int | None = None
+    actual_box_count: int | None = None
+    boxes_discrepancy: bool = False
     has_discrepancy: bool = False
     seller_id: str | None = None
     seller_name: str | None = None
@@ -85,8 +129,12 @@ class InboundIntakeRequestOut(BaseModel):
     warehouse_id: str
     status: str
     planned_delivery_date: str | None = None
+    planned_box_count: int | None = None
+    actual_box_count: int | None = None
+    boxes_discrepancy: bool = False
     has_discrepancy: bool = False
     distribution_completed_at: str | None = None
+    boxes: list[InboundIntakeBoxOut] = Field(default_factory=list)
     lines: list[InboundIntakeLineOut]
 
 
@@ -98,6 +146,99 @@ class InventoryMovementOut(BaseModel):
     movement_type: str
     inbound_intake_line_id: str | None
     created_at: str
+
+
+def _box_line_out(ln: InboundIntakeBoxLine) -> InboundIntakeBoxLineOut:
+    prod = ln.product
+    return InboundIntakeBoxLineOut(
+        id=str(ln.id),
+        product_id=str(ln.product_id),
+        sku_code=prod.sku_code if prod is not None else "",
+        product_name=prod.name if prod is not None else "",
+        quantity=int(ln.quantity),
+    )
+
+
+def _box_out(b: InboundIntakeBox) -> InboundIntakeBoxOut:
+    is_open = b.intake_opened_at is not None and b.intake_closed_at is None
+    lines_out: list[InboundIntakeBoxLineOut] = []
+    if "lines" not in sa_inspect(b).unloaded:
+        lines_out = [_box_line_out(ln) for ln in b.lines]
+    return InboundIntakeBoxOut(
+        id=str(b.id),
+        box_number=int(b.box_number),
+        internal_barcode=b.internal_barcode,
+        label_printed_at=b.label_printed_at.isoformat() if b.label_printed_at else None,
+        intake_opened_at=b.intake_opened_at.isoformat() if b.intake_opened_at else None,
+        intake_closed_at=b.intake_closed_at.isoformat() if b.intake_closed_at else None,
+        is_open=is_open,
+        lines=lines_out,
+    )
+
+
+def _map_inbound_box_err(exc: InboundIntakeBoxError) -> HTTPException:
+    code = exc.code
+    if code == "request_not_found":
+        return HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=code)
+    if code in ("box_not_found", "barcode_unknown"):
+        return HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=code)
+    if code in (
+        "bad_status",
+        "box_closed",
+        "no_open_box",
+        "open_box_exists",
+        "boxes_missing",
+    ):
+        return HTTPException(status_code=status.HTTP_409_CONFLICT, detail=code)
+    if code in (
+        "barcode_empty",
+        "qty_exceeded",
+        "product_not_on_request",
+        "actual_below_posted",
+    ):
+        return HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+            detail=code,
+        )
+    return HTTPException(
+        status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+        detail=code,
+    )
+
+
+def _request_out(
+    r: InboundIntakeRequest,
+    lines: list[InboundIntakeLineOut] | None = None,
+    boxes: list[InboundIntakeBoxOut] | None = None,
+) -> InboundIntakeRequestOut:
+    lines_out = lines
+    if lines_out is None:
+        lines_out = [_line_out_from_orm(ln, ln.product) for ln in r.lines]
+    boxes_out = boxes
+    if boxes_out is None:
+        if "boxes" in sa_inspect(r).unloaded:
+            boxes_out = []
+        else:
+            boxes_out = [
+                _box_out(b) for b in sorted(r.boxes, key=lambda x: x.box_number)
+            ]
+    return InboundIntakeRequestOut(
+        id=str(r.id),
+        warehouse_id=str(r.warehouse_id),
+        status=r.status,
+        planned_delivery_date=r.planned_delivery_date.isoformat()
+        if r.planned_delivery_date is not None
+        else None,
+        planned_box_count=r.planned_box_count,
+        actual_box_count=r.actual_box_count,
+        boxes_discrepancy=bool(r.boxes_discrepancy),
+        has_discrepancy=bool(r.has_discrepancy),
+        distribution_completed_at=r.distribution_completed_at.isoformat()
+        if r.distribution_completed_at is not None
+        else None,
+        boxes=boxes_out,
+        lines=lines_out,
+    )
 
 
 def _line_out_from_orm(line: InboundIntakeLine, product: Product) -> InboundIntakeLineOut:
@@ -179,7 +320,10 @@ async def list_inbound_requests(
             planned_delivery_date=r.planned_delivery_date.isoformat()
             if r.planned_delivery_date is not None
             else None,
-            has_discrepancy=bool(getattr(r, "has_discrepancy", False)),
+            planned_box_count=r.planned_box_count,
+            actual_box_count=r.actual_box_count,
+            boxes_discrepancy=bool(r.boxes_discrepancy),
+            has_discrepancy=bool(r.has_discrepancy),
             seller_id=str(r.seller_id) if r.seller_id is not None else None,
             seller_name=r.seller.name if r.seller is not None else None,
             created_at=r.created_at.isoformat(),
@@ -228,19 +372,7 @@ async def create_inbound_request(
                 detail="seller_not_found",
             ) from None
         raise
-    return InboundIntakeRequestOut(
-        id=str(r.id),
-        warehouse_id=str(r.warehouse_id),
-        status=r.status,
-        planned_delivery_date=r.planned_delivery_date.isoformat()
-        if r.planned_delivery_date is not None
-        else None,
-        has_discrepancy=bool(getattr(r, "has_discrepancy", False)),
-        distribution_completed_at=r.distribution_completed_at.isoformat()
-        if r.distribution_completed_at is not None
-        else None,
-        lines=[],
-    )
+    return _request_out(r, lines=[], boxes=[])
 
 
 @router.get("/{request_id}", response_model=InboundIntakeRequestOut)
@@ -265,19 +397,7 @@ async def get_inbound_request(
     for ln in r.lines:
         p = ln.product
         lines_out.append(_line_out_from_orm(ln, p))
-    return InboundIntakeRequestOut(
-        id=str(r.id),
-        warehouse_id=str(r.warehouse_id),
-        status=r.status,
-        planned_delivery_date=r.planned_delivery_date.isoformat()
-        if r.planned_delivery_date is not None
-        else None,
-        has_discrepancy=bool(getattr(r, "has_discrepancy", False)),
-        distribution_completed_at=r.distribution_completed_at.isoformat()
-        if r.distribution_completed_at is not None
-        else None,
-        lines=lines_out,
-    )
+    return _request_out(r, lines=lines_out)
 
 
 @router.patch("/{request_id}", response_model=InboundIntakeRequestOut)
@@ -296,12 +416,16 @@ async def patch_inbound_request_planned(
     line_seller_scope: uuid.UUID | None = (
         None if user.role == FULFILLMENT_ADMIN else seller_scope
     )
+    patch_fields = body.model_dump(exclude_unset=True)
     try:
-        r = await svc.patch_request_planned_delivery(
+        r = await svc.patch_request_draft(
             session,
             user.tenant_id,
             request_id,
-            planned_delivery_date=body.planned_delivery_date,
+            planned_delivery_date=patch_fields.get("planned_delivery_date"),
+            planned_delivery_date_set="planned_delivery_date" in patch_fields,
+            planned_box_count=patch_fields.get("planned_box_count"),
+            planned_box_count_set="planned_box_count" in patch_fields,
             seller_product_owner_id=line_seller_scope,
         )
     except InboundIntakeError as exc:
@@ -315,6 +439,11 @@ async def patch_inbound_request_planned(
                 status_code=status.HTTP_409_CONFLICT,
                 detail="not_draft",
             ) from None
+        if exc.code == "invalid_planned_box_count":
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+                detail="invalid_planned_box_count",
+            ) from None
         raise
     r2 = await svc.get_request(session, user.tenant_id, r.id)
     if r2 is None:
@@ -322,29 +451,23 @@ async def patch_inbound_request_planned(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="request_missing",
         )
-    return InboundIntakeRequestOut(
-        id=str(r2.id),
-        warehouse_id=str(r2.warehouse_id),
-        status=r2.status,
-        planned_delivery_date=r2.planned_delivery_date.isoformat()
-        if r2.planned_delivery_date is not None
-        else None,
-        has_discrepancy=bool(getattr(r2, "has_discrepancy", False)),
-        distribution_completed_at=r2.distribution_completed_at.isoformat()
-        if r2.distribution_completed_at is not None
-        else None,
-        lines=[_line_out_from_orm(ln, ln.product) for ln in r2.lines],
-    )
+    return _request_out(r2)
 
 
 @router.post("/{request_id}/primary-accept", response_model=InboundIntakeRequestOut)
 async def primary_accept_inbound_request(
     request_id: uuid.UUID,
+    body: InboundPrimaryAcceptBody,
     user: Annotated[User, Depends(require_fulfillment_admin)],
     session: Annotated[AsyncSession, Depends(get_db)],
 ) -> InboundIntakeRequestOut:
     try:
-        r = await svc.primary_accept_request(session, user.tenant_id, request_id)
+        r = await svc.primary_accept_request(
+            session,
+            user.tenant_id,
+            request_id,
+            actual_box_count=body.actual_box_count,
+        )
     except InboundIntakeError as exc:
         if exc.code == "request_not_found":
             raise HTTPException(
@@ -356,6 +479,14 @@ async def primary_accept_inbound_request(
                 status_code=status.HTTP_409_CONFLICT,
                 detail="not_submitted",
             ) from None
+        if exc.code in (
+            "invalid_actual_box_count",
+            "planned_boxes_missing",
+        ):
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+                detail=exc.code,
+            ) from None
         raise
     r2 = await svc.get_request(session, user.tenant_id, r.id)
     if r2 is None:
@@ -363,19 +494,119 @@ async def primary_accept_inbound_request(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="request_missing",
         )
-    return InboundIntakeRequestOut(
-        id=str(r2.id),
-        warehouse_id=str(r2.warehouse_id),
-        status=r2.status,
-        planned_delivery_date=r2.planned_delivery_date.isoformat()
-        if r2.planned_delivery_date is not None
-        else None,
-        has_discrepancy=bool(getattr(r2, "has_discrepancy", False)),
-        distribution_completed_at=r2.distribution_completed_at.isoformat()
-        if r2.distribution_completed_at is not None
-        else None,
-        lines=[_line_out_from_orm(ln, ln.product) for ln in r2.lines],
-    )
+    return _request_out(r2)
+
+
+@router.post(
+    "/{request_id}/boxes/{box_id}/mark-label-printed",
+    response_model=InboundIntakeBoxOut,
+)
+async def mark_inbound_box_label_printed(
+    request_id: uuid.UUID,
+    box_id: uuid.UUID,
+    user: Annotated[User, Depends(require_fulfillment_admin)],
+    session: Annotated[AsyncSession, Depends(get_db)],
+) -> InboundIntakeBoxOut:
+    try:
+        box = await inbound_box_svc.mark_box_label_printed(
+            session, user.tenant_id, request_id, box_id
+        )
+    except InboundIntakeBoxError as exc:
+        if exc.code == "request_not_found":
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="request_not_found",
+            ) from None
+        if exc.code == "box_not_found":
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="box_not_found",
+            ) from None
+        if exc.code == "bad_status":
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail="bad_status",
+            ) from None
+        raise
+    await session.commit()
+    return _box_out(box)
+
+
+@router.post(
+    "/{request_id}/boxes/open",
+    response_model=InboundIntakeBoxOut,
+)
+async def open_inbound_box_by_barcode(
+    request_id: uuid.UUID,
+    body: InboundBoxBarcodeBody,
+    user: Annotated[User, Depends(require_fulfillment_admin)],
+    session: Annotated[AsyncSession, Depends(get_db)],
+) -> InboundIntakeBoxOut:
+    try:
+        box = await inbound_box_svc.open_box_by_barcode(
+            session,
+            user.tenant_id,
+            request_id,
+            barcode=body.barcode,
+        )
+    except InboundIntakeBoxError as exc:
+        raise _map_inbound_box_err(exc) from None
+    return _box_out(box)
+
+
+@router.post(
+    "/{request_id}/boxes/{box_id}/scan",
+    response_model=InboundIntakeBoxLineOut,
+)
+async def scan_product_into_inbound_box(
+    request_id: uuid.UUID,
+    box_id: uuid.UUID,
+    body: InboundBoxScanBody,
+    user: Annotated[User, Depends(require_fulfillment_admin)],
+    session: Annotated[AsyncSession, Depends(get_db)],
+) -> InboundIntakeBoxLineOut:
+    bx = await session.get(InboundIntakeBox, box_id)
+    if bx is None or bx.request_id != request_id:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="box_not_found",
+        )
+    try:
+        ln = await inbound_box_svc.scan_product_into_box(
+            session,
+            user.tenant_id,
+            request_id,
+            box_id,
+            barcode=body.barcode,
+        )
+    except InboundIntakeBoxError as exc:
+        raise _map_inbound_box_err(exc) from None
+    return _box_line_out(ln)
+
+
+@router.post(
+    "/{request_id}/boxes/{box_id}/close",
+    response_model=InboundIntakeBoxOut,
+)
+async def close_inbound_box_intake(
+    request_id: uuid.UUID,
+    box_id: uuid.UUID,
+    user: Annotated[User, Depends(require_fulfillment_admin)],
+    session: Annotated[AsyncSession, Depends(get_db)],
+) -> InboundIntakeBoxOut:
+    bx = await session.get(InboundIntakeBox, box_id)
+    if bx is None or bx.request_id != request_id:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="box_not_found",
+        )
+    try:
+        box = await inbound_box_svc.close_box_intake(
+            session, user.tenant_id, request_id, box_id
+        )
+    except InboundIntakeBoxError as exc:
+        raise _map_inbound_box_err(exc) from None
+    return _box_out(box)
 
 
 @router.patch(
@@ -403,10 +634,10 @@ async def patch_inbound_line_actual(
                 status_code=status.HTTP_404_NOT_FOUND,
                 detail="line_not_found",
             ) from None
-        if exc.code == "not_verifying":
+        if exc.code in ("not_verifying", "use_box_scan"):
             raise HTTPException(
                 status_code=status.HTTP_409_CONFLICT,
-                detail="not_verifying",
+                detail=exc.code,
             ) from None
         if exc.code == "actual_below_posted":
             raise HTTPException(
@@ -443,10 +674,10 @@ async def complete_inbound_verification(
                 status_code=status.HTTP_404_NOT_FOUND,
                 detail="request_not_found",
             ) from None
-        if exc.code == "not_verifying":
+        if exc.code in ("not_verifying", "open_box_exists"):
             raise HTTPException(
                 status_code=status.HTTP_409_CONFLICT,
-                detail="not_verifying",
+                detail=exc.code,
             ) from None
         if exc.code == "actual_missing":
             raise HTTPException(
@@ -460,19 +691,7 @@ async def complete_inbound_verification(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="request_missing",
         )
-    return InboundIntakeRequestOut(
-        id=str(r2.id),
-        warehouse_id=str(r2.warehouse_id),
-        status=r2.status,
-        planned_delivery_date=r2.planned_delivery_date.isoformat()
-        if r2.planned_delivery_date is not None
-        else None,
-        has_discrepancy=bool(getattr(r2, "has_discrepancy", False)),
-        distribution_completed_at=r2.distribution_completed_at.isoformat()
-        if r2.distribution_completed_at is not None
-        else None,
-        lines=[_line_out_from_orm(ln, ln.product) for ln in r2.lines],
-    )
+    return _request_out(r2)
 
 
 @router.get(
@@ -813,19 +1032,7 @@ async def receive_inbound_line(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="request_missing",
         )
-    return InboundIntakeRequestOut(
-        id=str(r2.id),
-        warehouse_id=str(r2.warehouse_id),
-        status=r2.status,
-        planned_delivery_date=r2.planned_delivery_date.isoformat()
-        if r2.planned_delivery_date is not None
-        else None,
-        has_discrepancy=bool(getattr(r2, "has_discrepancy", False)),
-        distribution_completed_at=r2.distribution_completed_at.isoformat()
-        if r2.distribution_completed_at is not None
-        else None,
-        lines=[_line_out_from_orm(ln, ln.product) for ln in r2.lines],
-    )
+    return _request_out(r2)
 
 
 @router.post("/{request_id}/submit", response_model=InboundIntakeRequestOut)
@@ -863,6 +1070,11 @@ async def submit_inbound_request(
                 status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
                 detail="submit_empty",
             ) from None
+        if exc.code == "planned_boxes_missing":
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+                detail="planned_boxes_missing",
+            ) from None
         raise
     r2 = await svc.get_request(session, user.tenant_id, r.id)
     if r2 is None:
@@ -870,19 +1082,7 @@ async def submit_inbound_request(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="request_missing",
         )
-    return InboundIntakeRequestOut(
-        id=str(r2.id),
-        warehouse_id=str(r2.warehouse_id),
-        status=r2.status,
-        planned_delivery_date=r2.planned_delivery_date.isoformat()
-        if r2.planned_delivery_date is not None
-        else None,
-        has_discrepancy=bool(getattr(r2, "has_discrepancy", False)),
-        distribution_completed_at=r2.distribution_completed_at.isoformat()
-        if r2.distribution_completed_at is not None
-        else None,
-        lines=[_line_out_from_orm(ln, ln.product) for ln in r2.lines],
-    )
+    return _request_out(r2)
 
 
 @router.post("/{request_id}/post", response_model=InboundIntakeRequestOut)
@@ -936,19 +1136,7 @@ async def post_inbound_request(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="request_missing",
         )
-    return InboundIntakeRequestOut(
-        id=str(r2.id),
-        warehouse_id=str(r2.warehouse_id),
-        status=r2.status,
-        planned_delivery_date=r2.planned_delivery_date.isoformat()
-        if r2.planned_delivery_date is not None
-        else None,
-        has_discrepancy=bool(getattr(r2, "has_discrepancy", False)),
-        distribution_completed_at=r2.distribution_completed_at.isoformat()
-        if r2.distribution_completed_at is not None
-        else None,
-        lines=[_line_out_from_orm(ln, ln.product) for ln in r2.lines],
-    )
+    return _request_out(r2)
 
 
 @router.get(
@@ -1075,16 +1263,4 @@ async def complete_distribution(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="request_missing",
         )
-    return InboundIntakeRequestOut(
-        id=str(r2.id),
-        warehouse_id=str(r2.warehouse_id),
-        status=r2.status,
-        planned_delivery_date=r2.planned_delivery_date.isoformat()
-        if r2.planned_delivery_date is not None
-        else None,
-        has_discrepancy=bool(getattr(r2, "has_discrepancy", False)),
-        distribution_completed_at=r2.distribution_completed_at.isoformat()
-        if r2.distribution_completed_at is not None
-        else None,
-        lines=[_line_out_from_orm(ln, ln.product) for ln in r2.lines],
-    )
+    return _request_out(r2)

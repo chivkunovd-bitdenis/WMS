@@ -32,11 +32,13 @@ async def get_inventory_balances_summary(
     user: Annotated[User, Depends(get_current_user)],
     session: Annotated[AsyncSession, Depends(get_db)],
     seller_scope: Annotated[uuid.UUID | None, Depends(seller_line_product_scope)],
+    warehouse_id: Annotated[uuid.UUID | None, Query()] = None,
 ) -> list[InventoryBalanceRowOut]:
     rows = await inventory_service.list_balances_total(
         session,
         user.tenant_id,
         seller_product_owner_id=seller_scope,
+        warehouse_id=warehouse_id,
     )
     return [
         InventoryBalanceRowOut(

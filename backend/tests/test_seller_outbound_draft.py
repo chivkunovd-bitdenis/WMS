@@ -4,6 +4,7 @@ import time
 
 import pytest
 from httpx import AsyncClient
+from inbound_box_intake_helpers import fulfill_inbound_via_box_scans
 
 
 @pytest.mark.asyncio
@@ -62,6 +63,7 @@ async def test_seller_outbound_draft_create_and_line_own_sku_only(
         },
     )
     pid_own = p_own.json()["id"]
+    sku_own = p_own.json()["sku_code"]
     pid_other = p_other.json()["id"]
 
     base_in = "/operations/inbound-intake-requests"
@@ -78,14 +80,9 @@ async def test_seller_outbound_draft_create_and_line_own_sku_only(
         },
     )
     await async_client.post(f"{base_in}/{rid_in}/submit", headers=ah)
-    await async_client.post(f"{base_in}/{rid_in}/primary-accept", headers=ah)
+    await async_client.post(f"{base_in}/{rid_in}/primary-accept", headers=ah, json={"actual_box_count": 1})
     inb = await async_client.get(f"{base_in}/{rid_in}", headers=ah)
-    line_id = inb.json()["lines"][0]["id"]
-    await async_client.patch(
-        f"{base_in}/{rid_in}/lines/{line_id}/actual",
-        headers=ah,
-        json={"actual_qty": 10},
-    )
+    await fulfill_inbound_via_box_scans(async_client, ah, rid_in, sku_own, 10)
     await async_client.post(f"{base_in}/{rid_in}/verify", headers=ah)
     await async_client.post(f"{base_in}/{rid_in}/post", headers=ah)
 
