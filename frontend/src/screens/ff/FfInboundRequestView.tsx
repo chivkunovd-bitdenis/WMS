@@ -433,6 +433,19 @@ export function FfInboundRequestView({ token, requestId, isFulfillmentAdmin, onC
     return m
   }, [distributableProducts, distSumByProductId])
 
+  const noCellRemainingLines = useMemo(
+    () =>
+      distributableProducts
+        .map((p) => ({
+          ...p,
+          remaining: distRemainingByProductId.get(p.product_id) ?? p.accepted_qty,
+        }))
+        .filter((p) => p.remaining > 0),
+    [distributableProducts, distRemainingByProductId],
+  )
+
+  const hasNoCellPending = noCellRemainingLines.length > 0
+
   const distributionCompleted = Boolean(detail?.distribution_completed_at)
   const distributionEditable = isFulfillmentAdmin && !distributionCompleted
 
@@ -1052,15 +1065,24 @@ export function FfInboundRequestView({ token, requestId, isFulfillmentAdmin, onC
                     (cat?.wb_barcodes.length ? cat.wb_barcodes.join(', ') : '—')
                   const actualIsSet = ln.actual_qty != null
                   const hasDiscrepancy = actualIsSet && ln.actual_qty !== ln.expected_qty
+                  const matchesExpected = actualIsSet && ln.actual_qty === ln.expected_qty
                   return (
                     <TableRow
                       key={ln.id}
                       hover
-                      data-testid="ff-inbound-line-row"
+                      data-testid={
+                        matchesExpected ? 'ff-inbound-line-row-match' : 'ff-inbound-line-row'
+                      }
                       sx={{
                         '& td': { px: 1.25 },
                         '& td:first-of-type': { pl: 1 },
                         '& td:last-of-type': { pr: 1 },
+                        ...(matchesExpected
+                          ? {
+                              backgroundColor: (theme) =>
+                                alpha(theme.palette.success.main, 0.12),
+                            }
+                          : null),
                         ...(hasDiscrepancy
                           ? {
                               backgroundColor: (theme) =>
@@ -1596,23 +1618,39 @@ export function FfInboundRequestView({ token, requestId, isFulfillmentAdmin, onC
                         </Table>
                       </TableContainer>
 
-                      <Paper variant="outlined" sx={{ p: 2 }} data-testid="ff-inbound-distribution-no-cell">
-                        <Typography variant="body2" sx={{ fontWeight: 700, mb: 1 }}>
+                      <Paper
+                        variant="outlined"
+                        sx={{
+                          p: 2,
+                          ...(hasNoCellPending
+                            ? {
+                                bgcolor: (theme) => alpha(theme.palette.warning.main, 0.14),
+                                borderColor: (theme) => alpha(theme.palette.warning.main, 0.45),
+                              }
+                            : null),
+                        }}
+                        data-testid="ff-inbound-distribution-no-cell"
+                        data-pending={hasNoCellPending ? '1' : '0'}
+                      >
+                        <Typography
+                          variant="body2"
+                          sx={{ fontWeight: 700, mb: 1 }}
+                          color={hasNoCellPending ? 'warning.dark' : 'text.primary'}
+                        >
                           Остаток «Без ячейки»
                         </Typography>
                         <Stack spacing={0.5}>
-                          {distributableProducts
-                            .map((p) => {
-                              const rem = distRemainingByProductId.get(p.product_id) ?? p.accepted_qty
-                              return { ...p, remaining: rem }
-                            })
-                            .filter((p) => p.remaining > 0)
-                            .map((p) => (
-                              <Typography key={p.product_id} variant="body2" color="text.secondary">
-                                {p.sku_code} · {p.product_name}: {p.remaining}
-                              </Typography>
-                            ))}
-                          {distributableProducts.every((p) => (distRemainingByProductId.get(p.product_id) ?? p.accepted_qty) <= 0) ? (
+                          {noCellRemainingLines.map((p) => (
+                            <Typography
+                              key={p.product_id}
+                              variant="body2"
+                              color="warning.dark"
+                              data-testid="ff-inbound-distribution-no-cell-line"
+                            >
+                              {p.sku_code} · {p.product_name}: {p.remaining}
+                            </Typography>
+                          ))}
+                          {!hasNoCellPending ? (
                             <Typography variant="body2" color="text.secondary">
                               Остатков нет.
                             </Typography>

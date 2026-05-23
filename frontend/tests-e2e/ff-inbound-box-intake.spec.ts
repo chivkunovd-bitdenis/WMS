@@ -66,6 +66,8 @@ test.describe('FF inbound box piece intake', () => {
     ]);
 
     await expect(page.getByTestId('ff-inbound-line-actual').first()).toHaveValue('5');
+    // TC-NEW-C04 — факт = ожидание → зелёная строка
+    await expect(page.getByTestId('ff-inbound-line-row-match')).toBeVisible();
 
     const [verifyRes] = await Promise.all([
       waitForPostOk(page, INBOUND_API, (u) => u.includes('/verify')),

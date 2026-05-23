@@ -110,6 +110,10 @@ test('ff inbound distribution: partial, leftover without cell, complete -> reado
   await row.getByTestId('ff-inbound-distribution-product').click();
   await page.getByRole('option', { name: new RegExp(sku) }).click();
   await row.getByTestId('ff-inbound-distribution-qty').fill('2');
+  // TC-NEW-C05 — нераспределённый остаток выделен (без ячейки)
+  await expect(page.getByTestId('ff-inbound-distribution-no-cell')).toHaveAttribute('data-pending', '1');
+  await expect(page.getByTestId('ff-inbound-distribution-no-cell-line')).toContainText('3');
+
   await row.getByTestId('ff-inbound-distribution-location').click();
   await page.getByRole('option', { name: 'A-01' }).click();
 
