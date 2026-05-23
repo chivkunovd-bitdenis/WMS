@@ -5,7 +5,7 @@
 - What changed: кнопка печати ШК у выбранной ячейки в распределении FF; поле «Добавить по ШК» + Enter в picker; каталог FF = `/products` + WB-поля из `ff-catalog`; v2 inbound: поиск по ШК в `wb-catalog` merge, авто-выбор SKU; util `resolveProductByBarcode.ts`; e2e TC-NEW-C03/C06.
 - What did NOT change: US-C-07 печать накладной приёмки.
 - Verification: build ok; e2e barcode-add, distribution, inbound-intake passed.
-- Commit: pending
+- Commit: ac8f5ad
 
 ## TASK-11 — 2026-05-23 — Зелёные строки и «без ячейки» (US-C-04, US-C-05)
 
