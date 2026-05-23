@@ -5,6 +5,13 @@
 - What changed: миграция `0029` (`inbound_intake_box_lines`, `intake_opened_at`/`intake_closed_at` на коробах); API `POST .../boxes/open`, `.../boxes/{id}/scan`, `.../close`; агрегация `actual_qty` по сканам; блок ручного PATCH actual при наличии коробов; UI на `FfInboundRequestView` и `InboundScreen`; pytest `test_inbound_box_intake.py` + хелпер `inbound_box_intake_helpers.py`; e2e `ff-inbound-box-intake.spec.ts` (TC-NEW-C01); обновлены регрессионные тесты/e2e под box-scan.
 - What did NOT change: подсказки ячеек (US-C-02), зелёные строки, предварительные остатки только по коробам, состав короба от селлера.
 - Verification: `pytest` 86 passed; `npm run build` ok; e2e 3 passed (`ff-inbound-box-intake`, `ff-inbound-distribution`).
+- Commit: a9cebe6
+
+## TASK-10 — 2026-05-23 — Подсказки ячеек при распределении (US-C-02)
+
+- What changed: `GET /operations/inventory-balances/locations-by-product`; чипы «Уже лежит: A-01 (N)» в блоке распределения FF (`FfInboundRequestView`), клик подставляет ячейку; pytest `test_product_location_hints.py`; e2e `ff-inbound-cell-hints.spec.ts` (TC-NEW-C02).
+- What did NOT change: подсказки при поштучном скане в короб (только этап распределения); v2 InboundScreen.
+- Verification: pytest 87 passed; e2e cell-hints 1 passed; build ok.
 - Commit: pending
 
 ## TASK-8 — 2026-05-22 — Внутренние ШК на короба поставки (US-B-02)

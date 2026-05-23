@@ -495,6 +495,21 @@ async def list_location_balances_for_products_in_warehouse(
     return rows
 
 
+async def list_locations_for_product_in_warehouse(
+    session: AsyncSession,
+    tenant_id: uuid.UUID,
+    warehouse_id: uuid.UUID,
+    product_id: uuid.UUID,
+) -> list[tuple[uuid.UUID, str, int, int]]:
+    """location_id, location_code, on_hand, reserved — sorted by on_hand desc."""
+    rows = await list_location_balances_for_products_in_warehouse(
+        session, tenant_id, warehouse_id, [product_id]
+    )
+    product_rows = [(loc_id, code, on_hand, rsv) for pid, loc_id, code, on_hand, rsv in rows if pid == product_id]
+    product_rows.sort(key=lambda x: x[2], reverse=True)
+    return product_rows
+
+
 async def apply_marketplace_unload_pick(
     session: AsyncSession,
     *,

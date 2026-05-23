@@ -93,6 +93,14 @@ type DistributionLineDraft = {
   quantity: string
 }
 
+type CellLocationHint = {
+  storage_location_id: string
+  storage_location_code: string
+  quantity: number
+  reserved: number
+  available: number
+}
+
 export type WbCatalogRow = {
   id: string
   name: string
@@ -136,6 +144,7 @@ export function FfInboundRequestView({ token, requestId, isFulfillmentAdmin, onC
   const [distBusy, setDistBusy] = useState(false)
   const [distError, setDistError] = useState<string | null>(null)
   const [distLines, setDistLines] = useState<DistributionLineDraft[]>([])
+  const [cellHintsByProductId, setCellHintsByProductId] = useState<Record<string, CellLocationHint[]>>({})
 
   const [pickerOpen, setPickerOpen] = useState(false)
   const [pickerSearch, setPickerSearch] = useState('')
@@ -177,6 +186,34 @@ export function FfInboundRequestView({ token, requestId, isFulfillmentAdmin, onC
       setLocations((await res.json()) as LocationRow[])
     },
     [authHeaders],
+  )
+
+  const loadCellHints = useCallback(
+    async (productId: string) => {
+      if (!detail?.warehouse_id || !productId) return
+      try {
+        const params = new URLSearchParams({
+          product_id: productId,
+          warehouse_id: detail.warehouse_id,
+        })
+        const res = await fetch(
+          apiUrl(`/operations/inventory-balances/locations-by-product?${params}`),
+          { headers: authHeaders },
+        )
+        if (!res.ok) return
+        const rows = (await res.json()) as CellLocationHint[]
+        setCellHintsByProductId((prev) => {
+          if (prev[productId] !== undefined) return prev
+          return { ...prev, [productId]: rows }
+        })
+      } catch {
+        setCellHintsByProductId((prev) => {
+          if (prev[productId] !== undefined) return prev
+          return { ...prev, [productId]: [] }
+        })
+      }
+    },
+    [authHeaders, detail?.warehouse_id],
   )
 
   const loadDistribution = useCallback(async () => {
@@ -293,6 +330,13 @@ export function FfInboundRequestView({ token, requestId, isFulfillmentAdmin, onC
     }
     void loadDistribution()
   }, [detail, isFulfillmentAdmin, loadDistribution])
+
+  useEffect(() => {
+    if (!distOpen || detail?.status !== 'verified') return
+    for (const row of distLines) {
+      if (row.product_id) void loadCellHints(row.product_id)
+    }
+  }, [distOpen, detail?.status, distLines, loadCellHints])
 
   const catalogById = useMemo(() => {
     const m = new Map<string, WbCatalogRow>()
@@ -1432,6 +1476,7 @@ export function FfInboundRequestView({ token, requestId, isFulfillmentAdmin, onC
                                           setDistLines((prev) =>
                                             prev.map((r, i) => (i === idx ? { ...r, product_id: v } : r)),
                                           )
+                                          if (v) void loadCellHints(v)
                                         }}
                                         data-testid="ff-inbound-distribution-product"
                                       >
@@ -1486,6 +1531,41 @@ export function FfInboundRequestView({ token, requestId, isFulfillmentAdmin, onC
                                         ))}
                                       </Select>
                                     </FormControl>
+                                    {row.product_id && (cellHintsByProductId[row.product_id]?.length ?? 0) > 0 ? (
+                                      <Stack
+                                        direction="row"
+                                        spacing={0.5}
+                                        sx={{ mt: 0.75, flexWrap: 'wrap' }}
+                                        data-testid="ff-inbound-cell-hints"
+                                      >
+                                        <Typography
+                                          variant="caption"
+                                          color="text.secondary"
+                                          sx={{ alignSelf: 'center', mr: 0.5 }}
+                                        >
+                                          Уже лежит:
+                                        </Typography>
+                                        {cellHintsByProductId[row.product_id]!.map((h) => (
+                                          <Chip
+                                            key={h.storage_location_id}
+                                            size="small"
+                                            variant="outlined"
+                                            label={`${h.storage_location_code} (${h.available})`}
+                                            disabled={distBusy || !distributionEditable}
+                                            onClick={() => {
+                                              setDistLines((prev) =>
+                                                prev.map((r, i) =>
+                                                  i === idx
+                                                    ? { ...r, storage_location_id: h.storage_location_id }
+                                                    : r,
+                                                ),
+                                              )
+                                            }}
+                                            data-testid="ff-inbound-cell-hint"
+                                          />
+                                        ))}
+                                      </Stack>
+                                    ) : null}
                                   </TableCell>
                                   {distributionEditable ? (
                                     <TableCell align="right">
