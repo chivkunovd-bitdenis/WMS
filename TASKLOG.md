@@ -1,11 +1,18 @@
 # TASKLOG
 
+## TASK-19 — 2026-05-25 — Селлеры: MUI + email в одной форме
+
+- What changed: `SellersScreen` на MUI (как «Товары»); форма название + email → `POST /sellers` + `POST /auth/seller-accounts` без пароля; `docs/UI_DESIGN_SYSTEM_RU.md`, онбординг в `MVP_DECISIONS_RU.md` + `AGENTS.md`; дашборд — ссылка в «Селлеры».
+- What did NOT change: API не отдаёт временный пароль; логика `must_set_password` / первый вход с пустым паролем.
+- Verification: `npm run build`; e2e `sellers-create-ui` (полный онбординг).
+- Commit: (pending)
+
 ## TASK-18 — 2026-05-25 — Раздел «Селлеры» в портале FF
 
 - What changed: экран `/app/ff/sellers` — список селлеров и форма «Добавить селлера» (`POST /sellers`); пункт навигации `nav-sellers`; e2e `sellers-create-ui.spec.ts` (TC-S04-001).
 - What did NOT change: выдача аккаунта селлера — по-прежнему на дашборде (`POST /auth/seller-accounts`).
-- Verification: `npm run build`; e2e `sellers-create-ui`, `admin-shell-layout`.
-- Commit: (pending)
+- Verification: `npm run build`; e2e `sellers-create-ui`, `admin-shell-layout`; prod deploy `194.87.96.144:8088`.
+- Commit: b18340f
 
 ## TASK-17 — 2026-05-25 — Резерв без ячейки + накладные (MP + outbound) + deploy
 

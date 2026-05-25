@@ -822,84 +822,6 @@ export default function App() {
     setBackgroundJobResult(null)
   }
 
-  async function onCreateSeller(e: React.FormEvent<HTMLFormElement>) {
-    e.preventDefault()
-    const form = e.currentTarget
-    if (!token) {
-      return
-    }
-    setCatalogError(null)
-    setCatalogBusy(true)
-    try {
-      const fd = new FormData(form)
-      const name = String(fd.get('seller_name') ?? '').trim()
-      const res = await fetch(apiUrl('/sellers'), {
-        method: 'POST',
-        headers: {
-          ...authHeaders(token),
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ name }),
-      })
-      if (!res.ok) {
-        setCatalogError(await readApiErrorMessage(res))
-        return
-      }
-      form.reset()
-      await refreshSellers(token)
-    } catch (err) {
-      setCatalogError(
-        err instanceof Error ? err.message : 'Не удалось создать селлера.',
-      )
-    } finally {
-      setCatalogBusy(false)
-    }
-  }
-
-  async function onCreateSellerAccount(e: React.FormEvent<HTMLFormElement>) {
-    e.preventDefault()
-    const form = e.currentTarget
-    if (!token) {
-      return
-    }
-    setCatalogError(null)
-    setCatalogBusy(true)
-    try {
-      const fd = new FormData(form)
-      const seller_id = String(fd.get('acc_seller_id') ?? '')
-      const email = String(fd.get('acc_email') ?? '').trim()
-      if (!seller_id) {
-        setCatalogError('Выберите селлера для создания аккаунта.')
-        return
-      }
-      if (!email) {
-        setCatalogError('Укажите email для аккаунта селлера.')
-        return
-      }
-      const res = await fetch(apiUrl('/auth/seller-accounts'), {
-        method: 'POST',
-        headers: {
-          ...authHeaders(token),
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ seller_id, email }),
-      })
-      if (!res.ok) {
-        setCatalogError(await readApiErrorMessage(res))
-        return
-      }
-      form.reset()
-    } catch (err) {
-      setCatalogError(
-        err instanceof Error
-          ? err.message
-          : 'Не удалось создать аккаунт селлера.',
-      )
-    } finally {
-      setCatalogBusy(false)
-    }
-  }
-
   async function onCreateWarehouse(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault()
     const form = e.currentTarget
@@ -2433,10 +2355,6 @@ export default function App() {
               <FfDashboard
                 me={me}
                 isFulfillmentAdmin={isFulfillmentAdmin}
-                sellers={sellers}
-                catalogBusy={catalogBusy}
-                catalogError={catalogError}
-                onCreateSellerAccount={(e) => void onCreateSellerAccount(e)}
                 inboundSummaries={inboundSummaries}
                 outboundSummaries={outboundSummaries}
                 mpUnloadSummaries={marketplaceUnloadSummaries
@@ -2583,13 +2501,21 @@ export default function App() {
           <Route
             path="ff/sellers"
             element={
-              <SellersScreen
-                isFulfillmentAdmin={isFulfillmentAdmin}
-                catalogBusy={catalogBusy}
-                catalogError={catalogError}
-                sellers={sellers}
-                onCreateSeller={(e) => void onCreateSeller(e)}
-              />
+              token ? (
+                <SellersScreen
+                  token={token}
+                  authHeaders={authHeaders}
+                  isFulfillmentAdmin={isFulfillmentAdmin}
+                  sellers={sellers}
+                  onRefresh={() => void refreshSellers(token)}
+                />
+              ) : (
+                <FfPlaceholderPage
+                  title="Селлеры"
+                  hint="Нет токена."
+                  testId="ff-sellers-placeholder"
+                />
+              )
             }
           />
 

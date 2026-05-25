@@ -1,8 +1,6 @@
-import type { FormEventHandler } from 'react'
-import { Button } from '../ui/Button'
+import { Link as RouterLink } from 'react-router-dom'
+import { Alert, Button, Typography } from '@mui/material'
 import { Card } from '../ui/Card'
-import { Input } from '../ui/Input'
-import { Select } from '../ui/Select'
 
 type Me = {
   email: string
@@ -11,28 +9,14 @@ type Me = {
   seller_name?: string | null
 }
 
-type SellerRow = { id: string; name: string }
-
 type Props = {
   me: Me
   isFulfillmentAdmin: boolean
-  sellers: SellerRow[]
-  catalogBusy: boolean
-  catalogError: string | null
-  onCreateSellerAccount: FormEventHandler<HTMLFormElement>
   /** Вложенный блок (без дублирующего data-testid на корне карточки) */
   embedded?: boolean
 }
 
-export function DashboardCard({
-  me,
-  isFulfillmentAdmin,
-  sellers,
-  catalogBusy,
-  catalogError,
-  onCreateSellerAccount,
-  embedded = false,
-}: Props) {
+export function DashboardCard({ me, isFulfillmentAdmin, embedded = false }: Props) {
   return (
     <Card className="card" data-testid={embedded ? undefined : 'dashboard'}>
       {embedded ? null : (
@@ -46,62 +30,24 @@ export function DashboardCard({
         </>
       )}
 
-      {isFulfillmentAdmin && sellers.length > 0 ? (
-        <form
-          data-testid="seller-account-form"
-          style={{ marginTop: 12 }}
-          noValidate
-          onSubmit={onCreateSellerAccount}
-        >
-          <h3 className="subtle" style={{ marginTop: 0 }}>
-            Аккаунт селлера
-          </h3>
-          <p className="subtle" style={{ marginTop: 4, fontSize: 13 }}>
-            Укажите email — селлер задаёт пароль при первом входе в кабинет.
-          </p>
-          {catalogError ? (
-            <p className="error" data-testid="seller-account-error">
-              {catalogError}
-            </p>
-          ) : null}
-          <label>
-            Селлер
-            <Select
-              name="acc_seller_id"
-              data-testid="seller-account-seller"
-              required
-              defaultValue=""
-            >
-              <option value="" disabled>
-                Выберите
-              </option>
-              {sellers.map((s) => (
-                <option key={s.id} value={s.id}>
-                  {s.name}
-                </option>
-              ))}
-            </Select>
-          </label>
-          <label>
-            Email
-            <Input
-              name="acc_email"
-              data-testid="seller-account-email"
-              type="email"
-              required
-              autoComplete="off"
-            />
-          </label>
+      {isFulfillmentAdmin ? (
+        <Alert severity="info" sx={{ mt: embedded ? 0 : 1.5 }} data-testid="dashboard-sellers-hint">
+          <Typography variant="body2" component="span">
+            Новых селлеров добавляйте в разделе «Селлеры»: название и email. Пароль селлер задаёт при
+            первом входе (поле пароля оставить пустым).
+          </Typography>
           <Button
-            type="submit"
-            data-testid="seller-account-submit"
-            disabled={catalogBusy}
+            component={RouterLink}
+            to="/app/ff/sellers"
+            size="small"
+            variant="outlined"
+            sx={{ mt: 1 }}
+            data-testid="dashboard-go-sellers"
           >
-            {catalogBusy ? '…' : 'Создать аккаунт селлера'}
+            Открыть «Селлеры»
           </Button>
-        </form>
+        </Alert>
       ) : null}
     </Card>
   )
 }
-

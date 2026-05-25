@@ -1,5 +1,4 @@
 import { useMemo, useState } from 'react'
-import type { FormEventHandler } from 'react'
 import type { ReactNode } from 'react'
 import {
   Box,
@@ -44,15 +43,9 @@ type Me = {
   seller_name?: string | null
 }
 
-type SellerRow = { id: string; name: string }
-
 type Props = {
   me: Me
   isFulfillmentAdmin: boolean
-  sellers: SellerRow[]
-  catalogBusy: boolean
-  catalogError: string | null
-  onCreateSellerAccount: FormEventHandler<HTMLFormElement>
   inboundSummaries: FfInboundSummary[]
   outboundSummaries: FfOutboundSummary[]
   onOpenInbound: (id: string) => void
@@ -133,10 +126,6 @@ function FfDashboardSection({
 export function FfDashboard({
   me,
   isFulfillmentAdmin,
-  sellers,
-  catalogBusy,
-  catalogError,
-  onCreateSellerAccount,
   inboundSummaries,
   outboundSummaries,
   mpUnloadSummaries = [],
@@ -334,15 +323,7 @@ export function FfDashboard({
             bgcolor: 'background.paper',
           })}
         >
-          <DashboardCard
-            me={me}
-            isFulfillmentAdmin={isFulfillmentAdmin}
-            sellers={sellers}
-            catalogBusy={catalogBusy}
-            catalogError={catalogError}
-            onCreateSellerAccount={onCreateSellerAccount}
-            embedded
-          />
+          <DashboardCard me={me} isFulfillmentAdmin={isFulfillmentAdmin} embedded />
         </Paper>
       ) : null}
     </Stack>
