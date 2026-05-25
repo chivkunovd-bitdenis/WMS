@@ -64,8 +64,10 @@ async def create_request(
     )
     session.add(req)
     await session.commit()
-    await session.refresh(req)
-    return req
+    reloaded = await get_request(session, tenant_id, req.id)
+    if reloaded is None:
+        raise InboundIntakeError("request_not_found")
+    return reloaded
 
 
 async def list_requests(
@@ -740,5 +742,7 @@ async def reopen_distribution(
         raise InboundIntakeError("already_posted_partial")
     req.distribution_completed_at = None
     await session.commit()
-    await session.refresh(req)
-    return req
+    reloaded = await get_request(session, tenant_id, request_id)
+    if reloaded is None:
+        raise InboundIntakeError("request_not_found")
+    return reloaded
