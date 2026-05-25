@@ -5,7 +5,7 @@
 - What changed: экран «Товары» в портале селлера — колонки остаток, зарезерв., доступно и подсказка `(доступно N)` при резерве; e2e `seller-available-stock.spec.ts` (TC-S09-001); `TC_AUTOMATION_COVERAGE` / EN test-case note.
 - What did NOT change: API `inventory-balances/summary`; MP-диалог (уже показывал «Доступно на ФФ»); operational outbound у селлера.
 - Verification: `npm run build` ok; e2e `seller-available-stock.spec.ts` passed.
-- Commit: 819e233
+- Commit: c608196
 
 ## TASK-14 — 2026-05-25 — Хвосты MP unload + prod celery beat
 
