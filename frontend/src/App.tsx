@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from 'react'
 import './App.css'
-import { apiUrl } from './api'
+import { apiUrl, getStoredToken, setStoredToken } from './api'
+import { sellerPortalUrl } from './utils/portalUrls'
 import { Navigate, Route, Routes, useNavigate } from 'react-router-dom'
 import { ProfileLoadingScreen } from './screens/ProfileLoadingScreen'
 import { PublicAuthScreen } from './screens/PublicAuthScreen'
@@ -2323,9 +2324,11 @@ export default function App() {
     const isFulfillmentAdmin = me.role === 'fulfillment_admin'
     const isFulfillmentSeller = me.role === 'fulfillment_seller'
     if (isFulfillmentSeller) {
-      const sellerPortalUrl =
-        import.meta.env.VITE_SELLER_PORTAL_URL ?? 'http://localhost:15174'
-      window.location.assign(sellerPortalUrl)
+      const t = token ?? getStoredToken('fulfillment')
+      if (t) {
+        setStoredToken(t, 'seller')
+      }
+      window.location.assign(sellerPortalUrl())
       return null
     }
     const portal: 'seller' | 'ff' = 'ff'

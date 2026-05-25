@@ -9,6 +9,7 @@ import {
   Typography,
 } from '@mui/material'
 import type { AuthPortal } from '../hooks/useAuth'
+import { sellerPortalUrl } from '../utils/portalUrls'
 
 type Props = {
   variant: AuthPortal
@@ -204,17 +205,31 @@ export function PublicAuthScreen({
                 </Box>
               </form>
               {isFf ? (
-                <Button
-                  type="button"
-                  variant="text"
-                  color="primary"
-                  data-testid="go-to-register"
-                  onClick={() => setMode('register')}
-                  sx={{ mt: 1.5 }}
-                  fullWidth
-                >
-                  Регистрация организации (первый админ)
-                </Button>
+                <>
+                  <Button
+                    type="button"
+                    variant="text"
+                    color="primary"
+                    data-testid="go-to-seller-portal"
+                    href={sellerPortalUrl()}
+                    component="a"
+                    sx={{ mt: 1.5 }}
+                    fullWidth
+                  >
+                    Вход для селлера (портал /seller/)
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="text"
+                    color="primary"
+                    data-testid="go-to-register"
+                    onClick={() => setMode('register')}
+                    sx={{ mt: 1.5 }}
+                    fullWidth
+                  >
+                    Регистрация организации (первый админ)
+                  </Button>
+                </>
               ) : null}
             </Paper>
           ) : null}

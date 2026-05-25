@@ -6,6 +6,10 @@ COPY frontend/package.json frontend/package-lock.json /app/frontend/
 RUN npm ci
 
 COPY frontend /app/frontend
+ARG VITE_SELLER_PORTAL_URL=/seller/
+ARG VITE_FF_PORTAL_URL=/
+ENV VITE_SELLER_PORTAL_URL=$VITE_SELLER_PORTAL_URL
+ENV VITE_FF_PORTAL_URL=$VITE_FF_PORTAL_URL
 RUN npm run build
 
 

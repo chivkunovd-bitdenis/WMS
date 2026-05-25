@@ -17,6 +17,7 @@ import {
 } from '@mui/material'
 import { apiUrl } from '../../api'
 import { readApiErrorMessage } from '../../utils/readApiErrorMessage'
+import { sellerPortalUrl } from '../../utils/portalUrls'
 
 type SellerRow = { id: string; name: string }
 
@@ -84,9 +85,10 @@ export function SellersScreen({
 
       form.reset()
       await onRefresh()
+      const portalLink = sellerPortalUrl()
       setSuccess(
-        `Селлер «${seller.name}» создан. Передайте селлеру email ${email} и ссылку на портал селлера. ` +
-          'Первый вход: оставить пароль пустым — система попросит задать новый пароль.',
+        `Селлер «${seller.name}» создан. Передайте селлеру email ${email} и ссылку: ${portalLink} ` +
+          '(не корень сайта /). Первый вход: пароль пустой — система попросит задать новый.',
       )
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Не удалось добавить селлера.')

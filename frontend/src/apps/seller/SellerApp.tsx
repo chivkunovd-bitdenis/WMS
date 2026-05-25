@@ -3,6 +3,7 @@ import { Navigate, Route, Routes } from 'react-router-dom'
 import { apiUrl } from '../../api'
 import { useAuth } from '../../hooks/useAuth'
 import { readApiErrorMessage } from '../../utils/readApiErrorMessage'
+import { ffPortalUrl } from '../../utils/portalUrls'
 import { ProfileLoadingScreen } from '../../screens/ProfileLoadingScreen'
 import { PublicAuthScreen } from '../../screens/PublicAuthScreen'
 import { SellerDocumentsScreen } from '../../screens/v2/SellerDocumentsScreen'
@@ -108,7 +109,7 @@ export function SellerApp() {
     }
 
     if (me.role !== 'fulfillment_seller') {
-      window.location.assign('/')
+      window.location.assign(ffPortalUrl())
       return
     }
 
@@ -146,12 +147,10 @@ export function SellerApp() {
       return null
     }
     if (me.role !== 'fulfillment_seller') {
-      const ffPortalUrl =
-        import.meta.env.VITE_FF_PORTAL_URL ?? 'http://localhost:15173'
       return (
         <main className="shell" data-testid="seller-wrong-role">
           <p>Этот портал доступен только селлеру.</p>
-          <button type="button" onClick={() => window.location.assign(ffPortalUrl)}>
+          <button type="button" onClick={() => window.location.assign(ffPortalUrl())}>
             Перейти в портал фулфилмента
           </button>
         </main>
