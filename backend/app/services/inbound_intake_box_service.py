@@ -66,7 +66,7 @@ async def create_boxes_for_request(
             try:
                 await session.flush()
             except IntegrityError:
-                await session.expunge(box)
+                session.expunge(box)
                 continue
             created.append(box)
             break
