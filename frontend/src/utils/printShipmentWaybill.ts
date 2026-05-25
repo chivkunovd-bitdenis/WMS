@@ -3,10 +3,14 @@ export type WaybillLine = {
   product_name: string
   quantity: number
   shipped_qty?: number
+  received_qty?: number | null
   storage_location_code?: string | null
 }
 
-export type ShipmentWaybillDocKind = 'marketplace_unload' | 'operational_outbound'
+export type ShipmentWaybillDocKind =
+  | 'marketplace_unload'
+  | 'operational_outbound'
+  | 'inbound_intake'
 
 export type ShipmentWaybillData = {
   docKind: ShipmentWaybillDocKind
@@ -17,6 +21,8 @@ export type ShipmentWaybillData = {
   wbWarehouseLabel?: string | null
   plannedDate: string | null
   createdAt: string | null
+  plannedBoxCount?: number | null
+  actualBoxCount?: number | null
   lines: WaybillLine[]
   pickAllocations?: { location_code: string; sku_code: string; quantity: number }[]
 }
@@ -38,35 +44,60 @@ function docTitle(kind: ShipmentWaybillDocKind): string {
   if (kind === 'marketplace_unload') {
     return 'Накладная — отгрузка на маркетплейс'
   }
+  if (kind === 'inbound_intake') {
+    return 'Накладная — поставка на склад ФФ'
+  }
   return 'Накладная — отгрузка со склада'
 }
 
-/** Печать накладной отгрузки (A4, браузер). */
+function footerText(kind: ShipmentWaybillDocKind): string {
+  if (kind === 'inbound_intake') {
+    return 'Накладная для приёмки на складе. Сверка по составу и коробам. Факт — в системе WMS.'
+  }
+  return 'Печать для сверки перед вывозом. Факт отгрузки — в системе WMS.'
+}
+
+/** Печать накладной (A4, браузер). */
 export function printShipmentWaybill(data: ShipmentWaybillData): void {
   const isOperational = data.docKind === 'operational_outbound'
+  const isInbound = data.docKind === 'inbound_intake'
+
   const lineRows = data.lines
     .map((ln, i) => {
       const shipped =
         isOperational && ln.shipped_qty != null
           ? `<td align="right">${ln.shipped_qty}</td>`
           : ''
+      const received =
+        isInbound
+          ? `<td align="right">${ln.received_qty != null ? ln.received_qty : '—'}</td>`
+          : ''
       const cell =
         isOperational
           ? `<td>${escapeHtml(ln.storage_location_code ?? '—')}</td>`
           : ''
+      const qtyLabel = isInbound ? ln.quantity : ln.quantity
       return `<tr>
           <td>${i + 1}</td>
           <td>${escapeHtml(ln.sku_code)}</td>
           <td>${escapeHtml(ln.product_name)}</td>
           ${cell}
-          <td align="right">${ln.quantity}</td>
+          <td align="right">${qtyLabel}</td>
+          ${received}
           ${shipped}
         </tr>`
     })
     .join('')
 
   const headShipped = isOperational ? '<th align="right">Отгружено</th>' : ''
+  const headReceived = isInbound ? '<th align="right">Принято</th>' : ''
   const headCell = isOperational ? '<th>Ячейка</th>' : ''
+  const headQty = isInbound ? 'Заявлено' : 'Кол-во'
+
+  const boxMeta =
+    isInbound && (data.plannedBoxCount != null || data.actualBoxCount != null)
+      ? `<dt>Короба (план / факт)</dt><dd>${data.plannedBoxCount ?? '—'} / ${data.actualBoxCount ?? '—'}</dd>`
+      : ''
 
   const pickBlock =
     data.pickAllocations && data.pickAllocations.length > 0
@@ -88,6 +119,8 @@ export function printShipmentWaybill(data: ShipmentWaybillData): void {
     data.docKind === 'marketplace_unload'
       ? `<dt>Склад МП (WB)</dt><dd>${escapeHtml(data.wbWarehouseLabel ?? '—')}</dd>`
       : ''
+
+  const colSpan = 4 + (isOperational ? 2 : 0) + (isInbound ? 1 : 0)
 
   const html = `<!doctype html>
 <html>
@@ -116,18 +149,19 @@ export function printShipmentWaybill(data: ShipmentWaybillData): void {
       <dt>Склад ФФ</dt><dd>${escapeHtml(data.warehouseName)}</dd>
       <dt>Селлер</dt><dd>${escapeHtml(data.sellerName ?? '—')}</dd>
       ${wbMeta}
+      ${boxMeta}
       <dt>Плановая дата</dt><dd>${escapeHtml(data.plannedDate ?? '—')}</dd>
       <dt>Создано</dt><dd>${escapeHtml(data.createdAt ?? '—')}</dd>
     </dl>
     <h2>Состав</h2>
     <table>
       <thead>
-        <tr><th>#</th><th>SKU</th><th>Наименование</th>${headCell}<th align="right">Кол-во</th>${headShipped}</tr>
+        <tr><th>#</th><th>SKU</th><th>Наименование</th>${headCell}<th align="right">${headQty}</th>${headReceived}${headShipped}</tr>
       </thead>
-      <tbody>${lineRows || '<tr><td colspan="6">Нет строк</td></tr>'}</tbody>
+      <tbody>${lineRows || `<tr><td colspan="${colSpan}">Нет строк</td></tr>`}</tbody>
     </table>
     ${pickBlock}
-    <p class="foot">Печать для сверки перед вывозом. Факт отгрузки — в системе WMS.</p>
+    <p class="foot">${footerText(data.docKind)}</p>
   </body>
 </html>`
 
@@ -183,6 +217,18 @@ export function printOperationalOutboundWaybill(
 ): void {
   printShipmentWaybill({
     docKind: 'operational_outbound',
+    ...data,
+  })
+}
+
+export function printInboundSupplyWaybill(
+  data: Omit<
+    ShipmentWaybillData,
+    'docKind' | 'wbWarehouseLabel' | 'pickAllocations'
+  >,
+): void {
+  printShipmentWaybill({
+    docKind: 'inbound_intake',
     ...data,
   })
 }

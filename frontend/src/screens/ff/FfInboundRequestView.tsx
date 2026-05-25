@@ -31,6 +31,7 @@ import {
 import { alpha } from '@mui/material/styles'
 import { apiUrl } from '../../api'
 import { printBarcodeLabel } from '../../utils/printBarcodeLabel'
+import { printInboundSupplyWaybill } from '../../utils/printShipmentWaybill'
 import { readApiErrorMessage } from '../../utils/readApiErrorMessage'
 import { suggestNextLocationCode } from '../../utils/suggestNextLocationCode'
 import { renderBarcodeDataUrl } from '../../utils/renderBarcodeDataUrl'
@@ -79,6 +80,8 @@ type InboundDetail = {
   actual_box_count: number | null
   boxes_discrepancy: boolean
   has_discrepancy: boolean
+  seller_name?: string | null
+  created_at?: string | null
   distribution_completed_at: string | null
   boxes: InboundBox[]
   lines: InboundLine[]
@@ -1289,6 +1292,36 @@ export function FfInboundRequestView({ token, requestId, isFulfillmentAdmin, onC
                   Передать на склад
                 </Button>
               </>
+            ) : null}
+
+            {detail.lines.length > 0 ? (
+              <Button
+                variant="outlined"
+                startIcon={<PrintOutlined />}
+                disabled={busy}
+                data-testid="ff-inbound-print-waybill"
+                onClick={() => {
+                  const wh = requestWarehouse
+                  printInboundSupplyWaybill({
+                    documentId: detail.id,
+                    statusLabel: statusRu(detail.status),
+                    warehouseName: wh ? `${wh.name} (${wh.code})` : detail.warehouse_id,
+                    sellerName: detail.seller_name ?? null,
+                    plannedDate: detail.planned_delivery_date,
+                    createdAt: detail.created_at ?? null,
+                    plannedBoxCount: detail.planned_box_count,
+                    actualBoxCount: detail.actual_box_count,
+                    lines: detail.lines.map((ln) => ({
+                      sku_code: ln.sku_code,
+                      product_name: ln.product_name,
+                      quantity: ln.expected_qty,
+                      received_qty: ln.actual_qty,
+                    })),
+                  })
+                }}
+              >
+                Печать накладной
+              </Button>
             ) : null}
 
             <Button variant="outlined" disabled={busy} onClick={onClose} data-testid="ff-inbound-close">

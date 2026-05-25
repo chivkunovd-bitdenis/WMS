@@ -106,6 +106,7 @@ async def get_request(
             InboundIntakeRequest.tenant_id == tenant_id,
         )
         .options(
+            selectinload(InboundIntakeRequest.seller),
             selectinload(InboundIntakeRequest.lines).options(
                 selectinload(InboundIntakeLine.product),
                 selectinload(InboundIntakeLine.storage_location),

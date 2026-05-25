@@ -139,6 +139,9 @@ class InboundIntakeRequestOut(BaseModel):
     actual_box_count: int | None = None
     boxes_discrepancy: bool = False
     has_discrepancy: bool = False
+    seller_id: str | None = None
+    seller_name: str | None = None
+    created_at: str | None = None
     distribution_completed_at: str | None = None
     boxes: list[InboundIntakeBoxOut] = Field(default_factory=list)
     lines: list[InboundIntakeLineOut]
@@ -240,6 +243,9 @@ def _request_out(
         actual_box_count=r.actual_box_count,
         boxes_discrepancy=bool(r.boxes_discrepancy),
         has_discrepancy=bool(r.has_discrepancy),
+        seller_id=str(r.seller_id) if r.seller_id is not None else None,
+        seller_name=r.seller.name if r.seller is not None else None,
+        created_at=r.created_at.isoformat() if r.created_at is not None else None,
         distribution_completed_at=r.distribution_completed_at.isoformat()
         if r.distribution_completed_at is not None
         else None,
