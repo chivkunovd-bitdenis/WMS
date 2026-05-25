@@ -1,4 +1,5 @@
 import type { Page } from '@playwright/test';
+import { expect } from '@playwright/test';
 
 import { waitForPostOk } from './api-waits';
 
@@ -18,6 +19,8 @@ export async function loginAsSeller(
   opts?: { firstTime?: boolean },
 ): Promise<void> {
   const firstTime = opts?.firstTime ?? true;
+  await page.goto('/seller/');
+  await expect(page.getByTestId('login-form')).toBeVisible();
   await page.getByTestId('login-form').getByLabel('Email').fill(email);
   const pass = page.getByTestId('login-form').getByLabel('Пароль');
   if (firstTime) {
@@ -43,4 +46,5 @@ export async function loginAsSeller(
       page.getByTestId('seller-password-setup-submit').click(),
     ]);
   }
+  await expect(page.getByTestId('app-frame')).toBeVisible();
 }

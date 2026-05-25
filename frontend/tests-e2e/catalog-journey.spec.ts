@@ -51,7 +51,8 @@ test('register then create warehouse and location with barcode print preview', a
   await expect(page.getByTestId('create-location')).toBeEnabled();
   await page.getByTestId('create-location').click();
   await expect(page.getByTestId('location-form')).toBeVisible();
-  await page.getByTestId('location-code').locator('input').fill('A-01');
+  await page.getByTestId('location-rack').locator('input').fill('A');
+  await expect(page.getByTestId('location-code').locator('input')).toHaveValue('A 1.1');
   const [locPost, locList] = await Promise.all([
     waitForPostOk(page, '/api/warehouses', (u) => u.includes('/locations')),
     waitForLocationsListGet(page),
@@ -60,16 +61,17 @@ test('register then create warehouse and location with barcode print preview', a
   expect(locPost.ok()).toBeTruthy();
   expect(locList.ok()).toBeTruthy();
 
-  const locRow = page.getByTestId('location-row').filter({ hasText: 'A-01' });
+  const locRow = page.getByTestId('location-row').filter({ hasText: 'A 1.1' });
   await expect(locRow).toBeVisible();
 
-  const locJson = (await locPost.json()) as { barcode?: string };
+  const locJson = (await locPost.json()) as { barcode?: string; code?: string };
   const locBarcode = String(locJson.barcode ?? '');
+  const locCode = String(locJson.code ?? 'A 1.1');
   expect(locBarcode).toMatch(/^LOC-[A-Z0-9]{12}$/);
   await expect(locRow).toContainText(locBarcode);
 
   await locRow.getByTestId('location-print').click();
   await expect(page.getByTestId('location-print-preview')).toBeVisible();
-  await expect(page.getByTestId('location-print-preview')).toContainText('Ячейка № A-01');
+  await expect(page.getByTestId('location-print-preview')).toContainText(`Ячейка № ${locCode}`);
   await expect(page.getByTestId('location-print-preview')).toContainText(locBarcode);
 });

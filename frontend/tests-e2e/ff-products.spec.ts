@@ -118,7 +118,7 @@ test('ff products: filter by seller and sort by name/quantity', async ({ page })
     const { fulfillInboundViaBoxScans } = await import('./inbound-boxes-helpers')
     await fulfillInboundViaBoxScans(
       page.request,
-      { Authorization: `Bearer ${token}` },
+      h,
       req.id,
       primBody.boxes,
       skuCode,
