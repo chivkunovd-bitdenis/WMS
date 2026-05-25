@@ -5,7 +5,7 @@
 - What changed: UI «Изменено ФФ» (`ff_modified`) в списке и карточке отгрузки на МП; `celery_beat` в `docker-compose.prod.yml` / `docker-compose.yml`; расписание `wms.wb_mp_warehouses_daily_sync` (03:00 UTC); плановая дата отгрузки на МП в общем списке FF.
 - What did NOT change: operational outbound в кабинете селлера; деплой на сервер (вручную `git pull` + compose prod).
 - Verification: `ruff`/`mypy` celery_app; `npm run build` ok.
-- Commit: (pending)
+- Commit: e31fd17
 
 ## TASK-13 — 2026-05-24 — Отгрузка на МП от селлера (TC-NEW-MP)
 
