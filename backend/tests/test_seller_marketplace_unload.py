@@ -6,8 +6,6 @@ import time
 
 import pytest
 from httpx import AsyncClient
-from inbound_box_intake_helpers import fulfill_inbound_via_box_scans
-
 from test_marketplace_unload_and_discrepancy_acts import (
     E2E_BARCODE,
     _link_product_wb_barcode,
@@ -16,7 +14,11 @@ from test_marketplace_unload_and_discrepancy_acts import (
 )
 
 
-async def _seller_headers(async_client: AsyncClient, admin_h: dict[str, str], seller_id: str) -> dict[str, str]:
+async def _seller_headers(
+    async_client: AsyncClient,
+    admin_h: dict[str, str],
+    seller_id: str,
+) -> dict[str, str]:
     email = f"mp-sl-{time.time()}@example.com"
     acc = await async_client.post(
         "/auth/seller-accounts",
@@ -48,7 +50,9 @@ async def test_seller_mp_unload_plan_reserves_and_ff_confirms(
         },
     )
     ah = {"Authorization": f"Bearer {reg.json()['access_token']}"}
-    wh = await async_client.post("/warehouses", headers=ah, json={"name": "W", "code": f"w-{suffix}"})
+    wh = await async_client.post(
+        "/warehouses", headers=ah, json={"name": "W", "code": f"w-{suffix}"}
+    )
     wid = wh.json()["id"]
     sid, wb_wid = await _seller_wb_mp_warehouse(async_client, ah, monkeypatch)
     sh = await _seller_headers(async_client, ah, sid)
@@ -66,8 +70,12 @@ async def test_seller_mp_unload_plan_reserves_and_ff_confirms(
         },
     )
     pid = pr.json()["id"]
-    await _link_product_wb_barcode(async_client, ah, seller_id=sid, product_id=pid, monkeypatch=monkeypatch)
-    loc_id = await _post_inventory(async_client, ah, warehouse_id=wid, product_id=pid, qty=10, location_code="MP-A")
+    await _link_product_wb_barcode(
+        async_client, ah, seller_id=sid, product_id=pid, monkeypatch=monkeypatch
+    )
+    loc_id = await _post_inventory(
+        async_client, ah, warehouse_id=wid, product_id=pid, qty=10, location_code="MP-A"
+    )
 
     stock = await async_client.get(
         "/operations/inventory-balances/summary",
@@ -216,7 +224,9 @@ async def test_seller_cannot_see_other_seller_mp_unload(
         },
     )
     ah = {"Authorization": f"Bearer {reg.json()['access_token']}"}
-    wh = await async_client.post("/warehouses", headers=ah, json={"name": "W", "code": f"w-{suffix}"})
+    wh = await async_client.post(
+        "/warehouses", headers=ah, json={"name": "W", "code": f"w-{suffix}"}
+    )
     wid = wh.json()["id"]
     s1 = await async_client.post("/sellers", headers=ah, json={"name": "S1"})
     s2 = await async_client.post("/sellers", headers=ah, json={"name": "S2"})
@@ -243,7 +253,9 @@ async def test_seller_cannot_see_other_seller_mp_unload(
 
 
 @pytest.mark.asyncio
-async def test_seller_can_read_wb_mp_warehouses(async_client: AsyncClient, monkeypatch: pytest.MonkeyPatch) -> None:
+async def test_seller_can_read_wb_mp_warehouses(
+    async_client: AsyncClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
     # TC-NEW-MP-15
     suffix = str(int(time.time() * 1000))
     reg = await async_client.post(

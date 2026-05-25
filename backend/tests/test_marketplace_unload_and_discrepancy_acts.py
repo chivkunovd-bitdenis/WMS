@@ -6,7 +6,7 @@ import uuid
 
 import pytest
 from httpx import AsyncClient
-from inbound_box_intake_helpers import fulfill_inbound_via_box_scans
+from inbound_box_intake_helpers import fulfill_inbound_via_box_scans, post_primary_accept
 
 from app.services.background_job_service import JOB_TYPE_WILDBERRIES_CARDS_SYNC
 
@@ -123,7 +123,7 @@ async def _post_inventory(
     )
     assert line.status_code == 201, line.text
     await async_client.post(f"{base_in}/{rid}/submit", headers=h)
-    await async_client.post(f"{base_in}/{rid}/primary-accept", headers=h, json={"actual_box_count": 1})
+    await post_primary_accept(async_client, base_in, rid, h)
     sku = line.json()["sku_code"]
     await fulfill_inbound_via_box_scans(async_client, h, rid, sku, qty)
     verify = await async_client.post(f"{base_in}/{rid}/verify", headers=h)

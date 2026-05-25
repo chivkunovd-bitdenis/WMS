@@ -6,7 +6,7 @@ from fastapi import APIRouter, Depends
 from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.api.deps import get_current_user, require_ff_or_seller, require_fulfillment_admin
+from app.api.deps import require_ff_or_seller
 from app.db.session import get_db
 from app.models.user import User
 from app.services import wb_mp_warehouse_service as wh_svc

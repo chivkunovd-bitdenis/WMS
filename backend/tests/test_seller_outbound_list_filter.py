@@ -4,7 +4,7 @@ import time
 
 import pytest
 from httpx import AsyncClient
-from inbound_box_intake_helpers import fulfill_inbound_via_box_scans
+from inbound_box_intake_helpers import fulfill_inbound_via_box_scans, post_primary_accept
 
 
 @pytest.mark.asyncio
@@ -82,7 +82,7 @@ async def test_seller_outbound_list_only_own_seller_requests(
             },
         )
         await async_client.post(f"{base_in}/{rid}/submit", headers=ah)
-        await async_client.post(f"{base_in}/{rid}/primary-accept", headers=ah, json={"actual_box_count": 1})
+        await post_primary_accept(async_client, base_in, rid, ah)
         await fulfill_inbound_via_box_scans(async_client, ah, rid, product_sku, qty)
         await async_client.post(f"{base_in}/{rid}/verify", headers=ah)
         await async_client.post(f"{base_in}/{rid}/post", headers=ah)

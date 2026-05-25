@@ -4,7 +4,7 @@ import time
 
 import pytest
 from httpx import AsyncClient
-from inbound_box_intake_helpers import fulfill_inbound_via_box_scans
+from inbound_box_intake_helpers import fulfill_inbound_via_box_scans, post_primary_accept
 
 
 @pytest.mark.asyncio
@@ -68,7 +68,7 @@ async def test_inbound_distribution_lines_validate_limits_and_lock(
     assert ln.status_code == 201, ln.text
 
     await async_client.post(f"{base}/{rid}/submit", headers=ah)
-    prim = await async_client.post(f"{base}/{rid}/primary-accept", headers=ah, json={"actual_box_count": 1})
+    prim = await post_primary_accept(async_client, base, rid, ah)
     assert prim.status_code == 200, prim.text
     assert prim.json()["status"] == "primary_accepted"
 

@@ -538,7 +538,11 @@ async def list_locations_for_product_in_warehouse(
     rows = await list_location_balances_for_products_in_warehouse(
         session, tenant_id, warehouse_id, [product_id]
     )
-    product_rows = [(loc_id, code, on_hand, rsv) for pid, loc_id, code, on_hand, rsv in rows if pid == product_id]
+    product_rows = [
+        (loc_id, code, on_hand, rsv)
+        for pid, loc_id, code, on_hand, rsv in rows
+        if pid == product_id
+    ]
     product_rows.sort(key=lambda x: x[2], reverse=True)
     return product_rows
 

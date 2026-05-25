@@ -45,9 +45,10 @@ class MarketplaceUnloadError(Exception):
 def assert_request_visible(user: User, req: MarketplaceUnloadRequest) -> None:
     from app.core.roles import FULFILLMENT_SELLER
 
-    if user.role == FULFILLMENT_SELLER:
-        if user.seller_id is None or req.seller_id != user.seller_id:
-            raise MarketplaceUnloadError("not_found")
+    if user.role == FULFILLMENT_SELLER and (
+        user.seller_id is None or req.seller_id != user.seller_id
+    ):
+        raise MarketplaceUnloadError("not_found")
 
 
 async def create_request(

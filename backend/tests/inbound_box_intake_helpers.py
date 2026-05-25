@@ -1,6 +1,19 @@
 from __future__ import annotations
 
-from httpx import AsyncClient
+from httpx import AsyncClient, Response
+
+
+async def post_primary_accept(
+    async_client: AsyncClient,
+    base: str,
+    request_id: str,
+    headers: dict[str, str],
+) -> Response:
+    return await async_client.post(
+        f"{base}/{request_id}/primary-accept",
+        headers=headers,
+        json={"actual_box_count": 1},
+    )
 
 
 async def fulfill_inbound_via_box_scans(
