@@ -671,6 +671,9 @@ async def complete_distribution(
     res = await session.execute(stmt)
     rows = list(res.scalars().all())
 
+    if not rows:
+        raise InboundIntakeError("distribution_incomplete")
+
     sum_by_product: dict[uuid.UUID, int] = {}
     for r in rows:
         if r.quantity < 1:
@@ -684,6 +687,10 @@ async def complete_distribution(
         line = lines_by_product[r.product_id]
         if max(line.posted_qty, sum_by_product[r.product_id]) > accepted:
             raise InboundIntakeError("qty_exceeds_accepted")
+
+    for product_id, accepted in accepted_by_product.items():
+        if accepted > 0 and sum_by_product.get(product_id, 0) < accepted:
+            raise InboundIntakeError("distribution_incomplete")
 
     distributed_before_by_product: dict[uuid.UUID, int] = {}
     for r in rows:
@@ -711,6 +718,27 @@ async def complete_distribution(
     if req.distribution_completed_at is None:
         req.distribution_completed_at = datetime.now(UTC)
     _maybe_complete_request(req)
+    await session.commit()
+    await session.refresh(req)
+    return req
+
+
+async def reopen_distribution(
+    session: AsyncSession,
+    tenant_id: uuid.UUID,
+    request_id: uuid.UUID,
+) -> InboundIntakeRequest:
+    """Снять фиксацию распределения, если оприходование ещё не выполнялось."""
+    req = await get_request(session, tenant_id, request_id)
+    if req is None:
+        raise InboundIntakeError("request_not_found")
+    if req.status != STATUS_VERIFIED:
+        raise InboundIntakeError("not_reopenable")
+    if req.distribution_completed_at is None:
+        raise InboundIntakeError("distribution_not_completed")
+    if any(ln.posted_qty > 0 for ln in req.lines):
+        raise InboundIntakeError("already_posted_partial")
+    req.distribution_completed_at = None
     await session.commit()
     await session.refresh(req)
     return req

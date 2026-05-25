@@ -1,11 +1,18 @@
 # TASKLOG
 
+## TASK-20 — 2026-05-25 — Поставка: пустое распределение не оприходует; reopen
+
+- What changed: `complete_distribution` требует строки и полное покрытие принятого (`distribution_incomplete`); `POST .../distribution-reopen` если `posted_qty=0`; UI предупреждение + кнопка «Открыть распределение заново», блок «Завершить» при остатке «без ячейки»; подсказка в каталоге «Товары».
+- What did NOT change: логика пересчёта/коробов; ff-catalog по-прежнему только с движениями.
+- Verification: `pytest tests/test_inbound_distribution.py` (3 passed); prod deploy `194.87.96.144:8088`.
+- Commit: 5998780
+
 ## TASK-19 — 2026-05-25 — Селлеры: MUI + email в одной форме
 
 - What changed: `SellersScreen` на MUI (как «Товары»); форма название + email → `POST /sellers` + `POST /auth/seller-accounts` без пароля; `docs/UI_DESIGN_SYSTEM_RU.md`, онбординг в `MVP_DECISIONS_RU.md` + `AGENTS.md`; дашборд — ссылка в «Селлеры».
 - What did NOT change: API не отдаёт временный пароль; логика `must_set_password` / первый вход с пустым паролем.
-- Verification: `npm run build`; e2e `sellers-create-ui` (полный онбординг).
-- Commit: (pending)
+- Verification: `npm run build`; e2e `sellers-create-ui` (полный онбординг); prod deploy.
+- Commit: dd1ab61
 
 ## TASK-18 — 2026-05-25 — Раздел «Селлеры» в портале FF
 

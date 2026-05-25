@@ -1305,6 +1305,7 @@ async def complete_distribution(
             "qty_exceeds_accepted",
             "product_not_on_request",
             "product_not_accepted",
+            "distribution_incomplete",
         ):
             raise HTTPException(
                 status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
@@ -1318,3 +1319,34 @@ async def complete_distribution(
             detail="request_missing",
         )
     return _request_out(r2)
+
+
+@router.post(
+    "/{request_id}/distribution-reopen",
+    response_model=InboundIntakeRequestOut,
+)
+async def reopen_distribution_route(
+    request_id: uuid.UUID,
+    user: Annotated[User, Depends(require_fulfillment_admin)],
+    session: Annotated[AsyncSession, Depends(get_db)],
+) -> InboundIntakeRequestOut:
+    try:
+        r = await svc.reopen_distribution(session, user.tenant_id, request_id)
+    except InboundIntakeError as exc:
+        code = exc.code
+        if code == "request_not_found":
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=code,
+            ) from None
+        if code in ("not_reopenable", "distribution_not_completed", "already_posted_partial"):
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail=code,
+            ) from None
+        raise
+    lines_out: list[InboundIntakeLineOut] = []
+    for ln in r.lines:
+        p = ln.product
+        lines_out.append(_line_out_from_orm(ln, p))
+    return _request_out(r, lines=lines_out)

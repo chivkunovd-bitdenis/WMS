@@ -551,10 +551,15 @@ export function FfInboundRequestView({ token, requestId, isFulfillmentAdmin, onC
 
   const distributionCompleted = Boolean(detail?.distribution_completed_at)
   const distributionEditable = isFulfillmentAdmin && !distributionCompleted
+  const canReopenDistribution =
+    Boolean(detail) &&
+    distributionCompleted &&
+    detail!.status === 'verified' &&
+    detail!.lines.every((ln) => ln.posted_qty === 0)
 
   const validateDistributionDraft = (): string | null => {
     if (!detail) return 'Заявка не загружена.'
-    // allow empty draft: everything goes to "Без ячейки"
+    // пустые строки черновика игнорируем; завершение без полного распределения блокируется отдельно
     const acceptedByProductId = new Map(distributableProducts.map((p) => [p.product_id, p.accepted_qty]))
     const sumByProductId = new Map<string, number>()
 
@@ -637,8 +642,38 @@ export function FfInboundRequestView({ token, requestId, isFulfillmentAdmin, onC
     }
   }
 
+  const reopenDistribution = async () => {
+    if (!detail) return
+    setDistBusy(true)
+    setDistError(null)
+    try {
+      const res = await fetch(
+        apiUrl(`/operations/inbound-intake-requests/${requestId}/distribution-reopen`),
+        { method: 'POST', headers: authHeaders },
+      )
+      if (!res.ok) {
+        setDistError(await readApiErrorMessage(res))
+        return
+      }
+      await loadDetail()
+      await loadDistribution()
+      setDistOpen(true)
+    } catch (e) {
+      setDistError(e instanceof Error ? e.message : 'Не удалось открыть распределение.')
+    } finally {
+      setDistBusy(false)
+    }
+  }
+
   const completeDistribution = async () => {
     if (!detail) return
+    if (hasNoCellPending && distLines.every((r) => !r.product_id || !r.storage_location_id)) {
+      setDistError(
+        'Распределите всё принятое количество по ячейкам. Пока есть остаток «без ячейки» — товар не попадёт в складской каталог.',
+      )
+      setDistOpen(true)
+      return
+    }
     setDistBusy(true)
     setDistError(null)
     try {
@@ -1762,10 +1797,10 @@ export function FfInboundRequestView({ token, requestId, isFulfillmentAdmin, onC
                       </Typography>
                       <Typography variant="body2" color="text.secondary">
                         {distributionCompleted
-                          ? 'Распределение зафиксировано, правки недоступны.'
-                          : detail.status === 'verified'
-                            ? 'Добавьте строки (товар + ячейка + кол-во) или нажмите «Завершить распределение» без строк — остаток уйдёт в «Без ячейки».'
-                            : 'Станет доступно после «Завершить пересчёт» (статус «Проверено на складе»).'}
+                          ? hasNoCellPending
+                            ? 'Распределение зафиксировано без ячеек — товар не попал на склад. Откройте заново и распределите всё принятое.'
+                            : 'Распределение зафиксировано, правки недоступны.'
+                          : 'Распределите всё принятое количество по ячейкам, затем «Завершить распределение» — только тогда товар появится в разделе «Товары».'}
                       </Typography>
                       {requestWarehouse ? (
                         <Typography
@@ -1791,6 +1826,14 @@ export function FfInboundRequestView({ token, requestId, isFulfillmentAdmin, onC
                   {distError ? (
                     <Alert severity="error" sx={{ mt: 2 }} data-testid="ff-inbound-distribution-error">
                       {distError}
+                    </Alert>
+                  ) : null}
+
+                  {distributionCompleted && hasNoCellPending ? (
+                    <Alert severity="warning" sx={{ mt: 2 }} data-testid="ff-inbound-distribution-stuck-empty">
+                      Распределение зафиксировано, но принятый товар не разложен по ячейкам — в разделе{' '}
+                      <strong>Товары</strong> остатков не будет. Откройте распределение заново и укажите ячейки
+                      для всего принятого количества.
                     </Alert>
                   ) : null}
 
@@ -1856,13 +1899,23 @@ export function FfInboundRequestView({ token, requestId, isFulfillmentAdmin, onC
                             </Button>
                             <Button
                               variant="contained"
-                              disabled={distBusy}
+                              disabled={distBusy || hasNoCellPending}
                               onClick={() => void completeDistribution()}
                               data-testid="ff-inbound-distribution-complete"
                             >
                               Завершить распределение
                             </Button>
                           </>
+                        ) : canReopenDistribution ? (
+                          <Button
+                            variant="outlined"
+                            color="warning"
+                            disabled={distBusy}
+                            onClick={() => void reopenDistribution()}
+                            data-testid="ff-inbound-distribution-reopen"
+                          >
+                            Открыть распределение заново
+                          </Button>
                         ) : null}
                       </Stack>
 

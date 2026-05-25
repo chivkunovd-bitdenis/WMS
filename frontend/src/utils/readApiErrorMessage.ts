@@ -3,6 +3,11 @@ const API_DETAIL_MESSAGES_RU: Record<string, string> = {
     'Назначьте ячейку на каждой строке с количеством перед отправкой заявки.',
   insufficient_available: 'Недостаточно доступного остатка в выбранной ячейке.',
   submit_empty: 'Добавьте хотя бы одну строку в заявку.',
+  distribution_incomplete:
+    'Распределите всё принятое количество по ячейкам перед завершением — иначе товар не попадёт на склад.',
+  distribution_not_completed: 'Распределение ещё не зафиксировано.',
+  not_reopenable: 'Нельзя открыть распределение заново на этом статусе заявки.',
+  already_posted_partial: 'Часть товара уже оприходована — отмена фиксации недоступна.',
 }
 
 export async function readApiErrorMessage(res: Response): Promise<string> {

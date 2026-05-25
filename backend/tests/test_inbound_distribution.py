@@ -1,10 +1,15 @@
 from __future__ import annotations
 
 import time
+import uuid
+from datetime import UTC, datetime
 
 import pytest
 from httpx import AsyncClient
 from inbound_box_intake_helpers import fulfill_inbound_via_box_scans, post_primary_accept
+
+from app.db.session import SessionLocal
+from app.models.inbound_intake import InboundIntakeRequest
 
 
 @pytest.mark.asyncio
@@ -126,4 +131,109 @@ async def test_inbound_distribution_lines_validate_limits_and_lock(
     )
     assert locked.status_code == 409, locked.text
     assert locked.json()["detail"] == "distribution_completed"
+
+
+@pytest.mark.asyncio
+async def test_empty_distribution_complete_rejected(async_client: AsyncClient) -> None:
+    suffix = str(int(time.time() * 1000))
+    reg = await async_client.post(
+        "/auth/register",
+        json={
+            "organization_name": "Dist Empty Co",
+            "slug": f"dist-empty-{suffix}",
+            "admin_email": f"dist-empty-{suffix}@example.com",
+            "password": "password123",
+        },
+    )
+    assert reg.status_code == 200, reg.text
+    ah = {"Authorization": f"Bearer {reg.json()['access_token']}"}
+
+    wh = await async_client.post(
+        "/warehouses",
+        headers=ah,
+        json={"name": "W", "code": f"de-{suffix}"},
+    )
+    wid = wh.json()["id"]
+    pr = await async_client.post(
+        "/products",
+        headers=ah,
+        json={
+            "name": "P",
+            "sku_code": f"SKU-DE-{suffix}",
+            "length_mm": 1,
+            "width_mm": 1,
+            "height_mm": 1,
+        },
+    )
+    pid = pr.json()["id"]
+    sku = pr.json()["sku_code"]
+
+    base = "/operations/inbound-intake-requests"
+    rid = (await async_client.post(base, headers=ah, json={"warehouse_id": wid})).json()["id"]
+    await async_client.post(
+        f"{base}/{rid}/lines", headers=ah, json={"product_id": pid, "expected_qty": 3}
+    )
+    await async_client.post(f"{base}/{rid}/submit", headers=ah)
+    await post_primary_accept(async_client, base, rid, ah)
+    await fulfill_inbound_via_box_scans(async_client, ah, rid, sku, 3)
+    await async_client.post(f"{base}/{rid}/verify", headers=ah)
+
+    done = await async_client.post(f"{base}/{rid}/distribution-complete", headers=ah)
+    assert done.status_code == 422, done.text
+    assert done.json()["detail"] == "distribution_incomplete"
+
+
+@pytest.mark.asyncio
+async def test_distribution_reopen_after_stuck_lock(async_client: AsyncClient) -> None:
+    suffix = str(int(time.time() * 1000))
+    reg = await async_client.post(
+        "/auth/register",
+        json={
+            "organization_name": "Dist Reopen Co",
+            "slug": f"dist-reopen-{suffix}",
+            "admin_email": f"dist-reopen-{suffix}@example.com",
+            "password": "password123",
+        },
+    )
+    ah = {"Authorization": f"Bearer {reg.json()['access_token']}"}
+
+    wh = await async_client.post(
+        "/warehouses",
+        headers=ah,
+        json={"name": "W", "code": f"dr-{suffix}"},
+    )
+    wid = wh.json()["id"]
+    pr = await async_client.post(
+        "/products",
+        headers=ah,
+        json={
+            "name": "P",
+            "sku_code": f"SKU-DR-{suffix}",
+            "length_mm": 1,
+            "width_mm": 1,
+            "height_mm": 1,
+        },
+    )
+    pid = pr.json()["id"]
+    sku = pr.json()["sku_code"]
+
+    base = "/operations/inbound-intake-requests"
+    rid = (await async_client.post(base, headers=ah, json={"warehouse_id": wid})).json()["id"]
+    await async_client.post(
+        f"{base}/{rid}/lines", headers=ah, json={"product_id": pid, "expected_qty": 2}
+    )
+    await async_client.post(f"{base}/{rid}/submit", headers=ah)
+    await post_primary_accept(async_client, base, rid, ah)
+    await fulfill_inbound_via_box_scans(async_client, ah, rid, sku, 2)
+    await async_client.post(f"{base}/{rid}/verify", headers=ah)
+
+    async with SessionLocal() as session:
+        req = await session.get(InboundIntakeRequest, uuid.UUID(rid))
+        assert req is not None
+        req.distribution_completed_at = datetime.now(UTC)
+        await session.commit()
+
+    reopen = await async_client.post(f"{base}/{rid}/distribution-reopen", headers=ah)
+    assert reopen.status_code == 200, reopen.text
+    assert reopen.json()["distribution_completed_at"] is None
 

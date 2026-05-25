@@ -229,6 +229,10 @@ export function FfProductsCatalogScreen({ token, authHeaders, sellers }: Props) 
                   <Typography variant="body2" color="text.secondary">
                     Пока нет товаров.
                   </Typography>
+                  <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5 }}>
+                    Остатки появляются после приёмки: на заявке поставки нужно распределить принятое
+                    количество по ячейкам и завершить распределение (статус «Оприходовано»).
+                  </Typography>
                 </TableCell>
               </TableRow>
             ) : null}
