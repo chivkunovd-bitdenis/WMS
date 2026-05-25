@@ -9,7 +9,6 @@ import {
   List,
   ListItemButton,
   ListItemText,
-  ListSubheader,
   Toolbar,
   Typography,
 } from '@mui/material'
@@ -201,10 +200,9 @@ export function AuthedAppLayout({
             >
               <ListItemText primary="Поставки и отгрузки" />
             </ListItemButton>
-            <ListItemButton component={NavLink} to="/app/catalog" data-testid="nav-ff-warehouses">
-              <ListItemText primary="Склады и ячейки" />
+            <ListItemButton component={NavLink} to="/app/catalog" data-testid="nav-catalog">
+              <ListItemText primary="Каталог" />
             </ListItemButton>
-            <ListSubheader sx={{ bgcolor: 'transparent', lineHeight: 2 }}>Каталог</ListSubheader>
             <ListItemButton component={NavLink} to={`${base}/products`} data-testid="nav-ff-products">
               <ListItemText primary="Товары" />
             </ListItemButton>

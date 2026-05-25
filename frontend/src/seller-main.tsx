@@ -7,10 +7,13 @@ import './ui/ui.css'
 import { muiTheme } from './mui/theme'
 import { SellerApp } from './apps/seller/SellerApp'
 
+const sellerRouterBasename =
+  import.meta.env.VITE_SELLER_ROUTER_BASENAME?.trim() || '/seller'
+
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
     <ThemeProvider theme={muiTheme}>
-      <BrowserRouter basename="/seller">
+      <BrowserRouter basename={sellerRouterBasename}>
         <SellerApp />
       </BrowserRouter>
     </ThemeProvider>

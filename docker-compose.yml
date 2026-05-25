@@ -1,5 +1,5 @@
 # Порты на хосте по умолчанию вынесены из «типичных» 8000/5173/5432 — см. README.
-# Переопределение: WMS_DB_PORT, WMS_API_PORT, WMS_WEB_PORT в .env или в shell.
+# Переопределение: WMS_DB_PORT, WMS_API_PORT, WMS_WEB_PORT, WMS_SELLER_WEB_PORT в .env или в shell.
 
 services:
   db:
@@ -75,4 +75,15 @@ services:
     ports:
       - "${WMS_WEB_PORT:-15173}:80"
     volumes:
-      - ./frontend/deploy/Caddyfile.local:/etc/caddy/Caddyfile:ro
+      - ./frontend/deploy/Caddyfile.ff.local:/etc/caddy/Caddyfile:ro
+
+  web_seller:
+    build:
+      context: .
+      dockerfile: frontend/Dockerfile.seller.prod
+    depends_on:
+      - api
+    ports:
+      - "${WMS_SELLER_WEB_PORT:-15174}:80"
+    volumes:
+      - ./frontend/deploy/Caddyfile.seller.local:/etc/caddy/Caddyfile:ro

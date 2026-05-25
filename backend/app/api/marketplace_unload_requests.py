@@ -1,26 +1,31 @@
 from __future__ import annotations
 
 import uuid
+from datetime import date
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel, Field
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.api.deps import require_fulfillment_admin
+from app.api.deps import require_ff_or_seller, require_fulfillment_admin
+from app.core.roles import FULFILLMENT_ADMIN, FULFILLMENT_SELLER
 from app.db.session import get_db
 from app.models.marketplace_unload import (
     MarketplaceUnloadBox,
     MarketplaceUnloadBoxLine,
     MarketplaceUnloadLine,
+    MarketplaceUnloadPickAllocation,
     MarketplaceUnloadRequest,
 )
 from app.models.seller import Seller
 from app.models.user import User
 from app.services import marketplace_unload_box_service as box_svc
+from app.services import marketplace_unload_pick_service as pick_svc
 from app.services import marketplace_unload_service as svc
 from app.services.catalog_service import get_warehouse
 from app.services.marketplace_unload_box_service import MarketplaceUnloadBoxError
+from app.services.marketplace_unload_pick_service import MarketplaceUnloadPickError
 from app.services.marketplace_unload_service import MarketplaceUnloadError
 
 # Продукт (RU): отгрузка фулфилмента на маркетплейс. Имя префикса API — историческое.
@@ -36,8 +41,31 @@ class MarketplaceUnloadRequestCreate(BaseModel):
     wb_mp_warehouse_id: int | None = Field(default=None, ge=1, le=2_000_000_000)
 
 
+class SellerMarketplaceUnloadRequestCreate(BaseModel):
+    warehouse_id: uuid.UUID
+    wb_mp_warehouse_id: int | None = Field(default=None, ge=1, le=2_000_000_000)
+
+
 class MarketplaceUnloadRequestUpdate(BaseModel):
     wb_mp_warehouse_id: int = Field(ge=1, le=2_000_000_000)
+
+
+class MarketplaceUnloadConfirmBody(BaseModel):
+    planned_shipment_date: date | None = None
+
+
+class MarketplaceUnloadLineBulkItem(BaseModel):
+    product_id: uuid.UUID
+    quantity: int = Field(ge=0, le=1_000_000_000)
+
+
+class MarketplaceUnloadLinesBulkReplace(BaseModel):
+    lines: list[MarketplaceUnloadLineBulkItem] = Field(default_factory=list)
+
+
+class MarketplaceUnloadManualBoxLineBody(BaseModel):
+    product_id: uuid.UUID
+    quantity: int = Field(ge=1, le=1_000_000_000)
 
 
 class MarketplaceUnloadBoxLineOut(BaseModel):
@@ -85,7 +113,45 @@ class MarketplaceUnloadRequestSummaryOut(BaseModel):
     seller_id: str | None = None
     seller_name: str | None = None
     wb_mp_warehouse_id: int | None = None
+    planned_shipment_date: str | None = None
+    ff_modified: bool = False
     created_at: str
+
+
+class MarketplaceUnloadPickAllocationOut(BaseModel):
+    id: str
+    product_id: str
+    sku_code: str
+    product_name: str
+    storage_location_id: str
+    location_code: str
+    quantity: int
+
+
+class MarketplaceUnloadPickOptionLocationOut(BaseModel):
+    storage_location_id: str
+    location_code: str
+    quantity: int
+    reserved: int
+    available: int
+
+
+class MarketplaceUnloadPickOptionProductOut(BaseModel):
+    product_id: str
+    sku_code: str
+    product_name: str
+    scanned_qty: int
+    locations: list[MarketplaceUnloadPickOptionLocationOut]
+
+
+class PickAllocationItemIn(BaseModel):
+    product_id: uuid.UUID
+    storage_location_id: uuid.UUID
+    quantity: int = Field(ge=1, le=1_000_000_000)
+
+
+class PickAllocationsSave(BaseModel):
+    allocations: list[PickAllocationItemIn] = Field(default_factory=list)
 
 
 class MarketplaceUnloadRequestDetailOut(BaseModel):
@@ -96,9 +162,12 @@ class MarketplaceUnloadRequestDetailOut(BaseModel):
     seller_id: str | None = None
     seller_name: str | None = None
     wb_mp_warehouse_id: int | None = None
+    planned_shipment_date: str | None = None
+    ff_modified: bool = False
     created_at: str
     lines: list[MarketplaceUnloadLineOut]
     boxes: list[MarketplaceUnloadBoxOut] = Field(default_factory=list)
+    pick_allocations: list[MarketplaceUnloadPickAllocationOut] = Field(default_factory=list)
 
 
 def _box_line_out(ln: MarketplaceUnloadBoxLine) -> MarketplaceUnloadBoxLineOut:
@@ -147,7 +216,25 @@ def _summary_out(
         seller_id=str(r.seller_id) if r.seller_id is not None else None,
         seller_name=seller_name,
         wb_mp_warehouse_id=int(r.wb_mp_warehouse_id) if r.wb_mp_warehouse_id is not None else None,
+        planned_shipment_date=r.planned_shipment_date.isoformat()
+        if r.planned_shipment_date is not None
+        else None,
+        ff_modified=bool(r.ff_modified),
         created_at=r.created_at.isoformat(),
+    )
+
+
+def _pick_alloc_out(alloc: MarketplaceUnloadPickAllocation) -> MarketplaceUnloadPickAllocationOut:
+    p = alloc.product
+    loc = alloc.storage_location
+    return MarketplaceUnloadPickAllocationOut(
+        id=str(alloc.id),
+        product_id=str(alloc.product_id),
+        sku_code=p.sku_code,
+        product_name=p.name,
+        storage_location_id=str(alloc.storage_location_id),
+        location_code=loc.code,
+        quantity=int(alloc.quantity),
     )
 
 
@@ -158,6 +245,7 @@ def _detail_out(
     seller_name: str | None,
 ) -> MarketplaceUnloadRequestDetailOut:
     boxes = [_box_out(b) for b in getattr(r, "boxes", []) or []]
+    picks = [_pick_alloc_out(a) for a in getattr(r, "pick_allocations", []) or []]
     return MarketplaceUnloadRequestDetailOut(
         id=str(r.id),
         warehouse_id=str(r.warehouse_id),
@@ -166,9 +254,14 @@ def _detail_out(
         seller_id=str(r.seller_id) if r.seller_id is not None else None,
         seller_name=seller_name,
         wb_mp_warehouse_id=int(r.wb_mp_warehouse_id) if r.wb_mp_warehouse_id is not None else None,
+        planned_shipment_date=r.planned_shipment_date.isoformat()
+        if r.planned_shipment_date is not None
+        else None,
+        ff_modified=bool(r.ff_modified),
         created_at=r.created_at.isoformat(),
         lines=[_line_out(ln) for ln in r.lines],
         boxes=boxes,
+        pick_allocations=picks,
     )
 
 
@@ -203,6 +296,37 @@ def _map_mu_err(exc: MarketplaceUnloadError) -> HTTPException:
             status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
             detail="product_seller_mismatch",
         )
+    if exc.code == "insufficient_available":
+        return HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+            detail="insufficient_available",
+        )
+    if exc.code == "no_lines":
+        return HTTPException(status_code=status.HTTP_409_CONFLICT, detail="no_lines")
+    return HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=exc.code)
+
+
+def _map_pick_err(exc: MarketplaceUnloadPickError) -> HTTPException:
+    if exc.code == "not_found":
+        return HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="not_found")
+    if exc.code in ("not_editable", "bad_status", "open_box_exists"):
+        return HTTPException(status_code=status.HTTP_409_CONFLICT, detail=exc.code)
+    if exc.code in (
+        "invalid_quantity",
+        "product_not_in_shipment",
+        "location_not_found",
+        "product_not_found",
+        "product_seller_mismatch",
+        "insufficient_available",
+        "scans_required",
+        "pick_scan_mismatch",
+        "pick_required",
+        "no_lines",
+    ):
+        return HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+            detail=exc.code,
+        )
     return HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=exc.code)
 
 
@@ -213,6 +337,7 @@ def _map_box_err(exc: MarketplaceUnloadBoxError) -> HTTPException:
         return HTTPException(status_code=status.HTTP_409_CONFLICT, detail=exc.code)
     if exc.code in (
         "invalid_preset",
+        "invalid_quantity",
         "barcode_empty",
         "barcode_unknown",
         "product_not_in_shipment",
@@ -227,12 +352,28 @@ def _map_box_err(exc: MarketplaceUnloadBoxError) -> HTTPException:
     return HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=exc.code)
 
 
+async def _get_visible_request(
+    session: AsyncSession,
+    user: User,
+    request_id: uuid.UUID,
+) -> MarketplaceUnloadRequest:
+    r = await svc.get_request(session, user.tenant_id, request_id)
+    if r is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="not_found")
+    try:
+        svc.assert_request_visible(user, r)
+    except MarketplaceUnloadError as exc:
+        raise _map_mu_err(exc) from None
+    return r
+
+
 @router.get("", response_model=list[MarketplaceUnloadRequestSummaryOut])
 async def list_marketplace_unloads(
-    user: Annotated[User, Depends(require_fulfillment_admin)],
+    user: Annotated[User, Depends(require_ff_or_seller)],
     session: Annotated[AsyncSession, Depends(get_db)],
 ) -> list[MarketplaceUnloadRequestSummaryOut]:
-    rows = await svc.list_requests(session, user.tenant_id)
+    seller_filter = user.seller_id if user.role == FULFILLMENT_SELLER else None
+    rows = await svc.list_requests(session, user.tenant_id, seller_id=seller_filter)
     return [
         _summary_out(
             r,
@@ -246,12 +387,10 @@ async def list_marketplace_unloads(
 @router.get("/{request_id}", response_model=MarketplaceUnloadRequestDetailOut)
 async def get_marketplace_unload(
     request_id: uuid.UUID,
-    user: Annotated[User, Depends(require_fulfillment_admin)],
+    user: Annotated[User, Depends(require_ff_or_seller)],
     session: Annotated[AsyncSession, Depends(get_db)],
 ) -> MarketplaceUnloadRequestDetailOut:
-    r = await svc.get_request(session, user.tenant_id, request_id)
-    if r is None:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="not_found")
+    r = await _get_visible_request(session, user, request_id)
     return _detail_out(
         r,
         warehouse_name=r.warehouse.name,
@@ -304,6 +443,40 @@ async def create_marketplace_unload(
     return _summary_out(r2, warehouse_name=wh.name, seller_name=seller_name)
 
 
+@router.post(
+    "/seller",
+    response_model=MarketplaceUnloadRequestSummaryOut,
+    status_code=status.HTTP_201_CREATED,
+)
+async def create_seller_marketplace_unload(
+    body: SellerMarketplaceUnloadRequestCreate,
+    user: Annotated[User, Depends(require_ff_or_seller)],
+    session: Annotated[AsyncSession, Depends(get_db)],
+) -> MarketplaceUnloadRequestSummaryOut:
+    if user.role != FULFILLMENT_SELLER or user.seller_id is None:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="forbidden")
+    try:
+        r = await svc.create_request(
+            session,
+            user.tenant_id,
+            warehouse_id=body.warehouse_id,
+            seller_id=user.seller_id,
+            wb_mp_warehouse_id=body.wb_mp_warehouse_id,
+        )
+    except MarketplaceUnloadError as exc:
+        raise _map_mu_err(exc) from None
+    r2 = await svc.get_request(session, user.tenant_id, r.id)
+    assert r2 is not None
+    wh = await get_warehouse(session, user.tenant_id, r2.warehouse_id)
+    if wh is None:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="warehouse_missing_after_create",
+        )
+    sl = await session.get(Seller, user.seller_id)
+    return _summary_out(r2, warehouse_name=wh.name, seller_name=sl.name if sl else None)
+
+
 @router.patch(
     "/{request_id}",
     response_model=MarketplaceUnloadRequestDetailOut,
@@ -311,9 +484,10 @@ async def create_marketplace_unload(
 async def update_marketplace_unload(
     request_id: uuid.UUID,
     body: MarketplaceUnloadRequestUpdate,
-    user: Annotated[User, Depends(require_fulfillment_admin)],
+    user: Annotated[User, Depends(require_ff_or_seller)],
     session: Annotated[AsyncSession, Depends(get_db)],
 ) -> MarketplaceUnloadRequestDetailOut:
+    await _get_visible_request(session, user, request_id)
     try:
         r = await svc.set_wb_mp_warehouse(
             session,
@@ -338,9 +512,11 @@ async def update_marketplace_unload(
 async def add_marketplace_unload_line(
     request_id: uuid.UUID,
     body: MarketplaceUnloadLineCreate,
-    user: Annotated[User, Depends(require_fulfillment_admin)],
+    user: Annotated[User, Depends(require_ff_or_seller)],
     session: Annotated[AsyncSession, Depends(get_db)],
 ) -> MarketplaceUnloadLineOut:
+    await _get_visible_request(session, user, request_id)
+    allow_ff_confirmed = user.role == FULFILLMENT_ADMIN
     try:
         line = await svc.add_line(
             session,
@@ -348,10 +524,165 @@ async def add_marketplace_unload_line(
             request_id,
             product_id=body.product_id,
             quantity=body.quantity,
+            allow_ff_confirmed=allow_ff_confirmed,
         )
     except MarketplaceUnloadError as exc:
         raise _map_mu_err(exc) from None
     return _line_out(line)
+
+
+@router.put(
+    "/{request_id}/lines",
+    response_model=MarketplaceUnloadRequestDetailOut,
+)
+async def replace_marketplace_unload_lines(
+    request_id: uuid.UUID,
+    body: MarketplaceUnloadLinesBulkReplace,
+    user: Annotated[User, Depends(require_ff_or_seller)],
+    session: Annotated[AsyncSession, Depends(get_db)],
+) -> MarketplaceUnloadRequestDetailOut:
+    await _get_visible_request(session, user, request_id)
+    pairs = [(item.product_id, item.quantity) for item in body.lines]
+    try:
+        r = await svc.replace_lines(
+            session, user.tenant_id, request_id, lines=pairs
+        )
+    except MarketplaceUnloadError as exc:
+        raise _map_mu_err(exc) from None
+    return _detail_out(
+        r,
+        warehouse_name=r.warehouse.name,
+        seller_name=r.seller.name if r.seller is not None else None,
+    )
+
+
+@router.post(
+    "/{request_id}/plan",
+    response_model=MarketplaceUnloadRequestDetailOut,
+)
+async def plan_marketplace_unload(
+    request_id: uuid.UUID,
+    user: Annotated[User, Depends(require_ff_or_seller)],
+    session: Annotated[AsyncSession, Depends(get_db)],
+) -> MarketplaceUnloadRequestDetailOut:
+    await _get_visible_request(session, user, request_id)
+    try:
+        r = await svc.plan_request(session, user.tenant_id, request_id)
+    except MarketplaceUnloadError as exc:
+        raise _map_mu_err(exc) from None
+    return _detail_out(
+        r,
+        warehouse_name=r.warehouse.name,
+        seller_name=r.seller.name if r.seller is not None else None,
+    )
+
+
+@router.post(
+    "/{request_id}/unplan",
+    response_model=MarketplaceUnloadRequestDetailOut,
+)
+async def unplan_marketplace_unload(
+    request_id: uuid.UUID,
+    user: Annotated[User, Depends(require_ff_or_seller)],
+    session: Annotated[AsyncSession, Depends(get_db)],
+) -> MarketplaceUnloadRequestDetailOut:
+    await _get_visible_request(session, user, request_id)
+    try:
+        r = await svc.unplan_request(session, user.tenant_id, request_id)
+    except MarketplaceUnloadError as exc:
+        raise _map_mu_err(exc) from None
+    return _detail_out(
+        r,
+        warehouse_name=r.warehouse.name,
+        seller_name=r.seller.name if r.seller is not None else None,
+    )
+
+
+@router.post(
+    "/{request_id}/confirm",
+    response_model=MarketplaceUnloadRequestDetailOut,
+)
+async def confirm_marketplace_unload(
+    request_id: uuid.UUID,
+    body: MarketplaceUnloadConfirmBody,
+    user: Annotated[User, Depends(require_fulfillment_admin)],
+    session: Annotated[AsyncSession, Depends(get_db)],
+) -> MarketplaceUnloadRequestDetailOut:
+    try:
+        r = await svc.confirm_request(
+            session,
+            user.tenant_id,
+            request_id,
+            planned_shipment_date=body.planned_shipment_date,
+        )
+    except MarketplaceUnloadError as exc:
+        raise _map_mu_err(exc) from None
+    return _detail_out(
+        r,
+        warehouse_name=r.warehouse.name,
+        seller_name=r.seller.name if r.seller is not None else None,
+    )
+
+
+@router.get(
+    "/{request_id}/pick-options",
+    response_model=list[MarketplaceUnloadPickOptionProductOut],
+)
+async def get_marketplace_unload_pick_options(
+    request_id: uuid.UUID,
+    user: Annotated[User, Depends(require_fulfillment_admin)],
+    session: Annotated[AsyncSession, Depends(get_db)],
+) -> list[MarketplaceUnloadPickOptionProductOut]:
+    try:
+        opts = await pick_svc.get_pick_options(session, user.tenant_id, request_id)
+    except MarketplaceUnloadPickError as exc:
+        raise _map_pick_err(exc) from None
+    return [
+        MarketplaceUnloadPickOptionProductOut(
+            product_id=str(o.product_id),
+            sku_code=o.sku_code,
+            product_name=o.product_name,
+            scanned_qty=o.scanned_qty,
+            locations=[
+                MarketplaceUnloadPickOptionLocationOut(
+                    storage_location_id=str(loc.storage_location_id),
+                    location_code=loc.location_code,
+                    quantity=loc.quantity,
+                    reserved=loc.reserved,
+                    available=loc.available,
+                )
+                for loc in o.locations
+            ],
+        )
+        for o in opts
+    ]
+
+
+@router.put(
+    "/{request_id}/pick-allocations",
+    response_model=list[MarketplaceUnloadPickAllocationOut],
+)
+async def save_marketplace_unload_pick_allocations(
+    request_id: uuid.UUID,
+    body: PickAllocationsSave,
+    user: Annotated[User, Depends(require_fulfillment_admin)],
+    session: Annotated[AsyncSession, Depends(get_db)],
+) -> list[MarketplaceUnloadPickAllocationOut]:
+    rows = [
+        pick_svc.PickAllocationRow(
+            product_id=item.product_id,
+            storage_location_id=item.storage_location_id,
+            quantity=item.quantity,
+        )
+        for item in body.allocations
+    ]
+    try:
+        allocs = await pick_svc.save_pick_allocations(
+            session, user.tenant_id, request_id, rows
+        )
+    except MarketplaceUnloadPickError as exc:
+        raise _map_pick_err(exc) from None
+    return [_pick_alloc_out(a) for a in allocs]
 
 
 @router.post(
@@ -384,13 +715,44 @@ async def submit_marketplace_unload(
 async def delete_marketplace_unload_line(
     request_id: uuid.UUID,
     line_id: uuid.UUID,
-    user: Annotated[User, Depends(require_fulfillment_admin)],
+    user: Annotated[User, Depends(require_ff_or_seller)],
     session: Annotated[AsyncSession, Depends(get_db)],
 ) -> None:
+    await _get_visible_request(session, user, request_id)
+    allow_ff_confirmed = user.role == FULFILLMENT_ADMIN
     try:
-        await svc.delete_line(session, user.tenant_id, request_id, line_id)
+        await svc.delete_line(
+            session,
+            user.tenant_id,
+            request_id,
+            line_id,
+            allow_ff_confirmed=allow_ff_confirmed,
+        )
     except MarketplaceUnloadError as exc:
         raise _map_mu_err(exc) from None
+
+
+@router.post(
+    "/{request_id}/ship",
+    response_model=MarketplaceUnloadRequestDetailOut,
+)
+async def ship_marketplace_unload(
+    request_id: uuid.UUID,
+    user: Annotated[User, Depends(require_fulfillment_admin)],
+    session: Annotated[AsyncSession, Depends(get_db)],
+) -> MarketplaceUnloadRequestDetailOut:
+    try:
+        await pick_svc.ship_request(session, user.tenant_id, request_id)
+    except MarketplaceUnloadPickError as exc:
+        raise _map_pick_err(exc) from None
+    r = await svc.get_request(session, user.tenant_id, request_id)
+    if r is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="not_found")
+    return _detail_out(
+        r,
+        warehouse_name=r.warehouse.name,
+        seller_name=r.seller.name if r.seller is not None else None,
+    )
 
 
 @router.post(
@@ -436,6 +798,34 @@ async def scan_marketplace_unload_box(
     try:
         ln = await box_svc.scan_barcode_into_box(
             session, user.tenant_id, box_id, barcode=body.barcode
+        )
+    except MarketplaceUnloadBoxError as exc:
+        raise _map_box_err(exc) from None
+    return _box_line_out(ln)
+
+
+@router.post(
+    "/{request_id}/boxes/{box_id}/manual-line",
+    response_model=MarketplaceUnloadBoxLineOut,
+    status_code=status.HTTP_200_OK,
+)
+async def manual_marketplace_unload_box_line(
+    request_id: uuid.UUID,
+    box_id: uuid.UUID,
+    body: MarketplaceUnloadManualBoxLineBody,
+    user: Annotated[User, Depends(require_fulfillment_admin)],
+    session: Annotated[AsyncSession, Depends(get_db)],
+) -> MarketplaceUnloadBoxLineOut:
+    bx = await session.get(MarketplaceUnloadBox, box_id)
+    if bx is None or bx.request_id != request_id:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="box_not_found")
+    try:
+        ln = await box_svc.add_manual_qty_to_box(
+            session,
+            user.tenant_id,
+            box_id,
+            product_id=body.product_id,
+            quantity=body.quantity,
         )
     except MarketplaceUnloadBoxError as exc:
         raise _map_box_err(exc) from None

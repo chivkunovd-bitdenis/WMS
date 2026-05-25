@@ -10,6 +10,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from app.models.inbound_intake import (
+    InboundIntakeBox,
+    InboundIntakeBoxLine,
     InboundIntakeDistributionLine,
     InboundIntakeLine,
     InboundIntakeRequest,
@@ -58,6 +60,7 @@ async def create_request(
         status=STATUS_DRAFT,
         seller_id=seller_id,
         planned_delivery_date=planned_delivery_date,
+        planned_box_count=1,
     )
     session.add(req)
     await session.commit()
@@ -77,6 +80,7 @@ async def list_requests(
         .options(
             selectinload(InboundIntakeRequest.lines),
             selectinload(InboundIntakeRequest.seller),
+            selectinload(InboundIntakeRequest.boxes),
         )
         .order_by(InboundIntakeRequest.created_at.desc())
     )
@@ -105,6 +109,11 @@ async def get_request(
             selectinload(InboundIntakeRequest.lines).options(
                 selectinload(InboundIntakeLine.product),
                 selectinload(InboundIntakeLine.storage_location),
+            ),
+            selectinload(InboundIntakeRequest.boxes).options(
+                selectinload(InboundIntakeBox.lines).selectinload(
+                    InboundIntakeBoxLine.product
+                ),
             ),
         )
     )
@@ -248,12 +257,15 @@ async def delete_draft_line(
     await session.commit()
 
 
-async def patch_request_planned_delivery(
+async def patch_request_draft(
     session: AsyncSession,
     tenant_id: uuid.UUID,
     request_id: uuid.UUID,
     *,
-    planned_delivery_date: date | None,
+    planned_delivery_date: date | None = None,
+    planned_delivery_date_set: bool = False,
+    planned_box_count: int | None = None,
+    planned_box_count_set: bool = False,
     seller_product_owner_id: uuid.UUID | None = None,
 ) -> InboundIntakeRequest:
     req = await get_request(
@@ -266,10 +278,33 @@ async def patch_request_planned_delivery(
         raise InboundIntakeError("request_not_found")
     if req.status != STATUS_DRAFT:
         raise InboundIntakeError("not_draft")
-    req.planned_delivery_date = planned_delivery_date
+    if planned_delivery_date_set:
+        req.planned_delivery_date = planned_delivery_date
+    if planned_box_count_set:
+        if planned_box_count is None or planned_box_count < 1:
+            raise InboundIntakeError("invalid_planned_box_count")
+        req.planned_box_count = planned_box_count
     await session.commit()
     await session.refresh(req)
     return req
+
+
+async def patch_request_planned_delivery(
+    session: AsyncSession,
+    tenant_id: uuid.UUID,
+    request_id: uuid.UUID,
+    *,
+    planned_delivery_date: date | None,
+    seller_product_owner_id: uuid.UUID | None = None,
+) -> InboundIntakeRequest:
+    return await patch_request_draft(
+        session,
+        tenant_id,
+        request_id,
+        planned_delivery_date=planned_delivery_date,
+        planned_delivery_date_set=True,
+        seller_product_owner_id=seller_product_owner_id,
+    )
 
 
 async def set_line_storage_location(
@@ -325,6 +360,10 @@ async def submit_request(
         raise InboundIntakeError("not_draft")
     if len(req.lines) == 0:
         raise InboundIntakeError("submit_empty")
+    if req.planned_box_count is None:
+        req.planned_box_count = 1
+    if req.planned_box_count < 1:
+        raise InboundIntakeError("planned_boxes_missing")
     req.status = STATUS_SUBMITTED
     req.submitted_at = datetime.now(UTC)
     await session.commit()
@@ -348,16 +387,32 @@ async def primary_accept_request(
     session: AsyncSession,
     tenant_id: uuid.UUID,
     request_id: uuid.UUID,
+    *,
+    actual_box_count: int,
 ) -> InboundIntakeRequest:
+    if actual_box_count < 0:
+        raise InboundIntakeError("invalid_actual_box_count")
     req = await get_request(session, tenant_id, request_id)
     if req is None:
         raise InboundIntakeError("request_not_found")
     if req.status != STATUS_SUBMITTED:
         raise InboundIntakeError("not_submitted")
+    if req.planned_box_count is None:
+        req.planned_box_count = actual_box_count
+    req.actual_box_count = actual_box_count
+    req.boxes_discrepancy = actual_box_count != req.planned_box_count
     req.status = STATUS_PRIMARY_ACCEPTED
     req.primary_accepted_at = datetime.now(UTC)
+    from app.services import inbound_intake_box_service as inbound_box_svc
+
+    await inbound_box_svc.create_boxes_for_request(
+        session,
+        tenant_id,
+        req,
+        box_count=actual_box_count,
+    )
     await session.commit()
-    await session.refresh(req)
+    await session.refresh(req, attribute_names=["boxes"])
     return req
 
 
@@ -369,12 +424,16 @@ async def set_line_actual_qty(
     *,
     actual_qty: int,
 ) -> InboundIntakeLine:
+    from app.services import inbound_intake_box_service as inbound_box_svc
+
     if actual_qty < 0:
         raise InboundIntakeError("invalid_qty")
     pair = await _line_on_request(session, tenant_id, request_id, line_id)
     if pair is None:
         raise InboundIntakeError("line_not_found")
     req, line = pair
+    if await inbound_box_svc.request_has_boxes(session, tenant_id, request_id):
+        raise InboundIntakeError("use_box_scan")
     if req.status not in (STATUS_PRIMARY_ACCEPTED, STATUS_VERIFYING):
         raise InboundIntakeError("not_verifying")
     if line.posted_qty > actual_qty:
@@ -392,18 +451,25 @@ async def complete_verification(
     tenant_id: uuid.UUID,
     request_id: uuid.UUID,
 ) -> InboundIntakeRequest:
+    from app.services import inbound_intake_box_service as inbound_box_svc
+
     req = await get_request(session, tenant_id, request_id)
     if req is None:
         raise InboundIntakeError("request_not_found")
     if req.status not in (STATUS_PRIMARY_ACCEPTED, STATUS_VERIFYING):
         raise InboundIntakeError("not_verifying")
+    try:
+        await inbound_box_svc.assert_no_open_intake_box(session, request_id)
+    except inbound_box_svc.InboundIntakeBoxError as exc:
+        if exc.code == "open_box_exists":
+            raise InboundIntakeError("open_box_exists") from None
+        raise
     if any(ln.actual_qty is None for ln in req.lines):
         raise InboundIntakeError("actual_missing")
     req.status = STATUS_VERIFIED
     req.verified_at = datetime.now(UTC)
-    req.has_discrepancy = any(
-        (ln.actual_qty or 0) != ln.expected_qty for ln in req.lines
-    )
+    line_discrepancy = any((ln.actual_qty or 0) != ln.expected_qty for ln in req.lines)
+    req.has_discrepancy = bool(req.boxes_discrepancy) or line_discrepancy
     await session.commit()
     await session.refresh(req)
     return req

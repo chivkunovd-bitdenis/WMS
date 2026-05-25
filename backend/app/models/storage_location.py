@@ -4,7 +4,7 @@ import uuid
 from datetime import datetime
 from typing import TYPE_CHECKING
 
-from sqlalchemy import DateTime, ForeignKey, String, UniqueConstraint, Uuid, func
+from sqlalchemy import DateTime, ForeignKey, Integer, String, UniqueConstraint, Uuid, func
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.models.base import Base
@@ -16,6 +16,7 @@ if TYPE_CHECKING:
     from app.models.outbound_shipment import OutboundShipmentLine
     from app.models.tenant import Tenant
     from app.models.warehouse import Warehouse
+    from app.models.warehouse_storage_rack import WarehouseStorageRack
 
 
 class StorageLocation(Base):
@@ -39,6 +40,14 @@ class StorageLocation(Base):
         Uuid(as_uuid=True), ForeignKey("warehouses.id", ondelete="CASCADE"), index=True
     )
     code: Mapped[str] = mapped_column(String(64), nullable=False)
+    rack_id: Mapped[uuid.UUID | None] = mapped_column(
+        Uuid(as_uuid=True),
+        ForeignKey("warehouse_storage_racks.id", ondelete="SET NULL"),
+        nullable=True,
+        index=True,
+    )
+    side: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    position: Mapped[int | None] = mapped_column(Integer, nullable=True)
     barcode: Mapped[str] = mapped_column(String(64), nullable=False, index=True)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), nullable=False
@@ -47,6 +56,9 @@ class StorageLocation(Base):
     tenant: Mapped[Tenant] = relationship("Tenant", back_populates="locations")
     warehouse: Mapped[Warehouse] = relationship(
         "Warehouse", back_populates="locations"
+    )
+    rack: Mapped[WarehouseStorageRack | None] = relationship(
+        "WarehouseStorageRack", back_populates="locations"
     )
     inventory_balances: Mapped[list[InventoryBalance]] = relationship(
         "InventoryBalance",

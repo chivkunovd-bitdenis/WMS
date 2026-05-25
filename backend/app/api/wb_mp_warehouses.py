@@ -6,7 +6,7 @@ from fastapi import APIRouter, Depends
 from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.api.deps import require_fulfillment_admin
+from app.api.deps import require_ff_or_seller
 from app.db.session import get_db
 from app.models.user import User
 from app.services import wb_mp_warehouse_service as wh_svc
@@ -26,10 +26,10 @@ class WbMpWarehouseOut(BaseModel):
 
 @router.get("", response_model=list[WbMpWarehouseOut])
 async def list_wb_mp_warehouses(
-    user: Annotated[User, Depends(require_fulfillment_admin)],
+    user: Annotated[User, Depends(require_ff_or_seller)],
     session: Annotated[AsyncSession, Depends(get_db)],
 ) -> list[WbMpWarehouseOut]:
-    rows = await wh_svc.list_cached_mp_warehouses(session, user.tenant_id)
+    rows = await wh_svc.list_mp_warehouses_for_tenant(session, user.tenant_id)
     return [
         WbMpWarehouseOut(
             id=str(r.id),

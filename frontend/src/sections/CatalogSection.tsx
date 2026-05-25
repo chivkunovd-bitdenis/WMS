@@ -1,9 +1,12 @@
 import type { FormEventHandler } from 'react'
 import { useEffect, useMemo, useState } from 'react'
+import { suggestNextLocationForRack } from '../utils/formatLocationCode'
+import { suggestNextLocationCode } from '../utils/suggestNextLocationCode'
 import { PrintOutlined } from '@mui/icons-material'
 import JsBarcode from 'jsbarcode'
 import {
   Alert,
+  Autocomplete,
   Box,
   Button as MuiButton,
   Card as MuiCard,
@@ -23,6 +26,8 @@ import {
   TableHead,
   TableRow,
   TextField,
+  ToggleButton,
+  ToggleButtonGroup,
   Tooltip,
   Typography,
 } from '@mui/material'
@@ -68,7 +73,18 @@ type Props = {
   products: ProductRow[]
 
   onCreateWarehouse: FormEventHandler<HTMLFormElement>
-  onCreateLocation: FormEventHandler<HTMLFormElement>
+  onCreateLocation: (body: {
+    code?: string
+    rack_name?: string
+    side?: 1 | 2
+    position?: number
+  }) => Promise<boolean> // code — превью/совместимость со старым API
+  onListWarehouseRacks: (warehouseId: string) => Promise<string[]>
+  onSuggestLocation: (
+    warehouseId: string,
+    rackName: string,
+    side: 1 | 2,
+  ) => Promise<{ position: number; code: string } | null>
   onCreateSeller: FormEventHandler<HTMLFormElement>
   onCreateProduct: FormEventHandler<HTMLFormElement>
 
@@ -105,10 +121,17 @@ export function CatalogSection(props: Props) {
     setSelectedWarehouseId,
     onCreateWarehouse,
     onCreateLocation,
+    onListWarehouseRacks,
+    onSuggestLocation,
   } = props
 
   const [warehouseDialogOpen, setWarehouseDialogOpen] = useState(false)
   const [locationDialogOpen, setLocationDialogOpen] = useState(false)
+  const [rackNameDraft, setRackNameDraft] = useState('')
+  const [sideDraft, setSideDraft] = useState<1 | 2>(1)
+  const [positionDraft, setPositionDraft] = useState<number | null>(null)
+  const [generatedCode, setGeneratedCode] = useState('')
+  const [rackOptions, setRackOptions] = useState<string[]>([])
   const [printDialogOpen, setPrintDialogOpen] = useState(false)
   const [printLocation, setPrintLocation] = useState<LocationRow | null>(null)
   const [barcodeRenderError, setBarcodeRenderError] = useState<string | null>(null)
@@ -163,6 +186,50 @@ export function CatalogSection(props: Props) {
 
     return () => window.clearTimeout(t)
   }, [printDialogOpen, printLocation])
+
+  useEffect(() => {
+    if (!locationDialogOpen || !selectedWarehouseId) {
+      return
+    }
+    void (async () => {
+      const racks = await onListWarehouseRacks(selectedWarehouseId)
+      setRackOptions(racks)
+    })()
+  }, [locationDialogOpen, onListWarehouseRacks, selectedWarehouseId])
+
+  useEffect(() => {
+    if (!locationDialogOpen || !selectedWarehouseId) {
+      return
+    }
+    const trimmed = rackNameDraft.trim()
+    if (!trimmed) {
+      setGeneratedCode('')
+      setPositionDraft(null)
+      return
+    }
+    const local = suggestNextLocationForRack(
+      trimmed,
+      sideDraft,
+      visibleLocations.map((l) => l.code),
+    )
+    setGeneratedCode(local.code)
+    setPositionDraft(local.position)
+
+    void (async () => {
+      const s = await onSuggestLocation(selectedWarehouseId, trimmed, sideDraft)
+      if (s) {
+        setGeneratedCode(s.code)
+        setPositionDraft(s.position)
+      }
+    })()
+  }, [
+    locationDialogOpen,
+    onSuggestLocation,
+    rackNameDraft,
+    selectedWarehouseId,
+    sideDraft,
+    visibleLocations,
+  ])
 
   return (
     <Box id="catalog-section" data-testid="catalog-section" sx={{ display: 'grid', gap: 2 }}>
@@ -272,7 +339,16 @@ export function CatalogSection(props: Props) {
                 size="small"
                 data-testid="create-location"
                 disabled={!selectedWarehouseId}
-                onClick={() => setLocationDialogOpen(true)}
+                onClick={() => {
+                  setRackNameDraft('')
+                  setSideDraft(1)
+                  setPositionDraft(null)
+                  setGeneratedCode(
+                    // Fallback for the very first cell (legacy numeric pattern).
+                    suggestNextLocationCode(visibleLocations.map((l) => l.code)),
+                  )
+                  setLocationDialogOpen(true)
+                }}
               >
                 Создать ячейку
               </MuiButton>
@@ -605,19 +681,90 @@ export function CatalogSection(props: Props) {
             data-testid="location-form"
             noValidate
             onSubmit={(e) => {
-              onCreateLocation(e)
-              setLocationDialogOpen(false)
+              e.preventDefault()
+              void (async () => {
+                const trimmedRack = rackNameDraft.trim()
+                const ok = await onCreateLocation(
+                  trimmedRack
+                    ? {
+                        rack_name: trimmedRack,
+                        side: sideDraft,
+                        position: positionDraft ?? undefined,
+                        code: generatedCode,
+                      }
+                    : { code: generatedCode },
+                )
+                if (ok) {
+                  setLocationDialogOpen(false)
+                  setRackNameDraft('')
+                  setPositionDraft(null)
+                  setGeneratedCode('')
+                }
+              })()
             }}
             sx={{ pt: 2 }}
           >
             <Stack spacing={2}>
+              <Autocomplete
+                freeSolo
+                options={rackOptions}
+                value={rackNameDraft}
+                onChange={(_, v) => {
+                  setRackNameDraft(typeof v === 'string' ? v : (v ?? ''))
+                }}
+                onInputChange={(_, v) => setRackNameDraft(v)}
+                renderInput={(params) => (
+                  <TextField
+                    {...params}
+                    name="rack_name"
+                    data-testid="location-rack"
+                    label="Стеллаж"
+                    required
+                    autoComplete="off"
+                    disabled={!selectedWarehouseId}
+                    helperText={
+                      rackOptions.length > 0
+                        ? 'Можно выбрать существующий или ввести новый.'
+                        : 'Введите название стеллажа (текст или цифры).'
+                    }
+                  />
+                )}
+              />
+
+              <Box>
+                <Typography variant="body2" color="text.secondary" sx={{ mb: 0.5 }}>
+                  Сторона
+                </Typography>
+                <ToggleButtonGroup
+                  exclusive
+                  size="small"
+                  value={sideDraft}
+                  onChange={(_, v) => {
+                    if (v === 1 || v === 2) setSideDraft(v)
+                  }}
+                  aria-label="side"
+                >
+                  <ToggleButton value={1} data-testid="location-side-1">
+                    1
+                  </ToggleButton>
+                  <ToggleButton value={2} data-testid="location-side-2">
+                    2
+                  </ToggleButton>
+                </ToggleButtonGroup>
+              </Box>
+
               <TextField
-                name="location_code"
+                name="location_generated_code"
                 data-testid="location-code"
-                label="Код ячейки"
-                required
-                autoComplete="off"
+                label="Название ячейки"
                 fullWidth
+                value={generatedCode}
+                helperText={
+                  rackNameDraft.trim()
+                    ? 'Название формируется автоматически: стеллаж + сторона + номер.'
+                    : 'Сначала укажите стеллаж.'
+                }
+                slotProps={{ input: { readOnly: true } }}
                 disabled={!selectedWarehouseId}
               />
             </Stack>
@@ -629,7 +776,7 @@ export function CatalogSection(props: Props) {
                 type="submit"
                 variant="contained"
                 data-testid="location-submit"
-                disabled={catalogBusy || !selectedWarehouseId}
+                disabled={catalogBusy || !selectedWarehouseId || !rackNameDraft.trim()}
               >
                 {catalogBusy ? '…' : 'Создать'}
               </MuiButton>

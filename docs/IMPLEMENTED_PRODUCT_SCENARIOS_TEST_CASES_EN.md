@@ -520,6 +520,70 @@ This document expands **[IMPLEMENTED_PRODUCT_SCENARIOS_EN.md](./IMPLEMENTED_PROD
 
 ---
 
+## S16 — Seller marketplace unload (FC→MP intent, `marketplace_unload`)
+
+Distinct from **operational outbound** (S08) and **seller supply/inbound** (S06). Seller plans shipment to a **WB warehouse**; FF confirms, then boxes/scan/pick/ship.
+
+### TC-NEW-MP-04 Seller MP unload UI — no FF assembly blocks
+
+- **Actor:** fulfillment seller.
+- **Given:** seller logged in; MP unload draft exists with stock on FC warehouse.
+- **When:** opens **Create shipment to MP** / existing MP unload row.
+- **Then:** table shows SKU, name, **available** FC stock, qty input; actions **Save**, **Plan**, **Unplan** only — **no** box list, barcode scan, **Start picking**, **Shipped** (`ff-mp-*` assembly controls absent).
+- **Negative:** seller cannot confirm or ship from this screen.
+
+### TC-NEW-MP-06 Plan reserves stock and lists as scheduled
+
+- **Actor:** fulfillment seller.
+- **Given:** product available qty 10; seller selects WB warehouse and qty 4.
+- **When:** clicks **Plan** (Запланировать).
+- **Then:** status **scheduled** (submitted); document row type **mp_unload** in seller documents list; available for other requests reduced by reservation (4).
+- **Negative:** plan without WB warehouse → `wb_mp_warehouse_required`; qty above available → insufficient stock error.
+
+### TC-NEW-MP-07 FF dashboard shows submitted MP unloads only
+
+- **Actor:** fulfillment admin.
+- **Given:** seller MP unload in **draft** and another in **submitted** (planned).
+- **When:** opens FF dashboard **Planned shipments to MP warehouse**.
+- **Then:** only **submitted** row visible; draft not listed; click opens MP unload on supplies/shipments page.
+- **Negative:** operational outbound `submitted` must not replace this list when MP unload summaries exist.
+
+### TC-NEW-MP-09 FF confirms planned MP unload
+
+- **Actor:** fulfillment admin.
+- **Given:** seller **submitted** MP unload with lines and WB warehouse.
+- **When:** opens document, sets planned shipment date, **Confirm**.
+- **Then:** status **confirmed**; boxes/scan/picking UI enabled; seller cannot edit lines (only **unplan** while submitted).
+- **Negative:** seller role cannot call confirm.
+
+### TC-NEW-MP-11 Boxes and picking only after confirmed
+
+- **Actor:** fulfillment admin.
+- **Given:** MP unload **draft** or **submitted** with lines.
+- **When:** attempts create box / scan / pick allocations.
+- **Then:** rejected (`not_editable` / `bad_status`).
+- **When:** after **confirm**, creates box, scans, pick, then **Shipped**.
+- **Then:** status **shipped**; stock reduced; reservations released.
+- **Negative:** ship before scans → `scans_required`; ship before pick → `pick_required` after scans.
+
+### TC-NEW-MP-15 Seller reads WB MP warehouse catalog
+
+- **Actor:** fulfillment seller.
+- **Given:** tenant has supplies token on first registered seller; cache empty or stale.
+- **When:** opens MP unload form or `GET` WB warehouses list.
+- **Then:** HTTP 200; at least one warehouse (lazy sync from WB supplies API when cache empty).
+- **Negative:** unauthenticated → 401.
+
+### TC-NEW-MP-17 Seller RBAC on MP unload
+
+- **Actor:** seller A vs seller B.
+- **Given:** MP unload owned by seller B.
+- **When:** seller A lists documents or opens B's id.
+- **Then:** B's unload absent from list; direct get → 404.
+- **Negative:** seller cannot confirm or ship.
+
+---
+
 ## Cross-scenario matrix (acceptance checklist for role tests)
 
 Use this table as a **smoke checklist** when automating by role (from scenario summary; each cell should match at least one explicit case above).

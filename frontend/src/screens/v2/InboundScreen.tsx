@@ -1,4 +1,5 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
+import { resolveProductIdByBarcode } from '../../utils/resolveProductByBarcode'
 import type { FormEventHandler } from 'react'
 import { Button } from '../../ui/Button'
 import { Card } from '../../ui/Card'
@@ -8,7 +9,15 @@ import { Screen } from '../AppV2Screens'
 
 type WarehouseRow = { id: string; name: string; code: string }
 type LocationRow = { id: string; code: string; warehouse_id: string }
-type ProductRow = { id: string; name: string; sku_code: string }
+type ProductRow = {
+  id: string
+  name: string
+  sku_code: string
+  wb_barcodes?: string[]
+  wb_primary_barcode?: string | null
+  wb_vendor_code?: string | null
+  wb_nm_id?: number | null
+}
 
 type InboundSummaryRow = {
   id: string
@@ -31,12 +40,29 @@ type InboundLineRow = {
   storage_location_code: string | null
 }
 
+type InboundBoxLineRow = {
+  id: string
+  product_id: string
+  sku_code: string
+  product_name: string
+  quantity: number
+}
+
+type InboundBoxRow = {
+  id: string
+  box_number: number
+  internal_barcode: string
+  is_open: boolean
+  lines: InboundBoxLineRow[]
+}
+
 type InboundDetailRow = {
   id: string
   warehouse_id: string
   status: string
   planned_delivery_date: string | null
   has_discrepancy?: boolean
+  boxes?: InboundBoxRow[]
   lines: InboundLineRow[]
 }
 
@@ -77,6 +103,9 @@ type Props = {
   onAddInboundLine: FormEventHandler<HTMLFormElement>
   onSubmitInboundRequest: () => void
   onPrimaryAcceptInboundRequest: () => void
+  onOpenInboundBoxByBarcode: (barcode: string) => void
+  onScanInboundProductBarcode: (barcode: string) => void
+  onCloseInboundBoxIntake: () => void
   onSetInboundLineActualQty: FormEventHandler<HTMLFormElement>
   onCompleteInboundVerification: () => void
   onSaveInboundLineStorage: FormEventHandler<HTMLFormElement>
@@ -105,6 +134,9 @@ export function InboundScreen(props: Props) {
     onAddInboundLine,
     onSubmitInboundRequest,
     onPrimaryAcceptInboundRequest,
+    onOpenInboundBoxByBarcode,
+    onScanInboundProductBarcode,
+    onCloseInboundBoxIntake,
     onSetInboundLineActualQty,
     onCompleteInboundVerification,
     onSaveInboundLineStorage,
@@ -114,6 +146,12 @@ export function InboundScreen(props: Props) {
 
   const todayIso = new Date().toISOString().slice(0, 10)
   const [productQuery, setProductQuery] = useState('')
+  const [boxOpenScan, setBoxOpenScan] = useState('')
+  const [productScanBarcode, setProductScanBarcode] = useState('')
+  const productSelectRef = useRef<HTMLSelectElement>(null)
+
+  const boxIntakeMode = (inboundDetail?.boxes?.length ?? 0) > 0
+  const activeIntakeBox = inboundDetail?.boxes?.find((b) => b.is_open) ?? null
 
   const filteredProducts = useMemo(() => {
     const q = productQuery.trim().toLowerCase()
@@ -121,15 +159,18 @@ export function InboundScreen(props: Props) {
       return products
     }
     return products.filter((p) => {
-      const anyP = p as unknown as {
-        seller_name?: string | null
-        wb_vendor_code?: string | null
-        wb_nm_id?: number | null
-      }
+      const barcodes = (p.wb_barcodes ?? []).join(' ')
       const hay =
-        `${p.sku_code} ${p.name} ${anyP.seller_name ?? ''} ${anyP.wb_vendor_code ?? ''} ${anyP.wb_nm_id ?? ''}`.toLowerCase()
+        `${p.sku_code} ${p.name} ${p.wb_vendor_code ?? ''} ${p.wb_nm_id ?? ''} ${p.wb_primary_barcode ?? ''} ${barcodes}`.toLowerCase()
       return hay.includes(q)
     })
+  }, [productQuery, products])
+
+  useEffect(() => {
+    const id = resolveProductIdByBarcode(products, productQuery)
+    if (id && productSelectRef.current) {
+      productSelectRef.current.value = id
+    }
   }, [productQuery, products])
 
   return (
@@ -275,7 +316,7 @@ export function InboundScreen(props: Props) {
                       <Input
                         value={productQuery}
                         onChange={(e) => setProductQuery(e.target.value)}
-                        placeholder="Введи SKU или часть названия…"
+                        placeholder="SKU, штрихкод WB или название…"
                         aria-label="Поиск SKU для приёмки"
                         data-testid="inbound-line-product-search"
                       />
@@ -283,6 +324,7 @@ export function InboundScreen(props: Props) {
                     <label>
                       Товар
                       <Select
+                        ref={productSelectRef}
                         name="inbound_product_id"
                         data-testid="inbound-line-product"
                         required
@@ -374,8 +416,73 @@ export function InboundScreen(props: Props) {
                   <div data-testid="inbound-verify-panel">
                     {isFulfillmentAdmin ? (
                       <>
-                        <p className="subtle">Пересчёт: укажи факт по строкам.</p>
-                        {inboundDetail.lines.map((ln) => (
+                        {boxIntakeMode ? (
+                          <div data-testid="inbound-box-intake-panel" style={{ marginBottom: 16 }}>
+                            <p className="subtle">
+                              Поштучная приёмка: скан короба INB-…, затем штрихкоды товаров.
+                            </p>
+                            {!activeIntakeBox ? (
+                              <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                                <Input
+                                  data-testid="inbound-box-open-scan"
+                                  value={boxOpenScan}
+                                  onChange={(e) => setBoxOpenScan(e.target.value)}
+                                  placeholder="INB-…"
+                                  disabled={opsBusy}
+                                />
+                                <Button
+                                  type="button"
+                                  data-testid="inbound-box-open-submit"
+                                  disabled={opsBusy || !boxOpenScan.trim()}
+                                  onClick={() => {
+                                    onOpenInboundBoxByBarcode(boxOpenScan.trim())
+                                    setBoxOpenScan('')
+                                  }}
+                                >
+                                  Открыть короб
+                                </Button>
+                              </div>
+                            ) : (
+                              <div>
+                                <p data-testid="inbound-active-box">
+                                  Короб № {activeIntakeBox.box_number} ({activeIntakeBox.internal_barcode})
+                                </p>
+                                <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginTop: 8 }}>
+                                  <Input
+                                    data-testid="inbound-product-scan"
+                                    value={productScanBarcode}
+                                    onChange={(e) => setProductScanBarcode(e.target.value)}
+                                    placeholder="ШК товара"
+                                    disabled={opsBusy}
+                                  />
+                                  <Button
+                                    type="button"
+                                    data-testid="inbound-product-scan-submit"
+                                    disabled={opsBusy || !productScanBarcode.trim()}
+                                    onClick={() => {
+                                      onScanInboundProductBarcode(productScanBarcode.trim())
+                                      setProductScanBarcode('')
+                                    }}
+                                  >
+                                    Скан
+                                  </Button>
+                                  <Button
+                                    type="button"
+                                    data-testid="inbound-box-close"
+                                    disabled={opsBusy}
+                                    onClick={() => void onCloseInboundBoxIntake()}
+                                  >
+                                    Закрыть короб
+                                  </Button>
+                                </div>
+                              </div>
+                            )}
+                          </div>
+                        ) : (
+                          <p className="subtle">Пересчёт: укажи факт по строкам.</p>
+                        )}
+                        {!boxIntakeMode
+                          ? inboundDetail.lines.map((ln) => (
                           <Card
                             key={ln.id}
                             as="div"
@@ -412,7 +519,8 @@ export function InboundScreen(props: Props) {
                               </Button>
                             </form>
                           </Card>
-                        ))}
+                        ))
+                          : null}
                         <Button
                           type="button"
                           data-testid="inbound-verify-complete"

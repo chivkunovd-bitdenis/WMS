@@ -59,32 +59,57 @@ async def replace_tenant_mp_warehouses(
     await session.commit()
 
 
+async def sync_tenant_mp_warehouses(
+    session: AsyncSession,
+    tenant_id: uuid.UUID,
+    *,
+    supplies_api_token: str,
+) -> int:
+    """Pull WB warehouses and replace tenant cache. Returns row count."""
+    token = supplies_api_token.strip()
+    if not token:
+        return await count_tenant_mp_warehouses(session, tenant_id)
+    try:
+        async with httpx.AsyncClient() as client:
+            data = await wb_client.fetch_mp_warehouses_list(client, api_token=token)
+    except WildberriesClientError as exc:
+        logger.warning("wb mp warehouses fetch failed: %s", exc.code)
+        return await count_tenant_mp_warehouses(session, tenant_id)
+    except httpx.HTTPError:
+        logger.warning("wb mp warehouses transport error")
+        return await count_tenant_mp_warehouses(session, tenant_id)
+    if not data:
+        return await count_tenant_mp_warehouses(session, tenant_id)
+    await replace_tenant_mp_warehouses(session, tenant_id, data)
+    return await count_tenant_mp_warehouses(session, tenant_id)
+
+
 async def sync_tenant_mp_warehouses_if_empty(
     session: AsyncSession,
     tenant_id: uuid.UUID,
     *,
     supplies_api_token: str,
 ) -> int:
-    """Если для тенанта ещё нет кэша — один раз тянем склады WB. Возвращает число записей."""
+    """Если для тенанта ещё нет кэша — один раз тянем склады WB."""
     n_existing = await count_tenant_mp_warehouses(session, tenant_id)
     if n_existing > 0:
         return n_existing
-    token = supplies_api_token.strip()
-    if not token:
-        return 0
-    try:
-        async with httpx.AsyncClient() as client:
-            data = await wb_client.fetch_mp_warehouses_list(client, api_token=token)
-    except WildberriesClientError as exc:
-        logger.warning("wb mp warehouses fetch failed: %s", exc.code)
-        return 0
-    except httpx.HTTPError:
-        logger.warning("wb mp warehouses transport error")
-        return 0
-    if not data:
-        return 0
-    await replace_tenant_mp_warehouses(session, tenant_id, data)
-    return await count_tenant_mp_warehouses(session, tenant_id)
+    return await sync_tenant_mp_warehouses(
+        session, tenant_id, supplies_api_token=supplies_api_token
+    )
+
+
+async def get_first_tenant_seller_id(
+    session: AsyncSession, tenant_id: uuid.UUID
+) -> uuid.UUID | None:
+    stmt = (
+        select(Seller.id)
+        .where(Seller.tenant_id == tenant_id)
+        .order_by(Seller.created_at.asc())
+        .limit(1)
+    )
+    res = await session.execute(stmt)
+    return res.scalar_one_or_none()
 
 
 async def run_wb_mp_warehouses_sync_task(tenant_id: uuid.UUID, seller_id: uuid.UUID) -> None:
@@ -104,6 +129,30 @@ async def run_wb_mp_warehouses_sync_task(tenant_id: uuid.UUID, seller_id: uuid.U
         await sync_tenant_mp_warehouses_if_empty(session, tenant_id, supplies_api_token=supplies)
 
 
+async def run_daily_wb_mp_warehouses_sync_for_tenant(tenant_id: uuid.UUID) -> None:
+    """Daily: sync WB MP warehouses using first registered seller's supplies token."""
+    async with SessionLocal() as session:
+        first_seller_id = await get_first_tenant_seller_id(session, tenant_id)
+        if first_seller_id is None:
+            return
+        pair = await get_decrypted_tokens_for_seller(session, tenant_id, first_seller_id)
+        if pair is None:
+            return
+        _c, supplies = pair
+        if not supplies:
+            return
+        await sync_tenant_mp_warehouses(session, tenant_id, supplies_api_token=supplies)
+
+
+async def run_daily_wb_mp_warehouses_sync_all_tenants() -> None:
+    async with SessionLocal() as session:
+        stmt = select(Seller.tenant_id).distinct()
+        res = await session.execute(stmt)
+        tenant_ids = [row[0] for row in res.all()]
+    for tid in tenant_ids:
+        await run_daily_wb_mp_warehouses_sync_for_tenant(tid)
+
+
 async def list_cached_mp_warehouses(
     session: AsyncSession, tenant_id: uuid.UUID
 ) -> list[TenantWbMpWarehouse]:
@@ -114,6 +163,28 @@ async def list_cached_mp_warehouses(
     )
     res = await session.execute(stmt)
     return list(res.scalars().all())
+
+
+async def list_mp_warehouses_for_tenant(
+    session: AsyncSession, tenant_id: uuid.UUID
+) -> list[TenantWbMpWarehouse]:
+    """Return cached WB MP warehouses; lazy-fill from first seller supplies token if empty."""
+    rows = await list_cached_mp_warehouses(session, tenant_id)
+    if rows:
+        return rows
+    first_seller_id = await get_first_tenant_seller_id(session, tenant_id)
+    if first_seller_id is None:
+        return []
+    pair = await get_decrypted_tokens_for_seller(session, tenant_id, first_seller_id)
+    if pair is None:
+        return []
+    _c, supplies = pair
+    if not supplies:
+        return []
+    await sync_tenant_mp_warehouses_if_empty(
+        session, tenant_id, supplies_api_token=supplies
+    )
+    return await list_cached_mp_warehouses(session, tenant_id)
 
 
 async def get_cached_mp_warehouse(

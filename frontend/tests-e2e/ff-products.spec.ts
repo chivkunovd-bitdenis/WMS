@@ -26,7 +26,7 @@ test('ff products: filter by seller and sort by name/quantity', async ({ page })
 
   await expect(page.getByTestId('dashboard')).toBeVisible()
 
-  const regToken = (await page.evaluate(() => localStorage.getItem('wms_token'))) ?? ''
+  const regToken = (await page.evaluate(() => localStorage.getItem('wms_token_ff'))) ?? ''
   expect(regToken).toBeTruthy()
   const h = { Authorization: `Bearer ${regToken}` }
 
@@ -89,7 +89,12 @@ test('ff products: filter by seller and sort by name/quantity', async ({ page })
     id: string
   }
 
-  async function inboundReceive(productId: string, expectedQty: number, actualQty: number) {
+  async function inboundReceive(
+    productId: string,
+    skuCode: string,
+    expectedQty: number,
+    actualQty: number,
+  ) {
     const createReq = await apiPost('/operations/inbound-intake-requests', {
       warehouse_id: wh.id,
       planned_delivery_date: new Date().toISOString().slice(0, 10),
@@ -101,19 +106,30 @@ test('ff products: filter by seller and sort by name/quantity', async ({ page })
     })
     const line = (await addLineRes.json()) as { id: string }
     await apiPost(`/operations/inbound-intake-requests/${req.id}/submit`, {})
-    await apiPost(`/operations/inbound-intake-requests/${req.id}/primary-accept`, {})
+    const prim = await apiPost(`/operations/inbound-intake-requests/${req.id}/primary-accept`, {
+      actual_box_count: 1,
+    })
     await apiPatch(`/operations/inbound-intake-requests/${req.id}/lines/${line.id}`, {
       storage_location_id: loc.id,
     })
-    await apiPatch(`/operations/inbound-intake-requests/${req.id}/lines/${line.id}/actual`, {
-      actual_qty: actualQty,
-    })
+    const primBody = (await prim.json()) as {
+      boxes: { id: string; internal_barcode: string }[]
+    }
+    const { fulfillInboundViaBoxScans } = await import('./inbound-boxes-helpers')
+    await fulfillInboundViaBoxScans(
+      page.request,
+      h,
+      req.id,
+      primBody.boxes,
+      skuCode,
+      [actualQty],
+    )
     await apiPost(`/operations/inbound-intake-requests/${req.id}/verify`, {})
     await apiPost(`/operations/inbound-intake-requests/${req.id}/post`, {})
   }
 
-  await inboundReceive(prodA.id, 10, 2)
-  await inboundReceive(prodB.id, 10, 5)
+  await inboundReceive(prodA.id, skuA, 10, 2)
+  await inboundReceive(prodB.id, skuB, 10, 5)
 
   // Reload so App re-fetches sellers list for the filter dropdown.
   await page.reload()

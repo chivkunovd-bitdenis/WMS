@@ -15,8 +15,8 @@ export type AuthPortal = 'fulfillment' | 'seller'
 
 type RegisterFormEvent = React.FormEvent<HTMLFormElement>
 
-export function useAuth(_portal: AuthPortal = 'fulfillment') {
-  const [token, setToken] = useState<string | null>(() => getStoredToken())
+export function useAuth(portal: AuthPortal = 'fulfillment') {
+  const [token, setToken] = useState<string | null>(() => getStoredToken(portal))
   const [me, setMe] = useState<Me | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [loading, setLoading] = useState(false)
@@ -43,7 +43,7 @@ export function useAuth(_portal: AuthPortal = 'fulfillment') {
       }
       setMe((await res.json()) as Me)
     } catch (e) {
-      setStoredToken(null)
+      setStoredToken(null, portal)
       setToken(null)
       setMe(null)
       setError(
@@ -54,7 +54,7 @@ export function useAuth(_portal: AuthPortal = 'fulfillment') {
     } finally {
       setLoading(false)
     }
-  }, [])
+  }, [portal])
 
   useEffect(() => {
     if (token) {
@@ -114,7 +114,7 @@ export function useAuth(_portal: AuthPortal = 'fulfillment') {
             setError('Сервер не вернул токен. Обратитесь к разработчику.')
             return
           }
-          setStoredToken(data.access_token)
+          setStoredToken(data.access_token, portal)
           setToken(data.access_token)
           return
         }
@@ -138,7 +138,7 @@ export function useAuth(_portal: AuthPortal = 'fulfillment') {
     } finally {
       setAuthBusy(false)
     }
-  }, [])
+  }, [portal])
 
   const onLogin = useCallback(
     async (e: RegisterFormEvent) => {
@@ -184,7 +184,7 @@ export function useAuth(_portal: AuthPortal = 'fulfillment') {
           return
         }
         const data = (await res.json()) as { access_token: string }
-        setStoredToken(data.access_token)
+        setStoredToken(data.access_token, portal)
         setToken(data.access_token)
       } catch {
         setError(
@@ -194,7 +194,7 @@ export function useAuth(_portal: AuthPortal = 'fulfillment') {
         setAuthBusy(false)
       }
     },
-    [],
+    [portal],
   )
 
   const onSetInitialPassword = useCallback(
@@ -231,7 +231,7 @@ export function useAuth(_portal: AuthPortal = 'fulfillment') {
         }
         const data = (await res.json()) as { access_token: string }
         setPendingPasswordSetupEmail(null)
-        setStoredToken(data.access_token)
+        setStoredToken(data.access_token, portal)
         setToken(data.access_token)
       } catch {
         setError(
@@ -241,16 +241,16 @@ export function useAuth(_portal: AuthPortal = 'fulfillment') {
         setAuthBusy(false)
       }
     },
-    [pendingPasswordSetupEmail],
+    [pendingPasswordSetupEmail, portal],
   )
 
   const logout = useCallback(() => {
-    setStoredToken(null)
+    setStoredToken(null, portal)
     setToken(null)
     setMe(null)
     setError(null)
     setPendingPasswordSetupEmail(null)
-  }, [])
+  }, [portal])
 
   return {
     token,

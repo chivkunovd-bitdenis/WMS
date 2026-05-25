@@ -1,10 +1,71 @@
 from __future__ import annotations
 
+import asyncio
 import time
 import uuid
 
 import pytest
 from httpx import AsyncClient
+from inbound_box_intake_helpers import fulfill_inbound_via_box_scans, post_primary_accept
+
+from app.services.background_job_service import JOB_TYPE_WILDBERRIES_CARDS_SYNC
+
+E2E_BARCODE = "2045526738950"
+
+
+async def _link_product_wb_barcode(
+    async_client: AsyncClient,
+    h: dict[str, str],
+    *,
+    seller_id: str,
+    product_id: str,
+    monkeypatch: pytest.MonkeyPatch,
+    barcode: str = E2E_BARCODE,
+) -> None:
+    async def fake_cards(
+        client: object,
+        *,
+        api_token: str,
+        content_api_base: str | None = None,
+        limit: int = 100,
+    ) -> dict[str, object]:
+        return {
+            "cards": [
+                {
+                    "nmID": 555001,
+                    "vendorCode": "VC-MU",
+                    "sizes": [{"skus": [barcode]}],
+                }
+            ],
+            "cursor": {},
+        }
+
+    monkeypatch.setattr(
+        "app.services.wildberries_sync_service.fetch_cards_list",
+        fake_cards,
+    )
+    await async_client.patch(
+        f"/integrations/wildberries/sellers/{seller_id}/tokens",
+        headers=h,
+        json={"content_api_token": "wb-content-test"},
+    )
+    start = await async_client.post(
+        "/operations/background-jobs",
+        headers=h,
+        json={"job_type": JOB_TYPE_WILDBERRIES_CARDS_SYNC, "seller_id": seller_id},
+    )
+    jid = start.json()["id"]
+    for _ in range(40):
+        await asyncio.sleep(0.12)
+        jr = await async_client.get(f"/operations/background-jobs/{jid}", headers=h)
+        if jr.json()["status"] == "done":
+            break
+    link = await async_client.post(
+        f"/integrations/wildberries/sellers/{seller_id}/link-product",
+        headers=h,
+        json={"product_id": product_id, "nm_id": 555001},
+    )
+    assert link.status_code == 200, link.text
 
 
 async def _seller_wb_mp_warehouse(
@@ -29,6 +90,47 @@ async def _seller_wb_mp_warehouse(
     rows = whs.json()
     assert len(rows) >= 1
     return sid, int(rows[0]["wb_warehouse_id"])
+
+
+async def _post_inventory(
+    async_client: AsyncClient,
+    h: dict[str, str],
+    *,
+    warehouse_id: str,
+    product_id: str,
+    qty: int,
+    location_code: str,
+) -> str:
+    loc = await async_client.post(
+        f"/warehouses/{warehouse_id}/locations",
+        headers=h,
+        json={"code": location_code},
+    )
+    assert loc.status_code == 200, loc.text
+    location_id = str(loc.json()["id"])
+    base_in = "/operations/inbound-intake-requests"
+    inbound = await async_client.post(base_in, headers=h, json={"warehouse_id": warehouse_id})
+    assert inbound.status_code == 201, inbound.text
+    rid = inbound.json()["id"]
+    line = await async_client.post(
+        f"{base_in}/{rid}/lines",
+        headers=h,
+        json={
+            "product_id": product_id,
+            "expected_qty": qty,
+            "storage_location_id": location_id,
+        },
+    )
+    assert line.status_code == 201, line.text
+    await async_client.post(f"{base_in}/{rid}/submit", headers=h)
+    await post_primary_accept(async_client, base_in, rid, h)
+    sku = line.json()["sku_code"]
+    await fulfill_inbound_via_box_scans(async_client, h, rid, sku, qty)
+    verify = await async_client.post(f"{base_in}/{rid}/verify", headers=h)
+    assert verify.status_code == 200, verify.text
+    post = await async_client.post(f"{base_in}/{rid}/post", headers=h)
+    assert post.status_code == 200, post.text
+    return location_id
 
 
 @pytest.mark.asyncio
@@ -184,6 +286,27 @@ async def test_marketplace_unload_add_line_and_detail(
         },
     )
     pid = pr.json()["id"]
+    pr_no_stock = await async_client.post(
+        "/products",
+        headers=h,
+        json={
+            "name": "No stock",
+            "sku_code": f"NS-{suffix}",
+            "length_mm": 1,
+            "width_mm": 1,
+            "height_mm": 1,
+            "seller_id": sid,
+        },
+    )
+    pid_no_stock = pr_no_stock.json()["id"]
+    await _post_inventory(
+        async_client,
+        h,
+        warehouse_id=wid,
+        product_id=pid,
+        qty=5,
+        location_code="MU-L1",
+    )
 
     mu = await async_client.post(
         "/operations/marketplace-unload-requests",
@@ -198,6 +321,14 @@ async def test_marketplace_unload_add_line_and_detail(
     )
     assert det0.status_code == 200
     assert det0.json()["lines"] == []
+
+    no_stock_ln = await async_client.post(
+        f"/operations/marketplace-unload-requests/{mid}/lines",
+        headers=h,
+        json={"product_id": pid_no_stock, "quantity": 1},
+    )
+    assert no_stock_ln.status_code == 422
+    assert no_stock_ln.json()["detail"] == "insufficient_available"
 
     ln = await async_client.post(
         f"/operations/marketplace-unload-requests/{mid}/lines",
@@ -296,6 +427,14 @@ async def test_marketplace_unload_submit_delete_and_blocks(
         },
     )
     pid = pr.json()["id"]
+    await _post_inventory(
+        async_client,
+        h,
+        warehouse_id=wid,
+        product_id=pid,
+        qty=5,
+        location_code="MU-BLOCK",
+    )
     mu = await async_client.post(
         "/operations/marketplace-unload-requests",
         headers=h,
@@ -335,14 +474,13 @@ async def test_marketplace_unload_submit_delete_and_blocks(
         json={"product_id": pid, "quantity": 1},
     )
     assert add_blocked.status_code == 409
-    assert add_blocked.json()["detail"] == "not_editable"
+    assert add_blocked.json()["detail"] == "duplicate_line"
 
-    del_blocked = await async_client.delete(
+    del_confirmed = await async_client.delete(
         f"/operations/marketplace-unload-requests/{mid}/lines/{line_id}",
         headers=h,
     )
-    assert del_blocked.status_code == 409
-    assert del_blocked.json()["detail"] == "not_editable"
+    assert del_confirmed.status_code == 204
 
     mu2 = await async_client.post(
         "/operations/marketplace-unload-requests",
@@ -425,6 +563,33 @@ async def test_marketplace_unload_allows_draft_without_wb_warehouse_and_requires
     )
     assert patch.status_code == 200, patch.text
     assert patch.json()["wb_mp_warehouse_id"] == wb_wid
+
+    pr = await async_client.post(
+        "/products",
+        headers=h,
+        json={
+            "name": "P",
+            "sku_code": f"S-{suffix}",
+            "length_mm": 1,
+            "width_mm": 1,
+            "height_mm": 1,
+            "seller_id": sid,
+        },
+    )
+    pid = pr.json()["id"]
+    await _post_inventory(
+        async_client,
+        h,
+        warehouse_id=wid,
+        product_id=pid,
+        qty=2,
+        location_code="MU-NOWB",
+    )
+    await async_client.post(
+        f"/operations/marketplace-unload-requests/{mid}/lines",
+        headers=h,
+        json={"product_id": pid, "quantity": 1},
+    )
 
     sub = await async_client.post(
         f"/operations/marketplace-unload-requests/{mid}/submit", headers=h
@@ -560,3 +725,158 @@ async def test_discrepancy_act_submit_and_inbound_line_rules(async_client: Async
     )
     assert add_after.status_code == 409
     assert add_after.json()["detail"] == "not_editable"
+
+
+@pytest.mark.asyncio
+async def test_marketplace_unload_ship_deducts_stock_by_pick_and_scan(
+    async_client: AsyncClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    suffix = str(int(time.time() * 1000))
+    reg = await async_client.post(
+        "/auth/register",
+        json={
+            "organization_name": "MuShip Co",
+            "slug": f"muship-{suffix}",
+            "admin_email": f"muship-{suffix}@example.com",
+            "password": "password123",
+        },
+    )
+    token = str(reg.json()["access_token"])
+    h = {"Authorization": f"Bearer {token}"}
+    wh = await async_client.post(
+        "/warehouses", headers=h, json={"name": "W", "code": f"w-{suffix}"}
+    )
+    wid = wh.json()["id"]
+    sid, wb_wid = await _seller_wb_mp_warehouse(async_client, h, monkeypatch)
+    pr = await async_client.post(
+        "/products",
+        headers=h,
+        json={
+            "name": "P",
+            "sku_code": f"S-{suffix}",
+            "length_mm": 1,
+            "width_mm": 1,
+            "height_mm": 1,
+            "seller_id": sid,
+        },
+    )
+    pid = pr.json()["id"]
+    await _link_product_wb_barcode(
+        async_client, h, seller_id=sid, product_id=pid, monkeypatch=monkeypatch
+    )
+    loc_id = await _post_inventory(
+        async_client,
+        h,
+        warehouse_id=wid,
+        product_id=pid,
+        qty=5,
+        location_code="MU-SHIP",
+    )
+
+    bal_before = await async_client.get(
+        "/operations/inventory-balances/summary",
+        headers=h,
+        params={"warehouse_id": wid},
+    )
+    assert bal_before.status_code == 200
+    row_before = next(x for x in bal_before.json() if x["product_id"] == pid)
+    assert row_before["quantity"] == 5
+
+    mu = await async_client.post(
+        "/operations/marketplace-unload-requests",
+        headers=h,
+        json={"warehouse_id": wid, "seller_id": sid, "wb_mp_warehouse_id": wb_wid},
+    )
+    mid = mu.json()["id"]
+    await async_client.post(
+        f"/operations/marketplace-unload-requests/{mid}/lines",
+        headers=h,
+        json={"product_id": pid, "quantity": 3},
+    )
+
+    sub = await async_client.post(
+        f"/operations/marketplace-unload-requests/{mid}/submit",
+        headers=h,
+    )
+    assert sub.status_code == 200, sub.text
+    assert sub.json()["status"] == "confirmed"
+
+    ship_blocked = await async_client.post(
+        f"/operations/marketplace-unload-requests/{mid}/ship",
+        headers=h,
+    )
+    assert ship_blocked.status_code == 422
+    assert ship_blocked.json()["detail"] == "scans_required"
+
+    box = await async_client.post(
+        f"/operations/marketplace-unload-requests/{mid}/boxes",
+        headers=h,
+        json={"box_preset": "60_40_40"},
+    )
+    assert box.status_code == 201, box.text
+    box_id = box.json()["id"]
+    for _ in range(3):
+        scan = await async_client.post(
+            f"/operations/marketplace-unload-requests/{mid}/boxes/{box_id}/scan",
+            headers=h,
+            json={"barcode": E2E_BARCODE},
+        )
+        assert scan.status_code == 200, scan.text
+    close = await async_client.post(
+        f"/operations/marketplace-unload-requests/{mid}/boxes/{box_id}/close",
+        headers=h,
+    )
+    assert close.status_code == 200, close.text
+
+    pick_bad = await async_client.put(
+        f"/operations/marketplace-unload-requests/{mid}/pick-allocations",
+        headers=h,
+        json={
+            "allocations": [
+                {
+                    "product_id": pid,
+                    "storage_location_id": loc_id,
+                    "quantity": 2,
+                }
+            ]
+        },
+    )
+    assert pick_bad.status_code == 422
+    assert pick_bad.json()["detail"] == "pick_scan_mismatch"
+
+    pick_ok = await async_client.put(
+        f"/operations/marketplace-unload-requests/{mid}/pick-allocations",
+        headers=h,
+        json={
+            "allocations": [
+                {
+                    "product_id": pid,
+                    "storage_location_id": loc_id,
+                    "quantity": 3,
+                }
+            ]
+        },
+    )
+    assert pick_ok.status_code == 200, pick_ok.text
+
+    ship = await async_client.post(
+        f"/operations/marketplace-unload-requests/{mid}/ship",
+        headers=h,
+    )
+    assert ship.status_code == 200, ship.text
+    assert ship.json()["status"] == "shipped"
+
+    bal_after = await async_client.get(
+        "/operations/inventory-balances/summary",
+        headers=h,
+        params={"warehouse_id": wid},
+    )
+    row_after = next(x for x in bal_after.json() if x["product_id"] == pid)
+    assert row_after["quantity"] == 2
+
+    ship_again = await async_client.post(
+        f"/operations/marketplace-unload-requests/{mid}/ship",
+        headers=h,
+    )
+    assert ship_again.status_code == 409
+    assert ship_again.json()["detail"] == "bad_status"

@@ -28,6 +28,7 @@ import {
 import { apiUrl } from '../../api'
 import { ProductPhotoThumb } from '../../components/ProductPhotoThumb'
 import { readApiErrorMessage } from '../../utils/readApiErrorMessage'
+import { resolveProductIdByBarcode } from '../../utils/resolveProductByBarcode'
 
 export type WbCatalogRow = {
   id: string
@@ -58,6 +59,9 @@ type InboundDetail = {
   warehouse_id: string
   status: string
   planned_delivery_date: string | null
+  planned_box_count: number | null
+  actual_box_count: number | null
+  boxes_discrepancy: boolean
   has_discrepancy: boolean
   lines: InboundLine[]
 }
@@ -111,6 +115,7 @@ export function SellerInboundDraftScreen({
   const [pickerCategory, setPickerCategory] = useState<string>('__all__')
   const [pickerQtyByProduct, setPickerQtyByProduct] = useState<Record<string, number>>({})
   const [plannedDateDraft, setPlannedDateDraft] = useState<string>('')
+  const [plannedBoxCountDraft, setPlannedBoxCountDraft] = useState<string>('1')
 
   const loadDetail = useCallback(
     async (rid: string) => {
@@ -179,6 +184,12 @@ export function SellerInboundDraftScreen({
   useEffect(() => {
     setPlannedDateDraft(detail?.planned_delivery_date ?? '')
   }, [detail?.planned_delivery_date])
+
+  useEffect(() => {
+    if (detail?.planned_box_count != null) {
+      setPlannedBoxCountDraft(String(detail.planned_box_count))
+    }
+  }, [detail?.planned_box_count])
 
   const catalogById = useMemo(() => {
     const m = new Map<string, WbCatalogRow>()
@@ -344,7 +355,7 @@ export function SellerInboundDraftScreen({
     }
   }
 
-  const patchPlannedDate = async (isoDate: string) => {
+  const patchDraftField = async (body: Record<string, unknown>) => {
     if (!requestId) {
       return
     }
@@ -357,7 +368,7 @@ export function SellerInboundDraftScreen({
           ...authHeaders(token),
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({ planned_delivery_date: isoDate }),
+        body: JSON.stringify(body),
       })
       if (!res.ok) {
         setLocalError(await readApiErrorMessage(res))
@@ -365,10 +376,23 @@ export function SellerInboundDraftScreen({
       }
       setDetail((await res.json()) as InboundDetail)
     } catch (e) {
-      setLocalError(e instanceof Error ? e.message : 'Не удалось сохранить дату.')
+      setLocalError(e instanceof Error ? e.message : 'Не удалось сохранить заявку.')
     } finally {
       setBusy(false)
     }
+  }
+
+  const patchPlannedDate = async (isoDate: string) => {
+    await patchDraftField({ planned_delivery_date: isoDate })
+  }
+
+  const patchPlannedBoxCount = async (raw: string) => {
+    const n = Math.floor(Number(raw))
+    if (!Number.isFinite(n) || n < 1) {
+      setLocalError('Укажите количество коробов (целое число ≥ 1).')
+      return
+    }
+    await patchDraftField({ planned_box_count: n })
   }
 
   const patchLineQty = async (lineId: string, expectedQty: number) => {
@@ -520,6 +544,26 @@ export function SellerInboundDraftScreen({
                 htmlInput: { 'data-testid': 'seller-inbound-planned-date' },
               }}
             />
+            <TextField
+              label="Коробов (план)"
+              type="number"
+              size="small"
+              disabled={draftLocked || busy}
+              value={plannedBoxCountDraft}
+              onChange={(e) => setPlannedBoxCountDraft(e.target.value)}
+              onBlur={() => {
+                if (!detail) return
+                const n = Math.floor(Number(plannedBoxCountDraft))
+                if (detail.planned_box_count === n) return
+                void patchPlannedBoxCount(plannedBoxCountDraft)
+              }}
+              slotProps={{
+                htmlInput: {
+                  min: 1,
+                  'data-testid': 'seller-inbound-planned-boxes',
+                },
+              }}
+            />
             <Chip
               label={statusRu(detail.status)}
               color={detail.status === 'draft' ? 'default' : 'primary'}
@@ -545,7 +589,13 @@ export function SellerInboundDraftScreen({
             <Button
               variant="contained"
               color="secondary"
-              disabled={draftLocked || busy || detail.lines.length === 0}
+              disabled={
+                draftLocked ||
+                busy ||
+                detail.lines.length === 0 ||
+                !Number.isFinite(Number(plannedBoxCountDraft)) ||
+                Math.floor(Number(plannedBoxCountDraft)) < 1
+              }
               onClick={() => void submitToWarehouse()}
               data-testid="seller-inbound-submit-warehouse"
             >
@@ -697,6 +747,16 @@ export function SellerInboundDraftScreen({
               label="Поиск (артикул, ШК, nm, название, артикул продавца)"
               value={pickerSearch}
               onChange={(e) => setPickerSearch(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key !== 'Enter' || !catalog) return
+                e.preventDefault()
+                const productId = resolveProductIdByBarcode(catalog, pickerSearch)
+                const targetId =
+                  productId ?? (filteredPickerRows.length === 1 ? filteredPickerRows[0]!.id : null)
+                if (!targetId) return
+                setPickerQty(targetId, (pickerQtyByProduct[targetId] ?? 0) + 1)
+                setPickerSearch('')
+              }}
               size="small"
               fullWidth
               slotProps={{ htmlInput: { 'data-testid': 'seller-inbound-picker-search' } }}

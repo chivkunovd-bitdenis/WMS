@@ -87,11 +87,8 @@ test.describe('Full WMS user journey', () => {
     ]);
     await expect(page.getByTestId('inbound-detail-status')).toContainText('primary_accepted');
 
-    await page.getByTestId('inbound-line-actual-qty').fill('5');
-    await Promise.all([
-      waitForPatchOk(page, '/api/operations/inbound-intake-requests', (u) => u.includes('/actual')),
-      page.getByTestId('inbound-line-actual-save').click(),
-    ]);
+    const { v2InboundBoxIntakeUi } = await import('./inbound-boxes-helpers');
+    await v2InboundBoxIntakeUi(page, h, sku, 5);
     await Promise.all([
       waitForPostOk(page, '/api/operations/inbound-intake-requests', (u) => u.includes('/verify')),
       page.getByTestId('inbound-verify-complete').click(),
@@ -193,17 +190,8 @@ test.describe('Full WMS user journey', () => {
     ]);
     await expect(page.getByTestId('inbound-detail-status')).toContainText('primary_accepted');
 
-    await page.getByTestId('inbound-line-actual-qty').fill('8');
-    await Promise.all([
-      page.waitForResponse(
-        (r) =>
-          r.request().method() === 'PATCH' &&
-          r.url().includes('/api/operations/inbound-intake-requests') &&
-          r.url().includes('/actual') &&
-          r.status() === 200,
-      ),
-      page.getByTestId('inbound-line-actual-save').click(),
-    ]);
+    const { v2InboundBoxIntakeUi: v2IntakeB } = await import('./inbound-boxes-helpers');
+    await v2IntakeB(page, h, sku, 8);
     await Promise.all([
       waitForPostOk(page, '/api/operations/inbound-intake-requests', (u) => u.includes('/verify')),
       page.getByTestId('inbound-verify-complete').click(),

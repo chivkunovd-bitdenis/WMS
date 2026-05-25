@@ -2,6 +2,7 @@ import { test, expect } from '@playwright/test';
 
 import { waitForGetOk, waitForPostOk } from './api-waits';
 import { openFulfillmentRegistration } from './auth-flow';
+import { fillFfInboundBoxLineQty } from './inbound-boxes-helpers';
 
 // TC-NEW-FF-001 — распределение приёмки по ячейкам (FF): частично, остаток в «Без ячейки», завершение фиксирует read-only.
 test('ff inbound distribution: partial, leftover without cell, complete -> readonly', async ({ page }) => {
@@ -63,12 +64,11 @@ test('ff inbound distribution: partial, leftover without cell, complete -> reado
 
   const sub = await page.request.post(`${base}/${rid}/submit`, { headers: h });
   expect(sub.ok()).toBeTruthy();
-  const prim = await page.request.post(`${base}/${rid}/primary-accept`, { headers: h });
+  const prim = await page.request.post(`${base}/${rid}/primary-accept`, { headers: h, data: { actual_box_count: 1 }  });
   expect(prim.ok()).toBeTruthy();
-  const got = await page.request.get(`${base}/${rid}`, { headers: h });
-  expect(got.ok()).toBeTruthy();
-  const lineId = ((await got.json()) as { lines: { id: string }[] }).lines[0]!.id;
-  // Факт задаём через UI в основной таблице, затем завершаем пересчёт.
+  const primBody = (await prim.json()) as {
+    boxes: { id: string; internal_barcode: string }[];
+  };
 
   await page.goto('/app/ff/dashboard');
   await expect(page.getByTestId('ff-dashboard-inbound-block')).toBeVisible();
@@ -78,10 +78,17 @@ test('ff inbound distribution: partial, leftover without cell, complete -> reado
   await expect(page.getByTestId('ff-inbound-doc-root')).toBeVisible();
   await expect(page.getByTestId('ff-inbound-status-chip')).toContainText('Принято на складе');
 
-  const lineRow = page.getByTestId('ff-inbound-line-row').first();
-  await lineRow.getByTestId('ff-inbound-line-actual').fill('5');
-  // blur to trigger save
-  await page.getByTestId('ff-inbound-status-chip').click();
+  const inb = primBody.boxes[0]!.internal_barcode;
+  await page.getByTestId('ff-inbound-box-open-scan').fill(inb);
+  await Promise.all([
+    waitForPostOk(page, base, (u) => u.includes('/boxes/open')),
+    page.getByTestId('ff-inbound-box-open-submit').click(),
+  ]);
+  await fillFfInboundBoxLineQty(page, 5);
+  await Promise.all([
+    waitForPostOk(page, base, (u) => u.includes('/close')),
+    page.getByTestId('ff-inbound-box-close').click(),
+  ]);
 
   const [verifyRes] = await Promise.all([
     waitForPostOk(page, '/api/operations/inbound-intake-requests', (u) => u.includes('/verify')),
@@ -98,8 +105,14 @@ test('ff inbound distribution: partial, leftover without cell, complete -> reado
   await row.getByTestId('ff-inbound-distribution-product').click();
   await page.getByRole('option', { name: new RegExp(sku) }).click();
   await row.getByTestId('ff-inbound-distribution-qty').fill('2');
+  // TC-NEW-C05 — нераспределённый остаток выделен (без ячейки)
+  await expect(page.getByTestId('ff-inbound-distribution-no-cell')).toHaveAttribute('data-pending', '1');
+  await expect(page.getByTestId('ff-inbound-distribution-no-cell-line')).toContainText('3');
+
   await row.getByTestId('ff-inbound-distribution-location').click();
   await page.getByRole('option', { name: 'A-01' }).click();
+  // TC-NEW-C03 — печать ШК выбранной ячейки
+  await expect(row.getByTestId('ff-inbound-distribution-location-print')).toBeVisible();
 
   const [saveRes] = await Promise.all([
     page.waitForResponse((r) => r.request().method() === 'PUT' && r.url().includes('/distribution-lines') && r.status() === 200),

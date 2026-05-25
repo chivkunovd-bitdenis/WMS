@@ -131,7 +131,8 @@ VITE_API_PROXY="http://127.0.0.1:28080" npm --prefix frontend run dev
 
 | Сервис | URL / хост-порт | Переменная в `.env` |
 |--------|-----------------|---------------------|
-| Фронт (Vite) | http://localhost:**15173** | `WMS_WEB_PORT` |
+| Портал ФФ (Docker `web`) | http://localhost:**15173** | `WMS_WEB_PORT` |
+| Портал селлера (Docker `web_seller`) | http://localhost:**15174** | `WMS_SELLER_WEB_PORT` |
 | API | http://localhost:**18080** | `WMS_API_PORT` |
 | PostgreSQL | `localhost:5433` | `WMS_DB_PORT` |
 
@@ -141,7 +142,17 @@ VITE_API_PROXY="http://127.0.0.1:28080" npm --prefix frontend run dev
 WMS_DB_PORT=55433
 WMS_API_PORT=28080
 WMS_WEB_PORT=25173
+WMS_SELLER_WEB_PORT=25174
 ```
+
+Локальный Docker поднимает **два независимых веб-адреса**: только ФФ на `15173` и только селлер на `15174` (общий API на `18080`). Сессии разделены: `wms_token_ff` и `wms_token_seller` в `localStorage`.
+
+```bash
+docker compose up -d --build
+```
+
+- ФФ: http://localhost:15173/ (bootstrap: `admin@test.example.com` / `password123`)
+- Селлер: http://localhost:15174/
 
 Миграции БД (после изменений схемы):
 
@@ -202,7 +213,7 @@ Caddy хранит сертификаты Let's Encrypt в Docker volume `wms_ca
 - Дашборд ФФ: `/app/ff/dashboard` (недельный календарь, сводки inbound/outbound)
 - Поставки и загрузки / Supply and Load (единый список): `/app/ff/supplies-shipments`
 - Заглушки: `/app/ff/products`, `/app/ff/honest-sign`
-- Каталог (склады и ячейки): `/app/catalog`, `/app/catalog/products` (в сайдбаре ФФ также ведёт сюда пункт «Склады и ячейки»)
+- Каталог (склады, ячейки, селлеры, WB): `/app/catalog`, `/app/catalog/products` (в сайдбаре ФФ — пункт **«Каталог»**)
 - Операции: `/app/ops`, `/app/ops/inbound`, `/app/ops/outbound`, `/app/ops/movements`, `/app/ops/transfers`
 - Интеграции WB: `/app/integrations/wb` (редирект с `/app/ff/integrations/wb`)
 
@@ -214,7 +225,7 @@ Caddy хранит сертификаты Let's Encrypt в Docker volume `wms_ca
 - Настройки: `/seller/settings`
 - Черновик inbound: `/seller/inbound/new` и `/seller/inbound/:id`
 
-Локально в Vite (multi-page) удобная точка входа seller-приложения: `http://localhost:15173/seller/index.html` (если поднят `npm --prefix frontend run dev`).
+Локально в Vite (multi-page, один dev-сервер) seller по-прежнему: `http://localhost:5173/seller/index.html` (basename `/seller`). В Docker — отдельный порт **15174** с basename `/`.
 
 ## CI gates (Definition of Done)
 

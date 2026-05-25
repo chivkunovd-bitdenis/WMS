@@ -4,6 +4,7 @@ import time
 
 import pytest
 from httpx import AsyncClient
+from inbound_box_intake_helpers import fulfill_inbound_via_box_scans, post_primary_accept
 
 
 @pytest.mark.asyncio
@@ -52,6 +53,7 @@ async def test_inbound_distribution_lines_validate_limits_and_lock(
     )
     assert pr.status_code == 200, pr.text
     pid = pr.json()["id"]
+    sku = pr.json()["sku_code"]
 
     base = "/operations/inbound-intake-requests"
     cr = await async_client.post(base, headers=ah, json={"warehouse_id": wid})
@@ -66,19 +68,11 @@ async def test_inbound_distribution_lines_validate_limits_and_lock(
     assert ln.status_code == 201, ln.text
 
     await async_client.post(f"{base}/{rid}/submit", headers=ah)
-    prim = await async_client.post(f"{base}/{rid}/primary-accept", headers=ah)
+    prim = await post_primary_accept(async_client, base, rid, ah)
     assert prim.status_code == 200, prim.text
     assert prim.json()["status"] == "primary_accepted"
 
-    got = await async_client.get(f"{base}/{rid}", headers=ah)
-    assert got.status_code == 200, got.text
-    line_id = got.json()["lines"][0]["id"]
-    act = await async_client.patch(
-        f"{base}/{rid}/lines/{line_id}/actual",
-        headers=ah,
-        json={"actual_qty": 5},
-    )
-    assert act.status_code == 200, act.text
+    await fulfill_inbound_via_box_scans(async_client, ah, rid, sku, 5)
     ver = await async_client.post(f"{base}/{rid}/verify", headers=ah)
     assert ver.status_code == 200, ver.text
     assert ver.json()["status"] == "verified"

@@ -32,7 +32,13 @@ async def fetch_cards_list(
     """POST /content/v2/get/cards/list — first page (import-only, MVP)."""
     if settings.e2e_mock_wb_cards:
         return {
-            "cards": [{"nmID": 424242, "vendorCode": "E2E-MOCK"}],
+            "cards": [
+                {
+                    "nmID": 424242,
+                    "vendorCode": "E2E-MOCK",
+                    "sizes": [{"skus": ["E2E-MOCK-BARCODE"]}],
+                }
+            ],
             "cursor": {"total": 1},
         }
     base = (content_api_base or settings.wildberries_content_api_base).rstrip("/")

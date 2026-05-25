@@ -72,7 +72,23 @@ export function waitForPatchOk(
   return page.waitForResponse((r) => isMethodOk('PATCH', r, pathIncludes, urlFilter));
 }
 
+export function waitForPutOk(
+  page: Page,
+  pathIncludes: string,
+  urlFilter?: (url: string) => boolean,
+): Promise<Response> {
+  return page.waitForResponse((r) => isMethodOk('PUT', r, pathIncludes, urlFilter));
+}
+
 /** Inbound line partial receive: POST .../lines/{id}/receive */
+export function waitForInboundBoxLabelPrintedOk(page: Page): Promise<Response> {
+  return page.waitForResponse((r) =>
+    isMethodOk('POST', r, '/api/operations/inbound-intake-requests', (u) =>
+      u.includes('/mark-label-printed'),
+    ),
+  );
+}
+
 export function waitForInboundReceiveOk(page: Page): Promise<Response> {
   return page.waitForResponse((r) =>
     isMethodOk('POST', r, '/api/operations/inbound-intake-requests', (u) =>

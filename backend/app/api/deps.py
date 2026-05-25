@@ -68,6 +68,22 @@ async def require_fulfillment_admin(
     return user
 
 
+async def require_ff_or_seller(
+    user: Annotated[User, Depends(get_current_user)],
+) -> User:
+    if user.role not in (FULFILLMENT_ADMIN, FULFILLMENT_SELLER):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="forbidden",
+        )
+    if user.role == FULFILLMENT_SELLER and user.seller_id is None:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="seller_not_linked",
+        )
+    return user
+
+
 async def seller_line_product_scope(
     user: Annotated[User, Depends(get_current_user)],
 ) -> uuid.UUID | None:

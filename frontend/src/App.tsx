@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from 'react'
 import './App.css'
 import { apiUrl } from './api'
-import { Navigate, Route, Routes } from 'react-router-dom'
+import { Navigate, Route, Routes, useNavigate } from 'react-router-dom'
 import { ProfileLoadingScreen } from './screens/ProfileLoadingScreen'
 import { PublicAuthScreen } from './screens/PublicAuthScreen'
 import { AuthedAppLayout } from './layouts/AuthedAppLayout'
@@ -48,6 +48,8 @@ type ProductRow = {
   seller_name: string | null
   wb_nm_id?: number | null
   wb_vendor_code?: string | null
+  wb_barcodes?: string[]
+  wb_primary_barcode?: string | null
 }
 
 type SellerRow = { id: string; name: string }
@@ -75,12 +77,32 @@ type InboundLineRow = {
   storage_location_code: string | null
 }
 
+type InboundBoxLineRow = {
+  id: string
+  product_id: string
+  sku_code: string
+  product_name: string
+  quantity: number
+}
+
+type InboundBoxRow = {
+  id: string
+  box_number: number
+  internal_barcode: string
+  is_open: boolean
+  lines: InboundBoxLineRow[]
+}
+
 type InboundDetailRow = {
   id: string
   warehouse_id: string
   status: string
   planned_delivery_date: string | null
+  planned_box_count?: number | null
+  actual_box_count?: number | null
+  boxes_discrepancy?: boolean
   has_discrepancy?: boolean
+  boxes?: InboundBoxRow[]
   lines: InboundLineRow[]
 }
 
@@ -187,6 +209,8 @@ export default function App() {
     onCancelPasswordSetup,
     logout,
   } = useAuth('fulfillment')
+  const navigate = useNavigate()
+  const [pendingMpUnloadId, setPendingMpUnloadId] = useState<string | null>(null)
   const [warehouses, setWarehouses] = useState<WarehouseRow[]>([])
   const [selectedWarehouseId, setSelectedWarehouseId] = useState<string | null>(
     null,
@@ -345,13 +369,33 @@ export default function App() {
 
   const refreshProducts = useCallback(
     async (t: string) => {
-      const res = await fetch(apiUrl('/products'), {
-        headers: authHeaders(t),
-      })
-      if (!res.ok) {
-        throw new Error(await readApiErrorMessage(res))
+      const headers = authHeaders(t)
+      const [productsRes, catalogRes] = await Promise.all([
+        fetch(apiUrl('/products'), { headers }),
+        fetch(apiUrl('/products/ff-catalog'), { headers }),
+      ])
+      if (!productsRes.ok) {
+        throw new Error(await readApiErrorMessage(productsRes))
       }
-      setProducts((await res.json()) as ProductRow[])
+      const base = (await productsRes.json()) as ProductRow[]
+      if (!catalogRes.ok) {
+        setProducts(base)
+        return
+      }
+      const catalog = (await catalogRes.json()) as {
+        id: string
+        wb_barcodes?: string[]
+        wb_primary_barcode?: string | null
+      }[]
+      const barcodesById = new Map(
+        catalog.map((r) => [r.id, { wb_barcodes: r.wb_barcodes ?? [], wb_primary_barcode: r.wb_primary_barcode }]),
+      )
+      setProducts(
+        base.map((p) => {
+          const wb = barcodesById.get(p.id)
+          return wb ? { ...p, ...wb } : p
+        }),
+      )
     },
     [authHeaders],
   )
@@ -901,17 +945,33 @@ export default function App() {
     }
   }
 
-  async function onCreateLocation(e: React.FormEvent<HTMLFormElement>) {
-    e.preventDefault()
-    const form = e.currentTarget
+  async function onCreateLocation(body: {
+    code?: string
+    rack_name?: string
+    side?: 1 | 2
+    position?: number
+  }): Promise<boolean> {
     if (!token || !selectedWarehouseId) {
-      return
+      return false
+    }
+    const trimmedCode = body.code?.trim() ?? ''
+    const trimmedRack = body.rack_name?.trim() ?? ''
+    const hasRack = trimmedRack.length > 0
+    if (!hasRack && !trimmedCode) {
+      setCatalogError('Укажите стеллаж или код ячейки.')
+      return false
+    }
+    if (hasRack && !body.side) {
+      setCatalogError('Укажите сторону (1 или 2).')
+      return false
+    }
+    if (hasRack && !trimmedCode) {
+      setCatalogError('Не удалось сформировать название ячейки — проверьте стеллаж и сторону.')
+      return false
     }
     setCatalogError(null)
     setCatalogBusy(true)
     try {
-      const fd = new FormData(form)
-      const code = String(fd.get('location_code') ?? '').trim()
       const res = await fetch(
         apiUrl(`/warehouses/${selectedWarehouseId}/locations`),
         {
@@ -920,23 +980,78 @@ export default function App() {
             ...authHeaders(token),
             'Content-Type': 'application/json',
           },
-          body: JSON.stringify({ code }),
+          body: JSON.stringify(
+            hasRack
+              ? {
+                  rack_name: trimmedRack,
+                  side: body.side,
+                  position: body.position,
+                  code: trimmedCode,
+                }
+              : { code: trimmedCode },
+          ),
         },
       )
       if (!res.ok) {
-        setCatalogError(await readApiErrorMessage(res))
-        return
+        const msg = await readApiErrorMessage(res)
+        setCatalogError(
+          msg.includes('location_code_taken') || msg.includes('already exists')
+            ? 'Такой код ячейки уже есть на этом складе.'
+            : msg,
+        )
+        return false
       }
-      form.reset()
       await refreshLocations(token, selectedWarehouseId)
+      return true
     } catch (e) {
       setCatalogError(
         e instanceof Error
           ? e.message
           : 'Сеть: не удалось создать ячейку.',
       )
+      return false
     } finally {
       setCatalogBusy(false)
+    }
+  }
+
+  async function onListWarehouseRacks(warehouseId: string): Promise<string[]> {
+    if (!token) {
+      return []
+    }
+    try {
+      const res = await fetch(apiUrl(`/warehouses/${warehouseId}/racks`), {
+        headers: authHeaders(token),
+      })
+      if (!res.ok) {
+        return []
+      }
+      const rows = (await res.json()) as { name: string }[]
+      return rows.map((r) => r.name)
+    } catch {
+      return []
+    }
+  }
+
+  async function onSuggestLocation(
+    warehouseId: string,
+    rackName: string,
+    side: 1 | 2,
+  ): Promise<{ position: number; code: string } | null> {
+    if (!token) {
+      return null
+    }
+    try {
+      const params = new URLSearchParams({ rack_name: rackName, side: String(side) })
+      const res = await fetch(apiUrl(`/warehouses/${warehouseId}/locations/suggest?${params}`), {
+        headers: authHeaders(token),
+      })
+      if (!res.ok) {
+        return null
+      }
+      return (await res.json()) as { position: number; code: string }
+    } catch {
+      return null
     }
   }
 
@@ -1129,9 +1244,14 @@ export default function App() {
     setOpsError(null)
     setOpsBusy(true)
     try {
+      const plannedBoxes = inboundDetail?.planned_box_count ?? 1
       const res = await fetch(
         apiUrl(`/operations/inbound-intake-requests/${selectedInboundId}/primary-accept`),
-        { method: 'POST', headers: authHeaders(token) },
+        {
+          method: 'POST',
+          headers: { ...authHeaders(token), 'Content-Type': 'application/json' },
+          body: JSON.stringify({ actual_box_count: plannedBoxes }),
+        },
       )
       if (!res.ok) {
         setOpsError(await readApiErrorMessage(res))
@@ -1141,6 +1261,96 @@ export default function App() {
       await refreshInboundDetail(token, selectedInboundId)
     } catch (e) {
       setOpsError(e instanceof Error ? e.message : 'Не удалось выполнить первичную приёмку.')
+    } finally {
+      setOpsBusy(false)
+    }
+  }
+
+  async function onOpenInboundBoxByBarcode(barcode: string) {
+    if (!token || !selectedInboundId) {
+      return
+    }
+    setOpsError(null)
+    setOpsBusy(true)
+    try {
+      const res = await fetch(
+        apiUrl(`/operations/inbound-intake-requests/${selectedInboundId}/boxes/open`),
+        {
+          method: 'POST',
+          headers: { ...authHeaders(token), 'Content-Type': 'application/json' },
+          body: JSON.stringify({ barcode }),
+        },
+      )
+      if (!res.ok) {
+        setOpsError(await readApiErrorMessage(res))
+        return
+      }
+      await refreshInboundDetail(token, selectedInboundId)
+    } catch (e) {
+      setOpsError(e instanceof Error ? e.message : 'Не удалось открыть короб.')
+    } finally {
+      setOpsBusy(false)
+    }
+  }
+
+  async function onScanInboundProductBarcode(barcode: string) {
+    if (!token || !selectedInboundId) {
+      return
+    }
+    const openBox = inboundDetail?.boxes?.find((b) => b.is_open)
+    if (!openBox) {
+      setOpsError('Сначала отсканируйте короб (INB-…).')
+      return
+    }
+    setOpsError(null)
+    setOpsBusy(true)
+    try {
+      const res = await fetch(
+        apiUrl(
+          `/operations/inbound-intake-requests/${selectedInboundId}/boxes/${openBox.id}/scan`,
+        ),
+        {
+          method: 'POST',
+          headers: { ...authHeaders(token), 'Content-Type': 'application/json' },
+          body: JSON.stringify({ barcode }),
+        },
+      )
+      if (!res.ok) {
+        setOpsError(await readApiErrorMessage(res))
+        return
+      }
+      await refreshInboundDetail(token, selectedInboundId)
+    } catch (e) {
+      setOpsError(e instanceof Error ? e.message : 'Не удалось отсканировать товар.')
+    } finally {
+      setOpsBusy(false)
+    }
+  }
+
+  async function onCloseInboundBoxIntake() {
+    if (!token || !selectedInboundId) {
+      return
+    }
+    const openBox = inboundDetail?.boxes?.find((b) => b.is_open)
+    if (!openBox) {
+      return
+    }
+    setOpsError(null)
+    setOpsBusy(true)
+    try {
+      const res = await fetch(
+        apiUrl(
+          `/operations/inbound-intake-requests/${selectedInboundId}/boxes/${openBox.id}/close`,
+        ),
+        { method: 'POST', headers: authHeaders(token) },
+      )
+      if (!res.ok) {
+        setOpsError(await readApiErrorMessage(res))
+        return
+      }
+      await refreshInboundDetail(token, selectedInboundId)
+    } catch (e) {
+      setOpsError(e instanceof Error ? e.message : 'Не удалось закрыть короб.')
     } finally {
       setOpsBusy(false)
     }
@@ -2190,9 +2400,9 @@ export default function App() {
     const isFulfillmentAdmin = me.role === 'fulfillment_admin'
     const isFulfillmentSeller = me.role === 'fulfillment_seller'
     if (isFulfillmentSeller) {
-      // In Vite dev (MPA), the seller app is served from `/seller/index.html`.
-      // In prod (Caddy), `/seller/*` is the canonical public path.
-      window.location.assign(import.meta.env.PROD ? '/seller/' : '/seller/index.html')
+      const sellerPortalUrl =
+        import.meta.env.VITE_SELLER_PORTAL_URL ?? 'http://localhost:15174'
+      window.location.assign(sellerPortalUrl)
       return null
     }
     const portal: 'seller' | 'ff' = 'ff'
@@ -2228,15 +2438,27 @@ export default function App() {
                 onCreateSellerAccount={(e) => void onCreateSellerAccount(e)}
                 inboundSummaries={inboundSummaries}
                 outboundSummaries={outboundSummaries}
+                mpUnloadSummaries={marketplaceUnloadSummaries
+                  .filter((r) => r.status === 'submitted')
+                  .map((r) => ({
+                    id: r.id,
+                    status: r.status,
+                    line_count: r.line_count,
+                    planned_shipment_date: r.planned_shipment_date ?? null,
+                    created_at: r.created_at,
+                    warehouse_name: r.warehouse_name,
+                    seller_name: r.seller_name,
+                    marketplace_label: 'Wildberries',
+                    goods_qty_total: r.line_count,
+                  }))}
                 onOpenInbound={(id) => {
                   setSelectedOutboundId(null)
                   setSelectedInboundId(id)
                   setFfDocModal('inbound')
                 }}
                 onOpenOutbound={(id) => {
-                  setSelectedInboundId(null)
-                  setSelectedOutboundId(id)
-                  setFfDocModal('outbound')
+                  setPendingMpUnloadId(id)
+                  navigate(`${base}/ff/supplies-shipments`)
                 }}
               />
             }
@@ -2267,6 +2489,8 @@ export default function App() {
                 outboundSummaries={outboundSummaries}
                 marketplaceUnloadSummaries={marketplaceUnloadSummaries}
                 discrepancyActSummaries={discrepancyActSummaries}
+                initialMarketplaceUnloadId={pendingMpUnloadId}
+                onInitialMarketplaceUnloadOpened={() => setPendingMpUnloadId(null)}
                 onOpenInbound={(id) => {
                   setSelectedOutboundId(null)
                   setSelectedInboundId(id)
@@ -2328,7 +2552,9 @@ export default function App() {
                   setSelectedWarehouseId={setSelectedWarehouseId}
                   products={products}
                   onCreateWarehouse={(e) => void onCreateWarehouse(e)}
-                  onCreateLocation={(e) => void onCreateLocation(e)}
+                  onCreateLocation={onCreateLocation}
+                  onListWarehouseRacks={onListWarehouseRacks}
+                  onSuggestLocation={onSuggestLocation}
                   onCreateSeller={(e) => void onCreateSeller(e)}
                   onCreateProduct={(e) => void onCreateProduct(e)}
                   wbSellerId={wbSellerId}
@@ -2396,6 +2622,9 @@ export default function App() {
                 onAddInboundLine={(e) => void onAddInboundLine(e)}
                 onSubmitInboundRequest={() => void onSubmitInboundRequest()}
                 onPrimaryAcceptInboundRequest={() => void onPrimaryAcceptInboundRequest()}
+                onOpenInboundBoxByBarcode={(code) => void onOpenInboundBoxByBarcode(code)}
+                onScanInboundProductBarcode={(code) => void onScanInboundProductBarcode(code)}
+                onCloseInboundBoxIntake={() => void onCloseInboundBoxIntake()}
                 onSetInboundLineActualQty={(e) => void onSetInboundLineActualQty(e)}
                 onCompleteInboundVerification={() => void onCompleteInboundVerification()}
                 onSaveInboundLineStorage={(e) => void onSaveInboundLineStorage(e)}

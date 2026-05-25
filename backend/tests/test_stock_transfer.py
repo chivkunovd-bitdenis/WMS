@@ -4,6 +4,7 @@ import time
 
 import pytest
 from httpx import AsyncClient
+from inbound_box_intake_helpers import fulfill_inbound_via_box_scans
 
 
 @pytest.mark.asyncio
@@ -46,6 +47,7 @@ async def test_stock_transfer_moves_balance_and_journal(async_client: AsyncClien
         },
     )
     pid = pr.json()["id"]
+    sku = pr.json()["sku_code"]
 
     # stock через приёмку
     ir = await async_client.post(
@@ -68,14 +70,10 @@ async def test_stock_transfer_moves_balance_and_journal(async_client: AsyncClien
     )
     await async_client.post(
         f"/operations/inbound-intake-requests/{rid}/primary-accept", headers=h
-    )
+    , json={"actual_box_count": 1})
     inb = await async_client.get(f"/operations/inbound-intake-requests/{rid}", headers=h)
-    line_id = inb.json()["lines"][0]["id"]
-    await async_client.patch(
-        f"/operations/inbound-intake-requests/{rid}/lines/{line_id}/actual",
-        headers=h,
-        json={"actual_qty": 10},
-    )
+    inb.json()["lines"][0]["id"]
+    await fulfill_inbound_via_box_scans(async_client, h, rid, sku, 10)
     await async_client.post(
         f"/operations/inbound-intake-requests/{rid}/verify", headers=h
     )

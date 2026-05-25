@@ -18,8 +18,9 @@ import {
   TableRow,
   Typography,
 } from '@mui/material'
+import { SellerMarketplaceUnloadDialog } from '../../components/SellerMarketplaceUnloadDialog'
 
-type DocType = 'inbound' | 'outbound' | 'correction'
+type DocType = 'inbound' | 'mp_unload' | 'correction'
 
 type InboundSummaryRow = {
   id: string
@@ -28,13 +29,21 @@ type InboundSummaryRow = {
   planned_delivery_date: string | null
 }
 
-type OutboundSummaryRow = {
+type MpUnloadSummaryRow = {
   id: string
   status: string
   line_count: number
+  created_at?: string
 }
 
-function statusRu(status: string): string {
+function statusRu(status: string, docType: DocType): string {
+  if (docType === 'mp_unload') {
+    if (status === 'draft') return 'Черновик'
+    if (status === 'submitted') return 'Запланировано'
+    if (status === 'confirmed') return 'Подтверждено'
+    if (status === 'shipped') return 'Отгружено'
+    return status
+  }
   if (status === 'draft') return 'Черновик'
   if (status === 'submitted') return 'Передано на склад'
   if (status === 'primary_accepted') return 'Принято на складе'
@@ -55,21 +64,32 @@ type DocumentRow = {
 type Props = {
   busy: boolean
   error: string | null
+  token: string | null
+  authHeaders: (t: string) => Record<string, string>
+  warehouseId: string | null
   inboundSummaries: InboundSummaryRow[]
-  outboundSummaries: OutboundSummaryRow[]
+  mpUnloadSummaries: MpUnloadSummaryRow[]
   onCreateCorrection: () => void
+  onCreateMpUnload: () => Promise<string | null>
+  onRefreshMpUnloadList: () => Promise<void>
 }
 
 export function SellerDocumentsScreen({
   busy,
   error,
+  token,
+  authHeaders,
+  warehouseId,
   inboundSummaries,
-  outboundSummaries,
+  mpUnloadSummaries,
   onCreateCorrection,
+  onCreateMpUnload,
+  onRefreshMpUnloadList,
 }: Props) {
   const navigate = useNavigate()
   const [type, setType] = useState<DocType | 'all'>('all')
   const [sort, setSort] = useState<'date_desc' | 'date_asc'>('date_desc')
+  const [mpDialogId, setMpDialogId] = useState<string | null>(null)
 
   const rows = useMemo(() => {
     const all: DocumentRow[] = [
@@ -80,10 +100,10 @@ export function SellerDocumentsScreen({
         status: r.status,
         line_count: r.line_count,
       })),
-      ...outboundSummaries.map((r) => ({
-        type: 'outbound' as const,
+      ...mpUnloadSummaries.map((r) => ({
+        type: 'mp_unload' as const,
         id: r.id,
-        date: null,
+        date: r.created_at?.slice(0, 10) ?? null,
         status: r.status,
         line_count: r.line_count,
       })),
@@ -98,7 +118,7 @@ export function SellerDocumentsScreen({
       }
       return ad.localeCompare(bd) * sign
     })
-  }, [inboundSummaries, outboundSummaries, sort, type])
+  }, [inboundSummaries, mpUnloadSummaries, sort, type])
 
   return (
     <Box>
@@ -106,7 +126,7 @@ export function SellerDocumentsScreen({
         Документы
       </Typography>
       <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
-        Все документы селлера в одном списке
+        Поставки на ФФ и отгрузки на маркетплейс
       </Typography>
 
       {error ? (
@@ -140,6 +160,23 @@ export function SellerDocumentsScreen({
           >
             Создать заявку на поставку
           </Button>
+          <Button
+            variant="contained"
+            color="secondary"
+            data-testid="seller-create-mp-unload"
+            disabled={busy || !warehouseId}
+            onClick={() => {
+              void (async () => {
+                const id = await onCreateMpUnload()
+                if (id) {
+                  setMpDialogId(id)
+                }
+              })()
+            }}
+            sx={{ alignSelf: { xs: 'stretch', sm: 'auto' } }}
+          >
+            Создать отгрузку на МП
+          </Button>
         </Stack>
       </Paper>
 
@@ -156,7 +193,7 @@ export function SellerDocumentsScreen({
             >
               <MenuItem value="all">Все</MenuItem>
               <MenuItem value="inbound">Поставка</MenuItem>
-              <MenuItem value="outbound">Отгрузка</MenuItem>
+              <MenuItem value="mp_unload">Отгрузка на МП</MenuItem>
               <MenuItem value="correction">Акт расхождений</MenuItem>
             </Select>
           </FormControl>
@@ -193,22 +230,26 @@ export function SellerDocumentsScreen({
                 hover
                 data-testid="seller-documents-row"
                 data-doc-type={r.type}
-                sx={{ cursor: r.type === 'inbound' ? 'pointer' : 'default' }}
+                sx={{
+                  cursor: r.type === 'inbound' || r.type === 'mp_unload' ? 'pointer' : 'default',
+                }}
                 onClick={() => {
                   if (r.type === 'inbound') {
                     navigate(`/inbound/${r.id}`)
+                  } else if (r.type === 'mp_unload') {
+                    setMpDialogId(r.id)
                   }
                 }}
               >
                 <TableCell>
                   {r.type === 'inbound'
                     ? 'Поставка'
-                    : r.type === 'outbound'
-                      ? 'Отгрузка'
+                    : r.type === 'mp_unload'
+                      ? 'Отгрузка на МП'
                       : 'Акт расхождений'}
                 </TableCell>
                 <TableCell sx={{ color: 'text.secondary' }}>{r.date ?? '—'}</TableCell>
-                <TableCell>{statusRu(r.status)}</TableCell>
+                <TableCell>{statusRu(r.status, r.type)}</TableCell>
                 <TableCell align="right">{r.line_count}</TableCell>
               </TableRow>
             ))}
@@ -224,6 +265,19 @@ export function SellerDocumentsScreen({
           </TableBody>
         </Table>
       </TableContainer>
+
+      {token ? (
+        <SellerMarketplaceUnloadDialog
+          open={mpDialogId !== null}
+          requestId={mpDialogId}
+          token={token}
+          authHeaders={authHeaders}
+          warehouseId={warehouseId}
+          busy={busy}
+          onClose={() => setMpDialogId(null)}
+          onRefreshList={onRefreshMpUnloadList}
+        />
+      ) : null}
     </Box>
   )
 }

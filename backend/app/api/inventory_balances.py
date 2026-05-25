@@ -27,16 +27,26 @@ class InventoryBalanceRowOut(BaseModel):
     available: int
 
 
+class ProductLocationHintOut(BaseModel):
+    storage_location_id: str
+    storage_location_code: str
+    quantity: int
+    reserved: int
+    available: int
+
+
 @router.get("/summary", response_model=list[InventoryBalanceRowOut])
 async def get_inventory_balances_summary(
     user: Annotated[User, Depends(get_current_user)],
     session: Annotated[AsyncSession, Depends(get_db)],
     seller_scope: Annotated[uuid.UUID | None, Depends(seller_line_product_scope)],
+    warehouse_id: Annotated[uuid.UUID | None, Query()] = None,
 ) -> list[InventoryBalanceRowOut]:
     rows = await inventory_service.list_balances_total(
         session,
         user.tenant_id,
         seller_product_owner_id=seller_scope,
+        warehouse_id=warehouse_id,
     )
     return [
         InventoryBalanceRowOut(
@@ -48,6 +58,37 @@ async def get_inventory_balances_summary(
             available=qty - rsv,
         )
         for pid, sku_code, product_name, qty, rsv in rows
+    ]
+
+
+@router.get("/locations-by-product", response_model=list[ProductLocationHintOut])
+async def get_product_locations_in_warehouse(
+    user: Annotated[User, Depends(get_current_user)],
+    session: Annotated[AsyncSession, Depends(get_db)],
+    product_id: Annotated[uuid.UUID, Query()],
+    warehouse_id: Annotated[uuid.UUID, Query()],
+    seller_scope: Annotated[uuid.UUID | None, Depends(seller_line_product_scope)],
+) -> list[ProductLocationHintOut]:
+    if seller_scope is not None:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="forbidden",
+        )
+    rows = await inventory_service.list_locations_for_product_in_warehouse(
+        session,
+        user.tenant_id,
+        warehouse_id,
+        product_id,
+    )
+    return [
+        ProductLocationHintOut(
+            storage_location_id=str(loc_id),
+            storage_location_code=code,
+            quantity=on_hand,
+            reserved=rsv,
+            available=on_hand - rsv,
+        )
+        for loc_id, code, on_hand, rsv in rows
     ]
 
 

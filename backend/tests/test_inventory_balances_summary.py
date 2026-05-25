@@ -4,6 +4,7 @@ import time
 
 import pytest
 from httpx import AsyncClient
+from inbound_box_intake_helpers import fulfill_inbound_via_box_scans, post_primary_accept
 
 
 @pytest.mark.asyncio
@@ -64,9 +65,13 @@ async def test_inventory_balances_summary_seller_scope(async_client: AsyncClient
         },
     )
     pid1 = p1.json()["id"]
+    sku1 = p1.json()["sku_code"]
     pid2 = p2.json()["id"]
+    sku2 = p2.json()["sku_code"]
 
-    async def _inbound_post(product_id: str, storage_location_id: str, qty: int) -> None:
+    async def _inbound_post(
+        product_id: str, product_sku: str, storage_location_id: str, qty: int
+    ) -> None:
         base = "/operations/inbound-intake-requests"
         ir = await async_client.post(base, headers=h, json={"warehouse_id": wid})
         rid = ir.json()["id"]
@@ -80,18 +85,14 @@ async def test_inventory_balances_summary_seller_scope(async_client: AsyncClient
             },
         )
         await async_client.post(f"{base}/{rid}/submit", headers=h)
-        await async_client.post(f"{base}/{rid}/primary-accept", headers=h)
-        det = await async_client.get(f"{base}/{rid}", headers=h)
-        line_id = det.json()["lines"][0]["id"]
-        await async_client.patch(
-            f"{base}/{rid}/lines/{line_id}/actual", headers=h, json={"actual_qty": qty}
-        )
+        await post_primary_accept(async_client, base, rid, h)
+        await fulfill_inbound_via_box_scans(async_client, h, rid, product_sku, qty)
         await async_client.post(f"{base}/{rid}/verify", headers=h)
         await async_client.post(f"{base}/{rid}/post", headers=h)
 
-    await _inbound_post(pid1, lid1, 3)
-    await _inbound_post(pid1, lid2, 2)
-    await _inbound_post(pid2, lid1, 7)
+    await _inbound_post(pid1, sku1, lid1, 3)
+    await _inbound_post(pid1, sku1, lid2, 2)
+    await _inbound_post(pid2, sku2, lid1, 7)
 
     acc = await async_client.post(
         "/auth/seller-accounts",

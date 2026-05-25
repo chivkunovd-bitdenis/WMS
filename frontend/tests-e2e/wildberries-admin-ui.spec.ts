@@ -85,14 +85,18 @@ test('admin saves WB tokens, syncs cards and supplies, links SKU', async ({ page
   await page.goto('/app/integrations/wb');
   await page.getByTestId('wb-link-product-id').selectOption({ label: `${linkSku} — WB link item` });
   await page.getByTestId('wb-link-nm-id').fill('424242');
-  const [linkRes, prodListAfter] = await Promise.all([
+  const [linkRes] = await Promise.all([
     waitForPostOk(page, '/api/integrations/wildberries/sellers', (u) => u.includes('link-product')),
-    waitForGetOk(page, '/api/products'),
     page.getByTestId('wb-link-submit').click(),
   ]);
   expect(linkRes.ok()).toBeTruthy();
-  expect(prodListAfter.ok()).toBeTruthy();
-  const prodListJson = (await prodListAfter.json()) as Array<{
+  const linkJson = (await linkRes.json()) as { wb_nm_id: number; sku_code: string };
+  expect(linkJson.sku_code).toBe(linkSku);
+  expect(linkJson.wb_nm_id).toBe(424242);
+
+  const prodListRes = await page.request.get('/api/products', { headers: h });
+  expect(prodListRes.ok()).toBeTruthy();
+  const prodListJson = (await prodListRes.json()) as Array<{
     sku_code: string;
     wb_nm_id?: number | null;
   }>;
