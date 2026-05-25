@@ -4,6 +4,7 @@ import {
   Alert,
   Box,
   Button,
+  Chip,
   Dialog,
   DialogActions,
   DialogContent,
@@ -39,6 +40,7 @@ export type FfMarketplaceUnloadSummary = {
   seller_id: string | null
   seller_name: string | null
   planned_shipment_date?: string | null
+  ff_modified?: boolean
   created_at: string
 }
 
@@ -106,6 +108,7 @@ type MarketplaceUnloadDetail = {
   warehouse_id: string
   warehouse_name: string
   status: string
+  ff_modified: boolean
   wb_mp_warehouse_id: number | null
   lines: DocLineRow[]
   boxes: MarketplaceUnloadBox[]
@@ -133,6 +136,7 @@ type UnifiedRow = {
   lineCount: number
   sellerName: string | null
   extraLabel: string | null
+  ffModified: boolean
 }
 
 function statusRu(status: string): string {
@@ -281,6 +285,7 @@ export function FfSuppliesShipmentsPage({
           warehouse_id: string
           warehouse_name: string
           status: string
+          ff_modified?: boolean
           wb_mp_warehouse_id?: number | null
           lines: { id: string; sku_code: string; product_name: string; quantity: number }[]
           boxes?: {
@@ -310,6 +315,7 @@ export function FfSuppliesShipmentsPage({
           warehouse_id: j.warehouse_id,
           warehouse_name: j.warehouse_name,
           status: j.status,
+          ff_modified: Boolean(j.ff_modified),
           wb_mp_warehouse_id: j.wb_mp_warehouse_id ?? null,
           lines: j.lines.map((ln) => ({
             id: ln.id,
@@ -891,6 +897,7 @@ export function FfSuppliesShipmentsPage({
         lineCount: r.line_count,
         sellerName: r.seller_name ?? null,
         extraLabel: null,
+        ffModified: false,
       })),
       ...outboundSummaries.map((r) => ({
         kind: 'outbound' as const,
@@ -901,16 +908,18 @@ export function FfSuppliesShipmentsPage({
         lineCount: r.line_count,
         sellerName: r.seller_name ?? null,
         extraLabel: null,
+        ffModified: false,
       })),
       ...marketplaceUnloadSummaries.map((r) => ({
         kind: 'marketplace_unload' as const,
         id: r.id,
-        plannedDate: null,
+        plannedDate: r.planned_shipment_date ?? null,
         createdAt: r.created_at,
         status: r.status,
         lineCount: r.line_count,
         sellerName: r.seller_name ?? null,
         extraLabel: r.warehouse_name,
+        ffModified: Boolean(r.ff_modified),
       })),
       ...discrepancyActSummaries.map((r) => ({
         kind: 'discrepancy_act' as const,
@@ -921,6 +930,7 @@ export function FfSuppliesShipmentsPage({
         lineCount: r.line_count,
         sellerName: r.seller_name ?? null,
         extraLabel: r.inbound_intake_request_id ? `приёмка ${r.inbound_intake_request_id.slice(0, 8)}…` : null,
+        ffModified: false,
       })),
     ]
     let filtered = kind === 'all' ? all : all.filter((x) => x.kind === kind)
@@ -1155,7 +1165,18 @@ export function FfSuppliesShipmentsPage({
                 <TableCell>
                   {row.createdAt ? formatDateTimeLocal(row.createdAt) : '—'}
                 </TableCell>
-                <TableCell>{statusRu(row.status)}</TableCell>
+                <TableCell>
+                  {statusRu(row.status)}
+                  {row.ffModified ? (
+                    <Chip
+                      size="small"
+                      label="Изменено ФФ"
+                      color="warning"
+                      sx={{ ml: 0.75, verticalAlign: 'middle' }}
+                      data-testid="ff-mp-ff-modified-badge"
+                    />
+                  ) : null}
+                </TableCell>
                 <TableCell>{row.sellerName ?? '—'}</TableCell>
                 <TableCell sx={{ color: 'text.secondary', maxWidth: 200 }}>{row.extraLabel ?? '—'}</TableCell>
                 <TableCell align="right">{row.lineCount}</TableCell>
@@ -1186,6 +1207,11 @@ export function FfSuppliesShipmentsPage({
             <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
               Склад: {unloadDetail.warehouse_name} · {statusRu(unloadDetail.status)}
             </Typography>
+          ) : null}
+          {unloadDetail?.ff_modified ? (
+            <Alert severity="warning" sx={{ mb: 1 }} data-testid="ff-mp-ff-modified-notice">
+              Состав изменён на складе после планирования селлером.
+            </Alert>
           ) : null}
           {docModal === 'marketplace_unload' && unloadDetail && mpLineDraft ? (
             <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1.25} sx={{ mb: 2, mt: 1 }}>

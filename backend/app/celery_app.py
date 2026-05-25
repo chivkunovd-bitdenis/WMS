@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from celery import Celery
+from celery.schedules import crontab
 
 from app.core.settings import settings
 
@@ -13,3 +14,9 @@ celery_app = Celery(
     include=["app.tasks.background_jobs"],
 )
 celery_app.conf.task_ignore_result = True
+celery_app.conf.beat_schedule = {
+    "wb-mp-warehouses-daily": {
+        "task": "wms.wb_mp_warehouses_daily_sync",
+        "schedule": crontab(hour=3, minute=0),
+    },
+}

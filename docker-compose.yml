@@ -66,6 +66,19 @@ services:
       api:
         condition: service_started
 
+  celery_beat:
+    build:
+      context: ./backend
+    command: ["celery", "-A", "app.celery_app", "beat", "--loglevel=info"]
+    environment:
+      DATABASE_URL: postgresql+psycopg_async://postgres:postgres@db:5432/wms
+      CELERY_BROKER_URL: redis://redis:6379/0
+    depends_on:
+      redis:
+        condition: service_healthy
+      celery_worker:
+        condition: service_started
+
   web:
     build:
       context: .

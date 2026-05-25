@@ -195,6 +195,8 @@ docker compose -f docker-compose.prod.yml up -d --build
 docker compose -f docker-compose.prod.yml ps
 ```
 
+Миграции применяет `celery_worker` при старте (`alembic upgrade head`). В стеке также `celery_beat` (ежедневная синхронизация складов WB для отгрузок на МП, 03:00 UTC).
+
 ### Доступ
 
 - UI (Fulfillment): `https://${WMS_PUBLIC_DOMAIN}/`
