@@ -5,7 +5,7 @@
 - What changed: `submit` outbound возвращает `lines_missing_storage`, если у строки нет ячейки; решение в `MVP_DECISIONS_RU.md`; UI — обязательная ячейка при добавлении, форма в draft, блокировка кнопки submit; RU-сообщения в `readApiErrorMessage`; pytest + e2e `outbound-submit-storage.spec.ts`.
 - What did NOT change: soft-reserve на уровне склада; seller submit outbound (по-прежнему только admin API).
 - Verification: pytest `test_outbound_submit_storage.py`; e2e `outbound-submit-storage.spec.ts`; `npm run build`.
-- Commit: (pending)
+- Commit: 906bfd8
 
 ## TASK-15 — 2026-05-25 — Селлер: доступный остаток в UI (#15)
 
