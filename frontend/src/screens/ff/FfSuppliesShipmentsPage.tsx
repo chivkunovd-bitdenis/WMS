@@ -38,6 +38,7 @@ export type FfMarketplaceUnloadSummary = {
   line_count: number
   seller_id: string | null
   seller_name: string | null
+  planned_shipment_date?: string | null
   created_at: string
 }
 
@@ -172,6 +173,8 @@ type Props = {
   onOpenOutbound: (id: string) => void
   onCreateMpShipment: () => Promise<{ id: string } | null>
   onCreateDiverge: () => Promise<{ id: string } | null>
+  initialMarketplaceUnloadId?: string | null
+  onInitialMarketplaceUnloadOpened?: () => void
 }
 
 export function FfSuppliesShipmentsPage({
@@ -190,6 +193,8 @@ export function FfSuppliesShipmentsPage({
   onOpenOutbound,
   onCreateMpShipment,
   onCreateDiverge,
+  initialMarketplaceUnloadId = null,
+  onInitialMarketplaceUnloadOpened,
 }: Props) {
   const [kind, setKind] = useState<QuickFilterKind>('all')
   const [sellerFilter, setSellerFilter] = useState<string>('all')
@@ -221,9 +226,10 @@ export function FfSuppliesShipmentsPage({
   const [wbMpWarehousesBusy, setWbMpWarehousesBusy] = useState(false)
   const [pickDialogOpen, setPickDialogOpen] = useState(false)
   const [pickOptions, setPickOptions] = useState<MarketplaceUnloadPickOptionProduct[]>([])
-  const [pickQtyByProductLoc, setPickQtyByProductLoc] = useState<Record<string, Record<string, string>>>(
-    {},
-  )
+  const [confirmDate, setConfirmDate] = useState<string>('')
+  const [pickQtyByProductLoc, setPickQtyByProductLoc] = useState<
+    Record<string, Record<string, string>>
+  >({})
 
   const authHeaders = useMemo(
     () => (token ? { Authorization: `Bearer ${token}` } : null),
@@ -409,6 +415,20 @@ export function FfSuppliesShipmentsPage({
   useEffect(() => {
     void loadDocDetail()
   }, [loadDocDetail])
+
+  useEffect(() => {
+    if (!initialMarketplaceUnloadId) {
+      return
+    }
+    setUnloadDetail(null)
+    setDivergeDetail(null)
+    setModalError(null)
+    setSelectedInboundLineId('')
+    setLineProductId('')
+    setDocModal('marketplace_unload')
+    setDocModalId(initialMarketplaceUnloadId)
+    onInitialMarketplaceUnloadOpened?.()
+  }, [initialMarketplaceUnloadId, onInitialMarketplaceUnloadOpened])
 
   useEffect(() => {
     if (docModal !== 'marketplace_unload' || docModalId == null) {
@@ -721,17 +741,32 @@ export function FfSuppliesShipmentsPage({
     setModalBusy(true)
     setModalError(null)
     try {
-      const path =
-        docModal === 'marketplace_unload'
-          ? `/operations/marketplace-unload-requests/${docModalId}/submit`
-          : `/operations/discrepancy-acts/${docModalId}/submit`
-      const res = await fetch(apiUrl(path), {
-        method: 'POST',
-        headers: authHeaders,
-      })
-      if (!res.ok) {
-        setModalError(await readApiErrorMessage(res))
-        return
+      if (docModal === 'marketplace_unload') {
+        const body =
+          confirmDate.trim().length > 0
+            ? { planned_shipment_date: confirmDate.trim() }
+            : {}
+        const res = await fetch(
+          apiUrl(`/operations/marketplace-unload-requests/${docModalId}/confirm`),
+          {
+            method: 'POST',
+            headers: { ...authHeaders, 'Content-Type': 'application/json' },
+            body: JSON.stringify(body),
+          },
+        )
+        if (!res.ok) {
+          setModalError(await readApiErrorMessage(res))
+          return
+        }
+      } else {
+        const res = await fetch(apiUrl(`/operations/discrepancy-acts/${docModalId}/submit`), {
+          method: 'POST',
+          headers: authHeaders,
+        })
+        if (!res.ok) {
+          setModalError(await readApiErrorMessage(res))
+          return
+        }
       }
       await loadDocDetail()
       await onRefreshFfSupplyExtras()
@@ -923,14 +958,17 @@ export function FfSuppliesShipmentsPage({
         : ''
 
   const mpDraft = docModal === 'marketplace_unload' && unloadDetail?.status === 'draft'
+  const mpSubmitted =
+    docModal === 'marketplace_unload' && unloadDetail?.status === 'submitted'
   const mpConfirmed = docModal === 'marketplace_unload' && unloadDetail?.status === 'confirmed'
   const mpPickEditable =
-    (mpDraft || mpConfirmed) &&
-    docModal === 'marketplace_unload' &&
-    unloadDetail?.status !== 'shipped'
+    mpConfirmed && docModal === 'marketplace_unload' && unloadDetail?.status !== 'shipped'
 
   const draftDoc =
-    mpDraft || (docModal === 'discrepancy_act' && divergeDetail?.status === 'draft')
+    mpDraft ||
+    mpSubmitted ||
+    (docModal === 'discrepancy_act' && divergeDetail?.status === 'draft')
+  const mpLineDraft = mpDraft || mpSubmitted
 
   return (
     <Box data-testid="ff-supplies-shipments-page">
@@ -1149,7 +1187,7 @@ export function FfSuppliesShipmentsPage({
               Склад: {unloadDetail.warehouse_name} · {statusRu(unloadDetail.status)}
             </Typography>
           ) : null}
-          {docModal === 'marketplace_unload' && unloadDetail && draftDoc ? (
+          {docModal === 'marketplace_unload' && unloadDetail && mpLineDraft ? (
             <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1.25} sx={{ mb: 2, mt: 1 }}>
               <FormControl
                 size="small"
@@ -1283,7 +1321,7 @@ export function FfSuppliesShipmentsPage({
               </Table>
             </Paper>
           ) : null}
-          {docModal === 'marketplace_unload' && unloadDetail && (mpDraft || mpConfirmed) ? (
+          {docModal === 'marketplace_unload' && unloadDetail && mpConfirmed ? (
             <Box sx={{ mt: 2 }} data-testid="ff-mp-boxes">
               {(() => {
                 const openBox = unloadDetail.boxes.find((b) => !b.closed_at) ?? null
@@ -1292,7 +1330,7 @@ export function FfSuppliesShipmentsPage({
                   <Stack spacing={1.5}>
                     <Typography variant="subtitle2">Короба</Typography>
 
-                    {mpDraft ? (
+                    {mpConfirmed ? (
                       <Paper variant="outlined" sx={{ p: 1.5 }}>
                         <Stack spacing={1.25}>
                           <Typography variant="body2" color="text.secondary">
@@ -1437,7 +1475,9 @@ export function FfSuppliesShipmentsPage({
               })()}
             </Box>
           ) : null}
-          {draftDoc && docProductPicklist.length > 0 ? (
+          {((draftDoc && docModal !== 'marketplace_unload') ||
+            (mpDraft && docModal === 'marketplace_unload')) &&
+          docProductPicklist.length > 0 ? (
             <Stack spacing={1.5} sx={{ mt: 2 }}>
               {docModal === 'discrepancy_act' && inboundRefLines.length > 0 ? (
                 <FormControl fullWidth size="small">
@@ -1537,11 +1577,38 @@ export function FfSuppliesShipmentsPage({
               Отгружено
             </Button>
           ) : null}
-          {draftDoc ? (
+          {docModal === 'marketplace_unload' && (mpDraft || mpSubmitted) ? (
+            <TextField
+              size="small"
+              label="Дата отвоза"
+              type="date"
+              value={confirmDate}
+              onChange={(e) => setConfirmDate(e.target.value)}
+              slotProps={{ inputLabel: { shrink: true } }}
+              sx={{ mr: 1 }}
+              data-testid="ff-mp-confirm-date"
+            />
+          ) : null}
+          {docModal === 'marketplace_unload' && (mpDraft || mpSubmitted) ? (
             <Button
               variant="contained"
               color="secondary"
-              disabled={modalBusy || (docModal === 'marketplace_unload' && unloadDetail?.wb_mp_warehouse_id == null)}
+              disabled={
+                modalBusy ||
+                (docModal === 'marketplace_unload' && unloadDetail?.wb_mp_warehouse_id == null) ||
+                (unloadDetail?.lines.length ?? 0) < 1
+              }
+              onClick={() => void submitDoc()}
+              data-testid="ff-supplies-doc-submit"
+            >
+              Подтвердить
+            </Button>
+          ) : null}
+          {draftDoc && docModal !== 'marketplace_unload' ? (
+            <Button
+              variant="contained"
+              color="secondary"
+              disabled={modalBusy}
               onClick={() => void submitDoc()}
               data-testid="ff-supplies-doc-submit"
             >

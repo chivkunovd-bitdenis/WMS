@@ -474,14 +474,13 @@ async def test_marketplace_unload_submit_delete_and_blocks(
         json={"product_id": pid, "quantity": 1},
     )
     assert add_blocked.status_code == 409
-    assert add_blocked.json()["detail"] == "not_editable"
+    assert add_blocked.json()["detail"] == "duplicate_line"
 
-    del_blocked = await async_client.delete(
+    del_confirmed = await async_client.delete(
         f"/operations/marketplace-unload-requests/{mid}/lines/{line_id}",
         headers=h,
     )
-    assert del_blocked.status_code == 409
-    assert del_blocked.json()["detail"] == "not_editable"
+    assert del_confirmed.status_code == 204
 
     mu2 = await async_client.post(
         "/operations/marketplace-unload-requests",
@@ -795,6 +794,20 @@ async def test_marketplace_unload_ship_deducts_stock_by_pick_and_scan(
         json={"product_id": pid, "quantity": 3},
     )
 
+    sub = await async_client.post(
+        f"/operations/marketplace-unload-requests/{mid}/submit",
+        headers=h,
+    )
+    assert sub.status_code == 200, sub.text
+    assert sub.json()["status"] == "confirmed"
+
+    ship_blocked = await async_client.post(
+        f"/operations/marketplace-unload-requests/{mid}/ship",
+        headers=h,
+    )
+    assert ship_blocked.status_code == 422
+    assert ship_blocked.json()["detail"] == "scans_required"
+
     box = await async_client.post(
         f"/operations/marketplace-unload-requests/{mid}/boxes",
         headers=h,
@@ -845,20 +858,6 @@ async def test_marketplace_unload_ship_deducts_stock_by_pick_and_scan(
         },
     )
     assert pick_ok.status_code == 200, pick_ok.text
-
-    ship_blocked = await async_client.post(
-        f"/operations/marketplace-unload-requests/{mid}/ship",
-        headers=h,
-    )
-    assert ship_blocked.status_code == 409
-    assert ship_blocked.json()["detail"] == "bad_status"
-
-    sub = await async_client.post(
-        f"/operations/marketplace-unload-requests/{mid}/submit",
-        headers=h,
-    )
-    assert sub.status_code == 200, sub.text
-    assert sub.json()["status"] == "confirmed"
 
     ship = await async_client.post(
         f"/operations/marketplace-unload-requests/{mid}/ship",

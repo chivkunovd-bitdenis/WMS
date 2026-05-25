@@ -4,6 +4,7 @@ import uuid
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import Query
 from pydantic import BaseModel, Field
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -13,8 +14,11 @@ from app.models.user import User
 from app.services.catalog_service import (
     CatalogError,
     create_location,
+    create_location_from_rack,
     create_warehouse,
     get_warehouse,
+    list_racks,
+    suggest_next_location_for_rack,
 )
 from app.services.catalog_service import (
     list_locations as list_locs_svc,
@@ -40,7 +44,19 @@ class WarehouseOut(BaseModel):
 
 
 class LocationCreate(BaseModel):
-    code: str = Field(min_length=1, max_length=64)
+    code: str | None = Field(default=None, min_length=1, max_length=64)
+    rack_name: str | None = Field(default=None, min_length=1, max_length=32)
+    side: int | None = Field(default=None, ge=1, le=2)
+    position: int | None = Field(default=None, ge=1, le=9999)
+
+
+class RackOut(BaseModel):
+    name: str
+
+
+class LocationSuggestOut(BaseModel):
+    position: int
+    code: str
 
 
 class LocationOut(BaseModel):
@@ -116,14 +132,44 @@ async def post_location(
     session: Annotated[AsyncSession, Depends(get_db)],
 ) -> LocationOut:
     try:
-        loc = await create_location(
-            session, user.tenant_id, warehouse_id, code=body.code
-        )
+        if body.rack_name is not None:
+            if body.side is None:
+                raise HTTPException(
+                    status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                    detail="side_required",
+                )
+            loc = await create_location_from_rack(
+                session,
+                user.tenant_id,
+                warehouse_id,
+                rack_name=body.rack_name,
+                side=body.side,
+                position=body.position,
+            )
+        else:
+            if body.code is None:
+                raise HTTPException(
+                    status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                    detail="code_required",
+                )
+            loc = await create_location(
+                session, user.tenant_id, warehouse_id, code=body.code
+            )
     except CatalogError as exc:
         if exc.code == "warehouse_not_found":
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
                 detail="warehouse_not_found",
+            ) from None
+        if exc.code == "invalid_side":
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                detail="invalid_side",
+            ) from None
+        if exc.code == "invalid_position":
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                detail="invalid_position",
             ) from None
         if exc.code == "location_code_taken":
             raise HTTPException(
@@ -137,3 +183,51 @@ async def post_location(
         warehouse_id=str(loc.warehouse_id),
         barcode=loc.barcode,
     )
+
+
+@router.get("/{warehouse_id}/racks", response_model=list[RackOut])
+async def get_racks(
+    warehouse_id: uuid.UUID,
+    user: Annotated[User, Depends(get_current_user)],
+    session: Annotated[AsyncSession, Depends(get_db)],
+) -> list[RackOut]:
+    wh = await get_warehouse(session, user.tenant_id, warehouse_id)
+    if wh is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="warehouse_not_found",
+        )
+    rows = await list_racks(session, user.tenant_id, warehouse_id)
+    return [RackOut(name=x.name) for x in rows]
+
+
+@router.get("/{warehouse_id}/locations/suggest", response_model=LocationSuggestOut)
+async def suggest_location(
+    warehouse_id: uuid.UUID,
+    user: Annotated[User, Depends(get_current_user)],
+    session: Annotated[AsyncSession, Depends(get_db)],
+    rack_name: str = Query(min_length=1, max_length=32),
+    side: int = Query(ge=1, le=2),
+) -> LocationSuggestOut:
+    wh = await get_warehouse(session, user.tenant_id, warehouse_id)
+    if wh is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="warehouse_not_found",
+        )
+    try:
+        pos, code = await suggest_next_location_for_rack(
+            session,
+            user.tenant_id,
+            warehouse_id,
+            rack_name=rack_name,
+            side=side,
+        )
+    except CatalogError as exc:
+        if exc.code == "invalid_side":
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                detail="invalid_side",
+            ) from None
+        raise
+    return LocationSuggestOut(position=pos, code=code)

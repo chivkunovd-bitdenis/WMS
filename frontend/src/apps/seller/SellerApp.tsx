@@ -18,12 +18,6 @@ type InboundSummaryRow = {
   planned_delivery_date: string | null
 }
 
-type OutboundSummaryRow = {
-  id: string
-  status: string
-  line_count: number
-}
-
 type WarehouseRow = { id: string; name: string; code: string }
 
 export function SellerApp() {
@@ -50,9 +44,9 @@ export function SellerApp() {
   const [inboundSummaries, setInboundSummaries] = useState<InboundSummaryRow[]>(
     [],
   )
-  const [outboundSummaries, setOutboundSummaries] = useState<OutboundSummaryRow[]>(
-    [],
-  )
+  const [mpUnloadSummaries, setMpUnloadSummaries] = useState<
+    { id: string; status: string; line_count: number; created_at?: string }[]
+  >([])
 
   const authHeaders = useCallback(
     (t: string) => ({ Authorization: `Bearer ${t}` }),
@@ -89,15 +83,15 @@ export function SellerApp() {
     [authHeaders],
   )
 
-  const refreshOutboundList = useCallback(
+  const refreshMpUnloadList = useCallback(
     async (t: string) => {
-      const res = await fetch(apiUrl('/operations/outbound-shipment-requests'), {
+      const res = await fetch(apiUrl('/operations/marketplace-unload-requests'), {
         headers: authHeaders(t),
       })
       if (!res.ok) {
         throw new Error(await readApiErrorMessage(res))
       }
-      setOutboundSummaries((await res.json()) as OutboundSummaryRow[])
+      setMpUnloadSummaries((await res.json()) as typeof mpUnloadSummaries)
     },
     [authHeaders],
   )
@@ -109,7 +103,7 @@ export function SellerApp() {
       setOpsBusy(false)
       setOpsError(null)
       setInboundSummaries([])
-      setOutboundSummaries([])
+      setMpUnloadSummaries([])
       return
     }
 
@@ -123,12 +117,12 @@ export function SellerApp() {
       try {
         await refreshWarehouses(token)
         await refreshInboundList(token)
-        await refreshOutboundList(token)
+        await refreshMpUnloadList(token)
       } catch (e) {
         setOpsError(e instanceof Error ? e.message : 'Не удалось загрузить данные.')
       }
     })()
-  }, [me, refreshInboundList, refreshOutboundList, refreshWarehouses, token])
+  }, [me, refreshInboundList, refreshMpUnloadList, refreshWarehouses, token])
 
   const rootElement = (() => {
     if (!token) {
@@ -179,13 +173,60 @@ export function SellerApp() {
               <SellerDocumentsScreen
                 busy={opsBusy}
                 error={opsError}
+                token={token}
+                authHeaders={authHeaders}
+                warehouseId={selectedWarehouseId ?? warehouses[0]?.id ?? null}
                 inboundSummaries={inboundSummaries}
-                outboundSummaries={outboundSummaries}
+                mpUnloadSummaries={mpUnloadSummaries}
                 onCreateCorrection={() =>
                   setOpsError(
                     'Акт расхождений: будет реализован отдельным документом на следующем этапе.',
                   )
                 }
+                onCreateMpUnload={async () => {
+                  if (!token) {
+                    return null
+                  }
+                  const wid = selectedWarehouseId ?? warehouses[0]?.id
+                  if (!wid) {
+                    setOpsError('Склад ФФ не найден.')
+                    return null
+                  }
+                  setOpsBusy(true)
+                  setOpsError(null)
+                  try {
+                    const res = await fetch(
+                      apiUrl('/operations/marketplace-unload-requests/seller'),
+                      {
+                        method: 'POST',
+                        headers: {
+                          ...authHeaders(token),
+                          'Content-Type': 'application/json',
+                        },
+                        body: JSON.stringify({ warehouse_id: wid }),
+                      },
+                    )
+                    if (!res.ok) {
+                      setOpsError(await readApiErrorMessage(res))
+                      return null
+                    }
+                    const created = (await res.json()) as { id: string }
+                    await refreshMpUnloadList(token)
+                    return created.id
+                  } catch (e) {
+                    setOpsError(
+                      e instanceof Error ? e.message : 'Не удалось создать отгрузку на МП.',
+                    )
+                    return null
+                  } finally {
+                    setOpsBusy(false)
+                  }
+                }}
+                onRefreshMpUnloadList={async () => {
+                  if (token) {
+                    await refreshMpUnloadList(token)
+                  }
+                }}
               />
             }
           />

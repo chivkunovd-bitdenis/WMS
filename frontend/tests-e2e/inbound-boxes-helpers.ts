@@ -1,6 +1,6 @@
 import { expect, type APIRequestContext, type Page } from '@playwright/test';
 
-import { waitForGetOk, waitForPatchOk, waitForPostOk } from './api-waits';
+import { waitForGetOk, waitForPatchOk, waitForPostOk, waitForPutOk } from './api-waits';
 import { loginAsSeller, openFulfillmentRegistration } from './auth-flow';
 
 export const INBOUND_API = '/api/operations/inbound-intake-requests';
@@ -329,6 +329,16 @@ export async function apiCreateSubmittedInbound(
     throw new Error(`submit: ${sub.status()}`);
   }
   return rid;
+}
+
+/** Set quantity for the first line in the active open box (blur saves via PUT). */
+export async function fillFfInboundBoxLineQty(page: Page, quantity: number): Promise<void> {
+  const input = page.getByTestId('ff-inbound-box-line-qty').first();
+  await input.fill(String(quantity));
+  await Promise.all([
+    waitForPutOk(page, INBOUND_API, (u) => u.includes('/boxes/') && u.includes('/lines/')),
+    input.blur(),
+  ]);
 }
 
 async function sellerToken(

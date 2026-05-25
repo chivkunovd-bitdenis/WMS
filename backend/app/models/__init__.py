@@ -19,6 +19,7 @@ from app.models.marketplace_unload import (
     MarketplaceUnloadPickAllocation,
     MarketplaceUnloadRequest,
 )
+from app.models.marketplace_unload_reservation import MarketplaceUnloadReservation
 from app.models.outbound_shipment import OutboundShipmentLine, OutboundShipmentRequest
 from app.models.product import Product
 from app.models.seller import Seller
@@ -30,6 +31,7 @@ from app.models.tenant import Tenant
 from app.models.tenant_wb_mp_warehouse import TenantWbMpWarehouse
 from app.models.user import User
 from app.models.warehouse import Warehouse
+from app.models.warehouse_storage_rack import WarehouseStorageRack
 
 __all__ = [
     "BackgroundJob",
@@ -48,6 +50,7 @@ __all__ = [
     "MarketplaceUnloadLine",
     "MarketplaceUnloadPickAllocation",
     "MarketplaceUnloadRequest",
+    "MarketplaceUnloadReservation",
     "OutboundShipmentLine",
     "OutboundShipmentRequest",
     "Product",
@@ -60,4 +63,5 @@ __all__ = [
     "TenantWbMpWarehouse",
     "User",
     "Warehouse",
+    "WarehouseStorageRack",
 ]

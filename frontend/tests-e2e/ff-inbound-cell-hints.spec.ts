@@ -2,6 +2,7 @@ import { test, expect } from '@playwright/test';
 
 import { waitForGetOk, waitForPostOk } from './api-waits';
 import { openFulfillmentRegistration } from './auth-flow';
+import { fillFfInboundBoxLineQty } from './inbound-boxes-helpers';
 
 // TC-NEW-C02 — подсказки ячеек при распределении: где уже лежит товар.
 test('ff inbound distribution shows cell hints from existing stock', async ({ page }) => {
@@ -108,13 +109,7 @@ test('ff inbound distribution shows cell hints from existing stock', async ({ pa
     waitForPostOk(page, base, (u) => u.includes('/boxes/open')),
     page.getByTestId('ff-inbound-box-open-submit').click(),
   ]);
-  for (let n = 0; n < 2; n++) {
-    await page.getByTestId('ff-inbound-product-scan').fill(sku);
-    await Promise.all([
-      waitForPostOk(page, base, (u) => u.includes('/scan')),
-      page.getByTestId('ff-inbound-product-scan-submit').click(),
-    ]);
-  }
+  await fillFfInboundBoxLineQty(page, 2);
   await Promise.all([
     waitForPostOk(page, base, (u) => u.includes('/close')),
     page.getByTestId('ff-inbound-box-close').click(),

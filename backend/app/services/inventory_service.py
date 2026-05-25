@@ -17,11 +17,14 @@ from app.models.inventory_movement import (
     InventoryMovement,
 )
 from app.models.inventory_reservation import InventoryReservation
+from app.models.marketplace_unload import MarketplaceUnloadLine, MarketplaceUnloadRequest
+from app.models.marketplace_unload_reservation import MarketplaceUnloadReservation
 from app.models.outbound_shipment import OutboundShipmentLine, OutboundShipmentRequest
 from app.models.product import Product
 from app.models.storage_location import StorageLocation
 
 OUTBOUND_RESERVE_STATUSES = ("draft", "submitted")
+MP_UNLOAD_RESERVE_STATUSES = ("submitted", "confirmed")
 RESERVATION_ERROR = "insufficient_available"
 
 
@@ -136,7 +139,37 @@ async def reserved_totals_by_product(
             StorageLocation.warehouse_id == warehouse_id,
         )
     res = await session.execute(stmt)
-    return {pid: int(s or 0) for pid, s in res.all()}
+    outbound_map = {pid: int(s or 0) for pid, s in res.all()}
+
+    mp_stmt = (
+        select(
+            MarketplaceUnloadReservation.product_id,
+            func.coalesce(func.sum(MarketplaceUnloadReservation.quantity), 0),
+        )
+        .join(
+            MarketplaceUnloadLine,
+            MarketplaceUnloadLine.id
+            == MarketplaceUnloadReservation.marketplace_unload_line_id,
+        )
+        .join(
+            MarketplaceUnloadRequest,
+            MarketplaceUnloadRequest.id == MarketplaceUnloadLine.request_id,
+        )
+        .where(
+            MarketplaceUnloadReservation.tenant_id == tenant_id,
+            MarketplaceUnloadReservation.product_id.in_(product_ids),
+            MarketplaceUnloadRequest.status.in_(MP_UNLOAD_RESERVE_STATUSES),
+        )
+        .group_by(MarketplaceUnloadReservation.product_id)
+    )
+    if warehouse_id is not None:
+        mp_stmt = mp_stmt.where(MarketplaceUnloadReservation.warehouse_id == warehouse_id)
+    mp_res = await session.execute(mp_stmt)
+    mp_map = {pid: int(s or 0) for pid, s in mp_res.all()}
+
+    return {
+        pid: int(outbound_map.get(pid, 0)) + int(mp_map.get(pid, 0)) for pid in product_ids
+    }
 
 
 async def list_balances_total(

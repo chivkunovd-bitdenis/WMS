@@ -211,6 +211,26 @@ async def _expected_qty(
     return int(ln.expected_qty)
 
 
+async def _total_in_other_boxes(
+    session: AsyncSession,
+    request_id: uuid.UUID,
+    product_id: uuid.UUID,
+    *,
+    exclude_box_id: uuid.UUID,
+) -> int:
+    stmt = (
+        select(func.coalesce(func.sum(InboundIntakeBoxLine.quantity), 0))
+        .join(InboundIntakeBox, InboundIntakeBoxLine.box_id == InboundIntakeBox.id)
+        .where(
+            InboundIntakeBox.request_id == request_id,
+            InboundIntakeBoxLine.product_id == product_id,
+            InboundIntakeBox.id != exclude_box_id,
+        )
+    )
+    res = await session.execute(stmt)
+    return int(res.scalar_one())
+
+
 async def _total_scanned_for_product(
     session: AsyncSession,
     request_id: uuid.UUID,
@@ -228,13 +248,33 @@ async def _total_scanned_for_product(
     return int(res.scalar_one())
 
 
+async def _product_recorded_in_boxes(
+    session: AsyncSession,
+    request_id: uuid.UUID,
+    product_id: uuid.UUID,
+) -> bool:
+    """True if the SKU was explicitly entered in any box line (including quantity 0)."""
+    stmt = (
+        select(InboundIntakeBoxLine.id)
+        .join(InboundIntakeBox, InboundIntakeBoxLine.box_id == InboundIntakeBox.id)
+        .where(
+            InboundIntakeBox.request_id == request_id,
+            InboundIntakeBoxLine.product_id == product_id,
+        )
+        .limit(1)
+    )
+    res = await session.execute(stmt)
+    return res.scalar_one_or_none() is not None
+
+
 async def _sync_request_actuals(
     session: AsyncSession,
     req: InboundIntakeRequest,
 ) -> None:
     for ln in req.lines:
         total = await _total_scanned_for_product(session, req.id, ln.product_id)
-        if total > 0:
+        recorded = await _product_recorded_in_boxes(session, req.id, ln.product_id)
+        if recorded:
             if ln.posted_qty > total:
                 raise InboundIntakeBoxError("actual_below_posted")
             ln.actual_qty = total
@@ -315,10 +355,6 @@ async def scan_product_into_box(
     if expected <= 0:
         raise InboundIntakeBoxError("product_not_on_request")
 
-    scanned = await _total_scanned_for_product(session, req.id, product_id)
-    if scanned >= expected:
-        raise InboundIntakeBoxError("qty_exceeded")
-
     stmt = select(InboundIntakeBoxLine).where(
         InboundIntakeBoxLine.box_id == box_id,
         InboundIntakeBoxLine.product_id == product_id,
@@ -345,6 +381,61 @@ async def scan_product_into_box(
     )
     res2 = await session.execute(stmt2)
     return res2.scalar_one()
+
+
+async def set_product_quantity_in_open_box(
+    session: AsyncSession,
+    tenant_id: uuid.UUID,
+    request_id: uuid.UUID,
+    box_id: uuid.UUID,
+    *,
+    product_id: uuid.UUID,
+    quantity: int,
+) -> InboundIntakeBox:
+    if quantity < 0:
+        raise InboundIntakeBoxError("invalid_qty")
+
+    req = await _get_request_for_intake(session, tenant_id, request_id)
+    box = await session.get(InboundIntakeBox, box_id)
+    if box is None or box.request_id != request_id or box.tenant_id != tenant_id:
+        raise InboundIntakeBoxError("box_not_found")
+    if box.intake_closed_at is not None:
+        raise InboundIntakeBoxError("box_closed")
+    if box.intake_opened_at is None:
+        raise InboundIntakeBoxError("no_open_box")
+
+    open_box = await _open_box_for_request(session, request_id)
+    if open_box is None or open_box.id != box.id:
+        raise InboundIntakeBoxError("no_open_box")
+
+    expected = await _expected_qty(session, req.id, product_id)
+    if expected <= 0:
+        raise InboundIntakeBoxError("product_not_on_request")
+
+    stmt = select(InboundIntakeBoxLine).where(
+        InboundIntakeBoxLine.box_id == box_id,
+        InboundIntakeBoxLine.product_id == product_id,
+    )
+    res = await session.execute(stmt)
+    line = res.scalar_one_or_none()
+    if line is None:
+        session.add(
+            InboundIntakeBoxLine(
+                box_id=box_id,
+                product_id=product_id,
+                quantity=quantity,
+            )
+        )
+    else:
+        line.quantity = quantity
+
+    await session.flush()
+    req_loaded = await intake_svc.get_request(session, tenant_id, request_id)
+    if req_loaded is None:
+        raise InboundIntakeBoxError("request_not_found")
+    await _sync_request_actuals(session, req_loaded)
+    await session.commit()
+    return await _load_box(session, box.id)
 
 
 async def close_box_intake(

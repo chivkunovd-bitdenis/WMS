@@ -57,6 +57,7 @@ type Props = {
   outboundSummaries: FfOutboundSummary[]
   onOpenInbound: (id: string) => void
   onOpenOutbound: (id: string) => void
+  mpUnloadSummaries?: FfOutboundSummary[]
 }
 
 function outboundPlanDate(row: FfOutboundSummary): string | null {
@@ -138,6 +139,7 @@ export function FfDashboard({
   onCreateSellerAccount,
   inboundSummaries,
   outboundSummaries,
+  mpUnloadSummaries = [],
   onOpenInbound,
   onOpenOutbound,
 }: Props) {
@@ -154,8 +156,11 @@ export function FfDashboard({
   )
 
   const plannedOutbound = useMemo(
-    () => outboundSummaries.filter((r) => r.status === 'submitted'),
-    [outboundSummaries],
+    () =>
+      mpUnloadSummaries.length > 0
+        ? mpUnloadSummaries.filter((r) => r.status === 'submitted')
+        : outboundSummaries.filter((r) => r.status === 'submitted'),
+    [mpUnloadSummaries, outboundSummaries],
   )
 
   const inboundBars = useMemo(() => {

@@ -4,16 +4,17 @@ import { waitForPostOk } from './api-waits';
 import {
   INBOUND_API,
   apiCreateSubmittedInbound,
+  fillFfInboundBoxLineQty,
   loginFfAdmin,
   openFfInboundDoc,
   seedFfSellerInbound,
 } from './inbound-boxes-helpers';
 
-// TC-NEW-C01 — поштучная приёмка: скан INB → скан товара → закрыть короб → verify.
+// TC-NEW-C01 — поштучная приёмка: INB → ручное кол-во → закрыть короб → verify.
 test.describe('FF inbound box piece intake', () => {
-  test('TC-NEW-C01 scan two boxes then complete verification', async ({ page }) => {
+  test('TC-NEW-C01 manual qty in two boxes then complete verification', async ({ page }) => {
     const seed = await seedFfSellerInbound(page);
-    const rid = await apiCreateSubmittedInbound(page.request, seed, {
+    await apiCreateSubmittedInbound(page.request, seed, {
       plannedBoxes: 2,
       expectedQty: 5,
     });
@@ -36,13 +37,7 @@ test.describe('FF inbound box piece intake', () => {
     ]);
     await expect(page.getByTestId('ff-inbound-active-box')).toBeVisible();
 
-    for (let i = 0; i < 3; i++) {
-      await page.getByTestId('ff-inbound-product-scan').fill(seed.sku);
-      await Promise.all([
-        waitForPostOk(page, INBOUND_API, (u) => u.includes('/boxes/') && u.includes('/scan')),
-        page.getByTestId('ff-inbound-product-scan-submit').click(),
-      ]);
-    }
+    await fillFfInboundBoxLineQty(page, 3);
     await Promise.all([
       waitForPostOk(page, INBOUND_API, (u) => u.includes('/close')),
       page.getByTestId('ff-inbound-box-close').click(),
@@ -53,13 +48,7 @@ test.describe('FF inbound box piece intake', () => {
       waitForPostOk(page, INBOUND_API, (u) => u.includes('/boxes/open')),
       page.getByTestId('ff-inbound-box-open-submit').click(),
     ]);
-    for (let i = 0; i < 2; i++) {
-      await page.getByTestId('ff-inbound-product-scan').fill(seed.sku);
-      await Promise.all([
-        waitForPostOk(page, INBOUND_API, (u) => u.includes('/boxes/') && u.includes('/scan')),
-        page.getByTestId('ff-inbound-product-scan-submit').click(),
-      ]);
-    }
+    await fillFfInboundBoxLineQty(page, 2);
     await Promise.all([
       waitForPostOk(page, INBOUND_API, (u) => u.includes('/close')),
       page.getByTestId('ff-inbound-box-close').click(),
@@ -77,7 +66,7 @@ test.describe('FF inbound box piece intake', () => {
     await expect(page.getByTestId('ff-inbound-status-chip')).toContainText('Проверено');
   });
 
-  test('TC-NEW-C01-N2 product scan without open box shows error', async ({ page }) => {
+  test('TC-NEW-C01-N2 set line qty without open box shows error', async ({ page }) => {
     const seed = await seedFfSellerInbound(page);
     const rid = await apiCreateSubmittedInbound(page.request, seed, {
       plannedBoxes: 1,
@@ -89,11 +78,14 @@ test.describe('FF inbound box piece intake', () => {
       data: { actual_box_count: 1 },
     });
     const boxId = String(((await prim.json()) as { boxes: { id: string }[] }).boxes[0]!.id);
-    const scan = await page.request.post(`${INBOUND_API}/${rid}/boxes/${boxId}/scan`, {
-      headers: { ...h, 'Content-Type': 'application/json' },
-      data: { barcode: seed.sku },
-    });
-    expect(scan.status()).toBe(409);
-    expect(((await scan.json()) as { detail: string }).detail).toBe('no_open_box');
+    const put = await page.request.put(
+      `${INBOUND_API}/${rid}/boxes/${boxId}/lines/${seed.productId}`,
+      {
+        headers: { ...h, 'Content-Type': 'application/json' },
+        data: { quantity: 1 },
+      },
+    );
+    expect(put.status()).toBe(409);
+    expect(((await put.json()) as { detail: string }).detail).toBe('no_open_box');
   });
 });

@@ -7,7 +7,9 @@ from typing import Annotated
 from fastapi import APIRouter, Depends, HTTPException, Response, status
 from pydantic import BaseModel, Field
 from sqlalchemy import inspect as sa_inspect
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import selectinload
 
 from app.api.deps import get_current_user, require_fulfillment_admin, seller_line_product_scope
 from app.core.roles import FULFILLMENT_ADMIN, FULFILLMENT_SELLER
@@ -95,6 +97,10 @@ class InboundBoxBarcodeBody(BaseModel):
 
 class InboundBoxScanBody(BaseModel):
     barcode: str = Field(min_length=1, max_length=128)
+
+
+class InboundBoxLineQuantityBody(BaseModel):
+    quantity: int = Field(ge=0, le=100_000)
 
 
 class InboundIntakeLineOut(BaseModel):
@@ -195,6 +201,7 @@ def _map_inbound_box_err(exc: InboundIntakeBoxError) -> HTTPException:
         "qty_exceeded",
         "product_not_on_request",
         "actual_below_posted",
+        "invalid_qty",
     ):
         return HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
@@ -582,6 +589,47 @@ async def scan_product_into_inbound_box(
     except InboundIntakeBoxError as exc:
         raise _map_inbound_box_err(exc) from None
     return _box_line_out(ln)
+
+
+@router.put(
+    "/{request_id}/boxes/{box_id}/lines/{product_id}",
+    response_model=InboundIntakeBoxOut,
+)
+async def set_inbound_box_line_quantity(
+    request_id: uuid.UUID,
+    box_id: uuid.UUID,
+    product_id: uuid.UUID,
+    body: InboundBoxLineQuantityBody,
+    user: Annotated[User, Depends(require_fulfillment_admin)],
+    session: Annotated[AsyncSession, Depends(get_db)],
+) -> InboundIntakeBoxOut:
+    bx = await session.get(InboundIntakeBox, box_id)
+    if bx is None or bx.request_id != request_id:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="box_not_found",
+        )
+    try:
+        await inbound_box_svc.set_product_quantity_in_open_box(
+            session,
+            user.tenant_id,
+            request_id,
+            box_id,
+            product_id=product_id,
+            quantity=body.quantity,
+        )
+    except InboundIntakeBoxError as exc:
+        raise _map_inbound_box_err(exc) from None
+    stmt = (
+        select(InboundIntakeBox)
+        .where(InboundIntakeBox.id == box_id)
+        .options(
+            selectinload(InboundIntakeBox.lines).selectinload(InboundIntakeBoxLine.product),
+        )
+    )
+    res = await session.execute(stmt)
+    box = res.scalar_one()
+    return _box_out(box)
 
 
 @router.post(

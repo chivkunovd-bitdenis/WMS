@@ -111,9 +111,9 @@ async def _submitted_inbound_with_boxes(
 
 
 @pytest.mark.asyncio
-async def test_inbound_box_intake_scan_and_verify(async_client: AsyncClient) -> None:
+async def test_inbound_box_intake_manual_qty_and_verify(async_client: AsyncClient) -> None:
     suffix = str(int(time.time() * 1000))
-    ah, rid, _pid, sku, boxes = await _submitted_inbound_with_boxes(
+    ah, rid, pid, _sku, boxes = await _submitted_inbound_with_boxes(
         async_client, suffix=suffix, expected_qty=5, box_count=2
     )
     base = f"/operations/inbound-intake-requests/{rid}"
@@ -130,13 +130,12 @@ async def test_inbound_box_intake_scan_and_verify(async_client: AsyncClient) -> 
     assert open1.status_code == 200, open1.text
     assert open1.json()["is_open"] is True
 
-    for _ in range(3):
-        scan = await async_client.post(
-            f"{base}/boxes/{b1['id']}/scan",
-            headers=ah,
-            json={"barcode": sku},
-        )
-        assert scan.status_code == 200, scan.text
+    put1 = await async_client.put(
+        f"{base}/boxes/{b1['id']}/lines/{pid}",
+        headers=ah,
+        json={"quantity": 3},
+    )
+    assert put1.status_code == 200, put1.text
 
     close1 = await async_client.post(
         f"{base}/boxes/{b1['id']}/close",
@@ -152,13 +151,12 @@ async def test_inbound_box_intake_scan_and_verify(async_client: AsyncClient) -> 
     )
     assert open2.status_code == 200, open2.text
 
-    for _ in range(2):
-        scan2 = await async_client.post(
-            f"{base}/boxes/{b2['id']}/scan",
-            headers=ah,
-            json={"barcode": sku},
-        )
-        assert scan2.status_code == 200, scan2.text
+    put2 = await async_client.put(
+        f"{base}/boxes/{b2['id']}/lines/{pid}",
+        headers=ah,
+        json={"quantity": 2},
+    )
+    assert put2.status_code == 200, put2.text
 
     await async_client.post(f"{base}/boxes/{b2['id']}/close", headers=ah)
 
@@ -174,20 +172,74 @@ async def test_inbound_box_intake_scan_and_verify(async_client: AsyncClient) -> 
 
 
 @pytest.mark.asyncio
-async def test_inbound_product_scan_without_open_box(async_client: AsyncClient) -> None:
+async def test_inbound_box_zero_qty_sets_actual_zero(async_client: AsyncClient) -> None:
+    suffix = str(int(time.time() * 1000) + 10)
+    ah, rid, pid, _sku, boxes = await _submitted_inbound_with_boxes(
+        async_client, suffix=suffix, expected_qty=5, box_count=1
+    )
+    base = f"/operations/inbound-intake-requests/{rid}"
+    box = boxes[0]
+    await async_client.post(
+        f"{base}/boxes/open",
+        headers=ah,
+        json={"barcode": box["internal_barcode"]},
+    )
+    put = await async_client.put(
+        f"{base}/boxes/{box['id']}/lines/{pid}",
+        headers=ah,
+        json={"quantity": 0},
+    )
+    assert put.status_code == 200, put.text
+    await async_client.post(f"{base}/boxes/{box['id']}/close", headers=ah)
+    got = await async_client.get(base, headers=ah)
+    assert got.json()["lines"][0]["actual_qty"] == 0
+    verify = await async_client.post(f"{base}/verify", headers=ah)
+    assert verify.status_code == 200, verify.text
+
+
+@pytest.mark.asyncio
+async def test_inbound_box_over_receive_allowed(async_client: AsyncClient) -> None:
+    suffix = str(int(time.time() * 1000) + 20)
+    ah, rid, pid, _sku, boxes = await _submitted_inbound_with_boxes(
+        async_client, suffix=suffix, expected_qty=100, box_count=1
+    )
+    base = f"/operations/inbound-intake-requests/{rid}"
+    box = boxes[0]
+    await async_client.post(
+        f"{base}/boxes/open",
+        headers=ah,
+        json={"barcode": box["internal_barcode"]},
+    )
+    put = await async_client.put(
+        f"{base}/boxes/{box['id']}/lines/{pid}",
+        headers=ah,
+        json={"quantity": 220},
+    )
+    assert put.status_code == 200, put.text
+    await async_client.post(f"{base}/boxes/{box['id']}/close", headers=ah)
+    got = await async_client.get(base, headers=ah)
+    body = got.json()
+    assert body["lines"][0]["actual_qty"] == 220
+    verify = await async_client.post(f"{base}/verify", headers=ah)
+    assert verify.status_code == 200, verify.text
+    assert verify.json()["has_discrepancy"] is True
+
+
+@pytest.mark.asyncio
+async def test_inbound_box_line_qty_without_open_box(async_client: AsyncClient) -> None:
     suffix = str(int(time.time() * 1000) + 1)
-    ah, rid, _pid, sku, boxes = await _submitted_inbound_with_boxes(
+    ah, rid, pid, _sku, boxes = await _submitted_inbound_with_boxes(
         async_client, suffix=suffix, expected_qty=3, box_count=1
     )
     base = f"/operations/inbound-intake-requests/{rid}"
     box_id = boxes[0]["id"]
-    scan = await async_client.post(
-        f"{base}/boxes/{box_id}/scan",
+    put = await async_client.put(
+        f"{base}/boxes/{box_id}/lines/{pid}",
         headers=ah,
-        json={"barcode": sku},
+        json={"quantity": 1},
     )
-    assert scan.status_code == 409
-    assert scan.json()["detail"] == "no_open_box"
+    assert put.status_code == 409
+    assert put.json()["detail"] == "no_open_box"
 
 
 @pytest.mark.asyncio

@@ -20,7 +20,7 @@ from app.models.storage_location import StorageLocation
 from app.services import inventory_service
 from app.services import marketplace_unload_service as mu_svc
 
-PICK_EDITABLE_STATUSES = (mu_svc.STATUS_DRAFT, mu_svc.STATUS_CONFIRMED)
+PICK_EDITABLE_STATUSES = (mu_svc.STATUS_CONFIRMED,)
 
 
 class MarketplaceUnloadPickError(Exception):
@@ -267,6 +267,7 @@ async def ship_request(
         )
 
     req.status = mu_svc.STATUS_SHIPPED
+    await mu_svc.release_reservations_for_shipped(session, req.id)
     await session.commit()
     r2 = await mu_svc.get_request(session, tenant_id, request_id)
     assert r2 is not None

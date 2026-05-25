@@ -32,10 +32,12 @@ import { alpha } from '@mui/material/styles'
 import { apiUrl } from '../../api'
 import { printBarcodeLabel } from '../../utils/printBarcodeLabel'
 import { readApiErrorMessage } from '../../utils/readApiErrorMessage'
+import { suggestNextLocationCode } from '../../utils/suggestNextLocationCode'
 import { renderBarcodeDataUrl } from '../../utils/renderBarcodeDataUrl'
 import { resolveProductIdByBarcode } from '../../utils/resolveProductByBarcode'
 
 type LocationRow = { id: string; code: string; warehouse_id: string; barcode: string }
+type WarehouseRow = { id: string; name: string; code: string }
 
 type InboundBoxLine = {
   id: string
@@ -158,8 +160,15 @@ export function FfInboundRequestView({ token, requestId, isFulfillmentAdmin, onC
   const [plannedDateDraft, setPlannedDateDraft] = useState<string>('')
   const [actualBoxCountDraft, setActualBoxCountDraft] = useState<string>('')
   const [boxOpenScan, setBoxOpenScan] = useState('')
-  const [productScanBarcode, setProductScanBarcode] = useState('')
+  const [boxQtyDraftByProductId, setBoxQtyDraftByProductId] = useState<Record<string, string>>({})
   const [lineBarcodeScan, setLineBarcodeScan] = useState('')
+  const [newLocationCode, setNewLocationCode] = useState('')
+  const [requestWarehouse, setRequestWarehouse] = useState<WarehouseRow | null>(null)
+
+  const boxIntakeMode = (detail?.boxes?.length ?? 0) > 0
+  const verifyingWithBoxes =
+    boxIntakeMode &&
+    (detail?.status === 'primary_accepted' || detail?.status === 'verifying')
 
   const loadDetail = useCallback(async () => {
     const res = await fetch(apiUrl(`/operations/inbound-intake-requests/${requestId}`), {
@@ -218,12 +227,46 @@ export function FfInboundRequestView({ token, requestId, isFulfillmentAdmin, onC
       })
       if (!res.ok) {
         setLocations([])
+        setDistError('Не удалось загрузить список ячеек склада.')
         return
       }
-      setLocations((await res.json()) as LocationRow[])
+      const rows = (await res.json()) as LocationRow[]
+      setLocations(rows)
+      if (rows.length === 0) {
+        setDistError(null)
+        setNewLocationCode(suggestNextLocationCode([]))
+      }
     },
     [authHeaders],
   )
+
+  const createWarehouseLocation = async () => {
+    const code = newLocationCode.trim()
+    if (!detail?.warehouse_id || !code) {
+      setDistError('Укажите код ячейки (например A-01).')
+      return
+    }
+    setDistBusy(true)
+    setDistError(null)
+    try {
+      const res = await fetch(apiUrl(`/warehouses/${detail.warehouse_id}/locations`), {
+        method: 'POST',
+        headers: { ...authHeaders, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ code }),
+      })
+      if (!res.ok) {
+        setDistError(await readApiErrorMessage(res))
+        return
+      }
+      const created = (await res.json()) as LocationRow
+      await loadLocations(detail.warehouse_id)
+      setNewLocationCode(suggestNextLocationCode(locations.map((l) => l.code).concat(created.code)))
+    } catch (e) {
+      setDistError(e instanceof Error ? e.message : 'Не удалось создать ячейку.')
+    } finally {
+      setDistBusy(false)
+    }
+  }
 
   const loadCellHints = useCallback(
     async (productId: string) => {
@@ -320,16 +363,21 @@ export function FfInboundRequestView({ token, requestId, isFulfillmentAdmin, onC
       setActualDraftByLineId({})
       return
     }
-    // Keep drafts for lines that exist; default to actual if present, else expected.
+    // Manual verify: default draft to expected only when not using box intake.
+    // Box intake: «Принято» comes from короба — do not pretend undeclared lines are accepted.
     setActualDraftByLineId((prev) => {
+      const viaBoxes = (detail.boxes?.length ?? 0) > 0
       const next: Record<string, string> = {}
       for (const ln of detail.lines) {
         const existing = prev[ln.id]
-        if (existing !== undefined) {
+        if (existing !== undefined && !viaBoxes) {
           next[ln.id] = existing
+          continue
+        }
+        if (viaBoxes) {
+          next[ln.id] = ln.actual_qty != null ? String(ln.actual_qty) : ''
         } else {
-          const v = ln.actual_qty ?? ln.expected_qty
-          next[ln.id] = String(v)
+          next[ln.id] = String(ln.actual_qty ?? ln.expected_qty)
         }
       }
       return next
@@ -339,15 +387,26 @@ export function FfInboundRequestView({ token, requestId, isFulfillmentAdmin, onC
   useEffect(() => {
     if (!detail) {
       setLocations([])
+      setRequestWarehouse(null)
       return
     }
     // For verified stage we need the cell directory to assign storage locations.
     if (!detail.warehouse_id) {
       setLocations([])
+      setRequestWarehouse(null)
       return
     }
     void loadLocations(detail.warehouse_id)
-  }, [detail?.warehouse_id, loadLocations, detail])
+    void (async () => {
+      const res = await fetch(apiUrl('/warehouses'), { headers: authHeaders })
+      if (!res.ok) {
+        setRequestWarehouse(null)
+        return
+      }
+      const rows = (await res.json()) as WarehouseRow[]
+      setRequestWarehouse(rows.find((w) => w.id === detail.warehouse_id) ?? null)
+    })()
+  }, [authHeaders, detail?.warehouse_id, loadLocations, detail])
 
   useEffect(() => {
     if (!detail) {
@@ -421,8 +480,9 @@ export function FfInboundRequestView({ token, requestId, isFulfillmentAdmin, onC
   const acceptedQtyByProductId = useMemo(() => {
     const m = new Map<string, number>()
     if (!detail) return m
+    const viaBoxes = (detail.boxes?.length ?? 0) > 0
     for (const ln of detail.lines) {
-      const accepted = ln.actual_qty ?? ln.expected_qty
+      const accepted = viaBoxes ? (ln.actual_qty ?? 0) : (ln.actual_qty ?? ln.expected_qty)
       m.set(ln.product_id, accepted)
     }
     return m
@@ -435,7 +495,10 @@ export function FfInboundRequestView({ token, requestId, isFulfillmentAdmin, onC
         product_id: ln.product_id,
         sku_code: ln.sku_code,
         product_name: ln.product_name,
-        accepted_qty: ln.actual_qty ?? ln.expected_qty,
+        accepted_qty:
+          (detail.boxes?.length ?? 0) > 0
+            ? (ln.actual_qty ?? 0)
+            : (ln.actual_qty ?? ln.expected_qty),
       }))
       .filter((x) => x.accepted_qty > 0)
     const seen = new Set<string>()
@@ -890,6 +953,10 @@ export function FfInboundRequestView({ token, requestId, isFulfillmentAdmin, onC
     if (!detail) {
       return
     }
+    if ((detail.boxes?.length ?? 0) > 0) {
+      // Факт по строкам уже синхронизируется из поштучной приёмки по коробам.
+      return
+    }
     // Save actuals for all lines (required by backend before verify).
     // Important: do not rely on onBlur — user can click "Завершить" while focus is in the field.
     for (const ln of detail.lines) {
@@ -912,6 +979,26 @@ export function FfInboundRequestView({ token, requestId, isFulfillmentAdmin, onC
     setBusy(true)
     setError(null)
     try {
+      if (boxIntakeMode && activeIntakeBox) {
+        setError(
+          `Закройте короб № ${activeIntakeBox.box_number} (${activeIntakeBox.internal_barcode}) перед завершением пересчёта.`,
+        )
+        return
+      }
+      if (boxIntakeMode && detail) {
+        const missing = detail.lines.filter((ln) => ln.actual_qty == null)
+        if (missing.length > 0) {
+          const names = missing
+            .slice(0, 4)
+            .map((ln) => ln.sku_code)
+            .join(', ')
+          const more = missing.length > 4 ? ` и ещё ${missing.length - 4}` : ''
+          setError(
+            `Укажите количество в поштучной приёмке по коробам для всех позиций (в коробе можно поставить 0). Не заполнено: ${names}${more}.`,
+          )
+          return
+        }
+      }
       await ensureActualsSaved()
       const res = await fetch(
         apiUrl(`/operations/inbound-intake-requests/${requestId}/verify`),
@@ -919,7 +1006,15 @@ export function FfInboundRequestView({ token, requestId, isFulfillmentAdmin, onC
       )
       if (!res.ok) {
         const msg = await readApiErrorMessage(res)
-        setError(msg === 'actual_missing' ? 'Укажите факт по всем строкам.' : msg)
+        setError(
+          msg === 'actual_missing'
+            ? boxIntakeMode
+              ? 'Укажите количество по каждой позиции в поштучной приёмке по коробам (0 — если товар не принимали).'
+              : 'Укажите факт по всем строкам.'
+            : msg === 'open_box_exists'
+              ? 'Сначала закройте открытый короб в блоке поштучной приёмки.'
+              : msg,
+        )
         return
       }
       await loadDetail()
@@ -931,15 +1026,44 @@ export function FfInboundRequestView({ token, requestId, isFulfillmentAdmin, onC
     }
   }
 
-  const boxIntakeMode = (detail?.boxes?.length ?? 0) > 0
-  const activeIntakeBox = detail?.boxes.find((b) => b.is_open) ?? null
+  const activeIntakeBox = detail?.boxes?.find((b) => b.is_open) ?? null
+
+  const qtyInOtherBoxesByProductId = useMemo(() => {
+    const m = new Map<string, number>()
+    if (!detail?.boxes || !activeIntakeBox) {
+      return m
+    }
+    for (const box of detail.boxes) {
+      if (box.id === activeIntakeBox.id) {
+        continue
+      }
+      for (const ln of box.lines) {
+        m.set(ln.product_id, (m.get(ln.product_id) ?? 0) + ln.quantity)
+      }
+    }
+    return m
+  }, [activeIntakeBox, detail?.boxes])
+
+  useEffect(() => {
+    if (!activeIntakeBox || !detail) {
+      setBoxQtyDraftByProductId({})
+      return
+    }
+    const draft: Record<string, string> = {}
+    for (const ln of detail.lines) {
+      const inBox = activeIntakeBox.lines.find((bl) => bl.product_id === ln.product_id)
+      draft[ln.product_id] = String(inBox?.quantity ?? 0)
+    }
+    setBoxQtyDraftByProductId(draft)
+  }, [activeIntakeBox, detail])
+
   const actualEditable =
     isFulfillmentAdmin &&
     (detail?.status === 'primary_accepted' || detail?.status === 'verifying') &&
     !boxIntakeMode
 
-  const openInboundBoxByScan = async () => {
-    const code = boxOpenScan.trim()
+  const openInboundBox = async (barcode: string) => {
+    const code = barcode.trim()
     if (!code) return
     setBusy(true)
     setError(null)
@@ -965,31 +1089,43 @@ export function FfInboundRequestView({ token, requestId, isFulfillmentAdmin, onC
     }
   }
 
-  const scanProductIntoActiveBox = async () => {
+  const openInboundBoxByScan = async () => {
+    await openInboundBox(boxOpenScan)
+  }
+
+  const saveBoxLineQty = async (productId: string) => {
     if (!activeIntakeBox) return
-    const code = productScanBarcode.trim()
-    if (!code) return
+    const raw = boxQtyDraftByProductId[productId] ?? '0'
+    const qty = Math.floor(Number(raw))
+    if (!Number.isFinite(qty) || qty < 0) {
+      setError('Укажите целое количество ≥ 0.')
+      return
+    }
+    const inBox = activeIntakeBox.lines.find((ln) => ln.product_id === productId)
+    if (inBox && inBox.quantity === qty) {
+      return
+    }
     setBusy(true)
     setError(null)
     try {
       const res = await fetch(
         apiUrl(
-          `/operations/inbound-intake-requests/${requestId}/boxes/${activeIntakeBox.id}/scan`,
+          `/operations/inbound-intake-requests/${requestId}/boxes/${activeIntakeBox.id}/lines/${productId}`,
         ),
         {
-          method: 'POST',
+          method: 'PUT',
           headers: { ...authHeaders, 'Content-Type': 'application/json' },
-          body: JSON.stringify({ barcode: code }),
+          body: JSON.stringify({ quantity: qty }),
         },
       )
       if (!res.ok) {
-        setError(await readApiErrorMessage(res))
+        const msg = await readApiErrorMessage(res)
+        setError(msg)
         return
       }
-      setProductScanBarcode('')
       await loadDetail()
     } catch (e) {
-      setError(e instanceof Error ? e.message : 'Не удалось отсканировать товар.')
+      setError(e instanceof Error ? e.message : 'Не удалось сохранить количество.')
     } finally {
       setBusy(false)
     }
@@ -1183,7 +1319,7 @@ export function FfInboundRequestView({ token, requestId, isFulfillmentAdmin, onC
                     Заявлено
                   </TableCell>
                   <TableCell align="right" sx={{ width: 150 }}>
-                    Принято
+                    {verifyingWithBoxes ? 'Принято (из коробов)' : 'Принято'}
                   </TableCell>
                 </TableRow>
               </TableHead>
@@ -1195,15 +1331,21 @@ export function FfInboundRequestView({ token, requestId, isFulfillmentAdmin, onC
                     cat?.wb_primary_barcode ??
                     (cat?.wb_barcodes.length ? cat.wb_barcodes.join(', ') : '—')
                   const actualIsSet = ln.actual_qty != null
+                  const pendingBoxAcceptance = verifyingWithBoxes && !actualIsSet
                   const hasDiscrepancy = actualIsSet && ln.actual_qty !== ln.expected_qty
                   const matchesExpected = actualIsSet && ln.actual_qty === ln.expected_qty
+                  const rowTestId = matchesExpected
+                    ? 'ff-inbound-line-row-match'
+                    : hasDiscrepancy
+                      ? 'ff-inbound-line-row-discrepancy'
+                      : pendingBoxAcceptance
+                        ? 'ff-inbound-line-row-pending'
+                        : 'ff-inbound-line-row'
                   return (
                     <TableRow
                       key={ln.id}
                       hover
-                      data-testid={
-                        matchesExpected ? 'ff-inbound-line-row-match' : 'ff-inbound-line-row'
-                      }
+                      data-testid={rowTestId}
                       sx={{
                         '& td': { px: 1.25 },
                         '& td:first-of-type': { pl: 1 },
@@ -1218,6 +1360,12 @@ export function FfInboundRequestView({ token, requestId, isFulfillmentAdmin, onC
                           ? {
                               backgroundColor: (theme) =>
                                 alpha(theme.palette.error.main, 0.08),
+                            }
+                          : null),
+                        ...(pendingBoxAcceptance
+                          ? {
+                              backgroundColor: (theme) =>
+                                alpha(theme.palette.action.hover, 0.04),
                             }
                           : null),
                       }}
@@ -1256,9 +1404,14 @@ export function FfInboundRequestView({ token, requestId, isFulfillmentAdmin, onC
                         <TextField
                           type="number"
                           size="small"
+                          placeholder={verifyingWithBoxes ? '—' : undefined}
                           value={
-                            actualDraftByLineId[ln.id] ??
-                            String(ln.actual_qty ?? '')
+                            verifyingWithBoxes
+                              ? ln.actual_qty != null
+                                ? String(ln.actual_qty)
+                                : ''
+                              : (actualDraftByLineId[ln.id] ??
+                                (ln.actual_qty != null ? String(ln.actual_qty) : ''))
                           }
                           disabled={busy || !actualEditable}
                           onChange={(e) =>
@@ -1268,6 +1421,7 @@ export function FfInboundRequestView({ token, requestId, isFulfillmentAdmin, onC
                             }))
                           }
                           onBlur={() => {
+                            if (verifyingWithBoxes) return
                             const raw = actualDraftByLineId[ln.id]
                             const v = Number(raw)
                             if (!Number.isFinite(v) || v < 0) return
@@ -1411,15 +1565,28 @@ export function FfInboundRequestView({ token, requestId, isFulfillmentAdmin, onC
                             </TableCell>
                             {isFulfillmentAdmin ? (
                               <TableCell>
-                                <Button
-                                  size="small"
-                                  variant="outlined"
-                                  disabled={busy}
-                                  onClick={() => void printInboundBoxLabel(box)}
-                                  data-testid="ff-inbound-box-print"
-                                >
-                                  Печать
-                                </Button>
+                                <Stack direction="row" spacing={0.5}>
+                                  {!box.is_open && box.intake_closed_at == null ? (
+                                    <Button
+                                      size="small"
+                                      variant="contained"
+                                      disabled={busy || activeIntakeBox != null}
+                                      onClick={() => void openInboundBox(box.internal_barcode)}
+                                      data-testid="ff-inbound-box-open-btn"
+                                    >
+                                      Открыть
+                                    </Button>
+                                  ) : null}
+                                  <Button
+                                    size="small"
+                                    variant="outlined"
+                                    disabled={busy}
+                                    onClick={() => void printInboundBoxLabel(box)}
+                                    data-testid="ff-inbound-box-print"
+                                  >
+                                    Печать
+                                  </Button>
+                                </Stack>
                               </TableCell>
                             ) : null}
                           </TableRow>
@@ -1442,8 +1609,10 @@ export function FfInboundRequestView({ token, requestId, isFulfillmentAdmin, onC
                     Поштучная приёмка по коробу
                   </Typography>
                   <Typography variant="body2" color="text.secondary" sx={{ mb: 1.5 }}>
-                    Отсканируйте внутренний ШК короба (INB-…), затем штрихкоды товаров. Факт по
-                    строкам заявки обновляется автоматически.
+                    Откройте короб (скан INB-… или кнопка в таблице коробов), вручную укажите
+                    количество по каждой позиции в этом коробе и закройте короб. Можно указать
+                    больше, чем в заявке — расхождение зафиксируется при пересчёте. Сканирование
+                    штрихкодов товара не требуется.
                   </Typography>
                   {!activeIntakeBox ? (
                     <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1} sx={{ mb: 1.5 }}>
@@ -1476,29 +1645,7 @@ export function FfInboundRequestView({ token, requestId, isFulfillmentAdmin, onC
                         Активный короб № <strong>{activeIntakeBox.box_number}</strong> (
                         <code>{activeIntakeBox.internal_barcode}</code>)
                       </Alert>
-                      <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1}>
-                        <TextField
-                          size="small"
-                          label="Штрихкод товара"
-                          value={productScanBarcode}
-                          onChange={(e) => setProductScanBarcode(e.target.value)}
-                          disabled={busy}
-                          fullWidth
-                          onKeyDown={(e) => {
-                            if (e.key === 'Enter') void scanProductIntoActiveBox()
-                          }}
-                          slotProps={{
-                            htmlInput: { 'data-testid': 'ff-inbound-product-scan' },
-                          }}
-                        />
-                        <Button
-                          variant="contained"
-                          disabled={busy || !productScanBarcode.trim()}
-                          onClick={() => void scanProductIntoActiveBox()}
-                          data-testid="ff-inbound-product-scan-submit"
-                        >
-                          Скан
-                        </Button>
+                      <Stack direction="row" spacing={1} sx={{ mb: 1 }}>
                         <Button
                           variant="outlined"
                           disabled={busy}
@@ -1513,27 +1660,59 @@ export function FfInboundRequestView({ token, requestId, isFulfillmentAdmin, onC
                           <TableRow>
                             <TableCell>Артикул</TableCell>
                             <TableCell>Товар</TableCell>
-                            <TableCell align="right">Кол-во</TableCell>
+                            <TableCell align="right" sx={{ width: 90 }}>
+                              Заявлено
+                            </TableCell>
+                            <TableCell align="right" sx={{ width: 120 }}>
+                              В коробе
+                            </TableCell>
                           </TableRow>
                         </TableHead>
                         <TableBody>
-                          {activeIntakeBox.lines.length === 0 ? (
-                            <TableRow>
-                              <TableCell colSpan={3}>
-                                <Typography variant="body2" color="text.secondary">
-                                  Пока нет сканов в этом коробе
-                                </Typography>
-                              </TableCell>
-                            </TableRow>
-                          ) : (
-                            activeIntakeBox.lines.map((ln) => (
-                              <TableRow key={ln.id}>
+                          {detail.lines.map((ln) => {
+                            const inOther = qtyInOtherBoxesByProductId.get(ln.product_id) ?? 0
+                            const totalAfter =
+                              inOther +
+                              Math.floor(
+                                Number(boxQtyDraftByProductId[ln.product_id] ?? '0') || 0,
+                              )
+                            return (
+                              <TableRow key={ln.id} data-testid="ff-inbound-box-line-row">
                                 <TableCell>{ln.sku_code}</TableCell>
                                 <TableCell>{ln.product_name}</TableCell>
-                                <TableCell align="right">{ln.quantity}</TableCell>
+                                <TableCell align="right">{ln.expected_qty}</TableCell>
+                                <TableCell align="right">
+                                  <TextField
+                                    type="number"
+                                    size="small"
+                                    value={boxQtyDraftByProductId[ln.product_id] ?? '0'}
+                                    disabled={busy}
+                                    onChange={(e) =>
+                                      setBoxQtyDraftByProductId((prev) => ({
+                                        ...prev,
+                                        [ln.product_id]: e.target.value,
+                                      }))
+                                    }
+                                    onBlur={() => void saveBoxLineQty(ln.product_id)}
+                                    helperText={
+                                      totalAfter > ln.expected_qty
+                                        ? `всего ${totalAfter} (заявлено ${ln.expected_qty})`
+                                        : inOther > 0
+                                          ? `в др. коробах ${inOther}`
+                                          : undefined
+                                    }
+                                    slotProps={{
+                                      htmlInput: {
+                                        min: 0,
+                                        'data-testid': 'ff-inbound-box-line-qty',
+                                      },
+                                    }}
+                                    sx={{ maxWidth: 120 }}
+                                  />
+                                </TableCell>
                               </TableRow>
-                            ))
-                          )}
+                            )
+                          })}
                         </TableBody>
                       </Table>
                     </Stack>
@@ -1549,14 +1728,69 @@ export function FfInboundRequestView({ token, requestId, isFulfillmentAdmin, onC
                         Распределение по ячейкам
                       </Typography>
                       <Typography variant="body2" color="text.secondary">
-                        Доступно после завершения пересчёта. Нераспределённый остаток попадёт в «Без ячейки».
+                        {distributionCompleted
+                          ? 'Распределение зафиксировано, правки недоступны.'
+                          : detail.status === 'verified'
+                            ? 'Добавьте строки (товар + ячейка + кол-во) или нажмите «Завершить распределение» без строк — остаток уйдёт в «Без ячейки».'
+                            : 'Станет доступно после «Завершить пересчёт» (статус «Проверено на складе»).'}
                       </Typography>
+                      {requestWarehouse ? (
+                        <Typography
+                          variant="body2"
+                          color="text.secondary"
+                          sx={{ mt: 0.5 }}
+                          data-testid="ff-inbound-distribution-warehouse"
+                        >
+                          Склад этой заявки:{' '}
+                          <strong>
+                            {requestWarehouse.name} ({requestWarehouse.code})
+                          </strong>
+                          . В списке «Ячейка» — только ячейки этого склада (
+                          {locations.length === 0
+                            ? 'пока нет'
+                            : locations.map((l) => l.code).join(', ')}
+                          ).
+                        </Typography>
+                      ) : null}
                     </Box>
                   </Stack>
 
                   {distError ? (
                     <Alert severity="error" sx={{ mt: 2 }} data-testid="ff-inbound-distribution-error">
                       {distError}
+                    </Alert>
+                  ) : null}
+
+                  {locations.length === 0 &&
+                  !distributionCompleted &&
+                  (distOpen || detail.status === 'verified') ? (
+                    <Alert severity="warning" sx={{ mt: 2 }} data-testid="ff-inbound-distribution-no-locations">
+                      <Typography variant="body2" sx={{ mb: 1 }}>
+                        На складе этой заявки <strong>нет ячеек</strong> — поэтому список «Ячейка» пустой и
+                        не открывается. Создайте ячейку здесь или в разделе{' '}
+                        <strong>Каталог → Ячейки</strong> (тот же склад).
+                      </Typography>
+                      <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1}>
+                        <TextField
+                          size="small"
+                          label="Код новой ячейки"
+                          value={newLocationCode}
+                          onChange={(e) => setNewLocationCode(e.target.value)}
+                          disabled={distBusy}
+                          placeholder="A-01"
+                          slotProps={{
+                            htmlInput: { 'data-testid': 'ff-inbound-distribution-new-location-code' },
+                          }}
+                        />
+                        <Button
+                          variant="contained"
+                          disabled={distBusy || !newLocationCode.trim()}
+                          onClick={() => void createWarehouseLocation()}
+                          data-testid="ff-inbound-distribution-create-location"
+                        >
+                          Создать ячейку
+                        </Button>
+                      </Stack>
                     </Alert>
                   ) : null}
 
@@ -1682,7 +1916,18 @@ export function FfInboundRequestView({ token, requestId, isFulfillmentAdmin, onC
                                           </MenuItem>
                                           {locations.map((loc) => (
                                             <MenuItem key={loc.id} value={loc.id}>
-                                              {loc.code}
+                                              <Box>
+                                                <Typography variant="body2" component="span">
+                                                  {loc.code}
+                                                </Typography>
+                                                <Typography
+                                                  variant="caption"
+                                                  color="text.secondary"
+                                                  component="div"
+                                                >
+                                                  {loc.barcode}
+                                                </Typography>
+                                              </Box>
                                             </MenuItem>
                                           ))}
                                         </Select>

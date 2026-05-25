@@ -46,13 +46,13 @@ async def _barcode_index_for_seller(
     return idx
 
 
-async def _request_draft(
+async def _request_for_picking(
     session: AsyncSession, tenant_id: uuid.UUID, request_id: uuid.UUID
 ) -> MarketplaceUnloadRequest:
     req = await mu_svc.get_request(session, tenant_id, request_id)
     if req is None:
         raise MarketplaceUnloadBoxError("not_found")
-    if req.status != mu_svc.STATUS_DRAFT:
+    if req.status != mu_svc.STATUS_CONFIRMED:
         raise MarketplaceUnloadBoxError("not_editable")
     if req.seller_id is None:
         raise MarketplaceUnloadBoxError("seller_required")
@@ -80,7 +80,7 @@ async def create_open_box(
     preset = box_preset.strip()
     if preset not in ALLOWED_BOX_PRESETS:
         raise MarketplaceUnloadBoxError("invalid_preset")
-    await _request_draft(session, tenant_id, request_id)
+    await _request_for_picking(session, tenant_id, request_id)
     existing = await _open_box_for_request(session, request_id)
     if existing is not None:
         raise MarketplaceUnloadBoxError("open_box_exists")
@@ -139,7 +139,7 @@ async def scan_barcode_into_box(
     if box.closed_at is not None:
         raise MarketplaceUnloadBoxError("box_closed")
 
-    req = await _request_draft(session, tenant_id, box.request_id)
+    req = await _request_for_picking(session, tenant_id, box.request_id)
     if req.seller_id is None:
         raise MarketplaceUnloadBoxError("seller_required")
 
@@ -178,6 +178,56 @@ async def scan_barcode_into_box(
     return out
 
 
+async def add_manual_qty_to_box(
+    session: AsyncSession,
+    tenant_id: uuid.UUID,
+    box_id: uuid.UUID,
+    *,
+    product_id: uuid.UUID,
+    quantity: int,
+) -> MarketplaceUnloadBoxLine:
+    if quantity < 1:
+        raise MarketplaceUnloadBoxError("invalid_quantity")
+
+    box = await session.get(MarketplaceUnloadBox, box_id)
+    if box is None:
+        raise MarketplaceUnloadBoxError("box_not_found")
+    if box.closed_at is not None:
+        raise MarketplaceUnloadBoxError("box_closed")
+
+    req = await _request_for_picking(session, tenant_id, box.request_id)
+
+    planned = await _planned_qty(session, req.id, product_id)
+    if planned <= 0:
+        raise MarketplaceUnloadBoxError("product_not_in_shipment")
+
+    scanned = await _total_scanned_for_product(session, req.id, product_id)
+    if scanned + quantity > planned:
+        raise MarketplaceUnloadBoxError("qty_exceeded")
+
+    stmt = select(MarketplaceUnloadBoxLine).where(
+        MarketplaceUnloadBoxLine.box_id == box_id,
+        MarketplaceUnloadBoxLine.product_id == product_id,
+    )
+    res = await session.execute(stmt)
+    line = res.scalar_one_or_none()
+    if line is None:
+        line = MarketplaceUnloadBoxLine(
+            box_id=box_id, product_id=product_id, quantity=quantity
+        )
+        session.add(line)
+    else:
+        line.quantity = int(line.quantity) + quantity
+    await session.commit()
+    stmt2 = (
+        select(MarketplaceUnloadBoxLine)
+        .where(MarketplaceUnloadBoxLine.id == line.id)
+        .options(selectinload(MarketplaceUnloadBoxLine.product))
+    )
+    res2 = await session.execute(stmt2)
+    return res2.scalar_one()
+
+
 async def close_box(
     session: AsyncSession,
     tenant_id: uuid.UUID,
@@ -186,7 +236,7 @@ async def close_box(
     box = await session.get(MarketplaceUnloadBox, box_id)
     if box is None:
         raise MarketplaceUnloadBoxError("box_not_found")
-    await _request_draft(session, tenant_id, box.request_id)
+    await _request_for_picking(session, tenant_id, box.request_id)
     if box.closed_at is not None:
         raise MarketplaceUnloadBoxError("box_closed")
     box.closed_at = datetime.now(tz=UTC)

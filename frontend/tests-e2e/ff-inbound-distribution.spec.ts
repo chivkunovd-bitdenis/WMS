@@ -2,6 +2,7 @@ import { test, expect } from '@playwright/test';
 
 import { waitForGetOk, waitForPostOk } from './api-waits';
 import { openFulfillmentRegistration } from './auth-flow';
+import { fillFfInboundBoxLineQty } from './inbound-boxes-helpers';
 
 // TC-NEW-FF-001 — распределение приёмки по ячейкам (FF): частично, остаток в «Без ячейки», завершение фиксирует read-only.
 test('ff inbound distribution: partial, leftover without cell, complete -> readonly', async ({ page }) => {
@@ -83,13 +84,7 @@ test('ff inbound distribution: partial, leftover without cell, complete -> reado
     waitForPostOk(page, base, (u) => u.includes('/boxes/open')),
     page.getByTestId('ff-inbound-box-open-submit').click(),
   ]);
-  for (let n = 0; n < 5; n++) {
-    await page.getByTestId('ff-inbound-product-scan').fill(sku);
-    await Promise.all([
-      waitForPostOk(page, base, (u) => u.includes('/boxes/') && u.includes('/scan')),
-      page.getByTestId('ff-inbound-product-scan-submit').click(),
-    ]);
-  }
+  await fillFfInboundBoxLineQty(page, 5);
   await Promise.all([
     waitForPostOk(page, base, (u) => u.includes('/close')),
     page.getByTestId('ff-inbound-box-close').click(),

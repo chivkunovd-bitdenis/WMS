@@ -63,12 +63,28 @@ test('fulfillment admin sees week calendar and supplies-shipments page', async (
         Authorization: `Bearer ${token}`,
         'Content-Type': 'application/json',
       },
-      data: JSON.stringify({ supplies_api_token: 'e2e-ff-supplies-token' }),
+      data: JSON.stringify({
+        content_api_token: 'e2e-content',
+        supplies_api_token: 'e2e-ff-supplies-token',
+      }),
     },
   );
   if (!tokRes.ok()) {
     throw new Error(`wb supplies token patch failed: ${tokRes.status()} ${await tokRes.text()}`);
   }
+  const jobRes = await page.request.post(`${e2eApi}/operations/background-jobs`, {
+    headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+    data: JSON.stringify({ job_type: 'wildberries_cards_sync', seller_id: sellerId.id }),
+  });
+  const jobId = String(((await jobRes.json()) as { id: string }).id);
+  await expect
+    .poll(async () => {
+      const jr = await page.request.get(`${e2eApi}/operations/background-jobs/${jobId}`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      return (await jr.json()) as { status: string };
+    })
+    .toMatchObject({ status: 'done' });
 
   const prRes = await page.request.post(`${e2eApi}/products`, {
     headers: {
@@ -89,7 +105,14 @@ test('fulfillment admin sees week calendar and supplies-shipments page', async (
   }
   const productJson = (await prRes.json()) as { id: string; sku_code: string };
   const productId = String(productJson.id);
-  const productSku = productJson.sku_code;
+  const barcode = 'E2E-MOCK-BARCODE';
+  await page.request.post(
+    `${e2eApi}/integrations/wildberries/sellers/${sellerId.id}/link-product`,
+    {
+      headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+      data: JSON.stringify({ product_id: productId, nm_id: 424242 }),
+    },
+  );
   const whId = String(((await whRes.json()) as { id: string }).id);
   const locRes = await page.request.post(`${e2eApi}/warehouses/${whId}/locations`, {
     headers: {
@@ -132,7 +155,7 @@ test('fulfillment admin sees week calendar and supplies-shipments page', async (
     { Authorization: `Bearer ${token}` },
     inboundId,
     primBody.boxes,
-    productSku,
+    barcode,
     [5],
   );
   await page.request.post(`${baseIn}/${inboundId}/verify`, { headers: { Authorization: `Bearer ${token}` } });
@@ -172,9 +195,13 @@ test('fulfillment admin sees week calendar and supplies-shipments page', async (
   ]);
   await expect(page.getByTestId('ff-supplies-doc-lines')).toContainText('E2E FF product');
 
+  await page.getByLabel('Склад WB (маркетплейс)').click();
+  await page.getByRole('option', { name: /E2E WB склад/ }).click();
+  await page.getByTestId('ff-mp-confirm-date').locator('input').fill('2026-06-15');
   await Promise.all([
-    waitForPostOk(page, '/api/operations/marketplace-unload-requests', (u) => u.includes('/submit')),
+    waitForPostOk(page, '/api/operations/marketplace-unload-requests', (u) => u.includes('/confirm')),
     page.getByTestId('ff-supplies-doc-submit').click(),
   ]);
   await expect(page.getByTestId('ff-supplies-doc-dialog')).toContainText('Утверждено');
+  await expect(page.getByTestId('ff-mp-boxes')).toBeVisible();
 });

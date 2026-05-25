@@ -134,6 +134,11 @@ test('FF marketplace unload: pick by cell and ship reduces stock', async ({ page
     data: JSON.stringify({ product_id: productId, quantity: 3 }),
   });
 
+  await page.request.post(`${e2eApi}/operations/marketplace-unload-requests/${mid}/confirm`, {
+    headers: auth,
+    data: JSON.stringify({ planned_shipment_date: '2026-06-01' }),
+  });
+
   const box = await page.request.post(
     `${e2eApi}/operations/marketplace-unload-requests/${mid}/boxes`,
     { headers: auth, data: JSON.stringify({ box_preset: '60_40_40' }) },
@@ -166,9 +171,6 @@ test('FF marketplace unload: pick by cell and ship reduces stock', async ({ page
     },
   );
 
-  await page.request.post(`${e2eApi}/operations/marketplace-unload-requests/${mid}/submit`, {
-    headers: auth,
-  });
   await page.request.post(`${e2eApi}/operations/marketplace-unload-requests/${mid}/ship`, {
     headers: auth,
   });

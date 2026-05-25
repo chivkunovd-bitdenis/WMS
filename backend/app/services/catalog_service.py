@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import uuid
 
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
@@ -11,6 +11,7 @@ from app.models.product import Product
 from app.models.seller import Seller
 from app.models.storage_location import StorageLocation
 from app.models.warehouse import Warehouse
+from app.models.warehouse_storage_rack import WarehouseStorageRack
 
 
 class CatalogError(Exception):
@@ -84,6 +85,167 @@ async def list_locations(
     )
     res = await session.execute(stmt)
     return list(res.scalars().all())
+
+
+def _normalize_rack_name(name: str) -> str:
+    return name.strip().upper()
+
+
+def _format_location_code(rack_name: str, side: int, position: int) -> str:
+    return f"{rack_name} {side}.{position}"
+
+
+async def list_racks(
+    session: AsyncSession, tenant_id: uuid.UUID, warehouse_id: uuid.UUID
+) -> list[WarehouseStorageRack]:
+    stmt = (
+        select(WarehouseStorageRack)
+        .where(
+            WarehouseStorageRack.tenant_id == tenant_id,
+            WarehouseStorageRack.warehouse_id == warehouse_id,
+        )
+        .order_by(WarehouseStorageRack.name)
+    )
+    res = await session.execute(stmt)
+    return list(res.scalars().all())
+
+
+async def _get_rack_by_name(
+    session: AsyncSession,
+    tenant_id: uuid.UUID,
+    warehouse_id: uuid.UUID,
+    *,
+    rack_name: str,
+) -> WarehouseStorageRack | None:
+    name = _normalize_rack_name(rack_name)
+    stmt = select(WarehouseStorageRack).where(
+        WarehouseStorageRack.tenant_id == tenant_id,
+        WarehouseStorageRack.warehouse_id == warehouse_id,
+        WarehouseStorageRack.name == name,
+    )
+    res = await session.execute(stmt)
+    return res.scalar_one_or_none()
+
+
+async def _get_or_create_rack(
+    session: AsyncSession,
+    tenant_id: uuid.UUID,
+    warehouse_id: uuid.UUID,
+    *,
+    rack_name: str,
+) -> WarehouseStorageRack:
+    name = _normalize_rack_name(rack_name)
+    existing = await _get_rack_by_name(
+        session, tenant_id, warehouse_id, rack_name=name
+    )
+    if existing is not None:
+        return existing
+
+    rack = WarehouseStorageRack(
+        tenant_id=tenant_id,
+        warehouse_id=warehouse_id,
+        name=name,
+    )
+    session.add(rack)
+    try:
+        await session.commit()
+    except IntegrityError as exc:
+        await session.rollback()
+        # Another request won the race; read it again.
+        existing2 = await _get_rack_by_name(
+            session, tenant_id, warehouse_id, rack_name=name
+        )
+        if existing2 is not None:
+            return existing2
+        raise CatalogError("rack_create_failed") from exc
+    await session.refresh(rack)
+    return rack
+
+
+async def suggest_next_location_for_rack(
+    session: AsyncSession,
+    tenant_id: uuid.UUID,
+    warehouse_id: uuid.UUID,
+    *,
+    rack_name: str,
+    side: int,
+) -> tuple[int, str]:
+    if side not in (1, 2):
+        raise CatalogError("invalid_side")
+    name = _normalize_rack_name(rack_name)
+    max_pos = 0
+    rack = await _get_rack_by_name(
+        session, tenant_id, warehouse_id, rack_name=rack_name
+    )
+    if rack is not None:
+        stmt = select(func.max(StorageLocation.position)).where(
+            StorageLocation.tenant_id == tenant_id,
+            StorageLocation.warehouse_id == warehouse_id,
+            StorageLocation.rack_id == rack.id,
+            StorageLocation.side == side,
+            StorageLocation.position.is_not(None),
+        )
+        res = await session.execute(stmt)
+        max_pos = int(res.scalar_one() or 0)
+    next_pos = max_pos + 1
+    return next_pos, _format_location_code(name, side, next_pos)
+
+
+async def create_location_from_rack(
+    session: AsyncSession,
+    tenant_id: uuid.UUID,
+    warehouse_id: uuid.UUID,
+    *,
+    rack_name: str,
+    side: int,
+    position: int | None = None,
+) -> StorageLocation:
+    wh = await get_warehouse(session, tenant_id, warehouse_id)
+    if wh is None:
+        raise CatalogError("warehouse_not_found")
+    if side not in (1, 2):
+        raise CatalogError("invalid_side")
+    if position is not None and position <= 0:
+        raise CatalogError("invalid_position")
+
+    rack = await _get_or_create_rack(
+        session, tenant_id, warehouse_id, rack_name=rack_name
+    )
+
+    if position is None:
+        position, code = await suggest_next_location_for_rack(
+            session, tenant_id, warehouse_id, rack_name=rack.name, side=side
+        )
+    else:
+        code = _format_location_code(rack.name, side, position)
+
+    # CODE128 supports alphanumeric; keep it short and unique.
+    # Persisted in DB and used for printing the barcode label.
+    for _ in range(5):
+        loc = StorageLocation(
+            tenant_id=tenant_id,
+            warehouse_id=warehouse_id,
+            code=code,
+            rack_id=rack.id,
+            side=side,
+            position=position,
+            barcode=f"LOC-{uuid.uuid4().hex[:12].upper()}",
+        )
+        session.add(loc)
+        try:
+            await session.commit()
+        except IntegrityError as exc:
+            await session.rollback()
+            msg = str(exc.orig).lower() if exc.orig is not None else str(exc).lower()
+            if "uq_storage_locations_wh_code" in msg or "storage_locations_wh_code" in msg:
+                raise CatalogError("location_code_taken") from exc
+            if "uq_storage_locations_tenant_barcode" in msg or "tenant_barcode" in msg:
+                # Retry barcode collision (extremely unlikely).
+                continue
+            raise
+        await session.refresh(loc)
+        return loc
+    raise CatalogError("barcode_collision")
 
 
 async def create_location(

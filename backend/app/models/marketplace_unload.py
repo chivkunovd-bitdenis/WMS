@@ -1,15 +1,26 @@
 from __future__ import annotations
 
 import uuid
-from datetime import datetime
+from datetime import date, datetime
 from typing import TYPE_CHECKING
 
-from sqlalchemy import DateTime, ForeignKey, Integer, String, UniqueConstraint, Uuid, func
+from sqlalchemy import (
+    Boolean,
+    Date,
+    DateTime,
+    ForeignKey,
+    Integer,
+    String,
+    UniqueConstraint,
+    Uuid,
+    func,
+)
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.models.base import Base
 
 if TYPE_CHECKING:
+    from app.models.marketplace_unload_reservation import MarketplaceUnloadReservation
     from app.models.product import Product
     from app.models.seller import Seller
     from app.models.storage_location import StorageLocation
@@ -41,6 +52,8 @@ class MarketplaceUnloadRequest(Base):
     )
     wb_mp_warehouse_id: Mapped[int | None] = mapped_column(Integer, nullable=True, index=True)
     status: Mapped[str] = mapped_column(String(32), nullable=False)
+    planned_shipment_date: Mapped[date | None] = mapped_column(Date, nullable=True)
+    ff_modified: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default="false")
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), nullable=False
     )
@@ -98,6 +111,12 @@ class MarketplaceUnloadLine(Base):
         back_populates="lines",
     )
     product: Mapped[Product] = relationship("Product")
+    reservation: Mapped[MarketplaceUnloadReservation | None] = relationship(
+        "MarketplaceUnloadReservation",
+        back_populates="unload_line",
+        uselist=False,
+        cascade="all, delete-orphan",
+    )
 
 
 class MarketplaceUnloadBox(Base):
