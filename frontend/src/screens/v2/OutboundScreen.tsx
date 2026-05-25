@@ -1,4 +1,5 @@
 import type { FormEventHandler } from 'react'
+import { useMemo } from 'react'
 import { Button } from '../../ui/Button'
 import { Card } from '../../ui/Card'
 import { Input } from '../../ui/Input'
@@ -92,6 +93,17 @@ export function OutboundScreen(props: Props) {
     onPostOutboundRequest,
   } = props
 
+  const outboundMissingStorage = useMemo(
+    () =>
+      (outboundDetail?.lines ?? []).some(
+        (ln) =>
+          ln.quantity > 0 &&
+          ln.shipped_qty < ln.quantity &&
+          ln.storage_location_id == null,
+      ),
+    [outboundDetail?.lines],
+  )
+
   return (
     <Screen title="Отгрузка" subtitle="Заявки → строки → подбор → списание">
       {opsError ? (
@@ -107,8 +119,8 @@ export function OutboundScreen(props: Props) {
           <Card className="card" data-testid="outbound-section">
             <h3 style={{ margin: 0, fontSize: 16 }}>Заявки на отгрузку</h3>
             <p className="subtle">
-              Назначь ячейку на строке. Отгрузка по строке частями; «Провести весь остаток»
-              списывает всё неотгруженное.
+              Ячейка обязательна на каждой строке перед отправкой заявки (резерв по ячейке).
+              Отгрузка по строке частями; «Провести весь остаток» списывает всё неотгруженное.
             </p>
 
             {canEditOutboundDraft ? (
@@ -202,7 +214,44 @@ export function OutboundScreen(props: Props) {
                   {outboundDetail.lines.map((ln) => (
                     <li key={ln.id} data-testid="outbound-detail-line" data-line-id={ln.id}>
                       {ln.product_name} ({ln.sku_code}) — отгружено {ln.shipped_qty} из {ln.quantity}
-                      {ln.storage_location_code ? ` · ячейка: ${ln.storage_location_code}` : ''}
+                      {ln.storage_location_code ? ` · ячейка: ${ln.storage_location_code}` : ' · ячейка не назначена'}
+                      {outboundDetail.status === 'draft' &&
+                      isFulfillmentAdmin &&
+                      !ln.storage_location_id &&
+                      ln.shipped_qty < ln.quantity ? (
+                        <form
+                          data-testid="outbound-line-storage-form"
+                          data-line-id={ln.id}
+                          noValidate
+                          onSubmit={onSaveOutboundLineStorage}
+                        >
+                          <label>
+                            Ячейка отбора
+                            <Select
+                              name="out_line_storage_id"
+                              data-testid="outbound-line-storage-select"
+                              defaultValue=""
+                              required
+                            >
+                              <option value="" disabled>
+                                Выберите ячейку
+                              </option>
+                              {outboundRequestLocations.map((loc) => (
+                                <option key={loc.id} value={loc.id}>
+                                  {loc.code}
+                                </option>
+                              ))}
+                            </Select>
+                          </label>
+                          <Button
+                            type="submit"
+                            data-testid="outbound-line-storage-save"
+                            disabled={opsBusy || outboundRequestLocations.length === 0}
+                          >
+                            Сохранить ячейку
+                          </Button>
+                        </form>
+                      ) : null}
                       {outboundDetail.status === 'draft' && isFulfillmentAdmin ? (
                         <Button
                           type="button"
@@ -251,13 +300,16 @@ export function OutboundScreen(props: Props) {
                     </label>
                     {outboundRequestLocations.length > 0 ? (
                       <label>
-                        Ячейка (необязательно)
+                        Ячейка
                         <Select
                           name="outbound_line_storage_id"
                           data-testid="outbound-line-location"
                           defaultValue=""
+                          required
                         >
-                          <option value="">— позже —</option>
+                          <option value="" disabled>
+                            Выберите ячейку
+                          </option>
                           {outboundRequestLocations.map((loc) => (
                             <option key={loc.id} value={loc.id}>
                               {loc.code}
@@ -279,14 +331,24 @@ export function OutboundScreen(props: Props) {
                 {outboundDetail.status === 'draft' &&
                 outboundDetail.lines.length > 0 &&
                 isFulfillmentAdmin ? (
-                  <Button
-                    type="button"
-                    data-testid="outbound-submit-request"
-                    disabled={opsBusy}
-                    onClick={onSubmitOutboundRequest}
-                  >
-                    {opsBusy ? '…' : 'Отправить заявку'}
-                  </Button>
+                  <>
+                    {outboundMissingStorage ? (
+                      <p
+                        className="subtle"
+                        data-testid="outbound-submit-missing-storage-hint"
+                      >
+                        Назначьте ячейку на всех строках, чтобы отправить заявку.
+                      </p>
+                    ) : null}
+                    <Button
+                      type="button"
+                      data-testid="outbound-submit-request"
+                      disabled={opsBusy || outboundMissingStorage}
+                      onClick={onSubmitOutboundRequest}
+                    >
+                      {opsBusy ? '…' : 'Отправить заявку'}
+                    </Button>
+                  </>
                 ) : null}
 
                 {outboundDetail.status === 'submitted' ? (

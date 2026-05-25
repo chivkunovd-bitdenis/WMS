@@ -39,6 +39,7 @@
 | `TC-S08-003` | Duplicate SKU line on same outbound rejected | N |  |
 | `TC-S08-004` | Mixed sellers on one outbound rejected | N |  |
 | `TC-S08-005` | Submit outbound — reservations revalidated | Y | `outbound-reservation.spec.ts` |
+| `TC-NEW-13-001` | Submit blocked until all lines have storage cell | Y | `outbound-submit-storage.spec.ts` |
 | `TC-S08-006` | Ship partial quantity (admin) | N |  |
 | `TC-S08-007` | Post remaining unshipped quantity (admin) | N |  |
 | `TC-S08-008` | Fully shipped — request posted / closed | N |  |

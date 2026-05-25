@@ -297,9 +297,17 @@ This document expands **[IMPLEMENTED_PRODUCT_SCENARIOS_EN.md](./IMPLEMENTED_PROD
 ### TC-S08-005 Submit outbound — reservations revalidated
 
 - **Actor:** admin or seller (submit where allowed).
-- **Preconditions:** draft with valid lines and stock/reservation rules met.
+- **Preconditions:** draft with valid lines and stock/reservation rules met; **every line with unshipped qty has a storage cell assigned**.
 - **Steps:** **submit** outbound.
 - **Expected:** submitted state; reservations **revalidated**.
+- **Negative:** submit with a line missing storage cell → `lines_missing_storage` (422).
+
+### TC-NEW-13-001 Submit outbound blocked until storage on all lines
+
+- **Actor:** fulfillment admin.
+- **Preconditions:** draft outbound with at least one line without storage cell.
+- **Steps:** attempt submit (UI or API).
+- **Expected:** blocked with `lines_missing_storage`; after assigning cell on each line, submit succeeds and reserves apply per cell.
 
 ### TC-S08-006 Ship partial quantity (admin)
 
