@@ -43,7 +43,7 @@
 | `TC-S08-007` | Post remaining unshipped quantity (admin) | N |  |
 | `TC-S08-008` | Fully shipped — request posted / closed | N |  |
 | `TC-S08-009` | Seller cannot ship or post outbound | N |  |
-| `TC-S09-001` | Balances show on hand, reserved, available (where exposed) | N |  |
+| `TC-S09-001` | Balances show on hand, reserved, available (where exposed) | Y | `seller-available-stock.spec.ts` (seller «Товары»); admin hint in inbound post |
 | `TC-S09-002` | Second outbound cannot reserve beyond available | Y | `outbound-reservation.spec.ts` |
 | `TC-S09-003` | Transfer limited by available when outbound reserves stock | Y | `outbound-reservation.spec.ts` |
 | `TC-S09-004` | Reservation released on ship, draft line delete, or line closure | Y | `outbound-delete-line.spec.ts` |
@@ -95,7 +95,6 @@
 - `TC-S08-007` — Post remaining unshipped quantity (admin)
 - `TC-S08-008` — Fully shipped — request posted / closed
 - `TC-S08-009` — Seller cannot ship or post outbound
-- `TC-S09-001` — Balances show on hand, reserved, available (where exposed)
 - `TC-S10-002` — Cannot delete line when not draft
 - `TC-S11-001` — Prerequisites — seller exists before integration
 - `TC-S11-002` — Save tokens — secrets not shown in UI

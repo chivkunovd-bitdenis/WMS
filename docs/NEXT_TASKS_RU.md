@@ -32,7 +32,7 @@
 1. ~~[#12 — Удаление строки outbound в draft](https://github.com/chivkunovd-bitdenis/WMS/issues/12)~~ — сделано (см. срез выше).
 2. [#13 — Резерв без ячейки / политика submit](https://github.com/chivkunovd-bitdenis/WMS/issues/13).
 3. [#14 — Приоритет резервов / FIFO-FEFO](https://github.com/chivkunovd-bitdenis/WMS/issues/14).
-4. [#15 — Селлер: доступный остаток в UI](https://github.com/chivkunovd-bitdenis/WMS/issues/15).
+4. ~~[#15 — Селлер: доступный остаток в UI](https://github.com/chivkunovd-bitdenis/WMS/issues/15)~~ — экран «Товары»: колонки остаток / зарезерв. / доступно; e2e `seller-available-stock.spec.ts`.
 
 ### ~~Следующие issues (E5 после MVP)~~ — сделано (в GitHub закрыты #9, #10, #11)
 
