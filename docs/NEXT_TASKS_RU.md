@@ -30,7 +30,7 @@
 Созданы как `enhancement` + `needs-spec` — перевести в `ready`, когда будут полные AC и e2e (если есть UI):
 
 1. ~~[#12 — Удаление строки outbound в draft](https://github.com/chivkunovd-bitdenis/WMS/issues/12)~~ — сделано (см. срез выше).
-2. [#13 — Резерв без ячейки / политика submit](https://github.com/chivkunovd-bitdenis/WMS/issues/13).
+2. ~~[#13 — Резерв без ячейки / политика submit](https://github.com/chivkunovd-bitdenis/WMS/issues/13)~~ — submit только с ячейкой на всех строках; UI + pytest + e2e `outbound-submit-storage.spec.ts`.
 3. [#14 — Приоритет резервов / FIFO-FEFO](https://github.com/chivkunovd-bitdenis/WMS/issues/14).
 4. ~~[#15 — Селлер: доступный остаток в UI](https://github.com/chivkunovd-bitdenis/WMS/issues/15)~~ — экран «Товары»: колонки остаток / зарезерв. / доступно; e2e `seller-available-stock.spec.ts`.
 

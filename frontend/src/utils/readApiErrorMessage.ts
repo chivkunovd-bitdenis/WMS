@@ -1,3 +1,10 @@
+const API_DETAIL_MESSAGES_RU: Record<string, string> = {
+  lines_missing_storage:
+    'Назначьте ячейку на каждой строке с количеством перед отправкой заявки.',
+  insufficient_available: 'Недостаточно доступного остатка в выбранной ячейке.',
+  submit_empty: 'Добавьте хотя бы одну строку в заявку.',
+}
+
 export async function readApiErrorMessage(res: Response): Promise<string> {
   try {
     const text = await res.text()
@@ -7,7 +14,7 @@ export async function readApiErrorMessage(res: Response): Promise<string> {
     const data = JSON.parse(text) as { detail?: unknown }
     const d = data.detail
     if (typeof d === 'string') {
-      return d
+      return API_DETAIL_MESSAGES_RU[d] ?? d
     }
     if (Array.isArray(d)) {
       const parts = d

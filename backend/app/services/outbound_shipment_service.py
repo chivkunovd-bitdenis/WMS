@@ -279,6 +279,13 @@ async def submit_request(
         raise OutboundShipmentError("not_draft")
     if len(req.lines) == 0:
         raise OutboundShipmentError("submit_empty")
+    if any(
+        ln.quantity > 0
+        and ln.shipped_qty < ln.quantity
+        and ln.storage_location_id is None
+        for ln in req.lines
+    ):
+        raise OutboundShipmentError("lines_missing_storage")
     try:
         for ln in req.lines:
             await inv_svc.sync_outbound_line_reservation(session, tenant_id, req, ln)
