@@ -2328,7 +2328,7 @@ export default function App() {
       if (t) {
         setStoredToken(t, 'seller')
       }
-      window.location.assign(sellerPortalUrl())
+      window.location.replace(sellerPortalUrl())
       return null
     }
     const portal: 'seller' | 'ff' = 'ff'

@@ -3,7 +3,6 @@ import { Navigate, Route, Routes } from 'react-router-dom'
 import { apiUrl } from '../../api'
 import { useAuth } from '../../hooks/useAuth'
 import { readApiErrorMessage } from '../../utils/readApiErrorMessage'
-import { ffPortalUrl } from '../../utils/portalUrls'
 import { ProfileLoadingScreen } from '../../screens/ProfileLoadingScreen'
 import { PublicAuthScreen } from '../../screens/PublicAuthScreen'
 import { SellerDocumentsScreen } from '../../screens/v2/SellerDocumentsScreen'
@@ -26,6 +25,7 @@ export function SellerApp() {
     token,
     me,
     error,
+    portalMismatch,
     loading,
     authBusy,
     pendingPasswordSetupEmail,
@@ -108,11 +108,6 @@ export function SellerApp() {
       return
     }
 
-    if (me.role !== 'fulfillment_seller') {
-      window.location.assign(ffPortalUrl())
-      return
-    }
-
     setOpsError(null)
     void (async () => {
       try {
@@ -130,7 +125,7 @@ export function SellerApp() {
       return (
         <PublicAuthScreen
           variant="seller"
-          error={error}
+          error={portalMismatch ?? error}
           authBusy={authBusy}
           pendingPasswordSetupEmail={pendingPasswordSetupEmail}
           onRegister={(e) => e.preventDefault()}
@@ -146,17 +141,6 @@ export function SellerApp() {
     if (!me) {
       return null
     }
-    if (me.role !== 'fulfillment_seller') {
-      return (
-        <main className="shell" data-testid="seller-wrong-role">
-          <p>Этот портал доступен только селлеру.</p>
-          <button type="button" onClick={() => window.location.assign(ffPortalUrl())}>
-            Перейти в портал фулфилмента
-          </button>
-        </main>
-      )
-    }
-
     return (
       <SellerLayout
         onLogout={() => logout()}

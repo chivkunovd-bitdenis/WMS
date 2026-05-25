@@ -10,7 +10,7 @@
   redir /seller /seller/
 
   # Seller portal (separate SPA under /seller/*)
-  handle /seller/* {
+  handle /seller* {
     root * /srv
     try_files {path} /seller/index.html
     file_server

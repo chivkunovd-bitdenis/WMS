@@ -1,5 +1,10 @@
 import { useCallback, useEffect, useState } from 'react'
-import { apiUrl, getStoredToken, setStoredToken } from '../api'
+import {
+  apiUrl,
+  getStoredToken,
+  setStoredToken,
+  type AuthStoragePortal,
+} from '../api'
 import { readApiErrorMessage } from '../utils/readApiErrorMessage'
 import { buildAutoTenantSlug } from '../utils/tenantSlug'
 
@@ -13,10 +18,15 @@ export type Me = {
 
 export type AuthPortal = 'fulfillment' | 'seller'
 
+function clearOtherPortalToken(portal: AuthStoragePortal): void {
+  setStoredToken(null, portal === 'seller' ? 'fulfillment' : 'seller')
+}
+
 type RegisterFormEvent = React.FormEvent<HTMLFormElement>
 
 export function useAuth(portal: AuthPortal = 'fulfillment') {
   const [token, setToken] = useState<string | null>(() => getStoredToken(portal))
+  const [portalMismatch, setPortalMismatch] = useState<string | null>(null)
   const [me, setMe] = useState<Me | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [loading, setLoading] = useState(false)
@@ -57,12 +67,62 @@ export function useAuth(portal: AuthPortal = 'fulfillment') {
   }, [portal])
 
   useEffect(() => {
+    if (portal !== 'seller' || token) {
+      return
+    }
+    const ffTok = getStoredToken('fulfillment')
+    if (!ffTok) {
+      return
+    }
+    let cancelled = false
+    void (async () => {
+      try {
+        const res = await fetch(apiUrl('/auth/me'), {
+          headers: { Authorization: `Bearer ${ffTok}` },
+        })
+        if (!res.ok || cancelled) {
+          return
+        }
+        const profile = (await res.json()) as Me
+        if (profile.role !== 'fulfillment_seller' || cancelled) {
+          return
+        }
+        setStoredToken(ffTok, 'seller')
+        setStoredToken(null, 'fulfillment')
+        setToken(ffTok)
+      } catch {
+        /* ignore — seller login form stays */
+      }
+    })()
+    return () => {
+      cancelled = true
+    }
+  }, [portal, token])
+
+  useEffect(() => {
     if (token) {
       void loadMe(token)
     } else {
       setMe(null)
     }
   }, [token, loadMe])
+
+  useEffect(() => {
+    if (!me) {
+      setPortalMismatch(null)
+      return
+    }
+    if (portal === 'seller' && me.role !== 'fulfillment_seller') {
+      setPortalMismatch(
+        'Этот адрес только для селлера. Войдите email селлера (не админа ФФ). Портал фулфилмента: главная страница без /seller/.',
+      )
+      setStoredToken(null, 'seller')
+      setToken(null)
+      setMe(null)
+      return
+    }
+    setPortalMismatch(null)
+  }, [me, portal])
 
   const onCancelPasswordSetup = useCallback(() => {
     setPendingPasswordSetupEmail(null)
@@ -115,6 +175,7 @@ export function useAuth(portal: AuthPortal = 'fulfillment') {
             return
           }
           setStoredToken(data.access_token, portal)
+          clearOtherPortalToken(portal)
           setToken(data.access_token)
           return
         }
@@ -185,6 +246,8 @@ export function useAuth(portal: AuthPortal = 'fulfillment') {
         }
         const data = (await res.json()) as { access_token: string }
         setStoredToken(data.access_token, portal)
+        clearOtherPortalToken(portal)
+        setPortalMismatch(null)
         setToken(data.access_token)
       } catch {
         setError(
@@ -232,6 +295,8 @@ export function useAuth(portal: AuthPortal = 'fulfillment') {
         const data = (await res.json()) as { access_token: string }
         setPendingPasswordSetupEmail(null)
         setStoredToken(data.access_token, portal)
+        clearOtherPortalToken(portal)
+        setPortalMismatch(null)
         setToken(data.access_token)
       } catch {
         setError(
@@ -249,12 +314,14 @@ export function useAuth(portal: AuthPortal = 'fulfillment') {
     setToken(null)
     setMe(null)
     setError(null)
+    setPortalMismatch(null)
     setPendingPasswordSetupEmail(null)
   }, [portal])
 
   return {
     token,
     me,
+    portalMismatch,
     error,
     loading,
     authBusy,
