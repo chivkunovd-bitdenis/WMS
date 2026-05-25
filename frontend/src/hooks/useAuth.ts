@@ -67,39 +67,6 @@ export function useAuth(portal: AuthPortal = 'fulfillment') {
   }, [portal])
 
   useEffect(() => {
-    if (portal !== 'seller' || token) {
-      return
-    }
-    const ffTok = getStoredToken('fulfillment')
-    if (!ffTok) {
-      return
-    }
-    let cancelled = false
-    void (async () => {
-      try {
-        const res = await fetch(apiUrl('/auth/me'), {
-          headers: { Authorization: `Bearer ${ffTok}` },
-        })
-        if (!res.ok || cancelled) {
-          return
-        }
-        const profile = (await res.json()) as Me
-        if (profile.role !== 'fulfillment_seller' || cancelled) {
-          return
-        }
-        setStoredToken(ffTok, 'seller')
-        setStoredToken(null, 'fulfillment')
-        setToken(ffTok)
-      } catch {
-        /* ignore — seller login form stays */
-      }
-    })()
-    return () => {
-      cancelled = true
-    }
-  }, [portal, token])
-
-  useEffect(() => {
     if (token) {
       void loadMe(token)
     } else {
@@ -117,6 +84,15 @@ export function useAuth(portal: AuthPortal = 'fulfillment') {
         'Этот адрес только для селлера. Войдите email селлера (не админа ФФ). Портал фулфилмента: главная страница без /seller/.',
       )
       setStoredToken(null, 'seller')
+      setToken(null)
+      setMe(null)
+      return
+    }
+    if (portal === 'fulfillment' && me.role === 'fulfillment_seller') {
+      setPortalMismatch(
+        'Этот портал для сотрудников фулфилмента. Селлеру: откройте /seller/ и войдите там (отдельный вход).',
+      )
+      setStoredToken(null, 'fulfillment')
       setToken(null)
       setMe(null)
       return

@@ -1,7 +1,6 @@
 import { useCallback, useEffect, useState } from 'react'
 import './App.css'
-import { apiUrl, getStoredToken, setStoredToken } from './api'
-import { sellerPortalUrl } from './utils/portalUrls'
+import { apiUrl } from './api'
 import { Navigate, Route, Routes, useNavigate } from 'react-router-dom'
 import { ProfileLoadingScreen } from './screens/ProfileLoadingScreen'
 import { PublicAuthScreen } from './screens/PublicAuthScreen'
@@ -202,6 +201,7 @@ export default function App() {
     token,
     me,
     error,
+    portalMismatch,
     loading,
     authBusy,
     pendingPasswordSetupEmail,
@@ -2304,7 +2304,7 @@ export default function App() {
       return (
         <PublicAuthScreen
           variant="fulfillment"
-          error={error}
+          error={portalMismatch ?? error}
           authBusy={authBusy}
           pendingPasswordSetupEmail={pendingPasswordSetupEmail}
           onRegister={(e) => void onRegister(e)}
@@ -2323,14 +2323,6 @@ export default function App() {
 
     const isFulfillmentAdmin = me.role === 'fulfillment_admin'
     const isFulfillmentSeller = me.role === 'fulfillment_seller'
-    if (isFulfillmentSeller) {
-      const t = token ?? getStoredToken('fulfillment')
-      if (t) {
-        setStoredToken(t, 'seller')
-      }
-      window.location.replace(sellerPortalUrl())
-      return null
-    }
     const portal: 'seller' | 'ff' = 'ff'
     const base = '/app/ff'
 
