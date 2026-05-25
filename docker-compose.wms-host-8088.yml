@@ -1,0 +1,9 @@
+# Optional overlay on servers where 80/443 are taken — expose HTTP on 8088.
+services:
+  web:
+    ports: !override
+      - "8088:80"
+    volumes: !override
+      - ./deploy/Caddyfile.http:/etc/caddy/Caddyfile:ro
+    environment:
+      WMS_PUBLIC_DOMAIN: "wms.local"

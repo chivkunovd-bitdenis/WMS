@@ -8,7 +8,7 @@ from inbound_box_intake_helpers import fulfill_inbound_via_box_scans
 
 
 @pytest.mark.asyncio
-async def test_outbound_submit_requires_storage_on_all_lines(
+async def test_outbound_submit_warehouse_reserve_without_cell(
     async_client: AsyncClient,
 ) -> None:
     suffix = str(int(time.time() * 1000))
@@ -90,17 +90,29 @@ async def test_outbound_submit_requires_storage_on_all_lines(
     assert ln.status_code == 201, ln.text
     assert ln.json()["storage_location_id"] is None
 
-    bad = await async_client.post(f"{base}/{oid}/submit", headers=h)
-    assert bad.status_code == 422
-    assert bad.json()["detail"] == "lines_missing_storage"
+    ok_submit = await async_client.post(f"{base}/{oid}/submit", headers=h)
+    assert ok_submit.status_code == 200, ok_submit.text
+    assert ok_submit.json()["status"] == "submitted"
+
+    bal = await async_client.get(
+        "/operations/inventory-balances/summary",
+        headers=h,
+        params={"warehouse_id": wid},
+    )
+    row = next(x for x in bal.json() if x["product_id"] == pid)
+    assert row["reserved"] == 5
+    assert row["available"] == 5
+
+    line_id = ln.json()["id"]
+    post_bad = await async_client.post(f"{base}/{oid}/post", headers=h)
+    assert post_bad.status_code == 422
+    assert post_bad.json()["detail"] == "lines_missing_storage"
 
     patched = await async_client.patch(
-        f"{base}/{oid}/lines/{ln.json()['id']}",
+        f"{base}/{oid}/lines/{line_id}",
         headers=h,
         json={"storage_location_id": lid},
     )
     assert patched.status_code == 200, patched.text
-
-    ok = await async_client.post(f"{base}/{oid}/submit", headers=h)
-    assert ok.status_code == 200, ok.text
-    assert ok.json()["status"] == "submitted"
+    post_ok = await async_client.post(f"{base}/{oid}/post", headers=h)
+    assert post_ok.status_code == 200, post_ok.text

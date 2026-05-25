@@ -13,10 +13,11 @@ if TYPE_CHECKING:
     from app.models.product import Product
     from app.models.storage_location import StorageLocation
     from app.models.tenant import Tenant
+    from app.models.warehouse import Warehouse
 
 
 class InventoryReservation(Base):
-    """Количество, зарезервированное строкой отгрузки в ячейке (draft/submitted)."""
+    """Резерв строки operational outbound: по ячейке или по складу (без ячейки)."""
 
     __tablename__ = "inventory_reservations"
     __table_args__ = (
@@ -42,10 +43,17 @@ class InventoryReservation(Base):
         ForeignKey("products.id", ondelete="CASCADE"),
         index=True,
     )
-    storage_location_id: Mapped[uuid.UUID] = mapped_column(
+    warehouse_id: Mapped[uuid.UUID | None] = mapped_column(
+        Uuid(as_uuid=True),
+        ForeignKey("warehouses.id", ondelete="CASCADE"),
+        index=True,
+        nullable=True,
+    )
+    storage_location_id: Mapped[uuid.UUID | None] = mapped_column(
         Uuid(as_uuid=True),
         ForeignKey("storage_locations.id", ondelete="CASCADE"),
         index=True,
+        nullable=True,
     )
     quantity: Mapped[int] = mapped_column(Integer, nullable=False)
 
@@ -55,4 +63,5 @@ class InventoryReservation(Base):
         back_populates="inventory_reservation",
     )
     product: Mapped[Product] = relationship("Product")
-    storage_location: Mapped[StorageLocation] = relationship("StorageLocation")
+    warehouse: Mapped[Warehouse | None] = relationship("Warehouse")
+    storage_location: Mapped[StorageLocation | None] = relationship("StorageLocation")

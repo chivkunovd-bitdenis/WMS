@@ -1,0 +1,25 @@
+#!/usr/bin/env bash
+# Run on the production server from the repo root (e.g. /opt/wms).
+set -euo pipefail
+
+REPO_DIR="${WMS_REPO_DIR:-$(cd "$(dirname "$0")/../.." && pwd)}"
+cd "$REPO_DIR"
+
+echo "==> git pull"
+git fetch origin
+git checkout main
+git pull --ff-only origin main
+
+COMPOSE=(docker compose -f docker-compose.prod.yml)
+if [[ -f docker-compose.wms-host-8088.yml ]]; then
+  COMPOSE+=(-f docker-compose.wms-host-8088.yml)
+fi
+
+echo "==> docker compose prod build & up"
+"${COMPOSE[@]}" build
+"${COMPOSE[@]}" up -d
+
+echo "==> status"
+"${COMPOSE[@]}" ps
+
+echo "Done. Check https://${WMS_PUBLIC_DOMAIN:-your-domain}"

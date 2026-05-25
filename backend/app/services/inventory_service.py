@@ -3,7 +3,7 @@ from __future__ import annotations
 import uuid
 from datetime import UTC, datetime
 
-from sqlalchemy import delete, func, select
+from sqlalchemy import and_, delete, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.inbound_intake import InboundIntakeLine, InboundIntakeRequest
@@ -131,12 +131,23 @@ async def reserved_totals_by_product(
         .group_by(InventoryReservation.product_id)
     )
     if warehouse_id is not None:
-        stmt = stmt.join(
-            StorageLocation,
-            StorageLocation.id == InventoryReservation.storage_location_id,
-        ).where(
-            StorageLocation.tenant_id == tenant_id,
-            StorageLocation.warehouse_id == warehouse_id,
+        stmt = (
+            stmt.outerjoin(
+                StorageLocation,
+                StorageLocation.id == InventoryReservation.storage_location_id,
+            ).where(
+                or_(
+                    and_(
+                        InventoryReservation.storage_location_id.isnot(None),
+                        StorageLocation.tenant_id == tenant_id,
+                        StorageLocation.warehouse_id == warehouse_id,
+                    ),
+                    and_(
+                        InventoryReservation.storage_location_id.is_(None),
+                        InventoryReservation.warehouse_id == warehouse_id,
+                    ),
+                )
+            )
         )
     res = await session.execute(stmt)
     outbound_map = {pid: int(s or 0) for pid, s in res.all()}
@@ -266,6 +277,25 @@ async def available_quantity_at_location(
     return on_hand - reserved
 
 
+async def _physical_on_hand_in_warehouse(
+    session: AsyncSession,
+    tenant_id: uuid.UUID,
+    warehouse_id: uuid.UUID,
+    product_id: uuid.UUID,
+) -> int:
+    stmt = (
+        select(func.coalesce(func.sum(InventoryBalance.quantity), 0))
+        .join(StorageLocation, StorageLocation.id == InventoryBalance.storage_location_id)
+        .where(
+            InventoryBalance.tenant_id == tenant_id,
+            InventoryBalance.product_id == product_id,
+            StorageLocation.tenant_id == tenant_id,
+            StorageLocation.warehouse_id == warehouse_id,
+        )
+    )
+    return int(await session.scalar(stmt) or 0)
+
+
 async def sync_outbound_line_reservation(
     session: AsyncSession,
     tenant_id: uuid.UUID,
@@ -280,24 +310,47 @@ async def sync_outbound_line_reservation(
 
     should_hold = (
         request.status in OUTBOUND_RESERVE_STATUSES
-        and line.storage_location_id is not None
         and line.shipped_qty < line.quantity
     )
     if not should_hold:
         return
 
-    sid = line.storage_location_id
-    if sid is None:
-        return
     desired = line.quantity - line.shipped_qty
     if desired < 1:
         return
 
-    on_hand = await _physical_on_hand(session, tenant_id, line.product_id, sid)
-    others = await reserved_qty_excluding_line(
-        session, tenant_id, line.product_id, sid, line.id
+    sid = line.storage_location_id
+    if sid is not None:
+        on_hand = await _physical_on_hand(session, tenant_id, line.product_id, sid)
+        others = await reserved_qty_excluding_line(
+            session, tenant_id, line.product_id, sid, line.id
+        )
+        if on_hand < others + desired:
+            raise ValueError(RESERVATION_ERROR)
+        session.add(
+            InventoryReservation(
+                tenant_id=tenant_id,
+                outbound_shipment_line_id=line.id,
+                product_id=line.product_id,
+                storage_location_id=sid,
+                warehouse_id=None,
+                quantity=desired,
+            )
+        )
+        return
+
+    wh_id = request.warehouse_id
+    on_hand_wh = await _physical_on_hand_in_warehouse(
+        session, tenant_id, wh_id, line.product_id
     )
-    if on_hand < others + desired:
+    rsv_map = await reserved_totals_by_product(
+        session,
+        tenant_id,
+        [line.product_id],
+        warehouse_id=wh_id,
+    )
+    already = int(rsv_map.get(line.product_id, 0))
+    if on_hand_wh < already + desired:
         raise ValueError(RESERVATION_ERROR)
 
     session.add(
@@ -305,7 +358,8 @@ async def sync_outbound_line_reservation(
             tenant_id=tenant_id,
             outbound_shipment_line_id=line.id,
             product_id=line.product_id,
-            storage_location_id=sid,
+            storage_location_id=None,
+            warehouse_id=wh_id,
             quantity=desired,
         )
     )

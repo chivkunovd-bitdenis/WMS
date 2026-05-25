@@ -30,6 +30,7 @@ import { readApiErrorMessage } from '../../utils/readApiErrorMessage'
 import type { FfInboundSummary, FfOutboundSummary } from './FfDashboard'
 import { PageHeader } from '../../ui/PageHeader'
 import { formatDateTimeLocal } from '../../utils/formatDateTimeLocal'
+import { printMarketplaceUnloadWaybill } from '../../utils/printShipmentWaybill'
 
 export type FfMarketplaceUnloadSummary = {
   id: string
@@ -109,7 +110,10 @@ type MarketplaceUnloadDetail = {
   warehouse_name: string
   status: string
   ff_modified: boolean
+  seller_name: string | null
   wb_mp_warehouse_id: number | null
+  planned_shipment_date: string | null
+  created_at: string | null
   lines: DocLineRow[]
   boxes: MarketplaceUnloadBox[]
   pick_allocations: MarketplaceUnloadPickAllocation[]
@@ -286,7 +290,10 @@ export function FfSuppliesShipmentsPage({
           warehouse_name: string
           status: string
           ff_modified?: boolean
+          seller_name?: string | null
           wb_mp_warehouse_id?: number | null
+          planned_shipment_date?: string | null
+          created_at?: string
           lines: { id: string; sku_code: string; product_name: string; quantity: number }[]
           boxes?: {
             id: string
@@ -316,7 +323,10 @@ export function FfSuppliesShipmentsPage({
           warehouse_name: j.warehouse_name,
           status: j.status,
           ff_modified: Boolean(j.ff_modified),
+          seller_name: j.seller_name ?? null,
           wb_mp_warehouse_id: j.wb_mp_warehouse_id ?? null,
+          planned_shipment_date: j.planned_shipment_date ?? null,
+          created_at: j.created_at ?? null,
           lines: j.lines.map((ln) => ({
             id: ln.id,
             sku_code: ln.sku_code,
@@ -1579,6 +1589,45 @@ export function FfSuppliesShipmentsPage({
           ) : null}
         </DialogContent>
         <DialogActions>
+          {docModal === 'marketplace_unload' && unloadDetail && unloadDetail.lines.length > 0 ? (
+            <Button
+              variant="outlined"
+              disabled={modalBusy}
+              data-testid="ff-mp-print-waybill"
+              onClick={() => {
+                const wbName =
+                  wbMpWarehouses.find(
+                    (w) => w.wb_warehouse_id === unloadDetail.wb_mp_warehouse_id,
+                  )?.name ?? null
+                printMarketplaceUnloadWaybill({
+                  documentId: unloadDetail.id,
+                  statusLabel: statusRu(unloadDetail.status),
+                  warehouseName: unloadDetail.warehouse_name,
+                  sellerName: unloadDetail.seller_name,
+                  wbWarehouseLabel:
+                    wbName != null && unloadDetail.wb_mp_warehouse_id != null
+                      ? `${wbName} (${unloadDetail.wb_mp_warehouse_id})`
+                      : null,
+                  plannedDate: unloadDetail.planned_shipment_date,
+                  createdAt: unloadDetail.created_at
+                    ? formatDateTimeLocal(unloadDetail.created_at)
+                    : null,
+                  lines: unloadDetail.lines.map((ln) => ({
+                    sku_code: ln.sku_code,
+                    product_name: ln.product_name,
+                    quantity: ln.quantity,
+                  })),
+                  pickAllocations: unloadDetail.pick_allocations.map((a) => ({
+                    location_code: a.location_code,
+                    sku_code: a.sku_code,
+                    quantity: a.quantity,
+                  })),
+                })
+              }}
+            >
+              Печать накладной
+            </Button>
+          ) : null}
           {mpPickEditable ? (
             <Button
               variant="outlined"

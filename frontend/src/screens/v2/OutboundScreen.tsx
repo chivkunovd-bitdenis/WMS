@@ -1,10 +1,10 @@
 import type { FormEventHandler } from 'react'
-import { useMemo } from 'react'
 import { Button } from '../../ui/Button'
 import { Card } from '../../ui/Card'
 import { Input } from '../../ui/Input'
 import { Select } from '../../ui/Select'
 import { Screen } from '../AppV2Screens'
+import { printOperationalOutboundWaybill } from '../../utils/printShipmentWaybill'
 
 type WarehouseRow = { id: string; name: string; code: string }
 type LocationRow = { id: string; code: string; warehouse_id: string }
@@ -15,6 +15,10 @@ type OutboundSummaryRow = {
   warehouse_id: string
   status: string
   line_count: number
+  warehouse_name?: string
+  seller_name?: string | null
+  planned_shipment_date?: string | null
+  created_at?: string
 }
 
 type OutboundLineRow = {
@@ -32,6 +36,7 @@ type OutboundDetailRow = {
   id: string
   warehouse_id: string
   status: string
+  planned_shipment_date?: string | null
   lines: OutboundLineRow[]
 }
 
@@ -93,17 +98,6 @@ export function OutboundScreen(props: Props) {
     onPostOutboundRequest,
   } = props
 
-  const outboundMissingStorage = useMemo(
-    () =>
-      (outboundDetail?.lines ?? []).some(
-        (ln) =>
-          ln.quantity > 0 &&
-          ln.shipped_qty < ln.quantity &&
-          ln.storage_location_id == null,
-      ),
-    [outboundDetail?.lines],
-  )
-
   return (
     <Screen title="Отгрузка" subtitle="Заявки → строки → подбор → списание">
       {opsError ? (
@@ -119,7 +113,7 @@ export function OutboundScreen(props: Props) {
           <Card className="card" data-testid="outbound-section">
             <h3 style={{ margin: 0, fontSize: 16 }}>Заявки на отгрузку</h3>
             <p className="subtle">
-              Ячейка обязательна на каждой строке перед отправкой заявки (резерв по ячейке).
+              Резерв при отправке — по складу; ячейку назначают для подбора и списания.
               Отгрузка по строке частями; «Провести весь остаток» списывает всё неотгруженное.
             </p>
 
@@ -209,6 +203,53 @@ export function OutboundScreen(props: Props) {
                 <p className="subtle" data-testid="outbound-detail-status">
                   Статус: {outboundDetail.status}
                 </p>
+
+                {outboundDetail.lines.length > 0 ? (
+                  <Button
+                    type="button"
+                    size="sm"
+                    data-testid="outbound-print-waybill"
+                    disabled={opsBusy}
+                    onClick={() => {
+                      const summary = outboundSummaries.find((r) => r.id === outboundDetail.id)
+                      const wh =
+                        warehouses.find((w) => w.id === outboundDetail.warehouse_id) ??
+                        (summary?.warehouse_name
+                          ? { name: summary.warehouse_name, code: '' }
+                          : null)
+                      printOperationalOutboundWaybill({
+                        documentId: outboundDetail.id,
+                        statusLabel: outboundDetail.status,
+                        warehouseName: wh
+                          ? `${wh.name} (${wh.code})`
+                          : summary?.warehouse_name ?? outboundDetail.warehouse_id,
+                        sellerName: summary?.seller_name ?? null,
+                        plannedDate:
+                          outboundDetail.planned_shipment_date ??
+                          summary?.planned_shipment_date ??
+                          null,
+                        createdAt: summary?.created_at ?? null,
+                        lines: outboundDetail.lines.map((ln) => ({
+                          sku_code: ln.sku_code,
+                          product_name: ln.product_name,
+                          quantity: ln.quantity,
+                          shipped_qty: ln.shipped_qty,
+                          storage_location_code: ln.storage_location_code,
+                        })),
+                        pickAllocations: outboundDetail.lines
+                          .filter((ln) => ln.storage_location_code)
+                          .map((ln) => ({
+                            location_code: ln.storage_location_code!,
+                            sku_code: ln.sku_code,
+                            quantity: ln.quantity - ln.shipped_qty,
+                          }))
+                          .filter((x) => x.quantity > 0),
+                      })
+                    }}
+                  >
+                    Печать накладной
+                  </Button>
+                ) : null}
 
                 <ul className="list-plain" data-testid="outbound-detail-lines">
                   {outboundDetail.lines.map((ln) => (
@@ -300,16 +341,13 @@ export function OutboundScreen(props: Props) {
                     </label>
                     {outboundRequestLocations.length > 0 ? (
                       <label>
-                        Ячейка
+                        Ячейка (можно позже)
                         <Select
                           name="outbound_line_storage_id"
                           data-testid="outbound-line-location"
                           defaultValue=""
-                          required
                         >
-                          <option value="" disabled>
-                            Выберите ячейку
-                          </option>
+                          <option value="">— позже —</option>
                           {outboundRequestLocations.map((loc) => (
                             <option key={loc.id} value={loc.id}>
                               {loc.code}
@@ -331,24 +369,14 @@ export function OutboundScreen(props: Props) {
                 {outboundDetail.status === 'draft' &&
                 outboundDetail.lines.length > 0 &&
                 isFulfillmentAdmin ? (
-                  <>
-                    {outboundMissingStorage ? (
-                      <p
-                        className="subtle"
-                        data-testid="outbound-submit-missing-storage-hint"
-                      >
-                        Назначьте ячейку на всех строках, чтобы отправить заявку.
-                      </p>
-                    ) : null}
-                    <Button
-                      type="button"
-                      data-testid="outbound-submit-request"
-                      disabled={opsBusy || outboundMissingStorage}
-                      onClick={onSubmitOutboundRequest}
-                    >
-                      {opsBusy ? '…' : 'Отправить заявку'}
-                    </Button>
-                  </>
+                  <Button
+                    type="button"
+                    data-testid="outbound-submit-request"
+                    disabled={opsBusy}
+                    onClick={onSubmitOutboundRequest}
+                  >
+                    {opsBusy ? '…' : 'Отправить заявку'}
+                  </Button>
                 ) : null}
 
                 {outboundDetail.status === 'submitted' ? (

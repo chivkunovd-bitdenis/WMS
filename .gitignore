@@ -28,6 +28,7 @@ e2e.db
 backend/wms_pytest.sqlite
 backend/tests/wms_pytest.sqlite
 backend/dev.db
+backend/alembic_autogen.db
 
 # IDE
 .vscode/

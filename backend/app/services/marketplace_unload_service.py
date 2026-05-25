@@ -3,7 +3,7 @@ from __future__ import annotations
 import uuid
 from datetime import date
 
-from sqlalchemy import delete, func, select
+from sqlalchemy import and_, delete, func, or_, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
@@ -211,7 +211,6 @@ async def _available_product_qty_in_warehouse(
     )
     reserved_outbound_stmt = (
         select(func.coalesce(func.sum(InventoryReservation.quantity), 0))
-        .join(StorageLocation, StorageLocation.id == InventoryReservation.storage_location_id)
         .join(
             OutboundShipmentLine,
             OutboundShipmentLine.id == InventoryReservation.outbound_shipment_line_id,
@@ -220,12 +219,25 @@ async def _available_product_qty_in_warehouse(
             OutboundShipmentRequest,
             OutboundShipmentRequest.id == OutboundShipmentLine.request_id,
         )
+        .outerjoin(
+            StorageLocation,
+            StorageLocation.id == InventoryReservation.storage_location_id,
+        )
         .where(
             InventoryReservation.tenant_id == tenant_id,
             InventoryReservation.product_id == product_id,
-            StorageLocation.tenant_id == tenant_id,
-            StorageLocation.warehouse_id == warehouse_id,
             OutboundShipmentRequest.status.in_(("draft", "submitted")),
+            or_(
+                and_(
+                    InventoryReservation.storage_location_id.isnot(None),
+                    StorageLocation.tenant_id == tenant_id,
+                    StorageLocation.warehouse_id == warehouse_id,
+                ),
+                and_(
+                    InventoryReservation.storage_location_id.is_(None),
+                    InventoryReservation.warehouse_id == warehouse_id,
+                ),
+            ),
         )
     )
     on_hand = int(await session.scalar(on_hand_stmt) or 0)

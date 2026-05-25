@@ -1,31 +1,26 @@
 import { test, expect } from '@playwright/test';
 
-import {
-  waitForGetOk,
-  waitForPostOk,
-} from './api-waits';
+import { waitForGetOk, waitForPostOk } from './api-waits';
 import { openFulfillmentRegistration } from './auth-flow';
 import { fulfillInboundViaBoxScans } from './inbound-boxes-helpers';
 
-// TC-NEW-13-001 — submit без ячейки: складской резерв; списание — только с ячейкой.
-test('outbound submit without cell reserves warehouse; post needs cell', async ({
-  page,
-}) => {
-  test.setTimeout(120_000);
-  const email = `e2e-oss-${Date.now()}@example.com`;
-  const sku = `SKU-OSS-${Date.now()}`;
-  const whCode = `wh-oss-${Date.now()}`;
-  const e2eApi = process.env.E2E_API_ORIGIN ?? 'http://127.0.0.1:18000';
+// TC-NEW-G13-002 — накладная operational outbound (US-G-13).
+test('FF prints operational outbound waybill from ops screen', async ({ page }) => {
+  const email = `e2e-obw-${Date.now()}@example.com`;
+  const sku = `SKU-OBW-${Date.now()}`;
+  const whCode = `wh-obw-${Date.now()}`;
 
   await page.goto('/');
   await openFulfillmentRegistration(page);
-  await page.getByTestId('register-form').getByLabel('Организация').fill('E2E OSS');
+  await page.getByTestId('register-form').getByLabel('Организация').fill('E2E OB Waybill');
   await page.getByTestId('register-form').getByLabel('Email администратора').fill(email);
   await page.getByTestId('register-form').getByLabel('Пароль').fill('password123');
+  const regClick = page.getByTestId('register-form').getByRole('button', { name: 'Создать аккаунт' }).click();
+  const e2eApi = process.env.E2E_API_ORIGIN ?? 'http://127.0.0.1:18000';
   const [regRes] = await Promise.all([
     waitForPostOk(page, '/api/auth/register'),
     waitForGetOk(page, '/api/auth/me'),
-    page.getByTestId('register-form').getByRole('button', { name: 'Создать аккаунт' }).click(),
+    regClick,
   ]);
   const token = String(((await regRes.json()) as { access_token: string }).access_token);
   const auth = { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' };
@@ -37,12 +32,12 @@ test('outbound submit without cell reserves warehouse; post needs cell', async (
   const wid = String(((await wh.json()) as { id: string }).id);
   const loc = await page.request.post(`${e2eApi}/warehouses/${wid}/locations`, {
     headers: auth,
-    data: JSON.stringify({ code: 'OSS-A' }),
+    data: JSON.stringify({ code: 'OBW-A' }),
   });
   const lid = String(((await loc.json()) as { id: string }).id);
   const sellerRes = await page.request.post(`${e2eApi}/sellers`, {
     headers: auth,
-    data: JSON.stringify({ name: 'OSS Brand' }),
+    data: JSON.stringify({ name: 'OBW Brand' }),
   });
   const sellerId = String(((await sellerRes.json()) as { id: string }).id);
   await page.request.patch(`${e2eApi}/integrations/wildberries/sellers/${sellerId}/tokens`, {
@@ -102,9 +97,7 @@ test('outbound submit without cell reserves warehouse; post needs cell', async (
     headers: auth,
     data: { actual_box_count: 1 },
   });
-  const boxes = (await prim.json()) as {
-    boxes: { id: string; internal_barcode: string }[];
-  };
+  const boxes = (await prim.json()) as { boxes: { id: string; internal_barcode: string }[] };
   await fulfillInboundViaBoxScans(
     page.request,
     auth,
@@ -116,39 +109,24 @@ test('outbound submit without cell reserves warehouse; post needs cell', async (
   await page.request.post(`${baseIn}/${inboundId}/verify`, { headers: auth });
   await page.request.post(`${baseIn}/${inboundId}/post`, { headers: auth });
 
-  const baseOut = `${e2eApi}/operations/outbound-shipment-requests`;
-  const out = await page.request.post(baseOut, {
-    headers: auth,
-    data: JSON.stringify({ warehouse_id: wid }),
-  });
-  const oid = String(((await out.json()) as { id: string }).id);
-  const line = await page.request.post(`${baseOut}/${oid}/lines`, {
-    headers: auth,
-    data: JSON.stringify({ product_id: pid, quantity: 4 }),
-  });
-  expect(line.ok()).toBeTruthy();
-  const lineId = String(((await line.json()) as { id: string }).id);
-
-  const subRes = await page.request.post(`${baseOut}/${oid}/submit`, { headers: auth });
-  expect(subRes.ok()).toBeTruthy();
-
   await page.goto('/app/ops/outbound');
-  await page.getByTestId('outbound-request-item').first().click();
-  await expect(page.getByTestId('outbound-detail-status')).toContainText('submitted');
-
-  const storageForm = page.locator(
-    `[data-testid="outbound-line-storage-form"][data-line-id="${lineId}"]`,
-  );
-  await storageForm.getByTestId('outbound-line-storage-select').selectOption({ label: 'OSS-A' });
   await Promise.all([
-    page.waitForResponse(
-      (r) =>
-        r.request().method() === 'PATCH' &&
-        r.url().includes(`/operations/outbound-shipment-requests/${oid}/lines/`) &&
-        r.status() >= 200 &&
-        r.status() < 300,
+    waitForPostOk(page, '/api/operations/outbound-shipment-requests', (u) =>
+      !u.includes('/lines') && !u.includes('/submit'),
     ),
-    storageForm.getByTestId('outbound-line-storage-save').click(),
+    page.getByTestId('outbound-create-submit').click(),
   ]);
-  await expect(page.getByTestId('outbound-detail-status')).toContainText('submitted');
+  await page.getByTestId('outbound-line-product').selectOption({ label: `${sku} — T` });
+  await page.getByTestId('outbound-line-qty').fill('3');
+  await page.getByTestId('outbound-line-location').selectOption({ label: 'OBW-A' });
+  await Promise.all([
+    waitForPostOk(page, '/api/operations/outbound-shipment-requests', (u) => u.includes('/lines')),
+    page.getByTestId('outbound-line-submit').click(),
+  ]);
+
+  await page.getByTestId('outbound-request-item').first().click();
+  await expect(page.getByTestId('outbound-detail-lines')).toContainText(sku);
+  const printBtn = page.getByTestId('outbound-print-waybill');
+  await expect(printBtn).toBeVisible();
+  await printBtn.click();
 });
