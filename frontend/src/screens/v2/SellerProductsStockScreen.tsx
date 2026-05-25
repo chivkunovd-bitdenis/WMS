@@ -89,10 +89,15 @@ export function SellerProductsStockScreen({
 
   const rows = useMemo(() => {
     const byProduct = new Map(stock.map((s) => [s.product_id, s]))
-    return catalog.map((p) => ({
-      ...p,
-      stock_total: byProduct.get(p.id)?.quantity ?? 0,
-    }))
+    return catalog.map((p) => {
+      const bal = byProduct.get(p.id)
+      return {
+        ...p,
+        stock_on_hand: bal?.quantity ?? 0,
+        stock_reserved: bal?.reserved ?? 0,
+        stock_available: bal?.available ?? 0,
+      }
+    })
   }, [catalog, stock])
 
   const pagedRows = useMemo(() => {
@@ -126,7 +131,8 @@ export function SellerProductsStockScreen({
         Товары
       </Typography>
       <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
-        Каталог WB и остаток на фулфилменте (итого по SKU)
+        Каталог WB и остаток на фулфилменте: факт, зарезервировано под отгрузки, доступно к новым
+        заявкам
       </Typography>
 
       {error ? (
@@ -159,7 +165,9 @@ export function SellerProductsStockScreen({
               <TableCell>Артикул продавца</TableCell>
               <TableCell>nm</TableCell>
               <TableCell>Название</TableCell>
-              <TableCell align="right">Остаток (итого)</TableCell>
+              <TableCell align="right">Остаток</TableCell>
+              <TableCell align="right">Зарезерв.</TableCell>
+              <TableCell align="right">Доступно</TableCell>
             </TableRow>
           </TableHead>
           <TableBody>
@@ -173,12 +181,31 @@ export function SellerProductsStockScreen({
                 <TableCell>{p.wb_vendor_code ?? '—'}</TableCell>
                 <TableCell>{p.wb_nm_id ?? '—'}</TableCell>
                 <TableCell>{p.name}</TableCell>
-                <TableCell align="right">{p.stock_total}</TableCell>
+                <TableCell align="right" data-testid="seller-stock-on-hand">
+                  {p.stock_on_hand}
+                </TableCell>
+                <TableCell align="right" data-testid="seller-stock-reserved">
+                  {p.stock_reserved}
+                </TableCell>
+                <TableCell align="right" data-testid="seller-stock-available">
+                  {p.stock_available}
+                  {p.stock_reserved > 0 ? (
+                    <Typography
+                      component="span"
+                      variant="caption"
+                      color="text.secondary"
+                      sx={{ display: 'block' }}
+                      data-testid="seller-stock-available-hint"
+                    >
+                      (доступно {p.stock_available})
+                    </Typography>
+                  ) : null}
+                </TableCell>
               </TableRow>
             ))}
             {rows.length === 0 ? (
               <TableRow>
-                <TableCell colSpan={7}>
+                <TableCell colSpan={9}>
                   <Typography variant="body2" color="text.secondary">
                     Пока нет товаров.
                   </Typography>

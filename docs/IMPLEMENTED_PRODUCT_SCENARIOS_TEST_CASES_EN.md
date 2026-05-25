@@ -335,7 +335,7 @@ This document expands **[IMPLEMENTED_PRODUCT_SCENARIOS_EN.md](./IMPLEMENTED_PROD
 
 - **Actor:** admin (and seller where API/UI exposes balances per visibility).
 - **Preconditions:** stock in cell; optional active outbound reservations.
-- **Steps:** open balance display (global or contextual, e.g. after inbound post hints).
+- **Steps:** open balance display (seller portal **Products** table with on hand / reserved / available columns; admin contextual hint after inbound post when reserved > 0).
 - **Expected:** user can see **on hand**, **reserved**, **available** as product exposes them.
 
 ### TC-S09-002 Second outbound cannot reserve beyond available
