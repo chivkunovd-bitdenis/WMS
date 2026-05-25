@@ -10,6 +10,7 @@ import { readApiErrorMessage } from './utils/readApiErrorMessage'
 import { useAuth } from './hooks/useAuth'
 import { Screen } from './screens/AppV2Screens'
 import { ProductsScreen } from './screens/v2/ProductsScreen'
+import { SellersScreen } from './screens/v2/SellersScreen'
 import { InboundScreen } from './screens/v2/InboundScreen'
 import { OutboundScreen } from './screens/v2/OutboundScreen'
 import { WildberriesScreen } from './screens/v2/WildberriesScreen'
@@ -2540,7 +2541,7 @@ export default function App() {
           <Route
             path="catalog"
             element={
-              <Screen title="Каталог" subtitle="Склады, ячейки, товары, селлеры и интеграции">
+              <Screen title="Каталог" subtitle="Склады и ячейки">
                 <CatalogSection
                   isFulfillmentAdmin={isFulfillmentAdmin}
                   catalogBusy={catalogBusy}
@@ -2555,7 +2556,6 @@ export default function App() {
                   onCreateLocation={onCreateLocation}
                   onListWarehouseRacks={onListWarehouseRacks}
                   onSuggestLocation={onSuggestLocation}
-                  onCreateSeller={(e) => void onCreateSeller(e)}
                   onCreateProduct={(e) => void onCreateProduct(e)}
                   wbSellerId={wbSellerId}
                   setWbSellerId={setWbSellerId}
@@ -2577,6 +2577,19 @@ export default function App() {
                   onLinkProductToWb={(e) => void onLinkProductToWb(e)}
                 />
               </Screen>
+            }
+          />
+
+          <Route
+            path="ff/sellers"
+            element={
+              <SellersScreen
+                isFulfillmentAdmin={isFulfillmentAdmin}
+                catalogBusy={catalogBusy}
+                catalogError={catalogError}
+                sellers={sellers}
+                onCreateSeller={(e) => void onCreateSeller(e)}
+              />
             }
           />
 

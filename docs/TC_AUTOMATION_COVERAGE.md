@@ -16,7 +16,7 @@
 | `TC-S03-002` | Admin creates locations (cells) under a warehouse | Y | `catalog-journey.spec.ts` |
 | `TC-S03-003` | Seller cannot manage warehouses in current UI | Y | `seller-cabinet.spec.ts` |
 | `TC-S03-004` | Conceptual dependency — locations needed for some flows | N |  |
-| `TC-S04-001` | Admin creates seller record | Y | `sellers-and-background-job.spec.ts` |
+| `TC-S04-001` | Admin creates seller record | Y | `sellers-create-ui.spec.ts`, `sellers-and-background-job.spec.ts` |
 | `TC-S04-002` | Seller user is not created automatically with seller record | N |  |
 | `TC-S05-001` | Admin creates product with required fields | Y | `catalog-journey.spec.ts` |
 | `TC-S05-002` | After WB link — product list shows WB identifiers (when linked) | N |  |

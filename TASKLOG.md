@@ -1,11 +1,18 @@
 # TASKLOG
 
+## TASK-18 — 2026-05-25 — Раздел «Селлеры» в портале FF
+
+- What changed: экран `/app/ff/sellers` — список селлеров и форма «Добавить селлера» (`POST /sellers`); пункт навигации `nav-sellers`; e2e `sellers-create-ui.spec.ts` (TC-S04-001).
+- What did NOT change: выдача аккаунта селлера — по-прежнему на дашборде (`POST /auth/seller-accounts`).
+- Verification: `npm run build`; e2e `sellers-create-ui`, `admin-shell-layout`.
+- Commit: (pending)
+
 ## TASK-17 — 2026-05-25 — Резерв без ячейки + накладные (MP + outbound) + deploy
 
 - What changed: складской резерв на submit outbound без ячейки (миграция 0032); post по-прежнему требует ячейку; печать накладной на МП и operational outbound (`printShipmentWaybill.ts`); e2e `ff-mp-print-waybill`, `outbound-print-waybill`; `scripts/deploy/prod-update.sh`, `docker-compose.wms-host-8088.yml`, `docs/DEPLOY_SERVER_RU.md`.
 - What did NOT change: seller box composition; consumables inbound; FIFO/FEFO (#14).
 - Verification: `ruff`/`mypy`/`pytest` 93 passed; `npm run build`; e2e waybill specs passed.
-- Commit: (pending)
+- Commit: 3a15051
 
 ## TASK-16 — 2026-05-25 — Outbound submit: ячейка обязательна (#13)
 

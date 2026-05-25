@@ -85,7 +85,6 @@ type Props = {
     rackName: string,
     side: 1 | 2,
   ) => Promise<{ position: number; code: string } | null>
-  onCreateSeller: FormEventHandler<HTMLFormElement>
   onCreateProduct: FormEventHandler<HTMLFormElement>
 
   // Wildberries

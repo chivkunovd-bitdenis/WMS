@@ -33,6 +33,11 @@ test('admin shell: single app root, nav, dashboard and main sections visible', a
   await expect(page.getByTestId('ff-week-calendar')).toBeVisible();
   await expect(page.getByTestId('nav-ff-supplies-shipments')).toBeVisible();
   await expect(page.getByTestId('nav-catalog')).toBeVisible();
+  await expect(page.getByTestId('nav-sellers')).toBeVisible();
+
+  await page.getByTestId('nav-sellers').click();
+  await expect(page).toHaveURL(/\/app\/ff\/sellers$/);
+  await expect(page.getByTestId('sellers-panel')).toBeVisible();
 
   await page.getByTestId('nav-catalog').click();
   await expect(page).toHaveURL(/\/app\/catalog$/);
