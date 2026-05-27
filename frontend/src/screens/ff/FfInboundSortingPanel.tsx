@@ -44,6 +44,15 @@ type SortingBox = {
   lines: BoxLine[]
 }
 
+type PutawayHistoryRow = {
+  id: string
+  box_id: string | null
+  product_id: string
+  storage_location_code: string
+  quantity: number
+  created_at: string
+}
+
 type Props = {
   token: string
   requestId: string
@@ -51,6 +60,54 @@ type Props = {
   boxes: SortingBox[]
   sortingRemainingQty: number
   onReload: () => Promise<void>
+}
+
+function groupQtyByCell(rows: PutawayHistoryRow[]): [string, number][] {
+  const m = new Map<string, number>()
+  for (const h of rows) {
+    m.set(h.storage_location_code, (m.get(h.storage_location_code) ?? 0) + h.quantity)
+  }
+  return Array.from(m.entries()).sort((a, b) => a[0].localeCompare(b[0]))
+}
+
+function productPutawayByCell(
+  history: PutawayHistoryRow[],
+  productId: string,
+): [string, number][] {
+  const m = new Map<string, number>()
+  for (const h of history) {
+    if (h.product_id !== productId) {
+      continue
+    }
+    m.set(h.storage_location_code, (m.get(h.storage_location_code) ?? 0) + h.quantity)
+  }
+  return Array.from(m.entries()).sort((a, b) => a[0].localeCompare(b[0]))
+}
+
+function resolveBoxPutawayHistory(
+  boxId: string,
+  closedBoxes: SortingBox[],
+  putawayHistory: PutawayHistoryRow[],
+  byBoxId: Map<string, PutawayHistoryRow[]>,
+): PutawayHistoryRow[] {
+  const direct = byBoxId.get(boxId) ?? []
+  if (direct.length > 0) {
+    return direct
+  }
+  if (closedBoxes.length !== 1 || closedBoxes[0]?.id !== boxId) {
+    return direct
+  }
+  return putawayHistory
+    .filter((r) => !r.box_id)
+    .sort((a, b) => a.created_at.localeCompare(b.created_at))
+}
+
+function formatPutawayTime(iso: string): string {
+  const d = new Date(iso)
+  if (Number.isNaN(d.getTime())) {
+    return iso
+  }
+  return d.toLocaleString('ru-RU', { dateStyle: 'short', timeStyle: 'short' })
 }
 
 export function FfInboundSortingPanel({
@@ -68,6 +125,52 @@ export function FfInboundSortingPanel({
   const [selectedBoxId, setSelectedBoxId] = useState<string>('')
   const [cellByBoxId, setCellByBoxId] = useState<Record<string, string>>({})
   const [partialQtyByKey, setPartialQtyByKey] = useState<Record<string, string>>({})
+  const [putawayHistory, setPutawayHistory] = useState<PutawayHistoryRow[]>([])
+  const [historyLoadFailed, setHistoryLoadFailed] = useState(false)
+
+  const productMetaById = useMemo(() => {
+    const m = new Map<string, { sku_code: string; product_name: string }>()
+    for (const box of boxes) {
+      for (const ln of box.lines) {
+        m.set(ln.product_id, { sku_code: ln.sku_code, product_name: ln.product_name })
+      }
+    }
+    return m
+  }, [boxes])
+
+  const loadPutawayHistory = useCallback(async () => {
+    const res = await fetch(
+      apiUrl(`/operations/inbound-intake-requests/${requestId}/distribution-lines`),
+      { headers: authHeaders },
+    )
+    if (!res.ok) {
+      setPutawayHistory([])
+      setHistoryLoadFailed(true)
+      return
+    }
+    setHistoryLoadFailed(false)
+    setPutawayHistory((await res.json()) as PutawayHistoryRow[])
+  }, [authHeaders, requestId])
+
+  useEffect(() => {
+    void loadPutawayHistory()
+  }, [loadPutawayHistory, boxes])
+
+  const putawayHistoryByBoxId = useMemo(() => {
+    const m = new Map<string, PutawayHistoryRow[]>()
+    for (const row of putawayHistory) {
+      if (!row.box_id) {
+        continue
+      }
+      const list = m.get(row.box_id) ?? []
+      list.push(row)
+      m.set(row.box_id, list)
+    }
+    for (const list of m.values()) {
+      list.sort((a, b) => a.created_at.localeCompare(b.created_at))
+    }
+    return m
+  }, [putawayHistory])
 
   const closedBoxes = useMemo(
     () =>
@@ -128,6 +231,8 @@ export function FfInboundSortingPanel({
         return
       }
       await onReload()
+      await loadPutawayHistory()
+      setPartialQtyByKey({})
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Не удалось разложить короб.')
     } finally {
@@ -202,6 +307,15 @@ export function FfInboundSortingPanel({
         {closedBoxes.map((box) => {
           const done = box.remaining_qty <= 0
           const cellId = cellByBoxId[box.id] ?? ''
+          const boxHistory = resolveBoxPutawayHistory(
+            box.id,
+            closedBoxes,
+            putawayHistory,
+            putawayHistoryByBoxId,
+          )
+          const historyByCell = groupQtyByCell(boxHistory)
+          const boxPostedQty = box.lines.reduce((s, ln) => s + ln.posted_qty, 0)
+          const showPutawayBlock = boxHistory.length > 0 || boxPostedQty > 0
           return (
             <Paper
               key={box.id}
@@ -245,6 +359,80 @@ export function FfInboundSortingPanel({
                   data-testid="ff-sorting-box-remaining"
                 />
               </Stack>
+
+              {showPutawayBlock ? (
+                <Box
+                  sx={{
+                    mb: 1.5,
+                    p: 1.5,
+                    borderRadius: 1,
+                    bgcolor: (theme) => alpha(theme.palette.info.main, 0.06),
+                    border: (theme) => `1px solid ${alpha(theme.palette.info.main, 0.2)}`,
+                  }}
+                  data-testid="ff-sorting-putaway-history"
+                >
+                  <Typography variant="subtitle2" sx={{ fontWeight: 800, mb: 1 }}>
+                    Уже в ячейках
+                  </Typography>
+                  {historyLoadFailed ? (
+                    <Alert severity="warning" sx={{ mb: 1 }}>
+                      Не удалось загрузить историю разкладки. Обновите страницу.
+                    </Alert>
+                  ) : null}
+                  {historyByCell.length > 0 ? (
+                    <Stack direction="row" spacing={0.75} sx={{ mb: 1.25, flexWrap: 'wrap' }}>
+                      {historyByCell.map(([code, qty]) => (
+                        <Chip
+                          key={code}
+                          size="small"
+                          color="info"
+                          variant="outlined"
+                          label={`${code}: ${qty} шт`}
+                          data-testid="ff-sorting-putaway-cell-summary"
+                        />
+                      ))}
+                    </Stack>
+                  ) : boxPostedQty > 0 ? (
+                    <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
+                      Разложено {boxPostedQty} шт, но список ячеек пуст — возможно, разкладка была до
+                      обновления системы. Следующие операции появятся здесь.
+                    </Typography>
+                  ) : null}
+                  {boxHistory.length > 0 ? (
+                    <TableContainer>
+                      <Table size="small">
+                        <TableHead>
+                          <TableRow>
+                            <TableCell>Ячейка</TableCell>
+                            <TableCell>Артикул</TableCell>
+                            <TableCell>Товар</TableCell>
+                            <TableCell align="right">Кол-во</TableCell>
+                            <TableCell>Когда</TableCell>
+                          </TableRow>
+                        </TableHead>
+                        <TableBody>
+                          {boxHistory.map((h) => {
+                            const meta = productMetaById.get(h.product_id)
+                            return (
+                              <TableRow key={h.id} data-testid="ff-sorting-putaway-history-row">
+                                <TableCell>{h.storage_location_code}</TableCell>
+                                <TableCell>{meta?.sku_code ?? '—'}</TableCell>
+                                <TableCell>
+                                  {meta?.product_name ?? h.product_id.slice(0, 8)}
+                                </TableCell>
+                                <TableCell align="right">{h.quantity}</TableCell>
+                                <TableCell sx={{ whiteSpace: 'nowrap' }}>
+                                  {formatPutawayTime(h.created_at)}
+                                </TableCell>
+                              </TableRow>
+                            )
+                          })}
+                        </TableBody>
+                      </Table>
+                    </TableContainer>
+                  ) : null}
+                </Box>
+              ) : null}
 
               {!done ? (
                 <Stack
@@ -294,6 +482,7 @@ export function FfInboundSortingPanel({
                       <TableCell>Товар</TableCell>
                       <TableCell align="right">В коробе</TableCell>
                       <TableCell align="right">Разложено</TableCell>
+                      <TableCell>По ячейкам</TableCell>
                       <TableCell align="right">Остаток</TableCell>
                       {!done ? <TableCell align="right">Частично</TableCell> : null}
                     </TableRow>
@@ -301,12 +490,36 @@ export function FfInboundSortingPanel({
                   <TableBody>
                     {box.lines.map((ln) => {
                       const key = `${box.id}:${ln.product_id}`
+                      const lineCells = productPutawayByCell(boxHistory, ln.product_id)
                       return (
                         <TableRow key={ln.id} data-testid="ff-sorting-box-line">
                           <TableCell>{ln.sku_code}</TableCell>
                           <TableCell>{ln.product_name}</TableCell>
                           <TableCell align="right">{ln.quantity}</TableCell>
                           <TableCell align="right">{ln.posted_qty}</TableCell>
+                          <TableCell>
+                            {lineCells.length > 0 ? (
+                              <Stack direction="row" spacing={0.5} sx={{ flexWrap: 'wrap' }}>
+                                {lineCells.map(([code, qty]) => (
+                                  <Chip
+                                    key={code}
+                                    size="small"
+                                    variant="outlined"
+                                    label={`${code}: ${qty}`}
+                                    data-testid="ff-sorting-line-cell-chip"
+                                  />
+                                ))}
+                              </Stack>
+                            ) : ln.posted_qty > 0 ? (
+                              <Typography variant="caption" color="text.secondary">
+                                —
+                              </Typography>
+                            ) : (
+                              <Typography variant="caption" color="text.secondary">
+                                ещё не разложено
+                              </Typography>
+                            )}
+                          </TableCell>
                           <TableCell align="right">{ln.remaining_qty}</TableCell>
                           {!done && ln.remaining_qty > 0 ? (
                             <TableCell align="right" onClick={(e) => e.stopPropagation()}>

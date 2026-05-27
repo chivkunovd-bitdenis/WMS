@@ -103,6 +103,10 @@ test('ff verify posts to sorting zone; sorting queue and product columns', async
     waitForPostOk(page, base, (u) => u.includes('/putaway')),
     boxCard.getByTestId('ff-sorting-box-putaway-whole').click(),
   ]);
+  await expect(boxCard.getByTestId('ff-sorting-putaway-history')).toBeVisible();
+  await expect(boxCard.getByTestId('ff-sorting-putaway-cell-summary')).toContainText('STORE-1');
+  await expect(boxCard.getByTestId('ff-sorting-putaway-history-row').first()).toContainText('STORE-1');
+  await expect(boxCard.getByTestId('ff-sorting-line-cell-chip').first()).toContainText('STORE-1');
 
   const balDone = await page.request.get('/api/operations/inventory-balances/summary', { headers: h });
   const doneRow = ((await balDone.json()) as {

@@ -1397,7 +1397,9 @@ export function FfInboundRequestView({
                 </Button>
               ) : null}
 
-              {isFulfillmentAdmin && detail.status === 'verified' && workspace !== 'reception' ? (
+              {isFulfillmentAdmin &&
+              detail.status === 'verified' &&
+              workspace === 'full' ? (
                 <Button
                   variant="contained"
                   disabled={distBusy || distributionCompleted}
