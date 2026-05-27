@@ -14,7 +14,7 @@ export type InboundQueueRow = {
   sorting_remaining_qty?: number
 }
 
-const RECEPTION_STATUSES = new Set(['submitted', 'primary_accepted', 'verifying'])
+const RECEPTION_STATUSES = new Set(['draft', 'submitted', 'primary_accepted', 'verifying'])
 
 export function filterReceptionQueue(rows: InboundQueueRow[]): InboundQueueRow[] {
   return rows.filter((r) => RECEPTION_STATUSES.has(r.status))

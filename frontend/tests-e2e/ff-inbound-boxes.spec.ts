@@ -130,8 +130,8 @@ test.describe('US-B-01 FF primary accept by boxes', () => {
     await page.getByTestId('ff-inbound-close').click();
     await expect(page.getByTestId('ff-doc-dialog')).toBeHidden();
 
-    const row = page.getByTestId('ff-docs-row').filter({ hasText: 'Поставка' }).first();
-    await row.click();
+    await page.getByTestId('nav-ff-reception').click();
+    await page.getByTestId('ff-inbound-queue-table').locator('tbody tr').first().click();
     await expect(page.getByTestId('ff-inbound-boxes-panel')).toBeVisible();
     await expect(page.getByTestId('ff-inbound-box-row')).toHaveCount(4);
   });

@@ -156,7 +156,7 @@ function statusRu(status: string): string {
 }
 
 function kindRu(kind: DocKind): string {
-  if (kind === 'inbound') return 'Поставка'
+  if (kind === 'inbound') return 'Приёмка'
   if (kind === 'outbound') return 'Отгрузка'
   if (kind === 'marketplace_unload') return 'Отгрузка на МП'
   return 'Расхождение'

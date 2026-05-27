@@ -3,7 +3,7 @@ import { test, expect } from '@playwright/test';
 import { waitForGetOk, waitForPostOk } from './api-waits';
 import { openFulfillmentRegistration } from './auth-flow';
 
-// TC-S15-003 — FF дашборд: недельный календарь и «Поставки и отгрузки»; создание отгрузки ФФ→МП и открытие диалога состава.
+// TC-S15-003 — FF дашборд: недельный календарь; отгрузка ФФ→МП из раздела «Отгрузки на МП».
 // Given: админ ФФ, склад и товар в API; When: создаёт отгрузку на МП и открывает строку; Then: диалог документа виден (negative: без склада — ошибка вместо успеха).
 test('fulfillment admin sees week calendar and supplies-shipments page', async ({ page }) => {
   const email = `e2e-ff-dash-${Date.now()}@example.com`;
@@ -163,10 +163,6 @@ test('fulfillment admin sees week calendar and supplies-shipments page', async (
 
   await page.reload();
   await expect(page.getByTestId('dashboard')).toBeVisible();
-
-  await page.getByTestId('nav-ff-supplies-shipments').click();
-  await expect(page.getByTestId('ff-supplies-shipments-page')).toBeVisible();
-  await expect(page.getByTestId('ff-create-diverge')).toBeVisible();
 
   await page.getByTestId('nav-ff-mp-shipments').click();
   await expect(page.getByTestId('ff-mp-shipments-page')).toBeVisible();

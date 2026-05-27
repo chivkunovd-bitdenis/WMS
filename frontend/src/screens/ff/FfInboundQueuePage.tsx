@@ -31,6 +31,7 @@ type Props = {
 
 function statusLabel(status: string, workspace: InboundWorkspace): string {
   if (workspace === 'sorting' && status === 'verified') return 'В сортировке'
+  if (status === 'draft') return 'Черновик'
   if (status === 'submitted') return 'Передано'
   if (status === 'primary_accepted') return 'Принято первично'
   if (status === 'verifying') return 'Пересчёт'
@@ -46,7 +47,7 @@ export function FfInboundQueuePage({ workspace, rows, onOpen }: Props) {
   const title = workspace === 'reception' ? 'Приёмка' : 'Сортировка'
   const subtitle =
     workspace === 'reception'
-      ? 'Поставки до завершения поштучного пересчёта. После «Завершить пересчёт» заявка уходит в сортировку, остаток появляется у ФФ.'
+      ? 'Приёмки до завершения поштучного пересчёта. После «Завершить пересчёт» заявка уходит в сортировку, остаток появляется у ФФ.'
       : 'Разложение принятого товара по ячейкам хранения. Доступно к резерву только то, что уже разложено.'
 
   return (
@@ -56,8 +57,8 @@ export function FfInboundQueuePage({ workspace, rows, onOpen }: Props) {
       {filtered.length === 0 ? (
         <Alert severity="info" data-testid="ff-inbound-queue-empty">
           {workspace === 'reception'
-            ? 'Нет поставок в приёмке.'
-            : 'Нет поставок в сортировке — всё разложено по ячейкам.'}
+            ? 'Нет приёмок в очереди.'
+            : 'Нет приёмок в сортировке — всё разложено по ячейкам.'}
         </Alert>
       ) : (
         <TableContainer component={Paper} variant="outlined" data-testid="ff-inbound-queue-table">

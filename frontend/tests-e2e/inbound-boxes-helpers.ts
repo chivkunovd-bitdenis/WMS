@@ -213,12 +213,10 @@ export async function openFfInboundDoc(
   if (!opts?.skipLogin) {
     await loginFfAdmin(page, seed.adminEmail, seed.password);
   }
-  await page.getByTestId('nav-ff-supplies-shipments').click();
-  await expect(page.getByTestId('ff-supplies-shipments-page')).toBeVisible();
-  await page.getByTestId('ff-docs-filter-inbound').click();
-  const row = page.getByTestId('ff-docs-row').filter({ hasText: 'Поставка' }).first();
-  await row.click();
-  // Поставка открывается в общем ff-doc-dialog (App), не во вложенном supplies-dialog.
+  await page.getByTestId('nav-ff-reception').click();
+  await expect(page.getByTestId('ff-reception-page')).toBeVisible();
+  await page.getByTestId('ff-inbound-queue-table').locator('tbody tr').first().click();
+  // Приёмка открывается в ff-doc-dialog (App).
   await expect(page.getByTestId('ff-doc-dialog')).toBeVisible();
   await expect(page.getByTestId('ff-inbound-doc-root')).toBeVisible();
 }

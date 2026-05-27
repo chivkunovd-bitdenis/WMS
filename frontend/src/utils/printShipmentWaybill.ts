@@ -45,7 +45,7 @@ function docTitle(kind: ShipmentWaybillDocKind): string {
     return 'Накладная — отгрузка на маркетплейс'
   }
   if (kind === 'inbound_intake') {
-    return 'Накладная — поставка на склад ФФ'
+    return 'Накладная — приёмка на склад ФФ'
   }
   return 'Накладная — отгрузка со склада'
 }

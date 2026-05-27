@@ -4,7 +4,7 @@ import { waitForGetOk, waitForPostOk } from './api-waits';
 import { openFulfillmentRegistration } from './auth-flow';
 
 // TC-S15-001 — навигация по разделам после входа (целостность shell: один корень, ключевые области).
-// TC-S15-003 — дашборд ФФ: недельный календарь и пункт «Поставки и отгрузки» в сайдбаре.
+// TC-S15-003 — дашборд ФФ: недельный календарь; в сайдбаре «Приёмка» и «Отгрузки на МП».
 // TC-S02-001 — успешный вход в контекст сессии с видимым дашбордом.
 test('admin shell: single app root, nav, dashboard and main sections visible', async ({ page }) => {
   const email = `e2e-shell-${Date.now()}@example.com`;
@@ -31,7 +31,7 @@ test('admin shell: single app root, nav, dashboard and main sections visible', a
   await expect(page.getByTestId('topbar-user')).toBeVisible();
   await expect(page.getByTestId('user-email')).toBeVisible();
   await expect(page.getByTestId('ff-week-calendar')).toBeVisible();
-  await expect(page.getByTestId('nav-ff-supplies-shipments')).toBeVisible();
+  await expect(page.getByTestId('nav-ff-reception')).toBeVisible();
   await expect(page.getByTestId('nav-ff-mp-shipments')).toBeVisible();
   await expect(page.getByTestId('nav-catalog')).toBeVisible();
   await expect(page.getByTestId('nav-sellers')).toBeVisible();

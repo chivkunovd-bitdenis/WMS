@@ -209,14 +209,14 @@ export function FfDashboard({
           {me.organization_name}
         </Typography>
         <Typography variant="body2" sx={{ mt: 1, color: 'text.secondary', fontWeight: 500, lineHeight: 1.5 }}>
-          Поставки селлеров (заявки селлер → ФФ) и отгрузки фулфилмента на маркетплейс — план по датам.
+          Приёмка от селлеров и отгрузки фулфилмента на маркетплейс — план по датам.
         </Typography>
       </Paper>
 
       <FfDashboardSection
         testId="ff-dashboard-inbound-block"
-        title="Поставки (от селлеров)"
-        subtitle="После выхода из черновика. Если плановая дата не задана — показываем дату создания."
+        title="Приёмка (от селлеров)"
+        subtitle="Заявки после выхода из черновика. Если плановая дата приёмки не задана — показываем дату создания."
       >
         <Table size="small">
           <TableHead>

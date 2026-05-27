@@ -5,7 +5,7 @@
 - What changed: в боковом меню ФФ пункт **«Отгрузка»** (`/app/ff/mp-shipments`) — только документы отгрузки на маркетплейс; из «Поставки и отгрузки» убраны отгрузки на МП и кнопка их создания; дашборд открывает плановую отгрузку в новом разделе.
 - What did NOT change: API `marketplace-unload-requests`, логика модалки документа, бэкенд.
 - Verification: `npm run build`; e2e `admin-shell-layout`, `ff-mp-ship-pick` (по возможности полный `test:e2e`).
-- Commit: (pending)
+- Commit: bf34625; prod deploy `194.87.96.144:8088`.
 
 ## TASK-24 — 2026-05-27 — Сортировка: агрегация по ячейкам
 

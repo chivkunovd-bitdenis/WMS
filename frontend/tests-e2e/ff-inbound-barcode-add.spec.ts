@@ -15,10 +15,9 @@ test('ff inbound draft adds line by barcode scan field', async ({ page }) => {
   expect(cr.ok()).toBeTruthy();
 
   await loginFfAdmin(page, seed.adminEmail, seed.password);
-  await page.getByTestId('nav-ff-supplies-shipments').click();
-  await expect(page.getByTestId('ff-supplies-shipments-page')).toBeVisible();
-  await page.getByTestId('ff-docs-filter-inbound').click();
-  await page.getByTestId('ff-docs-row').first().click();
+  await page.getByTestId('nav-ff-reception').click();
+  await expect(page.getByTestId('ff-reception-page')).toBeVisible();
+  await page.getByTestId('ff-inbound-queue-table').locator('tbody tr').first().click();
   await expect(page.getByTestId('ff-inbound-doc-root')).toBeVisible();
 
   await page.getByTestId('ff-inbound-line-barcode-scan').fill(seed.sku);

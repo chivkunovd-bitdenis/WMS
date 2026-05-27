@@ -286,7 +286,7 @@ export function FfWeekCalendar({
             })}
           />
           <Typography variant="caption" sx={{ fontWeight: 600, color: 'text.secondary' }}>
-            Поставка (план привоза селлером)
+            Приёмка (план привоза селлером)
           </Typography>
         </Stack>
         <Stack direction="row" spacing={1} sx={{ alignItems: 'center' }}>
