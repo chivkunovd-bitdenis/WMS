@@ -66,6 +66,38 @@ test.describe('FF inbound box piece intake', () => {
     await expect(page.getByTestId('ff-inbound-status-chip')).toContainText('В сортировке');
   });
 
+  test('TC-NEW-C01 verify with open box saves qty and auto-closes', async ({ page }) => {
+    const seed = await seedFfSellerInbound(page);
+    await apiCreateSubmittedInbound(page.request, seed, {
+      plannedBoxes: 1,
+      expectedQty: 4,
+    });
+
+    await loginFfAdmin(page, seed.adminEmail, seed.password);
+    await openFfInboundDoc(page, seed, { skipLogin: true });
+
+    await Promise.all([
+      waitForPostOk(page, INBOUND_API, (u) => u.includes('/primary-accept')),
+      page.getByTestId('ff-inbound-primary-accept').click(),
+    ]);
+
+    const inb = await page.getByTestId('ff-inbound-box-barcode').first().innerText();
+    await page.getByTestId('ff-inbound-box-open-scan').fill(inb);
+    await Promise.all([
+      waitForPostOk(page, INBOUND_API, (u) => u.includes('/boxes/open')),
+      page.getByTestId('ff-inbound-box-open-submit').click(),
+    ]);
+    await fillFfInboundBoxLineQty(page, 4);
+
+    const [verifyRes] = await Promise.all([
+      waitForPostOk(page, INBOUND_API, (u) => u.includes('/verify')),
+      page.getByTestId('ff-inbound-verify-complete').click(),
+    ]);
+    expect(verifyRes.ok()).toBeTruthy();
+    await expect(page.getByTestId('ff-inbound-status-chip')).toContainText('В сортировке');
+    await expect(page.getByTestId('ff-inbound-active-box')).toHaveCount(0);
+  });
+
   test('TC-NEW-C01-N2 set line qty without open box shows error', async ({ page }) => {
     const seed = await seedFfSellerInbound(page);
     const rid = await apiCreateSubmittedInbound(page.request, seed, {

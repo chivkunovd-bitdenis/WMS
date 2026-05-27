@@ -453,6 +453,10 @@ async def close_box_intake(
     if box.intake_opened_at is None:
         raise InboundIntakeBoxError("no_open_box")
     box.intake_closed_at = datetime.now(UTC)
+    req_loaded = await intake_svc.get_request(session, tenant_id, request_id)
+    if req_loaded is None:
+        raise InboundIntakeBoxError("request_not_found")
+    await _sync_request_actuals(session, req_loaded)
     await session.commit()
     return await _load_box(session, box.id)
 

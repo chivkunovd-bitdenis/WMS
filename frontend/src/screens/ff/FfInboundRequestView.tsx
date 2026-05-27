@@ -182,14 +182,16 @@ export function FfInboundRequestView({
     boxIntakeMode &&
     (detail?.status === 'primary_accepted' || detail?.status === 'verifying')
 
-  const loadDetail = useCallback(async () => {
+  const loadDetail = useCallback(async (): Promise<InboundDetail> => {
     const res = await fetch(apiUrl(`/operations/inbound-intake-requests/${requestId}`), {
       headers: authHeaders,
     })
     if (!res.ok) {
       throw new Error(await readApiErrorMessage(res))
     }
-    setDetail((await res.json()) as InboundDetail)
+    const data = (await res.json()) as InboundDetail
+    setDetail(data)
+    return data
   }, [authHeaders, requestId])
 
   const fetchCatalogRows = useCallback(async (): Promise<WbCatalogRow[]> => {
@@ -454,6 +456,13 @@ export function FfInboundRequestView({
       if (row.product_id) void loadCellHints(row.product_id)
     }
   }, [distOpen, detail?.status, distLines, loadCellHints])
+
+  useEffect(() => {
+    if (!error) return
+    document
+      .querySelector('[data-testid="ff-inbound-doc-error"]')
+      ?.scrollIntoView({ behavior: 'smooth', block: 'nearest' })
+  }, [error])
 
   const catalogById = useMemo(() => {
     const m = new Map<string, WbCatalogRow>()
@@ -1029,18 +1038,84 @@ export function FfInboundRequestView({
     await loadDetail()
   }
 
+  const persistBoxLineQty = async (
+    boxId: string,
+    productId: string,
+    qty: number,
+  ): Promise<string | null> => {
+    const res = await fetch(
+      apiUrl(
+        `/operations/inbound-intake-requests/${requestId}/boxes/${boxId}/lines/${productId}`,
+      ),
+      {
+        method: 'PUT',
+        headers: { ...authHeaders, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ quantity: qty }),
+      },
+    )
+    if (!res.ok) {
+      return await readApiErrorMessage(res)
+    }
+    return null
+  }
+
+  const saveAllBoxLineQtysForBox = async (box: InboundBox): Promise<string | null> => {
+    if (!detail) {
+      return 'Заявка не загружена.'
+    }
+    for (const ln of detail.lines) {
+      const raw = boxQtyDraftByProductId[ln.product_id] ?? '0'
+      const qty = Math.floor(Number(raw))
+      if (!Number.isFinite(qty) || qty < 0) {
+        return 'Укажите целое количество ≥ 0 по каждой позиции в коробе.'
+      }
+      const inBox = box.lines.find((bl) => bl.product_id === ln.product_id)
+      if (inBox && inBox.quantity === qty) {
+        continue
+      }
+      const err = await persistBoxLineQty(box.id, ln.product_id, qty)
+      if (err) {
+        return err
+      }
+    }
+    return null
+  }
+
+  const closeInboundBoxById = async (boxId: string): Promise<string | null> => {
+    const res = await fetch(
+      apiUrl(`/operations/inbound-intake-requests/${requestId}/boxes/${boxId}/close`),
+      { method: 'POST', headers: authHeaders },
+    )
+    if (!res.ok) {
+      return await readApiErrorMessage(res)
+    }
+    return null
+  }
+
   const completeVerify = async () => {
     setBusy(true)
     setError(null)
     try {
+      let currentDetail = detail
       if (boxIntakeMode && activeIntakeBox) {
-        setError(
-          `Закройте короб № ${activeIntakeBox.box_number} (${activeIntakeBox.internal_barcode}) перед завершением пересчёта.`,
-        )
-        return
+        const saveErr = await saveAllBoxLineQtysForBox(activeIntakeBox)
+        if (saveErr) {
+          setError(saveErr)
+          return
+        }
+        const closeErr = await closeInboundBoxById(activeIntakeBox.id)
+        if (closeErr) {
+          setError(
+            closeErr === 'open_box_exists'
+              ? 'Сначала закройте открытый короб в блоке поштучной приёмки.'
+              : closeErr,
+          )
+          return
+        }
+        currentDetail = await loadDetail()
       }
-      if (boxIntakeMode && detail) {
-        const missing = detail.lines.filter((ln) => ln.actual_qty == null)
+      if (boxIntakeMode && currentDetail) {
+        const missing = currentDetail.lines.filter((ln) => ln.actual_qty == null)
         if (missing.length > 0) {
           const names = missing
             .slice(0, 4)
@@ -1162,19 +1237,9 @@ export function FfInboundRequestView({
     setBusy(true)
     setError(null)
     try {
-      const res = await fetch(
-        apiUrl(
-          `/operations/inbound-intake-requests/${requestId}/boxes/${activeIntakeBox.id}/lines/${productId}`,
-        ),
-        {
-          method: 'PUT',
-          headers: { ...authHeaders, 'Content-Type': 'application/json' },
-          body: JSON.stringify({ quantity: qty }),
-        },
-      )
-      if (!res.ok) {
-        const msg = await readApiErrorMessage(res)
-        setError(msg)
+      const err = await persistBoxLineQty(activeIntakeBox.id, productId, qty)
+      if (err) {
+        setError(err)
         return
       }
       await loadDetail()
@@ -1190,14 +1255,14 @@ export function FfInboundRequestView({
     setBusy(true)
     setError(null)
     try {
-      const res = await fetch(
-        apiUrl(
-          `/operations/inbound-intake-requests/${requestId}/boxes/${activeIntakeBox.id}/close`,
-        ),
-        { method: 'POST', headers: authHeaders },
-      )
-      if (!res.ok) {
-        setError(await readApiErrorMessage(res))
+      const saveErr = await saveAllBoxLineQtysForBox(activeIntakeBox)
+      if (saveErr) {
+        setError(saveErr)
+        return
+      }
+      const closeErr = await closeInboundBoxById(activeIntakeBox.id)
+      if (closeErr) {
+        setError(closeErr)
         return
       }
       await loadDetail()
@@ -1231,155 +1296,168 @@ export function FfInboundRequestView({
         <Alert severity="warning">Заявка не найдена или недоступна.</Alert>
       ) : (
         <Paper variant="outlined" sx={{ p: 2, minHeight: '38vh' }}>
-          <Stack
-            direction={{ xs: 'column', md: 'row' }}
-            spacing={2}
-            sx={{ mb: 2, alignItems: { md: 'center' } }}
-          >
-            <TextField
-              label="Дата поставки (план)"
-              type="date"
-              size="small"
-              disabled={draftLocked || busy}
-              value={plannedDateDraft}
-              onChange={(e) => setPlannedDateDraft(e.target.value)}
-              onBlur={() => {
-                if ((plannedDateDraft || '') !== (detail.planned_delivery_date ?? '')) {
-                  void patchPlannedDate(plannedDateDraft)
-                }
+          <Stack spacing={2} sx={{ mb: 2 }}>
+            <Stack
+              direction="row"
+              spacing={2}
+              useFlexGap
+              sx={{ alignItems: 'center', flexWrap: 'wrap' }}
+            >
+              <TextField
+                label="Дата поставки (план)"
+                type="date"
+                size="small"
+                disabled={draftLocked || busy}
+                value={plannedDateDraft}
+                onChange={(e) => setPlannedDateDraft(e.target.value)}
+                onBlur={() => {
+                  if ((plannedDateDraft || '') !== (detail.planned_delivery_date ?? '')) {
+                    void patchPlannedDate(plannedDateDraft)
+                  }
+                }}
+                slotProps={{
+                  inputLabel: { shrink: true },
+                  htmlInput: { 'data-testid': 'ff-inbound-planned-date' },
+                }}
+              />
+              <Chip
+                label={statusRu(detail.status)}
+                color={detail.status === 'draft' ? 'default' : 'primary'}
+                data-testid="ff-inbound-status-chip"
+              />
+              {detail.planned_box_count != null ? (
+                <Typography variant="body2" color="text.secondary" data-testid="ff-inbound-planned-boxes">
+                  План коробов: <strong>{detail.planned_box_count}</strong>
+                  {detail.actual_box_count != null ? (
+                    <>
+                      {' '}
+                      · факт: <strong>{detail.actual_box_count}</strong>
+                    </>
+                  ) : null}
+                </Typography>
+              ) : null}
+            </Stack>
+
+            <Stack
+              direction="row"
+              spacing={1}
+              useFlexGap
+              sx={{
+                justifyContent: { xs: 'stretch', sm: 'flex-end' },
+                alignItems: 'center',
+                flexWrap: 'wrap',
               }}
-              slotProps={{
-                inputLabel: { shrink: true },
-                htmlInput: { 'data-testid': 'ff-inbound-planned-date' },
-              }}
-            />
-            <Chip
-              label={statusRu(detail.status)}
-              color={detail.status === 'draft' ? 'default' : 'primary'}
-              data-testid="ff-inbound-status-chip"
-            />
-            {detail.planned_box_count != null ? (
-              <Typography variant="body2" color="text.secondary" data-testid="ff-inbound-planned-boxes">
-                План коробов: <strong>{detail.planned_box_count}</strong>
-                {detail.actual_box_count != null ? (
-                  <>
-                    {' '}
-                    · факт: <strong>{detail.actual_box_count}</strong>
-                  </>
-                ) : null}
-              </Typography>
-            ) : null}
-            <Box sx={{ flexGrow: 1 }} />
-
-            {isFulfillmentAdmin &&
-            workspace !== 'sorting' &&
-            (detail.status === 'primary_accepted' || detail.status === 'verifying') ? (
-              <Button
-                variant="contained"
-                disabled={busy}
-                onClick={() => void completeVerify()}
-                data-testid="ff-inbound-verify-complete"
-              >
-                Завершить пересчёт
-              </Button>
-            ) : null}
-
-            {isFulfillmentAdmin && detail.status === 'verified' && workspace !== 'reception' ? (
-              <Button
-                variant="contained"
-                disabled={distBusy || distributionCompleted}
-                onClick={() => setDistOpen(true)}
-                data-testid="ff-inbound-distribute-open"
-              >
-                Распределить по ячейкам
-              </Button>
-            ) : null}
-
-            {detail.status === 'draft' ? (
-              <>
-                <Stack
-                  direction={{ xs: 'column', sm: 'row' }}
-                  spacing={1}
-                  sx={{ width: '100%', flexBasis: '100%' }}
-                  data-testid="ff-inbound-line-barcode-row"
-                >
-                  <TextField
-                    size="small"
-                    label="Штрихкод / артикул"
-                    value={lineBarcodeScan}
-                    disabled={draftLocked || busy}
-                    onChange={(e) => setLineBarcodeScan(e.target.value)}
-                    onKeyDown={(e) => {
-                      if (e.key === 'Enter') {
-                        e.preventDefault()
-                        void addLineByBarcode()
-                      }
-                    }}
-                    slotProps={{ htmlInput: { 'data-testid': 'ff-inbound-line-barcode-scan' } }}
-                    sx={{ minWidth: 220, flexGrow: 1 }}
-                  />
-                  <Button
-                    variant="outlined"
-                    disabled={draftLocked || busy || !lineBarcodeScan.trim()}
-                    onClick={() => void addLineByBarcode()}
-                    data-testid="ff-inbound-line-barcode-add"
-                  >
-                    Добавить по ШК
-                  </Button>
-                </Stack>
-                <Button
-                  variant="outlined"
-                  disabled={draftLocked || busy}
-                  onClick={() => void openPicker()}
-                  data-testid="ff-inbound-add-products"
-                >
-                  Добавить товары
-                </Button>
+            >
+              {isFulfillmentAdmin &&
+              workspace !== 'sorting' &&
+              (detail.status === 'primary_accepted' || detail.status === 'verifying') ? (
                 <Button
                   variant="contained"
-                  color="secondary"
-                  disabled={busy || detail.lines.length === 0}
-                  onClick={() => void submitToWarehouse()}
-                  data-testid="ff-inbound-submit-warehouse"
+                  disabled={busy}
+                  onClick={() => void completeVerify()}
+                  data-testid="ff-inbound-verify-complete"
                 >
-                  Передать на склад
+                  Завершить пересчёт
                 </Button>
-              </>
-            ) : null}
+              ) : null}
 
-            {detail.lines.length > 0 ? (
-              <Button
-                variant="outlined"
-                startIcon={<PrintOutlined />}
-                disabled={busy}
-                data-testid="ff-inbound-print-waybill"
-                onClick={() => {
-                  const wh = requestWarehouse
-                  printInboundSupplyWaybill({
-                    documentId: detail.id,
-                    statusLabel: statusRu(detail.status),
-                    warehouseName: wh ? `${wh.name} (${wh.code})` : detail.warehouse_id,
-                    sellerName: detail.seller_name ?? null,
-                    plannedDate: detail.planned_delivery_date,
-                    createdAt: detail.created_at ?? null,
-                    plannedBoxCount: detail.planned_box_count,
-                    actualBoxCount: detail.actual_box_count,
-                    lines: detail.lines.map((ln) => ({
-                      sku_code: ln.sku_code,
-                      product_name: ln.product_name,
-                      quantity: ln.expected_qty,
-                      received_qty: ln.actual_qty,
-                    })),
-                  })
-                }}
-              >
-                Печать накладной
+              {isFulfillmentAdmin && detail.status === 'verified' && workspace !== 'reception' ? (
+                <Button
+                  variant="contained"
+                  disabled={distBusy || distributionCompleted}
+                  onClick={() => setDistOpen(true)}
+                  data-testid="ff-inbound-distribute-open"
+                >
+                  Распределить по ячейкам
+                </Button>
+              ) : null}
+
+              {detail.status === 'draft' ? (
+                <>
+                  <Stack
+                    direction={{ xs: 'column', sm: 'row' }}
+                    spacing={1}
+                    sx={{ width: { xs: '100%', sm: 'auto' }, flexBasis: { xs: '100%', sm: 'auto' } }}
+                    data-testid="ff-inbound-line-barcode-row"
+                  >
+                    <TextField
+                      size="small"
+                      label="Штрихкод / артикул"
+                      value={lineBarcodeScan}
+                      disabled={draftLocked || busy}
+                      onChange={(e) => setLineBarcodeScan(e.target.value)}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter') {
+                          e.preventDefault()
+                          void addLineByBarcode()
+                        }
+                      }}
+                      slotProps={{ htmlInput: { 'data-testid': 'ff-inbound-line-barcode-scan' } }}
+                      sx={{ minWidth: 220, flexGrow: 1 }}
+                    />
+                    <Button
+                      variant="outlined"
+                      disabled={draftLocked || busy || !lineBarcodeScan.trim()}
+                      onClick={() => void addLineByBarcode()}
+                      data-testid="ff-inbound-line-barcode-add"
+                    >
+                      Добавить по ШК
+                    </Button>
+                  </Stack>
+                  <Button
+                    variant="outlined"
+                    disabled={draftLocked || busy}
+                    onClick={() => void openPicker()}
+                    data-testid="ff-inbound-add-products"
+                  >
+                    Добавить товары
+                  </Button>
+                  <Button
+                    variant="contained"
+                    color="secondary"
+                    disabled={busy || detail.lines.length === 0}
+                    onClick={() => void submitToWarehouse()}
+                    data-testid="ff-inbound-submit-warehouse"
+                  >
+                    Передать на склад
+                  </Button>
+                </>
+              ) : null}
+
+              {detail.lines.length > 0 ? (
+                <Button
+                  variant="outlined"
+                  startIcon={<PrintOutlined />}
+                  disabled={busy}
+                  data-testid="ff-inbound-print-waybill"
+                  onClick={() => {
+                    const wh = requestWarehouse
+                    printInboundSupplyWaybill({
+                      documentId: detail.id,
+                      statusLabel: statusRu(detail.status),
+                      warehouseName: wh ? `${wh.name} (${wh.code})` : detail.warehouse_id,
+                      sellerName: detail.seller_name ?? null,
+                      plannedDate: detail.planned_delivery_date,
+                      createdAt: detail.created_at ?? null,
+                      plannedBoxCount: detail.planned_box_count,
+                      actualBoxCount: detail.actual_box_count,
+                      lines: detail.lines.map((ln) => ({
+                        sku_code: ln.sku_code,
+                        product_name: ln.product_name,
+                        quantity: ln.expected_qty,
+                        received_qty: ln.actual_qty,
+                      })),
+                    })
+                  }}
+                >
+                  Печать накладной
+                </Button>
+              ) : null}
+
+              <Button variant="outlined" disabled={busy} onClick={onClose} data-testid="ff-inbound-close">
+                Закрыть
               </Button>
-            ) : null}
-
-            <Button variant="outlined" disabled={busy} onClick={onClose} data-testid="ff-inbound-close">
-              Закрыть
-            </Button>
+            </Stack>
           </Stack>
 
           <TableContainer sx={{ width: '100%', overflowX: 'hidden' }}>
