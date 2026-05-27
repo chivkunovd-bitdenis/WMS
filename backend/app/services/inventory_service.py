@@ -3,7 +3,7 @@ from __future__ import annotations
 import uuid
 from datetime import UTC, datetime
 
-from sqlalchemy import and_, delete, func, or_, select
+from sqlalchemy import and_, case, delete, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.inbound_intake import InboundIntakeLine, InboundIntakeRequest
@@ -22,6 +22,7 @@ from app.models.marketplace_unload_reservation import MarketplaceUnloadReservati
 from app.models.outbound_shipment import OutboundShipmentLine, OutboundShipmentRequest
 from app.models.product import Product
 from app.models.storage_location import StorageLocation
+from app.services.sorting_location_service import SORTING_LOCATION_CODE
 
 OUTBOUND_RESERVE_STATUSES = ("draft", "submitted")
 MP_UNLOAD_RESERVE_STATUSES = ("submitted", "confirmed")
@@ -189,22 +190,35 @@ async def list_balances_total(
     *,
     seller_product_owner_id: uuid.UUID | None = None,
     warehouse_id: uuid.UUID | None = None,
-) -> list[tuple[uuid.UUID, str, str, int, int]]:
-    """Итоговые остатки по SKU (сумма по всем ячейкам).
+) -> list[tuple[uuid.UUID, str, str, int, int, int]]:
+    """Итоговые остатки по SKU (сумма по всем ячейкам, в т.ч. зона сортировки).
 
-    Возвращает: (product_id, sku_code, product_name, quantity_total, reserved_total)
+    Возвращает:
+    (product_id, sku_code, product_name, quantity_total, quantity_in_sorting, reserved_total)
     """
+    sorting_qty = func.coalesce(
+        func.sum(
+            case(
+                (StorageLocation.code == SORTING_LOCATION_CODE, InventoryBalance.quantity),
+                else_=0,
+            )
+        ),
+        0,
+    )
     stmt = (
         select(
             Product.id,
             Product.sku_code,
             Product.name,
             func.coalesce(func.sum(InventoryBalance.quantity), 0),
+            sorting_qty,
         )
         .join(InventoryBalance, InventoryBalance.product_id == Product.id)
+        .join(StorageLocation, StorageLocation.id == InventoryBalance.storage_location_id)
         .where(
             Product.tenant_id == tenant_id,
             InventoryBalance.tenant_id == tenant_id,
+            StorageLocation.tenant_id == tenant_id,
         )
         .group_by(Product.id, Product.sku_code, Product.name)
         .order_by(Product.sku_code)
@@ -212,15 +226,12 @@ async def list_balances_total(
     if seller_product_owner_id is not None:
         stmt = stmt.where(Product.seller_id == seller_product_owner_id)
     if warehouse_id is not None:
-        stmt = stmt.join(
-            StorageLocation,
-            StorageLocation.id == InventoryBalance.storage_location_id,
-        ).where(
-            StorageLocation.tenant_id == tenant_id,
-            StorageLocation.warehouse_id == warehouse_id,
-        )
+        stmt = stmt.where(StorageLocation.warehouse_id == warehouse_id)
     res = await session.execute(stmt)
-    rows = [(pid, sku, name, int(q or 0)) for pid, sku, name, q in res.all()]
+    rows = [
+        (pid, sku, name, int(q or 0), int(sort_q or 0))
+        for pid, sku, name, q, sort_q in res.all()
+    ]
     if not rows:
         return []
     pids = [pid for pid, *_ in rows]
@@ -228,8 +239,8 @@ async def list_balances_total(
         session, tenant_id, pids, warehouse_id=warehouse_id
     )
     return [
-        (pid, sku, name, qty, int(rsv_map.get(pid, 0)))
-        for pid, sku, name, qty in rows
+        (pid, sku, name, qty, sort_qty, int(rsv_map.get(pid, 0)))
+        for pid, sku, name, qty, sort_qty in rows
     ]
 
 
@@ -489,6 +500,68 @@ async def apply_inbound_receive(
     )
 
 
+async def apply_putaway_from_sorting(
+    session: AsyncSession,
+    tenant_id: uuid.UUID,
+    *,
+    from_storage_location_id: uuid.UUID,
+    to_storage_location_id: uuid.UUID,
+    product_id: uuid.UUID,
+    quantity: int,
+    inbound_intake_line_id: uuid.UUID,
+) -> None:
+    """Перемещение из зоны сортировки в ячейку хранения (привязка к строке приёмки)."""
+    if quantity < 1:
+        msg = "quantity must be positive"
+        raise ValueError(msg)
+    if from_storage_location_id == to_storage_location_id:
+        msg = "from and to must differ"
+        raise ValueError(msg)
+
+    loc_from = await session.get(StorageLocation, from_storage_location_id)
+    loc_to = await session.get(StorageLocation, to_storage_location_id)
+    if (
+        loc_from is None
+        or loc_to is None
+        or loc_from.tenant_id != tenant_id
+        or loc_to.tenant_id != tenant_id
+    ):
+        msg = "storage location not found"
+        raise ValueError(msg)
+    if loc_from.warehouse_id != loc_to.warehouse_id:
+        msg = "locations must be in the same warehouse"
+        raise ValueError(msg)
+
+    avail = await available_quantity_at_location(
+        session, tenant_id, product_id, from_storage_location_id
+    )
+    if avail < quantity:
+        msg = "insufficient stock"
+        raise ValueError(msg)
+
+    group_id = uuid.uuid4()
+    await record_movement_and_adjust_balance(
+        session,
+        tenant_id=tenant_id,
+        product_id=product_id,
+        storage_location_id=from_storage_location_id,
+        quantity_delta=-quantity,
+        movement_type=MOVEMENT_TYPE_STOCK_TRANSFER_OUT,
+        transfer_group_id=group_id,
+        inbound_intake_line_id=inbound_intake_line_id,
+    )
+    await record_movement_and_adjust_balance(
+        session,
+        tenant_id=tenant_id,
+        product_id=product_id,
+        storage_location_id=to_storage_location_id,
+        quantity_delta=quantity,
+        movement_type=MOVEMENT_TYPE_STOCK_TRANSFER_IN,
+        transfer_group_id=group_id,
+        inbound_intake_line_id=inbound_intake_line_id,
+    )
+
+
 async def apply_stock_transfer(
     session: AsyncSession,
     tenant_id: uuid.UUID,
@@ -595,7 +668,7 @@ async def list_locations_for_product_in_warehouse(
     product_rows = [
         (loc_id, code, on_hand, rsv)
         for pid, loc_id, code, on_hand, rsv in rows
-        if pid == product_id
+        if pid == product_id and code != SORTING_LOCATION_CODE
     ]
     product_rows.sort(key=lambda x: x[2], reverse=True)
     return product_rows

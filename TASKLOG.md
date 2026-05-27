@@ -1,5 +1,12 @@
 # TASKLOG
 
+## TASK-21 — 2026-05-27 — Приёмка / Сортировка: зона сортировки и остатки
+
+- What changed: системная ячейка `__SORTING__`; остаток на `verify`; transfer в ячейки через `distribution-complete`; разделы FF **Приёмка** и **Сортировка**; колонки «В сортировке» / «В ячейках» в товарах; API `quantity_in_sorting`; e2e `ff-reception-sorting.spec.ts` (TC-S06-007).
+- What did NOT change: инвентаризация для отката количества; резерв с зоны сортировки по-прежнему запрещён.
+- Verification: `pytest` 95 passed; `npm run build`; e2e `ff-reception-sorting`, `ff-inbound-cell-hints`.
+- Commit: 2de3092
+
 ## TASK-20 — 2026-05-25 — Поставка: пустое распределение не оприходует; reopen
 
 - What changed: `complete_distribution` требует строки и полное покрытие принятого (`distribution_incomplete`); `POST .../distribution-reopen` если `posted_qty=0`; UI предупреждение + кнопка «Открыть распределение заново», блок «Завершить» при остатке «без ячейки»; подсказка в каталоге «Товары».

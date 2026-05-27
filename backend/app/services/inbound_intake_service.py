@@ -19,7 +19,9 @@ from app.models.inbound_intake import (
 from app.models.inventory_movement import MOVEMENT_TYPE_INBOUND_INTAKE
 from app.models.product import Product
 from app.models.seller import Seller
+from app.models.storage_location import StorageLocation
 from app.services import inventory_service as inv_svc
+from app.services import sorting_location_service as sorting_loc_svc
 from app.services.catalog_service import (
     get_storage_location_in_warehouse,
     get_warehouse,
@@ -193,6 +195,8 @@ async def add_line(
         )
         if loc is None:
             raise InboundIntakeError("location_not_found")
+        if sorting_loc_svc.is_sorting_location(loc):
+            raise InboundIntakeError("sorting_location_reserved")
         loc_id = storage_location_id
     line = InboundIntakeLine(
         request_id=request_id,
@@ -338,6 +342,8 @@ async def set_line_storage_location(
     )
     if loc is None:
         raise InboundIntakeError("location_not_found")
+    if sorting_loc_svc.is_sorting_location(loc):
+        raise InboundIntakeError("sorting_location_reserved")
     line.storage_location_id = storage_location_id
     await session.commit()
     await session.refresh(line)
@@ -473,6 +479,22 @@ async def complete_verification(
     req.verified_at = datetime.now(UTC)
     line_discrepancy = any((ln.actual_qty or 0) != ln.expected_qty for ln in req.lines)
     req.has_discrepancy = bool(req.boxes_discrepancy) or line_discrepancy
+    sorting_loc = await sorting_loc_svc.get_or_create_sorting_location(
+        session, tenant_id, req.warehouse_id
+    )
+    for line in req.lines:
+        qty = line.actual_qty or 0
+        if qty < 1:
+            continue
+        await inv_svc.apply_inbound_receive(
+            session,
+            tenant_id=tenant_id,
+            product_id=line.product_id,
+            storage_location_id=sorting_loc.id,
+            quantity=qty,
+            movement_type=MOVEMENT_TYPE_INBOUND_INTAKE,
+            inbound_intake_line_id=line.id,
+        )
     await session.commit()
     await session.refresh(req)
     return req
@@ -503,14 +525,19 @@ async def receive_line(
         raise InboundIntakeError("storage_not_assigned")
     if quantity < 1 or quantity > remaining:
         raise InboundIntakeError("invalid_qty")
-    sid = line.storage_location_id
-    await inv_svc.apply_inbound_receive(
+    target_loc = await session.get(StorageLocation, line.storage_location_id)
+    if target_loc is None or sorting_loc_svc.is_sorting_location(target_loc):
+        raise InboundIntakeError("sorting_location_reserved")
+    sorting_loc = await sorting_loc_svc.get_or_create_sorting_location(
+        session, tenant_id, req.warehouse_id
+    )
+    await inv_svc.apply_putaway_from_sorting(
         session,
-        tenant_id=tenant_id,
+        tenant_id,
+        from_storage_location_id=sorting_loc.id,
+        to_storage_location_id=line.storage_location_id,
         product_id=line.product_id,
-        storage_location_id=sid,
         quantity=quantity,
-        movement_type=MOVEMENT_TYPE_INBOUND_INTAKE,
         inbound_intake_line_id=line.id,
     )
     line.posted_qty += quantity
@@ -532,6 +559,9 @@ async def post_all_remaining(
         raise InboundIntakeError("already_posted")
     if req.status != STATUS_VERIFIED:
         raise InboundIntakeError("not_verified")
+    sorting_loc = await sorting_loc_svc.get_or_create_sorting_location(
+        session, tenant_id, req.warehouse_id
+    )
     to_receive: list[tuple[InboundIntakeLine, int]] = []
     for line in req.lines:
         if line.actual_qty is None:
@@ -541,19 +571,22 @@ async def post_all_remaining(
             continue
         if line.storage_location_id is None:
             raise InboundIntakeError("lines_missing_storage")
+        target_loc = await session.get(StorageLocation, line.storage_location_id)
+        if target_loc is None or sorting_loc_svc.is_sorting_location(target_loc):
+            raise InboundIntakeError("sorting_location_reserved")
         to_receive.append((line, rem))
     if not to_receive:
         raise InboundIntakeError("nothing_to_receive")
     for line, rem in to_receive:
         sid = line.storage_location_id
         assert sid is not None
-        await inv_svc.apply_inbound_receive(
+        await inv_svc.apply_putaway_from_sorting(
             session,
-            tenant_id=tenant_id,
+            tenant_id,
+            from_storage_location_id=sorting_loc.id,
+            to_storage_location_id=sid,
             product_id=line.product_id,
-            storage_location_id=sid,
             quantity=rem,
-            movement_type=MOVEMENT_TYPE_INBOUND_INTAKE,
             inbound_intake_line_id=line.id,
         )
         line.posted_qty += rem
@@ -566,6 +599,17 @@ async def post_all_remaining(
 def _accepted_qty_for_line(line: InboundIntakeLine) -> int:
     # Если факт пересчитан — он приоритетен; иначе используем план.
     return line.actual_qty if line.actual_qty is not None else line.expected_qty
+
+
+def sorting_remaining_qty(req: InboundIntakeRequest) -> int:
+    """Сколько штук ещё не разложено по ячейкам хранения (остаётся в зоне сортировки)."""
+    if req.status != STATUS_VERIFIED:
+        return 0
+    total = 0
+    for ln in req.lines:
+        accepted = _accepted_qty_for_line(ln)
+        total += max(0, accepted - ln.posted_qty)
+    return total
 
 
 async def list_distribution_lines(
@@ -624,6 +668,8 @@ async def replace_distribution_lines(
         )
         if loc is None:
             raise InboundIntakeError("location_not_found")
+        if sorting_loc_svc.is_sorting_location(loc):
+            raise InboundIntakeError("sorting_location_reserved")
         next_sum = sum_by_product.get(product_id, 0) + qty
         if next_sum > accepted:
             raise InboundIntakeError("qty_exceeds_accepted")
@@ -676,6 +722,10 @@ async def complete_distribution(
     if not rows:
         raise InboundIntakeError("distribution_incomplete")
 
+    sorting_loc = await sorting_loc_svc.get_or_create_sorting_location(
+        session, tenant_id, req.warehouse_id
+    )
+
     sum_by_product: dict[uuid.UUID, int] = {}
     for r in rows:
         if r.quantity < 1:
@@ -685,14 +735,15 @@ async def complete_distribution(
             raise InboundIntakeError("product_not_on_request")
         if accepted <= 0:
             raise InboundIntakeError("product_not_accepted")
+        target_loc = await session.get(StorageLocation, r.storage_location_id)
+        if target_loc is None or target_loc.tenant_id != tenant_id:
+            raise InboundIntakeError("location_not_found")
+        if sorting_loc_svc.is_sorting_location(target_loc):
+            raise InboundIntakeError("sorting_location_reserved")
         sum_by_product[r.product_id] = sum_by_product.get(r.product_id, 0) + r.quantity
         line = lines_by_product[r.product_id]
         if max(line.posted_qty, sum_by_product[r.product_id]) > accepted:
             raise InboundIntakeError("qty_exceeds_accepted")
-
-    for product_id, accepted in accepted_by_product.items():
-        if accepted > 0 and sum_by_product.get(product_id, 0) < accepted:
-            raise InboundIntakeError("distribution_incomplete")
 
     distributed_before_by_product: dict[uuid.UUID, int] = {}
     for r in rows:
@@ -706,18 +757,24 @@ async def complete_distribution(
         )
         if quantity_to_post < 1:
             continue
-        await inv_svc.apply_inbound_receive(
+        await inv_svc.apply_putaway_from_sorting(
             session,
-            tenant_id=tenant_id,
+            tenant_id,
+            from_storage_location_id=sorting_loc.id,
+            to_storage_location_id=r.storage_location_id,
             product_id=r.product_id,
-            storage_location_id=r.storage_location_id,
             quantity=quantity_to_post,
-            movement_type=MOVEMENT_TYPE_INBOUND_INTAKE,
             inbound_intake_line_id=line.id,
         )
         line.posted_qty += quantity_to_post
 
-    if req.distribution_completed_at is None:
+    if (
+        all(
+            _accepted_qty_for_line(ln) <= 0 or ln.posted_qty >= _accepted_qty_for_line(ln)
+            for ln in req.lines
+        )
+        and req.distribution_completed_at is None
+    ):
         req.distribution_completed_at = datetime.now(UTC)
     _maybe_complete_request(req)
     await session.commit()

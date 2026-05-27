@@ -128,6 +128,7 @@ class InboundIntakeRequestSummaryOut(BaseModel):
     seller_id: str | None = None
     seller_name: str | None = None
     created_at: str
+    sorting_remaining_qty: int = 0
 
 
 class InboundIntakeRequestOut(BaseModel):
@@ -340,6 +341,7 @@ async def list_inbound_requests(
             seller_id=str(r.seller_id) if r.seller_id is not None else None,
             seller_name=r.seller.name if r.seller is not None else None,
             created_at=r.created_at.isoformat(),
+            sorting_remaining_qty=svc.sorting_remaining_qty(r),
         )
         for r in rows
     ]

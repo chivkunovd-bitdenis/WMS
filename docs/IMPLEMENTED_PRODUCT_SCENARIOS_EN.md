@@ -111,28 +111,32 @@ This document describes **what is already built** from a user and process perspe
 
 ---
 
-## 6. Inbound intake (receiving)
+## 6. Inbound intake (receiving) and sorting (putaway)
 
 **Actor:** admin and seller can participate up to the limits below.
 
 **Typical lifecycle**
 
 1. **Create request** — choose warehouse → draft request exists.
-2. **Add line** — choose product, expected quantity; optionally assign **storage location** immediately or later.
-3. **Submit request** — moves to a submitted state suitable for warehouse processing.
-4. **Assign / change cell** on a line (when allowed by status) if not set at creation.
-5. **Receive quantity** on a line (partial allowed) — records received quantity toward the line.
-6. **Post** — finalizes remaining unreceived quantity according to product rules in the app; **inventory increases** in the assigned locations; **movements** are visible in journals.
+2. **Add line** — choose product, expected quantity (no cell assignment in **Приёмка** UI).
+3. **Submit request** — moves to **submitted** for warehouse processing.
+4. **Reception (Приёмка)** — primary accept, box/piece intake, **complete verification**.
+5. **On verify** — **inventory appears at FF** in the system **sorting zone** cell (`Сортировка`); seller sees on-hand including this quantity.
+6. **Sorting (Сортировка)** — distribute accepted quantity to **storage cells** (partial allowed); transferred stock is **available for reservation** immediately; request stays in sorting queue until fully distributed.
+7. **Posted** — when all accepted quantity is in storage cells, request is **posted** (closed for sorting).
 
 **Outcomes**
 
-- Stock appears only after the flows that create positive movements (receive/post as implemented).
-- After posting, the UI may show **per-location balances** snippet for affected cells (admin view).
+- **On hand** (seller and FF totals) includes sorting-zone quantity until put away.
+- **Available** for outbound reservation counts only **storage cells**, not the sorting zone.
+- Product catalog shows columns: total on warehouse, **in sorting**, in storage cells, available.
+- Movements: inbound into sorting on verify; transfers sorting → storage on distribution.
 
 **Boundaries**
 
-- **Seller** may be read-only on posting / some warehouse actions depending on screen (fulfillment executes critical steps).
+- **Seller** may be read-only on reception/sorting execution where UI restricts; fulfillment executes critical steps.
 - Duplicate product line on the same inbound request is not allowed.
+- Quantity corrections after verify — **inventory adjustment** document (future), not reopening reception.
 
 ---
 

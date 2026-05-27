@@ -200,6 +200,12 @@ export function AuthedAppLayout({
             >
               <ListItemText primary="Поставки и отгрузки" />
             </ListItemButton>
+            <ListItemButton component={NavLink} to={`${base}/reception`} data-testid="nav-ff-reception">
+              <ListItemText primary="Приёмка" />
+            </ListItemButton>
+            <ListItemButton component={NavLink} to={`${base}/sorting`} data-testid="nav-ff-sorting">
+              <ListItemText primary="Сортировка" />
+            </ListItemButton>
             <ListItemButton component={NavLink} to="/app/catalog" data-testid="nav-catalog">
               <ListItemText primary="Каталог" />
             </ListItemButton>

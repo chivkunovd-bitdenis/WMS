@@ -82,6 +82,16 @@ async def test_inbound_distribution_lines_validate_limits_and_lock(
     assert ver.status_code == 200, ver.text
     assert ver.json()["status"] == "verified"
 
+    after_verify_bal = await async_client.get(
+        "/operations/inventory-balances/summary",
+        headers=ah,
+    )
+    assert after_verify_bal.status_code == 200, after_verify_bal.text
+    row_verify = next(r for r in after_verify_bal.json() if r["product_id"] == pid)
+    assert row_verify["quantity"] == 5
+    assert row_verify["quantity_in_sorting"] == 5
+    assert row_verify["quantity_in_storage"] == 0
+
     too_much = await async_client.put(
         f"{base}/{rid}/distribution-lines",
         headers=ah,
@@ -110,7 +120,9 @@ async def test_inbound_distribution_lines_validate_limits_and_lock(
 
     movements = await async_client.get(f"{base}/{rid}/movements", headers=ah)
     assert movements.status_code == 200, movements.text
-    assert sorted(m["quantity_delta"] for m in movements.json()) == [2, 3]
+    deltas = sorted(m["quantity_delta"] for m in movements.json())
+    assert deltas.count(5) == 1  # приход в зону сортировки при verify
+    assert 2 in deltas and 3 in deltas  # разкладка по ячейке
 
     balances = await async_client.get(
         "/operations/inventory-balances/summary",
@@ -119,6 +131,8 @@ async def test_inbound_distribution_lines_validate_limits_and_lock(
     assert balances.status_code == 200, balances.text
     balance_row = next(r for r in balances.json() if r["product_id"] == pid)
     assert balance_row["quantity"] == 5
+    assert balance_row["quantity_in_sorting"] == 0
+    assert balance_row["quantity_in_storage"] == 5
 
     ff_catalog = await async_client.get("/products/ff-catalog", headers=ah)
     assert ff_catalog.status_code == 200, ff_catalog.text

@@ -61,13 +61,11 @@ test('admin creates seller user; seller sees filtered catalog and inbound', asyn
 
   // Note: admin no longer creates inbound in UI (seller does).
 
-  await page.goto('/app/dashboard');
-  await page.getByTestId('seller-account-seller').selectOption({ label: 'Brand A' });
-  await page.getByTestId('seller-account-email').fill(sellerEmail);
-  await Promise.all([
-    waitForPostOk(page, '/api/auth/seller-accounts'),
-    page.getByTestId('seller-account-submit').click(),
-  ]);
+  const acc = await page.request.post('/api/auth/seller-accounts', {
+    headers: h,
+    data: { seller_id: sellerAId, email: sellerEmail },
+  });
+  expect(acc.ok()).toBeTruthy();
 
   await page.getByTestId('logout').click();
   await expect(page.getByTestId('login-form')).toBeVisible();

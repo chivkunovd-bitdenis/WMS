@@ -35,6 +35,8 @@ type StockSummaryRow = {
   sku_code: string
   product_name: string
   quantity: number
+  quantity_in_sorting: number
+  quantity_in_storage: number
   reserved: number
   available: number
 }
@@ -94,6 +96,7 @@ export function SellerProductsStockScreen({
       return {
         ...p,
         stock_on_hand: bal?.quantity ?? 0,
+        stock_in_sorting: bal?.quantity_in_sorting ?? 0,
         stock_reserved: bal?.reserved ?? 0,
         stock_available: bal?.available ?? 0,
       }
@@ -165,7 +168,8 @@ export function SellerProductsStockScreen({
               <TableCell>Артикул продавца</TableCell>
               <TableCell>nm</TableCell>
               <TableCell>Название</TableCell>
-              <TableCell align="right">Остаток</TableCell>
+              <TableCell align="right">На ФФ</TableCell>
+              <TableCell align="right">В сортировке</TableCell>
               <TableCell align="right">Зарезерв.</TableCell>
               <TableCell align="right">Доступно</TableCell>
             </TableRow>
@@ -183,6 +187,9 @@ export function SellerProductsStockScreen({
                 <TableCell>{p.name}</TableCell>
                 <TableCell align="right" data-testid="seller-stock-on-hand">
                   {p.stock_on_hand}
+                </TableCell>
+                <TableCell align="right" data-testid="seller-stock-in-sorting">
+                  {p.stock_in_sorting}
                 </TableCell>
                 <TableCell align="right" data-testid="seller-stock-reserved">
                   {p.stock_reserved}
@@ -205,7 +212,7 @@ export function SellerProductsStockScreen({
             ))}
             {rows.length === 0 ? (
               <TableRow>
-                <TableCell colSpan={9}>
+                <TableCell colSpan={10}>
                   <Typography variant="body2" color="text.secondary">
                     Пока нет товаров.
                   </Typography>

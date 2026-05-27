@@ -12,6 +12,7 @@ from app.models.seller import Seller
 from app.models.storage_location import StorageLocation
 from app.models.warehouse import Warehouse
 from app.models.warehouse_storage_rack import WarehouseStorageRack
+from app.services import sorting_location_service as sorting_loc_svc
 
 
 class CatalogError(Exception):
@@ -40,6 +41,9 @@ async def create_warehouse(
     except IntegrityError as exc:
         await session.rollback()
         raise CatalogError("warehouse_code_taken") from exc
+    await session.refresh(wh)
+    await sorting_loc_svc.get_or_create_sorting_location(session, tenant_id, wh.id)
+    await session.commit()
     await session.refresh(wh)
     return wh
 
@@ -70,7 +74,11 @@ async def get_storage_location_in_warehouse(
 
 
 async def list_locations(
-    session: AsyncSession, tenant_id: uuid.UUID, warehouse_id: uuid.UUID
+    session: AsyncSession,
+    tenant_id: uuid.UUID,
+    warehouse_id: uuid.UUID,
+    *,
+    exclude_sorting_zone: bool = False,
 ) -> list[StorageLocation]:
     wh = await get_warehouse(session, tenant_id, warehouse_id)
     if wh is None:
@@ -84,7 +92,10 @@ async def list_locations(
         .order_by(StorageLocation.code)
     )
     res = await session.execute(stmt)
-    return list(res.scalars().all())
+    rows = list(res.scalars().all())
+    if exclude_sorting_zone:
+        return [loc for loc in rows if not sorting_loc_svc.is_sorting_location(loc)]
+    return rows
 
 
 def _normalize_rack_name(name: str) -> str:

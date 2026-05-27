@@ -104,6 +104,7 @@ async def list_locations(
     warehouse_id: uuid.UUID,
     user: Annotated[User, Depends(get_current_user)],
     session: Annotated[AsyncSession, Depends(get_db)],
+    exclude_sorting_zone: Annotated[bool, Query()] = False,
 ) -> list[LocationOut]:
     wh = await get_warehouse(session, user.tenant_id, warehouse_id)
     if wh is None:
@@ -111,7 +112,12 @@ async def list_locations(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="warehouse_not_found",
         )
-    rows = await list_locs_svc(session, user.tenant_id, warehouse_id)
+    rows = await list_locs_svc(
+        session,
+        user.tenant_id,
+        warehouse_id,
+        exclude_sorting_zone=exclude_sorting_zone,
+    )
     return [
         LocationOut(
             id=str(x.id),
