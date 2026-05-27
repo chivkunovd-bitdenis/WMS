@@ -430,55 +430,6 @@ export function FfInboundSortingPanel({
               </Stack>
 
               <Box onClick={(e) => e.stopPropagation()}>
-                {!done ? (
-                  <Stack spacing={1.5} sx={{ mb: 1.5 }}>
-                    <Typography variant="subtitle2" sx={{ fontWeight: 700 }}>
-                      Разложить остаток
-                    </Typography>
-                    <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1}>
-                      <FormControl size="small" sx={{ minWidth: 200, flexGrow: 1 }}>
-                        <InputLabel id={`ff-sort-cell-${box.id}`}>Ячейка</InputLabel>
-                        <Select
-                          labelId={`ff-sort-cell-${box.id}`}
-                          label="Ячейка"
-                          value={cellId}
-                          disabled={busy || locations.length === 0}
-                          onChange={(e) =>
-                            setCellByBoxId((prev) => ({
-                              ...prev,
-                              [box.id]: String(e.target.value),
-                            }))
-                          }
-                          data-testid="ff-sorting-box-location"
-                        >
-                          <MenuItem value="">
-                            <em>Выберите ячейку</em>
-                          </MenuItem>
-                          {locations.map((loc) => (
-                            <MenuItem key={loc.id} value={loc.id}>
-                              {loc.code}
-                              {usedCellCodes.has(loc.code) ? ' (уже есть)' : ''}
-                            </MenuItem>
-                          ))}
-                        </Select>
-                      </FormControl>
-                      <Button
-                        variant="contained"
-                        disabled={busy || !cellId}
-                        onClick={() => void putawayWholeBoxToLocation(box, cellId)}
-                        data-testid="ff-sorting-box-putaway-whole"
-                      >
-                        Весь короб в ячейку
-                      </Button>
-                    </Stack>
-                    {cellGroups.length > 0 ? (
-                      <Typography variant="caption" color="text.secondary">
-                        Или «Весь остаток короба сюда» под ячейкой в блоке ниже.
-                      </Typography>
-                    ) : null}
-                  </Stack>
-                ) : null}
-
                 <TableContainer>
                 <Table size="small" data-testid="ff-sorting-box-lines">
                   <TableHead>
@@ -549,6 +500,55 @@ export function FfInboundSortingPanel({
                   </TableBody>
                 </Table>
                 </TableContainer>
+
+                {!done ? (
+                  <Stack spacing={1.5} sx={{ mt: 1.5, mb: 1.5 }}>
+                    <Typography variant="subtitle2" sx={{ fontWeight: 700 }}>
+                      Разложить остаток
+                    </Typography>
+                    <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1}>
+                      <FormControl size="small" sx={{ minWidth: 200, flexGrow: 1 }}>
+                        <InputLabel id={`ff-sort-cell-${box.id}`}>Ячейка</InputLabel>
+                        <Select
+                          labelId={`ff-sort-cell-${box.id}`}
+                          label="Ячейка"
+                          value={cellId}
+                          disabled={busy || locations.length === 0}
+                          onChange={(e) =>
+                            setCellByBoxId((prev) => ({
+                              ...prev,
+                              [box.id]: String(e.target.value),
+                            }))
+                          }
+                          data-testid="ff-sorting-box-location"
+                        >
+                          <MenuItem value="">
+                            <em>Выберите ячейку</em>
+                          </MenuItem>
+                          {locations.map((loc) => (
+                            <MenuItem key={loc.id} value={loc.id}>
+                              {loc.code}
+                              {usedCellCodes.has(loc.code) ? ' (уже есть)' : ''}
+                            </MenuItem>
+                          ))}
+                        </Select>
+                      </FormControl>
+                      <Button
+                        variant="contained"
+                        disabled={busy || !cellId}
+                        onClick={() => void putawayWholeBoxToLocation(box, cellId)}
+                        data-testid="ff-sorting-box-putaway-whole"
+                      >
+                        Весь короб в ячейку
+                      </Button>
+                    </Stack>
+                    {cellGroups.length > 0 ? (
+                      <Typography variant="caption" color="text.secondary">
+                        Или «Весь остаток короба сюда» в блоке «Уже в ячейках» ниже.
+                      </Typography>
+                    ) : null}
+                  </Stack>
+                ) : null}
 
                 {showPutawayBlock ? (
                   <Box sx={{ mt: 2 }} data-testid="ff-sorting-putaway-history">
