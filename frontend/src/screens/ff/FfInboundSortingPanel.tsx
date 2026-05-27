@@ -81,8 +81,6 @@ type Props = {
   sortingRemainingQty: number
   /** Заявка уже оприходована — только просмотр разкладки. */
   completed?: boolean
-  /** Статус «В сортировке» — можно подтянуть остаток в зону из коробов. */
-  canResyncSorting?: boolean
   onReload: () => Promise<void>
 }
 
@@ -181,12 +179,10 @@ export function FfInboundSortingPanel({
   boxes,
   sortingRemainingQty,
   completed = false,
-  canResyncSorting = false,
   onReload,
 }: Props) {
   const authHeaders = useMemo(() => ({ Authorization: `Bearer ${token}` }), [token])
   const [locations, setLocations] = useState<LocationRow[]>([])
-  const [sortingQtyByProduct, setSortingQtyByProduct] = useState<Record<string, number>>({})
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [selectedBoxId, setSelectedBoxId] = useState<string>('')
@@ -212,38 +208,6 @@ export function FfInboundSortingPanel({
     }
     return m
   }, [locations])
-
-  const productIds = useMemo(() => {
-    const ids = new Set<string>()
-    for (const box of boxes) {
-      for (const ln of box.lines) {
-        ids.add(ln.product_id)
-      }
-    }
-    return ids
-  }, [boxes])
-
-  const loadSortingBalances = useCallback(async () => {
-    const res = await fetch(apiUrl('/operations/inventory-balances/summary'), {
-      headers: authHeaders,
-    })
-    if (!res.ok) {
-      setSortingQtyByProduct({})
-      return
-    }
-    const rows = (await res.json()) as { product_id: string; quantity_in_sorting: number }[]
-    const m: Record<string, number> = {}
-    for (const row of rows) {
-      if (productIds.has(row.product_id)) {
-        m[row.product_id] = row.quantity_in_sorting
-      }
-    }
-    setSortingQtyByProduct(m)
-  }, [authHeaders, productIds])
-
-  useEffect(() => {
-    void loadSortingBalances()
-  }, [loadSortingBalances, boxes])
 
   const loadPutawayHistory = useCallback(async () => {
     const res = await fetch(
@@ -336,7 +300,6 @@ export function FfInboundSortingPanel({
       }
       await onReload()
       await loadPutawayHistory()
-      await loadSortingBalances()
       setPartialQtyByKey({})
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Не удалось разложить короб.')
@@ -373,43 +336,6 @@ export function FfInboundSortingPanel({
     await putawayBox(box.id, locId, [{ product_id: line.product_id, quantity: qty }])
   }
 
-  const resyncSorting = async () => {
-    setBusy(true)
-    setError(null)
-    try {
-      const res = await fetch(
-        apiUrl(`/operations/inbound-intake-requests/${requestId}/resync-sorting-stock`),
-        { method: 'POST', headers: authHeaders },
-      )
-      if (!res.ok) {
-        setError(await readApiErrorMessage(res))
-        return
-      }
-      await onReload()
-      await loadSortingBalances()
-      await loadPutawayHistory()
-    } catch (e) {
-      setError(e instanceof Error ? e.message : 'Не удалось обновить зону сортировки.')
-    } finally {
-      setBusy(false)
-    }
-  }
-
-  const hasSortingShortfall = useMemo(() => {
-    for (const box of closedBoxes) {
-      for (const ln of box.lines) {
-        if (ln.remaining_qty <= 0) {
-          continue
-        }
-        const inSorting = sortingQtyByProduct[ln.product_id] ?? 0
-        if (inSorting < ln.remaining_qty) {
-          return true
-        }
-      }
-    }
-    return false
-  }, [closedBoxes, sortingQtyByProduct])
-
   if (closedBoxes.length === 0) {
     return (
       <Alert severity="info" data-testid="ff-sorting-no-boxes">
@@ -441,36 +367,6 @@ export function FfInboundSortingPanel({
       {locations.length === 0 ? (
         <Alert severity="warning" sx={{ mb: 2 }} data-testid="ff-sorting-no-locations">
           На складе нет ячеек хранения — создайте их в «Каталог → Ячейки».
-        </Alert>
-      ) : null}
-
-      {!completed ? (
-        <Alert severity="info" sx={{ mb: 2 }} data-testid="ff-sorting-zone-hint">
-          <strong>Разложено</strong> в коробе — только то, что уже ушло из этого короба в ячейки.
-          Списание при разкладке идёт из общей зоны <strong>«Сортировка»</strong> (после «Завершить
-          пересчёт» по всей заявке, не по одному коробу).
-        </Alert>
-      ) : null}
-
-      {!completed && canResyncSorting && hasSortingShortfall ? (
-        <Alert
-          severity="warning"
-          sx={{ mb: 2 }}
-          action={
-            <Button
-              color="inherit"
-              size="small"
-              disabled={busy}
-              onClick={() => void resyncSorting()}
-              data-testid="ff-sorting-resync-stock"
-            >
-              Подтянуть из коробов
-            </Button>
-          }
-          data-testid="ff-sorting-shortfall-hint"
-        >
-          В «Сортировке» не хватает товара для разкладки (пересчёт мог быть до закрытия всех коробов).
-          Закройте все принятые короба в приёмке, затем нажмите «Подтянуть из коробов».
         </Alert>
       ) : null}
 
@@ -700,7 +596,6 @@ export function FfInboundSortingPanel({
                       <TableCell>Товар</TableCell>
                       <TableCell align="right">В коробе</TableCell>
                       <TableCell align="right">Разложено</TableCell>
-                      <TableCell align="right">В сортировке</TableCell>
                       <TableCell align="right">Остаток</TableCell>
                       {!done ? <TableCell align="right">Частично</TableCell> : null}
                     </TableRow>
@@ -708,22 +603,12 @@ export function FfInboundSortingPanel({
                   <TableBody>
                     {box.lines.map((ln) => {
                       const key = `${box.id}:${ln.product_id}`
-                      const inSorting = sortingQtyByProduct[ln.product_id] ?? 0
-                      const sortingShort =
-                        ln.remaining_qty > 0 && inSorting < ln.remaining_qty
                       return (
                         <TableRow key={ln.id} data-testid="ff-sorting-box-line">
                           <TableCell>{ln.sku_code}</TableCell>
                           <TableCell>{ln.product_name}</TableCell>
                           <TableCell align="right">{ln.quantity}</TableCell>
                           <TableCell align="right">{ln.posted_qty}</TableCell>
-                          <TableCell
-                            align="right"
-                            sx={sortingShort ? { color: 'error.main', fontWeight: 700 } : undefined}
-                            data-testid="ff-sorting-line-in-sorting"
-                          >
-                            {inSorting}
-                          </TableCell>
                           <TableCell align="right">{ln.remaining_qty}</TableCell>
                           {!done && ln.remaining_qty > 0 ? (
                             <TableCell align="right">

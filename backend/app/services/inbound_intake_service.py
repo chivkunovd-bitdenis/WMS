@@ -665,6 +665,38 @@ async def _get_box_for_putaway(
     return req, loaded
 
 
+async def _top_up_sorting_for_putaway(
+    session: AsyncSession,
+    tenant_id: uuid.UUID,
+    sorting_location_id: uuid.UUID,
+    line: InboundIntakeLine,
+    product_id: uuid.UUID,
+    qty: int,
+) -> None:
+    """Служебный буфер: перед разкладкой в ячейку гарантируем остаток по строке заявки."""
+    accepted = _accepted_qty_for_line(line)
+    pool = max(0, accepted - line.posted_qty)
+    if qty > pool:
+        raise InboundIntakeError("qty_exceeds_accepted")
+    avail = await inv_svc.available_quantity_at_location(
+        session, tenant_id, product_id, sorting_location_id
+    )
+    if avail >= qty:
+        return
+    shortfall = min(qty - avail, max(0, pool - avail))
+    if shortfall < 1:
+        raise InboundIntakeError("qty_exceeds_accepted")
+    await inv_svc.apply_inbound_receive(
+        session,
+        tenant_id=tenant_id,
+        product_id=product_id,
+        storage_location_id=sorting_location_id,
+        quantity=shortfall,
+        movement_type=MOVEMENT_TYPE_INBOUND_INTAKE,
+        inbound_intake_line_id=line.id,
+    )
+
+
 async def apply_box_putaway(
     session: AsyncSession,
     tenant_id: uuid.UUID,
@@ -675,11 +707,16 @@ async def apply_box_putaway(
     line_items: list[tuple[uuid.UUID, int]] | None = None,
 ) -> InboundIntakeRequest:
     """
-    Разложить из зоны сортировки в ячейку с привязкой к коробу.
+    Разложить принятый по заявке товар из короба в ячейку хранения.
 
-  line_items: (product_id, qty); None — весь остаток по коробу.
+    line_items: (product_id, qty); None — весь остаток по коробу.
     """
+    from app.services import inbound_intake_box_service as inbound_box_svc
+
     req, box = await _get_box_for_putaway(session, tenant_id, request_id, box_id)
+
+    if await inbound_box_svc.request_has_boxes(session, tenant_id, request_id):
+        await inbound_box_svc.sync_request_actuals_from_boxes(session, req)
 
     loc = await get_storage_location_in_warehouse(
         session, tenant_id, req.warehouse_id, storage_location_id
@@ -721,11 +758,9 @@ async def apply_box_putaway(
         if line.posted_qty + qty > accepted:
             raise InboundIntakeError("qty_exceeds_accepted")
 
-        avail = await inv_svc.available_quantity_at_location(
-            session, tenant_id, product_id, sorting_loc.id
+        await _top_up_sorting_for_putaway(
+            session, tenant_id, sorting_loc.id, line, product_id, qty
         )
-        if avail < qty:
-            raise InboundIntakeError("insufficient_sorting_stock")
 
         try:
             await inv_svc.apply_putaway_from_sorting(
@@ -739,7 +774,7 @@ async def apply_box_putaway(
             )
         except ValueError as exc:
             if str(exc) == "insufficient stock":
-                raise InboundIntakeError("insufficient_sorting_stock") from None
+                raise InboundIntakeError("qty_exceeds_accepted") from None
             raise
         line.posted_qty += qty
         bl.posted_qty += qty
@@ -792,20 +827,14 @@ async def resync_sorting_stock_for_request(
         need = max(0, accepted - line.posted_qty)
         if need <= 0:
             continue
-        avail = await inv_svc.available_quantity_at_location(
-            session, tenant_id, line.product_id, sorting_loc.id
+        await _top_up_sorting_for_putaway(
+            session,
+            tenant_id,
+            sorting_loc.id,
+            line,
+            line.product_id,
+            need,
         )
-        shortfall = need - avail
-        if shortfall > 0:
-            await inv_svc.apply_inbound_receive(
-                session,
-                tenant_id=tenant_id,
-                product_id=line.product_id,
-                storage_location_id=sorting_loc.id,
-                quantity=shortfall,
-                movement_type=MOVEMENT_TYPE_INBOUND_INTAKE,
-                inbound_intake_line_id=line.id,
-            )
     await session.commit()
     reloaded = await get_request(session, tenant_id, request_id)
     if reloaded is None:
