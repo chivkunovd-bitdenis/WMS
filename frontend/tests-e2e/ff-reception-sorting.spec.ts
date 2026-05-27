@@ -104,9 +104,10 @@ test('ff verify posts to sorting zone; sorting queue and product columns', async
     boxCard.getByTestId('ff-sorting-box-putaway-whole').click(),
   ]);
   await expect(boxCard.getByTestId('ff-sorting-putaway-history')).toBeVisible();
-  await expect(boxCard.getByTestId('ff-sorting-putaway-cell-summary')).toContainText('STORE-1');
-  await expect(boxCard.getByTestId('ff-sorting-putaway-history-row').first()).toContainText('STORE-1');
-  await expect(boxCard.getByTestId('ff-sorting-line-cell-chip').first()).toContainText('STORE-1');
+  const cellGroup = boxCard.getByTestId('ff-sorting-putaway-cell-group').filter({ hasText: 'STORE-1' });
+  await expect(cellGroup).toBeVisible();
+  await expect(cellGroup.getByTestId('ff-sorting-putaway-cell-summary')).toHaveText('STORE-1');
+  await expect(cellGroup.getByTestId('ff-sorting-putaway-whole-box-row')).toContainText('Короб №');
 
   const balDone = await page.request.get('/api/operations/inventory-balances/summary', { headers: h });
   const doneRow = ((await balDone.json()) as {

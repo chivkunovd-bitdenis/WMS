@@ -53,6 +53,26 @@ type PutawayHistoryRow = {
   created_at: string
 }
 
+type CellProductLine = {
+  product_id: string
+  sku_code: string
+  product_name: string
+  quantity: number
+}
+
+type CellWholeBoxLine = {
+  created_at: string
+  total_qty: number
+  products: CellProductLine[]
+}
+
+type CellPutawayGroup = {
+  cell_code: string
+  total_qty: number
+  whole_box_batches: CellWholeBoxLine[]
+  products: CellProductLine[]
+}
+
 type Props = {
   token: string
   requestId: string
@@ -60,28 +80,6 @@ type Props = {
   boxes: SortingBox[]
   sortingRemainingQty: number
   onReload: () => Promise<void>
-}
-
-function groupQtyByCell(rows: PutawayHistoryRow[]): [string, number][] {
-  const m = new Map<string, number>()
-  for (const h of rows) {
-    m.set(h.storage_location_code, (m.get(h.storage_location_code) ?? 0) + h.quantity)
-  }
-  return Array.from(m.entries()).sort((a, b) => a[0].localeCompare(b[0]))
-}
-
-function productPutawayByCell(
-  history: PutawayHistoryRow[],
-  productId: string,
-): [string, number][] {
-  const m = new Map<string, number>()
-  for (const h of history) {
-    if (h.product_id !== productId) {
-      continue
-    }
-    m.set(h.storage_location_code, (m.get(h.storage_location_code) ?? 0) + h.quantity)
-  }
-  return Array.from(m.entries()).sort((a, b) => a[0].localeCompare(b[0]))
 }
 
 function resolveBoxPutawayHistory(
@@ -102,12 +100,74 @@ function resolveBoxPutawayHistory(
     .sort((a, b) => a.created_at.localeCompare(b.created_at))
 }
 
-function formatPutawayTime(iso: string): string {
-  const d = new Date(iso)
-  if (Number.isNaN(d.getTime())) {
-    return iso
+function buildCellPutawayGroups(
+  boxHistory: PutawayHistoryRow[],
+  productMetaById: Map<string, { sku_code: string; product_name: string }>,
+): CellPutawayGroup[] {
+  const byCell = new Map<string, PutawayHistoryRow[]>()
+  for (const row of boxHistory) {
+    const list = byCell.get(row.storage_location_code) ?? []
+    list.push(row)
+    byCell.set(row.storage_location_code, list)
   }
-  return d.toLocaleString('ru-RU', { dateStyle: 'short', timeStyle: 'short' })
+
+  const groups: CellPutawayGroup[] = []
+
+  for (const [cell_code, rows] of byCell) {
+    const byTime = new Map<string, PutawayHistoryRow[]>()
+    for (const row of rows) {
+      const list = byTime.get(row.created_at) ?? []
+      list.push(row)
+      byTime.set(row.created_at, list)
+    }
+
+    const whole_box_batches: CellWholeBoxLine[] = []
+    const productQty = new Map<string, number>()
+
+    for (const [created_at, batch] of byTime) {
+      if (batch.length >= 2) {
+        const products: CellProductLine[] = batch.map((r) => {
+          const meta = productMetaById.get(r.product_id)
+          return {
+            product_id: r.product_id,
+            sku_code: meta?.sku_code ?? '—',
+            product_name: meta?.product_name ?? r.product_id.slice(0, 8),
+            quantity: r.quantity,
+          }
+        })
+        whole_box_batches.push({
+          created_at,
+          total_qty: batch.reduce((s, r) => s + r.quantity, 0),
+          products,
+        })
+        continue
+      }
+      for (const r of batch) {
+        productQty.set(r.product_id, (productQty.get(r.product_id) ?? 0) + r.quantity)
+      }
+    }
+
+    const products: CellProductLine[] = Array.from(productQty.entries())
+      .map(([product_id, quantity]) => {
+        const meta = productMetaById.get(product_id)
+        return {
+          product_id,
+          sku_code: meta?.sku_code ?? '—',
+          product_name: meta?.product_name ?? product_id.slice(0, 8),
+          quantity,
+        }
+      })
+      .sort((a, b) => a.product_name.localeCompare(b.product_name))
+
+    const total_qty =
+      whole_box_batches.reduce((s, b) => s + b.total_qty, 0) +
+      products.reduce((s, p) => s + p.quantity, 0)
+
+    groups.push({ cell_code, total_qty, whole_box_batches, products })
+  }
+
+  groups.sort((a, b) => a.cell_code.localeCompare(b.cell_code))
+  return groups
 }
 
 export function FfInboundSortingPanel({
@@ -138,6 +198,14 @@ export function FfInboundSortingPanel({
     return m
   }, [boxes])
 
+  const locationIdByCode = useMemo(() => {
+    const m = new Map<string, string>()
+    for (const loc of locations) {
+      m.set(loc.code, loc.id)
+    }
+    return m
+  }, [locations])
+
   const loadPutawayHistory = useCallback(async () => {
     const res = await fetch(
       apiUrl(`/operations/inbound-intake-requests/${requestId}/distribution-lines`),
@@ -165,9 +233,6 @@ export function FfInboundSortingPanel({
       const list = m.get(row.box_id) ?? []
       list.push(row)
       m.set(row.box_id, list)
-    }
-    for (const list of m.values()) {
-      list.sort((a, b) => a.created_at.localeCompare(b.created_at))
     }
     return m
   }, [putawayHistory])
@@ -240,19 +305,18 @@ export function FfInboundSortingPanel({
     }
   }
 
-  const putawayWholeBox = async (box: SortingBox) => {
-    const locId = cellByBoxId[box.id]?.trim()
-    if (!locId) {
-      setError('Выберите ячейку для короба.')
+  const putawayWholeBoxToLocation = async (box: SortingBox, storageLocationId: string) => {
+    if (!storageLocationId.trim()) {
+      setError('Выберите ячейку.')
       return
     }
-    await putawayBox(box.id, locId, null)
+    await putawayBox(box.id, storageLocationId, null)
   }
 
   const putawayPartialLine = async (box: SortingBox, line: BoxLine) => {
     const locId = cellByBoxId[box.id]?.trim()
     if (!locId) {
-      setError('Выберите ячейку.')
+      setError('Выберите ячейку для разкладки.')
       return
     }
     const key = `${box.id}:${line.product_id}`
@@ -313,9 +377,12 @@ export function FfInboundSortingPanel({
             putawayHistory,
             putawayHistoryByBoxId,
           )
-          const historyByCell = groupQtyByCell(boxHistory)
+          const cellGroups = buildCellPutawayGroups(boxHistory, productMetaById)
           const boxPostedQty = box.lines.reduce((s, ln) => s + ln.posted_qty, 0)
-          const showPutawayBlock = boxHistory.length > 0 || boxPostedQty > 0
+          const showPutawayBlock = cellGroups.length > 0 || boxPostedQty > 0
+          const usedCellCodes = new Set(cellGroups.map((g) => g.cell_code))
+          const unusedLocations = locations.filter((loc) => !usedCellCodes.has(loc.code))
+
           return (
             <Paper
               key={box.id}
@@ -362,14 +429,9 @@ export function FfInboundSortingPanel({
 
               {showPutawayBlock ? (
                 <Box
-                  sx={{
-                    mb: 1.5,
-                    p: 1.5,
-                    borderRadius: 1,
-                    bgcolor: (theme) => alpha(theme.palette.info.main, 0.06),
-                    border: (theme) => `1px solid ${alpha(theme.palette.info.main, 0.2)}`,
-                  }}
+                  sx={{ mb: 1.5 }}
                   data-testid="ff-sorting-putaway-history"
+                  onClick={(e) => e.stopPropagation()}
                 >
                   <Typography variant="subtitle2" sx={{ fontWeight: 800, mb: 1 }}>
                     Уже в ячейках
@@ -379,102 +441,151 @@ export function FfInboundSortingPanel({
                       Не удалось загрузить историю разкладки. Обновите страницу.
                     </Alert>
                   ) : null}
-                  {historyByCell.length > 0 ? (
-                    <Stack direction="row" spacing={0.75} sx={{ mb: 1.25, flexWrap: 'wrap' }}>
-                      {historyByCell.map(([code, qty]) => (
-                        <Chip
-                          key={code}
-                          size="small"
-                          color="info"
-                          variant="outlined"
-                          label={`${code}: ${qty} шт`}
-                          data-testid="ff-sorting-putaway-cell-summary"
-                        />
-                      ))}
-                    </Stack>
-                  ) : boxPostedQty > 0 ? (
+                  {cellGroups.length === 0 && boxPostedQty > 0 ? (
                     <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
-                      Разложено {boxPostedQty} шт, но список ячеек пуст — возможно, разкладка была до
-                      обновления системы. Следующие операции появятся здесь.
+                      Разложено {boxPostedQty} шт, но детализация по ячейкам недоступна (старая
+                      разкладка).
                     </Typography>
                   ) : null}
-                  {boxHistory.length > 0 ? (
-                    <TableContainer>
-                      <Table size="small">
-                        <TableHead>
-                          <TableRow>
-                            <TableCell>Ячейка</TableCell>
-                            <TableCell>Артикул</TableCell>
-                            <TableCell>Товар</TableCell>
-                            <TableCell align="right">Кол-во</TableCell>
-                            <TableCell>Когда</TableCell>
-                          </TableRow>
-                        </TableHead>
-                        <TableBody>
-                          {boxHistory.map((h) => {
-                            const meta = productMetaById.get(h.product_id)
-                            return (
-                              <TableRow key={h.id} data-testid="ff-sorting-putaway-history-row">
-                                <TableCell>{h.storage_location_code}</TableCell>
-                                <TableCell>{meta?.sku_code ?? '—'}</TableCell>
-                                <TableCell>
-                                  {meta?.product_name ?? h.product_id.slice(0, 8)}
-                                </TableCell>
-                                <TableCell align="right">{h.quantity}</TableCell>
-                                <TableCell sx={{ whiteSpace: 'nowrap' }}>
-                                  {formatPutawayTime(h.created_at)}
-                                </TableCell>
-                              </TableRow>
-                            )
-                          })}
-                        </TableBody>
-                      </Table>
-                    </TableContainer>
-                  ) : null}
+                  <Stack spacing={1.25}>
+                    {cellGroups.map((group) => {
+                      const locId = locationIdByCode.get(group.cell_code) ?? ''
+                      return (
+                        <Paper
+                          key={group.cell_code}
+                          variant="outlined"
+                          sx={{
+                            p: 1.25,
+                            bgcolor: (theme) => alpha(theme.palette.info.main, 0.04),
+                          }}
+                          data-testid="ff-sorting-putaway-cell-group"
+                          data-cell-code={group.cell_code}
+                        >
+                          <Stack
+                            direction="row"
+                            spacing={1}
+                            sx={{ mb: 1, alignItems: 'center', flexWrap: 'wrap' }}
+                          >
+                            <Chip
+                              label={group.cell_code}
+                              color="info"
+                              size="small"
+                              sx={{ fontWeight: 700 }}
+                              data-testid="ff-sorting-putaway-cell-summary"
+                            />
+                            <Typography variant="caption" color="text.secondary">
+                              всего {group.total_qty} шт
+                            </Typography>
+                          </Stack>
+
+                          <Stack spacing={0.75} sx={{ mb: !done && locId ? 1 : 0 }}>
+                            {group.whole_box_batches.map((batch) => (
+                              <Box
+                                key={batch.created_at}
+                                data-testid="ff-sorting-putaway-whole-box-row"
+                              >
+                                <Typography variant="body2" sx={{ fontWeight: 700 }}>
+                                  Короб № {box.box_number}{' '}
+                                  <Typography
+                                    component="span"
+                                    variant="body2"
+                                    color="text.secondary"
+                                    sx={{ fontWeight: 400 }}
+                                  >
+                                    {box.internal_barcode} — {batch.total_qty} шт
+                                  </Typography>
+                                </Typography>
+                                <Stack component="ul" sx={{ m: 0, pl: 2.5, mt: 0.25 }}>
+                                  {batch.products.map((p) => (
+                                    <Typography
+                                      key={`${batch.created_at}-${p.product_id}`}
+                                      component="li"
+                                      variant="body2"
+                                      color="text.secondary"
+                                    >
+                                      {p.sku_code} · {p.product_name} — {p.quantity} шт
+                                    </Typography>
+                                  ))}
+                                </Stack>
+                              </Box>
+                            ))}
+                            {group.products.map((p) => (
+                              <Typography
+                                key={p.product_id}
+                                variant="body2"
+                                data-testid="ff-sorting-putaway-product-row"
+                              >
+                                {p.sku_code} · {p.product_name} —{' '}
+                                <strong>{p.quantity} шт</strong>
+                              </Typography>
+                            ))}
+                          </Stack>
+
+                          {!done && locId ? (
+                            <Button
+                              size="small"
+                              variant="outlined"
+                              disabled={busy}
+                              onClick={() => void putawayWholeBoxToLocation(box, locId)}
+                              data-testid="ff-sorting-cell-putaway-whole"
+                            >
+                              Весь остаток короба сюда
+                            </Button>
+                          ) : null}
+                        </Paper>
+                      )
+                    })}
+                  </Stack>
                 </Box>
               ) : null}
 
               {!done ? (
-                <Stack
-                  direction={{ xs: 'column', sm: 'row' }}
-                  spacing={1}
-                  sx={{ mb: 1.5 }}
-                  onClick={(e) => e.stopPropagation()}
-                >
-                  <FormControl size="small" sx={{ minWidth: 200, flexGrow: 1 }}>
-                    <InputLabel id={`ff-sort-cell-${box.id}`}>Ячейка</InputLabel>
-                    <Select
-                      labelId={`ff-sort-cell-${box.id}`}
-                      label="Ячейка"
-                      value={cellId}
-                      disabled={busy || locations.length === 0}
-                      onChange={(e) =>
-                        setCellByBoxId((prev) => ({ ...prev, [box.id]: String(e.target.value) }))
-                      }
-                      data-testid="ff-sorting-box-location"
-                    >
-                      <MenuItem value="">
-                        <em>Выберите ячейку</em>
-                      </MenuItem>
-                      {locations.map((loc) => (
-                        <MenuItem key={loc.id} value={loc.id}>
-                          {loc.code}
+                <Stack spacing={1.5} onClick={(e) => e.stopPropagation()}>
+                  <Typography variant="subtitle2" sx={{ fontWeight: 700 }}>
+                    Разложить остаток
+                  </Typography>
+                  <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1}>
+                    <FormControl size="small" sx={{ minWidth: 200, flexGrow: 1 }}>
+                      <InputLabel id={`ff-sort-cell-${box.id}`}>Ячейка</InputLabel>
+                      <Select
+                        labelId={`ff-sort-cell-${box.id}`}
+                        label="Ячейка"
+                        value={cellId}
+                        disabled={busy || locations.length === 0}
+                        onChange={(e) =>
+                          setCellByBoxId((prev) => ({ ...prev, [box.id]: String(e.target.value) }))
+                        }
+                        data-testid="ff-sorting-box-location"
+                      >
+                        <MenuItem value="">
+                          <em>Выберите ячейку</em>
                         </MenuItem>
-                      ))}
-                    </Select>
-                  </FormControl>
-                  <Button
-                    variant="contained"
-                    disabled={busy || !cellId}
-                    onClick={() => void putawayWholeBox(box)}
-                    data-testid="ff-sorting-box-putaway-whole"
-                  >
-                    Весь короб в ячейку
-                  </Button>
+                        {locations.map((loc) => (
+                          <MenuItem key={loc.id} value={loc.id}>
+                            {loc.code}
+                            {usedCellCodes.has(loc.code) ? ' (уже есть)' : ''}
+                          </MenuItem>
+                        ))}
+                      </Select>
+                    </FormControl>
+                    <Button
+                      variant="contained"
+                      disabled={busy || !cellId}
+                      onClick={() => void putawayWholeBoxToLocation(box, cellId)}
+                      data-testid="ff-sorting-box-putaway-whole"
+                    >
+                      Весь короб в ячейку
+                    </Button>
+                  </Stack>
+                  {unusedLocations.length > 0 && cellGroups.length > 0 ? (
+                    <Typography variant="caption" color="text.secondary">
+                      Или нажмите «Весь остаток короба сюда» под нужной ячейкой выше.
+                    </Typography>
+                  ) : null}
                 </Stack>
               ) : null}
 
-              <TableContainer>
+              <TableContainer sx={{ mt: 1.5 }}>
                 <Table size="small" data-testid="ff-sorting-box-lines">
                   <TableHead>
                     <TableRow>
@@ -482,7 +593,6 @@ export function FfInboundSortingPanel({
                       <TableCell>Товар</TableCell>
                       <TableCell align="right">В коробе</TableCell>
                       <TableCell align="right">Разложено</TableCell>
-                      <TableCell>По ячейкам</TableCell>
                       <TableCell align="right">Остаток</TableCell>
                       {!done ? <TableCell align="right">Частично</TableCell> : null}
                     </TableRow>
@@ -490,39 +600,15 @@ export function FfInboundSortingPanel({
                   <TableBody>
                     {box.lines.map((ln) => {
                       const key = `${box.id}:${ln.product_id}`
-                      const lineCells = productPutawayByCell(boxHistory, ln.product_id)
                       return (
                         <TableRow key={ln.id} data-testid="ff-sorting-box-line">
                           <TableCell>{ln.sku_code}</TableCell>
                           <TableCell>{ln.product_name}</TableCell>
                           <TableCell align="right">{ln.quantity}</TableCell>
                           <TableCell align="right">{ln.posted_qty}</TableCell>
-                          <TableCell>
-                            {lineCells.length > 0 ? (
-                              <Stack direction="row" spacing={0.5} sx={{ flexWrap: 'wrap' }}>
-                                {lineCells.map(([code, qty]) => (
-                                  <Chip
-                                    key={code}
-                                    size="small"
-                                    variant="outlined"
-                                    label={`${code}: ${qty}`}
-                                    data-testid="ff-sorting-line-cell-chip"
-                                  />
-                                ))}
-                              </Stack>
-                            ) : ln.posted_qty > 0 ? (
-                              <Typography variant="caption" color="text.secondary">
-                                —
-                              </Typography>
-                            ) : (
-                              <Typography variant="caption" color="text.secondary">
-                                ещё не разложено
-                              </Typography>
-                            )}
-                          </TableCell>
                           <TableCell align="right">{ln.remaining_qty}</TableCell>
                           {!done && ln.remaining_qty > 0 ? (
-                            <TableCell align="right" onClick={(e) => e.stopPropagation()}>
+                            <TableCell align="right">
                               <Stack
                                 direction="row"
                                 spacing={0.5}
