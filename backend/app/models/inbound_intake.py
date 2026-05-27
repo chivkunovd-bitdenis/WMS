@@ -173,6 +173,7 @@ class InboundIntakeBoxLine(Base):
         index=True,
     )
     quantity: Mapped[int] = mapped_column(Integer, nullable=False)
+    posted_qty: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), nullable=False
     )
@@ -252,6 +253,12 @@ class InboundIntakeDistributionLine(Base):
         index=True,
     )
     quantity: Mapped[int] = mapped_column(Integer, nullable=False)
+    box_id: Mapped[uuid.UUID | None] = mapped_column(
+        Uuid(as_uuid=True),
+        ForeignKey("inbound_intake_boxes.id", ondelete="CASCADE"),
+        nullable=True,
+        index=True,
+    )
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), nullable=False
     )
@@ -259,5 +266,6 @@ class InboundIntakeDistributionLine(Base):
     request: Mapped[InboundIntakeRequest] = relationship(
         "InboundIntakeRequest", back_populates="distribution_lines"
     )
+    box: Mapped[InboundIntakeBox | None] = relationship("InboundIntakeBox")
     product: Mapped[Product] = relationship("Product")
     storage_location: Mapped[StorageLocation] = relationship("StorageLocation")

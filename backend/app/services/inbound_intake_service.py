@@ -612,6 +612,143 @@ def sorting_remaining_qty(req: InboundIntakeRequest) -> int:
     return total
 
 
+def box_line_remaining_qty(box_line: InboundIntakeBoxLine) -> int:
+    return max(0, int(box_line.quantity) - int(box_line.posted_qty))
+
+
+def box_remaining_qty(box: InboundIntakeBox) -> int:
+    return sum(box_line_remaining_qty(ln) for ln in box.lines)
+
+
+def _request_uses_box_putaway(req: InboundIntakeRequest) -> bool:
+    return len(req.boxes) > 0
+
+
+def _maybe_set_distribution_completed(req: InboundIntakeRequest) -> None:
+    if req.status != STATUS_VERIFIED:
+        return
+    if (
+        all(
+            _accepted_qty_for_line(ln) <= 0 or ln.posted_qty >= _accepted_qty_for_line(ln)
+            for ln in req.lines
+        )
+        and req.distribution_completed_at is None
+    ):
+        req.distribution_completed_at = datetime.now(UTC)
+
+
+async def _get_box_for_putaway(
+    session: AsyncSession,
+    tenant_id: uuid.UUID,
+    request_id: uuid.UUID,
+    box_id: uuid.UUID,
+) -> tuple[InboundIntakeRequest, InboundIntakeBox]:
+    req = await get_request(session, tenant_id, request_id)
+    if req is None:
+        raise InboundIntakeError("request_not_found")
+    if req.status != STATUS_VERIFIED:
+        raise InboundIntakeError("not_distributable")
+    box = await session.get(InboundIntakeBox, box_id)
+    if box is None or box.request_id != request_id or box.tenant_id != tenant_id:
+        raise InboundIntakeError("box_not_found")
+    if box.intake_closed_at is None:
+        raise InboundIntakeError("box_not_closed")
+    stmt = (
+        select(InboundIntakeBox)
+        .where(InboundIntakeBox.id == box_id)
+        .options(selectinload(InboundIntakeBox.lines).selectinload(InboundIntakeBoxLine.product))
+    )
+    res = await session.execute(stmt)
+    loaded = res.scalar_one()
+    return req, loaded
+
+
+async def apply_box_putaway(
+    session: AsyncSession,
+    tenant_id: uuid.UUID,
+    request_id: uuid.UUID,
+    box_id: uuid.UUID,
+    *,
+    storage_location_id: uuid.UUID,
+    line_items: list[tuple[uuid.UUID, int]] | None = None,
+) -> InboundIntakeRequest:
+    """
+    Разложить из зоны сортировки в ячейку с привязкой к коробу.
+
+  line_items: (product_id, qty); None — весь остаток по коробу.
+    """
+    req, box = await _get_box_for_putaway(session, tenant_id, request_id, box_id)
+
+    loc = await get_storage_location_in_warehouse(
+        session, tenant_id, req.warehouse_id, storage_location_id
+    )
+    if loc is None:
+        raise InboundIntakeError("location_not_found")
+    if sorting_loc_svc.is_sorting_location(loc):
+        raise InboundIntakeError("sorting_location_reserved")
+
+    if line_items is None:
+        line_items = [
+            (bl.product_id, box_line_remaining_qty(bl))
+            for bl in box.lines
+            if box_line_remaining_qty(bl) > 0
+        ]
+    if not line_items:
+        raise InboundIntakeError("nothing_to_putaway")
+
+    lines_by_product = {ln.product_id: ln for ln in req.lines}
+    box_lines_by_product = {bl.product_id: bl for bl in box.lines}
+    sorting_loc = await sorting_loc_svc.get_or_create_sorting_location(
+        session, tenant_id, req.warehouse_id
+    )
+
+    for product_id, qty in line_items:
+        if qty < 1:
+            raise InboundIntakeError("invalid_qty")
+        bl = box_lines_by_product.get(product_id)
+        if bl is None:
+            raise InboundIntakeError("product_not_in_box")
+        if qty > box_line_remaining_qty(bl):
+            raise InboundIntakeError("qty_exceeds_box_remaining")
+        line = lines_by_product.get(product_id)
+        if line is None:
+            raise InboundIntakeError("product_not_on_request")
+        accepted = _accepted_qty_for_line(line)
+        if accepted <= 0:
+            raise InboundIntakeError("product_not_accepted")
+        if line.posted_qty + qty > accepted:
+            raise InboundIntakeError("qty_exceeds_accepted")
+
+        await inv_svc.apply_putaway_from_sorting(
+            session,
+            tenant_id,
+            from_storage_location_id=sorting_loc.id,
+            to_storage_location_id=storage_location_id,
+            product_id=product_id,
+            quantity=qty,
+            inbound_intake_line_id=line.id,
+        )
+        line.posted_qty += qty
+        bl.posted_qty += qty
+        session.add(
+            InboundIntakeDistributionLine(
+                request_id=request_id,
+                product_id=product_id,
+                storage_location_id=storage_location_id,
+                quantity=qty,
+                box_id=box_id,
+            )
+        )
+
+    _maybe_set_distribution_completed(req)
+    _maybe_complete_request(req)
+    await session.commit()
+    reloaded = await get_request(session, tenant_id, request_id)
+    if reloaded is None:
+        raise InboundIntakeError("request_not_found")
+    return reloaded
+
+
 async def list_distribution_lines(
     session: AsyncSession,
     tenant_id: uuid.UUID,
@@ -634,35 +771,52 @@ async def replace_distribution_lines(
     tenant_id: uuid.UUID,
     request_id: uuid.UUID,
     *,
-    lines: list[tuple[uuid.UUID, uuid.UUID, int]],
+    lines: list[tuple[uuid.UUID | None, uuid.UUID, uuid.UUID, int]],
 ) -> list[InboundIntakeDistributionLine]:
     """
     Полностью заменяет строки распределения (черновик).
 
-    lines: список (product_id, storage_location_id, quantity).
+    lines: список (box_id | None, product_id, storage_location_id, quantity).
     """
     req = await get_request(session, tenant_id, request_id)
     if req is None:
         raise InboundIntakeError("request_not_found")
     if req.distribution_completed_at is not None:
         raise InboundIntakeError("distribution_completed")
-    # Распределение по ячейкам доступно только после завершения пересчёта (verified).
     if req.status != STATUS_VERIFIED:
         raise InboundIntakeError("not_distributable")
+
+    uses_boxes = _request_uses_box_putaway(req)
+    box_lines_by_key: dict[tuple[uuid.UUID, uuid.UUID], InboundIntakeBoxLine] = {}
+    if uses_boxes:
+        for box in req.boxes:
+            for bl in box.lines:
+                box_lines_by_key[(box.id, bl.product_id)] = bl
 
     accepted_by_product: dict[uuid.UUID, int] = {}
     for ln in req.lines:
         accepted_by_product[ln.product_id] = _accepted_qty_for_line(ln)
 
     sum_by_product: dict[uuid.UUID, int] = {}
-    for product_id, storage_location_id, qty in lines:
+    sum_by_box_product: dict[tuple[uuid.UUID, uuid.UUID], int] = {}
+    for box_id, product_id, storage_location_id, qty in lines:
         if qty < 1:
             raise InboundIntakeError("invalid_qty")
+        if uses_boxes and box_id is None:
+            raise InboundIntakeError("box_required")
         accepted = accepted_by_product.get(product_id)
         if accepted is None:
             raise InboundIntakeError("product_not_on_request")
         if accepted <= 0:
             raise InboundIntakeError("product_not_accepted")
+        if box_id is not None:
+            bl = box_lines_by_key.get((box_id, product_id))
+            if bl is None:
+                raise InboundIntakeError("product_not_in_box")
+            next_box_sum = sum_by_box_product.get((box_id, product_id), 0) + qty
+            if next_box_sum > box_line_remaining_qty(bl):
+                raise InboundIntakeError("qty_exceeds_box_remaining")
+            sum_by_box_product[(box_id, product_id)] = next_box_sum
         loc = await get_storage_location_in_warehouse(
             session, tenant_id, req.warehouse_id, storage_location_id
         )
@@ -680,13 +834,14 @@ async def replace_distribution_lines(
             InboundIntakeDistributionLine.request_id == request_id
         )
     )
-    for product_id, storage_location_id, qty in lines:
+    for box_id, product_id, storage_location_id, qty in lines:
         session.add(
             InboundIntakeDistributionLine(
                 request_id=request_id,
                 product_id=product_id,
                 storage_location_id=storage_location_id,
                 quantity=qty,
+                box_id=box_id,
             )
         )
     await session.commit()
@@ -722,6 +877,13 @@ async def complete_distribution(
     if not rows:
         raise InboundIntakeError("distribution_incomplete")
 
+    uses_boxes = _request_uses_box_putaway(req)
+    box_lines_by_key: dict[tuple[uuid.UUID, uuid.UUID], InboundIntakeBoxLine] = {}
+    if uses_boxes:
+        for box in req.boxes:
+            for bl in box.lines:
+                box_lines_by_key[(box.id, bl.product_id)] = bl
+
     sorting_loc = await sorting_loc_svc.get_or_create_sorting_location(
         session, tenant_id, req.warehouse_id
     )
@@ -730,11 +892,17 @@ async def complete_distribution(
     for r in rows:
         if r.quantity < 1:
             raise InboundIntakeError("invalid_qty")
+        if uses_boxes and r.box_id is None:
+            raise InboundIntakeError("box_required")
         accepted = accepted_by_product.get(r.product_id)
         if accepted is None:
             raise InboundIntakeError("product_not_on_request")
         if accepted <= 0:
             raise InboundIntakeError("product_not_accepted")
+        if r.box_id is not None:
+            bl = box_lines_by_key.get((r.box_id, r.product_id))
+            if bl is None:
+                raise InboundIntakeError("product_not_in_box")
         target_loc = await session.get(StorageLocation, r.storage_location_id)
         if target_loc is None or target_loc.tenant_id != tenant_id:
             raise InboundIntakeError("location_not_found")
@@ -757,6 +925,11 @@ async def complete_distribution(
         )
         if quantity_to_post < 1:
             continue
+        if r.box_id is not None:
+            bl = box_lines_by_key[(r.box_id, r.product_id)]
+            quantity_to_post = min(quantity_to_post, box_line_remaining_qty(bl))
+            if quantity_to_post < 1:
+                continue
         await inv_svc.apply_putaway_from_sorting(
             session,
             tenant_id,
@@ -767,15 +940,11 @@ async def complete_distribution(
             inbound_intake_line_id=line.id,
         )
         line.posted_qty += quantity_to_post
+        if r.box_id is not None:
+            bl = box_lines_by_key[(r.box_id, r.product_id)]
+            bl.posted_qty += quantity_to_post
 
-    if (
-        all(
-            _accepted_qty_for_line(ln) <= 0 or ln.posted_qty >= _accepted_qty_for_line(ln)
-            for ln in req.lines
-        )
-        and req.distribution_completed_at is None
-    ):
-        req.distribution_completed_at = datetime.now(UTC)
+    _maybe_set_distribution_completed(req)
     _maybe_complete_request(req)
     await session.commit()
     await session.refresh(req)

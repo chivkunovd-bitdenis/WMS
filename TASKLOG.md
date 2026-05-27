@@ -1,5 +1,12 @@
 # TASKLOG
 
+## TASK-22 — 2026-05-27 — Сортировка: разкладка по коробам (целиком и частично)
+
+- What changed: `posted_qty` на строках короба; `box_id` в строках распределения; `POST .../boxes/{id}/putaway` (весь короб или частично); экран **Сортировка** — карточки коробов с составом, «Весь короб в ячейку», частичная разкладка по SKU; приёмка без изменений логики количества.
+- What did NOT change: инвентаризация; резерв с зоны сортировки; полный экран «Поставки» (`workspace=full`) — старый черновик распределения с авто-`box_id` при одном коробе.
+- Verification: `pytest` test_inbound_distribution + test_inbound_box_intake; `npm run build`; e2e `ff-reception-sorting`, `ff-inbound-distribution`.
+- Commit: 2067093
+
 ## TASK-21 — 2026-05-27 — Приёмка / Сортировка: зона сортировки и остатки
 
 - What changed: системная ячейка `__SORTING__`; остаток на `verify`; transfer в ячейки через `distribution-complete`; разделы FF **Приёмка** и **Сортировка**; колонки «В сортировке» / «В ячейках» в товарах; API `quantity_in_sorting`; e2e `ff-reception-sorting.spec.ts` (TC-S06-007).

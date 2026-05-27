@@ -82,6 +82,10 @@ async def test_inbound_distribution_lines_validate_limits_and_lock(
     assert ver.status_code == 200, ver.text
     assert ver.json()["status"] == "verified"
 
+    got = await async_client.get(f"{base}/{rid}", headers=ah)
+    assert got.status_code == 200, got.text
+    box_id = got.json()["boxes"][0]["id"]
+
     after_verify_bal = await async_client.get(
         "/operations/inventory-balances/summary",
         headers=ah,
@@ -95,26 +99,41 @@ async def test_inbound_distribution_lines_validate_limits_and_lock(
     too_much = await async_client.put(
         f"{base}/{rid}/distribution-lines",
         headers=ah,
-        json=[{"product_id": pid, "storage_location_id": lid, "quantity": 6}],
-    )
-    assert too_much.status_code == 422, too_much.text
-    assert too_much.json()["detail"] == "qty_exceeds_accepted"
-
-    ok = await async_client.put(
-        f"{base}/{rid}/distribution-lines",
-        headers=ah,
         json=[
-            {"product_id": pid, "storage_location_id": lid, "quantity": 2},
-            {"product_id": pid, "storage_location_id": lid, "quantity": 3},
+            {
+                "box_id": box_id,
+                "product_id": pid,
+                "storage_location_id": lid,
+                "quantity": 6,
+            }
         ],
     )
-    assert ok.status_code == 200, ok.text
-    rows = ok.json()
-    assert len(rows) == 2
-    assert sum(int(r["quantity"]) for r in rows) == 5
+    assert too_much.status_code == 422, too_much.text
+    assert too_much.json()["detail"] in (
+        "qty_exceeds_accepted",
+        "qty_exceeds_box_remaining",
+    )
 
-    done = await async_client.post(f"{base}/{rid}/distribution-complete", headers=ah)
-    assert done.status_code == 200, done.text
+    partial = await async_client.post(
+        f"{base}/{rid}/boxes/{box_id}/putaway",
+        headers={**ah, "Content-Type": "application/json"},
+        json={
+            "storage_location_id": lid,
+            "lines": [{"product_id": pid, "quantity": 2}],
+        },
+    )
+    assert partial.status_code == 200, partial.text
+    assert partial.json()["lines"][0]["posted_qty"] == 2
+    box_after = partial.json()["boxes"][0]
+    assert box_after["remaining_qty"] == 3
+
+    rest = await async_client.post(
+        f"{base}/{rid}/boxes/{box_id}/putaway",
+        headers={**ah, "Content-Type": "application/json"},
+        json={"storage_location_id": lid},
+    )
+    assert rest.status_code == 200, rest.text
+    done = rest
     assert done.json()["status"] == "posted"
     assert done.json()["lines"][0]["posted_qty"] == 5
 
@@ -138,13 +157,16 @@ async def test_inbound_distribution_lines_validate_limits_and_lock(
     assert ff_catalog.status_code == 200, ff_catalog.text
     assert pid in {r["id"] for r in ff_catalog.json()}
 
-    locked = await async_client.put(
-        f"{base}/{rid}/distribution-lines",
-        headers=ah,
-        json=[{"product_id": pid, "storage_location_id": lid, "quantity": 1}],
+    locked = await async_client.post(
+        f"{base}/{rid}/boxes/{box_id}/putaway",
+        headers={**ah, "Content-Type": "application/json"},
+        json={
+            "storage_location_id": lid,
+            "lines": [{"product_id": pid, "quantity": 1}],
+        },
     )
     assert locked.status_code == 409, locked.text
-    assert locked.json()["detail"] == "distribution_completed"
+    assert locked.json()["detail"] == "not_distributable"
 
 
 @pytest.mark.asyncio

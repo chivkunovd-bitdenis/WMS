@@ -64,16 +64,18 @@ async def complete_inbound_to_storage(
 ) -> Response:
     """Разложить принятое из зоны сортировки в ячейку хранения (после verify)."""
     base = f"/operations/inbound-intake-requests/{request_id}"
-    put = await async_client.put(
-        f"{base}/distribution-lines",
-        headers=headers,
-        json=[
-            {
-                "product_id": product_id,
-                "storage_location_id": storage_location_id,
-                "quantity": quantity,
-            }
-        ],
+    got = await async_client.get(base, headers=headers)
+    assert got.status_code == 200, got.text
+    boxes = got.json()["boxes"]
+    assert boxes, "expected inbound boxes"
+    box_id = boxes[0]["id"]
+    putaway = await async_client.post(
+        f"{base}/boxes/{box_id}/putaway",
+        headers={**headers, "Content-Type": "application/json"},
+        json={
+            "storage_location_id": storage_location_id,
+            "lines": [{"product_id": product_id, "quantity": quantity}],
+        },
     )
-    assert put.status_code == 200, put.text
-    return await async_client.post(f"{base}/distribution-complete", headers=headers)
+    assert putaway.status_code == 200, putaway.text
+    return putaway

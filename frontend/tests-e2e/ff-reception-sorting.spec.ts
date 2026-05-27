@@ -94,18 +94,14 @@ test('ff verify posts to sorting zone; sorting queue and product columns', async
   await expect(page.getByTestId('ff-inbound-queue-sorting-qty').first()).toHaveText('4');
 
   await page.getByTestId('ff-inbound-queue-row').first().click();
-  await expect(page.getByTestId('ff-inbound-admin-distribution')).toBeVisible();
+  await expect(page.getByTestId('ff-sorting-panel')).toBeVisible();
 
-  await page.getByTestId('ff-inbound-distribution-add-row').click();
-  const distRow = page.getByTestId('ff-inbound-distribution-row').first();
-  await distRow.getByTestId('ff-inbound-distribution-product').click();
-  await page.getByRole('option', { name: new RegExp(sku) }).click();
-  await distRow.getByTestId('ff-inbound-distribution-qty').fill('4');
-  await distRow.getByTestId('ff-inbound-distribution-location').click();
+  const boxCard = page.getByTestId('ff-sorting-box-card').first();
+  await boxCard.getByTestId('ff-sorting-box-location').click();
   await page.getByRole('option', { name: /STORE-1/ }).click();
   await Promise.all([
-    waitForPostOk(page, base, (u) => u.includes('/distribution-complete')),
-    page.getByTestId('ff-inbound-distribution-complete').click(),
+    waitForPostOk(page, base, (u) => u.includes('/putaway')),
+    boxCard.getByTestId('ff-sorting-box-putaway-whole').click(),
   ]);
 
   const balDone = await page.request.get('/api/operations/inventory-balances/summary', { headers: h });

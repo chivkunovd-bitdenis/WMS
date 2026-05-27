@@ -78,6 +78,8 @@ class InboundIntakeBoxLineOut(BaseModel):
     sku_code: str
     product_name: str
     quantity: int
+    posted_qty: int = 0
+    remaining_qty: int = 0
 
 
 class InboundIntakeBoxOut(BaseModel):
@@ -88,6 +90,7 @@ class InboundIntakeBoxOut(BaseModel):
     intake_opened_at: str | None = None
     intake_closed_at: str | None = None
     is_open: bool = False
+    remaining_qty: int = 0
     lines: list[InboundIntakeBoxLineOut] = Field(default_factory=list)
 
 
@@ -101,6 +104,16 @@ class InboundBoxScanBody(BaseModel):
 
 class InboundBoxLineQuantityBody(BaseModel):
     quantity: int = Field(ge=0, le=100_000)
+
+
+class InboundBoxPutawayLineIn(BaseModel):
+    product_id: uuid.UUID
+    quantity: int = Field(ge=1, le=1_000_000_000)
+
+
+class InboundBoxPutawayBody(BaseModel):
+    storage_location_id: uuid.UUID
+    lines: list[InboundBoxPutawayLineIn] | None = None
 
 
 class InboundIntakeLineOut(BaseModel):
@@ -160,12 +173,15 @@ class InventoryMovementOut(BaseModel):
 
 def _box_line_out(ln: InboundIntakeBoxLine) -> InboundIntakeBoxLineOut:
     prod = ln.product
+    remaining = svc.box_line_remaining_qty(ln)
     return InboundIntakeBoxLineOut(
         id=str(ln.id),
         product_id=str(ln.product_id),
         sku_code=prod.sku_code if prod is not None else "",
         product_name=prod.name if prod is not None else "",
         quantity=int(ln.quantity),
+        posted_qty=int(ln.posted_qty),
+        remaining_qty=remaining,
     )
 
 
@@ -182,6 +198,7 @@ def _box_out(b: InboundIntakeBox) -> InboundIntakeBoxOut:
         intake_opened_at=b.intake_opened_at.isoformat() if b.intake_opened_at else None,
         intake_closed_at=b.intake_closed_at.isoformat() if b.intake_closed_at else None,
         is_open=is_open,
+        remaining_qty=svc.box_remaining_qty(b),
         lines=lines_out,
     )
 
@@ -290,6 +307,7 @@ class InboundDistributionLineIn(BaseModel):
     product_id: uuid.UUID
     storage_location_id: uuid.UUID
     quantity: int = Field(ge=1, le=1_000_000_000)
+    box_id: uuid.UUID | None = None
 
 
 class InboundDistributionLineOut(BaseModel):
@@ -299,10 +317,15 @@ class InboundDistributionLineOut(BaseModel):
     storage_location_code: str
     quantity: int
     created_at: str
+    box_id: str | None = None
+    box_number: int | None = None
+    box_internal_barcode: str | None = None
 
 
 def _dist_out(
-    row: InboundIntakeDistributionLine, loc: StorageLocation
+    row: InboundIntakeDistributionLine,
+    loc: StorageLocation,
+    box: InboundIntakeBox | None = None,
 ) -> InboundDistributionLineOut:
     return InboundDistributionLineOut(
         id=str(row.id),
@@ -311,6 +334,9 @@ def _dist_out(
         storage_location_code=loc.code,
         quantity=row.quantity,
         created_at=row.created_at.isoformat(),
+        box_id=str(row.box_id) if row.box_id is not None else None,
+        box_number=int(box.box_number) if box is not None else None,
+        box_internal_barcode=box.internal_barcode if box is not None else None,
     )
 
 
@@ -663,6 +689,63 @@ async def close_inbound_box_intake(
     except InboundIntakeBoxError as exc:
         raise _map_inbound_box_err(exc) from None
     return _box_out(box)
+
+
+@router.post(
+    "/{request_id}/boxes/{box_id}/putaway",
+    response_model=InboundIntakeRequestOut,
+)
+async def putaway_inbound_box(
+    request_id: uuid.UUID,
+    box_id: uuid.UUID,
+    body: InboundBoxPutawayBody,
+    user: Annotated[User, Depends(require_fulfillment_admin)],
+    session: Annotated[AsyncSession, Depends(get_db)],
+) -> InboundIntakeRequestOut:
+    line_items: list[tuple[uuid.UUID, int]] | None = None
+    if body.lines is not None:
+        line_items = [(ln.product_id, ln.quantity) for ln in body.lines]
+    try:
+        r = await svc.apply_box_putaway(
+            session,
+            user.tenant_id,
+            request_id,
+            box_id,
+            storage_location_id=body.storage_location_id,
+            line_items=line_items,
+        )
+    except InboundIntakeError as exc:
+        if exc.code == "request_not_found":
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="request_not_found",
+            ) from None
+        if exc.code in ("box_not_found", "location_not_found"):
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=exc.code,
+            ) from None
+        if exc.code in ("not_distributable", "box_not_closed"):
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail=exc.code,
+            ) from None
+        if exc.code in (
+            "invalid_qty",
+            "qty_exceeds_accepted",
+            "qty_exceeds_box_remaining",
+            "product_not_accepted",
+            "product_not_on_request",
+            "product_not_in_box",
+            "nothing_to_putaway",
+            "sorting_location_reserved",
+        ):
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+                detail=exc.code,
+            ) from None
+        raise
+    return _request_out(r)
 
 
 @router.patch(
@@ -1218,7 +1301,8 @@ async def list_distribution_lines(
         loc = await session.get(StorageLocation, r.storage_location_id)
         if loc is None:
             continue
-        out.append(_dist_out(r, loc))
+        box = await session.get(InboundIntakeBox, r.box_id) if r.box_id is not None else None
+        out.append(_dist_out(r, loc, box))
     return out
 
 
@@ -1237,7 +1321,9 @@ async def replace_distribution_lines(
             session,
             user.tenant_id,
             request_id,
-            lines=[(x.product_id, x.storage_location_id, x.quantity) for x in body],
+            lines=[
+                (x.box_id, x.product_id, x.storage_location_id, x.quantity) for x in body
+            ],
         )
     except InboundIntakeError as exc:
         if exc.code == "request_not_found":
@@ -1270,13 +1356,23 @@ async def replace_distribution_lines(
                 status_code=status.HTTP_404_NOT_FOUND,
                 detail="location_not_found",
             ) from None
+        if exc.code in (
+            "box_required",
+            "product_not_in_box",
+            "qty_exceeds_box_remaining",
+        ):
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+                detail=exc.code,
+            ) from None
         raise
     out: list[InboundDistributionLineOut] = []
     for r in rows:
         loc = await session.get(StorageLocation, r.storage_location_id)
         if loc is None:
             continue
-        out.append(_dist_out(r, loc))
+        box = await session.get(InboundIntakeBox, r.box_id) if r.box_id is not None else None
+        out.append(_dist_out(r, loc, box))
     return out
 
 

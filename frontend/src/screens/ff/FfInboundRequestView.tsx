@@ -33,6 +33,7 @@ import { apiUrl } from '../../api'
 import { printBarcodeLabel } from '../../utils/printBarcodeLabel'
 import { printInboundSupplyWaybill } from '../../utils/printShipmentWaybill'
 import { readApiErrorMessage } from '../../utils/readApiErrorMessage'
+import { FfInboundSortingPanel } from './FfInboundSortingPanel'
 import { suggestNextLocationCode } from '../../utils/suggestNextLocationCode'
 import { renderBarcodeDataUrl } from '../../utils/renderBarcodeDataUrl'
 import { resolveProductIdByBarcode } from '../../utils/resolveProductByBarcode'
@@ -46,6 +47,8 @@ type InboundBoxLine = {
   sku_code: string
   product_name: string
   quantity: number
+  posted_qty?: number
+  remaining_qty?: number
 }
 
 type InboundBox = {
@@ -56,6 +59,7 @@ type InboundBox = {
   intake_opened_at: string | null
   intake_closed_at: string | null
   is_open: boolean
+  remaining_qty?: number
   lines: InboundBoxLine[]
 }
 
@@ -97,6 +101,7 @@ type DistributionLineOut = {
 }
 
 type DistributionLineDraft = {
+  box_id: string
   product_id: string
   storage_location_id: string
   quantity: string
@@ -178,6 +183,25 @@ export function FfInboundRequestView({
   const [requestWarehouse, setRequestWarehouse] = useState<WarehouseRow | null>(null)
 
   const boxIntakeMode = (detail?.boxes?.length ?? 0) > 0
+  const sortingView = workspace === 'sorting'
+  const defaultPutawayBoxId = useMemo(() => {
+    const closed = (detail?.boxes ?? []).filter((b) => b.intake_closed_at != null)
+    if (closed.length === 1) {
+      return closed[0]!.id
+    }
+    return ''
+  }, [detail?.boxes])
+
+  const sortingRemainingTotal = useMemo(() => {
+    if (!detail) return 0
+    return detail.lines.reduce((sum, ln) => {
+      const accepted =
+        (detail.boxes?.length ?? 0) > 0
+          ? (ln.actual_qty ?? 0)
+          : (ln.actual_qty ?? ln.expected_qty)
+      return sum + Math.max(0, accepted - ln.posted_qty)
+    }, 0)
+  }, [detail])
   const verifyingWithBoxes =
     boxIntakeMode &&
     (detail?.status === 'primary_accepted' || detail?.status === 'verifying')
@@ -326,6 +350,7 @@ export function FfInboundRequestView({
       const rows = (await res.json()) as DistributionLineOut[]
       setDistLines(
         rows.map((r) => ({
+          box_id: (r as { box_id?: string | null }).box_id ?? defaultPutawayBoxId,
           product_id: r.product_id,
           storage_location_id: r.storage_location_id,
           quantity: String(r.quantity),
@@ -335,7 +360,7 @@ export function FfInboundRequestView({
       setDistLines([])
       setDistError(e instanceof Error ? e.message : 'Не удалось загрузить распределение.')
     }
-  }, [authHeaders, detail, requestId])
+  }, [authHeaders, defaultPutawayBoxId, detail, requestId])
 
   useEffect(() => {
     let cancelled = false
@@ -445,7 +470,8 @@ export function FfInboundRequestView({
       return
     }
     if (workspace === 'sorting') {
-      setDistOpen(true)
+      setDistOpen(false)
+      return
     }
     void loadDistribution()
   }, [detail, isFulfillmentAdmin, loadDistribution, workspace])
@@ -626,11 +652,15 @@ export function FfInboundRequestView({
       }
       const payload = distLines
         .filter((r) => r.product_id && r.storage_location_id && r.quantity)
-        .map((r) => ({
-          product_id: r.product_id,
-          storage_location_id: r.storage_location_id,
-          quantity: Math.floor(Number(r.quantity)),
-        }))
+        .map((r) => {
+          const boxId = r.box_id || defaultPutawayBoxId
+          return {
+            box_id: boxId || null,
+            product_id: r.product_id,
+            storage_location_id: r.storage_location_id,
+            quantity: Math.floor(Number(r.quantity)),
+          }
+        })
         .filter((r) => Number.isFinite(r.quantity) && r.quantity > 0)
       const res = await fetch(
         apiUrl(`/operations/inbound-intake-requests/${requestId}/distribution-lines`),
@@ -656,6 +686,7 @@ export function FfInboundRequestView({
       const rows = (await res.json()) as DistributionLineOut[]
       setDistLines(
         rows.map((r) => ({
+          box_id: (r as { box_id?: string | null }).box_id ?? defaultPutawayBoxId,
           product_id: r.product_id,
           storage_location_id: r.storage_location_id,
           quantity: String(r.quantity),
@@ -710,11 +741,15 @@ export function FfInboundRequestView({
       // Always persist draft first; completion must lock what is actually saved.
       const payload = distLines
         .filter((r) => r.product_id && r.storage_location_id && r.quantity)
-        .map((r) => ({
-          product_id: r.product_id,
-          storage_location_id: r.storage_location_id,
-          quantity: Math.floor(Number(r.quantity)),
-        }))
+        .map((r) => {
+          const boxId = r.box_id || defaultPutawayBoxId
+          return {
+            box_id: boxId || null,
+            product_id: r.product_id,
+            storage_location_id: r.storage_location_id,
+            quantity: Math.floor(Number(r.quantity)),
+          }
+        })
         .filter((r) => Number.isFinite(r.quantity) && r.quantity > 0)
       const putRes = await fetch(
         apiUrl(`/operations/inbound-intake-requests/${requestId}/distribution-lines`),
@@ -732,6 +767,7 @@ export function FfInboundRequestView({
       const savedRows = (await putRes.json()) as DistributionLineOut[]
       setDistLines(
         savedRows.map((r) => ({
+          box_id: (r as { box_id?: string | null }).box_id ?? defaultPutawayBoxId,
           product_id: r.product_id,
           storage_location_id: r.storage_location_id,
           quantity: String(r.quantity),
@@ -1460,6 +1496,28 @@ export function FfInboundRequestView({
             </Stack>
           </Stack>
 
+          {sortingView && detail.status === 'verified' ? (
+            <FfInboundSortingPanel
+              token={token}
+              requestId={requestId}
+              warehouseId={detail.warehouse_id}
+              boxes={(detail.boxes ?? []).map((b) => ({
+                ...b,
+                remaining_qty: b.remaining_qty ?? 0,
+                lines: b.lines.map((ln) => ({
+                  ...ln,
+                  posted_qty: ln.posted_qty ?? 0,
+                  remaining_qty: ln.remaining_qty ?? Math.max(0, ln.quantity - (ln.posted_qty ?? 0)),
+                })),
+              }))}
+              sortingRemainingQty={sortingRemainingTotal}
+              onReload={async () => {
+                await loadDetail()
+              }}
+            />
+          ) : null}
+
+          {!sortingView ? (
           <TableContainer sx={{ width: '100%', overflowX: 'hidden' }}>
             <Table
               size="small"
@@ -1615,10 +1673,19 @@ export function FfInboundRequestView({
               </TableBody>
             </Table>
           </TableContainer>
+          ) : null}
 
-          {isFulfillmentAdmin ? (
+          {sortingView &&
+          detail.status !== 'verified' &&
+          detail.status !== 'posted' ? (
+            <Alert severity="info" sx={{ mt: 2 }} data-testid="ff-inbound-sorting-wait-reception">
+              Сначала завершите приёмку и пересчёт в разделе <strong>Приёмка</strong>.
+            </Alert>
+          ) : null}
+
+          {isFulfillmentAdmin && !sortingView ? (
             <Box sx={{ mt: 2 }}>
-              {workspace !== 'sorting' && detail.status === 'submitted' ? (
+              {detail.status === 'submitted' ? (
                 <Paper variant="outlined" sx={{ p: 2 }} data-testid="ff-inbound-admin-submitted">
                   <Typography variant="subtitle2" sx={{ fontWeight: 800, mb: 1 }}>
                     Приёмка по коробам
@@ -1761,8 +1828,7 @@ export function FfInboundRequestView({
                 </Paper>
               ) : null}
 
-              {workspace !== 'sorting' &&
-              boxIntakeMode &&
+              {boxIntakeMode &&
               isFulfillmentAdmin &&
               (detail.status === 'primary_accepted' || detail.status === 'verifying') ? (
                 <Paper
@@ -1892,15 +1958,7 @@ export function FfInboundRequestView({
                 </Alert>
               ) : null}
 
-              {workspace === 'sorting' &&
-              detail.status !== 'verified' &&
-              detail.status !== 'posted' ? (
-                <Alert severity="info" sx={{ mt: 2 }} data-testid="ff-inbound-sorting-wait-reception">
-                  Сначала завершите приёмку и пересчёт в разделе <strong>Приёмка</strong>.
-                </Alert>
-              ) : null}
-
-              {detail.status === 'verified' && workspace !== 'reception' ? (
+              {detail.status === 'verified' && workspace === 'full' ? (
                 <Paper variant="outlined" sx={{ p: 2 }} data-testid="ff-inbound-admin-distribution">
                   <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1} sx={{ alignItems: { sm: 'center' } }}>
                     <Box sx={{ flexGrow: 1 }}>
@@ -1995,7 +2053,15 @@ export function FfInboundRequestView({
                               variant="outlined"
                               disabled={distBusy}
                               onClick={() =>
-                                setDistLines((prev) => [...prev, { product_id: '', storage_location_id: '', quantity: '' }])
+                                setDistLines((prev) => [
+                                  ...prev,
+                                  {
+                                    box_id: defaultPutawayBoxId,
+                                    product_id: '',
+                                    storage_location_id: '',
+                                    quantity: '',
+                                  },
+                                ])
                               }
                               data-testid="ff-inbound-distribution-add-row"
                             >
