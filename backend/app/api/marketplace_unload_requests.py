@@ -236,6 +236,7 @@ def _line_out(
     ln: MarketplaceUnloadLine,
     *,
     picked_qty: int = 0,
+    show_pick_discrepancy: bool = False,
 ) -> MarketplaceUnloadLineOut:
     p = ln.product
     plan = int(ln.quantity)
@@ -246,7 +247,7 @@ def _line_out(
         product_name=p.name,
         quantity=plan,
         picked_qty=picked_qty,
-        has_discrepancy=picked_qty != plan,
+        has_discrepancy=show_pick_discrepancy and picked_qty != plan,
     )
 
 
@@ -304,6 +305,7 @@ def _detail_out(
     boxes = [_box_out(b) for b in getattr(r, "boxes", []) or []]
     picks = [_pick_alloc_out(a) for a in getattr(r, "pick_allocations", []) or []]
     picked_map = _picked_by_product(r)
+    show_pick_discrepancy = r.status in ("confirmed", "shipped")
     return MarketplaceUnloadRequestDetailOut(
         id=str(r.id),
         warehouse_id=str(r.warehouse_id),
@@ -318,7 +320,12 @@ def _detail_out(
         ff_modified=bool(r.ff_modified),
         created_at=r.created_at.isoformat(),
         lines=[
-            _line_out(ln, picked_qty=picked_map.get(ln.product_id, 0)) for ln in r.lines
+            _line_out(
+                ln,
+                picked_qty=picked_map.get(ln.product_id, 0),
+                show_pick_discrepancy=show_pick_discrepancy,
+            )
+            for ln in r.lines
         ],
         boxes=boxes,
         pick_allocations=picks,

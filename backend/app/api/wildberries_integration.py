@@ -355,6 +355,7 @@ async def save_and_validate_self_content_token(
     body: WildberriesSelfTokenSaveBody,
     user: Annotated[User, Depends(get_current_user)],
     session: Annotated[AsyncSession, Depends(get_db)],
+    background_tasks: BackgroundTasks,
 ) -> WildberriesSelfTokenSaveOut:
     """Seller saves WB content API key; validate by calling cards list."""
     if user.role != FULFILLMENT_SELLER or user.seller_id is None:
@@ -437,6 +438,9 @@ async def save_and_validate_self_content_token(
             status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
             detail=exc.code,
         ) from None
+    from app.services.wb_mp_warehouse_service import run_wb_mp_warehouses_sync_task
+
+    background_tasks.add_task(run_wb_mp_warehouses_sync_task, user.tenant_id, user.seller_id)
     return WildberriesSelfTokenSaveOut(
         cards_received=n,
         cards_saved=saved,

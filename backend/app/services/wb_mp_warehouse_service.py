@@ -20,6 +20,18 @@ from app.services.wildberries_credentials_service import get_decrypted_tokens_fo
 logger = logging.getLogger(__name__)
 
 
+def pick_wb_mp_warehouse_api_token(
+    content_token: str | None,
+    supplies_token: str | None,
+) -> str | None:
+    """Supplies API key preferred; many sellers only save content key — use it as fallback."""
+    if supplies_token and supplies_token.strip():
+        return supplies_token.strip()
+    if content_token and content_token.strip():
+        return content_token.strip()
+    return None
+
+
 async def count_tenant_mp_warehouses(session: AsyncSession, tenant_id: uuid.UUID) -> int:
     stmt = select(func.count()).select_from(TenantWbMpWarehouse).where(
         TenantWbMpWarehouse.tenant_id == tenant_id,
@@ -63,10 +75,10 @@ async def sync_tenant_mp_warehouses(
     session: AsyncSession,
     tenant_id: uuid.UUID,
     *,
-    supplies_api_token: str,
+    api_token: str,
 ) -> int:
     """Pull WB warehouses and replace tenant cache. Returns row count."""
-    token = supplies_api_token.strip()
+    token = api_token.strip()
     if not token:
         return await count_tenant_mp_warehouses(session, tenant_id)
     try:
@@ -88,15 +100,13 @@ async def sync_tenant_mp_warehouses_if_empty(
     session: AsyncSession,
     tenant_id: uuid.UUID,
     *,
-    supplies_api_token: str,
+    api_token: str,
 ) -> int:
     """Если для тенанта ещё нет кэша — один раз тянем склады WB."""
     n_existing = await count_tenant_mp_warehouses(session, tenant_id)
     if n_existing > 0:
         return n_existing
-    return await sync_tenant_mp_warehouses(
-        session, tenant_id, supplies_api_token=supplies_api_token
-    )
+    return await sync_tenant_mp_warehouses(session, tenant_id, api_token=api_token)
 
 
 async def get_first_tenant_seller_id(
@@ -123,10 +133,11 @@ async def run_wb_mp_warehouses_sync_task(tenant_id: uuid.UUID, seller_id: uuid.U
         pair = await get_decrypted_tokens_for_seller(session, tenant_id, seller_id)
         if pair is None:
             return
-        _c, supplies = pair
-        if not supplies:
+        content, supplies = pair
+        token = pick_wb_mp_warehouse_api_token(content, supplies)
+        if not token:
             return
-        await sync_tenant_mp_warehouses_if_empty(session, tenant_id, supplies_api_token=supplies)
+        await sync_tenant_mp_warehouses_if_empty(session, tenant_id, api_token=token)
 
 
 async def run_daily_wb_mp_warehouses_sync_for_tenant(tenant_id: uuid.UUID) -> None:
@@ -138,10 +149,11 @@ async def run_daily_wb_mp_warehouses_sync_for_tenant(tenant_id: uuid.UUID) -> No
         pair = await get_decrypted_tokens_for_seller(session, tenant_id, first_seller_id)
         if pair is None:
             return
-        _c, supplies = pair
-        if not supplies:
+        content, supplies = pair
+        token = pick_wb_mp_warehouse_api_token(content, supplies)
+        if not token:
             return
-        await sync_tenant_mp_warehouses(session, tenant_id, supplies_api_token=supplies)
+        await sync_tenant_mp_warehouses(session, tenant_id, api_token=token)
 
 
 async def run_daily_wb_mp_warehouses_sync_all_tenants() -> None:
@@ -178,12 +190,11 @@ async def list_mp_warehouses_for_tenant(
     pair = await get_decrypted_tokens_for_seller(session, tenant_id, first_seller_id)
     if pair is None:
         return []
-    _c, supplies = pair
-    if not supplies:
+    content, supplies = pair
+    token = pick_wb_mp_warehouse_api_token(content, supplies)
+    if not token:
         return []
-    await sync_tenant_mp_warehouses_if_empty(
-        session, tenant_id, supplies_api_token=supplies
-    )
+    await sync_tenant_mp_warehouses_if_empty(session, tenant_id, api_token=token)
     return await list_cached_mp_warehouses(session, tenant_id)
 
 
