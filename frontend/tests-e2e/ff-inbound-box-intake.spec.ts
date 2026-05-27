@@ -63,7 +63,7 @@ test.describe('FF inbound box piece intake', () => {
       page.getByTestId('ff-inbound-verify-complete').click(),
     ]);
     expect(verifyRes.ok()).toBeTruthy();
-    await expect(page.getByTestId('ff-inbound-status-chip')).toContainText('Проверено');
+    await expect(page.getByTestId('ff-inbound-status-chip')).toContainText('В сортировке');
   });
 
   test('TC-NEW-C01-N2 set line qty without open box shows error', async ({ page }) => {

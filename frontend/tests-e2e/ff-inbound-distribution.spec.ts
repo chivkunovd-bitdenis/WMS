@@ -95,7 +95,7 @@ test('ff inbound distribution: partial, leftover without cell, complete -> reado
     page.getByTestId('ff-inbound-verify-complete').click(),
   ]);
   expect(verifyRes.ok()).toBeTruthy();
-  await expect(page.getByTestId('ff-inbound-status-chip')).toContainText('Проверено на складе');
+  await expect(page.getByTestId('ff-inbound-status-chip')).toContainText('В сортировке');
 
   await expect(page.getByTestId('ff-inbound-admin-distribution')).toBeVisible();
   await page.getByTestId('ff-inbound-distribute-open').click();
@@ -127,7 +127,9 @@ test('ff inbound distribution: partial, leftover without cell, complete -> reado
   ]);
   expect(completeRes.ok()).toBeTruthy();
 
-  await expect(page.getByTestId('ff-inbound-distribution-add-row')).toHaveCount(0);
+  // Частичная разкладка: 2 в ячейке, 3 ещё в зоне сортировки — поставка не закрыта.
+  await expect(page.getByTestId('ff-inbound-status-chip')).toContainText('В сортировке');
   await expect(page.getByTestId('ff-inbound-distribution-no-cell')).toContainText('3');
+  await expect(page.getByTestId('ff-inbound-distribution-add-row')).toBeVisible();
 });
 

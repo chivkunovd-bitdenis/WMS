@@ -232,18 +232,16 @@ test.describe('US-B-01 seller first-time login path', () => {
   test('seller account with password can submit inbound with planned boxes', async ({ page }) => {
     const seed = await seedFfSellerInbound(page);
 
-    await page.goto('/app/dashboard');
-    await page.getByTestId('seller-account-seller').selectOption({ label: `Box Seller ${seed.suffix}` });
-    await page.getByTestId('seller-account-email').fill(`alt-${seed.sellerEmail}`);
-    await Promise.all([
-      waitForPostOk(page, '/api/auth/seller-accounts'),
-      page.getByTestId('seller-account-submit').click(),
-    ]);
+    const altEmail = `alt-${seed.sellerEmail}`;
+    await page.request.post('/api/auth/seller-accounts', {
+      headers: { Authorization: `Bearer ${seed.token}` },
+      data: { seller_id: seed.sellerId, email: altEmail },
+    });
 
     await page.getByTestId('logout').click();
     await page.goto(sellerPortalEntry());
     await page.getByTestId('login-form').waitFor({ state: 'visible' });
-    await loginAsSeller(page, `alt-${seed.sellerEmail}`, seed.password, { firstTime: true });
+    await loginAsSeller(page, altEmail, seed.password, { firstTime: true });
     await expectSellerPortalReady(page);
 
     await page.getByTestId('nav-seller-documents').click();

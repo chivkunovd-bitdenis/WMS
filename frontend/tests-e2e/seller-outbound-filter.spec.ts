@@ -5,6 +5,7 @@ import {
   waitForPostOk,
 } from './api-waits';
 import { loginAsSeller, openFulfillmentRegistration } from './auth-flow';
+import { createSellerAccountViaApi } from './seller-account-helpers';
 
 // TC-S12-003 — селлер видит только свои отгрузки в списке.
 test('seller A outbound list excludes seller B shipments only (#11)', async ({ page }) => {
@@ -53,21 +54,8 @@ test('seller A outbound list excludes seller B shipments only (#11)', async ({ p
   });
   expect(prB.ok()).toBeTruthy();
 
-  // Create seller accounts for A/B.
-  await page.goto('/app/dashboard');
-  await page.getByTestId('seller-account-seller').selectOption({ label: 'Brand A' });
-  await page.getByTestId('seller-account-email').fill(sellerEmail);
-  await Promise.all([
-    waitForPostOk(page, '/api/auth/seller-accounts'),
-    page.getByTestId('seller-account-submit').click(),
-  ]);
-
-  await page.getByTestId('seller-account-seller').selectOption({ label: 'Brand B' });
-  await page.getByTestId('seller-account-email').fill(sellerEmailB);
-  await Promise.all([
-    waitForPostOk(page, '/api/auth/seller-accounts'),
-    page.getByTestId('seller-account-submit').click(),
-  ]);
+  await createSellerAccountViaApi(page.request, h, sellerAId, sellerEmail);
+  await createSellerAccountViaApi(page.request, h, sellerBId, sellerEmailB);
 
   const baseIn = '/api/operations/inbound-intake-requests';
 

@@ -685,10 +685,8 @@ export function FfInboundRequestView({
 
   const completeDistribution = async () => {
     if (!detail) return
-    if (hasNoCellPending && distLines.every((r) => !r.product_id || !r.storage_location_id)) {
-      setDistError(
-        'Распределите всё принятое количество по ячейкам. Пока есть остаток «без ячейки» — товар не попадёт в складской каталог.',
-      )
+    if (distLines.every((r) => !r.product_id || !r.storage_location_id || !r.quantity)) {
+      setDistError('Добавьте хотя бы одну строку с товаром, ячейкой и количеством.')
       setDistOpen(true)
       return
     }
@@ -1935,11 +1933,11 @@ export function FfInboundRequestView({
                             </Button>
                             <Button
                               variant="contained"
-                              disabled={distBusy || hasNoCellPending}
+                              disabled={distBusy}
                               onClick={() => void completeDistribution()}
                               data-testid="ff-inbound-distribution-complete"
                             >
-                              Завершить распределение
+                              {hasNoCellPending ? 'Применить разкладку' : 'Завершить распределение'}
                             </Button>
                           </>
                         ) : canReopenDistribution ? (
