@@ -118,8 +118,8 @@ test('FF prints marketplace unload waybill from document dialog', async ({ page 
   );
   expect(linesRes.ok()).toBeTruthy();
 
-  await page.goto('/app/ff/supplies-shipments');
-  await page.getByTestId('ff-docs-filter-mp-shipment').click();
+  await page.goto('/app/ff/mp-shipments');
+  await expect(page.getByTestId('ff-mp-shipments-page')).toBeVisible();
   await expect(page.getByTestId('ff-docs-row').first()).toBeVisible();
   await page.getByTestId('ff-docs-row').first().click();
   await expect(page.getByTestId('ff-supplies-doc-dialog')).toBeVisible();

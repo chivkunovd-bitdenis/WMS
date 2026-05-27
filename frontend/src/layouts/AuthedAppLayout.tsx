@@ -9,6 +9,7 @@ import {
   List,
   ListItemButton,
   ListItemText,
+  ListSubheader,
   Toolbar,
   Typography,
 } from '@mui/material'
@@ -183,29 +184,42 @@ export function AuthedAppLayout({
             borderRight: '1px solid',
             borderColor: 'divider',
             backgroundImage: 'none',
+            display: 'flex',
+            flexDirection: 'column',
           },
         }}
         data-testid="app-sidebar"
       >
         <Toolbar />
-        <Box sx={{ p: 1 }}>
-          <List dense aria-label="Разделы ФФ">
+        <Box sx={{ p: 1, overflow: 'auto', flex: 1 }}>
+          <List dense aria-label="Разделы ФФ" subheader={<ListSubheader component="div">Документы</ListSubheader>}>
             <ListItemButton component={NavLink} to={`${base}/dashboard`} data-testid="nav-dashboard">
               <ListItemText primary="Дашборд" />
+            </ListItemButton>
+            <ListItemButton
+              component={NavLink}
+              to={`${base}/mp-shipments`}
+              data-testid="nav-ff-mp-shipments"
+            >
+              <ListItemText primary="Отгрузки на МП" />
             </ListItemButton>
             <ListItemButton
               component={NavLink}
               to={`${base}/supplies-shipments`}
               data-testid="nav-ff-supplies-shipments"
             >
-              <ListItemText primary="Поставки и отгрузки" />
+              <ListItemText primary="Поставки" />
             </ListItemButton>
+          </List>
+          <List dense aria-label="Склад" subheader={<ListSubheader component="div">Склад</ListSubheader>}>
             <ListItemButton component={NavLink} to={`${base}/reception`} data-testid="nav-ff-reception">
               <ListItemText primary="Приёмка" />
             </ListItemButton>
             <ListItemButton component={NavLink} to={`${base}/sorting`} data-testid="nav-ff-sorting">
               <ListItemText primary="Сортировка" />
             </ListItemButton>
+          </List>
+          <List dense aria-label="Справочники" subheader={<ListSubheader component="div">Справочники</ListSubheader>}>
             <ListItemButton component={NavLink} to="/app/catalog" data-testid="nav-catalog">
               <ListItemText primary="Каталог" />
             </ListItemButton>

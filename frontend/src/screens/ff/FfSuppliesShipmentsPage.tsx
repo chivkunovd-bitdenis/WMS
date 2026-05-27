@@ -165,7 +165,10 @@ function kindRu(kind: DocKind): string {
 type ProductPick = { id: string; sku_code: string; name: string }
 type AvailableProductPick = ProductPick & { available: number }
 
+export type FfSuppliesShipmentsPageVariant = 'supplies' | 'mp-shipments'
+
 type Props = {
+  pageVariant?: FfSuppliesShipmentsPageVariant
   busy: boolean
   error: string | null
   infoNotice: string | null
@@ -186,6 +189,7 @@ type Props = {
 }
 
 export function FfSuppliesShipmentsPage({
+  pageVariant = 'supplies',
   busy,
   error,
   infoNotice,
@@ -204,7 +208,8 @@ export function FfSuppliesShipmentsPage({
   initialMarketplaceUnloadId = null,
   onInitialMarketplaceUnloadOpened,
 }: Props) {
-  const [kind, setKind] = useState<QuickFilterKind>('all')
+  const isMpShipmentsPage = pageVariant === 'mp-shipments'
+  const [kind, setKind] = useState<QuickFilterKind>(isMpShipmentsPage ? 'marketplace_unload' : 'all')
   const [sellerFilter, setSellerFilter] = useState<string>('all')
   const [sortKey, setSortKey] = useState<'planned_desc' | 'planned_asc' | 'created_desc' | 'created_asc'>(
     'created_desc',
@@ -868,28 +873,19 @@ export function FfSuppliesShipmentsPage({
 
   const sellerOptions = useMemo(() => {
     const s = new Set<string>()
-    for (const r of inboundSummaries) {
-      if (r.seller_name) {
-        s.add(r.seller_name)
-      }
-    }
-    for (const r of outboundSummaries) {
-      if (r.seller_name) {
-        s.add(r.seller_name)
-      }
-    }
-    for (const r of marketplaceUnloadSummaries) {
-      if (r.seller_name) {
-        s.add(r.seller_name)
-      }
-    }
-    for (const r of discrepancyActSummaries) {
-      if (r.seller_name) {
-        s.add(r.seller_name)
+    const sources = isMpShipmentsPage
+      ? [marketplaceUnloadSummaries]
+      : [inboundSummaries, outboundSummaries, discrepancyActSummaries]
+    for (const list of sources) {
+      for (const r of list) {
+        if ('seller_name' in r && r.seller_name) {
+          s.add(r.seller_name)
+        }
       }
     }
     return Array.from(s).sort((a, b) => a.localeCompare(b))
   }, [
+    isMpShipmentsPage,
     inboundSummaries,
     outboundSummaries,
     marketplaceUnloadSummaries,
@@ -897,53 +893,56 @@ export function FfSuppliesShipmentsPage({
   ])
 
   const rows = useMemo(() => {
-    const all: UnifiedRow[] = [
-      ...inboundSummaries.map((r) => ({
-        kind: 'inbound' as const,
-        id: r.id,
-        plannedDate: r.planned_delivery_date,
-        createdAt: r.created_at ?? null,
-        status: r.status,
-        lineCount: r.line_count,
-        sellerName: r.seller_name ?? null,
-        extraLabel: null,
-        ffModified: false,
-      })),
-      ...outboundSummaries.map((r) => ({
-        kind: 'outbound' as const,
-        id: r.id,
-        plannedDate: r.planned_shipment_date ?? r.created_at?.slice(0, 10) ?? null,
-        createdAt: r.created_at ?? null,
-        status: r.status,
-        lineCount: r.line_count,
-        sellerName: r.seller_name ?? null,
-        extraLabel: null,
-        ffModified: false,
-      })),
-      ...marketplaceUnloadSummaries.map((r) => ({
-        kind: 'marketplace_unload' as const,
-        id: r.id,
-        plannedDate: r.planned_shipment_date ?? null,
-        createdAt: r.created_at,
-        status: r.status,
-        lineCount: r.line_count,
-        sellerName: r.seller_name ?? null,
-        extraLabel: r.warehouse_name,
-        ffModified: Boolean(r.ff_modified),
-      })),
-      ...discrepancyActSummaries.map((r) => ({
-        kind: 'discrepancy_act' as const,
-        id: r.id,
-        plannedDate: null,
-        createdAt: r.created_at,
-        status: r.status,
-        lineCount: r.line_count,
-        sellerName: r.seller_name ?? null,
-        extraLabel: r.inbound_intake_request_id ? `приёмка ${r.inbound_intake_request_id.slice(0, 8)}…` : null,
-        ffModified: false,
-      })),
-    ]
-    let filtered = kind === 'all' ? all : all.filter((x) => x.kind === kind)
+    const all: UnifiedRow[] = isMpShipmentsPage
+      ? marketplaceUnloadSummaries.map((r) => ({
+          kind: 'marketplace_unload' as const,
+          id: r.id,
+          plannedDate: r.planned_shipment_date ?? null,
+          createdAt: r.created_at,
+          status: r.status,
+          lineCount: r.line_count,
+          sellerName: r.seller_name ?? null,
+          extraLabel: r.warehouse_name,
+          ffModified: Boolean(r.ff_modified),
+        }))
+      : [
+          ...inboundSummaries.map((r) => ({
+            kind: 'inbound' as const,
+            id: r.id,
+            plannedDate: r.planned_delivery_date,
+            createdAt: r.created_at ?? null,
+            status: r.status,
+            lineCount: r.line_count,
+            sellerName: r.seller_name ?? null,
+            extraLabel: null,
+            ffModified: false,
+          })),
+          ...outboundSummaries.map((r) => ({
+            kind: 'outbound' as const,
+            id: r.id,
+            plannedDate: r.planned_shipment_date ?? r.created_at?.slice(0, 10) ?? null,
+            createdAt: r.created_at ?? null,
+            status: r.status,
+            lineCount: r.line_count,
+            sellerName: r.seller_name ?? null,
+            extraLabel: null,
+            ffModified: false,
+          })),
+          ...discrepancyActSummaries.map((r) => ({
+            kind: 'discrepancy_act' as const,
+            id: r.id,
+            plannedDate: null,
+            createdAt: r.created_at,
+            status: r.status,
+            lineCount: r.line_count,
+            sellerName: r.seller_name ?? null,
+            extraLabel: r.inbound_intake_request_id
+              ? `приёмка ${r.inbound_intake_request_id.slice(0, 8)}…`
+              : null,
+            ffModified: false,
+          })),
+        ]
+    let filtered = isMpShipmentsPage || kind === 'all' ? all : all.filter((x) => x.kind === kind)
     if (sellerFilter !== 'all') {
       filtered = filtered.filter((x) => x.sellerName === sellerFilter)
     }
@@ -961,6 +960,7 @@ export function FfSuppliesShipmentsPage({
     })
     return sorted
   }, [
+    isMpShipmentsPage,
     inboundSummaries,
     outboundSummaries,
     marketplaceUnloadSummaries,
@@ -990,11 +990,17 @@ export function FfSuppliesShipmentsPage({
     (docModal === 'discrepancy_act' && divergeDetail?.status === 'draft')
   const mpLineDraft = mpDraft || mpSubmitted
 
+  const pageTestId = isMpShipmentsPage ? 'ff-mp-shipments-page' : 'ff-supplies-shipments-page'
+
   return (
-    <Box data-testid="ff-supplies-shipments-page">
+    <Box data-testid={pageTestId}>
       <PageHeader
-        title="Поставки и отгрузки"
-        description="Единый список: поставки (селлер → ФФ), операционные отгрузки, документы отгрузки ФФ на маркетплейс и акты расхождения. По строкам отгрузки на МП и расхождения — клик для состава; поставку и отгрузку из операций открываем в разделе операций."
+        title={isMpShipmentsPage ? 'Отгрузки на МП' : 'Поставки'}
+        description={
+          isMpShipmentsPage
+            ? 'Документы отгрузки фулфилмента на маркетплейс: состав, короба, подбор по ячейкам и проведение отгрузки.'
+            : 'Поставки (селлер → ФФ), операционные отгрузки и акты расхождения. Отгрузки на маркетплейс — в разделе «Отгрузки на МП» слева.'
+        }
       />
 
       {error ? (
@@ -1014,24 +1020,27 @@ export function FfSuppliesShipmentsPage({
           Новые документы
         </Typography>
         <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1.5}>
-          <Button
-            variant="contained"
-            color="primary"
-            disabled={busy}
-            data-testid="ff-create-mp-shipment"
-            onClick={() => void createAndOpenMpShipment()}
-          >
-            Создать отгрузку на МП
-          </Button>
-          <Button
-            variant="outlined"
-            color="secondary"
-            disabled={busy}
-            data-testid="ff-create-diverge"
-            onClick={() => void createAndOpenDiverge()}
-          >
-            Создать расхождение
-          </Button>
+          {isMpShipmentsPage ? (
+            <Button
+              variant="contained"
+              color="primary"
+              disabled={busy}
+              data-testid="ff-create-mp-shipment"
+              onClick={() => void createAndOpenMpShipment()}
+            >
+              Создать отгрузку на МП
+            </Button>
+          ) : (
+            <Button
+              variant="outlined"
+              color="secondary"
+              disabled={busy}
+              data-testid="ff-create-diverge"
+              onClick={() => void createAndOpenDiverge()}
+            >
+              Создать расхождение
+            </Button>
+          )}
         </Stack>
       </Paper>
 
@@ -1041,40 +1050,34 @@ export function FfSuppliesShipmentsPage({
           spacing={1.5}
           sx={{ flexWrap: 'wrap', alignItems: { xs: 'stretch', md: 'center' } }}
         >
-          <Stack direction="row" spacing={1} sx={{ flexWrap: 'wrap' }}>
-            <Button
-              size="small"
-              variant={kind === 'all' ? 'contained' : 'outlined'}
-              onClick={() => setKind('all')}
-              data-testid="ff-docs-filter-all"
-            >
-              Все
-            </Button>
-            <Button
-              size="small"
-              variant={kind === 'inbound' ? 'contained' : 'outlined'}
-              onClick={() => setKind('inbound')}
-              data-testid="ff-docs-filter-inbound"
-            >
-              Поставки
-            </Button>
-            <Button
-              size="small"
-              variant={kind === 'marketplace_unload' ? 'contained' : 'outlined'}
-              onClick={() => setKind('marketplace_unload')}
-              data-testid="ff-docs-filter-mp-shipment"
-            >
-              Отгрузки на МП
-            </Button>
-            <Button
-              size="small"
-              variant={kind === 'discrepancy_act' ? 'contained' : 'outlined'}
-              onClick={() => setKind('discrepancy_act')}
-              data-testid="ff-docs-filter-diverge"
-            >
-              Расхождения
-            </Button>
-          </Stack>
+          {!isMpShipmentsPage ? (
+            <Stack direction="row" spacing={1} sx={{ flexWrap: 'wrap' }}>
+              <Button
+                size="small"
+                variant={kind === 'all' ? 'contained' : 'outlined'}
+                onClick={() => setKind('all')}
+                data-testid="ff-docs-filter-all"
+              >
+                Все
+              </Button>
+              <Button
+                size="small"
+                variant={kind === 'inbound' ? 'contained' : 'outlined'}
+                onClick={() => setKind('inbound')}
+                data-testid="ff-docs-filter-inbound"
+              >
+                Поставки
+              </Button>
+              <Button
+                size="small"
+                variant={kind === 'discrepancy_act' ? 'contained' : 'outlined'}
+                onClick={() => setKind('discrepancy_act')}
+                data-testid="ff-docs-filter-diverge"
+              >
+                Расхождения
+              </Button>
+            </Stack>
+          ) : null}
           <FormControl size="small" sx={{ minWidth: 200 }}>
             <InputLabel id="ff-seller-filter-label">Селлер</InputLabel>
             <Select
@@ -1115,7 +1118,7 @@ export function FfSuppliesShipmentsPage({
       <Table size="small">
         <TableHead>
           <TableRow>
-            <TableCell>Тип</TableCell>
+            {!isMpShipmentsPage ? <TableCell>Тип</TableCell> : null}
             <TableCell>Плановая дата</TableCell>
             <TableCell>Создано</TableCell>
             <TableCell>Статус</TableCell>
@@ -1127,7 +1130,7 @@ export function FfSuppliesShipmentsPage({
         <TableBody>
           {rows.length === 0 ? (
             <TableRow>
-              <TableCell colSpan={7}>
+              <TableCell colSpan={isMpShipmentsPage ? 6 : 7}>
                 <Typography variant="body2" color="text.secondary">
                   Нет документов
                 </Typography>
@@ -1170,7 +1173,7 @@ export function FfSuppliesShipmentsPage({
                 data-testid="ff-docs-row"
                 data-doc-kind={row.kind}
               >
-                <TableCell>{kindRu(row.kind)}</TableCell>
+                {!isMpShipmentsPage ? <TableCell>{kindRu(row.kind)}</TableCell> : null}
                 <TableCell>{row.plannedDate ?? '—'}</TableCell>
                 <TableCell>
                   {row.createdAt ? formatDateTimeLocal(row.createdAt) : '—'}

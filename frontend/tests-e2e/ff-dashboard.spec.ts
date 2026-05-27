@@ -166,17 +166,18 @@ test('fulfillment admin sees week calendar and supplies-shipments page', async (
 
   await page.getByTestId('nav-ff-supplies-shipments').click();
   await expect(page.getByTestId('ff-supplies-shipments-page')).toBeVisible();
-  await expect(page.getByTestId('ff-create-mp-shipment')).toBeVisible();
   await expect(page.getByTestId('ff-create-diverge')).toBeVisible();
+
+  await page.getByTestId('nav-ff-mp-shipments').click();
+  await expect(page.getByTestId('ff-mp-shipments-page')).toBeVisible();
+  await expect(page.getByTestId('ff-create-mp-shipment')).toBeVisible();
   await page.getByTestId('ff-create-mp-shipment').click();
   await expect(page.getByTestId('ff-supplies-info-notice')).toBeVisible();
-  // Creating a document opens it immediately; close before interacting with filters.
+  // Creating a document opens it immediately; close before interacting with the list.
   if (await page.getByTestId('ff-supplies-doc-dialog').isVisible().catch(() => false)) {
     await page.getByTestId('ff-supplies-doc-close').click();
     await expect(page.getByTestId('ff-supplies-doc-dialog')).toBeHidden();
   }
-
-  await page.getByTestId('ff-docs-filter-mp-shipment').click();
   await Promise.all([
     waitForGetOk(page, '/api/operations/marketplace-unload-requests/'),
     page.locator('[data-doc-kind="marketplace_unload"]').first().click(),

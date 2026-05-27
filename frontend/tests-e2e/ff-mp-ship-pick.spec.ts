@@ -185,8 +185,8 @@ test('FF marketplace unload: pick by cell and ship reduces stock', async ({ page
   expect(row?.quantity).toBe(2);
 
   await page.reload();
-  await page.getByTestId('nav-ff-supplies-shipments').click();
-  await page.getByTestId('ff-docs-filter-mp-shipment').click();
+  await page.getByTestId('nav-ff-mp-shipments').click();
+  await expect(page.getByTestId('ff-mp-shipments-page')).toBeVisible();
   await Promise.all([
     waitForGetOk(page, '/api/operations/marketplace-unload-requests/'),
     page.locator('[data-doc-kind="marketplace_unload"]').first().click(),

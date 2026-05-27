@@ -2377,7 +2377,7 @@ export default function App() {
                 }}
                 onOpenOutbound={(id) => {
                   setPendingMpUnloadId(id)
-                  navigate(`${base}/ff/supplies-shipments`)
+                  navigate(`${base}/ff/mp-shipments`)
                 }}
               />
             }
@@ -2387,6 +2387,50 @@ export default function App() {
             path="ff/supplies-shipments"
             element={
               <FfSuppliesShipmentsPage
+                pageVariant="supplies"
+                busy={opsBusy}
+                error={opsError}
+                infoNotice={ffSuppliesNotice}
+                onDismissInfoNotice={() => setFfSuppliesNotice(null)}
+                token={token}
+                productPicklist={products.map((p) => ({
+                  id: p.id,
+                  sku_code: p.sku_code,
+                  name: p.name,
+                }))}
+                onRefreshFfSupplyExtras={async () => {
+                  if (!token) {
+                    return
+                  }
+                  await refreshMarketplaceUnloadList(token)
+                  await refreshDiscrepancyActList(token)
+                }}
+                inboundSummaries={inboundSummaries}
+                outboundSummaries={outboundSummaries}
+                marketplaceUnloadSummaries={marketplaceUnloadSummaries}
+                discrepancyActSummaries={discrepancyActSummaries}
+                onOpenInbound={(id) => {
+                  setSelectedOutboundId(null)
+                  setSelectedInboundId(id)
+                  setFfInboundWorkspace('full')
+                  setFfDocModal('inbound')
+                }}
+                onOpenOutbound={(id) => {
+                  setSelectedInboundId(null)
+                  setSelectedOutboundId(id)
+                  setFfDocModal('outbound')
+                }}
+                onCreateMpShipment={onCreateFfMpShipment}
+                onCreateDiverge={onCreateFfDiscrepancyAct}
+              />
+            }
+          />
+
+          <Route
+            path="ff/mp-shipments"
+            element={
+              <FfSuppliesShipmentsPage
+                pageVariant="mp-shipments"
                 busy={opsBusy}
                 error={opsError}
                 infoNotice={ffSuppliesNotice}
