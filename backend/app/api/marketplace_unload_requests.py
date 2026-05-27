@@ -4,7 +4,7 @@ import uuid
 from datetime import date
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Body, Depends, HTTPException, status
 from pydantic import BaseModel, Field
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -79,6 +79,7 @@ class MarketplaceUnloadBoxLineOut(BaseModel):
 class MarketplaceUnloadBoxOut(BaseModel):
     id: str
     box_preset: str
+    internal_barcode: str | None = None
     closed_at: str | None
     lines: list[MarketplaceUnloadBoxLineOut]
 
@@ -102,6 +103,8 @@ class MarketplaceUnloadLineOut(BaseModel):
     sku_code: str
     product_name: str
     quantity: int
+    picked_qty: int = 0
+    has_discrepancy: bool = False
 
 
 class MarketplaceUnloadRequestSummaryOut(BaseModel):
@@ -140,8 +143,43 @@ class MarketplaceUnloadPickOptionProductOut(BaseModel):
     product_id: str
     sku_code: str
     product_name: str
-    scanned_qty: int
+    planned_qty: int
+    picked_qty: int
     locations: list[MarketplaceUnloadPickOptionLocationOut]
+
+
+class MarketplaceUnloadPickScanBody(BaseModel):
+    barcode: str = Field(min_length=1, max_length=128)
+    storage_location_id: uuid.UUID | None = None
+
+
+class MarketplaceUnloadPickScanOut(BaseModel):
+    kind: str
+    storage_location_id: str | None = None
+    location_code: str | None = None
+    product_id: str | None = None
+    sku_code: str | None = None
+    product_name: str | None = None
+    picked_qty: int | None = None
+    allocation_quantity: int | None = None
+
+
+class MarketplaceUnloadPickAddBody(BaseModel):
+    storage_location_id: uuid.UUID
+    product_id: uuid.UUID
+    quantity: int = Field(ge=1, le=1_000_000_000)
+
+
+class MarketplaceUnloadAttachBoxBody(BaseModel):
+    barcode: str = Field(min_length=1, max_length=128)
+    box_preset: str = Field(default="60_40_40", min_length=1, max_length=32)
+
+
+class MarketplaceUnloadShipBody(BaseModel):
+    acknowledge_discrepancy: bool = False
+
+
+_DEFAULT_SHIP_BODY = MarketplaceUnloadShipBody()
 
 
 class PickAllocationItemIn(BaseModel):
@@ -182,23 +220,42 @@ def _box_line_out(ln: MarketplaceUnloadBoxLine) -> MarketplaceUnloadBoxLineOut:
 
 
 def _box_out(b: MarketplaceUnloadBox) -> MarketplaceUnloadBoxOut:
+    barcode: str | None = None
+    if b.warehouse_box is not None:
+        barcode = b.warehouse_box.internal_barcode
     return MarketplaceUnloadBoxOut(
         id=str(b.id),
         box_preset=b.box_preset,
+        internal_barcode=barcode,
         closed_at=b.closed_at.isoformat() if b.closed_at is not None else None,
         lines=[_box_line_out(x) for x in b.lines],
     )
 
 
-def _line_out(ln: MarketplaceUnloadLine) -> MarketplaceUnloadLineOut:
+def _line_out(
+    ln: MarketplaceUnloadLine,
+    *,
+    picked_qty: int = 0,
+) -> MarketplaceUnloadLineOut:
     p = ln.product
+    plan = int(ln.quantity)
     return MarketplaceUnloadLineOut(
         id=str(ln.id),
         product_id=str(ln.product_id),
         sku_code=p.sku_code,
         product_name=p.name,
-        quantity=ln.quantity,
+        quantity=plan,
+        picked_qty=picked_qty,
+        has_discrepancy=picked_qty != plan,
     )
+
+
+def _picked_by_product(r: MarketplaceUnloadRequest) -> dict[uuid.UUID, int]:
+    picked: dict[uuid.UUID, int] = {}
+    for a in getattr(r, "pick_allocations", []) or []:
+        pid = a.product_id
+        picked[pid] = picked.get(pid, 0) + int(a.quantity)
+    return picked
 
 
 def _summary_out(
@@ -246,6 +303,7 @@ def _detail_out(
 ) -> MarketplaceUnloadRequestDetailOut:
     boxes = [_box_out(b) for b in getattr(r, "boxes", []) or []]
     picks = [_pick_alloc_out(a) for a in getattr(r, "pick_allocations", []) or []]
+    picked_map = _picked_by_product(r)
     return MarketplaceUnloadRequestDetailOut(
         id=str(r.id),
         warehouse_id=str(r.warehouse_id),
@@ -259,7 +317,9 @@ def _detail_out(
         else None,
         ff_modified=bool(r.ff_modified),
         created_at=r.created_at.isoformat(),
-        lines=[_line_out(ln) for ln in r.lines],
+        lines=[
+            _line_out(ln, picked_qty=picked_map.get(ln.product_id, 0)) for ln in r.lines
+        ],
         boxes=boxes,
         pick_allocations=picks,
     )
@@ -315,13 +375,16 @@ def _map_pick_err(exc: MarketplaceUnloadPickError) -> HTTPException:
         "invalid_quantity",
         "product_not_in_shipment",
         "location_not_found",
+        "location_required",
         "product_not_found",
         "product_seller_mismatch",
         "insufficient_available",
-        "scans_required",
-        "pick_scan_mismatch",
+        "barcode_empty",
+        "barcode_unknown",
         "pick_required",
         "no_lines",
+        "discrepancy_requires_ack",
+        "seller_required",
     ):
         return HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
@@ -333,13 +396,21 @@ def _map_pick_err(exc: MarketplaceUnloadPickError) -> HTTPException:
 def _map_box_err(exc: MarketplaceUnloadBoxError) -> HTTPException:
     if exc.code == "not_found":
         return HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="not_found")
-    if exc.code in ("not_editable", "open_box_exists", "box_closed", "qty_exceeded"):
+    if exc.code in (
+        "not_editable",
+        "open_box_exists",
+        "box_closed",
+        "box_already_attached",
+        "warehouse_mismatch",
+    ):
         return HTTPException(status_code=status.HTTP_409_CONFLICT, detail=exc.code)
     if exc.code in (
         "invalid_preset",
         "invalid_quantity",
         "barcode_empty",
         "barcode_unknown",
+        "box_barcode_unknown",
+        "box_needs_location",
         "product_not_in_shipment",
         "seller_required",
     ):
@@ -642,7 +713,8 @@ async def get_marketplace_unload_pick_options(
             product_id=str(o.product_id),
             sku_code=o.sku_code,
             product_name=o.product_name,
-            scanned_qty=o.scanned_qty,
+            planned_qty=o.planned_qty,
+            picked_qty=o.picked_qty,
             locations=[
                 MarketplaceUnloadPickOptionLocationOut(
                     storage_location_id=str(loc.storage_location_id),
@@ -656,6 +728,65 @@ async def get_marketplace_unload_pick_options(
         )
         for o in opts
     ]
+
+
+@router.post(
+    "/{request_id}/pick/scan",
+    response_model=MarketplaceUnloadPickScanOut,
+)
+async def scan_marketplace_unload_pick(
+    request_id: uuid.UUID,
+    body: MarketplaceUnloadPickScanBody,
+    user: Annotated[User, Depends(require_fulfillment_admin)],
+    session: Annotated[AsyncSession, Depends(get_db)],
+) -> MarketplaceUnloadPickScanOut:
+    try:
+        result = await pick_svc.pick_scan(
+            session,
+            user.tenant_id,
+            request_id,
+            barcode=body.barcode,
+            storage_location_id=body.storage_location_id,
+        )
+    except MarketplaceUnloadPickError as exc:
+        raise _map_pick_err(exc) from None
+    return MarketplaceUnloadPickScanOut(
+        kind=result.kind,
+        storage_location_id=str(result.storage_location_id)
+        if result.storage_location_id is not None
+        else None,
+        location_code=result.location_code,
+        product_id=str(result.product_id) if result.product_id is not None else None,
+        sku_code=result.sku_code,
+        product_name=result.product_name,
+        picked_qty=result.picked_qty,
+        allocation_quantity=result.allocation_quantity,
+    )
+
+
+@router.post(
+    "/{request_id}/pick/add",
+    response_model=MarketplaceUnloadPickAllocationOut,
+    status_code=status.HTTP_200_OK,
+)
+async def add_marketplace_unload_pick_qty(
+    request_id: uuid.UUID,
+    body: MarketplaceUnloadPickAddBody,
+    user: Annotated[User, Depends(require_fulfillment_admin)],
+    session: Annotated[AsyncSession, Depends(get_db)],
+) -> MarketplaceUnloadPickAllocationOut:
+    try:
+        alloc = await pick_svc.add_pick_qty(
+            session,
+            user.tenant_id,
+            request_id,
+            storage_location_id=body.storage_location_id,
+            product_id=body.product_id,
+            quantity=body.quantity,
+        )
+    except MarketplaceUnloadPickError as exc:
+        raise _map_pick_err(exc) from None
+    return _pick_alloc_out(alloc)
 
 
 @router.put(
@@ -740,9 +871,15 @@ async def ship_marketplace_unload(
     request_id: uuid.UUID,
     user: Annotated[User, Depends(require_fulfillment_admin)],
     session: Annotated[AsyncSession, Depends(get_db)],
+    body: MarketplaceUnloadShipBody = Body(default=_DEFAULT_SHIP_BODY),  # noqa: B008
 ) -> MarketplaceUnloadRequestDetailOut:
     try:
-        await pick_svc.ship_request(session, user.tenant_id, request_id)
+        await pick_svc.ship_request(
+            session,
+            user.tenant_id,
+            request_id,
+            acknowledge_discrepancy=body.acknowledge_discrepancy,
+        )
     except MarketplaceUnloadPickError as exc:
         raise _map_pick_err(exc) from None
     r = await svc.get_request(session, user.tenant_id, request_id)
@@ -772,12 +909,47 @@ async def create_marketplace_unload_box(
         )
     except MarketplaceUnloadBoxError as exc:
         raise _map_box_err(exc) from None
+    r = await svc.get_request(session, user.tenant_id, request_id)
+    assert r is not None
+    for ob in r.boxes:
+        if ob.id == b.id:
+            return _box_out(ob)
     return MarketplaceUnloadBoxOut(
         id=str(b.id),
         box_preset=b.box_preset,
+        internal_barcode=b.warehouse_box.internal_barcode if b.warehouse_box else None,
         closed_at=None,
         lines=[],
     )
+
+
+@router.post(
+    "/{request_id}/boxes/attach",
+    response_model=MarketplaceUnloadBoxOut,
+    status_code=status.HTTP_201_CREATED,
+)
+async def attach_marketplace_unload_box(
+    request_id: uuid.UUID,
+    body: MarketplaceUnloadAttachBoxBody,
+    user: Annotated[User, Depends(require_fulfillment_admin)],
+    session: Annotated[AsyncSession, Depends(get_db)],
+) -> MarketplaceUnloadBoxOut:
+    try:
+        b = await box_svc.attach_existing_box_by_barcode(
+            session,
+            user.tenant_id,
+            request_id,
+            barcode=body.barcode,
+            box_preset=body.box_preset,
+        )
+    except MarketplaceUnloadBoxError as exc:
+        raise _map_box_err(exc) from None
+    r = await svc.get_request(session, user.tenant_id, b.request_id)
+    assert r is not None
+    for ob in r.boxes:
+        if ob.id == b.id:
+            return _box_out(ob)
+    return _box_out(b)
 
 
 @router.post(

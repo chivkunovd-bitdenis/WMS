@@ -111,9 +111,12 @@ test.describe('Full WMS user journey', () => {
     ]);
     expect(postRes.ok()).toBeTruthy();
     await expect(page.getByTestId('inbound-detail-status')).toContainText('posted');
+    const movementsAfterPost = page
+      .getByTestId('inbound-movements-list')
+      .getByTestId('inbound-movement-row');
     await expect(
-      page.getByTestId('inbound-movements-list').getByTestId('inbound-movement-row').first(),
-    ).toContainText('+5');
+      movementsAfterPost.filter({ hasText: '+5 · stock_transfer_in' }),
+    ).toHaveCount(1);
 
     const invRow = page
       .getByTestId('inventory-balance-list')

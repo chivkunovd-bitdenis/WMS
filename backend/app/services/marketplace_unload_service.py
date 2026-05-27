@@ -126,6 +126,9 @@ async def get_request(
             selectinload(MarketplaceUnloadRequest.boxes)
             .selectinload(MarketplaceUnloadBox.lines)
             .selectinload(MarketplaceUnloadBoxLine.product),
+            selectinload(MarketplaceUnloadRequest.boxes).selectinload(
+                MarketplaceUnloadBox.warehouse_box
+            ),
             selectinload(MarketplaceUnloadRequest.pick_allocations).selectinload(
                 MarketplaceUnloadPickAllocation.product
             ),

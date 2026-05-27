@@ -804,64 +804,35 @@ async def test_marketplace_unload_ship_deducts_stock_by_pick_and_scan(
     ship_blocked = await async_client.post(
         f"/operations/marketplace-unload-requests/{mid}/ship",
         headers=h,
+        json={"acknowledge_discrepancy": False},
     )
     assert ship_blocked.status_code == 422
-    assert ship_blocked.json()["detail"] == "scans_required"
+    assert ship_blocked.json()["detail"] == "pick_required"
 
-    box = await async_client.post(
-        f"/operations/marketplace-unload-requests/{mid}/boxes",
+    loc = await async_client.get(f"/warehouses/{wid}/locations", headers=h)
+    loc_barcode = next(x for x in loc.json() if x["id"] == loc_id)["barcode"]
+
+    loc_scan = await async_client.post(
+        f"/operations/marketplace-unload-requests/{mid}/pick/scan",
         headers=h,
-        json={"box_preset": "60_40_40"},
+        json={"barcode": loc_barcode},
     )
-    assert box.status_code == 201, box.text
-    box_id = box.json()["id"]
+    assert loc_scan.status_code == 200, loc_scan.text
+    assert loc_scan.json()["kind"] == "location"
+
     for _ in range(3):
-        scan = await async_client.post(
-            f"/operations/marketplace-unload-requests/{mid}/boxes/{box_id}/scan",
+        prod_scan = await async_client.post(
+            f"/operations/marketplace-unload-requests/{mid}/pick/scan",
             headers=h,
-            json={"barcode": E2E_BARCODE},
+            json={"barcode": E2E_BARCODE, "storage_location_id": loc_id},
         )
-        assert scan.status_code == 200, scan.text
-    close = await async_client.post(
-        f"/operations/marketplace-unload-requests/{mid}/boxes/{box_id}/close",
-        headers=h,
-    )
-    assert close.status_code == 200, close.text
-
-    pick_bad = await async_client.put(
-        f"/operations/marketplace-unload-requests/{mid}/pick-allocations",
-        headers=h,
-        json={
-            "allocations": [
-                {
-                    "product_id": pid,
-                    "storage_location_id": loc_id,
-                    "quantity": 2,
-                }
-            ]
-        },
-    )
-    assert pick_bad.status_code == 422
-    assert pick_bad.json()["detail"] == "pick_scan_mismatch"
-
-    pick_ok = await async_client.put(
-        f"/operations/marketplace-unload-requests/{mid}/pick-allocations",
-        headers=h,
-        json={
-            "allocations": [
-                {
-                    "product_id": pid,
-                    "storage_location_id": loc_id,
-                    "quantity": 3,
-                }
-            ]
-        },
-    )
-    assert pick_ok.status_code == 200, pick_ok.text
+        assert prod_scan.status_code == 200, prod_scan.text
+        assert prod_scan.json()["kind"] == "product"
 
     ship = await async_client.post(
         f"/operations/marketplace-unload-requests/{mid}/ship",
         headers=h,
+        json={"acknowledge_discrepancy": False},
     )
     assert ship.status_code == 200, ship.text
     assert ship.json()["status"] == "shipped"

@@ -31,6 +31,7 @@ from app.models.tenant import Tenant
 from app.models.tenant_wb_mp_warehouse import TenantWbMpWarehouse
 from app.models.user import User
 from app.models.warehouse import Warehouse
+from app.models.warehouse_box import WarehouseBox
 from app.models.warehouse_storage_rack import WarehouseStorageRack
 
 __all__ = [
@@ -63,5 +64,6 @@ __all__ = [
     "TenantWbMpWarehouse",
     "User",
     "Warehouse",
+    "WarehouseBox",
     "WarehouseStorageRack",
 ]

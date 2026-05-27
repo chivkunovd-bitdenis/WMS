@@ -26,6 +26,7 @@ if TYPE_CHECKING:
     from app.models.storage_location import StorageLocation
     from app.models.tenant import Tenant
     from app.models.warehouse import Warehouse
+    from app.models.warehouse_box import WarehouseBox
 
 
 class MarketplaceUnloadRequest(Base):
@@ -133,6 +134,12 @@ class MarketplaceUnloadBox(Base):
         index=True,
     )
     box_preset: Mapped[str] = mapped_column(String(32), nullable=False)
+    warehouse_box_id: Mapped[uuid.UUID | None] = mapped_column(
+        Uuid(as_uuid=True),
+        ForeignKey("warehouse_boxes.id", ondelete="SET NULL"),
+        nullable=True,
+        index=True,
+    )
     closed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), nullable=False
@@ -142,6 +149,7 @@ class MarketplaceUnloadBox(Base):
         "MarketplaceUnloadRequest",
         back_populates="boxes",
     )
+    warehouse_box: Mapped[WarehouseBox | None] = relationship("WarehouseBox")
     lines: Mapped[list[MarketplaceUnloadBoxLine]] = relationship(
         "MarketplaceUnloadBoxLine",
         back_populates="box",

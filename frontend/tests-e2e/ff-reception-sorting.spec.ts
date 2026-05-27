@@ -107,7 +107,7 @@ test('ff verify posts to sorting zone; sorting queue and product columns', async
   const cellGroup = boxCard.getByTestId('ff-sorting-putaway-cell-group').filter({ hasText: 'STORE-1' });
   await expect(cellGroup).toBeVisible();
   await expect(cellGroup.getByTestId('ff-sorting-putaway-cell-summary')).toHaveText('STORE-1');
-  await expect(cellGroup.getByTestId('ff-sorting-putaway-whole-box-row')).toContainText('Короб №');
+  await expect(cellGroup.getByTestId('ff-sorting-putaway-product-row')).toBeVisible();
 
   const balDone = await page.request.get('/api/operations/inventory-balances/summary', { headers: h });
   const doneRow = ((await balDone.json()) as {

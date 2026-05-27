@@ -139,40 +139,34 @@ test('FF marketplace unload: pick by cell and ship reduces stock', async ({ page
     data: JSON.stringify({ planned_shipment_date: '2026-06-01' }),
   });
 
-  const box = await page.request.post(
-    `${e2eApi}/operations/marketplace-unload-requests/${mid}/boxes`,
-    { headers: auth, data: JSON.stringify({ box_preset: '60_40_40' }) },
-  );
-  const boxId = String(((await box.json()) as { id: string }).id);
-  for (let i = 0; i < 3; i += 1) {
-    await page.request.post(
-      `${e2eApi}/operations/marketplace-unload-requests/${mid}/boxes/${boxId}/scan`,
-      { headers: auth, data: JSON.stringify({ barcode }) },
-    );
-  }
-  await page.request.post(
-    `${e2eApi}/operations/marketplace-unload-requests/${mid}/boxes/${boxId}/close`,
-    { headers: auth },
+  const locList = await page.request.get(`${e2eApi}/warehouses/${whId}/locations`, {
+    headers: auth,
+  });
+  const locBarcode = String(
+    ((await locList.json()) as { id: string; barcode: string }[]).find((x) => x.id === locId)
+      ?.barcode,
   );
 
-  await page.request.put(
-    `${e2eApi}/operations/marketplace-unload-requests/${mid}/pick-allocations`,
-    {
-      headers: auth,
-      data: JSON.stringify({
-        allocations: [
-          {
-            product_id: productId,
-            storage_location_id: locId,
-            quantity: 3,
-          },
-        ],
-      }),
-    },
+  const locScan = await page.request.post(
+    `${e2eApi}/operations/marketplace-unload-requests/${mid}/pick/scan`,
+    { headers: auth, data: JSON.stringify({ barcode: locBarcode }) },
   );
+  expect(locScan.ok()).toBeTruthy();
+
+  for (let i = 0; i < 3; i += 1) {
+    const prodScan = await page.request.post(
+      `${e2eApi}/operations/marketplace-unload-requests/${mid}/pick/scan`,
+      {
+        headers: auth,
+        data: JSON.stringify({ barcode, storage_location_id: locId }),
+      },
+    );
+    expect(prodScan.ok()).toBeTruthy();
+  }
 
   await page.request.post(`${e2eApi}/operations/marketplace-unload-requests/${mid}/ship`, {
     headers: auth,
+    data: JSON.stringify({ acknowledge_discrepancy: false }),
   });
 
   const bal = await page.request.get(`${e2eApi}/operations/inventory-balances/summary`, {

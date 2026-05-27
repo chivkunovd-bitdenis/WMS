@@ -71,11 +71,25 @@ test('ff inbound distribution shows cell hints from existing stock', async ({ pa
     }
     await page.request.post(`${base}/${rid}/boxes/${boxId}/close`, { headers: h });
     await page.request.post(`${base}/${rid}/verify`, { headers: h });
-    await page.request.put(`${base}/${rid}/distribution-lines`, {
+    const detailAfterVerify = await page.request.get(`${base}/${rid}`, { headers: h });
+    const boxIdForDist = ((await detailAfterVerify.json()) as { boxes: { id: string }[] })
+      .boxes[0]!.id;
+    const putDist = await page.request.put(`${base}/${rid}/distribution-lines`, {
       headers: { ...h, 'Content-Type': 'application/json' },
-      data: [{ product_id: pid, storage_location_id: lid, quantity: qty }],
+      data: [
+        {
+          box_id: boxIdForDist,
+          product_id: pid,
+          storage_location_id: lid,
+          quantity: qty,
+        },
+      ],
     });
-    await page.request.post(`${base}/${rid}/distribution-complete`, { headers: h });
+    expect(putDist.ok()).toBeTruthy();
+    const doneDist = await page.request.post(`${base}/${rid}/distribution-complete`, {
+      headers: h,
+    });
+    expect(doneDist.ok()).toBeTruthy();
     return rid;
   }
 

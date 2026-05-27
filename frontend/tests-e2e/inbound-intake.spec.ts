@@ -123,10 +123,13 @@ test('create inbound request, add line, submit — UI and API', async ({ page })
     page.getByTestId('inbound-post-submit').click(),
   ]);
   expect(postRes.ok()).toBeTruthy();
-  await expect(page.getByTestId('inbound-detail-status')).toContainText('posted');
-  await expect(
-    page.getByTestId('inbound-movements-list').getByTestId('inbound-movement-row').first(),
-  ).toContainText('+4');
+    await expect(page.getByTestId('inbound-detail-status')).toContainText('posted');
+    await expect(
+      page
+        .getByTestId('inbound-movements-list')
+        .getByTestId('inbound-movement-row')
+        .filter({ hasText: '+4 · stock_transfer_in' }),
+    ).toHaveCount(1);
   const invRow = page
     .getByTestId('inventory-balance-list')
     .getByTestId('inventory-balance-row')

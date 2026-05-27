@@ -128,7 +128,18 @@ async def mark_box_label_printed(
         raise InboundIntakeBoxError("box_not_found")
     box.label_printed_at = datetime.now(UTC)
     await session.flush()
-    return box
+    stmt = (
+        select(InboundIntakeBox)
+        .where(InboundIntakeBox.id == box_id)
+        .options(
+            selectinload(InboundIntakeBox.lines).selectinload(InboundIntakeBoxLine.product),
+        )
+    )
+    res = await session.execute(stmt)
+    loaded = res.scalar_one_or_none()
+    if loaded is None:
+        raise InboundIntakeBoxError("box_not_found")
+    return loaded
 
 
 async def _get_request_for_intake(

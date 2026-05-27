@@ -59,12 +59,24 @@ async def test_locations_by_product_returns_cells_with_stock(
     )
     await fulfill_inbound_via_box_scans(async_client, ah, rid, sku, 4)
     await async_client.post(f"{base}/{rid}/verify", headers=ah)
-    await async_client.put(
+    got = await async_client.get(f"{base}/{rid}", headers=ah)
+    assert got.status_code == 200, got.text
+    box_id = got.json()["boxes"][0]["id"]
+    put = await async_client.put(
         f"{base}/{rid}/distribution-lines",
         headers=ah,
-        json=[{"product_id": pid, "storage_location_id": lid, "quantity": 4}],
+        json=[
+            {
+                "box_id": box_id,
+                "product_id": pid,
+                "storage_location_id": lid,
+                "quantity": 4,
+            }
+        ],
     )
-    await async_client.post(f"{base}/{rid}/distribution-complete", headers=ah)
+    assert put.status_code == 200, put.text
+    done = await async_client.post(f"{base}/{rid}/distribution-complete", headers=ah)
+    assert done.status_code == 200, done.text
 
     hints = await async_client.get(
         "/operations/inventory-balances/locations-by-product",

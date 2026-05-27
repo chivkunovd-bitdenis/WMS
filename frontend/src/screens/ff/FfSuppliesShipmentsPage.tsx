@@ -60,6 +60,8 @@ type DocLineRow = {
   sku_code: string
   product_name: string
   quantity: number
+  picked_qty?: number
+  has_discrepancy?: boolean
   inbound_intake_line_id?: string | null
 }
 
@@ -74,6 +76,7 @@ type MarketplaceUnloadBoxLine = {
 type MarketplaceUnloadBox = {
   id: string
   box_preset: string
+  internal_barcode: string | null
   closed_at: string | null
   lines: MarketplaceUnloadBoxLine[]
 }
@@ -100,7 +103,8 @@ type MarketplaceUnloadPickOptionProduct = {
   product_id: string
   sku_code: string
   product_name: string
-  scanned_qty: number
+  planned_qty: number
+  picked_qty: number
   locations: MarketplaceUnloadPickOptionLocation[]
 }
 
@@ -243,6 +247,10 @@ export function FfSuppliesShipmentsPage({
   const [pickQtyByProductLoc, setPickQtyByProductLoc] = useState<
     Record<string, Record<string, string>>
   >({})
+  const [activePickLocationId, setActivePickLocationId] = useState<string | null>(null)
+  const [activePickLocationCode, setActivePickLocationCode] = useState<string | null>(null)
+  const [pickScanBarcode, setPickScanBarcode] = useState('')
+  const [attachBoxBarcode, setAttachBoxBarcode] = useState('')
 
   const authHeaders = useMemo(
     () => (token ? { Authorization: `Bearer ${token}` } : null),
@@ -299,10 +307,18 @@ export function FfSuppliesShipmentsPage({
           wb_mp_warehouse_id?: number | null
           planned_shipment_date?: string | null
           created_at?: string
-          lines: { id: string; sku_code: string; product_name: string; quantity: number }[]
+          lines: {
+            id: string
+            sku_code: string
+            product_name: string
+            quantity: number
+            picked_qty?: number
+            has_discrepancy?: boolean
+          }[]
           boxes?: {
             id: string
             box_preset: string
+            internal_barcode?: string | null
             closed_at: string | null
             lines: {
               id: string
@@ -337,11 +353,14 @@ export function FfSuppliesShipmentsPage({
             sku_code: ln.sku_code,
             product_name: ln.product_name,
             quantity: ln.quantity,
+            picked_qty: ln.picked_qty ?? 0,
+            has_discrepancy: Boolean(ln.has_discrepancy),
             inbound_intake_line_id: null,
           })),
           boxes: (j.boxes ?? []).map((b) => ({
             id: b.id,
             box_preset: b.box_preset,
+            internal_barcode: b.internal_barcode ?? null,
             closed_at: b.closed_at,
             lines: (b.lines ?? []).map((ln) => ({
               id: ln.id,
@@ -504,6 +523,10 @@ export function FfSuppliesShipmentsPage({
     setInboundRefLines([])
     setSelectedInboundLineId('')
     setWbMpWarehouses([])
+    setActivePickLocationId(null)
+    setActivePickLocationCode(null)
+    setPickScanBarcode('')
+    setAttachBoxBarcode('')
   }
 
   const setWbWarehouseForUnload = async (wbMpWarehouseId: number) => {
@@ -656,6 +679,87 @@ export function FfSuppliesShipmentsPage({
     }
   }
 
+  const doPickScan = async () => {
+    if (!token || !authHeaders || !docModalId) {
+      return
+    }
+    const raw = pickScanBarcode.trim()
+    if (!raw) {
+      setModalError('Введите штрихкод ячейки или товара.')
+      return
+    }
+    setModalBusy(true)
+    setModalError(null)
+    try {
+      const res = await fetch(
+        apiUrl(`/operations/marketplace-unload-requests/${docModalId}/pick/scan`),
+        {
+          method: 'POST',
+          headers: { ...authHeaders, 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            barcode: raw,
+            storage_location_id: activePickLocationId,
+          }),
+        },
+      )
+      if (!res.ok) {
+        setModalError(await readApiErrorMessage(res))
+        return
+      }
+      const j = (await res.json()) as {
+        kind: string
+        storage_location_id?: string | null
+        location_code?: string | null
+      }
+      setPickScanBarcode('')
+      if (j.kind === 'location' && j.storage_location_id) {
+        setActivePickLocationId(j.storage_location_id)
+        setActivePickLocationCode(j.location_code ?? j.storage_location_id)
+        return
+      }
+      await loadDocDetail()
+      await onRefreshFfSupplyExtras()
+    } catch (e) {
+      setModalError(e instanceof Error ? e.message : 'Не удалось выполнить скан.')
+    } finally {
+      setModalBusy(false)
+    }
+  }
+
+  const attachExistingBox = async () => {
+    if (!token || !authHeaders || !docModalId) {
+      return
+    }
+    const raw = attachBoxBarcode.trim()
+    if (!raw) {
+      setModalError('Введите штрихкод короба.')
+      return
+    }
+    setModalBusy(true)
+    setModalError(null)
+    try {
+      const res = await fetch(
+        apiUrl(`/operations/marketplace-unload-requests/${docModalId}/boxes/attach`),
+        {
+          method: 'POST',
+          headers: { ...authHeaders, 'Content-Type': 'application/json' },
+          body: JSON.stringify({ barcode: raw, box_preset: boxPreset }),
+        },
+      )
+      if (!res.ok) {
+        setModalError(await readApiErrorMessage(res))
+        return
+      }
+      setAttachBoxBarcode('')
+      await loadDocDetail()
+      await onRefreshFfSupplyExtras()
+    } catch (e) {
+      setModalError(e instanceof Error ? e.message : 'Не удалось добавить короб.')
+    } finally {
+      setModalBusy(false)
+    }
+  }
+
   const openPickDialog = async () => {
     if (!token || !authHeaders || !docModalId) {
       return
@@ -735,15 +839,33 @@ export function FfSuppliesShipmentsPage({
     if (!token || !authHeaders || !docModalId) {
       return
     }
+    const hasDiscrepancy = unloadDetail?.lines.some((ln) => ln.has_discrepancy) ?? false
+    if (
+      hasDiscrepancy &&
+      !window.confirm(
+        'Фактический набор не совпадает с планом по одной или нескольким строкам. Отгрузить с расхождением?',
+      )
+    ) {
+      return
+    }
     setModalBusy(true)
     setModalError(null)
     try {
       const res = await fetch(
         apiUrl(`/operations/marketplace-unload-requests/${docModalId}/ship`),
-        { method: 'POST', headers: authHeaders },
+        {
+          method: 'POST',
+          headers: { ...authHeaders, 'Content-Type': 'application/json' },
+          body: JSON.stringify({ acknowledge_discrepancy: hasDiscrepancy }),
+        },
       )
       if (!res.ok) {
-        setModalError(await readApiErrorMessage(res))
+        const msg = await readApiErrorMessage(res)
+        if (msg.includes('discrepancy_requires_ack')) {
+          setModalError('Подтвердите отгрузку с расхождением (факт ≠ план).')
+        } else {
+          setModalError(msg)
+        }
         return
       }
       await loadDocDetail()
@@ -1280,15 +1402,26 @@ export function FfSuppliesShipmentsPage({
               <TableRow>
                 <TableCell>Артикул</TableCell>
                 <TableCell>Товар</TableCell>
-                <TableCell>Строка приёмки</TableCell>
-                <TableCell align="right">Кол-во</TableCell>
+                {docModal !== 'marketplace_unload' ? (
+                  <TableCell>Строка приёмки</TableCell>
+                ) : null}
+                <TableCell align="right">План</TableCell>
+                {docModal === 'marketplace_unload' && mpConfirmed ? (
+                  <>
+                    <TableCell align="right">Факт</TableCell>
+                    <TableCell align="right">Δ</TableCell>
+                  </>
+                ) : null}
                 {draftDoc ? <TableCell align="right" width={56} /> : null}
               </TableRow>
             </TableHead>
             <TableBody>
               {(() => {
                 const lines = unloadDetail?.lines ?? divergeDetail?.lines ?? []
-                const emptySpan = draftDoc ? 5 : 4
+                const mpCols =
+                  docModal === 'marketplace_unload' && mpConfirmed ? 2 : 0
+                const emptySpan =
+                  3 + (docModal === 'marketplace_unload' ? 0 : 1) + mpCols + (draftDoc ? 1 : 0)
                 if (lines.length === 0) {
                   return (
                     <TableRow>
@@ -1300,16 +1433,37 @@ export function FfSuppliesShipmentsPage({
                     </TableRow>
                   )
                 }
-                return lines.map((ln) => (
-                  <TableRow key={ln.id}>
+                return lines.map((ln) => {
+                  const picked = ln.picked_qty ?? 0
+                  const delta = picked - ln.quantity
+                  return (
+                  <TableRow
+                    key={ln.id}
+                    sx={
+                      ln.has_discrepancy
+                        ? { '& .MuiTableCell-root': { color: 'error.main' } }
+                        : undefined
+                    }
+                    data-testid={
+                      ln.has_discrepancy ? `ff-mp-line-discrepancy-${ln.id}` : undefined
+                    }
+                  >
                     <TableCell>{ln.sku_code}</TableCell>
                     <TableCell>{ln.product_name}</TableCell>
-                    <TableCell sx={{ color: 'text.secondary', fontSize: 13 }}>
-                      {ln.inbound_intake_line_id
-                        ? `${ln.inbound_intake_line_id.slice(0, 8)}…`
-                        : '—'}
-                    </TableCell>
+                    {docModal !== 'marketplace_unload' ? (
+                      <TableCell sx={{ color: 'text.secondary', fontSize: 13 }}>
+                        {ln.inbound_intake_line_id
+                          ? `${ln.inbound_intake_line_id.slice(0, 8)}…`
+                          : '—'}
+                      </TableCell>
+                    ) : null}
                     <TableCell align="right">{ln.quantity}</TableCell>
+                    {docModal === 'marketplace_unload' && mpConfirmed ? (
+                      <>
+                        <TableCell align="right">{picked}</TableCell>
+                        <TableCell align="right">{delta > 0 ? `+${delta}` : delta}</TableCell>
+                      </>
+                    ) : null}
                     {draftDoc ? (
                       <TableCell align="right">
                         <Tooltip title="Удалить строку">
@@ -1329,10 +1483,58 @@ export function FfSuppliesShipmentsPage({
                       </TableCell>
                     ) : null}
                   </TableRow>
-                ))
+                )})
               })()}
             </TableBody>
           </Table>
+          {docModal === 'marketplace_unload' && unloadDetail && mpConfirmed ? (
+            <Paper variant="outlined" sx={{ p: 1.5, mt: 2 }} data-testid="ff-mp-pick-panel">
+              <Typography variant="subtitle2" sx={{ mb: 1 }}>
+                Подбор со склада
+              </Typography>
+              <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
+                Сканируйте штрихкод ячейки, затем товары. Или выберите ячейку вручную в «Начать
+                подбор».
+              </Typography>
+              {activePickLocationCode ? (
+                <Chip
+                  size="small"
+                  label={`Ячейка: ${activePickLocationCode}`}
+                  sx={{ mb: 1 }}
+                  data-testid="ff-mp-active-location"
+                />
+              ) : (
+                <Typography variant="caption" color="warning.main" sx={{ display: 'block', mb: 1 }}>
+                  Сначала отсканируйте ячейку.
+                </Typography>
+              )}
+              <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1} sx={{ mb: 1 }}>
+                <TextField
+                  size="small"
+                  label="Штрихкод ячейки / товара"
+                  value={pickScanBarcode}
+                  onChange={(e) => setPickScanBarcode(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') {
+                      e.preventDefault()
+                      void doPickScan()
+                    }
+                  }}
+                  disabled={modalBusy}
+                  fullWidth
+                  data-testid="ff-mp-pick-scan-input"
+                />
+                <Button
+                  variant="contained"
+                  onClick={() => void doPickScan()}
+                  disabled={modalBusy}
+                  data-testid="ff-mp-pick-scan"
+                >
+                  Скан
+                </Button>
+              </Stack>
+            </Paper>
+          ) : null}
           {docModal === 'marketplace_unload' && unloadDetail && unloadDetail.pick_allocations.length > 0 ? (
             <Paper variant="outlined" sx={{ p: 1.5, mt: 2 }} data-testid="ff-mp-pick-saved">
               <Typography variant="subtitle2" sx={{ mb: 1 }}>
@@ -1367,13 +1569,35 @@ export function FfSuppliesShipmentsPage({
                 const closed = unloadDetail.boxes.filter((b) => Boolean(b.closed_at))
                 return (
                   <Stack spacing={1.5}>
-                    <Typography variant="subtitle2">Короба</Typography>
+                    <Typography variant="subtitle2">Короба (упаковка)</Typography>
+                    <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1} sx={{ mb: 1 }}>
+                      <TextField
+                        size="small"
+                        label="Штрихкод существующего короба"
+                        value={attachBoxBarcode}
+                        onChange={(e) => setAttachBoxBarcode(e.target.value)}
+                        disabled={modalBusy}
+                        fullWidth
+                        data-testid="ff-mp-box-attach-input"
+                      />
+                      <Button
+                        variant="outlined"
+                        onClick={() => void attachExistingBox()}
+                        disabled={modalBusy}
+                        data-testid="ff-mp-box-attach"
+                      >
+                        Добавить короб
+                      </Button>
+                    </Stack>
 
                     {mpConfirmed ? (
                       <Paper variant="outlined" sx={{ p: 1.5 }}>
                         <Stack spacing={1.25}>
-                          <Typography variant="body2" color="text.secondary">
-                            Открытый короб: {openBox ? `${openBox.id.slice(0, 8)}…` : 'нет'}
+                              <Typography variant="body2" color="text.secondary">
+                            Открытый короб:{' '}
+                            {openBox
+                              ? openBox.internal_barcode ?? `${openBox.id.slice(0, 8)}…`
+                              : 'нет'}
                           </Typography>
                           {!openBox ? (
                             <Stack direction="row" spacing={1} sx={{ alignItems: 'center' }}>
@@ -1474,7 +1698,8 @@ export function FfSuppliesShipmentsPage({
                           {closed.map((b) => (
                             <Box key={b.id} sx={{ borderTop: '1px solid', borderColor: 'divider', pt: 1 }}>
                               <Typography variant="body2" color="text.secondary">
-                                {b.box_preset} · {b.id.slice(0, 8)}… · {b.closed_at ? b.closed_at.slice(0, 19).replace('T', ' ') : '—'}
+                                {b.internal_barcode ?? b.id.slice(0, 8)} · {b.box_preset} ·{' '}
+                                {b.closed_at ? b.closed_at.slice(0, 19).replace('T', ' ') : '—'}
                               </Typography>
                               <Table size="small" sx={{ mt: 0.5 }}>
                                 <TableHead>
@@ -1709,8 +1934,8 @@ export function FfSuppliesShipmentsPage({
         <DialogTitle>Подбор товара по ячейкам</DialogTitle>
         <DialogContent dividers>
           <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
-            Укажите, сколько снять с каждой ячейки. Сумма по товару должна совпасть с количеством
-            отсканированным в коробах.
+            Укажите, сколько снять с каждой ячейки. Можно больше или меньше плана — при отгрузке
+            потребуется подтверждение расхождения.
           </Typography>
           <Stack spacing={2}>
             {pickOptions.map((prod) => (
@@ -1718,7 +1943,7 @@ export function FfSuppliesShipmentsPage({
                 <Typography variant="subtitle2">
                   {prod.sku_code} — {prod.product_name}{' '}
                   <Typography component="span" variant="body2" color="text.secondary">
-                    (скан: {prod.scanned_qty})
+                    (план: {prod.planned_qty}, факт: {prod.picked_qty})
                   </Typography>
                 </Typography>
                 {prod.locations.length === 0 ? (
