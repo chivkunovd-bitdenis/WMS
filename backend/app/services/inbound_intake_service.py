@@ -762,6 +762,57 @@ async def apply_box_putaway(
     return reloaded
 
 
+async def resync_sorting_stock_for_request(
+    session: AsyncSession,
+    tenant_id: uuid.UUID,
+    request_id: uuid.UUID,
+) -> InboundIntakeRequest:
+    """
+    Довести остаток в зоне «Сортировка» до (принято − уже разложено) по каждому SKU.
+
+    Нужно, если пересчёт делали до закрытия всех коробов или остаток в сортировке разъехался.
+    """
+    from app.services import inbound_intake_box_service as inbound_box_svc
+
+    req = await get_request(session, tenant_id, request_id)
+    if req is None:
+        raise InboundIntakeError("request_not_found")
+    if req.status != STATUS_VERIFIED:
+        raise InboundIntakeError("not_distributable")
+    if await inbound_box_svc.request_has_boxes(session, tenant_id, request_id):
+        await inbound_box_svc.sync_request_actuals_from_boxes(session, req)
+
+    sorting_loc = await sorting_loc_svc.get_or_create_sorting_location(
+        session, tenant_id, req.warehouse_id
+    )
+    for line in req.lines:
+        accepted = _accepted_qty_for_line(line)
+        if accepted <= 0:
+            continue
+        need = max(0, accepted - line.posted_qty)
+        if need <= 0:
+            continue
+        avail = await inv_svc.available_quantity_at_location(
+            session, tenant_id, line.product_id, sorting_loc.id
+        )
+        shortfall = need - avail
+        if shortfall > 0:
+            await inv_svc.apply_inbound_receive(
+                session,
+                tenant_id=tenant_id,
+                product_id=line.product_id,
+                storage_location_id=sorting_loc.id,
+                quantity=shortfall,
+                movement_type=MOVEMENT_TYPE_INBOUND_INTAKE,
+                inbound_intake_line_id=line.id,
+            )
+    await session.commit()
+    reloaded = await get_request(session, tenant_id, request_id)
+    if reloaded is None:
+        raise InboundIntakeError("request_not_found")
+    return reloaded
+
+
 async def list_distribution_lines(
     session: AsyncSession,
     tenant_id: uuid.UUID,

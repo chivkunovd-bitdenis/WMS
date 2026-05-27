@@ -1510,6 +1510,7 @@ export function FfInboundRequestView({
                 requestId={requestId}
                 warehouseId={detail.warehouse_id}
                 completed={detail.status === 'posted'}
+                canResyncSorting={detail.status === 'verified'}
                 boxes={(detail.boxes ?? []).map((b) => ({
                   ...b,
                   remaining_qty: b.remaining_qty ?? 0,

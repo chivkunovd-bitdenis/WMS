@@ -749,6 +749,34 @@ async def putaway_inbound_box(
     return _request_out(r)
 
 
+@router.post(
+    "/{request_id}/resync-sorting-stock",
+    response_model=InboundIntakeRequestOut,
+)
+async def resync_inbound_sorting_stock(
+    request_id: uuid.UUID,
+    user: Annotated[User, Depends(require_fulfillment_admin)],
+    session: Annotated[AsyncSession, Depends(get_db)],
+) -> InboundIntakeRequestOut:
+    try:
+        r = await svc.resync_sorting_stock_for_request(
+            session, user.tenant_id, request_id
+        )
+    except InboundIntakeError as exc:
+        if exc.code == "request_not_found":
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="request_not_found",
+            ) from None
+        if exc.code == "not_distributable":
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail=exc.code,
+            ) from None
+        raise
+    return _request_out(r)
+
+
 @router.patch(
     "/{request_id}/lines/{line_id}/actual",
     response_model=InboundIntakeLineOut,

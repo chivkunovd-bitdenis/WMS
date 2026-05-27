@@ -170,6 +170,74 @@ async def test_inbound_distribution_lines_validate_limits_and_lock(
 
 
 @pytest.mark.asyncio
+async def test_resync_sorting_stock_idempotent(async_client: AsyncClient) -> None:
+    suffix = str(int(time.time() * 1000))
+    reg = await async_client.post(
+        "/auth/register",
+        json={
+            "organization_name": "Resync Co",
+            "slug": f"resync-{suffix}",
+            "admin_email": f"resync-{suffix}@example.com",
+            "password": "password123",
+        },
+    )
+    assert reg.status_code == 200, reg.text
+    token = str(reg.json()["access_token"])
+    ah = {"Authorization": f"Bearer {token}"}
+
+    wh = await async_client.post(
+        "/warehouses",
+        headers=ah,
+        json={"name": "W", "code": f"rs-{suffix}"},
+    )
+    wid = wh.json()["id"]
+    loc = await async_client.post(
+        f"/warehouses/{wid}/locations",
+        headers=ah,
+        json={"code": "R-01"},
+    )
+    lid = loc.json()["id"]
+
+    pr = await async_client.post(
+        "/products",
+        headers=ah,
+        json={
+            "name": "P",
+            "sku_code": f"SKU-R-{suffix}",
+            "length_mm": 1,
+            "width_mm": 1,
+            "height_mm": 1,
+        },
+    )
+    pid = pr.json()["id"]
+    sku = pr.json()["sku_code"]
+
+    base = "/operations/inbound-intake-requests"
+    cr = await async_client.post(base, headers=ah, json={"warehouse_id": wid})
+    rid = cr.json()["id"]
+    await async_client.post(
+        f"{base}/{rid}/lines",
+        headers=ah,
+        json={"product_id": pid, "expected_qty": 5},
+    )
+    await async_client.post(f"{base}/{rid}/submit", headers=ah)
+    await post_primary_accept(async_client, base, rid, ah)
+    await fulfill_inbound_via_box_scans(async_client, ah, rid, sku, 5)
+    ver = await async_client.post(f"{base}/{rid}/verify", headers=ah)
+    assert ver.status_code == 200, ver.text
+
+    resync = await async_client.post(f"{base}/{rid}/resync-sorting-stock", headers=ah)
+    assert resync.status_code == 200, resync.text
+
+    put = await async_client.post(
+        f"{base}/{rid}/boxes/{resync.json()['boxes'][0]['id']}/putaway",
+        headers={**ah, "Content-Type": "application/json"},
+        json={"storage_location_id": lid},
+    )
+    assert put.status_code == 200, put.text
+
+
+@pytest.mark.asyncio
 async def test_empty_distribution_complete_rejected(async_client: AsyncClient) -> None:
     suffix = str(int(time.time() * 1000))
     reg = await async_client.post(
