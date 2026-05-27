@@ -267,6 +267,14 @@ async def _product_recorded_in_boxes(
     return res.scalar_one_or_none() is not None
 
 
+async def sync_request_actuals_from_boxes(
+    session: AsyncSession,
+    req: InboundIntakeRequest,
+) -> None:
+    """Сумма по закрытым/открытым коробам → actual_qty на строках заявки."""
+    await _sync_request_actuals(session, req)
+
+
 async def _sync_request_actuals(
     session: AsyncSession,
     req: InboundIntakeRequest,

@@ -473,6 +473,8 @@ async def complete_verification(
         if exc.code == "open_box_exists":
             raise InboundIntakeError("open_box_exists") from None
         raise
+    if await inbound_box_svc.request_has_boxes(session, tenant_id, request_id):
+        await inbound_box_svc.sync_request_actuals_from_boxes(session, req)
     if any(ln.actual_qty is None for ln in req.lines):
         raise InboundIntakeError("actual_missing")
     req.status = STATUS_VERIFIED
@@ -719,15 +721,26 @@ async def apply_box_putaway(
         if line.posted_qty + qty > accepted:
             raise InboundIntakeError("qty_exceeds_accepted")
 
-        await inv_svc.apply_putaway_from_sorting(
-            session,
-            tenant_id,
-            from_storage_location_id=sorting_loc.id,
-            to_storage_location_id=storage_location_id,
-            product_id=product_id,
-            quantity=qty,
-            inbound_intake_line_id=line.id,
+        avail = await inv_svc.available_quantity_at_location(
+            session, tenant_id, product_id, sorting_loc.id
         )
+        if avail < qty:
+            raise InboundIntakeError("insufficient_sorting_stock")
+
+        try:
+            await inv_svc.apply_putaway_from_sorting(
+                session,
+                tenant_id,
+                from_storage_location_id=sorting_loc.id,
+                to_storage_location_id=storage_location_id,
+                product_id=product_id,
+                quantity=qty,
+                inbound_intake_line_id=line.id,
+            )
+        except ValueError as exc:
+            if str(exc) == "insufficient stock":
+                raise InboundIntakeError("insufficient_sorting_stock") from None
+            raise
         line.posted_qty += qty
         bl.posted_qty += qty
         session.add(

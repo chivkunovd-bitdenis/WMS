@@ -739,6 +739,7 @@ async def putaway_inbound_box(
             "product_not_in_box",
             "nothing_to_putaway",
             "sorting_location_reserved",
+            "insufficient_sorting_stock",
         ):
             raise HTTPException(
                 status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
