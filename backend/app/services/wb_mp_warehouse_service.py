@@ -20,16 +20,25 @@ from app.services.wildberries_credentials_service import get_decrypted_tokens_fo
 logger = logging.getLogger(__name__)
 
 
-def pick_wb_mp_warehouse_api_token(
+def wb_mp_warehouse_tokens_to_try(
     content_token: str | None,
     supplies_token: str | None,
-) -> str | None:
-    """Supplies API key preferred; many sellers only save content key — use it as fallback."""
-    if supplies_token and supplies_token.strip():
-        return supplies_token.strip()
-    if content_token and content_token.strip():
-        return content_token.strip()
-    return None
+) -> list[str]:
+    """
+    Content key first (seller UI saves it and cards sync works), then supplies.
+    Skip duplicates when both fields hold the same token.
+    """
+    seen: set[str] = set()
+    out: list[str] = []
+    for raw in (content_token, supplies_token):
+        if not raw:
+            continue
+        t = raw.strip()
+        if not t or t in seen:
+            continue
+        seen.add(t)
+        out.append(t)
+    return out
 
 
 async def count_tenant_mp_warehouses(session: AsyncSession, tenant_id: uuid.UUID) -> int:
@@ -71,42 +80,82 @@ async def replace_tenant_mp_warehouses(
     await session.commit()
 
 
-async def sync_tenant_mp_warehouses(
+async def fetch_mp_warehouses_try_tokens(
+    content_token: str | None,
+    supplies_token: str | None,
+) -> list[dict[str, object]]:
+    """Call WB supplies API with each distinct seller token until one succeeds."""
+    tokens = wb_mp_warehouse_tokens_to_try(content_token, supplies_token)
+    if not tokens:
+        return []
+    last_exc: WildberriesClientError | None = None
+    async with httpx.AsyncClient() as client:
+        for idx, token in enumerate(tokens):
+            try:
+                data = await wb_client.fetch_mp_warehouses_list(client, api_token=token)
+            except WildberriesClientError as exc:
+                last_exc = exc
+                logger.warning(
+                    "wb mp warehouses fetch failed (attempt %s/%s): %s http=%s",
+                    idx + 1,
+                    len(tokens),
+                    exc.code,
+                    exc.status_code,
+                )
+                continue
+            except httpx.HTTPError:
+                logger.warning(
+                    "wb mp warehouses transport error (attempt %s/%s)",
+                    idx + 1,
+                    len(tokens),
+                )
+                continue
+            if data:
+                if idx > 0:
+                    logger.info("wb mp warehouses loaded using fallback token attempt %s", idx + 1)
+                return data
+    if last_exc is not None:
+        logger.warning(
+            "wb mp warehouses: all %s token(s) failed, last=%s http=%s",
+            len(tokens),
+            last_exc.code,
+            last_exc.status_code,
+        )
+    return []
+
+
+async def sync_tenant_mp_warehouses_from_seller_tokens(
     session: AsyncSession,
     tenant_id: uuid.UUID,
     *,
-    api_token: str,
+    content_token: str | None,
+    supplies_token: str | None,
 ) -> int:
-    """Pull WB warehouses and replace tenant cache. Returns row count."""
-    token = api_token.strip()
-    if not token:
-        return await count_tenant_mp_warehouses(session, tenant_id)
-    try:
-        async with httpx.AsyncClient() as client:
-            data = await wb_client.fetch_mp_warehouses_list(client, api_token=token)
-    except WildberriesClientError as exc:
-        logger.warning("wb mp warehouses fetch failed: %s", exc.code)
-        return await count_tenant_mp_warehouses(session, tenant_id)
-    except httpx.HTTPError:
-        logger.warning("wb mp warehouses transport error")
-        return await count_tenant_mp_warehouses(session, tenant_id)
+    """Pull WB warehouses; try content then supplies token."""
+    data = await fetch_mp_warehouses_try_tokens(content_token, supplies_token)
     if not data:
         return await count_tenant_mp_warehouses(session, tenant_id)
     await replace_tenant_mp_warehouses(session, tenant_id, data)
     return await count_tenant_mp_warehouses(session, tenant_id)
 
 
-async def sync_tenant_mp_warehouses_if_empty(
+async def sync_tenant_mp_warehouses_if_empty_from_seller_tokens(
     session: AsyncSession,
     tenant_id: uuid.UUID,
     *,
-    api_token: str,
+    content_token: str | None,
+    supplies_token: str | None,
 ) -> int:
     """Если для тенанта ещё нет кэша — один раз тянем склады WB."""
     n_existing = await count_tenant_mp_warehouses(session, tenant_id)
     if n_existing > 0:
         return n_existing
-    return await sync_tenant_mp_warehouses(session, tenant_id, api_token=api_token)
+    return await sync_tenant_mp_warehouses_from_seller_tokens(
+        session,
+        tenant_id,
+        content_token=content_token,
+        supplies_token=supplies_token,
+    )
 
 
 async def get_first_tenant_seller_id(
@@ -123,7 +172,7 @@ async def get_first_tenant_seller_id(
 
 
 async def run_wb_mp_warehouses_sync_task(tenant_id: uuid.UUID, seller_id: uuid.UUID) -> None:
-    """Фон: если кэш пуст — взять supplies-токен этого селлера и заполнить склады WB."""
+    """Фон: если кэш пуст — токены селлера (content, затем supplies) → склады WB."""
     async with SessionLocal() as session:
         seller = await session.get(Seller, seller_id)
         if seller is None or seller.tenant_id != tenant_id:
@@ -134,14 +183,16 @@ async def run_wb_mp_warehouses_sync_task(tenant_id: uuid.UUID, seller_id: uuid.U
         if pair is None:
             return
         content, supplies = pair
-        token = pick_wb_mp_warehouse_api_token(content, supplies)
-        if not token:
-            return
-        await sync_tenant_mp_warehouses_if_empty(session, tenant_id, api_token=token)
+        await sync_tenant_mp_warehouses_if_empty_from_seller_tokens(
+            session,
+            tenant_id,
+            content_token=content,
+            supplies_token=supplies,
+        )
 
 
 async def run_daily_wb_mp_warehouses_sync_for_tenant(tenant_id: uuid.UUID) -> None:
-    """Daily: sync WB MP warehouses using first registered seller's supplies token."""
+    """Daily: sync WB MP warehouses using first registered seller's tokens."""
     async with SessionLocal() as session:
         first_seller_id = await get_first_tenant_seller_id(session, tenant_id)
         if first_seller_id is None:
@@ -150,10 +201,12 @@ async def run_daily_wb_mp_warehouses_sync_for_tenant(tenant_id: uuid.UUID) -> No
         if pair is None:
             return
         content, supplies = pair
-        token = pick_wb_mp_warehouse_api_token(content, supplies)
-        if not token:
-            return
-        await sync_tenant_mp_warehouses(session, tenant_id, api_token=token)
+        await sync_tenant_mp_warehouses_from_seller_tokens(
+            session,
+            tenant_id,
+            content_token=content,
+            supplies_token=supplies,
+        )
 
 
 async def run_daily_wb_mp_warehouses_sync_all_tenants() -> None:
@@ -180,7 +233,7 @@ async def list_cached_mp_warehouses(
 async def list_mp_warehouses_for_tenant(
     session: AsyncSession, tenant_id: uuid.UUID
 ) -> list[TenantWbMpWarehouse]:
-    """Return cached WB MP warehouses; lazy-fill from first seller supplies token if empty."""
+    """Return cached WB MP warehouses; lazy-fill from first seller tokens if empty."""
     rows = await list_cached_mp_warehouses(session, tenant_id)
     if rows:
         return rows
@@ -191,10 +244,12 @@ async def list_mp_warehouses_for_tenant(
     if pair is None:
         return []
     content, supplies = pair
-    token = pick_wb_mp_warehouse_api_token(content, supplies)
-    if not token:
-        return []
-    await sync_tenant_mp_warehouses_if_empty(session, tenant_id, api_token=token)
+    await sync_tenant_mp_warehouses_if_empty_from_seller_tokens(
+        session,
+        tenant_id,
+        content_token=content,
+        supplies_token=supplies,
+    )
     return await list_cached_mp_warehouses(session, tenant_id)
 
 
