@@ -1498,25 +1498,34 @@ export function FfInboundRequestView({
             </Stack>
           </Stack>
 
-          {sortingView && detail.status === 'verified' ? (
-            <FfInboundSortingPanel
-              token={token}
-              requestId={requestId}
-              warehouseId={detail.warehouse_id}
-              boxes={(detail.boxes ?? []).map((b) => ({
-                ...b,
-                remaining_qty: b.remaining_qty ?? 0,
-                lines: b.lines.map((ln) => ({
-                  ...ln,
-                  posted_qty: ln.posted_qty ?? 0,
-                  remaining_qty: ln.remaining_qty ?? Math.max(0, ln.quantity - (ln.posted_qty ?? 0)),
-                })),
-              }))}
-              sortingRemainingQty={sortingRemainingTotal}
-              onReload={async () => {
-                await loadDetail()
-              }}
-            />
+          {sortingView && (detail.status === 'verified' || detail.status === 'posted') ? (
+            <>
+              {detail.status === 'posted' ? (
+                <Alert severity="success" sx={{ mb: 2 }} data-testid="ff-sorting-posted-done">
+                  Оприходовано — весь товар разложен по ячейкам хранения.
+                </Alert>
+              ) : null}
+              <FfInboundSortingPanel
+                token={token}
+                requestId={requestId}
+                warehouseId={detail.warehouse_id}
+                completed={detail.status === 'posted'}
+                boxes={(detail.boxes ?? []).map((b) => ({
+                  ...b,
+                  remaining_qty: b.remaining_qty ?? 0,
+                  lines: (b.lines ?? []).map((ln) => ({
+                    ...ln,
+                    posted_qty: ln.posted_qty ?? 0,
+                    remaining_qty:
+                      ln.remaining_qty ?? Math.max(0, ln.quantity - (ln.posted_qty ?? 0)),
+                  })),
+                }))}
+                sortingRemainingQty={sortingRemainingTotal}
+                onReload={async () => {
+                  await loadDetail()
+                }}
+              />
+            </>
           ) : null}
 
           {!sortingView ? (

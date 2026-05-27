@@ -79,6 +79,8 @@ type Props = {
   warehouseId: string
   boxes: SortingBox[]
   sortingRemainingQty: number
+  /** Заявка уже оприходована — только просмотр разкладки. */
+  completed?: boolean
   onReload: () => Promise<void>
 }
 
@@ -176,6 +178,7 @@ export function FfInboundSortingPanel({
   warehouseId,
   boxes,
   sortingRemainingQty,
+  completed = false,
   onReload,
 }: Props) {
   const authHeaders = useMemo(() => ({ Authorization: `Bearer ${token}` }), [token])
@@ -369,7 +372,7 @@ export function FfInboundSortingPanel({
 
       <Stack spacing={2}>
         {closedBoxes.map((box) => {
-          const done = box.remaining_qty <= 0
+          const done = completed || box.remaining_qty <= 0
           const cellId = cellByBoxId[box.id] ?? ''
           const boxHistory = resolveBoxPutawayHistory(
             box.id,
