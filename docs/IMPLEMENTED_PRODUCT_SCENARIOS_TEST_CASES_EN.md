@@ -203,22 +203,29 @@ This document expands **[IMPLEMENTED_PRODUCT_SCENARIOS_EN.md](./IMPLEMENTED_PROD
 - **Steps:** assign or change **cell** on line when UI allows for status.
 - **Expected:** line shows updated location; operation succeeds when permitted.
 
-### TC-S06-006 Receive partial quantity on line
+### TC-S06-006 Partial putaway from sorting zone (distribution)
 
-- **Actor:** admin (seller limited per scenario on critical steps).
-- **Preconditions:** inbound in receivable state with line and location as required by app rules.
-- **Steps:** record **receive** for **part** of expected quantity.
-- **Expected:** received quantity accumulates; partial allowed.
+- **Actor:** admin.
+- **Preconditions:** inbound **verified**; accepted quantity in **sorting zone**; storage cells exist.
+- **Steps:** in **Сортировка**, save distribution lines for **part** of accepted qty; **complete distribution**.
+- **Expected:** that part appears in **storage cells** and is **available** for reservation; remainder stays **in sorting**; request remains in sorting queue.
 
-### TC-S06-007 Post inbound — inventory and movements
+### TC-S06-007 Verify inbound — stock at FF in sorting zone
 
-- **Actor:** admin (seller read-only on post per scenario/UI).
-- **Preconditions:** inbound ready for post per product rules; lines have assignments as required.
-- **Steps:** execute **post** (finalize unreceived remainder per app rules).
+- **Actor:** admin.
+- **Preconditions:** piece/box intake complete; inbound in **verifying** state.
+- **Steps:** **complete verification** (Завершить пересчёт).
 - **Expected:**
-  - **Inventory increases** in assigned locations as per implemented rules.
-  - **Movements** visible in relevant journals.
-  - Optional: **per-location balances** snippet for affected cells (admin view).
+  - Request leaves **Приёмка** queue; appears in **Сортировка** queue.
+  - **quantity_in_sorting** on balance summary equals accepted qty; seller **on hand** includes it.
+  - **Movements:** positive inbound into sorting zone cell.
+
+### TC-NEW-S06-001 Full putaway — sorting queue cleared
+
+- **Actor:** admin.
+- **Preconditions:** verified inbound with qty in sorting zone.
+- **Steps:** distribute **all** accepted quantity to storage cells; complete distribution.
+- **Expected:** **quantity_in_sorting** = 0; **quantity_in_storage** = accepted; request **posted**; removed from sorting queue.
 
 ### TC-S06-008 Seller restricted on post / some warehouse actions
 

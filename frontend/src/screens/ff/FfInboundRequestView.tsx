@@ -122,10 +122,13 @@ export type WbCatalogRow = {
   wb_primary_barcode: string | null
 }
 
+export type InboundRequestWorkspace = 'reception' | 'sorting' | 'full'
+
 type Props = {
   token: string
   requestId: string
   isFulfillmentAdmin: boolean
+  workspace?: InboundRequestWorkspace
   onClose: () => void
 }
 
@@ -134,12 +137,18 @@ function statusRu(status: string): string {
   if (status === 'submitted') return 'Передано на склад'
   if (status === 'primary_accepted') return 'Принято на складе'
   if (status === 'verifying') return 'Проверка на складе'
-  if (status === 'verified') return 'Проверено на складе'
+  if (status === 'verified') return 'В сортировке'
   if (status === 'posted') return 'Оприходовано'
   return status
 }
 
-export function FfInboundRequestView({ token, requestId, isFulfillmentAdmin, onClose }: Props) {
+export function FfInboundRequestView({
+  token,
+  requestId,
+  isFulfillmentAdmin,
+  workspace = 'full',
+  onClose,
+}: Props) {
   const authHeaders = useMemo(() => ({ Authorization: `Bearer ${token}` }), [token])
 
   const [detail, setDetail] = useState<InboundDetail | null>(null)
@@ -225,9 +234,10 @@ export function FfInboundRequestView({ token, requestId, isFulfillmentAdmin, onC
 
   const loadLocations = useCallback(
     async (warehouseId: string) => {
-      const res = await fetch(apiUrl(`/warehouses/${warehouseId}/locations`), {
-        headers: authHeaders,
-      })
+      const res = await fetch(
+        apiUrl(`/warehouses/${warehouseId}/locations?exclude_sorting_zone=true`),
+        { headers: authHeaders },
+      )
       if (!res.ok) {
         setLocations([])
         setDistError('Не удалось загрузить список ячеек склада.')
@@ -427,8 +437,16 @@ export function FfInboundRequestView({ token, requestId, isFulfillmentAdmin, onC
       setDistLines([])
       return
     }
+    if (workspace === 'reception') {
+      setDistOpen(false)
+      setDistLines([])
+      return
+    }
+    if (workspace === 'sorting') {
+      setDistOpen(true)
+    }
     void loadDistribution()
-  }, [detail, isFulfillmentAdmin, loadDistribution])
+  }, [detail, isFulfillmentAdmin, loadDistribution, workspace])
 
   useEffect(() => {
     if (!distOpen || detail?.status !== 'verified') return
@@ -667,10 +685,8 @@ export function FfInboundRequestView({ token, requestId, isFulfillmentAdmin, onC
 
   const completeDistribution = async () => {
     if (!detail) return
-    if (hasNoCellPending && distLines.every((r) => !r.product_id || !r.storage_location_id)) {
-      setDistError(
-        'Распределите всё принятое количество по ячейкам. Пока есть остаток «без ячейки» — товар не попадёт в складской каталог.',
-      )
+    if (distLines.every((r) => !r.product_id || !r.storage_location_id || !r.quantity)) {
+      setDistError('Добавьте хотя бы одну строку с товаром, ячейкой и количеством.')
       setDistOpen(true)
       return
     }
@@ -1255,7 +1271,9 @@ export function FfInboundRequestView({ token, requestId, isFulfillmentAdmin, onC
             ) : null}
             <Box sx={{ flexGrow: 1 }} />
 
-            {isFulfillmentAdmin && (detail.status === 'primary_accepted' || detail.status === 'verifying') ? (
+            {isFulfillmentAdmin &&
+            workspace !== 'sorting' &&
+            (detail.status === 'primary_accepted' || detail.status === 'verifying') ? (
               <Button
                 variant="contained"
                 disabled={busy}
@@ -1266,7 +1284,7 @@ export function FfInboundRequestView({ token, requestId, isFulfillmentAdmin, onC
               </Button>
             ) : null}
 
-            {isFulfillmentAdmin && detail.status === 'verified' ? (
+            {isFulfillmentAdmin && detail.status === 'verified' && workspace !== 'reception' ? (
               <Button
                 variant="contained"
                 disabled={distBusy || distributionCompleted}
@@ -1522,7 +1540,7 @@ export function FfInboundRequestView({ token, requestId, isFulfillmentAdmin, onC
 
           {isFulfillmentAdmin ? (
             <Box sx={{ mt: 2 }}>
-              {detail.status === 'submitted' ? (
+              {workspace !== 'sorting' && detail.status === 'submitted' ? (
                 <Paper variant="outlined" sx={{ p: 2 }} data-testid="ff-inbound-admin-submitted">
                   <Typography variant="subtitle2" sx={{ fontWeight: 800, mb: 1 }}>
                     Приёмка по коробам
@@ -1665,7 +1683,8 @@ export function FfInboundRequestView({ token, requestId, isFulfillmentAdmin, onC
                 </Paper>
               ) : null}
 
-              {boxIntakeMode &&
+              {workspace !== 'sorting' &&
+              boxIntakeMode &&
               isFulfillmentAdmin &&
               (detail.status === 'primary_accepted' || detail.status === 'verifying') ? (
                 <Paper
@@ -1788,7 +1807,22 @@ export function FfInboundRequestView({ token, requestId, isFulfillmentAdmin, onC
                 </Paper>
               ) : null}
 
-              {detail.status === 'verified' ? (
+              {workspace === 'reception' && detail.status === 'verified' ? (
+                <Alert severity="success" sx={{ mt: 2 }} data-testid="ff-inbound-moved-to-sorting">
+                  Пересчёт завершён. Остаток принят на склад ФФ (зона «Сортировка»). Разложение по ячейкам —
+                  в разделе <strong>Сортировка</strong>.
+                </Alert>
+              ) : null}
+
+              {workspace === 'sorting' &&
+              detail.status !== 'verified' &&
+              detail.status !== 'posted' ? (
+                <Alert severity="info" sx={{ mt: 2 }} data-testid="ff-inbound-sorting-wait-reception">
+                  Сначала завершите приёмку и пересчёт в разделе <strong>Приёмка</strong>.
+                </Alert>
+              ) : null}
+
+              {detail.status === 'verified' && workspace !== 'reception' ? (
                 <Paper variant="outlined" sx={{ p: 2 }} data-testid="ff-inbound-admin-distribution">
                   <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1} sx={{ alignItems: { sm: 'center' } }}>
                     <Box sx={{ flexGrow: 1 }}>
@@ -1798,9 +1832,9 @@ export function FfInboundRequestView({ token, requestId, isFulfillmentAdmin, onC
                       <Typography variant="body2" color="text.secondary">
                         {distributionCompleted
                           ? hasNoCellPending
-                            ? 'Распределение зафиксировано без ячеек — товар не попал на склад. Откройте заново и распределите всё принятое.'
-                            : 'Распределение зафиксировано, правки недоступны.'
-                          : 'Распределите всё принятое количество по ячейкам, затем «Завершить распределение» — только тогда товар появится в разделе «Товары».'}
+                            ? 'Распределение зафиксировано без ячеек — товар остаётся в зоне сортировки. Откройте заново и разложите принятое.'
+                            : 'Всё принятое разложено по ячейкам хранения.'
+                          : 'Разложите принятое по ячейкам хранения. Можно частями: разложенное сразу доступно к резерву, пока не разложено всё — поставка остаётся в этом разделе.'}
                       </Typography>
                       {requestWarehouse ? (
                         <Typography
@@ -1899,11 +1933,11 @@ export function FfInboundRequestView({ token, requestId, isFulfillmentAdmin, onC
                             </Button>
                             <Button
                               variant="contained"
-                              disabled={distBusy || hasNoCellPending}
+                              disabled={distBusy}
                               onClick={() => void completeDistribution()}
                               data-testid="ff-inbound-distribution-complete"
                             >
-                              Завершить распределение
+                              {hasNoCellPending ? 'Применить разкладку' : 'Завершить распределение'}
                             </Button>
                           </>
                         ) : canReopenDistribution ? (

@@ -150,9 +150,16 @@ async def test_inbound_intake_flow_post_all(async_client: AsyncClient) -> None:
     mov = await async_client.get(f"{base}/{rid}/movements", headers=ah)
     assert mov.status_code == 200, mov.text
     mrows = mov.json()
-    assert len(mrows) == 1
-    assert mrows[0]["quantity_delta"] == 5
-    assert mrows[0]["inbound_intake_line_id"] == line_id
+    inbound_to_sorting = [
+        m
+        for m in mrows
+        if m["movement_type"] == "inbound_intake" and m["quantity_delta"] > 0
+    ]
+    transfer_in = [m for m in mrows if m["movement_type"] == "stock_transfer_in"]
+    assert len(inbound_to_sorting) == 1
+    assert inbound_to_sorting[0]["quantity_delta"] == 5
+    assert inbound_to_sorting[0]["inbound_intake_line_id"] == line_id
+    assert sum(m["quantity_delta"] for m in transfer_in) == 5
 
     dup_post = await async_client.post(f"{base}/{rid}/post", headers=ah)
     assert dup_post.status_code == 409
@@ -255,7 +262,7 @@ async def test_inbound_partial_receive_then_complete(async_client: AsyncClient) 
     assert r2.json()["lines"][0]["posted_qty"] == 10
 
     mov = await async_client.get(f"{base}/{rid}/movements", headers=ah)
-    assert len(mov.json()) == 2
+    assert len(mov.json()) == 5
 
 
 @pytest.mark.asyncio

@@ -42,6 +42,8 @@ type StockSummaryRow = {
   sku_code: string
   product_name: string
   quantity: number
+  quantity_in_sorting: number
+  quantity_in_storage: number
   reserved: number
   available: number
 }
@@ -105,10 +107,17 @@ export function FfProductsCatalogScreen({ token, authHeaders, sellers }: Props) 
 
   const rows = useMemo(() => {
     const byProduct = new Map(stock.map((s) => [s.product_id, s]))
-    const merged = catalog.map((p) => ({
-      ...p,
-      quantity: byProduct.get(p.id)?.quantity ?? 0,
-    }))
+    const merged = catalog.map((p) => {
+      const bal = byProduct.get(p.id)
+      return {
+        ...p,
+        quantity: bal?.quantity ?? 0,
+        quantity_in_sorting: bal?.quantity_in_sorting ?? 0,
+        quantity_in_storage: bal?.quantity_in_storage ?? 0,
+        reserved: bal?.reserved ?? 0,
+        available: bal?.available ?? 0,
+      }
+    })
     if (selectedSellerId === '__all__') {
       return merged
     }
@@ -196,15 +205,24 @@ export function FfProductsCatalogScreen({ token, authHeaders, sellers }: Props) 
                 </TableSortLabel>
               </TableCell>
               <TableCell width={220}>Селлер</TableCell>
-              <TableCell align="right" width={160}>
+              <TableCell align="right" width={120}>
                 <TableSortLabel
                   active={sortKey === 'quantity'}
                   direction={sortKey === 'quantity' ? sortDir : 'asc'}
                   onClick={() => toggleSort('quantity')}
                   data-testid="ff-products-sort-quantity"
                 >
-                  Остаток (итого)
+                  На складе
                 </TableSortLabel>
+              </TableCell>
+              <TableCell align="right" width={120} data-testid="ff-products-col-sorting">
+                В сортировке
+              </TableCell>
+              <TableCell align="right" width={120}>
+                В ячейках
+              </TableCell>
+              <TableCell align="right" width={110}>
+                Доступно
               </TableCell>
             </TableRow>
           </TableHead>
@@ -221,17 +239,22 @@ export function FfProductsCatalogScreen({ token, authHeaders, sellers }: Props) 
                 <TableCell>{p.name}</TableCell>
                 <TableCell>{p.seller_name ?? '—'}</TableCell>
                 <TableCell align="right">{p.quantity}</TableCell>
+                <TableCell align="right" data-testid="ff-product-qty-sorting">
+                  {p.quantity_in_sorting}
+                </TableCell>
+                <TableCell align="right">{p.quantity_in_storage}</TableCell>
+                <TableCell align="right">{p.available}</TableCell>
               </TableRow>
             ))}
             {sortedRows.length === 0 && !busy ? (
               <TableRow>
-                <TableCell colSpan={8}>
+                <TableCell colSpan={11}>
                   <Typography variant="body2" color="text.secondary">
                     Пока нет товаров.
                   </Typography>
                   <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5 }}>
-                    Остатки появляются после приёмки: на заявке поставки нужно распределить принятое
-                    количество по ячейкам и завершить распределение (статус «Оприходовано»).
+                    Остаток появляется после завершения пересчёта на приёмке (зона «Сортировка»).
+                    После разкладки по ячейкам товар доступен к резерву.
                   </Typography>
                 </TableCell>
               </TableRow>

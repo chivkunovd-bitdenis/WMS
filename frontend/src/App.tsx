@@ -32,7 +32,8 @@ import {
   type FfMarketplaceUnloadSummary,
 } from './screens/ff/FfSuppliesShipmentsPage'
 import { FfPlaceholderPage } from './screens/ff/FfPlaceholderPage'
-import { FfInboundRequestView } from './screens/ff/FfInboundRequestView'
+import { FfInboundRequestView, type InboundRequestWorkspace } from './screens/ff/FfInboundRequestView'
+import { FfInboundQueuePage } from './screens/ff/FfInboundQueuePage'
 import { FfProductsCatalogScreen } from './screens/v2/FfProductsCatalogScreen'
 
 type WarehouseRow = { id: string; name: string; code: string }
@@ -64,6 +65,7 @@ type InboundSummaryRow = {
   seller_id?: string | null
   seller_name?: string | null
   created_at?: string
+  sorting_remaining_qty?: number
 }
 
 type InboundLineRow = {
@@ -256,6 +258,8 @@ export default function App() {
     null,
   )
   const [ffDocModal, setFfDocModal] = useState<null | 'inbound' | 'outbound'>(null)
+  const [ffInboundWorkspace, setFfInboundWorkspace] =
+    useState<InboundRequestWorkspace>('full')
   const [marketplaceUnloadSummaries, setMarketplaceUnloadSummaries] = useState<
     FfMarketplaceUnloadSummary[]
   >([])
@@ -2368,6 +2372,7 @@ export default function App() {
                 onOpenInbound={(id) => {
                   setSelectedOutboundId(null)
                   setSelectedInboundId(id)
+                  setFfInboundWorkspace('full')
                   setFfDocModal('inbound')
                 }}
                 onOpenOutbound={(id) => {
@@ -2408,6 +2413,7 @@ export default function App() {
                 onOpenInbound={(id) => {
                   setSelectedOutboundId(null)
                   setSelectedInboundId(id)
+                  setFfInboundWorkspace('full')
                   setFfDocModal('inbound')
                 }}
                 onOpenOutbound={(id) => {
@@ -2417,6 +2423,38 @@ export default function App() {
                 }}
                 onCreateMpShipment={onCreateFfMpShipment}
                 onCreateDiverge={onCreateFfDiscrepancyAct}
+              />
+            }
+          />
+
+          <Route
+            path="ff/reception"
+            element={
+              <FfInboundQueuePage
+                workspace="reception"
+                rows={inboundSummaries}
+                onOpen={(id) => {
+                  setSelectedOutboundId(null)
+                  setSelectedInboundId(id)
+                  setFfInboundWorkspace('reception')
+                  setFfDocModal('inbound')
+                }}
+              />
+            }
+          />
+
+          <Route
+            path="ff/sorting"
+            element={
+              <FfInboundQueuePage
+                workspace="sorting"
+                rows={inboundSummaries}
+                onOpen={(id) => {
+                  setSelectedOutboundId(null)
+                  setSelectedInboundId(id)
+                  setFfInboundWorkspace('sorting')
+                  setFfDocModal('inbound')
+                }}
               />
             }
           />
@@ -2694,10 +2732,13 @@ export default function App() {
                   token={token}
                   requestId={selectedInboundId}
                   isFulfillmentAdmin={isFulfillmentAdmin}
+                  workspace={ffInboundWorkspace}
                   onClose={() => {
                     setFfDocModal(null)
                     setSelectedInboundId(null)
                     setSelectedOutboundId(null)
+                    setFfInboundWorkspace('full')
+                    void refreshInboundList(token)
                   }}
                 />
               ) : (

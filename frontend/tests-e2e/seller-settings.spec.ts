@@ -2,6 +2,7 @@ import { test, expect } from '@playwright/test';
 
 import { waitForGetOk, waitForPostOk } from './api-waits';
 import { loginAsSeller, openFulfillmentRegistration } from './auth-flow';
+import { createSellerAccountViaApi } from './seller-account-helpers';
 
 // TC-NEW-SELLER-SETTINGS-001 — seller can save WB Content API key (validated by cards list).
 test('seller settings: save WB content api key', async ({ page }) => {
@@ -27,6 +28,7 @@ test('seller settings: save WB content api key', async ({ page }) => {
 
   const sA = await page.request.post('/api/sellers', { headers: h, data: { name: 'Brand A' } });
   expect(sA.ok()).toBeTruthy();
+  const sellerAId = String(((await sA.json()) as { id: string }).id);
 
   const wh = await page.request.post('/api/warehouses', { headers: h, data: { name: 'WH', code: whCode } });
   expect(wh.ok()).toBeTruthy();
@@ -34,13 +36,7 @@ test('seller settings: save WB content api key', async ({ page }) => {
   const loc = await page.request.post(`/api/warehouses/${wid}/locations`, { headers: h, data: { code: 'L1' } });
   expect(loc.ok()).toBeTruthy();
 
-  await page.goto('/app/dashboard');
-  await page.getByTestId('seller-account-seller').selectOption({ label: 'Brand A' });
-  await page.getByTestId('seller-account-email').fill(sellerEmail);
-  await Promise.all([
-    waitForPostOk(page, '/api/auth/seller-accounts'),
-    page.getByTestId('seller-account-submit').click(),
-  ]);
+  await createSellerAccountViaApi(page.request, h, sellerAId, sellerEmail);
 
   await page.getByTestId('logout').click();
   await expect(page.getByTestId('login-form')).toBeVisible();

@@ -1,6 +1,7 @@
 import type { FormEventHandler } from 'react'
 import { useEffect, useMemo, useState } from 'react'
 import { suggestNextLocationForRack } from '../utils/formatLocationCode'
+import { storageLocationLabel } from '../utils/inboundQueues'
 import { suggestNextLocationCode } from '../utils/suggestNextLocationCode'
 import { PrintOutlined } from '@mui/icons-material'
 import JsBarcode from 'jsbarcode'
@@ -368,26 +369,30 @@ export function CatalogSection(props: Props) {
                 <TableBody>
                   {visibleLocations.map((loc) => (
                     <TableRow key={loc.id} data-testid="location-row" data-location-id={loc.id}>
-                      <TableCell>{loc.code}</TableCell>
+                      <TableCell data-testid={loc.code === '__SORTING__' ? 'location-sorting-zone' : undefined}>
+                        {storageLocationLabel(loc.code)}
+                      </TableCell>
                       <TableCell sx={{ fontFamily: 'monospace', fontSize: 13 }}>
-                        {loc.barcode}
+                        {loc.code === '__SORTING__' ? '—' : loc.barcode}
                       </TableCell>
                       <TableCell align="right">
-                        <Tooltip title="Печать ШК">
-                          <span>
-                            <IconButton
-                              size="small"
-                              aria-label="Печать ШК"
-                              data-testid="location-print"
-                              onClick={() => {
-                                setPrintLocation(loc)
-                                setPrintDialogOpen(true)
-                              }}
-                            >
-                              <PrintOutlined fontSize="small" />
-                            </IconButton>
-                          </span>
-                        </Tooltip>
+                        {loc.code === '__SORTING__' ? null : (
+                          <Tooltip title="Печать ШК">
+                            <span>
+                              <IconButton
+                                size="small"
+                                aria-label="Печать ШК"
+                                data-testid="location-print"
+                                onClick={() => {
+                                  setPrintLocation(loc)
+                                  setPrintDialogOpen(true)
+                                }}
+                              >
+                                <PrintOutlined fontSize="small" />
+                              </IconButton>
+                            </span>
+                          </Tooltip>
+                        )}
                       </TableCell>
                     </TableRow>
                   ))}

@@ -11,6 +11,7 @@ from app.api.deps import get_current_user, seller_line_product_scope
 from app.db.session import get_db
 from app.models.user import User
 from app.services import inventory_service
+from app.services.sorting_location_service import SORTING_LOCATION_CODE
 
 router = APIRouter(
     prefix="/operations/inventory-balances",
@@ -23,6 +24,8 @@ class InventoryBalanceRowOut(BaseModel):
     sku_code: str
     product_name: str
     quantity: int
+    quantity_in_sorting: int
+    quantity_in_storage: int
     reserved: int
     available: int
 
@@ -54,10 +57,12 @@ async def get_inventory_balances_summary(
             sku_code=sku_code,
             product_name=product_name,
             quantity=qty,
+            quantity_in_sorting=sort_qty,
+            quantity_in_storage=max(0, qty - sort_qty),
             reserved=rsv,
-            available=qty - rsv,
+            available=max(0, qty - sort_qty - rsv),
         )
-        for pid, sku_code, product_name, qty, rsv in rows
+        for pid, sku_code, product_name, qty, sort_qty, rsv in rows
     ]
 
 
@@ -110,14 +115,20 @@ async def get_inventory_balances(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="location_not_found",
         )
+    from app.models.storage_location import StorageLocation
+
+    loc = await session.get(StorageLocation, storage_location_id)
+    is_sorting = loc is not None and loc.code == SORTING_LOCATION_CODE
     return [
         InventoryBalanceRowOut(
             product_id=str(b.product_id),
             sku_code=p.sku_code,
             product_name=p.name,
             quantity=b.quantity,
+            quantity_in_sorting=b.quantity if is_sorting else 0,
+            quantity_in_storage=0 if is_sorting else b.quantity,
             reserved=rsv,
-            available=b.quantity - rsv,
+            available=0 if is_sorting else b.quantity - rsv,
         )
         for b, p, rsv in rows
     ]
