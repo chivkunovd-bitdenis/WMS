@@ -3,6 +3,7 @@ import { test, expect } from '@playwright/test';
 import { waitForGetOk, waitForPostOk } from './api-waits';
 import { loginAsSeller, openFulfillmentRegistration } from './auth-flow';
 import { fulfillInboundViaBoxScans } from './inbound-boxes-helpers';
+import { setWmsDateField } from './wms-date-field-helpers';
 
 // TC-NEW-MP-04 — селлер создаёт отгрузку на МП, видит остаток и планирует.
 // TC-NEW-MP-06 — после «Запланировать» документ в списке со статусом «Запланировано».
@@ -162,7 +163,7 @@ test('seller creates MP unload draft, plans with stock table', async ({ page }) 
     page.getByRole('option', { name: /E2E WB склад/ }).click(),
   ]);
   await page.getByTestId(`seller-mp-qty-${productId}`).locator('input').fill('4');
-  await page.getByTestId('seller-mp-planned-date').locator('input').fill('2026-06-15');
+  await setWmsDateField(page, 'seller-mp-planned-date', '2026-06-15');
   await expect(page.getByTestId('seller-mp-plan')).toBeEnabled();
 
   await Promise.all([

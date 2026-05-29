@@ -7,6 +7,7 @@ import {
   waitForPatchOk,
   waitForPostOk,
 } from './api-waits';
+import { setWmsDateField } from './wms-date-field-helpers';
 import { loginAsSeller } from './auth-flow';
 import {
   INBOUND_API,
@@ -55,12 +56,10 @@ test.describe('US-B-01 seller inbound draft — fields and actions', () => {
     ]);
     await expect(plannedBoxes).toHaveValue('6');
 
-    const plannedDate = page.getByTestId('seller-inbound-planned-date');
     const tomorrow = new Date(Date.now() + 86400000).toISOString().slice(0, 10);
-    await plannedDate.fill(tomorrow);
     await Promise.all([
       waitForPatchOk(page, INBOUND_API, (u) => !u.includes('/lines')),
-      plannedDate.blur(),
+      setWmsDateField(page, 'seller-inbound-planned-date', tomorrow),
     ]);
 
     await page.getByTestId('seller-inbound-add-products').click();

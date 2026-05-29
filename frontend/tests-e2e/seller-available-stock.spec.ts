@@ -3,6 +3,7 @@ import { test, expect } from '@playwright/test';
 import { waitForGetOk, waitForPostOk } from './api-waits';
 import { loginAsSeller, openFulfillmentRegistration } from './auth-flow';
 import { fulfillInboundViaBoxScans } from './inbound-boxes-helpers';
+import { setWmsDateField } from './wms-date-field-helpers';
 
 // TC-S09-001 — селлер видит факт, зарезервировано и доступно на экране «Товары».
 // TC-NEW-15-001 — без админской подсказки после приёмки: остаток в кабинете селлера.
@@ -157,6 +158,8 @@ test('seller products table shows on hand, reserved, and available after MP plan
     page.getByRole('option', { name: /E2E WB склад/ }).click(),
   ]);
   await page.getByTestId(`seller-mp-qty-${productId}`).locator('input').fill('4');
+  await setWmsDateField(page, 'seller-mp-planned-date', '2026-06-15');
+  await expect(page.getByTestId('seller-mp-plan')).toBeEnabled();
   await Promise.all([
     page.waitForResponse(
       (r) =>

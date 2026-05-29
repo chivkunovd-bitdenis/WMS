@@ -1,6 +1,7 @@
 import { test, expect } from '@playwright/test';
 
 import { waitForGetOk, waitForPostOk } from './api-waits';
+import { setWmsDateField } from './wms-date-field-helpers';
 import { openFulfillmentRegistration } from './auth-flow';
 
 // TC-S15-003 — FF дашборд: недельный календарь; отгрузка ФФ→МП из раздела «Отгрузки на МП».
@@ -194,7 +195,7 @@ test('fulfillment admin sees week calendar and supplies-shipments page', async (
 
   await page.getByLabel('Склад WB (маркетплейс)').click();
   await page.getByRole('option', { name: /E2E WB склад/ }).click();
-  await page.getByTestId('ff-mp-planned-date').locator('input').fill('2026-06-15');
+  await setWmsDateField(page, 'ff-mp-planned-date', '2026-06-15');
   await page.waitForResponse(
     (r) =>
       r.request().method() === 'PATCH' &&

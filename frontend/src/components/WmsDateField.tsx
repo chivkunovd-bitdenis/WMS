@@ -52,6 +52,17 @@ export function WmsDateField({
           fullWidth: slotProps?.textField?.fullWidth ?? true,
           required,
           sx: slotProps?.textField?.sx,
+          onBlur: (event) => {
+            const raw = event.target.value.trim()
+            if (!raw) {
+              onChange(null)
+              return
+            }
+            const parsed = dayjs(raw, ['DD.MM.YYYY', 'YYYY-MM-DD', 'D.M.YYYY'], true)
+            if (parsed.isValid()) {
+              onChange(parsed.format('YYYY-MM-DD'))
+            }
+          },
         },
       }}
     />
