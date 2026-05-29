@@ -162,6 +162,7 @@ test('seller creates MP unload draft, plans with stock table', async ({ page }) 
     page.getByRole('option', { name: /E2E WB склад/ }).click(),
   ]);
   await page.getByTestId(`seller-mp-qty-${productId}`).locator('input').fill('4');
+  await page.getByTestId('seller-mp-planned-date').locator('input').fill('2026-06-15');
   await expect(page.getByTestId('seller-mp-plan')).toBeEnabled();
 
   await Promise.all([

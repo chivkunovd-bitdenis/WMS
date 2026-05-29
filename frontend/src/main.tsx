@@ -6,13 +6,16 @@ import './index.css'
 import './ui/ui.css'
 import App from './App.tsx'
 import { muiTheme } from './mui/theme'
+import { WmsDatePickersProvider } from './mui/WmsDatePickersProvider'
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
     <ThemeProvider theme={muiTheme}>
-      <BrowserRouter>
-        <App />
-      </BrowserRouter>
+      <WmsDatePickersProvider>
+        <BrowserRouter>
+          <App />
+        </BrowserRouter>
+      </WmsDatePickersProvider>
     </ThemeProvider>
   </StrictMode>,
 )

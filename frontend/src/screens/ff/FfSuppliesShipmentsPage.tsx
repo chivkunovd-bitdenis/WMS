@@ -26,6 +26,7 @@ import {
   Typography,
 } from '@mui/material'
 import { apiUrl } from '../../api'
+import { WmsDateField } from '../../components/WmsDateField'
 import { readApiErrorMessage } from '../../utils/readApiErrorMessage'
 import type { FfInboundSummary, FfOutboundSummary } from './FfDashboard'
 import { PageHeader } from '../../ui/PageHeader'
@@ -379,6 +380,7 @@ export function FfSuppliesShipmentsPage({
             quantity: a.quantity,
           })),
         })
+        setConfirmDate(j.planned_shipment_date ?? '')
         const stockRes = await fetch(
           apiUrl(
             `/operations/inventory-balances/summary?warehouse_id=${encodeURIComponent(j.warehouse_id)}`,
@@ -551,6 +553,33 @@ export function FfSuppliesShipmentsPage({
       await loadWbMpWarehouses()
     } catch (e) {
       setModalError(e instanceof Error ? e.message : 'Не удалось сохранить склад WB.')
+    } finally {
+      setModalBusy(false)
+    }
+  }
+
+  const patchMpPlannedDate = async (iso: string | null) => {
+    if (!token || !authHeaders || docModal !== 'marketplace_unload' || !docModalId) {
+      return
+    }
+    setConfirmDate(iso ?? '')
+    setModalBusy(true)
+    setModalError(null)
+    try {
+      const res = await fetch(apiUrl(`/operations/marketplace-unload-requests/${docModalId}`), {
+        method: 'PATCH',
+        headers: { ...authHeaders, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ planned_shipment_date: iso }),
+      })
+      if (!res.ok) {
+        setModalError(await readApiErrorMessage(res))
+        await loadDocDetail()
+        return
+      }
+      await loadDocDetail()
+      await onRefreshFfSupplyExtras()
+    } catch (e) {
+      setModalError(e instanceof Error ? e.message : 'Не удалось сохранить дату отгрузки.')
     } finally {
       setModalBusy(false)
     }
@@ -869,16 +898,17 @@ export function FfSuppliesShipmentsPage({
     setModalError(null)
     try {
       if (docModal === 'marketplace_unload') {
-        const body =
-          confirmDate.trim().length > 0
-            ? { planned_shipment_date: confirmDate.trim() }
-            : {}
+        if (!confirmDate.trim()) {
+          setModalError('Укажите дату отгрузки на маркетплейс.')
+          setModalBusy(false)
+          return
+        }
         const res = await fetch(
           apiUrl(`/operations/marketplace-unload-requests/${docModalId}/confirm`),
           {
             method: 'POST',
             headers: { ...authHeaders, 'Content-Type': 'application/json' },
-            body: JSON.stringify(body),
+            body: JSON.stringify({ planned_shipment_date: confirmDate.trim() }),
           },
         )
         if (!res.ok) {
@@ -1087,6 +1117,12 @@ export function FfSuppliesShipmentsPage({
   const mpSubmitted =
     docModal === 'marketplace_unload' && unloadDetail?.status === 'submitted'
   const mpConfirmed = docModal === 'marketplace_unload' && unloadDetail?.status === 'confirmed'
+  const mpShipped = docModal === 'marketplace_unload' && unloadDetail?.status === 'shipped'
+  const mpDateEditable =
+    docModal === 'marketplace_unload' &&
+    (unloadDetail?.status === 'draft' ||
+      unloadDetail?.status === 'submitted' ||
+      unloadDetail?.status === 'confirmed')
   const mpPickEditable =
     mpConfirmed && docModal === 'marketplace_unload' && unloadDetail?.status !== 'shipped'
 
@@ -1339,6 +1375,26 @@ export function FfSuppliesShipmentsPage({
           {unloadDetail ? (
             <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
               Склад: {unloadDetail.warehouse_name} · {statusRu(unloadDetail.status)}
+              {unloadDetail.planned_shipment_date
+                ? ` · отгрузка ${unloadDetail.planned_shipment_date}`
+                : ''}
+            </Typography>
+          ) : null}
+          {docModal === 'marketplace_unload' && unloadDetail && mpDateEditable ? (
+            <Box sx={{ mb: 2, maxWidth: 280 }}>
+              <WmsDateField
+                label="Дата отгрузки на МП"
+                value={confirmDate || unloadDetail.planned_shipment_date}
+                onChange={(iso) => void patchMpPlannedDate(iso)}
+                disabled={modalBusy}
+                required
+                testId="ff-mp-planned-date"
+              />
+            </Box>
+          ) : null}
+          {docModal === 'marketplace_unload' && unloadDetail && mpShipped ? (
+            <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+              Дата отгрузки: {unloadDetail.planned_shipment_date ?? '—'}
             </Typography>
           ) : null}
           {unloadDetail?.ff_modified ? (
@@ -1883,23 +1939,12 @@ export function FfSuppliesShipmentsPage({
             </Button>
           ) : null}
           {docModal === 'marketplace_unload' && (mpDraft || mpSubmitted) ? (
-            <TextField
-              size="small"
-              label="Дата отвоза"
-              type="date"
-              value={confirmDate}
-              onChange={(e) => setConfirmDate(e.target.value)}
-              slotProps={{ inputLabel: { shrink: true } }}
-              sx={{ mr: 1 }}
-              data-testid="ff-mp-confirm-date"
-            />
-          ) : null}
-          {docModal === 'marketplace_unload' && (mpDraft || mpSubmitted) ? (
             <Button
               variant="contained"
               color="secondary"
               disabled={
                 modalBusy ||
+                !confirmDate.trim() ||
                 (docModal === 'marketplace_unload' && unloadDetail?.wb_mp_warehouse_id == null) ||
                 (unloadDetail?.lines.length ?? 0) < 1
               }

@@ -25,6 +25,7 @@ import {
   TextField,
   Typography,
 } from '@mui/material'
+import { WmsDateField } from '../../components/WmsDateField'
 import { apiUrl } from '../../api'
 import { ProductPhotoThumb } from '../../components/ProductPhotoThumb'
 import { readApiErrorMessage } from '../../utils/readApiErrorMessage'
@@ -526,23 +527,21 @@ export function SellerInboundDraftScreen({
             spacing={2}
             sx={{ mb: 2, alignItems: { md: 'center' } }}
           >
-            <TextField
+            <WmsDateField
               label="Дата поставки (план)"
-              type="date"
-              size="small"
-              disabled={draftLocked || busy}
-              value={plannedDateDraft}
-              onChange={(e) => setPlannedDateDraft(e.target.value)}
-              onBlur={() => {
+              value={plannedDateDraft || null}
+              onChange={(iso) => {
+                const next = iso ?? ''
+                setPlannedDateDraft(next)
                 if (!detail) return
-                if ((plannedDateDraft || '') !== (detail.planned_delivery_date ?? '')) {
-                  void patchPlannedDate(plannedDateDraft)
+                if (next !== (detail.planned_delivery_date ?? '')) {
+                  void patchPlannedDate(next)
                 }
               }}
-              slotProps={{
-                inputLabel: { shrink: true },
-                htmlInput: { 'data-testid': 'seller-inbound-planned-date' },
-              }}
+              disabled={draftLocked || busy}
+              required
+              testId="seller-inbound-planned-date"
+              slotProps={{ textField: { fullWidth: false, sx: { minWidth: 220 } } }}
             />
             <TextField
               label="Коробов (план)"

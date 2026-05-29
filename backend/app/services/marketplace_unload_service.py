@@ -83,6 +83,9 @@ async def create_request(
     return req
 
 
+FF_DATE_EDITABLE_STATUSES = (STATUS_DRAFT, STATUS_SUBMITTED, STATUS_CONFIRMED)
+
+
 async def set_wb_mp_warehouse(
     session: AsyncSession,
     tenant_id: uuid.UUID,
@@ -99,6 +102,50 @@ async def set_wb_mp_warehouse(
     if mpw is None:
         raise MarketplaceUnloadError("wb_mp_warehouse_unknown")
     req.wb_mp_warehouse_id = wb_mp_warehouse_id
+    await session.commit()
+    r2 = await get_request(session, tenant_id, request_id)
+    assert r2 is not None
+    return r2
+
+
+async def patch_request(
+    session: AsyncSession,
+    tenant_id: uuid.UUID,
+    request_id: uuid.UUID,
+    *,
+    user: User,
+    wb_mp_warehouse_id: int | None = None,
+    planned_shipment_date: date | None = None,
+    set_planned_shipment_date: bool = False,
+) -> MarketplaceUnloadRequest:
+    from app.core.roles import FULFILLMENT_ADMIN, FULFILLMENT_SELLER
+
+    req = await get_request(session, tenant_id, request_id)
+    if req is None:
+        raise MarketplaceUnloadError("not_found")
+    assert_request_visible(user, req)
+
+    if wb_mp_warehouse_id is not None:
+        if req.status not in SELLER_EDITABLE_STATUSES:
+            raise MarketplaceUnloadError("not_editable")
+        if user.role == FULFILLMENT_SELLER and req.status != STATUS_DRAFT:
+            raise MarketplaceUnloadError("not_editable")
+        mpw = await get_cached_mp_warehouse(session, tenant_id, wb_mp_warehouse_id)
+        if mpw is None:
+            raise MarketplaceUnloadError("wb_mp_warehouse_unknown")
+        req.wb_mp_warehouse_id = wb_mp_warehouse_id
+
+    if set_planned_shipment_date:
+        if user.role == FULFILLMENT_SELLER:
+            if req.status not in SELLER_EDITABLE_STATUSES:
+                raise MarketplaceUnloadError("not_editable")
+        elif user.role == FULFILLMENT_ADMIN:
+            if req.status not in FF_DATE_EDITABLE_STATUSES:
+                raise MarketplaceUnloadError("not_editable")
+        else:
+            raise MarketplaceUnloadError("forbidden")
+        req.planned_shipment_date = planned_shipment_date
+
     await session.commit()
     r2 = await get_request(session, tenant_id, request_id)
     assert r2 is not None
@@ -394,6 +441,8 @@ async def plan_request(
         raise MarketplaceUnloadError("wb_mp_warehouse_required")
     if not req.lines:
         raise MarketplaceUnloadError("no_lines")
+    if req.planned_shipment_date is None:
+        raise MarketplaceUnloadError("planned_shipment_date_required")
     mpw = await get_cached_mp_warehouse(session, tenant_id, int(req.wb_mp_warehouse_id))
     if mpw is None:
         raise MarketplaceUnloadError("wb_mp_warehouse_unknown")
@@ -452,6 +501,9 @@ async def confirm_request(
     mpw = await get_cached_mp_warehouse(session, tenant_id, int(req.wb_mp_warehouse_id))
     if mpw is None:
         raise MarketplaceUnloadError("wb_mp_warehouse_unknown")
+    effective_date = planned_shipment_date if planned_shipment_date is not None else req.planned_shipment_date
+    if effective_date is None:
+        raise MarketplaceUnloadError("planned_shipment_date_required")
     if req.status == STATUS_DRAFT:
         for ln in req.lines:
             available_qty = await _available_product_qty_in_warehouse(
@@ -464,7 +516,7 @@ async def confirm_request(
             if available_qty < ln.quantity:
                 raise MarketplaceUnloadError("insufficient_available")
         await _apply_reservations(session, req)
-    req.planned_shipment_date = planned_shipment_date
+    req.planned_shipment_date = effective_date
     req.status = STATUS_CONFIRMED
     await session.commit()
     r2 = await get_request(session, tenant_id, request_id)

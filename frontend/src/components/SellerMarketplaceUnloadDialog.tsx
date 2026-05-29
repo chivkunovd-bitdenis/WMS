@@ -20,6 +20,7 @@ import {
   Typography,
 } from '@mui/material'
 import { apiUrl } from '../api'
+import { WmsDateField } from './WmsDateField'
 import { readApiErrorMessage } from '../utils/readApiErrorMessage'
 
 type StockRow = {
@@ -43,6 +44,7 @@ type UnloadDetail = {
   warehouse_name: string
   status: string
   wb_mp_warehouse_id: number | null
+  planned_shipment_date: string | null
   lines: UnloadLine[]
 }
 
@@ -83,6 +85,7 @@ export function SellerMarketplaceUnloadDialog({
   const [stockRows, setStockRows] = useState<StockRow[]>([])
   const [qtyByProduct, setQtyByProduct] = useState<Record<string, string>>({})
   const [wbWarehouses, setWbWarehouses] = useState<WbWarehouse[]>([])
+  const [plannedDate, setPlannedDate] = useState<string | null>(null)
 
   const isDraft = detail?.status === 'draft'
   const isSubmitted = detail?.status === 'submitted'
@@ -106,6 +109,7 @@ export function SellerMarketplaceUnloadDialog({
       }
       const j = (await res.json()) as UnloadDetail
       setDetail(j)
+      setPlannedDate(j.planned_shipment_date ?? null)
       const qtyMap: Record<string, string> = {}
       for (const ln of j.lines) {
         qtyMap[ln.product_id] = String(ln.quantity)
@@ -230,8 +234,38 @@ export function SellerMarketplaceUnloadDialog({
     }
   }
 
+  const patchPlannedDate = async (iso: string | null) => {
+    if (!token || !requestId || !isDraft) {
+      return
+    }
+    setPlannedDate(iso)
+    setModalBusy(true)
+    setModalError(null)
+    try {
+      const res = await fetch(apiUrl(`/operations/marketplace-unload-requests/${requestId}`), {
+        method: 'PATCH',
+        headers: { ...authHeaders(token), 'Content-Type': 'application/json' },
+        body: JSON.stringify({ planned_shipment_date: iso }),
+      })
+      if (!res.ok) {
+        setModalError(await readApiErrorMessage(res))
+        await loadDetail()
+        return
+      }
+      await loadDetail()
+    } catch (e) {
+      setModalError(e instanceof Error ? e.message : 'Не удалось сохранить дату отгрузки.')
+    } finally {
+      setModalBusy(false)
+    }
+  }
+
   const plan = async () => {
     if (!token || !requestId) {
+      return
+    }
+    if (!plannedDate) {
+      setModalError('Укажите дату отгрузки на маркетплейс.')
       return
     }
     const saved = await saveLines()
@@ -239,7 +273,20 @@ export function SellerMarketplaceUnloadDialog({
       return
     }
     setModalBusy(true)
+    setModalError(null)
     try {
+      const patchRes = await fetch(
+        apiUrl(`/operations/marketplace-unload-requests/${requestId}`),
+        {
+          method: 'PATCH',
+          headers: { ...authHeaders(token), 'Content-Type': 'application/json' },
+          body: JSON.stringify({ planned_shipment_date: plannedDate }),
+        },
+      )
+      if (!patchRes.ok) {
+        setModalError(await readApiErrorMessage(patchRes))
+        return
+      }
       const res = await fetch(apiUrl(`/operations/marketplace-unload-requests/${requestId}/plan`), {
         method: 'POST',
         headers: authHeaders(token),
@@ -294,6 +341,7 @@ export function SellerMarketplaceUnloadDialog({
         {detail ? (
           <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
             Склад ФФ: {detail.warehouse_name} · {statusRu(detail.status)}
+            {detail.planned_shipment_date ? ` · отгрузка ${detail.planned_shipment_date}` : ''}
           </Typography>
         ) : null}
         {isDraft ? (
@@ -323,6 +371,15 @@ export function SellerMarketplaceUnloadDialog({
                 ))}
               </Select>
             </FormControl>
+            <WmsDateField
+              label="Дата отгрузки на МП"
+              value={plannedDate}
+              onChange={(iso) => void patchPlannedDate(iso)}
+              disabled={modalBusyEffective}
+              required
+              testId="seller-mp-planned-date"
+              slotProps={{ textField: { fullWidth: false, sx: { minWidth: 220 } } }}
+            />
           </Stack>
         ) : null}
 
@@ -412,6 +469,7 @@ export function SellerMarketplaceUnloadDialog({
               disabled={
                 modalBusyEffective ||
                 detail?.wb_mp_warehouse_id == null ||
+                !plannedDate ||
                 linePayload.length < 1
               }
               onClick={() => void plan()}

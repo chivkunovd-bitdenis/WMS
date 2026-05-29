@@ -47,7 +47,8 @@ class SellerMarketplaceUnloadRequestCreate(BaseModel):
 
 
 class MarketplaceUnloadRequestUpdate(BaseModel):
-    wb_mp_warehouse_id: int = Field(ge=1, le=2_000_000_000)
+    wb_mp_warehouse_id: int | None = Field(default=None, ge=1, le=2_000_000_000)
+    planned_shipment_date: date | None = None
 
 
 class MarketplaceUnloadConfirmBody(BaseModel):
@@ -362,6 +363,13 @@ def _map_mu_err(exc: MarketplaceUnloadError) -> HTTPException:
             status_code=status.HTTP_409_CONFLICT,
             detail="wb_mp_warehouse_required",
         )
+    if exc.code == "planned_shipment_date_required":
+        return HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="planned_shipment_date_required",
+        )
+    if exc.code == "forbidden":
+        return HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="forbidden")
     if exc.code == "product_seller_mismatch":
         return HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
@@ -399,6 +407,7 @@ def _map_pick_err(exc: MarketplaceUnloadPickError) -> HTTPException:
         "open_box_required",
         "box_not_found",
         "box_closed",
+        "planned_shipment_date_required",
     ):
         return HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
@@ -576,15 +585,45 @@ async def update_marketplace_unload(
     session: Annotated[AsyncSession, Depends(get_db)],
 ) -> MarketplaceUnloadRequestDetailOut:
     await _get_visible_request(session, user, request_id)
-    try:
-        r = await svc.set_wb_mp_warehouse(
-            session,
-            user.tenant_id,
-            request_id,
-            wb_mp_warehouse_id=body.wb_mp_warehouse_id,
+    fields = body.model_dump(exclude_unset=True)
+    if not fields:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+            detail="no_fields",
         )
+    try:
+        r: MarketplaceUnloadRequest | None = None
+        if "wb_mp_warehouse_id" in fields:
+            wb_id = fields["wb_mp_warehouse_id"]
+            if wb_id is None:
+                raise HTTPException(
+                    status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+                    detail="wb_mp_warehouse_required",
+                )
+            r = await svc.set_wb_mp_warehouse(
+                session,
+                user.tenant_id,
+                request_id,
+                wb_mp_warehouse_id=int(wb_id),
+            )
+        if "planned_shipment_date" in fields:
+            raw_date = fields["planned_shipment_date"]
+            planned = raw_date if isinstance(raw_date, date) else None
+            r = await svc.patch_request(
+                session,
+                user.tenant_id,
+                request_id,
+                user=user,
+                planned_shipment_date=planned,
+                set_planned_shipment_date=True,
+            )
     except MarketplaceUnloadError as exc:
         raise _map_mu_err(exc) from None
+    if r is None:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="patch_failed",
+        )
     return _detail_out(
         r,
         warehouse_name=r.warehouse.name,

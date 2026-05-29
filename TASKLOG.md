@@ -1,5 +1,12 @@
 # TASKLOG
 
+## TASK-30 — 2026-05-29 — Отгрузка на МП: обязательная дата + календарь
+
+- What changed: `planned_shipment_date` обязательна для plan/confirm/ship; селлер не передаёт ФФ без даты; PATCH даты; общий `WmsDateField` (MUI DatePicker) на MP, приёмке селлера/ФФ.
+- What did NOT change: создание черновика без даты; логика состава/коробов.
+- Verification: `npm run build`; pytest `test_seller_marketplace_unload` (CI).
+- Commit: (pending)
+
 ## TASK-29 — 2026-05-29 — Отгрузка на МП: единое поле скана (короб / ячейка / товар)
 
 - What changed: убрана отдельная строка «Штрихкод существующего короба»; WHB-скан в общем поле → attach + закрытый короб внизу; ячейка и товар — как раньше в открытую тару.

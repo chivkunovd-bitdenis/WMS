@@ -30,6 +30,7 @@ import {
 } from '@mui/material'
 import { alpha } from '@mui/material/styles'
 import { apiUrl } from '../../api'
+import { WmsDateField } from '../../components/WmsDateField'
 import { printBarcodeLabel } from '../../utils/printBarcodeLabel'
 import { printInboundSupplyWaybill } from '../../utils/printShipmentWaybill'
 import { readApiErrorMessage } from '../../utils/readApiErrorMessage'
@@ -1339,22 +1340,20 @@ export function FfInboundRequestView({
               useFlexGap
               sx={{ alignItems: 'center', flexWrap: 'wrap' }}
             >
-              <TextField
+              <WmsDateField
                 label="Дата приёмки (план)"
-                type="date"
-                size="small"
-                disabled={draftLocked || busy}
-                value={plannedDateDraft}
-                onChange={(e) => setPlannedDateDraft(e.target.value)}
-                onBlur={() => {
-                  if ((plannedDateDraft || '') !== (detail.planned_delivery_date ?? '')) {
-                    void patchPlannedDate(plannedDateDraft)
+                value={plannedDateDraft || null}
+                onChange={(iso) => {
+                  const next = iso ?? ''
+                  setPlannedDateDraft(next)
+                  if ((next || '') !== (detail.planned_delivery_date ?? '')) {
+                    void patchPlannedDate(next)
                   }
                 }}
-                slotProps={{
-                  inputLabel: { shrink: true },
-                  htmlInput: { 'data-testid': 'ff-inbound-planned-date' },
-                }}
+                disabled={draftLocked || busy}
+                required
+                testId="ff-inbound-planned-date"
+                slotProps={{ textField: { fullWidth: false, sx: { minWidth: 220 } } }}
               />
               <Chip
                 label={statusRu(detail.status)}

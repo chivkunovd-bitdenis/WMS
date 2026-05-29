@@ -194,7 +194,14 @@ test('fulfillment admin sees week calendar and supplies-shipments page', async (
 
   await page.getByLabel('Склад WB (маркетплейс)').click();
   await page.getByRole('option', { name: /E2E WB склад/ }).click();
-  await page.getByTestId('ff-mp-confirm-date').locator('input').fill('2026-06-15');
+  await page.getByTestId('ff-mp-planned-date').locator('input').fill('2026-06-15');
+  await page.waitForResponse(
+    (r) =>
+      r.request().method() === 'PATCH' &&
+      r.url().includes('/operations/marketplace-unload-requests/') &&
+      r.status() >= 200 &&
+      r.status() < 300,
+  );
   await Promise.all([
     waitForPostOk(page, '/api/operations/marketplace-unload-requests', (u) => u.includes('/confirm')),
     page.getByTestId('ff-supplies-doc-submit').click(),

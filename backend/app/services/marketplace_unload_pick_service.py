@@ -335,6 +335,8 @@ async def ship_request(
         raise MarketplaceUnloadPickError("bad_status")
     if not req.lines:
         raise MarketplaceUnloadPickError("no_lines")
+    if req.planned_shipment_date is None:
+        raise MarketplaceUnloadPickError("planned_shipment_date_required")
 
     allocs = await list_pick_allocations(session, tenant_id, request_id)
     if not allocs:

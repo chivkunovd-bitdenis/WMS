@@ -5,6 +5,7 @@ import { ThemeProvider } from '@mui/material/styles'
 import './index.css'
 import './ui/ui.css'
 import { muiTheme } from './mui/theme'
+import { WmsDatePickersProvider } from './mui/WmsDatePickersProvider'
 import { SellerApp } from './apps/seller/SellerApp'
 
 const sellerRouterBasename =
@@ -13,9 +14,11 @@ const sellerRouterBasename =
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
     <ThemeProvider theme={muiTheme}>
-      <BrowserRouter basename={sellerRouterBasename}>
-        <SellerApp />
-      </BrowserRouter>
+      <WmsDatePickersProvider>
+        <BrowserRouter basename={sellerRouterBasename}>
+          <SellerApp />
+        </BrowserRouter>
+      </WmsDatePickersProvider>
     </ThemeProvider>
   </StrictMode>,
 )

@@ -127,6 +127,20 @@ async def test_seller_mp_unload_plan_reserves_and_ff_confirms(
     )
     assert patch_wh.status_code == 200, patch_wh.text
 
+    plan_no_date = await async_client.post(
+        f"/operations/marketplace-unload-requests/{mid}/plan",
+        headers=sh,
+    )
+    assert plan_no_date.status_code == 409
+    assert plan_no_date.json()["detail"] == "planned_shipment_date_required"
+
+    patch_date = await async_client.patch(
+        f"/operations/marketplace-unload-requests/{mid}",
+        headers=sh,
+        json={"planned_shipment_date": "2026-06-01"},
+    )
+    assert patch_date.status_code == 200, patch_date.text
+
     plan = await async_client.post(
         f"/operations/marketplace-unload-requests/{mid}/plan",
         headers=sh,
