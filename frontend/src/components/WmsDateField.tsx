@@ -53,7 +53,8 @@ export function WmsDateField({
           required,
           sx: slotProps?.textField?.sx,
           onBlur: (event) => {
-            const raw = event.target.value.trim()
+            const target = event.target as HTMLInputElement
+            const raw = target.value?.trim() ?? ''
             if (!raw) {
               onChange(null)
               return
