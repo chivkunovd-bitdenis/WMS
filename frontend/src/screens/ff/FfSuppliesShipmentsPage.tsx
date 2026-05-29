@@ -250,7 +250,6 @@ export function FfSuppliesShipmentsPage({
   >({})
   const [activePickLocationId, setActivePickLocationId] = useState<string | null>(null)
   const [activePickLocationCode, setActivePickLocationCode] = useState<string | null>(null)
-  const [attachBoxBarcode, setAttachBoxBarcode] = useState('')
 
   const authHeaders = useMemo(
     () => (token ? { Authorization: `Bearer ${token}` } : null),
@@ -526,7 +525,6 @@ export function FfSuppliesShipmentsPage({
     setActivePickLocationId(null)
     setActivePickLocationCode(null)
     setCollectQty('1')
-    setAttachBoxBarcode('')
   }
 
   const setWbWarehouseForUnload = async (wbMpWarehouseId: number) => {
@@ -654,8 +652,38 @@ export function FfSuppliesShipmentsPage({
         }
       }
 
+      const attachRes = await fetch(
+        apiUrl(`/operations/marketplace-unload-requests/${docModalId}/boxes/attach`),
+        {
+          method: 'POST',
+          headers: { ...authHeaders, 'Content-Type': 'application/json' },
+          body: JSON.stringify({ barcode: raw, box_preset: boxPreset }),
+        },
+      )
+      const attachText = await attachRes.text()
+      if (attachRes.ok) {
+        setScanBarcode('')
+        await loadDocDetail()
+        await onRefreshFfSupplyExtras()
+        return
+      }
+      let attachDetail: string | null = null
+      try {
+        const attachBody = JSON.parse(attachText) as { detail?: unknown }
+        attachDetail =
+          typeof attachBody.detail === 'string' ? attachBody.detail : null
+      } catch {
+        attachDetail = null
+      }
+      if (attachDetail !== 'box_barcode_unknown') {
+        setModalError(attachDetail ?? attachText.slice(0, 200) ?? 'Не удалось добавить короб.')
+        return
+      }
+
       if (!openBoxId) {
-        setModalError('Сначала откройте или добавьте короб для сборки.')
+        setModalError(
+          'Сначала откройте короб для сборки из ячеек или отсканируйте штрихкод готового короба.',
+        )
         return
       }
       if (!activePickLocationId) {
@@ -691,10 +719,6 @@ export function FfSuppliesShipmentsPage({
     }
   }
 
-  const doScan = async (boxId: string) => {
-    await doCollectScan(boxId)
-  }
-
   const closeBox = async (boxId: string) => {
     if (!token || !authHeaders || docModal !== 'marketplace_unload' || !docModalId) {
       return
@@ -722,40 +746,6 @@ export function FfSuppliesShipmentsPage({
     }
   }
 
-
-  const attachExistingBox = async () => {
-    if (!token || !authHeaders || !docModalId) {
-      return
-    }
-    const raw = attachBoxBarcode.trim()
-    if (!raw) {
-      setModalError('Введите штрихкод короба.')
-      return
-    }
-    setModalBusy(true)
-    setModalError(null)
-    try {
-      const res = await fetch(
-        apiUrl(`/operations/marketplace-unload-requests/${docModalId}/boxes/attach`),
-        {
-          method: 'POST',
-          headers: { ...authHeaders, 'Content-Type': 'application/json' },
-          body: JSON.stringify({ barcode: raw, box_preset: boxPreset }),
-        },
-      )
-      if (!res.ok) {
-        setModalError(await readApiErrorMessage(res))
-        return
-      }
-      setAttachBoxBarcode('')
-      await loadDocDetail()
-      await onRefreshFfSupplyExtras()
-    } catch (e) {
-      setModalError(e instanceof Error ? e.message : 'Не удалось добавить короб.')
-    } finally {
-      setModalBusy(false)
-    }
-  }
 
   const openPickDialog = async () => {
     if (!token || !authHeaders || !docModalId) {
@@ -1529,38 +1519,89 @@ export function FfSuppliesShipmentsPage({
                   <Stack spacing={1.5}>
                     <Typography variant="subtitle2">Сборка в короба</Typography>
                     <Typography variant="body2" color="text.secondary">
-                      Откройте короб, отсканируйте ячейку, затем товар (или укажите количество).
-                      Снятие с полки всегда попадает в открытую тару.
+                      Отсканируйте готовый короб (WHB-…) — он попадёт в закрытые. Или откройте
+                      короб, отсканируйте ячейку и товар (кол-во). Снятие с полки — в открытую
+                      тару.
                     </Typography>
-                    <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1} sx={{ mb: 1 }}>
-                      <TextField
-                        size="small"
-                        label="Штрихкод существующего короба"
-                        value={attachBoxBarcode}
-                        onChange={(e) => setAttachBoxBarcode(e.target.value)}
-                        disabled={modalBusy}
-                        fullWidth
-                        data-testid="ff-mp-box-attach-input"
-                      />
-                      <Button
-                        variant="outlined"
-                        onClick={() => void attachExistingBox()}
-                        disabled={modalBusy}
-                        data-testid="ff-mp-box-attach"
-                      >
-                        Добавить короб
-                      </Button>
-                    </Stack>
 
                     {mpConfirmed ? (
                       <Paper variant="outlined" sx={{ p: 1.5 }}>
                         <Stack spacing={1.25}>
-                              <Typography variant="body2" color="text.secondary">
-                            Открытый короб:{' '}
-                            {openBox
-                              ? openBox.internal_barcode ?? `${openBox.id.slice(0, 8)}…`
-                              : 'нет'}
-                          </Typography>
+                          <Stack
+                            direction="row"
+                            spacing={1}
+                            sx={{ flexWrap: 'wrap', gap: 1 }}
+                          >
+                            {openBox?.internal_barcode ? (
+                              <Chip
+                                size="small"
+                                label={`Открытый: ${openBox.internal_barcode}`}
+                                data-testid="ff-mp-active-box"
+                              />
+                            ) : (
+                              <Typography variant="caption" color="text.secondary">
+                                Открытого короба нет
+                              </Typography>
+                            )}
+                            {activePickLocationCode ? (
+                              <Chip
+                                size="small"
+                                label={`Ячейка: ${activePickLocationCode}`}
+                                data-testid="ff-mp-active-location"
+                              />
+                            ) : openBox ? (
+                              <Typography variant="caption" color="warning.main">
+                                Сначала отсканируйте ячейку
+                              </Typography>
+                            ) : null}
+                          </Stack>
+                          <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1}>
+                            <TextField
+                              size="small"
+                              label="Штрихкод ячейки / товара / короба"
+                              value={scanBarcode}
+                              onChange={(e) => setScanBarcode(e.target.value)}
+                              onKeyDown={(e) => {
+                                if (e.key === 'Enter') {
+                                  e.preventDefault()
+                                  void doCollectScan(openBox?.id ?? null)
+                                }
+                              }}
+                              disabled={modalBusy}
+                              fullWidth
+                              data-testid="ff-mp-pick-scan-input"
+                            />
+                            <TextField
+                              size="small"
+                              label="Кол-во"
+                              type="number"
+                              value={collectQty}
+                              onChange={(e) => setCollectQty(e.target.value)}
+                              slotProps={{ htmlInput: { min: 1 } }}
+                              sx={{ width: { xs: '100%', sm: 96 } }}
+                              disabled={modalBusy || !openBox}
+                              data-testid="ff-mp-collect-qty"
+                            />
+                            <Button
+                              variant="contained"
+                              onClick={() => void doCollectScan(openBox?.id ?? null)}
+                              disabled={modalBusy}
+                              data-testid="ff-mp-pick-scan"
+                            >
+                              Добавить
+                            </Button>
+                            {openBox ? (
+                              <Button
+                                variant="outlined"
+                                onClick={() => void closeBox(openBox.id)}
+                                disabled={modalBusy}
+                                data-testid="ff-mp-box-close"
+                              >
+                                Закрыть короб
+                              </Button>
+                            ) : null}
+                          </Stack>
+
                           {!openBox ? (
                             <Stack direction="row" spacing={1} sx={{ alignItems: 'center' }}>
                               <FormControl size="small" sx={{ minWidth: 160 }}>
@@ -1589,104 +1630,34 @@ export function FfSuppliesShipmentsPage({
                               </Button>
                             </Stack>
                           ) : (
-                            <Stack spacing={1}>
-                              <Stack
-                                direction="row"
-                                spacing={1}
-                                sx={{ flexWrap: 'wrap', gap: 1 }}
-                              >
-                                {openBox.internal_barcode ? (
-                                  <Chip
-                                    size="small"
-                                    label={`Короб: ${openBox.internal_barcode}`}
-                                    data-testid="ff-mp-active-box"
-                                  />
-                                ) : null}
-                                {activePickLocationCode ? (
-                                  <Chip
-                                    size="small"
-                                    label={`Ячейка: ${activePickLocationCode}`}
-                                    data-testid="ff-mp-active-location"
-                                  />
-                                ) : (
-                                  <Typography variant="caption" color="warning.main">
-                                    Сначала отсканируйте ячейку
-                                  </Typography>
-                                )}
-                              </Stack>
-                              <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1}>
-                                <TextField
-                                  size="small"
-                                  label="Штрихкод ячейки / товара"
-                                  value={scanBarcode}
-                                  onChange={(e) => setScanBarcode(e.target.value)}
-                                  onKeyDown={(e) => {
-                                    if (e.key === 'Enter') {
-                                      e.preventDefault()
-                                      void doScan(openBox.id)
-                                    }
-                                  }}
-                                  disabled={modalBusy}
-                                  fullWidth
-                                  data-testid="ff-mp-pick-scan-input"
-                                />
-                                <TextField
-                                  size="small"
-                                  label="Кол-во"
-                                  type="number"
-                                  value={collectQty}
-                                  onChange={(e) => setCollectQty(e.target.value)}
-                                  slotProps={{ htmlInput: { min: 1 } }}
-                                  sx={{ width: { xs: '100%', sm: 96 } }}
-                                  disabled={modalBusy}
-                                  data-testid="ff-mp-collect-qty"
-                                />
-                                <Button
-                                  variant="contained"
-                                  onClick={() => void doScan(openBox.id)}
-                                  disabled={modalBusy}
-                                  data-testid="ff-mp-pick-scan"
-                                >
-                                  Добавить
-                                </Button>
-                                <Button
-                                  variant="outlined"
-                                  onClick={() => void closeBox(openBox.id)}
-                                  disabled={modalBusy}
-                                  data-testid="ff-mp-box-close"
-                                >
-                                  Закрыть короб
-                                </Button>
-                              </Stack>
-                              <Table size="small" sx={{ mt: 1 }} data-testid="ff-mp-open-box-lines">
-                                <TableHead>
+                            <Table size="small" sx={{ mt: 1 }} data-testid="ff-mp-open-box-lines">
+                              <TableHead>
+                                <TableRow>
+                                  <TableCell>Артикул</TableCell>
+                                  <TableCell>Товар</TableCell>
+                                  <TableCell align="right">В коробе</TableCell>
+                                </TableRow>
+                              </TableHead>
+                              <TableBody>
+                                {openBox.lines.length === 0 ? (
                                   <TableRow>
-                                    <TableCell>Артикул</TableCell>
-                                    <TableCell>Товар</TableCell>
-                                    <TableCell align="right">В коробе</TableCell>
+                                    <TableCell colSpan={3}>
+                                      <Typography variant="body2" color="text.secondary">
+                                        Пока нет сканов
+                                      </Typography>
+                                    </TableCell>
                                   </TableRow>
-                                </TableHead>
-                                <TableBody>
-                                  {openBox.lines.length === 0 ? (
-                                    <TableRow>
-                                      <TableCell colSpan={3}>
-                                        <Typography variant="body2" color="text.secondary">
-                                          Пока нет сканов
-                                        </Typography>
-                                      </TableCell>
+                                ) : (
+                                  openBox.lines.map((ln) => (
+                                    <TableRow key={ln.id}>
+                                      <TableCell>{ln.sku_code}</TableCell>
+                                      <TableCell>{ln.product_name}</TableCell>
+                                      <TableCell align="right">{ln.quantity}</TableCell>
                                     </TableRow>
-                                  ) : (
-                                    openBox.lines.map((ln) => (
-                                      <TableRow key={ln.id}>
-                                        <TableCell>{ln.sku_code}</TableCell>
-                                        <TableCell>{ln.product_name}</TableCell>
-                                        <TableCell align="right">{ln.quantity}</TableCell>
-                                      </TableRow>
-                                    ))
-                                  )}
-                                </TableBody>
-                              </Table>
-                            </Stack>
+                                  ))
+                                )}
+                              </TableBody>
+                            </Table>
                           )}
                         </Stack>
                       </Paper>
