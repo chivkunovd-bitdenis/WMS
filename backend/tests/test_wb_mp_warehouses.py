@@ -7,6 +7,7 @@ import time
 import pytest
 from httpx import AsyncClient
 
+
 @pytest.mark.asyncio
 async def test_wb_mp_warehouses_lazy_sync_from_seller_content_token(
     async_client: AsyncClient,
