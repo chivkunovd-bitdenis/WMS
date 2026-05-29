@@ -76,22 +76,23 @@ export function useAuth(portal: AuthPortal = 'fulfillment') {
 
   useEffect(() => {
     if (!me) {
-      setPortalMismatch(null)
       return
     }
     if (portal === 'seller' && me.role !== 'fulfillment_seller') {
-      setPortalMismatch(
-        'Этот адрес только для селлера. Войдите email селлера (не админа ФФ). Портал фулфилмента: главная страница без /seller/.',
-      )
+      const msg =
+        'Этот адрес только для селлера. Войдите email селлера (не админа ФФ). Портал фулфилмента: главная страница без /seller/.'
+      setPortalMismatch(msg)
+      setError(msg)
       setStoredToken(null, 'seller')
       setToken(null)
       setMe(null)
       return
     }
     if (portal === 'fulfillment' && me.role === 'fulfillment_seller') {
-      setPortalMismatch(
-        'Этот портал для сотрудников фулфилмента. Селлеру: откройте /seller/ и войдите там (отдельный вход).',
-      )
+      const msg =
+        'Этот портал для сотрудников фулфилмента. Селлеру: откройте /seller/ и войдите там (отдельный вход).'
+      setPortalMismatch(msg)
+      setError(msg)
       setStoredToken(null, 'fulfillment')
       setToken(null)
       setMe(null)
