@@ -6,7 +6,7 @@ import uuid
 from dataclasses import dataclass
 from typing import Literal
 
-from sqlalchemy import delete, func, select
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
@@ -14,7 +14,6 @@ from app.models.marketplace_unload import (
     MarketplaceUnloadPickAllocation,
     MarketplaceUnloadRequest,
 )
-from app.models.product import Product
 from app.models.storage_location import StorageLocation
 from app.services import inventory_service
 from app.services import marketplace_unload_service as mu_svc
@@ -70,16 +69,9 @@ class PickScanResult:
 async def _picked_qty_by_product(
     session: AsyncSession, request_id: uuid.UUID
 ) -> dict[uuid.UUID, int]:
-    stmt = (
-        select(
-            MarketplaceUnloadPickAllocation.product_id,
-            func.coalesce(func.sum(MarketplaceUnloadPickAllocation.quantity), 0),
-        )
-        .where(MarketplaceUnloadPickAllocation.request_id == request_id)
-        .group_by(MarketplaceUnloadPickAllocation.product_id)
-    )
-    res = await session.execute(stmt)
-    return {row[0]: int(row[1]) for row in res.all()}
+    from app.services import marketplace_unload_collect_service as collect_svc
+
+    return await collect_svc.picked_qty_by_product(session, request_id)
 
 
 async def _barcode_index_for_seller(
@@ -207,62 +199,20 @@ async def add_pick_qty(
     product_id: uuid.UUID,
     quantity: int,
 ) -> MarketplaceUnloadPickAllocation:
-    if quantity < 1:
-        raise MarketplaceUnloadPickError("invalid_quantity")
+    from app.services import marketplace_unload_collect_service as collect_svc
 
-    req = await _request_for_picking(session, tenant_id, request_id)
-    line_products = {ln.product_id: int(ln.quantity) for ln in req.lines}
-    if product_id not in line_products:
-        raise MarketplaceUnloadPickError("product_not_in_shipment")
-
-    loc = await session.get(StorageLocation, storage_location_id)
-    if loc is None or loc.tenant_id != tenant_id or loc.warehouse_id != req.warehouse_id:
-        raise MarketplaceUnloadPickError("location_not_found")
-
-    prod = await session.get(Product, product_id)
-    if prod is None or prod.tenant_id != tenant_id:
-        raise MarketplaceUnloadPickError("product_not_found")
-    if req.seller_id is not None and prod.seller_id != req.seller_id:
-        raise MarketplaceUnloadPickError("product_seller_mismatch")
-
-    stmt = select(MarketplaceUnloadPickAllocation).where(
-        MarketplaceUnloadPickAllocation.request_id == request_id,
-        MarketplaceUnloadPickAllocation.product_id == product_id,
-        MarketplaceUnloadPickAllocation.storage_location_id == storage_location_id,
-    )
-    res = await session.execute(stmt)
-    alloc = res.scalar_one_or_none()
-    current = int(alloc.quantity) if alloc is not None else 0
-    new_qty = current + quantity
-
-    available = await inventory_service.available_at_location(
-        session, tenant_id, product_id, storage_location_id
-    )
-    if available < new_qty:
-        raise MarketplaceUnloadPickError("insufficient_available")
-
-    if alloc is None:
-        alloc = MarketplaceUnloadPickAllocation(
-            request_id=request_id,
-            product_id=product_id,
+    try:
+        result = await collect_svc.collect_into_box(
+            session,
+            tenant_id,
+            request_id,
             storage_location_id=storage_location_id,
-            quantity=new_qty,
+            product_id=product_id,
+            quantity=quantity,
         )
-        session.add(alloc)
-    else:
-        alloc.quantity = new_qty
-
-    await session.commit()
-    stmt2 = (
-        select(MarketplaceUnloadPickAllocation)
-        .where(MarketplaceUnloadPickAllocation.id == alloc.id)
-        .options(
-            selectinload(MarketplaceUnloadPickAllocation.product),
-            selectinload(MarketplaceUnloadPickAllocation.storage_location),
-        )
-    )
-    res2 = await session.execute(stmt2)
-    return res2.scalar_one()
+    except MarketplaceUnloadPickError:
+        raise
+    return result.allocation
 
 
 async def pick_scan(
@@ -290,6 +240,12 @@ async def pick_scan(
     if storage_location_id is None:
         raise MarketplaceUnloadPickError("location_required")
 
+    from app.services import marketplace_unload_collect_service as collect_svc
+
+    open_box = await collect_svc.get_open_box(session, request_id)
+    if open_box is None:
+        raise MarketplaceUnloadPickError("open_box_required")
+
     if req.seller_id is None:
         raise MarketplaceUnloadPickError("seller_required")
     idx = await _barcode_index_for_seller(session, tenant_id, req.seller_id)
@@ -297,24 +253,24 @@ async def pick_scan(
     if product_id is None:
         raise MarketplaceUnloadPickError("barcode_unknown")
 
-    alloc = await add_pick_qty(
+    result = await collect_svc.collect_into_box(
         session,
         tenant_id,
         request_id,
+        box_id=open_box.id,
         storage_location_id=storage_location_id,
         product_id=product_id,
         quantity=1,
     )
-    picked = await _picked_qty_by_product(session, request_id)
-    p = alloc.product
+    p = result.box_line.product
     return PickScanResult(
         kind="product",
         storage_location_id=storage_location_id,
         product_id=product_id,
         sku_code=p.sku_code,
         product_name=p.name,
-        picked_qty=picked.get(product_id, 0),
-        allocation_quantity=int(alloc.quantity),
+        picked_qty=result.picked_qty,
+        allocation_quantity=int(result.allocation.quantity),
     )
 
 
@@ -329,6 +285,12 @@ async def save_pick_allocations(
     if not line_products:
         raise MarketplaceUnloadPickError("no_lines")
 
+    from app.services import marketplace_unload_collect_service as collect_svc
+
+    open_box = await collect_svc.get_open_box(session, request_id)
+    if open_box is None:
+        raise MarketplaceUnloadPickError("open_box_required")
+
     merged: dict[tuple[uuid.UUID, uuid.UUID], int] = {}
     for row in rows:
         if row.quantity < 1:
@@ -339,44 +301,23 @@ async def save_pick_allocations(
         merged[key] = merged.get(key, 0) + row.quantity
 
     for (product_id, loc_id), qty in merged.items():
-        loc = await session.get(StorageLocation, loc_id)
-        if loc is None or loc.tenant_id != tenant_id or loc.warehouse_id != req.warehouse_id:
-            raise MarketplaceUnloadPickError("location_not_found")
-        prod = await session.get(Product, product_id)
-        if prod is None or prod.tenant_id != tenant_id:
-            raise MarketplaceUnloadPickError("product_not_found")
-        if req.seller_id is not None and prod.seller_id != req.seller_id:
-            raise MarketplaceUnloadPickError("product_seller_mismatch")
-        if (
-            await inventory_service.available_at_location(
-                session, tenant_id, product_id, loc_id
-            )
-            < qty
-        ):
-            raise MarketplaceUnloadPickError("insufficient_available")
-
-    await session.execute(
-        delete(MarketplaceUnloadPickAllocation).where(
-            MarketplaceUnloadPickAllocation.request_id == request_id
+        await collect_svc.collect_into_box(
+            session,
+            tenant_id,
+            request_id,
+            box_id=open_box.id,
+            storage_location_id=loc_id,
+            product_id=product_id,
+            quantity=qty,
         )
-    )
-    for (product_id, loc_id), qty in merged.items():
-        session.add(
-            MarketplaceUnloadPickAllocation(
-                request_id=request_id,
-                product_id=product_id,
-                storage_location_id=loc_id,
-                quantity=qty,
-            )
-        )
-    await session.commit()
     return await list_pick_allocations(session, tenant_id, request_id)
 
 
 def has_pick_discrepancy(req: MarketplaceUnloadRequest) -> bool:
     picked: dict[uuid.UUID, int] = {}
-    for a in req.pick_allocations:
-        picked[a.product_id] = picked.get(a.product_id, 0) + int(a.quantity)
+    for b in req.boxes:
+        for bl in b.lines:
+            picked[bl.product_id] = picked.get(bl.product_id, 0) + int(bl.quantity)
     return any(picked.get(ln.product_id, 0) != int(ln.quantity) for ln in req.lines)
 
 

@@ -803,7 +803,7 @@ async def resync_sorting_stock_for_request(
     request_id: uuid.UUID,
 ) -> InboundIntakeRequest:
     """
-    Довести остаток в зоне «Сортировка» до (принято − уже разложено) по каждому SKU.
+    Довести остаток в зоне «Сортировка» до (принято - уже разложено) по каждому SKU.
 
     Нужно, если пересчёт делали до закрытия всех коробов или остаток в сортировке разъехался.
     """
@@ -903,11 +903,11 @@ async def replace_distribution_lines(
         if accepted <= 0:
             raise InboundIntakeError("product_not_accepted")
         if box_id is not None:
-            bl = box_lines_by_key.get((box_id, product_id))
-            if bl is None:
+            box_line = box_lines_by_key.get((box_id, product_id))
+            if box_line is None:
                 raise InboundIntakeError("product_not_in_box")
             next_box_sum = sum_by_box_product.get((box_id, product_id), 0) + qty
-            if next_box_sum > box_line_remaining_qty(bl):
+            if next_box_sum > box_line_remaining_qty(box_line):
                 raise InboundIntakeError("qty_exceeds_box_remaining")
             sum_by_box_product[(box_id, product_id)] = next_box_sum
         loc = await get_storage_location_in_warehouse(
@@ -993,8 +993,8 @@ async def complete_distribution(
         if accepted <= 0:
             raise InboundIntakeError("product_not_accepted")
         if r.box_id is not None:
-            bl = box_lines_by_key.get((r.box_id, r.product_id))
-            if bl is None:
+            box_line = box_lines_by_key.get((r.box_id, r.product_id))
+            if box_line is None:
                 raise InboundIntakeError("product_not_in_box")
         target_loc = await session.get(StorageLocation, r.storage_location_id)
         if target_loc is None or target_loc.tenant_id != tenant_id:

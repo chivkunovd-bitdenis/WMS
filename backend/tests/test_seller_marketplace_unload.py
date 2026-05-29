@@ -176,29 +176,36 @@ async def test_seller_mp_unload_plan_reserves_and_ff_confirms(
     assert box.status_code == 201, box.text
     box_id = box.json()["id"]
 
+    loc = await async_client.get(f"/warehouses/{wid}/locations", headers=ah)
+    loc_barcode = next(x for x in loc.json() if x["id"] == loc_id)["barcode"]
+
+    loc_scan = await async_client.post(
+        f"/operations/marketplace-unload-requests/{mid}/pick/scan",
+        headers=ah,
+        json={"barcode": loc_barcode},
+    )
+    assert loc_scan.status_code == 200, loc_scan.text
+
     for _ in range(4):
         scan = await async_client.post(
             f"/operations/marketplace-unload-requests/{mid}/boxes/{box_id}/scan",
             headers=ah,
-            json={"barcode": E2E_BARCODE},
+            json={"barcode": E2E_BARCODE, "storage_location_id": loc_id},
         )
         assert scan.status_code == 200, scan.text
+
+    detail = await async_client.get(
+        f"/operations/marketplace-unload-requests/{mid}",
+        headers=ah,
+    )
+    assert detail.status_code == 200
+    line = detail.json()["lines"][0]
+    assert line["picked_qty"] == 4
 
     await async_client.post(
         f"/operations/marketplace-unload-requests/{mid}/boxes/{box_id}/close",
         headers=ah,
     )
-
-    pick = await async_client.put(
-        f"/operations/marketplace-unload-requests/{mid}/pick-allocations",
-        headers=ah,
-        json={
-            "allocations": [
-                {"product_id": pid, "storage_location_id": loc_id, "quantity": 4},
-            ]
-        },
-    )
-    assert pick.status_code == 200, pick.text
 
     ship = await async_client.post(
         f"/operations/marketplace-unload-requests/{mid}/ship",

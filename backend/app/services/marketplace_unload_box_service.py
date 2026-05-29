@@ -16,9 +16,10 @@ from app.models.marketplace_unload import (
     MarketplaceUnloadLine,
     MarketplaceUnloadRequest,
 )
-from app.services import marketplace_unload_pick_service as pick_svc
+from app.services import marketplace_unload_collect_service as collect_svc
 from app.services import marketplace_unload_service as mu_svc
 from app.services import warehouse_box_service as wh_box_svc
+from app.services.marketplace_unload_pick_service import MarketplaceUnloadPickError
 from app.services.seller_wb_catalog_service import list_seller_wb_catalog_rows
 
 ALLOWED_BOX_PRESETS = frozenset({"60_40_40", "30_20_30"})
@@ -28,6 +29,10 @@ class MarketplaceUnloadBoxError(Exception):
     def __init__(self, code: str) -> None:
         self.code = code
         super().__init__(code)
+
+
+def _map_collect_err(exc: MarketplaceUnloadPickError) -> MarketplaceUnloadBoxError:
+    return MarketplaceUnloadBoxError(exc.code)
 
 
 async def _barcode_index_for_seller(
@@ -65,12 +70,7 @@ async def _request_for_picking(
 async def _open_box_for_request(
     session: AsyncSession, request_id: uuid.UUID
 ) -> MarketplaceUnloadBox | None:
-    stmt = select(MarketplaceUnloadBox).where(
-        MarketplaceUnloadBox.request_id == request_id,
-        MarketplaceUnloadBox.closed_at.is_(None),
-    )
-    res = await session.execute(stmt)
-    return res.scalar_one_or_none()
+    return await collect_svc.get_open_box(session, request_id)
 
 
 async def create_open_box(
@@ -125,10 +125,14 @@ async def scan_barcode_into_box(
     box_id: uuid.UUID,
     *,
     barcode: str,
+    storage_location_id: uuid.UUID,
+    quantity: int = 1,
 ) -> MarketplaceUnloadBoxLine:
     raw = barcode.strip()
     if not raw:
         raise MarketplaceUnloadBoxError("barcode_empty")
+    if quantity < 1:
+        raise MarketplaceUnloadBoxError("invalid_quantity")
 
     box = await session.get(MarketplaceUnloadBox, box_id)
     if box is None:
@@ -148,25 +152,19 @@ async def scan_barcode_into_box(
     if not await _product_in_shipment(session, req.id, product_id):
         raise MarketplaceUnloadBoxError("product_not_in_shipment")
 
-    stmt = select(MarketplaceUnloadBoxLine).where(
-        MarketplaceUnloadBoxLine.box_id == box_id,
-        MarketplaceUnloadBoxLine.product_id == product_id,
-    )
-    res = await session.execute(stmt)
-    line = res.scalar_one_or_none()
-    if line is None:
-        line = MarketplaceUnloadBoxLine(box_id=box_id, product_id=product_id, quantity=1)
-        session.add(line)
-    else:
-        line.quantity = int(line.quantity) + 1
-    await session.commit()
-    stmt2 = (
-        select(MarketplaceUnloadBoxLine)
-        .where(MarketplaceUnloadBoxLine.id == line.id)
-        .options(selectinload(MarketplaceUnloadBoxLine.product))
-    )
-    res2 = await session.execute(stmt2)
-    return res2.scalar_one()
+    try:
+        result = await collect_svc.collect_into_box(
+            session,
+            tenant_id,
+            box.request_id,
+            box_id=box_id,
+            storage_location_id=storage_location_id,
+            product_id=product_id,
+            quantity=quantity,
+        )
+    except MarketplaceUnloadPickError as exc:
+        raise _map_collect_err(exc) from None
+    return result.box_line
 
 
 async def add_manual_qty_to_box(
@@ -175,6 +173,7 @@ async def add_manual_qty_to_box(
     box_id: uuid.UUID,
     *,
     product_id: uuid.UUID,
+    storage_location_id: uuid.UUID,
     quantity: int,
 ) -> MarketplaceUnloadBoxLine:
     if quantity < 1:
@@ -187,31 +186,22 @@ async def add_manual_qty_to_box(
         raise MarketplaceUnloadBoxError("box_closed")
 
     req = await _request_for_picking(session, tenant_id, box.request_id)
-
     if not await _product_in_shipment(session, req.id, product_id):
         raise MarketplaceUnloadBoxError("product_not_in_shipment")
 
-    stmt = select(MarketplaceUnloadBoxLine).where(
-        MarketplaceUnloadBoxLine.box_id == box_id,
-        MarketplaceUnloadBoxLine.product_id == product_id,
-    )
-    res = await session.execute(stmt)
-    line = res.scalar_one_or_none()
-    if line is None:
-        line = MarketplaceUnloadBoxLine(
-            box_id=box_id, product_id=product_id, quantity=quantity
+    try:
+        result = await collect_svc.collect_into_box(
+            session,
+            tenant_id,
+            box.request_id,
+            box_id=box_id,
+            storage_location_id=storage_location_id,
+            product_id=product_id,
+            quantity=quantity,
         )
-        session.add(line)
-    else:
-        line.quantity = int(line.quantity) + quantity
-    await session.commit()
-    stmt2 = (
-        select(MarketplaceUnloadBoxLine)
-        .where(MarketplaceUnloadBoxLine.id == line.id)
-        .options(selectinload(MarketplaceUnloadBoxLine.product))
-    )
-    res2 = await session.execute(stmt2)
-    return res2.scalar_one()
+    except MarketplaceUnloadPickError as exc:
+        raise _map_collect_err(exc) from None
+    return result.box_line
 
 
 async def attach_existing_box_by_barcode(
@@ -239,7 +229,6 @@ async def attach_existing_box_by_barcode(
         request_id=request_id,
         box_preset=preset,
         warehouse_box_id=wh_box.id if wh_box is not None else None,
-        closed_at=datetime.now(tz=UTC),
     )
     session.add(mp_box)
     await session.flush()
@@ -251,14 +240,19 @@ async def attach_existing_box_by_barcode(
             for dl in distro:
                 if not await _product_in_shipment(session, req.id, dl.product_id):
                     continue
-                await pick_svc.add_pick_qty(
-                    session,
-                    tenant_id,
-                    request_id,
-                    storage_location_id=dl.storage_location_id,
-                    product_id=dl.product_id,
-                    quantity=int(dl.quantity),
-                )
+                try:
+                    await collect_svc.collect_into_box(
+                        session,
+                        tenant_id,
+                        request_id,
+                        box_id=mp_box.id,
+                        storage_location_id=dl.storage_location_id,
+                        product_id=dl.product_id,
+                        quantity=int(dl.quantity),
+                        require_open_box=False,
+                    )
+                except MarketplaceUnloadPickError as exc:
+                    raise _map_collect_err(exc) from None
                 picks_added += 1
         else:
             stmt = select(InboundIntakeBoxLine).where(
@@ -272,14 +266,19 @@ async def attach_existing_box_by_barcode(
                 if not await _product_in_shipment(session, req.id, bl.product_id):
                     continue
                 if wh_box is not None and wh_box.storage_location_id is not None:
-                    await pick_svc.add_pick_qty(
-                        session,
-                        tenant_id,
-                        request_id,
-                        storage_location_id=wh_box.storage_location_id,
-                        product_id=bl.product_id,
-                        quantity=qty,
-                    )
+                    try:
+                        await collect_svc.collect_into_box(
+                            session,
+                            tenant_id,
+                            request_id,
+                            box_id=mp_box.id,
+                            storage_location_id=wh_box.storage_location_id,
+                            product_id=bl.product_id,
+                            quantity=qty,
+                            require_open_box=False,
+                        )
+                    except MarketplaceUnloadPickError as exc:
+                        raise _map_collect_err(exc) from None
                     picks_added += 1
 
     if inb_box is not None and picks_added < 1:
@@ -295,6 +294,7 @@ async def attach_existing_box_by_barcode(
         if res.scalar_one_or_none() is not None:
             raise MarketplaceUnloadBoxError("box_already_attached")
 
+    mp_box.closed_at = datetime.now(tz=UTC)
     await session.commit()
     await session.refresh(mp_box, attribute_names=["warehouse_box", "lines"])
     return mp_box

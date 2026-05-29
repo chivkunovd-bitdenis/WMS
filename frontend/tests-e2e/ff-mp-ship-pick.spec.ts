@@ -139,6 +139,13 @@ test('FF marketplace unload: pick by cell and ship reduces stock', async ({ page
     data: JSON.stringify({ planned_shipment_date: '2026-06-01' }),
   });
 
+  const box = await page.request.post(
+    `${e2eApi}/operations/marketplace-unload-requests/${mid}/boxes`,
+    { headers: auth, data: JSON.stringify({ box_preset: '60_40_40' }) },
+  );
+  expect(box.ok()).toBeTruthy();
+  const boxId = String(((await box.json()) as { id: string }).id);
+
   const locList = await page.request.get(`${e2eApi}/warehouses/${whId}/locations`, {
     headers: auth,
   });
@@ -155,7 +162,7 @@ test('FF marketplace unload: pick by cell and ship reduces stock', async ({ page
 
   for (let i = 0; i < 3; i += 1) {
     const prodScan = await page.request.post(
-      `${e2eApi}/operations/marketplace-unload-requests/${mid}/pick/scan`,
+      `${e2eApi}/operations/marketplace-unload-requests/${mid}/boxes/${boxId}/scan`,
       {
         headers: auth,
         data: JSON.stringify({ barcode, storage_location_id: locId }),
@@ -163,6 +170,14 @@ test('FF marketplace unload: pick by cell and ship reduces stock', async ({ page
     );
     expect(prodScan.ok()).toBeTruthy();
   }
+
+  const detail = await page.request.get(
+    `${e2eApi}/operations/marketplace-unload-requests/${mid}`,
+    { headers: auth },
+  );
+  expect(((await detail.json()) as { lines: { picked_qty: number }[] }).lines[0].picked_qty).toBe(
+    3,
+  );
 
   await page.request.post(`${e2eApi}/operations/marketplace-unload-requests/${mid}/ship`, {
     headers: auth,

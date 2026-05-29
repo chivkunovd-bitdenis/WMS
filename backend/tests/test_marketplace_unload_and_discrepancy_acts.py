@@ -812,6 +812,14 @@ async def test_marketplace_unload_ship_deducts_stock_by_pick_and_scan(
     loc = await async_client.get(f"/warehouses/{wid}/locations", headers=h)
     loc_barcode = next(x for x in loc.json() if x["id"] == loc_id)["barcode"]
 
+    box = await async_client.post(
+        f"/operations/marketplace-unload-requests/{mid}/boxes",
+        headers=h,
+        json={"box_preset": "60_40_40"},
+    )
+    assert box.status_code == 201, box.text
+    box_id = box.json()["id"]
+
     loc_scan = await async_client.post(
         f"/operations/marketplace-unload-requests/{mid}/pick/scan",
         headers=h,
@@ -822,12 +830,14 @@ async def test_marketplace_unload_ship_deducts_stock_by_pick_and_scan(
 
     for _ in range(3):
         prod_scan = await async_client.post(
-            f"/operations/marketplace-unload-requests/{mid}/pick/scan",
+            f"/operations/marketplace-unload-requests/{mid}/boxes/{box_id}/scan",
             headers=h,
             json={"barcode": E2E_BARCODE, "storage_location_id": loc_id},
         )
         assert prod_scan.status_code == 200, prod_scan.text
-        assert prod_scan.json()["kind"] == "product"
+
+    detail = await async_client.get(f"/operations/marketplace-unload-requests/{mid}", headers=h)
+    assert detail.json()["lines"][0]["picked_qty"] == 3
 
     ship = await async_client.post(
         f"/operations/marketplace-unload-requests/{mid}/ship",
