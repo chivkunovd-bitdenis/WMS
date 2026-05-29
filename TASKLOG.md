@@ -5,7 +5,7 @@
 - What changed: убрана отдельная строка «Штрихкод существующего короба»; WHB-скан в общем поле → attach + закрытый короб внизу; ячейка и товар — как раньше в открытую тару.
 - What did NOT change: API `/boxes/attach`, backend attach logic, закрытие короба кнопкой.
 - Verification: `npm run build`.
-- Commit: (pending)
+- Commit: 88dfd8c
 
 ## TASK-28 — 2026-05-27 — Логин: видимая ошибка при неверном портале
 
