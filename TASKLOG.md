@@ -4,8 +4,8 @@
 
 - What changed: операция `collect_into_box` — снятие с ячейки и количество в открытый короб в одной транзакции; **«Собрано»** = сумма по всем коробам; скан в короб требует `storage_location_id`; pick/scan товара только при открытом коробе; ручной подбор (модалка) добавляет в открытый короб; UI: сводка «Нужно / Собрано / Осталось», один блок «Сборка в короба», поле кол-ва.
 - What did NOT change: создание/утверждение отгрузки селлером; проведение ship по pick allocations; attach inbound-короба (с box_lines).
-- Verification: `npm run build` OK; pytest локально не прогнан (Python 3.9 на машине, проект 3.11+).
-- Commit: 7df9785
+- Verification: `npm run build` OK; pytest 99 passed (Docker py3.11); e2e — CI.
+- Commit: 97c5289
 
 ## TASK-26 — 2026-05-27 — Отгрузка на МП: подбор по ячейкам, план/факт, короба WHB
 
