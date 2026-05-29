@@ -133,6 +133,20 @@ async def _post_inventory(
     return location_id
 
 
+async def _patch_mp_planned_date(
+    async_client: AsyncClient,
+    h: dict[str, str],
+    mid: str,
+    planned_date: str = "2026-06-01",
+) -> None:
+    patch = await async_client.patch(
+        f"/operations/marketplace-unload-requests/{mid}",
+        headers=h,
+        json={"planned_shipment_date": planned_date},
+    )
+    assert patch.status_code == 200, patch.text
+
+
 @pytest.mark.asyncio
 async def test_marketplace_unload_and_discrepancy_act_crud_smoke(
     async_client: AsyncClient, monkeypatch: pytest.MonkeyPatch
@@ -454,6 +468,7 @@ async def test_marketplace_unload_submit_delete_and_blocks(
     assert bad_del.status_code == 404
     assert bad_del.json()["detail"] == "line_not_found"
 
+    await _patch_mp_planned_date(async_client, h, mid)
     sub = await async_client.post(
         f"/operations/marketplace-unload-requests/{mid}/submit",
         headers=h,
@@ -591,6 +606,13 @@ async def test_marketplace_unload_allows_draft_without_wb_warehouse_and_requires
         json={"product_id": pid, "quantity": 1},
     )
 
+    sub_no_date = await async_client.post(
+        f"/operations/marketplace-unload-requests/{mid}/submit", headers=h
+    )
+    assert sub_no_date.status_code == 409
+    assert sub_no_date.json()["detail"] == "planned_shipment_date_required"
+
+    await _patch_mp_planned_date(async_client, h, mid)
     sub = await async_client.post(
         f"/operations/marketplace-unload-requests/{mid}/submit", headers=h
     )
@@ -794,6 +816,7 @@ async def test_marketplace_unload_ship_deducts_stock_by_pick_and_scan(
         json={"product_id": pid, "quantity": 3},
     )
 
+    await _patch_mp_planned_date(async_client, h, mid)
     sub = await async_client.post(
         f"/operations/marketplace-unload-requests/{mid}/submit",
         headers=h,
