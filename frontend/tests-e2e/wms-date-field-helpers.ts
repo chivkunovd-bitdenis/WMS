@@ -6,15 +6,41 @@ export function isoDateRu(iso: string): string {
   return `${d}.${m}.${y}`;
 }
 
-/** Fill WmsDateField (MUI DatePicker, ru locale) and blur to commit. */
+async function dismissOpenMenus(page: Page): Promise<void> {
+  await page.keyboard.press('Escape');
+  await page.keyboard.press('Escape');
+  const menu = page.locator('[role="presentation"].MuiMenu-root');
+  if (await menu.count()) {
+    await menu.first().waitFor({ state: 'hidden', timeout: 5000 }).catch(() => undefined);
+  }
+}
+
+async function fillDateSection(
+  page: Page,
+  root: ReturnType<Page['getByTestId']>,
+  label: 'Day' | 'Month' | 'Year',
+  value: string,
+): Promise<void> {
+  const section = root.getByRole('spinbutton', { name: label });
+  await section.click();
+  await page.keyboard.press('ControlOrMeta+a');
+  await page.keyboard.type(value);
+}
+
+/** Fill WmsDateField (MUI X v9 section field, ru locale). */
 export async function setWmsDateField(
   page: Page,
   testId: string,
   isoDate: string,
 ): Promise<void> {
-  const input = page.getByTestId(testId).locator('input').first();
-  await input.waitFor({ state: 'visible' });
-  await input.click();
-  await input.fill(isoDateRu(isoDate));
-  await input.blur();
+  await dismissOpenMenus(page);
+
+  const root = page.getByTestId(testId);
+  await root.waitFor({ state: 'visible' });
+
+  const [yearStr, monthStr, dayStr] = isoDate.split('-');
+  await fillDateSection(page, root, 'Day', dayStr.padStart(2, '0'));
+  await fillDateSection(page, root, 'Month', monthStr.padStart(2, '0'));
+  await fillDateSection(page, root, 'Year', yearStr);
+  await root.getByRole('spinbutton', { name: 'Year' }).blur();
 }
