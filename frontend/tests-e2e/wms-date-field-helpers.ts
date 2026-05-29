@@ -12,7 +12,8 @@ export async function setWmsDateField(
   testId: string,
   isoDate: string,
 ): Promise<void> {
-  const input = page.getByTestId(testId).getByRole('textbox');
+  const input = page.getByTestId(testId).locator('input').first();
+  await input.waitFor({ state: 'visible' });
   await input.click();
   await input.fill(isoDateRu(isoDate));
   await input.blur();
