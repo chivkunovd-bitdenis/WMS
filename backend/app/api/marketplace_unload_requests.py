@@ -65,6 +65,7 @@ class MarketplaceUnloadLinesBulkReplace(BaseModel):
 
 class MarketplaceUnloadManualBoxLineBody(BaseModel):
     product_id: uuid.UUID
+    storage_location_id: uuid.UUID
     quantity: int = Field(ge=1, le=1_000_000_000)
 
 
@@ -90,6 +91,8 @@ class MarketplaceUnloadBoxCreate(BaseModel):
 
 class MarketplaceUnloadScanBody(BaseModel):
     barcode: str = Field(min_length=1, max_length=128)
+    storage_location_id: uuid.UUID | None = None
+    quantity: int = Field(default=1, ge=1, le=1_000_000_000)
 
 
 class MarketplaceUnloadLineCreate(BaseModel):
@@ -253,9 +256,10 @@ def _line_out(
 
 def _picked_by_product(r: MarketplaceUnloadRequest) -> dict[uuid.UUID, int]:
     picked: dict[uuid.UUID, int] = {}
-    for a in getattr(r, "pick_allocations", []) or []:
-        pid = a.product_id
-        picked[pid] = picked.get(pid, 0) + int(a.quantity)
+    for b in getattr(r, "boxes", []) or []:
+        for bl in b.lines:
+            pid = bl.product_id
+            picked[pid] = picked.get(pid, 0) + int(bl.quantity)
     return picked
 
 
@@ -392,6 +396,9 @@ def _map_pick_err(exc: MarketplaceUnloadPickError) -> HTTPException:
         "no_lines",
         "discrepancy_requires_ack",
         "seller_required",
+        "open_box_required",
+        "box_not_found",
+        "box_closed",
     ):
         return HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
@@ -420,6 +427,9 @@ def _map_box_err(exc: MarketplaceUnloadBoxError) -> HTTPException:
         "box_needs_location",
         "product_not_in_shipment",
         "seller_required",
+        "location_required",
+        "open_box_required",
+        "insufficient_available",
     ):
         return HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
@@ -975,8 +985,15 @@ async def scan_marketplace_unload_box(
     if bx is None or bx.request_id != request_id:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="box_not_found")
     try:
+        if body.storage_location_id is None:
+            raise box_svc.MarketplaceUnloadBoxError("location_required")
         ln = await box_svc.scan_barcode_into_box(
-            session, user.tenant_id, box_id, barcode=body.barcode
+            session,
+            user.tenant_id,
+            box_id,
+            barcode=body.barcode,
+            storage_location_id=body.storage_location_id,
+            quantity=body.quantity,
         )
     except MarketplaceUnloadBoxError as exc:
         raise _map_box_err(exc) from None
@@ -1004,6 +1021,7 @@ async def manual_marketplace_unload_box_line(
             user.tenant_id,
             box_id,
             product_id=body.product_id,
+            storage_location_id=body.storage_location_id,
             quantity=body.quantity,
         )
     except MarketplaceUnloadBoxError as exc:
