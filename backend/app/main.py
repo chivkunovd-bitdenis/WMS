@@ -20,6 +20,7 @@ from app.api.marketplace_unload_requests import router as marketplace_unload_req
 from app.api.outbound_shipment import router as outbound_shipment_router
 from app.api.products import router as products_router
 from app.api.sellers import router as sellers_router
+from app.api.staff_accounts import router as staff_accounts_router
 from app.api.stock_transfer import router as stock_transfer_router
 from app.api.warehouses import router as warehouses_router
 from app.api.wb_mp_warehouses import router as wb_mp_warehouses_router
@@ -92,6 +93,7 @@ def create_app() -> FastAPI:
     )
     app.include_router(health_router)
     app.include_router(auth_router)
+    app.include_router(staff_accounts_router)
     app.include_router(sellers_router)
     app.include_router(warehouses_router)
     app.include_router(products_router)

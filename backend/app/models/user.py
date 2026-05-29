@@ -10,6 +10,7 @@ from sqlalchemy.orm import Mapped, mapped_column, relationship
 from app.models.base import Base
 
 if TYPE_CHECKING:
+    from app.models.ff_staff_permissions import FfStaffPermissions
     from app.models.seller import Seller
     from app.models.tenant import Tenant
 
@@ -41,3 +42,9 @@ class User(Base):
 
     tenant: Mapped[Tenant] = relationship("Tenant", back_populates="users")
     seller: Mapped[Seller | None] = relationship("Seller", back_populates="users")
+    ff_staff_permissions: Mapped[FfStaffPermissions | None] = relationship(
+        "FfStaffPermissions",
+        back_populates="user",
+        uselist=False,
+        cascade="all, delete-orphan",
+    )

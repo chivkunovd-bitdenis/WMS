@@ -18,6 +18,7 @@ from app.services.auth_service import (
     register_fulfillment,
     set_initial_password,
 )
+from app.services.staff_permissions_service import get_staff_permissions
 from app.services.tokens import create_access_token
 
 router = APIRouter(prefix="/auth", tags=["auth"])
@@ -48,6 +49,15 @@ class UserMeResponse(BaseModel):
     organization_name: str
     seller_id: str | None = None
     seller_name: str | None = None
+    permissions: StaffPermissionsOut | None = None
+
+
+class StaffPermissionsOut(BaseModel):
+    settings: bool
+    mp_shipments: bool
+    reception: bool
+    cells: bool
+    inventory: bool
 
 
 class SellerAccountCreate(BaseModel):
@@ -227,6 +237,15 @@ async def me(
         seller = await session.get(Seller, user.seller_id)
         if seller is not None:
             seller_name = seller.name
+    perms_snapshot = await get_staff_permissions(session, user)
+    perms_dict = perms_snapshot.as_dict()
+    permissions = StaffPermissionsOut(
+        settings=perms_dict["settings"],
+        mp_shipments=perms_dict["mp_shipments"],
+        reception=perms_dict["reception"],
+        cells=perms_dict["cells"],
+        inventory=perms_dict["inventory"],
+    )
     return UserMeResponse(
         id=str(user.id),
         email=user.email,
@@ -235,4 +254,5 @@ async def me(
         organization_name=tenant.name,
         seller_id=seller_id_str,
         seller_name=seller_name,
+        permissions=permissions,
     )

@@ -14,6 +14,9 @@ import {
 } from '@mui/material'
 import { alpha } from '@mui/material/styles'
 
+import type { FfPermissions } from '../utils/ffPermissions'
+import { canAccessFfBlock, isFulfillmentAdminRole } from '../utils/ffPermissions'
+
 type Props = {
   children: ReactNode
   onLogout: () => void
@@ -22,6 +25,8 @@ type Props = {
   userLabel?: string
   userRoleLabel?: string
   portal: 'seller' | 'ff'
+  meRole?: string
+  ffPermissions?: FfPermissions | null
 }
 
 export function AuthedAppLayout({
@@ -32,6 +37,8 @@ export function AuthedAppLayout({
   userLabel,
   userRoleLabel,
   portal,
+  meRole = '',
+  ffPermissions = null,
 }: Props) {
   const base = portal === 'seller' ? '/app/seller' : '/app/ff'
   if (portal === 'seller') {
@@ -127,6 +134,8 @@ export function AuthedAppLayout({
     )
   }
   const ffDrawerWidth = 260
+  const isAdmin = isFulfillmentAdminRole(meRole)
+  const can = (block: keyof FfPermissions) => canAccessFfBlock(meRole, ffPermissions, block)
   return (
     <Box sx={{ display: 'flex', minHeight: '100vh' }} data-testid="app-frame">
       <CssBaseline />
@@ -193,35 +202,63 @@ export function AuthedAppLayout({
             <ListItemButton component={NavLink} to={`${base}/dashboard`} data-testid="nav-dashboard">
               <ListItemText primary="Дашборд" />
             </ListItemButton>
-            <ListItemButton
-              component={NavLink}
-              to={`${base}/mp-shipments`}
-              data-testid="nav-ff-mp-shipments"
-            >
-              <ListItemText primary="Отгрузки на МП" />
-            </ListItemButton>
-            <ListItemButton component={NavLink} to={`${base}/reception`} data-testid="nav-ff-reception">
-              <ListItemText primary="Приёмка" />
-            </ListItemButton>
-            <ListItemButton component={NavLink} to={`${base}/sorting`} data-testid="nav-ff-sorting">
-              <ListItemText primary="Сортировка" />
-            </ListItemButton>
-            <ListItemButton component={NavLink} to="/app/catalog" data-testid="nav-catalog">
-              <ListItemText primary="Каталог" />
-            </ListItemButton>
-            <ListItemButton component={NavLink} to={`${base}/sellers`} data-testid="nav-sellers">
-              <ListItemText primary="Селлеры" />
-            </ListItemButton>
-            <ListItemButton component={NavLink} to={`${base}/products`} data-testid="nav-ff-products">
-              <ListItemText primary="Товары" />
-            </ListItemButton>
-            <ListItemButton
-              component={NavLink}
-              to={`${base}/honest-sign`}
-              data-testid="nav-ff-honest-sign"
-            >
-              <ListItemText primary="Честный знак" />
-            </ListItemButton>
+            {can('mp_shipments') ? (
+              <ListItemButton
+                component={NavLink}
+                to={`${base}/mp-shipments`}
+                data-testid="nav-ff-mp-shipments"
+              >
+                <ListItemText primary="Отгрузки на МП" />
+              </ListItemButton>
+            ) : null}
+            {can('reception') ? (
+              <>
+                <ListItemButton component={NavLink} to={`${base}/reception`} data-testid="nav-ff-reception">
+                  <ListItemText primary="Приёмка" />
+                </ListItemButton>
+                <ListItemButton component={NavLink} to={`${base}/sorting`} data-testid="nav-ff-sorting">
+                  <ListItemText primary="Сортировка" />
+                </ListItemButton>
+              </>
+            ) : null}
+            {can('cells') ? (
+              <ListItemButton component={NavLink} to="/app/catalog" data-testid="nav-catalog">
+                <ListItemText primary="Каталог" />
+              </ListItemButton>
+            ) : null}
+            {isAdmin ? (
+              <ListItemButton component={NavLink} to={`${base}/sellers`} data-testid="nav-sellers">
+                <ListItemText primary="Селлеры" />
+              </ListItemButton>
+            ) : null}
+            {isAdmin ? (
+              <ListItemButton component={NavLink} to={`${base}/products`} data-testid="nav-ff-products">
+                <ListItemText primary="Товары" />
+              </ListItemButton>
+            ) : null}
+            {can('inventory') ? (
+              <ListItemButton
+                component={NavLink}
+                to={`${base}/inventory`}
+                data-testid="nav-ff-inventory"
+              >
+                <ListItemText primary="Инвентаризация" />
+              </ListItemButton>
+            ) : null}
+            {isAdmin ? (
+              <ListItemButton
+                component={NavLink}
+                to={`${base}/honest-sign`}
+                data-testid="nav-ff-honest-sign"
+              >
+                <ListItemText primary="Честный знак" />
+              </ListItemButton>
+            ) : null}
+            {can('settings') || isAdmin ? (
+              <ListItemButton component={NavLink} to={`${base}/settings`} data-testid="nav-ff-settings">
+                <ListItemText primary="Настройки" />
+              </ListItemButton>
+            ) : null}
           </List>
         </Box>
       </Drawer>

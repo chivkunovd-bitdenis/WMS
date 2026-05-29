@@ -8,12 +8,18 @@ import {
 import { readApiErrorMessage } from '../utils/readApiErrorMessage'
 import { buildAutoTenantSlug } from '../utils/tenantSlug'
 
+import {
+  isFfPortalRole,
+  type FfPermissions,
+} from '../utils/ffPermissions'
+
 export type Me = {
   email: string
   organization_name: string
   role: string
   seller_id?: string | null
   seller_name?: string | null
+  permissions?: FfPermissions | null
 }
 
 export type AuthPortal = 'fulfillment' | 'seller'
@@ -91,6 +97,15 @@ export function useAuth(portal: AuthPortal = 'fulfillment') {
     if (portal === 'fulfillment' && me.role === 'fulfillment_seller') {
       const msg =
         'Этот портал для сотрудников фулфилмента. Селлеру: откройте /seller/ и войдите там (отдельный вход).'
+      setPortalMismatch(msg)
+      setError(msg)
+      setStoredToken(null, 'fulfillment')
+      setToken(null)
+      setMe(null)
+      return
+    }
+    if (portal === 'fulfillment' && !isFfPortalRole(me.role)) {
+      const msg = 'Этот портал только для сотрудников фулфилмента.'
       setPortalMismatch(msg)
       setError(msg)
       setStoredToken(null, 'fulfillment')

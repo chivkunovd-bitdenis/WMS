@@ -8,7 +8,7 @@ from fastapi import APIRouter, Body, Depends, HTTPException, status
 from pydantic import BaseModel, Field
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.api.deps import require_ff_or_seller, require_fulfillment_admin
+from app.api.deps import require_mp_shipments_access
 from app.core.roles import FULFILLMENT_ADMIN, FULFILLMENT_SELLER
 from app.db.session import get_db
 from app.models.marketplace_unload import (
@@ -466,7 +466,7 @@ async def _get_visible_request(
 
 @router.get("", response_model=list[MarketplaceUnloadRequestSummaryOut])
 async def list_marketplace_unloads(
-    user: Annotated[User, Depends(require_ff_or_seller)],
+    user: Annotated[User, Depends(require_mp_shipments_access)],
     session: Annotated[AsyncSession, Depends(get_db)],
 ) -> list[MarketplaceUnloadRequestSummaryOut]:
     seller_filter = user.seller_id if user.role == FULFILLMENT_SELLER else None
@@ -484,7 +484,7 @@ async def list_marketplace_unloads(
 @router.get("/{request_id}", response_model=MarketplaceUnloadRequestDetailOut)
 async def get_marketplace_unload(
     request_id: uuid.UUID,
-    user: Annotated[User, Depends(require_ff_or_seller)],
+    user: Annotated[User, Depends(require_mp_shipments_access)],
     session: Annotated[AsyncSession, Depends(get_db)],
 ) -> MarketplaceUnloadRequestDetailOut:
     r = await _get_visible_request(session, user, request_id)
@@ -502,7 +502,7 @@ async def get_marketplace_unload(
 )
 async def create_marketplace_unload(
     body: MarketplaceUnloadRequestCreate,
-    user: Annotated[User, Depends(require_fulfillment_admin)],
+    user: Annotated[User, Depends(require_mp_shipments_access)],
     session: Annotated[AsyncSession, Depends(get_db)],
 ) -> MarketplaceUnloadRequestSummaryOut:
     try:
@@ -547,7 +547,7 @@ async def create_marketplace_unload(
 )
 async def create_seller_marketplace_unload(
     body: SellerMarketplaceUnloadRequestCreate,
-    user: Annotated[User, Depends(require_ff_or_seller)],
+    user: Annotated[User, Depends(require_mp_shipments_access)],
     session: Annotated[AsyncSession, Depends(get_db)],
 ) -> MarketplaceUnloadRequestSummaryOut:
     if user.role != FULFILLMENT_SELLER or user.seller_id is None:
@@ -581,7 +581,7 @@ async def create_seller_marketplace_unload(
 async def update_marketplace_unload(
     request_id: uuid.UUID,
     body: MarketplaceUnloadRequestUpdate,
-    user: Annotated[User, Depends(require_ff_or_seller)],
+    user: Annotated[User, Depends(require_mp_shipments_access)],
     session: Annotated[AsyncSession, Depends(get_db)],
 ) -> MarketplaceUnloadRequestDetailOut:
     await _get_visible_request(session, user, request_id)
@@ -639,7 +639,7 @@ async def update_marketplace_unload(
 async def add_marketplace_unload_line(
     request_id: uuid.UUID,
     body: MarketplaceUnloadLineCreate,
-    user: Annotated[User, Depends(require_ff_or_seller)],
+    user: Annotated[User, Depends(require_mp_shipments_access)],
     session: Annotated[AsyncSession, Depends(get_db)],
 ) -> MarketplaceUnloadLineOut:
     await _get_visible_request(session, user, request_id)
@@ -665,7 +665,7 @@ async def add_marketplace_unload_line(
 async def replace_marketplace_unload_lines(
     request_id: uuid.UUID,
     body: MarketplaceUnloadLinesBulkReplace,
-    user: Annotated[User, Depends(require_ff_or_seller)],
+    user: Annotated[User, Depends(require_mp_shipments_access)],
     session: Annotated[AsyncSession, Depends(get_db)],
 ) -> MarketplaceUnloadRequestDetailOut:
     await _get_visible_request(session, user, request_id)
@@ -689,7 +689,7 @@ async def replace_marketplace_unload_lines(
 )
 async def plan_marketplace_unload(
     request_id: uuid.UUID,
-    user: Annotated[User, Depends(require_ff_or_seller)],
+    user: Annotated[User, Depends(require_mp_shipments_access)],
     session: Annotated[AsyncSession, Depends(get_db)],
 ) -> MarketplaceUnloadRequestDetailOut:
     await _get_visible_request(session, user, request_id)
@@ -710,7 +710,7 @@ async def plan_marketplace_unload(
 )
 async def unplan_marketplace_unload(
     request_id: uuid.UUID,
-    user: Annotated[User, Depends(require_ff_or_seller)],
+    user: Annotated[User, Depends(require_mp_shipments_access)],
     session: Annotated[AsyncSession, Depends(get_db)],
 ) -> MarketplaceUnloadRequestDetailOut:
     await _get_visible_request(session, user, request_id)
@@ -732,7 +732,7 @@ async def unplan_marketplace_unload(
 async def confirm_marketplace_unload(
     request_id: uuid.UUID,
     body: MarketplaceUnloadConfirmBody,
-    user: Annotated[User, Depends(require_fulfillment_admin)],
+    user: Annotated[User, Depends(require_mp_shipments_access)],
     session: Annotated[AsyncSession, Depends(get_db)],
 ) -> MarketplaceUnloadRequestDetailOut:
     try:
@@ -757,7 +757,7 @@ async def confirm_marketplace_unload(
 )
 async def get_marketplace_unload_pick_options(
     request_id: uuid.UUID,
-    user: Annotated[User, Depends(require_fulfillment_admin)],
+    user: Annotated[User, Depends(require_mp_shipments_access)],
     session: Annotated[AsyncSession, Depends(get_db)],
 ) -> list[MarketplaceUnloadPickOptionProductOut]:
     try:
@@ -793,7 +793,7 @@ async def get_marketplace_unload_pick_options(
 async def scan_marketplace_unload_pick(
     request_id: uuid.UUID,
     body: MarketplaceUnloadPickScanBody,
-    user: Annotated[User, Depends(require_fulfillment_admin)],
+    user: Annotated[User, Depends(require_mp_shipments_access)],
     session: Annotated[AsyncSession, Depends(get_db)],
 ) -> MarketplaceUnloadPickScanOut:
     try:
@@ -828,7 +828,7 @@ async def scan_marketplace_unload_pick(
 async def add_marketplace_unload_pick_qty(
     request_id: uuid.UUID,
     body: MarketplaceUnloadPickAddBody,
-    user: Annotated[User, Depends(require_fulfillment_admin)],
+    user: Annotated[User, Depends(require_mp_shipments_access)],
     session: Annotated[AsyncSession, Depends(get_db)],
 ) -> MarketplaceUnloadPickAllocationOut:
     try:
@@ -852,7 +852,7 @@ async def add_marketplace_unload_pick_qty(
 async def save_marketplace_unload_pick_allocations(
     request_id: uuid.UUID,
     body: PickAllocationsSave,
-    user: Annotated[User, Depends(require_fulfillment_admin)],
+    user: Annotated[User, Depends(require_mp_shipments_access)],
     session: Annotated[AsyncSession, Depends(get_db)],
 ) -> list[MarketplaceUnloadPickAllocationOut]:
     rows = [
@@ -878,7 +878,7 @@ async def save_marketplace_unload_pick_allocations(
 )
 async def submit_marketplace_unload(
     request_id: uuid.UUID,
-    user: Annotated[User, Depends(require_fulfillment_admin)],
+    user: Annotated[User, Depends(require_mp_shipments_access)],
     session: Annotated[AsyncSession, Depends(get_db)],
 ) -> MarketplaceUnloadRequestDetailOut:
     try:
@@ -902,7 +902,7 @@ async def submit_marketplace_unload(
 async def delete_marketplace_unload_line(
     request_id: uuid.UUID,
     line_id: uuid.UUID,
-    user: Annotated[User, Depends(require_ff_or_seller)],
+    user: Annotated[User, Depends(require_mp_shipments_access)],
     session: Annotated[AsyncSession, Depends(get_db)],
 ) -> None:
     await _get_visible_request(session, user, request_id)
@@ -925,7 +925,7 @@ async def delete_marketplace_unload_line(
 )
 async def ship_marketplace_unload(
     request_id: uuid.UUID,
-    user: Annotated[User, Depends(require_fulfillment_admin)],
+    user: Annotated[User, Depends(require_mp_shipments_access)],
     session: Annotated[AsyncSession, Depends(get_db)],
     body: MarketplaceUnloadShipBody = Body(default=_DEFAULT_SHIP_BODY),  # noqa: B008
 ) -> MarketplaceUnloadRequestDetailOut:
@@ -956,7 +956,7 @@ async def ship_marketplace_unload(
 async def create_marketplace_unload_box(
     request_id: uuid.UUID,
     body: MarketplaceUnloadBoxCreate,
-    user: Annotated[User, Depends(require_fulfillment_admin)],
+    user: Annotated[User, Depends(require_mp_shipments_access)],
     session: Annotated[AsyncSession, Depends(get_db)],
 ) -> MarketplaceUnloadBoxOut:
     try:
@@ -987,7 +987,7 @@ async def create_marketplace_unload_box(
 async def attach_marketplace_unload_box(
     request_id: uuid.UUID,
     body: MarketplaceUnloadAttachBoxBody,
-    user: Annotated[User, Depends(require_fulfillment_admin)],
+    user: Annotated[User, Depends(require_mp_shipments_access)],
     session: Annotated[AsyncSession, Depends(get_db)],
 ) -> MarketplaceUnloadBoxOut:
     try:
@@ -1017,7 +1017,7 @@ async def scan_marketplace_unload_box(
     request_id: uuid.UUID,
     box_id: uuid.UUID,
     body: MarketplaceUnloadScanBody,
-    user: Annotated[User, Depends(require_fulfillment_admin)],
+    user: Annotated[User, Depends(require_mp_shipments_access)],
     session: Annotated[AsyncSession, Depends(get_db)],
 ) -> MarketplaceUnloadBoxLineOut:
     bx = await session.get(MarketplaceUnloadBox, box_id)
@@ -1048,7 +1048,7 @@ async def manual_marketplace_unload_box_line(
     request_id: uuid.UUID,
     box_id: uuid.UUID,
     body: MarketplaceUnloadManualBoxLineBody,
-    user: Annotated[User, Depends(require_fulfillment_admin)],
+    user: Annotated[User, Depends(require_mp_shipments_access)],
     session: Annotated[AsyncSession, Depends(get_db)],
 ) -> MarketplaceUnloadBoxLineOut:
     bx = await session.get(MarketplaceUnloadBox, box_id)
@@ -1075,7 +1075,7 @@ async def manual_marketplace_unload_box_line(
 async def close_marketplace_unload_box(
     request_id: uuid.UUID,
     box_id: uuid.UUID,
-    user: Annotated[User, Depends(require_fulfillment_admin)],
+    user: Annotated[User, Depends(require_mp_shipments_access)],
     session: Annotated[AsyncSession, Depends(get_db)],
 ) -> MarketplaceUnloadBoxOut:
     bx = await session.get(MarketplaceUnloadBox, box_id)

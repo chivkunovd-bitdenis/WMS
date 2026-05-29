@@ -1,5 +1,12 @@
 # TASKLOG
 
+## TASK-31 — 2026-05-30 — Пользователи ФФ: добавление и права доступа
+
+- What changed: роль `fulfillment_staff`; таблица `ff_staff_permissions`; API `/auth/staff-accounts` (создание, список, PATCH прав); первый вход с пустым паролем как у селлера; экран «Настройки → Пользователи» с матрицей галочек (настройки, отгрузки МП, приёмка, ячейки, инвентаризация); фильтрация меню по правам; backend-guards на приёмку/отгрузки/ячейки.
+- What did NOT change: управление селлерами (только админ); seller portal; полноценный раздел инвентаризации (заглушка).
+- Verification: `ruff`/`mypy`; pytest `test_staff_users`; `npm run build`; e2e `ff-staff-users.spec.ts`, `admin-shell-layout`.
+- Commit: (pending)
+
 ## TASK-30 — 2026-05-29 — Отгрузка на МП: обязательная дата + календарь
 
 - What changed: `planned_shipment_date` обязательна для plan/confirm/ship; селлер не передаёт ФФ без даты; PATCH даты; общий `WmsDateField` (MUI DatePicker) на MP, приёмке селлера/ФФ.

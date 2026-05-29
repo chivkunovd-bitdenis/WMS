@@ -11,7 +11,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
-from app.api.deps import get_current_user, require_fulfillment_admin, seller_line_product_scope
+from app.api.deps import get_current_user, require_reception_access, seller_line_product_scope
 from app.core.roles import FULFILLMENT_ADMIN, FULFILLMENT_SELLER
 from app.db.session import get_db
 from app.models.inbound_intake import (
@@ -499,7 +499,7 @@ async def patch_inbound_request_planned(
 async def primary_accept_inbound_request(
     request_id: uuid.UUID,
     body: InboundPrimaryAcceptBody,
-    user: Annotated[User, Depends(require_fulfillment_admin)],
+    user: Annotated[User, Depends(require_reception_access)],
     session: Annotated[AsyncSession, Depends(get_db)],
 ) -> InboundIntakeRequestOut:
     try:
@@ -545,7 +545,7 @@ async def primary_accept_inbound_request(
 async def mark_inbound_box_label_printed(
     request_id: uuid.UUID,
     box_id: uuid.UUID,
-    user: Annotated[User, Depends(require_fulfillment_admin)],
+    user: Annotated[User, Depends(require_reception_access)],
     session: Annotated[AsyncSession, Depends(get_db)],
 ) -> InboundIntakeBoxOut:
     try:
@@ -580,7 +580,7 @@ async def mark_inbound_box_label_printed(
 async def open_inbound_box_by_barcode(
     request_id: uuid.UUID,
     body: InboundBoxBarcodeBody,
-    user: Annotated[User, Depends(require_fulfillment_admin)],
+    user: Annotated[User, Depends(require_reception_access)],
     session: Annotated[AsyncSession, Depends(get_db)],
 ) -> InboundIntakeBoxOut:
     try:
@@ -603,7 +603,7 @@ async def scan_product_into_inbound_box(
     request_id: uuid.UUID,
     box_id: uuid.UUID,
     body: InboundBoxScanBody,
-    user: Annotated[User, Depends(require_fulfillment_admin)],
+    user: Annotated[User, Depends(require_reception_access)],
     session: Annotated[AsyncSession, Depends(get_db)],
 ) -> InboundIntakeBoxLineOut:
     bx = await session.get(InboundIntakeBox, box_id)
@@ -634,7 +634,7 @@ async def set_inbound_box_line_quantity(
     box_id: uuid.UUID,
     product_id: uuid.UUID,
     body: InboundBoxLineQuantityBody,
-    user: Annotated[User, Depends(require_fulfillment_admin)],
+    user: Annotated[User, Depends(require_reception_access)],
     session: Annotated[AsyncSession, Depends(get_db)],
 ) -> InboundIntakeBoxOut:
     bx = await session.get(InboundIntakeBox, box_id)
@@ -673,7 +673,7 @@ async def set_inbound_box_line_quantity(
 async def close_inbound_box_intake(
     request_id: uuid.UUID,
     box_id: uuid.UUID,
-    user: Annotated[User, Depends(require_fulfillment_admin)],
+    user: Annotated[User, Depends(require_reception_access)],
     session: Annotated[AsyncSession, Depends(get_db)],
 ) -> InboundIntakeBoxOut:
     bx = await session.get(InboundIntakeBox, box_id)
@@ -699,7 +699,7 @@ async def putaway_inbound_box(
     request_id: uuid.UUID,
     box_id: uuid.UUID,
     body: InboundBoxPutawayBody,
-    user: Annotated[User, Depends(require_fulfillment_admin)],
+    user: Annotated[User, Depends(require_reception_access)],
     session: Annotated[AsyncSession, Depends(get_db)],
 ) -> InboundIntakeRequestOut:
     line_items: list[tuple[uuid.UUID, int]] | None = None
@@ -755,7 +755,7 @@ async def putaway_inbound_box(
 )
 async def resync_inbound_sorting_stock(
     request_id: uuid.UUID,
-    user: Annotated[User, Depends(require_fulfillment_admin)],
+    user: Annotated[User, Depends(require_reception_access)],
     session: Annotated[AsyncSession, Depends(get_db)],
 ) -> InboundIntakeRequestOut:
     try:
@@ -785,7 +785,7 @@ async def patch_inbound_line_actual(
     request_id: uuid.UUID,
     line_id: uuid.UUID,
     body: InboundIntakeLineActualPatch,
-    user: Annotated[User, Depends(require_fulfillment_admin)],
+    user: Annotated[User, Depends(require_reception_access)],
     session: Annotated[AsyncSession, Depends(get_db)],
 ) -> InboundIntakeLineOut:
     try:
@@ -831,7 +831,7 @@ async def patch_inbound_line_actual(
 @router.post("/{request_id}/verify", response_model=InboundIntakeRequestOut)
 async def complete_inbound_verification(
     request_id: uuid.UUID,
-    user: Annotated[User, Depends(require_fulfillment_admin)],
+    user: Annotated[User, Depends(require_reception_access)],
     session: Annotated[AsyncSession, Depends(get_db)],
 ) -> InboundIntakeRequestOut:
     try:
@@ -1090,7 +1090,7 @@ async def patch_inbound_line_storage(
     request_id: uuid.UUID,
     line_id: uuid.UUID,
     body: InboundIntakeLineStoragePatch,
-    user: Annotated[User, Depends(require_fulfillment_admin)],
+    user: Annotated[User, Depends(require_reception_access)],
     session: Annotated[AsyncSession, Depends(get_db)],
 ) -> InboundIntakeLineOut:
     try:
@@ -1141,7 +1141,7 @@ async def receive_inbound_line(
     request_id: uuid.UUID,
     line_id: uuid.UUID,
     body: InboundIntakeLineReceiveBody,
-    user: Annotated[User, Depends(require_fulfillment_admin)],
+    user: Annotated[User, Depends(require_reception_access)],
     session: Annotated[AsyncSession, Depends(get_db)],
 ) -> InboundIntakeRequestOut:
     try:
@@ -1256,7 +1256,7 @@ async def submit_inbound_request(
 @router.post("/{request_id}/post", response_model=InboundIntakeRequestOut)
 async def post_inbound_request(
     request_id: uuid.UUID,
-    user: Annotated[User, Depends(require_fulfillment_admin)],
+    user: Annotated[User, Depends(require_reception_access)],
     session: Annotated[AsyncSession, Depends(get_db)],
 ) -> InboundIntakeRequestOut:
     try:
@@ -1313,7 +1313,7 @@ async def post_inbound_request(
 )
 async def list_distribution_lines(
     request_id: uuid.UUID,
-    user: Annotated[User, Depends(require_fulfillment_admin)],
+    user: Annotated[User, Depends(require_reception_access)],
     session: Annotated[AsyncSession, Depends(get_db)],
 ) -> list[InboundDistributionLineOut]:
     try:
@@ -1342,7 +1342,7 @@ async def list_distribution_lines(
 async def replace_distribution_lines(
     request_id: uuid.UUID,
     body: list[InboundDistributionLineIn],
-    user: Annotated[User, Depends(require_fulfillment_admin)],
+    user: Annotated[User, Depends(require_reception_access)],
     session: Annotated[AsyncSession, Depends(get_db)],
 ) -> list[InboundDistributionLineOut]:
     try:
@@ -1411,7 +1411,7 @@ async def replace_distribution_lines(
 )
 async def complete_distribution(
     request_id: uuid.UUID,
-    user: Annotated[User, Depends(require_fulfillment_admin)],
+    user: Annotated[User, Depends(require_reception_access)],
     session: Annotated[AsyncSession, Depends(get_db)],
 ) -> InboundIntakeRequestOut:
     try:
@@ -1454,7 +1454,7 @@ async def complete_distribution(
 )
 async def reopen_distribution_route(
     request_id: uuid.UUID,
-    user: Annotated[User, Depends(require_fulfillment_admin)],
+    user: Annotated[User, Depends(require_reception_access)],
     session: Annotated[AsyncSession, Depends(get_db)],
 ) -> InboundIntakeRequestOut:
     try:

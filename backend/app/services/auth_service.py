@@ -7,7 +7,8 @@ from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.roles import FULFILLMENT_ADMIN, FULFILLMENT_SELLER
+from app.core.roles import FULFILLMENT_ADMIN, FULFILLMENT_SELLER, FULFILLMENT_STAFF
+from app.models.ff_staff_permissions import FfStaffPermissions
 from app.models.seller import Seller
 from app.models.tenant import Tenant
 from app.models.user import User
@@ -106,6 +107,42 @@ async def create_seller_user(
     return user
 
 
+async def create_staff_user(
+    session: AsyncSession,
+    *,
+    acting_user: User,
+    email: str,
+    password: str | None,
+) -> User:
+    if acting_user.role != FULFILLMENT_ADMIN:
+        raise AuthError("forbidden")
+    if password and password.strip():
+        password_hash = hash_password(password)
+        must_set_password = False
+    else:
+        password_hash = hash_password(secrets.token_urlsafe(64))
+        must_set_password = True
+    user = User(
+        tenant_id=acting_user.tenant_id,
+        seller_id=None,
+        email=email.strip().lower(),
+        password_hash=password_hash,
+        must_set_password=must_set_password,
+        role=FULFILLMENT_STAFF,
+    )
+    session.add(user)
+    await session.flush()
+    perms = FfStaffPermissions(user_id=user.id)
+    session.add(perms)
+    try:
+        await session.commit()
+    except IntegrityError as exc:
+        await session.rollback()
+        raise AuthError("email_taken") from exc
+    await session.refresh(user)
+    return user
+
+
 async def set_initial_password(
     session: AsyncSession,
     *,
@@ -117,7 +154,7 @@ async def set_initial_password(
     user = result.scalar_one_or_none()
     if user is None:
         raise AuthError("invalid_credentials")
-    if user.role != FULFILLMENT_SELLER:
+    if user.role not in (FULFILLMENT_SELLER, FULFILLMENT_STAFF):
         raise AuthError("forbidden")
     if not user.must_set_password:
         raise AuthError("password_already_set")

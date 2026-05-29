@@ -35,6 +35,12 @@ import { FfPlaceholderPage } from './screens/ff/FfPlaceholderPage'
 import { FfInboundRequestView, type InboundRequestWorkspace } from './screens/ff/FfInboundRequestView'
 import { FfInboundQueuePage } from './screens/ff/FfInboundQueuePage'
 import { FfProductsCatalogScreen } from './screens/v2/FfProductsCatalogScreen'
+import { FfSettingsScreen } from './screens/ff/FfSettingsScreen'
+import {
+  canAccessFfBlock,
+  ffRoleLabel,
+  resolveFfPermissions,
+} from './utils/ffPermissions'
 
 type WarehouseRow = { id: string; name: string; code: string }
 type LocationRow = { id: string; code: string; warehouse_id: string; barcode: string }
@@ -585,7 +591,7 @@ export default function App() {
     void (async () => {
       try {
         await refreshWarehouses(token)
-        if (me.role !== 'fulfillment_admin') {
+        if (me.role !== 'fulfillment_admin' && !canAccessFfBlock(me.role, me.permissions, 'cells')) {
           setLocations([])
           setSelectedWarehouseId(null)
         }
@@ -720,7 +726,12 @@ export default function App() {
   }, [token, inboundDetail?.warehouse_id, authHeaders])
 
   useEffect(() => {
-    if (!token || !selectedWarehouseId || me?.role !== 'fulfillment_admin') {
+    if (
+      !token ||
+      !selectedWarehouseId ||
+      (me?.role !== 'fulfillment_admin' &&
+        !canAccessFfBlock(me?.role ?? '', me?.permissions, 'cells'))
+    ) {
       setLocations([])
       return
     }
@@ -2327,6 +2338,9 @@ export default function App() {
 
     const isFulfillmentAdmin = me.role === 'fulfillment_admin'
     const isFulfillmentSeller = me.role === 'fulfillment_seller'
+    const ffPermissions = resolveFfPermissions(me.role, me.permissions)
+    const canReceptionOps = canAccessFfBlock(me.role, me.permissions, 'reception')
+    const canCellsOps = canAccessFfBlock(me.role, me.permissions, 'cells')
     const portal: 'seller' | 'ff' = 'ff'
     const base = '/app/ff'
 
@@ -2338,7 +2352,9 @@ export default function App() {
         onLogout={onLogout}
           title="Портал ФФ"
         userLabel={me.email}
-        userRoleLabel={me.role}
+        userRoleLabel={ffRoleLabel(me.role)}
+        meRole={me.role}
+        ffPermissions={ffPermissions}
         portal={portal}
       >
         <>
@@ -2487,6 +2503,36 @@ export default function App() {
             }
           />
 
+          <Route
+            path="ff/inventory"
+            element={
+              canAccessFfBlock(me.role, me.permissions, 'inventory') ? (
+                <FfPlaceholderPage
+                  title="Инвентаризация"
+                  hint="Раздел в разработке."
+                  testId="ff-inventory-placeholder"
+                />
+              ) : (
+                <Navigate to={`${base}/dashboard`} replace />
+              )
+            }
+          />
+
+          <Route
+            path="ff/settings/*"
+            element={
+              token && (isFulfillmentAdmin || canAccessFfBlock(me.role, me.permissions, 'settings')) ? (
+                <FfSettingsScreen
+                  token={token}
+                  authHeaders={authHeaders}
+                  isFulfillmentAdmin={isFulfillmentAdmin}
+                />
+              ) : (
+                <Navigate to={`${base}/dashboard`} replace />
+              )
+            }
+          />
+
           <Route path="ff/inbound" element={<Navigate to="/app/ops/inbound" replace />} />
           <Route path="ff/outbound" element={<Navigate to="/app/ops/outbound" replace />} />
           <Route path="ff/warehouses" element={<Navigate to="/app/catalog" replace />} />
@@ -2500,7 +2546,7 @@ export default function App() {
             element={
               <Screen title="Каталог" subtitle="Склады и ячейки">
                 <CatalogSection
-                  isFulfillmentAdmin={isFulfillmentAdmin}
+                  isFulfillmentAdmin={isFulfillmentAdmin || canCellsOps}
                   catalogBusy={catalogBusy}
                   catalogError={catalogError}
                   sellers={sellers}
@@ -2585,7 +2631,7 @@ export default function App() {
                 opsBusy={opsBusy}
                 isFulfillmentAdmin={isFulfillmentAdmin}
                 isFulfillmentSeller={isFulfillmentSeller}
-                canEditInboundDraft={isFulfillmentAdmin}
+                canEditInboundDraft={canReceptionOps}
                 warehouses={warehouses}
                 selectedWarehouseId={selectedWarehouseId}
                 products={products}
@@ -2737,7 +2783,7 @@ export default function App() {
                 <FfInboundRequestView
                   token={token}
                   requestId={selectedInboundId}
-                  isFulfillmentAdmin={isFulfillmentAdmin}
+                  isFulfillmentAdmin={canReceptionOps}
                   workspace={ffInboundWorkspace}
                   onClose={() => {
                     setFfDocModal(null)
