@@ -501,7 +501,11 @@ async def confirm_request(
     mpw = await get_cached_mp_warehouse(session, tenant_id, int(req.wb_mp_warehouse_id))
     if mpw is None:
         raise MarketplaceUnloadError("wb_mp_warehouse_unknown")
-    effective_date = planned_shipment_date if planned_shipment_date is not None else req.planned_shipment_date
+    effective_date = (
+        planned_shipment_date
+        if planned_shipment_date is not None
+        else req.planned_shipment_date
+    )
     if effective_date is None:
         raise MarketplaceUnloadError("planned_shipment_date_required")
     if req.status == STATUS_DRAFT:
