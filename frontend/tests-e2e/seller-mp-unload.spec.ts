@@ -167,8 +167,22 @@ test('seller creates MP unload draft, plans with stock table', async ({ page }) 
     ),
     page.getByRole('option', { name: /E2E WB склад/ }).click(),
   ]);
+  await page
+    .locator('[role="presentation"].MuiMenu-root')
+    .first()
+    .waitFor({ state: 'hidden', timeout: 5000 })
+    .catch(() => undefined);
+  await Promise.all([
+    page.waitForResponse(
+      (r) =>
+        r.request().method() === 'PATCH' &&
+        r.url().includes('/operations/marketplace-unload-requests/') &&
+        r.status() >= 200 &&
+        r.status() < 300,
+    ),
+    setWmsDateField(page, 'seller-mp-planned-date', '2026-06-15'),
+  ]);
   await page.getByTestId(`seller-mp-qty-${productId}`).locator('input').fill('4');
-  await setWmsDateField(page, 'seller-mp-planned-date', '2026-06-15');
   await expect(page.getByTestId('seller-mp-plan')).toBeEnabled();
 
   await Promise.all([
