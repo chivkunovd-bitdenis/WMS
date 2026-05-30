@@ -5,7 +5,7 @@
 - What changed: FF-каталог — колонки «Не упак./Упаковано», редактирование ТЗ; создание задания из любой ячейки (не только сортировка); `POST /packaging-tasks/{id}/cancel` для ручных заданий; `pick_resync_warning` (миграция `0037`, sticky при смене подбора с прогрессом); e2e `ff-products` (ТЗ), `ff-packaging-page` (ячейка, отмена).
 - What did NOT change: биллинг упаковки; ЧЗ; dismiss предупреждения resync в UI (alert пока открыто задание).
 - Verification: `ruff`/`mypy`; pytest 110 passed; `npm run build`; e2e ff-packaging-page (4) + ff-products (2) green.
-- Commit: (pending)
+- Commit: 6d8647d
 
 ## TASK-34 — 2026-05-30 — Упаковка E7 (этапы 1–3, PR feat/packaging-e7)
 
