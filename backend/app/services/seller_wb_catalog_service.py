@@ -116,6 +116,7 @@ class FfCatalogRow:
     wb_primary_image_url: str | None
     wb_barcodes: tuple[str, ...]
     wb_primary_barcode: str | None
+    packaging_instructions: str | None = None
 
     def as_dict(self) -> dict[str, Any]:
         return {
@@ -130,6 +131,7 @@ class FfCatalogRow:
             "wb_primary_image_url": self.wb_primary_image_url,
             "wb_barcodes": list(self.wb_barcodes),
             "wb_primary_barcode": self.wb_primary_barcode,
+            "packaging_instructions": self.packaging_instructions,
         }
 
 
@@ -208,6 +210,7 @@ async def list_ff_catalog_rows(
                 wb_primary_image_url=img,
                 wb_barcodes=barcodes,
                 wb_primary_barcode=primary_sku_display(list(barcodes)),
+                packaging_instructions=p.packaging_instructions,
             ),
         )
     return rows

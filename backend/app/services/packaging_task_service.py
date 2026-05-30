@@ -34,6 +34,7 @@ PackagingTaskError = Literal[
     "task_not_done",
     "unload_not_found",
     "no_lines",
+    "linked_unload",
 ]
 
 
@@ -64,6 +65,12 @@ def task_progress(task: PackagingTask) -> PackagingTaskProgress:
     )
 
 
+@dataclass(frozen=True)
+class SyncPickResult:
+    task: PackagingTask
+    pick_changed_with_progress: bool
+
+
 async def progress_for_unload(
     session: AsyncSession,
     tenant_id: uuid.UUID,
@@ -75,7 +82,8 @@ async def progress_for_unload(
     if task is None:
         return None
     if sync_from_pick:
-        task = await sync_lines_from_pick_allocations(session, tenant_id, task)
+        synced = await sync_lines_from_pick_allocations(session, tenant_id, task)
+        task = synced.task
     return task_progress(task)
 
 
@@ -216,6 +224,8 @@ async def create_manual_task(
         _unpacked, packed = await _get_balance_split(
             session, tenant_id, product_id, location_id
         )
+        if qty > _unpacked:
+            raise PackagingTaskServiceError("insufficient_unpacked")
         suggested = min(packed, qty)
         session.add(
             PackagingTaskLine(
@@ -236,13 +246,14 @@ async def sync_lines_from_pick_allocations(
     session: AsyncSession,
     tenant_id: uuid.UUID,
     task: PackagingTask,
-) -> PackagingTask:
+) -> SyncPickResult:
+    pick_changed_with_progress = False
     loaded = await get_task(session, tenant_id, task.id)
     if loaded is None:
-        return task
+        return SyncPickResult(task=task, pick_changed_with_progress=False)
     task = loaded
     if task.marketplace_unload_request_id is None:
-        return task
+        return SyncPickResult(task=task, pick_changed_with_progress=False)
     unload_id = task.marketplace_unload_request_id
     stmt = select(MarketplaceUnloadPickAllocation).where(
         MarketplaceUnloadPickAllocation.request_id == unload_id,
@@ -250,7 +261,7 @@ async def sync_lines_from_pick_allocations(
     )
     allocs = list((await session.execute(stmt)).scalars().all())
     if not allocs:
-        return task
+        return SyncPickResult(task=task, pick_changed_with_progress=False)
 
     line_stmt = select(PackagingTaskLine).where(PackagingTaskLine.task_id == task.id)
     db_lines = list((await session.execute(line_stmt)).scalars().all())
@@ -268,7 +279,12 @@ async def sync_lines_from_pick_allocations(
         suggested = min(packed, qty)
         if key in existing:
             ln = existing[key]
-            if ln.qty_packed_in_task == 0 and ln.qty_confirmed_packed == 0:
+            has_progress = ln.qty_packed_in_task > 0 or ln.qty_confirmed_packed > 0
+            if has_progress and (
+                ln.qty_total != qty or ln.qty_suggested_packed != suggested
+            ):
+                pick_changed_with_progress = True
+            if (ln.qty_packed_in_task == 0 and ln.qty_confirmed_packed == 0) or has_progress:
                 ln.qty_total = qty
                 ln.qty_suggested_packed = suggested
         else:
@@ -282,13 +298,18 @@ async def sync_lines_from_pick_allocations(
                 )
             )
     for key, ln in existing.items():
-        if key not in seen and ln.qty_packed_in_task == 0 and ln.qty_confirmed_packed == 0:
-            await session.delete(ln)
+        if key not in seen:
+            if ln.qty_packed_in_task > 0 or ln.qty_confirmed_packed > 0:
+                pick_changed_with_progress = True
+            if ln.qty_packed_in_task == 0 and ln.qty_confirmed_packed == 0:
+                await session.delete(ln)
+    if pick_changed_with_progress:
+        task.pick_resync_warning = True
     _touch_task(task)
     await session.commit()
     loaded = await get_task(session, tenant_id, task.id)
     assert loaded is not None
-    return loaded
+    return SyncPickResult(task=loaded, pick_changed_with_progress=pick_changed_with_progress)
 
 
 async def ensure_task_for_unload(
@@ -298,7 +319,8 @@ async def ensure_task_for_unload(
 ) -> PackagingTask:
     existing = await get_task_for_unload(session, tenant_id, unload_id)
     if existing is not None:
-        return await sync_lines_from_pick_allocations(session, tenant_id, existing)
+        synced = await sync_lines_from_pick_allocations(session, tenant_id, existing)
+        return synced.task
 
     req = await session.get(MarketplaceUnloadRequest, unload_id)
     if req is None or req.tenant_id != tenant_id:
@@ -315,6 +337,26 @@ async def ensure_task_for_unload(
     await sync_lines_from_pick_allocations(session, tenant_id, task)
     await session.commit()
     loaded = await get_task(session, tenant_id, task.id)
+    assert loaded is not None
+    return loaded
+
+
+async def cancel_task(
+    session: AsyncSession,
+    tenant_id: uuid.UUID,
+    task_id: uuid.UUID,
+) -> PackagingTask:
+    task = await get_task(session, tenant_id, task_id)
+    if task is None:
+        raise PackagingTaskServiceError("not_found")
+    if task.status in (STATUS_DONE, STATUS_CANCELLED):
+        raise PackagingTaskServiceError("bad_status")
+    if task.marketplace_unload_request_id is not None:
+        raise PackagingTaskServiceError("linked_unload")
+    task.status = STATUS_CANCELLED
+    task.updated_at = datetime.now(UTC)
+    await session.commit()
+    loaded = await get_task(session, tenant_id, task_id)
     assert loaded is not None
     return loaded
 

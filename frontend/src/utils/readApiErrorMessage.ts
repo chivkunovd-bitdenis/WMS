@@ -12,6 +12,8 @@ const API_DETAIL_MESSAGES_RU: Record<string, string> = {
   distribution_not_completed: 'Распределение ещё не зафиксировано.',
   packaging_instructions_required:
     'Заполните ТЗ на упаковку для всех товаров в составе отгрузки (раздел «Товары»).',
+  linked_unload: 'Нельзя отменить задание, связанное с отгрузкой на МП.',
+  insufficient_unpacked: 'Недостаточно неупакованного остатка в выбранном месте.',
   not_reopenable: 'Нельзя открыть распределение заново на этом статусе заявки.',
   already_posted_partial: 'Часть товара уже оприходована — отмена фиксации недоступна.',
 }

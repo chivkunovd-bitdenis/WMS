@@ -626,6 +626,38 @@ Distinct from **operational outbound** (S08) and **seller supply/inbound** (S06)
 - **When:** all lines packed → task **done** → ship again.
 - **Then:** status **shipped**; stock reduced.
 
+### TC-NEW-PKG-04 FF edits packaging instructions in FF product catalog
+
+- **Actor:** fulfillment admin.
+- **Given:** product with FF inbound movement; empty `packaging_instructions`.
+- **When:** opens **Products** → clicks **TZ** on row → saves text.
+- **Then:** chip **Filled**; PATCH persists; catalog row shows instructions.
+- **Negative:** empty save clears instructions (seller path: whitespace rejected).
+
+### TC-NEW-PKG-05 FF creates packaging task from arbitrary storage cell
+
+- **Actor:** fulfillment admin.
+- **Given:** unpacked stock in a named cell (not sorting only).
+- **When:** **Packaging** → **Create** → warehouse + cell → submit.
+- **Then:** task panel opens with line from that cell; POST includes `storage_location_id`.
+- **Negative:** qty &gt; unpacked → API `insufficient_unpacked`.
+
+### TC-NEW-PKG-06 Cancel manual packaging task
+
+- **Actor:** fulfillment admin.
+- **Given:** manual task (no linked MP unload), not done.
+- **When:** **Cancel task** and confirm dialog.
+- **Then:** status **cancelled**; task leaves open queue.
+- **Negative:** linked unload task → POST cancel → HTTP 422 `linked_unload`.
+
+### TC-NEW-PKG-07 Pick change warning after pack progress (MP-linked)
+
+- **Actor:** fulfillment admin.
+- **Given:** MP unload with pick; packaging in progress on line.
+- **When:** pick allocation increases after partial pack; GET task.
+- **Then:** `pick_resync_warning` true; qty_total recalculated; packed progress preserved.
+- **Negative:** pick unchanged → warning stays false.
+
 ---
 
 ## Cross-scenario matrix (acceptance checklist for role tests)

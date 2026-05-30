@@ -63,6 +63,7 @@ class PackagingTaskOut(BaseModel):
     marketplace_unload_request_id: str | None
     inbound_intake_request_id: str | None
     is_complete: bool
+    pick_resync_warning: bool = False
     lines: list[PackagingTaskLineOut]
 
 
@@ -87,7 +88,7 @@ def _line_out(ln: PackagingTaskLine) -> PackagingTaskLineOut:
     )
 
 
-def _task_out(task: PackagingTask) -> PackagingTaskOut:
+def _task_out(task: PackagingTask, *, pick_resync_warning: bool = False) -> PackagingTaskOut:
     return PackagingTaskOut(
         id=str(task.id),
         warehouse_id=str(task.warehouse_id),
@@ -101,6 +102,7 @@ def _task_out(task: PackagingTask) -> PackagingTaskOut:
             str(task.inbound_intake_request_id) if task.inbound_intake_request_id else None
         ),
         is_complete=pkg_svc.is_task_complete(task),
+        pick_resync_warning=pick_resync_warning,
         lines=[_line_out(ln) for ln in task.lines],
     )
 
@@ -156,7 +158,7 @@ async def get_packaging_task_for_unload(
         task = await pkg_svc.ensure_task_for_unload(session, user.tenant_id, unload_id)
     except pkg_svc.PackagingTaskServiceError as exc:
         raise _http_from_pkg_error(exc) from exc
-    return _task_out(task)
+    return _task_out(task, pick_resync_warning=task.pick_resync_warning)
 
 
 @router.get("/{task_id}", response_model=PackagingTaskOut)
@@ -168,10 +170,26 @@ async def get_packaging_task(
     task = await pkg_svc.get_task(session, user.tenant_id, task_id)
     if task is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="not_found")
+    pick_warning = task.pick_resync_warning
     if task.marketplace_unload_request_id is not None:
-        task = await pkg_svc.sync_lines_from_pick_allocations(
+        synced = await pkg_svc.sync_lines_from_pick_allocations(
             session, user.tenant_id, task
         )
+        task = synced.task
+        pick_warning = task.pick_resync_warning
+    return _task_out(task, pick_resync_warning=pick_warning)
+
+
+@router.post("/{task_id}/cancel", response_model=PackagingTaskOut)
+async def cancel_packaging_task(
+    task_id: uuid.UUID,
+    user: Annotated[User, Depends(require_fulfillment_admin)],
+    session: Annotated[AsyncSession, Depends(get_db)],
+) -> PackagingTaskOut:
+    try:
+        task = await pkg_svc.cancel_task(session, user.tenant_id, task_id)
+    except pkg_svc.PackagingTaskServiceError as exc:
+        raise _http_from_pkg_error(exc) from exc
     return _task_out(task)
 
 
