@@ -68,6 +68,8 @@ class FfCatalogOut(BaseModel):
     wb_primary_image_url: str | None = None
     wb_barcodes: list[str]
     wb_primary_barcode: str | None = None
+    packaging_instructions: str | None = None
+    has_packaging_instructions: bool = False
 
 
 class ProductOut(BaseModel):
@@ -154,7 +156,13 @@ async def get_ff_catalog(
     seller_id: uuid.UUID | None = _seller_id_query,
 ) -> list[FfCatalogOut]:
     rows = await list_ff_catalog_rows(session, user.tenant_id, seller_id=seller_id)
-    return [FfCatalogOut(**r.as_dict()) for r in rows]
+    return [
+        FfCatalogOut(
+            **r.as_dict(),
+            has_packaging_instructions=bool((r.packaging_instructions or "").strip()),
+        )
+        for r in rows
+    ]
 
 
 @router.post("", response_model=ProductOut)

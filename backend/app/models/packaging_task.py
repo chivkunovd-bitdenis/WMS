@@ -4,7 +4,7 @@ import uuid
 from datetime import datetime
 from typing import TYPE_CHECKING
 
-from sqlalchemy import DateTime, ForeignKey, Integer, String, UniqueConstraint, Uuid, func
+from sqlalchemy import Boolean, DateTime, ForeignKey, Integer, String, UniqueConstraint, Uuid, func
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.models.base import Base
@@ -42,6 +42,9 @@ class PackagingTask(Base):
         Uuid(as_uuid=True), ForeignKey("warehouses.id", ondelete="CASCADE")
     )
     status: Mapped[str] = mapped_column(String(32), nullable=False, default=STATUS_DRAFT)
+    pick_resync_warning: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, default=False, server_default="false"
+    )
     marketplace_unload_request_id: Mapped[uuid.UUID | None] = mapped_column(
         Uuid(as_uuid=True),
         ForeignKey("marketplace_unload_requests.id", ondelete="CASCADE"),

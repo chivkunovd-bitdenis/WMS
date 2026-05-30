@@ -1,8 +1,14 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import {
   Alert,
   Box,
+  Button,
+  Chip,
   CircularProgress,
+  Dialog,
+  DialogActions,
+  DialogContent,
+  DialogTitle,
   FormControl,
   InputLabel,
   MenuItem,
@@ -16,6 +22,7 @@ import {
   TableHead,
   TableRow,
   TableSortLabel,
+  TextField,
   Typography,
 } from '@mui/material'
 import { apiUrl } from '../../api'
@@ -35,6 +42,8 @@ type FfCatalogRow = {
   wb_primary_image_url: string | null
   wb_barcodes: string[]
   wb_primary_barcode: string | null
+  packaging_instructions: string | null
+  has_packaging_instructions: boolean
 }
 
 type StockSummaryRow = {
@@ -42,6 +51,8 @@ type StockSummaryRow = {
   sku_code: string
   product_name: string
   quantity: number
+  quantity_unpacked: number
+  quantity_packed: number
   quantity_in_sorting: number
   quantity_in_storage: number
   reserved: number
@@ -65,45 +76,40 @@ export function FfProductsCatalogScreen({ token, authHeaders, sellers }: Props) 
   const [stock, setStock] = useState<StockSummaryRow[]>([])
   const [sortKey, setSortKey] = useState<SortKey>('name')
   const [sortDir, setSortDir] = useState<SortDir>('asc')
+  const [editProduct, setEditProduct] = useState<FfCatalogRow | null>(null)
+  const [editText, setEditText] = useState('')
+  const [editBusy, setEditBusy] = useState(false)
 
-  useEffect(() => {
-    let cancelled = false
-    async function load() {
-      setError(null)
-      setBusy(true)
-      try {
-        const sellerFilter = selectedSellerId !== '__all__' ? selectedSellerId : null
-        const qs = sellerFilter ? `?seller_id=${encodeURIComponent(sellerFilter)}` : ''
-        const [catRes, stRes] = await Promise.all([
-          fetch(apiUrl(`/products/ff-catalog${qs}`), { headers: { ...authHeaders(token) } }),
-          fetch(apiUrl('/operations/inventory-balances/summary'), { headers: { ...authHeaders(token) } }),
-        ])
-        if (!catRes.ok) {
-          throw new Error(await readApiErrorMessage(catRes))
-        }
-        if (!stRes.ok) {
-          throw new Error(await readApiErrorMessage(stRes))
-        }
-        const cat = (await catRes.json()) as FfCatalogRow[]
-        const st = (await stRes.json()) as StockSummaryRow[]
-        if (cancelled) return
-        setCatalog(cat)
-        setStock(st)
-      } catch (e) {
-        if (!cancelled) {
-          setError(e instanceof Error ? e.message : 'Не удалось загрузить товары.')
-        }
-      } finally {
-        if (!cancelled) {
-          setBusy(false)
-        }
+  const load = useCallback(async () => {
+    setError(null)
+    setBusy(true)
+    try {
+      const sellerFilter = selectedSellerId !== '__all__' ? selectedSellerId : null
+      const qs = sellerFilter ? `?seller_id=${encodeURIComponent(sellerFilter)}` : ''
+      const [catRes, stRes] = await Promise.all([
+        fetch(apiUrl(`/products/ff-catalog${qs}`), { headers: { ...authHeaders(token) } }),
+        fetch(apiUrl('/operations/inventory-balances/summary'), {
+          headers: { ...authHeaders(token) },
+        }),
+      ])
+      if (!catRes.ok) {
+        throw new Error(await readApiErrorMessage(catRes))
       }
-    }
-    void load()
-    return () => {
-      cancelled = true
+      if (!stRes.ok) {
+        throw new Error(await readApiErrorMessage(stRes))
+      }
+      setCatalog((await catRes.json()) as FfCatalogRow[])
+      setStock((await stRes.json()) as StockSummaryRow[])
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Не удалось загрузить товары.')
+    } finally {
+      setBusy(false)
     }
   }, [authHeaders, selectedSellerId, token])
+
+  useEffect(() => {
+    void load()
+  }, [load])
 
   const rows = useMemo(() => {
     const byProduct = new Map(stock.map((s) => [s.product_id, s]))
@@ -112,6 +118,8 @@ export function FfProductsCatalogScreen({ token, authHeaders, sellers }: Props) 
       return {
         ...p,
         quantity: bal?.quantity ?? 0,
+        quantity_unpacked: bal?.quantity_unpacked ?? 0,
+        quantity_packed: bal?.quantity_packed ?? 0,
         quantity_in_sorting: bal?.quantity_in_sorting ?? 0,
         quantity_in_storage: bal?.quantity_in_storage ?? 0,
         reserved: bal?.reserved ?? 0,
@@ -145,6 +153,34 @@ export function FfProductsCatalogScreen({ token, authHeaders, sellers }: Props) 
       return
     }
     setSortDir((d) => (d === 'asc' ? 'desc' : 'asc'))
+  }
+
+  function openPackagingEdit(p: FfCatalogRow) {
+    setEditProduct(p)
+    setEditText(p.packaging_instructions ?? '')
+  }
+
+  async function savePackagingInstructions() {
+    if (!editProduct) return
+    setEditBusy(true)
+    setError(null)
+    try {
+      const res = await fetch(apiUrl(`/products/${editProduct.id}/packaging-instructions`), {
+        method: 'PATCH',
+        headers: { ...authHeaders(token), 'Content-Type': 'application/json' },
+        body: JSON.stringify({ packaging_instructions: editText.trim() || null }),
+      })
+      if (!res.ok) {
+        setError(await readApiErrorMessage(res))
+        return
+      }
+      setEditProduct(null)
+      await load()
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Не удалось сохранить ТЗ.')
+    } finally {
+      setEditBusy(false)
+    }
   }
 
   return (
@@ -205,7 +241,8 @@ export function FfProductsCatalogScreen({ token, authHeaders, sellers }: Props) 
                 </TableSortLabel>
               </TableCell>
               <TableCell width={220}>Селлер</TableCell>
-              <TableCell align="right" width={120}>
+              <TableCell width={120}>ТЗ упаковки</TableCell>
+              <TableCell align="right" width={100}>
                 <TableSortLabel
                   active={sortKey === 'quantity'}
                   direction={sortKey === 'quantity' ? sortDir : 'asc'}
@@ -214,6 +251,12 @@ export function FfProductsCatalogScreen({ token, authHeaders, sellers }: Props) 
                 >
                   На складе
                 </TableSortLabel>
+              </TableCell>
+              <TableCell align="right" width={100} data-testid="ff-products-col-unpacked">
+                Не упак.
+              </TableCell>
+              <TableCell align="right" width={100} data-testid="ff-products-col-packed">
+                Упаковано
               </TableCell>
               <TableCell align="right" width={120} data-testid="ff-products-col-sorting">
                 В сортировке
@@ -238,7 +281,30 @@ export function FfProductsCatalogScreen({ token, authHeaders, sellers }: Props) 
                 <TableCell>{p.wb_nm_id ?? '—'}</TableCell>
                 <TableCell>{p.name}</TableCell>
                 <TableCell>{p.seller_name ?? '—'}</TableCell>
+                <TableCell>
+                  <Stack direction="row" spacing={0.5} sx={{ alignItems: 'center' }}>
+                    <Chip
+                      size="small"
+                      label={p.has_packaging_instructions ? 'Заполнено' : 'Нет ТЗ'}
+                      color={p.has_packaging_instructions ? 'success' : 'warning'}
+                      data-testid={`ff-packaging-status-${p.id}`}
+                    />
+                    <Button
+                      size="small"
+                      onClick={() => openPackagingEdit(p)}
+                      data-testid={`ff-packaging-edit-${p.id}`}
+                    >
+                      ТЗ
+                    </Button>
+                  </Stack>
+                </TableCell>
                 <TableCell align="right">{p.quantity}</TableCell>
+                <TableCell align="right" data-testid={`ff-product-unpacked-${p.id}`}>
+                  {p.quantity_unpacked}
+                </TableCell>
+                <TableCell align="right" data-testid={`ff-product-packed-${p.id}`}>
+                  {p.quantity_packed}
+                </TableCell>
                 <TableCell align="right" data-testid="ff-product-qty-sorting">
                   {p.quantity_in_sorting}
                 </TableCell>
@@ -248,7 +314,7 @@ export function FfProductsCatalogScreen({ token, authHeaders, sellers }: Props) 
             ))}
             {sortedRows.length === 0 && !busy ? (
               <TableRow>
-                <TableCell colSpan={11}>
+                <TableCell colSpan={14}>
                   <Typography variant="body2" color="text.secondary">
                     Пока нет товаров.
                   </Typography>
@@ -262,7 +328,43 @@ export function FfProductsCatalogScreen({ token, authHeaders, sellers }: Props) 
           </TableBody>
         </Table>
       </TableContainer>
+
+      <Dialog
+        open={editProduct !== null}
+        onClose={() => setEditProduct(null)}
+        fullWidth
+        maxWidth="sm"
+        data-testid="ff-packaging-dialog"
+      >
+        <DialogTitle>ТЗ на упаковку</DialogTitle>
+        <DialogContent>
+          <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
+            {editProduct?.sku_code} · {editProduct?.name}
+          </Typography>
+          <TextField
+            fullWidth
+            multiline
+            minRows={4}
+            label="Инструкция для склада"
+            value={editText}
+            onChange={(e) => setEditText(e.target.value)}
+            slotProps={{ htmlInput: { 'data-testid': 'ff-packaging-text' } }}
+          />
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setEditProduct(null)} disabled={editBusy}>
+            Отмена
+          </Button>
+          <Button
+            variant="contained"
+            disabled={editBusy}
+            onClick={() => void savePackagingInstructions()}
+            data-testid="ff-packaging-save"
+          >
+            Сохранить
+          </Button>
+        </DialogActions>
+      </Dialog>
     </Box>
   )
 }
-

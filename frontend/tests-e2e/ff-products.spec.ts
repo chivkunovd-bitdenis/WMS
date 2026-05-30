@@ -148,7 +148,7 @@ test('ff products: filter by seller and sort by name/quantity', async ({ page })
   await expect(page.getByTestId('ff-product-row')).toHaveCount(1)
   await expect(page.getByTestId('ff-products-table')).toContainText(skuA)
   await expect(page.getByTestId('ff-products-table')).not.toContainText(skuPrivate)
-  await expect(page.getByTestId('ff-product-row').first().locator('td').nth(7)).toHaveText('2')
+  await expect(page.getByTestId(`ff-product-unpacked-${prodA.id}`)).toHaveText('2')
 
   // Switch to All
   await page.getByTestId('ff-products-seller-filter').click()
@@ -169,5 +169,79 @@ test('ff products: filter by seller and sort by name/quantity', async ({ page })
 
   // Photo cell exists (even if WB photo missing in mocks): first column rendered and has avatar element.
   await expect(page.getByTestId('ff-product-row').first().locator('td').first()).toBeVisible()
+})
+
+// TC-NEW-PKG-04 — FF редактирует ТЗ упаковки в каталоге товаров.
+test('ff products: edit packaging instructions in catalog', async ({ page }) => {
+  const email = `e2e-ff-pkg-tz-${Date.now()}@example.com`
+  const password = 'password123'
+
+  await page.goto('/')
+  await openFulfillmentRegistration(page)
+  await page.getByTestId('register-form').getByLabel('Организация').fill('E2E FF TZ')
+  await page.getByTestId('register-form').getByLabel('Email администратора').fill(email)
+  await page.getByTestId('register-form').getByLabel('Пароль').fill(password)
+  await Promise.all([
+    waitForPostOk(page, '/api/auth/register'),
+    waitForGetOk(page, '/api/auth/me'),
+    page.getByTestId('register-form').getByRole('button', { name: 'Создать аккаунт' }).click(),
+  ])
+
+  const regToken = (await page.evaluate(() => localStorage.getItem('wms_token_ff'))) ?? ''
+  const h = { Authorization: `Bearer ${regToken}`, 'Content-Type': 'application/json' }
+  const e2eApi = process.env.E2E_API_ORIGIN ?? 'http://127.0.0.1:18000'
+  const sku = `SKU-TZ-${Date.now()}`
+
+  const wh = await page.request.post(`${e2eApi}/warehouses`, {
+    headers: h,
+    data: JSON.stringify({ name: 'WH', code: `wh-tz-${Date.now()}` }),
+  })
+  const whId = String(((await wh.json()) as { id: string }).id)
+  const pr = await page.request.post(`${e2eApi}/products`, {
+    headers: h,
+    data: JSON.stringify({ name: 'TZ Product', sku_code: sku, length_mm: 1, width_mm: 1, height_mm: 1 }),
+  })
+  const productId = String(((await pr.json()) as { id: string }).id)
+
+  const baseIn = `${e2eApi}/operations/inbound-intake-requests`
+  const inbound = await page.request.post(baseIn, {
+    headers: h,
+    data: JSON.stringify({ warehouse_id: whId }),
+  })
+  const inboundId = String(((await inbound.json()) as { id: string }).id)
+  await page.request.post(`${baseIn}/${inboundId}/lines`, {
+    headers: h,
+    data: JSON.stringify({ product_id: productId, expected_qty: 1 }),
+  })
+  await page.request.post(`${baseIn}/${inboundId}/submit`, { headers: h })
+  const primIn = await page.request.post(`${baseIn}/${inboundId}/primary-accept`, {
+    headers: h,
+    data: { actual_box_count: 1 },
+  })
+  const primInBody = (await primIn.json()) as { boxes: { id: string; internal_barcode: string }[] }
+  const { fulfillInboundViaBoxScans } = await import('./inbound-boxes-helpers')
+  await fulfillInboundViaBoxScans(page.request, h, inboundId, primInBody.boxes, sku, [1])
+  await page.request.post(`${baseIn}/${inboundId}/verify`, { headers: h })
+  await page.request.post(`${baseIn}/${inboundId}/post`, { headers: h })
+
+  await page.reload()
+  await page.getByTestId('nav-ff-products').click()
+  await expect(page.getByTestId('ff-products-list')).toBeVisible()
+  await expect(page.getByTestId(`ff-packaging-status-${productId}`)).toContainText('Нет ТЗ')
+
+  await page.getByTestId(`ff-packaging-edit-${productId}`).click()
+  await expect(page.getByTestId('ff-packaging-dialog')).toBeVisible()
+  await page.getByTestId('ff-packaging-text').fill('E2E: пакет + бирка')
+  await Promise.all([
+    page.waitForResponse(
+      (r) =>
+        r.request().method() === 'PATCH' &&
+        r.url().includes('/packaging-instructions') &&
+        r.status() >= 200 &&
+        r.status() < 300,
+    ),
+    page.getByTestId('ff-packaging-save').click(),
+  ])
+  await expect(page.getByTestId(`ff-packaging-status-${productId}`)).toContainText('Заполнено')
 })
 

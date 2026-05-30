@@ -232,3 +232,59 @@ async def test_packaging_task_defaults_to_sorting_location(
     task = create.json()
     assert task["lines"][0]["storage_location_id"] == sort_id
     assert task["inbound_intake_request_id"] == rid
+
+
+@pytest.mark.asyncio
+async def test_ff_catalog_includes_packaging_instructions(async_client: AsyncClient) -> None:
+    suffix = uuid.uuid4().hex[:8]
+    reg = await async_client.post(
+        "/auth/register",
+        json={
+            "organization_name": "FF Cat",
+            "slug": f"ff-cat-{suffix}",
+            "admin_email": f"ff-cat-{suffix}@example.com",
+            "password": "password123",
+        },
+    )
+    h = {"Authorization": f"Bearer {reg.json()['access_token']}"}
+    wh = await async_client.post("/warehouses", headers=h, json={"name": "W", "code": "w-ffc"})
+    wh_id = wh.json()["id"]
+    pr = await async_client.post(
+        "/products",
+        headers=h,
+        json={
+            "name": "FF Cat",
+            "sku_code": f"ffc-{uuid.uuid4().hex[:6]}",
+            "length_mm": 1,
+            "width_mm": 1,
+            "height_mm": 1,
+        },
+    )
+    pid = pr.json()["id"]
+    base_in = "/operations/inbound-intake-requests"
+    inbound = await async_client.post(base_in, headers=h, json={"warehouse_id": wh_id})
+    rid = inbound.json()["id"]
+    await async_client.post(
+        f"{base_in}/{rid}/lines",
+        headers=h,
+        json={"product_id": pid, "expected_qty": 1},
+    )
+    await async_client.post(f"{base_in}/{rid}/submit", headers=h)
+    from inbound_box_intake_helpers import fulfill_inbound_via_box_scans, post_primary_accept
+
+    await post_primary_accept(async_client, base_in, rid, h)
+    sku = pr.json()["sku_code"]
+    await fulfill_inbound_via_box_scans(async_client, h, rid, sku, 1)
+    await async_client.post(f"{base_in}/{rid}/verify", headers=h)
+    await async_client.post(f"{base_in}/{rid}/post", headers=h)
+
+    await async_client.patch(
+        f"/products/{pid}/packaging-instructions",
+        headers=h,
+        json={"packaging_instructions": "FF TZ text"},
+    )
+    cat = await async_client.get("/products/ff-catalog", headers=h)
+    assert cat.status_code == 200, cat.text
+    row = next(r for r in cat.json() if r["id"] == pid)
+    assert row["packaging_instructions"] == "FF TZ text"
+    assert row["has_packaging_instructions"] is True

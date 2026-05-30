@@ -54,6 +54,7 @@ export type PackagingTask = {
   marketplace_unload_request_id: string | null
   inbound_intake_request_id: string | null
   is_complete: boolean
+  pick_resync_warning?: boolean
   lines: PackagingTaskLine[]
 }
 
@@ -69,6 +70,7 @@ function statusLabel(status: string): string {
   if (status === 'draft') return 'Черновик'
   if (status === 'in_progress') return 'В работе'
   if (status === 'done') return 'Выполнено'
+  if (status === 'cancelled') return 'Отменено'
   return status
 }
 
@@ -127,6 +129,33 @@ export function FfPackagingTaskPanel({
     }
   }
 
+  const cancelTask = async () => {
+    if (!window.confirm('Отменить задание на упаковку?')) {
+      return
+    }
+    setBusy(true)
+    setError(null)
+    try {
+      const res = await fetch(apiUrl(`/operations/packaging-tasks/${task.id}/cancel`), {
+        method: 'POST',
+        headers: authHeaders,
+      })
+      if (!res.ok) {
+        setError(await readApiErrorMessage(res))
+        return
+      }
+      onUpdated((await res.json()) as PackagingTask)
+      onClose?.()
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  const manualTask =
+    !task.marketplace_unload_request_id &&
+    task.status !== 'done' &&
+    task.status !== 'cancelled'
+
   return (
     <Stack spacing={2} data-testid="ff-packaging-task-panel">
       <Stack direction="row" spacing={1} sx={{ alignItems: 'center', flexWrap: 'wrap' }}>
@@ -149,6 +178,12 @@ export function FfPackagingTaskPanel({
       {error ? (
         <Alert severity="error" data-testid="ff-packaging-error">
           {error}
+        </Alert>
+      ) : null}
+      {task.pick_resync_warning ? (
+        <Alert severity="warning" data-testid="ff-packaging-pick-resync-warning">
+          Подбор по ячейкам изменился. Количества в задании пересчитаны; уже упакованное в
+          задании сохранено — проверьте строки.
         </Alert>
       ) : null}
       <TableContainer component={Paper} variant="outlined">
@@ -213,7 +248,18 @@ export function FfPackagingTaskPanel({
         </Table>
       </TableContainer>
       {onClose ? (
-        <Stack direction="row" sx={{ justifyContent: 'flex-end' }}>
+        <Stack direction="row" spacing={1} sx={{ justifyContent: 'flex-end' }}>
+          {manualTask ? (
+            <Button
+              color="error"
+              variant="outlined"
+              disabled={busy}
+              onClick={() => void cancelTask()}
+              data-testid="ff-packaging-cancel-task"
+            >
+              Отменить задание
+            </Button>
+          ) : null}
           <Button onClick={onClose} data-testid="ff-packaging-close">
             Закрыть
           </Button>
@@ -243,6 +289,8 @@ type CreateDialogProps = {
   onCreated: (task: PackagingTask) => void
 }
 
+type LocationRow = { id: string; code: string; barcode: string }
+
 function FfCreatePackagingTaskDialog({ open, token, onClose, onCreated }: CreateDialogProps) {
   const authHeaders = {
     Authorization: `Bearer ${token}`,
@@ -250,6 +298,8 @@ function FfCreatePackagingTaskDialog({ open, token, onClose, onCreated }: Create
   }
   const [warehouses, setWarehouses] = useState<WarehouseRow[]>([])
   const [warehouseId, setWarehouseId] = useState('')
+  const [locations, setLocations] = useState<LocationRow[]>([])
+  const [locationId, setLocationId] = useState('')
   const [rows, setRows] = useState<SortingBalanceRow[]>([])
   const [selected, setSelected] = useState<Record<string, boolean>>({})
   const [qtyByProduct, setQtyByProduct] = useState<Record<string, string>>({})
@@ -259,6 +309,8 @@ function FfCreatePackagingTaskDialog({ open, token, onClose, onCreated }: Create
   useEffect(() => {
     if (!open) {
       setWarehouseId('')
+      setLocationId('')
+      setLocations([])
       setRows([])
       setSelected({})
       setQtyByProduct({})
@@ -282,32 +334,47 @@ function FfCreatePackagingTaskDialog({ open, token, onClose, onCreated }: Create
 
   useEffect(() => {
     if (!open || !warehouseId) {
+      setLocations([])
+      setLocationId('')
       setRows([])
       return
     }
     void (async () => {
-      const locRes = await fetch(apiUrl(`/warehouses/${warehouseId}/sorting-location`), {
+      const locRes = await fetch(apiUrl(`/warehouses/${warehouseId}/locations`), {
         headers: authHeaders,
       })
       if (!locRes.ok) {
         setError(await readApiErrorMessage(locRes))
         return
       }
-      const loc = (await locRes.json()) as { id: string }
+      const locList = (await locRes.json()) as LocationRow[]
+      const sorted = [...locList].sort((a, b) => {
+        if (a.code === '__SORTING__') return -1
+        if (b.code === '__SORTING__') return 1
+        return a.code.localeCompare(b.code)
+      })
+      setLocations(sorted)
+      const defaultLoc = sorted.find((l) => l.code === '__SORTING__') ?? sorted[0]
+      setLocationId(defaultLoc?.id ?? '')
+    })()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open, warehouseId, token])
+
+  useEffect(() => {
+    if (!open || !locationId) {
+      setRows([])
+      return
+    }
+    void (async () => {
       const balRes = await fetch(
-        apiUrl(`/operations/inventory-balances?storage_location_id=${loc.id}`),
+        apiUrl(`/operations/inventory-balances?storage_location_id=${locationId}`),
         { headers: authHeaders },
       )
       if (!balRes.ok) {
         setError(await readApiErrorMessage(balRes))
         return
       }
-      const balances = (await balRes.json()) as {
-        product_id: string
-        sku_code: string
-        product_name: string
-        quantity_unpacked: number
-      }[]
+      const balances = (await balRes.json()) as SortingBalanceRow[]
       const unpacked = balances.filter((b) => b.quantity_unpacked > 0)
       setRows(unpacked)
       const sel: Record<string, boolean> = {}
@@ -320,18 +387,19 @@ function FfCreatePackagingTaskDialog({ open, token, onClose, onCreated }: Create
       setQtyByProduct(qty)
     })()
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [open, warehouseId, token])
+  }, [open, locationId, token])
 
   const submit = async () => {
     const lines = rows
       .filter((r) => selected[r.product_id])
       .map((r) => ({
         product_id: r.product_id,
+        storage_location_id: locationId,
         quantity: Math.floor(Number(qtyByProduct[r.product_id] ?? '0')),
       }))
       .filter((ln) => ln.quantity >= 1)
-    if (!warehouseId || lines.length === 0) {
-      setError('Выберите склад и хотя бы один товар с количеством ≥ 1.')
+    if (!warehouseId || !locationId || lines.length === 0) {
+      setError('Выберите склад, место и хотя бы один товар с количеством ≥ 1.')
       return
     }
     setBusy(true)
@@ -353,9 +421,12 @@ function FfCreatePackagingTaskDialog({ open, token, onClose, onCreated }: Create
     }
   }
 
+  const locationLabel = (loc: LocationRow) =>
+    loc.code === '__SORTING__' ? 'Сортировка' : loc.code
+
   return (
     <Dialog open={open} onClose={onClose} fullWidth maxWidth="md" data-testid="ff-packaging-create-dialog">
-      <DialogTitle>Создать задание из сортировки</DialogTitle>
+      <DialogTitle>Создать задание на упаковку</DialogTitle>
       <DialogContent>
         <Stack spacing={2} sx={{ mt: 1 }}>
           {error ? <Alert severity="error">{error}</Alert> : null}
@@ -375,9 +446,27 @@ function FfCreatePackagingTaskDialog({ open, token, onClose, onCreated }: Create
               ))}
             </Select>
           </FormControl>
-          {warehouseId && rows.length === 0 ? (
+          {warehouseId ? (
+            <FormControl fullWidth size="small">
+              <InputLabel id="ff-packaging-loc-label">Место (ячейка)</InputLabel>
+              <Select
+                labelId="ff-packaging-loc-label"
+                label="Место (ячейка)"
+                value={locationId}
+                onChange={(e) => setLocationId(String(e.target.value))}
+                data-testid="ff-packaging-create-location"
+              >
+                {locations.map((loc) => (
+                  <MenuItem key={loc.id} value={loc.id}>
+                    {locationLabel(loc)}
+                  </MenuItem>
+                ))}
+              </Select>
+            </FormControl>
+          ) : null}
+          {warehouseId && locationId && rows.length === 0 ? (
             <Typography variant="body2" color="text.secondary" data-testid="ff-packaging-create-empty">
-              В зоне «Сортировка» нет неупакованного товара.
+              В выбранном месте нет неупакованного товара.
             </Typography>
           ) : null}
           {rows.length > 0 ? (
@@ -499,7 +588,7 @@ export function FfPackagingPage({ token }: PageProps) {
     <Box data-testid="ff-packaging-page">
       <PageHeader
         title="Упаковка"
-        description="Задания на маркировку и упаковку. Можно создать из сортировки или открыть из отгрузки на МП."
+        description="Задания на маркировку и упаковку. Создайте из ячейки или сортировки, либо откройте из отгрузки на МП."
       />
       <Stack direction="row" sx={{ justifyContent: 'flex-end', mb: 2 }}>
         <Button
