@@ -219,6 +219,9 @@ export function AuthedAppLayout({
                 <ListItemButton component={NavLink} to={`${base}/sorting`} data-testid="nav-ff-sorting">
                   <ListItemText primary="Сортировка" />
                 </ListItemButton>
+                <ListItemButton component={NavLink} to={`${base}/packaging`} data-testid="nav-ff-packaging">
+                  <ListItemText primary="Упаковка" />
+                </ListItemButton>
               </>
             ) : null}
             {can('cells') ? (

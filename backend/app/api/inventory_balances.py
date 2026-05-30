@@ -24,6 +24,8 @@ class InventoryBalanceRowOut(BaseModel):
     sku_code: str
     product_name: str
     quantity: int
+    quantity_unpacked: int
+    quantity_packed: int
     quantity_in_sorting: int
     quantity_in_storage: int
     reserved: int
@@ -57,12 +59,14 @@ async def get_inventory_balances_summary(
             sku_code=sku_code,
             product_name=product_name,
             quantity=qty,
+            quantity_unpacked=unp,
+            quantity_packed=pck,
             quantity_in_sorting=sort_qty,
             quantity_in_storage=max(0, qty - sort_qty),
             reserved=rsv,
             available=max(0, qty - sort_qty - rsv),
         )
-        for pid, sku_code, product_name, qty, sort_qty, rsv in rows
+        for pid, sku_code, product_name, qty, sort_qty, unp, pck, rsv in rows
     ]
 
 
@@ -125,6 +129,8 @@ async def get_inventory_balances(
             sku_code=p.sku_code,
             product_name=p.name,
             quantity=b.quantity,
+            quantity_unpacked=int(b.quantity_unpacked),
+            quantity_packed=int(b.quantity_packed),
             quantity_in_sorting=b.quantity if is_sorting else 0,
             quantity_in_storage=0 if is_sorting else b.quantity,
             reserved=rsv,

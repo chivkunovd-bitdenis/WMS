@@ -10,6 +10,7 @@ from sqlalchemy import (
     ForeignKey,
     Integer,
     String,
+    Text,
     UniqueConstraint,
     Uuid,
     func,
@@ -53,6 +54,7 @@ class Product(Base):
     length_mm: Mapped[int] = mapped_column(Integer, nullable=False)
     width_mm: Mapped[int] = mapped_column(Integer, nullable=False)
     height_mm: Mapped[int] = mapped_column(Integer, nullable=False)
+    packaging_instructions: Mapped[str | None] = mapped_column(Text, nullable=True)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), nullable=False
     )

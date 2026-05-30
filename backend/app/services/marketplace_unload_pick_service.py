@@ -212,6 +212,11 @@ async def add_pick_qty(
         )
     except MarketplaceUnloadPickError:
         raise
+    from app.services import packaging_task_service as pkg_svc
+
+    task = await pkg_svc.get_task_for_unload(session, tenant_id, request_id)
+    if task is not None:
+        await pkg_svc.sync_lines_from_pick_allocations(session, tenant_id, task)
     return result.allocation
 
 
@@ -310,6 +315,11 @@ async def save_pick_allocations(
             product_id=product_id,
             quantity=qty,
         )
+    from app.services import packaging_task_service as pkg_svc
+
+    task = await pkg_svc.get_task_for_unload(session, tenant_id, request_id)
+    if task is not None:
+        await pkg_svc.sync_lines_from_pick_allocations(session, tenant_id, task)
     return await list_pick_allocations(session, tenant_id, request_id)
 
 
@@ -355,6 +365,15 @@ async def ship_request(
 
     if has_pick_discrepancy(req) and not acknowledge_discrepancy:
         raise MarketplaceUnloadPickError("discrepancy_requires_ack")
+
+    from app.services import packaging_task_service as pkg_svc
+
+    try:
+        await pkg_svc.assert_unload_packaging_done(session, tenant_id, request_id)
+    except pkg_svc.PackagingTaskServiceError as exc:
+        if exc.code == "task_not_done":
+            raise MarketplaceUnloadPickError("packaging_not_done") from exc
+        raise
 
     for a in allocs:
         if (

@@ -10,6 +10,8 @@ const API_DETAIL_MESSAGES_RU: Record<string, string> = {
   distribution_incomplete:
     'Распределите всё принятое количество по ячейкам перед завершением — иначе товар не попадёт на склад.',
   distribution_not_completed: 'Распределение ещё не зафиксировано.',
+  packaging_instructions_required:
+    'Заполните ТЗ на упаковку для всех товаров в составе отгрузки (раздел «Товары»).',
   not_reopenable: 'Нельзя открыть распределение заново на этом статусе заявки.',
   already_posted_partial: 'Часть товара уже оприходована — отмена фиксации недоступна.',
 }

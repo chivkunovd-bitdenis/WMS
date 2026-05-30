@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import uuid
 from datetime import UTC, datetime
+from typing import Literal
 
 from sqlalchemy import and_, case, delete, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -27,6 +28,26 @@ from app.services.sorting_location_service import SORTING_LOCATION_CODE
 OUTBOUND_RESERVE_STATUSES = ("draft", "submitted")
 MP_UNLOAD_RESERVE_STATUSES = ("submitted", "confirmed")
 RESERVATION_ERROR = "insufficient_available"
+DeductPrefer = Literal["packed", "unpacked"]
+
+
+def _sync_balance_quantity(bal: InventoryBalance) -> None:
+    bal.quantity = int(bal.quantity_unpacked) + int(bal.quantity_packed)
+
+
+def _deduct_from_buckets(bal: InventoryBalance, qty: int, *, prefer: DeductPrefer) -> None:
+    if prefer == "unpacked":
+        from_unpacked = min(int(bal.quantity_unpacked), qty)
+        from_packed = qty - from_unpacked
+    else:
+        from_packed = min(int(bal.quantity_packed), qty)
+        from_unpacked = qty - from_packed
+    if from_unpacked > int(bal.quantity_unpacked) or from_packed > int(bal.quantity_packed):
+        msg = "insufficient stock"
+        raise ValueError(msg)
+    bal.quantity_unpacked = int(bal.quantity_unpacked) - from_unpacked
+    bal.quantity_packed = int(bal.quantity_packed) - from_packed
+    _sync_balance_quantity(bal)
 
 
 async def _physical_on_hand(
@@ -190,11 +211,12 @@ async def list_balances_total(
     *,
     seller_product_owner_id: uuid.UUID | None = None,
     warehouse_id: uuid.UUID | None = None,
-) -> list[tuple[uuid.UUID, str, str, int, int, int]]:
+) -> list[tuple[uuid.UUID, str, str, int, int, int, int, int]]:
     """Итоговые остатки по SKU (сумма по всем ячейкам, в т.ч. зона сортировки).
 
     Возвращает:
-    (product_id, sku_code, product_name, quantity_total, quantity_in_sorting, reserved_total)
+    (product_id, sku_code, product_name, quantity_total, quantity_in_sorting,
+     quantity_unpacked_total, quantity_packed_total, reserved_total)
     """
     sorting_qty = func.coalesce(
         func.sum(
@@ -212,6 +234,8 @@ async def list_balances_total(
             Product.name,
             func.coalesce(func.sum(InventoryBalance.quantity), 0),
             sorting_qty,
+            func.coalesce(func.sum(InventoryBalance.quantity_unpacked), 0),
+            func.coalesce(func.sum(InventoryBalance.quantity_packed), 0),
         )
         .join(InventoryBalance, InventoryBalance.product_id == Product.id)
         .join(StorageLocation, StorageLocation.id == InventoryBalance.storage_location_id)
@@ -229,8 +253,8 @@ async def list_balances_total(
         stmt = stmt.where(StorageLocation.warehouse_id == warehouse_id)
     res = await session.execute(stmt)
     rows = [
-        (pid, sku, name, int(q or 0), int(sort_q or 0))
-        for pid, sku, name, q, sort_q in res.all()
+        (pid, sku, name, int(q or 0), int(sort_q or 0), int(unp or 0), int(pck or 0))
+        for pid, sku, name, q, sort_q, unp, pck in res.all()
     ]
     if not rows:
         return []
@@ -239,8 +263,8 @@ async def list_balances_total(
         session, tenant_id, pids, warehouse_id=warehouse_id
     )
     return [
-        (pid, sku, name, qty, sort_qty, int(rsv_map.get(pid, 0)))
-        for pid, sku, name, qty, sort_qty in rows
+        (pid, sku, name, qty, sort_qty, unp, pck, int(rsv_map.get(pid, 0)))
+        for pid, sku, name, qty, sort_qty, unp, pck in rows
     ]
 
 
@@ -420,6 +444,7 @@ async def record_movement_and_adjust_balance(
     outbound_shipment_line_id: uuid.UUID | None = None,
     transfer_group_id: uuid.UUID | None = None,
     marketplace_unload_request_id: uuid.UUID | None = None,
+    deduct_prefer: DeductPrefer = "unpacked",
 ) -> None:
     """Запись в журнал и изменение остатка (delta может быть отрицательным)."""
     if quantity_delta == 0:
@@ -465,13 +490,53 @@ async def record_movement_and_adjust_balance(
             product_id=product_id,
             storage_location_id=storage_location_id,
             quantity=0,
+            quantity_unpacked=0,
+            quantity_packed=0,
         )
         session.add(bal)
-    new_qty = bal.quantity + quantity_delta
-    if new_qty < 0:
+    if quantity_delta > 0:
+        bal.quantity_unpacked = int(bal.quantity_unpacked) + quantity_delta
+        _sync_balance_quantity(bal)
+    else:
+        _deduct_from_buckets(bal, -quantity_delta, prefer=deduct_prefer)
+    if bal.quantity < 0:
         msg = "insufficient stock"
         raise ValueError(msg)
-    bal.quantity = new_qty
+    bal.updated_at = datetime.now(UTC)
+
+
+async def apply_packaging_convert(
+    session: AsyncSession,
+    *,
+    tenant_id: uuid.UUID,
+    product_id: uuid.UUID,
+    storage_location_id: uuid.UUID,
+    quantity: int,
+) -> None:
+    """Перевод qty из не упаковано в упаковано в том же месте."""
+    if quantity < 1:
+        msg = "quantity must be positive"
+        raise ValueError(msg)
+    loc = await session.get(StorageLocation, storage_location_id)
+    if loc is None or loc.tenant_id != tenant_id:
+        msg = "storage location not found"
+        raise ValueError(msg)
+    prod = await session.get(Product, product_id)
+    if prod is None or prod.tenant_id != tenant_id:
+        msg = "product not found"
+        raise ValueError(msg)
+    stmt = select(InventoryBalance).where(
+        InventoryBalance.tenant_id == tenant_id,
+        InventoryBalance.product_id == product_id,
+        InventoryBalance.storage_location_id == storage_location_id,
+    )
+    bal = (await session.execute(stmt)).scalar_one_or_none()
+    if bal is None or int(bal.quantity_unpacked) < quantity:
+        msg = "insufficient_unpacked"
+        raise ValueError(msg)
+    bal.quantity_unpacked = int(bal.quantity_unpacked) - quantity
+    bal.quantity_packed = int(bal.quantity_packed) + quantity
+    _sync_balance_quantity(bal)
     bal.updated_at = datetime.now(UTC)
 
 
@@ -694,6 +759,7 @@ async def apply_marketplace_unload_pick(
         quantity_delta=-quantity,
         movement_type=MOVEMENT_TYPE_MARKETPLACE_UNLOAD,
         marketplace_unload_request_id=marketplace_unload_request_id,
+        deduct_prefer="packed",
     )
 
 

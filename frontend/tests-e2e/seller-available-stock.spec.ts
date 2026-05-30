@@ -88,6 +88,11 @@ test('seller products table shows on hand, reserved, and available after MP plan
     data: JSON.stringify({ product_id: productId, nm_id: 424242 }),
   });
 
+  await page.request.patch(`${e2eApi}/products/${productId}/packaging-instructions`, {
+    headers: auth,
+    data: JSON.stringify({ packaging_instructions: 'E2E: пакет + стикер WB' }),
+  });
+
   const locRes = await page.request.post(`${e2eApi}/warehouses/${whId}/locations`, {
     headers: auth,
     data: JSON.stringify({ code: 'SAV-LOC' }),

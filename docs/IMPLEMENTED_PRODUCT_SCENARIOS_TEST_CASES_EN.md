@@ -599,6 +599,35 @@ Distinct from **operational outbound** (S08) and **seller supply/inbound** (S06)
 
 ---
 
+## Packaging (E7 — fulfillment)
+
+### TC-NEW-PKG-01 FF creates packaging task from sorting zone and packs via UI
+
+- **Actor:** fulfillment admin.
+- **Given:** inbound posted; unpacked stock in sorting zone for a product (no MP unload).
+- **When:** opens **Packaging** → **Create from sorting** → selects warehouse → submits → clicks **Pack** on line.
+- **Then:** task status **done**; unpacked decreases and packed increases for the line quantity.
+- **Negative:** empty sorting queue → no rows in create dialog.
+
+### TC-NEW-PKG-02 MP unload confirm requires packaging instructions on all lines
+
+- **Actor:** fulfillment admin / seller.
+- **Given:** MP unload draft with lines; at least one product has empty `packaging_instructions`.
+- **When:** calls **plan** or **confirm** without filling instructions.
+- **Then:** HTTP 400 `packaging_instructions_required`; unload stays draft/submitted.
+- **Negative:** whitespace-only instructions treated as empty.
+
+### TC-NEW-PKG-03 Ship MP unload blocked until linked packaging task done
+
+- **Actor:** fulfillment admin.
+- **Given:** confirmed MP unload with pick complete; linked packaging task **in_progress**.
+- **When:** calls **ship**.
+- **Then:** HTTP 400 packaging-not-done; stock unchanged.
+- **When:** all lines packed → task **done** → ship again.
+- **Then:** status **shipped**; stock reduced.
+
+---
+
 ## Cross-scenario matrix (acceptance checklist for role tests)
 
 Use this table as a **smoke checklist** when automating by role (from scenario summary; each cell should match at least one explicit case above).

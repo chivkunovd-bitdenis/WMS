@@ -78,6 +78,11 @@ test('FF marketplace unload: pick by cell and ship reduces stock', async ({ page
     data: JSON.stringify({ product_id: productId, nm_id: 424242 }),
   });
 
+  await page.request.patch(`${e2eApi}/products/${productId}/packaging-instructions`, {
+    headers: auth,
+    data: JSON.stringify({ packaging_instructions: 'E2E: пакет + стикер WB' }),
+  });
+
   const locRes = await page.request.post(`${e2eApi}/warehouses/${whId}/locations`, {
     headers: auth,
     data: JSON.stringify({ code: 'MP-LOC' }),
@@ -169,6 +174,31 @@ test('FF marketplace unload: pick by cell and ship reduces stock', async ({ page
       },
     );
     expect(prodScan.ok()).toBeTruthy();
+  }
+
+  const pkgTask = await page.request.get(
+    `${e2eApi}/operations/packaging-tasks/by-unload/${mid}`,
+    { headers: auth },
+  );
+  expect(pkgTask.ok()).toBeTruthy();
+  const pkgBody = (await pkgTask.json()) as {
+    id: string;
+    lines: { id: string; qty_need_pack: number }[];
+  };
+  const pkgLineId = pkgBody.lines[0]?.id;
+  expect(pkgLineId).toBeTruthy();
+  if (pkgLineId) {
+    await page.request.post(
+      `${e2eApi}/operations/packaging-tasks/${pkgBody.id}/lines/${pkgLineId}/confirm-packed`,
+      { headers: auth, data: JSON.stringify({}) },
+    );
+    const needPack = pkgBody.lines[0].qty_need_pack;
+    if (needPack > 0) {
+      await page.request.post(
+        `${e2eApi}/operations/packaging-tasks/${pkgBody.id}/lines/${pkgLineId}/pack`,
+        { headers: auth, data: JSON.stringify({ quantity: needPack }) },
+      );
+    }
   }
 
   const detail = await page.request.get(
