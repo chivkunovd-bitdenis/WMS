@@ -3,7 +3,6 @@ import {
   apiUrl,
   getStoredToken,
   setStoredToken,
-  type AuthStoragePortal,
 } from '../api'
 import { readApiErrorMessage } from '../utils/readApiErrorMessage'
 import { buildAutoTenantSlug } from '../utils/tenantSlug'
@@ -23,10 +22,6 @@ export type Me = {
 }
 
 export type AuthPortal = 'fulfillment' | 'seller'
-
-function clearOtherPortalToken(portal: AuthStoragePortal): void {
-  setStoredToken(null, portal === 'seller' ? 'fulfillment' : 'seller')
-}
 
 type RegisterFormEvent = React.FormEvent<HTMLFormElement>
 
@@ -167,7 +162,6 @@ export function useAuth(portal: AuthPortal = 'fulfillment') {
             return
           }
           setStoredToken(data.access_token, portal)
-          clearOtherPortalToken(portal)
           setToken(data.access_token)
           return
         }
@@ -238,7 +232,6 @@ export function useAuth(portal: AuthPortal = 'fulfillment') {
         }
         const data = (await res.json()) as { access_token: string }
         setStoredToken(data.access_token, portal)
-        clearOtherPortalToken(portal)
         setPortalMismatch(null)
         setToken(data.access_token)
       } catch {
@@ -287,7 +280,6 @@ export function useAuth(portal: AuthPortal = 'fulfillment') {
         const data = (await res.json()) as { access_token: string }
         setPendingPasswordSetupEmail(null)
         setStoredToken(data.access_token, portal)
-        clearOtherPortalToken(portal)
         setPortalMismatch(null)
         setToken(data.access_token)
       } catch {

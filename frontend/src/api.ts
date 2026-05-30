@@ -22,11 +22,14 @@ export function getStoredToken(
   if (value) {
     return value;
   }
-  const legacy = localStorage.getItem(LEGACY_TOKEN_KEY);
-  if (legacy) {
-    localStorage.setItem(key, legacy);
-    localStorage.removeItem(LEGACY_TOKEN_KEY);
-    return legacy;
+  // Legacy single-key storage applied only to FF portal (historical default).
+  if (portal === 'fulfillment') {
+    const legacy = localStorage.getItem(LEGACY_TOKEN_KEY);
+    if (legacy) {
+      localStorage.setItem(key, legacy);
+      localStorage.removeItem(LEGACY_TOKEN_KEY);
+      return legacy;
+    }
   }
   return null;
 }
