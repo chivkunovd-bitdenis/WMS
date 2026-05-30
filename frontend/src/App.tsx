@@ -25,6 +25,7 @@ import {
   Typography as MuiTypography,
 } from '@mui/material'
 import CloseIcon from '@mui/icons-material/Close'
+import { FfPackagingPage } from './screens/ff/FfPackagingPage'
 import { FfDashboard } from './screens/ff/FfDashboard'
 import {
   FfSuppliesShipmentsPage,
@@ -2488,6 +2489,17 @@ export default function App() {
                 <FfProductsCatalogScreen token={token} authHeaders={authHeaders} sellers={sellers} />
               ) : (
                 <FfPlaceholderPage title="Товары" hint="Нет токена." testId="ff-products-placeholder" />
+              )
+            }
+          />
+
+          <Route
+            path="ff/packaging"
+            element={
+              token ? (
+                <FfPackagingPage token={token} />
+              ) : (
+                <FfPlaceholderPage title="Упаковка" hint="Нет токена." testId="ff-packaging-placeholder" />
               )
             }
           />

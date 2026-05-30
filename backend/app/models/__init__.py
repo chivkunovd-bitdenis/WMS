@@ -22,6 +22,7 @@ from app.models.marketplace_unload import (
 )
 from app.models.marketplace_unload_reservation import MarketplaceUnloadReservation
 from app.models.outbound_shipment import OutboundShipmentLine, OutboundShipmentRequest
+from app.models.packaging_task import PackagingTask, PackagingTaskLine
 from app.models.product import Product
 from app.models.seller import Seller
 from app.models.seller_wildberries_credentials import SellerWildberriesCredentials
@@ -56,6 +57,8 @@ __all__ = [
     "MarketplaceUnloadReservation",
     "OutboundShipmentLine",
     "OutboundShipmentRequest",
+    "PackagingTask",
+    "PackagingTaskLine",
     "Product",
     "Seller",
     "SellerWildberriesCredentials",

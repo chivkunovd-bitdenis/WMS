@@ -8,13 +8,15 @@ from pydantic import BaseModel, Field, computed_field
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.deps import get_current_user, require_fulfillment_admin, seller_line_product_scope
-from app.core.roles import FULFILLMENT_SELLER
+from app.core.roles import FULFILLMENT_ADMIN, FULFILLMENT_SELLER
 from app.db.session import get_db
 from app.models.user import User
 from app.services.catalog_service import (
     CatalogError,
     create_product,
+    get_product,
     list_products,
+    update_packaging_instructions,
     volume_liters_from_mm,
 )
 from app.services.seller_wb_catalog_service import (
@@ -48,6 +50,8 @@ class SellerWbCatalogOut(BaseModel):
     wb_primary_image_url: str | None = None
     wb_barcodes: list[str]
     wb_primary_barcode: str | None = None
+    packaging_instructions: str | None = None
+    has_packaging_instructions: bool = False
 
 
 class FfCatalogOut(BaseModel):
@@ -77,11 +81,35 @@ class ProductOut(BaseModel):
     seller_name: str | None
     wb_nm_id: int | None = None
     wb_vendor_code: str | None = None
+    packaging_instructions: str | None = None
 
     @computed_field  # type: ignore[prop-decorator]
     @property
     def volume_liters(self) -> float:
         return volume_liters_from_mm(self.length_mm, self.width_mm, self.height_mm)
+
+
+class PackagingInstructionsPatch(BaseModel):
+    packaging_instructions: str | None = Field(default=None, max_length=8000)
+
+
+def _product_out(p: object) -> ProductOut:
+    from app.models.product import Product
+
+    assert isinstance(p, Product)
+    return ProductOut(
+        id=str(p.id),
+        name=p.name,
+        sku_code=p.sku_code,
+        length_mm=p.length_mm,
+        width_mm=p.width_mm,
+        height_mm=p.height_mm,
+        seller_id=str(p.seller_id) if p.seller_id else None,
+        seller_name=p.seller.name if p.seller is not None else None,
+        wb_nm_id=int(p.wb_nm_id) if p.wb_nm_id is not None else None,
+        wb_vendor_code=p.wb_vendor_code,
+        packaging_instructions=p.packaging_instructions,
+    )
 
 
 @router.get("", response_model=list[ProductOut])
@@ -91,21 +119,7 @@ async def get_products(
     seller_scope: Annotated[uuid.UUID | None, Depends(seller_line_product_scope)],
 ) -> list[ProductOut]:
     rows = await list_products(session, user.tenant_id, seller_id=seller_scope)
-    return [
-        ProductOut(
-            id=str(p.id),
-            name=p.name,
-            sku_code=p.sku_code,
-            length_mm=p.length_mm,
-            width_mm=p.width_mm,
-            height_mm=p.height_mm,
-            seller_id=str(p.seller_id) if p.seller_id else None,
-            seller_name=p.seller.name if p.seller is not None else None,
-            wb_nm_id=int(p.wb_nm_id) if p.wb_nm_id is not None else None,
-            wb_vendor_code=p.wb_vendor_code,
-        )
-        for p in rows
-    ]
+    return [_product_out(p) for p in rows]
 
 
 @router.get("/wb-catalog", response_model=list[SellerWbCatalogOut])
@@ -124,7 +138,13 @@ async def get_seller_wb_catalog(
             detail="seller_not_linked",
         )
     rows = await list_seller_wb_catalog_rows(session, user.tenant_id, user.seller_id)
-    return [SellerWbCatalogOut(**r.as_dict()) for r in rows]
+    return [
+        SellerWbCatalogOut(
+            **r.as_dict(),
+            has_packaging_instructions=bool((r.packaging_instructions or "").strip()),
+        )
+        for r in rows
+    ]
 
 
 @router.get("/ff-catalog", response_model=list[FfCatalogOut])
@@ -172,15 +192,36 @@ async def post_product(
             ) from None
         raise
     await session.refresh(p, attribute_names=["seller"])
-    return ProductOut(
-        id=str(p.id),
-        name=p.name,
-        sku_code=p.sku_code,
-        length_mm=p.length_mm,
-        width_mm=p.width_mm,
-        height_mm=p.height_mm,
-        seller_id=str(p.seller_id) if p.seller_id else None,
-        seller_name=p.seller.name if p.seller is not None else None,
-        wb_nm_id=int(p.wb_nm_id) if p.wb_nm_id is not None else None,
-        wb_vendor_code=p.wb_vendor_code,
-    )
+    return _product_out(p)
+
+
+@router.patch("/{product_id}/packaging-instructions", response_model=ProductOut)
+async def patch_product_packaging_instructions(
+    product_id: uuid.UUID,
+    body: PackagingInstructionsPatch,
+    user: Annotated[User, Depends(get_current_user)],
+    session: Annotated[AsyncSession, Depends(get_db)],
+) -> ProductOut:
+    p = await get_product(session, user.tenant_id, product_id)
+    if p is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="product_not_found")
+    if user.role == FULFILLMENT_SELLER:
+        if user.seller_id is None or p.seller_id != user.seller_id:
+            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="forbidden")
+    elif user.role != FULFILLMENT_ADMIN:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="forbidden")
+    try:
+        updated = await update_packaging_instructions(
+            session,
+            user.tenant_id,
+            product_id,
+            packaging_instructions=body.packaging_instructions,
+        )
+    except CatalogError as exc:
+        if exc.code == "product_not_found":
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="product_not_found",
+            ) from None
+        raise
+    return _product_out(updated)

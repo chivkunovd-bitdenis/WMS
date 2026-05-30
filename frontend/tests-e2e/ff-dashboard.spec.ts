@@ -114,6 +114,10 @@ test('fulfillment admin sees week calendar and supplies-shipments page', async (
       data: JSON.stringify({ product_id: productId, nm_id: 424242 }),
     },
   );
+  await page.request.patch(`${e2eApi}/products/${productId}/packaging-instructions`, {
+    headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+    data: JSON.stringify({ packaging_instructions: 'E2E: пакет + стикер WB' }),
+  });
   const whId = String(((await whRes.json()) as { id: string }).id);
   const locRes = await page.request.post(`${e2eApi}/warehouses/${whId}/locations`, {
     headers: {
@@ -193,16 +197,31 @@ test('fulfillment admin sees week calendar and supplies-shipments page', async (
   ]);
   await expect(page.getByTestId('ff-supplies-doc-lines')).toContainText('E2E FF product');
 
-  await page.getByLabel('Склад WB (маркетплейс)').click();
-  await page.getByRole('option', { name: /E2E WB склад/ }).click();
-  await setWmsDateField(page, 'ff-mp-planned-date', '2026-06-15');
-  await page.waitForResponse(
-    (r) =>
-      r.request().method() === 'PATCH' &&
-      r.url().includes('/operations/marketplace-unload-requests/') &&
-      r.status() >= 200 &&
-      r.status() < 300,
-  );
+  const wbSelect = page.getByTestId('ff-mp-wb-warehouse-select');
+  const wbLabel = (await wbSelect.textContent()) ?? '';
+  if (!wbLabel.includes('E2E WB склад')) {
+    await wbSelect.click();
+    await Promise.all([
+      page.waitForResponse(
+        (r) =>
+          r.request().method() === 'PATCH' &&
+          r.url().includes('/operations/marketplace-unload-requests/') &&
+          r.status() >= 200 &&
+          r.status() < 300,
+      ),
+      page.getByRole('option', { name: /E2E WB склад/ }).click(),
+    ]);
+  }
+  await Promise.all([
+    page.waitForResponse(
+      (r) =>
+        r.request().method() === 'PATCH' &&
+        r.url().includes('/operations/marketplace-unload-requests/') &&
+        r.status() >= 200 &&
+        r.status() < 300,
+    ),
+    setWmsDateField(page, 'ff-mp-planned-date', '2026-06-15'),
+  ]);
   await Promise.all([
     waitForPostOk(page, '/api/operations/marketplace-unload-requests', (u) => u.includes('/confirm')),
     page.getByTestId('ff-supplies-doc-submit').click(),

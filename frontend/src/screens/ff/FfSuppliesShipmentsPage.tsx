@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useSearchParams } from 'react-router-dom'
 import { DeleteOutlineOutlined } from '@mui/icons-material'
 import {
   Alert,
@@ -28,8 +29,9 @@ import {
 import { apiUrl } from '../../api'
 import { WmsDateField } from '../../components/WmsDateField'
 import { readApiErrorMessage } from '../../utils/readApiErrorMessage'
-import type { FfInboundSummary, FfOutboundSummary } from './FfDashboard'
 import { PageHeader } from '../../ui/PageHeader'
+import type { FfInboundSummary, FfOutboundSummary } from './FfDashboard'
+import { FfPackagingTaskDialog } from './FfPackagingPage'
 import { formatDateTimeLocal } from '../../utils/formatDateTimeLocal'
 import { printMarketplaceUnloadWaybill } from '../../utils/printShipmentWaybill'
 
@@ -109,6 +111,14 @@ type MarketplaceUnloadPickOptionProduct = {
   locations: MarketplaceUnloadPickOptionLocation[]
 }
 
+type LinkedPackagingTask = {
+  task_id: string
+  status: string
+  qty_done: number
+  qty_total: number
+  is_complete: boolean
+}
+
 type MarketplaceUnloadDetail = {
   id: string
   warehouse_id: string
@@ -122,6 +132,7 @@ type MarketplaceUnloadDetail = {
   lines: DocLineRow[]
   boxes: MarketplaceUnloadBox[]
   pick_allocations: MarketplaceUnloadPickAllocation[]
+  linked_packaging_task: LinkedPackagingTask | null
 }
 
 type DiscrepancyActDetail = {
@@ -213,6 +224,7 @@ export function FfSuppliesShipmentsPage({
   initialMarketplaceUnloadId = null,
   onInitialMarketplaceUnloadOpened,
 }: Props) {
+  const [searchParams, setSearchParams] = useSearchParams()
   const isMpShipmentsPage = pageVariant === 'mp-shipments'
   const [kind, setKind] = useState<QuickFilterKind>(isMpShipmentsPage ? 'marketplace_unload' : 'all')
   const [sellerFilter, setSellerFilter] = useState<string>('all')
@@ -222,6 +234,7 @@ export function FfSuppliesShipmentsPage({
 
   const [docModal, setDocModal] = useState<null | 'marketplace_unload' | 'discrepancy_act'>(null)
   const [docModalId, setDocModalId] = useState<string | null>(null)
+  const [packagingDialogOpen, setPackagingDialogOpen] = useState(false)
   const [modalBusy, setModalBusy] = useState(false)
   const [modalError, setModalError] = useState<string | null>(null)
   const [unloadDetail, setUnloadDetail] = useState<MarketplaceUnloadDetail | null>(null)
@@ -337,6 +350,13 @@ export function FfSuppliesShipmentsPage({
             location_code: string
             quantity: number
           }[]
+          linked_packaging_task?: {
+            task_id: string
+            status: string
+            qty_done: number
+            qty_total: number
+            is_complete: boolean
+          } | null
         }
         setUnloadDetail({
           id: j.id,
@@ -379,6 +399,7 @@ export function FfSuppliesShipmentsPage({
             location_code: a.location_code,
             quantity: a.quantity,
           })),
+          linked_packaging_task: j.linked_packaging_task ?? null,
         })
         setConfirmDate(j.planned_shipment_date ?? '')
         const stockRes = await fetch(
@@ -470,6 +491,21 @@ export function FfSuppliesShipmentsPage({
     setDocModalId(initialMarketplaceUnloadId)
     onInitialMarketplaceUnloadOpened?.()
   }, [initialMarketplaceUnloadId, onInitialMarketplaceUnloadOpened])
+
+  useEffect(() => {
+    const openMp = searchParams.get('open_mp')
+    if (!openMp || !isMpShipmentsPage) {
+      return
+    }
+    setUnloadDetail(null)
+    setDivergeDetail(null)
+    setModalError(null)
+    setDocModal('marketplace_unload')
+    setDocModalId(openMp)
+    const next = new URLSearchParams(searchParams)
+    next.delete('open_mp')
+    setSearchParams(next, { replace: true })
+  }, [isMpShipmentsPage, searchParams, setSearchParams])
 
   useEffect(() => {
     if (docModal !== 'marketplace_unload' || docModalId == null) {
@@ -1402,6 +1438,42 @@ export function FfSuppliesShipmentsPage({
               Состав изменён на складе после планирования селлером.
             </Alert>
           ) : null}
+          {docModal === 'marketplace_unload' &&
+          unloadDetail?.linked_packaging_task &&
+          mpConfirmed ? (
+            <Alert
+              severity={
+                unloadDetail.linked_packaging_task.is_complete ? 'success' : 'info'
+              }
+              sx={{ mb: 2 }}
+              data-testid="ff-mp-packaging-progress"
+            >
+              <Stack
+                direction={{ xs: 'column', sm: 'row' }}
+                spacing={1}
+                sx={{ alignItems: { sm: 'center' }, justifyContent: 'space-between' }}
+              >
+                <Typography variant="body2">
+                  Задание на упаковку:{' '}
+                  {unloadDetail.linked_packaging_task.qty_done}/
+                  {unloadDetail.linked_packaging_task.qty_total} шт
+                  {unloadDetail.linked_packaging_task.is_complete
+                    ? ' · выполнено'
+                    : ' · в работе'}
+                </Typography>
+                {!unloadDetail.linked_packaging_task.is_complete ? (
+                  <Button
+                    size="small"
+                    variant="outlined"
+                    onClick={() => setPackagingDialogOpen(true)}
+                    data-testid="ff-mp-packaging-continue"
+                  >
+                    Продолжить упаковку
+                  </Button>
+                ) : null}
+              </Stack>
+            </Alert>
+          ) : null}
           {docModal === 'marketplace_unload' && unloadDetail && mpLineDraft ? (
             <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1.25} sx={{ mb: 2, mt: 1 }}>
               <FormControl
@@ -1926,6 +1998,16 @@ export function FfSuppliesShipmentsPage({
           ) : null}
           {mpConfirmed ? (
             <Button
+              variant="outlined"
+              disabled={modalBusy || !docModalId || !token}
+              onClick={() => setPackagingDialogOpen(true)}
+              data-testid="ff-mp-open-packaging"
+            >
+              Упаковка
+            </Button>
+          ) : null}
+          {mpConfirmed ? (
+            <Button
               variant="contained"
               color="primary"
               disabled={
@@ -2055,6 +2137,18 @@ export function FfSuppliesShipmentsPage({
           </Button>
         </DialogActions>
       </Dialog>
+      {token && docModalId && docModal === 'marketplace_unload' ? (
+        <FfPackagingTaskDialog
+          open={packagingDialogOpen}
+          token={token}
+          unloadId={docModalId}
+          unloadLabel={docModalId.slice(0, 8)}
+          onClose={() => {
+            setPackagingDialogOpen(false)
+            void loadDocDetail()
+          }}
+        />
+      ) : null}
     </Box>
   )
 }

@@ -3,7 +3,12 @@ import {
   Alert,
   Box,
   Button,
+  Chip,
   CircularProgress,
+  Dialog,
+  DialogActions,
+  DialogContent,
+  DialogTitle,
   Paper,
   Stack,
   Table,
@@ -13,6 +18,7 @@ import {
   TableHead,
   TablePagination,
   TableRow,
+  TextField,
   Typography,
 } from '@mui/material'
 import { apiUrl } from '../../api'
@@ -28,6 +34,8 @@ type WbCatalogRow = {
   wb_primary_image_url: string | null
   wb_barcodes: string[]
   wb_primary_barcode: string | null
+  packaging_instructions: string | null
+  has_packaging_instructions: boolean
 }
 
 type StockSummaryRow = {
@@ -56,6 +64,9 @@ export function SellerProductsStockScreen({
   const [stock, setStock] = useState<StockSummaryRow[]>([])
   const [page, setPage] = useState(0)
   const [rowsPerPage, setRowsPerPage] = useState(10)
+  const [editProduct, setEditProduct] = useState<WbCatalogRow | null>(null)
+  const [editText, setEditText] = useState('')
+  const [editBusy, setEditBusy] = useState(false)
 
   async function refreshAll() {
     setError(null)
@@ -107,6 +118,37 @@ export function SellerProductsStockScreen({
     const start = page * rowsPerPage
     return rows.slice(start, start + rowsPerPage)
   }, [page, rows, rowsPerPage])
+
+  function openPackagingEdit(p: WbCatalogRow) {
+    setEditProduct(p)
+    setEditText(p.packaging_instructions ?? '')
+  }
+
+  async function savePackagingInstructions() {
+    if (!editProduct) return
+    setEditBusy(true)
+    setError(null)
+    try {
+      const res = await fetch(
+        apiUrl(`/products/${editProduct.id}/packaging-instructions`),
+        {
+          method: 'PATCH',
+          headers: { ...authHeaders(token), 'Content-Type': 'application/json' },
+          body: JSON.stringify({ packaging_instructions: editText.trim() || null }),
+        },
+      )
+      if (!res.ok) {
+        setError(await readApiErrorMessage(res))
+        return
+      }
+      setEditProduct(null)
+      await refreshAll()
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Не удалось сохранить ТЗ.')
+    } finally {
+      setEditBusy(false)
+    }
+  }
 
   async function onSyncProducts() {
     setError(null)
@@ -172,6 +214,7 @@ export function SellerProductsStockScreen({
               <TableCell align="right">В сортировке</TableCell>
               <TableCell align="right">Зарезерв.</TableCell>
               <TableCell align="right">Доступно</TableCell>
+              <TableCell>ТЗ упаковки</TableCell>
             </TableRow>
           </TableHead>
           <TableBody>
@@ -208,11 +251,29 @@ export function SellerProductsStockScreen({
                     </Typography>
                   ) : null}
                 </TableCell>
+                <TableCell>
+                  <Stack direction="row" spacing={1} sx={{ alignItems: 'center' }}>
+                    <Chip
+                      size="small"
+                      label={p.has_packaging_instructions ? 'Заполнено' : 'Нет ТЗ'}
+                      color={p.has_packaging_instructions ? 'success' : 'warning'}
+                      variant="outlined"
+                      data-testid={`seller-packaging-status-${p.id}`}
+                    />
+                    <Button
+                      size="small"
+                      onClick={() => openPackagingEdit(p)}
+                      data-testid={`seller-packaging-edit-${p.id}`}
+                    >
+                      Редактировать
+                    </Button>
+                  </Stack>
+                </TableCell>
               </TableRow>
             ))}
             {rows.length === 0 ? (
               <TableRow>
-                <TableCell colSpan={10}>
+                <TableCell colSpan={11}>
                   <Typography variant="body2" color="text.secondary">
                     Пока нет товаров.
                   </Typography>
@@ -237,6 +298,47 @@ export function SellerProductsStockScreen({
           data-testid="seller-products-pagination"
         />
       </TableContainer>
+
+      <Dialog
+        open={editProduct != null}
+        onClose={() => !editBusy && setEditProduct(null)}
+        fullWidth
+        maxWidth="sm"
+        data-testid="seller-packaging-dialog"
+      >
+        <DialogTitle>ТЗ на упаковку</DialogTitle>
+        <DialogContent>
+          {editProduct ? (
+            <Stack spacing={2} sx={{ mt: 1 }}>
+              <Typography variant="body2" color="text.secondary">
+                {editProduct.sku_code} · {editProduct.name}
+              </Typography>
+              <TextField
+                label="Инструкция для фулфилмента"
+                multiline
+                minRows={4}
+                fullWidth
+                value={editText}
+                onChange={(e) => setEditText(e.target.value)}
+                slotProps={{ htmlInput: { 'data-testid': 'seller-packaging-text' } }}
+              />
+            </Stack>
+          ) : null}
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setEditProduct(null)} disabled={editBusy}>
+            Отмена
+          </Button>
+          <Button
+            variant="contained"
+            disabled={editBusy}
+            onClick={() => void savePackagingInstructions()}
+            data-testid="seller-packaging-save"
+          >
+            Сохранить
+          </Button>
+        </DialogActions>
+      </Dialog>
     </Box>
   )
 }

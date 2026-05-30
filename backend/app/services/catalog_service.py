@@ -375,3 +375,47 @@ async def create_product(
         raise CatalogError("sku_taken") from exc
     await session.refresh(p)
     return p
+
+
+async def get_product(
+    session: AsyncSession,
+    tenant_id: uuid.UUID,
+    product_id: uuid.UUID,
+) -> Product | None:
+    p = await session.get(Product, product_id)
+    if p is None or p.tenant_id != tenant_id:
+        return None
+    return p
+
+
+async def update_packaging_instructions(
+    session: AsyncSession,
+    tenant_id: uuid.UUID,
+    product_id: uuid.UUID,
+    *,
+    packaging_instructions: str | None,
+) -> Product:
+    p = await get_product(session, tenant_id, product_id)
+    if p is None:
+        raise CatalogError("product_not_found")
+    text = (packaging_instructions or "").strip()
+    p.packaging_instructions = text if text else None
+    await session.commit()
+    await session.refresh(p, attribute_names=["seller"])
+    return p
+
+
+async def products_missing_packaging_instructions(
+    session: AsyncSession,
+    tenant_id: uuid.UUID,
+    product_ids: list[uuid.UUID],
+) -> list[Product]:
+    if not product_ids:
+        return []
+    stmt = select(Product).where(
+        Product.tenant_id == tenant_id,
+        Product.id.in_(product_ids),
+    )
+    res = await session.execute(stmt)
+    products = list(res.scalars().all())
+    return [p for p in products if not (p.packaging_instructions or "").strip()]

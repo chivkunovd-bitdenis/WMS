@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useNavigate } from 'react-router-dom'
 import {
   Alert,
   Box,
@@ -181,6 +182,7 @@ export function FfInboundSortingPanel({
   completed = false,
   onReload,
 }: Props) {
+  const navigate = useNavigate()
   const authHeaders = useMemo(() => ({ Authorization: `Bearer ${token}` }), [token])
   const [locations, setLocations] = useState<LocationRow[]>([])
   const [busy, setBusy] = useState(false)
@@ -336,6 +338,62 @@ export function FfInboundSortingPanel({
     await putawayBox(box.id, locId, [{ product_id: line.product_id, quantity: qty }])
   }
 
+  const sortingPackLines = useMemo(() => {
+    const m = new Map<string, { product_id: string; sku_code: string; product_name: string; quantity: number }>()
+    for (const box of closedBoxes) {
+      for (const ln of box.lines) {
+        if (ln.remaining_qty <= 0) {
+          continue
+        }
+        const prev = m.get(ln.product_id)
+        if (prev) {
+          prev.quantity += ln.remaining_qty
+        } else {
+          m.set(ln.product_id, {
+            product_id: ln.product_id,
+            sku_code: ln.sku_code,
+            product_name: ln.product_name,
+            quantity: ln.remaining_qty,
+          })
+        }
+      }
+    }
+    return Array.from(m.values())
+  }, [closedBoxes])
+
+  const createPackagingFromSorting = async () => {
+    if (sortingPackLines.length === 0) {
+      setError('Нет товара в сортировке для упаковки.')
+      return
+    }
+    setBusy(true)
+    setError(null)
+    try {
+      const res = await fetch(apiUrl('/operations/packaging-tasks'), {
+        method: 'POST',
+        headers: { ...authHeaders, 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          warehouse_id: warehouseId,
+          inbound_intake_request_id: requestId,
+          lines: sortingPackLines.map((ln) => ({
+            product_id: ln.product_id,
+            quantity: ln.quantity,
+          })),
+        }),
+      })
+      if (!res.ok) {
+        setError(await readApiErrorMessage(res))
+        return
+      }
+      const task = (await res.json()) as { id: string }
+      navigate('/ff/packaging', { state: { taskId: task.id } })
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Не удалось создать задание.')
+    } finally {
+      setBusy(false)
+    }
+  }
+
   if (closedBoxes.length === 0) {
     return (
       <Alert severity="info" data-testid="ff-sorting-no-boxes">
@@ -362,6 +420,17 @@ export function FfInboundSortingPanel({
           size="small"
           data-testid="ff-sorting-remaining-total"
         />
+        {!completed && sortingRemainingQty > 0 ? (
+          <Button
+            variant="outlined"
+            size="small"
+            disabled={busy}
+            onClick={() => void createPackagingFromSorting()}
+            data-testid="ff-sorting-pack-btn"
+          >
+            Упаковать
+          </Button>
+        ) : null}
       </Stack>
 
       {locations.length === 0 ? (

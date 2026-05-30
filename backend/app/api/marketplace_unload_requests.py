@@ -23,6 +23,7 @@ from app.models.user import User
 from app.services import marketplace_unload_box_service as box_svc
 from app.services import marketplace_unload_pick_service as pick_svc
 from app.services import marketplace_unload_service as svc
+from app.services import packaging_task_service as pkg_svc
 from app.services.catalog_service import get_warehouse
 from app.services.marketplace_unload_box_service import MarketplaceUnloadBoxError
 from app.services.marketplace_unload_pick_service import MarketplaceUnloadPickError
@@ -196,6 +197,14 @@ class PickAllocationsSave(BaseModel):
     allocations: list[PickAllocationItemIn] = Field(default_factory=list)
 
 
+class LinkedPackagingTaskOut(BaseModel):
+    task_id: str
+    status: str
+    qty_done: int
+    qty_total: int
+    is_complete: bool
+
+
 class MarketplaceUnloadRequestDetailOut(BaseModel):
     id: str
     warehouse_id: str
@@ -210,6 +219,7 @@ class MarketplaceUnloadRequestDetailOut(BaseModel):
     lines: list[MarketplaceUnloadLineOut]
     boxes: list[MarketplaceUnloadBoxOut] = Field(default_factory=list)
     pick_allocations: list[MarketplaceUnloadPickAllocationOut] = Field(default_factory=list)
+    linked_packaging_task: LinkedPackagingTaskOut | None = None
 
 
 def _box_line_out(ln: MarketplaceUnloadBoxLine) -> MarketplaceUnloadBoxLineOut:
@@ -301,11 +311,24 @@ def _pick_alloc_out(alloc: MarketplaceUnloadPickAllocation) -> MarketplaceUnload
     )
 
 
+def _linked_packaging_out(
+    progress: pkg_svc.PackagingTaskProgress,
+) -> LinkedPackagingTaskOut:
+    return LinkedPackagingTaskOut(
+        task_id=str(progress.task_id),
+        status=progress.status,
+        qty_done=progress.qty_done,
+        qty_total=progress.qty_total,
+        is_complete=progress.is_complete,
+    )
+
+
 def _detail_out(
     r: MarketplaceUnloadRequest,
     *,
     warehouse_name: str,
     seller_name: str | None,
+    linked_packaging_task: LinkedPackagingTaskOut | None = None,
 ) -> MarketplaceUnloadRequestDetailOut:
     boxes = [_box_out(b) for b in getattr(r, "boxes", []) or []]
     picks = [_pick_alloc_out(a) for a in getattr(r, "pick_allocations", []) or []]
@@ -334,6 +357,34 @@ def _detail_out(
         ],
         boxes=boxes,
         pick_allocations=picks,
+        linked_packaging_task=linked_packaging_task,
+    )
+
+
+async def _detail_with_packaging(
+    session: AsyncSession,
+    tenant_id: uuid.UUID,
+    r: MarketplaceUnloadRequest,
+    *,
+    warehouse_name: str,
+    seller_name: str | None,
+    sync_packaging: bool = False,
+) -> MarketplaceUnloadRequestDetailOut:
+    linked: LinkedPackagingTaskOut | None = None
+    if r.status in ("confirmed", "shipped"):
+        progress = await pkg_svc.progress_for_unload(
+            session,
+            tenant_id,
+            r.id,
+            sync_from_pick=sync_packaging,
+        )
+        if progress is not None:
+            linked = _linked_packaging_out(progress)
+    return _detail_out(
+        r,
+        warehouse_name=warehouse_name,
+        seller_name=seller_name,
+        linked_packaging_task=linked,
     )
 
 
@@ -382,6 +433,11 @@ def _map_mu_err(exc: MarketplaceUnloadError) -> HTTPException:
         )
     if exc.code == "no_lines":
         return HTTPException(status_code=status.HTTP_409_CONFLICT, detail="no_lines")
+    if exc.code == "packaging_instructions_required":
+        return HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+            detail="packaging_instructions_required",
+        )
     return HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=exc.code)
 
 
@@ -408,6 +464,7 @@ def _map_pick_err(exc: MarketplaceUnloadPickError) -> HTTPException:
         "box_not_found",
         "box_closed",
         "planned_shipment_date_required",
+        "packaging_not_done",
     ):
         return HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
@@ -488,10 +545,13 @@ async def get_marketplace_unload(
     session: Annotated[AsyncSession, Depends(get_db)],
 ) -> MarketplaceUnloadRequestDetailOut:
     r = await _get_visible_request(session, user, request_id)
-    return _detail_out(
+    return await _detail_with_packaging(
+        session,
+        user.tenant_id,
         r,
         warehouse_name=r.warehouse.name,
         seller_name=r.seller.name if r.seller is not None else None,
+        sync_packaging=True,
     )
 
 

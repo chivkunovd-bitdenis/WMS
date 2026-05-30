@@ -25,6 +25,10 @@ from app.services.catalog_service import (
 from app.services.catalog_service import (
     list_warehouses as list_wh_svc,
 )
+from app.services.sorting_location_service import (
+    SORTING_LOCATION_LABEL,
+    get_or_create_sorting_location,
+)
 
 router = APIRouter(prefix="/warehouses", tags=["warehouses"])
 
@@ -97,6 +101,28 @@ async def post_warehouse(
             detail="warehouse_code_taken",
         ) from None
     return WarehouseOut(id=str(w.id), name=w.name, code=w.code)
+
+
+@router.get("/{warehouse_id}/sorting-location", response_model=LocationOut)
+async def get_sorting_location(
+    warehouse_id: uuid.UUID,
+    user: Annotated[User, Depends(get_current_user)],
+    session: Annotated[AsyncSession, Depends(get_db)],
+) -> LocationOut:
+    wh = await get_warehouse(session, user.tenant_id, warehouse_id)
+    if wh is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="warehouse_not_found",
+        )
+    loc = await get_or_create_sorting_location(session, user.tenant_id, warehouse_id)
+    await session.commit()
+    return LocationOut(
+        id=str(loc.id),
+        code=SORTING_LOCATION_LABEL,
+        warehouse_id=str(loc.warehouse_id),
+        barcode=loc.barcode,
+    )
 
 
 @router.get("/{warehouse_id}/locations", response_model=list[LocationOut])

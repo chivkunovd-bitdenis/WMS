@@ -1,5 +1,25 @@
 # TASKLOG
 
+## TASK-34 — 2026-05-30 — Упаковка E7 (этапы 1–3, PR feat/packaging-e7)
+
+- What changed: `packaging_task` API + миграция split unpacked/packed; авто-задание при confirm MP unload; ship блок до `done`; ТЗ `packaging_instructions` (селлер UI + валидация plan/confirm); раздел FF «Упаковка»; create from sorting; прогресс в карточке отгрузки; e2e `ff-packaging-page`, regression MP ship/pick/seller; docs `PACKAGING_RU.md`, TC-NEW-PKG-*.
+- What did NOT change: FF-редактирование ТЗ в каталоге; задание из произвольной ячейки; отмена задания; биллинг; ЧЗ.
+- Verification: `ruff`/`mypy`; pytest 106 passed; `npm run build`; e2e `ff-packaging-page`, `ff-mp-ship-pick`.
+- Commit: 642cba7
+
+## TASK-33 — 2026-05-30 — Упаковка (этап 2: ТЗ селлера, сортировка, валидация MP)
+
+- What changed: `PATCH /products/{id}/packaging-instructions` (селлер/админ); блок `plan`/`confirm` MP unload без ТЗ (`packaging_instructions_required`); `GET /warehouses/{id}/sorting-location`; создание задания без ячейки → зона «Сортировка»; UI селлера — редактирование ТЗ; FF — «Создать задание» на странице упаковки + кнопка «Упаковать» на сортировке; sync упаковки при подборе в короб; pytest `test_product_packaging_instructions.py`; e2e seller-mp-unload/seller-available-stock — ТЗ перед plan.
+- What did NOT change: FF-редактирование ТЗ в каталоге; биллинг упаковки; ЧЗ.
+- Verification: pytest (packaging + seller MP subset) locally via `.venv`.
+- Commit: (pending)
+
+## TASK-32 — 2026-05-30 — Задание на упаковку (этап 1: backend + UI)
+
+- What changed: миграция `0036` — `quantity_unpacked`/`quantity_packed` на остатках; модели/API `packaging_tasks`; авто-задание при confirm отгрузки на МП; блок `ship` до выполнения задания; раздел «Упаковка» в меню ФФ; диалог упаковки из отгрузки на МП; pytest `test_packaging_tasks.py`; e2e `ff-mp-ship-pick` дополнен шагом упаковки. Спека: `docs/PACKAGING_RU.md`.
+- What did NOT change: ТЗ на упаковку в карточке товара (поле `packaging_instructions` в БД есть, UI селлера — позже); кнопка «Упаковать» на сортировке; биллинг; ЧЗ.
+- Commit: (pending)
+
 ## TASK-31 — 2026-05-30 — Пользователи ФФ: добавление и права доступа
 
 - What changed: роль `fulfillment_staff`; таблица `ff_staff_permissions`; API `/auth/staff-accounts` (создание, список, PATCH прав); первый вход с пустым паролем как у селлера; экран «Настройки → Пользователи» с матрицей галочек (настройки, отгрузки МП, приёмка, ячейки, инвентаризация); фильтрация меню по правам; backend-guards на приёмку/отгрузки/ячейки.

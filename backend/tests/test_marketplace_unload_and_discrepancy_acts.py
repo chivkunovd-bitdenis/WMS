@@ -147,6 +147,21 @@ async def _patch_mp_planned_date(
     assert patch.status_code == 200, patch.text
 
 
+async def _patch_packaging_instructions(
+    async_client: AsyncClient,
+    h: dict[str, str],
+    product_id: str,
+    *,
+    instructions: str = "E2E packaging instructions",
+) -> None:
+    patch = await async_client.patch(
+        f"/products/{product_id}/packaging-instructions",
+        headers=h,
+        json={"packaging_instructions": instructions},
+    )
+    assert patch.status_code == 200, patch.text
+
+
 @pytest.mark.asyncio
 async def test_marketplace_unload_and_discrepancy_act_crud_smoke(
     async_client: AsyncClient, monkeypatch: pytest.MonkeyPatch
@@ -468,6 +483,7 @@ async def test_marketplace_unload_submit_delete_and_blocks(
     assert bad_del.status_code == 404
     assert bad_del.json()["detail"] == "line_not_found"
 
+    await _patch_packaging_instructions(async_client, h, pid)
     await _patch_mp_planned_date(async_client, h, mid)
     sub = await async_client.post(
         f"/operations/marketplace-unload-requests/{mid}/submit",
@@ -613,6 +629,7 @@ async def test_marketplace_unload_allows_draft_without_wb_warehouse_and_requires
     assert sub_no_date.json()["detail"] == "planned_shipment_date_required"
 
     await _patch_mp_planned_date(async_client, h, mid)
+    await _patch_packaging_instructions(async_client, h, pid)
     sub = await async_client.post(
         f"/operations/marketplace-unload-requests/{mid}/submit", headers=h
     )
@@ -817,6 +834,7 @@ async def test_marketplace_unload_ship_deducts_stock_by_pick_and_scan(
     )
 
     await _patch_mp_planned_date(async_client, h, mid)
+    await _patch_packaging_instructions(async_client, h, pid)
     sub = await async_client.post(
         f"/operations/marketplace-unload-requests/{mid}/submit",
         headers=h,
@@ -861,6 +879,26 @@ async def test_marketplace_unload_ship_deducts_stock_by_pick_and_scan(
 
     detail = await async_client.get(f"/operations/marketplace-unload-requests/{mid}", headers=h)
     assert detail.json()["lines"][0]["picked_qty"] == 3
+
+    pkg = await async_client.get(
+        f"/operations/packaging-tasks/by-unload/{mid}",
+        headers=h,
+    )
+    assert pkg.status_code == 200, pkg.text
+    task = pkg.json()
+    if not task["lines"]:
+        task = (
+            await async_client.get(
+                f"/operations/packaging-tasks/{task['id']}",
+                headers=h,
+            )
+        ).json()
+    pkg_line = task["lines"][0]
+    await async_client.post(
+        f"/operations/packaging-tasks/{task['id']}/lines/{pkg_line['id']}/pack",
+        headers=h,
+        json={"quantity": pkg_line["qty_need_pack"]},
+    )
 
     ship = await async_client.post(
         f"/operations/marketplace-unload-requests/{mid}/ship",

@@ -44,6 +44,8 @@ class InventoryBalance(Base):
         index=True,
     )
     quantity: Mapped[int] = mapped_column(Integer, nullable=False)
+    quantity_unpacked: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    quantity_packed: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), nullable=False
     )

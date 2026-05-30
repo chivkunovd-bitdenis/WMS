@@ -21,6 +21,7 @@ from app.models.base import Base
 
 if TYPE_CHECKING:
     from app.models.marketplace_unload_reservation import MarketplaceUnloadReservation
+    from app.models.packaging_task import PackagingTask
     from app.models.product import Product
     from app.models.seller import Seller
     from app.models.storage_location import StorageLocation
@@ -76,6 +77,11 @@ class MarketplaceUnloadRequest(Base):
         "MarketplaceUnloadPickAllocation",
         back_populates="request",
         cascade="all, delete-orphan",
+    )
+    packaging_task: Mapped[PackagingTask | None] = relationship(
+        "PackagingTask",
+        back_populates="marketplace_unload_request",
+        uselist=False,
     )
 
 
