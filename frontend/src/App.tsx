@@ -2519,7 +2519,7 @@ export default function App() {
           />
 
           <Route
-            path="ff/settings/*"
+            path="ff/settings"
             element={
               token && (isFulfillmentAdmin || canAccessFfBlock(me.role, me.permissions, 'settings')) ? (
                 <FfSettingsScreen

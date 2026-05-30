@@ -41,11 +41,12 @@ test('admin adds FF staff user, toggles permissions, staff sets password on firs
 
   await Promise.all([
     waitForPatchOk(page, `/api/auth/staff-accounts/${staffId}/permissions`),
-    staffRow.getByRole('checkbox', { name: 'Приёмка' }).check(),
+    staffRow.getByTestId(`ff-staff-perm-${staffId}-reception`).click(),
   ]);
+  await expect(page.getByTestId('ff-staff-perm-saved')).toBeVisible();
   await Promise.all([
     waitForPatchOk(page, `/api/auth/staff-accounts/${staffId}/permissions`),
-    staffRow.getByRole('checkbox', { name: 'Отгрузки на МП' }).check(),
+    staffRow.getByTestId(`ff-staff-perm-${staffId}-mp_shipments`).click(),
   ]);
 
   await page.getByTestId('logout').click();
