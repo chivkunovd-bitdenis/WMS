@@ -141,20 +141,6 @@ async def test_seller_mp_unload_plan_reserves_and_ff_confirms(
     )
     assert patch_date.status_code == 200, patch_date.text
 
-    plan_no_tz = await async_client.post(
-        f"/operations/marketplace-unload-requests/{mid}/plan",
-        headers=sh,
-    )
-    assert plan_no_tz.status_code == 422
-    assert plan_no_tz.json()["detail"] == "packaging_instructions_required"
-
-    tz = await async_client.patch(
-        f"/products/{pid}/packaging-instructions",
-        headers=sh,
-        json={"packaging_instructions": "Стикер WB"},
-    )
-    assert tz.status_code == 200, tz.text
-
     plan = await async_client.post(
         f"/operations/marketplace-unload-requests/{mid}/plan",
         headers=sh,

@@ -1,11 +1,18 @@
 # TASKLOG
 
+## TASK-36 — 2026-06-03 — MP unload: без блокировки по ТЗ упаковки
+
+- What changed: снята проверка `packaging_instructions_required` при `plan`/`confirm` отгрузки на МП; поле ТЗ на товаре остаётся опциональным.
+- What did NOT change: блок `packaging_not_done` при «Отгружено», если есть незавершённое задание упаковки; UI редактирования ТЗ.
+- Verification: pytest `test_seller_marketplace_unload`, `test_product_packaging_instructions`.
+- Commit: df1934e
+
 ## TASK-35 — 2026-05-30 — Упаковка E7 slice 4 (FF каталог, ячейка, отмена, resync)
 
 - What changed: FF-каталог — колонки «Не упак./Упаковано», редактирование ТЗ; создание задания из любой ячейки (не только сортировка); `POST /packaging-tasks/{id}/cancel` для ручных заданий; `pick_resync_warning` (миграция `0037`, sticky при смене подбора с прогрессом); e2e `ff-products` (ТЗ), `ff-packaging-page` (ячейка, отмена).
 - What did NOT change: биллинг упаковки; ЧЗ; dismiss предупреждения resync в UI (alert пока открыто задание).
-- Verification: `ruff`/`mypy`; pytest 110 passed; `npm run build`; e2e ff-packaging-page (4) + ff-products (2) green.
-- Commit: 6d8647d
+- Verification: `ruff`/`mypy`; pytest 110 passed; `npm run build`; e2e 49 passed; prod deploy `194.87.96.144:8088` (migrations 0036→0037).
+- Commit: 6d8647d (main `5c9d115`)
 
 ## TASK-34 — 2026-05-30 — Упаковка E7 (этапы 1–3, PR feat/packaging-e7)
 

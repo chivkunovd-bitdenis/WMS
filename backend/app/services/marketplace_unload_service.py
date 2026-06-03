@@ -23,7 +23,7 @@ from app.models.product import Product
 from app.models.seller import Seller
 from app.models.storage_location import StorageLocation
 from app.models.user import User
-from app.services.catalog_service import get_warehouse, products_missing_packaging_instructions
+from app.services.catalog_service import get_warehouse
 from app.services.wb_mp_warehouse_service import get_cached_mp_warehouse
 
 STATUS_DRAFT = "draft"
@@ -40,20 +40,6 @@ class MarketplaceUnloadError(Exception):
     def __init__(self, code: str) -> None:
         self.code = code
         super().__init__(code)
-
-
-async def _validate_packaging_instructions(
-    session: AsyncSession,
-    tenant_id: uuid.UUID,
-    lines: list[MarketplaceUnloadLine],
-) -> None:
-    missing = await products_missing_packaging_instructions(
-        session,
-        tenant_id,
-        [ln.product_id for ln in lines],
-    )
-    if missing:
-        raise MarketplaceUnloadError("packaging_instructions_required")
 
 
 def assert_request_visible(user: User, req: MarketplaceUnloadRequest) -> None:
@@ -457,7 +443,6 @@ async def plan_request(
         raise MarketplaceUnloadError("no_lines")
     if req.planned_shipment_date is None:
         raise MarketplaceUnloadError("planned_shipment_date_required")
-    await _validate_packaging_instructions(session, tenant_id, list(req.lines))
     mpw = await get_cached_mp_warehouse(session, tenant_id, int(req.wb_mp_warehouse_id))
     if mpw is None:
         raise MarketplaceUnloadError("wb_mp_warehouse_unknown")
@@ -523,7 +508,6 @@ async def confirm_request(
     )
     if effective_date is None:
         raise MarketplaceUnloadError("planned_shipment_date_required")
-    await _validate_packaging_instructions(session, tenant_id, list(req.lines))
     if req.status == STATUS_DRAFT:
         for ln in req.lines:
             available_qty = await _available_product_qty_in_warehouse(

@@ -88,7 +88,7 @@ async def test_seller_patches_packaging_instructions(async_client: AsyncClient) 
 
 
 @pytest.mark.asyncio
-async def test_mp_plan_blocked_without_packaging_instructions(
+async def test_mp_plan_allowed_without_packaging_instructions(
     async_client: AsyncClient, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     suffix = str(int(time.time() * 1000))
@@ -146,24 +146,12 @@ async def test_mp_plan_blocked_without_packaging_instructions(
         json={"wb_mp_warehouse_id": wb_wid, "planned_shipment_date": "2026-06-01"},
     )
 
-    plan_blocked = await async_client.post(
-        f"/operations/marketplace-unload-requests/{mid}/plan",
-        headers=sh,
-    )
-    assert plan_blocked.status_code == 422
-    assert plan_blocked.json()["detail"] == "packaging_instructions_required"
-
-    await async_client.patch(
-        f"/products/{pid}/packaging-instructions",
-        headers=sh,
-        json={"packaging_instructions": "Маркировка"},
-    )
-
     plan_ok = await async_client.post(
         f"/operations/marketplace-unload-requests/{mid}/plan",
         headers=sh,
     )
     assert plan_ok.status_code == 200, plan_ok.text
+    assert plan_ok.json()["status"] == "submitted"
 
 
 @pytest.mark.asyncio
