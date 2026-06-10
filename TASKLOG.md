@@ -5,6 +5,7 @@
 - What changed: макет термоэтикетки как на WB — штрихкод и цифры сверху, имя селлера, название, артикул, цвет, бренд, «Пожалуйста оставьте отзыв»; убраны EAC и строка размера. API каталога отдаёт `wb_brand` из карточки WB.
 - What did NOT change: печать коробов/ячеек; накладные A4; размер по-прежнему в каталоге, но не на этикетке.
 - Verification: `npm run build`; pytest `test_wb_card_enrichment`, `test_seller_wb_catalog_enriched_from_imported_card`; e2e `ff-product-barcode-print.spec.ts`.
+- Commit: b5e3eba; prod deploy `194.87.96.144:8088`.
 
 ## TASK-39 — 2026-06-10 — Приёмка без обязательного короба; этикетка: размер/цвет WB
 
