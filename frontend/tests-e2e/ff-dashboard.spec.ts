@@ -185,6 +185,10 @@ test('fulfillment admin sees week calendar and supplies-shipments page', async (
   ]);
   await expect(page.getByTestId('ff-supplies-doc-dialog')).toBeVisible();
 
+  await expect(page.getByTestId('ff-mp-add-products-panel')).toBeVisible();
+  await expect(page.getByTestId('ff-mp-add-products')).toBeVisible();
+  await expect(page.getByTestId('ff-supplies-line-product')).not.toBeVisible();
+
   await page.getByTestId('ff-mp-line-barcode-scan').fill(barcode);
   await Promise.all([
     waitForPostOk(

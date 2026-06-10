@@ -1619,43 +1619,97 @@ export function FfSuppliesShipmentsPage({
             </Alert>
           ) : null}
           {docModal === 'marketplace_unload' && unloadDetail && mpLineDraft ? (
-            <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1.25} sx={{ mb: 2, mt: 1 }}>
-              <FormControl
-                size="small"
-                sx={{ minWidth: 280, width: { xs: '100%', sm: 'auto' } }}
-                disabled={modalBusy || wbMpWarehousesBusy}
-              >
-                <InputLabel id="ff-mp-wb-warehouse">Склад WB (маркетплейс)</InputLabel>
-                <Select
-                  labelId="ff-mp-wb-warehouse"
-                  label="Склад WB (маркетплейс)"
-                  value={unloadDetail.wb_mp_warehouse_id ?? ''}
-                  onChange={(e) => {
-                    const v = Number(e.target.value)
-                    if (Number.isInteger(v) && v > 0) {
-                      void setWbWarehouseForUnload(v)
-                    }
-                  }}
-                  data-testid="ff-mp-wb-warehouse-select"
+            <Stack spacing={2} sx={{ mb: 2, mt: 1 }}>
+              <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1.25}>
+                <FormControl
+                  size="small"
+                  sx={{ minWidth: 280, width: { xs: '100%', sm: 'auto' } }}
+                  disabled={modalBusy || wbMpWarehousesBusy}
                 >
-                  <MenuItem value="">
-                    <em>Не выбран</em>
-                  </MenuItem>
-                  {wbMpWarehouses.map((w) => (
-                    <MenuItem key={w.wb_warehouse_id} value={w.wb_warehouse_id}>
-                      {w.name} ({w.wb_warehouse_id})
+                  <InputLabel id="ff-mp-wb-warehouse">Склад WB (маркетплейс)</InputLabel>
+                  <Select
+                    labelId="ff-mp-wb-warehouse"
+                    label="Склад WB (маркетплейс)"
+                    value={unloadDetail.wb_mp_warehouse_id ?? ''}
+                    onChange={(e) => {
+                      const v = Number(e.target.value)
+                      if (Number.isInteger(v) && v > 0) {
+                        void setWbWarehouseForUnload(v)
+                      }
+                    }}
+                    data-testid="ff-mp-wb-warehouse-select"
+                  >
+                    <MenuItem value="">
+                      <em>Не выбран</em>
                     </MenuItem>
-                  ))}
-                </Select>
-              </FormControl>
-              {unloadDetail.wb_mp_warehouse_id == null ? (
-                <Typography
-                  variant="caption"
-                  color="text.secondary"
-                  sx={{ alignSelf: { xs: 'flex-start', sm: 'center' }, lineHeight: 1.25 }}
-                >
-                  Можно создать черновик без склада WB. Для «Утвердить» нужно выбрать склад, когда он появится.
-                </Typography>
+                    {wbMpWarehouses.map((w) => (
+                      <MenuItem key={w.wb_warehouse_id} value={w.wb_warehouse_id}>
+                        {w.name} ({w.wb_warehouse_id})
+                      </MenuItem>
+                    ))}
+                  </Select>
+                </FormControl>
+                {unloadDetail.wb_mp_warehouse_id == null ? (
+                  <Typography
+                    variant="caption"
+                    color="text.secondary"
+                    sx={{ alignSelf: { xs: 'flex-start', sm: 'center' }, lineHeight: 1.25 }}
+                  >
+                    Можно создать черновик без склада WB. Для «Утвердить» нужно выбрать склад, когда он
+                    появится.
+                  </Typography>
+                ) : null}
+              </Stack>
+              {mpDraft ? (
+                <Paper variant="outlined" sx={{ p: 1.5 }} data-testid="ff-mp-add-products-panel">
+                  <Typography variant="subtitle2" sx={{ mb: 1.25 }}>
+                    Добавление товаров
+                  </Typography>
+                  <Stack
+                    direction={{ xs: 'column', sm: 'row' }}
+                    spacing={1}
+                    sx={{ flexWrap: 'wrap' }}
+                  >
+                    <Stack
+                      direction={{ xs: 'column', sm: 'row' }}
+                      spacing={1}
+                      sx={{ width: { xs: '100%', sm: 'auto' }, flexGrow: 1 }}
+                      data-testid="ff-mp-line-barcode-row"
+                    >
+                      <TextField
+                        size="small"
+                        label="Штрихкод / артикул"
+                        value={mpLineBarcodeScan}
+                        disabled={modalBusy}
+                        onChange={(e) => setMpLineBarcodeScan(e.target.value)}
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter') {
+                            e.preventDefault()
+                            void addMpLineByBarcode()
+                          }
+                        }}
+                        slotProps={{ htmlInput: { 'data-testid': 'ff-mp-line-barcode-scan' } }}
+                        sx={{ minWidth: 220, flexGrow: 1 }}
+                      />
+                      <Button
+                        variant="outlined"
+                        disabled={modalBusy || !mpLineBarcodeScan.trim()}
+                        onClick={() => void addMpLineByBarcode()}
+                        data-testid="ff-mp-line-barcode-add"
+                      >
+                        Добавить по ШК
+                      </Button>
+                    </Stack>
+                    <Button
+                      variant="contained"
+                      disabled={modalBusy}
+                      onClick={() => void openMpProductPicker()}
+                      data-testid="ff-mp-add-products"
+                    >
+                      Добавить товары
+                    </Button>
+                  </Stack>
+                </Paper>
               ) : null}
             </Stack>
           ) : null}
@@ -1691,52 +1745,6 @@ export function FfSuppliesShipmentsPage({
                 </strong>
               </Typography>
             </Paper>
-          ) : null}
-          {docModal === 'marketplace_unload' && mpDraft ? (
-            <Stack
-              direction={{ xs: 'column', sm: 'row' }}
-              spacing={1}
-              sx={{ mb: 2, flexWrap: 'wrap' }}
-            >
-              <Stack
-                direction={{ xs: 'column', sm: 'row' }}
-                spacing={1}
-                sx={{ width: { xs: '100%', sm: 'auto' }, flexGrow: 1 }}
-                data-testid="ff-mp-line-barcode-row"
-              >
-                <TextField
-                  size="small"
-                  label="Штрихкод / артикул"
-                  value={mpLineBarcodeScan}
-                  disabled={modalBusy}
-                  onChange={(e) => setMpLineBarcodeScan(e.target.value)}
-                  onKeyDown={(e) => {
-                    if (e.key === 'Enter') {
-                      e.preventDefault()
-                      void addMpLineByBarcode()
-                    }
-                  }}
-                  slotProps={{ htmlInput: { 'data-testid': 'ff-mp-line-barcode-scan' } }}
-                  sx={{ minWidth: 220, flexGrow: 1 }}
-                />
-                <Button
-                  variant="outlined"
-                  disabled={modalBusy || !mpLineBarcodeScan.trim()}
-                  onClick={() => void addMpLineByBarcode()}
-                  data-testid="ff-mp-line-barcode-add"
-                >
-                  Добавить по ШК
-                </Button>
-              </Stack>
-              <Button
-                variant="outlined"
-                disabled={modalBusy}
-                onClick={() => void openMpProductPicker()}
-                data-testid="ff-mp-add-products"
-              >
-                Добавить товары
-              </Button>
-            </Stack>
           ) : null}
           <Table size="small" data-testid="ff-supplies-doc-lines" sx={{ tableLayout: 'fixed', width: '100%' }}>
             <TableHead>
