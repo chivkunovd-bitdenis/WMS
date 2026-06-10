@@ -1,0 +1,26 @@
+---
+description: Release and merge policy — all changes and prod deploys only via PR into main; never direct push to main.
+alwaysApply: true
+---
+
+# Release via PR only
+
+## Hard rules (agents and humans)
+
+1. **Every change** that should reach prod: feature branch → PR → green CI → **merge** → (optional) green CI on `main` → deploy.
+2. **Never** `git push origin main` to land code. **Never** deploy from a local branch that was not merged via PR.
+3. **Never** skip PR because «solo dev», «hotfix», or «owner said deploy» — deploy **after** merge, not instead of PR.
+4. Prod update: only `./scripts/deploy/prod-update.sh` on server after `main` contains the merged commit and CI is green.
+
+## Agent workflow when owner says «лей на прод» / «deploy»
+
+1. Ensure work is on a branch (not only local uncommitted, not direct commits on `main`).
+2. Open PR (`gh pr create`) with required `### Test coverage` if CI demands it.
+3. Wait for green CI on the PR; fix or iterate until green.
+4. Merge PR (owner merges or agent with explicit merge permission — still via GitHub merge, not push to main).
+5. Confirm green CI on `main` for the merge commit.
+6. Run prod deploy (`ssh … ./scripts/deploy/prod-update.sh`).
+
+## Why this exists
+
+`AGENTS.md` step 6 said «Open PR» but did not forbid direct push; GitHub branch protection was bypassable for admins, so agents pushed to `main` when asked to deploy. Full policy: `AGENTS.md` → **Release to prod (PR-only)** and `docs/DEPLOY_SERVER_RU.md`.

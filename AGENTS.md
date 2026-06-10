@@ -30,7 +30,26 @@ Epic map for splitting work: **[docs/BACKLOG_EPICS_RU.md](docs/BACKLOG_EPICS_RU.
    - backend: `ruff check . && mypy . && pytest` (in `backend/`)
    - frontend: `npm run build && npm run test:e2e` (in `frontend/`)
 6. Open PR with the template and wait for CI green.
-7. Only after green CI: mark issue done and move to next `ready`.
+7. **Merge PR into `main`** (squash or merge commit — как принято в репо). **Запрещено** пушить коммиты напрямую в `origin/main` (`git push origin main`) — см. **[Release to prod (PR-only)](#release-to-prod-pr-only)**.
+8. Only after **merge + green CI on `main`**: deploy prod (`docs/DEPLOY_SERVER_RU.md`), then mark issue done and move to next `ready`.
+
+## Release to prod (PR-only)
+
+**Источник правды для агентов и соло-разработки.** Прямой push в `main` обходил branch protection — это **не** канон.
+
+| Шаг | Действие | Запрещено |
+|-----|----------|-----------|
+| 1 | Ветка от `main`: `feat/…`, `fix/…` | Коммиты сразу в `main` |
+| 2 | Локально: `ruff` + `mypy` + `pytest`; `npm run build` + `npm run test:e2e` | Деплой без тестов |
+| 3 | `gh pr create` — описание с `### Test coverage` (если требует CI) | Пустой PR body для product-диффа |
+| 4 | Дождаться **зелёного CI на PR** | Merge при красном CI |
+| 5 | **Merge PR** → код попадает в `main` | `git push origin main` |
+| 6 | Убедиться, что **CI на `main` зелёный** (push после merge) | `git pull` на прод до зелёного CI |
+| 7 | На сервере: `./scripts/deploy/prod-update.sh` | Ручные правки на проде вне git |
+
+**Деплой = только содержимое merged `main`.** Hotfix — тоже через PR (ветка `fix/…`), без исключений «залить сразу».
+
+**Branch protection (GitHub):** merge в `main` только при зелёных checks; **не** давать bypass push админам, если хотите, чтобы агенты физически не могли обойти PR.
 
 ## Test coverage traceability (mandatory before vertical slice)
 
