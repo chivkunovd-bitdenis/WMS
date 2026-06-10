@@ -26,8 +26,11 @@ import {
   Tooltip,
   Typography,
 } from '@mui/material'
+import { FfProductLineCells, FfProductTableHeadCells } from '../../components/FfProductLineCells'
+import { useWbProductCatalog } from '../../hooks/useWbProductCatalog'
 import { apiUrl } from '../../api'
 import { WmsDateField } from '../../components/WmsDateField'
+import { productDisplayMetaFromCatalog } from '../../types/wbProductCatalog'
 import { readApiErrorMessage } from '../../utils/readApiErrorMessage'
 import { PageHeader } from '../../ui/PageHeader'
 import type { FfInboundSummary, FfOutboundSummary } from './FfDashboard'
@@ -60,6 +63,7 @@ export type FfDiscrepancyActSummary = {
 
 type DocLineRow = {
   id: string
+  product_id: string
   sku_code: string
   product_name: string
   quantity: number
@@ -257,6 +261,7 @@ export function FfSuppliesShipmentsPage({
   const [wbMpWarehouses, setWbMpWarehouses] = useState<{ wb_warehouse_id: number; name: string }[]>([])
   const [wbMpWarehousesBusy, setWbMpWarehousesBusy] = useState(false)
   const [pickDialogOpen, setPickDialogOpen] = useState(false)
+  const { catalogById } = useWbProductCatalog(token, docModal !== null)
   const [pickOptions, setPickOptions] = useState<MarketplaceUnloadPickOptionProduct[]>([])
   const [confirmDate, setConfirmDate] = useState<string>('')
   const [pickQtyByProductLoc, setPickQtyByProductLoc] = useState<
@@ -322,6 +327,7 @@ export function FfSuppliesShipmentsPage({
           created_at?: string
           lines: {
             id: string
+            product_id: string
             sku_code: string
             product_name: string
             quantity: number
@@ -370,6 +376,7 @@ export function FfSuppliesShipmentsPage({
           created_at: j.created_at ?? null,
           lines: j.lines.map((ln) => ({
             id: ln.id,
+            product_id: ln.product_id,
             sku_code: ln.sku_code,
             product_name: ln.product_name,
             quantity: ln.quantity,
@@ -445,6 +452,7 @@ export function FfSuppliesShipmentsPage({
           inbound_intake_request_id: string | null
           lines: {
             id: string
+            product_id: string
             sku_code: string
             product_name: string
             quantity: number
@@ -457,6 +465,7 @@ export function FfSuppliesShipmentsPage({
           inbound_intake_request_id: j.inbound_intake_request_id,
           lines: j.lines.map((ln) => ({
             id: ln.id,
+            product_id: ln.product_id,
             sku_code: ln.sku_code,
             product_name: ln.product_name,
             quantity: ln.quantity,
@@ -1548,11 +1557,10 @@ export function FfSuppliesShipmentsPage({
               </Typography>
             </Paper>
           ) : null}
-          <Table size="small" data-testid="ff-supplies-doc-lines">
+          <Table size="small" data-testid="ff-supplies-doc-lines" sx={{ tableLayout: 'fixed', width: '100%' }}>
             <TableHead>
               <TableRow>
-                <TableCell>Артикул</TableCell>
-                <TableCell>Товар</TableCell>
+                <FfProductTableHeadCells />
                 {docModal !== 'marketplace_unload' ? (
                   <TableCell>Строка приёмки</TableCell>
                 ) : null}
@@ -1572,7 +1580,7 @@ export function FfSuppliesShipmentsPage({
                 const mpCols =
                   docModal === 'marketplace_unload' && mpConfirmed ? 2 : 0
                 const emptySpan =
-                  3 + (docModal === 'marketplace_unload' ? 0 : 1) + mpCols + (draftDoc ? 1 : 0)
+                  7 + (docModal === 'marketplace_unload' ? 0 : 1) + mpCols + (draftDoc ? 1 : 0)
                 if (lines.length === 0) {
                   return (
                     <TableRow>
@@ -1587,6 +1595,7 @@ export function FfSuppliesShipmentsPage({
                 return lines.map((ln) => {
                   const picked = ln.picked_qty ?? 0
                   const remaining = ln.quantity - picked
+                  const displayMeta = productDisplayMetaFromCatalog(ln.product_id, ln, catalogById)
                   return (
                   <TableRow
                     key={ln.id}
@@ -1599,8 +1608,10 @@ export function FfSuppliesShipmentsPage({
                       ln.has_discrepancy ? `ff-mp-line-discrepancy-${ln.id}` : undefined
                     }
                   >
-                    <TableCell>{ln.sku_code}</TableCell>
-                    <TableCell>{ln.product_name}</TableCell>
+                    <FfProductLineCells
+                      meta={displayMeta}
+                      printTestId={`ff-mp-line-print-${ln.id}`}
+                    />
                     {docModal !== 'marketplace_unload' ? (
                       <TableCell sx={{ color: 'text.secondary', fontSize: 13 }}>
                         {ln.inbound_intake_line_id

@@ -2,7 +2,6 @@ import { useCallback, useEffect, useMemo, useState } from 'react'
 import PrintOutlined from '@mui/icons-material/PrintOutlined'
 import {
   Alert,
-  Avatar,
   Box,
   Button,
   Chip,
@@ -30,7 +29,12 @@ import {
 } from '@mui/material'
 import { alpha } from '@mui/material/styles'
 import { apiUrl } from '../../api'
+import { FfProductLineCells, FfProductTableHeadCells } from '../../components/FfProductLineCells'
 import { WmsDateField } from '../../components/WmsDateField'
+import {
+  productDisplayMetaFromCatalog,
+  type WbProductCatalogRow,
+} from '../../types/wbProductCatalog'
 import { printBarcodeLabel } from '../../utils/printBarcodeLabel'
 import { printInboundSupplyWaybill } from '../../utils/printShipmentWaybill'
 import { readApiErrorMessage } from '../../utils/readApiErrorMessage'
@@ -116,17 +120,7 @@ type CellLocationHint = {
   available: number
 }
 
-export type WbCatalogRow = {
-  id: string
-  name: string
-  sku_code: string
-  wb_nm_id: number | null
-  wb_vendor_code: string | null
-  wb_subject_name: string | null
-  wb_primary_image_url: string | null
-  wb_barcodes: string[]
-  wb_primary_barcode: string | null
-}
+export type WbCatalogRow = WbProductCatalogRow
 
 export type InboundRequestWorkspace = 'reception' | 'sorting' | 'full'
 
@@ -1541,12 +1535,7 @@ export function FfInboundRequestView({
             >
               <TableHead>
                 <TableRow>
-                  <TableCell sx={{ width: 56 }}>Фото</TableCell>
-                  <TableCell sx={{ width: 190, pl: 2 }}>Артикул</TableCell>
-                  <TableCell sx={{ width: 220 }}>ШК</TableCell>
-                  <TableCell sx={{ width: 140 }}>Артикул продавца</TableCell>
-                  <TableCell sx={{ width: 120, pr: 2 }}>Артикул WB</TableCell>
-                  <TableCell sx={{ pl: 2 }}>Наименование</TableCell>
+                  <FfProductTableHeadCells />
                   <TableCell align="right" sx={{ width: 120 }}>
                     Заявлено
                   </TableCell>
@@ -1557,11 +1546,7 @@ export function FfInboundRequestView({
               </TableHead>
               <TableBody>
                 {detail.lines.map((ln) => {
-                  const cat = catalogById.get(ln.product_id)
-                  const img = cat?.wb_primary_image_url ?? undefined
-                  const barcode =
-                    cat?.wb_primary_barcode ??
-                    (cat?.wb_barcodes.length ? cat.wb_barcodes.join(', ') : '—')
+                  const displayMeta = productDisplayMetaFromCatalog(ln.product_id, ln, catalogById)
                   const actualIsSet = ln.actual_qty != null
                   const pendingBoxAcceptance = verifyingWithBoxes && !actualIsSet
                   const hasDiscrepancy = actualIsSet && ln.actual_qty !== ln.expected_qty
@@ -1602,33 +1587,10 @@ export function FfInboundRequestView({
                           : null),
                       }}
                     >
-                      <TableCell>
-                        <Avatar
-                          variant="rounded"
-                          src={img}
-                          alt=""
-                          sx={{ width: 44, height: 44 }}
-                          slotProps={{ img: { loading: 'lazy' } }}
-                        />
-                      </TableCell>
-                      <TableCell sx={{ whiteSpace: 'nowrap', pl: 2 }} title={ln.sku_code}>
-                        {ln.sku_code}
-                      </TableCell>
-                      <TableCell sx={{ whiteSpace: 'nowrap' }} title={barcode}>
-                        {barcode}
-                      </TableCell>
-                      <TableCell
-                        sx={{ whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}
-                        title={cat?.wb_vendor_code ?? '—'}
-                      >
-                        {cat?.wb_vendor_code ?? '—'}
-                      </TableCell>
-                      <TableCell sx={{ pr: 2 }}>{cat?.wb_nm_id ?? '—'}</TableCell>
-                      <TableCell sx={{ pl: 2, whiteSpace: 'normal', wordBreak: 'break-word' }}>
-                        <Typography variant="body2" sx={{ lineHeight: 1.25 }}>
-                          {ln.product_name}
-                        </Typography>
-                      </TableCell>
+                      <FfProductLineCells
+                        meta={displayMeta}
+                        printTestId={`ff-inbound-line-print-${ln.id}`}
+                      />
                       <TableCell align="right" sx={{ minWidth: 120 }}>
                         {ln.expected_qty}
                       </TableCell>
@@ -1673,7 +1635,7 @@ export function FfInboundRequestView({
                 })}
                 {detail.lines.length === 0 ? (
                   <TableRow>
-                    <TableCell colSpan={8}>
+                    <TableCell colSpan={9}>
                       <Typography variant="body2" color="text.secondary">
                         Пока нет строк. Добавьте товары.
                       </Typography>
@@ -2395,12 +2357,7 @@ export function FfInboundRequestView({
             >
               <TableHead>
                 <TableRow>
-                  <TableCell sx={{ width: 56 }}>Фото</TableCell>
-                  <TableCell sx={{ width: 160, pl: 2 }}>Артикул</TableCell>
-                  <TableCell sx={{ width: 190 }}>ШК</TableCell>
-                  <TableCell sx={{ width: 150 }}>Артикул продавца</TableCell>
-                  <TableCell sx={{ width: 120, pr: 2 }}>Артикул WB</TableCell>
-                  <TableCell sx={{ pl: 2 }}>Наименование</TableCell>
+                  <FfProductTableHeadCells />
                   <TableCell align="right" sx={{ width: 140 }}>
                     Кол-во в заявку
                   </TableCell>
@@ -2410,6 +2367,11 @@ export function FfInboundRequestView({
                 {filteredPickerRows.map((r) => {
                   const inDraft = lineProductIds.has(r.id)
                   const qty = pickerQtyByProduct[r.id] ?? 0
+                  const displayMeta = productDisplayMetaFromCatalog(
+                    r.id,
+                    { sku_code: r.sku_code, name: r.name },
+                    catalogById,
+                  )
                   return (
                     <TableRow
                       key={r.id}
@@ -2418,27 +2380,22 @@ export function FfInboundRequestView({
                       data-testid="ff-inbound-picker-row"
                       data-in-draft={inDraft ? '1' : '0'}
                     >
-                      <TableCell>
-                        <Avatar variant="rounded" src={r.wb_primary_image_url ?? undefined} sx={{ width: 44, height: 44 }} />
-                      </TableCell>
-                      <TableCell sx={{ pl: 2 }} title={r.sku_code}>
-                        {r.sku_code}
-                      </TableCell>
-                      <TableCell title={r.wb_primary_barcode ?? (r.wb_barcodes[0] ?? '—')}>
-                        {r.wb_primary_barcode ?? (r.wb_barcodes[0] ?? '—')}
-                      </TableCell>
-                      <TableCell title={r.wb_vendor_code ?? '—'}>{r.wb_vendor_code ?? '—'}</TableCell>
-                      <TableCell sx={{ pr: 2 }}>{r.wb_nm_id ?? '—'}</TableCell>
-                      <TableCell sx={{ pl: 2 }} title={r.name}>
-                        <Typography variant="body2" noWrap>
-                          {r.name}
-                        </Typography>
-                        {inDraft ? (
-                          <Typography variant="caption" color="text.secondary" sx={{ display: 'block' }} noWrap>
-                            Товар уже добавлен в заявку
-                          </Typography>
-                        ) : null}
-                      </TableCell>
+                      <FfProductLineCells
+                        meta={displayMeta}
+                        printTestId={`ff-inbound-picker-print-${r.id}`}
+                        nameExtra={
+                          inDraft ? (
+                            <Typography
+                              variant="caption"
+                              color="text.secondary"
+                              sx={{ display: 'block' }}
+                              noWrap
+                            >
+                              Товар уже добавлен в заявку
+                            </Typography>
+                          ) : null
+                        }
+                      />
                       <TableCell align="right">
                         <TextField
                           type="number"
