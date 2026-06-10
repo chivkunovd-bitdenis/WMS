@@ -20,6 +20,7 @@ import {
   Table,
   TableBody,
   TableCell,
+  TableContainer,
   TableHead,
   TableRow,
   TextField,
@@ -31,6 +32,7 @@ import { useWbProductCatalog } from '../../hooks/useWbProductCatalog'
 import { apiUrl } from '../../api'
 import { WmsDateField } from '../../components/WmsDateField'
 import { productDisplayMetaFromCatalog } from '../../types/wbProductCatalog'
+import { resolveProductIdByBarcode } from '../../utils/resolveProductByBarcode'
 import { readApiErrorMessage } from '../../utils/readApiErrorMessage'
 import { PageHeader } from '../../ui/PageHeader'
 import type { FfInboundSummary, FfOutboundSummary } from './FfDashboard'
@@ -261,7 +263,12 @@ export function FfSuppliesShipmentsPage({
   const [wbMpWarehouses, setWbMpWarehouses] = useState<{ wb_warehouse_id: number; name: string }[]>([])
   const [wbMpWarehousesBusy, setWbMpWarehousesBusy] = useState(false)
   const [pickDialogOpen, setPickDialogOpen] = useState(false)
-  const { catalogById } = useWbProductCatalog(token, docModal !== null)
+  const [mpPickerOpen, setMpPickerOpen] = useState(false)
+  const [mpPickerSearch, setMpPickerSearch] = useState('')
+  const [mpPickerCategory, setMpPickerCategory] = useState<string>('__all__')
+  const [mpPickerQtyByProduct, setMpPickerQtyByProduct] = useState<Record<string, number>>({})
+  const [mpLineBarcodeScan, setMpLineBarcodeScan] = useState('')
+  const { catalog, catalogById, reload: reloadWbCatalog } = useWbProductCatalog(token, docModal !== null)
   const [pickOptions, setPickOptions] = useState<MarketplaceUnloadPickOptionProduct[]>([])
   const [confirmDate, setConfirmDate] = useState<string>('')
   const [pickQtyByProductLoc, setPickQtyByProductLoc] = useState<
@@ -572,6 +579,11 @@ export function FfSuppliesShipmentsPage({
     setActivePickLocationId(null)
     setActivePickLocationCode(null)
     setCollectQty('1')
+    setMpPickerOpen(false)
+    setMpPickerSearch('')
+    setMpPickerCategory('__all__')
+    setMpPickerQtyByProduct({})
+    setMpLineBarcodeScan('')
   }
 
   const setWbWarehouseForUnload = async (wbMpWarehouseId: number) => {
@@ -1191,6 +1203,129 @@ export function FfSuppliesShipmentsPage({
     (docModal === 'discrepancy_act' && divergeDetail?.status === 'draft')
   const mpLineDraft = mpDraft || mpSubmitted
 
+  const mpLineProductIds = useMemo(
+    () => new Set(unloadDetail?.lines.map((ln) => ln.product_id) ?? []),
+    [unloadDetail?.lines],
+  )
+
+  const mpPickerCategories = useMemo(() => {
+    const s = new Set<string>()
+    for (const r of catalog) {
+      const c = r.wb_subject_name?.trim()
+      if (c) s.add(c)
+    }
+    return Array.from(s).sort((a, b) => a.localeCompare(b))
+  }, [catalog])
+
+  const mpFilteredPickerRows = useMemo(() => {
+    const q = mpPickerSearch.trim().toLowerCase()
+    return catalog.filter((r) => {
+      if (mpPickerCategory !== '__all__') {
+        const sub = (r.wb_subject_name ?? '').trim()
+        if (sub !== mpPickerCategory) return false
+      }
+      if (!q) return true
+      const nm = r.wb_nm_id != null ? String(r.wb_nm_id) : ''
+      const barcodes = r.wb_barcodes.join(' ').toLowerCase()
+      const hay = `${r.sku_code} ${r.wb_vendor_code ?? ''} ${r.name} ${nm} ${barcodes}`.toLowerCase()
+      return hay.includes(q)
+    })
+  }, [catalog, mpPickerCategory, mpPickerSearch])
+
+  const openMpProductPicker = async () => {
+    if (!token || !authHeaders) return
+    setModalError(null)
+    try {
+      if (catalog.length === 0) {
+        await reloadWbCatalog()
+      }
+      setMpPickerOpen(true)
+    } catch (e) {
+      setModalError(e instanceof Error ? e.message : 'Не удалось загрузить каталог.')
+    }
+  }
+
+  const postMpLine = async (productId: string, quantity: number) => {
+    if (!token || !authHeaders || !docModalId) return false
+    const res = await fetch(apiUrl(`/operations/marketplace-unload-requests/${docModalId}/lines`), {
+      method: 'POST',
+      headers: { ...authHeaders, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ product_id: productId, quantity }),
+    })
+    if (!res.ok) {
+      setModalError(await readApiErrorMessage(res))
+      return false
+    }
+    return true
+  }
+
+  const addMpLineByBarcode = async () => {
+    if (!unloadDetail || !docModalId || docModal !== 'marketplace_unload' || !mpDraft) return
+    const code = mpLineBarcodeScan.trim()
+    if (!code) return
+    setModalBusy(true)
+    setModalError(null)
+    try {
+      let rows = catalog
+      if (rows.length === 0) {
+        rows = await reloadWbCatalog()
+      }
+      const productId = resolveProductIdByBarcode(rows, code)
+      if (!productId) {
+        setModalError('Товар не найден по штрихкоду или артикулу.')
+        return
+      }
+      const existing = unloadDetail.lines.find((ln) => ln.product_id === productId)
+      if (existing) {
+        const delRes = await fetch(
+          apiUrl(
+            `/operations/marketplace-unload-requests/${docModalId}/lines/${existing.id}`,
+          ),
+          { method: 'DELETE', headers: authHeaders! },
+        )
+        if (!delRes.ok) {
+          setModalError(await readApiErrorMessage(delRes))
+          return
+        }
+        const ok = await postMpLine(productId, existing.quantity + 1)
+        if (!ok) return
+      } else {
+        const ok = await postMpLine(productId, 1)
+        if (!ok) return
+      }
+      setMpLineBarcodeScan('')
+      await loadDocDetail()
+      await onRefreshFfSupplyExtras()
+    } catch (e) {
+      setModalError(e instanceof Error ? e.message : 'Не удалось добавить строку по штрихкоду.')
+    } finally {
+      setModalBusy(false)
+    }
+  }
+
+  const applyMpProductPicker = async () => {
+    if (!unloadDetail || !docModalId || docModal !== 'marketplace_unload' || !mpDraft) return
+    setModalBusy(true)
+    setModalError(null)
+    try {
+      for (const [productId, rawQty] of Object.entries(mpPickerQtyByProduct)) {
+        if (mpLineProductIds.has(productId)) continue
+        const addQty = Number.isFinite(rawQty) ? Math.floor(rawQty) : 0
+        if (addQty <= 0) continue
+        const ok = await postMpLine(productId, addQty)
+        if (!ok) return
+      }
+      setMpPickerQtyByProduct({})
+      setMpPickerOpen(false)
+      await loadDocDetail()
+      await onRefreshFfSupplyExtras()
+    } catch (e) {
+      setModalError(e instanceof Error ? e.message : 'Не удалось добавить товары.')
+    } finally {
+      setModalBusy(false)
+    }
+  }
+
   const pageTestId = isMpShipmentsPage ? 'ff-mp-shipments-page' : 'ff-supplies-shipments-page'
 
   return (
@@ -1557,6 +1692,52 @@ export function FfSuppliesShipmentsPage({
               </Typography>
             </Paper>
           ) : null}
+          {docModal === 'marketplace_unload' && mpDraft ? (
+            <Stack
+              direction={{ xs: 'column', sm: 'row' }}
+              spacing={1}
+              sx={{ mb: 2, flexWrap: 'wrap' }}
+            >
+              <Stack
+                direction={{ xs: 'column', sm: 'row' }}
+                spacing={1}
+                sx={{ width: { xs: '100%', sm: 'auto' }, flexGrow: 1 }}
+                data-testid="ff-mp-line-barcode-row"
+              >
+                <TextField
+                  size="small"
+                  label="Штрихкод / артикул"
+                  value={mpLineBarcodeScan}
+                  disabled={modalBusy}
+                  onChange={(e) => setMpLineBarcodeScan(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') {
+                      e.preventDefault()
+                      void addMpLineByBarcode()
+                    }
+                  }}
+                  slotProps={{ htmlInput: { 'data-testid': 'ff-mp-line-barcode-scan' } }}
+                  sx={{ minWidth: 220, flexGrow: 1 }}
+                />
+                <Button
+                  variant="outlined"
+                  disabled={modalBusy || !mpLineBarcodeScan.trim()}
+                  onClick={() => void addMpLineByBarcode()}
+                  data-testid="ff-mp-line-barcode-add"
+                >
+                  Добавить по ШК
+                </Button>
+              </Stack>
+              <Button
+                variant="outlined"
+                disabled={modalBusy}
+                onClick={() => void openMpProductPicker()}
+                data-testid="ff-mp-add-products"
+              >
+                Добавить товары
+              </Button>
+            </Stack>
+          ) : null}
           <Table size="small" data-testid="ff-supplies-doc-lines" sx={{ tableLayout: 'fixed', width: '100%' }}>
             <TableHead>
               <TableRow>
@@ -1880,9 +2061,7 @@ export function FfSuppliesShipmentsPage({
               })()}
             </Box>
           ) : null}
-          {((draftDoc && docModal !== 'marketplace_unload') ||
-            (mpDraft && docModal === 'marketplace_unload')) &&
-          docProductPicklist.length > 0 ? (
+          {draftDoc && docModal === 'discrepancy_act' && docProductPicklist.length > 0 ? (
             <Stack spacing={1.5} sx={{ mt: 2 }}>
               {docModal === 'discrepancy_act' && inboundRefLines.length > 0 ? (
                 <FormControl fullWidth size="small">
@@ -1949,11 +2128,9 @@ export function FfSuppliesShipmentsPage({
               </Button>
             </Stack>
           ) : null}
-          {draftDoc && docProductPicklist.length === 0 ? (
+          {draftDoc && docModal === 'discrepancy_act' && docProductPicklist.length === 0 ? (
             <Typography variant="caption" color="text.secondary" sx={{ mt: 1, display: 'block' }}>
-              {docModal === 'marketplace_unload'
-                ? 'Нет товаров с доступным остатком на складе ФФ.'
-                : 'Добавьте товары в каталоге, чтобы оформить строки.'}
+              Добавьте товары в каталоге, чтобы оформить строки.
             </Typography>
           ) : null}
         </DialogContent>
@@ -2145,6 +2322,144 @@ export function FfSuppliesShipmentsPage({
             data-testid="ff-mp-pick-save"
           >
             Сохранить подбор
+          </Button>
+        </DialogActions>
+      </Dialog>
+      <Dialog
+        open={mpPickerOpen}
+        onClose={() => (modalBusy ? undefined : setMpPickerOpen(false))}
+        maxWidth={false}
+        fullWidth
+        slotProps={{ paper: { sx: { width: 'min(1200px, 96vw)', maxHeight: '92vh' } } }}
+        data-testid="ff-mp-product-picker"
+      >
+        <DialogTitle>Выбор товаров</DialogTitle>
+        <DialogContent dividers>
+          <Stack spacing={2} sx={{ mb: 2 }}>
+            <TextField
+              label="Поиск (артикул, ШК, nm, название, артикул продавца)"
+              value={mpPickerSearch}
+              onChange={(e) => setMpPickerSearch(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key !== 'Enter') return
+                e.preventDefault()
+                const productId = resolveProductIdByBarcode(catalog, mpPickerSearch)
+                const targetId =
+                  productId ??
+                  (mpFilteredPickerRows.length === 1 ? mpFilteredPickerRows[0]!.id : null)
+                if (!targetId) return
+                setMpPickerQtyByProduct((prev) => ({
+                  ...prev,
+                  [targetId]: (prev[targetId] ?? 0) + 1,
+                }))
+                setMpPickerSearch('')
+              }}
+              size="small"
+              fullWidth
+              slotProps={{ htmlInput: { 'data-testid': 'ff-mp-picker-search' } }}
+            />
+            <FormControl size="small" sx={{ minWidth: 260 }}>
+              <InputLabel id="ff-mp-picker-cat-label">Категория (WB)</InputLabel>
+              <Select
+                labelId="ff-mp-picker-cat-label"
+                label="Категория (WB)"
+                value={mpPickerCategory}
+                onChange={(e) => setMpPickerCategory(String(e.target.value))}
+                data-testid="ff-mp-picker-category"
+              >
+                <MenuItem value="__all__">Все</MenuItem>
+                {mpPickerCategories.map((c) => (
+                  <MenuItem key={c} value={c}>
+                    {c}
+                  </MenuItem>
+                ))}
+              </Select>
+            </FormControl>
+          </Stack>
+          <TableContainer sx={{ width: '100%', overflowX: 'hidden' }}>
+            <Table
+              size="small"
+              data-testid="ff-mp-picker-table"
+              sx={{ tableLayout: 'fixed', width: '100%' }}
+            >
+              <TableHead>
+                <TableRow>
+                  <FfProductTableHeadCells />
+                  <TableCell align="right" sx={{ width: 140 }}>
+                    Кол-во в отгрузку
+                  </TableCell>
+                </TableRow>
+              </TableHead>
+              <TableBody>
+                {mpFilteredPickerRows.map((r) => {
+                  const inDraft = mpLineProductIds.has(r.id)
+                  const qty = mpPickerQtyByProduct[r.id] ?? 0
+                  const displayMeta = productDisplayMetaFromCatalog(
+                    r.id,
+                    { sku_code: r.sku_code, name: r.name },
+                    catalogById,
+                  )
+                  return (
+                    <TableRow
+                      key={r.id}
+                      hover
+                      sx={{ opacity: inDraft ? 0.45 : 1 }}
+                      data-testid="ff-mp-picker-row"
+                      data-in-draft={inDraft ? '1' : '0'}
+                    >
+                      <FfProductLineCells
+                        meta={displayMeta}
+                        printTestId={`ff-mp-picker-print-${r.id}`}
+                        nameExtra={
+                          inDraft ? (
+                            <Typography
+                              variant="caption"
+                              color="text.secondary"
+                              sx={{ display: 'block' }}
+                              noWrap
+                            >
+                              Товар уже добавлен в отгрузку
+                            </Typography>
+                          ) : null
+                        }
+                      />
+                      <TableCell align="right">
+                        <TextField
+                          type="number"
+                          size="small"
+                          disabled={inDraft || modalBusy}
+                          value={qty || ''}
+                          onChange={(e) =>
+                            setMpPickerQtyByProduct((prev) => ({
+                              ...prev,
+                              [r.id]: Number(e.target.value),
+                            }))
+                          }
+                          slotProps={{ htmlInput: { min: 0, 'data-testid': 'ff-mp-picker-qty' } }}
+                        />
+                      </TableCell>
+                    </TableRow>
+                  )
+                })}
+              </TableBody>
+            </Table>
+          </TableContainer>
+        </DialogContent>
+        <DialogActions>
+          <Button
+            onClick={() => setMpPickerOpen(false)}
+            disabled={modalBusy}
+            data-testid="ff-mp-picker-cancel"
+          >
+            Отмена
+          </Button>
+          <Button
+            variant="contained"
+            onClick={() => void applyMpProductPicker()}
+            disabled={modalBusy}
+            data-testid="ff-mp-picker-apply"
+          >
+            Добавить в отгрузку
           </Button>
         </DialogActions>
       </Dialog>

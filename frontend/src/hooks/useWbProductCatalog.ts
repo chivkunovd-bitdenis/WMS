@@ -14,10 +14,11 @@ async function fetchWbProductCatalogRows(
 }
 
 type UseWbProductCatalogResult = {
+  catalog: WbProductCatalogRow[]
   catalogById: Map<string, WbProductCatalogRow>
   loading: boolean
   error: string | null
-  reload: () => Promise<void>
+  reload: () => Promise<WbProductCatalogRow[]>
 }
 
 export function useWbProductCatalog(
@@ -36,15 +37,18 @@ export function useWbProductCatalog(
   const reload = useCallback(async () => {
     if (!authHeaders) {
       setRows([])
-      return
+      return []
     }
     setLoading(true)
     setError(null)
     try {
-      setRows(await fetchWbProductCatalogRows(authHeaders))
+      const next = await fetchWbProductCatalogRows(authHeaders)
+      setRows(next)
+      return next
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Не удалось загрузить каталог товаров.')
       setRows([])
+      return []
     } finally {
       setLoading(false)
     }
@@ -59,5 +63,5 @@ export function useWbProductCatalog(
 
   const catalogById = useMemo(() => new Map(rows.map((r) => [r.id, r])), [rows])
 
-  return { catalogById, loading, error, reload }
+  return { catalog: rows, catalogById, loading, error, reload }
 }

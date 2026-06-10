@@ -185,15 +185,14 @@ test('fulfillment admin sees week calendar and supplies-shipments page', async (
   ]);
   await expect(page.getByTestId('ff-supplies-doc-dialog')).toBeVisible();
 
-  await page.getByTestId('ff-supplies-line-product').click();
-  await page.getByRole('option', { name: /E2E FF product/ }).click();
+  await page.getByTestId('ff-mp-line-barcode-scan').fill(barcode);
   await Promise.all([
     waitForPostOk(
       page,
       '/api/operations/marketplace-unload-requests',
       (u) => u.includes('/lines') && !u.includes('/submit'),
     ),
-    page.getByTestId('ff-supplies-line-add').click(),
+    page.getByTestId('ff-mp-line-barcode-add').click(),
   ]);
   await expect(page.getByTestId('ff-supplies-doc-lines')).toContainText('E2E FF product');
 
