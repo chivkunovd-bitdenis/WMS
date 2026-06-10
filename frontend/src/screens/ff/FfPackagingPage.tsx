@@ -26,8 +26,11 @@ import {
   TextField,
   Typography,
 } from '@mui/material'
+import { FfProductLineCells, FfProductTableHeadCells } from '../../components/FfProductLineCells'
+import { useWbProductCatalog } from '../../hooks/useWbProductCatalog'
 import { apiUrl } from '../../api'
 import { PageHeader } from '../../ui/PageHeader'
+import { productDisplayMetaFromCatalog } from '../../types/wbProductCatalog'
 import { readApiErrorMessage } from '../../utils/readApiErrorMessage'
 
 export type PackagingTaskLine = {
@@ -81,6 +84,7 @@ export function FfPackagingTaskPanel({
   onClose,
   onUpdated,
 }: TaskPanelProps) {
+  const { catalogById } = useWbProductCatalog(token)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
@@ -187,10 +191,10 @@ export function FfPackagingTaskPanel({
         </Alert>
       ) : null}
       <TableContainer component={Paper} variant="outlined">
-        <Table size="small">
+        <Table size="small" sx={{ tableLayout: 'fixed', width: '100%' }}>
           <TableHead>
             <TableRow>
-              <TableCell>Товар / ячейка</TableCell>
+              <FfProductTableHeadCells nameLabel="Наименование / ячейка" />
               <TableCell>Инструкция</TableCell>
               <TableCell align="right">Всего</TableCell>
               <TableCell align="right">На полке упак.</TableCell>
@@ -200,14 +204,17 @@ export function FfPackagingTaskPanel({
             </TableRow>
           </TableHead>
           <TableBody>
-            {task.lines.map((ln) => (
+            {task.lines.map((ln) => {
+              const displayMeta = productDisplayMetaFromCatalog(ln.product_id, ln, catalogById)
+              return (
               <TableRow key={ln.id} data-testid="ff-packaging-line">
-                <TableCell>
-                  <Typography variant="body2">{ln.sku_code}</Typography>
-                  <Typography variant="caption" color="text.secondary">
-                    {ln.product_name} · {ln.storage_location_code}
-                  </Typography>
-                </TableCell>
+                <FfProductLineCells
+                  meta={{
+                    ...displayMeta,
+                    product_name: `${displayMeta.product_name} · ${ln.storage_location_code}`,
+                  }}
+                  printTestId={`ff-packaging-line-print-${ln.id}`}
+                />
                 <TableCell sx={{ maxWidth: 220 }}>
                   <Typography variant="caption" data-testid="ff-packaging-instructions">
                     {ln.packaging_instructions?.trim() || '— ТЗ не заполнено —'}
@@ -243,7 +250,7 @@ export function FfPackagingTaskPanel({
                   </Stack>
                 </TableCell>
               </TableRow>
-            ))}
+            )})}
           </TableBody>
         </Table>
       </TableContainer>
@@ -292,6 +299,7 @@ type CreateDialogProps = {
 type LocationRow = { id: string; code: string; barcode: string }
 
 function FfCreatePackagingTaskDialog({ open, token, onClose, onCreated }: CreateDialogProps) {
+  const { catalogById } = useWbProductCatalog(token, open)
   const authHeaders = {
     Authorization: `Bearer ${token}`,
     'Content-Type': 'application/json',
@@ -471,17 +479,19 @@ function FfCreatePackagingTaskDialog({ open, token, onClose, onCreated }: Create
           ) : null}
           {rows.length > 0 ? (
             <TableContainer component={Paper} variant="outlined">
-              <Table size="small">
+              <Table size="small" sx={{ tableLayout: 'fixed', width: '100%' }}>
                 <TableHead>
                   <TableRow>
                     <TableCell padding="checkbox" />
-                    <TableCell>Товар</TableCell>
+                    <FfProductTableHeadCells />
                     <TableCell align="right">Неупаковано</TableCell>
                     <TableCell align="right">В задание</TableCell>
                   </TableRow>
                 </TableHead>
                 <TableBody>
-                  {rows.map((r) => (
+                  {rows.map((r) => {
+                    const displayMeta = productDisplayMetaFromCatalog(r.product_id, r, catalogById)
+                    return (
                     <TableRow key={r.product_id} data-testid="ff-packaging-create-row">
                       <TableCell padding="checkbox">
                         <Checkbox
@@ -491,9 +501,10 @@ function FfCreatePackagingTaskDialog({ open, token, onClose, onCreated }: Create
                           }
                         />
                       </TableCell>
-                      <TableCell>
-                        {r.sku_code} · {r.product_name}
-                      </TableCell>
+                      <FfProductLineCells
+                        meta={displayMeta}
+                        printTestId={`ff-packaging-create-print-${r.product_id}`}
+                      />
                       <TableCell align="right">{r.quantity_unpacked}</TableCell>
                       <TableCell align="right">
                         <TextField
@@ -517,7 +528,7 @@ function FfCreatePackagingTaskDialog({ open, token, onClose, onCreated }: Create
                         />
                       </TableCell>
                     </TableRow>
-                  ))}
+                  )})}
                 </TableBody>
               </Table>
             </TableContainer>

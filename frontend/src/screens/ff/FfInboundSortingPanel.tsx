@@ -21,7 +21,10 @@ import {
   Typography,
 } from '@mui/material'
 import { alpha } from '@mui/material/styles'
+import { FfProductLineCells, FfProductTableHeadCells } from '../../components/FfProductLineCells'
+import { useWbProductCatalog } from '../../hooks/useWbProductCatalog'
 import { apiUrl } from '../../api'
+import { productDisplayMetaFromCatalog } from '../../types/wbProductCatalog'
 import { readApiErrorMessage } from '../../utils/readApiErrorMessage'
 
 type LocationRow = { id: string; code: string; warehouse_id: string; barcode: string }
@@ -184,6 +187,7 @@ export function FfInboundSortingPanel({
 }: Props) {
   const navigate = useNavigate()
   const authHeaders = useMemo(() => ({ Authorization: `Bearer ${token}` }), [token])
+  const { catalogById } = useWbProductCatalog(token)
   const [locations, setLocations] = useState<LocationRow[]>([])
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -503,8 +507,7 @@ export function FfInboundSortingPanel({
                 <Table size="small" data-testid="ff-sorting-box-lines">
                   <TableHead>
                     <TableRow>
-                      <TableCell>Артикул</TableCell>
-                      <TableCell>Товар</TableCell>
+                      <FfProductTableHeadCells />
                       <TableCell align="right">В коробе</TableCell>
                       <TableCell align="right">Разложено</TableCell>
                       <TableCell align="right">Остаток</TableCell>
@@ -514,10 +517,13 @@ export function FfInboundSortingPanel({
                   <TableBody>
                     {box.lines.map((ln) => {
                       const key = `${box.id}:${ln.product_id}`
+                      const displayMeta = productDisplayMetaFromCatalog(ln.product_id, ln, catalogById)
                       return (
                         <TableRow key={ln.id} data-testid="ff-sorting-box-line">
-                          <TableCell>{ln.sku_code}</TableCell>
-                          <TableCell>{ln.product_name}</TableCell>
+                          <FfProductLineCells
+                            meta={displayMeta}
+                            printTestId={`ff-sorting-line-print-${ln.id}`}
+                          />
                           <TableCell align="right">{ln.quantity}</TableCell>
                           <TableCell align="right">{ln.posted_qty}</TableCell>
                           <TableCell align="right">{ln.remaining_qty}</TableCell>
