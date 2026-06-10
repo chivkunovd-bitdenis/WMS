@@ -7,8 +7,10 @@ export function escapeLabelHtml(text: string): string {
     .replace(/"/g, '&quot;')
 }
 
-/** One-line product title on 58 mm thermal label (~8pt sans). */
-export function truncateProductLabelName(name: string, maxLen = 34): string {
+export const PRODUCT_LABEL_REVIEW_FOOTER = 'Пожалуйста оставьте отзыв'
+
+/** Product title on 58 mm WB-style thermal label (~7pt sans, up to two lines). */
+export function truncateProductLabelName(name: string, maxLen = 42): string {
   const trimmed = name.trim().replace(/\s+/g, ' ')
   if (trimmed.length <= maxLen) {
     return trimmed
@@ -27,18 +29,28 @@ export function resolveProductLabelArticle(meta: {
   return meta.sku_code.trim()
 }
 
-export function productLabelVariantLines(meta: {
-  wb_size?: string | null
+/** WB marketplace label lines below article (color, brand). */
+export function productLabelDetailLines(meta: {
   wb_color?: string | null
+  wb_brand?: string | null
 }): string[] {
   const lines: string[] = []
-  const size = meta.wb_size?.trim()
   const color = meta.wb_color?.trim()
-  if (size) {
-    lines.push(`Размер: ${size}`)
-  }
+  const brand = meta.wb_brand?.trim()
   if (color) {
     lines.push(`Цвет: ${color}`)
   }
+  if (brand) {
+    lines.push(`Бренд: ${brand}`)
+  }
   return lines
+}
+
+/** @deprecated Use productLabelDetailLines — size is not printed on WB 58×40 labels. */
+export function productLabelVariantLines(meta: {
+  wb_size?: string | null
+  wb_color?: string | null
+  wb_brand?: string | null
+}): string[] {
+  return productLabelDetailLines(meta)
 }

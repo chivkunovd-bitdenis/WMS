@@ -7,6 +7,13 @@ from typing import Any
 _WB_COLOR_CHAR_ID = 14177449
 
 
+def brand_from_card(card: dict[str, Any]) -> str | None:
+    raw = card.get("brand")
+    if isinstance(raw, str) and raw.strip():
+        return raw.strip()
+    return None
+
+
 def subject_name_from_card(card: dict[str, Any]) -> str | None:
     for key in ("subjectName", "subject_name"):
         raw = card.get(key)

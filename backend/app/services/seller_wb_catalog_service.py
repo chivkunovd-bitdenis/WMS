@@ -15,6 +15,7 @@ from app.models.product import Product
 from app.models.seller_wildberries_imported_card import SellerWildberriesImportedCard
 from app.services.catalog_service import list_products
 from app.services.wb_card_enrichment import (
+    brand_from_card,
     collect_skus_from_card,
     color_from_card,
     first_photo_url_from_card,
@@ -37,6 +38,7 @@ class SellerWbCatalogRow:
     wb_primary_barcode: str | None
     wb_size: str | None = None
     wb_color: str | None = None
+    wb_brand: str | None = None
     packaging_instructions: str | None = None
 
     def as_dict(self) -> dict[str, Any]:
@@ -52,6 +54,7 @@ class SellerWbCatalogRow:
             "wb_primary_barcode": self.wb_primary_barcode,
             "wb_size": self.wb_size,
             "wb_color": self.wb_color,
+            "wb_brand": self.wb_brand,
             "packaging_instructions": self.packaging_instructions,
         }
 
@@ -72,12 +75,13 @@ def _variant_from_raw(
     raw: dict[str, Any] | None,
     *,
     primary_barcode: str | None,
-) -> tuple[str | None, str | None]:
+) -> tuple[str | None, str | None, str | None]:
     if not raw:
-        return None, None
+        return None, None, None
     return (
         size_from_card_for_barcode(raw, primary_barcode),
         color_from_card(raw),
+        brand_from_card(raw),
     )
 
 
@@ -106,7 +110,7 @@ async def list_seller_wb_catalog_rows(
             card_raw = by_nm.get(nm)
         subj, img, barcodes = _enrich_from_raw(card_raw)
         primary = primary_sku_display(list(barcodes))
-        wb_size, wb_color = _variant_from_raw(card_raw, primary_barcode=primary)
+        wb_size, wb_color, wb_brand = _variant_from_raw(card_raw, primary_barcode=primary)
         rows.append(
             SellerWbCatalogRow(
                 product_id=p.id,
@@ -120,6 +124,7 @@ async def list_seller_wb_catalog_rows(
                 wb_primary_barcode=primary,
                 wb_size=wb_size,
                 wb_color=wb_color,
+                wb_brand=wb_brand,
                 packaging_instructions=p.packaging_instructions,
             ),
         )
@@ -141,6 +146,7 @@ class FfCatalogRow:
     wb_primary_barcode: str | None
     wb_size: str | None = None
     wb_color: str | None = None
+    wb_brand: str | None = None
     packaging_instructions: str | None = None
 
     def as_dict(self) -> dict[str, Any]:
@@ -158,6 +164,7 @@ class FfCatalogRow:
             "wb_primary_barcode": self.wb_primary_barcode,
             "wb_size": self.wb_size,
             "wb_color": self.wb_color,
+            "wb_brand": self.wb_brand,
             "packaging_instructions": self.packaging_instructions,
         }
 
@@ -203,7 +210,7 @@ async def list_linked_wb_catalog_rows(
             card_raw = by_seller_nm.get((p.seller_id, nm))
         subj, img, barcodes = _enrich_from_raw(card_raw)
         primary = primary_sku_display(list(barcodes))
-        wb_size, wb_color = _variant_from_raw(card_raw, primary_barcode=primary)
+        wb_size, wb_color, wb_brand = _variant_from_raw(card_raw, primary_barcode=primary)
         rows.append(
             FfCatalogRow(
                 product_id=p.id,
@@ -219,6 +226,7 @@ async def list_linked_wb_catalog_rows(
                 wb_primary_barcode=primary,
                 wb_size=wb_size,
                 wb_color=wb_color,
+                wb_brand=wb_brand,
                 packaging_instructions=p.packaging_instructions,
             ),
         )
@@ -288,7 +296,7 @@ async def list_ff_catalog_rows(
             card_raw = by_seller_nm.get((p.seller_id, nm))
         subj, img, barcodes = _enrich_from_raw(card_raw)
         primary = primary_sku_display(list(barcodes))
-        wb_size, wb_color = _variant_from_raw(card_raw, primary_barcode=primary)
+        wb_size, wb_color, wb_brand = _variant_from_raw(card_raw, primary_barcode=primary)
         rows.append(
             FfCatalogRow(
                 product_id=p.id,
@@ -304,6 +312,7 @@ async def list_ff_catalog_rows(
                 wb_primary_barcode=primary,
                 wb_size=wb_size,
                 wb_color=wb_color,
+                wb_brand=wb_brand,
                 packaging_instructions=p.packaging_instructions,
             ),
         )

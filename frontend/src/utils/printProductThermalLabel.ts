@@ -1,7 +1,7 @@
-import { EAC_MARK_DATA_URL } from './eacMarkSvg'
 import {
   escapeLabelHtml,
-  productLabelVariantLines,
+  PRODUCT_LABEL_REVIEW_FOOTER,
+  productLabelDetailLines,
   resolveProductLabelArticle,
   truncateProductLabelName,
 } from './productLabelText'
@@ -11,8 +11,9 @@ export type ProductThermalLabelData = {
   product_name: string
   sku_code: string
   wb_vendor_code?: string | null
-  wb_size?: string | null
   wb_color?: string | null
+  wb_brand?: string | null
+  seller_name?: string | null
   barcode: string
 }
 
@@ -24,7 +25,7 @@ const LABEL_CSS = `
   .label {
     width: 58mm;
     height: 40mm;
-    padding: 1.6mm 1.8mm 1.2mm;
+    padding: 1.4mm 1.8mm 1mm;
     display: flex;
     flex-direction: column;
     overflow: hidden;
@@ -32,53 +33,63 @@ const LABEL_CSS = `
     break-after: page;
   }
   .label:last-child { page-break-after: auto; break-after: auto; }
-  .head {
-    display: flex;
-    align-items: flex-start;
-    justify-content: space-between;
-    gap: 1.2mm;
-    min-height: 14mm;
-    flex: 0 0 auto;
-  }
-  .text { flex: 1 1 auto; min-width: 0; line-height: 1.22; font-size: 7.2pt; }
-  .name {
-    font-size: 7.6pt;
-    font-weight: 400;
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    margin: 0 0 0.6mm;
-  }
-  .meta { margin: 0; }
-  .eac {
-    flex: 0 0 9mm;
-    width: 9mm;
-    height: 11.5mm;
-    object-fit: contain;
-  }
   .barcode-wrap {
-    flex: 1 1 auto;
+    flex: 0 0 auto;
     display: flex;
     flex-direction: column;
     align-items: center;
-    justify-content: flex-end;
-    min-height: 0;
-    padding-top: 0.4mm;
+    justify-content: flex-start;
+    margin-bottom: 0.8mm;
   }
   .barcode-wrap img {
     width: 52mm;
     max-width: 100%;
     height: auto;
-    max-height: 17mm;
+    max-height: 14mm;
     object-fit: contain;
     display: block;
   }
   .digits {
-    margin: 0.5mm 0 0;
-    font-size: 8.5pt;
+    margin: 0.3mm 0 0;
+    font-size: 8pt;
     letter-spacing: 0.04em;
     text-align: center;
     font-family: Arial, Helvetica, sans-serif;
+    line-height: 1.1;
+  }
+  .body {
+    flex: 1 1 auto;
+    min-height: 0;
+    line-height: 1.2;
+    font-size: 6.8pt;
+    display: flex;
+    flex-direction: column;
+    gap: 0.15mm;
+  }
+  .seller {
+    margin: 0;
+    font-size: 6.8pt;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  .name {
+    margin: 0;
+    font-size: 7pt;
+    font-weight: 400;
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+    word-break: break-word;
+  }
+  .meta { margin: 0; }
+  .footer {
+    flex: 0 0 auto;
+    margin: 0.4mm 0 0;
+    font-size: 6.4pt;
+    text-align: left;
+    line-height: 1.15;
   }
 `
 
@@ -86,22 +97,26 @@ function buildLabelHtml(data: ProductThermalLabelData, barcodeDataUrl: string): 
   const name = escapeLabelHtml(truncateProductLabelName(data.product_name))
   const article = escapeLabelHtml(resolveProductLabelArticle(data))
   const barcode = escapeLabelHtml(data.barcode.trim())
-  const variantLines = productLabelVariantLines(data)
+  const seller = data.seller_name?.trim()
+  const sellerLine = seller
+    ? `<p class="seller" title="${escapeLabelHtml(seller)}">${escapeLabelHtml(seller)}</p>`
+    : ''
+  const detailLines = productLabelDetailLines(data)
     .map((line) => `<p class="meta">${escapeLabelHtml(line)}</p>`)
     .join('')
+  const review = escapeLabelHtml(PRODUCT_LABEL_REVIEW_FOOTER)
   return `<section class="label" data-testid="product-thermal-label">
-  <div class="head">
-    <div class="text">
-      <p class="name" title="${name}">${name}</p>
-      <p class="meta">Артикул: ${article}</p>
-      ${variantLines}
-    </div>
-    <img class="eac" src="${EAC_MARK_DATA_URL}" alt="EAC" />
-  </div>
   <div class="barcode-wrap">
     <img id="barcode" src="${barcodeDataUrl}" alt="barcode" />
     <p class="digits">${barcode}</p>
   </div>
+  <div class="body">
+    ${sellerLine}
+    <p class="name" title="${name}">${name}</p>
+    <p class="meta">Артикул: ${article}</p>
+    ${detailLines}
+  </div>
+  <p class="footer">${review}</p>
 </section>`
 }
 

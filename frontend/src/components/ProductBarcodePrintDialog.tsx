@@ -9,9 +9,9 @@ import {
   TextField,
   Typography,
 } from '@mui/material'
-import { EAC_MARK_DATA_URL } from '../utils/eacMarkSvg'
 import {
-  productLabelVariantLines,
+  PRODUCT_LABEL_REVIEW_FOOTER,
+  productLabelDetailLines,
   resolveProductLabelArticle,
   truncateProductLabelName,
 } from '../utils/productLabelText'
@@ -39,7 +39,8 @@ export function ProductBarcodePrintDialog({ open, meta, onClose }: Props) {
   const barcode = meta ? resolveProductPrimaryBarcode(meta) : ''
   const article = meta ? resolveProductLabelArticle(meta) : ''
   const name = meta ? truncateProductLabelName(meta.product_name) : ''
-  const variantLines = meta ? productLabelVariantLines(meta) : []
+  const sellerName = meta?.seller_name?.trim() ?? ''
+  const detailLines = meta ? productLabelDetailLines(meta) : []
 
   const previewBarcodeUrl = useMemo(() => {
     if (!barcode) {
@@ -69,8 +70,9 @@ export function ProductBarcodePrintDialog({ open, meta, onClose }: Props) {
           product_name: meta.product_name,
           sku_code: meta.sku_code,
           wb_vendor_code: meta.wb_vendor_code,
-          wb_size: meta.wb_size,
           wb_color: meta.wb_color,
+          wb_brand: meta.wb_brand,
+          seller_name: meta.seller_name,
           barcode,
         },
         Math.floor(n),
@@ -92,7 +94,7 @@ export function ProductBarcodePrintDialog({ open, meta, onClose }: Props) {
       <DialogTitle>Печать этикетки 58×40</DialogTitle>
       <DialogContent>
         <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
-          Термоэтикетка: название, артикул, размер и цвет из карточки WB, знак EAC, штрихкод CODE128.
+          Этикетка WB: штрихкод, селлер, название, артикул, цвет, бренд и призыв оставить отзыв.
         </Typography>
 
         <Box
@@ -114,39 +116,13 @@ export function ProductBarcodePrintDialog({ open, meta, onClose }: Props) {
             mb: 2,
           }}
         >
-          <Box sx={{ display: 'flex', gap: '4px', alignItems: 'flex-start', mb: '4px' }}>
-            <Box sx={{ flex: 1, minWidth: 0, fontSize: 10, lineHeight: 1.2 }}>
-              <Box
-                sx={{
-                  fontSize: 10.5,
-                  whiteSpace: 'nowrap',
-                  overflow: 'hidden',
-                  textOverflow: 'ellipsis',
-                  mb: '2px',
-                }}
-                title={meta?.product_name}
-              >
-                {name || '—'}
-              </Box>
-              <Box>Артикул: {article || '—'}</Box>
-              {variantLines.map((line) => (
-                <Box key={line}>{line}</Box>
-              ))}
-            </Box>
-            <Box
-              component="img"
-              src={EAC_MARK_DATA_URL}
-              alt="EAC"
-              sx={{ width: 28, height: 36, flexShrink: 0 }}
-            />
-          </Box>
-          <Box sx={{ flex: 1, display: 'flex', flexDirection: 'column', justifyContent: 'flex-end' }}>
+          <Box sx={{ flex: '0 0 auto', mb: '3px' }}>
             {previewBarcodeUrl ? (
               <Box
                 component="img"
                 src={previewBarcodeUrl}
                 alt="barcode"
-                sx={{ width: '100%', maxHeight: 52, objectFit: 'contain' }}
+                sx={{ width: '100%', maxHeight: 40, objectFit: 'contain', display: 'block' }}
               />
             ) : null}
             <Typography
@@ -155,14 +131,51 @@ export function ProductBarcodePrintDialog({ open, meta, onClose }: Props) {
                 display: 'block',
                 textAlign: 'center',
                 letterSpacing: '0.04em',
-                fontSize: 10,
-                mt: 0.25,
+                fontSize: 9,
+                lineHeight: 1.1,
                 fontFamily: 'Arial, Helvetica, sans-serif',
               }}
             >
               {barcode || '—'}
             </Typography>
           </Box>
+
+          <Box sx={{ flex: 1, minHeight: 0, fontSize: 9, lineHeight: 1.2, overflow: 'hidden' }}>
+            {sellerName ? (
+              <Box
+                sx={{
+                  whiteSpace: 'nowrap',
+                  overflow: 'hidden',
+                  textOverflow: 'ellipsis',
+                  mb: '1px',
+                }}
+                title={sellerName}
+              >
+                {sellerName}
+              </Box>
+            ) : null}
+            <Box
+              sx={{
+                fontSize: 9.5,
+                display: '-webkit-box',
+                WebkitLineClamp: 2,
+                WebkitBoxOrient: 'vertical',
+                overflow: 'hidden',
+                mb: '1px',
+              }}
+              title={meta?.product_name}
+            >
+              {name || '—'}
+            </Box>
+            <Box>Артикул: {article || '—'}</Box>
+            {detailLines.map((line) => (
+              <Box key={line}>{line}</Box>
+            ))}
+          </Box>
+
+          <Typography variant="caption" sx={{ fontSize: 8.5, lineHeight: 1.15, mt: '2px' }}>
+            {PRODUCT_LABEL_REVIEW_FOOTER}
+          </Typography>
         </Box>
 
         <TextField

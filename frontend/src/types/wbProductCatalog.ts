@@ -2,6 +2,7 @@ export type WbProductCatalogRow = {
   id: string
   name: string
   sku_code: string
+  seller_name?: string | null
   wb_nm_id: number | null
   wb_vendor_code: string | null
   wb_subject_name: string | null
@@ -10,11 +11,13 @@ export type WbProductCatalogRow = {
   wb_primary_barcode: string | null
   wb_size: string | null
   wb_color: string | null
+  wb_brand?: string | null
 }
 
 export type ProductLineDisplayMeta = {
   sku_code: string
   product_name: string
+  seller_name?: string | null
   wb_primary_image_url: string | null
   wb_primary_barcode: string | null
   wb_barcodes: string[]
@@ -22,6 +25,7 @@ export type ProductLineDisplayMeta = {
   wb_nm_id: number | null
   wb_size: string | null
   wb_color: string | null
+  wb_brand?: string | null
 }
 
 export function productDisplayMetaFromCatalog(
@@ -35,6 +39,7 @@ export function productDisplayMetaFromCatalog(
     return {
       sku_code: cat.sku_code,
       product_name: productName,
+      seller_name: cat.seller_name ?? null,
       wb_primary_image_url: cat.wb_primary_image_url,
       wb_primary_barcode: cat.wb_primary_barcode,
       wb_barcodes: cat.wb_barcodes,
@@ -42,11 +47,13 @@ export function productDisplayMetaFromCatalog(
       wb_nm_id: cat.wb_nm_id,
       wb_size: cat.wb_size,
       wb_color: cat.wb_color,
+      wb_brand: cat.wb_brand ?? null,
     }
   }
   return {
     sku_code: line.sku_code,
     product_name: productName,
+    seller_name: null,
     wb_primary_image_url: null,
     wb_primary_barcode: null,
     wb_barcodes: [],
@@ -54,6 +61,7 @@ export function productDisplayMetaFromCatalog(
     wb_nm_id: null,
     wb_size: null,
     wb_color: null,
+    wb_brand: null,
   }
 }
 

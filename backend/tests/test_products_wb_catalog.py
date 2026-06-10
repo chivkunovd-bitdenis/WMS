@@ -27,6 +27,7 @@ async def test_seller_wb_catalog_enriched_from_imported_card(
                 {
                     "nmID": 777888,
                     "vendorCode": "VC-ENRICH",
+                    "brand": "TestBrand",
                     "subjectName": "Футболки",
                     "sizes": [{"techSize": "M", "skus": ["2000000111223"]}],
                     "photos": [{"big": "https://img.example/wb1.jpg"}],
@@ -114,6 +115,7 @@ async def test_seller_wb_catalog_enriched_from_imported_card(
     assert row["wb_vendor_code"] == "VC-ENRICH"
     assert row["wb_size"] == "M"
     assert row["wb_color"] == "синий"
+    assert row["wb_brand"] == "TestBrand"
 
 
 @pytest.mark.asyncio

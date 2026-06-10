@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from app.services.wb_card_enrichment import (
+    brand_from_card,
     collect_skus_from_card,
     color_from_card,
     first_photo_url_from_card,
@@ -36,6 +37,11 @@ def test_first_photo_url_priority() -> None:
 def test_primary_sku_display() -> None:
     assert primary_sku_display(["a", "b"]) == "a"
     assert primary_sku_display([]) is None
+
+
+def test_brand_from_card() -> None:
+    assert brand_from_card({"brand": "  MeMove  "}) == "MeMove"
+    assert brand_from_card({}) is None
 
 
 def test_color_from_card_by_name() -> None:
