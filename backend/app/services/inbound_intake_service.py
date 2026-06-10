@@ -433,16 +433,12 @@ async def set_line_actual_qty(
     *,
     actual_qty: int,
 ) -> InboundIntakeLine:
-    from app.services import inbound_intake_box_service as inbound_box_svc
-
     if actual_qty < 0:
         raise InboundIntakeError("invalid_qty")
     pair = await _line_on_request(session, tenant_id, request_id, line_id)
     if pair is None:
         raise InboundIntakeError("line_not_found")
     req, line = pair
-    if await inbound_box_svc.request_has_boxes(session, tenant_id, request_id):
-        raise InboundIntakeError("use_box_scan")
     if req.status not in (STATUS_PRIMARY_ACCEPTED, STATUS_VERIFYING):
         raise InboundIntakeError("not_verifying")
     if line.posted_qty > actual_qty:

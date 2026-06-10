@@ -36,7 +36,8 @@ async def fetch_cards_list(
                 {
                     "nmID": 424242,
                     "vendorCode": "E2E-MOCK",
-                    "sizes": [{"skus": ["E2E-MOCK-BARCODE"]}],
+                    "sizes": [{"techSize": "L", "skus": ["E2E-MOCK-BARCODE"]}],
+                    "characteristics": [{"name": "Цвет", "value": ["коричневый"]}],
                 }
             ],
             "cursor": {"total": 1},

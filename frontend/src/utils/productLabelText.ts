@@ -26,3 +26,19 @@ export function resolveProductLabelArticle(meta: {
   }
   return meta.sku_code.trim()
 }
+
+export function productLabelVariantLines(meta: {
+  wb_size?: string | null
+  wb_color?: string | null
+}): string[] {
+  const lines: string[] = []
+  const size = meta.wb_size?.trim()
+  const color = meta.wb_color?.trim()
+  if (size) {
+    lines.push(`Размер: ${size}`)
+  }
+  if (color) {
+    lines.push(`Цвет: ${color}`)
+  }
+  return lines
+}

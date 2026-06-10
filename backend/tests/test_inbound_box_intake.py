@@ -243,7 +243,7 @@ async def test_inbound_box_line_qty_without_open_box(async_client: AsyncClient) 
 
 
 @pytest.mark.asyncio
-async def test_inbound_manual_actual_blocked_when_boxes_exist(
+async def test_inbound_manual_actual_allowed_when_boxes_exist(
     async_client: AsyncClient,
 ) -> None:
     suffix = str(int(time.time() * 1000) + 2)
@@ -260,9 +260,15 @@ async def test_inbound_manual_actual_blocked_when_boxes_exist(
         headers=ah,
         json={"actual_qty": 2},
     )
-    assert patch.status_code == 409
-    assert patch.json()["detail"] == "use_box_scan"
+    assert patch.status_code == 200
+    assert patch.json()["actual_qty"] == 2
     assert boxes
+    verify = await async_client.post(
+        f"/operations/inbound-intake-requests/{rid}/verify",
+        headers=ah,
+    )
+    assert verify.status_code == 200
+    assert verify.json()["status"] == "verified"
 
 
 @pytest.mark.asyncio

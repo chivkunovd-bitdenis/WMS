@@ -1,6 +1,6 @@
 import { test, expect } from '@playwright/test';
 
-import { waitForPostOk } from './api-waits';
+import { waitForPatchOk, waitForPostOk } from './api-waits';
 import {
   INBOUND_API,
   apiCreateSubmittedInbound,
@@ -119,5 +119,40 @@ test.describe('FF inbound box piece intake', () => {
     );
     expect(put.status()).toBe(409);
     expect(((await put.json()) as { detail: string }).detail).toBe('no_open_box');
+  });
+
+  // TC-NEW-C02 — ручной факт в таблице без открытия короба (короба есть после primary-accept).
+  test('TC-NEW-C02 manual line actual without opening box completes verification', async ({
+    page,
+  }) => {
+    const seed = await seedFfSellerInbound(page);
+    await apiCreateSubmittedInbound(page.request, seed, {
+      plannedBoxes: 1,
+      expectedQty: 3,
+    });
+
+    await loginFfAdmin(page, seed.adminEmail, seed.password);
+    await openFfInboundDoc(page, seed, { skipLogin: true });
+
+    await Promise.all([
+      waitForPostOk(page, INBOUND_API, (u) => u.includes('/primary-accept')),
+      page.getByTestId('ff-inbound-primary-accept').click(),
+    ]);
+
+    const actualField = page.getByTestId('ff-inbound-line-actual').first();
+    await actualField.fill('3');
+    await Promise.all([
+      waitForPatchOk(page, INBOUND_API, (u) => u.includes('/actual')),
+      actualField.blur(),
+    ]);
+
+    await expect(page.getByTestId('ff-inbound-line-row-match')).toBeVisible();
+
+    const [verifyRes] = await Promise.all([
+      waitForPostOk(page, INBOUND_API, (u) => u.includes('/verify')),
+      page.getByTestId('ff-inbound-verify-complete').click(),
+    ]);
+    expect(verifyRes.ok()).toBeTruthy();
+    await expect(page.getByTestId('ff-inbound-status-chip')).toContainText('В сортировке');
   });
 });

@@ -197,9 +197,6 @@ export function FfInboundRequestView({
       return sum + Math.max(0, accepted - ln.posted_qty)
     }, 0)
   }, [detail])
-  const verifyingWithBoxes =
-    boxIntakeMode &&
-    (detail?.status === 'primary_accepted' || detail?.status === 'verifying')
 
   const loadDetail = useCallback(async (): Promise<InboundDetail> => {
     const res = await fetch(apiUrl(`/operations/inbound-intake-requests/${requestId}`), {
@@ -377,22 +374,17 @@ export function FfInboundRequestView({
       setActualDraftByLineId({})
       return
     }
-    // Manual verify: default draft to expected only when not using box intake.
-    // Box intake: «Принято» comes from короба — do not pretend undeclared lines are accepted.
+    // Default draft: saved actual, else expected (manual entry always available).
     setActualDraftByLineId((prev) => {
-      const viaBoxes = (detail.boxes?.length ?? 0) > 0
       const next: Record<string, string> = {}
       for (const ln of detail.lines) {
         const existing = prev[ln.id]
-        if (existing !== undefined && !viaBoxes) {
+        if (existing !== undefined && ln.actual_qty == null) {
           next[ln.id] = existing
           continue
         }
-        if (viaBoxes) {
-          next[ln.id] = ln.actual_qty != null ? String(ln.actual_qty) : ''
-        } else {
-          next[ln.id] = String(ln.actual_qty ?? ln.expected_qty)
-        }
+        next[ln.id] =
+          ln.actual_qty != null ? String(ln.actual_qty) : String(ln.expected_qty)
       }
       return next
     })
@@ -1015,6 +1007,7 @@ export function FfInboundRequestView({
         setError(msg === 'actual_missing' ? 'Укажите факт по всем строкам.' : msg)
         return
       }
+      await loadDetail()
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Не удалось сохранить факт.')
     } finally {
@@ -1024,10 +1017,6 @@ export function FfInboundRequestView({
 
   const ensureActualsSaved = async () => {
     if (!detail) {
-      return
-    }
-    if ((detail.boxes?.length ?? 0) > 0) {
-      // Факт по строкам уже синхронизируется из поштучной приёмки по коробам.
       return
     }
     // Save actuals for all lines (required by backend before verify).
@@ -1106,7 +1095,6 @@ export function FfInboundRequestView({
     setBusy(true)
     setError(null)
     try {
-      let currentDetail = detail
       if (boxIntakeMode && activeIntakeBox) {
         const saveErr = await saveAllBoxLineQtysForBox(activeIntakeBox)
         if (saveErr) {
@@ -1122,21 +1110,7 @@ export function FfInboundRequestView({
           )
           return
         }
-        currentDetail = await loadDetail()
-      }
-      if (boxIntakeMode && currentDetail) {
-        const missing = currentDetail.lines.filter((ln) => ln.actual_qty == null)
-        if (missing.length > 0) {
-          const names = missing
-            .slice(0, 4)
-            .map((ln) => ln.sku_code)
-            .join(', ')
-          const more = missing.length > 4 ? ` и ещё ${missing.length - 4}` : ''
-          setError(
-            `Укажите количество в поштучной приёмке по коробам для всех позиций (в коробе можно поставить 0). Не заполнено: ${names}${more}.`,
-          )
-          return
-        }
+        await loadDetail()
       }
       await ensureActualsSaved()
       const res = await fetch(
@@ -1147,9 +1121,7 @@ export function FfInboundRequestView({
         const msg = await readApiErrorMessage(res)
         setError(
           msg === 'actual_missing'
-            ? boxIntakeMode
-              ? 'Укажите количество по каждой позиции в поштучной приёмке по коробам (0 — если товар не принимали).'
-              : 'Укажите факт по всем строкам.'
+            ? 'Укажите факт по всем строкам (вручную в таблице или через короб).'
             : msg === 'open_box_exists'
               ? 'Сначала закройте открытый короб в блоке поштучной приёмки.'
               : msg,
@@ -1198,8 +1170,7 @@ export function FfInboundRequestView({
 
   const actualEditable =
     isFulfillmentAdmin &&
-    (detail?.status === 'primary_accepted' || detail?.status === 'verifying') &&
-    !boxIntakeMode
+    (detail?.status === 'primary_accepted' || detail?.status === 'verifying')
 
   const openInboundBox = async (barcode: string) => {
     const code = barcode.trim()
@@ -1519,7 +1490,7 @@ export function FfInboundRequestView({
                     Заявлено
                   </TableCell>
                   <TableCell align="right" sx={{ width: 150 }}>
-                    {verifyingWithBoxes ? 'Принято (из коробов)' : 'Принято'}
+                    Принято
                   </TableCell>
                 </TableRow>
               </TableHead>
@@ -1527,14 +1498,16 @@ export function FfInboundRequestView({
                 {detail.lines.map((ln) => {
                   const displayMeta = productDisplayMetaFromCatalog(ln.product_id, ln, catalogById)
                   const actualIsSet = ln.actual_qty != null
-                  const pendingBoxAcceptance = verifyingWithBoxes && !actualIsSet
+                  const pendingAcceptance =
+                    (detail.status === 'primary_accepted' || detail.status === 'verifying') &&
+                    !actualIsSet
                   const hasDiscrepancy = actualIsSet && ln.actual_qty !== ln.expected_qty
                   const matchesExpected = actualIsSet && ln.actual_qty === ln.expected_qty
                   const rowTestId = matchesExpected
                     ? 'ff-inbound-line-row-match'
                     : hasDiscrepancy
                       ? 'ff-inbound-line-row-discrepancy'
-                      : pendingBoxAcceptance
+                      : pendingAcceptance
                         ? 'ff-inbound-line-row-pending'
                         : 'ff-inbound-line-row'
                   return (
@@ -1558,7 +1531,7 @@ export function FfInboundRequestView({
                                 alpha(theme.palette.error.main, 0.08),
                             }
                           : null),
-                        ...(pendingBoxAcceptance
+                        ...(pendingAcceptance
                           ? {
                               backgroundColor: (theme) =>
                                 alpha(theme.palette.action.hover, 0.04),
@@ -1577,14 +1550,9 @@ export function FfInboundRequestView({
                         <TextField
                           type="number"
                           size="small"
-                          placeholder={verifyingWithBoxes ? '—' : undefined}
                           value={
-                            verifyingWithBoxes
-                              ? ln.actual_qty != null
-                                ? String(ln.actual_qty)
-                                : ''
-                              : (actualDraftByLineId[ln.id] ??
-                                (ln.actual_qty != null ? String(ln.actual_qty) : ''))
+                            actualDraftByLineId[ln.id] ??
+                            (ln.actual_qty != null ? String(ln.actual_qty) : '')
                           }
                           disabled={busy || !actualEditable}
                           onChange={(e) =>
@@ -1594,7 +1562,6 @@ export function FfInboundRequestView({
                             }))
                           }
                           onBlur={() => {
-                            if (verifyingWithBoxes) return
                             const raw = actualDraftByLineId[ln.id]
                             const v = Number(raw)
                             if (!Number.isFinite(v) || v < 0) return
@@ -1701,7 +1668,8 @@ export function FfInboundRequestView({
                         Короба и внутренние ШК
                       </Typography>
                       <Typography variant="body2" color="text.secondary">
-                        После приёмки по коробам — печать этикеток 58×40 (CODE128) для поштучной приёмки.
+                        После приёмки по коробам — печать этикеток 58×40 (CODE128). Поштучный пересчёт
+                        можно вести в таблице выше или через короб ниже.
                       </Typography>
                     </Box>
                     {isFulfillmentAdmin ? (
@@ -1788,13 +1756,13 @@ export function FfInboundRequestView({
                   data-testid="ff-inbound-box-intake-panel"
                 >
                   <Typography variant="subtitle2" sx={{ fontWeight: 800, mb: 1 }}>
-                    Поштучная приёмка по коробу
+                    Поштучная приёмка по коробу (необязательно)
                   </Typography>
                   <Typography variant="body2" color="text.secondary" sx={{ mb: 1.5 }}>
-                    Откройте короб (скан INB-… или кнопка в таблице коробов), вручную укажите
-                    количество по каждой позиции в этом коробе и закройте короб. Можно указать
-                    больше, чем в заявке — расхождение зафиксируется при пересчёте. Сканирование
-                    штрихкодов товара не требуется.
+                    Альтернатива ручному вводу в колонке «Принято»: откройте короб (скан INB-… или
+                    кнопка в таблице коробов), укажите количество по позициям в этом коробе и
+                    закройте короб. Можно указать больше, чем в заявке — расхождение зафиксируется
+                    при пересчёте.
                   </Typography>
                   {!activeIntakeBox ? (
                     <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1} sx={{ mb: 1.5 }}>

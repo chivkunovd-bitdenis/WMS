@@ -291,14 +291,13 @@ async def _sync_request_actuals(
     req: InboundIntakeRequest,
 ) -> None:
     for ln in req.lines:
-        total = await _total_scanned_for_product(session, req.id, ln.product_id)
         recorded = await _product_recorded_in_boxes(session, req.id, ln.product_id)
-        if recorded:
-            if ln.posted_qty > total:
-                raise InboundIntakeBoxError("actual_below_posted")
-            ln.actual_qty = total
-        else:
-            ln.actual_qty = None
+        if not recorded:
+            continue
+        total = await _total_scanned_for_product(session, req.id, ln.product_id)
+        if ln.posted_qty > total:
+            raise InboundIntakeBoxError("actual_below_posted")
+        ln.actual_qty = total
     if req.status == intake_svc.STATUS_PRIMARY_ACCEPTED and any(
         ln.actual_qty is not None for ln in req.lines
     ):

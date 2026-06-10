@@ -11,6 +11,7 @@ import {
 } from '@mui/material'
 import { EAC_MARK_DATA_URL } from '../utils/eacMarkSvg'
 import {
+  productLabelVariantLines,
   resolveProductLabelArticle,
   truncateProductLabelName,
 } from '../utils/productLabelText'
@@ -38,6 +39,7 @@ export function ProductBarcodePrintDialog({ open, meta, onClose }: Props) {
   const barcode = meta ? resolveProductPrimaryBarcode(meta) : ''
   const article = meta ? resolveProductLabelArticle(meta) : ''
   const name = meta ? truncateProductLabelName(meta.product_name) : ''
+  const variantLines = meta ? productLabelVariantLines(meta) : []
 
   const previewBarcodeUrl = useMemo(() => {
     if (!barcode) {
@@ -67,6 +69,8 @@ export function ProductBarcodePrintDialog({ open, meta, onClose }: Props) {
           product_name: meta.product_name,
           sku_code: meta.sku_code,
           wb_vendor_code: meta.wb_vendor_code,
+          wb_size: meta.wb_size,
+          wb_color: meta.wb_color,
           barcode,
         },
         Math.floor(n),
@@ -88,7 +92,7 @@ export function ProductBarcodePrintDialog({ open, meta, onClose }: Props) {
       <DialogTitle>Печать этикетки 58×40</DialogTitle>
       <DialogContent>
         <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
-          Термоэтикетка: название, артикул, знак EAC, штрихкод CODE128.
+          Термоэтикетка: название, артикул, размер и цвет из карточки WB, знак EAC, штрихкод CODE128.
         </Typography>
 
         <Box
@@ -125,7 +129,9 @@ export function ProductBarcodePrintDialog({ open, meta, onClose }: Props) {
                 {name || '—'}
               </Box>
               <Box>Артикул: {article || '—'}</Box>
-              <Box>Производитель: Россия</Box>
+              {variantLines.map((line) => (
+                <Box key={line}>{line}</Box>
+              ))}
             </Box>
             <Box
               component="img"

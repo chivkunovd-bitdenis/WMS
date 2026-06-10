@@ -95,7 +95,9 @@ test('ff inbound modal opens 58x40 label print dialog with preview', async ({ pa
   await expect(dialog).toBeVisible();
   await expect(dialog.getByText('Печать этикетки 58×40')).toBeVisible();
   await expect(page.getByTestId('ff-product-label-preview')).toContainText('Брюки коричневые');
-  await expect(page.getByTestId('ff-product-label-preview')).toContainText('Производитель: Россия');
+  await expect(page.getByTestId('ff-product-label-preview')).toContainText('Размер: L');
+  await expect(page.getByTestId('ff-product-label-preview')).toContainText('Цвет: коричневый');
+  await expect(page.getByTestId('ff-product-label-preview')).not.toContainText('Производитель');
   await expect(page.getByTestId('ff-product-label-preview')).toContainText('Артикул:');
   await expect(page.getByTestId('ff-product-label-preview')).toContainText('E2E-MOCK-BARCODE');
   await expect(page.getByTestId('ff-product-label-print')).toBeEnabled();

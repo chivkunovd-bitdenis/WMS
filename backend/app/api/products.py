@@ -51,6 +51,8 @@ class SellerWbCatalogOut(BaseModel):
     wb_primary_image_url: str | None = None
     wb_barcodes: list[str]
     wb_primary_barcode: str | None = None
+    wb_size: str | None = None
+    wb_color: str | None = None
     packaging_instructions: str | None = None
     has_packaging_instructions: bool = False
 
@@ -69,6 +71,8 @@ class FfCatalogOut(BaseModel):
     wb_primary_image_url: str | None = None
     wb_barcodes: list[str]
     wb_primary_barcode: str | None = None
+    wb_size: str | None = None
+    wb_color: str | None = None
     packaging_instructions: str | None = None
     has_packaging_instructions: bool = False
 

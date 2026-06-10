@@ -2,8 +2,10 @@ from __future__ import annotations
 
 from app.services.wb_card_enrichment import (
     collect_skus_from_card,
+    color_from_card,
     first_photo_url_from_card,
     primary_sku_display,
+    size_from_card_for_barcode,
     subject_name_from_card,
 )
 
@@ -34,3 +36,19 @@ def test_first_photo_url_priority() -> None:
 def test_primary_sku_display() -> None:
     assert primary_sku_display(["a", "b"]) == "a"
     assert primary_sku_display([]) is None
+
+
+def test_color_from_card_by_name() -> None:
+    card = {"characteristics": [{"name": "Цвет", "value": ["коричневый"]}]}
+    assert color_from_card(card) == "коричневый"
+
+
+def test_size_from_card_for_barcode() -> None:
+    card = {
+        "sizes": [
+            {"techSize": "S", "skus": ["111"]},
+            {"techSize": "L", "wbSize": "48", "skus": ["222"]},
+        ],
+    }
+    assert size_from_card_for_barcode(card, "222") == "L"
+    assert size_from_card_for_barcode(card, "111") == "S"

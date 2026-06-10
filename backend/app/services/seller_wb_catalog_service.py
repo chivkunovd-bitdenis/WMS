@@ -16,8 +16,10 @@ from app.models.seller_wildberries_imported_card import SellerWildberriesImporte
 from app.services.catalog_service import list_products
 from app.services.wb_card_enrichment import (
     collect_skus_from_card,
+    color_from_card,
     first_photo_url_from_card,
     primary_sku_display,
+    size_from_card_for_barcode,
     subject_name_from_card,
 )
 
@@ -33,6 +35,8 @@ class SellerWbCatalogRow:
     wb_primary_image_url: str | None
     wb_barcodes: tuple[str, ...]
     wb_primary_barcode: str | None
+    wb_size: str | None = None
+    wb_color: str | None = None
     packaging_instructions: str | None = None
 
     def as_dict(self) -> dict[str, Any]:
@@ -46,6 +50,8 @@ class SellerWbCatalogRow:
             "wb_primary_image_url": self.wb_primary_image_url,
             "wb_barcodes": list(self.wb_barcodes),
             "wb_primary_barcode": self.wb_primary_barcode,
+            "wb_size": self.wb_size,
+            "wb_color": self.wb_color,
             "packaging_instructions": self.packaging_instructions,
         }
 
@@ -59,6 +65,19 @@ def _enrich_from_raw(raw: dict[str, Any] | None) -> tuple[str | None, str | None
         subject_name_from_card(raw),
         first_photo_url_from_card(raw),
         tup,
+    )
+
+
+def _variant_from_raw(
+    raw: dict[str, Any] | None,
+    *,
+    primary_barcode: str | None,
+) -> tuple[str | None, str | None]:
+    if not raw:
+        return None, None
+    return (
+        size_from_card_for_barcode(raw, primary_barcode),
+        color_from_card(raw),
     )
 
 
@@ -86,6 +105,8 @@ async def list_seller_wb_catalog_rows(
         if nm is not None:
             card_raw = by_nm.get(nm)
         subj, img, barcodes = _enrich_from_raw(card_raw)
+        primary = primary_sku_display(list(barcodes))
+        wb_size, wb_color = _variant_from_raw(card_raw, primary_barcode=primary)
         rows.append(
             SellerWbCatalogRow(
                 product_id=p.id,
@@ -96,7 +117,9 @@ async def list_seller_wb_catalog_rows(
                 wb_subject_name=subj,
                 wb_primary_image_url=img,
                 wb_barcodes=barcodes,
-                wb_primary_barcode=primary_sku_display(list(barcodes)),
+                wb_primary_barcode=primary,
+                wb_size=wb_size,
+                wb_color=wb_color,
                 packaging_instructions=p.packaging_instructions,
             ),
         )
@@ -116,6 +139,8 @@ class FfCatalogRow:
     wb_primary_image_url: str | None
     wb_barcodes: tuple[str, ...]
     wb_primary_barcode: str | None
+    wb_size: str | None = None
+    wb_color: str | None = None
     packaging_instructions: str | None = None
 
     def as_dict(self) -> dict[str, Any]:
@@ -131,6 +156,8 @@ class FfCatalogRow:
             "wb_primary_image_url": self.wb_primary_image_url,
             "wb_barcodes": list(self.wb_barcodes),
             "wb_primary_barcode": self.wb_primary_barcode,
+            "wb_size": self.wb_size,
+            "wb_color": self.wb_color,
             "packaging_instructions": self.packaging_instructions,
         }
 
@@ -175,6 +202,8 @@ async def list_linked_wb_catalog_rows(
         if nm is not None and p.seller_id is not None:
             card_raw = by_seller_nm.get((p.seller_id, nm))
         subj, img, barcodes = _enrich_from_raw(card_raw)
+        primary = primary_sku_display(list(barcodes))
+        wb_size, wb_color = _variant_from_raw(card_raw, primary_barcode=primary)
         rows.append(
             FfCatalogRow(
                 product_id=p.id,
@@ -187,7 +216,9 @@ async def list_linked_wb_catalog_rows(
                 wb_subject_name=subj,
                 wb_primary_image_url=img,
                 wb_barcodes=barcodes,
-                wb_primary_barcode=primary_sku_display(list(barcodes)),
+                wb_primary_barcode=primary,
+                wb_size=wb_size,
+                wb_color=wb_color,
                 packaging_instructions=p.packaging_instructions,
             ),
         )
@@ -256,6 +287,8 @@ async def list_ff_catalog_rows(
         if nm is not None and p.seller_id is not None:
             card_raw = by_seller_nm.get((p.seller_id, nm))
         subj, img, barcodes = _enrich_from_raw(card_raw)
+        primary = primary_sku_display(list(barcodes))
+        wb_size, wb_color = _variant_from_raw(card_raw, primary_barcode=primary)
         rows.append(
             FfCatalogRow(
                 product_id=p.id,
@@ -268,7 +301,9 @@ async def list_ff_catalog_rows(
                 wb_subject_name=subj,
                 wb_primary_image_url=img,
                 wb_barcodes=barcodes,
-                wb_primary_barcode=primary_sku_display(list(barcodes)),
+                wb_primary_barcode=primary,
+                wb_size=wb_size,
+                wb_color=wb_color,
                 packaging_instructions=p.packaging_instructions,
             ),
         )

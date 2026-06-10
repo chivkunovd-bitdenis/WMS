@@ -1,6 +1,7 @@
 import { EAC_MARK_DATA_URL } from './eacMarkSvg'
 import {
   escapeLabelHtml,
+  productLabelVariantLines,
   resolveProductLabelArticle,
   truncateProductLabelName,
 } from './productLabelText'
@@ -10,6 +11,8 @@ export type ProductThermalLabelData = {
   product_name: string
   sku_code: string
   wb_vendor_code?: string | null
+  wb_size?: string | null
+  wb_color?: string | null
   barcode: string
 }
 
@@ -83,12 +86,15 @@ function buildLabelHtml(data: ProductThermalLabelData, barcodeDataUrl: string): 
   const name = escapeLabelHtml(truncateProductLabelName(data.product_name))
   const article = escapeLabelHtml(resolveProductLabelArticle(data))
   const barcode = escapeLabelHtml(data.barcode.trim())
+  const variantLines = productLabelVariantLines(data)
+    .map((line) => `<p class="meta">${escapeLabelHtml(line)}</p>`)
+    .join('')
   return `<section class="label" data-testid="product-thermal-label">
   <div class="head">
     <div class="text">
       <p class="name" title="${name}">${name}</p>
       <p class="meta">Артикул: ${article}</p>
-      <p class="meta">Производитель: Россия</p>
+      ${variantLines}
     </div>
     <img class="eac" src="${EAC_MARK_DATA_URL}" alt="EAC" />
   </div>

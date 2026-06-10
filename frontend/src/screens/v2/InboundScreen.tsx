@@ -419,7 +419,8 @@ export function InboundScreen(props: Props) {
                         {boxIntakeMode ? (
                           <div data-testid="inbound-box-intake-panel" style={{ marginBottom: 16 }}>
                             <p className="subtle">
-                              Поштучная приёмка: скан короба INB-…, затем штрихкоды товаров.
+                              Необязательно: поштучная приёмка через короб (скан INB-…, затем ШК
+                              товара). Или укажите факт по строкам ниже.
                             </p>
                             {!activeIntakeBox ? (
                               <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
@@ -478,11 +479,9 @@ export function InboundScreen(props: Props) {
                               </div>
                             )}
                           </div>
-                        ) : (
-                          <p className="subtle">Пересчёт: укажи факт по строкам.</p>
-                        )}
-                        {!boxIntakeMode
-                          ? inboundDetail.lines.map((ln) => (
+                        ) : null}
+                        <p className="subtle">Пересчёт: укажи факт по строкам.</p>
+                        {inboundDetail.lines.map((ln) => (
                           <Card
                             key={ln.id}
                             as="div"
@@ -519,8 +518,7 @@ export function InboundScreen(props: Props) {
                               </Button>
                             </form>
                           </Card>
-                        ))
-                          : null}
+                        ))}
                         <Button
                           type="button"
                           data-testid="inbound-verify-complete"
