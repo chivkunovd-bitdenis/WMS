@@ -5,6 +5,7 @@
 - What changed: в черновике отгрузки на МП — скан ШК/артикула, кнопка «Добавить товары» и модалка каталога WB (фото, артикулы, ШК, поиск, категория, кол-во) как в `FfInboundRequestView`; строки таблицы по-прежнему через `FfProductLineCells`. Старый Select по остаткам убран для МП.
 - What did NOT change: сборка в короба, подбор по ячейкам, акты расхождений (там старый Select).
 - Verification: `npm run build`; e2e `ff-dashboard.spec.ts`, `ff-mp-ship-pick.spec.ts`.
+- Commit: c8db069; CI run 27307241687 success; prod deploy `194.87.96.144:8088`.
 
 ## TASK-40 — 2026-06-11 — Этикетка ШК 58×40 по макету WB (штрихкод сверху)
 
