@@ -214,39 +214,11 @@ export function FfInboundRequestView({
   }, [authHeaders, requestId])
 
   const fetchCatalogRows = useCallback(async (): Promise<WbCatalogRow[]> => {
-    const [productsRes, ffRes] = await Promise.all([
-      fetch(apiUrl('/products'), { headers: authHeaders }),
-      fetch(apiUrl('/products/ff-catalog'), { headers: authHeaders }),
-    ])
-    if (!productsRes.ok) {
-      throw new Error(await readApiErrorMessage(productsRes))
+    const res = await fetch(apiUrl('/products/linked-wb-catalog'), { headers: authHeaders })
+    if (!res.ok) {
+      throw new Error(await readApiErrorMessage(res))
     }
-    const products = (await productsRes.json()) as {
-      id: string
-      name: string
-      sku_code: string
-      wb_nm_id?: number | null
-      wb_vendor_code?: string | null
-    }[]
-    const ffRows = ffRes.ok ? ((await ffRes.json()) as WbCatalogRow[]) : []
-    const ffById = new Map(ffRows.map((r) => [r.id, r]))
-    return products.map((p) => {
-      const ff = ffById.get(p.id)
-      if (ff) {
-        return ff
-      }
-      return {
-        id: p.id,
-        name: p.name,
-        sku_code: p.sku_code,
-        wb_nm_id: p.wb_nm_id ?? null,
-        wb_vendor_code: p.wb_vendor_code ?? null,
-        wb_subject_name: null,
-        wb_primary_image_url: null,
-        wb_barcodes: [],
-        wb_primary_barcode: null,
-      }
-    })
+    return (await res.json()) as WbCatalogRow[]
   }, [authHeaders])
 
   const loadCatalog = useCallback(async () => {
@@ -378,6 +350,13 @@ export function FfInboundRequestView({
       cancelled = true
     }
   }, [loadDetail])
+
+  useEffect(() => {
+    if (!detail) {
+      return
+    }
+    void loadCatalog()
+  }, [detail, loadCatalog])
 
   useEffect(() => {
     setPlannedDateDraft(detail?.planned_delivery_date ?? '')

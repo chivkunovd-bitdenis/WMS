@@ -1,13 +1,14 @@
 import type { ReactNode } from 'react'
+import { useState } from 'react'
 import PrintOutlined from '@mui/icons-material/PrintOutlined'
 import { IconButton, TableCell, Tooltip, Typography } from '@mui/material'
 import { ProductPhotoThumb } from './ProductPhotoThumb'
+import { ProductBarcodePrintDialog } from './ProductBarcodePrintDialog'
 import {
   formatProductBarcodeDisplay,
   resolveProductPrimaryBarcode,
   type ProductLineDisplayMeta,
 } from '../types/wbProductCatalog'
-import { printProductBarcodeFromMeta } from '../utils/productBarcodePrint'
 
 type HeadProps = {
   showPrint?: boolean
@@ -43,6 +44,7 @@ export function FfProductLineCells({
   printTestId = 'ff-product-barcode-print',
   nameExtra,
 }: CellsProps) {
+  const [printOpen, setPrintOpen] = useState(false)
   const barcodeDisplay = formatProductBarcodeDisplay(meta)
   const printable = Boolean(resolveProductPrimaryBarcode(meta))
 
@@ -72,25 +74,29 @@ export function FfProductLineCells({
       </TableCell>
       {showPrint ? (
         <TableCell align="center" sx={{ pr: 1 }}>
-          <Tooltip title={printable ? 'Печать ШК товара' : 'Нет баркода WB'}>
+          <Tooltip
+            title={
+              printable
+                ? 'Печать этикетки 58×40'
+                : 'Нет баркода WB — откройте диалог и синхронизируйте карточки'
+            }
+          >
             <span>
               <IconButton
                 size="small"
                 aria-label="Печать ШК товара"
-                disabled={!printable}
                 data-testid={printTestId}
-                onClick={() => {
-                  try {
-                    printProductBarcodeFromMeta(meta)
-                  } catch (e) {
-                    window.alert(e instanceof Error ? e.message : 'Не удалось напечатать ШК.')
-                  }
-                }}
+                onClick={() => setPrintOpen(true)}
               >
                 <PrintOutlined fontSize="small" />
               </IconButton>
             </span>
           </Tooltip>
+          <ProductBarcodePrintDialog
+            open={printOpen}
+            meta={meta}
+            onClose={() => setPrintOpen(false)}
+          />
         </TableCell>
       ) : null}
     </>

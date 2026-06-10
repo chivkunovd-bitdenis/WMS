@@ -316,6 +316,95 @@ async def test_ff_catalog_shows_only_products_with_warehouse_movements(
 
 
 @pytest.mark.asyncio
+async def test_linked_wb_catalog_before_stock_movement(
+    async_client: AsyncClient,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    async def fake_cards(
+        client: object,
+        *,
+        api_token: str,
+        content_api_base: str | None = None,
+        limit: int = 100,
+    ) -> dict[str, object]:
+        return {
+            "cards": [
+                {
+                    "nmID": 777001,
+                    "vendorCode": "wb38qjqidg",
+                    "sizes": [{"skus": ["2041647591153"]}],
+                }
+            ],
+            "cursor": {},
+        }
+
+    monkeypatch.setattr(
+        "app.services.wildberries_sync_service.fetch_cards_list",
+        fake_cards,
+    )
+
+    suffix = str(int(time.time() * 1000))
+    reg = await async_client.post(
+        "/auth/register",
+        json={
+            "organization_name": "Linked WB",
+            "slug": f"lnk-wb-{suffix}",
+            "admin_email": f"lnk-wb-{suffix}@example.com",
+            "password": "password123",
+        },
+    )
+    assert reg.status_code == 200
+    ah = {"Authorization": f"Bearer {reg.json()['access_token']}"}
+    sid = (await async_client.post("/sellers", headers=ah, json={"name": "S"})).json()["id"]
+    await async_client.patch(
+        f"/integrations/wildberries/sellers/{sid}/tokens",
+        headers=ah,
+        json={"content_api_token": "token"},
+    )
+    start = await async_client.post(
+        "/operations/background-jobs",
+        headers=ah,
+        json={"job_type": JOB_TYPE_WILDBERRIES_CARDS_SYNC, "seller_id": sid},
+    )
+    jid = start.json()["id"]
+    for _ in range(40):
+        await asyncio.sleep(0.12)
+        jr = await async_client.get(f"/operations/background-jobs/{jid}", headers=ah)
+        if jr.json()["status"] == "done":
+            break
+
+    pr = await async_client.post(
+        "/products",
+        headers=ah,
+        json={
+            "name": "Брюки коричневые L",
+            "sku_code": f"LBL-{suffix}",
+            "length_mm": 10,
+            "width_mm": 10,
+            "height_mm": 10,
+            "seller_id": sid,
+        },
+    )
+    pid = pr.json()["id"]
+    link = await async_client.post(
+        f"/integrations/wildberries/sellers/{sid}/link-product",
+        headers=ah,
+        json={"product_id": pid, "nm_id": 777001},
+    )
+    assert link.status_code == 200, link.text
+
+    ff = await async_client.get("/products/ff-catalog", headers=ah)
+    assert ff.status_code == 200
+    assert pid not in {r["id"] for r in ff.json()}
+
+    linked = await async_client.get("/products/linked-wb-catalog", headers=ah)
+    assert linked.status_code == 200, linked.text
+    row = next(r for r in linked.json() if r["id"] == pid)
+    assert row["wb_primary_barcode"] == "2041647591153"
+    assert row["wb_vendor_code"] == "wb38qjqidg"
+
+
+@pytest.mark.asyncio
 async def test_ff_catalog_forbidden_for_seller(async_client: AsyncClient) -> None:
     suffix = str(int(time.time() * 1000))
     reg = await async_client.post(
