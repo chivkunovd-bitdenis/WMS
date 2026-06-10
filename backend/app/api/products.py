@@ -21,6 +21,7 @@ from app.services.catalog_service import (
 )
 from app.services.seller_wb_catalog_service import (
     list_ff_catalog_rows,
+    list_linked_wb_catalog_rows,
     list_seller_wb_catalog_rows,
 )
 
@@ -142,6 +143,23 @@ async def get_seller_wb_catalog(
     rows = await list_seller_wb_catalog_rows(session, user.tenant_id, user.seller_id)
     return [
         SellerWbCatalogOut(
+            **r.as_dict(),
+            has_packaging_instructions=bool((r.packaging_instructions or "").strip()),
+        )
+        for r in rows
+    ]
+
+
+@router.get("/linked-wb-catalog", response_model=list[FfCatalogOut])
+async def get_linked_wb_catalog(
+    user: Annotated[User, Depends(require_fulfillment_admin)],
+    session: Annotated[AsyncSession, Depends(get_db)],
+    seller_id: uuid.UUID | None = _seller_id_query,
+) -> list[FfCatalogOut]:
+    """WB enrichment for all products (barcodes/photo) — including before first stock movement."""
+    rows = await list_linked_wb_catalog_rows(session, user.tenant_id, seller_id=seller_id)
+    return [
+        FfCatalogOut(
             **r.as_dict(),
             has_packaging_instructions=bool((r.packaging_instructions or "").strip()),
         )
