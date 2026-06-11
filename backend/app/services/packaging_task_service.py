@@ -24,6 +24,7 @@ from app.models.packaging_task import (
 )
 from app.services import inventory_service as inv_svc
 from app.services import sorting_location_service as sorting_loc_svc
+from app.services import staff_packaging_billing_service as billing_svc
 
 PackagingTaskError = Literal[
     "not_found",
@@ -202,6 +203,7 @@ async def create_manual_task(
     warehouse_id: uuid.UUID,
     lines: list[tuple[uuid.UUID, uuid.UUID | None, int]],
     inbound_intake_request_id: uuid.UUID | None = None,
+    created_by_user_id: uuid.UUID | None = None,
 ) -> PackagingTask:
     if not lines:
         raise PackagingTaskServiceError("no_lines")
@@ -210,6 +212,7 @@ async def create_manual_task(
         warehouse_id=warehouse_id,
         status=STATUS_DRAFT,
         inbound_intake_request_id=inbound_intake_request_id,
+        created_by_user_id=created_by_user_id,
     )
     session.add(task)
     await session.flush()
@@ -316,6 +319,8 @@ async def ensure_task_for_unload(
     session: AsyncSession,
     tenant_id: uuid.UUID,
     unload_id: uuid.UUID,
+    *,
+    created_by_user_id: uuid.UUID | None = None,
 ) -> PackagingTask:
     existing = await get_task_for_unload(session, tenant_id, unload_id)
     if existing is not None:
@@ -331,6 +336,7 @@ async def ensure_task_for_unload(
         warehouse_id=req.warehouse_id,
         status=STATUS_DRAFT,
         marketplace_unload_request_id=unload_id,
+        created_by_user_id=created_by_user_id,
     )
     session.add(task)
     await session.flush()
@@ -367,6 +373,8 @@ async def confirm_line_packed_from_shelf(
     task_id: uuid.UUID,
     line_id: uuid.UUID,
     qty: int | None = None,
+    *,
+    acting_user_id: uuid.UUID | None = None,
 ) -> PackagingTask:
     task = await get_task(session, tenant_id, task_id)
     if task is None:
@@ -386,6 +394,10 @@ async def confirm_line_packed_from_shelf(
         raise PackagingTaskServiceError("invalid_qty")
     line.qty_confirmed_packed = confirmed
     _touch_task(task)
+    if acting_user_id is not None:
+        await billing_svc.finalize_task_billing(
+            session, task, completed_by_user_id=acting_user_id
+        )
     await session.commit()
     loaded = await get_task(session, tenant_id, task_id)
     assert loaded is not None
@@ -398,6 +410,8 @@ async def record_pack_progress(
     task_id: uuid.UUID,
     line_id: uuid.UUID,
     qty: int,
+    *,
+    acting_user_id: uuid.UUID | None = None,
 ) -> PackagingTask:
     if qty < 1:
         raise PackagingTaskServiceError("invalid_qty")
@@ -427,6 +441,10 @@ async def record_pack_progress(
         raise
     line.qty_packed_in_task = int(line.qty_packed_in_task) + qty
     _touch_task(task)
+    if acting_user_id is not None:
+        await billing_svc.finalize_task_billing(
+            session, task, completed_by_user_id=acting_user_id
+        )
     await session.commit()
     loaded = await get_task(session, tenant_id, task_id)
     assert loaded is not None

@@ -48,6 +48,7 @@ async def test_admin_creates_staff_user_first_login_and_permissions(
             "reception": True,
             "cells": False,
             "inventory": False,
+            "packaging": False,
         },
     )
     assert patched.status_code == 200, patched.text

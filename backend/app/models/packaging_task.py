@@ -56,6 +56,23 @@ class PackagingTask(Base):
         ForeignKey("inbound_intake_requests.id", ondelete="SET NULL"),
         nullable=True,
     )
+    created_by_user_id: Mapped[uuid.UUID | None] = mapped_column(
+        Uuid(as_uuid=True),
+        ForeignKey("users.id", ondelete="SET NULL"),
+        nullable=True,
+    )
+    completed_by_user_id: Mapped[uuid.UUID | None] = mapped_column(
+        Uuid(as_uuid=True),
+        ForeignKey("users.id", ondelete="SET NULL"),
+        nullable=True,
+        index=True,
+    )
+    completed_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True, index=True
+    )
+    billing_units_packed: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    billing_rate_kopecks: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    billing_earned_kopecks: Mapped[int | None] = mapped_column(Integer, nullable=True)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), nullable=False
     )

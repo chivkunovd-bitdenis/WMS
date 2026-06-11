@@ -16,6 +16,7 @@ from app.services.auth_service import get_user_by_id
 from app.services.staff_permissions_service import (
     PERM_CELLS,
     PERM_MP_SHIPMENTS,
+    PERM_PACKAGING,
     PERM_RECEPTION,
     get_staff_permissions,
 )
@@ -154,6 +155,7 @@ def require_ff_or_seller_with_permission(
 require_reception_access = require_ff_permission(PERM_RECEPTION)
 require_mp_shipments_access = require_ff_or_seller_with_permission(PERM_MP_SHIPMENTS)
 require_cells_access = require_ff_permission(PERM_CELLS)
+require_packaging_access = require_ff_permission(PERM_PACKAGING)
 
 
 async def seller_line_product_scope(

@@ -58,6 +58,7 @@ class StaffPermissionsOut(BaseModel):
     reception: bool
     cells: bool
     inventory: bool
+    packaging: bool
 
 
 class SellerAccountCreate(BaseModel):
@@ -245,6 +246,7 @@ async def me(
         reception=perms_dict["reception"],
         cells=perms_dict["cells"],
         inventory=perms_dict["inventory"],
+        packaging=perms_dict["packaging"],
     )
     return UserMeResponse(
         id=str(user.id),

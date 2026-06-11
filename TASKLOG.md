@@ -1,5 +1,11 @@
 # TASKLOG
 
+## TASK-50 — 2026-06-11 — Биллинг сотрудников за упаковку
+
+- What changed: ставка за ед. (₽) в настройках сотрудников; расчёт ЗП по завершённым заданиям (только `qty_packed_in_task`, снимок ставки при завершении); фильтр по месяцу (МСК); право «Упаковка» в матрице доступа; API `PATCH /auth/staff-accounts/{id}/packaging-rate`; миграция `0038`.
+- What did NOT change: биллинг селлеров (литр‑день), выплаты/бухгалтерия.
+- Verification: `ruff` / `mypy` / `pytest tests/test_staff_packaging_billing.py`; `npm run build`; e2e `ff-staff-packaging-billing.spec.ts`.
+
 ## TASK-49 — 2026-06-11 — Упаковка: таблица создания задания как в приёмке
 
 - What changed: диалог «Создать задание на упаковку» — ширина `min(1200px, 96vw)` как у `WbProductPickerDialog` в приёмке; те же отступы таблицы; фиксированные ширины колонок количества; `minWidth: 180` у «Наименование» в `FfProductLineCells` (не ломается посимвольно).
