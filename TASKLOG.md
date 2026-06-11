@@ -4,13 +4,15 @@
 
 - What changed: `SellerWbProductPickerDialog` → ядро `WbProductPickerDialog` с `variant="ff"` (`FfProductLineCells`, печать ШК); подключено в `FfInboundRequestView` и `FfSuppliesShipmentsPage`. Пропсы `applyLabel`, `renderTrailingHeadCells` / `renderTrailingBodyCells` для будущих колонок FF.
 - What did NOT change: API; логика сохранения строк остаётся в родительских экранах.
-- Verification: `npm run build`; e2e ff-dashboard, ff-inbound-boxes, seller-mp-unload, seller-cabinet — 8 passed.
+- Verification: `npm run build`; e2e ff-dashboard, ff-inbound-boxes, seller-mp-unload, seller-cabinet — 8 passed; prod `194.87.96.144:8088` commit `9094acf`.
+- Commit: 9094acf.
 
 ## TASK-44 — 2026-06-11 — Общий picker каталога WB для селлера
 
 - What changed: `SellerWbProductPickerDialog` — единая модалка выбора товаров (поиск, категория, фото, qty); подключена в `SellerInboundDraftScreen` и `SellerMarketplaceUnloadDialog`. Отгрузка на МП передаёт `showAvailableColumn`, `filterRow`, `getAvailable`.
-- What did NOT change: портал ФФ (`FfInboundRequestView`, `FfSuppliesShipmentsPage`) — шаг 2 позже.
+- What did NOT change: портал ФФ — подключён в TASK-45.
 - Verification: `npm run build`; e2e seller-mp-unload, seller-available-stock, seller-cabinet, ff-inbound-boxes.
+- Commit: 4cb7c33 (в prod вместе с 9094acf).
 
 ## TASK-43 — 2026-06-11 — Селлер: отгрузка на МП — добавление товаров как в приёмке
 
