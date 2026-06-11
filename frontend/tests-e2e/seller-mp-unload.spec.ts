@@ -154,7 +154,6 @@ test('seller creates MP unload draft, plans with stock table', async ({ page }) 
   ]);
   await expect(page.getByTestId('seller-mp-unload-dialog')).toBeVisible();
 
-  await expect(page.getByTestId('seller-mp-product-stock-table')).toContainText(sku);
   await page.getByLabel('Склад WB (маркетплейс)').click();
   await expect(page.getByRole('option', { name: /E2E WB склад/ })).toBeVisible();
   await Promise.all([
@@ -182,18 +181,26 @@ test('seller creates MP unload draft, plans with stock table', async ({ page }) 
     ),
     setWmsDateField(page, 'seller-mp-planned-date', '2026-06-15'),
   ]);
-  await page.getByTestId(`seller-mp-qty-${productId}`).locator('input').fill('4');
-  await expect(page.getByTestId('seller-mp-plan')).toBeEnabled();
-
+  await page.getByTestId('seller-mp-add-products').click();
+  await expect(page.getByTestId('seller-mp-picker')).toBeVisible();
+  await page.getByTestId('seller-mp-picker-search').fill(sku);
+  await page.getByTestId('seller-mp-picker-qty').first().fill('4');
   await Promise.all([
     page.waitForResponse(
       (r) =>
-        r.request().method() === 'PUT' &&
+        r.request().method() === 'POST' &&
         r.url().includes('/operations/marketplace-unload-requests/') &&
         r.url().includes('/lines') &&
         r.status() >= 200 &&
         r.status() < 300,
     ),
+    page.getByTestId('seller-mp-picker-apply').click(),
+  ]);
+  await expect(page.getByTestId('seller-mp-picker')).toBeHidden();
+  await expect(page.getByTestId('seller-mp-lines-table')).toContainText(sku);
+  await expect(page.getByTestId('seller-mp-plan')).toBeEnabled();
+
+  await Promise.all([
     page.waitForResponse(
       (r) =>
         r.request().method() === 'POST' &&

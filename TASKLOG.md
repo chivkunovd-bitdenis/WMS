@@ -1,5 +1,24 @@
 # TASKLOG
 
+## TASK-44 — 2026-06-11 — Общий picker каталога WB для селлера
+
+- What changed: `SellerWbProductPickerDialog` — единая модалка выбора товаров (поиск, категория, фото, qty); подключена в `SellerInboundDraftScreen` и `SellerMarketplaceUnloadDialog`. Отгрузка на МП передаёт `showAvailableColumn`, `filterRow`, `getAvailable`.
+- What did NOT change: портал ФФ (`FfInboundRequestView`, `FfSuppliesShipmentsPage`) — шаг 2 позже.
+- Verification: `npm run build`; e2e seller-mp-unload, seller-available-stock, seller-cabinet, ff-inbound-boxes.
+
+## TASK-43 — 2026-06-11 — Селлер: отгрузка на МП — добавление товаров как в приёмке
+
+- What changed: в `SellerMarketplaceUnloadDialog` убрана старая таблица всех остатков; кнопка «Добавить товары» + модалка каталога WB (поиск, категория, фото, ШК, колонка «Доступно») как в `SellerInboundDraftScreen`; строки заявки редактируются в таблице с удалением. E2e `seller-mp-unload`, `seller-available-stock` обновлены.
+- What did NOT change: API отгрузки на МП; портал ФФ (уже на новом паттерне).
+- Verification: `npm run build`; e2e `seller-mp-unload.spec.ts`, `seller-available-stock.spec.ts` — 2 passed.
+
+## TASK-42 — 2026-06-11 — Отгрузка на МП: видимая панель добавления + деплой
+
+- What changed: панель «Добавление товаров» (скан ШК + «Добавить товары») перенесена **под склад WB, до таблицы строк**; Caddy `no-cache` для `index.html`; e2e проверяет отсутствие старого Select на МП.
+- What did NOT change: логика модалки каталога и API строк (c8db069); акты расхождений.
+- Verification: PR #33 CI green; prod `194.87.96.144:8088` commit `d3a951e`, bundle `ff-CC085PGz.js`.
+- Commit: d3a951e (squash merge PR #33).
+
 ## TASK-41 — 2026-06-11 — Отгрузка на МП: добавление товаров как в приёмке
 
 - What changed: в черновике отгрузки на МП — скан ШК/артикула, кнопка «Добавить товары» и модалка каталога WB (фото, артикулы, ШК, поиск, категория, кол-во) как в `FfInboundRequestView`; строки таблицы по-прежнему через `FfProductLineCells`. Старый Select по остаткам убран для МП.

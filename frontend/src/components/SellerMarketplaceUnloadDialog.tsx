@@ -14,12 +14,18 @@ import {
   Table,
   TableBody,
   TableCell,
+  TableContainer,
   TableHead,
   TableRow,
   TextField,
   Typography,
 } from '@mui/material'
 import { apiUrl } from '../api'
+import { ProductPhotoThumb } from './ProductPhotoThumb'
+import {
+  SellerWbProductPickerDialog,
+  type SellerWbCatalogRow,
+} from './SellerWbProductPickerDialog'
 import { WmsDateField } from './WmsDateField'
 import { readApiErrorMessage } from '../utils/readApiErrorMessage'
 
@@ -83,13 +89,37 @@ export function SellerMarketplaceUnloadDialog({
   const [modalError, setModalError] = useState<string | null>(null)
   const [detail, setDetail] = useState<UnloadDetail | null>(null)
   const [stockRows, setStockRows] = useState<StockRow[]>([])
-  const [qtyByProduct, setQtyByProduct] = useState<Record<string, string>>({})
+  const [catalog, setCatalog] = useState<SellerWbCatalogRow[] | null>(null)
+  const [pickerOpen, setPickerOpen] = useState(false)
   const [wbWarehouses, setWbWarehouses] = useState<WbWarehouse[]>([])
   const [plannedDate, setPlannedDate] = useState<string | null>(null)
 
   const isDraft = detail?.status === 'draft'
   const isSubmitted = detail?.status === 'submitted'
   const modalBusyEffective = modalBusy || parentBusy
+
+  const stockByProductId = useMemo(() => {
+    const m = new Map<string, StockRow>()
+    for (const row of stockRows) {
+      m.set(row.product_id, row)
+    }
+    return m
+  }, [stockRows])
+
+  const catalogById = useMemo(() => {
+    const m = new Map<string, SellerWbCatalogRow>()
+    if (catalog) {
+      for (const r of catalog) {
+        m.set(r.id, r)
+      }
+    }
+    return m
+  }, [catalog])
+
+  const lineProductIds = useMemo(
+    () => new Set(detail?.lines.map((l) => l.product_id) ?? []),
+    [detail],
+  )
 
   const loadDetail = useCallback(async () => {
     if (!token || !requestId) {
@@ -110,11 +140,6 @@ export function SellerMarketplaceUnloadDialog({
       const j = (await res.json()) as UnloadDetail
       setDetail(j)
       setPlannedDate(j.planned_shipment_date ?? null)
-      const qtyMap: Record<string, string> = {}
-      for (const ln of j.lines) {
-        qtyMap[ln.product_id] = String(ln.quantity)
-      }
-      setQtyByProduct(qtyMap)
     } catch (e) {
       setModalError(e instanceof Error ? e.message : 'Не удалось загрузить заявку.')
     } finally {
@@ -174,16 +199,111 @@ export function SellerMarketplaceUnloadDialog({
     void loadWbWarehouses()
   }, [open, loadDetail, loadStock, loadWbWarehouses])
 
-  const linePayload = useMemo(() => {
-    return stockRows
-      .map((row) => ({
-        product_id: row.product_id,
-        quantity: Number.parseInt(qtyByProduct[row.product_id] ?? '0', 10) || 0,
-      }))
-      .filter((x) => x.quantity > 0)
-  }, [qtyByProduct, stockRows])
+  useEffect(() => {
+    if (!token || !open) {
+      return
+    }
+    if (catalog !== null) {
+      return
+    }
+    let cancelled = false
+    void (async () => {
+      try {
+        const res = await fetch(apiUrl('/products/wb-catalog'), {
+          headers: { ...authHeaders(token) },
+        })
+        if (!res.ok) {
+          return
+        }
+        const rows = (await res.json()) as SellerWbCatalogRow[]
+        if (!cancelled) {
+          setCatalog(rows)
+        }
+      } catch {
+        // photos optional until picker opens
+      }
+    })()
+    return () => {
+      cancelled = true
+    }
+  }, [authHeaders, catalog, open, token])
 
-  const saveLines = async (): Promise<boolean> => {
+  const openPicker = async () => {
+    setModalError(null)
+    if (catalog === null) {
+      try {
+        const res = await fetch(apiUrl('/products/wb-catalog'), {
+          headers: { ...authHeaders(token) },
+        })
+        if (!res.ok) {
+          setModalError(await readApiErrorMessage(res))
+          return
+        }
+        setCatalog((await res.json()) as SellerWbCatalogRow[])
+      } catch (e) {
+        setModalError(e instanceof Error ? e.message : 'Не удалось загрузить каталог.')
+        return
+      }
+    }
+    setPickerOpen(true)
+  }
+
+  const pickerFilterRow = useCallback(
+    (row: SellerWbCatalogRow) => {
+      const available = stockByProductId.get(row.id)?.available ?? 0
+      return available >= 1 || lineProductIds.has(row.id)
+    },
+    [lineProductIds, stockByProductId],
+  )
+
+  const pickerGetAvailable = useCallback(
+    (productId: string) => stockByProductId.get(productId)?.available ?? 0,
+    [stockByProductId],
+  )
+
+  const applyPicker = async (pickerQtyByProduct: Record<string, number>) => {
+    if (!token || !requestId) {
+      return
+    }
+    setModalBusy(true)
+    setModalError(null)
+    try {
+      for (const [productId, rawQty] of Object.entries(pickerQtyByProduct)) {
+        const qty = Number.isFinite(rawQty) ? Math.floor(rawQty) : 0
+        if (qty <= 0 || lineProductIds.has(productId)) {
+          continue
+        }
+        const available = stockByProductId.get(productId)?.available ?? 0
+        if (qty > available) {
+          setModalError(`Недостаточно остатка: доступно ${available}.`)
+          setModalBusy(false)
+          return
+        }
+        const res = await fetch(
+          apiUrl(`/operations/marketplace-unload-requests/${requestId}/lines`),
+          {
+            method: 'POST',
+            headers: { ...authHeaders(token), 'Content-Type': 'application/json' },
+            body: JSON.stringify({ product_id: productId, quantity: qty }),
+          },
+        )
+        if (!res.ok) {
+          setModalError(await readApiErrorMessage(res))
+          setModalBusy(false)
+          return
+        }
+      }
+      setPickerOpen(false)
+      await loadDetail()
+      await loadStock()
+    } catch (e) {
+      setModalError(e instanceof Error ? e.message : 'Не удалось добавить товары.')
+    } finally {
+      setModalBusy(false)
+    }
+  }
+
+  const replaceAllLines = async (lines: { product_id: string; quantity: number }[]): Promise<boolean> => {
     if (!token || !requestId) {
       return false
     }
@@ -193,7 +313,7 @@ export function SellerMarketplaceUnloadDialog({
       const res = await fetch(apiUrl(`/operations/marketplace-unload-requests/${requestId}/lines`), {
         method: 'PUT',
         headers: { ...authHeaders(token), 'Content-Type': 'application/json' },
-        body: JSON.stringify({ lines: linePayload }),
+        body: JSON.stringify({ lines }),
       })
       if (!res.ok) {
         setModalError(await readApiErrorMessage(res))
@@ -205,6 +325,41 @@ export function SellerMarketplaceUnloadDialog({
     } catch (e) {
       setModalError(e instanceof Error ? e.message : 'Не удалось сохранить состав.')
       return false
+    } finally {
+      setModalBusy(false)
+    }
+  }
+
+  const patchLineQty = async (lineId: string, quantity: number) => {
+    if (!detail) {
+      return
+    }
+    const lines = detail.lines.map((ln) => ({
+      product_id: ln.product_id,
+      quantity: ln.id === lineId ? quantity : ln.quantity,
+    }))
+    await replaceAllLines(lines)
+  }
+
+  const deleteLine = async (lineId: string) => {
+    if (!token || !requestId) {
+      return
+    }
+    setModalBusy(true)
+    setModalError(null)
+    try {
+      const res = await fetch(
+        apiUrl(`/operations/marketplace-unload-requests/${requestId}/lines/${lineId}`),
+        { method: 'DELETE', headers: authHeaders(token) },
+      )
+      if (!res.ok) {
+        setModalError(await readApiErrorMessage(res))
+        return
+      }
+      await loadDetail()
+      await loadStock()
+    } catch (e) {
+      setModalError(e instanceof Error ? e.message : 'Не удалось удалить строку.')
     } finally {
       setModalBusy(false)
     }
@@ -268,8 +423,8 @@ export function SellerMarketplaceUnloadDialog({
       setModalError('Укажите дату отгрузки на маркетплейс.')
       return
     }
-    const saved = await saveLines()
-    if (!saved) {
+    if (!detail || detail.lines.length < 1) {
+      setModalError('Добавьте хотя бы один товар.')
       return
     }
     setModalBusy(true)
@@ -329,170 +484,271 @@ export function SellerMarketplaceUnloadDialog({
     }
   }
 
-  return (
-    <Dialog open={open} onClose={onClose} fullScreen data-testid="seller-mp-unload-dialog">
-      <DialogTitle>Отгрузка на маркетплейс</DialogTitle>
-      <DialogContent dividers>
-        {modalError ? (
-          <Alert severity="error" sx={{ mb: 2 }} data-testid="seller-mp-unload-error">
-            {modalError}
-          </Alert>
-        ) : null}
-        {detail ? (
-          <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
-            Склад ФФ: {detail.warehouse_name} · {statusRu(detail.status)}
-            {detail.planned_shipment_date ? ` · отгрузка ${detail.planned_shipment_date}` : ''}
-          </Typography>
-        ) : null}
-        {isDraft ? (
-          <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1.25} sx={{ mb: 2 }}>
-            <FormControl size="small" sx={{ minWidth: 280 }}>
-              <InputLabel id="seller-mp-wb-warehouse">Склад WB (маркетплейс)</InputLabel>
-              <Select
-                labelId="seller-mp-wb-warehouse"
-                label="Склад WB (маркетплейс)"
-                value={detail?.wb_mp_warehouse_id ?? ''}
-                onChange={(e) => {
-                  const v = Number(e.target.value)
-                  if (Number.isInteger(v) && v > 0) {
-                    void setWbWarehouse(v)
-                  }
-                }}
-                data-testid="seller-mp-wb-warehouse-select"
-                disabled={modalBusyEffective}
-              >
-                <MenuItem value="">
-                  <em>Не выбран</em>
-                </MenuItem>
-                {wbWarehouses.map((w) => (
-                  <MenuItem key={w.wb_warehouse_id} value={w.wb_warehouse_id}>
-                    {w.name} ({w.wb_warehouse_id})
-                  </MenuItem>
-                ))}
-              </Select>
-            </FormControl>
-            <WmsDateField
-              label="Дата отгрузки на МП"
-              value={plannedDate}
-              onChange={(iso) => void patchPlannedDate(iso)}
-              disabled={modalBusyEffective}
-              required
-              testId="seller-mp-planned-date"
-              slotProps={{ textField: { fullWidth: false, sx: { minWidth: 220 } } }}
-            />
-          </Stack>
-        ) : null}
-
-        {isDraft ? (
-          <Table size="small" data-testid="seller-mp-product-stock-table" sx={{ mb: 2 }}>
-            <TableHead>
-              <TableRow>
-                <TableCell>Артикул</TableCell>
-                <TableCell>Товар</TableCell>
-                <TableCell align="right">Доступно на ФФ</TableCell>
-                <TableCell align="right">К отгрузке</TableCell>
-              </TableRow>
-            </TableHead>
-            <TableBody>
-              {stockRows.length === 0 ? (
-                <TableRow>
-                  <TableCell colSpan={4}>
-                    <Typography variant="body2" color="text.secondary">
-                      Нет товаров с остатком на складе ФФ.
+  const draftLinesTable = isDraft && detail ? (
+    <>
+      <Stack direction="row" spacing={1} sx={{ mb: 1.5, justifyContent: 'flex-end' }}>
+        <Button
+          variant="outlined"
+          disabled={modalBusyEffective}
+          onClick={() => void openPicker()}
+          data-testid="seller-mp-add-products"
+        >
+          Добавить товары
+        </Button>
+      </Stack>
+      <TableContainer sx={{ width: '100%', overflowX: 'hidden', mb: 2 }}>
+        <Table
+          size="small"
+          data-testid="seller-mp-lines-table"
+          sx={{
+            tableLayout: 'fixed',
+            width: '100%',
+            '& th': { py: 1.25 },
+            '& td': { py: 1.25 },
+          }}
+        >
+          <TableHead>
+            <TableRow>
+              <TableCell sx={{ width: 56 }}>Фото</TableCell>
+              <TableCell sx={{ width: 190, pl: 2 }}>Артикул</TableCell>
+              <TableCell sx={{ width: 220 }}>ШК</TableCell>
+              <TableCell sx={{ width: 140 }}>Артикул продавца</TableCell>
+              <TableCell sx={{ width: 120, pr: 2 }}>Артикул WB</TableCell>
+              <TableCell sx={{ pl: 2 }}>Наименование</TableCell>
+              <TableCell align="right" sx={{ width: 110 }}>
+                Доступно
+              </TableCell>
+              <TableCell align="right" sx={{ width: 120 }}>
+                К отгрузке
+              </TableCell>
+              <TableCell sx={{ width: 92 }} />
+            </TableRow>
+          </TableHead>
+          <TableBody>
+            {detail.lines.map((ln) => {
+              const cat = catalogById.get(ln.product_id)
+              const img = cat?.wb_primary_image_url ?? undefined
+              const barcode =
+                cat?.wb_primary_barcode ??
+                (cat?.wb_barcodes.length ? cat.wb_barcodes.join(', ') : '—')
+              const available = stockByProductId.get(ln.product_id)?.available ?? 0
+              return (
+                <TableRow
+                  key={ln.id}
+                  hover
+                  data-testid="seller-mp-line-row"
+                  sx={{
+                    '& td': { px: 1.25 },
+                    '& td:first-of-type': { pl: 1 },
+                    '& td:last-of-type': { pr: 1 },
+                  }}
+                >
+                  <TableCell>
+                    <ProductPhotoThumb src={img} />
+                  </TableCell>
+                  <TableCell sx={{ whiteSpace: 'nowrap', pl: 2 }} title={ln.sku_code}>
+                    {ln.sku_code}
+                  </TableCell>
+                  <TableCell sx={{ whiteSpace: 'nowrap' }} title={barcode}>
+                    {barcode}
+                  </TableCell>
+                  <TableCell
+                    sx={{ whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}
+                    title={cat?.wb_vendor_code ?? '—'}
+                  >
+                    {cat?.wb_vendor_code ?? '—'}
+                  </TableCell>
+                  <TableCell sx={{ pr: 2 }}>{cat?.wb_nm_id ?? '—'}</TableCell>
+                  <TableCell sx={{ pl: 2, whiteSpace: 'normal', wordBreak: 'break-word' }}>
+                    <Typography variant="body2" sx={{ lineHeight: 1.25 }}>
+                      {ln.product_name}
                     </Typography>
                   </TableCell>
-                </TableRow>
-              ) : (
-                stockRows.map((row) => (
-                  <TableRow key={row.product_id}>
-                    <TableCell>{row.sku_code}</TableCell>
-                    <TableCell>{row.product_name}</TableCell>
-                    <TableCell align="right">{row.available}</TableCell>
-                    <TableCell align="right">
-                      <TextField
-                        size="small"
-                        type="number"
-                        slotProps={{ htmlInput: { min: 0, max: row.available } }}
-                        value={qtyByProduct[row.product_id] ?? ''}
-                        onChange={(e) =>
-                          setQtyByProduct((prev) => ({
-                            ...prev,
-                            [row.product_id]: e.target.value,
-                          }))
+                  <TableCell align="right">{available}</TableCell>
+                  <TableCell align="right" sx={{ minWidth: 120 }}>
+                    <TextField
+                      type="number"
+                      size="small"
+                      disabled={modalBusyEffective}
+                      defaultValue={ln.quantity}
+                      key={`${ln.id}-${ln.quantity}`}
+                      onBlur={(e) => {
+                        const v = Number(e.target.value)
+                        if (!Number.isFinite(v) || v < 1) {
+                          return
                         }
-                        data-testid={`seller-mp-qty-${row.product_id}`}
-                        disabled={modalBusyEffective}
-                        sx={{ width: 96 }}
-                      />
-                    </TableCell>
-                  </TableRow>
-                ))
-              )}
-            </TableBody>
-          </Table>
-        ) : null}
-
-        {detail && detail.lines.length > 0 ? (
-          <Table size="small" data-testid="seller-mp-lines-table">
-            <TableHead>
-              <TableRow>
-                <TableCell>Артикул</TableCell>
-                <TableCell>Товар</TableCell>
-                <TableCell align="right">Кол-во</TableCell>
-              </TableRow>
-            </TableHead>
-            <TableBody>
-              {detail.lines.map((ln) => (
-                <TableRow key={ln.id}>
-                  <TableCell>{ln.sku_code}</TableCell>
-                  <TableCell>{ln.product_name}</TableCell>
-                  <TableCell align="right">{ln.quantity}</TableCell>
+                        if (v > available) {
+                          setModalError(`Недостаточно остатка: доступно ${available}.`)
+                          return
+                        }
+                        if (v !== ln.quantity) {
+                          void patchLineQty(ln.id, v)
+                        }
+                      }}
+                      slotProps={{
+                        htmlInput: {
+                          min: 1,
+                          max: available,
+                          'data-testid': `seller-mp-qty-${ln.product_id}`,
+                        },
+                      }}
+                    />
+                  </TableCell>
+                  <TableCell>
+                    <Button
+                      size="small"
+                      color="error"
+                      disabled={modalBusyEffective}
+                      onClick={() => void deleteLine(ln.id)}
+                      data-testid="seller-mp-line-delete"
+                    >
+                      Удалить
+                    </Button>
+                  </TableCell>
                 </TableRow>
-              ))}
-            </TableBody>
-          </Table>
-        ) : null}
-      </DialogContent>
-      <DialogActions>
-        {isDraft ? (
-          <>
-            <Button
-              variant="outlined"
-              disabled={modalBusyEffective}
-              onClick={() => void saveLines()}
-              data-testid="seller-mp-save"
-            >
-              Сохранить
-            </Button>
+              )
+            })}
+            {detail.lines.length === 0 ? (
+              <TableRow>
+                <TableCell colSpan={9}>
+                  <Typography variant="body2" color="text.secondary">
+                    Добавьте товары кнопкой «Добавить товары».
+                  </Typography>
+                </TableCell>
+              </TableRow>
+            ) : null}
+          </TableBody>
+        </Table>
+      </TableContainer>
+    </>
+  ) : null
+
+  const readOnlyLinesTable =
+    detail && !isDraft && detail.lines.length > 0 ? (
+      <Table size="small" data-testid="seller-mp-lines-table-readonly">
+        <TableHead>
+          <TableRow>
+            <TableCell>Артикул</TableCell>
+            <TableCell>Товар</TableCell>
+            <TableCell align="right">Кол-во</TableCell>
+          </TableRow>
+        </TableHead>
+        <TableBody>
+          {detail.lines.map((ln) => (
+            <TableRow key={ln.id}>
+              <TableCell>{ln.sku_code}</TableCell>
+              <TableCell>{ln.product_name}</TableCell>
+              <TableCell align="right">{ln.quantity}</TableCell>
+            </TableRow>
+          ))}
+        </TableBody>
+      </Table>
+    ) : null
+
+  return (
+    <>
+      <Dialog open={open} onClose={onClose} fullScreen data-testid="seller-mp-unload-dialog">
+        <DialogTitle>Отгрузка на маркетплейс</DialogTitle>
+        <DialogContent dividers>
+          {modalError ? (
+            <Alert severity="error" sx={{ mb: 2 }} data-testid="seller-mp-unload-error">
+              {modalError}
+            </Alert>
+          ) : null}
+          {detail ? (
+            <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
+              Склад ФФ: {detail.warehouse_name} · {statusRu(detail.status)}
+              {detail.planned_shipment_date ? ` · отгрузка ${detail.planned_shipment_date}` : ''}
+            </Typography>
+          ) : null}
+          {isDraft ? (
+            <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1.25} sx={{ mb: 2 }}>
+              <FormControl size="small" sx={{ minWidth: 280 }}>
+                <InputLabel id="seller-mp-wb-warehouse">Склад WB (маркетплейс)</InputLabel>
+                <Select
+                  labelId="seller-mp-wb-warehouse"
+                  label="Склад WB (маркетплейс)"
+                  value={detail?.wb_mp_warehouse_id ?? ''}
+                  onChange={(e) => {
+                    const v = Number(e.target.value)
+                    if (Number.isInteger(v) && v > 0) {
+                      void setWbWarehouse(v)
+                    }
+                  }}
+                  data-testid="seller-mp-wb-warehouse-select"
+                  disabled={modalBusyEffective}
+                >
+                  <MenuItem value="">
+                    <em>Не выбран</em>
+                  </MenuItem>
+                  {wbWarehouses.map((w) => (
+                    <MenuItem key={w.wb_warehouse_id} value={w.wb_warehouse_id}>
+                      {w.name} ({w.wb_warehouse_id})
+                    </MenuItem>
+                  ))}
+                </Select>
+              </FormControl>
+              <WmsDateField
+                label="Дата отгрузки на МП"
+                value={plannedDate}
+                onChange={(iso) => void patchPlannedDate(iso)}
+                disabled={modalBusyEffective}
+                required
+                testId="seller-mp-planned-date"
+                slotProps={{ textField: { fullWidth: false, sx: { minWidth: 220 } } }}
+              />
+            </Stack>
+          ) : null}
+
+          {draftLinesTable}
+          {readOnlyLinesTable}
+        </DialogContent>
+        <DialogActions>
+          {isDraft ? (
             <Button
               variant="contained"
               disabled={
                 modalBusyEffective ||
                 detail?.wb_mp_warehouse_id == null ||
                 !plannedDate ||
-                linePayload.length < 1
+                (detail?.lines.length ?? 0) < 1
               }
               onClick={() => void plan()}
               data-testid="seller-mp-plan"
             >
               Запланировать
             </Button>
-          </>
-        ) : null}
-        {isSubmitted ? (
-          <Button
-            variant="outlined"
-            disabled={modalBusyEffective}
-            onClick={() => void unplan()}
-            data-testid="seller-mp-unplan"
-          >
-            Вернуть в черновик
+          ) : null}
+          {isSubmitted ? (
+            <Button
+              variant="outlined"
+              disabled={modalBusyEffective}
+              onClick={() => void unplan()}
+              data-testid="seller-mp-unplan"
+            >
+              Вернуть в черновик
+            </Button>
+          ) : null}
+          <Button onClick={onClose} data-testid="seller-mp-close">
+            Закрыть
           </Button>
-        ) : null}
-        <Button onClick={onClose} data-testid="seller-mp-close">
-          Закрыть
-        </Button>
-      </DialogActions>
-    </Dialog>
+        </DialogActions>
+      </Dialog>
+
+      <SellerWbProductPickerDialog
+        open={pickerOpen}
+        busy={modalBusyEffective}
+        catalog={catalog}
+        disabledProductIds={lineProductIds}
+        testIdPrefix="seller-mp-picker"
+        qtyColumnLabel="К отгрузке"
+        showAvailableColumn
+        getAvailable={pickerGetAvailable}
+        filterRow={pickerFilterRow}
+        emptyMessage="Нет товаров с остатком на складе ФФ."
+        onClose={() => setPickerOpen(false)}
+        onApply={applyPicker}
+      />
+    </>
   )
 }

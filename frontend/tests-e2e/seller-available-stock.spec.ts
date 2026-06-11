@@ -177,16 +177,23 @@ test('seller products table shows on hand, reserved, and available after MP plan
     ),
     setWmsDateField(page, 'seller-mp-planned-date', '2026-06-15'),
   ]);
-  await page.getByTestId(`seller-mp-qty-${productId}`).locator('input').fill('4');
-  await expect(page.getByTestId('seller-mp-plan')).toBeEnabled();
+  await page.getByTestId('seller-mp-add-products').click();
+  await expect(page.getByTestId('seller-mp-picker')).toBeVisible();
+  await page.getByTestId('seller-mp-picker-search').fill(sku);
+  await page.getByTestId('seller-mp-picker-qty').first().fill('4');
   await Promise.all([
     page.waitForResponse(
       (r) =>
-        r.request().method() === 'PUT' &&
+        r.request().method() === 'POST' &&
+        r.url().includes('/operations/marketplace-unload-requests/') &&
         r.url().includes('/lines') &&
         r.status() >= 200 &&
         r.status() < 300,
     ),
+    page.getByTestId('seller-mp-picker-apply').click(),
+  ]);
+  await expect(page.getByTestId('seller-mp-plan')).toBeEnabled();
+  await Promise.all([
     page.waitForResponse(
       (r) =>
         r.request().method() === 'POST' &&

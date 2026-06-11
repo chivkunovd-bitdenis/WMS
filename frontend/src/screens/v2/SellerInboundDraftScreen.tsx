@@ -6,15 +6,7 @@ import {
   Button,
   Chip,
   CircularProgress,
-  Dialog,
-  DialogActions,
-  DialogContent,
-  DialogTitle,
-  FormControl,
-  InputLabel,
-  MenuItem,
   Paper,
-  Select,
   Stack,
   Table,
   TableBody,
@@ -26,10 +18,10 @@ import {
   Typography,
 } from '@mui/material'
 import { WmsDateField } from '../../components/WmsDateField'
+import { SellerWbProductPickerDialog } from '../../components/SellerWbProductPickerDialog'
 import { apiUrl } from '../../api'
 import { ProductPhotoThumb } from '../../components/ProductPhotoThumb'
 import { readApiErrorMessage } from '../../utils/readApiErrorMessage'
-import { resolveProductIdByBarcode } from '../../utils/resolveProductByBarcode'
 
 export type WbCatalogRow = {
   id: string
@@ -112,9 +104,6 @@ export function SellerInboundDraftScreen({
   const [localError, setLocalError] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
   const [pickerOpen, setPickerOpen] = useState(false)
-  const [pickerSearch, setPickerSearch] = useState('')
-  const [pickerCategory, setPickerCategory] = useState<string>('__all__')
-  const [pickerQtyByProduct, setPickerQtyByProduct] = useState<Record<string, number>>({})
   const [plannedDateDraft, setPlannedDateDraft] = useState<string>('')
   const [plannedBoxCountDraft, setPlannedBoxCountDraft] = useState<string>('1')
 
@@ -253,47 +242,7 @@ export function SellerInboundDraftScreen({
     setPickerOpen(true)
   }
 
-  const categories = useMemo(() => {
-    if (!catalog) {
-      return []
-    }
-    const s = new Set<string>()
-    for (const r of catalog) {
-      const c = r.wb_subject_name?.trim()
-      if (c) {
-        s.add(c)
-      }
-    }
-    return Array.from(s).sort((a, b) => a.localeCompare(b))
-  }, [catalog])
-
-  const filteredPickerRows = useMemo(() => {
-    if (!catalog) {
-      return []
-    }
-    const q = pickerSearch.trim().toLowerCase()
-    return catalog.filter((r) => {
-      if (pickerCategory !== '__all__') {
-        const sub = (r.wb_subject_name ?? '').trim()
-        if (sub !== pickerCategory) {
-          return false
-        }
-      }
-      if (!q) {
-        return true
-      }
-      const nm = r.wb_nm_id != null ? String(r.wb_nm_id) : ''
-      const barcodes = r.wb_barcodes.join(' ').toLowerCase()
-      const hay = `${r.sku_code} ${r.wb_vendor_code ?? ''} ${r.name} ${nm} ${barcodes}`.toLowerCase()
-      return hay.includes(q)
-    })
-  }, [catalog, pickerCategory, pickerSearch])
-
-  const setPickerQty = (productId: string, qty: number) => {
-    setPickerQtyByProduct((prev) => ({ ...prev, [productId]: qty }))
-  }
-
-  const applyPicker = async () => {
+  const applyPicker = async (pickerQtyByProduct: Record<string, number>) => {
     if (!requestId || !detail) {
       return
     }
@@ -346,7 +295,6 @@ export function SellerInboundDraftScreen({
           }
         }
       }
-      setPickerQtyByProduct({})
       setPickerOpen(false)
       await loadDetail(requestId)
     } catch (e) {
@@ -731,172 +679,16 @@ export function SellerInboundDraftScreen({
         </Paper>
       )}
 
-      <Dialog
+      <SellerWbProductPickerDialog
         open={pickerOpen}
-        onClose={() => (busy ? undefined : setPickerOpen(false))}
-        maxWidth={false}
-        fullWidth
-        slotProps={{ paper: { sx: { width: 'min(1200px, 96vw)', maxHeight: '92vh' } } }}
-        data-testid="seller-inbound-picker"
-      >
-        <DialogTitle>Выбор товаров</DialogTitle>
-        <DialogContent dividers>
-          <Stack spacing={2} sx={{ mb: 2 }}>
-            <TextField
-              label="Поиск (артикул, ШК, nm, название, артикул продавца)"
-              value={pickerSearch}
-              onChange={(e) => setPickerSearch(e.target.value)}
-              onKeyDown={(e) => {
-                if (e.key !== 'Enter' || !catalog) return
-                e.preventDefault()
-                const productId = resolveProductIdByBarcode(catalog, pickerSearch)
-                const targetId =
-                  productId ?? (filteredPickerRows.length === 1 ? filteredPickerRows[0]!.id : null)
-                if (!targetId) return
-                setPickerQty(targetId, (pickerQtyByProduct[targetId] ?? 0) + 1)
-                setPickerSearch('')
-              }}
-              size="small"
-              fullWidth
-              slotProps={{ htmlInput: { 'data-testid': 'seller-inbound-picker-search' } }}
-            />
-            <FormControl size="small" sx={{ minWidth: 260 }}>
-              <InputLabel id="picker-cat-label">Категория (WB)</InputLabel>
-              <Select
-                labelId="picker-cat-label"
-                label="Категория (WB)"
-                value={pickerCategory}
-                onChange={(e) => setPickerCategory(e.target.value)}
-                data-testid="seller-inbound-picker-category"
-              >
-                <MenuItem value="__all__">Все</MenuItem>
-                {categories.map((c) => (
-                  <MenuItem key={c} value={c}>
-                    {c}
-                  </MenuItem>
-                ))}
-              </Select>
-            </FormControl>
-          </Stack>
-          <TableContainer sx={{ width: '100%', overflowX: 'hidden' }}>
-            <Table
-              size="small"
-              data-testid="seller-inbound-picker-table"
-              sx={{
-                tableLayout: 'fixed',
-                width: '100%',
-                '& th': { py: 1.25 },
-                '& td': { py: 1.25 },
-              }}
-            >
-              <TableHead>
-                <TableRow>
-                  <TableCell sx={{ width: 56 }}>Фото</TableCell>
-                  <TableCell sx={{ width: 160, pl: 2 }}>Артикул</TableCell>
-                  <TableCell sx={{ width: 190 }}>ШК</TableCell>
-                  <TableCell sx={{ width: 150 }}>Артикул продавца</TableCell>
-                  <TableCell sx={{ width: 120, pr: 2 }}>Артикул WB</TableCell>
-                  <TableCell sx={{ pl: 2 }}>Наименование</TableCell>
-                  <TableCell align="right" sx={{ width: 140 }}>
-                    Кол-во в заявку
-                  </TableCell>
-                </TableRow>
-              </TableHead>
-              <TableBody>
-                {filteredPickerRows.map((r) => {
-                  const inDraft = lineProductIds.has(r.id)
-                  const qty = pickerQtyByProduct[r.id] ?? 0
-                  return (
-                    <TableRow
-                      key={r.id}
-                      hover
-                      sx={{
-                        opacity: inDraft ? 0.45 : 1,
-                        bgcolor: inDraft ? 'action.hover' : undefined,
-                        '& td': { px: 1.25 },
-                        '& td:first-of-type': { pl: 1 },
-                        '& td:last-of-type': { pr: 1 },
-                      }}
-                      data-testid="seller-inbound-picker-row"
-                      data-in-draft={inDraft ? '1' : '0'}
-                    >
-                      <TableCell>
-                        <ProductPhotoThumb src={r.wb_primary_image_url} />
-                      </TableCell>
-                      <TableCell
-                        sx={{
-                          whiteSpace: 'normal',
-                          wordBreak: 'break-word',
-                          overflow: 'hidden',
-                          pl: 2,
-                        }}
-                        title={r.sku_code}
-                      >
-                        {r.sku_code}
-                      </TableCell>
-                      <TableCell
-                        sx={{ whiteSpace: 'normal', wordBreak: 'break-word', overflow: 'hidden' }}
-                        title={r.wb_primary_barcode ?? (r.wb_barcodes[0] ?? '—')}
-                      >
-                        {r.wb_primary_barcode ?? (r.wb_barcodes[0] ?? '—')}
-                      </TableCell>
-                      <TableCell
-                        sx={{ whiteSpace: 'normal', wordBreak: 'break-word', overflow: 'hidden' }}
-                        title={r.wb_vendor_code ?? '—'}
-                      >
-                        {r.wb_vendor_code ?? '—'}
-                      </TableCell>
-                      <TableCell sx={{ pr: 2 }}>{r.wb_nm_id ?? '—'}</TableCell>
-                      <TableCell
-                        sx={{
-                          pl: 2,
-                          maxWidth: 440,
-                          whiteSpace: 'nowrap',
-                          overflow: 'hidden',
-                          textOverflow: 'ellipsis',
-                        }}
-                        title={r.name}
-                      >
-                        <Typography variant="body2" sx={{ lineHeight: 1.25 }} noWrap>
-                          {r.name}
-                        </Typography>
-                        {inDraft ? (
-                          <Typography variant="caption" color="text.secondary" sx={{ display: 'block' }} noWrap>
-                            Товар уже добавлен в заявку
-                          </Typography>
-                        ) : null}
-                      </TableCell>
-                      <TableCell align="right" sx={{ minWidth: 120 }}>
-                        <TextField
-                          type="number"
-                          size="small"
-                          disabled={inDraft || busy}
-                          value={qty || ''}
-                          onChange={(e) => setPickerQty(r.id, Number(e.target.value))}
-                          slotProps={{
-                            htmlInput: {
-                              min: 0,
-                              'data-testid': 'seller-inbound-picker-qty',
-                            },
-                          }}
-                        />
-                      </TableCell>
-                    </TableRow>
-                  )
-                })}
-              </TableBody>
-            </Table>
-          </TableContainer>
-        </DialogContent>
-        <DialogActions>
-          <Button onClick={() => setPickerOpen(false)} disabled={busy} data-testid="seller-inbound-picker-cancel">
-            Отмена
-          </Button>
-          <Button variant="contained" onClick={() => void applyPicker()} disabled={busy} data-testid="seller-inbound-picker-apply">
-            Добавить в заявку
-          </Button>
-        </DialogActions>
-      </Dialog>
+        busy={busy}
+        catalog={catalog}
+        disabledProductIds={lineProductIds}
+        testIdPrefix="seller-inbound-picker"
+        qtyColumnLabel="Кол-во в заявку"
+        onClose={() => setPickerOpen(false)}
+        onApply={applyPicker}
+      />
     </Box>
   )
 }
