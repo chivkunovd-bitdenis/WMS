@@ -8,6 +8,7 @@ import {
   TextField,
   Typography,
 } from '@mui/material'
+import { WmsBrandMark } from '../components/WmsBrandMark'
 import type { AuthPortal } from '../hooks/useAuth'
 import { sellerPortalUrl } from '../utils/portalUrls'
 
@@ -152,9 +153,12 @@ export function PublicAuthScreen({
     >
       <Container maxWidth="sm">
         <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
-          <Typography variant="h5" component="h1">
-            WMS · {title}
-          </Typography>
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
+            <WmsBrandMark size={32} />
+            <Typography variant="h5" component="h1">
+              WMS · {title}
+            </Typography>
+          </Box>
           <Typography variant="body2" color="text.secondary">
             {subtitle}
           </Typography>

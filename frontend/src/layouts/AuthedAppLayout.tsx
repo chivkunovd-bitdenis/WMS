@@ -14,6 +14,7 @@ import {
 } from '@mui/material'
 import { alpha } from '@mui/material/styles'
 
+import { WmsBrandMark } from '../components/WmsBrandMark'
 import type { FfPermissions } from '../utils/ffPermissions'
 import { canAccessFfBlock, isFulfillmentAdminRole } from '../utils/ffPermissions'
 
@@ -58,7 +59,8 @@ export function AuthedAppLayout({
           data-testid="app-topbar"
         >
           <Toolbar sx={{ display: 'flex', justifyContent: 'space-between', gap: 2 }}>
-            <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, minWidth: 0 }}>
+            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5, minWidth: 0 }}>
+              <WmsBrandMark size={26} />
               <Typography variant="h6" noWrap>
                 {title}
               </Typography>
@@ -151,7 +153,8 @@ export function AuthedAppLayout({
         data-testid="app-topbar"
       >
         <Toolbar sx={{ display: 'flex', justifyContent: 'space-between', gap: 2 }}>
-          <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, minWidth: 0 }}>
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5, minWidth: 0 }}>
+            <WmsBrandMark size={26} />
             <Typography variant="h6" noWrap>
               {title}
             </Typography>
