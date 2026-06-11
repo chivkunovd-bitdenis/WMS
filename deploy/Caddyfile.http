@@ -9,12 +9,19 @@
 
   handle /seller* {
     root * /srv
+    @seller_spa {
+      not path /assets/*
+      not path /favicon.svg
+    }
+    header @seller_spa Cache-Control "no-cache, no-store, must-revalidate"
     try_files {path} /seller/index.html
     file_server
   }
 
   handle {
     root * /srv
+    @spa_html path /index.html /seller/index.html
+    header @spa_html Cache-Control "no-cache, no-store, must-revalidate"
     try_files {path} /index.html
     file_server
   }
