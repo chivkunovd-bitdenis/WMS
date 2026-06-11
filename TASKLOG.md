@@ -4,7 +4,8 @@
 
 - What changed: `frontend/public/favicon.svg` — вместо розовой молнии (оцифровка) иконка коробки в цвете темы; `WmsBrandMark` в шапке FF/селлера и на экране входа; заголовки вкладок `WMS · Фулфилмент` / `WMS · Селлер`.
 - What did NOT change: API, бизнес-логика.
-- Verification: `npm run build`; prod deploy `194.87.96.144:8088` — `curl` favicon + hard refresh вкладки.
+- Verification: `npm run build`; CI green PR #34; prod deploy `194.87.96.144:8088` commit `4caef80` — `curl /favicon.svg` → коробка `#5b21b6`.
+- Commit: 4caef80 (squash PR #34).
 
 ## TASK-46 — 2026-06-11 — Seller SPA: no-cache на :8088 (Caddyfile.http)
 
