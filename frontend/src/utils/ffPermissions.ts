@@ -4,6 +4,7 @@ export type FfPermissions = {
   reception: boolean
   cells: boolean
   inventory: boolean
+  packaging: boolean
 }
 
 export const FF_PERMISSION_BLOCKS: {
@@ -36,6 +37,11 @@ export const FF_PERMISSION_BLOCKS: {
     label: 'Инвентаризация',
     hint: 'Раздел инвентаризации (пока заглушка)',
   },
+  {
+    key: 'packaging',
+    label: 'Упаковка',
+    hint: 'Очередь и выполнение заданий на упаковку',
+  },
 ]
 
 export function adminFfPermissions(): FfPermissions {
@@ -45,6 +51,7 @@ export function adminFfPermissions(): FfPermissions {
     reception: true,
     cells: true,
     inventory: true,
+    packaging: true,
   }
 }
 
@@ -62,6 +69,7 @@ export function resolveFfPermissions(
       reception: false,
       cells: false,
       inventory: false,
+      packaging: false,
     }
   )
 }

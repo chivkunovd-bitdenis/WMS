@@ -2496,10 +2496,18 @@ export default function App() {
           <Route
             path="ff/packaging"
             element={
-              token ? (
+              token && (isFulfillmentAdmin || canAccessFfBlock(me.role, me.permissions, 'packaging')) ? (
                 <FfPackagingPage token={token} />
               ) : (
-                <FfPlaceholderPage title="Упаковка" hint="Нет токена." testId="ff-packaging-placeholder" />
+                <FfPlaceholderPage
+                  title="Упаковка"
+                  hint={
+                    token
+                      ? 'Нет доступа к разделу «Упаковка». Обратитесь к администратору.'
+                      : 'Нет токена.'
+                  }
+                  testId="ff-packaging-placeholder"
+                />
               )
             }
           />

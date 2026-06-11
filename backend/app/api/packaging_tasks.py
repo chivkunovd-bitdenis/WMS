@@ -7,7 +7,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query, status
 from pydantic import BaseModel, Field
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.api.deps import require_fulfillment_admin
+from app.api.deps import require_packaging_access
 from app.db.session import get_db
 from app.models.packaging_task import PackagingTask, PackagingTaskLine
 from app.models.user import User
@@ -117,7 +117,7 @@ def _http_from_pkg_error(exc: pkg_svc.PackagingTaskServiceError) -> HTTPExceptio
 
 @router.get("", response_model=list[PackagingTaskOut])
 async def list_packaging_tasks(
-    user: Annotated[User, Depends(require_fulfillment_admin)],
+    user: Annotated[User, Depends(require_packaging_access)],
     session: Annotated[AsyncSession, Depends(get_db)],
     warehouse_id: Annotated[uuid.UUID | None, Query()] = None,
 ) -> list[PackagingTaskOut]:
@@ -130,7 +130,7 @@ async def list_packaging_tasks(
 @router.post("", response_model=PackagingTaskOut, status_code=status.HTTP_201_CREATED)
 async def create_packaging_task(
     body: PackagingTaskCreate,
-    user: Annotated[User, Depends(require_fulfillment_admin)],
+    user: Annotated[User, Depends(require_packaging_access)],
     session: Annotated[AsyncSession, Depends(get_db)],
 ) -> PackagingTaskOut:
     try:
@@ -142,6 +142,7 @@ async def create_packaging_task(
                 (ln.product_id, ln.storage_location_id, ln.quantity) for ln in body.lines
             ],
             inbound_intake_request_id=body.inbound_intake_request_id,
+            created_by_user_id=user.id,
         )
     except pkg_svc.PackagingTaskServiceError as exc:
         raise _http_from_pkg_error(exc) from exc
@@ -151,7 +152,7 @@ async def create_packaging_task(
 @router.get("/by-unload/{unload_id}", response_model=PackagingTaskOut)
 async def get_packaging_task_for_unload(
     unload_id: uuid.UUID,
-    user: Annotated[User, Depends(require_fulfillment_admin)],
+    user: Annotated[User, Depends(require_packaging_access)],
     session: Annotated[AsyncSession, Depends(get_db)],
 ) -> PackagingTaskOut:
     try:
@@ -164,7 +165,7 @@ async def get_packaging_task_for_unload(
 @router.get("/{task_id}", response_model=PackagingTaskOut)
 async def get_packaging_task(
     task_id: uuid.UUID,
-    user: Annotated[User, Depends(require_fulfillment_admin)],
+    user: Annotated[User, Depends(require_packaging_access)],
     session: Annotated[AsyncSession, Depends(get_db)],
 ) -> PackagingTaskOut:
     task = await pkg_svc.get_task(session, user.tenant_id, task_id)
@@ -183,7 +184,7 @@ async def get_packaging_task(
 @router.post("/{task_id}/cancel", response_model=PackagingTaskOut)
 async def cancel_packaging_task(
     task_id: uuid.UUID,
-    user: Annotated[User, Depends(require_fulfillment_admin)],
+    user: Annotated[User, Depends(require_packaging_access)],
     session: Annotated[AsyncSession, Depends(get_db)],
 ) -> PackagingTaskOut:
     try:
@@ -198,7 +199,7 @@ async def confirm_packed_from_shelf(
     task_id: uuid.UUID,
     line_id: uuid.UUID,
     body: ConfirmPackedIn,
-    user: Annotated[User, Depends(require_fulfillment_admin)],
+    user: Annotated[User, Depends(require_packaging_access)],
     session: Annotated[AsyncSession, Depends(get_db)],
 ) -> PackagingTaskOut:
     try:
@@ -208,6 +209,7 @@ async def confirm_packed_from_shelf(
             task_id,
             line_id,
             qty=body.quantity,
+            acting_user_id=user.id,
         )
     except pkg_svc.PackagingTaskServiceError as exc:
         raise _http_from_pkg_error(exc) from exc
@@ -219,7 +221,7 @@ async def record_pack_progress(
     task_id: uuid.UUID,
     line_id: uuid.UUID,
     body: PackProgressIn,
-    user: Annotated[User, Depends(require_fulfillment_admin)],
+    user: Annotated[User, Depends(require_packaging_access)],
     session: Annotated[AsyncSession, Depends(get_db)],
 ) -> PackagingTaskOut:
     try:
@@ -229,6 +231,7 @@ async def record_pack_progress(
             task_id,
             line_id,
             body.quantity,
+            acting_user_id=user.id,
         )
     except pkg_svc.PackagingTaskServiceError as exc:
         raise _http_from_pkg_error(exc) from exc

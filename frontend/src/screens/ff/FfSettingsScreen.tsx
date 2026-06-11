@@ -23,12 +23,20 @@ import { apiUrl } from '../../api'
 import { readApiErrorMessage } from '../../utils/readApiErrorMessage'
 import { FF_PERMISSION_BLOCKS, type FfPermissions } from '../../utils/ffPermissions'
 
+type StaffPackagingBilling = {
+  billing_month: string
+  units_packed: number
+  earned_rub: string
+}
+
 type StaffAccountRow = {
   id: string
   email: string
   role: string
   must_set_password: boolean
   permissions: FfPermissions
+  packaging_rate_rub: string
+  packaging_billing: StaffPackagingBilling
 }
 
 type Props = {
@@ -37,27 +45,51 @@ type Props = {
   isFulfillmentAdmin: boolean
 }
 
+function currentBillingMonth(): string {
+  const now = new Date()
+  const y = now.getFullYear()
+  const m = String(now.getMonth() + 1).padStart(2, '0')
+  return `${y}-${m}`
+}
+
+function formatRubDisplay(value: string): string {
+  const n = Number(value)
+  if (!Number.isFinite(n)) {
+    return value
+  }
+  return n.toLocaleString('ru-RU', { minimumFractionDigits: 0, maximumFractionDigits: 2 })
+}
+
 export function FfSettingsScreen({ token, authHeaders, isFulfillmentAdmin }: Props) {
   const [rows, setRows] = useState<StaffAccountRow[]>([])
+  const [billingMonth, setBillingMonth] = useState(currentBillingMonth)
   const [busy, setBusy] = useState(false)
   const [permBusyId, setPermBusyId] = useState<string | null>(null)
+  const [rateBusyId, setRateBusyId] = useState<string | null>(null)
+  const [rateDrafts, setRateDrafts] = useState<Record<string, string>>({})
   const [error, setError] = useState<string | null>(null)
   const [success, setSuccess] = useState<string | null>(null)
   const [permSavedNotice, setPermSavedNotice] = useState<string | null>(null)
+  const [rateSavedNotice, setRateSavedNotice] = useState<string | null>(null)
   const [highlightRowId, setHighlightRowId] = useState<string | null>(null)
 
   const loadRows = useCallback(async () => {
     if (!token || !isFulfillmentAdmin) {
       return
     }
-    const res = await fetch(apiUrl('/auth/staff-accounts'), {
+    const params = new URLSearchParams({ billing_month: billingMonth })
+    const res = await fetch(apiUrl(`/auth/staff-accounts?${params.toString()}`), {
       headers: authHeaders(token),
     })
     if (!res.ok) {
       throw new Error(await readApiErrorMessage(res))
     }
-    setRows((await res.json()) as StaffAccountRow[])
-  }, [authHeaders, isFulfillmentAdmin, token])
+    const data = (await res.json()) as StaffAccountRow[]
+    setRows(data)
+    setRateDrafts(
+      Object.fromEntries(data.map((row) => [row.id, row.packaging_rate_rub])),
+    )
+  }, [authHeaders, billingMonth, isFulfillmentAdmin, token])
 
   useEffect(() => {
     void loadRows().catch((err: unknown) => {
@@ -146,13 +178,54 @@ export function FfSettingsScreen({ token, authHeaders, isFulfillmentAdmin }: Pro
     }
   }
 
+  async function savePackagingRate(row: StaffAccountRow) {
+    if (!token || !isFulfillmentAdmin) {
+      return
+    }
+    const draft = (rateDrafts[row.id] ?? '').trim().replace(',', '.')
+    if (!draft) {
+      setError('Укажите ставку за единицу (0 или больше).')
+      return
+    }
+    const parsed = Number(draft)
+    if (!Number.isFinite(parsed) || parsed < 0) {
+      setError('Ставка должна быть неотрицательным числом.')
+      return
+    }
+    setError(null)
+    setRateBusyId(row.id)
+    try {
+      const params = new URLSearchParams({ billing_month: billingMonth })
+      const res = await fetch(
+        apiUrl(`/auth/staff-accounts/${row.id}/packaging-rate?${params.toString()}`),
+        {
+          method: 'PATCH',
+          headers: { ...authHeaders(token), 'Content-Type': 'application/json' },
+          body: JSON.stringify({ rate_rub: parsed }),
+        },
+      )
+      if (!res.ok) {
+        setError(await readApiErrorMessage(res))
+        return
+      }
+      const updated = (await res.json()) as StaffAccountRow
+      setRows((prev) => prev.map((r) => (r.id === updated.id ? updated : r)))
+      setRateDrafts((prev) => ({ ...prev, [row.id]: updated.packaging_rate_rub }))
+      setRateSavedNotice(`${row.email}: ставка ${formatRubDisplay(updated.packaging_rate_rub)} ₽`)
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Не удалось сохранить ставку.')
+    } finally {
+      setRateBusyId(null)
+    }
+  }
+
   return (
     <Box data-testid="ff-settings-screen">
       <Typography variant="h5" gutterBottom>
         Настройки
       </Typography>
       <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
-        Сотрудники фулфилмента и доступ к разделам портала.
+        Сотрудники фулфилмента, доступ к разделам и расчёт зарплаты за упаковку.
       </Typography>
 
       {!isFulfillmentAdmin ? (
@@ -173,6 +246,25 @@ export function FfSettingsScreen({ token, authHeaders, isFulfillmentAdmin }: Pro
           ) : null}
 
           <Stack spacing={2}>
+            <Stack
+              direction={{ xs: 'column', sm: 'row' }}
+              spacing={2}
+              sx={{ alignItems: { xs: 'stretch', sm: 'center' } }}
+            >
+              <TextField
+                label="Месяц расчёта"
+                type="month"
+                size="small"
+                value={billingMonth}
+                onChange={(e) => setBillingMonth(e.target.value)}
+                slotProps={{
+                  htmlInput: { 'data-testid': 'ff-staff-billing-month' },
+                }}
+                helperText="Период по московскому времени"
+                sx={{ width: { xs: '100%', sm: 220 } }}
+              />
+            </Stack>
+
             {rows.length === 0 ? (
               <Paper
                 variant="outlined"
@@ -213,6 +305,15 @@ export function FfSettingsScreen({ token, authHeaders, isFulfillmentAdmin }: Pro
                           </Tooltip>
                         </TableCell>
                       ))}
+                      <TableCell align="right" sx={{ minWidth: 120 }}>
+                        Ставка за ед., ₽
+                      </TableCell>
+                      <TableCell align="right" sx={{ minWidth: 110 }}>
+                        Упаковано, шт
+                      </TableCell>
+                      <TableCell align="right" sx={{ minWidth: 110 }}>
+                        Начислено, ₽
+                      </TableCell>
                     </TableRow>
                   </TableHead>
                   <TableBody>
@@ -256,6 +357,48 @@ export function FfSettingsScreen({ token, authHeaders, isFulfillmentAdmin }: Pro
                             />
                           </TableCell>
                         ))}
+                        <TableCell align="right">
+                          <TextField
+                            size="small"
+                            type="number"
+                            inputMode="decimal"
+                            value={rateDrafts[row.id] ?? row.packaging_rate_rub}
+                            disabled={rateBusyId === row.id}
+                            onChange={(e) =>
+                              setRateDrafts((prev) => ({
+                                ...prev,
+                                [row.id]: e.target.value,
+                              }))
+                            }
+                            onBlur={() => {
+                              const draft = rateDrafts[row.id]
+                              if (draft !== undefined && draft !== row.packaging_rate_rub) {
+                                void savePackagingRate(row)
+                              }
+                            }}
+                            onKeyDown={(e) => {
+                              if (e.key === 'Enter') {
+                                e.preventDefault()
+                                void savePackagingRate(row)
+                              }
+                            }}
+                            slotProps={{
+                              htmlInput: {
+                                'data-testid': `ff-staff-rate-${row.id}`,
+                                min: 0,
+                                step: 0.01,
+                                style: { textAlign: 'right' },
+                              },
+                            }}
+                            sx={{ width: 108 }}
+                          />
+                        </TableCell>
+                        <TableCell align="right" data-testid={`ff-staff-units-${row.id}`}>
+                          {row.packaging_billing.units_packed}
+                        </TableCell>
+                        <TableCell align="right" data-testid={`ff-staff-earned-${row.id}`}>
+                          {formatRubDisplay(row.packaging_billing.earned_rub)}
+                        </TableCell>
                       </TableRow>
                     ))}
                   </TableBody>
@@ -319,6 +462,23 @@ export function FfSettingsScreen({ token, authHeaders, isFulfillmentAdmin }: Pro
               sx={{ width: '100%' }}
             >
               {permSavedNotice}
+            </Alert>
+          </Snackbar>
+
+          <Snackbar
+            open={rateSavedNotice !== null}
+            autoHideDuration={2500}
+            onClose={() => setRateSavedNotice(null)}
+            anchorOrigin={{ vertical: 'bottom', horizontal: 'center' }}
+          >
+            <Alert
+              severity="success"
+              variant="filled"
+              onClose={() => setRateSavedNotice(null)}
+              data-testid="ff-staff-rate-saved"
+              sx={{ width: '100%' }}
+            >
+              {rateSavedNotice}
             </Alert>
           </Snackbar>
         </Box>
