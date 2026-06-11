@@ -13,6 +13,8 @@ import {
   Typography,
 } from '@mui/material'
 
+import { WmsBrandMark } from '../../components/WmsBrandMark'
+
 type Props = {
   children: ReactNode
   onLogout: () => void
@@ -45,7 +47,8 @@ export function SellerLayout({
         data-testid="app-topbar"
       >
         <Toolbar sx={{ display: 'flex', justifyContent: 'space-between', gap: 2 }}>
-          <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, minWidth: 0 }}>
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5, minWidth: 0 }}>
+            <WmsBrandMark size={26} />
             <Typography variant="h6" noWrap>
               {title}
             </Typography>

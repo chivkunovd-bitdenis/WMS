@@ -1,5 +1,11 @@
 # TASKLOG
 
+## TASK-47 — 2026-06-11 — Брендинг WMS: favicon и марка в UI
+
+- What changed: `frontend/public/favicon.svg` — вместо розовой молнии (оцифровка) иконка коробки в цвете темы; `WmsBrandMark` в шапке FF/селлера и на экране входа; заголовки вкладок `WMS · Фулфилмент` / `WMS · Селлер`.
+- What did NOT change: API, бизнес-логика.
+- Verification: `npm run build`; prod deploy `194.87.96.144:8088` — `curl` favicon + hard refresh вкладки.
+
 ## TASK-46 — 2026-06-11 — Seller SPA: no-cache на :8088 (Caddyfile.http)
 
 - What changed: `deploy/Caddyfile.http` — `Cache-Control: no-cache` для seller/FF HTML (как в `frontend/deploy/Caddyfile`), чтобы после деплоя браузер не держал старый `seller-*.js`.
