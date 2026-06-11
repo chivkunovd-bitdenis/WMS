@@ -1,5 +1,11 @@
 # TASKLOG
 
+## TASK-48 — 2026-06-11 — Отдельный favicon и марка для портала селлера
+
+- What changed: `frontend/public/favicon-seller.svg` — бирюзовый «магазин» (отличается от фиолетовой «коробки» FF); `seller/index.html` → `/favicon-seller.svg`; `WmsBrandMark` с `portal="seller"` в шапке селлера и на экране входа; `deploy/Caddyfile.http` — исключение favicon-seller из no-cache SPA.
+- What did NOT change: favicon FF (`/favicon.svg`), API, бизнес-логика.
+- Verification: `npm run build` — OK.
+
 ## TASK-47 — 2026-06-11 — Брендинг WMS: favicon и марка в UI
 
 - What changed: `frontend/public/favicon.svg` — вместо розовой молнии (оцифровка) иконка коробки в цвете темы; `WmsBrandMark` в шапке FF/селлера и на экране входа; заголовки вкладок `WMS · Фулфилмент` / `WMS · Селлер`.
