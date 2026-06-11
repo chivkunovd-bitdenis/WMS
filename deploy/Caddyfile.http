@@ -12,6 +12,7 @@
     @seller_spa {
       not path /assets/*
       not path /favicon.svg
+      not path /favicon-seller.svg
     }
     header @seller_spa Cache-Control "no-cache, no-store, must-revalidate"
     try_files {path} /seller/index.html

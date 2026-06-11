@@ -154,7 +154,7 @@ export function PublicAuthScreen({
       <Container maxWidth="sm">
         <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
           <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
-            <WmsBrandMark size={32} />
+            <WmsBrandMark size={32} portal={isFf ? 'fulfillment' : 'seller'} />
             <Typography variant="h5" component="h1">
               WMS · {title}
             </Typography>
