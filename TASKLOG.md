@@ -1,5 +1,12 @@
 # TASKLOG
 
+## TASK-49 — 2026-06-11 — Упаковка: таблица создания задания как в приёмке
+
+- What changed: диалог «Создать задание на упаковку» — ширина `min(1200px, 96vw)` как у `WbProductPickerDialog` в приёмке; те же отступы таблицы; фиксированные ширины колонок количества; `minWidth: 180` у «Наименование» в `FfProductLineCells` (не ломается посимвольно).
+- What did NOT change: API упаковки, логика создания задания.
+- Verification: `npm run build` — OK.
+- Commit: 405025f.
+
 ## TASK-48 — 2026-06-11 — Отдельный favicon и марка для портала селлера
 
 - What changed: `frontend/public/favicon-seller.svg` — бирюзовый «магазин» (отличается от фиолетовой «коробки» FF); `seller/index.html` → `/favicon-seller.svg`; `WmsBrandMark` с `portal="seller"` в шапке селлера и на экране входа; `deploy/Caddyfile.http` — исключение favicon-seller из no-cache SPA.
