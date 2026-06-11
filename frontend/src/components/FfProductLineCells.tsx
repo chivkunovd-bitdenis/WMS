@@ -23,7 +23,7 @@ export function FfProductTableHeadCells({ showPrint = true, nameLabel = 'Наи�
       <TableCell sx={{ width: 220 }}>ШК</TableCell>
       <TableCell sx={{ width: 140 }}>Артикул продавца</TableCell>
       <TableCell sx={{ width: 120, pr: 2 }}>Артикул WB</TableCell>
-      <TableCell sx={{ pl: 2 }}>{nameLabel}</TableCell>
+      <TableCell sx={{ pl: 2, minWidth: 180 }}>{nameLabel}</TableCell>
       {showPrint ? (
         <TableCell align="center" sx={{ width: 56, pr: 1 }} />
       ) : null}
@@ -66,7 +66,15 @@ export function FfProductLineCells({
         {meta.wb_vendor_code ?? '—'}
       </TableCell>
       <TableCell sx={{ pr: 2 }}>{meta.wb_nm_id ?? '—'}</TableCell>
-      <TableCell sx={{ pl: 2, whiteSpace: 'normal', wordBreak: 'break-word' }}>
+      <TableCell
+        sx={{
+          pl: 2,
+          minWidth: 180,
+          whiteSpace: 'normal',
+          wordBreak: 'break-word',
+          overflow: 'hidden',
+        }}
+      >
         <Typography variant="body2" sx={{ lineHeight: 1.25 }}>
           {meta.product_name}
         </Typography>

@@ -190,8 +190,16 @@ export function FfPackagingTaskPanel({
           задании сохранено — проверьте строки.
         </Alert>
       ) : null}
-      <TableContainer component={Paper} variant="outlined">
-        <Table size="small" sx={{ tableLayout: 'fixed', width: '100%' }}>
+      <TableContainer component={Paper} variant="outlined" sx={{ width: '100%', overflowX: 'hidden' }}>
+        <Table
+          size="small"
+          sx={{
+            tableLayout: 'fixed',
+            width: '100%',
+            '& th': { py: 1.25 },
+            '& td': { py: 1.25 },
+          }}
+        >
           <TableHead>
             <TableRow>
               <FfProductTableHeadCells nameLabel="Наименование / ячейка" />
@@ -433,7 +441,14 @@ function FfCreatePackagingTaskDialog({ open, token, onClose, onCreated }: Create
     loc.code === '__SORTING__' ? 'Сортировка' : loc.code
 
   return (
-    <Dialog open={open} onClose={onClose} fullWidth maxWidth="md" data-testid="ff-packaging-create-dialog">
+    <Dialog
+      open={open}
+      onClose={onClose}
+      fullWidth
+      maxWidth={false}
+      slotProps={{ paper: { sx: { width: 'min(1200px, 96vw)', maxHeight: '92vh' } } }}
+      data-testid="ff-packaging-create-dialog"
+    >
       <DialogTitle>Создать задание на упаковку</DialogTitle>
       <DialogContent>
         <Stack spacing={2} sx={{ mt: 1 }}>
@@ -478,14 +493,27 @@ function FfCreatePackagingTaskDialog({ open, token, onClose, onCreated }: Create
             </Typography>
           ) : null}
           {rows.length > 0 ? (
-            <TableContainer component={Paper} variant="outlined">
-              <Table size="small" sx={{ tableLayout: 'fixed', width: '100%' }}>
+            <TableContainer component={Paper} variant="outlined" sx={{ width: '100%', overflowX: 'hidden' }}>
+              <Table
+                size="small"
+                data-testid="ff-packaging-create-table"
+                sx={{
+                  tableLayout: 'fixed',
+                  width: '100%',
+                  '& th': { py: 1.25 },
+                  '& td': { py: 1.25 },
+                }}
+              >
                 <TableHead>
                   <TableRow>
-                    <TableCell padding="checkbox" />
+                    <TableCell padding="checkbox" sx={{ width: 48 }} />
                     <FfProductTableHeadCells />
-                    <TableCell align="right">Неупаковано</TableCell>
-                    <TableCell align="right">В задание</TableCell>
+                    <TableCell align="right" sx={{ width: 120 }}>
+                      Неупаковано
+                    </TableCell>
+                    <TableCell align="right" sx={{ width: 120 }}>
+                      В задание
+                    </TableCell>
                   </TableRow>
                 </TableHead>
                 <TableBody>
@@ -708,7 +736,14 @@ export function FfPackagingTaskDialog({
   }, [open, token, unloadId])
 
   return (
-    <Dialog open={open} onClose={onClose} fullWidth maxWidth="lg" data-testid="ff-packaging-dialog">
+    <Dialog
+      open={open}
+      onClose={onClose}
+      fullWidth
+      maxWidth={false}
+      slotProps={{ paper: { sx: { width: 'min(1200px, 96vw)', maxHeight: '92vh' } } }}
+      data-testid="ff-packaging-dialog"
+    >
       <DialogTitle>Задание на упаковку</DialogTitle>
       <DialogContent>
         {error ? <Alert severity="error">{error}</Alert> : null}
