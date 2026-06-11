@@ -1,5 +1,11 @@
 # TASKLOG
 
+## TASK-45 — 2026-06-11 — WbProductPickerDialog: FF приёмка и отгрузка на МП
+
+- What changed: `SellerWbProductPickerDialog` → ядро `WbProductPickerDialog` с `variant="ff"` (`FfProductLineCells`, печать ШК); подключено в `FfInboundRequestView` и `FfSuppliesShipmentsPage`. Пропсы `applyLabel`, `renderTrailingHeadCells` / `renderTrailingBodyCells` для будущих колонок FF.
+- What did NOT change: API; логика сохранения строк остаётся в родительских экранах.
+- Verification: `npm run build`; e2e ff-dashboard, ff-inbound-boxes, seller-mp-unload, seller-cabinet — 8 passed.
+
 ## TASK-44 — 2026-06-11 — Общий picker каталога WB для селлера
 
 - What changed: `SellerWbProductPickerDialog` — единая модалка выбора товаров (поиск, категория, фото, qty); подключена в `SellerInboundDraftScreen` и `SellerMarketplaceUnloadDialog`. Отгрузка на МП передаёт `showAvailableColumn`, `filterRow`, `getAvailable`.

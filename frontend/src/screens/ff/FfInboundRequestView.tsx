@@ -6,10 +6,6 @@ import {
   Button,
   Chip,
   CircularProgress,
-  Dialog,
-  DialogActions,
-  DialogContent,
-  DialogTitle,
   FormControl,
   IconButton,
   InputLabel,
@@ -30,6 +26,7 @@ import {
 import { alpha } from '@mui/material/styles'
 import { apiUrl } from '../../api'
 import { FfProductLineCells, FfProductTableHeadCells } from '../../components/FfProductLineCells'
+import { WbProductPickerDialog } from '../../components/WbProductPickerDialog'
 import { WmsDateField } from '../../components/WmsDateField'
 import {
   productDisplayMetaFromCatalog,
@@ -165,9 +162,6 @@ export function FfInboundRequestView({
   const [cellHintsByProductId, setCellHintsByProductId] = useState<Record<string, CellLocationHint[]>>({})
 
   const [pickerOpen, setPickerOpen] = useState(false)
-  const [pickerSearch, setPickerSearch] = useState('')
-  const [pickerCategory, setPickerCategory] = useState<string>('__all__')
-  const [pickerQtyByProduct, setPickerQtyByProduct] = useState<Record<string, number>>({})
 
   const [plannedDateDraft, setPlannedDateDraft] = useState<string>('')
   const [actualBoxCountDraft, setActualBoxCountDraft] = useState<string>('')
@@ -470,32 +464,6 @@ export function FfInboundRequestView({
     () => new Set(detail?.lines.map((l) => l.product_id) ?? []),
     [detail],
   )
-
-  const categories = useMemo(() => {
-    if (!catalog) return []
-    const s = new Set<string>()
-    for (const r of catalog) {
-      const c = r.wb_subject_name?.trim()
-      if (c) s.add(c)
-    }
-    return Array.from(s).sort((a, b) => a.localeCompare(b))
-  }, [catalog])
-
-  const filteredPickerRows = useMemo(() => {
-    if (!catalog) return []
-    const q = pickerSearch.trim().toLowerCase()
-    return catalog.filter((r) => {
-      if (pickerCategory !== '__all__') {
-        const sub = (r.wb_subject_name ?? '').trim()
-        if (sub !== pickerCategory) return false
-      }
-      if (!q) return true
-      const nm = r.wb_nm_id != null ? String(r.wb_nm_id) : ''
-      const barcodes = r.wb_barcodes.join(' ').toLowerCase()
-      const hay = `${r.sku_code} ${r.wb_vendor_code ?? ''} ${r.name} ${nm} ${barcodes}`.toLowerCase()
-      return hay.includes(q)
-    })
-  }, [catalog, pickerCategory, pickerSearch])
 
   const draftLocked = detail != null && detail.status !== 'draft'
 
@@ -844,7 +812,7 @@ export function FfInboundRequestView({
     }
   }
 
-  const applyPicker = async () => {
+  const applyPicker = async (pickerQtyByProduct: Record<string, number>) => {
     if (!detail) return
     setBusy(true)
     setError(null)
@@ -885,7 +853,6 @@ export function FfInboundRequestView({
           }
         }
       }
-      setPickerQtyByProduct({})
       setPickerOpen(false)
       await loadDetail()
     } catch (e) {
@@ -2246,134 +2213,17 @@ export function FfInboundRequestView({
         </Paper>
       )}
 
-      <Dialog
+      <WbProductPickerDialog
         open={pickerOpen}
-        onClose={() => (busy ? undefined : setPickerOpen(false))}
-        maxWidth={false}
-        fullWidth
-        slotProps={{ paper: { sx: { width: 'min(1200px, 96vw)', maxHeight: '92vh' } } }}
-        data-testid="ff-inbound-picker"
-      >
-        <DialogTitle>Выбор товаров</DialogTitle>
-        <DialogContent dividers>
-          <Stack spacing={2} sx={{ mb: 2 }}>
-            <TextField
-              label="Поиск (артикул, ШК, nm, название, артикул продавца)"
-              value={pickerSearch}
-              onChange={(e) => setPickerSearch(e.target.value)}
-              onKeyDown={(e) => {
-                if (e.key !== 'Enter' || !catalog) return
-                e.preventDefault()
-                const productId = resolveProductIdByBarcode(catalog, pickerSearch)
-                const targetId =
-                  productId ?? (filteredPickerRows.length === 1 ? filteredPickerRows[0]!.id : null)
-                if (!targetId) return
-                setPickerQtyByProduct((prev) => ({
-                  ...prev,
-                  [targetId]: (prev[targetId] ?? 0) + 1,
-                }))
-                setPickerSearch('')
-              }}
-              size="small"
-              fullWidth
-              slotProps={{ htmlInput: { 'data-testid': 'ff-inbound-picker-search' } }}
-            />
-            <FormControl size="small" sx={{ minWidth: 260 }}>
-              <InputLabel id="ff-picker-cat-label">Категория (WB)</InputLabel>
-              <Select
-                labelId="ff-picker-cat-label"
-                label="Категория (WB)"
-                value={pickerCategory}
-                onChange={(e) => setPickerCategory(String(e.target.value))}
-                data-testid="ff-inbound-picker-category"
-              >
-                <MenuItem value="__all__">Все</MenuItem>
-                {categories.map((c) => (
-                  <MenuItem key={c} value={c}>
-                    {c}
-                  </MenuItem>
-                ))}
-              </Select>
-            </FormControl>
-          </Stack>
-          <TableContainer sx={{ width: '100%', overflowX: 'hidden' }}>
-            <Table
-              size="small"
-              data-testid="ff-inbound-picker-table"
-              sx={{ tableLayout: 'fixed', width: '100%' }}
-            >
-              <TableHead>
-                <TableRow>
-                  <FfProductTableHeadCells />
-                  <TableCell align="right" sx={{ width: 140 }}>
-                    Кол-во в заявку
-                  </TableCell>
-                </TableRow>
-              </TableHead>
-              <TableBody>
-                {filteredPickerRows.map((r) => {
-                  const inDraft = lineProductIds.has(r.id)
-                  const qty = pickerQtyByProduct[r.id] ?? 0
-                  const displayMeta = productDisplayMetaFromCatalog(
-                    r.id,
-                    { sku_code: r.sku_code, name: r.name },
-                    catalogById,
-                  )
-                  return (
-                    <TableRow
-                      key={r.id}
-                      hover
-                      sx={{ opacity: inDraft ? 0.45 : 1 }}
-                      data-testid="ff-inbound-picker-row"
-                      data-in-draft={inDraft ? '1' : '0'}
-                    >
-                      <FfProductLineCells
-                        meta={displayMeta}
-                        printTestId={`ff-inbound-picker-print-${r.id}`}
-                        nameExtra={
-                          inDraft ? (
-                            <Typography
-                              variant="caption"
-                              color="text.secondary"
-                              sx={{ display: 'block' }}
-                              noWrap
-                            >
-                              Товар уже добавлен в заявку
-                            </Typography>
-                          ) : null
-                        }
-                      />
-                      <TableCell align="right">
-                        <TextField
-                          type="number"
-                          size="small"
-                          disabled={inDraft || busy}
-                          value={qty || ''}
-                          onChange={(e) =>
-                            setPickerQtyByProduct((prev) => ({
-                              ...prev,
-                              [r.id]: Number(e.target.value),
-                            }))
-                          }
-                          slotProps={{ htmlInput: { min: 0, 'data-testid': 'ff-inbound-picker-qty' } }}
-                        />
-                      </TableCell>
-                    </TableRow>
-                  )
-                })}
-              </TableBody>
-            </Table>
-          </TableContainer>
-        </DialogContent>
-        <DialogActions>
-          <Button onClick={() => setPickerOpen(false)} disabled={busy} data-testid="ff-inbound-picker-cancel">
-            Отмена
-          </Button>
-          <Button variant="contained" onClick={() => void applyPicker()} disabled={busy} data-testid="ff-inbound-picker-apply">
-            Добавить в заявку
-          </Button>
-        </DialogActions>
-      </Dialog>
+        busy={busy}
+        catalog={catalog}
+        disabledProductIds={lineProductIds}
+        testIdPrefix="ff-inbound-picker"
+        variant="ff"
+        qtyColumnLabel="Кол-во в заявку"
+        onClose={() => setPickerOpen(false)}
+        onApply={applyPicker}
+      />
     </Box>
   )
 }
