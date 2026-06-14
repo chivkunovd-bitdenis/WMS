@@ -48,46 +48,39 @@ export function SellersScreen({
     }
     setError(null)
     setSuccess(null)
+    const fd = new FormData(form)
+    const name = String(fd.get('seller_name') ?? '').trim()
+    const email = String(fd.get('seller_email') ?? '').trim()
+    if (!name) {
+      setError('Укажите название селлера.')
+      return
+    }
+    if (!email) {
+      setError('Укажите email для входа в кабинет селлера.')
+      return
+    }
     setBusy(true)
     try {
-      const fd = new FormData(form)
-      const name = String(fd.get('seller_name') ?? '').trim()
-      const email = String(fd.get('seller_email') ?? '').trim()
-      if (!name) {
-        setError('Укажите название селлера.')
-        return
-      }
-      if (!email) {
-        setError('Укажите email для входа в кабинет селлера.')
-        return
-      }
-
-      const sellerRes = await fetch(apiUrl('/sellers'), {
+      const res = await fetch(apiUrl('/sellers/with-account'), {
         method: 'POST',
         headers: { ...authHeaders(token), 'Content-Type': 'application/json' },
-        body: JSON.stringify({ name }),
+        body: JSON.stringify({ name, email }),
       })
-      if (!sellerRes.ok) {
-        setError(await readApiErrorMessage(sellerRes))
+      if (!res.ok) {
+        setError(await readApiErrorMessage(res))
         return
       }
-      const seller = (await sellerRes.json()) as { id: string; name: string }
-
-      const accRes = await fetch(apiUrl('/auth/seller-accounts'), {
-        method: 'POST',
-        headers: { ...authHeaders(token), 'Content-Type': 'application/json' },
-        body: JSON.stringify({ seller_id: seller.id, email }),
-      })
-      if (!accRes.ok) {
-        setError(await readApiErrorMessage(accRes))
-        return
+      const created = (await res.json()) as {
+        seller_id: string
+        seller_name: string
+        email: string
       }
 
       form.reset()
       await onRefresh()
       const portalLink = sellerPortalUrl()
       setSuccess(
-        `Селлер «${seller.name}» создан. Передайте селлеру email ${email} и ссылку: ${portalLink} ` +
+        `Селлер «${created.seller_name}» создан. Передайте селлеру email ${created.email} и ссылку: ${portalLink} ` +
           '(не корень сайта /). Первый вход: пароль пустой — система попросит задать новый.',
       )
     } catch (err) {

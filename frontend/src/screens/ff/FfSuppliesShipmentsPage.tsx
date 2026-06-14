@@ -27,7 +27,7 @@ import {
   Typography,
 } from '@mui/material'
 import { FfProductLineCells, FfProductTableHeadCells } from '../../components/FfProductLineCells'
-import { WbProductPickerDialog } from '../../components/WbProductPickerDialog'
+import { WbProductPickerDialog, type WbProductPickerCatalogRow } from '../../components/WbProductPickerDialog'
 import { useWbProductCatalog } from '../../hooks/useWbProductCatalog'
 import { apiUrl } from '../../api'
 import { WmsDateField } from '../../components/WmsDateField'
@@ -131,6 +131,7 @@ type MarketplaceUnloadDetail = {
   warehouse_name: string
   status: string
   ff_modified: boolean
+  seller_id: string | null
   seller_name: string | null
   wb_mp_warehouse_id: number | null
   planned_shipment_date: string | null
@@ -196,6 +197,7 @@ type Props = {
   infoNotice: string | null
   onDismissInfoNotice: () => void
   token: string | null
+  sellers: { id: string; name: string }[]
   productPicklist: ProductPick[]
   onRefreshFfSupplyExtras: () => Promise<void>
   inboundSummaries: FfInboundSummary[]
@@ -204,7 +206,7 @@ type Props = {
   discrepancyActSummaries: FfDiscrepancyActSummary[]
   onOpenInbound: (id: string) => void
   onOpenOutbound: (id: string) => void
-  onCreateMpShipment: () => Promise<{ id: string } | null>
+  onCreateMpShipment: (sellerId: string) => Promise<{ id: string } | null>
   onCreateDiverge: () => Promise<{ id: string } | null>
   initialMarketplaceUnloadId?: string | null
   onInitialMarketplaceUnloadOpened?: () => void
@@ -217,6 +219,7 @@ export function FfSuppliesShipmentsPage({
   infoNotice,
   onDismissInfoNotice,
   token,
+  sellers,
   productPicklist,
   onRefreshFfSupplyExtras,
   inboundSummaries,
@@ -234,6 +237,7 @@ export function FfSuppliesShipmentsPage({
   const isMpShipmentsPage = pageVariant === 'mp-shipments'
   const [kind, setKind] = useState<QuickFilterKind>(isMpShipmentsPage ? 'marketplace_unload' : 'all')
   const [sellerFilter, setSellerFilter] = useState<string>('all')
+  const [mpCreateSellerId, setMpCreateSellerId] = useState<string>('')
   const [sortKey, setSortKey] = useState<'planned_desc' | 'planned_asc' | 'created_desc' | 'created_asc'>(
     'created_desc',
   )
@@ -265,7 +269,12 @@ export function FfSuppliesShipmentsPage({
   const [pickDialogOpen, setPickDialogOpen] = useState(false)
   const [mpPickerOpen, setMpPickerOpen] = useState(false)
   const [mpLineBarcodeScan, setMpLineBarcodeScan] = useState('')
-  const { catalog, catalogById, reload: reloadWbCatalog } = useWbProductCatalog(token, docModal !== null)
+  const mpCatalogSellerId = unloadDetail?.seller_id ?? null
+  const { catalog, catalogById, reload: reloadWbCatalog } = useWbProductCatalog(
+    token,
+    docModal === 'marketplace_unload',
+    mpCatalogSellerId,
+  )
   const [pickOptions, setPickOptions] = useState<MarketplaceUnloadPickOptionProduct[]>([])
   const [confirmDate, setConfirmDate] = useState<string>('')
   const [pickQtyByProductLoc, setPickQtyByProductLoc] = useState<
@@ -278,6 +287,17 @@ export function FfSuppliesShipmentsPage({
     () => (token ? { Authorization: `Bearer ${token}` } : null),
     [token],
   )
+
+  useEffect(() => {
+    if (sellers.length === 0) {
+      setMpCreateSellerId('')
+      return
+    }
+    if (mpCreateSellerId && sellers.some((s) => s.id === mpCreateSellerId)) {
+      return
+    }
+    setMpCreateSellerId(sellers[0]!.id)
+  }, [sellers, mpCreateSellerId])
 
   const loadWbMpWarehouses = useCallback(async () => {
     if (!token || !authHeaders) {
@@ -325,6 +345,7 @@ export function FfSuppliesShipmentsPage({
           warehouse_name: string
           status: string
           ff_modified?: boolean
+          seller_id?: string | null
           seller_name?: string | null
           wb_mp_warehouse_id?: number | null
           planned_shipment_date?: string | null
@@ -374,6 +395,7 @@ export function FfSuppliesShipmentsPage({
           warehouse_name: j.warehouse_name,
           status: j.status,
           ff_modified: Boolean(j.ff_modified),
+          seller_id: j.seller_id ?? null,
           seller_name: j.seller_name ?? null,
           wb_mp_warehouse_id: j.wb_mp_warehouse_id ?? null,
           planned_shipment_date: j.planned_shipment_date ?? null,
@@ -413,10 +435,12 @@ export function FfSuppliesShipmentsPage({
           linked_packaging_task: j.linked_packaging_task ?? null,
         })
         setConfirmDate(j.planned_shipment_date ?? '')
+        const stockParams = new URLSearchParams({ warehouse_id: j.warehouse_id })
+        if (j.seller_id) {
+          stockParams.set('seller_id', j.seller_id)
+        }
         const stockRes = await fetch(
-          apiUrl(
-            `/operations/inventory-balances/summary?warehouse_id=${encodeURIComponent(j.warehouse_id)}`,
-          ),
+          apiUrl(`/operations/inventory-balances/summary?${stockParams.toString()}`),
           { headers: authHeaders },
         )
         if (stockRes.ok) {
@@ -637,7 +661,11 @@ export function FfSuppliesShipmentsPage({
   }
 
   const createAndOpenMpShipment = async () => {
-    const created = await onCreateMpShipment()
+    if (!mpCreateSellerId) {
+      setModalError('Выберите селлера (ИП) для отгрузки.')
+      return
+    }
+    const created = await onCreateMpShipment(mpCreateSellerId)
     if (!created?.id) {
       return
     }
@@ -1202,6 +1230,27 @@ export function FfSuppliesShipmentsPage({
     [unloadDetail?.lines],
   )
 
+  const mpStockByProductId = useMemo(() => {
+    const m = new Map<string, number>()
+    for (const row of warehouseAvailableProductPicklist) {
+      m.set(row.id, row.available)
+    }
+    return m
+  }, [warehouseAvailableProductPicklist])
+
+  const mpPickerFilterRow = useCallback(
+    (row: WbProductPickerCatalogRow) => {
+      const available = mpStockByProductId.get(row.id) ?? 0
+      return available >= 1 || mpLineProductIds.has(row.id)
+    },
+    [mpLineProductIds, mpStockByProductId],
+  )
+
+  const mpPickerGetAvailable = useCallback(
+    (productId: string) => mpStockByProductId.get(productId) ?? 0,
+    [mpStockByProductId],
+  )
+
   const openMpProductPicker = async () => {
     if (!token || !authHeaders) return
     setModalError(null)
@@ -1324,17 +1373,35 @@ export function FfSuppliesShipmentsPage({
         <Typography variant="subtitle2" sx={{ mb: 1.5, fontWeight: 700 }}>
           Новые документы
         </Typography>
-        <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1.5}>
+        <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1.5} sx={{ alignItems: { sm: 'center' } }}>
           {isMpShipmentsPage ? (
-            <Button
-              variant="contained"
-              color="primary"
-              disabled={busy}
-              data-testid="ff-create-mp-shipment"
-              onClick={() => void createAndOpenMpShipment()}
-            >
-              Создать отгрузку на МП
-            </Button>
+            <>
+              <FormControl size="small" sx={{ minWidth: 260 }} required>
+                <InputLabel id="ff-mp-create-seller-label">Селлер (ИП)</InputLabel>
+                <Select
+                  labelId="ff-mp-create-seller-label"
+                  label="Селлер (ИП)"
+                  value={mpCreateSellerId}
+                  onChange={(e) => setMpCreateSellerId(String(e.target.value))}
+                  data-testid="ff-mp-create-seller-filter"
+                >
+                  {sellers.map((s) => (
+                    <MenuItem key={s.id} value={s.id}>
+                      {s.name}
+                    </MenuItem>
+                  ))}
+                </Select>
+              </FormControl>
+              <Button
+                variant="contained"
+                color="primary"
+                disabled={busy || !mpCreateSellerId}
+                data-testid="ff-create-mp-shipment"
+                onClick={() => void createAndOpenMpShipment()}
+              >
+                Создать отгрузку на МП
+              </Button>
+            </>
           ) : (
             <Button
               variant="outlined"
@@ -2312,6 +2379,10 @@ export function FfSuppliesShipmentsPage({
         qtyColumnLabel="Кол-во в отгрузку"
         applyLabel="Добавить в отгрузку"
         inDraftMessage="Товар уже добавлен в отгрузку"
+        showAvailableColumn
+        getAvailable={mpPickerGetAvailable}
+        filterRow={mpPickerFilterRow}
+        emptyMessage="Нет товаров с остатком у выбранного селлера."
         onClose={() => setMpPickerOpen(false)}
         onApply={applyMpProductPicker}
       />

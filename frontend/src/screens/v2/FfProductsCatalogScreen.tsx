@@ -42,6 +42,7 @@ type FfCatalogRow = {
   wb_primary_image_url: string | null
   wb_barcodes: string[]
   wb_primary_barcode: string | null
+  wb_size: string | null
   packaging_instructions: string | null
   has_packaging_instructions: boolean
 }
@@ -227,6 +228,7 @@ export function FfProductsCatalogScreen({ token, authHeaders, sellers }: Props) 
             <TableRow>
               <TableCell width={68}>Фото</TableCell>
               <TableCell width={140}>SKU</TableCell>
+              <TableCell width={80}>Размер</TableCell>
               <TableCell width={190}>ШК</TableCell>
               <TableCell width={160}>Артикул продавца</TableCell>
               <TableCell width={110}>WB nm</TableCell>
@@ -276,6 +278,7 @@ export function FfProductsCatalogScreen({ token, authHeaders, sellers }: Props) 
                   <ProductPhotoThumb src={p.wb_primary_image_url} />
                 </TableCell>
                 <TableCell>{p.sku_code}</TableCell>
+                <TableCell>{p.wb_size ?? '—'}</TableCell>
                 <TableCell>{p.wb_primary_barcode ?? (p.wb_barcodes[0] ?? '—')}</TableCell>
                 <TableCell>{p.wb_vendor_code ?? '—'}</TableCell>
                 <TableCell>{p.wb_nm_id ?? '—'}</TableCell>
@@ -314,7 +317,7 @@ export function FfProductsCatalogScreen({ token, authHeaders, sellers }: Props) 
             ))}
             {sortedRows.length === 0 && !busy ? (
               <TableRow>
-                <TableCell colSpan={14}>
+                <TableCell colSpan={15}>
                   <Typography variant="body2" color="text.secondary">
                     Пока нет товаров.
                   </Typography>

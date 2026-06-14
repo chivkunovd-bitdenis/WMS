@@ -8,7 +8,6 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
-from app.models.inventory_balance import InventoryBalance
 from app.models.inventory_reservation import InventoryReservation
 from app.models.marketplace_unload import (
     MarketplaceUnloadBox,
@@ -23,6 +22,7 @@ from app.models.product import Product
 from app.models.seller import Seller
 from app.models.storage_location import StorageLocation
 from app.models.user import User
+from app.services import inventory_service
 from app.services.catalog_service import get_warehouse
 from app.services.wb_mp_warehouse_service import get_cached_mp_warehouse
 
@@ -249,15 +249,8 @@ async def _available_product_qty_in_warehouse(
     *,
     exclude_request_id: uuid.UUID | None = None,
 ) -> int:
-    on_hand_stmt = (
-        select(func.coalesce(func.sum(InventoryBalance.quantity), 0))
-        .join(StorageLocation, StorageLocation.id == InventoryBalance.storage_location_id)
-        .where(
-            InventoryBalance.tenant_id == tenant_id,
-            InventoryBalance.product_id == product_id,
-            StorageLocation.tenant_id == tenant_id,
-            StorageLocation.warehouse_id == warehouse_id,
-        )
+    on_hand = await inventory_service.storage_on_hand_in_warehouse(
+        session, tenant_id, warehouse_id, product_id
     )
     reserved_outbound_stmt = (
         select(func.coalesce(func.sum(InventoryReservation.quantity), 0))
@@ -290,7 +283,6 @@ async def _available_product_qty_in_warehouse(
             ),
         )
     )
-    on_hand = int(await session.scalar(on_hand_stmt) or 0)
     reserved_outbound = int(await session.scalar(reserved_outbound_stmt) or 0)
     reserved_mp = await _mp_reserved_qty_for_product(
         session,

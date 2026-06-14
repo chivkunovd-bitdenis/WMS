@@ -8,6 +8,66 @@ from httpx import AsyncClient
 
 
 @pytest.mark.asyncio
+async def test_create_seller_with_account_atomic(async_client: AsyncClient) -> None:
+    suffix = str(int(time.time() * 1000))
+    reg = await async_client.post(
+        "/auth/register",
+        json={
+            "organization_name": "Atomic Co",
+            "slug": f"atomic-{suffix}",
+            "admin_email": f"atomic-{suffix}@example.com",
+            "password": "password123",
+        },
+    )
+    token = str(reg.json()["access_token"])
+    h = {"Authorization": f"Bearer {token}"}
+
+    created = await async_client.post(
+        "/sellers/with-account",
+        headers=h,
+        json={"name": "Seller Atomic", "email": f"seller-{suffix}@example.com"},
+    )
+    assert created.status_code == 201, created.text
+    body = created.json()
+    assert body["seller_name"] == "Seller Atomic"
+    assert body["email"] == f"seller-{suffix}@example.com"
+    assert body["role"] == "fulfillment_seller"
+
+    listed = await async_client.get("/sellers", headers=h)
+    assert len(listed.json()) == 1
+
+
+@pytest.mark.asyncio
+async def test_create_seller_with_account_email_taken_no_orphan(
+    async_client: AsyncClient,
+) -> None:
+    suffix = str(int(time.time() * 1000))
+    reg = await async_client.post(
+        "/auth/register",
+        json={
+            "organization_name": "Orphan Co",
+            "slug": f"orphan-{suffix}",
+            "admin_email": f"orphan-{suffix}@example.com",
+            "password": "password123",
+        },
+    )
+    token = str(reg.json()["access_token"])
+    h = {"Authorization": f"Bearer {token}"}
+    taken_email = f"orphan-{suffix}@example.com"
+
+    failed = await async_client.post(
+        "/sellers/with-account",
+        headers=h,
+        json={"name": "Would Orphan", "email": taken_email},
+    )
+    assert failed.status_code == 409
+    assert failed.json()["detail"] == "email_taken"
+
+    listed = await async_client.get("/sellers", headers=h)
+    assert listed.json() == []
+
+
+@pytest.mark.asyncio
 async def test_create_seller_and_product_with_seller(async_client: AsyncClient) -> None:
     suffix = str(int(time.time() * 1000))
     reg = await async_client.post(

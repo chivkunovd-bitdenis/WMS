@@ -75,6 +75,8 @@ class WildberriesImportedSupplyOut(BaseModel):
 class LinkProductWbBody(BaseModel):
     product_id: uuid.UUID
     nm_id: int = Field(ge=1)
+    wb_barcode: str | None = Field(default=None, max_length=64)
+    wb_chrt_id: int | None = Field(default=None, ge=1)
 
 
 class LinkProductWbOut(BaseModel):
@@ -82,6 +84,8 @@ class LinkProductWbOut(BaseModel):
     sku_code: str
     wb_nm_id: int
     wb_vendor_code: str | None
+    wb_barcode: str | None = None
+    wb_size: str | None = None
 
 
 class WildberriesSelfTokenSaveBody(BaseModel):
@@ -227,6 +231,8 @@ async def link_product_to_wildberries(
             seller_id,
             body.product_id,
             body.nm_id,
+            wb_barcode=body.wb_barcode,
+            wb_chrt_id=body.wb_chrt_id,
         )
     except WildberriesLinkError as exc:
         if exc.code == "product_not_found":
@@ -239,12 +245,22 @@ async def link_product_to_wildberries(
                 status_code=status.HTTP_404_NOT_FOUND,
                 detail="wb_card_not_found",
             ) from exc
-        if exc.code == "wb_nm_already_linked":
+        if exc.code in (
+            "wb_nm_already_linked",
+            "wb_barcode_already_linked",
+        ):
             raise HTTPException(
                 status_code=status.HTTP_409_CONFLICT,
-                detail="wb_nm_already_linked",
+                detail=exc.code,
             ) from exc
-        if exc.code in ("product_must_have_seller", "product_seller_mismatch"):
+        if exc.code in (
+            "product_must_have_seller",
+            "product_seller_mismatch",
+            "wb_size_required",
+            "wb_barcode_not_found",
+            "wb_chrt_not_found",
+            "wb_card_no_sizes",
+        ):
             raise HTTPException(
                 status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
                 detail=exc.code,
@@ -256,6 +272,8 @@ async def link_product_to_wildberries(
         sku_code=p.sku_code,
         wb_nm_id=int(p.wb_nm_id),
         wb_vendor_code=p.wb_vendor_code,
+        wb_barcode=p.wb_barcode,
+        wb_size=p.wb_size,
     )
 
 

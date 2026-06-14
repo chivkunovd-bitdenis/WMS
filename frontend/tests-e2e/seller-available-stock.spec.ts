@@ -210,7 +210,9 @@ test('seller products table shows on hand, reserved, and available after MP plan
   const row = page.getByTestId('seller-product-row').filter({ hasText: sku });
   await expect(row).toBeVisible();
   await expect(row.getByTestId('seller-stock-on-hand')).toHaveText('10');
+  await expect(row.getByTestId('seller-stock-in-storage')).toHaveText('10');
   await expect(row.getByTestId('seller-stock-reserved')).toHaveText('4');
-  await expect(row.getByTestId('seller-stock-available')).toContainText('6');
-  await expect(row.getByTestId('seller-stock-available-hint')).toContainText('(доступно 6)');
+  await expect(row.getByTestId('seller-stock-free-total')).toHaveText('6');
+  await expect(row.getByTestId('seller-stock-available')).toHaveText('6');
+  await expect(row.getByTestId('seller-stock-available-hint')).toContainText('(свободно 6)');
 });

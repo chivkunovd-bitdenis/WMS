@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from dataclasses import dataclass
 from typing import Any
 
 _WB_COLOR_CHAR_ID = 14177449
@@ -20,6 +21,75 @@ def subject_name_from_card(card: dict[str, Any]) -> str | None:
         if isinstance(raw, str) and raw.strip():
             return raw.strip()
     return None
+
+
+@dataclass(frozen=True)
+class WbSizeVariant:
+    chrt_id: int | None
+    size_label: str | None
+    barcode: str
+
+
+def _parse_chrt_id(entry: dict[str, Any]) -> int | None:
+    raw = entry.get("chrtID") if "chrtID" in entry else entry.get("chrtId")
+    if isinstance(raw, bool):
+        return None
+    if isinstance(raw, int):
+        return raw
+    if isinstance(raw, float) and raw.is_integer():
+        return int(raw)
+    if isinstance(raw, str) and raw.strip().isdigit():
+        return int(raw.strip())
+    return None
+
+
+def iter_size_variants_from_card(card: dict[str, Any]) -> list[WbSizeVariant]:
+    """One WMS product row per barcode in ``sizes[].skus``."""
+    out: list[WbSizeVariant] = []
+    sizes = card.get("sizes")
+    if isinstance(sizes, list) and sizes:
+        for sz in sizes:
+            if not isinstance(sz, dict):
+                continue
+            label = _size_label_from_entry(sz)
+            chrt = _parse_chrt_id(sz)
+            skus = sz.get("skus")
+            if not isinstance(skus, list):
+                continue
+            for s in skus:
+                if isinstance(s, str) and (t := s.strip()):
+                    out.append(WbSizeVariant(chrt_id=chrt, size_label=label, barcode=t))
+    if out:
+        return out
+    for barcode in collect_skus_from_card(card):
+        out.append(WbSizeVariant(chrt_id=None, size_label=None, barcode=barcode))
+    return out
+
+
+def sku_code_for_wb_variant(
+    vendor: str | None,
+    nm: int | None,
+    variant: WbSizeVariant,
+    *,
+    multi_variant: bool,
+) -> str:
+    base = (vendor or (str(nm) if nm is not None else "") or variant.barcode).strip()
+    if not multi_variant:
+        return base[:128]
+    if variant.size_label:
+        suffix = variant.size_label.replace("/", "-").strip()
+        if suffix:
+            return f"{base}/{suffix}"[:128]
+    if variant.chrt_id is not None:
+        return f"{base}/chrt{variant.chrt_id}"[:128]
+    return f"{base}/{variant.barcode[-8:]}"[:128]
+
+
+def product_display_name(base_title: str, variant: WbSizeVariant, *, multi_variant: bool) -> str:
+    title = base_title.strip() or "WB товар"
+    if not multi_variant or not variant.size_label:
+        return title[:255]
+    return f"{title} {variant.size_label}"[:255]
 
 
 def collect_skus_from_card(card: dict[str, Any]) -> list[str]:
