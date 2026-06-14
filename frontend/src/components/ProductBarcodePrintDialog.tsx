@@ -70,6 +70,7 @@ export function ProductBarcodePrintDialog({ open, meta, onClose }: Props) {
           product_name: meta.product_name,
           sku_code: meta.sku_code,
           wb_vendor_code: meta.wb_vendor_code,
+          wb_size: meta.wb_size,
           wb_color: meta.wb_color,
           wb_brand: meta.wb_brand,
           seller_name: meta.seller_name,
@@ -94,7 +95,7 @@ export function ProductBarcodePrintDialog({ open, meta, onClose }: Props) {
       <DialogTitle>Печать этикетки 58×40</DialogTitle>
       <DialogContent>
         <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
-          Этикетка WB: штрихкод, селлер, название, артикул, цвет, бренд и призыв оставить отзыв.
+          Этикетка WB: штрихкод (ШК), селлер, название, артикул, размер, цвет, бренд и призыв оставить отзыв.
         </Typography>
 
         <Box

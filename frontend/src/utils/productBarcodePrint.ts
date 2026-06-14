@@ -5,6 +5,7 @@ export function printProductBarcodeLabel(options: {
   sku_code: string
   product_name?: string
   wb_vendor_code?: string | null
+  wb_size?: string | null
   wb_color?: string | null
   wb_brand?: string | null
   seller_name?: string | null
@@ -20,6 +21,7 @@ export function printProductBarcodeLabel(options: {
       product_name: options.product_name ?? options.sku_code,
       sku_code: options.sku_code,
       wb_vendor_code: options.wb_vendor_code,
+      wb_size: options.wb_size,
       wb_color: options.wb_color,
       wb_brand: options.wb_brand,
       seller_name: options.seller_name,
@@ -34,6 +36,7 @@ export function printProductBarcodeFromMeta(
     sku_code: string
     product_name?: string
     wb_vendor_code?: string | null
+    wb_size?: string | null
     wb_color?: string | null
     wb_brand?: string | null
     seller_name?: string | null
@@ -50,6 +53,7 @@ export function printProductBarcodeFromMeta(
     sku_code: meta.sku_code,
     product_name: meta.product_name,
     wb_vendor_code: meta.wb_vendor_code,
+    wb_size: meta.wb_size,
     wb_color: meta.wb_color,
     wb_brand: meta.wb_brand,
     seller_name: meta.seller_name,

@@ -29,14 +29,19 @@ export function resolveProductLabelArticle(meta: {
   return meta.sku_code.trim()
 }
 
-/** WB marketplace label lines below article (color, brand). */
+/** WB marketplace label lines below article (size, color, brand). */
 export function productLabelDetailLines(meta: {
+  wb_size?: string | null
   wb_color?: string | null
   wb_brand?: string | null
 }): string[] {
   const lines: string[] = []
+  const size = meta.wb_size?.trim()
   const color = meta.wb_color?.trim()
   const brand = meta.wb_brand?.trim()
+  if (size) {
+    lines.push(`Размер: ${size}`)
+  }
   if (color) {
     lines.push(`Цвет: ${color}`)
   }
@@ -44,13 +49,4 @@ export function productLabelDetailLines(meta: {
     lines.push(`Бренд: ${brand}`)
   }
   return lines
-}
-
-/** @deprecated Use productLabelDetailLines — size is not printed on WB 58×40 labels. */
-export function productLabelVariantLines(meta: {
-  wb_size?: string | null
-  wb_color?: string | null
-  wb_brand?: string | null
-}): string[] {
-  return productLabelDetailLines(meta)
 }

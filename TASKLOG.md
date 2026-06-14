@@ -1,5 +1,11 @@
 # TASKLOG
 
+## TASK-54 — 2026-06-14 — Этикетка 58×40 и колонка ШК: баркод WB + размер
+
+- What changed: на этикетке 58×40 в блоке деталей снова печатается «Размер: …»; под штрихкодом — только цифры ШК (баркод WB, не артикул/sku); в колонке «ШК» строк товаров (приёмка, упаковка, отгрузка) — баркод сверху, «Размер: …» снизу; e2e `ff-product-barcode-print.spec.ts` обновлён.
+- What did NOT change: отдельная колонка «Размер» в каталоге товаров; логика импорта WB.
+- Verification: `npm run build`; `npx playwright test tests-e2e/ff-product-barcode-print.spec.ts`.
+
 ## TASK-53 — 2026-06-14 — WB: отдельный товар на каждый размер + фильтр ИП при отгрузке ФФ
 
 - What changed: импорт WB — один `Product` на каждый баркод из `sizes[].skus` (`sku_code` вида `ART/S`, поля `wb_barcode`, `wb_chrt_id`, `wb_size`); при multi-size старый merged SKU → `OLD/…` + `[OLD]` в названии; миграция `20260614_0039`; post-deploy `./scripts/deploy/sync-all-wb-products.sh` (в `prod-update.sh`) — полная загрузка карточек по **всем** селлерам с content-токеном; UI «Товары» — колонка «Размер»; отгрузка на МП (ФФ) — выбор селлера (ИП) перед созданием.

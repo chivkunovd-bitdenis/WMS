@@ -11,6 +11,7 @@ export type ProductThermalLabelData = {
   product_name: string
   sku_code: string
   wb_vendor_code?: string | null
+  wb_size?: string | null
   wb_color?: string | null
   wb_brand?: string | null
   seller_name?: string | null
