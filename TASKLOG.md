@@ -5,6 +5,7 @@
 - What changed: на этикетке 58×40 в блоке деталей снова печатается «Размер: …»; под штрихкодом — только цифры ШК (баркод WB, не артикул/sku); в колонке «ШК» строк товаров (приёмка, упаковка, отгрузка) — баркод сверху, «Размер: …» снизу; e2e `ff-product-barcode-print.spec.ts` обновлён.
 - What did NOT change: отдельная колонка «Размер» в каталоге товаров; логика импорта WB.
 - Verification: `npm run build`; `npx playwright test tests-e2e/ff-product-barcode-print.spec.ts`.
+- Deploy: commit `476d2aa`, prod `/opt/wms` — `git pull` + rebuild `web` only, `:8088` OK.
 
 ## TASK-53 — 2026-06-14 — WB: отдельный товар на каждый размер + фильтр ИП при отгрузке ФФ
 
