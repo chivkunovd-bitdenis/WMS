@@ -13,6 +13,7 @@ from app.core.roles import FF_PORTAL_ROLES, FULFILLMENT_ADMIN, FULFILLMENT_SELLE
 from app.db.session import get_db
 from app.models.user import User
 from app.services.auth_service import get_user_by_id
+from app.services.seller_shop_service import SellerShopError, assert_can_act_as_seller
 from app.services.staff_permissions_service import (
     PERM_CELLS,
     PERM_MP_SHIPMENTS,
@@ -23,6 +24,39 @@ from app.services.staff_permissions_service import (
 from app.services.tokens import decode_access_token
 
 _bearer = HTTPBearer(auto_error=False)
+
+
+async def resolve_effective_seller_id(
+    session: AsyncSession,
+    user: User,
+    credentials: HTTPAuthorizationCredentials | None,
+) -> uuid.UUID | None:
+    """Seller scope: JWT seller_id when delegated, else user's home seller."""
+    if user.role != FULFILLMENT_SELLER:
+        return user.seller_id
+    home_seller_id = user.seller_id
+    if home_seller_id is None:
+        return None
+    if credentials is None or credentials.scheme.lower() != "bearer":
+        return home_seller_id
+    try:
+        payload = decode_access_token(credentials.credentials)
+        raw = payload.get("seller_id")
+        if not isinstance(raw, str):
+            return home_seller_id
+        active_seller_id = uuid.UUID(raw)
+    except (jwt.PyJWTError, ValueError):
+        return home_seller_id
+    if active_seller_id == home_seller_id:
+        return home_seller_id
+    try:
+        await assert_can_act_as_seller(session, user, active_seller_id)
+    except SellerShopError:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="forbidden",
+        ) from None
+    return active_seller_id
 
 
 async def get_current_user(
@@ -63,6 +97,16 @@ async def get_current_user(
             detail="tenant_mismatch",
         )
     return user
+
+
+async def get_effective_seller_id(
+    user: Annotated[User, Depends(get_current_user)],
+    credentials: Annotated[
+        HTTPAuthorizationCredentials | None, Depends(_bearer)
+    ],
+    session: Annotated[AsyncSession, Depends(get_db)],
+) -> uuid.UUID | None:
+    return await resolve_effective_seller_id(session, user, credentials)
 
 
 async def require_fulfillment_admin(
@@ -160,13 +204,18 @@ require_packaging_access = require_ff_permission(PERM_PACKAGING)
 
 async def seller_line_product_scope(
     user: Annotated[User, Depends(get_current_user)],
+    credentials: Annotated[
+        HTTPAuthorizationCredentials | None, Depends(_bearer)
+    ],
+    session: Annotated[AsyncSession, Depends(get_db)],
 ) -> uuid.UUID | None:
     """For fulfillment_seller: filter operations to lines with these products."""
     if user.role == FULFILLMENT_SELLER:
-        if user.seller_id is None:
+        seller_id = await resolve_effective_seller_id(session, user, credentials)
+        if seller_id is None:
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
                 detail="seller_not_linked",
             )
-        return user.seller_id
+        return seller_id
     return None

@@ -1,5 +1,11 @@
 # TASKLOG
 
+## TASK-55 — 2026-06-15 — Портал селлера: переключение между магазинами (Vitality)
+
+- What changed: менеджер-магазинов (email с «vitalik», `WMS_SHOP_MANAGER_EMAILS` или `users.can_manage_seller_shops`) — в сайдбаре раздел «Магазины» с чекбоксами (все селлеры тенанта кроме своего и тестовых `@example.com` / `e2e-*`); после включения — переключатель «Активный магазин»; API `PUT /auth/seller-shops`, `POST /auth/switch-seller`; JWT `seller_id` = активный магазин; все seller API (отгрузки, приёмки, товары, WB) работают от лица выбранного магазина; миграция `20260615_0040`; pytest `test_seller_shop_switch.py`.
+- What did NOT change: обычные селлеры без флага — только свой магазин; админ FF не затронут.
+- Verification: `pytest tests/test_seller_shop_switch.py`; `npm run build`.
+
 ## TASK-54 — 2026-06-14 — Этикетка 58×40 и колонка ШК: баркод WB + размер
 
 - What changed: на этикетке 58×40 в блоке деталей снова печатается «Размер: …»; под штрихкодом — только цифры ШК (баркод WB, не артикул/sku); в колонке «ШК» строк товаров (приёмка, упаковка, отгрузка) — баркод сверху, «Размер: …» снизу; e2e `ff-product-barcode-print.spec.ts` обновлён.

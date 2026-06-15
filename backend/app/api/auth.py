@@ -4,10 +4,16 @@ import uuid
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from pydantic import BaseModel, EmailStr, Field, field_validator
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.api.deps import get_current_user, require_fulfillment_admin
+from app.api.deps import (
+    get_current_user,
+    require_fulfillment_admin,
+    resolve_effective_seller_id,
+)
+from app.core.roles import FULFILLMENT_SELLER
 from app.db.session import get_db
 from app.models.seller import Seller
 from app.models.user import User
@@ -18,10 +24,19 @@ from app.services.auth_service import (
     register_fulfillment,
     set_initial_password,
 )
+from app.services.seller_shop_service import (
+    SellerShopError,
+    can_act_as_seller,
+    list_delegatable_shops,
+    list_switchable_shops,
+    update_enabled_shops,
+    user_can_manage_seller_shops,
+)
 from app.services.staff_permissions_service import get_staff_permissions
 from app.services.tokens import create_access_token
 
 router = APIRouter(prefix="/auth", tags=["auth"])
+_bearer = HTTPBearer(auto_error=False)
 
 
 class RegisterBody(BaseModel):
@@ -41,6 +56,22 @@ class TokenResponse(BaseModel):
     token_type: str = "bearer"
 
 
+class StaffPermissionsOut(BaseModel):
+    settings: bool
+    mp_shipments: bool
+    reception: bool
+    cells: bool
+    inventory: bool
+    packaging: bool
+
+
+class SellerShopOut(BaseModel):
+    id: str
+    name: str
+    enabled: bool = False
+    is_home: bool = False
+
+
 class UserMeResponse(BaseModel):
     id: str
     email: str
@@ -49,16 +80,22 @@ class UserMeResponse(BaseModel):
     organization_name: str
     seller_id: str | None = None
     seller_name: str | None = None
+    home_seller_id: str | None = None
+    home_seller_name: str | None = None
+    active_seller_id: str | None = None
+    active_seller_name: str | None = None
+    can_manage_seller_shops: bool = False
+    switchable_shops: list[SellerShopOut] = Field(default_factory=list)
+    delegatable_shops: list[SellerShopOut] = Field(default_factory=list)
     permissions: StaffPermissionsOut | None = None
 
 
-class StaffPermissionsOut(BaseModel):
-    settings: bool
-    mp_shipments: bool
-    reception: bool
-    cells: bool
-    inventory: bool
-    packaging: bool
+class SwitchSellerBody(BaseModel):
+    seller_id: uuid.UUID | None = None
+
+
+class SellerShopsUpdateBody(BaseModel):
+    enabled_seller_ids: list[uuid.UUID] = Field(default_factory=list)
 
 
 class SellerAccountCreate(BaseModel):
@@ -222,6 +259,9 @@ async def set_initial_password_route(
 @router.get("/me", response_model=UserMeResponse)
 async def me(
     user: Annotated[User, Depends(get_current_user)],
+    credentials: Annotated[
+        HTTPAuthorizationCredentials | None, Depends(_bearer)
+    ],
     session: Annotated[AsyncSession, Depends(get_db)],
 ) -> UserMeResponse:
     from sqlalchemy import select
@@ -231,13 +271,41 @@ async def me(
     stmt = select(Tenant).where(Tenant.id == user.tenant_id)
     res = await session.execute(stmt)
     tenant = res.scalar_one()
-    seller_name: str | None = None
-    seller_id_str: str | None = None
+    home_seller_id_str: str | None = None
+    home_seller_name: str | None = None
     if user.seller_id is not None:
-        seller_id_str = str(user.seller_id)
-        seller = await session.get(Seller, user.seller_id)
-        if seller is not None:
-            seller_name = seller.name
+        home_seller_id_str = str(user.seller_id)
+        home = await session.get(Seller, user.seller_id)
+        if home is not None:
+            home_seller_name = home.name
+    active_seller_id = await resolve_effective_seller_id(session, user, credentials)
+    active_seller_id_str = str(active_seller_id) if active_seller_id else None
+    active_seller_name: str | None = None
+    if active_seller_id is not None:
+        active = await session.get(Seller, active_seller_id)
+        if active is not None:
+            active_seller_name = active.name
+    can_manage = user_can_manage_seller_shops(user)
+    switchable = await list_switchable_shops(session, user)
+    delegatable = await list_delegatable_shops(session, user)
+    switchable_out = [
+        SellerShopOut(
+            id=str(s.id),
+            name=s.name,
+            enabled=True,
+            is_home=s.id == user.seller_id,
+        )
+        for s in switchable
+    ]
+    delegatable_out = [
+        SellerShopOut(
+            id=str(s.id),
+            name=s.name,
+            enabled=enabled,
+            is_home=False,
+        )
+        for s, enabled in delegatable
+    ]
     perms_snapshot = await get_staff_permissions(session, user)
     perms_dict = perms_snapshot.as_dict()
     permissions = StaffPermissionsOut(
@@ -254,7 +322,60 @@ async def me(
         tenant_id=str(user.tenant_id),
         role=user.role,
         organization_name=tenant.name,
-        seller_id=seller_id_str,
-        seller_name=seller_name,
+        seller_id=active_seller_id_str,
+        seller_name=active_seller_name,
+        home_seller_id=home_seller_id_str,
+        home_seller_name=home_seller_name,
+        active_seller_id=active_seller_id_str,
+        active_seller_name=active_seller_name,
+        can_manage_seller_shops=can_manage,
+        switchable_shops=switchable_out,
+        delegatable_shops=delegatable_out,
         permissions=permissions,
     )
+
+
+@router.put("/seller-shops", response_model=list[SellerShopOut])
+async def put_seller_shops(
+    body: SellerShopsUpdateBody,
+    user: Annotated[User, Depends(get_current_user)],
+    session: Annotated[AsyncSession, Depends(get_db)],
+) -> list[SellerShopOut]:
+    if not user_can_manage_seller_shops(user):
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="forbidden")
+    try:
+        rows = await update_enabled_shops(session, user, body.enabled_seller_ids)
+    except SellerShopError as exc:
+        if exc.code == "seller_not_allowed":
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+                detail="seller_not_allowed",
+            ) from None
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="forbidden",
+        ) from None
+    return [
+        SellerShopOut(id=str(s.id), name=s.name, enabled=enabled, is_home=False)
+        for s, enabled in rows
+    ]
+
+
+@router.post("/switch-seller", response_model=TokenResponse)
+async def switch_seller(
+    body: SwitchSellerBody,
+    user: Annotated[User, Depends(get_current_user)],
+    session: Annotated[AsyncSession, Depends(get_db)],
+) -> TokenResponse:
+    if user.role != FULFILLMENT_SELLER or user.seller_id is None:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="forbidden")
+    target = body.seller_id if body.seller_id is not None else user.seller_id
+    if not await can_act_as_seller(session, user, target):
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="forbidden")
+    token = create_access_token(
+        user_id=user.id,
+        tenant_id=user.tenant_id,
+        role=user.role,
+        seller_id=target,
+    )
+    return TokenResponse(access_token=token)

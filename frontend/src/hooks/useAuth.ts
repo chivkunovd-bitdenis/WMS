@@ -18,6 +18,23 @@ export type Me = {
   role: string
   seller_id?: string | null
   seller_name?: string | null
+  home_seller_id?: string | null
+  home_seller_name?: string | null
+  active_seller_id?: string | null
+  active_seller_name?: string | null
+  can_manage_seller_shops?: boolean
+  switchable_shops?: {
+    id: string
+    name: string
+    enabled?: boolean
+    is_home?: boolean
+  }[]
+  delegatable_shops?: {
+    id: string
+    name: string
+    enabled?: boolean
+    is_home?: boolean
+  }[]
   permissions?: FfPermissions | null
 }
 
@@ -302,6 +319,27 @@ export function useAuth(portal: AuthPortal = 'fulfillment') {
     setPendingPasswordSetupEmail(null)
   }, [portal])
 
+  const applyToken = useCallback(
+    (nextToken: string) => {
+      setStoredToken(nextToken, portal)
+      setPortalMismatch(null)
+      setToken(nextToken)
+    },
+    [portal],
+  )
+
+  const reloadMe = useCallback(
+    async (overrideToken?: string | null) => {
+      const t = overrideToken ?? token
+      if (!t) {
+        return null
+      }
+      await loadMe(t)
+      return t
+    },
+    [loadMe, token],
+  )
+
   return {
     token,
     me,
@@ -315,5 +353,7 @@ export function useAuth(portal: AuthPortal = 'fulfillment') {
     onSetInitialPassword,
     onCancelPasswordSetup,
     logout,
+    applyToken,
+    reloadMe,
   }
 }

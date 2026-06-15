@@ -10,7 +10,7 @@ from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Request,
 from pydantic import BaseModel, Field
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.api.deps import get_current_user, require_fulfillment_admin
+from app.api.deps import get_current_user, get_effective_seller_id, require_fulfillment_admin
 from app.core.roles import FULFILLMENT_SELLER
 from app.core.settings import settings
 from app.db.session import get_db
@@ -300,10 +300,11 @@ async def get_seller_wildberries_tokens(
 async def get_self_wildberries_tokens(
     user: Annotated[User, Depends(get_current_user)],
     session: Annotated[AsyncSession, Depends(get_db)],
+    effective_seller_id: Annotated[uuid.UUID | None, Depends(get_effective_seller_id)],
 ) -> WildberriesSelfTokensOut:
-    if user.role != FULFILLMENT_SELLER or user.seller_id is None:
+    if user.role != FULFILLMENT_SELLER or effective_seller_id is None:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="forbidden")
-    st = await get_public_token_status(session, user.tenant_id, user.seller_id)
+    st = await get_public_token_status(session, user.tenant_id, effective_seller_id)
     if st is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="seller_not_found")
     has_c, has_s, upd = st
@@ -374,9 +375,10 @@ async def save_and_validate_self_content_token(
     user: Annotated[User, Depends(get_current_user)],
     session: Annotated[AsyncSession, Depends(get_db)],
     background_tasks: BackgroundTasks,
+    effective_seller_id: Annotated[uuid.UUID | None, Depends(get_effective_seller_id)],
 ) -> WildberriesSelfTokenSaveOut:
     """Seller saves WB content API key; validate by calling cards list."""
-    if user.role != FULFILLMENT_SELLER or user.seller_id is None:
+    if user.role != FULFILLMENT_SELLER or effective_seller_id is None:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="forbidden")
     token = body.content_api_token.strip()
     if not token:
@@ -443,13 +445,15 @@ async def save_and_validate_self_content_token(
         await patch_seller_tokens(
             session,
             user.tenant_id,
-            user.seller_id,
+            effective_seller_id,
             content_api_token=token,
             supplies_api_token=SKIP,
         )
-        saved = await upsert_imported_cards(session, user.tenant_id, user.seller_id, total_cards)
+        saved = await upsert_imported_cards(
+            session, user.tenant_id, effective_seller_id, total_cards
+        )
         prod_stats = await upsert_products_from_wb_cards(
-            session, user.tenant_id, user.seller_id, total_cards
+            session, user.tenant_id, effective_seller_id, total_cards
         )
     except WildberriesCredentialsError as exc:
         raise HTTPException(
@@ -458,7 +462,7 @@ async def save_and_validate_self_content_token(
         ) from None
     from app.services.wb_mp_warehouse_service import run_wb_mp_warehouses_sync_task
 
-    background_tasks.add_task(run_wb_mp_warehouses_sync_task, user.tenant_id, user.seller_id)
+    background_tasks.add_task(run_wb_mp_warehouses_sync_task, user.tenant_id, effective_seller_id)
     return WildberriesSelfTokenSaveOut(
         cards_received=n,
         cards_saved=saved,
@@ -472,11 +476,12 @@ async def save_and_validate_self_content_token(
 async def sync_products_now(
     user: Annotated[User, Depends(get_current_user)],
     session: Annotated[AsyncSession, Depends(get_db)],
+    effective_seller_id: Annotated[uuid.UUID | None, Depends(get_effective_seller_id)],
 ) -> WildberriesSelfSyncOut:
     """Seller-click sync: fetch all WB cards, persist snapshots, and upsert Product rows."""
-    if user.role != FULFILLMENT_SELLER or user.seller_id is None:
+    if user.role != FULFILLMENT_SELLER or effective_seller_id is None:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="forbidden")
-    pair = await get_decrypted_tokens_for_seller(session, user.tenant_id, user.seller_id)
+    pair = await get_decrypted_tokens_for_seller(session, user.tenant_id, effective_seller_id)
     if pair is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="seller_not_found")
     content_token, _supplies = pair
@@ -532,11 +537,11 @@ async def sync_products_now(
                 break
 
     n = len(total_cards)
-    saved = await upsert_imported_cards(session, user.tenant_id, user.seller_id, total_cards)
+    saved = await upsert_imported_cards(session, user.tenant_id, effective_seller_id, total_cards)
     prod_stats = await upsert_products_from_wb_cards(
         session,
         user.tenant_id,
-        user.seller_id,
+        effective_seller_id,
         total_cards,
     )
     return WildberriesSelfSyncOut(

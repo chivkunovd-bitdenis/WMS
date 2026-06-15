@@ -42,11 +42,17 @@ class MarketplaceUnloadError(Exception):
         super().__init__(code)
 
 
-def assert_request_visible(user: User, req: MarketplaceUnloadRequest) -> None:
+def assert_request_visible(
+    user: User,
+    req: MarketplaceUnloadRequest,
+    *,
+    effective_seller_id: uuid.UUID | None = None,
+) -> None:
     from app.core.roles import FULFILLMENT_SELLER
 
+    seller_id = effective_seller_id if effective_seller_id is not None else user.seller_id
     if user.role == FULFILLMENT_SELLER and (
-        user.seller_id is None or req.seller_id != user.seller_id
+        seller_id is None or req.seller_id != seller_id
     ):
         raise MarketplaceUnloadError("not_found")
 

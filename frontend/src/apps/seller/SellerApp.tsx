@@ -33,7 +33,11 @@ export function SellerApp() {
     onSetInitialPassword,
     onCancelPasswordSetup,
     logout,
+    applyToken,
+    reloadMe,
   } = useAuth('seller')
+
+  const [shopsBusy, setShopsBusy] = useState(false)
 
   const [warehouses, setWarehouses] = useState<WarehouseRow[]>([])
   const [selectedWarehouseId, setSelectedWarehouseId] = useState<string | null>(
@@ -97,6 +101,95 @@ export function SellerApp() {
     [authHeaders],
   )
 
+  const refreshAllOps = useCallback(
+    async (t: string) => {
+      await refreshWarehouses(t)
+      await refreshInboundList(t)
+      await refreshMpUnloadList(t)
+    },
+    [refreshInboundList, refreshMpUnloadList, refreshWarehouses],
+  )
+
+  const handleToggleShop = useCallback(
+    async (sellerId: string, enabled: boolean) => {
+      if (!token || !me?.can_manage_seller_shops) {
+        return
+      }
+      const currentEnabled = (me.delegatable_shops ?? [])
+        .filter((s) => s.enabled)
+        .map((s) => s.id)
+      const nextEnabled = enabled
+        ? [...new Set([...currentEnabled, sellerId])]
+        : currentEnabled.filter((id) => id !== sellerId)
+      setShopsBusy(true)
+      setOpsError(null)
+      try {
+        const res = await fetch(apiUrl('/auth/seller-shops'), {
+          method: 'PUT',
+          headers: {
+            ...authHeaders(token),
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({ enabled_seller_ids: nextEnabled }),
+        })
+        if (!res.ok) {
+          setOpsError(await readApiErrorMessage(res))
+          return
+        }
+        await reloadMe()
+      } catch (e) {
+        setOpsError(
+          e instanceof Error ? e.message : 'Не удалось обновить список магазинов.',
+        )
+      } finally {
+        setShopsBusy(false)
+      }
+    },
+    [authHeaders, me, reloadMe, token],
+  )
+
+  const handleSwitchShop = useCallback(
+    async (sellerId: string | null) => {
+      if (!token) {
+        return
+      }
+      const homeId = me?.home_seller_id ?? me?.seller_id ?? null
+      const targetId = sellerId ?? homeId
+      if (!targetId || targetId === (me?.active_seller_id ?? me?.seller_id)) {
+        return
+      }
+      setShopsBusy(true)
+      setOpsError(null)
+      try {
+        const res = await fetch(apiUrl('/auth/switch-seller'), {
+          method: 'POST',
+          headers: {
+            ...authHeaders(token),
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            seller_id: sellerId,
+          }),
+        })
+        if (!res.ok) {
+          setOpsError(await readApiErrorMessage(res))
+          return
+        }
+        const data = (await res.json()) as { access_token: string }
+        applyToken(data.access_token)
+        await reloadMe(data.access_token)
+        await refreshAllOps(data.access_token)
+      } catch (e) {
+        setOpsError(
+          e instanceof Error ? e.message : 'Не удалось переключить магазин.',
+        )
+      } finally {
+        setShopsBusy(false)
+      }
+    },
+    [applyToken, authHeaders, me, refreshAllOps, reloadMe, token],
+  )
+
   useEffect(() => {
     if (!token || !me) {
       setWarehouses([])
@@ -146,7 +239,19 @@ export function SellerApp() {
         onLogout={() => logout()}
         title="Портал селлера"
         userLabel={me.email}
-        userRoleLabel={me.role}
+        userRoleLabel={
+          me.active_seller_name && me.active_seller_name !== me.home_seller_name
+            ? `${me.role} · ${me.active_seller_name}`
+            : me.role
+        }
+        canManageSellerShops={Boolean(me.can_manage_seller_shops)}
+        homeSellerId={me.home_seller_id ?? me.seller_id ?? null}
+        activeSellerId={me.active_seller_id ?? me.seller_id ?? null}
+        delegatableShops={me.delegatable_shops ?? []}
+        switchableShops={me.switchable_shops ?? []}
+        shopsBusy={shopsBusy}
+        onToggleShop={(sellerId, enabled) => void handleToggleShop(sellerId, enabled)}
+        onSwitchShop={(sellerId) => void handleSwitchShop(sellerId)}
       >
         <Routes>
           <Route path="/" element={<Navigate to="/documents" replace />} />

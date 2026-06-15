@@ -7,7 +7,12 @@ from fastapi import APIRouter, Depends, HTTPException, Query, status
 from pydantic import BaseModel, Field, computed_field
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.api.deps import get_current_user, require_fulfillment_admin, seller_line_product_scope
+from app.api.deps import (
+    get_current_user,
+    get_effective_seller_id,
+    require_fulfillment_admin,
+    seller_line_product_scope,
+)
 from app.core.roles import FULFILLMENT_ADMIN, FULFILLMENT_SELLER
 from app.db.session import get_db
 from app.models.user import User
@@ -135,18 +140,19 @@ async def get_products(
 async def get_seller_wb_catalog(
     user: Annotated[User, Depends(get_current_user)],
     session: Annotated[AsyncSession, Depends(get_db)],
+    effective_seller_id: Annotated[uuid.UUID | None, Depends(get_effective_seller_id)],
 ) -> list[SellerWbCatalogOut]:
     if user.role != FULFILLMENT_SELLER:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="forbidden",
         )
-    if user.seller_id is None:
+    if effective_seller_id is None:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="seller_not_linked",
         )
-    rows = await list_seller_wb_catalog_rows(session, user.tenant_id, user.seller_id)
+    rows = await list_seller_wb_catalog_rows(session, user.tenant_id, effective_seller_id)
     return [
         SellerWbCatalogOut(
             **r.as_dict(),
@@ -233,12 +239,13 @@ async def patch_product_packaging_instructions(
     body: PackagingInstructionsPatch,
     user: Annotated[User, Depends(get_current_user)],
     session: Annotated[AsyncSession, Depends(get_db)],
+    effective_seller_id: Annotated[uuid.UUID | None, Depends(get_effective_seller_id)],
 ) -> ProductOut:
     p = await get_product(session, user.tenant_id, product_id)
     if p is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="product_not_found")
     if user.role == FULFILLMENT_SELLER:
-        if user.seller_id is None or p.seller_id != user.seller_id:
+        if effective_seller_id is None or p.seller_id != effective_seller_id:
             raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="forbidden")
     elif user.role != FULFILLMENT_ADMIN:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="forbidden")

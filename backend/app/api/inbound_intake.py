@@ -11,7 +11,12 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
-from app.api.deps import get_current_user, require_reception_access, seller_line_product_scope
+from app.api.deps import (
+    get_current_user,
+    get_effective_seller_id,
+    require_reception_access,
+    seller_line_product_scope,
+)
 from app.core.roles import FULFILLMENT_ADMIN, FULFILLMENT_SELLER
 from app.db.session import get_db
 from app.models.inbound_intake import (
@@ -378,16 +383,17 @@ async def create_inbound_request(
     body: InboundIntakeRequestCreate,
     user: Annotated[User, Depends(get_current_user)],
     session: Annotated[AsyncSession, Depends(get_db)],
+    effective_seller_id: Annotated[uuid.UUID | None, Depends(get_effective_seller_id)],
 ) -> InboundIntakeRequestOut:
     if user.role == FULFILLMENT_ADMIN:
         owning_seller_id: uuid.UUID | None = None
     elif user.role == FULFILLMENT_SELLER:
-        if user.seller_id is None:
+        if effective_seller_id is None:
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
                 detail="seller_not_linked",
             )
-        owning_seller_id = user.seller_id
+        owning_seller_id = effective_seller_id
     else:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,

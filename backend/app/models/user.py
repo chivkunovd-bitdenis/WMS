@@ -12,6 +12,7 @@ from app.models.base import Base
 if TYPE_CHECKING:
     from app.models.ff_staff_permissions import FfStaffPermissions
     from app.models.seller import Seller
+    from app.models.seller_shop_delegation import SellerShopDelegation
     from app.models.tenant import Tenant
 
 
@@ -35,6 +36,9 @@ class User(Base):
     must_set_password: Mapped[bool] = mapped_column(
         Boolean, nullable=False, default=False
     )
+    can_manage_seller_shops: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, default=False, server_default="false"
+    )
     role: Mapped[str] = mapped_column(String(64), nullable=False)
     packaging_rate_kopecks: Mapped[int] = mapped_column(
         Integer, nullable=False, default=0, server_default="0"
@@ -49,5 +53,10 @@ class User(Base):
         "FfStaffPermissions",
         back_populates="user",
         uselist=False,
+        cascade="all, delete-orphan",
+    )
+    shop_delegations: Mapped[list[SellerShopDelegation]] = relationship(
+        "SellerShopDelegation",
+        back_populates="user",
         cascade="all, delete-orphan",
     )

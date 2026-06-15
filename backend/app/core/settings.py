@@ -49,6 +49,13 @@ class Settings(BaseSettings):
             "Playwright/e2e: stub WB GET /warehouses JSON without calling the network."
         ),
     )
+    shop_manager_emails: str = Field(
+        default="",
+        description=(
+            "Comma-separated seller user emails allowed to manage/switch shops "
+            "(in addition to users.can_manage_seller_shops)."
+        ),
+    )
 
     @property
     def database_url_sync(self) -> str:

@@ -14,6 +14,7 @@ import {
 } from '@mui/material'
 
 import { WmsBrandMark } from '../../components/WmsBrandMark'
+import { SellerShopSidebar, type SellerShopRow } from '../../components/SellerShopSidebar'
 
 type Props = {
   children: ReactNode
@@ -21,6 +22,14 @@ type Props = {
   title?: string
   userLabel?: string
   userRoleLabel?: string
+  canManageSellerShops?: boolean
+  homeSellerId?: string | null
+  activeSellerId?: string | null
+  delegatableShops?: SellerShopRow[]
+  switchableShops?: SellerShopRow[]
+  shopsBusy?: boolean
+  onToggleShop?: (sellerId: string, enabled: boolean) => void
+  onSwitchShop?: (sellerId: string | null) => void
 }
 
 export function SellerLayout({
@@ -29,6 +38,14 @@ export function SellerLayout({
   title = 'WMS',
   userLabel,
   userRoleLabel,
+  canManageSellerShops = false,
+  homeSellerId = null,
+  activeSellerId = null,
+  delegatableShops = [],
+  switchableShops = [],
+  shopsBusy = false,
+  onToggleShop,
+  onSwitchShop,
 }: Props) {
   const drawerWidth = 240
   const base = ''
@@ -101,6 +118,18 @@ export function SellerLayout({
               <ListItemText primary="Настройки" />
             </ListItemButton>
           </List>
+          {onToggleShop && onSwitchShop ? (
+            <SellerShopSidebar
+              canManage={canManageSellerShops}
+              homeSellerId={homeSellerId}
+              activeSellerId={activeSellerId}
+              delegatableShops={delegatableShops}
+              switchableShops={switchableShops}
+              busy={shopsBusy}
+              onToggleShop={onToggleShop}
+              onSwitchShop={onSwitchShop}
+            />
+          ) : null}
         </Box>
       </Drawer>
 
