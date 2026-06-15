@@ -209,7 +209,7 @@ async def seller_line_product_scope(
     ],
     session: Annotated[AsyncSession, Depends(get_db)],
 ) -> uuid.UUID | None:
-    """For fulfillment_seller: filter operations to lines with these products."""
+    """For fulfillment_seller: filter operations to active seller when set."""
     if user.role == FULFILLMENT_SELLER:
         seller_id = await resolve_effective_seller_id(session, user, credentials)
         if seller_id is None:

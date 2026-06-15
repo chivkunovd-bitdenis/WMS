@@ -17,7 +17,7 @@ import {
   PRODUCT_LABEL_REVIEW_FOOTER,
   productLabelDetailLines,
   resolveProductLabelArticle,
-  truncateProductLabelName,
+  normalizeProductLabelName,
   type ProductLabelPrintOptions,
 } from '../utils/productLabelText'
 import { printProductThermalLabels } from '../utils/printProductThermalLabel'
@@ -53,7 +53,7 @@ export function ProductBarcodePrintDialog({ open, meta, onClose }: Props) {
 
   const barcode = meta ? resolveProductPrimaryBarcode(meta) : ''
   const article = meta ? resolveProductLabelArticle(meta) : ''
-  const name = meta ? truncateProductLabelName(meta.product_name) : ''
+  const name = meta ? normalizeProductLabelName(meta.product_name) : ''
   const sellerName = meta?.seller_name?.trim() ?? ''
   const detailLines = useMemo(
     () => (meta ? productLabelDetailLines(meta, printOptions) : []),
@@ -182,9 +182,11 @@ export function ProductBarcodePrintDialog({ open, meta, onClose }: Props) {
                 WebkitLineClamp: 2,
                 WebkitBoxOrient: 'vertical',
                 overflow: 'hidden',
+                textOverflow: 'ellipsis',
+                wordBreak: 'break-word',
                 mb: '1px',
               }}
-              title={meta?.product_name}
+              title={name || meta?.product_name}
             >
               {name || '—'}
             </Box>

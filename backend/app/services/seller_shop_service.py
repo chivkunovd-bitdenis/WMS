@@ -31,18 +31,20 @@ def is_test_user_email(email: str) -> bool:
 
 
 def user_can_manage_seller_shops(user: User) -> bool:
-    if user.role != FULFILLMENT_SELLER:
+    """Shop switcher in seller portal — allowlist only (not all sellers)."""
+    if user.role != FULFILLMENT_SELLER or user.seller_id is None:
         return False
     if user.can_manage_seller_shops:
         return True
     email = user.email.strip().lower()
-    if "vitalik" in email or "виталик" in email:
+    if "denmark" in email or "denmarks" in email or "денмарк" in email:
         return True
     configured = settings.shop_manager_emails.strip().lower()
-    if not configured:
-        return False
-    allowed = {e.strip() for e in configured.split(",") if e.strip()}
-    return user.email.strip().lower() in allowed
+    if configured:
+        allowed = {e.strip() for e in configured.split(",") if e.strip()}
+        if email in allowed:
+            return True
+    return False
 
 
 async def is_test_seller(
