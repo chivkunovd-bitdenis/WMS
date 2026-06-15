@@ -4,6 +4,7 @@ from app.services.wb_card_enrichment import (
     brand_from_card,
     collect_skus_from_card,
     color_from_card,
+    composition_from_card,
     first_photo_url_from_card,
     primary_sku_display,
     size_from_card_for_barcode,
@@ -47,6 +48,15 @@ def test_brand_from_card() -> None:
 def test_color_from_card_by_name() -> None:
     card = {"characteristics": [{"name": "Цвет", "value": ["коричневый"]}]}
     assert color_from_card(card) == "коричневый"
+
+
+def test_composition_from_card() -> None:
+    card = {
+        "characteristics": [
+            {"name": "Состав", "value": ["хлопок 95%", "эластан 5%"]},
+        ],
+    }
+    assert composition_from_card(card) == "хлопок 95%, эластан 5%"
 
 
 def test_size_from_card_for_barcode() -> None:

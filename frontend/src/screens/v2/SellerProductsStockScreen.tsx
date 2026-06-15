@@ -257,8 +257,10 @@ export function SellerProductsStockScreen({
                 <TableCell align="right" data-testid="seller-stock-free-total">
                   {p.stock_free_total}
                 </TableCell>
-                <TableCell align="right" data-testid="seller-stock-available">
-                  {p.stock_available_for_mp}
+                <TableCell align="right">
+                  <Box component="span" data-testid="seller-stock-available">
+                    {p.stock_available_for_mp}
+                  </Box>
                   {p.stock_reserved > 0 ? (
                     <Typography
                       component="span"

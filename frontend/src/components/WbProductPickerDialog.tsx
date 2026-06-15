@@ -22,6 +22,7 @@ import {
 } from '@mui/material'
 import { FfProductLineCells, FfProductTableHeadCells } from './FfProductLineCells'
 import { ProductPhotoThumb } from './ProductPhotoThumb'
+import { ProductBarcodeCell } from './ProductBarcodeCell'
 import {
   productDisplayMetaFromCatalog,
   type WbProductCatalogRow,
@@ -38,6 +39,8 @@ export type WbProductPickerCatalogRow = {
   wb_primary_image_url: string | null
   wb_barcodes: string[]
   wb_primary_barcode?: string | null
+  wb_size?: string | null
+  wb_composition?: string | null
   seller_name?: string | null
 }
 
@@ -340,11 +343,12 @@ export function WbProductPickerDialog({
                         >
                           {r.sku_code}
                         </TableCell>
-                        <TableCell
-                          sx={{ whiteSpace: 'normal', wordBreak: 'break-word', overflow: 'hidden' }}
-                          title={r.wb_primary_barcode ?? (r.wb_barcodes[0] ?? '—')}
-                        >
-                          {r.wb_primary_barcode ?? (r.wb_barcodes[0] ?? '—')}
+                        <TableCell sx={{ maxWidth: 190 }}>
+                          <ProductBarcodeCell
+                            barcode={r.wb_primary_barcode ?? r.wb_barcodes[0] ?? null}
+                            wb_size={r.wb_size}
+                            wb_composition={r.wb_composition}
+                          />
                         </TableCell>
                         <TableCell
                           sx={{ whiteSpace: 'normal', wordBreak: 'break-word', overflow: 'hidden' }}

@@ -4,6 +4,7 @@ import {
   productLabelDetailLines,
   resolveProductLabelArticle,
   truncateProductLabelName,
+  type ProductLabelPrintOptions,
 } from './productLabelText'
 import { renderBarcodeDataUrl } from './renderBarcodeDataUrl'
 
@@ -14,6 +15,7 @@ export type ProductThermalLabelData = {
   wb_size?: string | null
   wb_color?: string | null
   wb_brand?: string | null
+  wb_composition?: string | null
   seller_name?: string | null
   barcode: string
 }
@@ -85,6 +87,14 @@ const LABEL_CSS = `
     word-break: break-word;
   }
   .meta { margin: 0; }
+  .meta-composition {
+    margin: 0;
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+    word-break: break-word;
+  }
   .footer {
     flex: 0 0 auto;
     margin: 0.4mm 0 0;
@@ -94,7 +104,11 @@ const LABEL_CSS = `
   }
 `
 
-function buildLabelHtml(data: ProductThermalLabelData, barcodeDataUrl: string): string {
+function buildLabelHtml(
+  data: ProductThermalLabelData,
+  barcodeDataUrl: string,
+  printOptions?: ProductLabelPrintOptions,
+): string {
   const name = escapeLabelHtml(truncateProductLabelName(data.product_name))
   const article = escapeLabelHtml(resolveProductLabelArticle(data))
   const barcode = escapeLabelHtml(data.barcode.trim())
@@ -102,8 +116,11 @@ function buildLabelHtml(data: ProductThermalLabelData, barcodeDataUrl: string): 
   const sellerLine = seller
     ? `<p class="seller" title="${escapeLabelHtml(seller)}">${escapeLabelHtml(seller)}</p>`
     : ''
-  const detailLines = productLabelDetailLines(data)
-    .map((line) => `<p class="meta">${escapeLabelHtml(line)}</p>`)
+  const detailLines = productLabelDetailLines(data, printOptions)
+    .map((line) => {
+      const cls = line.startsWith('Состав:') ? 'meta meta-composition' : 'meta'
+      return `<p class="${cls}">${escapeLabelHtml(line)}</p>`
+    })
     .join('')
   const review = escapeLabelHtml(PRODUCT_LABEL_REVIEW_FOOTER)
   return `<section class="label" data-testid="product-thermal-label">
@@ -125,9 +142,12 @@ export function buildProductThermalLabelDocument(
   data: ProductThermalLabelData,
   quantity: number,
   barcodeDataUrl: string,
+  printOptions?: ProductLabelPrintOptions,
 ): string {
   const copies = Math.max(1, Math.min(999, Math.floor(quantity)))
-  const labels = Array.from({ length: copies }, () => buildLabelHtml(data, barcodeDataUrl)).join('')
+  const labels = Array.from({ length: copies }, () =>
+    buildLabelHtml(data, barcodeDataUrl, printOptions),
+  ).join('')
   return `<!doctype html>
 <html>
   <head>
@@ -139,13 +159,17 @@ export function buildProductThermalLabelDocument(
 </html>`
 }
 
-export function printProductThermalLabels(data: ProductThermalLabelData, quantity: number): void {
+export function printProductThermalLabels(
+  data: ProductThermalLabelData,
+  quantity: number,
+  printOptions?: ProductLabelPrintOptions,
+): void {
   const barcode = data.barcode.trim()
   if (!barcode) {
     throw new Error('У товара нет штрихкода для печати.')
   }
   const barcodeDataUrl = renderBarcodeDataUrl(barcode, { variant: 'thermal58' })
-  const html = buildProductThermalLabelDocument(data, quantity, barcodeDataUrl)
+  const html = buildProductThermalLabelDocument(data, quantity, barcodeDataUrl, printOptions)
 
   const iframe = document.createElement('iframe')
   iframe.setAttribute('aria-hidden', 'true')

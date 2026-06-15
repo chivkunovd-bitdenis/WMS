@@ -59,6 +59,7 @@ class SellerWbCatalogOut(BaseModel):
     wb_size: str | None = None
     wb_color: str | None = None
     wb_brand: str | None = None
+    wb_composition: str | None = None
     packaging_instructions: str | None = None
     has_packaging_instructions: bool = False
 
@@ -80,6 +81,7 @@ class FfCatalogOut(BaseModel):
     wb_size: str | None = None
     wb_color: str | None = None
     wb_brand: str | None = None
+    wb_composition: str | None = None
     packaging_instructions: str | None = None
     has_packaging_instructions: bool = False
 

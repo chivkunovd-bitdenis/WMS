@@ -8,6 +8,7 @@ import {
   resolveProductPrimaryBarcode,
   type ProductLineDisplayMeta,
 } from '../types/wbProductCatalog'
+import { ProductBarcodeCell } from './ProductBarcodeCell'
 
 type HeadProps = {
   showPrint?: boolean
@@ -45,7 +46,6 @@ export function FfProductLineCells({
 }: CellsProps) {
   const [printOpen, setPrintOpen] = useState(false)
   const barcode = resolveProductPrimaryBarcode(meta)
-  const size = meta.wb_size?.trim()
   const printable = Boolean(barcode)
 
   return (
@@ -56,15 +56,13 @@ export function FfProductLineCells({
       <TableCell sx={{ whiteSpace: 'nowrap', pl: 2 }} title={meta.sku_code}>
         {meta.sku_code}
       </TableCell>
-      <TableCell sx={{ whiteSpace: 'nowrap' }} data-testid="ff-product-line-barcode">
-        <Typography variant="body2" component="span" sx={{ display: 'block' }} title={barcode || undefined}>
-          {barcode || '—'}
-        </Typography>
-        {size ? (
-          <Typography variant="caption" color="text.secondary" component="span" sx={{ display: 'block' }}>
-            Размер: {size}
-          </Typography>
-        ) : null}
+      <TableCell sx={{ maxWidth: 220 }}>
+        <ProductBarcodeCell
+          barcode={barcode}
+          wb_size={meta.wb_size}
+          wb_composition={meta.wb_composition}
+          testId="ff-product-line-barcode"
+        />
       </TableCell>
       <TableCell
         sx={{ whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}

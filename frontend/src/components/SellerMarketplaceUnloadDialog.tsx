@@ -22,6 +22,7 @@ import {
 } from '@mui/material'
 import { apiUrl } from '../api'
 import { ProductPhotoThumb } from './ProductPhotoThumb'
+import { ProductBarcodeCell } from './ProductBarcodeCell'
 import {
   SellerWbProductPickerDialog,
   type SellerWbCatalogRow,
@@ -530,7 +531,7 @@ export function SellerMarketplaceUnloadDialog({
               const img = cat?.wb_primary_image_url ?? undefined
               const barcode =
                 cat?.wb_primary_barcode ??
-                (cat?.wb_barcodes.length ? cat.wb_barcodes.join(', ') : '—')
+                (cat?.wb_barcodes.length ? cat.wb_barcodes[0] ?? null : null)
               const available = stockByProductId.get(ln.product_id)?.available ?? 0
               return (
                 <TableRow
@@ -549,8 +550,12 @@ export function SellerMarketplaceUnloadDialog({
                   <TableCell sx={{ whiteSpace: 'nowrap', pl: 2 }} title={ln.sku_code}>
                     {ln.sku_code}
                   </TableCell>
-                  <TableCell sx={{ whiteSpace: 'nowrap' }} title={barcode}>
-                    {barcode}
+                  <TableCell sx={{ maxWidth: 220 }}>
+                    <ProductBarcodeCell
+                      barcode={barcode}
+                      wb_size={cat?.wb_size}
+                      wb_composition={cat?.wb_composition}
+                    />
                   </TableCell>
                   <TableCell
                     sx={{ whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}

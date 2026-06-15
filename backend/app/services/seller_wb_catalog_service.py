@@ -18,6 +18,7 @@ from app.services.wb_card_enrichment import (
     brand_from_card,
     collect_skus_from_card,
     color_from_card,
+    composition_from_card,
     first_photo_url_from_card,
     primary_sku_display,
     size_from_card_for_barcode,
@@ -39,6 +40,7 @@ class SellerWbCatalogRow:
     wb_size: str | None = None
     wb_color: str | None = None
     wb_brand: str | None = None
+    wb_composition: str | None = None
     packaging_instructions: str | None = None
 
     def as_dict(self) -> dict[str, Any]:
@@ -55,6 +57,7 @@ class SellerWbCatalogRow:
             "wb_size": self.wb_size,
             "wb_color": self.wb_color,
             "wb_brand": self.wb_brand,
+            "wb_composition": self.wb_composition,
             "packaging_instructions": self.packaging_instructions,
         }
 
@@ -99,17 +102,18 @@ def _variant_from_raw(
     *,
     primary_barcode: str | None,
     p: Product | None = None,
-) -> tuple[str | None, str | None, str | None]:
+) -> tuple[str | None, str | None, str | None, str | None]:
     if p is not None:
         size = _size_for_product(p, raw, primary_barcode)
     else:
         size = size_from_card_for_barcode(raw, primary_barcode) if raw else None
     if not raw:
-        return size, None, None
+        return size, None, None, None
     return (
         size,
         color_from_card(raw),
         brand_from_card(raw),
+        composition_from_card(raw),
     )
 
 
@@ -140,7 +144,9 @@ async def list_seller_wb_catalog_rows(
         primary, barcodes = _barcodes_for_product(p, card_raw)
         if primary is None:
             primary = primary_sku_display(list(barcodes))
-        wb_size, wb_color, wb_brand = _variant_from_raw(card_raw, primary_barcode=primary, p=p)
+        wb_size, wb_color, wb_brand, wb_composition = _variant_from_raw(
+            card_raw, primary_barcode=primary, p=p
+        )
         if subj is None and card_raw:
             subj = subject_name_from_card(card_raw)
         if img is None and card_raw:
@@ -159,6 +165,7 @@ async def list_seller_wb_catalog_rows(
                 wb_size=wb_size,
                 wb_color=wb_color,
                 wb_brand=wb_brand,
+                wb_composition=wb_composition,
                 packaging_instructions=p.packaging_instructions,
             ),
         )
@@ -181,6 +188,7 @@ class FfCatalogRow:
     wb_size: str | None = None
     wb_color: str | None = None
     wb_brand: str | None = None
+    wb_composition: str | None = None
     packaging_instructions: str | None = None
 
     def as_dict(self) -> dict[str, Any]:
@@ -199,6 +207,7 @@ class FfCatalogRow:
             "wb_size": self.wb_size,
             "wb_color": self.wb_color,
             "wb_brand": self.wb_brand,
+            "wb_composition": self.wb_composition,
             "packaging_instructions": self.packaging_instructions,
         }
 
@@ -246,7 +255,9 @@ async def list_linked_wb_catalog_rows(
         primary, barcodes = _barcodes_for_product(p, card_raw)
         if primary is None:
             primary = primary_sku_display(list(barcodes))
-        wb_size, wb_color, wb_brand = _variant_from_raw(card_raw, primary_barcode=primary, p=p)
+        wb_size, wb_color, wb_brand, wb_composition = _variant_from_raw(
+            card_raw, primary_barcode=primary, p=p
+        )
         if subj is None and card_raw:
             subj = subject_name_from_card(card_raw)
         if img is None and card_raw:
@@ -267,6 +278,7 @@ async def list_linked_wb_catalog_rows(
                 wb_size=wb_size,
                 wb_color=wb_color,
                 wb_brand=wb_brand,
+                wb_composition=wb_composition,
                 packaging_instructions=p.packaging_instructions,
             ),
         )
@@ -338,7 +350,9 @@ async def list_ff_catalog_rows(
         primary, barcodes = _barcodes_for_product(p, card_raw)
         if primary is None:
             primary = primary_sku_display(list(barcodes))
-        wb_size, wb_color, wb_brand = _variant_from_raw(card_raw, primary_barcode=primary, p=p)
+        wb_size, wb_color, wb_brand, wb_composition = _variant_from_raw(
+            card_raw, primary_barcode=primary, p=p
+        )
         if subj is None and card_raw:
             subj = subject_name_from_card(card_raw)
         if img is None and card_raw:
@@ -359,6 +373,7 @@ async def list_ff_catalog_rows(
                 wb_size=wb_size,
                 wb_color=wb_color,
                 wb_brand=wb_brand,
+                wb_composition=wb_composition,
                 packaging_instructions=p.packaging_instructions,
             ),
         )

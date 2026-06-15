@@ -6,6 +6,14 @@ from dataclasses import dataclass
 from typing import Any
 
 _WB_COLOR_CHAR_ID = 14177449
+_COMPOSITION_CHAR_NAMES = frozenset(
+    {
+        "состав",
+        "состав ткани",
+        "состав материала",
+        "материал",
+    }
+)
 
 
 def brand_from_card(card: dict[str, Any]) -> str | None:
@@ -131,6 +139,24 @@ def _characteristic_value_to_str(value: Any) -> str | None:
 
 def color_from_card(card: dict[str, Any]) -> str | None:
     """Color from card ``characteristics`` (name «Цвет» or known WB id)."""
+    return _characteristic_from_card(
+        card,
+        names=frozenset({"цвет"}),
+        char_id=_WB_COLOR_CHAR_ID,
+    )
+
+
+def composition_from_card(card: dict[str, Any]) -> str | None:
+    """Material composition from card ``characteristics`` (name «Состав» etc.)."""
+    return _characteristic_from_card(card, names=_COMPOSITION_CHAR_NAMES)
+
+
+def _characteristic_from_card(
+    card: dict[str, Any],
+    *,
+    names: frozenset[str],
+    char_id: int | None = None,
+) -> str | None:
     chars = card.get("characteristics")
     if not isinstance(chars, list):
         return None
@@ -142,9 +168,9 @@ def color_from_card(card: dict[str, Any]) -> str | None:
         if not raw_val:
             continue
         name = ch.get("name")
-        if isinstance(name, str) and name.strip().casefold() == "цвет":
+        if isinstance(name, str) and name.strip().casefold() in names:
             return raw_val
-        if ch.get("id") == _WB_COLOR_CHAR_ID:
+        if char_id is not None and ch.get("id") == char_id:
             fallback = raw_val
     return fallback
 
