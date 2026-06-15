@@ -23,6 +23,7 @@ type Props = {
   delegatableShops: SellerShopRow[]
   switchableShops: SellerShopRow[]
   busy?: boolean
+  allowAllShops?: boolean
   onToggleShop: (sellerId: string, enabled: boolean) => void
   onSwitchShop: (sellerId: string | null) => void
 }
@@ -34,6 +35,7 @@ export function SellerShopSidebar({
   delegatableShops,
   switchableShops,
   busy = false,
+  allowAllShops = false,
   onToggleShop,
   onSwitchShop,
 }: Props) {
@@ -41,7 +43,7 @@ export function SellerShopSidebar({
     return null
   }
 
-  const showSwitcher = switchableShops.length > 1
+  const showSwitcher = allowAllShops || switchableShops.length > 1
 
   return (
     <Box sx={{ mt: 2 }} data-testid="seller-shops-panel">
@@ -108,6 +110,16 @@ export function SellerShopSidebar({
             Активный магазин
           </Typography>
           <List dense disablePadding data-testid="seller-shop-switcher">
+            {allowAllShops ? (
+              <ListItemButton
+                selected={activeSellerId == null}
+                disabled={busy}
+                data-testid="seller-shop-switch-all"
+                onClick={() => onSwitchShop(null)}
+              >
+                <ListItemText primary="Все магазины" />
+              </ListItemButton>
+            ) : null}
             {switchableShops.map((shop) => {
               const selected =
                 activeSellerId === shop.id ||

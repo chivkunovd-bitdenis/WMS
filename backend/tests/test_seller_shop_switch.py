@@ -36,7 +36,7 @@ async def test_seller_shop_switch_acts_as_delegated_seller(
         headers=admin_h,
         json={
             "name": "Home Shop",
-            "email": f"vitalik-{suffix}@mail.ru",
+            "email": f"denmarks-{suffix}@mail.ru",
             "password": "password123",
         },
     )
@@ -69,7 +69,7 @@ async def test_seller_shop_switch_acts_as_delegated_seller(
     login = await async_client.post(
         "/auth/login",
         json={
-            "email": f"vitalik-{suffix}@mail.ru",
+            "email": f"denmarks-{suffix}@mail.ru",
             "password": "password123",
         },
     )
@@ -175,3 +175,41 @@ async def test_seller_cannot_switch_without_delegation(
         json={"seller_id": sid2},
     )
     assert switch.status_code == 403
+
+
+@pytest.mark.asyncio
+async def test_regular_seller_cannot_manage_shops(
+    async_client: AsyncClient,
+) -> None:
+    suffix = str(int(time.time() * 1000))
+    reg = await async_client.post(
+        "/auth/register",
+        json={
+            "organization_name": "Regular Co",
+            "slug": f"reg-sh-{suffix}",
+            "admin_email": f"admin-reg-{suffix}@example.com",
+            "password": "password123",
+        },
+    )
+    assert reg.status_code == 200
+    admin_h = {"Authorization": f"Bearer {reg.json()['access_token']}"}
+    seller = await async_client.post(
+        "/sellers/with-account",
+        headers=admin_h,
+        json={
+            "name": "Regular Shop",
+            "email": f"regular-{suffix}@mail.ru",
+            "password": "password123",
+        },
+    )
+    assert seller.status_code == 201
+    login = await async_client.post(
+        "/auth/login",
+        json={"email": f"regular-{suffix}@mail.ru", "password": "password123"},
+    )
+    assert login.status_code == 200
+    me = await async_client.get(
+        "/auth/me",
+        headers={"Authorization": f"Bearer {login.json()['access_token']}"},
+    )
+    assert me.json()["can_manage_seller_shops"] is False

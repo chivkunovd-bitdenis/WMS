@@ -3,7 +3,7 @@ import {
   PRODUCT_LABEL_REVIEW_FOOTER,
   productLabelDetailLines,
   resolveProductLabelArticle,
-  truncateProductLabelName,
+  normalizeProductLabelName,
   type ProductLabelPrintOptions,
 } from './productLabelText'
 import { renderBarcodeDataUrl } from './renderBarcodeDataUrl'
@@ -84,6 +84,7 @@ const LABEL_CSS = `
     -webkit-line-clamp: 2;
     -webkit-box-orient: vertical;
     overflow: hidden;
+    text-overflow: ellipsis;
     word-break: break-word;
   }
   .meta { margin: 0; }
@@ -109,7 +110,7 @@ function buildLabelHtml(
   barcodeDataUrl: string,
   printOptions?: ProductLabelPrintOptions,
 ): string {
-  const name = escapeLabelHtml(truncateProductLabelName(data.product_name))
+  const name = escapeLabelHtml(normalizeProductLabelName(data.product_name))
   const article = escapeLabelHtml(resolveProductLabelArticle(data))
   const barcode = escapeLabelHtml(data.barcode.trim())
   const seller = data.seller_name?.trim()

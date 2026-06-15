@@ -9,13 +9,14 @@ export function escapeLabelHtml(text: string): string {
 
 export const PRODUCT_LABEL_REVIEW_FOOTER = 'Пожалуйста оставьте отзыв'
 
-/** Product title on 58 mm WB-style thermal label (~7pt sans, up to two lines). */
-export function truncateProductLabelName(name: string, maxLen = 42): string {
-  const trimmed = name.trim().replace(/\s+/g, ' ')
-  if (trimmed.length <= maxLen) {
-    return trimmed
-  }
-  return `${trimmed.slice(0, Math.max(1, maxLen - 1))}…`
+/** Product title on 58 mm WB-style thermal label — normalize only; overflow is clipped in CSS (up to 2 lines). */
+export function normalizeProductLabelName(name: string): string {
+  return name.trim().replace(/\s+/g, ' ')
+}
+
+/** @deprecated Alias for {@link normalizeProductLabelName}. */
+export function truncateProductLabelName(name: string): string {
+  return normalizeProductLabelName(name)
 }
 
 export function resolveProductLabelArticle(meta: {
