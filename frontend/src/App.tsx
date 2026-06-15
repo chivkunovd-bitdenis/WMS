@@ -2152,8 +2152,12 @@ export default function App() {
     }
   }
 
-  const onCreateFfMpShipment = useCallback(async (): Promise<{ id: string } | null> => {
+  const onCreateFfMpShipment = useCallback(async (sellerId: string): Promise<{ id: string } | null> => {
     if (!token) {
+      return null
+    }
+    if (!sellerId) {
+      setOpsError('Выберите селлера (ИП) для отгрузки.')
       return null
     }
     let wid: string | null = selectedWarehouseId ?? warehouses[0]?.id ?? null
@@ -2178,33 +2182,6 @@ export default function App() {
     setOpsError(null)
     setOpsBusy(true)
     try {
-      let sellerId: string | null = sellers[0]?.id ?? null
-      if (!sellerId) {
-        const listRes = await fetch(apiUrl('/sellers'), {
-          headers: authHeaders(token),
-        })
-        if (listRes.ok) {
-          const list = (await listRes.json()) as SellerRow[]
-          sellerId = list[0]?.id ?? null
-        }
-      }
-      if (!sellerId) {
-        const cr = await fetch(apiUrl('/sellers'), {
-          method: 'POST',
-          headers: {
-            ...authHeaders(token),
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify({ name: `МП ${Date.now()}` }),
-        })
-        if (!cr.ok) {
-          setOpsError(await readApiErrorMessage(cr))
-        return null
-        }
-        sellerId = (await cr.json() as { id: string }).id
-        await refreshSellers(token)
-      }
-
       const tokRes = await fetch(
         apiUrl(`/integrations/wildberries/sellers/${sellerId}/tokens`),
         {
@@ -2273,10 +2250,8 @@ export default function App() {
     token,
     selectedWarehouseId,
     warehouses,
-    sellers,
     authHeaders,
     refreshMarketplaceUnloadList,
-    refreshSellers,
   ])
 
   const onCreateFfDiscrepancyAct = useCallback(async (): Promise<{ id: string } | null> => {
@@ -2415,6 +2390,7 @@ export default function App() {
                 infoNotice={ffSuppliesNotice}
                 onDismissInfoNotice={() => setFfSuppliesNotice(null)}
                 token={token}
+                sellers={sellers.map((s) => ({ id: s.id, name: s.name }))}
                 productPicklist={products.map((p) => ({
                   id: p.id,
                   sku_code: p.sku_code,

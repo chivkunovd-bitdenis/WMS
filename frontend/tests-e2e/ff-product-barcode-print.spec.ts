@@ -100,8 +100,28 @@ test('ff inbound modal opens 58x40 label print dialog with preview', async ({ pa
   await expect(page.getByTestId('ff-product-label-preview')).toContainText('Артикул:');
   await expect(page.getByTestId('ff-product-label-preview')).toContainText('Цвет: коричневый');
   await expect(page.getByTestId('ff-product-label-preview')).toContainText('Бренд: E2E-MOCK-BRAND');
-  await expect(page.getByTestId('ff-product-label-preview')).toContainText('Пожалуйста оставьте отзыв');
+  await expect(page.getByTestId('ff-product-label-preview')).toContainText('Размер: L');
+  await expect(page.getByTestId('ff-product-label-preview')).toContainText(
+    'Состав: хлопок 95%, эластан 5%',
+  );
+  await expect(page.getByTestId('ff-product-label-include-size')).toBeChecked();
+  await expect(page.getByTestId('ff-product-label-include-composition')).toBeChecked();
+
+  await page.getByTestId('ff-product-label-include-composition').uncheck();
+  await expect(page.getByTestId('ff-product-label-preview')).not.toContainText('Состав:');
+  await expect(page.getByTestId('ff-product-label-preview')).toContainText('Размер: L');
+
+  await page.getByTestId('ff-product-label-include-size').uncheck();
   await expect(page.getByTestId('ff-product-label-preview')).not.toContainText('Размер:');
+
+  await page.getByTestId('ff-product-label-include-size').check();
+  await page.getByTestId('ff-product-label-include-composition').check();
+  await expect(page.getByTestId('ff-product-label-preview')).toContainText('Размер: L');
+  await expect(page.getByTestId('ff-product-label-preview')).toContainText('Состав:');
+  await expect(page.getByTestId('ff-product-label-preview')).toContainText('Пожалуйста оставьте отзыв');
+  await expect(page.getByTestId('ff-product-line-barcode')).toContainText('E2E-MOCK-BARCODE');
+  await expect(page.getByTestId('ff-product-line-barcode')).toContainText('Размер: L');
+  await expect(page.getByTestId('ff-product-line-barcode')).toContainText('Состав:');
   await expect(page.getByTestId('ff-product-label-preview')).not.toContainText('EAC');
   await expect(page.getByTestId('ff-product-label-print')).toBeEnabled();
 

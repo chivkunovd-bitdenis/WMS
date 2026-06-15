@@ -32,7 +32,7 @@ class Product(Base):
     __tablename__ = "products"
     __table_args__ = (
         UniqueConstraint("tenant_id", "sku_code", name="uq_products_tenant_sku"),
-        UniqueConstraint("tenant_id", "wb_nm_id", name="uq_products_tenant_wb_nm_id"),
+        UniqueConstraint("tenant_id", "wb_barcode", name="uq_products_tenant_wb_barcode"),
     )
 
     id: Mapped[uuid.UUID] = mapped_column(
@@ -51,6 +51,9 @@ class Product(Base):
     sku_code: Mapped[str] = mapped_column(String(128), nullable=False)
     wb_nm_id: Mapped[int | None] = mapped_column(BigInteger, nullable=True, index=True)
     wb_vendor_code: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    wb_chrt_id: Mapped[int | None] = mapped_column(BigInteger, nullable=True, index=True)
+    wb_barcode: Mapped[str | None] = mapped_column(String(64), nullable=True, index=True)
+    wb_size: Mapped[str | None] = mapped_column(String(64), nullable=True)
     length_mm: Mapped[int] = mapped_column(Integer, nullable=False)
     width_mm: Mapped[int] = mapped_column(Integer, nullable=False)
     height_mm: Mapped[int] = mapped_column(Integer, nullable=False)

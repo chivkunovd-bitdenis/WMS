@@ -164,7 +164,7 @@ test('ff products: filter by seller and sort by name/quantity', async ({ page })
 
   // Sort by name asc: Alpha first
   await page.getByTestId('ff-products-sort-name').click()
-  const firstNameAfterName = await page.getByTestId('ff-product-row').first().locator('td').nth(5).innerText()
+  const firstNameAfterName = await page.getByTestId('ff-product-row').first().locator('td').nth(6).innerText()
   expect(firstNameAfterName).toContain('Alpha')
 
   // Photo cell exists (even if WB photo missing in mocks): first column rendered and has avatar element.

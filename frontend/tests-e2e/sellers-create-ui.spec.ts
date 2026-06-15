@@ -29,8 +29,7 @@ test('admin creates seller with email; seller sets password on first login', asy
   await page.getByTestId('seller-name').fill(sellerName);
   await page.getByTestId('seller-email').fill(sellerEmail);
   await Promise.all([
-    waitForPostOk(page, '/api/sellers'),
-    waitForPostOk(page, '/api/auth/seller-accounts'),
+    waitForPostOk(page, '/api/sellers/with-account'),
     page.getByTestId('seller-submit').click(),
   ]);
 

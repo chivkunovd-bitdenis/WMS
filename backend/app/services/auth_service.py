@@ -70,6 +70,52 @@ async def login(session: AsyncSession, *, email: str, password: str) -> tuple[Us
     return user, token
 
 
+async def _email_taken(session: AsyncSession, email: str) -> bool:
+    stmt = select(User).where(User.email == email.strip().lower())
+    result = await session.execute(stmt)
+    return result.scalar_one_or_none() is not None
+
+
+async def create_seller_with_account(
+    session: AsyncSession,
+    *,
+    acting_user: User,
+    name: str,
+    email: str,
+    password: str | None,
+) -> tuple[Seller, User]:
+    if acting_user.role != FULFILLMENT_ADMIN:
+        raise AuthError("forbidden")
+    email_norm = email.strip().lower()
+    if await _email_taken(session, email_norm):
+        raise AuthError("email_taken")
+    if password and password.strip():
+        password_hash = hash_password(password)
+        must_set_password = False
+    else:
+        password_hash = hash_password(secrets.token_urlsafe(64))
+        must_set_password = True
+    seller = Seller(tenant_id=acting_user.tenant_id, name=name.strip())
+    user = User(
+        tenant_id=acting_user.tenant_id,
+        seller=seller,
+        email=email_norm,
+        password_hash=password_hash,
+        must_set_password=must_set_password,
+        role=FULFILLMENT_SELLER,
+    )
+    session.add(seller)
+    session.add(user)
+    try:
+        await session.commit()
+    except IntegrityError as exc:
+        await session.rollback()
+        raise AuthError("email_taken") from exc
+    await session.refresh(seller)
+    await session.refresh(user)
+    return seller, user
+
+
 async def create_seller_user(
     session: AsyncSession,
     *,

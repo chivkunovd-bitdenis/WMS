@@ -21,6 +21,7 @@ import { WmsDateField } from '../../components/WmsDateField'
 import { SellerWbProductPickerDialog } from '../../components/SellerWbProductPickerDialog'
 import { apiUrl } from '../../api'
 import { ProductPhotoThumb } from '../../components/ProductPhotoThumb'
+import { ProductBarcodeCell } from '../../components/ProductBarcodeCell'
 import { readApiErrorMessage } from '../../utils/readApiErrorMessage'
 
 export type WbCatalogRow = {
@@ -33,6 +34,8 @@ export type WbCatalogRow = {
   wb_primary_image_url: string | null
   wb_barcodes: string[]
   wb_primary_barcode: string | null
+  wb_size?: string | null
+  wb_composition?: string | null
 }
 
 type InboundLine = {
@@ -581,7 +584,7 @@ export function SellerInboundDraftScreen({
                   const img = cat?.wb_primary_image_url ?? undefined
                   const barcode =
                     cat?.wb_primary_barcode ??
-                    (cat?.wb_barcodes.length ? cat.wb_barcodes.join(', ') : '—')
+                    (cat?.wb_barcodes.length ? cat.wb_barcodes[0] ?? null : null)
                   return (
                     <TableRow
                       key={ln.id}
@@ -607,13 +610,12 @@ export function SellerInboundDraftScreen({
                       >
                         {ln.sku_code}
                       </TableCell>
-                      <TableCell
-                        sx={{
-                          whiteSpace: 'nowrap',
-                        }}
-                        title={barcode}
-                      >
-                        {barcode}
+                      <TableCell sx={{ maxWidth: 220 }}>
+                        <ProductBarcodeCell
+                          barcode={barcode}
+                          wb_size={cat?.wb_size}
+                          wb_composition={cat?.wb_composition}
+                        />
                       </TableCell>
                       <TableCell
                         sx={{

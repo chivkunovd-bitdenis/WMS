@@ -331,6 +331,27 @@ async def _physical_on_hand_in_warehouse(
     return int(await session.scalar(stmt) or 0)
 
 
+async def storage_on_hand_in_warehouse(
+    session: AsyncSession,
+    tenant_id: uuid.UUID,
+    warehouse_id: uuid.UUID,
+    product_id: uuid.UUID,
+) -> int:
+    """Остаток в ячейках хранения (без зоны «Сортировка»)."""
+    stmt = (
+        select(func.coalesce(func.sum(InventoryBalance.quantity), 0))
+        .join(StorageLocation, StorageLocation.id == InventoryBalance.storage_location_id)
+        .where(
+            InventoryBalance.tenant_id == tenant_id,
+            InventoryBalance.product_id == product_id,
+            StorageLocation.tenant_id == tenant_id,
+            StorageLocation.warehouse_id == warehouse_id,
+            StorageLocation.code != SORTING_LOCATION_CODE,
+        )
+    )
+    return int(await session.scalar(stmt) or 0)
+
+
 async def sync_outbound_line_reservation(
     session: AsyncSession,
     tenant_id: uuid.UUID,
@@ -375,7 +396,7 @@ async def sync_outbound_line_reservation(
         return
 
     wh_id = request.warehouse_id
-    on_hand_wh = await _physical_on_hand_in_warehouse(
+    on_hand_wh = await storage_on_hand_in_warehouse(
         session, tenant_id, wh_id, line.product_id
     )
     rsv_map = await reserved_totals_by_product(

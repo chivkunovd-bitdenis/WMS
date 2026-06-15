@@ -12,6 +12,7 @@ export type WbProductCatalogRow = {
   wb_size: string | null
   wb_color: string | null
   wb_brand?: string | null
+  wb_composition?: string | null
 }
 
 export type ProductLineDisplayMeta = {
@@ -26,6 +27,7 @@ export type ProductLineDisplayMeta = {
   wb_size: string | null
   wb_color: string | null
   wb_brand?: string | null
+  wb_composition?: string | null
 }
 
 export function productDisplayMetaFromCatalog(
@@ -48,6 +50,7 @@ export function productDisplayMetaFromCatalog(
       wb_size: cat.wb_size,
       wb_color: cat.wb_color,
       wb_brand: cat.wb_brand ?? null,
+      wb_composition: cat.wb_composition ?? null,
     }
   }
   return {
@@ -62,6 +65,7 @@ export function productDisplayMetaFromCatalog(
     wb_size: null,
     wb_color: null,
     wb_brand: null,
+    wb_composition: null,
   }
 }
 

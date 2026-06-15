@@ -22,4 +22,11 @@ echo "==> docker compose prod build & up"
 echo "==> status"
 "${COMPOSE[@]}" ps
 
+echo "==> WB products re-sync (all sellers; legacy SKUs → OLD/…)"
+if [[ -x scripts/deploy/sync-all-wb-products.sh ]]; then
+  ./scripts/deploy/sync-all-wb-products.sh
+else
+  echo "skip: scripts/deploy/sync-all-wb-products.sh not found"
+fi
+
 echo "Done. Check https://${WMS_PUBLIC_DOMAIN:-your-domain}"

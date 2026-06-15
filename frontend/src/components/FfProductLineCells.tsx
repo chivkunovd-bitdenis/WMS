@@ -5,10 +5,10 @@ import { IconButton, TableCell, Tooltip, Typography } from '@mui/material'
 import { ProductPhotoThumb } from './ProductPhotoThumb'
 import { ProductBarcodePrintDialog } from './ProductBarcodePrintDialog'
 import {
-  formatProductBarcodeDisplay,
   resolveProductPrimaryBarcode,
   type ProductLineDisplayMeta,
 } from '../types/wbProductCatalog'
+import { ProductBarcodeCell } from './ProductBarcodeCell'
 
 type HeadProps = {
   showPrint?: boolean
@@ -45,8 +45,8 @@ export function FfProductLineCells({
   nameExtra,
 }: CellsProps) {
   const [printOpen, setPrintOpen] = useState(false)
-  const barcodeDisplay = formatProductBarcodeDisplay(meta)
-  const printable = Boolean(resolveProductPrimaryBarcode(meta))
+  const barcode = resolveProductPrimaryBarcode(meta)
+  const printable = Boolean(barcode)
 
   return (
     <>
@@ -56,8 +56,13 @@ export function FfProductLineCells({
       <TableCell sx={{ whiteSpace: 'nowrap', pl: 2 }} title={meta.sku_code}>
         {meta.sku_code}
       </TableCell>
-      <TableCell sx={{ whiteSpace: 'nowrap' }} title={barcodeDisplay}>
-        {barcodeDisplay}
+      <TableCell sx={{ maxWidth: 220 }}>
+        <ProductBarcodeCell
+          barcode={barcode}
+          wb_size={meta.wb_size}
+          wb_composition={meta.wb_composition}
+          testId="ff-product-line-barcode"
+        />
       </TableCell>
       <TableCell
         sx={{ whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}

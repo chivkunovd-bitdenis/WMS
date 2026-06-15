@@ -5,10 +5,15 @@ from datetime import date
 from typing import Annotated
 
 from fastapi import APIRouter, Body, Depends, HTTPException, status
+from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from pydantic import BaseModel, Field
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.api.deps import require_mp_shipments_access
+from app.api.deps import (
+    get_effective_seller_id,
+    require_mp_shipments_access,
+    resolve_effective_seller_id,
+)
 from app.core.roles import FULFILLMENT_ADMIN, FULFILLMENT_SELLER
 from app.db.session import get_db
 from app.models.marketplace_unload import (
@@ -34,6 +39,7 @@ router = APIRouter(
     prefix="/operations/marketplace-unload-requests",
     tags=["operations"],
 )
+_bearer = HTTPBearer(auto_error=False)
 
 
 class MarketplaceUnloadRequestCreate(BaseModel):
@@ -510,12 +516,19 @@ async def _get_visible_request(
     session: AsyncSession,
     user: User,
     request_id: uuid.UUID,
+    credentials: HTTPAuthorizationCredentials | None = None,
+    *,
+    effective_seller_id: uuid.UUID | None = None,
 ) -> MarketplaceUnloadRequest:
+    if effective_seller_id is None:
+        effective_seller_id = await resolve_effective_seller_id(
+            session, user, credentials
+        )
     r = await svc.get_request(session, user.tenant_id, request_id)
     if r is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="not_found")
     try:
-        svc.assert_request_visible(user, r)
+        svc.assert_request_visible(user, r, effective_seller_id=effective_seller_id)
     except MarketplaceUnloadError as exc:
         raise _map_mu_err(exc) from None
     return r
@@ -525,8 +538,9 @@ async def _get_visible_request(
 async def list_marketplace_unloads(
     user: Annotated[User, Depends(require_mp_shipments_access)],
     session: Annotated[AsyncSession, Depends(get_db)],
+    effective_seller_id: Annotated[uuid.UUID | None, Depends(get_effective_seller_id)],
 ) -> list[MarketplaceUnloadRequestSummaryOut]:
-    seller_filter = user.seller_id if user.role == FULFILLMENT_SELLER else None
+    seller_filter = effective_seller_id if user.role == FULFILLMENT_SELLER else None
     rows = await svc.list_requests(session, user.tenant_id, seller_id=seller_filter)
     return [
         _summary_out(
@@ -543,8 +557,18 @@ async def get_marketplace_unload(
     request_id: uuid.UUID,
     user: Annotated[User, Depends(require_mp_shipments_access)],
     session: Annotated[AsyncSession, Depends(get_db)],
+    credentials: Annotated[
+        HTTPAuthorizationCredentials | None, Depends(_bearer)
+    ],
+    effective_seller_id: Annotated[uuid.UUID | None, Depends(get_effective_seller_id)],
 ) -> MarketplaceUnloadRequestDetailOut:
-    r = await _get_visible_request(session, user, request_id)
+    r = await _get_visible_request(
+        session,
+        user,
+        request_id,
+        credentials,
+        effective_seller_id=effective_seller_id,
+    )
     return await _detail_with_packaging(
         session,
         user.tenant_id,
@@ -609,15 +633,16 @@ async def create_seller_marketplace_unload(
     body: SellerMarketplaceUnloadRequestCreate,
     user: Annotated[User, Depends(require_mp_shipments_access)],
     session: Annotated[AsyncSession, Depends(get_db)],
+    effective_seller_id: Annotated[uuid.UUID | None, Depends(get_effective_seller_id)],
 ) -> MarketplaceUnloadRequestSummaryOut:
-    if user.role != FULFILLMENT_SELLER or user.seller_id is None:
+    if user.role != FULFILLMENT_SELLER or effective_seller_id is None:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="forbidden")
     try:
         r = await svc.create_request(
             session,
             user.tenant_id,
             warehouse_id=body.warehouse_id,
-            seller_id=user.seller_id,
+            seller_id=effective_seller_id,
             wb_mp_warehouse_id=body.wb_mp_warehouse_id,
         )
     except MarketplaceUnloadError as exc:
@@ -630,7 +655,7 @@ async def create_seller_marketplace_unload(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="warehouse_missing_after_create",
         )
-    sl = await session.get(Seller, user.seller_id)
+    sl = await session.get(Seller, effective_seller_id)
     return _summary_out(r2, warehouse_name=wh.name, seller_name=sl.name if sl else None)
 
 
@@ -643,8 +668,11 @@ async def update_marketplace_unload(
     body: MarketplaceUnloadRequestUpdate,
     user: Annotated[User, Depends(require_mp_shipments_access)],
     session: Annotated[AsyncSession, Depends(get_db)],
+    credentials: Annotated[
+        HTTPAuthorizationCredentials | None, Depends(_bearer)
+    ],
 ) -> MarketplaceUnloadRequestDetailOut:
-    await _get_visible_request(session, user, request_id)
+    await _get_visible_request(session, user, request_id, credentials)
     fields = body.model_dump(exclude_unset=True)
     if not fields:
         raise HTTPException(
@@ -701,8 +729,11 @@ async def add_marketplace_unload_line(
     body: MarketplaceUnloadLineCreate,
     user: Annotated[User, Depends(require_mp_shipments_access)],
     session: Annotated[AsyncSession, Depends(get_db)],
+    credentials: Annotated[
+        HTTPAuthorizationCredentials | None, Depends(_bearer)
+    ],
 ) -> MarketplaceUnloadLineOut:
-    await _get_visible_request(session, user, request_id)
+    await _get_visible_request(session, user, request_id, credentials)
     allow_ff_confirmed = user.role == FULFILLMENT_ADMIN
     try:
         line = await svc.add_line(
@@ -727,8 +758,11 @@ async def replace_marketplace_unload_lines(
     body: MarketplaceUnloadLinesBulkReplace,
     user: Annotated[User, Depends(require_mp_shipments_access)],
     session: Annotated[AsyncSession, Depends(get_db)],
+    credentials: Annotated[
+        HTTPAuthorizationCredentials | None, Depends(_bearer)
+    ],
 ) -> MarketplaceUnloadRequestDetailOut:
-    await _get_visible_request(session, user, request_id)
+    await _get_visible_request(session, user, request_id, credentials)
     pairs = [(item.product_id, item.quantity) for item in body.lines]
     try:
         r = await svc.replace_lines(
@@ -751,8 +785,11 @@ async def plan_marketplace_unload(
     request_id: uuid.UUID,
     user: Annotated[User, Depends(require_mp_shipments_access)],
     session: Annotated[AsyncSession, Depends(get_db)],
+    credentials: Annotated[
+        HTTPAuthorizationCredentials | None, Depends(_bearer)
+    ],
 ) -> MarketplaceUnloadRequestDetailOut:
-    await _get_visible_request(session, user, request_id)
+    await _get_visible_request(session, user, request_id, credentials)
     try:
         r = await svc.plan_request(session, user.tenant_id, request_id)
     except MarketplaceUnloadError as exc:
@@ -772,8 +809,11 @@ async def unplan_marketplace_unload(
     request_id: uuid.UUID,
     user: Annotated[User, Depends(require_mp_shipments_access)],
     session: Annotated[AsyncSession, Depends(get_db)],
+    credentials: Annotated[
+        HTTPAuthorizationCredentials | None, Depends(_bearer)
+    ],
 ) -> MarketplaceUnloadRequestDetailOut:
-    await _get_visible_request(session, user, request_id)
+    await _get_visible_request(session, user, request_id, credentials)
     try:
         r = await svc.unplan_request(session, user.tenant_id, request_id)
     except MarketplaceUnloadError as exc:
@@ -964,8 +1004,11 @@ async def delete_marketplace_unload_line(
     line_id: uuid.UUID,
     user: Annotated[User, Depends(require_mp_shipments_access)],
     session: Annotated[AsyncSession, Depends(get_db)],
+    credentials: Annotated[
+        HTTPAuthorizationCredentials | None, Depends(_bearer)
+    ],
 ) -> None:
-    await _get_visible_request(session, user, request_id)
+    await _get_visible_request(session, user, request_id, credentials)
     allow_ff_confirmed = user.role == FULFILLMENT_ADMIN
     try:
         await svc.delete_line(

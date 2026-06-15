@@ -34,6 +34,7 @@ type WbCatalogRow = {
   wb_primary_image_url: string | null
   wb_barcodes: string[]
   wb_primary_barcode: string | null
+  wb_size: string | null
   packaging_instructions: string | null
   has_packaging_instructions: boolean
 }
@@ -104,12 +105,21 @@ export function SellerProductsStockScreen({
     const byProduct = new Map(stock.map((s) => [s.product_id, s]))
     return catalog.map((p) => {
       const bal = byProduct.get(p.id)
+      const onHand = bal?.quantity ?? 0
+      const reserved = bal?.reserved ?? 0
+      const inStorage = bal?.quantity_in_storage ?? 0
+      const freeTotal = Math.max(0, onHand - reserved)
+      const availableForMp = bal?.available ?? Math.max(0, inStorage - reserved)
       return {
         ...p,
-        stock_on_hand: bal?.quantity ?? 0,
+        stock_on_hand: onHand,
+        stock_in_storage: inStorage,
         stock_in_sorting: bal?.quantity_in_sorting ?? 0,
-        stock_reserved: bal?.reserved ?? 0,
-        stock_available: bal?.available ?? 0,
+        stock_reserved: reserved,
+        // «Остаток» для селлера: всего на ФФ минус резерв (не вычитаем сортировку повторно).
+        stock_free_total: freeTotal,
+        // Доступно к новой отгрузке на МП — только из ячеек (как на бэкенде).
+        stock_available_for_mp: availableForMp,
       }
     })
   }, [catalog, stock])
@@ -176,8 +186,8 @@ export function SellerProductsStockScreen({
         Товары
       </Typography>
       <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
-        Каталог WB и остаток на фулфилменте: факт, зарезервировано под отгрузки, доступно к новым
-        заявкам
+        Каталог WB и остаток на фулфилменте. <strong>Остаток</strong> — всего на ФФ минус резерв;
+        отгрузку на МП можно планировать только по колонке «В ячейках» (после разкладки ФФ).
       </Typography>
 
       {error ? (
@@ -206,14 +216,17 @@ export function SellerProductsStockScreen({
             <TableRow>
               <TableCell>Фото</TableCell>
               <TableCell>SKU</TableCell>
+              <TableCell>Размер</TableCell>
               <TableCell>ШК</TableCell>
               <TableCell>Артикул продавца</TableCell>
               <TableCell>nm</TableCell>
               <TableCell>Название</TableCell>
               <TableCell align="right">На ФФ</TableCell>
               <TableCell align="right">В сортировке</TableCell>
+              <TableCell align="right">В ячейках</TableCell>
               <TableCell align="right">Зарезерв.</TableCell>
-              <TableCell align="right">Доступно</TableCell>
+              <TableCell align="right">Остаток</TableCell>
+              <TableCell align="right">К отгрузке</TableCell>
               <TableCell>ТЗ упаковки</TableCell>
             </TableRow>
           </TableHead>
@@ -224,6 +237,7 @@ export function SellerProductsStockScreen({
                   <ProductPhotoThumb src={p.wb_primary_image_url} />
                 </TableCell>
                 <TableCell>{p.sku_code}</TableCell>
+                <TableCell>{p.wb_size ?? '—'}</TableCell>
                 <TableCell>{p.wb_primary_barcode ?? (p.wb_barcodes[0] ?? '—')}</TableCell>
                 <TableCell>{p.wb_vendor_code ?? '—'}</TableCell>
                 <TableCell>{p.wb_nm_id ?? '—'}</TableCell>
@@ -234,11 +248,19 @@ export function SellerProductsStockScreen({
                 <TableCell align="right" data-testid="seller-stock-in-sorting">
                   {p.stock_in_sorting}
                 </TableCell>
+                <TableCell align="right" data-testid="seller-stock-in-storage">
+                  {p.stock_in_storage}
+                </TableCell>
                 <TableCell align="right" data-testid="seller-stock-reserved">
                   {p.stock_reserved}
                 </TableCell>
-                <TableCell align="right" data-testid="seller-stock-available">
-                  {p.stock_available}
+                <TableCell align="right" data-testid="seller-stock-free-total">
+                  {p.stock_free_total}
+                </TableCell>
+                <TableCell align="right">
+                  <Box component="span" data-testid="seller-stock-available">
+                    {p.stock_available_for_mp}
+                  </Box>
                   {p.stock_reserved > 0 ? (
                     <Typography
                       component="span"
@@ -247,7 +269,7 @@ export function SellerProductsStockScreen({
                       sx={{ display: 'block' }}
                       data-testid="seller-stock-available-hint"
                     >
-                      (доступно {p.stock_available})
+                      (свободно {p.stock_free_total})
                     </Typography>
                   ) : null}
                 </TableCell>
@@ -273,7 +295,7 @@ export function SellerProductsStockScreen({
             ))}
             {rows.length === 0 ? (
               <TableRow>
-                <TableCell colSpan={11}>
+                <TableCell colSpan={14}>
                   <Typography variant="body2" color="text.secondary">
                     Пока нет товаров.
                   </Typography>

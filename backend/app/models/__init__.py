@@ -25,6 +25,7 @@ from app.models.outbound_shipment import OutboundShipmentLine, OutboundShipmentR
 from app.models.packaging_task import PackagingTask, PackagingTaskLine
 from app.models.product import Product
 from app.models.seller import Seller
+from app.models.seller_shop_delegation import SellerShopDelegation
 from app.models.seller_wildberries_credentials import SellerWildberriesCredentials
 from app.models.seller_wildberries_imported_card import SellerWildberriesImportedCard
 from app.models.seller_wildberries_imported_supply import SellerWildberriesImportedSupply
@@ -61,6 +62,7 @@ __all__ = [
     "PackagingTaskLine",
     "Product",
     "Seller",
+    "SellerShopDelegation",
     "SellerWildberriesCredentials",
     "SellerWildberriesImportedCard",
     "SellerWildberriesImportedSupply",

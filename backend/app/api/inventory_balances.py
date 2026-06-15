@@ -8,6 +8,7 @@ from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.deps import get_current_user, seller_line_product_scope
+from app.core.roles import FULFILLMENT_ADMIN
 from app.db.session import get_db
 from app.models.user import User
 from app.services import inventory_service
@@ -46,11 +47,20 @@ async def get_inventory_balances_summary(
     session: Annotated[AsyncSession, Depends(get_db)],
     seller_scope: Annotated[uuid.UUID | None, Depends(seller_line_product_scope)],
     warehouse_id: Annotated[uuid.UUID | None, Query()] = None,
+    seller_id: Annotated[uuid.UUID | None, Query()] = None,
 ) -> list[InventoryBalanceRowOut]:
+    effective_seller = seller_scope
+    if seller_id is not None:
+        if user.role != FULFILLMENT_ADMIN:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="forbidden",
+            )
+        effective_seller = seller_id
     rows = await inventory_service.list_balances_total(
         session,
         user.tenant_id,
-        seller_product_owner_id=seller_scope,
+        seller_product_owner_id=effective_seller,
         warehouse_id=warehouse_id,
     )
     return [

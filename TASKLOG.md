@@ -1,10 +1,44 @@
 # TASKLOG
 
+## TASK-55 — 2026-06-15 — Портал селлера: переключение между магазинами (Vitality)
+
+- What changed: менеджер-магазинов (email с «vitalik», `WMS_SHOP_MANAGER_EMAILS` или `users.can_manage_seller_shops`) — в сайдбаре раздел «Магазины» с чекбоксами (все селлеры тенанта кроме своего и тестовых `@example.com` / `e2e-*`); после включения — переключатель «Активный магазин»; API `PUT /auth/seller-shops`, `POST /auth/switch-seller`; JWT `seller_id` = активный магазин; все seller API (отгрузки, приёмки, товары, WB) работают от лица выбранного магазина; миграция `20260615_0040`; pytest `test_seller_shop_switch.py`.
+- What did NOT change: обычные селлеры без флага — только свой магазин; админ FF не затронут.
+- Verification: `pytest tests/test_seller_shop_switch.py`; `npm run build`.
+
+## TASK-54 — 2026-06-14 — Этикетка 58×40 и колонка ШК: баркод WB + размер
+
+- What changed: на этикетке 58×40 в блоке деталей снова печатается «Размер: …»; под штрихкодом — только цифры ШК (баркод WB, не артикул/sku); в колонке «ШК» строк товаров (приёмка, упаковка, отгрузка) — баркод сверху, «Размер: …» снизу; e2e `ff-product-barcode-print.spec.ts` обновлён.
+- What did NOT change: отдельная колонка «Размер» в каталоге товаров; логика импорта WB.
+- Verification: `npm run build`; `npx playwright test tests-e2e/ff-product-barcode-print.spec.ts`.
+- Deploy: commit `476d2aa`, prod `/opt/wms` — `git pull` + rebuild `web` only, `:8088` OK.
+
+## TASK-53 — 2026-06-14 — WB: отдельный товар на каждый размер + фильтр ИП при отгрузке ФФ
+
+- What changed: импорт WB — один `Product` на каждый баркод из `sizes[].skus` (`sku_code` вида `ART/S`, поля `wb_barcode`, `wb_chrt_id`, `wb_size`); при multi-size старый merged SKU → `OLD/…` + `[OLD]` в названии; миграция `20260614_0039`; post-deploy `./scripts/deploy/sync-all-wb-products.sh` (в `prod-update.sh`) — полная загрузка карточек по **всем** селлерам с content-токеном; UI «Товары» — колонка «Размер»; отгрузка на МП (ФФ) — выбор селлера (ИП) перед созданием.
+- What did NOT change: строки `OLD/…` не удаляются (остатки/история на них); одна snapshot-карточка WB на nmID.
+- Verification: `pytest tests/test_wildberries_legacy_old_mark.py tests/test_wildberries_product_import_sizes.py`; `npm run build`.
+- Deploy: `prod-update.sh` → migrate + `python -m app.cli.sync_all_wb_products` в контейнере api.
+
+## TASK-52 — 2026-06-14 — Дубликаты селлеров: очистка prod + атомарное создание
+
+- What changed: prod — удалены 6 пустых дублей «ИП Герус Д.В.» (оставлен один с `gerus_denis@mail.ru`); бэкенд — `POST /sellers/with-account` (селлер + учётка в одной транзакции, откат при `email_taken`); UI `SellersScreen` — один запрос вместо двух; pytest `test_create_seller_with_account_*`; e2e sellers-create / auth-dual / auth-portal-mismatch.
+- What did NOT change: отдельные `POST /sellers` и `POST /auth/seller-accounts` (для тестов/API); остальные селлеры (Denmarcs, Виталик и т.д.).
+- Verification: `pytest tests/test_sellers.py` — 4 passed; `npm run build` — OK; prod SQL — 1 «ИП Герус Д.В.».
+- Deploy: код ещё не на проде — нужен `git pull` + rebuild.
+
+## TASK-51 — 2026-06-11 — Остатки селлера: остаток vs резерв vs отгрузка
+
+- What changed: бэкенд — резерв МП/outbound только по ячейкам (не «Сортировка»); UI селлера — колонки «В ячейках», «Остаток» (На ФФ − резерв), «К отгрузке» (только ячейки); тест `test_available_matches_mp_reserve_only_after_putaway`, e2e `seller-available-stock`.
+- What did NOT change: списание при ship/pick МП; экран товаров ФФ.
+- Verification: `pytest tests/test_inventory_balances_summary.py`; `npm run build`.
+
 ## TASK-50 — 2026-06-11 — Биллинг сотрудников за упаковку
 
 - What changed: ставка за ед. (₽) в настройках сотрудников; расчёт ЗП по завершённым заданиям (только `qty_packed_in_task`, снимок ставки при завершении); фильтр по месяцу (МСК); право «Упаковка» в матрице доступа; API `PATCH /auth/staff-accounts/{id}/packaging-rate`; миграция `0038`.
 - What did NOT change: биллинг селлеров (литр‑день), выплаты/бухгалтерия.
-- Verification: `ruff` / `mypy` / `pytest tests/test_staff_packaging_billing.py`; `npm run build`; e2e `ff-staff-packaging-billing.spec.ts`.
+- Verification: `ruff` / `mypy` / `pytest tests/test_staff_packaging_billing.py`; `npm run build`; e2e `ff-staff-packaging-billing.spec.ts`; PR #37 CI green; prod `194.87.96.144:8088` commit `b646463`.
+- Commit: b646463 (squash PR #37).
 
 ## TASK-49 — 2026-06-11 — Упаковка: таблица создания задания как в приёмке
 

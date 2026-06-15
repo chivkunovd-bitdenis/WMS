@@ -7,7 +7,7 @@ from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, status
 from pydantic import BaseModel, Field
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.api.deps import get_current_user, require_fulfillment_admin
+from app.api.deps import get_current_user, get_effective_seller_id, require_fulfillment_admin
 from app.core.roles import FULFILLMENT_SELLER
 from app.core.settings import settings
 from app.db.session import get_db
@@ -156,13 +156,14 @@ async def start_wildberries_cards_sync_self(
     background_tasks: BackgroundTasks,
     user: Annotated[User, Depends(get_current_user)],
     session: Annotated[AsyncSession, Depends(get_db)],
+    effective_seller_id: Annotated[uuid.UUID | None, Depends(get_effective_seller_id)],
 ) -> BackgroundJobStartOut:
-    if user.role != FULFILLMENT_SELLER or user.seller_id is None:
+    if user.role != FULFILLMENT_SELLER or effective_seller_id is None:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="forbidden",
         )
-    seller = await session.get(Seller, user.seller_id)
+    seller = await session.get(Seller, effective_seller_id)
     if seller is None or seller.tenant_id != user.tenant_id:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
@@ -172,7 +173,7 @@ async def start_wildberries_cards_sync_self(
         session,
         user.tenant_id,
         job_type=JOB_TYPE_WILDBERRIES_CARDS_SYNC,
-        payload_json={"seller_id": str(user.seller_id)},
+        payload_json={"seller_id": str(effective_seller_id)},
     )
     if settings.celery_broker_url:
         from app.tasks.background_jobs import run_wildberries_cards_sync_task

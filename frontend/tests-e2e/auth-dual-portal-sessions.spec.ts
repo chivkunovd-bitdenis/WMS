@@ -30,8 +30,7 @@ test('FF and seller sessions stay independent after login and page reload', asyn
   await page.getByTestId('seller-name').fill(`Brand ${Date.now()}`);
   await page.getByTestId('seller-email').fill(sellerEmail);
   await Promise.all([
-    waitForPostOk(page, '/api/sellers'),
-    waitForPostOk(page, '/api/auth/seller-accounts'),
+    waitForPostOk(page, '/api/sellers/with-account'),
     page.getByTestId('seller-submit').click(),
   ]);
 

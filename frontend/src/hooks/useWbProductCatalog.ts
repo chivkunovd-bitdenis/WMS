@@ -5,8 +5,13 @@ import { readApiErrorMessage } from '../utils/readApiErrorMessage'
 
 async function fetchWbProductCatalogRows(
   authHeaders: Record<string, string>,
+  sellerId?: string | null,
 ): Promise<WbProductCatalogRow[]> {
-  const res = await fetch(apiUrl('/products/linked-wb-catalog'), { headers: authHeaders })
+  const qs =
+    sellerId && sellerId.trim()
+      ? `?seller_id=${encodeURIComponent(sellerId.trim())}`
+      : ''
+  const res = await fetch(apiUrl(`/products/linked-wb-catalog${qs}`), { headers: authHeaders })
   if (!res.ok) {
     throw new Error(await readApiErrorMessage(res))
   }
@@ -24,6 +29,7 @@ type UseWbProductCatalogResult = {
 export function useWbProductCatalog(
   token: string | null | undefined,
   enabled = true,
+  sellerId?: string | null,
 ): UseWbProductCatalogResult {
   const [rows, setRows] = useState<WbProductCatalogRow[]>([])
   const [loading, setLoading] = useState(false)
@@ -42,7 +48,7 @@ export function useWbProductCatalog(
     setLoading(true)
     setError(null)
     try {
-      const next = await fetchWbProductCatalogRows(authHeaders)
+      const next = await fetchWbProductCatalogRows(authHeaders, sellerId)
       setRows(next)
       return next
     } catch (e) {
@@ -52,7 +58,7 @@ export function useWbProductCatalog(
     } finally {
       setLoading(false)
     }
-  }, [authHeaders])
+  }, [authHeaders, sellerId])
 
   useEffect(() => {
     if (!enabled || !authHeaders) {

@@ -2,18 +2,23 @@ import { useEffect, useMemo, useState } from 'react'
 import {
   Box,
   Button,
+  Checkbox,
   Dialog,
   DialogActions,
   DialogContent,
   DialogTitle,
+  FormControlLabel,
+  FormGroup,
   TextField,
   Typography,
 } from '@mui/material'
 import {
+  DEFAULT_PRODUCT_LABEL_PRINT_OPTIONS,
   PRODUCT_LABEL_REVIEW_FOOTER,
   productLabelDetailLines,
   resolveProductLabelArticle,
   truncateProductLabelName,
+  type ProductLabelPrintOptions,
 } from '../utils/productLabelText'
 import { printProductThermalLabels } from '../utils/printProductThermalLabel'
 import { resolveProductPrimaryBarcode, type ProductLineDisplayMeta } from '../types/wbProductCatalog'
@@ -28,19 +33,32 @@ type Props = {
 export function ProductBarcodePrintDialog({ open, meta, onClose }: Props) {
   const [qty, setQty] = useState('1')
   const [error, setError] = useState<string | null>(null)
+  const [printOptions, setPrintOptions] = useState<ProductLabelPrintOptions>(
+    DEFAULT_PRODUCT_LABEL_PRINT_OPTIONS,
+  )
+
+  const hasSize = Boolean(meta?.wb_size?.trim())
+  const hasComposition = Boolean(meta?.wb_composition?.trim())
 
   useEffect(() => {
     if (open) {
       setQty('1')
       setError(null)
+      setPrintOptions({
+        includeSize: Boolean(meta?.wb_size?.trim()),
+        includeComposition: Boolean(meta?.wb_composition?.trim()),
+      })
     }
-  }, [open, meta?.sku_code])
+  }, [open, meta?.sku_code, meta?.wb_size, meta?.wb_composition])
 
   const barcode = meta ? resolveProductPrimaryBarcode(meta) : ''
   const article = meta ? resolveProductLabelArticle(meta) : ''
   const name = meta ? truncateProductLabelName(meta.product_name) : ''
   const sellerName = meta?.seller_name?.trim() ?? ''
-  const detailLines = meta ? productLabelDetailLines(meta) : []
+  const detailLines = useMemo(
+    () => (meta ? productLabelDetailLines(meta, printOptions) : []),
+    [meta, printOptions],
+  )
 
   const previewBarcodeUrl = useMemo(() => {
     if (!barcode) {
@@ -70,12 +88,15 @@ export function ProductBarcodePrintDialog({ open, meta, onClose }: Props) {
           product_name: meta.product_name,
           sku_code: meta.sku_code,
           wb_vendor_code: meta.wb_vendor_code,
+          wb_size: meta.wb_size,
           wb_color: meta.wb_color,
           wb_brand: meta.wb_brand,
+          wb_composition: meta.wb_composition,
           seller_name: meta.seller_name,
           barcode,
         },
         Math.floor(n),
+        printOptions,
       )
       onClose()
     } catch (e) {
@@ -94,7 +115,7 @@ export function ProductBarcodePrintDialog({ open, meta, onClose }: Props) {
       <DialogTitle>Печать этикетки 58×40</DialogTitle>
       <DialogContent>
         <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
-          Этикетка WB: штрихкод, селлер, название, артикул, цвет, бренд и призыв оставить отзыв.
+          Этикетка WB: штрихкод, селлер, название, артикул, цвет, бренд и по выбору — размер и состав.
         </Typography>
 
         <Box
@@ -169,7 +190,22 @@ export function ProductBarcodePrintDialog({ open, meta, onClose }: Props) {
             </Box>
             <Box>Артикул: {article || '—'}</Box>
             {detailLines.map((line) => (
-              <Box key={line}>{line}</Box>
+              <Box
+                key={line}
+                sx={
+                  line.startsWith('Состав:')
+                    ? {
+                        display: '-webkit-box',
+                        WebkitLineClamp: 2,
+                        WebkitBoxOrient: 'vertical',
+                        overflow: 'hidden',
+                        wordBreak: 'break-word',
+                      }
+                    : undefined
+                }
+              >
+                {line}
+              </Box>
             ))}
           </Box>
 
@@ -177,6 +213,37 @@ export function ProductBarcodePrintDialog({ open, meta, onClose }: Props) {
             {PRODUCT_LABEL_REVIEW_FOOTER}
           </Typography>
         </Box>
+
+        <FormGroup row sx={{ justifyContent: 'center', gap: 1, mb: 2 }} data-testid="ff-product-label-fields">
+          <FormControlLabel
+            control={
+              <Checkbox
+                size="small"
+                checked={printOptions.includeSize}
+                disabled={!hasSize}
+                onChange={(_, checked) =>
+                  setPrintOptions((prev) => ({ ...prev, includeSize: checked }))
+                }
+                data-testid="ff-product-label-include-size"
+              />
+            }
+            label="Размер"
+          />
+          <FormControlLabel
+            control={
+              <Checkbox
+                size="small"
+                checked={printOptions.includeComposition}
+                disabled={!hasComposition}
+                onChange={(_, checked) =>
+                  setPrintOptions((prev) => ({ ...prev, includeComposition: checked }))
+                }
+                data-testid="ff-product-label-include-composition"
+              />
+            }
+            label="Состав"
+          />
+        </FormGroup>
 
         <TextField
           label="Количество этикеток"

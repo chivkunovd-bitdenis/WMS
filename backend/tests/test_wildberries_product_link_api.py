@@ -22,7 +22,13 @@ async def test_link_product_to_wb_card(
         limit: int = 100,
     ) -> dict[str, object]:
         return {
-            "cards": [{"nmID": 555001, "vendorCode": "VC-LINK"}],
+            "cards": [
+                {
+                    "nmID": 555001,
+                    "vendorCode": "VC-LINK",
+                    "sizes": [{"skus": ["4600111222333"]}],
+                }
+            ],
             "cursor": {},
         }
 

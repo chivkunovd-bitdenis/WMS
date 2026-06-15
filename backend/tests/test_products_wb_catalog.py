@@ -31,7 +31,10 @@ async def test_seller_wb_catalog_enriched_from_imported_card(
                     "subjectName": "Футболки",
                     "sizes": [{"techSize": "M", "skus": ["2000000111223"]}],
                     "photos": [{"big": "https://img.example/wb1.jpg"}],
-                    "characteristics": [{"name": "Цвет", "value": ["синий"]}],
+                    "characteristics": [
+                        {"name": "Цвет", "value": ["синий"]},
+                        {"name": "Состав", "value": ["хлопок 100%"]},
+                    ],
                 }
             ],
             "cursor": {},
@@ -116,6 +119,7 @@ async def test_seller_wb_catalog_enriched_from_imported_card(
     assert row["wb_size"] == "M"
     assert row["wb_color"] == "синий"
     assert row["wb_brand"] == "TestBrand"
+    assert row["wb_composition"] == "хлопок 100%"
 
 
 @pytest.mark.asyncio

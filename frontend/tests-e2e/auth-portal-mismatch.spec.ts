@@ -25,8 +25,7 @@ test('seller login on FF portal shows portal mismatch error', async ({ page }) =
   await page.getByTestId('seller-name').fill(sellerName);
   await page.getByTestId('seller-email').fill(sellerEmail);
   await Promise.all([
-    waitForPostOk(page, '/api/sellers'),
-    waitForPostOk(page, '/api/auth/seller-accounts'),
+    waitForPostOk(page, '/api/sellers/with-account'),
     page.getByTestId('seller-submit').click(),
   ]);
 

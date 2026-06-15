@@ -38,7 +38,10 @@ async def fetch_cards_list(
                     "vendorCode": "E2E-MOCK",
                     "brand": "E2E-MOCK-BRAND",
                     "sizes": [{"techSize": "L", "skus": ["E2E-MOCK-BARCODE"]}],
-                    "characteristics": [{"name": "Цвет", "value": ["коричневый"]}],
+                    "characteristics": [
+                        {"name": "Цвет", "value": ["коричневый"]},
+                        {"name": "Состав", "value": ["хлопок 95%, эластан 5%"]},
+                    ],
                 }
             ],
             "cursor": {"total": 1},
