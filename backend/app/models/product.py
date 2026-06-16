@@ -6,6 +6,7 @@ from typing import TYPE_CHECKING
 
 from sqlalchemy import (
     BigInteger,
+    Boolean,
     DateTime,
     ForeignKey,
     Integer,
@@ -58,6 +59,9 @@ class Product(Base):
     width_mm: Mapped[int] = mapped_column(Integer, nullable=False)
     height_mm: Mapped[int] = mapped_column(Integer, nullable=False)
     packaging_instructions: Mapped[str | None] = mapped_column(Text, nullable=True)
+    requires_honest_sign: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, default=False, server_default="false"
+    )
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), nullable=False
     )

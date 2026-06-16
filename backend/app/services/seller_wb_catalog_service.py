@@ -42,6 +42,7 @@ class SellerWbCatalogRow:
     wb_brand: str | None = None
     wb_composition: str | None = None
     packaging_instructions: str | None = None
+    requires_honest_sign: bool = False
 
     def as_dict(self) -> dict[str, Any]:
         return {
@@ -59,6 +60,7 @@ class SellerWbCatalogRow:
             "wb_brand": self.wb_brand,
             "wb_composition": self.wb_composition,
             "packaging_instructions": self.packaging_instructions,
+            "requires_honest_sign": self.requires_honest_sign,
         }
 
 
@@ -167,6 +169,7 @@ async def list_seller_wb_catalog_rows(
                 wb_brand=wb_brand,
                 wb_composition=wb_composition,
                 packaging_instructions=p.packaging_instructions,
+                requires_honest_sign=bool(p.requires_honest_sign),
             ),
         )
     return rows
@@ -190,6 +193,7 @@ class FfCatalogRow:
     wb_brand: str | None = None
     wb_composition: str | None = None
     packaging_instructions: str | None = None
+    requires_honest_sign: bool = False
 
     def as_dict(self) -> dict[str, Any]:
         return {
@@ -209,6 +213,7 @@ class FfCatalogRow:
             "wb_brand": self.wb_brand,
             "wb_composition": self.wb_composition,
             "packaging_instructions": self.packaging_instructions,
+            "requires_honest_sign": self.requires_honest_sign,
         }
 
 
@@ -280,6 +285,7 @@ async def list_linked_wb_catalog_rows(
                 wb_brand=wb_brand,
                 wb_composition=wb_composition,
                 packaging_instructions=p.packaging_instructions,
+                requires_honest_sign=bool(p.requires_honest_sign),
             ),
         )
     return rows
@@ -375,6 +381,7 @@ async def list_ff_catalog_rows(
                 wb_brand=wb_brand,
                 wb_composition=wb_composition,
                 packaging_instructions=p.packaging_instructions,
+                requires_honest_sign=bool(p.requires_honest_sign),
             ),
         )
     return rows

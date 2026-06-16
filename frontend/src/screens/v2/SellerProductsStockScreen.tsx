@@ -3,7 +3,9 @@ import {
   Alert,
   Box,
   Button,
+  Checkbox,
   Chip,
+  FormControlLabel,
   CircularProgress,
   Dialog,
   DialogActions,
@@ -36,6 +38,7 @@ type WbCatalogRow = {
   wb_primary_barcode: string | null
   wb_size: string | null
   packaging_instructions: string | null
+  requires_honest_sign: boolean
   has_packaging_instructions: boolean
 }
 
@@ -67,6 +70,7 @@ export function SellerProductsStockScreen({
   const [rowsPerPage, setRowsPerPage] = useState(10)
   const [editProduct, setEditProduct] = useState<WbCatalogRow | null>(null)
   const [editText, setEditText] = useState('')
+  const [editRequiresHonestSign, setEditRequiresHonestSign] = useState(false)
   const [editBusy, setEditBusy] = useState(false)
 
   async function refreshAll() {
@@ -132,6 +136,7 @@ export function SellerProductsStockScreen({
   function openPackagingEdit(p: WbCatalogRow) {
     setEditProduct(p)
     setEditText(p.packaging_instructions ?? '')
+    setEditRequiresHonestSign(Boolean(p.requires_honest_sign))
   }
 
   async function savePackagingInstructions() {
@@ -144,7 +149,10 @@ export function SellerProductsStockScreen({
         {
           method: 'PATCH',
           headers: { ...authHeaders(token), 'Content-Type': 'application/json' },
-          body: JSON.stringify({ packaging_instructions: editText.trim() || null }),
+          body: JSON.stringify({
+            packaging_instructions: editText.trim() || null,
+            requires_honest_sign: editRequiresHonestSign,
+          }),
         },
       )
       if (!res.ok) {
@@ -335,6 +343,16 @@ export function SellerProductsStockScreen({
               <Typography variant="body2" color="text.secondary">
                 {editProduct.sku_code} · {editProduct.name}
               </Typography>
+              <FormControlLabel
+                control={
+                  <Checkbox
+                    checked={editRequiresHonestSign}
+                    onChange={(e) => setEditRequiresHonestSign(e.target.checked)}
+                    data-testid="seller-requires-honest-sign"
+                  />
+                }
+                label="Нужен Честный знак при упаковке"
+              />
               <TextField
                 label="Инструкция для фулфилмента"
                 multiline

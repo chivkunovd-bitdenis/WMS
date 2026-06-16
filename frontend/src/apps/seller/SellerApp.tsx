@@ -8,6 +8,7 @@ import { PublicAuthScreen } from '../../screens/PublicAuthScreen'
 import { SellerDocumentsScreen } from '../../screens/v2/SellerDocumentsScreen'
 import { SellerInboundDraftScreen } from '../../screens/v2/SellerInboundDraftScreen'
 import { SellerProductsStockScreen } from '../../screens/v2/SellerProductsStockScreen'
+import { SellerHonestSignScreen } from '../../screens/v2/SellerHonestSignScreen'
 import { SellerSettingsScreen } from '../../screens/v2/SellerSettingsScreen'
 import { SellerLayout } from './SellerLayout'
 
@@ -355,6 +356,10 @@ export function SellerApp() {
                 <SellerProductsStockScreen token={token} authHeaders={authHeaders} />
               ) : null
             }
+          />
+          <Route
+            path="/honest-sign"
+            element={token ? <SellerHonestSignScreen token={token} /> : null}
           />
           <Route
             path="/settings"

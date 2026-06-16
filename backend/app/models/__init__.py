@@ -21,6 +21,7 @@ from app.models.marketplace_unload import (
     MarketplaceUnloadRequest,
 )
 from app.models.marketplace_unload_reservation import MarketplaceUnloadReservation
+from app.models.marking_code import MarkingCode, MarkingCodeImport
 from app.models.outbound_shipment import OutboundShipmentLine, OutboundShipmentRequest
 from app.models.packaging_task import PackagingTask, PackagingTaskLine
 from app.models.product import Product
@@ -56,6 +57,8 @@ __all__ = [
     "MarketplaceUnloadPickAllocation",
     "MarketplaceUnloadRequest",
     "MarketplaceUnloadReservation",
+    "MarkingCode",
+    "MarkingCodeImport",
     "OutboundShipmentLine",
     "OutboundShipmentRequest",
     "PackagingTask",

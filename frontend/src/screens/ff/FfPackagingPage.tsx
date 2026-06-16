@@ -32,6 +32,7 @@ import { apiUrl } from '../../api'
 import { PageHeader } from '../../ui/PageHeader'
 import { productDisplayMetaFromCatalog } from '../../types/wbProductCatalog'
 import { readApiErrorMessage } from '../../utils/readApiErrorMessage'
+import { useMarkingCodePrint } from '../../utils/useMarkingCodePrint'
 
 export type PackagingTaskLine = {
   id: string
@@ -41,12 +42,15 @@ export type PackagingTaskLine = {
   storage_location_id: string
   storage_location_code: string
   packaging_instructions: string | null
+  requires_honest_sign: boolean
   qty_total: number
   qty_suggested_packed: number
   qty_confirmed_packed: number
   qty_need_pack: number
   qty_packed_in_task: number
   qty_done: number
+  qty_marking_printed: number
+  marking_available_count: number
   is_complete: boolean
 }
 
@@ -87,6 +91,7 @@ export function FfPackagingTaskPanel({
   const { catalogById } = useWbProductCatalog(token)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const { openPrint, dialog: markingPrintDialog } = useMarkingCodePrint()
 
   const authHeaders = {
     Authorization: `Bearer ${token}`,
@@ -208,6 +213,7 @@ export function FfPackagingTaskPanel({
               <TableCell align="right">На полке упак.</TableCell>
               <TableCell align="right">Упаковать</TableCell>
               <TableCell align="right">Готово</TableCell>
+              <TableCell align="right">ЧЗ</TableCell>
               <TableCell align="right">Действия</TableCell>
             </TableRow>
           </TableHead>
@@ -233,7 +239,85 @@ export function FfPackagingTaskPanel({
                 <TableCell align="right">{ln.qty_need_pack}</TableCell>
                 <TableCell align="right">{ln.qty_done}</TableCell>
                 <TableCell align="right">
-                  <Stack direction="row" spacing={0.5} sx={{ justifyContent: 'flex-end' }}>
+                  {ln.requires_honest_sign ? (
+                    <Stack spacing={0.25} sx={{ alignItems: 'flex-end' }}>
+                      <Typography variant="caption" color="text.secondary">
+                        {ln.qty_marking_printed > 0
+                          ? `напеч. ${ln.qty_marking_printed}`
+                          : `дост. ${ln.marking_available_count}`}
+                      </Typography>
+                    </Stack>
+                  ) : (
+                    '—'
+                  )}
+                </TableCell>
+                <TableCell align="right">
+                  <Stack direction="row" spacing={0.5} sx={{ justifyContent: 'flex-end', flexWrap: 'wrap' }}>
+                    {ln.requires_honest_sign && ln.qty_need_pack > 0 && ln.qty_marking_printed < 1 ? (
+                      <Button
+                        size="small"
+                        variant="outlined"
+                        disabled={busy || ln.marking_available_count < ln.qty_need_pack}
+                        onClick={() =>
+                          openPrint({
+                            token,
+                            lineId: ln.id,
+                            qtyNeedPack: ln.qty_need_pack,
+                            markingAvailable: ln.marking_available_count,
+                            qtyMarkingPrinted: ln.qty_marking_printed,
+                            skuCode: ln.sku_code,
+                            onPrinted: () => {
+                              void (async () => {
+                                const res = await fetch(
+                                  apiUrl(`/operations/packaging-tasks/${task.id}`),
+                                  { headers: authHeaders },
+                                )
+                                if (res.ok) {
+                                  onUpdated((await res.json()) as PackagingTask)
+                                }
+                              })()
+                            },
+                          })
+                        }
+                        data-testid="ff-packaging-print-marking"
+                      >
+                        Печать ЧЗ
+                      </Button>
+                    ) : null}
+                    {ln.requires_honest_sign && ln.qty_marking_printed > 0 ? (
+                      <Button
+                        size="small"
+                        variant="text"
+                        disabled={busy}
+                        onClick={() =>
+                          openPrint(
+                            {
+                              token,
+                              lineId: ln.id,
+                              qtyNeedPack: ln.qty_need_pack,
+                              markingAvailable: ln.marking_available_count,
+                              qtyMarkingPrinted: ln.qty_marking_printed,
+                              skuCode: ln.sku_code,
+                              onPrinted: () => {
+                                void (async () => {
+                                  const res = await fetch(
+                                    apiUrl(`/operations/packaging-tasks/${task.id}`),
+                                    { headers: authHeaders },
+                                  )
+                                  if (res.ok) {
+                                    onUpdated((await res.json()) as PackagingTask)
+                                  }
+                                })()
+                              },
+                            },
+                            { reprint: true },
+                          )
+                        }
+                        data-testid="ff-packaging-reprint-marking"
+                      >
+                        Повтор
+                      </Button>
+                    ) : null}
                     {ln.qty_confirmed_packed < ln.qty_suggested_packed ? (
                       <Button
                         size="small"
@@ -262,6 +346,7 @@ export function FfPackagingTaskPanel({
           </TableBody>
         </Table>
       </TableContainer>
+      {markingPrintDialog}
       {onClose ? (
         <Stack direction="row" spacing={1} sx={{ justifyContent: 'flex-end' }}>
           {manualTask ? (

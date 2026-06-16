@@ -3,7 +3,9 @@ import {
   Alert,
   Box,
   Button,
+  Checkbox,
   Chip,
+  FormControlLabel,
   CircularProgress,
   Dialog,
   DialogActions,
@@ -44,6 +46,7 @@ type FfCatalogRow = {
   wb_primary_barcode: string | null
   wb_size: string | null
   packaging_instructions: string | null
+  requires_honest_sign: boolean
   has_packaging_instructions: boolean
 }
 
@@ -79,6 +82,7 @@ export function FfProductsCatalogScreen({ token, authHeaders, sellers }: Props) 
   const [sortDir, setSortDir] = useState<SortDir>('asc')
   const [editProduct, setEditProduct] = useState<FfCatalogRow | null>(null)
   const [editText, setEditText] = useState('')
+  const [editRequiresHonestSign, setEditRequiresHonestSign] = useState(false)
   const [editBusy, setEditBusy] = useState(false)
 
   const load = useCallback(async () => {
@@ -159,6 +163,7 @@ export function FfProductsCatalogScreen({ token, authHeaders, sellers }: Props) 
   function openPackagingEdit(p: FfCatalogRow) {
     setEditProduct(p)
     setEditText(p.packaging_instructions ?? '')
+    setEditRequiresHonestSign(Boolean(p.requires_honest_sign))
   }
 
   async function savePackagingInstructions() {
@@ -169,7 +174,10 @@ export function FfProductsCatalogScreen({ token, authHeaders, sellers }: Props) 
       const res = await fetch(apiUrl(`/products/${editProduct.id}/packaging-instructions`), {
         method: 'PATCH',
         headers: { ...authHeaders(token), 'Content-Type': 'application/json' },
-        body: JSON.stringify({ packaging_instructions: editText.trim() || null }),
+        body: JSON.stringify({
+          packaging_instructions: editText.trim() || null,
+          requires_honest_sign: editRequiresHonestSign,
+        }),
       })
       if (!res.ok) {
         setError(await readApiErrorMessage(res))
@@ -344,6 +352,16 @@ export function FfProductsCatalogScreen({ token, authHeaders, sellers }: Props) 
           <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
             {editProduct?.sku_code} · {editProduct?.name}
           </Typography>
+          <FormControlLabel
+            control={
+              <Checkbox
+                checked={editRequiresHonestSign}
+                onChange={(e) => setEditRequiresHonestSign(e.target.checked)}
+                data-testid="ff-requires-honest-sign"
+              />
+            }
+            label="Нужен Честный знак при упаковке"
+          />
           <TextField
             fullWidth
             multiline

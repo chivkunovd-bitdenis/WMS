@@ -471,6 +471,7 @@ def _map_pick_err(exc: MarketplaceUnloadPickError) -> HTTPException:
         "box_closed",
         "planned_shipment_date_required",
         "packaging_not_done",
+        "marking_not_done",
     ):
         return HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,

@@ -61,6 +61,7 @@ class SellerWbCatalogOut(BaseModel):
     wb_brand: str | None = None
     wb_composition: str | None = None
     packaging_instructions: str | None = None
+    requires_honest_sign: bool = False
     has_packaging_instructions: bool = False
 
 
@@ -83,6 +84,7 @@ class FfCatalogOut(BaseModel):
     wb_brand: str | None = None
     wb_composition: str | None = None
     packaging_instructions: str | None = None
+    requires_honest_sign: bool = False
     has_packaging_instructions: bool = False
 
 
@@ -98,6 +100,7 @@ class ProductOut(BaseModel):
     wb_nm_id: int | None = None
     wb_vendor_code: str | None = None
     packaging_instructions: str | None = None
+    requires_honest_sign: bool = False
 
     @computed_field  # type: ignore[prop-decorator]
     @property
@@ -107,6 +110,7 @@ class ProductOut(BaseModel):
 
 class PackagingInstructionsPatch(BaseModel):
     packaging_instructions: str | None = Field(default=None, max_length=8000)
+    requires_honest_sign: bool | None = None
 
 
 def _product_out(p: object) -> ProductOut:
@@ -125,6 +129,7 @@ def _product_out(p: object) -> ProductOut:
         wb_nm_id=int(p.wb_nm_id) if p.wb_nm_id is not None else None,
         wb_vendor_code=p.wb_vendor_code,
         packaging_instructions=p.packaging_instructions,
+        requires_honest_sign=bool(p.requires_honest_sign),
     )
 
 
@@ -257,6 +262,7 @@ async def patch_product_packaging_instructions(
             user.tenant_id,
             product_id,
             packaging_instructions=body.packaging_instructions,
+            requires_honest_sign=body.requires_honest_sign,
         )
     except CatalogError as exc:
         if exc.code == "product_not_found":

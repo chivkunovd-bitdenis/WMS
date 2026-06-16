@@ -461,3 +461,12 @@ async def assert_unload_packaging_done(
         raise PackagingTaskServiceError("task_not_done")
     if task.status != STATUS_DONE and not is_task_complete(task):
         raise PackagingTaskServiceError("task_not_done")
+    from app.services import marking_code_service as mc_svc
+
+    for line in task.lines:
+        try:
+            await mc_svc.assert_packaging_line_marking_done(session, tenant_id, line)
+        except mc_svc.MarkingCodeServiceError as exc:
+            if exc.code == "marking_not_done":
+                raise PackagingTaskServiceError("marking_not_done") from exc
+            raise

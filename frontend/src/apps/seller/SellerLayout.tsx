@@ -114,6 +114,9 @@ export function SellerLayout({
             <ListItemButton component={NavLink} to={`${base}/products`} data-testid="nav-seller-products">
               <ListItemText primary="Товары" />
             </ListItemButton>
+            <ListItemButton component={NavLink} to={`${base}/honest-sign`} data-testid="nav-seller-honest-sign">
+              <ListItemText primary="Честный знак" />
+            </ListItemButton>
             <ListItemButton component={NavLink} to={`${base}/settings`} data-testid="nav-seller-settings">
               <ListItemText primary="Настройки" />
             </ListItemButton>
