@@ -65,6 +65,7 @@ type Props = {
   busy: boolean
   error: string | null
   token: string | null
+  catalogScopeKey?: string
   authHeaders: (t: string) => Record<string, string>
   warehouseId: string | null
   inboundSummaries: InboundSummaryRow[]
@@ -78,6 +79,7 @@ export function SellerDocumentsScreen({
   busy,
   error,
   token,
+  catalogScopeKey = '',
   authHeaders,
   warehouseId,
   inboundSummaries,
@@ -271,6 +273,7 @@ export function SellerDocumentsScreen({
           open={mpDialogId !== null}
           requestId={mpDialogId}
           token={token}
+          catalogScopeKey={catalogScopeKey}
           authHeaders={authHeaders}
           warehouseId={warehouseId}
           busy={busy}

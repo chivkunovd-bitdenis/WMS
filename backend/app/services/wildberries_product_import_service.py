@@ -118,6 +118,7 @@ async def _find_product_for_variant(
     by_barcode = await session.execute(
         select(Product).where(
             Product.tenant_id == tenant_id,
+            Product.seller_id == seller_id,
             Product.wb_barcode == variant.barcode,
         )
     )

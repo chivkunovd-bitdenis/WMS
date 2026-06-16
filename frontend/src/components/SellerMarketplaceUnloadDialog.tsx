@@ -64,6 +64,7 @@ type Props = {
   authHeaders: (t: string) => Record<string, string>
   warehouseId: string | null
   busy: boolean
+  catalogScopeKey?: string
   onClose: () => void
   onRefreshList: () => Promise<void>
 }
@@ -83,6 +84,7 @@ export function SellerMarketplaceUnloadDialog({
   authHeaders,
   warehouseId,
   busy: parentBusy,
+  catalogScopeKey = '',
   onClose,
   onRefreshList,
 }: Props) {
@@ -201,6 +203,10 @@ export function SellerMarketplaceUnloadDialog({
   }, [open, loadDetail, loadStock, loadWbWarehouses])
 
   useEffect(() => {
+    setCatalog(null)
+  }, [catalogScopeKey, token])
+
+  useEffect(() => {
     if (!token || !open) {
       return
     }
@@ -227,7 +233,7 @@ export function SellerMarketplaceUnloadDialog({
     return () => {
       cancelled = true
     }
-  }, [authHeaders, catalog, open, token])
+  }, [authHeaders, catalog, catalogScopeKey, open, token])
 
   const openPicker = async () => {
     setModalError(null)

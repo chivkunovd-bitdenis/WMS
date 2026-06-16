@@ -235,6 +235,7 @@ export function SellerApp() {
     if (!me) {
       return null
     }
+    const catalogScopeKey = me.active_seller_id ?? me.seller_id ?? 'none'
     return (
       <SellerLayout
         onLogout={() => logout()}
@@ -251,8 +252,14 @@ export function SellerApp() {
         delegatableShops={me.delegatable_shops ?? []}
         switchableShops={me.switchable_shops ?? []}
         shopsBusy={shopsBusy}
-        onToggleShop={(sellerId, enabled) => void handleToggleShop(sellerId, enabled)}
-        onSwitchShop={(sellerId) => void handleSwitchShop(sellerId)}
+        {...(me.can_manage_seller_shops ||
+        (me.switchable_shops?.length ?? 0) > 1
+          ? {
+              onToggleShop: (sellerId: string, enabled: boolean) =>
+                void handleToggleShop(sellerId, enabled),
+              onSwitchShop: (sellerId: string | null) => void handleSwitchShop(sellerId),
+            }
+          : {})}
       >
         <Routes>
           <Route path="/" element={<Navigate to="/documents" replace />} />
@@ -260,7 +267,9 @@ export function SellerApp() {
             path="/documents"
             element={
               <SellerDocumentsScreen
+                key={catalogScopeKey}
                 busy={opsBusy}
+                catalogScopeKey={catalogScopeKey}
                 error={opsError}
                 token={token}
                 authHeaders={authHeaders}
@@ -324,6 +333,7 @@ export function SellerApp() {
             element={
               token ? (
                 <SellerInboundDraftScreen
+                  key={catalogScopeKey}
                   token={token}
                   authHeaders={authHeaders}
                   warehouseId={selectedWarehouseId ?? (warehouses[0]?.id ?? null)}
@@ -339,6 +349,7 @@ export function SellerApp() {
             element={
               token ? (
                 <SellerInboundDraftScreen
+                  key={catalogScopeKey}
                   token={token}
                   authHeaders={authHeaders}
                   warehouseId={selectedWarehouseId ?? (warehouses[0]?.id ?? null)}
@@ -353,19 +364,27 @@ export function SellerApp() {
             path="/products"
             element={
               token ? (
-                <SellerProductsStockScreen token={token} authHeaders={authHeaders} />
+                <SellerProductsStockScreen
+                  key={catalogScopeKey}
+                  token={token}
+                  authHeaders={authHeaders}
+                />
               ) : null
             }
           />
           <Route
             path="/honest-sign"
-            element={token ? <SellerHonestSignScreen token={token} /> : null}
+            element={token ? <SellerHonestSignScreen key={catalogScopeKey} token={token} /> : null}
           />
           <Route
             path="/settings"
             element={
               token ? (
-                <SellerSettingsScreen token={token} authHeaders={authHeaders} />
+                <SellerSettingsScreen
+                  key={catalogScopeKey}
+                  token={token}
+                  authHeaders={authHeaders}
+                />
               ) : null
             }
           />
