@@ -1,5 +1,11 @@
 # TASKLOG
 
+## TASK-56 — 2026-06-16 — Честный знак: импорт кодов и печать из упаковки
+
+- What changed: модуль ЧЗ — `marking_codes` / `marking_code_imports` в БД; флаг `requires_honest_sign` у товара; загрузка CSV/PDF селлером или админом ФФ; остатки в разделах «Честный знак» (FF + seller); в задании на упаковке кнопка «Печать ЧЗ» на всё `qty_need_pack` строки, галочка «в 2 экземплярах», повторная печать без списания новых кодов; печать DataMatrix 58×40 (`bwip-js`); блок отгрузки на МП при `marking_not_done`; миграция `20260616_0041`; pytest `test_marking_codes.py`; e2e `ff-marking-packaging.spec.ts`.
+- What did NOT change: отчётность в ГИС МТ / API ЧЗ; парсинг PDF-сетки на листе (только постраничный текст + CSV).
+- Verification: `ruff check . && mypy . && pytest` (129 passed); `npm run build`; `npx playwright test tests-e2e/ff-marking-packaging.spec.ts`.
+
 ## TASK-55 — 2026-06-15 — Портал селлера: переключение между магазинами (Vitality)
 
 - What changed: менеджер-магазинов (email с «vitalik», `WMS_SHOP_MANAGER_EMAILS` или `users.can_manage_seller_shops`) — в сайдбаре раздел «Магазины» с чекбоксами (все селлеры тенанта кроме своего и тестовых `@example.com` / `e2e-*`); после включения — переключатель «Активный магазин»; API `PUT /auth/seller-shops`, `POST /auth/switch-seller`; JWT `seller_id` = активный магазин; все seller API (отгрузки, приёмки, товары, WB) работают от лица выбранного магазина; миграция `20260615_0040`; pytest `test_seller_shop_switch.py`.

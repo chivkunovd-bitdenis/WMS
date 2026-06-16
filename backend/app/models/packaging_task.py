@@ -12,6 +12,7 @@ from app.models.base import Base
 if TYPE_CHECKING:
     from app.models.inbound_intake import InboundIntakeRequest
     from app.models.marketplace_unload import MarketplaceUnloadLine, MarketplaceUnloadRequest
+    from app.models.marking_code import MarkingCode
     from app.models.product import Product
     from app.models.storage_location import StorageLocation
     from app.models.tenant import Tenant
@@ -126,6 +127,7 @@ class PackagingTaskLine(Base):
     qty_suggested_packed: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     qty_confirmed_packed: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     qty_packed_in_task: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    qty_marking_printed: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     marketplace_unload_line_id: Mapped[uuid.UUID | None] = mapped_column(
         Uuid(as_uuid=True),
         ForeignKey("marketplace_unload_lines.id", ondelete="SET NULL"),
@@ -137,4 +139,8 @@ class PackagingTaskLine(Base):
     storage_location: Mapped[StorageLocation] = relationship("StorageLocation")
     marketplace_unload_line: Mapped[MarketplaceUnloadLine | None] = relationship(
         "MarketplaceUnloadLine"
+    )
+    marking_codes: Mapped[list[MarkingCode]] = relationship(
+        "MarkingCode",
+        back_populates="packaging_task_line",
     )

@@ -36,7 +36,7 @@ async def test_seller_shop_switch_acts_as_delegated_seller(
         headers=admin_h,
         json={
             "name": "Home Shop",
-            "email": f"denmarks-{suffix}@mail.ru",
+            "email": f"vitalik-{suffix}@mail.ru",
             "password": "password123",
         },
     )
@@ -69,7 +69,7 @@ async def test_seller_shop_switch_acts_as_delegated_seller(
     login = await async_client.post(
         "/auth/login",
         json={
-            "email": f"denmarks-{suffix}@mail.ru",
+            "email": f"vitalik-{suffix}@mail.ru",
             "password": "password123",
         },
     )
@@ -213,3 +213,10 @@ async def test_regular_seller_cannot_manage_shops(
         headers={"Authorization": f"Bearer {login.json()['access_token']}"},
     )
     assert me.json()["can_manage_seller_shops"] is False
+
+    put = await async_client.put(
+        "/auth/seller-shops",
+        headers={"Authorization": f"Bearer {login.json()['access_token']}"},
+        json={"enabled_seller_ids": []},
+    )
+    assert put.status_code == 403

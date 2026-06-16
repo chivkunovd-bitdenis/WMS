@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from pydantic import Field
+from pydantic import AliasChoices, Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -51,9 +51,14 @@ class Settings(BaseSettings):
     )
     shop_manager_emails: str = Field(
         default="",
+        validation_alias=AliasChoices(
+            "shop_manager_emails",
+            "WMS_SHOP_MANAGER_EMAILS",
+            "SHOP_MANAGER_EMAILS",
+        ),
         description=(
             "Comma-separated seller user emails allowed to manage/switch shops "
-            "(in addition to users.can_manage_seller_shops)."
+            "(in addition to users.can_manage_seller_shops and built-in email markers)."
         ),
     )
 

@@ -32,6 +32,7 @@ import {
   type FfDiscrepancyActSummary,
   type FfMarketplaceUnloadSummary,
 } from './screens/ff/FfSuppliesShipmentsPage'
+import { FfHonestSignPage } from './screens/ff/FfHonestSignPage'
 import { FfPlaceholderPage } from './screens/ff/FfPlaceholderPage'
 import { FfInboundRequestView, type InboundRequestWorkspace } from './screens/ff/FfInboundRequestView'
 import { FfInboundQueuePage } from './screens/ff/FfInboundQueuePage'
@@ -2491,11 +2492,15 @@ export default function App() {
           <Route
             path="ff/honest-sign"
             element={
-              <FfPlaceholderPage
-                title="Честный знак"
-                hint="Раздел в разработке."
-                testId="ff-honest-sign-placeholder"
-              />
+              token ? (
+                <FfHonestSignPage token={token} />
+              ) : (
+                <FfPlaceholderPage
+                  title="Честный знак"
+                  hint="Нет токена."
+                  testId="ff-honest-sign-placeholder"
+                />
+              )
             }
           />
 

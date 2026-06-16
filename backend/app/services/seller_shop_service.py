@@ -21,6 +21,17 @@ class SellerShopError(Exception):
 _TEST_EMAIL_SUFFIXES = ("@test.example.com", "@example.com")
 _TEST_EMAIL_PREFIXES = ("e2e-", "iso-", "test-", "cat-")
 
+# Built-in allowlist for shop manager UI (seller portal sidebar).
+# Also: users.can_manage_seller_shops in DB, WMS_SHOP_MANAGER_EMAILS env.
+_SHOP_MANAGER_EMAIL_MARKERS = (
+    "vitalik",
+    "vitaliy",
+    "виталий",
+    "denmark",
+    "denmarks",
+    "денмарк",
+)
+
 
 def is_test_user_email(email: str) -> bool:
     normalized = email.strip().lower()
@@ -37,7 +48,7 @@ def user_can_manage_seller_shops(user: User) -> bool:
     if user.can_manage_seller_shops:
         return True
     email = user.email.strip().lower()
-    if "denmark" in email or "denmarks" in email or "денмарк" in email:
+    if any(marker in email for marker in _SHOP_MANAGER_EMAIL_MARKERS):
         return True
     configured = settings.shop_manager_emails.strip().lower()
     if configured:

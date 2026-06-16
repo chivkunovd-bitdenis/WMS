@@ -394,12 +394,15 @@ async def update_packaging_instructions(
     product_id: uuid.UUID,
     *,
     packaging_instructions: str | None,
+    requires_honest_sign: bool | None = None,
 ) -> Product:
     p = await get_product(session, tenant_id, product_id)
     if p is None:
         raise CatalogError("product_not_found")
     text = (packaging_instructions or "").strip()
     p.packaging_instructions = text if text else None
+    if requires_honest_sign is not None:
+        p.requires_honest_sign = requires_honest_sign
     await session.commit()
     await session.refresh(p, attribute_names=["seller"])
     return p

@@ -13,7 +13,11 @@ from app.core.roles import FF_PORTAL_ROLES, FULFILLMENT_ADMIN, FULFILLMENT_SELLE
 from app.db.session import get_db
 from app.models.user import User
 from app.services.auth_service import get_user_by_id
-from app.services.seller_shop_service import SellerShopError, assert_can_act_as_seller
+from app.services.seller_shop_service import (
+    SellerShopError,
+    assert_can_act_as_seller,
+    user_can_manage_seller_shops,
+)
 from app.services.staff_permissions_service import (
     PERM_CELLS,
     PERM_MP_SHIPMENTS,
@@ -37,6 +41,8 @@ async def resolve_effective_seller_id(
     home_seller_id = user.seller_id
     if home_seller_id is None:
         return None
+    if not user_can_manage_seller_shops(user):
+        return home_seller_id
     if credentials is None or credentials.scheme.lower() != "bearer":
         return home_seller_id
     try:
