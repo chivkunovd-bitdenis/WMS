@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import {
   Alert,
   Box,
@@ -73,7 +73,7 @@ export function SellerProductsStockScreen({
   const [editRequiresHonestSign, setEditRequiresHonestSign] = useState(false)
   const [editBusy, setEditBusy] = useState(false)
 
-  async function refreshAll() {
+  const refreshAll = useCallback(async () => {
     setError(null)
     setBusy(true)
     try {
@@ -98,12 +98,11 @@ export function SellerProductsStockScreen({
     } finally {
       setBusy(false)
     }
-  }
+  }, [authHeaders, token])
 
   useEffect(() => {
     void refreshAll()
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [])
+  }, [refreshAll])
 
   const rows = useMemo(() => {
     const byProduct = new Map(stock.map((s) => [s.product_id, s]))

@@ -24,6 +24,7 @@ from app.services.catalog_service import (
     update_packaging_instructions,
     volume_liters_from_mm,
 )
+from app.services.seller_shop_service import user_can_manage_seller_shops
 from app.services.seller_wb_catalog_service import (
     list_ff_catalog_rows,
     list_linked_wb_catalog_rows,
@@ -159,7 +160,15 @@ async def get_seller_wb_catalog(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="seller_not_linked",
         )
-    rows = await list_seller_wb_catalog_rows(session, user.tenant_id, effective_seller_id)
+    catalog_seller_id = effective_seller_id
+    if not user_can_manage_seller_shops(user):
+        if user.seller_id is None:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="seller_not_linked",
+            )
+        catalog_seller_id = user.seller_id
+    rows = await list_seller_wb_catalog_rows(session, user.tenant_id, catalog_seller_id)
     return [
         SellerWbCatalogOut(
             **r.as_dict(),
@@ -252,7 +261,10 @@ async def patch_product_packaging_instructions(
     if p is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="product_not_found")
     if user.role == FULFILLMENT_SELLER:
-        if effective_seller_id is None or p.seller_id != effective_seller_id:
+        owner_id = user.seller_id
+        if user_can_manage_seller_shops(user) and effective_seller_id is not None:
+            owner_id = effective_seller_id
+        if owner_id is None or p.seller_id != owner_id:
             raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="forbidden")
     elif user.role != FULFILLMENT_ADMIN:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="forbidden")
