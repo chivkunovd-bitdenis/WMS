@@ -1,5 +1,12 @@
 # TASKLOG
 
+## TASK-57 — 2026-06-16 — Селлер: изоляция каталога по магазину + деплой
+
+- What changed: обычные селлеры всегда видят только свой `seller_id` (JWT-делегирование игнорируется); менеджеры — allowlist (`vitalik`/`vitaliy`/`виталий`, `denmark`/`denmarks`, `WMS_SHOP_MANAGER_EMAILS`, флаг БД); фронт перезагружает каталог при смене активного магазина; WB-импорт ищет баркод только в рамках селлера; pytest `test_seller_wb_catalog_isolation.py`, `test_seller_shop_allowlist.py`.
+- What did NOT change: FF-каталог «все селлеры» для админа; логика переключения магазинов у менеджеров.
+- Verification: pytest seller isolation 15 passed; PR #40 CI green; `npm run build`.
+- Deploy: merge PR #40 → `main` `ee5095c`; prod `194.87.96.144:8088` — `prod-update.sh`, все контейнеры Up, seller/api HTTP 200. WB re-sync прерван (OOM); при необходимости вручную: `./scripts/deploy/sync-all-wb-products.sh`.
+
 ## TASK-56 — 2026-06-16 — Честный знак: импорт кодов и печать из упаковки
 
 - What changed: модуль ЧЗ — `marking_codes` / `marking_code_imports` в БД; флаг `requires_honest_sign` у товара; загрузка CSV/PDF селлером или админом ФФ; остатки в разделах «Честный знак» (FF + seller); в задании на упаковке кнопка «Печать ЧЗ» на всё `qty_need_pack` строки, галочка «в 2 экземплярах», повторная печать без списания новых кодов; печать DataMatrix 58×40 (`bwip-js`); блок отгрузки на МП при `marking_not_done`; миграция `20260616_0041`; pytest `test_marking_codes.py`; e2e `ff-marking-packaging.spec.ts`.

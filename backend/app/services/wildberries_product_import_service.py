@@ -126,14 +126,13 @@ async def _find_product_for_variant(
     if p is not None:
         return p
     by_sku = await session.execute(
-        select(Product).where(Product.tenant_id == tenant_id, Product.sku_code == sku)
+        select(Product).where(
+            Product.tenant_id == tenant_id,
+            Product.sku_code == sku,
+            Product.seller_id == seller_id,
+        )
     )
-    p = by_sku.scalar_one_or_none()
-    if p is None:
-        return None
-    if p.seller_id is not None and p.seller_id != seller_id:
-        return None
-    return p
+    return by_sku.scalar_one_or_none()
 
 
 def _apply_variant_fields(
