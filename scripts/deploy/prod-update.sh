@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
 # Run on the production server from the repo root (e.g. /opt/wms).
+# Preconditions: code already merged to origin/main via PR; CI on main is green.
 set -euo pipefail
 
 REPO_DIR="${WMS_REPO_DIR:-$(cd "$(dirname "$0")/../.." && pwd)}"

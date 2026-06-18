@@ -2,6 +2,7 @@ You are an AI coding agent working in this repository.
 
 Hard rules:
 - One feature per PR. No unrelated refactors.
+- **Never push directly to `origin/main`.** All releases: branch → PR → merge → deploy (`AGENTS.md`, `docs/DEPLOY_SERVER_RU.md`, rule `release-via-pr-only.mdc`).
 - Backend architecture boundaries:
   - routes only in /backend/app/api
   - business logic only in /backend/app/services

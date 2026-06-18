@@ -1,6 +1,18 @@
 # Деплой на сервер (prod)
 
-Канонический путь: **git pull + docker compose** на сервере. Секреты только в `.env` на сервере.
+Канонический путь: **PR → merge в `main` → зелёный CI на `main` → git pull + docker compose** на сервере. Секреты только в `.env` на сервере.
+
+**Запрещено:** `git push origin main` с рабочей машины или агента; деплой с ветки, которая не влita через PR. Подробно: **`AGENTS.md` → Release to prod (PR-only)**.
+
+## Релиз (каждая фича / фикс)
+
+1. Ветка от `main`: `git checkout -b feat/…`
+2. Код + тесты; локально: `backend/` → `ruff check . && mypy . && pytest`; `frontend/` → `npm run build && npm run test:e2e`
+3. Push ветки: `git push -u origin HEAD`
+4. PR: `gh pr create` (блок `### Test coverage` — см. `AGENTS.md`, если CI требует)
+5. Дождаться **зелёного CI на PR** → **Merge**
+6. Дождаться **зелёного CI на `main`** (workflow после merge)
+7. На сервере: `./scripts/deploy/prod-update.sh`
 
 ## Требования
 
@@ -41,13 +53,19 @@ cd /opt/wms
 
 ## CI (GitHub Actions)
 
-На каждый PR и push в `main`:
+На каждый **PR** и push в `main` (после merge):
 
 - `backend`: ruff, mypy, pytest
 - `frontend`: build, Playwright e2e
 - проверки Test coverage в PR
 
-Зелёный CI на `main` — обязательное условие перед `git pull` на прод.
+**Merge в `main` только при зелёном CI на PR.** После merge — CI на `main` должен быть зелёным **до** `git pull` на прод.
+
+### Branch protection (рекомендуется включить)
+
+- Require pull request before merging
+- Require status checks (backend, e2e, …)
+- **Do not allow bypassing** for admins — иначе агенты с `gh`/git снова смогут пушить в `main` в обход PR
 
 ## Проверка после деплоя
 
