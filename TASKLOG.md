@@ -1,5 +1,11 @@
 # TASKLOG
 
+## TASK-58 — 2026-06-18 — Печать ШК в каталоге товаров ФФ и после закрытия приёмки
+
+- What changed: в разделе «Товары» ФФ — кнопка печати этикетки 58×40 (как на приёмке/упаковке); после «Завершить пересчёт» в разделе «Сортировка» таблица состава приёмки с печатью ШК остаётся видимой; общий компонент `ProductBarcodePrintButton`.
+- What did NOT change: API печати; логика этикетки 58×40.
+- Verification: `npm run build`; e2e `ff-reception-sorting.spec.ts`, `ff-product-barcode-print.spec.ts` — green.
+
 ## TASK-57 — 2026-06-16 — Селлер: изоляция каталога по магазину + деплой
 
 - What changed: обычные селлеры всегда видят только свой `seller_id` (JWT-делегирование игнорируется); менеджеры — allowlist (`vitalik`/`vitaliy`/`виталий`, `denmark`/`denmarks`, `WMS_SHOP_MANAGER_EMAILS`, флаг БД); фронт перезагружает каталог при смене активного магазина; WB-импорт ищет баркод только в рамках селлера; pytest `test_seller_wb_catalog_isolation.py`, `test_seller_shop_allowlist.py`.

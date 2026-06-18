@@ -69,6 +69,36 @@ export function productDisplayMetaFromCatalog(
   }
 }
 
+export function catalogRowToDisplayMeta(row: {
+  name: string
+  sku_code: string
+  seller_name?: string | null
+  wb_primary_image_url?: string | null
+  wb_primary_barcode?: string | null
+  wb_barcodes?: string[]
+  wb_vendor_code?: string | null
+  wb_nm_id?: number | null
+  wb_size?: string | null
+  wb_color?: string | null
+  wb_brand?: string | null
+  wb_composition?: string | null
+}): ProductLineDisplayMeta {
+  return {
+    sku_code: row.sku_code,
+    product_name: row.name,
+    seller_name: row.seller_name ?? null,
+    wb_primary_image_url: row.wb_primary_image_url ?? null,
+    wb_primary_barcode: row.wb_primary_barcode ?? null,
+    wb_barcodes: row.wb_barcodes ?? [],
+    wb_vendor_code: row.wb_vendor_code ?? null,
+    wb_nm_id: row.wb_nm_id ?? null,
+    wb_size: row.wb_size ?? null,
+    wb_color: row.wb_color ?? null,
+    wb_brand: row.wb_brand ?? null,
+    wb_composition: row.wb_composition ?? null,
+  }
+}
+
 export function resolveProductPrimaryBarcode(meta: {
   wb_primary_barcode?: string | null
   wb_barcodes?: string[]

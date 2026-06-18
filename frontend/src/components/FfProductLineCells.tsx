@@ -1,9 +1,7 @@
 import type { ReactNode } from 'react'
-import { useState } from 'react'
-import PrintOutlined from '@mui/icons-material/PrintOutlined'
-import { IconButton, TableCell, Tooltip, Typography } from '@mui/material'
+import { TableCell, Typography } from '@mui/material'
 import { ProductPhotoThumb } from './ProductPhotoThumb'
-import { ProductBarcodePrintDialog } from './ProductBarcodePrintDialog'
+import { ProductBarcodePrintButton } from './ProductBarcodePrintButton'
 import {
   resolveProductPrimaryBarcode,
   type ProductLineDisplayMeta,
@@ -44,9 +42,7 @@ export function FfProductLineCells({
   printTestId = 'ff-product-barcode-print',
   nameExtra,
 }: CellsProps) {
-  const [printOpen, setPrintOpen] = useState(false)
   const barcode = resolveProductPrimaryBarcode(meta)
-  const printable = Boolean(barcode)
 
   return (
     <>
@@ -87,29 +83,7 @@ export function FfProductLineCells({
       </TableCell>
       {showPrint ? (
         <TableCell align="center" sx={{ pr: 1 }}>
-          <Tooltip
-            title={
-              printable
-                ? 'Печать этикетки 58×40'
-                : 'Нет баркода WB — откройте диалог и синхронизируйте карточки'
-            }
-          >
-            <span>
-              <IconButton
-                size="small"
-                aria-label="Печать ШК товара"
-                data-testid={printTestId}
-                onClick={() => setPrintOpen(true)}
-              >
-                <PrintOutlined fontSize="small" />
-              </IconButton>
-            </span>
-          </Tooltip>
-          <ProductBarcodePrintDialog
-            open={printOpen}
-            meta={meta}
-            onClose={() => setPrintOpen(false)}
-          />
+          <ProductBarcodePrintButton meta={meta} testId={printTestId} />
         </TableCell>
       ) : null}
     </>

@@ -29,7 +29,13 @@ import {
 } from '@mui/material'
 import { apiUrl } from '../../api'
 import { ProductPhotoThumb } from '../../components/ProductPhotoThumb'
+import { ProductBarcodeCell } from '../../components/ProductBarcodeCell'
+import { ProductBarcodePrintButton } from '../../components/ProductBarcodePrintButton'
 import { readApiErrorMessage } from '../../utils/readApiErrorMessage'
+import {
+  catalogRowToDisplayMeta,
+  resolveProductPrimaryBarcode,
+} from '../../types/wbProductCatalog'
 
 type SellerRow = { id: string; name: string }
 
@@ -45,6 +51,9 @@ type FfCatalogRow = {
   wb_barcodes: string[]
   wb_primary_barcode: string | null
   wb_size: string | null
+  wb_color: string | null
+  wb_brand: string | null
+  wb_composition: string | null
   packaging_instructions: string | null
   requires_honest_sign: boolean
   has_packaging_instructions: boolean
@@ -277,17 +286,28 @@ export function FfProductsCatalogScreen({ token, authHeaders, sellers }: Props) 
               <TableCell align="right" width={110}>
                 Доступно
               </TableCell>
+              <TableCell align="center" width={56} />
             </TableRow>
           </TableHead>
           <TableBody>
-            {sortedRows.map((p) => (
+            {sortedRows.map((p) => {
+              const displayMeta = catalogRowToDisplayMeta(p)
+              const barcode = resolveProductPrimaryBarcode(displayMeta)
+              return (
               <TableRow key={p.id} hover data-testid="ff-product-row">
                 <TableCell>
                   <ProductPhotoThumb src={p.wb_primary_image_url} />
                 </TableCell>
                 <TableCell>{p.sku_code}</TableCell>
                 <TableCell>{p.wb_size ?? '—'}</TableCell>
-                <TableCell>{p.wb_primary_barcode ?? (p.wb_barcodes[0] ?? '—')}</TableCell>
+                <TableCell>
+                  <ProductBarcodeCell
+                    barcode={barcode || null}
+                    wb_size={p.wb_size}
+                    wb_composition={p.wb_composition}
+                    testId={`ff-catalog-barcode-${p.id}`}
+                  />
+                </TableCell>
                 <TableCell>{p.wb_vendor_code ?? '—'}</TableCell>
                 <TableCell>{p.wb_nm_id ?? '—'}</TableCell>
                 <TableCell>{p.name}</TableCell>
@@ -321,11 +341,17 @@ export function FfProductsCatalogScreen({ token, authHeaders, sellers }: Props) 
                 </TableCell>
                 <TableCell align="right">{p.quantity_in_storage}</TableCell>
                 <TableCell align="right">{p.available}</TableCell>
+                <TableCell align="center">
+                  <ProductBarcodePrintButton
+                    meta={displayMeta}
+                    testId={`ff-catalog-print-${p.id}`}
+                  />
+                </TableCell>
               </TableRow>
-            ))}
+            )})}
             {sortedRows.length === 0 && !busy ? (
               <TableRow>
-                <TableCell colSpan={15}>
+                <TableCell colSpan={16}>
                   <Typography variant="body2" color="text.secondary">
                     Пока нет товаров.
                   </Typography>
