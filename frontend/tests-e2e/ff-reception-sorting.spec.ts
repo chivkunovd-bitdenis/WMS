@@ -96,6 +96,13 @@ test('ff verify posts to sorting zone; sorting queue and product columns', async
   await page.getByTestId('ff-inbound-queue-row').first().click();
   await expect(page.getByTestId('ff-sorting-panel')).toBeVisible();
 
+  // TC-NEW-PRINT-02 — после закрытия приёмки печать ШК доступна в сортировке.
+  const linesTable = page.getByTestId('ff-inbound-lines-table');
+  await expect(linesTable).toBeVisible();
+  await linesTable.getByRole('button', { name: 'Печать ШК товара' }).first().click();
+  await expect(page.getByTestId('ff-product-label-print-dialog')).toBeVisible();
+  await page.getByTestId('ff-product-label-cancel').click();
+
   const boxCard = page.getByTestId('ff-sorting-box-card').first();
   await boxCard.getByTestId('ff-sorting-box-location').click();
   await page.getByRole('option', { name: /STORE-1/ }).click();
@@ -124,4 +131,9 @@ test('ff verify posts to sorting zone; sorting queue and product columns', async
   const prodRow = page.getByTestId('ff-product-row').filter({ hasText: sku });
   await expect(prodRow.getByTestId('ff-product-qty-sorting')).toHaveText('0');
   await expect(prodRow).toContainText('4');
+
+  // TC-NEW-PRINT-03 — печать ШК из каталога товаров ФФ.
+  await prodRow.getByRole('button', { name: 'Печать ШК товара' }).click();
+  await expect(page.getByTestId('ff-product-label-print-dialog')).toBeVisible();
+  await page.getByTestId('ff-product-label-cancel').click();
 });

@@ -173,6 +173,9 @@ export function FfInboundRequestView({
 
   const boxIntakeMode = (detail?.boxes?.length ?? 0) > 0
   const sortingView = workspace === 'sorting'
+  const receptionClosed =
+    detail?.status === 'verified' || detail?.status === 'posted'
+  const showInboundLinesTable = !sortingView || receptionClosed
   const defaultPutawayBoxId = useMemo(() => {
     const closed = (detail?.boxes ?? []).filter((b) => b.intake_closed_at != null)
     if (closed.length === 1) {
@@ -1438,8 +1441,13 @@ export function FfInboundRequestView({
             </>
           ) : null}
 
-          {!sortingView ? (
+          {showInboundLinesTable ? (
           <TableContainer sx={{ width: '100%', overflowX: 'hidden' }}>
+            {sortingView && receptionClosed ? (
+              <Typography variant="subtitle2" sx={{ fontWeight: 700, mb: 1 }}>
+                Состав приёмки
+              </Typography>
+            ) : null}
             <Table
               size="small"
               data-testid="ff-inbound-lines-table"
