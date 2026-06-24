@@ -1,10 +1,29 @@
 # TASKLOG
 
+## TASK-61 — 2026-06-24 — Фикс сброса даты отгрузки в WmsDateField
+
+- What changed: `WmsDateField` не вызывает `onChange(null)` на пустом blur после выбора в календаре; регрессия в `seller-mp-unload.spec.ts` (TC-NEW-DATE-01).
+- What did NOT change: API PATCH `planned_shipment_date`; логика сохранения в диалогах селлера и ФФ.
+- Verification: `npm run build`; e2e `seller-mp-unload.spec.ts`, `ff-dashboard.spec.ts`.
+
+## TASK-60 — 2026-06-23 — FF навигация: «Каталог»→«Ячейки», «Товары»→«Каталог»
+
+- What changed: подписи в сайдбаре ФФ и заголовки экранов — раздел складов/ячеек «Ячейки», раздел товаров селлеров «Каталог»; подсказки в приёмке/сортировке и текст ошибки ТЗ упаковки.
+- What did NOT change: маршруты (`/app/catalog`, `/app/ff/products`), `data-testid`, кабинет селлера («Товары»).
+- Verification: `npm run build`; e2e `admin-shell-layout.spec.ts`, `ff-products.spec.ts`.
+
+## TASK-59 — 2026-06-23 — FF каталог: все товары селлеров, не только с движениями
+
+- What changed: `GET /products/ff-catalog` возвращает все товары тенанта (как `linked-wb-catalog`), а не только с `InventoryMovement`; остатки в UI по-прежнему из `inventory-balances/summary` (0 для непринятых).
+- What did NOT change: приватный WB-каталог селлера; эндпоинт `linked-wb-catalog` (оставлен для приёмки/хуков).
+- Verification: `ruff check . && mypy . && pytest` — 142 passed; `npm run build`; e2e `ff-products.spec.ts` — 2 passed.
+
 ## TASK-58 — 2026-06-18 — Печать ШК в каталоге товаров ФФ и после закрытия приёмки
 
 - What changed: в разделе «Товары» ФФ — кнопка печати этикетки 58×40 (как на приёмке/упаковке); после «Завершить пересчёт» в разделе «Сортировка» таблица состава приёмки с печатью ШК остаётся видимой; общий компонент `ProductBarcodePrintButton`.
 - What did NOT change: API печати; логика этикетки 58×40.
 - Verification: `npm run build`; e2e `ff-reception-sorting.spec.ts`, `ff-product-barcode-print.spec.ts` — green.
+- Deploy: PR #42 → `main` `a8a840a`; prod `194.87.96.144:8088` — `prod-update.sh`, все контейнеры Up, bundle `ff-ZMw0qrUp.js`.
 
 ## TASK-57 — 2026-06-16 — Селлер: изоляция каталога по магазину + деплой
 
