@@ -1,3 +1,4 @@
+import { useEffect, useState } from 'react'
 import dayjs, { type Dayjs } from 'dayjs'
 import { Box } from '@mui/material'
 import { DatePicker } from '@mui/x-date-pickers/DatePicker'
@@ -23,6 +24,13 @@ function parseIso(value: string | null): Dayjs | null {
   return d.isValid() ? d : null
 }
 
+function toIso(next: Dayjs | null): string | null {
+  if (next == null || !next.isValid()) {
+    return null
+  }
+  return next.format('YYYY-MM-DD')
+}
+
 export function WmsDateField({
   label,
   value,
@@ -33,18 +41,35 @@ export function WmsDateField({
   testId,
   slotProps,
 }: Props) {
+  const [draft, setDraft] = useState<Dayjs | null>(() => parseIso(value))
+
+  useEffect(() => {
+    setDraft(parseIso(value))
+  }, [value])
+
+  const commitDraft = (next: Dayjs | null) => {
+    const iso = toIso(next)
+    if (iso == null) {
+      return
+    }
+    if (iso !== value) {
+      onChange(iso)
+    }
+  }
+
   const picker = (
     <DatePicker
       label={label}
-      value={parseIso(value)}
+      value={draft}
       disabled={disabled}
       minDate={minDate ? parseIso(minDate) ?? undefined : undefined}
       onChange={(next) => {
-        if (next == null || !next.isValid()) {
-          onChange(null)
-          return
-        }
-        onChange(next.format('YYYY-MM-DD'))
+        // Локальный черновик при наборе секций; не шлём null в родителя (MUI даёт null при закрытии).
+        setDraft(next)
+      }}
+      onAccept={(next) => {
+        setDraft(next)
+        commitDraft(next)
       }}
       slotProps={{
         textField: {
@@ -55,16 +80,13 @@ export function WmsDateField({
           onBlur: (event) => {
             const target = event.target as HTMLInputElement
             const raw = target.value?.trim() ?? ''
-            // Пустой blur после выбора в календаре (MUI X field sections) не должен сбрасывать дату.
             if (!raw) {
               return
             }
             const parsed = dayjs(raw, ['DD.MM.YYYY', 'YYYY-MM-DD', 'D.M.YYYY'], true)
             if (parsed.isValid()) {
-              const iso = parsed.format('YYYY-MM-DD')
-              if (iso !== value) {
-                onChange(iso)
-              }
+              setDraft(parsed)
+              commitDraft(parsed)
             }
           },
         },

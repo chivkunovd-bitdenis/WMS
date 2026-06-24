@@ -634,10 +634,10 @@ export function FfSuppliesShipmentsPage({
   }
 
   const patchMpPlannedDate = async (iso: string | null) => {
-    if (!token || !authHeaders || docModal !== 'marketplace_unload' || !docModalId) {
+    if (!token || !authHeaders || docModal !== 'marketplace_unload' || !docModalId || !iso) {
       return
     }
-    setConfirmDate(iso ?? '')
+    setConfirmDate(iso)
     setModalBusy(true)
     setModalError(null)
     try {

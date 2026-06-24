@@ -171,6 +171,16 @@ test('seller creates MP unload draft, plans with stock table', async ({ page }) 
     .first()
     .waitFor({ state: 'hidden', timeout: 5000 })
     .catch(() => undefined);
+  const nullDatePatches: string[] = [];
+  page.on('request', (req) => {
+    if (req.method() !== 'PATCH' || !req.url().includes('/operations/marketplace-unload-requests/')) {
+      return;
+    }
+    const body = req.postData() ?? '';
+    if (body.includes('"planned_shipment_date":null')) {
+      nullDatePatches.push(body);
+    }
+  });
   await Promise.all([
     page.waitForResponse(
       (r) =>
@@ -187,6 +197,8 @@ test('seller creates MP unload draft, plans with stock table', async ({ page }) 
   await expect(dateRoot.getByRole('spinbutton', { name: 'Year' })).toHaveText('2026', {
     timeout: 5000,
   });
+  await page.waitForTimeout(500);
+  expect(nullDatePatches).toHaveLength(0);
   await page.getByTestId('seller-mp-add-products').click();
   await expect(page.getByTestId('seller-mp-picker')).toBeVisible();
   await page.getByTestId('seller-mp-picker-search').fill(sku);
