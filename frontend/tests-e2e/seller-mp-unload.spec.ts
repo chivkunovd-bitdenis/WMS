@@ -181,6 +181,12 @@ test('seller creates MP unload draft, plans with stock table', async ({ page }) 
     ),
     setWmsDateField(page, 'seller-mp-planned-date', '2026-06-15'),
   ]);
+  // TC-NEW-DATE-01 — дата не сбрасывается после blur (календарь → клик вне поля).
+  const dateRoot = page.getByTestId('seller-mp-planned-date');
+  await page.getByRole('dialog').getByRole('heading').first().click();
+  await expect(dateRoot.getByRole('spinbutton', { name: 'Year' })).toHaveText('2026', {
+    timeout: 5000,
+  });
   await page.getByTestId('seller-mp-add-products').click();
   await expect(page.getByTestId('seller-mp-picker')).toBeVisible();
   await page.getByTestId('seller-mp-picker-search').fill(sku);

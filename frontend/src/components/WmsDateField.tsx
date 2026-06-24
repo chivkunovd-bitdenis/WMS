@@ -55,13 +55,16 @@ export function WmsDateField({
           onBlur: (event) => {
             const target = event.target as HTMLInputElement
             const raw = target.value?.trim() ?? ''
+            // Пустой blur после выбора в календаре (MUI X field sections) не должен сбрасывать дату.
             if (!raw) {
-              onChange(null)
               return
             }
             const parsed = dayjs(raw, ['DD.MM.YYYY', 'YYYY-MM-DD', 'D.M.YYYY'], true)
             if (parsed.isValid()) {
-              onChange(parsed.format('YYYY-MM-DD'))
+              const iso = parsed.format('YYYY-MM-DD')
+              if (iso !== value) {
+                onChange(iso)
+              }
             }
           },
         },
