@@ -397,7 +397,7 @@ export function SellerMarketplaceUnloadDialog({
   }
 
   const patchPlannedDate = async (iso: string | null) => {
-    if (!token || !requestId || !isDraft) {
+    if (!token || !requestId || !isDraft || !iso) {
       return
     }
     setPlannedDate(iso)
