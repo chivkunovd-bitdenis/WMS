@@ -5,7 +5,7 @@
 - What changed: таблица `seller_marking_credentials` (шифрованные токены ЧЗ/СУЗ/МП, МЧД, signing_method, edo_route, auto_introduce, auto_emit_limit); API `GET/PATCH /operations/marking-codes/self/credentials` и `/sellers/{id}/credentials`; блок настроек в `SellerSettingsScreen`; pytest + e2e `seller-marking-credentials.spec.ts`.
 - What did NOT change: signing-service (T4.2), авто-ввод в оборот (T4.3).
 - Verification: `pytest tests/test_marking_credentials_api.py` 4 passed; `npm run build`; e2e `seller-marking-credentials.spec.ts` green.
-- Commit: (pending).
+- Commit: `6840b15`.
 
 ## TASK-77 — 2026-06-26 — ЧЗ T3.3–T3.5: прогноз, low-stock, дашборд селлера, триггеры ФФ
 
