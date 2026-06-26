@@ -34,7 +34,7 @@ import {
 } from './screens/ff/FfSuppliesShipmentsPage'
 import { FfHonestSignPage } from './screens/ff/FfHonestSignPage'
 import { HonestSignImportPage } from './screens/shared/HonestSignImportPage'
-import { HonestSignLedgerPage } from './screens/shared/HonestSignLedgerPage'
+import { FfHonestSignLedgerPage } from './screens/ff/FfHonestSignLedgerPage'
 import { HonestSignPoolPage } from './screens/shared/HonestSignPoolPage'
 import { FfPlaceholderPage } from './screens/ff/FfPlaceholderPage'
 import { FfInboundRequestView, type InboundRequestWorkspace } from './screens/ff/FfInboundRequestView'
@@ -2525,7 +2525,7 @@ export default function App() {
             path="ff/honest-sign/ledger"
             element={
               token ? (
-                <HonestSignLedgerPage testIdPrefix="ff-honest-sign-ledger" />
+                <FfHonestSignLedgerPage token={token} />
               ) : (
                 <FfPlaceholderPage
                   title="Лента расхода"
