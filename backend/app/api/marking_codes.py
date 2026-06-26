@@ -53,6 +53,19 @@ class MarkingImportOut(BaseModel):
     pools: list[PoolImportResultOut]
 
 
+class ImportPreviewGroupOut(BaseModel):
+    gtin: str
+    codes_count: int
+    suggested_title: str
+
+
+class MarkingImportPreviewOut(BaseModel):
+    groups: list[ImportPreviewGroupOut]
+    total_codes: int
+    invalid_count: int
+    duplicates_in_file: int
+
+
 class MarkingInventoryRowOut(BaseModel):
     product_id: str
     sku_code: str
@@ -246,6 +259,63 @@ def _pool_list_item_out(row: mc_svc.PoolListRow) -> PoolListItemOut:
         defective=row.defective,
         forecast_days=row.forecast_days,
         low_stock_threshold=row.low_stock_threshold,
+    )
+
+
+@router.post("/import/preview", response_model=MarkingImportPreviewOut)
+async def preview_marking_import(
+    user: Annotated[User, Depends(get_current_user)],
+    session: Annotated[AsyncSession, Depends(get_db)],
+    effective_seller_id: Annotated[uuid.UUID | None, Depends(get_effective_seller_id)],
+    files: Annotated[list[UploadFile], File(...)],
+    seller_id: Annotated[uuid.UUID | None, Form()] = None,
+) -> MarkingImportPreviewOut:
+    if user.role == FULFILLMENT_SELLER:
+        if effective_seller_id is None:
+            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="seller_not_linked")
+        target_seller_id = effective_seller_id
+    elif user.role == FULFILLMENT_ADMIN:
+        if seller_id is None:
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+                detail="seller_id_required",
+            )
+        target_seller_id = seller_id
+    else:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="forbidden")
+
+    file_payloads: list[tuple[str, bytes]] = []
+    for upload in files:
+        filename = (upload.filename or "upload").strip() or "upload"
+        content = await upload.read(_MAX_UPLOAD_BYTES + 1)
+        if len(content) > _MAX_UPLOAD_BYTES:
+            raise HTTPException(
+                status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
+                detail="file_too_large",
+            )
+        file_payloads.append((filename, content))
+
+    try:
+        result = await mc_svc.preview_marking_import(
+            session,
+            user.tenant_id,
+            target_seller_id,
+            files=file_payloads,
+        )
+    except mc_svc.MarkingCodeServiceError as exc:
+        raise _http_from_mc_error(exc) from exc
+    return MarkingImportPreviewOut(
+        groups=[
+            ImportPreviewGroupOut(
+                gtin=g.gtin,
+                codes_count=g.codes_count,
+                suggested_title=g.suggested_title,
+            )
+            for g in result.groups
+        ],
+        total_codes=result.total_codes,
+        invalid_count=result.invalid_count,
+        duplicates_in_file=result.duplicates_in_file,
     )
 
 

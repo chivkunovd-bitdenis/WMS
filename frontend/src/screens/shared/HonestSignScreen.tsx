@@ -9,6 +9,7 @@ import {
   MenuItem,
   Paper,
   Skeleton,
+  Snackbar,
   Stack,
   Table,
   TableBody,
@@ -28,6 +29,7 @@ import { apiUrl } from '../../api'
 import { PageHeader } from '../../ui/PageHeader'
 import { readApiErrorMessage } from '../../utils/readApiErrorMessage'
 import { MarkingPoolProductsDialog } from './MarkingPoolProductsDialog'
+import { MarkingImportDialog } from './MarkingImportDialog'
 
 export type MarkingPoolRow = {
   id: string
@@ -124,6 +126,15 @@ export function HonestSignScreen({
   const [menuAnchor, setMenuAnchor] = useState<HTMLElement | null>(null)
   const [menuPool, setMenuPool] = useState<MarkingPoolRow | null>(null)
   const [linkPool, setLinkPool] = useState<MarkingPoolRow | null>(null)
+  const [importOpen, setImportOpen] = useState(false)
+  const [toastMessage, setToastMessage] = useState<string | null>(null)
+
+  const openImport = () => {
+    if (sellerIdRequiredForImport && !effectiveSellerId) {
+      return
+    }
+    setImportOpen(true)
+  }
 
   const effectiveSellerId = sellerId ?? selectedSellerId
 
@@ -268,7 +279,7 @@ export function HonestSignScreen({
           variant="contained"
           startIcon={<UploadFileOutlined />}
           disabled={sellerIdRequiredForImport && !effectiveSellerId}
-          onClick={() => navigate(`${routeBase}/honest-sign/import`)}
+          onClick={openImport}
           data-testid={`${testIdPrefix}-open-import`}
         >
           Загрузить коды
@@ -343,7 +354,7 @@ export function HonestSignScreen({
                         variant="contained"
                         size="small"
                         startIcon={<UploadFileOutlined />}
-                        onClick={() => navigate(`${routeBase}/honest-sign/import`)}
+                        onClick={openImport}
                         data-testid={`${testIdPrefix}-empty-upload`}
                       >
                         Загрузить коды
@@ -485,6 +496,28 @@ export function HonestSignScreen({
           onSaved={onLinkedProductsSaved}
         />
       ) : null}
+
+      {importOpen && effectiveSellerId ? (
+        <MarkingImportDialog
+          open
+          token={token}
+          sellerId={effectiveSellerId}
+          testIdPrefix={testIdPrefix}
+          onClose={() => setImportOpen(false)}
+          onImported={(message) => {
+            setToastMessage(message)
+            void loadPools()
+          }}
+        />
+      ) : null}
+
+      <Snackbar
+        open={toastMessage != null}
+        autoHideDuration={5000}
+        onClose={() => setToastMessage(null)}
+        message={toastMessage ?? ''}
+        data-testid={`${testIdPrefix}-import-toast`}
+      />
     </Stack>
   )
 }

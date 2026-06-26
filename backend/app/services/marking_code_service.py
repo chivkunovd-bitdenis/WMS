@@ -119,6 +119,21 @@ class PoolImportResultRow:
 
 
 @dataclass(frozen=True)
+class ImportPreviewGroup:
+    gtin: str
+    codes_count: int
+    suggested_title: str
+
+
+@dataclass(frozen=True)
+class MarkingImportPreviewResult:
+    groups: list[ImportPreviewGroup]
+    total_codes: int
+    invalid_count: int
+    duplicates_in_file: int
+
+
+@dataclass(frozen=True)
 class MarkingInventoryResult:
     rows: list[ProductMarkingInventoryRow]
     unlinked_available_count: int
@@ -615,6 +630,87 @@ async def relink_unlinked_marking_codes(
     return linked
 
 
+def _group_cis_codes_from_rows(
+    parsed_rows: list[dict[str, str]],
+) -> tuple[dict[str, list[str]], int, int]:
+    seen_in_upload: set[str] = set()
+    by_gtin: dict[str, list[str]] = {}
+    invalid_count = 0
+    duplicate_count = 0
+    for row in parsed_rows:
+        cis = normalize_cis(row.get("cis", ""))
+        if cis is None:
+            invalid_count += 1
+            continue
+        if cis in seen_in_upload:
+            duplicate_count += 1
+            continue
+        seen_in_upload.add(cis)
+        gtin = (row.get("gtin") or "").strip() or extract_gtin_from_cis(cis)
+        if not gtin:
+            invalid_count += 1
+            continue
+        by_gtin.setdefault(gtin, []).append(cis)
+    return by_gtin, invalid_count, duplicate_count
+
+
+async def preview_marking_import(
+    session: AsyncSession,
+    tenant_id: uuid.UUID,
+    seller_id: uuid.UUID,
+    *,
+    files: list[tuple[str, bytes]],
+) -> MarkingImportPreviewResult:
+    seller = await session.get(Seller, seller_id)
+    if seller is None or seller.tenant_id != tenant_id:
+        raise MarkingCodeServiceError("seller_not_found")
+    if not files:
+        raise MarkingCodeServiceError("empty_file")
+
+    parsed_rows: list[dict[str, str]] = []
+    for filename, content in files:
+        try:
+            rows = parse_import_file(filename, content)
+        except MarkingCodeServiceError:
+            raise
+        except (UnicodeError, OSError, ValueError) as exc:
+            raise MarkingCodeServiceError("parse_failed") from exc
+        parsed_rows.extend(rows)
+
+    if not parsed_rows:
+        raise MarkingCodeServiceError("empty_file")
+
+    by_gtin, invalid_count, duplicates_in_file = _group_cis_codes_from_rows(parsed_rows)
+    if not by_gtin:
+        raise MarkingCodeServiceError("no_valid_codes")
+
+    groups: list[ImportPreviewGroup] = []
+    total_codes = 0
+    for gtin, cis_list in sorted(by_gtin.items()):
+        stmt = select(MarkingPool).where(
+            MarkingPool.tenant_id == tenant_id,
+            MarkingPool.seller_id == seller_id,
+            MarkingPool.gtin == gtin,
+        )
+        pool = (await session.execute(stmt)).scalar_one_or_none()
+        suggested = pool.title if pool is not None else f"GTIN …{gtin[-4:]}"
+        groups.append(
+            ImportPreviewGroup(
+                gtin=gtin,
+                codes_count=len(cis_list),
+                suggested_title=suggested,
+            )
+        )
+        total_codes += len(cis_list)
+
+    return MarkingImportPreviewResult(
+        groups=groups,
+        total_codes=total_codes,
+        invalid_count=invalid_count,
+        duplicates_in_file=duplicates_in_file,
+    )
+
+
 def _resolve_pool_spec(
     gtin: str,
     pool_specs: list[PoolImportSpec],
@@ -720,33 +816,15 @@ async def import_marking_codes(
     )
     assert document_number is not None
 
-    seen_in_upload: set[str] = set()
-    by_gtin: dict[str, list[str]] = {}
-    invalid_count = 0
-    duplicate_count = 0
-
-    for row in parsed_rows:
-        cis = normalize_cis(row.get("cis", ""))
-        if cis is None:
-            invalid_count += 1
-            continue
-        if cis in seen_in_upload:
-            duplicate_count += 1
-            continue
-        seen_in_upload.add(cis)
-        gtin = (row.get("gtin") or "").strip() or extract_gtin_from_cis(cis)
-        if not gtin:
-            invalid_count += 1
-            continue
-        by_gtin.setdefault(gtin, []).append(cis)
+    by_gtin, invalid_count, duplicate_count = _group_cis_codes_from_rows(parsed_rows)
 
     pool_results: list[PoolImportResultRow] = []
     total_accepted = 0
 
     for gtin, cis_list in sorted(by_gtin.items()):
-        spec = _resolve_pool_spec(gtin, pool_specs)
-        title = spec.title if spec is not None else f"GTIN …{gtin[-4:]}"
-        product_ids = spec.product_ids if spec is not None else []
+        pool_spec = _resolve_pool_spec(gtin, pool_specs)
+        title = pool_spec.title if pool_spec is not None else f"GTIN …{gtin[-4:]}"
+        product_ids = pool_spec.product_ids if pool_spec is not None else []
         pool = await get_or_create_marking_pool(
             session,
             tenant_id,

@@ -209,3 +209,27 @@ async def test_import_assigns_document_number_on_batch(async_client: AsyncClient
         batch = await session.get(MarkingCodeImport, import_id)
         assert batch is not None
         assert batch.document_number == imp.json()["document_number"]
+
+
+@pytest.mark.asyncio
+async def test_import_preview_groups_by_gtin(async_client: AsyncClient) -> None:
+    h = await _register_admin(async_client)
+    seller = await async_client.post(
+        "/sellers",
+        headers=h,
+        json={"name": "Preview Seller", "email": f"prev-{uuid.uuid4().hex[:8]}@example.com"},
+    )
+    seller_id = seller.json()["id"]
+    gtin = "00000000009999"
+    cis = f"01{gtin}21{'P' * 20}0001"
+    preview = await async_client.post(
+        "/operations/marking-codes/import/preview",
+        headers=h,
+        data={"seller_id": seller_id},
+        files=[("files", ("codes.csv", f"cis\n{cis}".encode(), "text/csv"))],
+    )
+    assert preview.status_code == 200, preview.text
+    body = preview.json()
+    assert body["total_codes"] == 1
+    assert len(body["groups"]) == 1
+    assert body["groups"][0]["gtin"] == gtin
