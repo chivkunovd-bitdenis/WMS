@@ -32,7 +32,13 @@ import { apiUrl } from '../../api'
 import { PageHeader } from '../../ui/PageHeader'
 import { productDisplayMetaFromCatalog } from '../../types/wbProductCatalog'
 import { readApiErrorMessage } from '../../utils/readApiErrorMessage'
-import { printMarkingCodeLabels } from '../../utils/printMarkingCodeLabel'
+import {
+  printMarkingCodeLabels,
+  printMarkingCodeTape,
+  type MarkingTapeUnitInput,
+} from '../../utils/printMarkingCodeLabel'
+import { displayMetaToProductLabel } from '../../utils/productBarcodePrint'
+import type { PrintLayout } from '../../utils/printTemplate'
 import { useMarkingCodePrint } from '../../utils/useMarkingCodePrint'
 
 export type PackagingTaskLine = {
@@ -109,6 +115,9 @@ export function FfPackagingTaskPanel({
     Authorization: `Bearer ${token}`,
     'Content-Type': 'application/json',
   }
+
+  const productLabelForLine = (ln: PackagingTaskLine) =>
+    displayMetaToProductLabel(productDisplayMetaFromCatalog(ln.product_id, ln, catalogById))
 
   const confirmPacked = async (lineId: string) => {
     setBusy(true)
@@ -257,13 +266,41 @@ export function FfPackagingTaskPanel({
         codes: string[]
         duplicate_copies: number
         quantity: number
+        layout: PrintLayout
+        lines: {
+          codes: string[]
+          sku_code: string
+          product_name: string
+          product_id: string
+        }[]
       }
       if (data.quantity < 1) {
         setError('Нет доступных кодов для печати по всем строкам.')
-        await loadPrintAllPreview()
+        await loadPrintAllPreview(printAllAllowPartial)
         return
       }
-      await printMarkingCodeLabels(data.codes, data.duplicate_copies)
+      const units: MarkingTapeUnitInput[] = []
+      for (const line of data.lines) {
+        const taskLine = task.lines.find((ln) => ln.product_id === line.product_id)
+        const productLabel = taskLine
+          ? productLabelForLine(taskLine)
+          : displayMetaToProductLabel({
+              sku_code: line.sku_code,
+              product_name: line.product_name,
+              seller_name: null,
+              wb_primary_image_url: null,
+              wb_primary_barcode: null,
+              wb_barcodes: [],
+              wb_vendor_code: null,
+              wb_nm_id: null,
+              wb_size: null,
+              wb_color: null,
+            })
+        for (const cis of line.codes) {
+          units.push({ cis, productLabel })
+        }
+      }
+      await printMarkingCodeTape(units, data.layout)
       setPrintAllOpen(false)
       setPrintAllPreview(null)
       const taskRes = await fetch(apiUrl(`/operations/packaging-tasks/${task.id}`), {
@@ -306,6 +343,8 @@ export function FfPackagingTaskPanel({
         duplicate_copies: number
         quantity: number
         shortage: number | null
+        packaging_task_line_id: string
+        layout: PrintLayout
       }
       if (data.quantity < 1) {
         setScanFlash('error')
@@ -316,7 +355,12 @@ export function FfPackagingTaskPanel({
         )
         return
       }
-      await printMarkingCodeLabels(data.codes, data.duplicate_copies)
+      const line = task.lines.find((ln) => ln.id === data.packaging_task_line_id)
+      await printMarkingCodeLabels(data.codes, {
+        layout: data.layout,
+        duplicateCopies: data.duplicate_copies,
+        productLabel: line ? productLabelForLine(line) : undefined,
+      })
       setScanBarcode('')
       setScanFlash('ok')
       const taskRes = await fetch(apiUrl(`/operations/packaging-tasks/${task.id}`), {
@@ -486,6 +530,7 @@ export function FfPackagingTaskPanel({
                             qtyMarkingPrinted: ln.qty_marking_printed,
                             skuCode: ln.sku_code,
                             productName: ln.product_name,
+                            productLabel: productLabelForLine(ln),
                             onPrinted: () => {
                               void (async () => {
                                 const res = await fetch(
@@ -521,6 +566,7 @@ export function FfPackagingTaskPanel({
                               qtyMarkingPrinted: ln.qty_marking_printed,
                               skuCode: ln.sku_code,
                               productName: ln.product_name,
+                              productLabel: productLabelForLine(ln),
                               onPrinted: () => {
                                 void (async () => {
                                   const res = await fetch(

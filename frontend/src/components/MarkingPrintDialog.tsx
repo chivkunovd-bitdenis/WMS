@@ -28,11 +28,14 @@ import {
   MARKING_PRINT_PRESETS,
   buildTapePreviewUnits,
   cloneLayout,
+  expandLayoutTape,
   type PrintPresetId,
 } from '../utils/markingPrintPresets'
 import { createPrintTemplate, resolvePrintTemplate, type PrintLayout } from '../utils/printTemplate'
+import { displayMetaToProductLabel } from '../utils/productBarcodePrint'
 import { readApiErrorMessage } from '../utils/readApiErrorMessage'
 import { printMarkingCodeLabels } from '../utils/printMarkingCodeLabel'
+import type { ProductThermalLabelData } from '../utils/printProductThermalLabel'
 
 export type MarkingPrintContext = {
   token: string
@@ -44,6 +47,7 @@ export type MarkingPrintContext = {
   qtyMarkingPrinted: number
   skuCode: string
   productName: string
+  productLabel?: ProductThermalLabelData | null
   onPrinted: () => void
 }
 
@@ -107,6 +111,10 @@ export function MarkingPrintDialog({ open, reprint, ctx, busy, onBusyChange, onC
         : 0
 
   const previewUnits = useMemo(() => buildTapePreviewUnits(layout, 3), [layout])
+  const previewTapeCount = useMemo(
+    () => expandLayoutTape(['#1', '#2', '#3'], layout).length,
+    [layout],
+  )
 
   const applyPreset = (id: PrintPresetId) => {
     setPresetId(id)
@@ -183,6 +191,7 @@ export function MarkingPrintDialog({ open, reprint, ctx, busy, onBusyChange, onC
         duplicate_copies: number
         quantity: number
         shortage: number | null
+        layout: PrintLayout
       }
       if (data.quantity < 1) {
         setError(
@@ -192,7 +201,24 @@ export function MarkingPrintDialog({ open, reprint, ctx, busy, onBusyChange, onC
         )
         return
       }
-      await printMarkingCodeLabels(data.codes, data.duplicate_copies)
+      await printMarkingCodeLabels(data.codes, {
+        layout: data.layout ?? layout,
+        duplicateCopies: data.duplicate_copies,
+        productLabel:
+          ctx.productLabel ??
+          displayMetaToProductLabel({
+            sku_code: ctx.skuCode,
+            product_name: ctx.productName,
+            seller_name: null,
+            wb_primary_image_url: null,
+            wb_primary_barcode: null,
+            wb_barcodes: [],
+            wb_vendor_code: null,
+            wb_nm_id: null,
+            wb_size: null,
+            wb_color: null,
+          }),
+      })
       ctx.onPrinted()
       onClose()
     } catch (e) {
@@ -377,8 +403,13 @@ export function MarkingPrintDialog({ open, reprint, ctx, busy, onBusyChange, onC
                 ) : null}
 
                 <Box data-testid="marking-print-preview">
-                  <Typography variant="caption" color="text.secondary" sx={{ mb: 0.5, display: 'block' }}>
-                    Предпросмотр ленты (один код на единицу)
+                  <Typography
+                    variant="caption"
+                    color="text.secondary"
+                    sx={{ mb: 0.5, display: 'block' }}
+                    data-testid="marking-print-preview-tape-count"
+                  >
+                    Предпросмотр ленты (один код на единицу) · {previewTapeCount} этикеток на 3 ед.
                   </Typography>
                   {previewUnits.map((unit) => (
                     <Stack

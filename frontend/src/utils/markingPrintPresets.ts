@@ -41,6 +41,28 @@ export const MARKING_PRINT_PRESETS: PrintPreset[] = [
   },
 ]
 
+export type LayoutTapeItem = {
+  block: PrintLayoutUnit['block']
+  cis: string
+  unitIndex: number
+}
+
+/** Разворачивает коды в ленту по layout: на каждую единицу — блоки units по порядку. */
+export function expandLayoutTape(codes: string[], layout: PrintLayout): LayoutTapeItem[] {
+  const units = layout.units.length > 0 ? layout.units : [{ block: 'cz' as const, copies: 1 }]
+  const out: LayoutTapeItem[] = []
+  for (let i = 0; i < codes.length; i += 1) {
+    const cis = codes[i]
+    for (const unit of units) {
+      const copies = Math.max(1, unit.copies)
+      for (let c = 0; c < copies; c += 1) {
+        out.push({ block: unit.block, cis, unitIndex: i })
+      }
+    }
+  }
+  return out
+}
+
 export function blockLabel(block: PrintLayoutUnit['block']): string {
   return block === 'cz' ? 'ЧЗ' : 'Этикетка'
 }
@@ -53,21 +75,21 @@ export type TapePreviewUnit = {
 
 /** Предпросмотр 2–3 единиц ленты: внутри единицы код одинаковый. */
 export function buildTapePreviewUnits(layout: PrintLayout, maxUnits = 3): TapePreviewUnit[] {
-  const units: TapePreviewUnit[] = []
-  for (let i = 0; i < maxUnits; i += 1) {
-    const blocks: string[] = []
-    for (const unit of layout.units) {
-      for (let c = 0; c < unit.copies; c += 1) {
-        blocks.push(blockLabel(unit.block))
-      }
-    }
-    units.push({
-      unitIndex: i + 1,
-      blocks,
-      codeHint: `#${i + 1}`,
-    })
+  const codeHints = Array.from({ length: maxUnits }, (_, i) => `#${i + 1}`)
+  const tape = expandLayoutTape(codeHints, layout)
+  const byUnit = new Map<number, string[]>()
+  for (const item of tape) {
+    const blocks = byUnit.get(item.unitIndex) ?? []
+    blocks.push(blockLabel(item.block))
+    byUnit.set(item.unitIndex, blocks)
   }
-  return units
+  return [...byUnit.entries()]
+    .sort(([a], [b]) => a - b)
+    .map(([unitIndex, blocks]) => ({
+      unitIndex: unitIndex + 1,
+      blocks,
+      codeHint: codeHints[unitIndex] ?? `#${unitIndex + 1}`,
+    }))
 }
 
 export function cloneLayout(layout: PrintLayout): PrintLayout {

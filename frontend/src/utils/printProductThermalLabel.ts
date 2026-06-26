@@ -20,7 +20,7 @@ export type ProductThermalLabelData = {
   barcode: string
 }
 
-const LABEL_CSS = `
+export const PRODUCT_THERMAL_LABEL_CSS = `
   @page { size: 58mm 40mm; margin: 0; }
   * { box-sizing: border-box; }
   html, body { margin: 0; padding: 0; }
@@ -105,7 +105,7 @@ const LABEL_CSS = `
   }
 `
 
-function buildLabelHtml(
+export function buildProductLabelSectionHtml(
   data: ProductThermalLabelData,
   barcodeDataUrl: string,
   printOptions?: ProductLabelPrintOptions,
@@ -147,14 +147,14 @@ export function buildProductThermalLabelDocument(
 ): string {
   const copies = Math.max(1, Math.min(999, Math.floor(quantity)))
   const labels = Array.from({ length: copies }, () =>
-    buildLabelHtml(data, barcodeDataUrl, printOptions),
+    buildProductLabelSectionHtml(data, barcodeDataUrl, printOptions),
   ).join('')
   return `<!doctype html>
 <html>
   <head>
     <meta charset="utf-8" />
     <title>Этикетка товара</title>
-    <style>${LABEL_CSS}</style>
+    <style>${PRODUCT_THERMAL_LABEL_CSS}</style>
   </head>
   <body>${labels}</body>
 </html>`

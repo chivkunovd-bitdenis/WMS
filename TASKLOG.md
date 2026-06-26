@@ -1,11 +1,18 @@
 # TASKLOG
 
+## TASK-72 — 2026-06-26 — ЧЗ T1.6: рендер ленты по layout
+
+- What changed: `expandLayoutTape` в `markingPrintPresets.ts`; `printMarkingCodeTape` / обновлённый `printMarkingCodeLabels` с блоками `cz` и `label` (58×40); экспорт `buildProductLabelSectionHtml`; вызовы из `MarkingPrintDialog`, `FfPackagingPage` (scan/print-all/строка); vitest `markingPrintPresets.test.ts`; e2e constructor — пресет «Этикетки + ЧЗ», счётчик этикеток в предпросмотре.
+- What did NOT change: Фаза 2 (shift_lead, перепечатки).
+- Verification: `npm run test:unit` 2 passed; `npm run build`; e2e constructor + print-all green.
+- Commit: not yet.
+
 ## TASK-71 — 2026-06-26 — ЧЗ T1.5: печать всех ЧЗ по задаче
 
 - What changed: `print_all_for_packaging_task` + `POST /operations/marking-codes/packaging-tasks/{id}/print-all` (dry_run, allow_partial); кнопка «Печать всех ЧЗ» и диалог сводки на панели упаковки; pytest `test_marking_print_all.py`; e2e `ff-marking-print-all.spec.ts` (TC-NEW-003).
 - What did NOT change: рендер ленты по layout label-блокам (T1.6).
 - Verification: pytest print_all 2 passed; `npm run build`; e2e print-all green.
-- Commit: not yet.
+- Commit: `7b33be6`.
 
 ## TASK-70 — 2026-06-26 — ЧЗ T1.4: скан-печать
 
