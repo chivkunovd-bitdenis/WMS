@@ -33,6 +33,9 @@ import {
   type FfMarketplaceUnloadSummary,
 } from './screens/ff/FfSuppliesShipmentsPage'
 import { FfHonestSignPage } from './screens/ff/FfHonestSignPage'
+import { HonestSignImportPage } from './screens/shared/HonestSignImportPage'
+import { HonestSignLedgerPage } from './screens/shared/HonestSignLedgerPage'
+import { HonestSignPoolPage } from './screens/shared/HonestSignPoolPage'
 import { FfPlaceholderPage } from './screens/ff/FfPlaceholderPage'
 import { FfInboundRequestView, type InboundRequestWorkspace } from './screens/ff/FfInboundRequestView'
 import { FfInboundQueuePage } from './screens/ff/FfInboundQueuePage'
@@ -2465,7 +2468,7 @@ export default function App() {
               token ? (
                 <FfProductsCatalogScreen token={token} authHeaders={authHeaders} sellers={sellers} />
               ) : (
-                <FfPlaceholderPage title="Товары" hint="Нет токена." testId="ff-products-placeholder" />
+                <FfPlaceholderPage title="Каталог" hint="Нет токена." testId="ff-products-placeholder" />
               )
             }
           />
@@ -2499,6 +2502,49 @@ export default function App() {
                   title="Честный знак"
                   hint="Нет токена."
                   testId="ff-honest-sign-placeholder"
+                />
+              )
+            }
+          />
+
+          <Route
+            path="ff/honest-sign/pool/:poolId"
+            element={
+              token ? (
+                <HonestSignPoolPage token={token} testIdPrefix="ff-honest-sign-pool" />
+              ) : (
+                <FfPlaceholderPage
+                  title="Пул ЧЗ"
+                  hint="Нет токена."
+                  testId="ff-honest-sign-pool-placeholder"
+                />
+              )
+            }
+          />
+          <Route
+            path="ff/honest-sign/ledger"
+            element={
+              token ? (
+                <HonestSignLedgerPage testIdPrefix="ff-honest-sign-ledger" />
+              ) : (
+                <FfPlaceholderPage
+                  title="Лента расхода"
+                  hint="Нет токена."
+                  testId="ff-honest-sign-ledger-placeholder"
+                />
+              )
+            }
+          />
+          <Route
+            path="ff/honest-sign/import"
+            element={
+              token ? (
+                <HonestSignImportPage testIdPrefix="ff-honest-sign-import" />
+              ) : (
+                <FfPlaceholderPage
+                  title="Загрузка кодов"
+                  hint="Нет токена."
+                  testId="ff-honest-sign-import-placeholder"
                 />
               )
             }
@@ -2545,7 +2591,7 @@ export default function App() {
           <Route
             path="catalog"
             element={
-              <Screen title="Каталог" subtitle="Склады и ячейки">
+              <Screen title="Ячейки" subtitle="Склады и ячейки">
                 <CatalogSection
                   isFulfillmentAdmin={isFulfillmentAdmin || canCellsOps}
                   catalogBusy={catalogBusy}

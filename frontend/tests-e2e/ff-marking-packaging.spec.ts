@@ -24,6 +24,7 @@ test('FF packaging: print honest sign codes for line quantity', async ({ page })
   ])
   const token = String(((await regRes.json()) as { access_token: string }).access_token)
   const auth = { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' }
+  const bearer = { Authorization: `Bearer ${token}` }
 
   const sellerRes = await page.request.post(`${e2eApi}/sellers`, {
     headers: auth,
@@ -55,14 +56,15 @@ test('FF packaging: print honest sign codes for line quantity', async ({ page })
     data: JSON.stringify({ requires_honest_sign: true, packaging_instructions: 'ЧЗ x2' }),
   })
 
-  const cis = `01${'0'.repeat(10)}123421${'A'.repeat(20)}0001`
+  const gtin = '000000001234'
+  const cis = `01${gtin}21${'A'.repeat(20)}0001`
   const csv = `cis,sku_code\n${cis},${sku}`
   const imp = await page.request.post(`${e2eApi}/operations/marking-codes/import`, {
-    headers: { Authorization: `Bearer ${token}` },
+    headers: bearer,
     multipart: {
       seller_id: sellerId,
-      product_id: productId,
-      file: {
+      pools_json: JSON.stringify([{ title: 'E2E CZ Pool', product_ids: [productId] }]),
+      files: {
         name: 'codes.csv',
         mimeType: 'text/csv',
         buffer: Buffer.from(csv),
@@ -70,6 +72,7 @@ test('FF packaging: print honest sign codes for line quantity', async ({ page })
     },
   })
   expect(imp.ok()).toBeTruthy()
+  const poolId = String(((await imp.json()) as { pools: { pool_id: string }[] }).pools[0].pool_id)
 
   const baseIn = `${e2eApi}/operations/inbound-intake-requests`
   const inbound = await page.request.post(baseIn, {
@@ -96,7 +99,8 @@ test('FF packaging: print honest sign codes for line quantity', async ({ page })
   await page.getByTestId('nav-ff-honest-sign').click()
   await expect(page.getByTestId('ff-honest-sign-page')).toBeVisible()
   await page.getByTestId(`ff-honest-sign-seller-${sellerId}`).click()
-  await expect(page.getByTestId(`ff-honest-sign-row-${productId}`)).toBeVisible()
+  await expect(page.getByTestId(`ff-honest-sign-pool-row-${poolId}`)).toBeVisible()
+  await expect(page.getByTestId(`ff-honest-sign-pool-chip-${poolId}-${productId}`)).toBeVisible()
 
   await page.getByTestId('nav-ff-packaging').click()
   await page.getByTestId('ff-packaging-create-open').click()

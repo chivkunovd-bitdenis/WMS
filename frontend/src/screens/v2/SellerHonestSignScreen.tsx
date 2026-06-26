@@ -5,5 +5,7 @@ type Props = {
 }
 
 export function SellerHonestSignScreen({ token }: Props) {
-  return <HonestSignScreen token={token} testIdPrefix="seller-honest-sign" />
+  return (
+    <HonestSignScreen token={token} testIdPrefix="seller-honest-sign" routeBase="/seller" />
+  )
 }

@@ -1,11 +1,14 @@
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useNavigate } from 'react-router-dom'
 import {
   Alert,
-  Box,
   Button,
-  Checkbox,
+  Chip,
   IconButton,
+  Menu,
+  MenuItem,
   Paper,
+  Skeleton,
   Stack,
   Table,
   TableBody,
@@ -13,37 +16,93 @@ import {
   TableContainer,
   TableHead,
   TableRow,
-  Tooltip,
+  TextField,
+  ToggleButton,
+  ToggleButtonGroup,
   Typography,
 } from '@mui/material'
 import UploadFileOutlined from '@mui/icons-material/UploadFileOutlined'
-import QrCode2Outlined from '@mui/icons-material/QrCode2Outlined'
+import TimelineOutlined from '@mui/icons-material/TimelineOutlined'
+import MoreVertOutlined from '@mui/icons-material/MoreVertOutlined'
 import { apiUrl } from '../../api'
 import { PageHeader } from '../../ui/PageHeader'
 import { readApiErrorMessage } from '../../utils/readApiErrorMessage'
-import { MarkingProductCodesDialog } from './MarkingProductCodesDialog'
-import { MarkingPoolProductsPanel } from './MarkingPoolProductsPanel'
+import { MarkingPoolProductsDialog } from './MarkingPoolProductsDialog'
 
-export type MarkingInventoryRow = {
-  product_id: string
-  sku_code: string
-  product_name: string
-  requires_honest_sign: boolean
-  available_count: number
-  printed_count: number
+export type MarkingPoolRow = {
+  id: string
+  title: string
+  gtin: string
+  products: { id: string; sku_code: string; name: string }[]
+  available: number
+  reserved: number
+  printed: number
+  defective: number
+  forecast_days: number | null
+  low_stock_threshold: number | null
 }
+
+type StockFilter = 'all' | 'low' | 'empty'
 
 type Props = {
   token: string
-  /** FF admin: filter by seller; seller portal: omit */
   sellerId?: string | null
   sellerIdRequiredForImport?: boolean
   sellers?: { id: string; name: string }[]
   selectedSellerId?: string | null
   onSelectedSellerIdChange?: (id: string | null) => void
   testIdPrefix?: string
-  /** T0.4: optional pool link panel (e2e / until T0.7 pool list) */
-  poolPreview?: { poolId: string; poolTitle: string; sellerId: string } | null
+  /** FF: /app/ff · seller: /seller */
+  routeBase?: string
+}
+
+function poolMatchesSearch(row: MarkingPoolRow, query: string): boolean {
+  const needle = query.trim().toLowerCase()
+  if (!needle) {
+    return true
+  }
+  if (row.title.toLowerCase().includes(needle) || row.gtin.toLowerCase().includes(needle)) {
+    return true
+  }
+  return row.products.some(
+    (p) =>
+      p.sku_code.toLowerCase().includes(needle) || p.name.toLowerCase().includes(needle),
+  )
+}
+
+function isLowStock(row: MarkingPoolRow): boolean {
+  if (row.low_stock_threshold != null) {
+    return row.available < row.low_stock_threshold
+  }
+  return row.available > 0 && row.available <= 10
+}
+
+function ProductChips({
+  products,
+  testIdPrefix,
+  poolId,
+}: {
+  products: MarkingPoolRow['products']
+  testIdPrefix: string
+  poolId: string
+}) {
+  const visible = products.slice(0, 3)
+  const rest = products.length - visible.length
+  return (
+    <Stack direction="row" spacing={0.5} sx={{ flexWrap: 'wrap' }}>
+      {visible.map((p) => (
+        <Chip
+          key={p.id}
+          size="small"
+          label={p.sku_code}
+          data-testid={`${testIdPrefix}-pool-chip-${poolId}-${p.id}`}
+        />
+      ))}
+      {rest > 0 ? (
+        <Chip size="small" variant="outlined" label={`ещё ${rest}`} />
+      ) : null}
+    </Stack>
+  )
 }
 
 export function HonestSignScreen({
@@ -54,24 +113,21 @@ export function HonestSignScreen({
   selectedSellerId = null,
   onSelectedSellerIdChange,
   testIdPrefix = 'honest-sign',
-  poolPreview = null,
+  routeBase = '/app/ff',
 }: Props) {
-  const [rows, setRows] = useState<MarkingInventoryRow[]>([])
-  const [selectedProductId, setSelectedProductId] = useState<string | null>(null)
-  const [codesDialogProduct, setCodesDialogProduct] = useState<MarkingInventoryRow | null>(null)
+  const navigate = useNavigate()
+  const [pools, setPools] = useState<MarkingPoolRow[]>([])
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
-  const [importMsg, setImportMsg] = useState<string | null>(null)
-  const fileRef = useRef<HTMLInputElement>(null)
+  const [search, setSearch] = useState('')
+  const [stockFilter, setStockFilter] = useState<StockFilter>('all')
+  const [menuAnchor, setMenuAnchor] = useState<HTMLElement | null>(null)
+  const [menuPool, setMenuPool] = useState<MarkingPoolRow | null>(null)
+  const [linkPool, setLinkPool] = useState<MarkingPoolRow | null>(null)
 
   const effectiveSellerId = sellerId ?? selectedSellerId
-  const selectedRow = rows.find((r) => r.product_id === selectedProductId) ?? null
 
-  const authHeaders = {
-    Authorization: `Bearer ${token}`,
-  }
-
-  const loadInventory = useCallback(async () => {
+  const loadPools = useCallback(async () => {
     setBusy(true)
     setError(null)
     try {
@@ -83,18 +139,14 @@ export function HonestSignScreen({
             : effectiveSellerId
               ? `?seller_id=${encodeURIComponent(effectiveSellerId)}`
               : ''
-      const res = await fetch(apiUrl(`/operations/marking-codes/inventory${q}`), {
-        headers: authHeaders,
+      const res = await fetch(apiUrl(`/operations/marking-codes/pools${q}`), {
+        headers: { Authorization: `Bearer ${token}` },
       })
       if (!res.ok) {
         setError(await readApiErrorMessage(res))
         return
       }
-      const data = (await res.json()) as { rows: MarkingInventoryRow[] }
-      setRows(data.rows)
-      setSelectedProductId((prev) =>
-        prev && data.rows.some((r) => r.product_id === prev) ? prev : null,
-      )
+      setPools((await res.json()) as MarkingPoolRow[])
     } finally {
       setBusy(false)
     }
@@ -102,83 +154,63 @@ export function HonestSignScreen({
 
   useEffect(() => {
     if (sellerIdRequiredForImport && !effectiveSellerId) {
-      setRows([])
-      setSelectedProductId(null)
+      setPools([])
       return
     }
-    void loadInventory()
-  }, [effectiveSellerId, loadInventory, sellerIdRequiredForImport])
+    void loadPools()
+  }, [effectiveSellerId, loadPools, sellerIdRequiredForImport])
 
-  useEffect(() => {
-    setSelectedProductId(null)
-  }, [effectiveSellerId])
+  const kpis = useMemo(() => {
+    const availableTotal = pools.reduce((s, p) => s + p.available, 0)
+    const defectiveTotal = pools.reduce((s, p) => s + p.defective, 0)
+    const lowCount = pools.filter(isLowStock).length
+    return { availableTotal, defectiveTotal, lowCount, spend7d: 0 }
+  }, [pools])
 
-  const onPickFile = () => fileRef.current?.click()
+  const filteredPools = useMemo(() => {
+    return pools.filter((row) => {
+      if (!poolMatchesSearch(row, search)) {
+        return false
+      }
+      if (stockFilter === 'empty') {
+        return row.available === 0
+      }
+      if (stockFilter === 'low') {
+        return isLowStock(row)
+      }
+      return true
+    })
+  }, [pools, search, stockFilter])
 
-  const onFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0]
-    e.target.value = ''
-    if (!file) {
-      return
-    }
-    const importSellerId = sellerId ?? effectiveSellerId
-    if (!importSellerId) {
-      setError('Выберите селлера для загрузки кодов.')
-      return
-    }
-    if (!selectedProductId) {
-      setError('Отметьте товар в таблице — коды будут загружены для него.')
-      return
-    }
-    setBusy(true)
-    setError(null)
-    setImportMsg(null)
-    try {
-      const form = new FormData()
-      form.append('file', file)
-      form.append('product_id', selectedProductId)
-      if (sellerIdRequiredForImport) {
-        form.append('seller_id', importSellerId)
-      }
-      const res = await fetch(apiUrl('/operations/marking-codes/import'), {
-        method: 'POST',
-        headers: authHeaders,
-        body: form,
-      })
-      if (!res.ok) {
-        setError(await readApiErrorMessage(res))
-        return
-      }
-      const data = (await res.json()) as {
-        accepted_count: number
-        skipped_count: number
-        skip_reasons: { reason: string; count: number }[]
-      }
-      const skipDetails =
-        data.skip_reasons.length > 0
-          ? ` Пропуск: ${data.skip_reasons.map((r) => `${r.reason} (${r.count})`).join(', ')}.`
-          : ''
-      const label = selectedRow ? `${selectedRow.sku_code}` : 'товар'
-      setImportMsg(
-        `Для «${label}» загружено кодов: ${data.accepted_count}. Пропущено: ${data.skipped_count}.${skipDetails}`,
-      )
-      await loadInventory()
-    } finally {
-      setBusy(false)
-    }
+  const openMenu = (event: React.MouseEvent<HTMLElement>, pool: MarkingPoolRow) => {
+    event.stopPropagation()
+    setMenuAnchor(event.currentTarget)
+    setMenuPool(pool)
   }
 
-  const toggleProduct = (productId: string) => {
-    setSelectedProductId((prev) => (prev === productId ? null : productId))
-    setImportMsg(null)
+  const closeMenu = () => {
+    setMenuAnchor(null)
+    setMenuPool(null)
+  }
+
+  const onLinkedProductsSaved = (products: MarkingPoolRow['products']) => {
+    if (!linkPool) {
+      return
+    }
+    setPools((prev) =>
+      prev.map((p) => (p.id === linkPool.id ? { ...p, products } : p)),
+    )
+    setLinkPool(null)
+    void loadPools()
   }
 
   return (
     <Stack spacing={2} data-testid={`${testIdPrefix}-page`}>
       <PageHeader
         title="Честный знак"
-        description="Отметьте товар, загрузите коды (CSV или PDF) — они привяжутся к выбранной строке."
+        description="Пулы кодов по GTIN: остаток общий на пул, товары привязываются вручную."
       />
+
       {sellerIdRequiredForImport && sellers.length > 0 ? (
         <Stack direction="row" spacing={1} sx={{ flexWrap: 'wrap', alignItems: 'center' }}>
           <Typography variant="body2" color="text.secondary">
@@ -197,145 +229,262 @@ export function HonestSignScreen({
           ))}
         </Stack>
       ) : null}
+
       {error ? (
         <Alert severity="error" data-testid={`${testIdPrefix}-error`}>
           {error}
         </Alert>
       ) : null}
-      {importMsg ? (
-        <Alert severity="success" data-testid={`${testIdPrefix}-import-success`}>
-          {importMsg}
-        </Alert>
-      ) : null}
-      {poolPreview ? (
-        <MarkingPoolProductsPanel
-          token={token}
-          poolId={poolPreview.poolId}
-          poolTitle={poolPreview.poolTitle}
-          sellerId={poolPreview.sellerId}
-          testIdPrefix={testIdPrefix}
-        />
-      ) : null}
-      <Paper variant="outlined" sx={{ p: 2 }}>
-        <Stack
-          direction={{ xs: 'column', sm: 'row' }}
-          spacing={1.5}
-          sx={{ alignItems: { sm: 'center' } }}
-        >
-          <Box sx={{ flex: 1 }}>
-            <Typography variant="body2" color="text.secondary">
-              {selectedRow ? (
-                <>
-                  Загрузка для: <strong>{selectedRow.product_name}</strong> ({selectedRow.sku_code})
-                </>
-              ) : (
-                'Отметьте товар галочкой в таблице ниже.'
-              )}
-            </Typography>
-          </Box>
-          <input
-            ref={fileRef}
-            type="file"
-            accept=".csv,.txt,.tsv,.pdf"
-            hidden
-            data-testid={`${testIdPrefix}-file-input`}
-            onChange={(ev) => void onFileChange(ev)}
-          />
-          <Button
-            variant="contained"
-            startIcon={<UploadFileOutlined />}
-            disabled={
-              busy ||
-              !selectedProductId ||
-              (sellerIdRequiredForImport && !effectiveSellerId)
-            }
-            onClick={onPickFile}
-            data-testid={`${testIdPrefix}-upload`}
+
+      <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1} sx={{ flexWrap: 'wrap' }}>
+        {[
+          { label: 'Доступно всего', value: kpis.availableTotal, testId: 'kpi-available' },
+          { label: 'Расход 7 дней', value: kpis.spend7d, testId: 'kpi-spend-7d' },
+          { label: 'Брак', value: kpis.defectiveTotal, testId: 'kpi-defective' },
+          {
+            label: 'Пулы на исходе',
+            value: kpis.lowCount,
+            testId: 'kpi-low-stock',
+            onClick: () => setStockFilter('low'),
+          },
+        ].map((kpi) => (
+          <Paper
+            key={kpi.testId}
+            variant="outlined"
+            sx={{ p: 1.5, minWidth: 140, flex: 1, cursor: kpi.onClick ? 'pointer' : 'default' }}
+            onClick={kpi.onClick}
+            data-testid={`${testIdPrefix}-${kpi.testId}`}
           >
-            Загрузить коды
-          </Button>
-        </Stack>
-      </Paper>
+            <Typography variant="caption" color="text.secondary">
+              {kpi.label}
+            </Typography>
+            <Typography variant="h6">{kpi.value}</Typography>
+          </Paper>
+        ))}
+      </Stack>
+
+      <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1}>
+        <Button
+          variant="contained"
+          startIcon={<UploadFileOutlined />}
+          disabled={sellerIdRequiredForImport && !effectiveSellerId}
+          onClick={() => navigate(`${routeBase}/honest-sign/import`)}
+          data-testid={`${testIdPrefix}-open-import`}
+        >
+          Загрузить коды
+        </Button>
+        <Button
+          variant="outlined"
+          startIcon={<TimelineOutlined />}
+          onClick={() => navigate(`${routeBase}/honest-sign/ledger`)}
+          data-testid={`${testIdPrefix}-open-ledger`}
+        >
+          Лента расхода
+        </Button>
+      </Stack>
+
+      <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1.5} sx={{ alignItems: { sm: 'center' } }}>
+        <TextField
+          size="small"
+          label="Поиск"
+          placeholder="Название, GTIN, артикул"
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
+          sx={{ flex: 1 }}
+          data-testid={`${testIdPrefix}-search`}
+        />
+        <ToggleButtonGroup
+          exclusive
+          size="small"
+          value={stockFilter}
+          onChange={(_, v: StockFilter | null) => v && setStockFilter(v)}
+          data-testid={`${testIdPrefix}-stock-filter`}
+        >
+          <ToggleButton value="all">Все</ToggleButton>
+          <ToggleButton value="low">На исходе</ToggleButton>
+          <ToggleButton value="empty">Пустые</ToggleButton>
+        </ToggleButtonGroup>
+      </Stack>
+
       <TableContainer component={Paper} variant="outlined">
-        <Table size="small" data-testid={`${testIdPrefix}-inventory-table`}>
+        <Table size="small" data-testid={`${testIdPrefix}-pools-table`}>
           <TableHead>
             <TableRow>
-              <TableCell padding="checkbox" />
-              <TableCell>Товар</TableCell>
-              <TableCell>Артикул</TableCell>
-              <TableCell align="right">Нужен ЧЗ</TableCell>
+              <TableCell>Пул</TableCell>
+              <TableCell>Товары</TableCell>
               <TableCell align="right">Доступно</TableCell>
+              <TableCell align="right">Резерв</TableCell>
               <TableCell align="right">Напечатано</TableCell>
-              <TableCell align="center" padding="checkbox">
-                КИЗ
-              </TableCell>
+              <TableCell align="right">Брак</TableCell>
+              <TableCell align="right">Прогноз</TableCell>
+              <TableCell padding="checkbox" />
             </TableRow>
           </TableHead>
           <TableBody>
-            {rows.length === 0 ? (
-              <TableRow>
-                <TableCell colSpan={7}>
-                  <Typography variant="body2" color="text.secondary">
-                    {busy ? 'Загрузка…' : 'Нет товаров у выбранного селлера.'}
-                  </Typography>
-                </TableCell>
-              </TableRow>
-            ) : (
-              rows.map((r) => (
-                <TableRow
-                  key={r.product_id}
-                  selected={selectedProductId === r.product_id}
-                  hover
-                  data-testid={`${testIdPrefix}-row-${r.product_id}`}
-                >
-                  <TableCell padding="checkbox">
-                    <Checkbox
-                      checked={selectedProductId === r.product_id}
-                      onChange={() => toggleProduct(r.product_id)}
-                      slotProps={{
-                        input: {
-                          'aria-label': `Выбрать ${r.sku_code}`,
-                        },
-                      }}
-                    />
-                  </TableCell>
-                  <TableCell>{r.product_name}</TableCell>
-                  <TableCell>{r.sku_code}</TableCell>
-                  <TableCell align="right">{r.requires_honest_sign ? 'Да' : 'Нет'}</TableCell>
-                  <TableCell align="right">{r.available_count}</TableCell>
-                  <TableCell align="right">{r.printed_count}</TableCell>
-                  <TableCell align="center" padding="checkbox">
-                    <Tooltip title="Коды и печать">
-                      <span>
-                        <IconButton
-                          size="small"
-                          disabled={r.available_count + r.printed_count === 0}
-                          onClick={() => setCodesDialogProduct(r)}
-                          data-testid={`${testIdPrefix}-view-codes-${r.product_id}`}
-                        >
-                          <QrCode2Outlined fontSize="small" />
-                        </IconButton>
-                      </span>
-                    </Tooltip>
+            {busy ? (
+              Array.from({ length: 3 }).map((_, i) => (
+                <TableRow key={i}>
+                  <TableCell colSpan={8}>
+                    <Skeleton height={32} />
                   </TableCell>
                 </TableRow>
               ))
+            ) : filteredPools.length === 0 ? (
+              <TableRow>
+                <TableCell colSpan={8}>
+                  <Stack spacing={1} sx={{ py: 2, alignItems: 'flex-start' }}>
+                    <Typography variant="body2" color="text.secondary">
+                      {pools.length === 0
+                        ? 'Пулов пока нет — загрузите коды из файла.'
+                        : 'Ничего не найдено по фильтру.'}
+                    </Typography>
+                    {pools.length === 0 ? (
+                      <Button
+                        variant="contained"
+                        size="small"
+                        startIcon={<UploadFileOutlined />}
+                        onClick={() => navigate(`${routeBase}/honest-sign/import`)}
+                        data-testid={`${testIdPrefix}-empty-upload`}
+                      >
+                        Загрузить коды
+                      </Button>
+                    ) : null}
+                  </Stack>
+                </TableCell>
+              </TableRow>
+            ) : (
+              filteredPools.map((row) => {
+                const low = isLowStock(row)
+                const unlinked = row.products.length === 0
+                return (
+                  <TableRow
+                    key={row.id}
+                    hover
+                    sx={{ cursor: 'pointer' }}
+                    onClick={() => navigate(`${routeBase}/honest-sign/pool/${row.id}`)}
+                    data-testid={`${testIdPrefix}-pool-row-${row.id}`}
+                  >
+                    <TableCell>
+                      <Stack spacing={0.25}>
+                        <Typography variant="body2" sx={{ fontWeight: 600 }}>
+                          {row.title}
+                        </Typography>
+                        <Typography variant="caption" color="text.secondary">
+                          GTIN {row.gtin}
+                        </Typography>
+                        {unlinked ? (
+                          <Chip
+                            size="small"
+                            color="warning"
+                            label="не привязан"
+                            onClick={(e) => {
+                              e.stopPropagation()
+                              setLinkPool(row)
+                            }}
+                            data-testid={`${testIdPrefix}-pool-unlinked-${row.id}`}
+                          />
+                        ) : null}
+                      </Stack>
+                    </TableCell>
+                    <TableCell>
+                      {row.products.length > 0 ? (
+                        <ProductChips
+                          products={row.products}
+                          testIdPrefix={testIdPrefix}
+                          poolId={row.id}
+                        />
+                      ) : (
+                        <Button
+                          size="small"
+                          onClick={(e) => {
+                            e.stopPropagation()
+                            setLinkPool(row)
+                          }}
+                          data-testid={`${testIdPrefix}-pool-link-quick-${row.id}`}
+                        >
+                          Привязать
+                        </Button>
+                      )}
+                    </TableCell>
+                    <TableCell
+                      align="right"
+                      sx={{ color: low ? 'error.main' : undefined, fontWeight: low ? 600 : 400 }}
+                    >
+                      {row.available}
+                    </TableCell>
+                    <TableCell align="right">{row.reserved}</TableCell>
+                    <TableCell align="right">{row.printed}</TableCell>
+                    <TableCell align="right">{row.defective}</TableCell>
+                    <TableCell align="right">
+                      {row.forecast_days != null ? `${row.forecast_days} д` : '—'}
+                    </TableCell>
+                    <TableCell padding="checkbox" align="right">
+                      <IconButton
+                        size="small"
+                        aria-label="Действия пула"
+                        onClick={(e) => openMenu(e, row)}
+                        data-testid={`${testIdPrefix}-pool-menu-${row.id}`}
+                      >
+                        <MoreVertOutlined fontSize="small" />
+                      </IconButton>
+                    </TableCell>
+                  </TableRow>
+                )
+              })
             )}
           </TableBody>
         </Table>
       </TableContainer>
-      <MarkingProductCodesDialog
-        open={codesDialogProduct !== null}
-        token={token}
-        productId={codesDialogProduct?.product_id ?? null}
-        productLabel={
-          codesDialogProduct
-            ? `${codesDialogProduct.sku_code} · ${codesDialogProduct.product_name}`
-            : ''
-        }
-        testIdPrefix={testIdPrefix}
-        onClose={() => setCodesDialogProduct(null)}
-      />
+
+      <Menu anchorEl={menuAnchor} open={Boolean(menuAnchor)} onClose={closeMenu}>
+        <MenuItem
+          onClick={() => {
+            if (menuPool) {
+              setLinkPool(menuPool)
+            }
+            closeMenu()
+          }}
+          data-testid={`${testIdPrefix}-menu-link-products`}
+        >
+          Привязать товары
+        </MenuItem>
+        <MenuItem
+          onClick={() => {
+            if (menuPool) {
+              navigate(`${routeBase}/honest-sign/pool/${menuPool.id}?tab=codes`)
+            }
+            closeMenu()
+          }}
+          data-testid={`${testIdPrefix}-menu-codes`}
+        >
+          Коды
+        </MenuItem>
+        <MenuItem
+          onClick={() => {
+            if (menuPool) {
+              navigate(`${routeBase}/honest-sign/ledger?pool_id=${menuPool.id}`)
+            }
+            closeMenu()
+          }}
+          data-testid={`${testIdPrefix}-menu-ledger`}
+        >
+          Лента пула
+        </MenuItem>
+      </Menu>
+
+      {linkPool && effectiveSellerId ? (
+        <MarkingPoolProductsDialog
+          open
+          token={token}
+          poolId={linkPool.id}
+          poolTitle={linkPool.title}
+          sellerId={effectiveSellerId}
+          linkedProducts={linkPool.products}
+          testIdPrefix={testIdPrefix}
+          onClose={() => setLinkPool(null)}
+          onSaved={onLinkedProductsSaved}
+        />
+      ) : null}
     </Stack>
   )
 }

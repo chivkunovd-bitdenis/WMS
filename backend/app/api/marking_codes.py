@@ -122,6 +122,7 @@ class PoolListItemOut(BaseModel):
     printed: int
     defective: int
     forecast_days: float | None
+    low_stock_threshold: int | None = None
 
 
 class PoolImportBatchOut(BaseModel):
@@ -244,6 +245,7 @@ def _pool_list_item_out(row: mc_svc.PoolListRow) -> PoolListItemOut:
         printed=row.printed,
         defective=row.defective,
         forecast_days=row.forecast_days,
+        low_stock_threshold=row.low_stock_threshold,
     )
 
 
@@ -419,6 +421,7 @@ async def get_marking_pool(
         printed=detail.printed,
         defective=detail.defective,
         forecast_days=detail.forecast_days,
+        low_stock_threshold=detail.low_stock_threshold,
         import_batches=[
             PoolImportBatchOut(
                 import_id=str(b.import_id),

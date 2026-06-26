@@ -175,6 +175,7 @@ class PoolListRow:
     printed: int
     defective: int
     forecast_days: float | None
+    low_stock_threshold: int | None
 
 
 @dataclass(frozen=True)
@@ -197,6 +198,7 @@ class PoolDetailRow:
     printed: int
     defective: int
     forecast_days: float | None
+    low_stock_threshold: int | None
     import_batches: list[PoolImportBatchRow]
 
 
@@ -1192,6 +1194,7 @@ async def list_pools(
                 printed=_status_count(pool_counts, STATUS_PRINTED),
                 defective=_status_count(pool_counts, STATUS_DEFECTIVE),
                 forecast_days=None,
+                low_stock_threshold=pool.low_stock_threshold,
             )
         )
     return rows
@@ -1232,6 +1235,7 @@ async def get_pool_detail(
         printed=_status_count(pool_counts, STATUS_PRINTED),
         defective=_status_count(pool_counts, STATUS_DEFECTIVE),
         forecast_days=None,
+        low_stock_threshold=pool.low_stock_threshold,
         import_batches=[
             PoolImportBatchRow(
                 import_id=b.id,
