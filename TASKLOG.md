@@ -1,11 +1,11 @@
 # TASKLOG
 
-## TASK-73 — 2026-06-26 — ЧЗ T2.1–T2.2: shift_lead и запрос брака
+## TASK-73 — 2026-06-26 — ЧЗ T2.1–T2.3: shift_lead, брак, очередь перепечатки
 
-- What changed: `can_shift_lead` в `ff_staff_permissions`; `require_shift_lead`; API `GET reprint-requests`, `POST codes/{id}/defect`, `GET packaging-task-lines/{id}/printed-codes`; таблица `marking_reprint_requests`; кнопка «Брак» на упаковке; экран «Перепечатки» с таблицей pending; pytest + e2e.
-- What did NOT change: действия старшего (подтвердить/заменить/отклонить) — T2.3.
-- Verification: pytest shift_lead + reprint_defect; `npm run build`; e2e ff-shift-lead + ff-marking-defect green.
-- Commit: `f6d78d1`.
+- What changed: T2.1 `can_shift_lead`, `require_shift_lead`, nav «Перепечатки»; T2.2 `marking_reprint_requests`, `POST codes/{id}/defect`, кнопка «Брак» на упаковке; T2.3 approve/replace/reject API и кнопки на экране очереди.
+- What did NOT change: T2.4 скан-пара «товар=пакет»; колокольчик уведомлений (Э7).
+- Verification: pytest reprint_defect + shift_lead; `npm run build`; e2e ff-shift-lead + ff-marking-defect.
+- Commits: `78881e7` (T2.1), `f6d78d1` (T2.2), `ff6f9f9` (T2.3).
 
 ## TASK-72 — 2026-06-26 — ЧЗ T1.6: рендер ленты по layout
 
