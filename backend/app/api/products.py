@@ -67,7 +67,7 @@ class SellerWbCatalogOut(BaseModel):
 
 
 class FfCatalogOut(BaseModel):
-    """FF warehouse catalog row: only products with FF stock movements."""
+    """FF warehouse catalog row: tenant products enriched from WB cards."""
 
     id: str
     seller_id: str | None = None

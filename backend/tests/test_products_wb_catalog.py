@@ -141,7 +141,7 @@ async def test_wb_catalog_forbidden_for_admin(async_client: AsyncClient) -> None
 
 
 @pytest.mark.asyncio
-async def test_ff_catalog_shows_only_products_with_warehouse_movements(
+async def test_ff_catalog_lists_all_tenant_products(
     async_client: AsyncClient,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -304,7 +304,7 @@ async def test_ff_catalog_shows_only_products_with_warehouse_movements(
     row_ids = {r["id"] for r in all_rows}
     assert pid_a in row_ids
     assert pid_c in row_ids
-    assert pid_b_private_only not in row_ids
+    assert pid_b_private_only in row_ids
     row_a = next(r for r in all_rows if r["id"] == pid_a)
     assert row_a["seller_id"] == sid_a
     assert row_a["seller_name"] == "Seller A"
@@ -320,8 +320,8 @@ async def test_ff_catalog_shows_only_products_with_warehouse_movements(
     )
     assert filtered_res.status_code == 200
     filtered_rows = filtered_res.json()
-    assert {r["id"] for r in filtered_rows} == {pid_c}
-    assert filtered_rows[0]["seller_name"] == "Seller B"
+    assert {r["id"] for r in filtered_rows} == {pid_b_private_only, pid_c}
+    assert {r["seller_name"] for r in filtered_rows} == {"Seller B"}
 
 
 @pytest.mark.asyncio
@@ -404,7 +404,9 @@ async def test_linked_wb_catalog_before_stock_movement(
 
     ff = await async_client.get("/products/ff-catalog", headers=ah)
     assert ff.status_code == 200
-    assert pid not in {r["id"] for r in ff.json()}
+    ff_row = next(r for r in ff.json() if r["id"] == pid)
+    assert ff_row["wb_primary_barcode"] == "2041647591153"
+    assert ff_row["wb_vendor_code"] == "wb38qjqidg"
 
     linked = await async_client.get("/products/linked-wb-catalog", headers=ah)
     assert linked.status_code == 200, linked.text

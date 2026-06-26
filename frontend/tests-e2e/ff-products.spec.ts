@@ -3,9 +3,9 @@ import { expect, test } from '@playwright/test'
 import { waitForGetOk, waitForPostOk } from './api-waits'
 import { openFulfillmentRegistration } from './auth-flow'
 
-// TC-NEW-001 — FF складской каталог: только товары с движениями ФФ.
-// Given: FF admin, есть товары селлеров, но один товар не принимался на склад; When: открывает «Товары»;
-// Then: видны только товары с движениями, остаток равен actual_qty; restriction/negative: private-only товар не виден ФФ.
+// TC-NEW-001 — FF складской каталог: все товары селлеров, остатки по движениям.
+// Given: FF admin, есть товары селлеров, один товар не принимался на склад; When: открывает «Каталог»;
+// Then: видны все товары селлеров; у принятых остаток равен actual_qty, у непринятых — 0.
 test('ff products: filter by seller and sort by name/quantity', async ({ page }) => {
   const email = `e2e-ff-products-${Date.now()}@example.com`
   const password = 'password123'
@@ -145,16 +145,16 @@ test('ff products: filter by seller and sort by name/quantity', async ({ page })
   const sellerListbox = page.getByRole('listbox')
   await expect(sellerListbox).toBeVisible()
   await sellerListbox.getByText('E2E Seller A', { exact: true }).click()
-  await expect(page.getByTestId('ff-product-row')).toHaveCount(1)
+  await expect(page.getByTestId('ff-product-row')).toHaveCount(2)
   await expect(page.getByTestId('ff-products-table')).toContainText(skuA)
-  await expect(page.getByTestId('ff-products-table')).not.toContainText(skuPrivate)
+  await expect(page.getByTestId('ff-products-table')).toContainText(skuPrivate)
   await expect(page.getByTestId(`ff-product-unpacked-${prodA.id}`)).toHaveText('2')
 
   // Switch to All
   await page.getByTestId('ff-products-seller-filter').click()
   await expect(sellerListbox).toBeVisible()
   await sellerListbox.getByText('Все', { exact: true }).click()
-  await expect(page.getByTestId('ff-product-row')).toHaveCount(2)
+  await expect(page.getByTestId('ff-product-row')).toHaveCount(3)
 
   // Sort by quantity desc: first row should be product B (qty 5)
   await page.getByTestId('ff-products-sort-quantity').click()

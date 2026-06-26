@@ -8,9 +8,7 @@ from typing import Any
 
 from sqlalchemy import false, select
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy.orm import selectinload
 
-from app.models.inventory_movement import InventoryMovement
 from app.models.product import Product
 from app.models.seller_wildberries_imported_card import SellerWildberriesImportedCard
 from app.services.catalog_service import list_products
@@ -297,91 +295,5 @@ async def list_ff_catalog_rows(
     *,
     seller_id: uuid.UUID | None = None,
 ) -> list[FfCatalogRow]:
-    """FF warehouse catalog: products that already have warehouse movements.
-
-    Seller WB/API catalog remains private. FF sees products only after warehouse
-    flow creates stock movements (for example, posted inbound by actual qty).
-    """
-    moved_product_ids = (
-        select(InventoryMovement.product_id)
-        .where(InventoryMovement.tenant_id == tenant_id)
-        .distinct()
-    )
-    product_stmt = (
-        select(Product)
-        .where(
-            Product.tenant_id == tenant_id,
-            Product.id.in_(moved_product_ids),
-        )
-        .options(selectinload(Product.seller))
-        .order_by(Product.sku_code)
-    )
-    if seller_id is not None:
-        product_stmt = product_stmt.where(Product.seller_id == seller_id)
-    res = await session.execute(product_stmt)
-    products = list(res.scalars().unique().all())
-    if not products:
-        return []
-
-    seller_ids: set[uuid.UUID] = set()
-    for p in products:
-        if p.seller_id is not None:
-            seller_ids.add(p.seller_id)
-
-    card_stmt = select(SellerWildberriesImportedCard).where(
-        SellerWildberriesImportedCard.tenant_id == tenant_id,
-    )
-    if seller_id is not None:
-        card_stmt = card_stmt.where(SellerWildberriesImportedCard.seller_id == seller_id)
-    elif seller_ids:
-        card_stmt = card_stmt.where(SellerWildberriesImportedCard.seller_id.in_(seller_ids))
-    else:
-        # No sellers on products: no point fetching cards.
-        card_stmt = card_stmt.where(false())
-
-    card_res = await session.execute(card_stmt)
-    cards = list(card_res.scalars().all())
-    by_seller_nm: dict[tuple[uuid.UUID, int], dict[str, Any] | None] = {}
-    for c in cards:
-        raw = c.raw_json if isinstance(c.raw_json, dict) else None
-        by_seller_nm[(c.seller_id, int(c.nm_id))] = raw
-
-    rows: list[FfCatalogRow] = []
-    for p in products:
-        nm = int(p.wb_nm_id) if p.wb_nm_id is not None else None
-        card_raw: dict[str, Any] | None = None
-        if nm is not None and p.seller_id is not None:
-            card_raw = by_seller_nm.get((p.seller_id, nm))
-        subj, img, _legacy_barcodes = _enrich_from_raw(card_raw)
-        primary, barcodes = _barcodes_for_product(p, card_raw)
-        if primary is None:
-            primary = primary_sku_display(list(barcodes))
-        wb_size, wb_color, wb_brand, wb_composition = _variant_from_raw(
-            card_raw, primary_barcode=primary, p=p
-        )
-        if subj is None and card_raw:
-            subj = subject_name_from_card(card_raw)
-        if img is None and card_raw:
-            img = first_photo_url_from_card(card_raw)
-        rows.append(
-            FfCatalogRow(
-                product_id=p.id,
-                seller_id=p.seller_id,
-                seller_name=p.seller.name if p.seller is not None else None,
-                name=p.name,
-                sku_code=p.sku_code,
-                wb_nm_id=nm,
-                wb_vendor_code=p.wb_vendor_code,
-                wb_subject_name=subj,
-                wb_primary_image_url=img,
-                wb_barcodes=barcodes,
-                wb_primary_barcode=primary,
-                wb_size=wb_size,
-                wb_color=wb_color,
-                wb_brand=wb_brand,
-                wb_composition=wb_composition,
-                packaging_instructions=p.packaging_instructions,
-                requires_honest_sign=bool(p.requires_honest_sign),
-            ),
-        )
-    return rows
+    """FF warehouse catalog: all tenant products enriched from imported WB cards."""
+    return await list_linked_wb_catalog_rows(session, tenant_id, seller_id=seller_id)
