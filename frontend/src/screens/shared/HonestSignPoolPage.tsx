@@ -40,6 +40,11 @@ type PoolDetail = {
   printed: number
   defective: number
   forecast_days: number | null
+  low_stock_threshold?: number | null
+  forecast_days_threshold?: number | null
+  consumption_7d?: number
+  loaded?: number
+  used?: number
   import_batches: {
     import_id: string
     document_number: string | null
@@ -106,6 +111,9 @@ export function HonestSignPoolPage({
   const [historyCodeId, setHistoryCodeId] = useState<string | null>(null)
   const [history, setHistory] = useState<HistoryEvent[]>([])
   const [historyBusy, setHistoryBusy] = useState(false)
+  const [lowThreshold, setLowThreshold] = useState('')
+  const [forecastThreshold, setForecastThreshold] = useState('')
+  const [thresholdSaving, setThresholdSaving] = useState(false)
 
   const authHeaders = useMemo(
     () => ({ Authorization: `Bearer ${token}` }),
@@ -126,7 +134,14 @@ export function HonestSignPoolPage({
         setError(await readApiErrorMessage(res))
         return
       }
-      setDetail((await res.json()) as PoolDetail)
+      const body = (await res.json()) as PoolDetail
+      setDetail(body)
+      setLowThreshold(
+        body.low_stock_threshold != null ? String(body.low_stock_threshold) : '',
+      )
+      setForecastThreshold(
+        body.forecast_days_threshold != null ? String(body.forecast_days_threshold) : '',
+      )
     } finally {
       setBusy(false)
     }
@@ -204,6 +219,29 @@ export function HonestSignPoolPage({
     URL.revokeObjectURL(url)
   }
 
+  const saveThresholds = async () => {
+    if (!poolId) return
+    setThresholdSaving(true)
+    setError(null)
+    try {
+      const res = await fetch(apiUrl(`/operations/marking-codes/pools/${poolId}/threshold`), {
+        method: 'PUT',
+        headers: { ...authHeaders, 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          low_stock_threshold: lowThreshold.trim() ? Number(lowThreshold) : null,
+          forecast_days_threshold: forecastThreshold.trim() ? Number(forecastThreshold) : null,
+        }),
+      })
+      if (!res.ok) {
+        setError(await readApiErrorMessage(res))
+        return
+      }
+      await loadDetail()
+    } finally {
+      setThresholdSaving(false)
+    }
+  }
+
   const openHistory = async (codeId: string) => {
     setHistoryCodeId(codeId)
     setHistoryBusy(true)
@@ -265,6 +303,7 @@ export function HonestSignPoolPage({
               ['Резерв', detail.reserved],
               ['Напечатано', detail.printed],
               ['Брак', detail.defective],
+              ['Расход 7д', detail.consumption_7d ?? '—'],
               ['Прогноз', detail.forecast_days ?? '—'],
             ].map(([label, value]) => (
               <Paper key={String(label)} variant="outlined" sx={{ p: 1.5, minWidth: 120 }}>
@@ -275,6 +314,38 @@ export function HonestSignPoolPage({
               </Paper>
             ))}
           </Stack>
+          <Paper variant="outlined" sx={{ p: 2 }} data-testid={`${testIdPrefix}-thresholds`}>
+            <Typography variant="subtitle2" sx={{ mb: 1 }}>
+              Пороги остатка
+            </Typography>
+            <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1.5} sx={{ alignItems: { sm: 'flex-end' } }}>
+              <TextField
+                size="small"
+                label="Мин. остаток"
+                type="number"
+                value={lowThreshold}
+                onChange={(e) => setLowThreshold(e.target.value)}
+                data-testid={`${testIdPrefix}-threshold-low`}
+              />
+              <TextField
+                size="small"
+                label="Прогноз, дней"
+                type="number"
+                value={forecastThreshold}
+                onChange={(e) => setForecastThreshold(e.target.value)}
+                data-testid={`${testIdPrefix}-threshold-forecast`}
+              />
+              <Button
+                variant="contained"
+                size="small"
+                disabled={thresholdSaving}
+                onClick={() => void saveThresholds()}
+                data-testid={`${testIdPrefix}-threshold-save`}
+              >
+                Сохранить
+              </Button>
+            </Stack>
+          </Paper>
           <Typography variant="subtitle2">История загрузок</Typography>
           <TableContainer component={Paper} variant="outlined">
             <Table size="small">

@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import {
   Alert,
+  Box,
   Button,
   Chip,
   IconButton,
@@ -42,6 +43,10 @@ export type MarkingPoolRow = {
   defective: number
   forecast_days: number | null
   low_stock_threshold: number | null
+  forecast_days_threshold?: number | null
+  consumption_7d?: number
+  loaded?: number
+  used?: number
 }
 
 type StockFilter = 'all' | 'low' | 'empty'
@@ -56,6 +61,8 @@ type Props = {
   testIdPrefix?: string
   /** FF: /app/ff · seller: /seller */
   routeBase?: string
+  /** T3.4: карточки остатков вместо только таблицы */
+  showSellerDashboard?: boolean
 }
 
 function poolMatchesSearch(row: MarkingPoolRow, query: string): boolean {
@@ -107,6 +114,15 @@ function ProductChips({
   )
 }
 
+function forecastUntilLabel(forecastDays: number | null): string {
+  if (forecastDays == null || forecastDays <= 0) return '—'
+  const d = new Date()
+  d.setDate(d.getDate() + Math.ceil(forecastDays))
+  const dd = String(d.getDate()).padStart(2, '0')
+  const mm = String(d.getMonth() + 1).padStart(2, '0')
+  return `${dd}.${mm}`
+}
+
 export function HonestSignScreen({
   token,
   sellerId,
@@ -116,6 +132,7 @@ export function HonestSignScreen({
   onSelectedSellerIdChange,
   testIdPrefix = 'honest-sign',
   routeBase = '/app/ff',
+  showSellerDashboard = false,
 }: Props) {
   const navigate = useNavigate()
   const [pools, setPools] = useState<MarkingPoolRow[]>([])
@@ -175,7 +192,8 @@ export function HonestSignScreen({
     const availableTotal = pools.reduce((s, p) => s + p.available, 0)
     const defectiveTotal = pools.reduce((s, p) => s + p.defective, 0)
     const lowCount = pools.filter(isLowStock).length
-    return { availableTotal, defectiveTotal, lowCount, spend7d: 0 }
+    const spend7d = pools.reduce((s, p) => s + (p.consumption_7d ?? 0), 0)
+    return { availableTotal, defectiveTotal, lowCount, spend7d }
   }, [pools])
 
   const filteredPools = useMemo(() => {
@@ -273,6 +291,60 @@ export function HonestSignScreen({
           </Paper>
         ))}
       </Stack>
+
+      {showSellerDashboard && pools.length > 0 ? (
+        <Stack spacing={1} data-testid={`${testIdPrefix}-seller-dashboard`}>
+          {pools.map((row) => {
+            const low = isLowStock(row)
+            const spendPerDay =
+              row.consumption_7d != null ? Math.round((row.consumption_7d / 7) * 10) / 10 : 0
+            return (
+              <Paper
+                key={row.id}
+                variant="outlined"
+                sx={{
+                  p: 2,
+                  bgcolor: low ? 'error.50' : row.available <= 20 ? 'warning.50' : 'background.paper',
+                }}
+                data-testid={`${testIdPrefix}-pool-card-${row.id}`}
+              >
+                <Stack
+                  direction={{ xs: 'column', sm: 'row' }}
+                  spacing={1}
+                  sx={{ justifyContent: 'space-between', alignItems: { sm: 'center' } }}
+                >
+                  <Box>
+                    <Typography variant="subtitle1" sx={{ fontWeight: 600 }}>
+                      {row.title}
+                    </Typography>
+                    <Typography variant="caption" color="text.secondary">
+                      GTIN {row.gtin}
+                    </Typography>
+                  </Box>
+                  <Button
+                    size="small"
+                    variant="contained"
+                    startIcon={<UploadFileOutlined />}
+                    onClick={openImport}
+                    data-testid={`${testIdPrefix}-pool-card-upload-${row.id}`}
+                  >
+                    Догрузить
+                  </Button>
+                </Stack>
+                <Stack direction="row" spacing={2} sx={{ mt: 1, flexWrap: 'wrap' }}>
+                  <Typography variant="body2">Загружено: {row.loaded ?? '—'}</Typography>
+                  <Typography variant="body2">Использовано: {row.used ?? '—'}</Typography>
+                  <Typography variant="body2">Доступно: {row.available}</Typography>
+                  <Typography variant="body2">Расход/день: {spendPerDay}</Typography>
+                  <Typography variant="body2">
+                    Прогноз до: {forecastUntilLabel(row.forecast_days)}
+                  </Typography>
+                </Stack>
+              </Paper>
+            )
+          })}
+        </Stack>
+      ) : null}
 
       <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1}>
         <Button

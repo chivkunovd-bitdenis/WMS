@@ -76,6 +76,11 @@ async def create_request(
     reloaded = await get_request(session, tenant_id, req.id)
     if reloaded is None:
         raise InboundIntakeError("request_not_found")
+    if seller_id is not None:
+        from app.services.notification_trigger_service import notify_ff_inbound_created
+
+        await notify_ff_inbound_created(session, reloaded)
+        await session.commit()
     return reloaded
 
 

@@ -1,5 +1,12 @@
 # TASKLOG
 
+## TASK-77 — 2026-06-26 — ЧЗ T3.3–T3.5: прогноз, low-stock, дашборд селлера, триггеры ФФ
+
+- What changed: T3.3 расчёт `consumption_7d`/`forecast_days`, `PUT pools/{id}/threshold`, Celery `marking_low_stock`, KPI и пороги в UI; T3.4 карточки остатков селлера + e2e; T3.5 `notify_ff_portal` при создании приёмки/отгрузки МП.
+- What did NOT change: фаза 4 (креды ЧЗ, подпись).
+- Verification: pytest forecast+triggers; `npm run build`; e2e `seller-honest-sign-dashboard.spec.ts`.
+- Commit: (pending).
+
 ## TASK-76 — 2026-06-26 — ЧЗ T3.2: колокольчик и центр уведомлений
 
 - What changed: `NotificationBell` в шапке FF и селлера, страница «Уведомления», API-клиент, e2e seed `/_e2e/seed`, Playwright `ff-notifications.spec.ts`.

@@ -206,6 +206,15 @@ class PoolListItemOut(BaseModel):
     defective: int
     forecast_days: float | None
     low_stock_threshold: int | None = None
+    forecast_days_threshold: int | None = None
+    consumption_7d: int = 0
+    loaded: int = 0
+    used: int = 0
+
+
+class PoolThresholdIn(BaseModel):
+    low_stock_threshold: int | None = None
+    forecast_days_threshold: int | None = None
 
 
 class PoolImportBatchOut(BaseModel):
@@ -409,6 +418,10 @@ def _pool_list_item_out(row: mc_svc.PoolListRow) -> PoolListItemOut:
         defective=row.defective,
         forecast_days=row.forecast_days,
         low_stock_threshold=row.low_stock_threshold,
+        forecast_days_threshold=row.forecast_days_threshold,
+        consumption_7d=row.consumption_7d,
+        loaded=row.loaded,
+        used=row.used,
     )
 
 
@@ -600,6 +613,39 @@ async def set_pool_products(
     return _pool_products_out(result)
 
 
+@router.put("/pools/{pool_id}/threshold", response_model=PoolListItemOut)
+async def set_marking_pool_threshold(
+    pool_id: uuid.UUID,
+    body: PoolThresholdIn,
+    user: Annotated[User, Depends(get_current_user)],
+    session: Annotated[AsyncSession, Depends(get_db)],
+    effective_seller_id: Annotated[uuid.UUID | None, Depends(get_effective_seller_id)],
+) -> PoolListItemOut:
+    from app.models.marking_code import MarkingPool
+
+    pool = await session.get(MarkingPool, pool_id)
+    if pool is None or pool.tenant_id != user.tenant_id:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="pool_not_found")
+    await _assert_pool_access(user, pool.seller_id, effective_seller_id)
+    try:
+        await mc_svc.set_pool_threshold(
+            session,
+            user.tenant_id,
+            pool_id,
+            low_stock_threshold=body.low_stock_threshold,
+            forecast_days_threshold=body.forecast_days_threshold,
+        )
+        rows = await mc_svc.list_pools(
+            session, user.tenant_id, seller_id=pool.seller_id
+        )
+    except mc_svc.MarkingCodeServiceError as exc:
+        raise _http_from_mc_error(exc) from exc
+    row = next((r for r in rows if r.id == pool_id), None)
+    if row is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="pool_not_found")
+    return _pool_list_item_out(row)
+
+
 @router.get("/pools", response_model=list[PoolListItemOut])
 async def list_marking_pools(
     user: Annotated[User, Depends(get_current_user)],
@@ -643,6 +689,10 @@ async def get_marking_pool(
         defective=detail.defective,
         forecast_days=detail.forecast_days,
         low_stock_threshold=detail.low_stock_threshold,
+        forecast_days_threshold=detail.forecast_days_threshold,
+        consumption_7d=detail.consumption_7d,
+        loaded=detail.loaded,
+        used=detail.used,
         import_batches=[
             PoolImportBatchOut(
                 import_id=str(b.import_id),

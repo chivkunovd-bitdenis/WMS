@@ -19,4 +19,8 @@ celery_app.conf.beat_schedule = {
         "task": "wms.wb_mp_warehouses_daily_sync",
         "schedule": crontab(hour=3, minute=0),
     },
+    "marking-low-stock": {
+        "task": "wms.marking_low_stock",
+        "schedule": crontab(hour="*/6", minute=15),
+    },
 }

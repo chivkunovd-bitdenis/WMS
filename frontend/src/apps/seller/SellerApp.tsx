@@ -375,7 +375,15 @@ export function SellerApp() {
           />
           <Route
             path="/honest-sign"
-            element={token ? <SellerHonestSignScreen key={catalogScopeKey} token={token} /> : null}
+            element={
+              token ? (
+                <SellerHonestSignScreen
+                  key={catalogScopeKey}
+                  token={token}
+                  sellerId={me.active_seller_id ?? me.seller_id ?? ''}
+                />
+              ) : null
+            }
           />
           <Route
             path="/settings"

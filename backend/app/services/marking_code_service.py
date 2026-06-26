@@ -6,19 +6,23 @@ import json
 import re
 import uuid
 from dataclasses import dataclass
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 
 from sqlalchemy import func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from app.models.marking_code import (
+    EVENT_APPLIED,
+    EVENT_DEFECTIVE,
     EVENT_IMPORTED,
     EVENT_PRINTED,
-    EVENT_REPRINTED,
-    EVENT_DEFECTIVE,
     EVENT_REPLACED,
-    EVENT_APPLIED,
+    EVENT_REPRINTED,
+    EVENT_SHIPPED,
+    REPRINT_STATUS_APPROVED,
+    REPRINT_STATUS_PENDING,
+    REPRINT_STATUS_REJECTED,
     STATUS_APPLIED,
     STATUS_AVAILABLE,
     STATUS_DEFECTIVE,
@@ -30,9 +34,6 @@ from app.models.marking_code import (
     MarkingPool,
     MarkingPoolProduct,
     MarkingReprintRequest,
-    REPRINT_STATUS_APPROVED,
-    REPRINT_STATUS_PENDING,
-    REPRINT_STATUS_REJECTED,
 )
 from app.models.packaging_task import PackagingTask, PackagingTaskLine
 from app.models.product import Product
@@ -249,6 +250,10 @@ class PoolListRow:
     defective: int
     forecast_days: float | None
     low_stock_threshold: int | None
+    forecast_days_threshold: int | None
+    consumption_7d: int
+    loaded: int
+    used: int
 
 
 @dataclass(frozen=True)
@@ -273,6 +278,10 @@ class PoolDetailRow:
     defective: int
     forecast_days: float | None
     low_stock_threshold: int | None
+    forecast_days_threshold: int | None
+    consumption_7d: int
+    loaded: int
+    used: int
     import_batches: list[PoolImportBatchRow]
 
 
@@ -1619,6 +1628,75 @@ def _status_count(counts: dict[str, int], status: str) -> int:
     return int(counts.get(status, 0))
 
 
+CONSUMPTION_LOOKBACK_DAYS = 7
+CONSUMPTION_EVENT_TYPES = frozenset({EVENT_PRINTED, EVENT_SHIPPED})
+
+
+def _pool_loaded_used(pool_counts: dict[str, int]) -> tuple[int, int]:
+    loaded = sum(pool_counts.values())
+    available = _status_count(pool_counts, STATUS_AVAILABLE)
+    reserved = _status_count(pool_counts, STATUS_RESERVED)
+    used = max(0, loaded - available - reserved)
+    return loaded, used
+
+
+def compute_forecast_days(available: int, consumption_7d: int) -> float | None:
+    if consumption_7d <= 0:
+        return None
+    avg_per_day = consumption_7d / CONSUMPTION_LOOKBACK_DAYS
+    if avg_per_day <= 0:
+        return None
+    return round(available / avg_per_day, 1)
+
+
+async def _pool_consumption_7d_batch(
+    session: AsyncSession,
+    tenant_id: uuid.UUID,
+    pool_ids: list[uuid.UUID],
+) -> dict[uuid.UUID, int]:
+    if not pool_ids:
+        return {}
+    cutoff = datetime.now(UTC) - timedelta(days=CONSUMPTION_LOOKBACK_DAYS)
+    stmt = (
+        select(
+            MarkingCodeEvent.pool_id,
+            func.coalesce(func.sum(MarkingCodeEvent.copies), 0),
+        )
+        .where(
+            MarkingCodeEvent.tenant_id == tenant_id,
+            MarkingCodeEvent.pool_id.in_(pool_ids),
+            MarkingCodeEvent.event_type.in_(tuple(CONSUMPTION_EVENT_TYPES)),
+            MarkingCodeEvent.created_at >= cutoff,
+        )
+        .group_by(MarkingCodeEvent.pool_id)
+    )
+    out: dict[uuid.UUID, int] = {}
+    for pool_id, total in (await session.execute(stmt)).all():
+        if pool_id is not None:
+            out[pool_id] = int(total)
+    return out
+
+
+async def set_pool_threshold(
+    session: AsyncSession,
+    tenant_id: uuid.UUID,
+    pool_id: uuid.UUID,
+    *,
+    low_stock_threshold: int | None,
+    forecast_days_threshold: int | None,
+) -> MarkingPool:
+    pool = await _get_pool_or_error(session, tenant_id, pool_id)
+    if low_stock_threshold is not None and low_stock_threshold < 0:
+        raise MarkingCodeServiceError("invalid_threshold")
+    if forecast_days_threshold is not None and forecast_days_threshold < 0:
+        raise MarkingCodeServiceError("invalid_threshold")
+    pool.low_stock_threshold = low_stock_threshold
+    pool.forecast_days_threshold = forecast_days_threshold
+    await session.commit()
+    await session.refresh(pool)
+    return pool
+
+
 async def _products_by_pool(
     session: AsyncSession,
     tenant_id: uuid.UUID,
@@ -1662,21 +1740,29 @@ async def list_pools(
     pool_ids = [p.id for p in pools]
     counts = await _pool_status_counts(session, tenant_id, seller_id=seller_id, pool_ids=pool_ids)
     products_map = await _products_by_pool(session, tenant_id, pool_ids)
+    consumption_map = await _pool_consumption_7d_batch(session, tenant_id, pool_ids)
     rows: list[PoolListRow] = []
     for pool in pools:
         pool_counts = counts.get(pool.id, {})
+        available = _status_count(pool_counts, STATUS_AVAILABLE)
+        consumption_7d = consumption_map.get(pool.id, 0)
+        loaded, used = _pool_loaded_used(pool_counts)
         rows.append(
             PoolListRow(
                 id=pool.id,
                 title=pool.title,
                 gtin=pool.gtin,
                 products=products_map.get(pool.id, []),
-                available=_status_count(pool_counts, STATUS_AVAILABLE),
+                available=available,
                 reserved=_status_count(pool_counts, STATUS_RESERVED),
                 printed=_status_count(pool_counts, STATUS_PRINTED),
                 defective=_status_count(pool_counts, STATUS_DEFECTIVE),
-                forecast_days=None,
+                forecast_days=compute_forecast_days(available, consumption_7d),
                 low_stock_threshold=pool.low_stock_threshold,
+                forecast_days_threshold=pool.forecast_days_threshold,
+                consumption_7d=consumption_7d,
+                loaded=loaded,
+                used=used,
             )
         )
     return rows
@@ -1692,7 +1778,11 @@ async def get_pool_detail(
         session, tenant_id, seller_id=None, pool_ids=[pool_id]
     )
     pool_counts = counts.get(pool_id, {})
-    products_map = await _products_by_pool(session, tenant_id, [pool_id])
+    available = _status_count(pool_counts, STATUS_AVAILABLE)
+    consumption_7d = (
+        await _pool_consumption_7d_batch(session, tenant_id, [pool_id])
+    ).get(pool_id, 0)
+    loaded, used = _pool_loaded_used(pool_counts)
 
     batch_stmt = (
         select(MarkingCodeImport)
@@ -1706,6 +1796,7 @@ async def get_pool_detail(
         .order_by(MarkingCodeImport.created_at.desc())
     )
     batches = list((await session.execute(batch_stmt)).scalars().all())
+    products_map = await _products_by_pool(session, tenant_id, [pool_id])
 
     return PoolDetailRow(
         id=pool.id,
@@ -1713,12 +1804,16 @@ async def get_pool_detail(
         title=pool.title,
         gtin=pool.gtin,
         products=products_map.get(pool_id, []),
-        available=_status_count(pool_counts, STATUS_AVAILABLE),
+        available=available,
         reserved=_status_count(pool_counts, STATUS_RESERVED),
         printed=_status_count(pool_counts, STATUS_PRINTED),
         defective=_status_count(pool_counts, STATUS_DEFECTIVE),
-        forecast_days=None,
+        forecast_days=compute_forecast_days(available, consumption_7d),
         low_stock_threshold=pool.low_stock_threshold,
+        forecast_days_threshold=pool.forecast_days_threshold,
+        consumption_7d=consumption_7d,
+        loaded=loaded,
+        used=used,
         import_batches=[
             PoolImportBatchRow(
                 import_id=b.id,

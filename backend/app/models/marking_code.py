@@ -84,6 +84,7 @@ class MarkingPool(Base):
     gtin: Mapped[str] = mapped_column(String(32), nullable=False)
     title: Mapped[str] = mapped_column(String(512), nullable=False)
     low_stock_threshold: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    forecast_days_threshold: Mapped[int | None] = mapped_column(Integer, nullable=True)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), nullable=False
     )
