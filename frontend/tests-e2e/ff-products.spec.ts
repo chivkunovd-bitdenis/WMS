@@ -156,6 +156,22 @@ test('ff products: filter by seller and sort by name/quantity', async ({ page })
   await sellerListbox.getByText('Все', { exact: true }).click()
   await expect(page.getByTestId('ff-product-row')).toHaveCount(3)
 
+  // TC-NEW-002 — поиск по артикулу (SKU) и названию
+  await page.getByTestId('ff-products-search').fill('Private only')
+  await expect(page.getByTestId('ff-product-row')).toHaveCount(1)
+  await expect(page.getByTestId('ff-products-table')).toContainText(skuPrivate)
+
+  await page.getByTestId('ff-products-search').fill(skuA)
+  await expect(page.getByTestId('ff-product-row')).toHaveCount(1)
+  await expect(page.getByTestId('ff-products-table')).toContainText('Alpha product')
+
+  await page.getByTestId('ff-products-search').fill('zzz-no-match-xyz')
+  await expect(page.getByTestId('ff-product-row')).toHaveCount(0)
+  await expect(page.getByTestId('ff-products-search-empty')).toBeVisible()
+
+  await page.getByTestId('ff-products-search').fill('')
+  await expect(page.getByTestId('ff-product-row')).toHaveCount(3)
+
   // Sort by quantity desc: first row should be product B (qty 5)
   await page.getByTestId('ff-products-sort-quantity').click()
   await page.getByTestId('ff-products-sort-quantity').click()

@@ -81,10 +81,24 @@ type Props = {
 type SortKey = 'name' | 'quantity'
 type SortDir = 'asc' | 'desc'
 
+function rowMatchesSearch(
+  row: { name: string; sku_code: string; wb_vendor_code: string | null },
+  query: string,
+): boolean {
+  const needle = query.trim().toLowerCase()
+  if (!needle) return true
+  return (
+    row.name.toLowerCase().includes(needle) ||
+    row.sku_code.toLowerCase().includes(needle) ||
+    (row.wb_vendor_code?.toLowerCase().includes(needle) ?? false)
+  )
+}
+
 export function FfProductsCatalogScreen({ token, authHeaders, sellers }: Props) {
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [selectedSellerId, setSelectedSellerId] = useState<string>('__all__')
+  const [searchQuery, setSearchQuery] = useState('')
   const [catalog, setCatalog] = useState<FfCatalogRow[]>([])
   const [stock, setStock] = useState<StockSummaryRow[]>([])
   const [sortKey, setSortKey] = useState<SortKey>('name')
@@ -146,9 +160,13 @@ export function FfProductsCatalogScreen({ token, authHeaders, sellers }: Props) 
     return merged.filter((r) => r.seller_id === selectedSellerId)
   }, [catalog, selectedSellerId, stock])
 
+  const filteredRows = useMemo(() => {
+    return rows.filter((r) => rowMatchesSearch(r, searchQuery))
+  }, [rows, searchQuery])
+
   const sortedRows = useMemo(() => {
     const dir = sortDir === 'asc' ? 1 : -1
-    return [...rows].sort((a, b) => {
+    return [...filteredRows].sort((a, b) => {
       if (sortKey === 'quantity') {
         const d = (a.quantity - b.quantity) * dir
         if (d !== 0) return d
@@ -158,7 +176,7 @@ export function FfProductsCatalogScreen({ token, authHeaders, sellers }: Props) 
       if (d !== 0) return d
       return (a.quantity - b.quantity) * dir
     })
-  }, [rows, sortDir, sortKey])
+  }, [filteredRows, sortDir, sortKey])
 
   function toggleSort(next: SortKey) {
     if (sortKey !== next) {
@@ -204,10 +222,10 @@ export function FfProductsCatalogScreen({ token, authHeaders, sellers }: Props) 
   return (
     <Box>
       <Typography variant="h5" gutterBottom>
-        Товары
+        Каталог
       </Typography>
       <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
-        Складской каталог ФФ: товары всех селлеров, по которым уже были движения на складе.
+        Все товары селлеров и остатки на складе ФФ.
       </Typography>
 
       {error ? (
@@ -217,8 +235,18 @@ export function FfProductsCatalogScreen({ token, authHeaders, sellers }: Props) 
       ) : null}
 
       <Paper variant="outlined" sx={{ p: 2, mb: 2 }} data-testid="ff-products-filters">
-        <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2} sx={{ alignItems: { sm: 'center' } }}>
-          <FormControl size="small" sx={{ minWidth: 260 }}>
+        <Stack spacing={2}>
+          <TextField
+            fullWidth
+            size="small"
+            label="Поиск"
+            placeholder="Артикул или название"
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            slotProps={{ htmlInput: { 'data-testid': 'ff-products-search' } }}
+          />
+          <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2} sx={{ alignItems: { sm: 'center' } }}>
+            <FormControl size="small" sx={{ minWidth: 260 }}>
             <InputLabel id="ff-products-seller-label">Селлер</InputLabel>
             <Select
               labelId="ff-products-seller-label"
@@ -236,6 +264,7 @@ export function FfProductsCatalogScreen({ token, authHeaders, sellers }: Props) 
             </Select>
           </FormControl>
           {busy ? <CircularProgress size={18} data-testid="ff-products-loading" /> : null}
+          </Stack>
         </Stack>
       </Paper>
 
@@ -352,13 +381,21 @@ export function FfProductsCatalogScreen({ token, authHeaders, sellers }: Props) 
             {sortedRows.length === 0 && !busy ? (
               <TableRow>
                 <TableCell colSpan={16}>
-                  <Typography variant="body2" color="text.secondary">
-                    Пока нет товаров.
-                  </Typography>
-                  <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5 }}>
-                    Остаток появляется после завершения пересчёта на приёмке (зона «Сортировка»).
-                    После разкладки по ячейкам товар доступен к резерву.
-                  </Typography>
+                  {searchQuery.trim() ? (
+                    <Typography variant="body2" color="text.secondary" data-testid="ff-products-search-empty">
+                      Ничего не найдено по запросу «{searchQuery.trim()}».
+                    </Typography>
+                  ) : (
+                    <>
+                      <Typography variant="body2" color="text.secondary">
+                        Пока нет товаров.
+                      </Typography>
+                      <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5 }}>
+                        Остаток появляется после завершения пересчёта на приёмке (зона «Сортировка»).
+                        После разкладки по ячейкам товар доступен к резерву.
+                      </Typography>
+                    </>
+                  )}
                 </TableCell>
               </TableRow>
             ) : null}

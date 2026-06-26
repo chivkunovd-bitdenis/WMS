@@ -1,5 +1,11 @@
 # TASKLOG
 
+## TASK-62 — 2026-06-26 — FF каталог: поиск по артикулу и названию
+
+- What changed: в разделе «Каталог» ФФ — строка поиска сверху; фильтрация по `sku_code`, `wb_vendor_code` (артикул продавца) и названию; пустое состояние «ничего не найдено»; e2e TC-NEW-002 в `ff-products.spec.ts`.
+- What did NOT change: API `/products/ff-catalog`; фильтр по селлеру и сортировка.
+- Verification: `npm run build`; e2e `ff-products.spec.ts` — filter/sort/search.
+
 ## TASK-61 — 2026-06-24 — Фикс сброса даты отгрузки в WmsDateField
 
 - What changed: `WmsDateField` не вызывает `onChange(null)` на пустом blur после выбора в календаре; регрессия в `seller-mp-unload.spec.ts` (TC-NEW-DATE-01).
@@ -18,7 +24,7 @@
 - What changed: `GET /products/ff-catalog` возвращает все товары тенанта (как `linked-wb-catalog`), а не только с `InventoryMovement`; остатки в UI по-прежнему из `inventory-balances/summary` (0 для непринятых).
 - What did NOT change: приватный WB-каталог селлера; эндпоинт `linked-wb-catalog` (оставлен для приёмки/хуков).
 - Verification: `pytest tests/test_products_wb_catalog.py::test_ff_catalog_lists_all_tenant_products`; e2e `ff-products.spec.ts` — filter/sort passed.
-- Deploy: (pending PR merge + prod-update.sh + sync-all-wb-products.sh).
+- Deploy: PR #45 → `main` `7146d77`; prod `194.87.96.144:8088` — `prod-update.sh`, WB sync 8/8 sellers ok (~307 SKU updated).
 
 ## TASK-58 — 2026-06-18 — Печать ШК в каталоге товаров ФФ и после закрытия приёмки
 
