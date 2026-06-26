@@ -315,3 +315,61 @@ class MarkingCodeEvent(Base):
     seller: Mapped[Seller] = relationship("Seller")
     code: Mapped[MarkingCode] = relationship("MarkingCode", back_populates="events")
     pool: Mapped[MarkingPool | None] = relationship("MarkingPool")
+
+
+REPRINT_STATUS_PENDING = "pending"
+REPRINT_STATUS_APPROVED = "approved"
+REPRINT_STATUS_REJECTED = "rejected"
+
+REPRINT_REQUEST_STATUSES = frozenset(
+    {
+        REPRINT_STATUS_PENDING,
+        REPRINT_STATUS_APPROVED,
+        REPRINT_STATUS_REJECTED,
+    }
+)
+
+
+class MarkingReprintRequest(Base):
+    __tablename__ = "marking_reprint_requests"
+
+    id: Mapped[uuid.UUID] = mapped_column(
+        Uuid(as_uuid=True), primary_key=True, default=uuid.uuid4
+    )
+    tenant_id: Mapped[uuid.UUID] = mapped_column(
+        Uuid(as_uuid=True), ForeignKey("tenants.id", ondelete="CASCADE"), index=True
+    )
+    code_id: Mapped[uuid.UUID] = mapped_column(
+        Uuid(as_uuid=True),
+        ForeignKey("marking_codes.id", ondelete="CASCADE"),
+        index=True,
+    )
+    packaging_task_line_id: Mapped[uuid.UUID] = mapped_column(
+        Uuid(as_uuid=True),
+        ForeignKey("packaging_task_lines.id", ondelete="CASCADE"),
+        index=True,
+    )
+    requested_by_user_id: Mapped[uuid.UUID] = mapped_column(
+        Uuid(as_uuid=True),
+        ForeignKey("users.id", ondelete="CASCADE"),
+    )
+    reason: Mapped[str | None] = mapped_column(String(512), nullable=True)
+    status: Mapped[str] = mapped_column(String(32), nullable=False, default=REPRINT_STATUS_PENDING)
+    resolved_by_user_id: Mapped[uuid.UUID | None] = mapped_column(
+        Uuid(as_uuid=True),
+        ForeignKey("users.id", ondelete="SET NULL"),
+        nullable=True,
+    )
+    resolved_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False, index=True
+    )
+
+    tenant: Mapped[Tenant] = relationship("Tenant")
+    code: Mapped[MarkingCode] = relationship("MarkingCode")
+    packaging_task_line: Mapped[PackagingTaskLine] = relationship("PackagingTaskLine")
+    requested_by_user: Mapped[User] = relationship("User", foreign_keys=[requested_by_user_id])
+    resolved_by_user: Mapped[User | None] = relationship(
+        "User",
+        foreign_keys=[resolved_by_user_id],
+    )

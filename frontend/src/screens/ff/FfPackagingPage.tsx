@@ -159,6 +159,38 @@ export function FfPackagingTaskPanel({
     }
   }
 
+  const reportDefectMarking = async (lineId: string) => {
+    setBusy(true)
+    setError(null)
+    try {
+      const codesRes = await fetch(
+        apiUrl(`/operations/marking-codes/packaging-task-lines/${lineId}/printed-codes`),
+        { headers: authHeaders },
+      )
+      if (!codesRes.ok) {
+        setError(await readApiErrorMessage(codesRes))
+        return
+      }
+      const codes = ((await codesRes.json()) as { codes: { id: string }[] }).codes
+      if (codes.length < 1) {
+        setError('Нет напечатанных кодов для этой строки')
+        return
+      }
+      const codeId = codes[0].id
+      const defectRes = await fetch(apiUrl(`/operations/marking-codes/codes/${codeId}/defect`), {
+        method: 'POST',
+        headers: authHeaders,
+        body: JSON.stringify({ packaging_task_line_id: lineId }),
+      })
+      if (!defectRes.ok) {
+        setError(await readApiErrorMessage(defectRes))
+        return
+      }
+    } finally {
+      setBusy(false)
+    }
+  }
+
   const cancelTask = async () => {
     if (!window.confirm('Отменить задание на упаковку?')) {
       return
@@ -585,6 +617,18 @@ export function FfPackagingTaskPanel({
                         data-testid="ff-packaging-reprint-marking"
                       >
                         Повтор
+                      </Button>
+                    ) : null}
+                    {ln.requires_honest_sign && ln.qty_marking_printed > 0 ? (
+                      <Button
+                        size="small"
+                        variant="outlined"
+                        color="warning"
+                        disabled={busy}
+                        onClick={() => void reportDefectMarking(ln.id)}
+                        data-testid="ff-packaging-defect-marking"
+                      >
+                        Брак
                       </Button>
                     ) : null}
                     {ln.qty_confirmed_packed < ln.qty_suggested_packed ? (

@@ -25,6 +25,8 @@ from app.models.marking_code import (
     MarkingCodeImport,
     MarkingPool,
     MarkingPoolProduct,
+    MarkingReprintRequest,
+    REPRINT_STATUS_PENDING,
 )
 from app.models.packaging_task import PackagingTask, PackagingTaskLine
 from app.models.product import Product
@@ -1870,3 +1872,144 @@ async def get_code_history(
         )
         for event, actor_email in (await session.execute(stmt)).all()
     ]
+
+
+@dataclass(frozen=True)
+class PrintedCodeRow:
+    id: uuid.UUID
+    cis_masked: str
+    status: str
+
+
+@dataclass(frozen=True)
+class ReprintRequestRow:
+    id: uuid.UUID
+    code_id: uuid.UUID
+    status: str
+    reason: str | None
+    created_at: datetime
+    requested_by_email: str
+    product_name: str
+    product_sku: str
+    cis_masked: str
+    document_number: str | None
+
+
+async def list_printed_codes_for_packaging_line(
+    session: AsyncSession,
+    tenant_id: uuid.UUID,
+    line_id: uuid.UUID,
+) -> list[PrintedCodeRow]:
+    line = await session.get(PackagingTaskLine, line_id)
+    if line is None:
+        raise MarkingCodeServiceError("line_not_found")
+    task = await session.get(PackagingTask, line.task_id)
+    if task is None or task.tenant_id != tenant_id:
+        raise MarkingCodeServiceError("line_not_found")
+
+    stmt = (
+        select(MarkingCode)
+        .where(
+            MarkingCode.tenant_id == tenant_id,
+            MarkingCode.packaging_task_line_id == line_id,
+            MarkingCode.status == STATUS_PRINTED,
+        )
+        .order_by(MarkingCode.printed_at.asc(), MarkingCode.created_at.asc())
+    )
+    codes = list((await session.execute(stmt)).scalars().all())
+    return [
+        PrintedCodeRow(id=code.id, cis_masked=mask_cis_code(code.cis_code), status=code.status)
+        for code in codes
+    ]
+
+
+async def create_defect_reprint_request(
+    session: AsyncSession,
+    tenant_id: uuid.UUID,
+    code_id: uuid.UUID,
+    *,
+    packaging_task_line_id: uuid.UUID,
+    requested_by: uuid.UUID,
+    reason: str | None = None,
+) -> MarkingReprintRequest:
+    code = await session.get(MarkingCode, code_id)
+    if code is None or code.tenant_id != tenant_id:
+        raise MarkingCodeServiceError("code_not_found")
+    if code.status != STATUS_PRINTED:
+        raise MarkingCodeServiceError("code_not_printed")
+    if code.packaging_task_line_id != packaging_task_line_id:
+        raise MarkingCodeServiceError("line_mismatch")
+
+    line = await session.get(PackagingTaskLine, packaging_task_line_id)
+    if line is None:
+        raise MarkingCodeServiceError("line_not_found")
+    task = await session.get(PackagingTask, line.task_id)
+    if task is None or task.tenant_id != tenant_id:
+        raise MarkingCodeServiceError("line_not_found")
+
+    pending_stmt = select(MarkingReprintRequest.id).where(
+        MarkingReprintRequest.tenant_id == tenant_id,
+        MarkingReprintRequest.code_id == code_id,
+        MarkingReprintRequest.status == REPRINT_STATUS_PENDING,
+    )
+    if (await session.execute(pending_stmt)).scalar_one_or_none() is not None:
+        raise MarkingCodeServiceError("reprint_already_pending")
+
+    req = MarkingReprintRequest(
+        tenant_id=tenant_id,
+        code_id=code_id,
+        packaging_task_line_id=packaging_task_line_id,
+        requested_by_user_id=requested_by,
+        reason=reason.strip() if reason and reason.strip() else None,
+        status=REPRINT_STATUS_PENDING,
+    )
+    session.add(req)
+    await session.commit()
+    await session.refresh(req)
+    return req
+
+
+async def list_pending_reprint_requests(
+    session: AsyncSession,
+    tenant_id: uuid.UUID,
+) -> list[ReprintRequestRow]:
+    stmt = (
+        select(
+            MarkingReprintRequest,
+            MarkingCode.cis_code,
+            User.email,
+            Product.name,
+            Product.sku_code,
+            PackagingTask.document_number,
+        )
+        .join(MarkingCode, MarkingCode.id == MarkingReprintRequest.code_id)
+        .join(User, User.id == MarkingReprintRequest.requested_by_user_id)
+        .join(
+            PackagingTaskLine,
+            PackagingTaskLine.id == MarkingReprintRequest.packaging_task_line_id,
+        )
+        .join(Product, Product.id == PackagingTaskLine.product_id)
+        .join(PackagingTask, PackagingTask.id == PackagingTaskLine.task_id)
+        .where(
+            MarkingReprintRequest.tenant_id == tenant_id,
+            MarkingReprintRequest.status == REPRINT_STATUS_PENDING,
+        )
+        .order_by(MarkingReprintRequest.created_at.asc())
+    )
+    rows: list[ReprintRequestRow] = []
+    for req, cis, email, product_name, sku, doc_num in (await session.execute(stmt)).all():
+        rows.append(
+            ReprintRequestRow(
+                id=req.id,
+                code_id=req.code_id,
+                status=req.status,
+                reason=req.reason,
+                created_at=req.created_at,
+                requested_by_email=email,
+                product_name=product_name,
+                product_sku=sku,
+                cis_masked=mask_cis_code(cis),
+                document_number=doc_num,
+            )
+        )
+    return rows

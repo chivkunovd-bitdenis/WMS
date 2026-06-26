@@ -2540,7 +2540,7 @@ export default function App() {
             path="ff/honest-sign/reprints"
             element={
               token && canAccessFfBlock(me.role, me.permissions, 'shift_lead') ? (
-                <FfHonestSignReprintsPage />
+                <FfHonestSignReprintsPage token={token} />
               ) : (
                 <Navigate to={`${base}/dashboard`} replace />
               )

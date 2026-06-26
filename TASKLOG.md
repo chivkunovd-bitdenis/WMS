@@ -1,5 +1,12 @@
 # TASKLOG
 
+## TASK-73 — 2026-06-26 — ЧЗ T2.1–T2.2: shift_lead и запрос брака
+
+- What changed: `can_shift_lead` в `ff_staff_permissions`; `require_shift_lead`; API `GET reprint-requests`, `POST codes/{id}/defect`, `GET packaging-task-lines/{id}/printed-codes`; таблица `marking_reprint_requests`; кнопка «Брак» на упаковке; экран «Перепечатки» с таблицей pending; pytest + e2e.
+- What did NOT change: действия старшего (подтвердить/заменить/отклонить) — T2.3.
+- Verification: pytest shift_lead + reprint_defect; `npm run build`; e2e ff-shift-lead + ff-marking-defect green.
+- Commit: pending.
+
 ## TASK-72 — 2026-06-26 — ЧЗ T1.6: рендер ленты по layout
 
 - What changed: `expandLayoutTape` в `markingPrintPresets.ts`; `printMarkingCodeTape` / обновлённый `printMarkingCodeLabels` с блоками `cz` и `label` (58×40); экспорт `buildProductLabelSectionHtml`; вызовы из `MarkingPrintDialog`, `FfPackagingPage` (scan/print-all/строка); vitest `markingPrintPresets.test.ts`; e2e constructor — пресет «Этикетки + ЧЗ», счётчик этикеток в предпросмотре.

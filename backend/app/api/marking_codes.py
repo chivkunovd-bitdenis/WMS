@@ -1096,15 +1096,106 @@ class MarkingReprintRequestOut(BaseModel):
     status: str
     reason: str | None = None
     created_at: datetime
+    requested_by_email: str
+    product_name: str
+    product_sku: str
+    cis_masked: str
+    document_number: str | None = None
 
 
 class MarkingReprintRequestsOut(BaseModel):
     requests: list[MarkingReprintRequestOut]
 
 
+class PrintedMarkingCodeOut(BaseModel):
+    id: str
+    cis_masked: str
+    status: str
+
+
+class PrintedMarkingCodesOut(BaseModel):
+    codes: list[PrintedMarkingCodeOut]
+
+
+class MarkingDefectIn(BaseModel):
+    packaging_task_line_id: uuid.UUID
+    reason: str | None = Field(default=None, max_length=512)
+
+
+class MarkingDefectOut(BaseModel):
+    request_id: str
+    code_id: str
+    status: str
+
+
+@router.get(
+    "/packaging-task-lines/{line_id}/printed-codes",
+    response_model=PrintedMarkingCodesOut,
+)
+async def list_printed_codes_for_line(
+    line_id: uuid.UUID,
+    user: Annotated[User, Depends(require_packaging_access)],
+    session: Annotated[AsyncSession, Depends(get_db)],
+) -> PrintedMarkingCodesOut:
+    try:
+        rows = await mc_svc.list_printed_codes_for_packaging_line(
+            session, user.tenant_id, line_id
+        )
+    except mc_svc.MarkingCodeServiceError as exc:
+        raise _http_from_mc_error(exc) from exc
+    return PrintedMarkingCodesOut(
+        codes=[
+            PrintedMarkingCodeOut(id=str(row.id), cis_masked=row.cis_masked, status=row.status)
+            for row in rows
+        ]
+    )
+
+
+@router.post("/codes/{code_id}/defect", response_model=MarkingDefectOut)
+async def report_marking_code_defect(
+    code_id: uuid.UUID,
+    body: MarkingDefectIn,
+    user: Annotated[User, Depends(require_packaging_access)],
+    session: Annotated[AsyncSession, Depends(get_db)],
+) -> MarkingDefectOut:
+    try:
+        req = await mc_svc.create_defect_reprint_request(
+            session,
+            user.tenant_id,
+            code_id,
+            packaging_task_line_id=body.packaging_task_line_id,
+            requested_by=user.id,
+            reason=body.reason,
+        )
+    except mc_svc.MarkingCodeServiceError as exc:
+        raise _http_from_mc_error(exc) from exc
+    return MarkingDefectOut(
+        request_id=str(req.id),
+        code_id=str(req.code_id),
+        status=req.status,
+    )
+
+
 @router.get("/reprint-requests", response_model=MarkingReprintRequestsOut)
 async def list_marking_reprint_requests(
-    _user: Annotated[User, Depends(require_shift_lead)],
+    user: Annotated[User, Depends(require_shift_lead)],
+    session: Annotated[AsyncSession, Depends(get_db)],
 ) -> MarkingReprintRequestsOut:
-    """Shift-lead queue for marking reprints (T2.3 will populate rows)."""
-    return MarkingReprintRequestsOut(requests=[])
+    rows = await mc_svc.list_pending_reprint_requests(session, user.tenant_id)
+    return MarkingReprintRequestsOut(
+        requests=[
+            MarkingReprintRequestOut(
+                id=str(row.id),
+                code_id=str(row.code_id),
+                status=row.status,
+                reason=row.reason,
+                created_at=row.created_at,
+                requested_by_email=row.requested_by_email,
+                product_name=row.product_name,
+                product_sku=row.product_sku,
+                cis_masked=row.cis_masked,
+                document_number=row.document_number,
+            )
+            for row in rows
+        ]
+    )

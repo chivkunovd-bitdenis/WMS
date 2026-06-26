@@ -28,6 +28,7 @@ from app.models.marking_code import (
     MarkingCodeImport,
     MarkingPool,
     MarkingPoolProduct,
+    MarkingReprintRequest,
 )
 from app.models.outbound_shipment import OutboundShipmentLine, OutboundShipmentRequest
 from app.models.packaging_task import PackagingTask, PackagingTaskLine
@@ -71,6 +72,7 @@ __all__ = [
     "MarkingCodeImport",
     "MarkingPool",
     "MarkingPoolProduct",
+    "MarkingReprintRequest",
     "OutboundShipmentLine",
     "OutboundShipmentRequest",
     "PackagingTask",
