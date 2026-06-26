@@ -18,6 +18,8 @@ from app.models.marking_code import (
     EVENT_REPRINTED,
     EVENT_DEFECTIVE,
     EVENT_REPLACED,
+    EVENT_APPLIED,
+    STATUS_APPLIED,
     STATUS_AVAILABLE,
     STATUS_DEFECTIVE,
     STATUS_PRINTED,
@@ -2203,3 +2205,132 @@ async def reject_reprint_request(
         status=req.status,
         code_id=req.code_id,
     )
+
+
+@dataclass(frozen=True)
+class VerifyPairResult:
+    match: bool
+    applied: bool
+    code_id: uuid.UUID | None = None
+
+
+async def verify_pair_and_apply(
+    session: AsyncSession,
+    tenant_id: uuid.UUID,
+    *,
+    cis_a: str,
+    cis_b: str,
+    acting_user_id: uuid.UUID,
+) -> VerifyPairResult:
+    norm_a = normalize_cis(cis_a)
+    norm_b = normalize_cis(cis_b)
+    if norm_a is None or norm_b is None:
+        raise MarkingCodeServiceError("invalid_cis")
+
+    if norm_a != norm_b:
+        return VerifyPairResult(match=False, applied=False)
+
+    stmt = select(MarkingCode).where(
+        MarkingCode.tenant_id == tenant_id,
+        MarkingCode.cis_code == norm_a,
+    )
+    code = (await session.execute(stmt)).scalar_one_or_none()
+    if code is None:
+        return VerifyPairResult(match=True, applied=False)
+
+    if code.status != STATUS_PRINTED:
+        return VerifyPairResult(match=True, applied=False, code_id=code.id)
+
+    now = datetime.now(UTC)
+    code.status = STATUS_APPLIED
+    code.applied_at = now
+
+    line: PackagingTaskLine | None = None
+    document_number: str | None = None
+    if code.packaging_task_line_id is not None:
+        line = await session.get(PackagingTaskLine, code.packaging_task_line_id)
+        if line is not None:
+            task = await session.get(PackagingTask, line.task_id)
+            if task is not None:
+                document_number = task.document_number
+
+    await record_event(
+        session,
+        code=code,
+        event_type=EVENT_APPLIED,
+        actor=acting_user_id,
+        document_number=document_number,
+        packaging_task=line,
+    )
+    await session.commit()
+    return VerifyPairResult(match=True, applied=True, code_id=code.id)
+
+
+@dataclass(frozen=True)
+class PendingMarkingRow:
+    packaging_task_id: uuid.UUID
+    packaging_task_line_id: uuid.UUID
+    document_number: str | None
+    warehouse_id: uuid.UUID
+    seller_id: uuid.UUID | None
+    product_id: uuid.UUID
+    sku_code: str
+    product_name: str
+    storage_location_code: str
+    qty_need: int
+    qty_marking_printed: int
+    qty_remaining: int
+    marking_available_count: int
+
+
+async def list_pending_marking_lines(
+    session: AsyncSession,
+    tenant_id: uuid.UUID,
+    *,
+    warehouse_id: uuid.UUID | None = None,
+    seller_id: uuid.UUID | None = None,
+) -> list[PendingMarkingRow]:
+    from app.services.packaging_task_service import qty_need_pack
+
+    stmt = (
+        select(PackagingTaskLine, PackagingTask, Product, StorageLocation)
+        .join(PackagingTask, PackagingTask.id == PackagingTaskLine.task_id)
+        .join(Product, Product.id == PackagingTaskLine.product_id)
+        .join(StorageLocation, StorageLocation.id == PackagingTaskLine.storage_location_id)
+        .where(
+            PackagingTask.tenant_id == tenant_id,
+            PackagingTask.status.in_(("draft", "in_progress")),
+            Product.requires_honest_sign.is_(True),
+        )
+        .order_by(PackagingTask.created_at.asc())
+    )
+    if warehouse_id is not None:
+        stmt = stmt.where(PackagingTask.warehouse_id == warehouse_id)
+    if seller_id is not None:
+        stmt = stmt.where(Product.seller_id == seller_id)
+
+    rows: list[PendingMarkingRow] = []
+    for line, task, product, loc in (await session.execute(stmt)).all():
+        qty_need = qty_need_pack(line)
+        printed = int(line.qty_marking_printed)
+        if printed >= qty_need or qty_need < 1:
+            continue
+        available = await count_available_for_product(session, tenant_id, product.id)
+        rows.append(
+            PendingMarkingRow(
+                packaging_task_id=task.id,
+                packaging_task_line_id=line.id,
+                document_number=task.document_number,
+                warehouse_id=task.warehouse_id,
+                seller_id=product.seller_id,
+                product_id=product.id,
+                sku_code=product.sku_code,
+                product_name=product.name,
+                storage_location_code=loc.code,
+                qty_need=qty_need,
+                qty_marking_printed=printed,
+                qty_remaining=qty_need - printed,
+                marking_available_count=available,
+            )
+        )
+    return rows

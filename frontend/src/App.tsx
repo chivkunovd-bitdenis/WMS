@@ -26,6 +26,7 @@ import {
 } from '@mui/material'
 import CloseIcon from '@mui/icons-material/Close'
 import { FfPackagingPage } from './screens/ff/FfPackagingPage'
+import { FfPendingMarkingPage } from './screens/ff/FfPendingMarkingPage'
 import { FfDashboard } from './screens/ff/FfDashboard'
 import {
   FfSuppliesShipmentsPage,
@@ -2489,6 +2490,16 @@ export default function App() {
                   }
                   testId="ff-packaging-placeholder"
                 />
+              )
+            }
+          />
+          <Route
+            path="ff/packaging/pending-marking"
+            element={
+              token && (isFulfillmentAdmin || canAccessFfBlock(me.role, me.permissions, 'packaging')) ? (
+                <FfPendingMarkingPage token={token} />
+              ) : (
+                <Navigate to={`${base}/dashboard`} replace />
               )
             }
           />

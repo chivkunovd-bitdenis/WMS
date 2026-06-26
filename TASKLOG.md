@@ -1,5 +1,12 @@
 # TASKLOG
 
+## TASK-74 — 2026-06-26 — ЧЗ T2.4–T2.5: verify-pair и ворклист pending
+
+- What changed: T2.4 `POST verify-pair` (match → `applied` + событие), мини-станция на упаковке; T2.5 `GET pending-marking`, экран «Осталось промаркировать», бейдж на упаковке.
+- What did NOT change: фаза 3 (уведомления T3.1).
+- Verification: pytest verify_pair + pending; e2e ff-marking-verify-pair + ff-pending-marking.
+- Commit: pending.
+
 ## TASK-73 — 2026-06-26 — ЧЗ T2.1–T2.3: shift_lead, брак, очередь перепечатки
 
 - What changed: T2.1 `can_shift_lead`, `require_shift_lead`, nav «Перепечатки»; T2.2 `marking_reprint_requests`, `POST codes/{id}/defect`, кнопка «Брак» на упаковке; T2.3 approve/replace/reject API и кнопки на экране очереди.

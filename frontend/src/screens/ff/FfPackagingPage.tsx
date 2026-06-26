@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from 'react'
 import { Link as RouterLink, useLocation } from 'react-router-dom'
 import {
   Alert,
+  Badge,
   Box,
   Button,
   Checkbox,
@@ -102,6 +103,10 @@ export function FfPackagingTaskPanel({
   const [scanBarcode, setScanBarcode] = useState('')
   const [scanBusy, setScanBusy] = useState(false)
   const [scanFlash, setScanFlash] = useState<'ok' | 'error' | null>(null)
+  const [pairScan, setPairScan] = useState('')
+  const [pairFirstCis, setPairFirstCis] = useState<string | null>(null)
+  const [pairBusy, setPairBusy] = useState(false)
+  const [pairFlash, setPairFlash] = useState<'ok' | 'error' | null>(null)
   const [printAllOpen, setPrintAllOpen] = useState(false)
   const [printAllBusy, setPrintAllBusy] = useState(false)
   const [printAllAllowPartial, setPrintAllAllowPartial] = useState(false)
@@ -220,6 +225,10 @@ export function FfPackagingTaskPanel({
 
   const hasHonestSignLines = task.lines.some(
     (ln) => ln.requires_honest_sign && ln.qty_need_pack > ln.qty_marking_printed,
+  )
+
+  const hasPrintedMarkingLines = task.lines.some(
+    (ln) => ln.requires_honest_sign && ln.qty_marking_printed > 0,
   )
 
   const shortageLineCount =
@@ -409,6 +418,51 @@ export function FfPackagingTaskPanel({
     }
   }
 
+  const submitPairVerify = async () => {
+    const raw = pairScan.trim()
+    if (!raw || pairBusy) {
+      return
+    }
+    if (pairFirstCis === null) {
+      setPairFirstCis(raw)
+      setPairScan('')
+      setPairFlash(null)
+      return
+    }
+    setPairBusy(true)
+    setPairFlash(null)
+    setError(null)
+    try {
+      const res = await fetch(apiUrl('/operations/marking-codes/verify-pair'), {
+        method: 'POST',
+        headers: authHeaders,
+        body: JSON.stringify({ cis_a: pairFirstCis, cis_b: raw }),
+      })
+      if (!res.ok) {
+        setPairFlash('error')
+        setError(await readApiErrorMessage(res))
+        return
+      }
+      const data = (await res.json()) as { match: boolean; applied: boolean }
+      if (data.match && data.applied) {
+        setPairFlash('ok')
+      } else if (data.match) {
+        setPairFlash('error')
+        setError('Коды совпали, но ЧЗ уже проверен или ещё не напечатан.')
+      } else {
+        setPairFlash('error')
+        setError('Наклейки не совпали — проверьте товар и пакет.')
+      }
+    } catch (e) {
+      setPairFlash('error')
+      setError(e instanceof Error ? e.message : 'Проверка пары не удалась.')
+    } finally {
+      setPairFirstCis(null)
+      setPairScan('')
+      setPairBusy(false)
+    }
+  }
+
   return (
     <Stack spacing={2} data-testid="ff-packaging-task-panel">
       <Stack direction="row" spacing={1} sx={{ alignItems: 'center', flexWrap: 'wrap' }}>
@@ -481,6 +535,51 @@ export function FfPackagingTaskPanel({
             Печать всех ЧЗ
           </Button>
         </Stack>
+      ) : null}
+      {hasPrintedMarkingLines && manualTask ? (
+        <Paper variant="outlined" sx={{ p: 2 }} data-testid="marking-verify-pair-panel">
+          <Typography variant="subtitle2" gutterBottom>
+            Проверка пары ЧЗ (товар = пакет)
+          </Typography>
+          <Stack spacing={1}>
+            {pairFirstCis ? (
+              <Typography variant="caption" color="text.secondary" data-testid="marking-verify-pair-step">
+                Первая наклейка принята — сканируйте вторую (пакет)
+              </Typography>
+            ) : (
+              <Typography variant="caption" color="text.secondary" data-testid="marking-verify-pair-step">
+                Сканируйте наклейку на товаре, затем на пакете
+              </Typography>
+            )}
+            <TextField
+              size="small"
+              label={pairFirstCis ? 'Скан 2: пакет' : 'Скан 1: товар'}
+              value={pairScan}
+              disabled={pairBusy || busy}
+              onChange={(e) => setPairScan(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') {
+                  e.preventDefault()
+                  void submitPairVerify()
+                }
+              }}
+              slotProps={{
+                htmlInput: { 'data-testid': 'marking-verify-pair-input' },
+              }}
+              sx={{ maxWidth: 480 }}
+            />
+            {pairFlash === 'ok' ? (
+              <Alert severity="success" data-testid="marking-verify-pair-ok">
+                Совпало — ЧЗ применён
+              </Alert>
+            ) : null}
+            {pairFlash === 'error' ? (
+              <Alert severity="error" data-testid="marking-verify-pair-error">
+                Не совпало или не применено
+              </Alert>
+            ) : null}
+          </Stack>
+        </Paper>
       ) : null}
       {task.pick_resync_warning ? (
         <Alert severity="warning" data-testid="ff-packaging-pick-resync-warning">
@@ -1058,6 +1157,7 @@ export function FfPackagingPage({ token }: PageProps) {
   const [selected, setSelected] = useState<PackagingTask | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [createOpen, setCreateOpen] = useState(false)
+  const [pendingMarkingCount, setPendingMarkingCount] = useState(0)
 
   const loadTaskById = useCallback(
     async (taskId: string) => {
@@ -1082,6 +1182,13 @@ export function FfPackagingPage({ token }: PageProps) {
       return
     }
     setTasks((await res.json()) as PackagingTask[])
+    const pendingRes = await fetch(apiUrl('/operations/marking-codes/pending-marking'), {
+      headers: { Authorization: `Bearer ${token}` },
+    })
+    if (pendingRes.ok) {
+      const pending = (await pendingRes.json()) as { total: number }
+      setPendingMarkingCount(pending.total)
+    }
   }, [token])
 
   useEffect(() => {
@@ -1101,7 +1208,17 @@ export function FfPackagingPage({ token }: PageProps) {
         title="Упаковка"
         description="Задания на маркировку и упаковку. Создайте из ячейки или сортировки, либо откройте из отгрузки на МП."
       />
-      <Stack direction="row" sx={{ justifyContent: 'flex-end', mb: 2 }}>
+      <Stack direction="row" spacing={1} sx={{ justifyContent: 'flex-end', mb: 2, alignItems: 'center' }}>
+        <Badge badgeContent={pendingMarkingCount} color="warning" data-testid="ff-packaging-pending-badge">
+          <Button
+            component={RouterLink}
+            to="/app/ff/packaging/pending-marking"
+            variant="outlined"
+            data-testid="ff-packaging-pending-link"
+          >
+            Осталось промаркировать
+          </Button>
+        </Badge>
         <Button
           variant="contained"
           onClick={() => setCreateOpen(true)}

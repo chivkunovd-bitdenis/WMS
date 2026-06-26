@@ -112,6 +112,38 @@ class ScanPrintMarkingIn(BaseModel):
     product_barcode: str = Field(min_length=1, max_length=128)
 
 
+class VerifyPairIn(BaseModel):
+    cis_a: str = Field(min_length=1, max_length=512)
+    cis_b: str = Field(min_length=1, max_length=512)
+
+
+class VerifyPairOut(BaseModel):
+    match: bool
+    applied: bool
+    code_id: str | None = None
+
+
+class PendingMarkingLineOut(BaseModel):
+    packaging_task_id: str
+    packaging_task_line_id: str
+    document_number: str | None
+    warehouse_id: str
+    seller_id: str | None
+    product_id: str
+    sku_code: str
+    product_name: str
+    storage_location_code: str
+    qty_need: int
+    qty_marking_printed: int
+    qty_remaining: int
+    marking_available_count: int
+
+
+class PendingMarkingOut(BaseModel):
+    rows: list[PendingMarkingLineOut]
+    total: int
+
+
 class PrintAllMarkingIn(BaseModel):
     layout_json: PrintLayoutOut | None = None
     allow_partial: bool = False
@@ -993,6 +1025,65 @@ async def scan_print_marking_codes(
         codes=result.codes,
         layout=_layout_out(result.layout),
         shortage=result.shortage,
+    )
+
+
+@router.post("/verify-pair", response_model=VerifyPairOut)
+async def verify_marking_pair(
+    body: VerifyPairIn,
+    user: Annotated[User, Depends(require_packaging_access)],
+    session: Annotated[AsyncSession, Depends(get_db)],
+) -> VerifyPairOut:
+    try:
+        result = await mc_svc.verify_pair_and_apply(
+            session,
+            user.tenant_id,
+            cis_a=body.cis_a,
+            cis_b=body.cis_b,
+            acting_user_id=user.id,
+        )
+    except mc_svc.MarkingCodeServiceError as exc:
+        raise _http_from_mc_error(exc) from exc
+    return VerifyPairOut(
+        match=result.match,
+        applied=result.applied,
+        code_id=str(result.code_id) if result.code_id else None,
+    )
+
+
+@router.get("/pending-marking", response_model=PendingMarkingOut)
+async def list_pending_marking(
+    user: Annotated[User, Depends(require_packaging_access)],
+    session: Annotated[AsyncSession, Depends(get_db)],
+    warehouse_id: Annotated[uuid.UUID | None, Query()] = None,
+    seller_id: Annotated[uuid.UUID | None, Query()] = None,
+) -> PendingMarkingOut:
+    rows = await mc_svc.list_pending_marking_lines(
+        session,
+        user.tenant_id,
+        warehouse_id=warehouse_id,
+        seller_id=seller_id,
+    )
+    return PendingMarkingOut(
+        total=len(rows),
+        rows=[
+            PendingMarkingLineOut(
+                packaging_task_id=str(row.packaging_task_id),
+                packaging_task_line_id=str(row.packaging_task_line_id),
+                document_number=row.document_number,
+                warehouse_id=str(row.warehouse_id),
+                seller_id=str(row.seller_id) if row.seller_id else None,
+                product_id=str(row.product_id),
+                sku_code=row.sku_code,
+                product_name=row.product_name,
+                storage_location_code=row.storage_location_code,
+                qty_need=row.qty_need,
+                qty_marking_printed=row.qty_marking_printed,
+                qty_remaining=row.qty_remaining,
+                marking_available_count=row.marking_available_count,
+            )
+            for row in rows
+        ],
     )
 
 
