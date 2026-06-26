@@ -36,6 +36,7 @@ from app.models.packaging_task import PackagingTask, PackagingTaskLine
 from app.models.print_template import PrintTemplate
 from app.models.product import Product
 from app.models.seller import Seller
+from app.models.seller_marking_credentials import SellerMarkingCredentials
 from app.models.seller_shop_delegation import SellerShopDelegation
 from app.models.seller_wildberries_credentials import SellerWildberriesCredentials
 from app.models.seller_wildberries_imported_card import SellerWildberriesImportedCard
@@ -82,6 +83,7 @@ __all__ = [
     "PrintTemplate",
     "Product",
     "Seller",
+    "SellerMarkingCredentials",
     "SellerShopDelegation",
     "SellerWildberriesCredentials",
     "SellerWildberriesImportedCard",

@@ -1,5 +1,12 @@
 # TASKLOG
 
+## TASK-78 — 2026-06-26 — ЧЗ T4.1: хранилище кредов селлера
+
+- What changed: таблица `seller_marking_credentials` (шифрованные токены ЧЗ/СУЗ/МП, МЧД, signing_method, edo_route, auto_introduce, auto_emit_limit); API `GET/PATCH /operations/marking-codes/self/credentials` и `/sellers/{id}/credentials`; блок настроек в `SellerSettingsScreen`; pytest + e2e `seller-marking-credentials.spec.ts`.
+- What did NOT change: signing-service (T4.2), авто-ввод в оборот (T4.3).
+- Verification: `pytest tests/test_marking_credentials_api.py` 4 passed; `npm run build`; e2e `seller-marking-credentials.spec.ts` green.
+- Commit: (pending).
+
 ## TASK-77 — 2026-06-26 — ЧЗ T3.3–T3.5: прогноз, low-stock, дашборд селлера, триггеры ФФ
 
 - What changed: T3.3 расчёт `consumption_7d`/`forecast_days`, `PUT pools/{id}/threshold`, Celery `marking_low_stock`, KPI и пороги в UI; T3.4 карточки остатков селлера + e2e; T3.5 `notify_ff_portal` при создании приёмки/отгрузки МП.
