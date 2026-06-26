@@ -15,6 +15,7 @@ import {
 import { alpha } from '@mui/material/styles'
 
 import { WmsBrandMark } from '../components/WmsBrandMark'
+import { NotificationBell } from '../components/NotificationBell'
 import type { FfPermissions } from '../utils/ffPermissions'
 import { canAccessFfBlock, isFulfillmentAdminRole } from '../utils/ffPermissions'
 
@@ -72,6 +73,7 @@ export function AuthedAppLayout({
                   {userRoleLabel ? <span> · {userRoleLabel}</span> : null}
                 </Box>
               ) : null}
+              <NotificationBell portal="seller" notificationsPath={`${base}/notifications`} />
               <MuiButton
                 type="button"
                 variant="outlined"
@@ -171,6 +173,7 @@ export function AuthedAppLayout({
                 {userRoleLabel ? <span> · {userRoleLabel}</span> : null}
               </Box>
             ) : null}
+            <NotificationBell portal="fulfillment" notificationsPath={`${base}/notifications`} />
             <MuiButton
               type="button"
               variant="outlined"

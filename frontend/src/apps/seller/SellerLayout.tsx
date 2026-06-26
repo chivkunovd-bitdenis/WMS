@@ -14,6 +14,7 @@ import {
 } from '@mui/material'
 
 import { WmsBrandMark } from '../../components/WmsBrandMark'
+import { NotificationBell } from '../../components/NotificationBell'
 import { SellerShopSidebar, type SellerShopRow } from '../../components/SellerShopSidebar'
 
 type Props = {
@@ -77,6 +78,7 @@ export function SellerLayout({
                 {userRoleLabel ? <span> · {userRoleLabel}</span> : null}
               </Box>
             ) : null}
+            <NotificationBell portal="seller" notificationsPath="/notifications" />
             <MuiButton
               type="button"
               variant="outlined"

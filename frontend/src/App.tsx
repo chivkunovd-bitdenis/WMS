@@ -37,6 +37,7 @@ import { FfHonestSignPage } from './screens/ff/FfHonestSignPage'
 import { HonestSignImportPage } from './screens/shared/HonestSignImportPage'
 import { FfHonestSignLedgerPage } from './screens/ff/FfHonestSignLedgerPage'
 import { FfHonestSignReprintsPage } from './screens/ff/FfHonestSignReprintsPage'
+import { NotificationsPage } from './screens/shared/NotificationsPage'
 import { HonestSignPoolPage } from './screens/shared/HonestSignPoolPage'
 import { FfPlaceholderPage } from './screens/ff/FfPlaceholderPage'
 import { FfInboundRequestView, type InboundRequestWorkspace } from './screens/ff/FfInboundRequestView'
@@ -2567,6 +2568,21 @@ export default function App() {
                   title="Загрузка кодов"
                   hint="Нет токена."
                   testId="ff-honest-sign-import-placeholder"
+                />
+              )
+            }
+          />
+
+          <Route
+            path="ff/notifications"
+            element={
+              token ? (
+                <NotificationsPage token={token} portal="ff" testId="ff-notifications-page" />
+              ) : (
+                <FfPlaceholderPage
+                  title="Уведомления"
+                  hint="Нет токена."
+                  testId="ff-notifications-placeholder"
                 />
               )
             }

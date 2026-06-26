@@ -10,6 +10,7 @@ import { SellerInboundDraftScreen } from '../../screens/v2/SellerInboundDraftScr
 import { SellerProductsStockScreen } from '../../screens/v2/SellerProductsStockScreen'
 import { SellerHonestSignScreen } from '../../screens/v2/SellerHonestSignScreen'
 import { SellerSettingsScreen } from '../../screens/v2/SellerSettingsScreen'
+import { NotificationsPage } from '../../screens/shared/NotificationsPage'
 import { SellerLayout } from './SellerLayout'
 
 type InboundSummaryRow = {
@@ -385,6 +386,14 @@ export function SellerApp() {
                   token={token}
                   authHeaders={authHeaders}
                 />
+              ) : null
+            }
+          />
+          <Route
+            path="/notifications"
+            element={
+              token ? (
+                <NotificationsPage token={token} portal="seller" testId="seller-notifications-page" />
               ) : null
             }
           />
