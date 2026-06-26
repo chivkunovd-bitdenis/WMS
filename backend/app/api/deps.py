@@ -23,6 +23,7 @@ from app.services.staff_permissions_service import (
     PERM_MP_SHIPMENTS,
     PERM_PACKAGING,
     PERM_RECEPTION,
+    PERM_SHIFT_LEAD,
     get_staff_permissions,
 )
 from app.services.tokens import decode_access_token
@@ -206,6 +207,7 @@ require_reception_access = require_ff_permission(PERM_RECEPTION)
 require_mp_shipments_access = require_ff_or_seller_with_permission(PERM_MP_SHIPMENTS)
 require_cells_access = require_ff_permission(PERM_CELLS)
 require_packaging_access = require_ff_permission(PERM_PACKAGING)
+require_shift_lead = require_ff_permission(PERM_SHIFT_LEAD)
 
 
 async def seller_line_product_scope(

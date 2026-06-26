@@ -14,6 +14,7 @@ from app.api.deps import (
     get_current_user,
     get_effective_seller_id,
     require_packaging_access,
+    require_shift_lead,
 )
 from app.core.roles import FULFILLMENT_ADMIN, FULFILLMENT_SELLER
 from app.db.session import get_db
@@ -1087,3 +1088,23 @@ async def print_all_marking_codes_for_task(
     except pt_svc.PrintTemplateServiceError as exc:
         raise _http_from_pt_error(exc) from exc
     return _print_all_out(result)
+
+
+class MarkingReprintRequestOut(BaseModel):
+    id: str
+    code_id: str
+    status: str
+    reason: str | None = None
+    created_at: datetime
+
+
+class MarkingReprintRequestsOut(BaseModel):
+    requests: list[MarkingReprintRequestOut]
+
+
+@router.get("/reprint-requests", response_model=MarkingReprintRequestsOut)
+async def list_marking_reprint_requests(
+    _user: Annotated[User, Depends(require_shift_lead)],
+) -> MarkingReprintRequestsOut:
+    """Shift-lead queue for marking reprints (T2.3 will populate rows)."""
+    return MarkingReprintRequestsOut(requests=[])

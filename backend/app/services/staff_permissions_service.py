@@ -17,6 +17,7 @@ PERM_RECEPTION = "reception"
 PERM_CELLS = "cells"
 PERM_INVENTORY = "inventory"
 PERM_PACKAGING = "packaging"
+PERM_SHIFT_LEAD = "shift_lead"
 
 ALL_PERMISSIONS = (
     PERM_SETTINGS,
@@ -25,6 +26,7 @@ ALL_PERMISSIONS = (
     PERM_CELLS,
     PERM_INVENTORY,
     PERM_PACKAGING,
+    PERM_SHIFT_LEAD,
 )
 
 
@@ -36,6 +38,7 @@ class StaffPermissionsSnapshot:
     cells: bool = False
     inventory: bool = False
     packaging: bool = False
+    shift_lead: bool = False
 
     def as_dict(self) -> dict[str, bool]:
         return {
@@ -45,6 +48,7 @@ class StaffPermissionsSnapshot:
             PERM_CELLS: self.cells,
             PERM_INVENTORY: self.inventory,
             PERM_PACKAGING: self.packaging,
+            PERM_SHIFT_LEAD: self.shift_lead,
         }
 
     def has(self, permission: str) -> bool:
@@ -58,6 +62,7 @@ ADMIN_ALL = StaffPermissionsSnapshot(
     cells=True,
     inventory=True,
     packaging=True,
+    shift_lead=True,
 )
 
 
@@ -71,6 +76,7 @@ def _from_row(row: FfStaffPermissions | None) -> StaffPermissionsSnapshot:
         cells=row.can_cells,
         inventory=row.can_inventory,
         packaging=row.can_packaging,
+        shift_lead=row.can_shift_lead,
     )
 
 
@@ -133,6 +139,7 @@ async def update_staff_permissions(
     row.can_cells = permissions.cells
     row.can_inventory = permissions.inventory
     row.can_packaging = permissions.packaging
+    row.can_shift_lead = permissions.shift_lead
     await session.commit()
     await session.refresh(user)
     await session.refresh(row)

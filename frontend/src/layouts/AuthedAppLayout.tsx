@@ -262,6 +262,15 @@ export function AuthedAppLayout({
                 <ListItemText primary="Честный знак" />
               </ListItemButton>
             ) : null}
+            {can('shift_lead') ? (
+              <ListItemButton
+                component={NavLink}
+                to={`${base}/honest-sign/reprints`}
+                data-testid="nav-ff-honest-sign-reprints"
+              >
+                <ListItemText primary="Перепечатки" />
+              </ListItemButton>
+            ) : null}
             {can('settings') || isAdmin ? (
               <ListItemButton component={NavLink} to={`${base}/settings`} data-testid="nav-ff-settings">
                 <ListItemText primary="Настройки" />

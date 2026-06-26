@@ -35,6 +35,7 @@ import {
 import { FfHonestSignPage } from './screens/ff/FfHonestSignPage'
 import { HonestSignImportPage } from './screens/shared/HonestSignImportPage'
 import { FfHonestSignLedgerPage } from './screens/ff/FfHonestSignLedgerPage'
+import { FfHonestSignReprintsPage } from './screens/ff/FfHonestSignReprintsPage'
 import { HonestSignPoolPage } from './screens/shared/HonestSignPoolPage'
 import { FfPlaceholderPage } from './screens/ff/FfPlaceholderPage'
 import { FfInboundRequestView, type InboundRequestWorkspace } from './screens/ff/FfInboundRequestView'
@@ -2532,6 +2533,16 @@ export default function App() {
                   hint="Нет токена."
                   testId="ff-honest-sign-ledger-placeholder"
                 />
+              )
+            }
+          />
+          <Route
+            path="ff/honest-sign/reprints"
+            element={
+              token && canAccessFfBlock(me.role, me.permissions, 'shift_lead') ? (
+                <FfHonestSignReprintsPage />
+              ) : (
+                <Navigate to={`${base}/dashboard`} replace />
               )
             }
           />

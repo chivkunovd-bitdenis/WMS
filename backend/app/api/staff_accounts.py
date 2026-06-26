@@ -34,6 +34,7 @@ class StaffPermissionsBody(BaseModel):
     cells: bool = False
     inventory: bool = False
     packaging: bool = False
+    shift_lead: bool = False
 
     def to_snapshot(self) -> StaffPermissionsSnapshot:
         return StaffPermissionsSnapshot(
@@ -43,6 +44,7 @@ class StaffPermissionsBody(BaseModel):
             cells=self.cells,
             inventory=self.inventory,
             packaging=self.packaging,
+            shift_lead=self.shift_lead,
         )
 
 
@@ -70,6 +72,7 @@ class StaffPermissionsOut(BaseModel):
     cells: bool
     inventory: bool
     packaging: bool
+    shift_lead: bool
 
 
 class StaffPackagingBillingOut(BaseModel):
@@ -101,6 +104,7 @@ def _permissions_out(snapshot: StaffPermissionsSnapshot) -> StaffPermissionsOut:
         cells=d["cells"],
         inventory=d["inventory"],
         packaging=d["packaging"],
+        shift_lead=d["shift_lead"],
     )
 
 

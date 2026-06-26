@@ -63,6 +63,7 @@ class StaffPermissionsOut(BaseModel):
     cells: bool
     inventory: bool
     packaging: bool
+    shift_lead: bool
 
 
 class SellerShopOut(BaseModel):
@@ -315,6 +316,7 @@ async def me(
         cells=perms_dict["cells"],
         inventory=perms_dict["inventory"],
         packaging=perms_dict["packaging"],
+        shift_lead=perms_dict["shift_lead"],
     )
     return UserMeResponse(
         id=str(user.id),
