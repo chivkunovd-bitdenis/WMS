@@ -5,9 +5,7 @@
 - What changed: `NotificationBell` в шапке FF и селлера, страница «Уведомления», API-клиент, e2e seed `/_e2e/seed`, Playwright `ff-notifications.spec.ts`.
 - What did NOT change: пороги low-stock (T3.3), дашборд остатков селлера (T3.4), триггеры отгрузок (T3.5).
 - Verification: `npm run build`; e2e `ff-notifications.spec.ts` green.
-- Commit: (pending).
-
-## TASK-75 — 2026-06-26 — ЧЗ T3.1: шина уведомлений
+- Commit: `11c1ccd`.
 
 - What changed: таблица `notifications`, сервис `notify`/`notify_ff_portal`, API `GET/POST /operations/notifications` (список, read, read-all), скоуп получателя user/seller/ff_portal.
 - What did NOT change: UI колокольчик (T3.2), триггеры low-stock и отгрузок (T3.3–T3.5).
