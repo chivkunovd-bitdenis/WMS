@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 import os
 import uuid
+from datetime import datetime
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, UploadFile, status
@@ -111,10 +112,79 @@ class E2eCreatePoolOut(BaseModel):
     pool_id: str
 
 
+class PoolListItemOut(BaseModel):
+    id: str
+    title: str
+    gtin: str
+    products: list[PoolProductOut]
+    available: int
+    reserved: int
+    printed: int
+    defective: int
+    forecast_days: float | None
+
+
+class PoolImportBatchOut(BaseModel):
+    import_id: str
+    document_number: str | None
+    filename: str
+    accepted_count: int
+    created_at: str
+
+
+class PoolDetailOut(PoolListItemOut):
+    import_batches: list[PoolImportBatchOut]
+
+
+class PoolCodeOut(BaseModel):
+    id: str
+    cis_masked: str
+    status: str
+    created_at: str
+    printed_by: str | None
+    document_number: str | None
+
+
+class LedgerEventOut(BaseModel):
+    id: str
+    created_at: str
+    event_type: str
+    cis_masked: str
+    pool_title: str | None
+    gtin: str | None
+    product_name: str | None
+    product_sku: str | None
+    seller_name: str | None
+    document_number: str | None
+    actor_email: str | None
+
+
+class LedgerPageOut(BaseModel):
+    rows: list[LedgerEventOut]
+    total: int
+
+
+class CodeHistoryEventOut(BaseModel):
+    id: str
+    created_at: str
+    event_type: str
+    document_number: str | None
+    actor_email: str | None
+    copies: int
+    reason: str | None
+
+
 def _http_from_mc_error(exc: mc_svc.MarkingCodeServiceError) -> HTTPException:
     code = exc.code
     status_code = status.HTTP_422_UNPROCESSABLE_CONTENT
-    if code in ("seller_not_found", "line_not_found", "product_not_found", "pool_not_found"):
+    not_found_codes = (
+        "seller_not_found",
+        "line_not_found",
+        "product_not_found",
+        "pool_not_found",
+        "code_not_found",
+    )
+    if code in not_found_codes:
         status_code = status.HTTP_404_NOT_FOUND
     if code in ("product_seller_mismatch", "product_id_required"):
         status_code = status.HTTP_422_UNPROCESSABLE_CONTENT
@@ -145,6 +215,36 @@ async def _assert_pool_access(
             raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="forbidden")
     elif user.role != FULFILLMENT_ADMIN:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="forbidden")
+
+
+def _resolve_marking_seller_scope(
+    user: User,
+    effective_seller_id: uuid.UUID | None,
+    seller_id: uuid.UUID | None,
+) -> uuid.UUID | None:
+    if user.role == FULFILLMENT_SELLER:
+        if effective_seller_id is None:
+            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="seller_not_linked")
+        return effective_seller_id
+    if user.role == FULFILLMENT_ADMIN:
+        return seller_id
+    raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="forbidden")
+
+
+def _pool_list_item_out(row: mc_svc.PoolListRow) -> PoolListItemOut:
+    return PoolListItemOut(
+        id=str(row.id),
+        title=row.title,
+        gtin=row.gtin,
+        products=[
+            PoolProductOut(id=str(p.id), sku_code=p.sku_code, name=p.name) for p in row.products
+        ],
+        available=row.available,
+        reserved=row.reserved,
+        printed=row.printed,
+        defective=row.defective,
+        forecast_days=row.forecast_days,
+    )
 
 
 @router.post("/import", response_model=MarkingImportOut)
@@ -276,6 +376,174 @@ async def set_pool_products(
     except mc_svc.MarkingCodeServiceError as exc:
         raise _http_from_mc_error(exc) from exc
     return _pool_products_out(result)
+
+
+@router.get("/pools", response_model=list[PoolListItemOut])
+async def list_marking_pools(
+    user: Annotated[User, Depends(get_current_user)],
+    session: Annotated[AsyncSession, Depends(get_db)],
+    effective_seller_id: Annotated[uuid.UUID | None, Depends(get_effective_seller_id)],
+    seller_id: Annotated[uuid.UUID | None, Query()] = None,
+) -> list[PoolListItemOut]:
+    scope = _resolve_marking_seller_scope(user, effective_seller_id, seller_id)
+    rows = await mc_svc.list_pools(session, user.tenant_id, seller_id=scope)
+    return [_pool_list_item_out(r) for r in rows]
+
+
+@router.get("/pools/{pool_id}", response_model=PoolDetailOut)
+async def get_marking_pool(
+    pool_id: uuid.UUID,
+    user: Annotated[User, Depends(get_current_user)],
+    session: Annotated[AsyncSession, Depends(get_db)],
+    effective_seller_id: Annotated[uuid.UUID | None, Depends(get_effective_seller_id)],
+) -> PoolDetailOut:
+    from app.models.marking_code import MarkingPool
+
+    pool = await session.get(MarkingPool, pool_id)
+    if pool is None or pool.tenant_id != user.tenant_id:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="pool_not_found")
+    await _assert_pool_access(user, pool.seller_id, effective_seller_id)
+    try:
+        detail = await mc_svc.get_pool_detail(session, user.tenant_id, pool_id)
+    except mc_svc.MarkingCodeServiceError as exc:
+        raise _http_from_mc_error(exc) from exc
+    return PoolDetailOut(
+        id=str(detail.id),
+        title=detail.title,
+        gtin=detail.gtin,
+        products=[
+            PoolProductOut(id=str(p.id), sku_code=p.sku_code, name=p.name) for p in detail.products
+        ],
+        available=detail.available,
+        reserved=detail.reserved,
+        printed=detail.printed,
+        defective=detail.defective,
+        forecast_days=detail.forecast_days,
+        import_batches=[
+            PoolImportBatchOut(
+                import_id=str(b.import_id),
+                document_number=b.document_number,
+                filename=b.filename,
+                accepted_count=b.accepted_count,
+                created_at=b.created_at.isoformat(),
+            )
+            for b in detail.import_batches
+        ],
+    )
+
+
+@router.get("/pools/{pool_id}/codes", response_model=list[PoolCodeOut])
+async def list_marking_pool_codes(
+    pool_id: uuid.UUID,
+    user: Annotated[User, Depends(get_current_user)],
+    session: Annotated[AsyncSession, Depends(get_db)],
+    effective_seller_id: Annotated[uuid.UUID | None, Depends(get_effective_seller_id)],
+    status: Annotated[str | None, Query()] = None,
+) -> list[PoolCodeOut]:
+    from app.models.marking_code import MarkingPool
+
+    pool = await session.get(MarkingPool, pool_id)
+    if pool is None or pool.tenant_id != user.tenant_id:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="pool_not_found")
+    await _assert_pool_access(user, pool.seller_id, effective_seller_id)
+    try:
+        rows = await mc_svc.list_pool_codes(
+            session, user.tenant_id, pool_id, status=status
+        )
+    except mc_svc.MarkingCodeServiceError as exc:
+        raise _http_from_mc_error(exc) from exc
+    return [
+        PoolCodeOut(
+            id=str(r.id),
+            cis_masked=r.cis_masked,
+            status=r.status,
+            created_at=r.created_at.isoformat(),
+            printed_by=r.printed_by,
+            document_number=r.document_number,
+        )
+        for r in rows
+    ]
+
+
+@router.get("/ledger", response_model=LedgerPageOut)
+async def list_marking_ledger(
+    user: Annotated[User, Depends(get_current_user)],
+    session: Annotated[AsyncSession, Depends(get_db)],
+    effective_seller_id: Annotated[uuid.UUID | None, Depends(get_effective_seller_id)],
+    seller_id: Annotated[uuid.UUID | None, Query()] = None,
+    pool_id: Annotated[uuid.UUID | None, Query()] = None,
+    product_id: Annotated[uuid.UUID | None, Query()] = None,
+    document: Annotated[str | None, Query()] = None,
+    event_type: Annotated[str | None, Query()] = None,
+    date_from: Annotated[datetime | None, Query()] = None,
+    date_to: Annotated[datetime | None, Query()] = None,
+    limit: Annotated[int, Query(ge=1, le=200)] = 50,
+    offset: Annotated[int, Query(ge=0)] = 0,
+) -> LedgerPageOut:
+    scope = _resolve_marking_seller_scope(user, effective_seller_id, seller_id)
+    page = await mc_svc.list_ledger(
+        session,
+        user.tenant_id,
+        seller_id=scope,
+        pool_id=pool_id,
+        product_id=product_id,
+        document_number=document,
+        event_type=event_type,
+        date_from=date_from,
+        date_to=date_to,
+        limit=limit,
+        offset=offset,
+    )
+    return LedgerPageOut(
+        total=page.total,
+        rows=[
+            LedgerEventOut(
+                id=str(r.id),
+                created_at=r.created_at.isoformat(),
+                event_type=r.event_type,
+                cis_masked=r.cis_masked,
+                pool_title=r.pool_title,
+                gtin=r.gtin,
+                product_name=r.product_name,
+                product_sku=r.product_sku,
+                seller_name=r.seller_name,
+                document_number=r.document_number,
+                actor_email=r.actor_email,
+            )
+            for r in page.rows
+        ],
+    )
+
+
+@router.get("/codes/{code_id}/history", response_model=list[CodeHistoryEventOut])
+async def get_marking_code_history(
+    code_id: uuid.UUID,
+    user: Annotated[User, Depends(get_current_user)],
+    session: Annotated[AsyncSession, Depends(get_db)],
+    effective_seller_id: Annotated[uuid.UUID | None, Depends(get_effective_seller_id)],
+) -> list[CodeHistoryEventOut]:
+    from app.models.marking_code import MarkingCode
+
+    code = await session.get(MarkingCode, code_id)
+    if code is None or code.tenant_id != user.tenant_id:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="code_not_found")
+    await _assert_pool_access(user, code.seller_id, effective_seller_id)
+    try:
+        rows = await mc_svc.get_code_history(session, user.tenant_id, code_id)
+    except mc_svc.MarkingCodeServiceError as exc:
+        raise _http_from_mc_error(exc) from exc
+    return [
+        CodeHistoryEventOut(
+            id=str(r.id),
+            created_at=r.created_at.isoformat(),
+            event_type=r.event_type,
+            document_number=r.document_number,
+            actor_email=r.actor_email,
+            copies=r.copies,
+            reason=r.reason,
+        )
+        for r in rows
+    ]
 
 
 if _E2E_SCHEMA:

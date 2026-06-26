@@ -17,7 +17,9 @@ from app.models.marking_code import (
     EVENT_PRINTED,
     EVENT_REPRINTED,
     STATUS_AVAILABLE,
+    STATUS_DEFECTIVE,
     STATUS_PRINTED,
+    STATUS_RESERVED,
     MarkingCode,
     MarkingCodeEvent,
     MarkingCodeImport,
@@ -27,6 +29,7 @@ from app.models.marking_code import (
 from app.models.packaging_task import PackagingTaskLine
 from app.models.product import Product
 from app.models.seller import Seller
+from app.models.user import User
 from app.services.catalog_service import get_product
 from app.services.document_number_service import (
     DOC_TYPE_MARKING_IMPORT,
@@ -159,6 +162,84 @@ class PoolProductRow:
 class PoolProductsResult:
     pool_id: uuid.UUID
     products: list[PoolProductRow]
+
+
+@dataclass(frozen=True)
+class PoolListRow:
+    id: uuid.UUID
+    title: str
+    gtin: str
+    products: list[PoolProductRow]
+    available: int
+    reserved: int
+    printed: int
+    defective: int
+    forecast_days: float | None
+
+
+@dataclass(frozen=True)
+class PoolImportBatchRow:
+    import_id: uuid.UUID
+    document_number: str | None
+    filename: str
+    accepted_count: int
+    created_at: datetime
+
+
+@dataclass(frozen=True)
+class PoolDetailRow:
+    id: uuid.UUID
+    title: str
+    gtin: str
+    products: list[PoolProductRow]
+    available: int
+    reserved: int
+    printed: int
+    defective: int
+    forecast_days: float | None
+    import_batches: list[PoolImportBatchRow]
+
+
+@dataclass(frozen=True)
+class PoolCodeRow:
+    id: uuid.UUID
+    cis_masked: str
+    status: str
+    created_at: datetime
+    printed_by: str | None
+    document_number: str | None
+
+
+@dataclass(frozen=True)
+class LedgerEventRow:
+    id: uuid.UUID
+    created_at: datetime
+    event_type: str
+    cis_masked: str
+    pool_title: str | None
+    gtin: str | None
+    product_name: str | None
+    product_sku: str | None
+    seller_name: str | None
+    document_number: str | None
+    actor_email: str | None
+
+
+@dataclass(frozen=True)
+class LedgerPage:
+    rows: list[LedgerEventRow]
+    total: int
+
+
+@dataclass(frozen=True)
+class CodeHistoryRow:
+    id: uuid.UUID
+    created_at: datetime
+    event_type: str
+    document_number: str | None
+    actor_email: str | None
+    copies: int
+    reason: str | None
 
 
 def mask_cis_code(cis: str) -> str:
@@ -1016,3 +1097,297 @@ async def assert_packaging_line_marking_done(
     done = qty_done(line)
     if done > 0 and int(line.qty_marking_printed) < done:
         raise MarkingCodeServiceError("marking_not_done")
+
+
+async def _pool_status_counts(
+    session: AsyncSession,
+    tenant_id: uuid.UUID,
+    *,
+    seller_id: uuid.UUID | None,
+    pool_ids: list[uuid.UUID] | None = None,
+) -> dict[uuid.UUID, dict[str, int]]:
+    stmt = (
+        select(
+            MarkingCode.pool_id,
+            MarkingCode.status,
+            func.count(MarkingCode.id),
+        )
+        .where(
+            MarkingCode.tenant_id == tenant_id,
+            MarkingCode.pool_id.is_not(None),
+        )
+        .group_by(MarkingCode.pool_id, MarkingCode.status)
+    )
+    if seller_id is not None:
+        stmt = stmt.where(MarkingCode.seller_id == seller_id)
+    if pool_ids is not None:
+        stmt = stmt.where(MarkingCode.pool_id.in_(pool_ids))
+    result: dict[uuid.UUID, dict[str, int]] = {}
+    for pool_id, status, cnt in (await session.execute(stmt)).all():
+        if pool_id is None:
+            continue
+        bucket = result.setdefault(pool_id, {})
+        bucket[status] = int(cnt)
+    return result
+
+
+def _status_count(counts: dict[str, int], status: str) -> int:
+    return int(counts.get(status, 0))
+
+
+async def _products_by_pool(
+    session: AsyncSession,
+    tenant_id: uuid.UUID,
+    pool_ids: list[uuid.UUID],
+) -> dict[uuid.UUID, list[PoolProductRow]]:
+    if not pool_ids:
+        return {}
+    stmt = (
+        select(
+            MarkingPoolProduct.pool_id,
+            Product.id,
+            Product.sku_code,
+            Product.name,
+        )
+        .join(Product, Product.id == MarkingPoolProduct.product_id)
+        .where(
+            MarkingPoolProduct.tenant_id == tenant_id,
+            MarkingPoolProduct.pool_id.in_(pool_ids),
+        )
+        .order_by(Product.sku_code.asc())
+    )
+    out: dict[uuid.UUID, list[PoolProductRow]] = {}
+    for pool_id, product_id, sku_code, name in (await session.execute(stmt)).all():
+        out.setdefault(pool_id, []).append(
+            PoolProductRow(id=product_id, sku_code=sku_code, name=name)
+        )
+    return out
+
+
+async def list_pools(
+    session: AsyncSession,
+    tenant_id: uuid.UUID,
+    *,
+    seller_id: uuid.UUID | None,
+) -> list[PoolListRow]:
+    stmt = select(MarkingPool).where(MarkingPool.tenant_id == tenant_id)
+    if seller_id is not None:
+        stmt = stmt.where(MarkingPool.seller_id == seller_id)
+    stmt = stmt.order_by(MarkingPool.title.asc())
+    pools = list((await session.execute(stmt)).scalars().all())
+    pool_ids = [p.id for p in pools]
+    counts = await _pool_status_counts(session, tenant_id, seller_id=seller_id, pool_ids=pool_ids)
+    products_map = await _products_by_pool(session, tenant_id, pool_ids)
+    rows: list[PoolListRow] = []
+    for pool in pools:
+        pool_counts = counts.get(pool.id, {})
+        rows.append(
+            PoolListRow(
+                id=pool.id,
+                title=pool.title,
+                gtin=pool.gtin,
+                products=products_map.get(pool.id, []),
+                available=_status_count(pool_counts, STATUS_AVAILABLE),
+                reserved=_status_count(pool_counts, STATUS_RESERVED),
+                printed=_status_count(pool_counts, STATUS_PRINTED),
+                defective=_status_count(pool_counts, STATUS_DEFECTIVE),
+                forecast_days=None,
+            )
+        )
+    return rows
+
+
+async def get_pool_detail(
+    session: AsyncSession,
+    tenant_id: uuid.UUID,
+    pool_id: uuid.UUID,
+) -> PoolDetailRow:
+    pool = await _get_pool_or_error(session, tenant_id, pool_id)
+    counts = await _pool_status_counts(
+        session, tenant_id, seller_id=None, pool_ids=[pool_id]
+    )
+    pool_counts = counts.get(pool_id, {})
+    products_map = await _products_by_pool(session, tenant_id, [pool_id])
+
+    batch_stmt = (
+        select(MarkingCodeImport)
+        .join(MarkingCode, MarkingCode.import_batch_id == MarkingCodeImport.id)
+        .where(
+            MarkingCode.tenant_id == tenant_id,
+            MarkingCode.pool_id == pool_id,
+            MarkingCodeImport.tenant_id == tenant_id,
+        )
+        .distinct()
+        .order_by(MarkingCodeImport.created_at.desc())
+    )
+    batches = list((await session.execute(batch_stmt)).scalars().all())
+
+    return PoolDetailRow(
+        id=pool.id,
+        title=pool.title,
+        gtin=pool.gtin,
+        products=products_map.get(pool_id, []),
+        available=_status_count(pool_counts, STATUS_AVAILABLE),
+        reserved=_status_count(pool_counts, STATUS_RESERVED),
+        printed=_status_count(pool_counts, STATUS_PRINTED),
+        defective=_status_count(pool_counts, STATUS_DEFECTIVE),
+        forecast_days=None,
+        import_batches=[
+            PoolImportBatchRow(
+                import_id=b.id,
+                document_number=b.document_number,
+                filename=b.filename,
+                accepted_count=b.accepted_count,
+                created_at=b.created_at,
+            )
+            for b in batches
+        ],
+    )
+
+
+async def list_pool_codes(
+    session: AsyncSession,
+    tenant_id: uuid.UUID,
+    pool_id: uuid.UUID,
+    *,
+    status: str | None = None,
+) -> list[PoolCodeRow]:
+    await _get_pool_or_error(session, tenant_id, pool_id)
+    stmt = (
+        select(MarkingCode, MarkingCodeImport.document_number, User.email)
+        .outerjoin(MarkingCodeImport, MarkingCode.import_batch_id == MarkingCodeImport.id)
+        .outerjoin(User, MarkingCode.printed_by_user_id == User.id)
+        .where(
+            MarkingCode.tenant_id == tenant_id,
+            MarkingCode.pool_id == pool_id,
+        )
+        .order_by(MarkingCode.created_at.desc())
+    )
+    if status is not None:
+        stmt = stmt.where(MarkingCode.status == status)
+    rows: list[PoolCodeRow] = []
+    for code, import_doc, printer_email in (await session.execute(stmt)).all():
+        rows.append(
+            PoolCodeRow(
+                id=code.id,
+                cis_masked=mask_cis_code(code.cis_code),
+                status=code.status,
+                created_at=code.created_at,
+                printed_by=printer_email,
+                document_number=import_doc,
+            )
+        )
+    return rows
+
+
+async def list_ledger(
+    session: AsyncSession,
+    tenant_id: uuid.UUID,
+    *,
+    seller_id: uuid.UUID | None,
+    pool_id: uuid.UUID | None,
+    product_id: uuid.UUID | None,
+    document_number: str | None,
+    event_type: str | None,
+    date_from: datetime | None,
+    date_to: datetime | None,
+    limit: int,
+    offset: int,
+) -> LedgerPage:
+    stmt = (
+        select(
+            MarkingCodeEvent,
+            MarkingCode.cis_code,
+            MarkingCode.gtin,
+            MarkingPool.title,
+            Product.name,
+            Product.sku_code,
+            Seller.name,
+            User.email,
+        )
+        .join(MarkingCode, MarkingCode.id == MarkingCodeEvent.code_id)
+        .outerjoin(MarkingPool, MarkingPool.id == MarkingCodeEvent.pool_id)
+        .outerjoin(Product, Product.id == MarkingCode.product_id)
+        .outerjoin(Seller, Seller.id == MarkingCodeEvent.seller_id)
+        .outerjoin(User, User.id == MarkingCodeEvent.actor_user_id)
+        .where(MarkingCodeEvent.tenant_id == tenant_id)
+    )
+    if seller_id is not None:
+        stmt = stmt.where(MarkingCodeEvent.seller_id == seller_id)
+    if pool_id is not None:
+        stmt = stmt.where(MarkingCodeEvent.pool_id == pool_id)
+    if product_id is not None:
+        pool_for_product = select(MarkingPoolProduct.pool_id).where(
+            MarkingPoolProduct.tenant_id == tenant_id,
+            MarkingPoolProduct.product_id == product_id,
+        )
+        stmt = stmt.where(
+            or_(
+                MarkingCode.product_id == product_id,
+                MarkingCodeEvent.pool_id.in_(pool_for_product),
+            )
+        )
+    if document_number:
+        stmt = stmt.where(MarkingCodeEvent.document_number == document_number)
+    if event_type:
+        stmt = stmt.where(MarkingCodeEvent.event_type == event_type)
+    if date_from is not None:
+        stmt = stmt.where(MarkingCodeEvent.created_at >= date_from)
+    if date_to is not None:
+        stmt = stmt.where(MarkingCodeEvent.created_at <= date_to)
+
+    count_stmt = select(func.count()).select_from(stmt.subquery())
+    total = int((await session.execute(count_stmt)).scalar_one())
+
+    stmt = stmt.order_by(MarkingCodeEvent.created_at.desc()).limit(limit).offset(offset)
+    rows: list[LedgerEventRow] = []
+    for event, cis, gtin, pool_title, product_name, product_sku, seller_name, actor_email in (
+        await session.execute(stmt)
+    ).all():
+        rows.append(
+            LedgerEventRow(
+                id=event.id,
+                created_at=event.created_at,
+                event_type=event.event_type,
+                cis_masked=mask_cis_code(cis),
+                pool_title=pool_title,
+                gtin=gtin,
+                product_name=product_name,
+                product_sku=product_sku,
+                seller_name=seller_name,
+                document_number=event.document_number,
+                actor_email=actor_email,
+            )
+        )
+    return LedgerPage(rows=rows, total=total)
+
+
+async def get_code_history(
+    session: AsyncSession,
+    tenant_id: uuid.UUID,
+    code_id: uuid.UUID,
+) -> list[CodeHistoryRow]:
+    code = await session.get(MarkingCode, code_id)
+    if code is None or code.tenant_id != tenant_id:
+        raise MarkingCodeServiceError("code_not_found")
+    stmt = (
+        select(MarkingCodeEvent, User.email)
+        .outerjoin(User, User.id == MarkingCodeEvent.actor_user_id)
+        .where(
+            MarkingCodeEvent.tenant_id == tenant_id,
+            MarkingCodeEvent.code_id == code_id,
+        )
+        .order_by(MarkingCodeEvent.created_at.asc())
+    )
+    return [
+        CodeHistoryRow(
+            id=event.id,
+            created_at=event.created_at,
+            event_type=event.event_type,
+            document_number=event.document_number,
+            actor_email=actor_email,
+            copies=event.copies,
+            reason=event.reason,
+        )
+        for event, actor_email in (await session.execute(stmt)).all()
+    ]
