@@ -1,10 +1,25 @@
 # TASKLOG
 
+## TASK-64 — 2026-06-26 — ЧЗ T0.2: модель пулов и расширение кодов
+
+- What changed: таблицы `marking_pools`, `marking_pool_products`; расширение `marking_codes` (pool_id, serial, crypto_tail, reserved/applied/introduced/transferred/consumed, defective_reason, replaced_by_code_id); константы статусов; дата-миграция backfill пулов для существующих кодов; pytest `test_marking_pools.py`.
+- What did NOT change: API, фронт, импорт в пулы (T0.3), события `marking_code_events` (T0.5).
+- Verification: `ruff`/`mypy` green; `pytest` 154 passed.
+- Deploy: not yet.
+
+## TASK-63 — 2026-06-26 — ЧЗ T0.1: нумерация документов (УПАК/ПРИЕМ/ОТГР)
+
+- What changed: таблица `document_sequences`, колонка `document_number` на `packaging_tasks`, `inbound_intake_requests`, `marketplace_unload_requests`; сервис `document_number_service.py` (атомарный счётчик по МСК); номер при создании упаковки/приёмки/отгрузки; API + UI (упаковка, приёмка, списки отгрузок); pytest + e2e TC-NEW-DOCNUM-01.
+- What did NOT change: пулы ЧЗ, импорт кодов, события `marking_code_events` (T0.2+).
+- Verification: `ruff`/`mypy` green; `pytest` 152 passed; `npm run build`; e2e `ff-packaging-page.spec.ts` (create from sorting).
+- Deploy: not yet.
+
 ## TASK-62 — 2026-06-26 — FF каталог: поиск по артикулу и названию
 
 - What changed: в разделе «Каталог» ФФ — строка поиска сверху; фильтрация по `sku_code`, `wb_vendor_code` (артикул продавца) и названию; пустое состояние «ничего не найдено»; e2e TC-NEW-002 в `ff-products.spec.ts`.
 - What did NOT change: API `/products/ff-catalog`; фильтр по селлеру и сортировка.
 - Verification: `npm run build`; e2e `ff-products.spec.ts` — filter/sort/search.
+- Deploy: PR #46 → `main` `4e82c6b`; prod `194.87.96.144:8088` — `prod-update.sh`, HTTP 200.
 
 ## TASK-61 — 2026-06-24 — Фикс сброса даты отгрузки в WmsDateField
 

@@ -3,6 +3,7 @@
 from app.models.background_job import BackgroundJob
 from app.models.base import Base
 from app.models.discrepancy_act import DiscrepancyAct, DiscrepancyActLine
+from app.models.document_sequence import DocumentSequence
 from app.models.ff_staff_permissions import FfStaffPermissions
 from app.models.inbound_intake import (
     InboundIntakeBox,
@@ -21,7 +22,12 @@ from app.models.marketplace_unload import (
     MarketplaceUnloadRequest,
 )
 from app.models.marketplace_unload_reservation import MarketplaceUnloadReservation
-from app.models.marking_code import MarkingCode, MarkingCodeImport
+from app.models.marking_code import (
+    MarkingCode,
+    MarkingCodeImport,
+    MarkingPool,
+    MarkingPoolProduct,
+)
 from app.models.outbound_shipment import OutboundShipmentLine, OutboundShipmentRequest
 from app.models.packaging_task import PackagingTask, PackagingTaskLine
 from app.models.product import Product
@@ -43,6 +49,7 @@ __all__ = [
     "Base",
     "DiscrepancyAct",
     "DiscrepancyActLine",
+    "DocumentSequence",
     "FfStaffPermissions",
     "InboundIntakeBox",
     "InboundIntakeBoxLine",
@@ -59,6 +66,8 @@ __all__ = [
     "MarketplaceUnloadReservation",
     "MarkingCode",
     "MarkingCodeImport",
+    "MarkingPool",
+    "MarkingPoolProduct",
     "OutboundShipmentLine",
     "OutboundShipmentRequest",
     "PackagingTask",
