@@ -5,7 +5,7 @@
 - What changed: T2.4 `POST verify-pair` (match → `applied` + событие), мини-станция на упаковке; T2.5 `GET pending-marking`, экран «Осталось промаркировать», бейдж на упаковке.
 - What did NOT change: фаза 3 (уведомления T3.1).
 - Verification: pytest verify_pair + pending; e2e ff-marking-verify-pair + ff-pending-marking.
-- Commit: pending.
+- Commit: `15e290a`.
 
 ## TASK-73 — 2026-06-26 — ЧЗ T2.1–T2.3: shift_lead, брак, очередь перепечатки
 
