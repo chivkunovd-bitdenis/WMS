@@ -74,6 +74,7 @@ class PackagingTask(Base):
     billing_units_packed: Mapped[int | None] = mapped_column(Integer, nullable=True)
     billing_rate_kopecks: Mapped[int | None] = mapped_column(Integer, nullable=True)
     billing_earned_kopecks: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    document_number: Mapped[str | None] = mapped_column(String(32), nullable=True)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), nullable=False
     )

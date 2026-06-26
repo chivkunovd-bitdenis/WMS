@@ -92,7 +92,9 @@ test('FF packaging page: create from sorting and pack line', async ({ page }) =>
     page.getByTestId('ff-packaging-create-submit').click(),
   ]);
 
+  // TC-NEW-DOCNUM-01 — human-readable packaging document number on create.
   await expect(page.getByTestId('ff-packaging-task-panel')).toBeVisible();
+  await expect(page.getByTestId('ff-packaging-document-number')).toContainText(/^УПАК-\d{2}-\d{2}-\d{2}-1$/);
   await expect(page.getByTestId('ff-packaging-line')).toBeVisible();
 
   await Promise.all([

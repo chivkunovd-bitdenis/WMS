@@ -120,6 +120,7 @@ class MarketplaceUnloadLineOut(BaseModel):
 
 class MarketplaceUnloadRequestSummaryOut(BaseModel):
     id: str
+    document_number: str | None = None
     warehouse_id: str
     warehouse_name: str
     status: str
@@ -213,6 +214,7 @@ class LinkedPackagingTaskOut(BaseModel):
 
 class MarketplaceUnloadRequestDetailOut(BaseModel):
     id: str
+    document_number: str | None = None
     warehouse_id: str
     warehouse_name: str
     status: str
@@ -288,6 +290,7 @@ def _summary_out(
 ) -> MarketplaceUnloadRequestSummaryOut:
     return MarketplaceUnloadRequestSummaryOut(
         id=str(r.id),
+        document_number=r.document_number,
         warehouse_id=str(r.warehouse_id),
         warehouse_name=warehouse_name,
         status=r.status,
@@ -342,6 +345,7 @@ def _detail_out(
     show_pick_discrepancy = r.status in ("confirmed", "shipped")
     return MarketplaceUnloadRequestDetailOut(
         id=str(r.id),
+        document_number=r.document_number,
         warehouse_id=str(r.warehouse_id),
         warehouse_name=warehouse_name,
         status=r.status,

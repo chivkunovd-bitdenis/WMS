@@ -61,6 +61,7 @@ test('FF packaging: print honest sign codes for line quantity', async ({ page })
     headers: { Authorization: `Bearer ${token}` },
     multipart: {
       seller_id: sellerId,
+      product_id: productId,
       file: {
         name: 'codes.csv',
         mimeType: 'text/csv',

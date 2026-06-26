@@ -112,6 +112,8 @@ async def test_packaging_task_manual_convert(async_client: AsyncClient) -> None:
     assert create.status_code == 201, create.text
     task = create.json()
     task_id = task["id"]
+    assert task.get("document_number", "").startswith("УПАК-")
+    assert task["document_number"].endswith("-1")
     line_id = task["lines"][0]["id"]
     assert task["lines"][0]["qty_suggested_packed"] == 0
 

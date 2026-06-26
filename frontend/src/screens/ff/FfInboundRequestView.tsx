@@ -79,6 +79,7 @@ type InboundLine = {
 
 type InboundDetail = {
   id: string
+  document_number: string | null
   warehouse_id: string
   status: string
   planned_delivery_date: string | null
@@ -1274,6 +1275,15 @@ export function FfInboundRequestView({
                 color={detail.status === 'draft' ? 'default' : 'primary'}
                 data-testid="ff-inbound-status-chip"
               />
+              {detail.document_number ? (
+                <Typography
+                  variant="subtitle2"
+                  sx={{ fontWeight: 600 }}
+                  data-testid="ff-inbound-document-number"
+                >
+                  {detail.document_number}
+                </Typography>
+              ) : null}
               {detail.planned_box_count != null ? (
                 <Typography variant="body2" color="text.secondary" data-testid="ff-inbound-planned-boxes">
                   План коробов: <strong>{detail.planned_box_count}</strong>
@@ -1896,7 +1906,7 @@ export function FfInboundRequestView({
                   {distributionCompleted && hasNoCellPending ? (
                     <Alert severity="warning" sx={{ mt: 2 }} data-testid="ff-inbound-distribution-stuck-empty">
                       Распределение зафиксировано, но принятый товар не разложен по ячейкам — в разделе{' '}
-                      <strong>Товары</strong> остатков не будет. Откройте распределение заново и укажите ячейки
+                      <strong>Каталог</strong> остатков не будет. Откройте распределение заново и укажите ячейки
                       для всего принятого количества.
                     </Alert>
                   ) : null}
@@ -1908,7 +1918,7 @@ export function FfInboundRequestView({
                       <Typography variant="body2" sx={{ mb: 1 }}>
                         На складе этой заявки <strong>нет ячеек</strong> — поэтому список «Ячейка» пустой и
                         не открывается. Создайте ячейку здесь или в разделе{' '}
-                        <strong>Каталог → Ячейки</strong> (тот же склад).
+                        <strong>Ячейки</strong> (тот же склад).
                       </Typography>
                       <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1}>
                         <TextField

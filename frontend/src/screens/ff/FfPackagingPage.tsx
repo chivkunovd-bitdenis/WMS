@@ -56,6 +56,7 @@ export type PackagingTaskLine = {
 
 export type PackagingTask = {
   id: string
+  document_number: string | null
   warehouse_id: string
   status: string
   marketplace_unload_request_id: string | null
@@ -169,6 +170,15 @@ export function FfPackagingTaskPanel({
     <Stack spacing={2} data-testid="ff-packaging-task-panel">
       <Stack direction="row" spacing={1} sx={{ alignItems: 'center', flexWrap: 'wrap' }}>
         <Chip label={statusLabel(task.status)} size="small" data-testid="ff-packaging-task-status" />
+        {task.document_number ? (
+          <Typography
+            variant="subtitle2"
+            sx={{ fontWeight: 600 }}
+            data-testid="ff-packaging-document-number"
+          >
+            {task.document_number}
+          </Typography>
+        ) : null}
         {task.marketplace_unload_request_id ? (
           <Link
             component={RouterLink}
@@ -739,6 +749,7 @@ export function FfPackagingPage({ token }: PageProps) {
           <Table size="small">
             <TableHead>
               <TableRow>
+                <TableCell>Номер</TableCell>
                 <TableCell>Статус</TableCell>
                 <TableCell>Строк</TableCell>
                 <TableCell>Отгрузка</TableCell>
@@ -747,7 +758,7 @@ export function FfPackagingPage({ token }: PageProps) {
             <TableBody>
               {tasks.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={3}>
+                  <TableCell colSpan={4}>
                     <Typography variant="body2" color="text.secondary">
                       Нет открытых заданий.
                     </Typography>
@@ -762,6 +773,7 @@ export function FfPackagingPage({ token }: PageProps) {
                     onClick={() => setSelected(t)}
                     data-testid="ff-packaging-queue-row"
                   >
+                    <TableCell>{t.document_number ?? '—'}</TableCell>
                     <TableCell>{statusLabel(t.status)}</TableCell>
                     <TableCell>{t.lines.length}</TableCell>
                     <TableCell>{t.marketplace_unload_request_id ? 'Да' : '—'}</TableCell>

@@ -25,6 +25,10 @@ from app.models.packaging_task import (
 from app.services import inventory_service as inv_svc
 from app.services import sorting_location_service as sorting_loc_svc
 from app.services import staff_packaging_billing_service as billing_svc
+from app.services.document_number_service import (
+    DOC_TYPE_PACKAGING,
+    assign_document_number_if_missing,
+)
 
 PackagingTaskError = Literal[
     "not_found",
@@ -216,6 +220,9 @@ async def create_manual_task(
     )
     session.add(task)
     await session.flush()
+    await assign_document_number_if_missing(
+        session, tenant_id, DOC_TYPE_PACKAGING, task
+    )
     for product_id, location_id, qty in lines:
         if qty < 1:
             raise PackagingTaskServiceError("invalid_qty")
@@ -340,6 +347,9 @@ async def ensure_task_for_unload(
     )
     session.add(task)
     await session.flush()
+    await assign_document_number_if_missing(
+        session, tenant_id, DOC_TYPE_PACKAGING, task
+    )
     await sync_lines_from_pick_allocations(session, tenant_id, task)
     await session.commit()
     loaded = await get_task(session, tenant_id, task.id)

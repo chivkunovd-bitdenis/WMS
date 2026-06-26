@@ -42,6 +42,7 @@ import { printMarketplaceUnloadWaybill } from '../../utils/printShipmentWaybill'
 
 export type FfMarketplaceUnloadSummary = {
   id: string
+  document_number?: string | null
   warehouse_id: string
   warehouse_name: string
   status: string
@@ -127,6 +128,7 @@ type LinkedPackagingTask = {
 
 type MarketplaceUnloadDetail = {
   id: string
+  document_number: string | null
   warehouse_id: string
   warehouse_name: string
   status: string
@@ -157,6 +159,7 @@ type QuickFilterKind = 'all' | 'inbound' | 'marketplace_unload' | 'discrepancy_a
 type UnifiedRow = {
   kind: DocKind
   id: string
+  documentNumber: string | null
   plannedDate: string | null
   createdAt: string | null
   status: string
@@ -341,6 +344,7 @@ export function FfSuppliesShipmentsPage({
         }
         const j = (await res.json()) as {
           id: string
+          document_number?: string | null
           warehouse_id: string
           warehouse_name: string
           status: string
@@ -391,6 +395,7 @@ export function FfSuppliesShipmentsPage({
         }
         setUnloadDetail({
           id: j.id,
+          document_number: j.document_number ?? null,
           warehouse_id: j.warehouse_id,
           warehouse_name: j.warehouse_name,
           status: j.status,
@@ -1112,6 +1117,7 @@ export function FfSuppliesShipmentsPage({
       ? marketplaceUnloadSummaries.map((r) => ({
           kind: 'marketplace_unload' as const,
           id: r.id,
+          documentNumber: r.document_number ?? null,
           plannedDate: r.planned_shipment_date ?? null,
           createdAt: r.created_at,
           status: r.status,
@@ -1124,6 +1130,7 @@ export function FfSuppliesShipmentsPage({
           ...inboundSummaries.map((r) => ({
             kind: 'inbound' as const,
             id: r.id,
+            documentNumber: r.document_number ?? null,
             plannedDate: r.planned_delivery_date,
             createdAt: r.created_at ?? null,
             status: r.status,
@@ -1135,6 +1142,7 @@ export function FfSuppliesShipmentsPage({
           ...outboundSummaries.map((r) => ({
             kind: 'outbound' as const,
             id: r.id,
+            documentNumber: null,
             plannedDate: r.planned_shipment_date ?? r.created_at?.slice(0, 10) ?? null,
             createdAt: r.created_at ?? null,
             status: r.status,
@@ -1146,6 +1154,7 @@ export function FfSuppliesShipmentsPage({
           ...discrepancyActSummaries.map((r) => ({
             kind: 'discrepancy_act' as const,
             id: r.id,
+            documentNumber: null,
             plannedDate: null,
             createdAt: r.created_at,
             status: r.status,
@@ -1491,6 +1500,7 @@ export function FfSuppliesShipmentsPage({
         <TableHead>
           <TableRow>
             {!isMpShipmentsPage ? <TableCell>Тип</TableCell> : null}
+            <TableCell>Номер</TableCell>
             <TableCell>Плановая дата</TableCell>
             <TableCell>Создано</TableCell>
             <TableCell>Статус</TableCell>
@@ -1502,7 +1512,7 @@ export function FfSuppliesShipmentsPage({
         <TableBody>
           {rows.length === 0 ? (
             <TableRow>
-              <TableCell colSpan={isMpShipmentsPage ? 6 : 7}>
+              <TableCell colSpan={isMpShipmentsPage ? 7 : 8}>
                 <Typography variant="body2" color="text.secondary">
                   Нет документов
                 </Typography>
@@ -1546,6 +1556,7 @@ export function FfSuppliesShipmentsPage({
                 data-doc-kind={row.kind}
               >
                 {!isMpShipmentsPage ? <TableCell>{kindRu(row.kind)}</TableCell> : null}
+                <TableCell>{row.documentNumber ?? '—'}</TableCell>
                 <TableCell>{row.plannedDate ?? '—'}</TableCell>
                 <TableCell>
                   {row.createdAt ? formatDateTimeLocal(row.createdAt) : '—'}
@@ -1590,6 +1601,14 @@ export function FfSuppliesShipmentsPage({
           ) : null}
           {unloadDetail ? (
             <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
+              {unloadDetail.document_number ? (
+                <>
+                  <strong data-testid="ff-mp-unload-document-number">
+                    {unloadDetail.document_number}
+                  </strong>
+                  {' · '}
+                </>
+              ) : null}
               Склад: {unloadDetail.warehouse_name} · {statusRu(unloadDetail.status)}
               {unloadDetail.planned_shipment_date
                 ? ` · отгрузка ${unloadDetail.planned_shipment_date}`
