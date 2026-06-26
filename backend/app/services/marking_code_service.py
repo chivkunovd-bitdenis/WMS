@@ -205,6 +205,7 @@ class PoolImportBatchRow:
 @dataclass(frozen=True)
 class PoolDetailRow:
     id: uuid.UUID
+    seller_id: uuid.UUID
     title: str
     gtin: str
     products: list[PoolProductRow]
@@ -1305,6 +1306,7 @@ async def get_pool_detail(
 
     return PoolDetailRow(
         id=pool.id,
+        seller_id=pool.seller_id,
         title=pool.title,
         gtin=pool.gtin,
         products=products_map.get(pool_id, []),

@@ -147,6 +147,7 @@ class PoolImportBatchOut(BaseModel):
 
 
 class PoolDetailOut(PoolListItemOut):
+    seller_id: str
     import_batches: list[PoolImportBatchOut]
 
 
@@ -481,6 +482,7 @@ async def get_marking_pool(
         raise _http_from_mc_error(exc) from exc
     return PoolDetailOut(
         id=str(detail.id),
+        seller_id=str(detail.seller_id),
         title=detail.title,
         gtin=detail.gtin,
         products=[
