@@ -7,6 +7,8 @@
 - Verification: `npm run build`; e2e `ff-notifications.spec.ts` green.
 - Commit: `11c1ccd`.
 
+## TASK-75 — 2026-06-26 — ЧЗ T3.1: шина уведомлений
+
 - What changed: таблица `notifications`, сервис `notify`/`notify_ff_portal`, API `GET/POST /operations/notifications` (список, read, read-all), скоуп получателя user/seller/ff_portal.
 - What did NOT change: UI колокольчик (T3.2), триггеры low-stock и отгрузок (T3.3–T3.5).
 - Verification: `ruff`, `mypy`, `pytest tests/test_notifications.py` — 5 passed.
