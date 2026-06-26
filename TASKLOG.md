@@ -1,5 +1,12 @@
 # TASKLOG
 
+## TASK-65 — 2026-06-26 — ЧЗ T0.5: журнал marking_code_events
+
+- What changed: таблица `marking_code_events`, модель `MarkingCodeEvent`, константы типов событий; `record_event()` в `marking_code_service.py`; события `imported` при импорте, `printed`/`reprinted` при печати; pytest `test_marking_code_events.py`.
+- What did NOT change: API ленты (T0.6), привязка пул↔товары (T0.4), рефактор импорта в пулы (T0.3).
+- Verification: `ruff`/`mypy` green; `pytest` 156 passed.
+- Deploy: not yet.
+
 ## TASK-64 — 2026-06-26 — ЧЗ T0.2: модель пулов и расширение кодов
 
 - What changed: таблицы `marking_pools`, `marking_pool_products`; расширение `marking_codes` (pool_id, serial, crypto_tail, reserved/applied/introduced/transferred/consumed, defective_reason, replaced_by_code_id); константы статусов; дата-миграция backfill пулов для существующих кодов; pytest `test_marking_pools.py`.

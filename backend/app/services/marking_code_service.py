@@ -13,9 +13,13 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from app.models.marking_code import (
+    EVENT_IMPORTED,
+    EVENT_PRINTED,
+    EVENT_REPRINTED,
     STATUS_AVAILABLE,
     STATUS_PRINTED,
     MarkingCode,
+    MarkingCodeEvent,
     MarkingCodeImport,
 )
 from app.models.packaging_task import PackagingTaskLine
@@ -26,6 +30,7 @@ from app.services.catalog_service import get_product
 _CIS_MIN_LEN = 15
 _CIS_MAX_LEN = 512
 _GTIN_RE = re.compile(r"(?<!\d)(\d{14})(?!\d)")
+_GS1_GTIN_AI01_RE = re.compile(r"(?:^|\x1d)01(\d{14})")
 _CIS_CANDIDATE_RE = re.compile(
     r"[\x1d(]?(?:01)?\d{14}[\x1d)]?(?:21)[\w!\"%&'()*+,\-./:;<=>?]{13,}"
 )
@@ -35,6 +40,40 @@ class MarkingCodeServiceError(Exception):
     def __init__(self, code: str) -> None:
         super().__init__(code)
         self.code = code
+
+
+async def record_event(
+    session: AsyncSession,
+    *,
+    code: MarkingCode,
+    event_type: str,
+    actor: uuid.UUID | None,
+    document_number: str | None = None,
+    packaging_task: PackagingTaskLine | None = None,
+    reason: str | None = None,
+    copies: int = 1,
+) -> MarkingCodeEvent:
+    packaging_task_id: uuid.UUID | None = None
+    packaging_task_line_id: uuid.UUID | None = None
+    if packaging_task is not None:
+        packaging_task_line_id = packaging_task.id
+        packaging_task_id = packaging_task.task_id
+
+    event = MarkingCodeEvent(
+        tenant_id=code.tenant_id,
+        seller_id=code.seller_id,
+        code_id=code.id,
+        pool_id=code.pool_id,
+        event_type=event_type,
+        packaging_task_id=packaging_task_id,
+        packaging_task_line_id=packaging_task_line_id,
+        document_number=document_number,
+        actor_user_id=actor,
+        copies=copies,
+        reason=reason,
+    )
+    session.add(event)
+    return event
 
 
 @dataclass(frozen=True)
@@ -48,7 +87,23 @@ class MarkingImportResult:
     import_id: uuid.UUID
     accepted_count: int
     skipped_count: int
+    linked_count: int
+    unlinked_count: int
     skip_reasons: list[ImportSkipReason]
+
+
+@dataclass(frozen=True)
+class MarkingInventoryResult:
+    rows: list[ProductMarkingInventoryRow]
+    unlinked_available_count: int
+
+
+@dataclass(frozen=True)
+class ProductMarkingCodeRow:
+    id: uuid.UUID
+    cis_code: str
+    status: str
+    created_at: datetime
 
 
 @dataclass(frozen=True)
@@ -83,8 +138,28 @@ def normalize_cis(raw: str) -> str | None:
 
 
 def extract_gtin_from_cis(cis: str) -> str | None:
+    gs1_match = _GS1_GTIN_AI01_RE.search(cis)
+    if gs1_match:
+        return gs1_match.group(1)
     match = _GTIN_RE.search(cis)
     return match.group(1) if match else None
+
+
+def _gtin_lookup_variants(gtin: str) -> list[str]:
+    """GTIN in CIS is 14 digits; WB barcodes are often stored as EAN-13."""
+    clean = gtin.strip()
+    if not clean:
+        return []
+    variants: list[str] = [clean]
+    if len(clean) == 14 and clean.startswith("0"):
+        without_leading = clean[1:]
+        if without_leading not in variants:
+            variants.append(without_leading)
+    elif len(clean) == 13:
+        with_leading = f"0{clean}"
+        if with_leading not in variants:
+            variants.append(with_leading)
+    return variants
 
 
 def _parse_csv_rows(content: bytes) -> list[dict[str, str]]:
@@ -188,10 +263,11 @@ async def _resolve_product_for_row(
             return found
     gtin_clean = gtin.strip()
     if gtin_clean:
+        gtin_variants = _gtin_lookup_variants(gtin_clean)
         stmt = select(Product).where(
             Product.tenant_id == tenant_id,
             Product.seller_id == seller_id,
-            Product.wb_barcode == gtin_clean,
+            Product.wb_barcode.in_(gtin_variants),
         )
         res = await session.execute(stmt)
         found = res.scalar_one_or_none()
@@ -200,11 +276,45 @@ async def _resolve_product_for_row(
     return None
 
 
+async def relink_unlinked_marking_codes(
+    session: AsyncSession,
+    tenant_id: uuid.UUID,
+    seller_id: uuid.UUID,
+) -> int:
+    """Try to attach imported codes (product_id=NULL) to catalog products by GTIN."""
+    stmt = select(MarkingCode).where(
+        MarkingCode.tenant_id == tenant_id,
+        MarkingCode.seller_id == seller_id,
+        MarkingCode.product_id.is_(None),
+        MarkingCode.status == STATUS_AVAILABLE,
+    )
+    codes = list((await session.execute(stmt)).scalars().all())
+    linked = 0
+    for code in codes:
+        gtin = (code.gtin or "").strip() or extract_gtin_from_cis(code.cis_code)
+        if not gtin:
+            continue
+        product = await _resolve_product_for_row(
+            session,
+            tenant_id,
+            seller_id,
+            gtin=gtin,
+            sku="",
+        )
+        if product is not None:
+            code.product_id = product.id
+            linked += 1
+    if linked:
+        await session.commit()
+    return linked
+
+
 async def import_marking_codes(
     session: AsyncSession,
     tenant_id: uuid.UUID,
     seller_id: uuid.UUID,
     *,
+    product_id: uuid.UUID,
     filename: str,
     content: bytes,
     uploaded_by_user_id: uuid.UUID | None,
@@ -212,6 +322,12 @@ async def import_marking_codes(
     seller = await session.get(Seller, seller_id)
     if seller is None or seller.tenant_id != tenant_id:
         raise MarkingCodeServiceError("seller_not_found")
+
+    product = await get_product(session, tenant_id, product_id)
+    if product is None:
+        raise MarkingCodeServiceError("product_not_found")
+    if product.seller_id != seller_id:
+        raise MarkingCodeServiceError("product_seller_mismatch")
 
     try:
         parsed_rows = parse_import_file(filename, content)
@@ -251,23 +367,23 @@ async def import_marking_codes(
             skip_counts["duplicate"] = skip_counts.get("duplicate", 0) + 1
             continue
         gtin = (row.get("gtin") or "").strip() or extract_gtin_from_cis(cis)
-        product = await _resolve_product_for_row(
-            session,
-            tenant_id,
-            seller_id,
-            gtin=gtin or "",
-            sku=row.get("sku", ""),
-        )
         code = MarkingCode(
             tenant_id=tenant_id,
             seller_id=seller_id,
-            product_id=product.id if product is not None else None,
+            product_id=product.id,
             import_batch_id=batch.id,
             cis_code=cis,
             gtin=gtin,
             status=STATUS_AVAILABLE,
         )
         session.add(code)
+        await session.flush()
+        await record_event(
+            session,
+            code=code,
+            event_type=EVENT_IMPORTED,
+            actor=uploaded_by_user_id,
+        )
         accepted += 1
 
     skipped = sum(skip_counts.values())
@@ -279,6 +395,8 @@ async def import_marking_codes(
         import_id=batch.id,
         accepted_count=accepted,
         skipped_count=skipped,
+        linked_count=accepted,
+        unlinked_count=0,
         skip_reasons=[ImportSkipReason(k, v) for k, v in sorted(skip_counts.items())],
     )
 
@@ -288,13 +406,14 @@ async def list_inventory(
     tenant_id: uuid.UUID,
     *,
     seller_id: uuid.UUID | None,
-) -> list[ProductMarkingInventoryRow]:
+) -> MarkingInventoryResult:
+    if seller_id is not None:
+        await relink_unlinked_marking_codes(session, tenant_id, seller_id)
+
     product_stmt = select(Product).where(Product.tenant_id == tenant_id)
     if seller_id is not None:
         product_stmt = product_stmt.where(Product.seller_id == seller_id)
     products = list((await session.execute(product_stmt)).scalars().all())
-    if not products:
-        return []
 
     counts_stmt = (
         select(
@@ -310,8 +429,11 @@ async def list_inventory(
     count_rows = (await session.execute(counts_stmt)).all()
     available_by_product: dict[uuid.UUID, int] = {}
     printed_by_product: dict[uuid.UUID, int] = {}
+    unlinked_available = 0
     for product_id, status, cnt in count_rows:
         if product_id is None:
+            if status == STATUS_AVAILABLE:
+                unlinked_available = int(cnt)
             continue
         if status == STATUS_AVAILABLE:
             available_by_product[product_id] = int(cnt)
@@ -320,9 +442,6 @@ async def list_inventory(
 
     rows: list[ProductMarkingInventoryRow] = []
     for p in products:
-        has_stock = p.id in available_by_product or p.id in printed_by_product
-        if not p.requires_honest_sign and not has_stock:
-            continue
         rows.append(
             ProductMarkingInventoryRow(
                 product_id=p.id,
@@ -334,7 +453,39 @@ async def list_inventory(
             )
         )
     rows.sort(key=lambda r: r.sku_code)
-    return rows
+    return MarkingInventoryResult(
+        rows=rows,
+        unlinked_available_count=unlinked_available,
+    )
+
+
+async def list_product_codes(
+    session: AsyncSession,
+    tenant_id: uuid.UUID,
+    product_id: uuid.UUID,
+) -> list[ProductMarkingCodeRow]:
+    product = await get_product(session, tenant_id, product_id)
+    if product is None:
+        raise MarkingCodeServiceError("product_not_found")
+
+    stmt = (
+        select(MarkingCode)
+        .where(
+            MarkingCode.tenant_id == tenant_id,
+            MarkingCode.product_id == product_id,
+        )
+        .order_by(MarkingCode.created_at.desc())
+    )
+    codes = list((await session.execute(stmt)).scalars().all())
+    return [
+        ProductMarkingCodeRow(
+            id=code.id,
+            cis_code=code.cis_code,
+            status=code.status,
+            created_at=code.created_at,
+        )
+        for code in codes
+    ]
 
 
 async def count_available_for_product(
@@ -403,6 +554,17 @@ async def print_codes_for_packaging_line(
         codes = list((await session.execute(stmt)).scalars().all())
         if not codes:
             raise MarkingCodeServiceError("nothing_to_reprint")
+        for code in codes:
+            await record_event(
+                session,
+                code=code,
+                event_type=EVENT_REPRINTED,
+                actor=acting_user_id,
+                document_number=task.document_number,
+                packaging_task=line,
+                copies=duplicate_copies,
+            )
+        await session.commit()
         return PrintMarkingCodesResult(
             packaging_task_line_id=line.id,
             quantity=len(codes),
@@ -436,6 +598,15 @@ async def print_codes_for_packaging_line(
         code.packaging_task_line_id = line.id
         code.printed_at = now
         code.printed_by_user_id = acting_user_id
+        await record_event(
+            session,
+            code=code,
+            event_type=EVENT_PRINTED,
+            actor=acting_user_id,
+            document_number=task.document_number,
+            packaging_task=line,
+            copies=duplicate_copies,
+        )
 
     line.qty_marking_printed = quantity
     await session.commit()

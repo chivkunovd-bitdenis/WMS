@@ -24,6 +24,7 @@ from app.models.marketplace_unload import (
 from app.models.marketplace_unload_reservation import MarketplaceUnloadReservation
 from app.models.marking_code import (
     MarkingCode,
+    MarkingCodeEvent,
     MarkingCodeImport,
     MarkingPool,
     MarkingPoolProduct,
@@ -65,6 +66,7 @@ __all__ = [
     "MarketplaceUnloadRequest",
     "MarketplaceUnloadReservation",
     "MarkingCode",
+    "MarkingCodeEvent",
     "MarkingCodeImport",
     "MarkingPool",
     "MarkingPoolProduct",

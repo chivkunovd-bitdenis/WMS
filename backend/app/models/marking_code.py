@@ -42,6 +42,32 @@ MARKING_CODE_STATUSES = frozenset(
     }
 )
 
+EVENT_IMPORTED = "imported"
+EVENT_PRINTED = "printed"
+EVENT_REPRINTED = "reprinted"
+EVENT_APPLIED = "applied"
+EVENT_INTRODUCED = "introduced"
+EVENT_SHIPPED = "shipped"
+EVENT_TRANSFERRED = "transferred"
+EVENT_DEFECTIVE = "defective"
+EVENT_REPLACED = "replaced"
+EVENT_VOIDED = "voided"
+
+MARKING_CODE_EVENT_TYPES = frozenset(
+    {
+        EVENT_IMPORTED,
+        EVENT_PRINTED,
+        EVENT_REPRINTED,
+        EVENT_APPLIED,
+        EVENT_INTRODUCED,
+        EVENT_SHIPPED,
+        EVENT_TRANSFERRED,
+        EVENT_DEFECTIVE,
+        EVENT_REPLACED,
+        EVENT_VOIDED,
+    }
+)
+
 
 class MarkingPool(Base):
     __tablename__ = "marking_pools"
@@ -230,3 +256,61 @@ class MarkingCode(Base):
         remote_side=[id],
         foreign_keys=[replaced_by_code_id],
     )
+    events: Mapped[list[MarkingCodeEvent]] = relationship(
+        "MarkingCodeEvent",
+        back_populates="code",
+    )
+
+
+class MarkingCodeEvent(Base):
+    __tablename__ = "marking_code_events"
+
+    id: Mapped[uuid.UUID] = mapped_column(
+        Uuid(as_uuid=True), primary_key=True, default=uuid.uuid4
+    )
+    tenant_id: Mapped[uuid.UUID] = mapped_column(
+        Uuid(as_uuid=True), ForeignKey("tenants.id", ondelete="CASCADE"), index=True
+    )
+    seller_id: Mapped[uuid.UUID] = mapped_column(
+        Uuid(as_uuid=True), ForeignKey("sellers.id", ondelete="CASCADE"), index=True
+    )
+    code_id: Mapped[uuid.UUID] = mapped_column(
+        Uuid(as_uuid=True),
+        ForeignKey("marking_codes.id", ondelete="CASCADE"),
+        index=True,
+    )
+    pool_id: Mapped[uuid.UUID | None] = mapped_column(
+        Uuid(as_uuid=True),
+        ForeignKey("marking_pools.id", ondelete="SET NULL"),
+        nullable=True,
+        index=True,
+    )
+    event_type: Mapped[str] = mapped_column(String(32), nullable=False)
+    packaging_task_id: Mapped[uuid.UUID | None] = mapped_column(
+        Uuid(as_uuid=True),
+        ForeignKey("packaging_tasks.id", ondelete="SET NULL"),
+        nullable=True,
+        index=True,
+    )
+    packaging_task_line_id: Mapped[uuid.UUID | None] = mapped_column(
+        Uuid(as_uuid=True),
+        ForeignKey("packaging_task_lines.id", ondelete="SET NULL"),
+        nullable=True,
+    )
+    document_number: Mapped[str | None] = mapped_column(String(32), nullable=True)
+    actor_user_id: Mapped[uuid.UUID | None] = mapped_column(
+        Uuid(as_uuid=True),
+        ForeignKey("users.id", ondelete="SET NULL"),
+        nullable=True,
+    )
+    copies: Mapped[int] = mapped_column(Integer, nullable=False, default=1)
+    reason: Mapped[str | None] = mapped_column(String(512), nullable=True)
+    meta_json: Mapped[str | None] = mapped_column(Text, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False, index=True
+    )
+
+    tenant: Mapped[Tenant] = relationship("Tenant")
+    seller: Mapped[Seller] = relationship("Seller")
+    code: Mapped[MarkingCode] = relationship("MarkingCode", back_populates="events")
+    pool: Mapped[MarkingPool | None] = relationship("MarkingPool")
