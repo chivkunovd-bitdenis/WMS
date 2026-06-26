@@ -1,5 +1,12 @@
 # TASKLOG
 
+## TASK-75 — 2026-06-26 — ЧЗ T3.1: шина уведомлений
+
+- What changed: таблица `notifications`, сервис `notify`/`notify_ff_portal`, API `GET/POST /operations/notifications` (список, read, read-all), скоуп получателя user/seller/ff_portal.
+- What did NOT change: UI колокольчик (T3.2), триггеры low-stock и отгрузок (T3.3–T3.5).
+- Verification: `ruff`, `mypy`, `pytest tests/test_notifications.py` — 5 passed.
+- Commit: (pending).
+
 ## TASK-74 — 2026-06-26 — ЧЗ T2.4–T2.5: verify-pair и ворклист pending
 
 - What changed: T2.4 `POST verify-pair` (match → `applied` + событие), мини-станция на упаковке; T2.5 `GET pending-marking`, экран «Осталось промаркировать», бейдж на упаковке.

@@ -14,6 +14,7 @@ if TYPE_CHECKING:
     from app.models.inbound_intake import InboundIntakeRequest
     from app.models.inventory_balance import InventoryBalance
     from app.models.inventory_movement import InventoryMovement
+    from app.models.notification import Notification
     from app.models.outbound_shipment import OutboundShipmentRequest
     from app.models.product import Product
     from app.models.seller import Seller
@@ -61,5 +62,9 @@ class Tenant(Base):
     )
     background_jobs: Mapped[list[BackgroundJob]] = relationship(
         "BackgroundJob",
+        back_populates="tenant",
+    )
+    notifications: Mapped[list[Notification]] = relationship(
+        "Notification",
         back_populates="tenant",
     )

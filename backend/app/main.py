@@ -18,6 +18,7 @@ from app.api.inventory_balances import router as inventory_balances_router
 from app.api.inventory_movements import router as inventory_movements_router
 from app.api.marketplace_unload_requests import router as marketplace_unload_requests_router
 from app.api.marking_codes import router as marking_codes_router
+from app.api.notifications import router as notifications_router
 from app.api.outbound_shipment import router as outbound_shipment_router
 from app.api.packaging_tasks import router as packaging_tasks_router
 from app.api.products import router as products_router
@@ -107,6 +108,7 @@ def create_app() -> FastAPI:
     app.include_router(marketplace_unload_requests_router)
     app.include_router(packaging_tasks_router)
     app.include_router(marking_codes_router)
+    app.include_router(notifications_router)
     app.include_router(wb_mp_warehouses_router)
     app.include_router(discrepancy_acts_router)
     app.include_router(background_jobs_router)
