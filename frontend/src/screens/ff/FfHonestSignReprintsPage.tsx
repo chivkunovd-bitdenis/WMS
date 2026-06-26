@@ -1,7 +1,9 @@
 import { useCallback, useEffect, useState } from 'react'
 import {
   Box,
+  Button,
   Paper,
+  Stack,
   Table,
   TableBody,
   TableCell,
@@ -38,6 +40,12 @@ export function FfHonestSignReprintsPage({
   const [rows, setRows] = useState<ReprintRequest[]>([])
   const [error, setError] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
+  const [busyId, setBusyId] = useState<string | null>(null)
+
+  const authHeaders = {
+    Authorization: `Bearer ${token}`,
+    'Content-Type': 'application/json',
+  }
 
   const load = useCallback(async () => {
     setLoading(true)
@@ -61,6 +69,28 @@ export function FfHonestSignReprintsPage({
   useEffect(() => {
     void load()
   }, [load])
+
+  const resolveRequest = async (requestId: string, action: 'replace' | 'approve-reprint' | 'reject') => {
+    setBusyId(requestId)
+    setError(null)
+    try {
+      const res = await fetch(
+        apiUrl(`/operations/marking-codes/reprint-requests/${requestId}/${action}`),
+        {
+          method: 'POST',
+          headers: authHeaders,
+          body: action === 'reject' ? JSON.stringify({ reason: 'Отклонено старшим' }) : undefined,
+        },
+      )
+      if (!res.ok) {
+        setError(await readApiErrorMessage(res))
+        return
+      }
+      await load()
+    } finally {
+      setBusyId(null)
+    }
+  }
 
   return (
     <Box data-testid={testId}>
@@ -93,6 +123,7 @@ export function FfHonestSignReprintsPage({
                 <TableCell>Код</TableCell>
                 <TableCell>Причина</TableCell>
                 <TableCell>Документ</TableCell>
+                <TableCell align="right">Действия</TableCell>
               </TableRow>
             </TableHead>
             <TableBody>
@@ -106,6 +137,37 @@ export function FfHonestSignReprintsPage({
                   <TableCell>{row.cis_masked}</TableCell>
                   <TableCell>{row.reason?.trim() || '—'}</TableCell>
                   <TableCell>{row.document_number ?? '—'}</TableCell>
+                  <TableCell align="right">
+                    <Stack direction="row" spacing={0.5} sx={{ justifyContent: 'flex-end' }}>
+                      <Button
+                        size="small"
+                        variant="outlined"
+                        disabled={busyId === row.id}
+                        onClick={() => void resolveRequest(row.id, 'approve-reprint')}
+                        data-testid={`${testId}-approve-${row.id}`}
+                      >
+                        Подтвердить
+                      </Button>
+                      <Button
+                        size="small"
+                        variant="contained"
+                        disabled={busyId === row.id}
+                        onClick={() => void resolveRequest(row.id, 'replace')}
+                        data-testid={`${testId}-replace-${row.id}`}
+                      >
+                        Заменить
+                      </Button>
+                      <Button
+                        size="small"
+                        color="inherit"
+                        disabled={busyId === row.id}
+                        onClick={() => void resolveRequest(row.id, 'reject')}
+                        data-testid={`${testId}-reject-${row.id}`}
+                      >
+                        Отклонить
+                      </Button>
+                    </Stack>
+                  </TableCell>
                 </TableRow>
               ))}
             </TableBody>

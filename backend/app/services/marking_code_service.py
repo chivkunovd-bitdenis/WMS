@@ -16,6 +16,8 @@ from app.models.marking_code import (
     EVENT_IMPORTED,
     EVENT_PRINTED,
     EVENT_REPRINTED,
+    EVENT_DEFECTIVE,
+    EVENT_REPLACED,
     STATUS_AVAILABLE,
     STATUS_DEFECTIVE,
     STATUS_PRINTED,
@@ -26,7 +28,9 @@ from app.models.marking_code import (
     MarkingPool,
     MarkingPoolProduct,
     MarkingReprintRequest,
+    REPRINT_STATUS_APPROVED,
     REPRINT_STATUS_PENDING,
+    REPRINT_STATUS_REJECTED,
 )
 from app.models.packaging_task import PackagingTask, PackagingTaskLine
 from app.models.product import Product
@@ -2013,3 +2017,189 @@ async def list_pending_reprint_requests(
             )
         )
     return rows
+
+
+async def _get_pending_reprint_request(
+    session: AsyncSession,
+    tenant_id: uuid.UUID,
+    request_id: uuid.UUID,
+) -> MarkingReprintRequest:
+    req = await session.get(MarkingReprintRequest, request_id)
+    if req is None or req.tenant_id != tenant_id:
+        raise MarkingCodeServiceError("reprint_request_not_found")
+    if req.status != REPRINT_STATUS_PENDING:
+        raise MarkingCodeServiceError("reprint_request_not_pending")
+    return req
+
+
+@dataclass(frozen=True)
+class ReprintResolutionResult:
+    request_id: uuid.UUID
+    status: str
+    code_id: uuid.UUID
+    replacement_code_id: uuid.UUID | None = None
+    cis_code: str | None = None
+
+
+async def approve_reprint_request(
+    session: AsyncSession,
+    tenant_id: uuid.UUID,
+    request_id: uuid.UUID,
+    *,
+    resolved_by: uuid.UUID,
+    copies: int = 1,
+) -> ReprintResolutionResult:
+    req = await _get_pending_reprint_request(session, tenant_id, request_id)
+    code = await session.get(MarkingCode, req.code_id)
+    if code is None or code.tenant_id != tenant_id:
+        raise MarkingCodeServiceError("code_not_found")
+    line = await session.get(PackagingTaskLine, req.packaging_task_line_id)
+    if line is None:
+        raise MarkingCodeServiceError("line_not_found")
+    task = await session.get(PackagingTask, line.task_id)
+    if task is None or task.tenant_id != tenant_id:
+        raise MarkingCodeServiceError("line_not_found")
+
+    await record_event(
+        session,
+        code=code,
+        event_type=EVENT_REPRINTED,
+        actor=resolved_by,
+        document_number=task.document_number,
+        packaging_task=line,
+        copies=copies,
+        reason=req.reason,
+    )
+    now = datetime.now(UTC)
+    req.status = REPRINT_STATUS_APPROVED
+    req.resolved_by_user_id = resolved_by
+    req.resolved_at = now
+    await session.commit()
+    return ReprintResolutionResult(
+        request_id=req.id,
+        status=req.status,
+        code_id=code.id,
+        cis_code=code.cis_code,
+    )
+
+
+async def replace_reprint_request(
+    session: AsyncSession,
+    tenant_id: uuid.UUID,
+    request_id: uuid.UUID,
+    *,
+    resolved_by: uuid.UUID,
+    copies: int = 1,
+) -> ReprintResolutionResult:
+    req = await _get_pending_reprint_request(session, tenant_id, request_id)
+    old_code = await session.get(MarkingCode, req.code_id)
+    if old_code is None or old_code.tenant_id != tenant_id:
+        raise MarkingCodeServiceError("code_not_found")
+    if old_code.status != STATUS_PRINTED:
+        raise MarkingCodeServiceError("code_not_printed")
+    line = await session.get(PackagingTaskLine, req.packaging_task_line_id)
+    if line is None:
+        raise MarkingCodeServiceError("line_not_found")
+    task = await session.get(PackagingTask, line.task_id)
+    if task is None or task.tenant_id != tenant_id:
+        raise MarkingCodeServiceError("line_not_found")
+    product = await get_product(session, tenant_id, line.product_id)
+    if product is None:
+        raise MarkingCodeServiceError("product_not_found")
+
+    pool_ids = await _pool_ids_for_product(session, tenant_id, product.id)
+    if old_code.pool_id is not None:
+        pool_filter = MarkingCode.pool_id == old_code.pool_id
+    elif pool_ids:
+        pool_filter = MarkingCode.pool_id.in_(pool_ids)
+    else:
+        pool_filter = MarkingCode.product_id == product.id
+
+    new_stmt = (
+        select(MarkingCode)
+        .where(
+            MarkingCode.tenant_id == tenant_id,
+            MarkingCode.seller_id == product.seller_id,
+            MarkingCode.status == STATUS_AVAILABLE,
+            pool_filter,
+        )
+        .order_by(MarkingCode.created_at.asc())
+        .limit(1)
+        .with_for_update()
+    )
+    new_code = (await session.execute(new_stmt)).scalar_one_or_none()
+    if new_code is None:
+        raise MarkingCodeServiceError("no_replacement_code")
+
+    now = datetime.now(UTC)
+    old_code.status = STATUS_DEFECTIVE
+    old_code.defective_reason = req.reason
+    await record_event(
+        session,
+        code=old_code,
+        event_type=EVENT_DEFECTIVE,
+        actor=resolved_by,
+        document_number=task.document_number,
+        packaging_task=line,
+        reason=req.reason,
+    )
+
+    new_code.status = STATUS_PRINTED
+    new_code.product_id = product.id
+    new_code.packaging_task_line_id = line.id
+    new_code.printed_at = now
+    new_code.printed_by_user_id = resolved_by
+    old_code.replaced_by_code_id = new_code.id
+
+    await record_event(
+        session,
+        code=old_code,
+        event_type=EVENT_REPLACED,
+        actor=resolved_by,
+        document_number=task.document_number,
+        packaging_task=line,
+        reason=req.reason,
+    )
+    await record_event(
+        session,
+        code=new_code,
+        event_type=EVENT_PRINTED,
+        actor=resolved_by,
+        document_number=task.document_number,
+        packaging_task=line,
+        copies=copies,
+    )
+
+    req.status = REPRINT_STATUS_APPROVED
+    req.resolved_by_user_id = resolved_by
+    req.resolved_at = now
+    await session.commit()
+    return ReprintResolutionResult(
+        request_id=req.id,
+        status=req.status,
+        code_id=old_code.id,
+        replacement_code_id=new_code.id,
+        cis_code=new_code.cis_code,
+    )
+
+
+async def reject_reprint_request(
+    session: AsyncSession,
+    tenant_id: uuid.UUID,
+    request_id: uuid.UUID,
+    *,
+    resolved_by: uuid.UUID,
+    reject_reason: str | None = None,
+) -> ReprintResolutionResult:
+    req = await _get_pending_reprint_request(session, tenant_id, request_id)
+    req.status = REPRINT_STATUS_REJECTED
+    req.resolved_by_user_id = resolved_by
+    req.resolved_at = datetime.now(UTC)
+    if reject_reason and reject_reason.strip():
+        req.reason = reject_reason.strip()
+    await session.commit()
+    return ReprintResolutionResult(
+        request_id=req.id,
+        status=req.status,
+        code_id=req.code_id,
+    )

@@ -5,7 +5,7 @@
 - What changed: `can_shift_lead` в `ff_staff_permissions`; `require_shift_lead`; API `GET reprint-requests`, `POST codes/{id}/defect`, `GET packaging-task-lines/{id}/printed-codes`; таблица `marking_reprint_requests`; кнопка «Брак» на упаковке; экран «Перепечатки» с таблицей pending; pytest + e2e.
 - What did NOT change: действия старшего (подтвердить/заменить/отклонить) — T2.3.
 - Verification: pytest shift_lead + reprint_defect; `npm run build`; e2e ff-shift-lead + ff-marking-defect green.
-- Commit: pending.
+- Commit: `f6d78d1`.
 
 ## TASK-72 — 2026-06-26 — ЧЗ T1.6: рендер ленты по layout
 

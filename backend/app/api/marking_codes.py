@@ -314,6 +314,7 @@ def _http_from_mc_error(exc: mc_svc.MarkingCodeServiceError) -> HTTPException:
         "pool_not_found",
         "code_not_found",
         "task_not_found",
+        "reprint_request_not_found",
     )
     if code in not_found_codes:
         status_code = status.HTTP_404_NOT_FOUND
@@ -1199,3 +1200,77 @@ async def list_marking_reprint_requests(
             for row in rows
         ]
     )
+
+
+class ReprintRejectIn(BaseModel):
+    reason: str | None = Field(default=None, max_length=512)
+
+
+class ReprintResolutionOut(BaseModel):
+    request_id: str
+    status: str
+    code_id: str
+    replacement_code_id: str | None = None
+    cis_code: str | None = None
+
+
+def _resolution_out(result: mc_svc.ReprintResolutionResult) -> ReprintResolutionOut:
+    return ReprintResolutionOut(
+        request_id=str(result.request_id),
+        status=result.status,
+        code_id=str(result.code_id),
+        replacement_code_id=(
+            str(result.replacement_code_id) if result.replacement_code_id else None
+        ),
+        cis_code=result.cis_code,
+    )
+
+
+@router.post("/reprint-requests/{request_id}/approve-reprint", response_model=ReprintResolutionOut)
+async def approve_marking_reprint(
+    request_id: uuid.UUID,
+    user: Annotated[User, Depends(require_shift_lead)],
+    session: Annotated[AsyncSession, Depends(get_db)],
+) -> ReprintResolutionOut:
+    try:
+        result = await mc_svc.approve_reprint_request(
+            session, user.tenant_id, request_id, resolved_by=user.id
+        )
+    except mc_svc.MarkingCodeServiceError as exc:
+        raise _http_from_mc_error(exc) from exc
+    return _resolution_out(result)
+
+
+@router.post("/reprint-requests/{request_id}/replace", response_model=ReprintResolutionOut)
+async def replace_marking_reprint(
+    request_id: uuid.UUID,
+    user: Annotated[User, Depends(require_shift_lead)],
+    session: Annotated[AsyncSession, Depends(get_db)],
+) -> ReprintResolutionOut:
+    try:
+        result = await mc_svc.replace_reprint_request(
+            session, user.tenant_id, request_id, resolved_by=user.id
+        )
+    except mc_svc.MarkingCodeServiceError as exc:
+        raise _http_from_mc_error(exc) from exc
+    return _resolution_out(result)
+
+
+@router.post("/reprint-requests/{request_id}/reject", response_model=ReprintResolutionOut)
+async def reject_marking_reprint(
+    request_id: uuid.UUID,
+    body: ReprintRejectIn,
+    user: Annotated[User, Depends(require_shift_lead)],
+    session: Annotated[AsyncSession, Depends(get_db)],
+) -> ReprintResolutionOut:
+    try:
+        result = await mc_svc.reject_reprint_request(
+            session,
+            user.tenant_id,
+            request_id,
+            resolved_by=user.id,
+            reject_reason=body.reason,
+        )
+    except mc_svc.MarkingCodeServiceError as exc:
+        raise _http_from_mc_error(exc) from exc
+    return _resolution_out(result)

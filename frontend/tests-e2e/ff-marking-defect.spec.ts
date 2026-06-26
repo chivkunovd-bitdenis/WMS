@@ -58,7 +58,8 @@ test('FF packaging: defect button creates pending reprint request', async ({ pag
 
   const gtin = '000000001234'
   const cis = `01${gtin}21${'D'.repeat(20)}0001`
-  const csv = `cis,sku_code\n${cis},${sku}`
+  const cis2 = `01${gtin}21${'D'.repeat(20)}0002`
+  const csv = `cis,sku_code\n${cis},${sku}\n${cis2},${sku}`
   const imp = await page.request.post(`${e2eApi}/operations/marking-codes/import`, {
     headers: bearer,
     multipart: {
@@ -141,5 +142,22 @@ test('FF packaging: defect button creates pending reprint request', async ({ pag
 
   await page.getByTestId('nav-ff-honest-sign-reprints').click()
   await expect(page.getByTestId('ff-honest-sign-reprints-page-table')).toBeVisible()
-  await expect(page.locator('[data-testid^="ff-honest-sign-reprints-page-row-"]')).toHaveCount(1)
+  const row = page.locator('[data-testid^="ff-honest-sign-reprints-page-row-"]').first()
+  await expect(row).toBeVisible()
+  const requestId = (await row.getAttribute('data-testid'))?.replace(
+    'ff-honest-sign-reprints-page-row-',
+    '',
+  )
+  expect(requestId).toBeTruthy()
+  await Promise.all([
+    page.waitForResponse(
+      (r) =>
+        r.request().method() === 'POST' &&
+        r.url().includes(`/reprint-requests/${requestId}/replace`) &&
+        r.status() >= 200 &&
+        r.status() < 300,
+    ),
+    page.getByTestId(`ff-honest-sign-reprints-page-replace-${requestId}`).click(),
+  ])
+  await expect(page.getByTestId('ff-honest-sign-reprints-page-empty')).toBeVisible()
 })

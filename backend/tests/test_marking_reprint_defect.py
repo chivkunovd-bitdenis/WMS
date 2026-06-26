@@ -52,6 +52,7 @@ async def _seed_printed_code(
     )
 
     cis = f"01{'0' * 10}1234{'21'}{'B' * 20}0001"
+    cis2 = f"01{'0' * 10}1234{'21'}{'B' * 20}0002"
     imp = await async_client.post(
         "/operations/marking-codes/import",
         headers=h,
@@ -61,7 +62,7 @@ async def _seed_printed_code(
                 [{"title": "Pool", "product_ids": [product_id]}],
             ),
         },
-        files=[("files", ("codes.csv", f"cis\n{cis}".encode(), "text/csv"))],
+        files=[("files", ("codes.csv", f"cis\n{cis}\n{cis2}".encode(), "text/csv"))],
     )
     assert imp.status_code == 200, imp.text
 
@@ -169,3 +170,33 @@ async def test_defect_requires_packaging_access(async_client: AsyncClient) -> No
         json={"packaging_task_line_id": line_id},
     )
     assert forbidden.status_code == 403
+
+
+@pytest.mark.asyncio
+async def test_replace_reprint_request_clears_queue(async_client: AsyncClient) -> None:
+    admin_h, line_id, code_id = await _seed_printed_code(async_client)
+
+    created = await async_client.post(
+        f"/operations/marking-codes/codes/{code_id}/defect",
+        headers=admin_h,
+        json={"packaging_task_line_id": line_id},
+    )
+    assert created.status_code == 200
+    request_id = created.json()["request_id"]
+
+    replaced = await async_client.post(
+        f"/operations/marking-codes/reprint-requests/{request_id}/replace",
+        headers=admin_h,
+    )
+    assert replaced.status_code == 200, replaced.text
+    body = replaced.json()
+    assert body["status"] == "approved"
+    assert body["replacement_code_id"] is not None
+
+    queue = await async_client.get(
+        "/operations/marking-codes/reprint-requests",
+        headers=admin_h,
+    )
+    assert queue.status_code == 200
+    assert queue.json()["requests"] == []
+
