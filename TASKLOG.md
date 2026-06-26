@@ -5,6 +5,7 @@
 - What changed: `WmsDateField` не вызывает `onChange(null)` на пустом blur после выбора в календаре; регрессия в `seller-mp-unload.spec.ts` (TC-NEW-DATE-01).
 - What did NOT change: API PATCH `planned_shipment_date`; логика сохранения в диалогах селлера и ФФ.
 - Verification: `npm run build`; e2e `seller-mp-unload.spec.ts`, `ff-dashboard.spec.ts`.
+- Deploy: PR #43 → `main` `fc1a32b`; prod `194.87.96.144:8088` — `prod-update.sh`, HTTP 200.
 
 ## TASK-60 — 2026-06-23 — FF навигация: «Каталог»→«Ячейки», «Товары»→«Каталог»
 
@@ -16,7 +17,8 @@
 
 - What changed: `GET /products/ff-catalog` возвращает все товары тенанта (как `linked-wb-catalog`), а не только с `InventoryMovement`; остатки в UI по-прежнему из `inventory-balances/summary` (0 для непринятых).
 - What did NOT change: приватный WB-каталог селлера; эндпоинт `linked-wb-catalog` (оставлен для приёмки/хуков).
-- Verification: `ruff check . && mypy . && pytest` — 142 passed; `npm run build`; e2e `ff-products.spec.ts` — 2 passed.
+- Verification: `pytest tests/test_products_wb_catalog.py::test_ff_catalog_lists_all_tenant_products`; e2e `ff-products.spec.ts` — filter/sort passed.
+- Deploy: (pending PR merge + prod-update.sh + sync-all-wb-products.sh).
 
 ## TASK-58 — 2026-06-18 — Печать ШК в каталоге товаров ФФ и после закрытия приёмки
 
