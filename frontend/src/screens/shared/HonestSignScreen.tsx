@@ -3,6 +3,8 @@ import {
   Alert,
   Box,
   Button,
+  Checkbox,
+  IconButton,
   Paper,
   Stack,
   Table,
@@ -11,12 +13,16 @@ import {
   TableContainer,
   TableHead,
   TableRow,
+  Tooltip,
   Typography,
 } from '@mui/material'
 import UploadFileOutlined from '@mui/icons-material/UploadFileOutlined'
+import QrCode2Outlined from '@mui/icons-material/QrCode2Outlined'
 import { apiUrl } from '../../api'
 import { PageHeader } from '../../ui/PageHeader'
 import { readApiErrorMessage } from '../../utils/readApiErrorMessage'
+import { MarkingProductCodesDialog } from './MarkingProductCodesDialog'
+import { MarkingPoolProductsPanel } from './MarkingPoolProductsPanel'
 
 export type MarkingInventoryRow = {
   product_id: string
@@ -36,6 +42,8 @@ type Props = {
   selectedSellerId?: string | null
   onSelectedSellerIdChange?: (id: string | null) => void
   testIdPrefix?: string
+  /** T0.4: optional pool link panel (e2e / until T0.7 pool list) */
+  poolPreview?: { poolId: string; poolTitle: string; sellerId: string } | null
 }
 
 export function HonestSignScreen({
@@ -46,14 +54,18 @@ export function HonestSignScreen({
   selectedSellerId = null,
   onSelectedSellerIdChange,
   testIdPrefix = 'honest-sign',
+  poolPreview = null,
 }: Props) {
   const [rows, setRows] = useState<MarkingInventoryRow[]>([])
+  const [selectedProductId, setSelectedProductId] = useState<string | null>(null)
+  const [codesDialogProduct, setCodesDialogProduct] = useState<MarkingInventoryRow | null>(null)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [importMsg, setImportMsg] = useState<string | null>(null)
   const fileRef = useRef<HTMLInputElement>(null)
 
   const effectiveSellerId = sellerId ?? selectedSellerId
+  const selectedRow = rows.find((r) => r.product_id === selectedProductId) ?? null
 
   const authHeaders = {
     Authorization: `Bearer ${token}`,
@@ -78,7 +90,11 @@ export function HonestSignScreen({
         setError(await readApiErrorMessage(res))
         return
       }
-      setRows((await res.json()) as MarkingInventoryRow[])
+      const data = (await res.json()) as { rows: MarkingInventoryRow[] }
+      setRows(data.rows)
+      setSelectedProductId((prev) =>
+        prev && data.rows.some((r) => r.product_id === prev) ? prev : null,
+      )
     } finally {
       setBusy(false)
     }
@@ -87,10 +103,15 @@ export function HonestSignScreen({
   useEffect(() => {
     if (sellerIdRequiredForImport && !effectiveSellerId) {
       setRows([])
+      setSelectedProductId(null)
       return
     }
     void loadInventory()
   }, [effectiveSellerId, loadInventory, sellerIdRequiredForImport])
+
+  useEffect(() => {
+    setSelectedProductId(null)
+  }, [effectiveSellerId])
 
   const onPickFile = () => fileRef.current?.click()
 
@@ -105,12 +126,17 @@ export function HonestSignScreen({
       setError('Выберите селлера для загрузки кодов.')
       return
     }
+    if (!selectedProductId) {
+      setError('Отметьте товар в таблице — коды будут загружены для него.')
+      return
+    }
     setBusy(true)
     setError(null)
     setImportMsg(null)
     try {
       const form = new FormData()
       form.append('file', file)
+      form.append('product_id', selectedProductId)
       if (sellerIdRequiredForImport) {
         form.append('seller_id', importSellerId)
       }
@@ -126,9 +152,15 @@ export function HonestSignScreen({
       const data = (await res.json()) as {
         accepted_count: number
         skipped_count: number
+        skip_reasons: { reason: string; count: number }[]
       }
+      const skipDetails =
+        data.skip_reasons.length > 0
+          ? ` Пропуск: ${data.skip_reasons.map((r) => `${r.reason} (${r.count})`).join(', ')}.`
+          : ''
+      const label = selectedRow ? `${selectedRow.sku_code}` : 'товар'
       setImportMsg(
-        `Загружено кодов: ${data.accepted_count}. Пропущено: ${data.skipped_count}.`,
+        `Для «${label}» загружено кодов: ${data.accepted_count}. Пропущено: ${data.skipped_count}.${skipDetails}`,
       )
       await loadInventory()
     } finally {
@@ -136,11 +168,16 @@ export function HonestSignScreen({
     }
   }
 
+  const toggleProduct = (productId: string) => {
+    setSelectedProductId((prev) => (prev === productId ? null : productId))
+    setImportMsg(null)
+  }
+
   return (
     <Stack spacing={2} data-testid={`${testIdPrefix}-page`}>
       <PageHeader
         title="Честный знак"
-        description="Загрузка кодов (CSV или PDF) и остатки по товарам с маркировкой."
+        description="Отметьте товар, загрузите коды (CSV или PDF) — они привяжутся к выбранной строке."
       />
       {sellerIdRequiredForImport && sellers.length > 0 ? (
         <Stack direction="row" spacing={1} sx={{ flexWrap: 'wrap', alignItems: 'center' }}>
@@ -170,59 +207,135 @@ export function HonestSignScreen({
           {importMsg}
         </Alert>
       ) : null}
-      <Box>
-        <input
-          ref={fileRef}
-          type="file"
-          accept=".csv,.txt,.tsv,.pdf"
-          hidden
-          data-testid={`${testIdPrefix}-file-input`}
-          onChange={(ev) => void onFileChange(ev)}
+      {poolPreview ? (
+        <MarkingPoolProductsPanel
+          token={token}
+          poolId={poolPreview.poolId}
+          poolTitle={poolPreview.poolTitle}
+          sellerId={poolPreview.sellerId}
+          testIdPrefix={testIdPrefix}
         />
-        <Button
-          variant="contained"
-          startIcon={<UploadFileOutlined />}
-          disabled={busy || (sellerIdRequiredForImport && !effectiveSellerId)}
-          onClick={onPickFile}
-          data-testid={`${testIdPrefix}-upload`}
+      ) : null}
+      <Paper variant="outlined" sx={{ p: 2 }}>
+        <Stack
+          direction={{ xs: 'column', sm: 'row' }}
+          spacing={1.5}
+          sx={{ alignItems: { sm: 'center' } }}
         >
-          Загрузить коды (CSV / PDF)
-        </Button>
-      </Box>
+          <Box sx={{ flex: 1 }}>
+            <Typography variant="body2" color="text.secondary">
+              {selectedRow ? (
+                <>
+                  Загрузка для: <strong>{selectedRow.product_name}</strong> ({selectedRow.sku_code})
+                </>
+              ) : (
+                'Отметьте товар галочкой в таблице ниже.'
+              )}
+            </Typography>
+          </Box>
+          <input
+            ref={fileRef}
+            type="file"
+            accept=".csv,.txt,.tsv,.pdf"
+            hidden
+            data-testid={`${testIdPrefix}-file-input`}
+            onChange={(ev) => void onFileChange(ev)}
+          />
+          <Button
+            variant="contained"
+            startIcon={<UploadFileOutlined />}
+            disabled={
+              busy ||
+              !selectedProductId ||
+              (sellerIdRequiredForImport && !effectiveSellerId)
+            }
+            onClick={onPickFile}
+            data-testid={`${testIdPrefix}-upload`}
+          >
+            Загрузить коды
+          </Button>
+        </Stack>
+      </Paper>
       <TableContainer component={Paper} variant="outlined">
         <Table size="small" data-testid={`${testIdPrefix}-inventory-table`}>
           <TableHead>
             <TableRow>
+              <TableCell padding="checkbox" />
               <TableCell>Товар</TableCell>
               <TableCell>Артикул</TableCell>
               <TableCell align="right">Нужен ЧЗ</TableCell>
               <TableCell align="right">Доступно</TableCell>
               <TableCell align="right">Напечатано</TableCell>
+              <TableCell align="center" padding="checkbox">
+                КИЗ
+              </TableCell>
             </TableRow>
           </TableHead>
           <TableBody>
             {rows.length === 0 ? (
               <TableRow>
-                <TableCell colSpan={5}>
+                <TableCell colSpan={7}>
                   <Typography variant="body2" color="text.secondary">
-                    {busy ? 'Загрузка…' : 'Нет данных по маркировке.'}
+                    {busy ? 'Загрузка…' : 'Нет товаров у выбранного селлера.'}
                   </Typography>
                 </TableCell>
               </TableRow>
             ) : (
               rows.map((r) => (
-                <TableRow key={r.product_id} data-testid={`${testIdPrefix}-row-${r.product_id}`}>
+                <TableRow
+                  key={r.product_id}
+                  selected={selectedProductId === r.product_id}
+                  hover
+                  data-testid={`${testIdPrefix}-row-${r.product_id}`}
+                >
+                  <TableCell padding="checkbox">
+                    <Checkbox
+                      checked={selectedProductId === r.product_id}
+                      onChange={() => toggleProduct(r.product_id)}
+                      slotProps={{
+                        input: {
+                          'aria-label': `Выбрать ${r.sku_code}`,
+                        },
+                      }}
+                    />
+                  </TableCell>
                   <TableCell>{r.product_name}</TableCell>
                   <TableCell>{r.sku_code}</TableCell>
                   <TableCell align="right">{r.requires_honest_sign ? 'Да' : 'Нет'}</TableCell>
                   <TableCell align="right">{r.available_count}</TableCell>
                   <TableCell align="right">{r.printed_count}</TableCell>
+                  <TableCell align="center" padding="checkbox">
+                    <Tooltip title="Коды и печать">
+                      <span>
+                        <IconButton
+                          size="small"
+                          disabled={r.available_count + r.printed_count === 0}
+                          onClick={() => setCodesDialogProduct(r)}
+                          data-testid={`${testIdPrefix}-view-codes-${r.product_id}`}
+                        >
+                          <QrCode2Outlined fontSize="small" />
+                        </IconButton>
+                      </span>
+                    </Tooltip>
+                  </TableCell>
                 </TableRow>
               ))
             )}
           </TableBody>
         </Table>
       </TableContainer>
+      <MarkingProductCodesDialog
+        open={codesDialogProduct !== null}
+        token={token}
+        productId={codesDialogProduct?.product_id ?? null}
+        productLabel={
+          codesDialogProduct
+            ? `${codesDialogProduct.sku_code} · ${codesDialogProduct.product_name}`
+            : ''
+        }
+        testIdPrefix={testIdPrefix}
+        onClose={() => setCodesDialogProduct(null)}
+      />
     </Stack>
   )
 }

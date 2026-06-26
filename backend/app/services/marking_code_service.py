@@ -21,6 +21,8 @@ from app.models.marking_code import (
     MarkingCode,
     MarkingCodeEvent,
     MarkingCodeImport,
+    MarkingPool,
+    MarkingPoolProduct,
 )
 from app.models.packaging_task import PackagingTaskLine
 from app.models.product import Product
@@ -123,6 +125,19 @@ class PrintMarkingCodesResult:
     duplicate_copies: int
     is_reprint: bool
     codes: list[str]
+
+
+@dataclass(frozen=True)
+class PoolProductRow:
+    id: uuid.UUID
+    sku_code: str
+    name: str
+
+
+@dataclass(frozen=True)
+class PoolProductsResult:
+    pool_id: uuid.UUID
+    products: list[PoolProductRow]
 
 
 def normalize_cis(raw: str) -> str | None:
@@ -274,6 +289,179 @@ async def _resolve_product_for_row(
         if found is not None:
             return found
     return None
+
+
+async def _get_pool_or_error(
+    session: AsyncSession,
+    tenant_id: uuid.UUID,
+    pool_id: uuid.UUID,
+) -> MarkingPool:
+    pool = await session.get(MarkingPool, pool_id)
+    if pool is None or pool.tenant_id != tenant_id:
+        raise MarkingCodeServiceError("pool_not_found")
+    return pool
+
+
+async def _validate_pool_products(
+    session: AsyncSession,
+    tenant_id: uuid.UUID,
+    seller_id: uuid.UUID,
+    product_ids: list[uuid.UUID],
+) -> None:
+    if not product_ids:
+        return
+    unique_ids = list(dict.fromkeys(product_ids))
+    stmt = select(Product).where(
+        Product.tenant_id == tenant_id,
+        Product.id.in_(unique_ids),
+    )
+    products = list((await session.execute(stmt)).scalars().all())
+    if len(products) != len(unique_ids):
+        raise MarkingCodeServiceError("product_not_found")
+    for product in products:
+        if product.seller_id != seller_id:
+            raise MarkingCodeServiceError("product_seller_mismatch")
+
+
+async def _pool_products_result(
+    session: AsyncSession,
+    tenant_id: uuid.UUID,
+    pool_id: uuid.UUID,
+) -> PoolProductsResult:
+    stmt = (
+        select(Product)
+        .join(MarkingPoolProduct, MarkingPoolProduct.product_id == Product.id)
+        .where(
+            MarkingPoolProduct.tenant_id == tenant_id,
+            MarkingPoolProduct.pool_id == pool_id,
+        )
+        .order_by(Product.sku_code.asc())
+    )
+    products = list((await session.execute(stmt)).scalars().all())
+    return PoolProductsResult(
+        pool_id=pool_id,
+        products=[
+            PoolProductRow(id=p.id, sku_code=p.sku_code, name=p.name) for p in products
+        ],
+    )
+
+
+async def set_pool_products(
+    session: AsyncSession,
+    tenant_id: uuid.UUID,
+    pool_id: uuid.UUID,
+    product_ids: list[uuid.UUID],
+) -> PoolProductsResult:
+    pool = await _get_pool_or_error(session, tenant_id, pool_id)
+    unique_ids = list(dict.fromkeys(product_ids))
+    await _validate_pool_products(session, tenant_id, pool.seller_id, unique_ids)
+
+    existing_stmt = select(MarkingPoolProduct).where(
+        MarkingPoolProduct.tenant_id == tenant_id,
+        MarkingPoolProduct.pool_id == pool_id,
+    )
+    existing = list((await session.execute(existing_stmt)).scalars().all())
+    new_ids = set(unique_ids)
+    for link in existing:
+        if link.product_id not in new_ids:
+            await session.delete(link)
+
+    existing_ids = {link.product_id for link in existing}
+    for product_id in unique_ids:
+        if product_id not in existing_ids:
+            session.add(
+                MarkingPoolProduct(
+                    tenant_id=tenant_id,
+                    pool_id=pool_id,
+                    product_id=product_id,
+                )
+            )
+
+    await session.commit()
+    return await _pool_products_result(session, tenant_id, pool_id)
+
+
+async def add_pool_products(
+    session: AsyncSession,
+    tenant_id: uuid.UUID,
+    pool_id: uuid.UUID,
+    product_ids: list[uuid.UUID],
+) -> PoolProductsResult:
+    pool = await _get_pool_or_error(session, tenant_id, pool_id)
+    unique_ids = list(dict.fromkeys(product_ids))
+    await _validate_pool_products(session, tenant_id, pool.seller_id, unique_ids)
+
+    if not unique_ids:
+        return await _pool_products_result(session, tenant_id, pool_id)
+
+    existing_stmt = select(MarkingPoolProduct.product_id).where(
+        MarkingPoolProduct.tenant_id == tenant_id,
+        MarkingPoolProduct.pool_id == pool_id,
+        MarkingPoolProduct.product_id.in_(unique_ids),
+    )
+    existing_ids = set((await session.execute(existing_stmt)).scalars().all())
+    for product_id in unique_ids:
+        if product_id not in existing_ids:
+            session.add(
+                MarkingPoolProduct(
+                    tenant_id=tenant_id,
+                    pool_id=pool_id,
+                    product_id=product_id,
+                )
+            )
+
+    await session.commit()
+    return await _pool_products_result(session, tenant_id, pool_id)
+
+
+async def remove_pool_products(
+    session: AsyncSession,
+    tenant_id: uuid.UUID,
+    pool_id: uuid.UUID,
+    product_ids: list[uuid.UUID],
+) -> PoolProductsResult:
+    await _get_pool_or_error(session, tenant_id, pool_id)
+    unique_ids = list(dict.fromkeys(product_ids))
+    if not unique_ids:
+        return await _pool_products_result(session, tenant_id, pool_id)
+
+    links_stmt = select(MarkingPoolProduct).where(
+        MarkingPoolProduct.tenant_id == tenant_id,
+        MarkingPoolProduct.pool_id == pool_id,
+        MarkingPoolProduct.product_id.in_(unique_ids),
+    )
+    for link in (await session.execute(links_stmt)).scalars().all():
+        await session.delete(link)
+
+    await session.commit()
+    return await _pool_products_result(session, tenant_id, pool_id)
+
+
+async def create_marking_pool(
+    session: AsyncSession,
+    tenant_id: uuid.UUID,
+    seller_id: uuid.UUID,
+    *,
+    gtin: str,
+    title: str,
+) -> MarkingPool:
+    seller = await session.get(Seller, seller_id)
+    if seller is None or seller.tenant_id != tenant_id:
+        raise MarkingCodeServiceError("seller_not_found")
+    gtin_clean = gtin.strip()
+    title_clean = title.strip()
+    if not gtin_clean or not title_clean:
+        raise MarkingCodeServiceError("invalid_pool_spec")
+    pool = MarkingPool(
+        tenant_id=tenant_id,
+        seller_id=seller_id,
+        gtin=gtin_clean,
+        title=title_clean,
+    )
+    session.add(pool)
+    await session.commit()
+    await session.refresh(pool)
+    return pool
 
 
 async def relink_unlinked_marking_codes(
