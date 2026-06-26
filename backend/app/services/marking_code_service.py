@@ -8,7 +8,7 @@ import uuid
 from dataclasses import dataclass
 from datetime import UTC, datetime
 
-from sqlalchemy import func, select
+from sqlalchemy import func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
@@ -28,6 +28,10 @@ from app.models.packaging_task import PackagingTaskLine
 from app.models.product import Product
 from app.models.seller import Seller
 from app.services.catalog_service import get_product
+from app.services.document_number_service import (
+    DOC_TYPE_MARKING_IMPORT,
+    assign_document_number_if_missing,
+)
 
 _CIS_MIN_LEN = 15
 _CIS_MAX_LEN = 512
@@ -87,11 +91,28 @@ class ImportSkipReason:
 @dataclass(frozen=True)
 class MarkingImportResult:
     import_id: uuid.UUID
+    document_number: str
     accepted_count: int
     skipped_count: int
-    linked_count: int
-    unlinked_count: int
     skip_reasons: list[ImportSkipReason]
+    pools: list[PoolImportResultRow]
+
+
+@dataclass(frozen=True)
+class PoolImportSpec:
+    title: str
+    product_ids: list[uuid.UUID]
+    gtin: str | None = None
+
+
+@dataclass(frozen=True)
+class PoolImportResultRow:
+    pool_id: uuid.UUID
+    gtin: str
+    title: str
+    accepted: int
+    duplicates: int
+    invalid: int
 
 
 @dataclass(frozen=True)
@@ -138,6 +159,11 @@ class PoolProductRow:
 class PoolProductsResult:
     pool_id: uuid.UUID
     products: list[PoolProductRow]
+
+
+def mask_cis_code(cis: str) -> str:
+    tail = cis[-12:] if len(cis) > 12 else cis
+    return f"…{tail}"
 
 
 def normalize_cis(raw: str) -> str | None:
@@ -346,12 +372,12 @@ async def _pool_products_result(
     )
 
 
-async def set_pool_products(
+async def _apply_pool_products(
     session: AsyncSession,
     tenant_id: uuid.UUID,
     pool_id: uuid.UUID,
     product_ids: list[uuid.UUID],
-) -> PoolProductsResult:
+) -> None:
     pool = await _get_pool_or_error(session, tenant_id, pool_id)
     unique_ids = list(dict.fromkeys(product_ids))
     await _validate_pool_products(session, tenant_id, pool.seller_id, unique_ids)
@@ -377,6 +403,14 @@ async def set_pool_products(
                 )
             )
 
+
+async def set_pool_products(
+    session: AsyncSession,
+    tenant_id: uuid.UUID,
+    pool_id: uuid.UUID,
+    product_ids: list[uuid.UUID],
+) -> PoolProductsResult:
+    await _apply_pool_products(session, tenant_id, pool_id, product_ids)
     await session.commit()
     return await _pool_products_result(session, tenant_id, pool_id)
 
@@ -474,6 +508,7 @@ async def relink_unlinked_marking_codes(
         MarkingCode.tenant_id == tenant_id,
         MarkingCode.seller_id == seller_id,
         MarkingCode.product_id.is_(None),
+        MarkingCode.pool_id.is_(None),
         MarkingCode.status == STATUS_AVAILABLE,
     )
     codes = list((await session.execute(stmt)).scalars().all())
@@ -497,95 +532,214 @@ async def relink_unlinked_marking_codes(
     return linked
 
 
+def _resolve_pool_spec(
+    gtin: str,
+    pool_specs: list[PoolImportSpec],
+) -> PoolImportSpec | None:
+    for spec in pool_specs:
+        if spec.gtin and spec.gtin.strip() == gtin:
+            return spec
+    if len(pool_specs) == 1 and not pool_specs[0].gtin:
+        return pool_specs[0]
+    return None
+
+
+async def get_or_create_marking_pool(
+    session: AsyncSession,
+    tenant_id: uuid.UUID,
+    seller_id: uuid.UUID,
+    *,
+    gtin: str,
+    title: str,
+) -> MarkingPool:
+    stmt = select(MarkingPool).where(
+        MarkingPool.tenant_id == tenant_id,
+        MarkingPool.seller_id == seller_id,
+        MarkingPool.gtin == gtin,
+    )
+    pool = (await session.execute(stmt)).scalar_one_or_none()
+    title_clean = title.strip() or f"GTIN …{gtin[-4:]}"
+    if pool is not None:
+        if title_clean and pool.title != title_clean:
+            pool.title = title_clean
+        return pool
+    pool = MarkingPool(
+        tenant_id=tenant_id,
+        seller_id=seller_id,
+        gtin=gtin,
+        title=title_clean,
+    )
+    session.add(pool)
+    await session.flush()
+    return pool
+
+
+async def _pool_ids_for_product(
+    session: AsyncSession,
+    tenant_id: uuid.UUID,
+    product_id: uuid.UUID,
+) -> list[uuid.UUID]:
+    stmt = select(MarkingPoolProduct.pool_id).where(
+        MarkingPoolProduct.tenant_id == tenant_id,
+        MarkingPoolProduct.product_id == product_id,
+    )
+    return list((await session.execute(stmt)).scalars().all())
+
+
 async def import_marking_codes(
     session: AsyncSession,
     tenant_id: uuid.UUID,
     seller_id: uuid.UUID,
     *,
-    product_id: uuid.UUID,
-    filename: str,
-    content: bytes,
+    files: list[tuple[str, bytes]],
+    pool_specs: list[PoolImportSpec],
     uploaded_by_user_id: uuid.UUID | None,
 ) -> MarkingImportResult:
     seller = await session.get(Seller, seller_id)
     if seller is None or seller.tenant_id != tenant_id:
         raise MarkingCodeServiceError("seller_not_found")
+    if not files:
+        raise MarkingCodeServiceError("empty_file")
 
-    product = await get_product(session, tenant_id, product_id)
-    if product is None:
-        raise MarkingCodeServiceError("product_not_found")
-    if product.seller_id != seller_id:
-        raise MarkingCodeServiceError("product_seller_mismatch")
-
-    try:
-        parsed_rows = parse_import_file(filename, content)
-    except MarkingCodeServiceError:
-        raise
-    except (UnicodeError, OSError, ValueError) as exc:
-        raise MarkingCodeServiceError("parse_failed") from exc
+    parsed_rows: list[dict[str, str]] = []
+    filenames: list[str] = []
+    for filename, content in files:
+        try:
+            rows = parse_import_file(filename, content)
+        except MarkingCodeServiceError:
+            raise
+        except (UnicodeError, OSError, ValueError) as exc:
+            raise MarkingCodeServiceError("parse_failed") from exc
+        parsed_rows.extend(rows)
+        filenames.append(filename)
 
     if not parsed_rows:
         raise MarkingCodeServiceError("empty_file")
 
-    skip_counts: dict[str, int] = {}
-    accepted = 0
+    for spec in pool_specs:
+        await _validate_pool_products(session, tenant_id, seller_id, spec.product_ids)
+
     batch = MarkingCodeImport(
         tenant_id=tenant_id,
         seller_id=seller_id,
-        filename=filename,
+        filename=", ".join(filenames)[:512],
         accepted_count=0,
         skipped_count=0,
         uploaded_by_user_id=uploaded_by_user_id,
     )
     session.add(batch)
     await session.flush()
+    document_number = await assign_document_number_if_missing(
+        session,
+        tenant_id,
+        DOC_TYPE_MARKING_IMPORT,
+        batch,
+    )
+    assert document_number is not None
+
+    seen_in_upload: set[str] = set()
+    by_gtin: dict[str, list[str]] = {}
+    invalid_count = 0
+    duplicate_count = 0
 
     for row in parsed_rows:
         cis = normalize_cis(row.get("cis", ""))
         if cis is None:
-            skip_counts["invalid_format"] = skip_counts.get("invalid_format", 0) + 1
+            invalid_count += 1
             continue
-        existing = await session.execute(
-            select(MarkingCode.id).where(
-                MarkingCode.tenant_id == tenant_id,
-                MarkingCode.cis_code == cis,
+        if cis in seen_in_upload:
+            duplicate_count += 1
+            continue
+        seen_in_upload.add(cis)
+        gtin = (row.get("gtin") or "").strip() or extract_gtin_from_cis(cis)
+        if not gtin:
+            invalid_count += 1
+            continue
+        by_gtin.setdefault(gtin, []).append(cis)
+
+    pool_results: list[PoolImportResultRow] = []
+    total_accepted = 0
+
+    for gtin, cis_list in sorted(by_gtin.items()):
+        spec = _resolve_pool_spec(gtin, pool_specs)
+        title = spec.title if spec is not None else f"GTIN …{gtin[-4:]}"
+        product_ids = spec.product_ids if spec is not None else []
+        pool = await get_or_create_marking_pool(
+            session,
+            tenant_id,
+            seller_id,
+            gtin=gtin,
+            title=title,
+        )
+        if product_ids:
+            await _apply_pool_products(session, tenant_id, pool.id, product_ids)
+
+        pool_accepted = 0
+        pool_duplicates = 0
+        pool_invalid = 0
+
+        for cis in cis_list:
+            existing = await session.execute(
+                select(MarkingCode.id).where(
+                    MarkingCode.tenant_id == tenant_id,
+                    MarkingCode.cis_code == cis,
+                )
+            )
+            if existing.scalar_one_or_none() is not None:
+                pool_duplicates += 1
+                continue
+            code = MarkingCode(
+                tenant_id=tenant_id,
+                seller_id=seller_id,
+                pool_id=pool.id,
+                import_batch_id=batch.id,
+                cis_code=cis,
+                gtin=gtin,
+                status=STATUS_AVAILABLE,
+            )
+            session.add(code)
+            await session.flush()
+            await record_event(
+                session,
+                code=code,
+                event_type=EVENT_IMPORTED,
+                actor=uploaded_by_user_id,
+                document_number=document_number,
+            )
+            pool_accepted += 1
+
+        pool_results.append(
+            PoolImportResultRow(
+                pool_id=pool.id,
+                gtin=gtin,
+                title=pool.title,
+                accepted=pool_accepted,
+                duplicates=pool_duplicates,
+                invalid=pool_invalid,
             )
         )
-        if existing.scalar_one_or_none() is not None:
-            skip_counts["duplicate"] = skip_counts.get("duplicate", 0) + 1
-            continue
-        gtin = (row.get("gtin") or "").strip() or extract_gtin_from_cis(cis)
-        code = MarkingCode(
-            tenant_id=tenant_id,
-            seller_id=seller_id,
-            product_id=product.id,
-            import_batch_id=batch.id,
-            cis_code=cis,
-            gtin=gtin,
-            status=STATUS_AVAILABLE,
-        )
-        session.add(code)
-        await session.flush()
-        await record_event(
-            session,
-            code=code,
-            event_type=EVENT_IMPORTED,
-            actor=uploaded_by_user_id,
-        )
-        accepted += 1
+        total_accepted += pool_accepted
+        duplicate_count += pool_duplicates
 
-    skipped = sum(skip_counts.values())
-    batch.accepted_count = accepted
-    batch.skipped_count = skipped
+    total_skipped = invalid_count + duplicate_count
+    skip_counts: dict[str, int] = {}
+    if invalid_count:
+        skip_counts["invalid_format"] = invalid_count
+    if duplicate_count:
+        skip_counts["duplicate"] = duplicate_count
+
+    batch.accepted_count = total_accepted
+    batch.skipped_count = total_skipped
     batch.skip_reasons_json = json.dumps(skip_counts, ensure_ascii=False) if skip_counts else None
     await session.commit()
+
     return MarkingImportResult(
         import_id=batch.id,
-        accepted_count=accepted,
-        skipped_count=skipped,
-        linked_count=accepted,
-        unlinked_count=0,
+        document_number=document_number,
+        accepted_count=total_accepted,
+        skipped_count=total_skipped,
         skip_reasons=[ImportSkipReason(k, v) for k, v in sorted(skip_counts.items())],
+        pools=pool_results,
     )
 
 
@@ -606,27 +760,56 @@ async def list_inventory(
     counts_stmt = (
         select(
             MarkingCode.product_id,
+            MarkingCode.pool_id,
             MarkingCode.status,
             func.count(MarkingCode.id),
         )
         .where(MarkingCode.tenant_id == tenant_id)
-        .group_by(MarkingCode.product_id, MarkingCode.status)
+        .group_by(MarkingCode.product_id, MarkingCode.pool_id, MarkingCode.status)
     )
     if seller_id is not None:
         counts_stmt = counts_stmt.where(MarkingCode.seller_id == seller_id)
     count_rows = (await session.execute(counts_stmt)).all()
     available_by_product: dict[uuid.UUID, int] = {}
     printed_by_product: dict[uuid.UUID, int] = {}
+    available_by_pool: dict[uuid.UUID, int] = {}
+    printed_by_pool: dict[uuid.UUID, int] = {}
     unlinked_available = 0
-    for product_id, status, cnt in count_rows:
-        if product_id is None:
+    for product_id, pool_id, status, cnt in count_rows:
+        count = int(cnt)
+        if product_id is None and pool_id is None:
             if status == STATUS_AVAILABLE:
-                unlinked_available = int(cnt)
+                unlinked_available = count
             continue
-        if status == STATUS_AVAILABLE:
-            available_by_product[product_id] = int(cnt)
-        elif status == STATUS_PRINTED:
-            printed_by_product[product_id] = int(cnt)
+        if pool_id is not None:
+            if status == STATUS_AVAILABLE:
+                available_by_pool[pool_id] = available_by_pool.get(pool_id, 0) + count
+            elif status == STATUS_PRINTED:
+                printed_by_pool[pool_id] = printed_by_pool.get(pool_id, 0) + count
+            continue
+        if product_id is not None:
+            if status == STATUS_AVAILABLE:
+                available_by_product[product_id] = available_by_product.get(product_id, 0) + count
+            elif status == STATUS_PRINTED:
+                printed_by_product[product_id] = printed_by_product.get(product_id, 0) + count
+
+    pool_links_stmt = select(MarkingPoolProduct.pool_id, MarkingPoolProduct.product_id).where(
+        MarkingPoolProduct.tenant_id == tenant_id,
+    )
+    if seller_id is not None:
+        pool_links_stmt = pool_links_stmt.join(
+            MarkingPool, MarkingPool.id == MarkingPoolProduct.pool_id
+        ).where(MarkingPool.seller_id == seller_id)
+    pool_links = (await session.execute(pool_links_stmt)).all()
+    for pool_id, product_id in pool_links:
+        if pool_id in available_by_pool:
+            available_by_product[product_id] = (
+                available_by_product.get(product_id, 0) + available_by_pool[pool_id]
+            )
+        if pool_id in printed_by_pool:
+            printed_by_product[product_id] = (
+                printed_by_product.get(product_id, 0) + printed_by_pool[pool_id]
+            )
 
     rows: list[ProductMarkingInventoryRow] = []
     for p in products:
@@ -681,10 +864,18 @@ async def count_available_for_product(
     tenant_id: uuid.UUID,
     product_id: uuid.UUID,
 ) -> int:
+    product = await get_product(session, tenant_id, product_id)
+    if product is None:
+        return 0
+    pool_ids = await _pool_ids_for_product(session, tenant_id, product_id)
+    filters = [MarkingCode.product_id == product_id]
+    if pool_ids:
+        filters.append(MarkingCode.pool_id.in_(pool_ids))
     stmt = select(func.count(MarkingCode.id)).where(
         MarkingCode.tenant_id == tenant_id,
-        MarkingCode.product_id == product_id,
+        MarkingCode.seller_id == product.seller_id,
         MarkingCode.status == STATUS_AVAILABLE,
+        or_(*filters),
     )
     res = await session.execute(stmt)
     return int(res.scalar_one())
@@ -764,13 +955,17 @@ async def print_codes_for_packaging_line(
     if int(line.qty_marking_printed) > 0:
         raise MarkingCodeServiceError("already_printed_use_reprint")
 
+    pool_ids = await _pool_ids_for_product(session, tenant_id, product.id)
+    code_filters = [MarkingCode.product_id == product.id]
+    if pool_ids:
+        code_filters.append(MarkingCode.pool_id.in_(pool_ids))
     stmt = (
         select(MarkingCode)
         .where(
             MarkingCode.tenant_id == tenant_id,
             MarkingCode.seller_id == product.seller_id,
-            MarkingCode.product_id == product.id,
             MarkingCode.status == STATUS_AVAILABLE,
+            or_(*code_filters),
         )
         .order_by(MarkingCode.created_at.asc())
         .limit(quantity)

@@ -145,6 +145,7 @@ class MarkingCodeImport(Base):
         Uuid(as_uuid=True), ForeignKey("sellers.id", ondelete="CASCADE"), index=True
     )
     filename: Mapped[str] = mapped_column(String(512), nullable=False)
+    document_number: Mapped[str | None] = mapped_column(String(32), nullable=True)
     accepted_count: Mapped[int] = mapped_column(nullable=False, default=0)
     skipped_count: Mapped[int] = mapped_column(nullable=False, default=0)
     skip_reasons_json: Mapped[str | None] = mapped_column(Text, nullable=True)

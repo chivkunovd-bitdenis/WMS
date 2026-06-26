@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 import uuid
 
 import pytest
@@ -12,7 +13,6 @@ from app.models.marking_code import (
     EVENT_IMPORTED,
     EVENT_PRINTED,
     EVENT_REPRINTED,
-    MarkingCode,
     MarkingCodeEvent,
 )
 
@@ -48,22 +48,24 @@ async def test_import_records_imported_events(async_client: AsyncClient) -> None
     imp = await async_client.post(
         "/operations/marking-codes/import",
         headers=h,
-        data={"seller_id": seller_id, "product_id": product_id},
-        files={"file": ("codes.csv", csv_body.encode(), "text/csv")},
+        data={
+            "seller_id": seller_id,
+            "pools_json": json.dumps(
+                [{"title": "Evt pool", "product_ids": [product_id]}],
+            ),
+        },
+        files=[("files", ("codes.csv", csv_body.encode(), "text/csv"))],
     )
     assert imp.status_code == 200, imp.text
     assert imp.json()["accepted_count"] == 3
+    doc_number = imp.json()["document_number"]
 
     async with SessionLocal() as session:
         imported_count = (
             await session.execute(
                 select(func.count(MarkingCodeEvent.id)).where(
                     MarkingCodeEvent.event_type == EVENT_IMPORTED,
-                    MarkingCodeEvent.code_id.in_(
-                        select(MarkingCode.id).where(
-                            MarkingCode.product_id == uuid.UUID(product_id)
-                        )
-                    ),
+                    MarkingCodeEvent.document_number == doc_number,
                 )
             )
         ).scalar_one()
@@ -113,8 +115,13 @@ async def test_print_records_printed_and_reprint_records_reprinted(
     imp = await async_client.post(
         "/operations/marking-codes/import",
         headers=h,
-        data={"seller_id": seller_id, "product_id": product_id},
-        files={"file": ("codes.csv", csv_body.encode(), "text/csv")},
+        data={
+            "seller_id": seller_id,
+            "pools_json": json.dumps(
+                [{"title": "Print pool", "product_ids": [product_id]}],
+            ),
+        },
+        files=[("files", ("codes.csv", csv_body.encode(), "text/csv"))],
     )
     assert imp.status_code == 200
 
