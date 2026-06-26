@@ -194,10 +194,24 @@ async def test_marking_insufficient_codes(async_client: AsyncClient) -> None:
     fail = await async_client.post(
         f"/operations/marking-codes/packaging-lines/{line_id}/print",
         headers=h,
-        json={"duplicate_copies": 2, "reprint": False},
+        json={"duplicate_copies": 2, "reprint": False, "allow_partial": False},
     )
-    assert fail.status_code == 422
-    assert fail.json()["detail"] == "insufficient_codes"
+    assert fail.status_code == 200, fail.text
+    body = fail.json()
+    assert body["quantity"] == 0
+    assert body["shortage"] == 2
+    assert body["codes"] == []
+
+    partial = await async_client.post(
+        f"/operations/marking-codes/packaging-lines/{line_id}/print",
+        headers=h,
+        json={"duplicate_copies": 2, "reprint": False, "allow_partial": True},
+    )
+    assert partial.status_code == 200, partial.text
+    partial_body = partial.json()
+    assert partial_body["quantity"] == 1
+    assert partial_body["shortage"] == 2
+    assert len(partial_body["codes"]) == 1
 
 
 @pytest.mark.asyncio

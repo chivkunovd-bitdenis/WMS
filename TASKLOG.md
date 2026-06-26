@@ -1,5 +1,40 @@
 # TASKLOG
 
+## TASK-70 — 2026-06-26 — ЧЗ T1.4: скан-печать
+
+- What changed: `units_to_print` в `print_codes_for_packaging_line` (инкремент `qty_marking_printed`); `scan_print_for_packaging_task` + `POST /operations/marking-codes/scan-print`; поле «Сканируйте товар» на панели упаковки; pytest `test_marking_scan_print.py`.
+- What did NOT change: print-all (T1.5), layout-рендер label (T1.6).
+- Verification: pytest scan + marking; `npm run build`.
+- Commit: not yet.
+
+## TASK-69 — 2026-06-26 — ЧЗ T1.3: диалог-конструктор печати
+
+- What changed: `MarkingPrintDialog` — шапка (товар/документ, нужно/доступно), баннер нехватки, «печатать доступные M», пресеты (Парами/Этикетки+ЧЗ/…/Свой), конструктор блоков, предпросмотр 3 единиц, сохранение шаблона, тост «Запросить у селлера»; кнопка «Печать ЧЗ» доступна при available≥1; e2e `ff-marking-print-constructor.spec.ts` (TC-NEW-002).
+- What did NOT change: scan-print (T1.4), print-all (T1.5), рендер label-блоков (T1.6).
+- Verification: `npm run build`; e2e constructor + packaging.
+- Commit: not yet.
+
+## TASK-68 — 2026-06-26 — ЧЗ T1.2: печать из пула
+
+- What changed: рефактор `print_codes_for_packaging_line` — коды из пула (`marking_pool_products`), reserve→printed, события с `document_number`, API `{layout_json, copies, allow_partial}`; ответ `{codes, layout, quantity, shortage}` вместо 422 при нехватке; фронт отправляет `layout_json` из шаблона; pytest `test_marking_print_pool.py`, обновлён `test_marking_insufficient_codes`.
+- What did NOT change: конструктор ленты Э5 (T1.3), scan-print (T1.4), рендер по layout на фронте (T1.6).
+- Verification: pytest marking print 9 passed; `npm run build`.
+- Commit: not yet.
+
+## TASK-67 — 2026-06-26 — ЧЗ T1.1: шаблоны печати
+
+- What changed: таблица `print_templates`, модель `PrintTemplate`, сервис `print_template_service.py` (CRUD + резолвер product→seller→системный «Парами»); API `GET/POST/PUT/DELETE /operations/marking-codes/print-templates` и `GET …/print-templates/resolve`; фронт `printTemplate.ts`, диалог печати подтягивает шаблон по товару; pytest `test_print_templates.py`.
+- What did NOT change: рефактор печати из пула (T1.2), конструктор ленты Э5 (T1.3), scan-print (T1.4).
+- Verification: `ruff`/`mypy` green; pytest print_templates 3 passed; `npm run build`; e2e packaging — по возможности.
+- Commit: not yet.
+
+## TASK-66 — 2026-06-26 — ЧЗ T0.4: привязка пул↔товары
+
+- What changed: `set_pool_products` / `add_pool_products` / `remove_pool_products` в `marking_code_service.py`; `PUT /operations/marking-codes/pools/{pool_id}/products` (422 `product_seller_mismatch`); диалог `MarkingPoolProductsDialog` + панель `MarkingPoolProductsPanel` (чипы товаров); e2e seed `POST …/_e2e/pools` при `WMS_AUTO_CREATE_SCHEMA=1`; pytest `test_marking_pool_products.py`, e2e `ff-pool-products-link.spec.ts` (TC-NEW-004).
+- What did NOT change: список пулов Э1 (T0.7), импорт в пулы (T0.3), GET ленты/пулов (T0.6).
+- Verification: `ruff`/`mypy` green; pytest marking 12 passed; `npm run build`; e2e `ff-pool-products-link.spec.ts` green.
+- Commit: `82180c8`.
+
 ## TASK-65 — 2026-06-26 — ЧЗ T0.5: журнал marking_code_events
 
 - What changed: таблица `marking_code_events`, модель `MarkingCodeEvent`, константы типов событий; `record_event()` в `marking_code_service.py`; события `imported` при импорте, `printed`/`reprinted` при печати; pytest `test_marking_code_events.py`.

@@ -32,6 +32,7 @@ import { apiUrl } from '../../api'
 import { PageHeader } from '../../ui/PageHeader'
 import { productDisplayMetaFromCatalog } from '../../types/wbProductCatalog'
 import { readApiErrorMessage } from '../../utils/readApiErrorMessage'
+import { printMarkingCodeLabels } from '../../utils/printMarkingCodeLabel'
 import { useMarkingCodePrint } from '../../utils/useMarkingCodePrint'
 
 export type PackagingTaskLine = {
@@ -92,6 +93,9 @@ export function FfPackagingTaskPanel({
   const { catalogById } = useWbProductCatalog(token)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [scanBarcode, setScanBarcode] = useState('')
+  const [scanBusy, setScanBusy] = useState(false)
+  const [scanFlash, setScanFlash] = useState<'ok' | 'error' | null>(null)
   const { openPrint, dialog: markingPrintDialog } = useMarkingCodePrint()
 
   const authHeaders = {
@@ -166,6 +170,64 @@ export function FfPackagingTaskPanel({
     task.status !== 'done' &&
     task.status !== 'cancelled'
 
+  const hasHonestSignLines = task.lines.some(
+    (ln) => ln.requires_honest_sign && ln.qty_need_pack > ln.qty_marking_printed,
+  )
+
+  const submitScanPrint = async () => {
+    const code = scanBarcode.trim()
+    if (!code || scanBusy) {
+      return
+    }
+    setScanBusy(true)
+    setScanFlash(null)
+    setError(null)
+    try {
+      const res = await fetch(apiUrl('/operations/marking-codes/scan-print'), {
+        method: 'POST',
+        headers: authHeaders,
+        body: JSON.stringify({
+          packaging_task_id: task.id,
+          product_barcode: code,
+        }),
+      })
+      if (!res.ok) {
+        setScanFlash('error')
+        setError(await readApiErrorMessage(res))
+        return
+      }
+      const data = (await res.json()) as {
+        codes: string[]
+        duplicate_copies: number
+        quantity: number
+        shortage: number | null
+      }
+      if (data.quantity < 1) {
+        setScanFlash('error')
+        setError(
+          data.shortage
+            ? `Не хватает ${data.shortage} кодов ЧЗ в пуле.`
+            : 'Нет доступных кодов для печати.',
+        )
+        return
+      }
+      await printMarkingCodeLabels(data.codes, data.duplicate_copies)
+      setScanBarcode('')
+      setScanFlash('ok')
+      const taskRes = await fetch(apiUrl(`/operations/packaging-tasks/${task.id}`), {
+        headers: authHeaders,
+      })
+      if (taskRes.ok) {
+        onUpdated((await taskRes.json()) as PackagingTask)
+      }
+    } catch (e) {
+      setScanFlash('error')
+      setError(e instanceof Error ? e.message : 'Скан-печать не удалась.')
+    } finally {
+      setScanBusy(false)
+    }
+  }
+
   return (
     <Stack spacing={2} data-testid="ff-packaging-task-panel">
       <Stack direction="row" spacing={1} sx={{ alignItems: 'center', flexWrap: 'wrap' }}>
@@ -198,6 +260,36 @@ export function FfPackagingTaskPanel({
         <Alert severity="error" data-testid="ff-packaging-error">
           {error}
         </Alert>
+      ) : null}
+      {hasHonestSignLines && manualTask ? (
+        <TextField
+          size="small"
+          fullWidth
+          autoFocus
+          label="Сканируйте товар"
+          placeholder="Штрихкод или SKU"
+          value={scanBarcode}
+          disabled={scanBusy || busy}
+          onChange={(e) => setScanBarcode(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter') {
+              e.preventDefault()
+              void submitScanPrint()
+            }
+          }}
+          slotProps={{
+            htmlInput: { 'data-testid': 'marking-scan-print-input' },
+          }}
+          sx={{
+            maxWidth: 420,
+            ...(scanFlash === 'ok'
+              ? { '& .MuiOutlinedInput-root': { borderColor: 'success.main' } }
+              : scanFlash === 'error'
+                ? { '& .MuiOutlinedInput-root': { borderColor: 'error.main' } }
+                : {}),
+          }}
+          data-testid="marking-scan-print-field"
+        />
       ) : null}
       {task.pick_resync_warning ? (
         <Alert severity="warning" data-testid="ff-packaging-pick-resync-warning">
@@ -267,15 +359,18 @@ export function FfPackagingTaskPanel({
                       <Button
                         size="small"
                         variant="outlined"
-                        disabled={busy || ln.marking_available_count < ln.qty_need_pack}
+                        disabled={busy || ln.marking_available_count < 1}
                         onClick={() =>
                           openPrint({
                             token,
                             lineId: ln.id,
+                            productId: ln.product_id,
+                            documentNumber: task.document_number,
                             qtyNeedPack: ln.qty_need_pack,
                             markingAvailable: ln.marking_available_count,
                             qtyMarkingPrinted: ln.qty_marking_printed,
                             skuCode: ln.sku_code,
+                            productName: ln.product_name,
                             onPrinted: () => {
                               void (async () => {
                                 const res = await fetch(
@@ -304,10 +399,13 @@ export function FfPackagingTaskPanel({
                             {
                               token,
                               lineId: ln.id,
+                              productId: ln.product_id,
+                              documentNumber: task.document_number,
                               qtyNeedPack: ln.qty_need_pack,
                               markingAvailable: ln.marking_available_count,
                               qtyMarkingPrinted: ln.qty_marking_printed,
                               skuCode: ln.sku_code,
+                              productName: ln.product_name,
                               onPrinted: () => {
                                 void (async () => {
                                   const res = await fetch(

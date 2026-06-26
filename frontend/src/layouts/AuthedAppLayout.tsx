@@ -231,7 +231,7 @@ export function AuthedAppLayout({
             ) : null}
             {can('cells') ? (
               <ListItemButton component={NavLink} to="/app/catalog" data-testid="nav-catalog">
-                <ListItemText primary="Каталог" />
+                <ListItemText primary="Ячейки" />
               </ListItemButton>
             ) : null}
             {isAdmin ? (
@@ -241,7 +241,7 @@ export function AuthedAppLayout({
             ) : null}
             {isAdmin ? (
               <ListItemButton component={NavLink} to={`${base}/products`} data-testid="nav-ff-products">
-                <ListItemText primary="Товары" />
+                <ListItemText primary="Каталог" />
               </ListItemButton>
             ) : null}
             {can('inventory') ? (

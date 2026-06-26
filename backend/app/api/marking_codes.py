@@ -19,6 +19,7 @@ from app.core.roles import FULFILLMENT_ADMIN, FULFILLMENT_SELLER
 from app.db.session import get_db
 from app.models.user import User
 from app.services import marking_code_service as mc_svc
+from app.services import print_template_service as pt_svc
 from app.services.catalog_service import get_product
 
 router = APIRouter(
@@ -88,8 +89,11 @@ class ProductMarkingCodeOut(BaseModel):
 
 
 class PrintMarkingCodesIn(BaseModel):
-    duplicate_copies: int = Field(default=2, ge=1, le=2)
+    layout_json: PrintLayoutOut | None = None
+    copies: int | None = Field(default=None, ge=1, le=10)
+    allow_partial: bool = False
     reprint: bool = False
+    duplicate_copies: int | None = Field(default=None, ge=1, le=2)
 
 
 class PrintMarkingCodesOut(BaseModel):
@@ -98,6 +102,13 @@ class PrintMarkingCodesOut(BaseModel):
     duplicate_copies: int
     is_reprint: bool
     codes: list[str]
+    layout: PrintLayoutOut
+    shortage: int | None = None
+
+
+class ScanPrintMarkingIn(BaseModel):
+    packaging_task_id: uuid.UUID
+    product_barcode: str = Field(min_length=1, max_length=128)
 
 
 class PoolProductOut(BaseModel):
@@ -189,6 +200,83 @@ class CodeHistoryEventOut(BaseModel):
     reason: str | None
 
 
+class PrintLayoutUnitOut(BaseModel):
+    block: str
+    copies: int
+
+
+class PrintLayoutOut(BaseModel):
+    units: list[PrintLayoutUnitOut]
+
+
+class PrintTemplateOut(BaseModel):
+    id: str | None
+    seller_id: str | None
+    product_id: str | None
+    name: str
+    layout: PrintLayoutOut
+    is_default: bool
+    is_system: bool
+
+
+class CreatePrintTemplateIn(BaseModel):
+    name: str = Field(min_length=1, max_length=256)
+    layout: PrintLayoutOut
+    seller_id: uuid.UUID | None = None
+    product_id: uuid.UUID | None = None
+    is_default: bool = False
+
+
+class UpdatePrintTemplateIn(BaseModel):
+    name: str | None = Field(default=None, min_length=1, max_length=256)
+    layout: PrintLayoutOut | None = None
+    is_default: bool | None = None
+
+
+def _http_from_pt_error(exc: pt_svc.PrintTemplateServiceError) -> HTTPException:
+    code = exc.code
+    status_code = status.HTTP_422_UNPROCESSABLE_CONTENT
+    if code in ("template_not_found", "product_not_found"):
+        status_code = status.HTTP_404_NOT_FOUND
+    return HTTPException(status_code=status_code, detail=code)
+
+
+def _layout_out(layout: pt_svc.PrintLayout) -> PrintLayoutOut:
+    return PrintLayoutOut(
+        units=[PrintLayoutUnitOut(block=u.block, copies=u.copies) for u in layout.units],
+    )
+
+
+def _layout_in_to_dict(layout: PrintLayoutOut) -> dict[str, object]:
+    return {"units": [{"block": u.block, "copies": u.copies} for u in layout.units]}
+
+
+def _print_template_out(row: pt_svc.PrintTemplateRow) -> PrintTemplateOut:
+    return PrintTemplateOut(
+        id=str(row.id) if row.id is not None else None,
+        seller_id=str(row.seller_id) if row.seller_id is not None else None,
+        product_id=str(row.product_id) if row.product_id is not None else None,
+        name=row.name,
+        layout=_layout_out(row.layout),
+        is_default=row.is_default,
+        is_system=row.is_system,
+    )
+
+
+async def _assert_template_seller_access(
+    user: User,
+    template_seller_id: uuid.UUID | None,
+    effective_seller_id: uuid.UUID | None,
+) -> None:
+    if user.role == FULFILLMENT_SELLER:
+        if effective_seller_id is None:
+            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="seller_not_linked")
+        if template_seller_id is not None and template_seller_id != effective_seller_id:
+            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="forbidden")
+    elif user.role != FULFILLMENT_ADMIN:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="forbidden")
+
+
 def _http_from_mc_error(exc: mc_svc.MarkingCodeServiceError) -> HTTPException:
     code = exc.code
     status_code = status.HTTP_422_UNPROCESSABLE_CONTENT
@@ -198,6 +286,7 @@ def _http_from_mc_error(exc: mc_svc.MarkingCodeServiceError) -> HTTPException:
         "product_not_found",
         "pool_not_found",
         "code_not_found",
+        "task_not_found",
     )
     if code in not_found_codes:
         status_code = status.HTTP_404_NOT_FOUND
@@ -725,6 +814,160 @@ async def list_product_marking_codes(
     ]
 
 
+@router.get("/print-templates/resolve", response_model=PrintTemplateOut)
+async def resolve_print_template(
+    user: Annotated[User, Depends(require_packaging_access)],
+    session: Annotated[AsyncSession, Depends(get_db)],
+    effective_seller_id: Annotated[uuid.UUID | None, Depends(get_effective_seller_id)],
+    product_id: Annotated[uuid.UUID | None, Query()] = None,
+    seller_id: Annotated[uuid.UUID | None, Query()] = None,
+) -> PrintTemplateOut:
+    if user.role == FULFILLMENT_SELLER:
+        if effective_seller_id is None:
+            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="seller_not_linked")
+        scope_seller_id = effective_seller_id
+    elif user.role == FULFILLMENT_ADMIN:
+        scope_seller_id = seller_id
+    else:
+        scope_seller_id = seller_id
+    try:
+        row = await pt_svc.resolve_default_print_template(
+            session,
+            user.tenant_id,
+            product_id=product_id,
+            seller_id=scope_seller_id,
+        )
+    except pt_svc.PrintTemplateServiceError as exc:
+        raise _http_from_pt_error(exc) from exc
+    return _print_template_out(row)
+
+
+@router.get("/print-templates", response_model=list[PrintTemplateOut])
+async def list_print_templates(
+    user: Annotated[User, Depends(get_current_user)],
+    session: Annotated[AsyncSession, Depends(get_db)],
+    effective_seller_id: Annotated[uuid.UUID | None, Depends(get_effective_seller_id)],
+    seller_id: Annotated[uuid.UUID | None, Query()] = None,
+    product_id: Annotated[uuid.UUID | None, Query()] = None,
+) -> list[PrintTemplateOut]:
+    scope = _resolve_marking_seller_scope(user, effective_seller_id, seller_id)
+    rows = await pt_svc.list_print_templates(
+        session,
+        user.tenant_id,
+        seller_id=scope,
+        product_id=product_id,
+    )
+    return [_print_template_out(r) for r in rows]
+
+
+@router.post(
+    "/print-templates",
+    response_model=PrintTemplateOut,
+    status_code=status.HTTP_201_CREATED,
+)
+async def create_print_template(
+    body: CreatePrintTemplateIn,
+    user: Annotated[User, Depends(get_current_user)],
+    session: Annotated[AsyncSession, Depends(get_db)],
+    effective_seller_id: Annotated[uuid.UUID | None, Depends(get_effective_seller_id)],
+) -> PrintTemplateOut:
+    if user.role == FULFILLMENT_SELLER:
+        if effective_seller_id is None:
+            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="seller_not_linked")
+        target_seller_id = effective_seller_id
+    elif user.role == FULFILLMENT_ADMIN:
+        target_seller_id = body.seller_id
+    else:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="forbidden")
+    try:
+        row = await pt_svc.create_print_template(
+            session,
+            user.tenant_id,
+            name=body.name,
+            layout=_layout_in_to_dict(body.layout),
+            seller_id=target_seller_id,
+            product_id=body.product_id,
+            is_default=body.is_default,
+        )
+    except pt_svc.PrintTemplateServiceError as exc:
+        raise _http_from_pt_error(exc) from exc
+    return _print_template_out(row)
+
+
+@router.put("/print-templates/{template_id}", response_model=PrintTemplateOut)
+async def update_print_template(
+    template_id: uuid.UUID,
+    body: UpdatePrintTemplateIn,
+    user: Annotated[User, Depends(get_current_user)],
+    session: Annotated[AsyncSession, Depends(get_db)],
+    effective_seller_id: Annotated[uuid.UUID | None, Depends(get_effective_seller_id)],
+) -> PrintTemplateOut:
+    from app.models.print_template import PrintTemplate
+
+    model = await session.get(PrintTemplate, template_id)
+    if model is None or model.tenant_id != user.tenant_id:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="template_not_found")
+    await _assert_template_seller_access(user, model.seller_id, effective_seller_id)
+    try:
+        row = await pt_svc.update_print_template(
+            session,
+            user.tenant_id,
+            template_id,
+            name=body.name,
+            layout=_layout_in_to_dict(body.layout) if body.layout is not None else None,
+            is_default=body.is_default,
+        )
+    except pt_svc.PrintTemplateServiceError as exc:
+        raise _http_from_pt_error(exc) from exc
+    return _print_template_out(row)
+
+
+@router.delete("/print-templates/{template_id}", status_code=status.HTTP_204_NO_CONTENT)
+async def delete_print_template(
+    template_id: uuid.UUID,
+    user: Annotated[User, Depends(get_current_user)],
+    session: Annotated[AsyncSession, Depends(get_db)],
+    effective_seller_id: Annotated[uuid.UUID | None, Depends(get_effective_seller_id)],
+) -> None:
+    from app.models.print_template import PrintTemplate
+
+    model = await session.get(PrintTemplate, template_id)
+    if model is None or model.tenant_id != user.tenant_id:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="template_not_found")
+    await _assert_template_seller_access(user, model.seller_id, effective_seller_id)
+    try:
+        await pt_svc.delete_print_template(session, user.tenant_id, template_id)
+    except pt_svc.PrintTemplateServiceError as exc:
+        raise _http_from_pt_error(exc) from exc
+
+
+@router.post("/scan-print", response_model=PrintMarkingCodesOut)
+async def scan_print_marking_codes(
+    body: ScanPrintMarkingIn,
+    user: Annotated[User, Depends(require_packaging_access)],
+    session: Annotated[AsyncSession, Depends(get_db)],
+) -> PrintMarkingCodesOut:
+    try:
+        result = await mc_svc.scan_print_for_packaging_task(
+            session,
+            user.tenant_id,
+            body.packaging_task_id,
+            product_barcode=body.product_barcode,
+            acting_user_id=user.id,
+        )
+    except mc_svc.MarkingCodeServiceError as exc:
+        raise _http_from_mc_error(exc) from exc
+    return PrintMarkingCodesOut(
+        packaging_task_line_id=str(result.packaging_task_line_id),
+        quantity=result.quantity,
+        duplicate_copies=result.duplicate_copies,
+        is_reprint=result.is_reprint,
+        codes=result.codes,
+        layout=_layout_out(result.layout),
+        shortage=result.shortage,
+    )
+
+
 @router.post(
     "/packaging-lines/{line_id}/print",
     response_model=PrintMarkingCodesOut,
@@ -735,21 +978,33 @@ async def print_marking_codes_for_line(
     user: Annotated[User, Depends(require_packaging_access)],
     session: Annotated[AsyncSession, Depends(get_db)],
 ) -> PrintMarkingCodesOut:
+    layout_payload: dict[str, object] | None = None
+    if body.layout_json is not None:
+        layout_payload = _layout_in_to_dict(body.layout_json)
+    legacy_copies = body.duplicate_copies
+    if body.copies is not None:
+        legacy_copies = body.copies
     try:
         result = await mc_svc.print_codes_for_packaging_line(
             session,
             user.tenant_id,
             line_id,
             acting_user_id=user.id,
-            duplicate_copies=body.duplicate_copies,
+            layout=layout_payload,
+            allow_partial=body.allow_partial,
             reprint=body.reprint,
+            duplicate_copies=legacy_copies,
         )
     except mc_svc.MarkingCodeServiceError as exc:
         raise _http_from_mc_error(exc) from exc
+    except pt_svc.PrintTemplateServiceError as exc:
+        raise _http_from_pt_error(exc) from exc
     return PrintMarkingCodesOut(
         packaging_task_line_id=str(result.packaging_task_line_id),
         quantity=result.quantity,
         duplicate_copies=result.duplicate_copies,
         is_reprint=result.is_reprint,
         codes=result.codes,
+        layout=_layout_out(result.layout),
+        shortage=result.shortage,
     )

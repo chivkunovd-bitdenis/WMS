@@ -31,6 +31,7 @@ from app.models.marking_code import (
 )
 from app.models.outbound_shipment import OutboundShipmentLine, OutboundShipmentRequest
 from app.models.packaging_task import PackagingTask, PackagingTaskLine
+from app.models.print_template import PrintTemplate
 from app.models.product import Product
 from app.models.seller import Seller
 from app.models.seller_shop_delegation import SellerShopDelegation
@@ -74,6 +75,7 @@ __all__ = [
     "OutboundShipmentRequest",
     "PackagingTask",
     "PackagingTaskLine",
+    "PrintTemplate",
     "Product",
     "Seller",
     "SellerShopDelegation",

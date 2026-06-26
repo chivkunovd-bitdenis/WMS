@@ -3,10 +3,10 @@
 ## BUG-3 — 2026-06-24 — Дата отгрузки сбрасывается после выбора в календаре
 
 - Symptom: в заявке на отгрузку на МП пользователь выбирает дату в календаре, но поле сразу очищается.
-- Cause: `WmsDateField` на `onBlur` вызывал `onChange(null)` при пустом значении секции поля; после закрытия календаря MUI X v9 blur срабатывал на пустой секции и отправлял PATCH с `planned_shipment_date: null`.
-- Fix: пустой blur больше не сбрасывает дату; ручной ввод по-прежнему парсится на blur.
-- Verification: `npm run build`; e2e `seller-mp-unload.spec.ts` (TC-NEW-DATE-01 blur persistence), `ff-dashboard.spec.ts`.
-- Commit: pending
+- Cause: `WmsDateField` на `onBlur` вызывал `onChange(null)` при пустом значении секции поля; после закрытия календаря MUI X v9 blur срабатывал на пустой секции и отправлял PATCH с `planned_shipment_date: null`. Дополнительно: `DatePicker.onChange(null)` при закрытии календаря гонял второй PATCH с null поверх сохранённой даты.
+- Fix: пустой blur не сбрасывает дату; коммит даты через `onAccept`/blur; PATCH-обработчики игнорируют null.
+- Verification: `npm run build`; e2e `seller-mp-unload.spec.ts` (TC-NEW-DATE-01, no null PATCH), `ff-dashboard.spec.ts`, `ff-inbound-boxes.spec.ts`.
+- Commit: 962a2fd (PR #44); prod `194.87.96.144:8088` — `prod-update.sh`.
 
 ## BUG-2 — 2026-05-03 — FF could add no-stock products to WB shipment
 

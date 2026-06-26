@@ -26,7 +26,7 @@ from app.models.marking_code import (
     MarkingPool,
     MarkingPoolProduct,
 )
-from app.models.packaging_task import PackagingTaskLine
+from app.models.packaging_task import PackagingTask, PackagingTaskLine
 from app.models.product import Product
 from app.models.seller import Seller
 from app.models.user import User
@@ -34,6 +34,13 @@ from app.services.catalog_service import get_product
 from app.services.document_number_service import (
     DOC_TYPE_MARKING_IMPORT,
     assign_document_number_if_missing,
+)
+from app.services.print_template_service import (
+    LAYOUT_BLOCK_CZ,
+    LayoutUnit,
+    PrintLayout,
+    parse_layout,
+    resolve_default_print_template,
 )
 
 _CIS_MIN_LEN = 15
@@ -164,6 +171,26 @@ class PrintMarkingCodesResult:
     duplicate_copies: int
     is_reprint: bool
     codes: list[str]
+    layout: PrintLayout
+    shortage: int | None = None
+
+
+def cz_copies_from_layout(layout: PrintLayout) -> int:
+    total = sum(unit.copies for unit in layout.units if unit.block == LAYOUT_BLOCK_CZ)
+    return total if total > 0 else 1
+
+
+def resolve_print_layout(
+    layout: PrintLayout | dict[str, object] | None,
+    *,
+    duplicate_copies: int | None,
+) -> PrintLayout:
+    if layout is not None:
+        return layout if isinstance(layout, PrintLayout) else parse_layout(layout)
+    copies = duplicate_copies if duplicate_copies is not None else 2
+    if copies not in (1, 2):
+        raise MarkingCodeServiceError("invalid_duplicate_copies")
+    return PrintLayout(units=[LayoutUnit(block=LAYOUT_BLOCK_CZ, copies=copies)])
 
 
 @dataclass(frozen=True)
@@ -1049,11 +1076,14 @@ async def print_codes_for_packaging_line(
     task_line_id: uuid.UUID,
     *,
     acting_user_id: uuid.UUID,
-    duplicate_copies: int,
-    reprint: bool,
+    layout: PrintLayout | dict[str, object] | None = None,
+    allow_partial: bool = False,
+    reprint: bool = False,
+    duplicate_copies: int | None = None,
+    units_to_print: int | None = None,
 ) -> PrintMarkingCodesResult:
-    if duplicate_copies not in (1, 2):
-        raise MarkingCodeServiceError("invalid_duplicate_copies")
+    print_layout = resolve_print_layout(layout, duplicate_copies=duplicate_copies)
+    event_copies = cz_copies_from_layout(print_layout)
 
     line_stmt = (
         select(PackagingTaskLine)
@@ -1077,9 +1107,11 @@ async def print_codes_for_packaging_line(
 
     from app.services.packaging_task_service import qty_need_pack
 
-    quantity = qty_need_pack(line)
-    if quantity < 1:
+    quantity_needed = qty_need_pack(line)
+    if quantity_needed < 1:
         raise MarkingCodeServiceError("nothing_to_mark")
+
+    line_id = line.id
 
     if reprint:
         if int(line.qty_marking_printed) < 1:
@@ -1103,46 +1135,95 @@ async def print_codes_for_packaging_line(
                 actor=acting_user_id,
                 document_number=task.document_number,
                 packaging_task=line,
-                copies=duplicate_copies,
+                copies=event_copies,
             )
         await session.commit()
         return PrintMarkingCodesResult(
-            packaging_task_line_id=line.id,
+            packaging_task_line_id=line_id,
             quantity=len(codes),
-            duplicate_copies=duplicate_copies,
+            duplicate_copies=event_copies,
             is_reprint=True,
             codes=[c.cis_code for c in codes],
+            layout=print_layout,
         )
 
-    if int(line.qty_marking_printed) > 0:
+    if int(line.qty_marking_printed) > 0 and units_to_print is None:
         raise MarkingCodeServiceError("already_printed_use_reprint")
 
+    already_printed = int(line.qty_marking_printed)
+    remaining_need = quantity_needed - already_printed
+    if remaining_need < 1:
+        raise MarkingCodeServiceError("marking_complete")
+
+    if units_to_print is not None:
+        if units_to_print < 1:
+            raise MarkingCodeServiceError("invalid_print_quantity")
+        target_qty = min(units_to_print, remaining_need)
+    else:
+        target_qty = quantity_needed
+
     pool_ids = await _pool_ids_for_product(session, tenant_id, product.id)
-    code_filters = [MarkingCode.product_id == product.id]
     if pool_ids:
-        code_filters.append(MarkingCode.pool_id.in_(pool_ids))
+        code_filter = MarkingCode.pool_id.in_(pool_ids)
+    else:
+        code_filter = MarkingCode.product_id == product.id
+
     stmt = (
         select(MarkingCode)
         .where(
             MarkingCode.tenant_id == tenant_id,
             MarkingCode.seller_id == product.seller_id,
             MarkingCode.status == STATUS_AVAILABLE,
-            or_(*code_filters),
+            code_filter,
         )
         .order_by(MarkingCode.created_at.asc())
-        .limit(quantity)
+        .limit(target_qty)
         .with_for_update()
     )
     codes = list((await session.execute(stmt)).scalars().all())
-    if len(codes) < quantity:
-        raise MarkingCodeServiceError("insufficient_codes")
+    available = len(codes)
+    shortage = max(0, target_qty - available)
+
+    if shortage > 0 and not allow_partial:
+        await session.rollback()
+        return PrintMarkingCodesResult(
+            packaging_task_line_id=line_id,
+            quantity=0,
+            duplicate_copies=event_copies,
+            is_reprint=False,
+            codes=[],
+            layout=print_layout,
+            shortage=shortage,
+        )
+
+    quantity = available if shortage > 0 else target_qty
+    if quantity < 1:
+        await session.rollback()
+        return PrintMarkingCodesResult(
+            packaging_task_line_id=line_id,
+            quantity=0,
+            duplicate_copies=event_copies,
+            is_reprint=False,
+            codes=[],
+            layout=print_layout,
+            shortage=shortage if shortage > 0 else target_qty,
+        )
 
     now = datetime.now(UTC)
-    for code in codes:
+    for code in codes[:quantity]:
+        code.status = STATUS_RESERVED
+        code.reserved_by_user_id = acting_user_id
+        code.reserved_at = now
+    await session.flush()
+
+    for code in codes[:quantity]:
         code.status = STATUS_PRINTED
+        code.product_id = product.id
         code.packaging_task_line_id = line.id
         code.printed_at = now
         code.printed_by_user_id = acting_user_id
+        code.reserved_by_user_id = None
+        code.reserved_at = None
         await record_event(
             session,
             code=code,
@@ -1150,18 +1231,81 @@ async def print_codes_for_packaging_line(
             actor=acting_user_id,
             document_number=task.document_number,
             packaging_task=line,
-            copies=duplicate_copies,
+            copies=event_copies,
         )
 
-    line.qty_marking_printed = quantity
+    line.qty_marking_printed = already_printed + quantity
     await session.commit()
 
     return PrintMarkingCodesResult(
-        packaging_task_line_id=line.id,
+        packaging_task_line_id=line_id,
         quantity=quantity,
-        duplicate_copies=duplicate_copies,
+        duplicate_copies=event_copies,
         is_reprint=False,
-        codes=[c.cis_code for c in codes],
+        codes=[c.cis_code for c in codes[:quantity]],
+        layout=print_layout,
+        shortage=shortage if shortage > 0 else None,
+    )
+
+
+async def _find_product_by_scan_barcode(
+    session: AsyncSession,
+    tenant_id: uuid.UUID,
+    barcode: str,
+) -> Product | None:
+    code = barcode.strip()
+    if not code:
+        return None
+    lower = code.lower()
+    stmt = select(Product).where(
+        Product.tenant_id == tenant_id,
+        or_(
+            func.lower(Product.sku_code) == lower,
+            func.lower(Product.wb_barcode) == lower,
+        ),
+    )
+    return (await session.execute(stmt)).scalar_one_or_none()
+
+
+async def scan_print_for_packaging_task(
+    session: AsyncSession,
+    tenant_id: uuid.UUID,
+    packaging_task_id: uuid.UUID,
+    *,
+    product_barcode: str,
+    acting_user_id: uuid.UUID,
+) -> PrintMarkingCodesResult:
+    task_stmt = (
+        select(PackagingTask)
+        .where(PackagingTask.id == packaging_task_id, PackagingTask.tenant_id == tenant_id)
+        .options(selectinload(PackagingTask.lines))
+    )
+    task = (await session.execute(task_stmt)).scalar_one_or_none()
+    if task is None:
+        raise MarkingCodeServiceError("task_not_found")
+
+    product = await _find_product_by_scan_barcode(session, tenant_id, product_barcode)
+    if product is None:
+        raise MarkingCodeServiceError("product_not_found")
+
+    line = next((ln for ln in task.lines if ln.product_id == product.id), None)
+    if line is None:
+        raise MarkingCodeServiceError("line_not_in_task")
+
+    default_template = await resolve_default_print_template(
+        session,
+        tenant_id,
+        product_id=product.id,
+        seller_id=product.seller_id,
+    )
+    return await print_codes_for_packaging_line(
+        session,
+        tenant_id,
+        line.id,
+        acting_user_id=acting_user_id,
+        layout=default_template.layout,
+        allow_partial=False,
+        units_to_print=1,
     )
 
 
