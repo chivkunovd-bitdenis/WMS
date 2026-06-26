@@ -1,18 +1,25 @@
 # TASKLOG
 
+## TASK-71 — 2026-06-26 — ЧЗ T1.5: печать всех ЧЗ по задаче
+
+- What changed: `print_all_for_packaging_task` + `POST /operations/marking-codes/packaging-tasks/{id}/print-all` (dry_run, allow_partial); кнопка «Печать всех ЧЗ» и диалог сводки на панели упаковки; pytest `test_marking_print_all.py`; e2e `ff-marking-print-all.spec.ts` (TC-NEW-003).
+- What did NOT change: рендер ленты по layout label-блокам (T1.6).
+- Verification: pytest print_all 2 passed; `npm run build`; e2e print-all green.
+- Commit: not yet.
+
 ## TASK-70 — 2026-06-26 — ЧЗ T1.4: скан-печать
 
 - What changed: `units_to_print` в `print_codes_for_packaging_line` (инкремент `qty_marking_printed`); `scan_print_for_packaging_task` + `POST /operations/marking-codes/scan-print`; поле «Сканируйте товар» на панели упаковки; pytest `test_marking_scan_print.py`.
 - What did NOT change: print-all (T1.5), layout-рендер label (T1.6).
 - Verification: pytest scan + marking; `npm run build`.
-- Commit: not yet.
+- Commit: `b1e27b1`.
 
 ## TASK-69 — 2026-06-26 — ЧЗ T1.3: диалог-конструктор печати
 
 - What changed: `MarkingPrintDialog` — шапка (товар/документ, нужно/доступно), баннер нехватки, «печатать доступные M», пресеты (Парами/Этикетки+ЧЗ/…/Свой), конструктор блоков, предпросмотр 3 единиц, сохранение шаблона, тост «Запросить у селлера»; кнопка «Печать ЧЗ» доступна при available≥1; e2e `ff-marking-print-constructor.spec.ts` (TC-NEW-002).
 - What did NOT change: scan-print (T1.4), print-all (T1.5), рендер label-блоков (T1.6).
 - Verification: `npm run build`; e2e constructor + packaging.
-- Commit: not yet.
+- Commit: `b1e27b1`.
 
 ## TASK-68 — 2026-06-26 — ЧЗ T1.2: печать из пула
 

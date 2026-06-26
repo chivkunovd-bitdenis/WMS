@@ -29,6 +29,7 @@ from app.models.marking_code import (
 from app.models.packaging_task import PackagingTask, PackagingTaskLine
 from app.models.product import Product
 from app.models.seller import Seller
+from app.models.storage_location import StorageLocation
 from app.models.user import User
 from app.services.catalog_service import get_product
 from app.services.document_number_service import (
@@ -173,6 +174,28 @@ class PrintMarkingCodesResult:
     codes: list[str]
     layout: PrintLayout
     shortage: int | None = None
+
+
+@dataclass(frozen=True)
+class PrintAllLineResult:
+    packaging_task_line_id: uuid.UUID
+    product_id: uuid.UUID
+    sku_code: str
+    product_name: str
+    quantity: int
+    shortage: int
+    codes: list[str]
+
+
+@dataclass(frozen=True)
+class PrintAllMarkingCodesResult:
+    packaging_task_id: uuid.UUID
+    quantity: int
+    duplicate_copies: int
+    codes: list[str]
+    layout: PrintLayout
+    lines: list[PrintAllLineResult]
+    dry_run: bool
 
 
 def cz_copies_from_layout(layout: PrintLayout) -> int:
@@ -1306,6 +1329,234 @@ async def scan_print_for_packaging_task(
         layout=default_template.layout,
         allow_partial=False,
         units_to_print=1,
+    )
+
+
+async def _load_packaging_task_for_marking(
+    session: AsyncSession,
+    tenant_id: uuid.UUID,
+    packaging_task_id: uuid.UUID,
+) -> PackagingTask:
+    task_stmt = (
+        select(PackagingTask)
+        .where(PackagingTask.id == packaging_task_id, PackagingTask.tenant_id == tenant_id)
+        .options(
+            selectinload(PackagingTask.lines).selectinload(PackagingTaskLine.product),
+        )
+    )
+    task = (await session.execute(task_stmt)).scalar_one_or_none()
+    if task is None:
+        raise MarkingCodeServiceError("task_not_found")
+    return task
+
+
+def _lines_needing_marking(task: PackagingTask) -> list[PackagingTaskLine]:
+    from app.services.packaging_task_service import qty_need_pack
+
+    out: list[PackagingTaskLine] = []
+    for line in task.lines:
+        product = line.product
+        if product is None or not product.requires_honest_sign:
+            continue
+        remaining = qty_need_pack(line) - int(line.qty_marking_printed)
+        if remaining > 0:
+            out.append(line)
+    return out
+
+
+async def _ordered_lines_needing_marking(
+    session: AsyncSession,
+    task: PackagingTask,
+) -> list[PackagingTaskLine]:
+    lines = _lines_needing_marking(task)
+    if not lines:
+        return []
+    loc_ids = {ln.storage_location_id for ln in lines}
+    stmt = select(StorageLocation.id, StorageLocation.code).where(
+        StorageLocation.id.in_(loc_ids),
+    )
+    code_by_id = {row[0]: row[1] for row in (await session.execute(stmt)).all()}
+    return sorted(lines, key=lambda ln: code_by_id.get(ln.storage_location_id, ""))
+
+
+async def _resolve_line_print_layout(
+    session: AsyncSession,
+    tenant_id: uuid.UUID,
+    line: PackagingTaskLine,
+    *,
+    global_layout: PrintLayout | dict[str, object] | None,
+) -> PrintLayout:
+    if global_layout is not None:
+        return resolve_print_layout(global_layout, duplicate_copies=None)
+    product = line.product
+    if product is None:
+        raise MarkingCodeServiceError("product_not_found")
+    template = await resolve_default_print_template(
+        session,
+        tenant_id,
+        product_id=product.id,
+        seller_id=product.seller_id,
+    )
+    return template.layout
+
+
+async def _preview_line_print(
+    session: AsyncSession,
+    tenant_id: uuid.UUID,
+    line: PackagingTaskLine,
+    *,
+    allow_partial: bool,
+) -> PrintAllLineResult:
+    from app.services.packaging_task_service import qty_need_pack
+
+    product = line.product
+    if product is None:
+        raise MarkingCodeServiceError("product_not_found")
+    remaining = qty_need_pack(line) - int(line.qty_marking_printed)
+    available = await count_available_for_product(session, tenant_id, product.id)
+    shortage = max(0, remaining - available)
+    if shortage > 0 and not allow_partial:
+        quantity = 0
+        codes: list[str] = []
+    else:
+        quantity = min(remaining, available) if shortage > 0 else remaining
+        codes = [f"__preview_{line.id}_{i}" for i in range(quantity)]
+    return PrintAllLineResult(
+        packaging_task_line_id=line.id,
+        product_id=product.id,
+        sku_code=product.sku_code,
+        product_name=product.name,
+        quantity=quantity,
+        shortage=shortage,
+        codes=codes,
+    )
+
+
+async def print_all_for_packaging_task(
+    session: AsyncSession,
+    tenant_id: uuid.UUID,
+    packaging_task_id: uuid.UUID,
+    *,
+    acting_user_id: uuid.UUID,
+    layout: PrintLayout | dict[str, object] | None = None,
+    allow_partial: bool = False,
+    dry_run: bool = False,
+) -> PrintAllMarkingCodesResult:
+    task = await _load_packaging_task_for_marking(session, tenant_id, packaging_task_id)
+    lines = await _ordered_lines_needing_marking(session, task)
+    if not lines:
+        raise MarkingCodeServiceError("nothing_to_mark")
+
+    response_layout = await _resolve_line_print_layout(
+        session,
+        tenant_id,
+        lines[0],
+        global_layout=layout,
+    )
+    duplicate_copies = cz_copies_from_layout(response_layout)
+
+    if dry_run:
+        line_results: list[PrintAllLineResult] = []
+        for line in lines:
+            preview = await _preview_line_print(
+                session,
+                tenant_id,
+                line,
+                allow_partial=allow_partial,
+            )
+            line_results.append(
+                PrintAllLineResult(
+                    packaging_task_line_id=preview.packaging_task_line_id,
+                    product_id=preview.product_id,
+                    sku_code=preview.sku_code,
+                    product_name=preview.product_name,
+                    quantity=preview.quantity,
+                    shortage=preview.shortage,
+                    codes=[],
+                ),
+            )
+        total_qty = sum(r.quantity for r in line_results)
+        return PrintAllMarkingCodesResult(
+            packaging_task_id=task.id,
+            quantity=total_qty,
+            duplicate_copies=duplicate_copies,
+            codes=[],
+            layout=response_layout,
+            lines=line_results,
+            dry_run=True,
+        )
+
+    if not allow_partial:
+        previews = [
+            await _preview_line_print(session, tenant_id, line, allow_partial=False)
+            for line in lines
+        ]
+        if any(p.shortage > 0 for p in previews):
+            return PrintAllMarkingCodesResult(
+                packaging_task_id=task.id,
+                quantity=0,
+                duplicate_copies=duplicate_copies,
+                codes=[],
+                layout=response_layout,
+                lines=[
+                    PrintAllLineResult(
+                        packaging_task_line_id=p.packaging_task_line_id,
+                        product_id=p.product_id,
+                        sku_code=p.sku_code,
+                        product_name=p.product_name,
+                        quantity=0,
+                        shortage=p.shortage,
+                        codes=[],
+                    )
+                    for p in previews
+                ],
+                dry_run=False,
+            )
+
+    line_results = []
+    all_codes: list[str] = []
+    total_qty = 0
+    for line in lines:
+        line_layout = await _resolve_line_print_layout(
+            session,
+            tenant_id,
+            line,
+            global_layout=layout,
+        )
+        result = await print_codes_for_packaging_line(
+            session,
+            tenant_id,
+            line.id,
+            acting_user_id=acting_user_id,
+            layout=line_layout,
+            allow_partial=allow_partial,
+        )
+        product = line.product
+        sku = product.sku_code if product is not None else ""
+        name = product.name if product is not None else ""
+        shortage = int(result.shortage or 0)
+        line_results.append(
+            PrintAllLineResult(
+                packaging_task_line_id=line.id,
+                product_id=line.product_id,
+                sku_code=sku,
+                product_name=name,
+                quantity=result.quantity,
+                shortage=shortage,
+                codes=result.codes,
+            ),
+        )
+        all_codes.extend(result.codes)
+        total_qty += result.quantity
+
+    return PrintAllMarkingCodesResult(
+        packaging_task_id=task.id,
+        quantity=total_qty,
+        duplicate_copies=duplicate_copies,
+        codes=all_codes,
+        layout=response_layout,
+        lines=line_results,
+        dry_run=False,
     )
 
 

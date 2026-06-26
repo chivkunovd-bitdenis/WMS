@@ -111,6 +111,32 @@ class ScanPrintMarkingIn(BaseModel):
     product_barcode: str = Field(min_length=1, max_length=128)
 
 
+class PrintAllMarkingIn(BaseModel):
+    layout_json: PrintLayoutOut | None = None
+    allow_partial: bool = False
+    dry_run: bool = False
+
+
+class PrintAllLineOut(BaseModel):
+    packaging_task_line_id: str
+    product_id: str
+    sku_code: str
+    product_name: str
+    quantity: int
+    shortage: int
+    codes: list[str]
+
+
+class PrintAllMarkingOut(BaseModel):
+    packaging_task_id: str
+    quantity: int
+    duplicate_copies: int
+    codes: list[str]
+    layout: PrintLayoutOut
+    lines: list[PrintAllLineOut]
+    dry_run: bool
+
+
 class PoolProductOut(BaseModel):
     id: str
     sku_code: str
@@ -1008,3 +1034,56 @@ async def print_marking_codes_for_line(
         layout=_layout_out(result.layout),
         shortage=result.shortage,
     )
+
+
+def _print_all_out(result: mc_svc.PrintAllMarkingCodesResult) -> PrintAllMarkingOut:
+    return PrintAllMarkingOut(
+        packaging_task_id=str(result.packaging_task_id),
+        quantity=result.quantity,
+        duplicate_copies=result.duplicate_copies,
+        codes=result.codes,
+        layout=_layout_out(result.layout),
+        lines=[
+            PrintAllLineOut(
+                packaging_task_line_id=str(line.packaging_task_line_id),
+                product_id=str(line.product_id),
+                sku_code=line.sku_code,
+                product_name=line.product_name,
+                quantity=line.quantity,
+                shortage=line.shortage,
+                codes=line.codes,
+            )
+            for line in result.lines
+        ],
+        dry_run=result.dry_run,
+    )
+
+
+@router.post(
+    "/packaging-tasks/{task_id}/print-all",
+    response_model=PrintAllMarkingOut,
+)
+async def print_all_marking_codes_for_task(
+    task_id: uuid.UUID,
+    body: PrintAllMarkingIn,
+    user: Annotated[User, Depends(require_packaging_access)],
+    session: Annotated[AsyncSession, Depends(get_db)],
+) -> PrintAllMarkingOut:
+    layout_payload: dict[str, object] | None = None
+    if body.layout_json is not None:
+        layout_payload = _layout_in_to_dict(body.layout_json)
+    try:
+        result = await mc_svc.print_all_for_packaging_task(
+            session,
+            user.tenant_id,
+            task_id,
+            acting_user_id=user.id,
+            layout=layout_payload,
+            allow_partial=body.allow_partial,
+            dry_run=body.dry_run,
+        )
+    except mc_svc.MarkingCodeServiceError as exc:
+        raise _http_from_mc_error(exc) from exc
+    except pt_svc.PrintTemplateServiceError as exc:
+        raise _http_from_pt_error(exc) from exc
+    return _print_all_out(result)

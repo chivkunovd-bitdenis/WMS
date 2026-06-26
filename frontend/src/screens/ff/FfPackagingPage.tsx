@@ -96,6 +96,13 @@ export function FfPackagingTaskPanel({
   const [scanBarcode, setScanBarcode] = useState('')
   const [scanBusy, setScanBusy] = useState(false)
   const [scanFlash, setScanFlash] = useState<'ok' | 'error' | null>(null)
+  const [printAllOpen, setPrintAllOpen] = useState(false)
+  const [printAllBusy, setPrintAllBusy] = useState(false)
+  const [printAllAllowPartial, setPrintAllAllowPartial] = useState(false)
+  const [printAllPreview, setPrintAllPreview] = useState<{
+    quantity: number
+    lines: { product_name: string; sku_code: string; quantity: number; shortage: number }[]
+  } | null>(null)
   const { openPrint, dialog: markingPrintDialog } = useMarkingCodePrint()
 
   const authHeaders = {
@@ -173,6 +180,104 @@ export function FfPackagingTaskPanel({
   const hasHonestSignLines = task.lines.some(
     (ln) => ln.requires_honest_sign && ln.qty_need_pack > ln.qty_marking_printed,
   )
+
+  const shortageLineCount =
+    printAllPreview?.lines.filter((ln) => ln.shortage > 0).length ?? 0
+
+  const loadPrintAllPreview = useCallback(async (allowPartial = printAllAllowPartial) => {
+    const res = await fetch(
+      apiUrl(`/operations/marking-codes/packaging-tasks/${task.id}/print-all`),
+      {
+        method: 'POST',
+        headers: authHeaders,
+        body: JSON.stringify({ dry_run: true, allow_partial: allowPartial }),
+      },
+    )
+    if (!res.ok) {
+      throw new Error(await readApiErrorMessage(res))
+    }
+    const data = (await res.json()) as {
+      quantity: number
+      lines: { product_name: string; sku_code: string; quantity: number; shortage: number }[]
+    }
+    setPrintAllPreview(data)
+    return data
+  }, [authHeaders, printAllAllowPartial, task.id])
+
+  const openPrintAllDialog = () => {
+    setPrintAllOpen(true)
+    setError(null)
+    setPrintAllBusy(true)
+    void (async () => {
+      try {
+        await loadPrintAllPreview()
+      } catch (e) {
+        setError(e instanceof Error ? e.message : 'Не удалось загрузить сводку печати.')
+        setPrintAllOpen(false)
+      } finally {
+        setPrintAllBusy(false)
+      }
+    })()
+  }
+
+  const onPrintAllAllowPartialChange = (checked: boolean) => {
+    setPrintAllAllowPartial(checked)
+    if (!printAllOpen) {
+      return
+    }
+    setPrintAllBusy(true)
+    void (async () => {
+      try {
+        await loadPrintAllPreview(checked)
+      } catch (e) {
+        setError(e instanceof Error ? e.message : 'Не удалось обновить сводку печати.')
+      } finally {
+        setPrintAllBusy(false)
+      }
+    })()
+  }
+
+  const confirmPrintAll = async () => {
+    setPrintAllBusy(true)
+    setError(null)
+    try {
+      const res = await fetch(
+        apiUrl(`/operations/marking-codes/packaging-tasks/${task.id}/print-all`),
+        {
+          method: 'POST',
+          headers: authHeaders,
+          body: JSON.stringify({ allow_partial: printAllAllowPartial }),
+        },
+      )
+      if (!res.ok) {
+        setError(await readApiErrorMessage(res))
+        return
+      }
+      const data = (await res.json()) as {
+        codes: string[]
+        duplicate_copies: number
+        quantity: number
+      }
+      if (data.quantity < 1) {
+        setError('Нет доступных кодов для печати по всем строкам.')
+        await loadPrintAllPreview()
+        return
+      }
+      await printMarkingCodeLabels(data.codes, data.duplicate_copies)
+      setPrintAllOpen(false)
+      setPrintAllPreview(null)
+      const taskRes = await fetch(apiUrl(`/operations/packaging-tasks/${task.id}`), {
+        headers: authHeaders,
+      })
+      if (taskRes.ok) {
+        onUpdated((await taskRes.json()) as PackagingTask)
+      }
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Печать всех ЧЗ не удалась.')
+    } finally {
+      setPrintAllBusy(false)
+    }
+  }
 
   const submitScanPrint = async () => {
     const code = scanBarcode.trim()
@@ -262,34 +367,44 @@ export function FfPackagingTaskPanel({
         </Alert>
       ) : null}
       {hasHonestSignLines && manualTask ? (
-        <TextField
-          size="small"
-          fullWidth
-          autoFocus
-          label="Сканируйте товар"
-          placeholder="Штрихкод или SKU"
-          value={scanBarcode}
-          disabled={scanBusy || busy}
-          onChange={(e) => setScanBarcode(e.target.value)}
-          onKeyDown={(e) => {
-            if (e.key === 'Enter') {
-              e.preventDefault()
-              void submitScanPrint()
-            }
-          }}
-          slotProps={{
-            htmlInput: { 'data-testid': 'marking-scan-print-input' },
-          }}
-          sx={{
-            maxWidth: 420,
-            ...(scanFlash === 'ok'
-              ? { '& .MuiOutlinedInput-root': { borderColor: 'success.main' } }
-              : scanFlash === 'error'
-                ? { '& .MuiOutlinedInput-root': { borderColor: 'error.main' } }
-                : {}),
-          }}
-          data-testid="marking-scan-print-field"
-        />
+        <Stack direction="row" spacing={1} sx={{ alignItems: 'flex-start', flexWrap: 'wrap' }}>
+          <TextField
+            size="small"
+            autoFocus
+            label="Сканируйте товар"
+            placeholder="Штрихкод или SKU"
+            value={scanBarcode}
+            disabled={scanBusy || busy}
+            onChange={(e) => setScanBarcode(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter') {
+                e.preventDefault()
+                void submitScanPrint()
+              }
+            }}
+            slotProps={{
+              htmlInput: { 'data-testid': 'marking-scan-print-input' },
+            }}
+            sx={{
+              flex: '1 1 280px',
+              maxWidth: 420,
+              ...(scanFlash === 'ok'
+                ? { '& .MuiOutlinedInput-root': { borderColor: 'success.main' } }
+                : scanFlash === 'error'
+                  ? { '& .MuiOutlinedInput-root': { borderColor: 'error.main' } }
+                  : {}),
+            }}
+            data-testid="marking-scan-print-field"
+          />
+          <Button
+            variant="outlined"
+            disabled={busy || printAllBusy}
+            onClick={openPrintAllDialog}
+            data-testid="ff-packaging-print-all-marking"
+          >
+            Печать всех ЧЗ
+          </Button>
+        </Stack>
       ) : null}
       {task.pick_resync_warning ? (
         <Alert severity="warning" data-testid="ff-packaging-pick-resync-warning">
@@ -455,6 +570,80 @@ export function FfPackagingTaskPanel({
         </Table>
       </TableContainer>
       {markingPrintDialog}
+      <Dialog
+        open={printAllOpen}
+        onClose={() => {
+          if (!printAllBusy) {
+            setPrintAllOpen(false)
+            setPrintAllPreview(null)
+          }
+        }}
+        maxWidth="sm"
+        fullWidth
+        data-testid="marking-print-all-dialog"
+      >
+        <DialogTitle>Печать всех ЧЗ</DialogTitle>
+        <DialogContent>
+          <Stack spacing={2} sx={{ pt: 0.5 }}>
+            {printAllBusy && !printAllPreview ? (
+              <Typography variant="body2" color="text.secondary">
+                Загрузка сводки…
+              </Typography>
+            ) : null}
+            {printAllPreview ? (
+              <>
+                <Typography variant="body1" data-testid="marking-print-all-summary">
+                  Будет напечатано {printAllPreview.quantity} кодов
+                  {shortageLineCount > 0
+                    ? `, нехватка по ${shortageLineCount} строкам`
+                    : ''}
+                  .
+                </Typography>
+                {printAllPreview.lines.map((ln) => (
+                  <Typography
+                    key={`${ln.sku_code}-${ln.product_name}`}
+                    variant="body2"
+                    color={ln.shortage > 0 ? 'warning.main' : 'text.secondary'}
+                    data-testid="marking-print-all-line"
+                  >
+                    {ln.product_name} ({ln.sku_code}): {ln.quantity} кодов
+                    {ln.shortage > 0 ? `, не хватает ${ln.shortage}` : ''}
+                  </Typography>
+                ))}
+              </>
+            ) : null}
+            <Stack direction="row" sx={{ alignItems: 'center' }}>
+              <Checkbox
+                checked={printAllAllowPartial}
+                disabled={printAllBusy}
+                onChange={(e) => onPrintAllAllowPartialChange(e.target.checked)}
+                data-testid="marking-print-all-allow-partial"
+              />
+              <Typography variant="body2">Печатать доступные при нехватке</Typography>
+            </Stack>
+          </Stack>
+        </DialogContent>
+        <DialogActions>
+          <Button
+            disabled={printAllBusy}
+            onClick={() => {
+              setPrintAllOpen(false)
+              setPrintAllPreview(null)
+            }}
+            data-testid="marking-print-all-cancel"
+          >
+            Отмена
+          </Button>
+          <Button
+            variant="contained"
+            disabled={printAllBusy || !printAllPreview || printAllPreview.quantity < 1}
+            onClick={() => void confirmPrintAll()}
+            data-testid="marking-print-all-confirm"
+          >
+            Печать
+          </Button>
+        </DialogActions>
+      </Dialog>
       {onClose ? (
         <Stack direction="row" spacing={1} sx={{ justifyContent: 'flex-end' }}>
           {manualTask ? (
