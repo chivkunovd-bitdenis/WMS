@@ -128,6 +128,7 @@ type Props = {
   isFulfillmentAdmin: boolean
   workspace?: InboundRequestWorkspace
   onClose: () => void
+  addressStorageEnabled?: boolean
 }
 
 function statusRu(status: string): string {
@@ -146,6 +147,7 @@ export function FfInboundRequestView({
   isFulfillmentAdmin,
   workspace = 'full',
   onClose,
+  addressStorageEnabled = true,
 }: Props) {
   const authHeaders = useMemo(() => ({ Authorization: `Bearer ${token}` }), [token])
 
@@ -1321,6 +1323,7 @@ export function FfInboundRequestView({
               ) : null}
 
               {isFulfillmentAdmin &&
+              addressStorageEnabled &&
               detail.status === 'verified' &&
               workspace === 'full' ? (
                 <Button
@@ -1857,12 +1860,13 @@ export function FfInboundRequestView({
 
               {workspace === 'reception' && detail.status === 'verified' ? (
                 <Alert severity="success" sx={{ mt: 2 }} data-testid="ff-inbound-moved-to-sorting">
-                  Пересчёт завершён. Остаток принят на склад ФФ (зона «Сортировка»). Разложение по ячейкам —
-                  в разделе <strong>Сортировка</strong>.
+                  {addressStorageEnabled
+                    ? 'Пересчёт завершён. Остаток принят на склад ФФ (зона «Сортировка»). Разложение по ячейкам — в разделе Сортировка.'
+                    : 'Пересчёт завершён. Остаток принят на склад ФФ (зона «Сортировка»).'}
                 </Alert>
               ) : null}
 
-              {detail.status === 'verified' && workspace === 'full' ? (
+              {addressStorageEnabled && detail.status === 'verified' && workspace === 'full' ? (
                 <Paper variant="outlined" sx={{ p: 2 }} data-testid="ff-inbound-admin-distribution">
                   <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1} sx={{ alignItems: { sm: 'center' } }}>
                     <Box sx={{ flexGrow: 1 }}>

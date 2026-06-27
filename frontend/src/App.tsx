@@ -226,6 +226,7 @@ export default function App() {
     onSetInitialPassword,
     onCancelPasswordSetup,
     logout,
+    reloadMe,
   } = useAuth('fulfillment')
   const navigate = useNavigate()
   const [pendingMpUnloadId, setPendingMpUnloadId] = useState<string | null>(null)
@@ -2397,6 +2398,7 @@ export default function App() {
                 infoNotice={ffSuppliesNotice}
                 onDismissInfoNotice={() => setFfSuppliesNotice(null)}
                 token={token}
+                addressStorageEnabled={me?.address_storage_enabled !== false}
                 sellers={sellers.map((s) => ({ id: s.id, name: s.name }))}
                 productPicklist={products.map((p) => ({
                   id: p.id,
@@ -2611,6 +2613,10 @@ export default function App() {
                   token={token}
                   authHeaders={authHeaders}
                   isFulfillmentAdmin={isFulfillmentAdmin}
+                  addressStorageEnabled={me.address_storage_enabled !== false}
+                  onAddressStorageChange={() => {
+                    void reloadMe()
+                  }}
                 />
               ) : (
                 <Navigate to={`${base}/dashboard`} replace />
@@ -2870,6 +2876,7 @@ export default function App() {
                   requestId={selectedInboundId}
                   isFulfillmentAdmin={canReceptionOps}
                   workspace={ffInboundWorkspace}
+                  addressStorageEnabled={me?.address_storage_enabled !== false}
                   onClose={() => {
                     setFfDocModal(null)
                     setSelectedInboundId(null)

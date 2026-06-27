@@ -213,6 +213,7 @@ type Props = {
   onCreateDiverge: () => Promise<{ id: string } | null>
   initialMarketplaceUnloadId?: string | null
   onInitialMarketplaceUnloadOpened?: () => void
+  addressStorageEnabled?: boolean
 }
 
 export function FfSuppliesShipmentsPage({
@@ -235,6 +236,7 @@ export function FfSuppliesShipmentsPage({
   onCreateDiverge,
   initialMarketplaceUnloadId = null,
   onInitialMarketplaceUnloadOpened,
+  addressStorageEnabled = true,
 }: Props) {
   const [searchParams, setSearchParams] = useSearchParams()
   const isMpShipmentsPage = pageVariant === 'mp-shipments'
@@ -743,25 +745,27 @@ export function FfSuppliesShipmentsPage({
     setModalBusy(true)
     setModalError(null)
     try {
-      const locRes = await fetch(
-        apiUrl(`/operations/marketplace-unload-requests/${docModalId}/pick/scan`),
-        {
-          method: 'POST',
-          headers: { ...authHeaders, 'Content-Type': 'application/json' },
-          body: JSON.stringify({ barcode: raw }),
-        },
-      )
-      if (locRes.ok) {
-        const j = (await locRes.json()) as {
-          kind: string
-          storage_location_id?: string | null
-          location_code?: string | null
-        }
-        if (j.kind === 'location' && j.storage_location_id) {
-          setActivePickLocationId(j.storage_location_id)
-          setActivePickLocationCode(j.location_code ?? j.storage_location_id)
-          setScanBarcode('')
-          return
+      if (addressStorageEnabled) {
+        const locRes = await fetch(
+          apiUrl(`/operations/marketplace-unload-requests/${docModalId}/pick/scan`),
+          {
+            method: 'POST',
+            headers: { ...authHeaders, 'Content-Type': 'application/json' },
+            body: JSON.stringify({ barcode: raw }),
+          },
+        )
+        if (locRes.ok) {
+          const j = (await locRes.json()) as {
+            kind: string
+            storage_location_id?: string | null
+            location_code?: string | null
+          }
+          if (j.kind === 'location' && j.storage_location_id) {
+            setActivePickLocationId(j.storage_location_id)
+            setActivePickLocationCode(j.location_code ?? j.storage_location_id)
+            setScanBarcode('')
+            return
+          }
         }
       }
 
@@ -795,13 +799,23 @@ export function FfSuppliesShipmentsPage({
 
       if (!openBoxId) {
         setModalError(
-          'Сначала откройте короб для сборки из ячеек или отсканируйте штрихкод готового короба.',
+          addressStorageEnabled
+            ? 'Сначала откройте короб для сборки из ячеек или отсканируйте штрихкод готового короба.'
+            : 'Сначала откройте короб для сборки или отсканируйте штрихкод готового короба.',
         )
         return
       }
-      if (!activePickLocationId) {
+      if (addressStorageEnabled && !activePickLocationId) {
         setModalError('Сначала отсканируйте ячейку.')
         return
+      }
+
+      const scanBody: { barcode: string; quantity: number; storage_location_id?: string } = {
+        barcode: raw,
+        quantity: qty,
+      }
+      if (addressStorageEnabled && activePickLocationId) {
+        scanBody.storage_location_id = activePickLocationId
       }
 
       const prodRes = await fetch(
@@ -811,11 +825,7 @@ export function FfSuppliesShipmentsPage({
         {
           method: 'POST',
           headers: { ...authHeaders, 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            barcode: raw,
-            storage_location_id: activePickLocationId,
-            quantity: qty,
-          }),
+          body: JSON.stringify(scanBody),
         },
       )
       if (!prodRes.ok) {
@@ -1212,7 +1222,10 @@ export function FfSuppliesShipmentsPage({
       unloadDetail?.status === 'submitted' ||
       unloadDetail?.status === 'confirmed')
   const mpPickEditable =
-    mpConfirmed && docModal === 'marketplace_unload' && unloadDetail?.status !== 'shipped'
+    addressStorageEnabled &&
+    mpConfirmed &&
+    docModal === 'marketplace_unload' &&
+    unloadDetail?.status !== 'shipped'
 
   const mpCollectSummary = useMemo(() => {
     if (!unloadDetail || docModal !== 'marketplace_unload') {
@@ -1902,9 +1915,9 @@ export function FfSuppliesShipmentsPage({
                   <Stack spacing={1.5}>
                     <Typography variant="subtitle2">Сборка в короба</Typography>
                     <Typography variant="body2" color="text.secondary">
-                      Отсканируйте готовый короб (WHB-…) — он попадёт в закрытые. Или откройте
-                      короб, отсканируйте ячейку и товар (кол-во). Снятие с полки — в открытую
-                      тару.
+                      {addressStorageEnabled
+                        ? 'Отсканируйте готовый короб (WHB-…) — он попадёт в закрытые. Или откройте короб, отсканируйте ячейку и товар (кол-во). Снятие с полки — в открытую тару.'
+                        : 'Отсканируйте готовый короб (WHB-…) — он попадёт в закрытые. Или откройте короб и отсканируйте товар (кол-во). Снятие — в открытую тару.'}
                     </Typography>
 
                     {mpConfirmed ? (
@@ -1926,22 +1939,28 @@ export function FfSuppliesShipmentsPage({
                                 Открытого короба нет
                               </Typography>
                             )}
-                            {activePickLocationCode ? (
-                              <Chip
-                                size="small"
-                                label={`Ячейка: ${activePickLocationCode}`}
-                                data-testid="ff-mp-active-location"
-                              />
-                            ) : openBox ? (
-                              <Typography variant="caption" color="warning.main">
-                                Сначала отсканируйте ячейку
-                              </Typography>
+                            {addressStorageEnabled ? (
+                              activePickLocationCode ? (
+                                <Chip
+                                  size="small"
+                                  label={`Ячейка: ${activePickLocationCode}`}
+                                  data-testid="ff-mp-active-location"
+                                />
+                              ) : openBox ? (
+                                <Typography variant="caption" color="warning.main">
+                                  Сначала отсканируйте ячейку
+                                </Typography>
+                              ) : null
                             ) : null}
                           </Stack>
                           <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1}>
                             <TextField
                               size="small"
-                              label="Штрихкод ячейки / товара / короба"
+                              label={
+                                addressStorageEnabled
+                                  ? 'Штрихкод ячейки / товара / короба'
+                                  : 'Штрихкод товара / короба'
+                              }
                               value={scanBarcode}
                               onChange={(e) => setScanBarcode(e.target.value)}
                               onKeyDown={(e) => {
@@ -2092,7 +2111,7 @@ export function FfSuppliesShipmentsPage({
                       </Paper>
                     ) : null}
 
-                    {unloadDetail.pick_allocations.length > 0 ? (
+                    {addressStorageEnabled && unloadDetail.pick_allocations.length > 0 ? (
                       <Paper variant="outlined" sx={{ p: 1.5 }} data-testid="ff-mp-pick-saved">
                         <Typography variant="subtitle2" sx={{ mb: 1 }}>
                           Откуда сняли (по ячейкам)

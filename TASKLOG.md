@@ -1,5 +1,24 @@
 # TASKLOG
 
+## TASK-003 — 2026-06-27 — Скрытие UI ячеек при выкл. адресном хранении
+
+- What changed: `addressStorageEnabled` prop в `FfSuppliesShipmentsPage`, `FfInboundRequestView`, `App.tsx`; скрыты chip ячейки, «Начать подбор», таблица pick_allocations, блок распределения приёмки; scan без шага ячейки; e2e `ff-address-storage-mp-ui.spec.ts`.
+- What did NOT change: списание при collect (TASK-004), backend API (TASK-002 уже в `908029c`).
+- Verification: `npm run build`; e2e `ff-address-storage-mp-ui.spec.ts` + `ff-address-storage-setting.spec.ts` green.
+
+## TASK-001 — 2026-06-27 — Флаг «Адресное хранение» (UI)
+
+- What changed: checkbox на `FfSettingsScreen`, поле `address_storage_enabled` в `Me`/`useAuth`, reload me после PATCH; e2e `ff-address-storage-setting.spec.ts`. Backend/API — в `908029c`.
+- What did NOT change: скрытие UI ячеек (TASK-003).
+- Verification: e2e settings + build green.
+
+## TASK-002 — 2026-06-27 — Условная обязательность ячеек в collect/pick API
+
+- What changed: `resolve_collect_storage_location` в `marketplace_unload_collect_service`; флаг `address_storage_enabled` через `tenant_settings_service` (TASK-001 dependency); optional `storage_location_id` в API scan/manual-line/pick-add; `pick_scan` — порядок ячейка→товар при вкл. флаге; pytest `test_marketplace_unload_address_storage.py`.
+- What did NOT change: списание при collect (TASK-004), скрытие UI ячеек (TASK-003), inventory movement moment on ship.
+- Verification: `ruff` + `mypy` on changed files green; pytest 2 new + `test_marketplace_unload_ship_deducts_stock_by_pick_and_scan` green.
+- Commit: `908029c`.
+
 ## TASK-78 — 2026-06-26 — ЧЗ T4.1: хранилище кредов селлера
 
 - What changed: таблица `seller_marking_credentials` (шифрованные токены ЧЗ/СУЗ/МП, МЧД, signing_method, edo_route, auto_introduce, auto_emit_limit); API `GET/PATCH /operations/marking-codes/self/credentials` и `/sellers/{id}/credentials`; блок настроек в `SellerSettingsScreen`; pytest + e2e `seller-marking-credentials.spec.ts`.
