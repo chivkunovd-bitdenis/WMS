@@ -17,7 +17,7 @@ async def _register_admin(async_client: AsyncClient, slug: str) -> str:
         },
     )
     assert reg.status_code == 200, reg.text
-    return reg.json()["access_token"]
+    return str(reg.json()["access_token"])
 
 
 def _auth(token: str) -> dict[str, str]:

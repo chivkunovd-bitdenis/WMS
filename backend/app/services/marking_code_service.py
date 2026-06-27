@@ -11,6 +11,7 @@ from datetime import UTC, datetime, timedelta
 from sqlalchemy import func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
+from sqlalchemy.sql.elements import ColumnElement
 
 from app.models.marking_code import (
     EVENT_APPLIED,
@@ -36,6 +37,7 @@ from app.models.marking_code import (
     MarkingReprintRequest,
 )
 from app.models.packaging_task import PackagingTask, PackagingTaskLine
+from app.models.print_template import LAYOUT_BLOCK_CZ
 from app.models.product import Product
 from app.models.seller import Seller
 from app.models.storage_location import StorageLocation
@@ -46,7 +48,6 @@ from app.services.document_number_service import (
     assign_document_number_if_missing,
 )
 from app.services.print_template_service import (
-    LAYOUT_BLOCK_CZ,
     LayoutUnit,
     PrintLayout,
     parse_layout,
@@ -1204,7 +1205,7 @@ async def print_codes_for_packaging_line(
 
     pool_ids = await _pool_ids_for_product(session, tenant_id, product.id)
     if pool_ids:
-        code_filter = MarkingCode.pool_id.in_(pool_ids)
+        code_filter: ColumnElement[bool] = MarkingCode.pool_id.in_(pool_ids)
     else:
         code_filter = MarkingCode.product_id == product.id
 

@@ -712,7 +712,7 @@ async def list_marking_pool_codes(
     user: Annotated[User, Depends(get_current_user)],
     session: Annotated[AsyncSession, Depends(get_db)],
     effective_seller_id: Annotated[uuid.UUID | None, Depends(get_effective_seller_id)],
-    status: Annotated[str | None, Query()] = None,
+    code_status: Annotated[str | None, Query()] = None,
 ) -> list[PoolCodeOut]:
     from app.models.marking_code import MarkingPool
 
@@ -722,7 +722,7 @@ async def list_marking_pool_codes(
     await _assert_pool_access(user, pool.seller_id, effective_seller_id)
     try:
         rows = await mc_svc.list_pool_codes(
-            session, user.tenant_id, pool_id, status=status
+            session, user.tenant_id, pool_id, status=code_status
         )
     except mc_svc.MarkingCodeServiceError as exc:
         raise _http_from_mc_error(exc) from exc
@@ -935,7 +935,7 @@ async def resolve_print_template(
     if user.role == FULFILLMENT_SELLER:
         if effective_seller_id is None:
             raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="seller_not_linked")
-        scope_seller_id = effective_seller_id
+        scope_seller_id: uuid.UUID | None = effective_seller_id
     elif user.role == FULFILLMENT_ADMIN:
         scope_seller_id = seller_id
     else:
@@ -984,7 +984,7 @@ async def create_print_template(
     if user.role == FULFILLMENT_SELLER:
         if effective_seller_id is None:
             raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="seller_not_linked")
-        target_seller_id = effective_seller_id
+        target_seller_id: uuid.UUID | None = effective_seller_id
     elif user.role == FULFILLMENT_ADMIN:
         target_seller_id = body.seller_id
     else:

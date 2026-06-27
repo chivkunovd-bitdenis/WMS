@@ -173,7 +173,7 @@ async def test_sequential_print_does_not_reuse_codes(async_client: AsyncClient) 
             json={"allow_partial": True, "duplicate_copies": 1},
         )
         assert res.status_code == 200, res.text
-        return res.json()["codes"]
+        return list(res.json()["codes"])
 
     codes_a = await _print_line(line_a)
     codes_b = await _print_line(line_b)

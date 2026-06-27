@@ -10,7 +10,7 @@ from sqlalchemy import select
 from test_packaging_tasks import _register_admin
 
 from app.db.session import SessionLocal
-from app.models.marking_code import MarkingCode, MarkingCodeEvent, MarkingPool
+from app.models.marking_code import EVENT_PRINTED, MarkingCode, MarkingCodeEvent, MarkingPool
 from app.models.notification import Notification
 from app.services import marking_code_service as mc_svc
 from app.services.marking_low_stock_service import run_marking_low_stock_for_tenant
@@ -80,7 +80,7 @@ async def test_pool_list_includes_forecast_from_events(async_client: AsyncClient
             await mc_svc.record_event(
                 session,
                 code=code,
-                event_type=mc_svc.EVENT_PRINTED,
+                event_type=EVENT_PRINTED,
                 actor=None,
                 copies=7,
             )

@@ -7,7 +7,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.db.session import SessionLocal
-from app.models.marking_code import MarkingPool
+from app.models.marking_code import STATUS_AVAILABLE, MarkingPool
 from app.models.notification import RECIPIENT_TYPE_SELLER, SEVERITY_CRITICAL
 from app.models.tenant import Tenant
 from app.services import marking_code_service as mc_svc
@@ -78,7 +78,7 @@ async def run_marking_low_stock_for_tenant(
     sent = 0
     for pool in pools:
         pool_counts = counts.get(pool.id, {})
-        available = mc_svc._status_count(pool_counts, mc_svc.STATUS_AVAILABLE)
+        available = mc_svc._status_count(pool_counts, STATUS_AVAILABLE)
         consumption_7d = consumption_map.get(pool.id, 0)
         forecast_days = mc_svc.compute_forecast_days(available, consumption_7d)
         if not _is_low_stock_breach(pool, available=available, forecast_days=forecast_days):

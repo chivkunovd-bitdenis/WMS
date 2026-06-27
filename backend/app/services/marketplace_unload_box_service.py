@@ -209,7 +209,7 @@ async def scan_barcode_into_box(
     box_id: uuid.UUID,
     *,
     barcode: str,
-    storage_location_id: uuid.UUID,
+    storage_location_id: uuid.UUID | None,
     quantity: int = 1,
 ) -> BoxScanResult:
     """Scan flow for TSD/web: optional location barcode, then product → box line."""
@@ -273,7 +273,7 @@ async def add_manual_qty_to_box(
     box_id: uuid.UUID,
     *,
     product_id: uuid.UUID,
-    storage_location_id: uuid.UUID,
+    storage_location_id: uuid.UUID | None,
     quantity: int,
 ) -> MarketplaceUnloadBoxLine:
     if quantity < 1:

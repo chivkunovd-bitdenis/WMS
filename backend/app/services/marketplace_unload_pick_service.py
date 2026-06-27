@@ -31,7 +31,7 @@ class MarketplaceUnloadPickError(Exception):
 @dataclass(frozen=True)
 class PickAllocationRow:
     product_id: uuid.UUID
-    storage_location_id: uuid.UUID
+    storage_location_id: uuid.UUID | None
     quantity: int
 
 
@@ -195,7 +195,7 @@ async def add_pick_qty(
     tenant_id: uuid.UUID,
     request_id: uuid.UUID,
     *,
-    storage_location_id: uuid.UUID,
+    storage_location_id: uuid.UUID | None,
     product_id: uuid.UUID,
     quantity: int,
 ) -> MarketplaceUnloadPickAllocation:
@@ -296,7 +296,7 @@ async def save_pick_allocations(
     if open_box is None:
         raise MarketplaceUnloadPickError("open_box_required")
 
-    merged: dict[tuple[uuid.UUID, uuid.UUID], int] = {}
+    merged: dict[tuple[uuid.UUID, uuid.UUID | None], int] = {}
     for row in rows:
         if row.quantity < 1:
             raise MarketplaceUnloadPickError("invalid_quantity")
