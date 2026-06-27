@@ -182,7 +182,20 @@ async def test_staff_packaging_billing_counts_only_packed_in_task(
         json={"quantity": 6},
     )
     assert pack.status_code == 200, pack.text
-    assert pack.json()["status"] == STATUS_DONE
+    assert pack.json()["status"] == "in_progress"
+
+    listed_before_complete = await async_client.get("/auth/staff-accounts", headers=admin_h)
+    assert listed_before_complete.status_code == 200, listed_before_complete.text
+    row_before_complete = next(r for r in listed_before_complete.json() if r["id"] == staff_id)
+    assert row_before_complete["packaging_billing"]["units_packed"] == 0
+
+    complete = await async_client.post(
+        f"/operations/packaging-tasks/{task_id}/complete",
+        headers=staff_h,
+        json={"acknowledge_all_packed": False},
+    )
+    assert complete.status_code == 200, complete.text
+    assert complete.json()["status"] == STATUS_DONE
 
     listed = await async_client.get("/auth/staff-accounts", headers=admin_h)
     assert listed.status_code == 200, listed.text

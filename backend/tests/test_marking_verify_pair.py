@@ -60,7 +60,12 @@ async def _printed_code_cis(async_client: AsyncClient) -> tuple[dict[str, str], 
     )
     assert imp.status_code == 200, imp.text
     loc_id = await _inventory_at_location(
-        async_client, h, warehouse_id=wh_id, product_id=product_id, qty=1, location_code=f"p-{suffix}"
+        async_client,
+        h,
+        warehouse_id=wh_id,
+        product_id=product_id,
+        qty=1,
+        location_code=f"p-{suffix}",
     )
     task = await async_client.post(
         "/operations/packaging-tasks",

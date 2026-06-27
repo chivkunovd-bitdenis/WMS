@@ -8,6 +8,8 @@ import pytest
 from httpx import AsyncClient
 from test_marketplace_unload_and_discrepancy_acts import (
     E2E_BARCODE,
+    _finish_unload_packaging,
+    _inventory_in_sorting_zone,
     _link_product_wb_barcode,
     _patch_mp_planned_date,
     _patch_packaging_instructions,
@@ -80,6 +82,9 @@ async def _confirmed_unload_with_box(
         qty=10,
         location_code=f"MU-AS-{suffix}",
     )
+    await _inventory_in_sorting_zone(
+        async_client, h, warehouse_id=wid, product_id=pid, qty=10
+    )
 
     mu = await async_client.post(
         BASE,
@@ -96,6 +101,8 @@ async def _confirmed_unload_with_box(
     await _patch_packaging_instructions(async_client, h, pid)
     sub = await async_client.post(f"{BASE}/{mid}/submit", headers=h)
     assert sub.status_code == 200, sub.text
+
+    await _finish_unload_packaging(async_client, h, mid)
 
     box = await async_client.post(
         f"{BASE}/{mid}/boxes",
@@ -159,7 +166,7 @@ async def test_collect_requires_location_when_address_storage_on(
     loc_barcode = next(x for x in loc.json() if x["id"] == loc_id)["barcode"]
 
     loc_scan = await async_client.post(
-        f"{BASE}/{mid}/pick/scan",
+        f"{BASE}/{mid}/boxes/{box_id}/scan",
         headers=h,
         json={"barcode": loc_barcode},
     )

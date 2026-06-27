@@ -1,18 +1,18 @@
 import { test, expect } from '@playwright/test'
 
-import { waitForGetOk, waitForPatchOk, waitForPostOk } from './api-waits'
+import { waitForGetOk, waitForPostOk } from './api-waits'
 import { openFulfillmentRegistration } from './auth-flow'
 import { fulfillInboundViaBoxScans } from './inbound-boxes-helpers'
 
-// TC-NEW-MP-003 — TASK-003: при выкл. адресном хранении UI ячеек скрыт на отгрузке МП.
-test('address storage off hides cell UI on marketplace unload', async ({ page }) => {
-  const email = `e2e-mp-ui-cells-${Date.now()}@example.com`
+// TC-NEW-MP-008 — TASK-008/017: короба заблокированы в UI до завершения упаковки.
+test('FF marketplace unload: box create disabled until packaging done', async ({ page }) => {
+  const email = `e2e-mp-pkg-gate-${Date.now()}@example.com`
   const e2eApi = process.env.E2E_API_ORIGIN ?? 'http://127.0.0.1:18000'
   const barcode = 'E2E-MOCK-BARCODE'
 
   await page.goto('/')
   await openFulfillmentRegistration(page)
-  await page.getByTestId('register-form').getByLabel('Организация').fill('E2E MP UI Cells')
+  await page.getByTestId('register-form').getByLabel('Организация').fill('E2E MP Pkg Gate')
   await page.getByTestId('register-form').getByLabel('Email администратора').fill(email)
   await page.getByTestId('register-form').getByLabel('Пароль').fill('password123')
   await Promise.all([
@@ -25,21 +25,15 @@ test('address storage off hides cell UI on marketplace unload', async ({ page })
   expect(token).toBeTruthy()
   const auth = { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' }
 
-  const patchOff = await page.request.patch(`${e2eApi}/tenant/settings`, {
-    headers: auth,
-    data: JSON.stringify({ address_storage_enabled: false }),
-  })
-  expect(patchOff.ok()).toBeTruthy()
-
   const whRes = await page.request.post(`${e2eApi}/warehouses`, {
     headers: auth,
-    data: JSON.stringify({ name: 'W', code: `w-ui-${Date.now()}` }),
+    data: JSON.stringify({ name: 'W', code: `w-pkg-${Date.now()}` }),
   })
   const whId = String(((await whRes.json()) as { id: string }).id)
 
   const sellerRes = await page.request.post(`${e2eApi}/sellers`, {
     headers: auth,
-    data: JSON.stringify({ name: 'UI Seller' }),
+    data: JSON.stringify({ name: 'Gate Seller' }),
   })
   const sellerId = String(((await sellerRes.json()) as { id: string }).id)
 
@@ -68,8 +62,8 @@ test('address storage off hides cell UI on marketplace unload', async ({ page })
   const prRes = await page.request.post(`${e2eApi}/products`, {
     headers: auth,
     data: JSON.stringify({
-      name: 'UI Product',
-      sku_code: `ui-sku-${Date.now()}`,
+      name: 'Gate Product',
+      sku_code: `gate-sku-${Date.now()}`,
       length_mm: 1,
       width_mm: 1,
       height_mm: 1,
@@ -83,9 +77,14 @@ test('address storage off hides cell UI on marketplace unload', async ({ page })
     data: JSON.stringify({ product_id: productId, nm_id: 424242 }),
   })
 
+  await page.request.patch(`${e2eApi}/products/${productId}/packaging-instructions`, {
+    headers: auth,
+    data: JSON.stringify({ packaging_instructions: 'E2E gate packaging' }),
+  })
+
   const locRes = await page.request.post(`${e2eApi}/warehouses/${whId}/locations`, {
     headers: auth,
-    data: JSON.stringify({ code: 'UI-LOC' }),
+    data: JSON.stringify({ code: 'GATE-LOC' }),
   })
   const locId = String(((await locRes.json()) as { id: string }).id)
 
@@ -111,43 +110,9 @@ test('address storage off hides cell UI on marketplace unload', async ({ page })
   const primInBody = (await primIn.json()) as {
     boxes: { id: string; internal_barcode: string }[]
   }
-  await fulfillInboundViaBoxScans(
-    page.request,
-    auth,
-    inboundId,
-    primInBody.boxes,
-    barcode,
-    [5],
-  )
+  await fulfillInboundViaBoxScans(page.request, auth, inboundId, primInBody.boxes, barcode, [5])
   await page.request.post(`${baseIn}/${inboundId}/verify`, { headers: auth })
   await page.request.post(`${baseIn}/${inboundId}/post`, { headers: auth })
-
-  const inboundSort = await page.request.post(baseIn, {
-    headers: auth,
-    data: JSON.stringify({ warehouse_id: whId }),
-  })
-  const sortInboundId = String(((await inboundSort.json()) as { id: string }).id)
-  await page.request.post(`${baseIn}/${sortInboundId}/lines`, {
-    headers: auth,
-    data: JSON.stringify({ product_id: productId, expected_qty: 5 }),
-  })
-  await page.request.post(`${baseIn}/${sortInboundId}/submit`, { headers: auth })
-  const primSort = await page.request.post(`${baseIn}/${sortInboundId}/primary-accept`, {
-    headers: auth,
-    data: { actual_box_count: 1 },
-  })
-  const primSortBody = (await primSort.json()) as {
-    boxes: { id: string; internal_barcode: string }[];
-  }
-  await fulfillInboundViaBoxScans(
-    page.request,
-    auth,
-    sortInboundId,
-    primSortBody.boxes,
-    barcode,
-    [5],
-  )
-  await page.request.post(`${baseIn}/${sortInboundId}/verify`, { headers: auth })
 
   const whs = await page.request.get(`${e2eApi}/operations/wb-mp-warehouses`, { headers: auth })
   const wbWid = Number(((await whs.json()) as { wb_warehouse_id: number }[])[0].wb_warehouse_id)
@@ -163,71 +128,36 @@ test('address storage off hides cell UI on marketplace unload', async ({ page })
   const mid = String(((await mu.json()) as { id: string }).id)
   await page.request.post(`${e2eApi}/operations/marketplace-unload-requests/${mid}/lines`, {
     headers: auth,
-    data: JSON.stringify({ product_id: productId, quantity: 1 }),
+    data: JSON.stringify({ product_id: productId, quantity: 2 }),
   })
-  const confirmRes = await page.request.post(
-    `${e2eApi}/operations/marketplace-unload-requests/${mid}/confirm`,
-    {
-      headers: auth,
-      data: JSON.stringify({ planned_shipment_date: '2026-06-01' }),
-    },
-  )
-  expect(confirmRes.ok()).toBeTruthy()
+  await page.request.post(`${e2eApi}/operations/marketplace-unload-requests/${mid}/confirm`, {
+    headers: auth,
+    data: JSON.stringify({ planned_shipment_date: '2026-06-01' }),
+  })
 
-  const pkgRes = await page.request.get(
-    `${e2eApi}/operations/packaging-tasks/by-unload/${mid}`,
-    { headers: auth },
+  const blockedBox = await page.request.post(
+    `${e2eApi}/operations/marketplace-unload-requests/${mid}/boxes`,
+    { headers: auth, data: JSON.stringify({ box_preset: '60_40_40' }) },
   )
-  expect(pkgRes.ok()).toBeTruthy()
-  const pkgBody = (await pkgRes.json()) as {
-    id: string
-    lines: { id: string; qty_need_pack: number }[]
-  }
-  const pkgLine = pkgBody.lines[0]
-  if (pkgLine && pkgLine.qty_need_pack > 0) {
-    await page.request.post(
-      `${e2eApi}/operations/packaging-tasks/${pkgBody.id}/lines/${pkgLine.id}/pack`,
-      {
-        headers: auth,
-        data: JSON.stringify({ quantity: pkgLine.qty_need_pack }),
-      },
-    )
-  }
-  await page.request.post(
-    `${e2eApi}/operations/packaging-tasks/${pkgBody.id}/complete`,
-    { headers: auth, data: JSON.stringify({ acknowledge_all_packed: false }) },
-  )
+  expect(blockedBox.status()).toBe(422)
+  expect(((await blockedBox.json()) as { detail: string }).detail).toBe('packaging_not_done')
 
   await page.reload()
   await page.getByTestId('nav-ff-mp-shipments').click()
-  await expect(page.getByTestId('ff-mp-shipments-page')).toBeVisible()
   await Promise.all([
     waitForGetOk(page, `/api/operations/marketplace-unload-requests/${mid}`),
     waitForGetOk(page, '/api/operations/marketplace-unload-requests/'),
     page.locator('[data-doc-kind="marketplace_unload"]').first().click(),
   ])
+
   await expect(page.getByTestId('ff-supplies-doc-dialog')).toBeVisible()
-  await expect(page.getByTestId('ff-mp-boxes')).toBeVisible()
-  await expect(page.getByTestId('ff-mp-active-location')).toHaveCount(0)
-  await expect(page.getByTestId('ff-mp-start-picking')).toHaveCount(0)
-  await expect(page.getByLabel('Штрихкод товара / короба')).toBeVisible()
+  // REV-FIX-010: explicit alert on «Короба» tab when packaging gate active.
+  await expect(page.getByTestId('ff-mp-packaging-gate-alert')).toBeVisible()
+  await expect(page.getByTestId('ff-mp-packaging-progress')).toBeVisible()
+  await expect(page.getByTestId('ff-mp-packaging-continue')).toBeVisible()
+  await expect(page.getByTestId('ff-mp-box-batch-create')).toBeDisabled()
 
-  await page.getByTestId('ff-supplies-doc-close').click()
-
-  await page.getByTestId('nav-ff-settings').click()
-  const checkbox = page.getByRole('checkbox', { name: /Адресное хранение включено/i })
-  const patchOn = waitForPatchOk(page, '/api/tenant/settings')
-  const meOn = waitForGetOk(page, '/api/auth/me')
-  await checkbox.check()
-  await patchOn
-  await meOn
-
-  await page.getByTestId('nav-ff-mp-shipments').click()
-  await Promise.all([
-    waitForGetOk(page, '/api/operations/marketplace-unload-requests/'),
-    page.locator('[data-doc-kind="marketplace_unload"]').first().click(),
-  ])
-  // TC-NEW-MP-005 — TASK-005: legacy «Начать подбор» удалён; сборка только через короба.
-  await expect(page.getByTestId('ff-mp-start-picking')).toHaveCount(0)
-  await expect(page.getByTestId('ff-mp-picking-dialog')).toHaveCount(0)
+  await page.getByTestId('ff-mp-tab-final').click()
+  await expect(page.getByTestId('ff-mp-tab-final-panel')).toBeVisible()
+  await expect(page.getByTestId('ff-mp-ship')).toBeDisabled()
 })

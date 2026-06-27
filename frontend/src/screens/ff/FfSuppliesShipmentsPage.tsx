@@ -1,6 +1,6 @@
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState, type MouseEvent } from 'react'
 import { useSearchParams } from 'react-router-dom'
-import { DeleteOutlineOutlined } from '@mui/icons-material'
+import { DeleteOutlineOutlined, MoreVertOutlined } from '@mui/icons-material'
 import {
   Alert,
   Box,
@@ -13,18 +13,22 @@ import {
   FormControl,
   IconButton,
   InputLabel,
+  Menu,
   MenuItem,
   Paper,
   Select,
   Stack,
+  Tab,
   Table,
   TableBody,
   TableCell,
   TableHead,
   TableRow,
+  Tabs,
   TextField,
   Tooltip,
   Typography,
+  Snackbar,
 } from '@mui/material'
 import { FfProductLineCells, FfProductTableHeadCells } from '../../components/FfProductLineCells'
 import { WbProductPickerDialog, type WbProductPickerCatalogRow } from '../../components/WbProductPickerDialog'
@@ -36,9 +40,15 @@ import { resolveProductIdByBarcode } from '../../utils/resolveProductByBarcode'
 import { readApiErrorMessage } from '../../utils/readApiErrorMessage'
 import { PageHeader } from '../../ui/PageHeader'
 import type { FfInboundSummary, FfOutboundSummary } from './FfDashboard'
-import { FfPackagingTaskDialog } from './FfPackagingPage'
+import {
+  FfPackagingTaskPanel,
+  type PackagingTask,
+} from './FfPackagingPage'
+import { FfMarketplaceUnloadBoxAddDialog } from './FfMarketplaceUnloadBoxAddDialog'
 import { formatDateTimeLocal } from '../../utils/formatDateTimeLocal'
 import { printMarketplaceUnloadWaybill } from '../../utils/printShipmentWaybill'
+import { printBarcodeLabel } from '../../utils/printBarcodeLabel'
+import { renderBarcodeDataUrl } from '../../utils/renderBarcodeDataUrl'
 
 export type FfMarketplaceUnloadSummary = {
   id: string
@@ -101,23 +111,6 @@ type MarketplaceUnloadPickAllocation = {
   quantity: number
 }
 
-type MarketplaceUnloadPickOptionLocation = {
-  storage_location_id: string
-  location_code: string
-  quantity: number
-  reserved: number
-  available: number
-}
-
-type MarketplaceUnloadPickOptionProduct = {
-  product_id: string
-  sku_code: string
-  product_name: string
-  planned_qty: number
-  picked_qty: number
-  locations: MarketplaceUnloadPickOptionLocation[]
-}
-
 type LinkedPackagingTask = {
   task_id: string
   status: string
@@ -153,6 +146,8 @@ type DiscrepancyActDetail = {
 
 type DocKind = 'inbound' | 'outbound' | 'marketplace_unload' | 'discrepancy_act'
 
+type MpUnloadTab = 'products' | 'packaging' | 'boxes' | 'final'
+
 /** Быстрые фильтры без операционной «Отгрузки» — только «Отгрузки на МП». */
 type QuickFilterKind = 'all' | 'inbound' | 'marketplace_unload' | 'discrepancy_act'
 
@@ -174,6 +169,7 @@ function statusRu(status: string): string {
   if (status === 'confirmed') return 'Утверждено'
   if (status === 'shipped') return 'Отгружено'
   if (status === 'submitted') return 'Запланировано'
+  if (status === 'cancelled') return 'Отменено'
   if (status === 'primary_accepted') return 'Принято на складе'
   if (status === 'verifying') return 'Проверка'
   if (status === 'verified') return 'Проверено'
@@ -249,7 +245,9 @@ export function FfSuppliesShipmentsPage({
 
   const [docModal, setDocModal] = useState<null | 'marketplace_unload' | 'discrepancy_act'>(null)
   const [docModalId, setDocModalId] = useState<string | null>(null)
-  const [packagingDialogOpen, setPackagingDialogOpen] = useState(false)
+  const [mpUnloadTab, setMpUnloadTab] = useState<MpUnloadTab>('products')
+  const [packagingTask, setPackagingTask] = useState<PackagingTask | null>(null)
+  const [packagingTaskError, setPackagingTaskError] = useState<string | null>(null)
   const [modalBusy, setModalBusy] = useState(false)
   const [modalError, setModalError] = useState<string | null>(null)
   const [unloadDetail, setUnloadDetail] = useState<MarketplaceUnloadDetail | null>(null)
@@ -257,6 +255,7 @@ export function FfSuppliesShipmentsPage({
   const [lineProductId, setLineProductId] = useState<string>('')
   const [lineQty, setLineQty] = useState<string>('1')
   const [boxPreset, setBoxPreset] = useState<'60_40_40' | '30_20_30'>('60_40_40')
+  const [boxBatchCount, setBoxBatchCount] = useState<string>('1')
   const [scanBarcode, setScanBarcode] = useState<string>('')
   const [collectQty, setCollectQty] = useState<string>('1')
   const [inboundRefLines, setInboundRefLines] = useState<
@@ -271,22 +270,24 @@ export function FfSuppliesShipmentsPage({
     docModal === 'marketplace_unload' ? warehouseAvailableProductPicklist : productPicklist
   const [wbMpWarehouses, setWbMpWarehouses] = useState<{ wb_warehouse_id: number; name: string }[]>([])
   const [wbMpWarehousesBusy, setWbMpWarehousesBusy] = useState(false)
-  const [pickDialogOpen, setPickDialogOpen] = useState(false)
   const [mpPickerOpen, setMpPickerOpen] = useState(false)
   const [mpLineBarcodeScan, setMpLineBarcodeScan] = useState('')
+  const [mpShipConfirmOpen, setMpShipConfirmOpen] = useState(false)
+  const [mpCancelConfirmOpen, setMpCancelConfirmOpen] = useState(false)
   const mpCatalogSellerId = unloadDetail?.seller_id ?? null
   const { catalog, catalogById, reload: reloadWbCatalog } = useWbProductCatalog(
     token,
     docModal === 'marketplace_unload',
     mpCatalogSellerId,
   )
-  const [pickOptions, setPickOptions] = useState<MarketplaceUnloadPickOptionProduct[]>([])
   const [confirmDate, setConfirmDate] = useState<string>('')
-  const [pickQtyByProductLoc, setPickQtyByProductLoc] = useState<
-    Record<string, Record<string, string>>
-  >({})
   const [activePickLocationId, setActivePickLocationId] = useState<string | null>(null)
   const [activePickLocationCode, setActivePickLocationCode] = useState<string | null>(null)
+  const [boxMenuAnchor, setBoxMenuAnchor] = useState<null | HTMLElement>(null)
+  const [boxMenuTargetId, setBoxMenuTargetId] = useState<string | null>(null)
+  const [boxAddDialogBoxId, setBoxAddDialogBoxId] = useState<string | null>(null)
+  const [boxAddSuccessMsg, setBoxAddSuccessMsg] = useState<string | null>(null)
+  const mpTabInitForRef = useRef<string | null>(null)
 
   const authHeaders = useMemo(
     () => (token ? { Authorization: `Bearer ${token}` } : null),
@@ -609,6 +610,10 @@ export function FfSuppliesShipmentsPage({
     setCollectQty('1')
     setMpPickerOpen(false)
     setMpLineBarcodeScan('')
+    setMpUnloadTab('products')
+    setPackagingTask(null)
+    setPackagingTaskError(null)
+    mpTabInitForRef.current = null
   }
 
   const setWbWarehouseForUnload = async (wbMpWarehouseId: number) => {
@@ -703,17 +708,25 @@ export function FfSuppliesShipmentsPage({
     if (!token || !authHeaders || docModal !== 'marketplace_unload' || !docModalId) {
       return
     }
+    const count = Number(boxBatchCount)
+    if (!Number.isInteger(count) || count < 1 || count > 50) {
+      setModalError('Укажите количество коробов от 1 до 50.')
+      return
+    }
     setModalBusy(true)
     setModalError(null)
     try {
-      const res = await fetch(apiUrl(`/operations/marketplace-unload-requests/${docModalId}/boxes`), {
-        method: 'POST',
-        headers: {
-          ...authHeaders,
-          'Content-Type': 'application/json',
+      const res = await fetch(
+        apiUrl(`/operations/marketplace-unload-requests/${docModalId}/boxes/batch`),
+        {
+          method: 'POST',
+          headers: {
+            ...authHeaders,
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({ count, box_preset: boxPreset }),
         },
-        body: JSON.stringify({ box_preset: boxPreset }),
-      })
+      )
       if (!res.ok) {
         setModalError(await readApiErrorMessage(res))
         return
@@ -722,7 +735,9 @@ export function FfSuppliesShipmentsPage({
       await loadDocDetail()
       await onRefreshFfSupplyExtras()
     } catch (e) {
-      setModalError(e instanceof Error ? e.message : 'Не удалось открыть короб.')
+      setModalError(
+        e instanceof Error ? e.message : 'Не удалось создать короб(а).',
+      )
     } finally {
       setModalBusy(false)
     }
@@ -745,7 +760,31 @@ export function FfSuppliesShipmentsPage({
     setModalBusy(true)
     setModalError(null)
     try {
-      if (addressStorageEnabled) {
+      if (addressStorageEnabled && openBoxId) {
+        const locTry = await fetch(
+          apiUrl(
+            `/operations/marketplace-unload-requests/${docModalId}/boxes/${openBoxId}/scan`,
+          ),
+          {
+            method: 'POST',
+            headers: { ...authHeaders, 'Content-Type': 'application/json' },
+            body: JSON.stringify({ barcode: raw }),
+          },
+        )
+        if (locTry.ok) {
+          const j = (await locTry.json()) as {
+            kind: string
+            storage_location_id?: string | null
+            location_code?: string | null
+          }
+          if (j.kind === 'location' && j.storage_location_id) {
+            setActivePickLocationId(j.storage_location_id)
+            setActivePickLocationCode(j.location_code ?? j.storage_location_id)
+            setScanBarcode('')
+            return
+          }
+        }
+      } else if (addressStorageEnabled && openBoxId === null) {
         const locRes = await fetch(
           apiUrl(`/operations/marketplace-unload-requests/${docModalId}/pick/scan`),
           {
@@ -869,90 +908,184 @@ export function FfSuppliesShipmentsPage({
     }
   }
 
+  const boxById = useMemo(() => {
+    const map = new Map<string, MarketplaceUnloadBox>()
+    for (const b of unloadDetail?.boxes ?? []) {
+      map.set(b.id, b)
+    }
+    return map
+  }, [unloadDetail?.boxes])
 
-  const openPickDialog = async () => {
-    if (!token || !authHeaders || !docModalId) {
+  const openBoxMenu = (event: MouseEvent<HTMLElement>, boxId: string) => {
+    event.stopPropagation()
+    setBoxMenuAnchor(event.currentTarget)
+    setBoxMenuTargetId(boxId)
+  }
+
+  const closeBoxMenu = () => {
+    setBoxMenuAnchor(null)
+    setBoxMenuTargetId(null)
+  }
+
+  const printBoxBarcode = (box: MarketplaceUnloadBox) => {
+    const barcode = box.internal_barcode?.trim()
+    if (!barcode) {
+      setModalError('У короба нет штрихкода.')
       return
     }
-    if (!openMpBox) {
-      setModalError('Сначала откройте короб — ручной подбор идёт в текущую тару.')
+    printBarcodeLabel({
+      title: 'Короб отгрузки',
+      barcode,
+      barcodeDataUrl: renderBarcodeDataUrl(barcode),
+    })
+  }
+
+  const printAllMpBoxBarcodes = () => {
+    const boxes = unloadDetail?.boxes ?? []
+    const withBarcode = boxes.filter((b) => b.internal_barcode?.trim())
+    if (withBarcode.length === 0) {
+      setModalError('Нет коробов с штрихкодом для печати.')
       return
     }
+    for (const box of withBarcode) {
+      printBoxBarcode(box)
+    }
+  }
+
+  const copyBox = async (boxId: string) => {
+    if (!token || !authHeaders || docModal !== 'marketplace_unload' || !docModalId) {
+      return
+    }
+    closeBoxMenu()
     setModalBusy(true)
     setModalError(null)
     try {
       const res = await fetch(
-        apiUrl(`/operations/marketplace-unload-requests/${docModalId}/pick-options`),
-        { headers: authHeaders },
+        apiUrl(`/operations/marketplace-unload-requests/${docModalId}/boxes/${boxId}/copy`),
+        { method: 'POST', headers: authHeaders },
       )
       if (!res.ok) {
         setModalError(await readApiErrorMessage(res))
         return
       }
-      const opts = (await res.json()) as MarketplaceUnloadPickOptionProduct[]
-      setPickOptions(opts)
-      setPickQtyByProductLoc({})
-      setPickDialogOpen(true)
+      await loadDocDetail()
+      await onRefreshFfSupplyExtras()
     } catch (e) {
-      setModalError(e instanceof Error ? e.message : 'Не удалось загрузить подбор.')
+      setModalError(e instanceof Error ? e.message : 'Не удалось скопировать короб.')
     } finally {
       setModalBusy(false)
     }
   }
 
-  const savePickAllocations = async () => {
-    if (!token || !authHeaders || !docModalId) {
+  const deleteBox = async (boxId: string) => {
+    if (!token || !authHeaders || docModal !== 'marketplace_unload' || !docModalId) {
       return
     }
-    const allocations: { product_id: string; storage_location_id: string; quantity: number }[] = []
-    for (const [productId, byLoc] of Object.entries(pickQtyByProductLoc)) {
-      for (const [locId, raw] of Object.entries(byLoc)) {
-        const q = Number(raw)
-        if (Number.isInteger(q) && q > 0) {
-          allocations.push({
-            product_id: productId,
-            storage_location_id: locId,
-            quantity: q,
-          })
-        }
+    closeBoxMenu()
+    setModalBusy(true)
+    setModalError(null)
+    try {
+      const res = await fetch(
+        apiUrl(`/operations/marketplace-unload-requests/${docModalId}/boxes/${boxId}`),
+        { method: 'DELETE', headers: authHeaders },
+      )
+      if (!res.ok) {
+        setModalError(await readApiErrorMessage(res))
+        return
       }
+      await loadDocDetail()
+      await onRefreshFfSupplyExtras()
+    } catch (e) {
+      setModalError(e instanceof Error ? e.message : 'Не удалось удалить короб.')
+    } finally {
+      setModalBusy(false)
+    }
+  }
+
+  const removeBoxLine = async (boxId: string, lineId: string) => {
+    if (!token || !authHeaders || docModal !== 'marketplace_unload' || !docModalId) {
+      return
     }
     setModalBusy(true)
     setModalError(null)
     try {
       const res = await fetch(
-        apiUrl(`/operations/marketplace-unload-requests/${docModalId}/pick-allocations`),
+        apiUrl(
+          `/operations/marketplace-unload-requests/${docModalId}/boxes/${boxId}/lines/${lineId}/remove`,
+        ),
         {
-          method: 'PUT',
+          method: 'POST',
           headers: { ...authHeaders, 'Content-Type': 'application/json' },
-          body: JSON.stringify({ allocations }),
+          body: JSON.stringify({}),
         },
       )
       if (!res.ok) {
         setModalError(await readApiErrorMessage(res))
         return
       }
-      setPickDialogOpen(false)
       await loadDocDetail()
       await onRefreshFfSupplyExtras()
     } catch (e) {
-      setModalError(e instanceof Error ? e.message : 'Не удалось сохранить подбор.')
+      setModalError(e instanceof Error ? e.message : 'Не удалось убрать товар из короба.')
     } finally {
       setModalBusy(false)
     }
   }
 
-  const shipMpUnload = async () => {
+  const renderBoxActions = (box: MarketplaceUnloadBox) => {
+    const totalQty = box.lines.reduce((sum, ln) => sum + ln.quantity, 0)
+    const boxClosed = Boolean(box.closed_at)
+    return (
+      <Stack direction="row" spacing={0.5} sx={{ alignItems: 'center', flexWrap: 'wrap' }}>
+        <Typography variant="body2" color="text.secondary" sx={{ flex: 1 }}>
+          {box.internal_barcode ?? box.id.slice(0, 8)} · {box.box_preset} ·{' '}
+          {boxClosed ? box.closed_at!.slice(0, 19).replace('T', ' ') : 'открыт'}
+        </Typography>
+        <Button
+          size="small"
+          variant="outlined"
+          disabled={modalBusy || mpPackagingGateActive || boxClosed}
+          onClick={() => setBoxAddDialogBoxId(box.id)}
+          data-testid={`ff-mp-box-add-products-${box.id}`}
+        >
+          Добавить товары
+        </Button>
+        <IconButton
+          size="small"
+          aria-label="Действия с коробом"
+          data-testid={`ff-mp-box-menu-${box.id}`}
+          disabled={modalBusy}
+          onClick={(e) => openBoxMenu(e, box.id)}
+        >
+          <MoreVertOutlined fontSize="small" />
+        </IconButton>
+        <IconButton
+          size="small"
+          aria-label="Печать ШК короба"
+          data-testid={`ff-mp-box-print-${box.id}`}
+          disabled={modalBusy || !box.internal_barcode}
+          onClick={() => printBoxBarcode(box)}
+        >
+          <Typography variant="caption" sx={{ fontWeight: 700 }}>
+            ШК
+          </Typography>
+        </IconButton>
+        <IconButton
+          size="small"
+          aria-label="Удалить пустой короб"
+          data-testid={`ff-mp-box-delete-${box.id}`}
+          disabled={modalBusy || totalQty > 0}
+          onClick={() => void deleteBox(box.id)}
+        >
+          <DeleteOutlineOutlined fontSize="small" />
+        </IconButton>
+      </Stack>
+    )
+  }
+
+
+  const shipMpUnload = async (acknowledgeDiscrepancy = false) => {
     if (!token || !authHeaders || !docModalId) {
-      return
-    }
-    const hasDiscrepancy = unloadDetail?.lines.some((ln) => ln.has_discrepancy) ?? false
-    if (
-      hasDiscrepancy &&
-      !window.confirm(
-        'Фактический набор не совпадает с планом по одной или нескольким строкам. Отгрузить с расхождением?',
-      )
-    ) {
       return
     }
     setModalBusy(true)
@@ -963,22 +1096,67 @@ export function FfSuppliesShipmentsPage({
         {
           method: 'POST',
           headers: { ...authHeaders, 'Content-Type': 'application/json' },
-          body: JSON.stringify({ acknowledge_discrepancy: hasDiscrepancy }),
+          body: JSON.stringify({ acknowledge_discrepancy: acknowledgeDiscrepancy }),
         },
       )
       if (!res.ok) {
         const msg = await readApiErrorMessage(res)
-        if (msg.includes('discrepancy_requires_ack')) {
-          setModalError('Подтвердите отгрузку с расхождением (факт ≠ план).')
+        if (msg.includes('distribution_incomplete')) {
+          setModalError(
+            acknowledgeDiscrepancy
+              ? 'Не удалось отгрузить: нет товаров в коробах или нужно подтверждение недопоставки.'
+              : 'Распределено меньше плана. Подтвердите недопоставку или заполните короба.',
+          )
         } else {
           setModalError(msg)
         }
         return
       }
+      setMpShipConfirmOpen(false)
       await loadDocDetail()
       await onRefreshFfSupplyExtras()
     } catch (e) {
       setModalError(e instanceof Error ? e.message : 'Не удалось отгрузить.')
+    } finally {
+      setModalBusy(false)
+    }
+  }
+
+  const requestShipMpUnload = () => {
+    if (!token || !authHeaders || !docModalId) {
+      return
+    }
+    if ((mpCollectSummary?.distributed ?? 0) < 1) {
+      setModalError('Добавьте товары в короба перед отгрузкой.')
+      return
+    }
+    if ((mpCollectSummary?.remaining ?? 0) > 0) {
+      setMpShipConfirmOpen(true)
+      return
+    }
+    void shipMpUnload(false)
+  }
+
+  const cancelMpUnload = async () => {
+    if (!token || !authHeaders || !docModalId) {
+      return
+    }
+    setModalBusy(true)
+    setModalError(null)
+    try {
+      const res = await fetch(
+        apiUrl(`/operations/marketplace-unload-requests/${docModalId}/cancel`),
+        { method: 'POST', headers: authHeaders },
+      )
+      if (!res.ok) {
+        setModalError(await readApiErrorMessage(res))
+        return
+      }
+      setMpCancelConfirmOpen(false)
+      await loadDocDetail()
+      await onRefreshFfSupplyExtras()
+    } catch (e) {
+      setModalError(e instanceof Error ? e.message : 'Не удалось отменить отгрузку.')
     } finally {
       setModalBusy(false)
     }
@@ -1215,31 +1393,86 @@ export function FfSuppliesShipmentsPage({
   const mpSubmitted =
     docModal === 'marketplace_unload' && unloadDetail?.status === 'submitted'
   const mpConfirmed = docModal === 'marketplace_unload' && unloadDetail?.status === 'confirmed'
+  const mpCancellable = mpSubmitted || mpConfirmed
   const mpShipped = docModal === 'marketplace_unload' && unloadDetail?.status === 'shipped'
+  const mpPackagingDone =
+    !unloadDetail?.linked_packaging_task ||
+    unloadDetail.linked_packaging_task.status === 'done'
+  const mpPackagingGateActive =
+    mpConfirmed && Boolean(unloadDetail?.linked_packaging_task) && !mpPackagingDone
+
+  const loadPackagingTask = useCallback(async () => {
+    if (!token || !authHeaders || !docModalId || docModal !== 'marketplace_unload') {
+      setPackagingTask(null)
+      setPackagingTaskError(null)
+      return
+    }
+    if (!unloadDetail?.linked_packaging_task) {
+      setPackagingTask(null)
+      setPackagingTaskError(null)
+      return
+    }
+    try {
+      const res = await fetch(apiUrl(`/operations/packaging-tasks/by-unload/${docModalId}`), {
+        headers: authHeaders,
+      })
+      if (!res.ok) {
+        setPackagingTaskError(await readApiErrorMessage(res))
+        setPackagingTask(null)
+        return
+      }
+      setPackagingTask((await res.json()) as PackagingTask)
+      setPackagingTaskError(null)
+    } catch (e) {
+      setPackagingTaskError(e instanceof Error ? e.message : 'Не удалось загрузить упаковку.')
+      setPackagingTask(null)
+    }
+  }, [token, authHeaders, docModalId, docModal, unloadDetail?.linked_packaging_task])
+
+  useEffect(() => {
+    void loadPackagingTask()
+  }, [loadPackagingTask])
+
+  useEffect(() => {
+    if (!unloadDetail || docModal !== 'marketplace_unload' || !docModalId) {
+      return
+    }
+    if (mpTabInitForRef.current === docModalId) {
+      return
+    }
+    mpTabInitForRef.current = docModalId
+    if (unloadDetail.status === 'shipped') {
+      setMpUnloadTab('final')
+    } else if (unloadDetail.status === 'confirmed') {
+      setMpUnloadTab('boxes')
+    } else {
+      setMpUnloadTab('products')
+    }
+  }, [unloadDetail, docModalId, docModal])
+
   const mpDateEditable =
     docModal === 'marketplace_unload' &&
     (unloadDetail?.status === 'draft' ||
       unloadDetail?.status === 'submitted' ||
       unloadDetail?.status === 'confirmed')
-  const mpPickEditable =
-    addressStorageEnabled &&
-    mpConfirmed &&
-    docModal === 'marketplace_unload' &&
-    unloadDetail?.status !== 'shipped'
-
   const mpCollectSummary = useMemo(() => {
     if (!unloadDetail || docModal !== 'marketplace_unload') {
       return null
     }
     const planned = unloadDetail.lines.reduce((sum, ln) => sum + ln.quantity, 0)
-    const picked = unloadDetail.lines.reduce((sum, ln) => sum + (ln.picked_qty ?? 0), 0)
-    return { planned, picked, remaining: planned - picked }
+    const distributed = unloadDetail.lines.reduce((sum, ln) => sum + (ln.picked_qty ?? 0), 0)
+    const packagingTask = unloadDetail.linked_packaging_task
+    return {
+      planned,
+      distributed,
+      remaining: planned - distributed,
+      packagingLabel: !packagingTask
+        ? null
+        : packagingTask.status === 'done' || packagingTask.is_complete
+          ? 'выполнена'
+          : 'в работе',
+    }
   }, [unloadDetail, docModal])
-
-  const openMpBox = useMemo(
-    () => unloadDetail?.boxes.find((b) => !b.closed_at) ?? null,
-    [unloadDetail?.boxes],
-  )
 
   const draftDoc =
     mpDraft ||
@@ -1374,7 +1607,7 @@ export function FfSuppliesShipmentsPage({
         title={isMpShipmentsPage ? 'Отгрузки на МП' : 'Поставки'}
         description={
           isMpShipmentsPage
-            ? 'Документы отгрузки фулфилмента на маркетплейс: состав, короба, подбор по ячейкам и проведение отгрузки.'
+            ? 'Документы отгрузки на маркетплейс: план товаров, упаковка, короба и финальная отгрузка.'
             : 'Поставки (селлер → ФФ), операционные отгрузки и акты расхождения. Отгрузки на маркетплейс — в разделе «Отгрузки на МП» слева.'
         }
       />
@@ -1628,34 +1861,16 @@ export function FfSuppliesShipmentsPage({
                 : ''}
             </Typography>
           ) : null}
-          {docModal === 'marketplace_unload' && unloadDetail && mpDateEditable ? (
-            <Box sx={{ mb: 2, maxWidth: 280 }}>
-              <WmsDateField
-                label="Дата отгрузки на МП"
-                value={confirmDate || unloadDetail.planned_shipment_date}
-                onChange={(iso) => void patchMpPlannedDate(iso)}
-                disabled={modalBusy}
-                required
-                testId="ff-mp-planned-date"
-              />
-            </Box>
-          ) : null}
-          {docModal === 'marketplace_unload' && unloadDetail && mpShipped ? (
-            <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
-              Дата отгрузки: {unloadDetail.planned_shipment_date ?? '—'}
-            </Typography>
-          ) : null}
           {unloadDetail?.ff_modified ? (
             <Alert severity="warning" sx={{ mb: 1 }} data-testid="ff-mp-ff-modified-notice">
               Состав изменён на складе после планирования селлером.
             </Alert>
           ) : null}
           {docModal === 'marketplace_unload' &&
-          unloadDetail?.linked_packaging_task &&
-          mpConfirmed ? (
+          unloadDetail?.linked_packaging_task ? (
             <Alert
               severity={
-                unloadDetail.linked_packaging_task.is_complete ? 'success' : 'info'
+                unloadDetail.linked_packaging_task.is_complete ? 'success' : 'warning'
               }
               sx={{ mb: 2 }}
               data-testid="ff-mp-packaging-progress"
@@ -1672,12 +1887,15 @@ export function FfSuppliesShipmentsPage({
                   {unloadDetail.linked_packaging_task.is_complete
                     ? ' · выполнено'
                     : ' · в работе'}
+                  {!unloadDetail.linked_packaging_task.is_complete
+                    ? ' · сначала завершите упаковку — сборка в короба недоступна'
+                    : ''}
                 </Typography>
                 {!unloadDetail.linked_packaging_task.is_complete ? (
                   <Button
                     size="small"
                     variant="outlined"
-                    onClick={() => setPackagingDialogOpen(true)}
+                    onClick={() => setMpUnloadTab('packaging')}
                     data-testid="ff-mp-packaging-continue"
                   >
                     Продолжить упаковку
@@ -1686,230 +1904,284 @@ export function FfSuppliesShipmentsPage({
               </Stack>
             </Alert>
           ) : null}
-          {docModal === 'marketplace_unload' && unloadDetail && mpLineDraft ? (
-            <Stack spacing={2} sx={{ mb: 2, mt: 1 }}>
-              <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1.25}>
-                <FormControl
-                  size="small"
-                  sx={{ minWidth: 280, width: { xs: '100%', sm: 'auto' } }}
-                  disabled={modalBusy || wbMpWarehousesBusy}
-                >
-                  <InputLabel id="ff-mp-wb-warehouse">Склад WB (маркетплейс)</InputLabel>
-                  <Select
-                    labelId="ff-mp-wb-warehouse"
-                    label="Склад WB (маркетплейс)"
-                    value={unloadDetail.wb_mp_warehouse_id ?? ''}
-                    onChange={(e) => {
-                      const v = Number(e.target.value)
-                      if (Number.isInteger(v) && v > 0) {
-                        void setWbWarehouseForUnload(v)
-                      }
-                    }}
-                    data-testid="ff-mp-wb-warehouse-select"
-                  >
-                    <MenuItem value="">
-                      <em>Не выбран</em>
-                    </MenuItem>
-                    {wbMpWarehouses.map((w) => (
-                      <MenuItem key={w.wb_warehouse_id} value={w.wb_warehouse_id}>
-                        {w.name} ({w.wb_warehouse_id})
-                      </MenuItem>
-                    ))}
-                  </Select>
-                </FormControl>
-                {unloadDetail.wb_mp_warehouse_id == null ? (
-                  <Typography
-                    variant="caption"
-                    color="text.secondary"
-                    sx={{ alignSelf: { xs: 'flex-start', sm: 'center' }, lineHeight: 1.25 }}
-                  >
-                    Можно создать черновик без склада WB. Для «Утвердить» нужно выбрать склад, когда он
-                    появится.
-                  </Typography>
-                ) : null}
-              </Stack>
-              {mpDraft ? (
-                <Paper variant="outlined" sx={{ p: 1.5 }} data-testid="ff-mp-add-products-panel">
-                  <Typography variant="subtitle2" sx={{ mb: 1.25 }}>
-                    Добавление товаров
-                  </Typography>
-                  <Stack
-                    direction={{ xs: 'column', sm: 'row' }}
-                    spacing={1}
-                    sx={{ flexWrap: 'wrap' }}
-                  >
-                    <Stack
-                      direction={{ xs: 'column', sm: 'row' }}
-                      spacing={1}
-                      sx={{ width: { xs: '100%', sm: 'auto' }, flexGrow: 1 }}
-                      data-testid="ff-mp-line-barcode-row"
-                    >
-                      <TextField
-                        size="small"
-                        label="Штрихкод / артикул"
-                        value={mpLineBarcodeScan}
-                        disabled={modalBusy}
-                        onChange={(e) => setMpLineBarcodeScan(e.target.value)}
-                        onKeyDown={(e) => {
-                          if (e.key === 'Enter') {
-                            e.preventDefault()
-                            void addMpLineByBarcode()
-                          }
-                        }}
-                        slotProps={{ htmlInput: { 'data-testid': 'ff-mp-line-barcode-scan' } }}
-                        sx={{ minWidth: 220, flexGrow: 1 }}
-                      />
-                      <Button
-                        variant="outlined"
-                        disabled={modalBusy || !mpLineBarcodeScan.trim()}
-                        onClick={() => void addMpLineByBarcode()}
-                        data-testid="ff-mp-line-barcode-add"
+          {docModal === 'marketplace_unload' && unloadDetail ? (
+            <Box sx={{ mb: 2 }}>
+              <Tabs
+                value={mpUnloadTab}
+                onChange={(_e, value: MpUnloadTab) => setMpUnloadTab(value)}
+                variant="scrollable"
+                scrollButtons="auto"
+                sx={{ borderBottom: 1, borderColor: 'divider', mb: 2 }}
+              >
+                <Tab label="Товары" value="products" data-testid="ff-mp-tab-products" />
+                <Tab
+                  label="Упаковка"
+                  value="packaging"
+                  disabled={!unloadDetail.linked_packaging_task}
+                  data-testid="ff-mp-tab-packaging"
+                />
+                <Tab
+                  label="Короба"
+                  value="boxes"
+                  disabled={!mpConfirmed}
+                  data-testid="ff-mp-tab-boxes"
+                />
+                <Tab label="Финальная отгрузка" value="final" data-testid="ff-mp-tab-final" />
+              </Tabs>
+              {mpUnloadTab === 'products' ? (
+                <Stack spacing={2}>
+                  {unloadDetail.seller_name ? (
+                    <Typography variant="body2" color="text.secondary">
+                      Селлер: <strong>{unloadDetail.seller_name}</strong>
+                    </Typography>
+                  ) : null}
+                  {/* REV-FIX-014 MVP: plan total on draft «Товары»; full collect summary stays on «Короба» after confirm. */}
+                  {mpCollectSummary && mpDraft ? (
+                    <Typography variant="body2" data-testid="ff-mp-plan-total">
+                      План: <strong>{mpCollectSummary.planned}</strong> шт
+                    </Typography>
+                  ) : null}
+                  {mpLineDraft && mpDraft ? (
+                    <Paper variant="outlined" sx={{ p: 1.5 }} data-testid="ff-mp-add-products-panel">
+                      <Typography variant="subtitle2" sx={{ mb: 1.25 }}>
+                        Добавление товаров
+                      </Typography>
+                      <Stack
+                        direction={{ xs: 'column', sm: 'row' }}
+                        spacing={1}
+                        sx={{ flexWrap: 'wrap' }}
                       >
-                        Добавить по ШК
-                      </Button>
-                    </Stack>
-                    <Button
-                      variant="contained"
-                      disabled={modalBusy}
-                      onClick={() => void openMpProductPicker()}
-                      data-testid="ff-mp-add-products"
-                    >
-                      Добавить товары
-                    </Button>
-                  </Stack>
-                </Paper>
-              ) : null}
-            </Stack>
-          ) : null}
-          {divergeDetail ? (
-            <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
-              {statusRu(divergeDetail.status)}
-              {divergeDetail.inbound_intake_request_id
-                ? ` · приёмка ${divergeDetail.inbound_intake_request_id.slice(0, 8)}…`
-                : ''}
-            </Typography>
-          ) : null}
-          {docModal === 'marketplace_unload' && mpConfirmed && mpCollectSummary ? (
-            <Paper
-              variant="outlined"
-              sx={{ p: 1.5, mb: 2, bgcolor: 'action.hover' }}
-              data-testid="ff-mp-collect-summary"
-            >
-              <Typography variant="subtitle2" sx={{ mb: 0.5 }}>
-                Сборка отгрузки
-              </Typography>
-              <Typography variant="body2">
-                Нужно: <strong>{mpCollectSummary.planned}</strong>
-                {' · '}
-                Собрано: <strong>{mpCollectSummary.picked}</strong>
-                {' · '}
-                Осталось:{' '}
-                <strong
-                  style={{
-                    color: mpCollectSummary.remaining !== 0 ? '#ed6c02' : undefined,
-                  }}
-                >
-                  {mpCollectSummary.remaining}
-                </strong>
-              </Typography>
-            </Paper>
-          ) : null}
-          <Table size="small" data-testid="ff-supplies-doc-lines" sx={{ tableLayout: 'fixed', width: '100%' }}>
-            <TableHead>
-              <TableRow>
-                <FfProductTableHeadCells />
-                {docModal !== 'marketplace_unload' ? (
-                  <TableCell>Строка приёмки</TableCell>
-                ) : null}
-                <TableCell align="right">План</TableCell>
-                {docModal === 'marketplace_unload' && mpConfirmed ? (
-                  <>
-                    <TableCell align="right">Собрано</TableCell>
-                    <TableCell align="right">Осталось</TableCell>
-                  </>
-                ) : null}
-                {draftDoc ? <TableCell align="right" width={56} /> : null}
-              </TableRow>
-            </TableHead>
-            <TableBody>
-              {(() => {
-                const lines = unloadDetail?.lines ?? divergeDetail?.lines ?? []
-                const mpCols =
-                  docModal === 'marketplace_unload' && mpConfirmed ? 2 : 0
-                const emptySpan =
-                  7 + (docModal === 'marketplace_unload' ? 0 : 1) + mpCols + (draftDoc ? 1 : 0)
-                if (lines.length === 0) {
-                  return (
-                    <TableRow>
-                      <TableCell colSpan={emptySpan}>
-                        <Typography variant="body2" color="text.secondary">
-                          Пока нет строк
-                        </Typography>
-                      </TableCell>
-                    </TableRow>
-                  )
-                }
-                return lines.map((ln) => {
-                  const picked = ln.picked_qty ?? 0
-                  const remaining = ln.quantity - picked
-                  const displayMeta = productDisplayMetaFromCatalog(ln.product_id, ln, catalogById)
-                  return (
-                  <TableRow
-                    key={ln.id}
-                    sx={
-                      ln.has_discrepancy
-                        ? { '& .MuiTableCell-root': { color: 'error.main' } }
-                        : undefined
-                    }
-                    data-testid={
-                      ln.has_discrepancy ? `ff-mp-line-discrepancy-${ln.id}` : undefined
-                    }
-                  >
-                    <FfProductLineCells
-                      meta={displayMeta}
-                      printTestId={`ff-mp-line-print-${ln.id}`}
-                    />
-                    {docModal !== 'marketplace_unload' ? (
-                      <TableCell sx={{ color: 'text.secondary', fontSize: 13 }}>
-                        {ln.inbound_intake_line_id
-                          ? `${ln.inbound_intake_line_id.slice(0, 8)}…`
-                          : '—'}
-                      </TableCell>
-                    ) : null}
-                    <TableCell align="right">{ln.quantity}</TableCell>
-                    {docModal === 'marketplace_unload' && mpConfirmed ? (
-                      <>
-                        <TableCell align="right">{picked}</TableCell>
-                        <TableCell align="right">{remaining}</TableCell>
-                      </>
-                    ) : null}
-                    {draftDoc ? (
-                      <TableCell align="right">
-                        <Tooltip title="Удалить строку">
-                          <IconButton
+                        <Stack
+                          direction={{ xs: 'column', sm: 'row' }}
+                          spacing={1}
+                          sx={{ width: { xs: '100%', sm: 'auto' }, flexGrow: 1 }}
+                          data-testid="ff-mp-line-barcode-row"
+                        >
+                          <TextField
                             size="small"
-                            aria-label="Удалить строку"
-                            data-testid={`ff-supplies-line-delete-${ln.id}`}
+                            label="Штрихкод / артикул"
+                            value={mpLineBarcodeScan}
                             disabled={modalBusy}
-                            onClick={(e) => {
-                              e.stopPropagation()
-                              void deleteDocLine(ln.id)
+                            onChange={(e) => setMpLineBarcodeScan(e.target.value)}
+                            onKeyDown={(e) => {
+                              if (e.key === 'Enter') {
+                                e.preventDefault()
+                                void addMpLineByBarcode()
+                              }
+                            }}
+                            slotProps={{ htmlInput: { 'data-testid': 'ff-mp-line-barcode-scan' } }}
+                            sx={{ minWidth: 220, flexGrow: 1 }}
+                          />
+                          <Button
+                            variant="outlined"
+                            disabled={modalBusy || !mpLineBarcodeScan.trim()}
+                            onClick={() => void addMpLineByBarcode()}
+                            data-testid="ff-mp-line-barcode-add"
+                          >
+                            Добавить по ШК
+                          </Button>
+                        </Stack>
+                        <Button
+                          variant="contained"
+                          disabled={modalBusy}
+                          onClick={() => void openMpProductPicker()}
+                          data-testid="ff-mp-add-products"
+                        >
+                          Добавить товары
+                        </Button>
+                      </Stack>
+                    </Paper>
+                  ) : null}
+                  <Table
+                    size="small"
+                    data-testid="ff-supplies-doc-lines"
+                    sx={{ tableLayout: 'fixed', width: '100%' }}
+                  >
+                    <TableHead>
+                      <TableRow>
+                        <FfProductTableHeadCells />
+                        <TableCell align="right">План</TableCell>
+                        {mpConfirmed ? (
+                          <>
+                            <TableCell align="right">Распределено</TableCell>
+                            <TableCell align="right">Осталось</TableCell>
+                          </>
+                        ) : null}
+                        {draftDoc ? <TableCell align="right" width={56} /> : null}
+                      </TableRow>
+                    </TableHead>
+                    <TableBody>
+                      {(() => {
+                        const lines = unloadDetail.lines
+                        const mpCols = mpConfirmed ? 2 : 0
+                        const emptySpan = 7 + mpCols + (draftDoc ? 1 : 0)
+                        if (lines.length === 0) {
+                          return (
+                            <TableRow>
+                              <TableCell colSpan={emptySpan}>
+                                <Typography variant="body2" color="text.secondary">
+                                  Пока нет строк
+                                </Typography>
+                              </TableCell>
+                            </TableRow>
+                          )
+                        }
+                        return lines.map((ln) => {
+                          const picked = ln.picked_qty ?? 0
+                          const remaining = ln.quantity - picked
+                          const displayMeta = productDisplayMetaFromCatalog(
+                            ln.product_id,
+                            ln,
+                            catalogById,
+                          )
+                          return (
+                            <TableRow
+                              key={ln.id}
+                              sx={
+                                ln.has_discrepancy
+                                  ? { '& .MuiTableCell-root': { color: 'error.main' } }
+                                  : undefined
+                              }
+                              data-testid={
+                                ln.has_discrepancy ? `ff-mp-line-discrepancy-${ln.id}` : undefined
+                              }
+                            >
+                              <FfProductLineCells
+                                meta={displayMeta}
+                                printTestId={`ff-mp-line-print-${ln.id}`}
+                              />
+                              <TableCell align="right">{ln.quantity}</TableCell>
+                              {mpConfirmed ? (
+                                <>
+                                  <TableCell align="right">{picked}</TableCell>
+                                  <TableCell align="right">{remaining}</TableCell>
+                                </>
+                              ) : null}
+                              {draftDoc ? (
+                                <TableCell align="right">
+                                  <Tooltip title="Удалить строку">
+                                    <IconButton
+                                      size="small"
+                                      aria-label="Удалить строку"
+                                      data-testid={`ff-supplies-line-delete-${ln.id}`}
+                                      disabled={modalBusy}
+                                      onClick={(e) => {
+                                        e.stopPropagation()
+                                        void deleteDocLine(ln.id)
+                                      }}
+                                    >
+                                      <DeleteOutlineOutlined fontSize="small" />
+                                    </IconButton>
+                                  </Tooltip>
+                                </TableCell>
+                              ) : null}
+                            </TableRow>
+                          )
+                        })
+                      })()}
+                    </TableBody>
+                  </Table>
+                </Stack>
+              ) : null}
+              {mpUnloadTab === 'packaging' ? (
+                <Box data-testid="ff-mp-tab-packaging-panel">
+                  {packagingTaskError ? (
+                    <Alert severity="error" sx={{ mb: 2 }}>
+                      {packagingTaskError}
+                    </Alert>
+                  ) : null}
+                  {packagingTask && token ? (
+                    <FfPackagingTaskPanel
+                      token={token}
+                      task={packagingTask}
+                      unloadLabel={
+                        unloadDetail.document_number ?? docModalId?.slice(0, 8) ?? null
+                      }
+                      onUpdated={(task) => {
+                        setPackagingTask(task)
+                        void loadDocDetail()
+                      }}
+                    />
+                  ) : unloadDetail?.linked_packaging_task ? (
+                    <Typography
+                      variant="body2"
+                      color="text.secondary"
+                      data-testid="ff-mp-packaging-task-created"
+                    >
+                      Задание на упаковку создано.
+                    </Typography>
+                  ) : (
+                    <Typography
+                      variant="body2"
+                      color="text.secondary"
+                      data-testid="ff-mp-packaging-empty"
+                    >
+                      Задание на упаковку ещё не создано.
+                    </Typography>
+                  )}
+                </Box>
+              ) : null}
+              {/* REV-FIX-014: «План и распределение» + ff-mp-collect-warning only after confirm (not on draft). */}
+              {mpUnloadTab === 'boxes' && mpConfirmed ? (
+                <Stack spacing={2}>
+                  {mpPackagingGateActive ? (
+                    <Alert severity="warning" data-testid="ff-mp-packaging-gate-alert">
+                      Сначала завершите упаковку товара
+                    </Alert>
+                  ) : null}
+                  {mpCollectSummary ? (
+                    <Stack spacing={1.5}>
+                      <Paper
+                        variant="outlined"
+                        sx={{ p: 1.5, bgcolor: 'action.hover' }}
+                        data-testid="ff-mp-collect-summary"
+                      >
+                        <Typography variant="subtitle2" sx={{ mb: 0.5 }}>
+                          План и распределение
+                        </Typography>
+                        <Typography variant="body2">
+                          План отгрузки:{' '}
+                          <strong data-testid="ff-mp-collect-summary-planned">
+                            {mpCollectSummary.planned}
+                          </strong>
+                          {' · '}
+                          Распределено по коробам:{' '}
+                          <strong data-testid="ff-mp-collect-summary-distributed">
+                            {mpCollectSummary.distributed}
+                          </strong>
+                          {' · '}
+                          Остаток:{' '}
+                          <strong
+                            data-testid="ff-mp-collect-summary-remaining"
+                            style={{
+                              color: mpCollectSummary.remaining !== 0 ? '#ed6c02' : undefined,
                             }}
                           >
-                            <DeleteOutlineOutlined fontSize="small" />
-                          </IconButton>
-                        </Tooltip>
-                      </TableCell>
-                    ) : null}
-                  </TableRow>
-                )})
-              })()}
-            </TableBody>
-          </Table>
-          {docModal === 'marketplace_unload' && unloadDetail && mpConfirmed ? (
-            <Box sx={{ mt: 2 }} data-testid="ff-mp-boxes">
+                            {mpCollectSummary.remaining}
+                          </strong>
+                          {mpCollectSummary.packagingLabel ? (
+                            <>
+                              {' · '}
+                              Упаковка:{' '}
+                              <strong data-testid="ff-mp-collect-summary-packaging">
+                                {mpCollectSummary.packagingLabel}
+                              </strong>
+                            </>
+                          ) : null}
+                        </Typography>
+                      </Paper>
+                      {mpCollectSummary.remaining > 0 ? (
+                        <Alert severity="warning" data-testid="ff-mp-collect-warning">
+                          Распределено {mpCollectSummary.distributed} из {mpCollectSummary.planned}.
+                          Можно отгрузить неполную поставку с подтверждением на вкладке «Финал».
+                        </Alert>
+                      ) : null}
+                    </Stack>
+                  ) : null}
+                  <Box data-testid="ff-mp-boxes">
               {(() => {
-                const openBox = openMpBox
+                const openBoxes = unloadDetail.boxes.filter((b) => !b.closed_at)
+                const openBox = openBoxes[0] ?? null
                 const closed = unloadDetail.boxes.filter((b) => Boolean(b.closed_at))
                 return (
                   <Stack spacing={1.5}>
@@ -1969,7 +2241,7 @@ export function FfSuppliesShipmentsPage({
                                   void doCollectScan(openBox?.id ?? null)
                                 }
                               }}
-                              disabled={modalBusy}
+                              disabled={modalBusy || mpPackagingGateActive}
                               fullWidth
                               data-testid="ff-mp-pick-scan-input"
                             />
@@ -1981,13 +2253,13 @@ export function FfSuppliesShipmentsPage({
                               onChange={(e) => setCollectQty(e.target.value)}
                               slotProps={{ htmlInput: { min: 1 } }}
                               sx={{ width: { xs: '100%', sm: 96 } }}
-                              disabled={modalBusy || !openBox}
+                              disabled={modalBusy || !openBox || mpPackagingGateActive}
                               data-testid="ff-mp-collect-qty"
                             />
                             <Button
                               variant="contained"
                               onClick={() => void doCollectScan(openBox?.id ?? null)}
-                              disabled={modalBusy}
+                              disabled={modalBusy || mpPackagingGateActive}
                               data-testid="ff-mp-pick-scan"
                             >
                               Добавить
@@ -2004,63 +2276,101 @@ export function FfSuppliesShipmentsPage({
                             ) : null}
                           </Stack>
 
-                          {!openBox ? (
-                            <Stack direction="row" spacing={1} sx={{ alignItems: 'center' }}>
-                              <FormControl size="small" sx={{ minWidth: 160 }}>
-                                <InputLabel id="ff-mp-box-preset">Пресет</InputLabel>
-                                <Select
-                                  labelId="ff-mp-box-preset"
-                                  label="Пресет"
-                                  value={boxPreset}
-                                  onChange={(e) =>
-                                    setBoxPreset(String(e.target.value) as '60_40_40' | '30_20_30')
-                                  }
-                                  data-testid="ff-mp-box-preset"
-                                  disabled={modalBusy}
-                                >
-                                  <MenuItem value="60_40_40">60×40×40</MenuItem>
-                                  <MenuItem value="30_20_30">30×20×30</MenuItem>
-                                </Select>
-                              </FormControl>
-                              <Button
-                                variant="contained"
-                                onClick={() => void createBox()}
-                                disabled={modalBusy}
-                                data-testid="ff-mp-box-open"
-                              >
-                                Открыть короб
-                              </Button>
+                          {openBoxes.length > 0 ? (
+                            <Stack spacing={1.5}>
+                              {openBoxes.map((b, idx) => (
+                                <Box key={b.id} data-testid={`ff-mp-box-open-row-${b.id}`}>
+                                  {renderBoxActions(b)}
+                                  <Table
+                                    size="small"
+                                    sx={{ mt: 1 }}
+                                    data-testid={
+                                      idx === 0 ? 'ff-mp-open-box-lines' : `ff-mp-box-lines-${b.id}`
+                                    }
+                                  >
+                                    <TableHead>
+                                      <TableRow>
+                                        <TableCell>Артикул</TableCell>
+                                        <TableCell>Товар</TableCell>
+                                        <TableCell align="right">В коробе</TableCell>
+                                        <TableCell align="right" />
+                                      </TableRow>
+                                    </TableHead>
+                                    <TableBody>
+                                      {b.lines.length === 0 ? (
+                                        <TableRow>
+                                          <TableCell colSpan={4}>
+                                            <Typography variant="body2" color="text.secondary">
+                                              Пока нет сканов
+                                            </Typography>
+                                          </TableCell>
+                                        </TableRow>
+                                      ) : (
+                                        b.lines.map((ln) => (
+                                          <TableRow key={ln.id}>
+                                            <TableCell>{ln.sku_code}</TableCell>
+                                            <TableCell>{ln.product_name}</TableCell>
+                                            <TableCell align="right">{ln.quantity}</TableCell>
+                                            <TableCell align="right">
+                                              <Tooltip title="Убрать из короба">
+                                                <IconButton
+                                                  size="small"
+                                                  aria-label="Убрать из короба"
+                                                  data-testid={`ff-mp-box-line-remove-${ln.id}`}
+                                                  disabled={modalBusy}
+                                                  onClick={() => void removeBoxLine(b.id, ln.id)}
+                                                >
+                                                  <DeleteOutlineOutlined fontSize="small" />
+                                                </IconButton>
+                                              </Tooltip>
+                                            </TableCell>
+                                          </TableRow>
+                                        ))
+                                      )}
+                                    </TableBody>
+                                  </Table>
+                                </Box>
+                              ))}
                             </Stack>
-                          ) : (
-                            <Table size="small" sx={{ mt: 1 }} data-testid="ff-mp-open-box-lines">
-                              <TableHead>
-                                <TableRow>
-                                  <TableCell>Артикул</TableCell>
-                                  <TableCell>Товар</TableCell>
-                                  <TableCell align="right">В коробе</TableCell>
-                                </TableRow>
-                              </TableHead>
-                              <TableBody>
-                                {openBox.lines.length === 0 ? (
-                                  <TableRow>
-                                    <TableCell colSpan={3}>
-                                      <Typography variant="body2" color="text.secondary">
-                                        Пока нет сканов
-                                      </Typography>
-                                    </TableCell>
-                                  </TableRow>
-                                ) : (
-                                  openBox.lines.map((ln) => (
-                                    <TableRow key={ln.id}>
-                                      <TableCell>{ln.sku_code}</TableCell>
-                                      <TableCell>{ln.product_name}</TableCell>
-                                      <TableCell align="right">{ln.quantity}</TableCell>
-                                    </TableRow>
-                                  ))
-                                )}
-                              </TableBody>
-                            </Table>
-                          )}
+                          ) : null}
+
+                          <Stack direction="row" spacing={1} sx={{ alignItems: 'center', flexWrap: 'wrap' }}>
+                            <TextField
+                              size="small"
+                              label="Кол-во коробов"
+                              type="number"
+                              value={boxBatchCount}
+                              onChange={(e) => setBoxBatchCount(e.target.value)}
+                              slotProps={{ htmlInput: { min: 1, max: 50 } }}
+                              sx={{ width: 120 }}
+                              disabled={modalBusy || mpPackagingGateActive}
+                              data-testid="ff-mp-box-batch-count"
+                            />
+                            <FormControl size="small" sx={{ minWidth: 160 }}>
+                              <InputLabel id="ff-mp-box-preset">Пресет</InputLabel>
+                              <Select
+                                labelId="ff-mp-box-preset"
+                                label="Пресет"
+                                value={boxPreset}
+                                onChange={(e) =>
+                                  setBoxPreset(String(e.target.value) as '60_40_40' | '30_20_30')
+                                }
+                                data-testid="ff-mp-box-preset"
+                                disabled={modalBusy || mpPackagingGateActive}
+                              >
+                                <MenuItem value="60_40_40">60×40×40</MenuItem>
+                                <MenuItem value="30_20_30">30×20×30</MenuItem>
+                              </Select>
+                            </FormControl>
+                            <Button
+                              variant="contained"
+                              onClick={() => void createBox()}
+                              disabled={modalBusy || mpPackagingGateActive}
+                              data-testid="ff-mp-box-batch-create"
+                            >
+                              {Number(boxBatchCount) === 1 ? 'Создать короб' : 'Создать короба'}
+                            </Button>
+                          </Stack>
                         </Stack>
                       </Paper>
                     ) : null}
@@ -2072,23 +2382,25 @@ export function FfSuppliesShipmentsPage({
                         </Typography>
                         <Stack spacing={1}>
                           {closed.map((b) => (
-                            <Box key={b.id} sx={{ borderTop: '1px solid', borderColor: 'divider', pt: 1 }}>
-                              <Typography variant="body2" color="text.secondary">
-                                {b.internal_barcode ?? b.id.slice(0, 8)} · {b.box_preset} ·{' '}
-                                {b.closed_at ? b.closed_at.slice(0, 19).replace('T', ' ') : '—'}
-                              </Typography>
+                            <Box
+                              key={b.id}
+                              sx={{ borderTop: '1px solid', borderColor: 'divider', pt: 1 }}
+                              data-testid="ff-mp-box-closed-row"
+                            >
+                              {renderBoxActions(b)}
                               <Table size="small" sx={{ mt: 0.5 }}>
                                 <TableHead>
                                   <TableRow>
                                     <TableCell>Артикул</TableCell>
                                     <TableCell>Товар</TableCell>
                                     <TableCell align="right">Кол-во</TableCell>
+                                    <TableCell align="right" />
                                   </TableRow>
                                 </TableHead>
                                 <TableBody>
                                   {b.lines.length === 0 ? (
                                     <TableRow>
-                                      <TableCell colSpan={3}>
+                                      <TableCell colSpan={4}>
                                         <Typography variant="body2" color="text.secondary">
                                           Нет строк
                                         </Typography>
@@ -2100,6 +2412,19 @@ export function FfSuppliesShipmentsPage({
                                         <TableCell>{ln.sku_code}</TableCell>
                                         <TableCell>{ln.product_name}</TableCell>
                                         <TableCell align="right">{ln.quantity}</TableCell>
+                                        <TableCell align="right">
+                                          <Tooltip title="Убрать из короба">
+                                            <IconButton
+                                              size="small"
+                                              aria-label="Убрать из короба"
+                                              data-testid={`ff-mp-box-line-remove-${ln.id}`}
+                                              disabled={modalBusy}
+                                              onClick={() => void removeBoxLine(b.id, ln.id)}
+                                            >
+                                              <DeleteOutlineOutlined fontSize="small" />
+                                            </IconButton>
+                                          </Tooltip>
+                                        </TableCell>
                                       </TableRow>
                                     ))
                                   )}
@@ -2107,41 +2432,329 @@ export function FfSuppliesShipmentsPage({
                               </Table>
                             </Box>
                           ))}
+                          <Menu
+                            anchorEl={boxMenuAnchor}
+                            open={Boolean(boxMenuAnchor)}
+                            onClose={closeBoxMenu}
+                            data-testid="ff-mp-box-menu"
+                          >
+                            <MenuItem
+                              data-testid="ff-mp-box-menu-print"
+                              disabled={!boxMenuTargetId || !boxById.get(boxMenuTargetId ?? '')?.internal_barcode}
+                              onClick={() => {
+                                const box = boxMenuTargetId ? boxById.get(boxMenuTargetId) : null
+                                if (box) {
+                                  printBoxBarcode(box)
+                                }
+                                closeBoxMenu()
+                              }}
+                            >
+                              Печать ШК
+                            </MenuItem>
+                            <MenuItem
+                              data-testid="ff-mp-box-menu-copy"
+                              disabled={!boxMenuTargetId || modalBusy}
+                              onClick={() => {
+                                if (boxMenuTargetId) {
+                                  void copyBox(boxMenuTargetId)
+                                }
+                              }}
+                            >
+                              Копировать в новый короб
+                            </MenuItem>
+                            <MenuItem
+                              data-testid="ff-mp-box-menu-delete"
+                              disabled={
+                                !boxMenuTargetId ||
+                                modalBusy ||
+                                (boxMenuTargetId
+                                  ? (boxById.get(boxMenuTargetId)?.lines.reduce(
+                                      (s, ln) => s + ln.quantity,
+                                      0,
+                                    ) ?? 0) > 0
+                                  : true)
+                              }
+                              onClick={() => {
+                                if (boxMenuTargetId) {
+                                  void deleteBox(boxMenuTargetId)
+                                }
+                              }}
+                            >
+                              Удалить короб
+                            </MenuItem>
+                          </Menu>
                         </Stack>
-                      </Paper>
-                    ) : null}
-
-                    {addressStorageEnabled && unloadDetail.pick_allocations.length > 0 ? (
-                      <Paper variant="outlined" sx={{ p: 1.5 }} data-testid="ff-mp-pick-saved">
-                        <Typography variant="subtitle2" sx={{ mb: 1 }}>
-                          Откуда сняли (по ячейкам)
-                        </Typography>
-                        <Table size="small">
-                          <TableHead>
-                            <TableRow>
-                              <TableCell>Товар</TableCell>
-                              <TableCell>Ячейка</TableCell>
-                              <TableCell align="right">Кол-во</TableCell>
-                            </TableRow>
-                          </TableHead>
-                          <TableBody>
-                            {unloadDetail.pick_allocations.map((a) => (
-                              <TableRow key={a.id}>
-                                <TableCell>
-                                  {a.sku_code} — {a.product_name}
-                                </TableCell>
-                                <TableCell>{a.location_code}</TableCell>
-                                <TableCell align="right">{a.quantity}</TableCell>
-                              </TableRow>
-                            ))}
-                          </TableBody>
-                        </Table>
                       </Paper>
                     ) : null}
                   </Stack>
                 )
               })()}
             </Box>
+                </Stack>
+              ) : null}
+              {mpUnloadTab === 'final' ? (
+                <Stack spacing={2} data-testid="ff-mp-tab-final-panel">
+                  {mpDateEditable ? (
+                    <Box sx={{ maxWidth: 280 }}>
+                      <WmsDateField
+                        label="Дата отгрузки на МП"
+                        value={confirmDate || unloadDetail.planned_shipment_date}
+                        onChange={(iso) => void patchMpPlannedDate(iso)}
+                        disabled={modalBusy}
+                        required
+                        testId="ff-mp-planned-date"
+                      />
+                    </Box>
+                  ) : null}
+                  {mpShipped ? (
+                    <Typography variant="body2" color="text.secondary">
+                      Дата отгрузки: {unloadDetail.planned_shipment_date ?? '—'}
+                    </Typography>
+                  ) : null}
+                  {mpLineDraft ? (
+                    <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1.25}>
+                      <FormControl
+                        size="small"
+                        sx={{ minWidth: 280, width: { xs: '100%', sm: 'auto' } }}
+                        disabled={modalBusy || wbMpWarehousesBusy}
+                      >
+                        <InputLabel id="ff-mp-wb-warehouse">Склад WB (маркетплейс)</InputLabel>
+                        <Select
+                          labelId="ff-mp-wb-warehouse"
+                          label="Склад WB (маркетплейс)"
+                          value={unloadDetail.wb_mp_warehouse_id ?? ''}
+                          onChange={(e) => {
+                            const v = Number(e.target.value)
+                            if (Number.isInteger(v) && v > 0) {
+                              void setWbWarehouseForUnload(v)
+                            }
+                          }}
+                          data-testid="ff-mp-wb-warehouse-select"
+                        >
+                          <MenuItem value="">
+                            <em>Не выбран</em>
+                          </MenuItem>
+                          {wbMpWarehouses.map((w) => (
+                            <MenuItem key={w.wb_warehouse_id} value={w.wb_warehouse_id}>
+                              {w.name} ({w.wb_warehouse_id})
+                            </MenuItem>
+                          ))}
+                        </Select>
+                      </FormControl>
+                      {unloadDetail.wb_mp_warehouse_id == null ? (
+                        <Typography
+                          variant="caption"
+                          color="text.secondary"
+                          sx={{ alignSelf: { xs: 'flex-start', sm: 'center' }, lineHeight: 1.25 }}
+                        >
+                          Можно создать черновик без склада WB. Для «Утвердить» нужно выбрать склад,
+                          когда он появится.
+                        </Typography>
+                      ) : null}
+                    </Stack>
+                  ) : mpConfirmed ? (
+                    <Typography variant="body2" color="text.secondary">
+                      Склад WB:{' '}
+                      {wbMpWarehouses.find(
+                        (w) => w.wb_warehouse_id === unloadDetail.wb_mp_warehouse_id,
+                      )?.name ?? unloadDetail.wb_mp_warehouse_id ?? '—'}
+                    </Typography>
+                  ) : null}
+                  {mpConfirmed && (unloadDetail.boxes.length ?? 0) > 0 ? (
+                    <Button
+                      variant="outlined"
+                      disabled={modalBusy}
+                      data-testid="ff-mp-print-all-box-barcodes"
+                      onClick={() => printAllMpBoxBarcodes()}
+                    >
+                      Печать всех ШК коробов
+                    </Button>
+                  ) : null}
+                  {unloadDetail.lines.length > 0 ? (
+                    <Button
+                      variant="outlined"
+                      disabled={modalBusy}
+                      data-testid="ff-mp-print-waybill"
+                      onClick={() => {
+                        const wbName =
+                          wbMpWarehouses.find(
+                            (w) => w.wb_warehouse_id === unloadDetail.wb_mp_warehouse_id,
+                          )?.name ?? null
+                        printMarketplaceUnloadWaybill({
+                          documentId: unloadDetail.id,
+                          statusLabel: statusRu(unloadDetail.status),
+                          warehouseName: unloadDetail.warehouse_name,
+                          sellerName: unloadDetail.seller_name,
+                          wbWarehouseLabel:
+                            wbName != null && unloadDetail.wb_mp_warehouse_id != null
+                              ? `${wbName} (${unloadDetail.wb_mp_warehouse_id})`
+                              : null,
+                          plannedDate: unloadDetail.planned_shipment_date,
+                          createdAt: unloadDetail.created_at
+                            ? formatDateTimeLocal(unloadDetail.created_at)
+                            : null,
+                          lines: unloadDetail.lines.map((ln) => ({
+                            sku_code: ln.sku_code,
+                            product_name: ln.product_name,
+                            quantity: ln.quantity,
+                          })),
+                          pickAllocations: unloadDetail.pick_allocations.map((a) => ({
+                            location_code: a.location_code,
+                            sku_code: a.sku_code,
+                            quantity: a.quantity,
+                          })),
+                        })
+                      }}
+                    >
+                      Печать накладной
+                    </Button>
+                  ) : null}
+                  {mpDraft || mpSubmitted ? (
+                    <Stack direction="row" spacing={1}>
+                      <Button
+                        variant="contained"
+                        color="secondary"
+                        disabled={
+                          modalBusy ||
+                          !confirmDate.trim() ||
+                          unloadDetail.wb_mp_warehouse_id == null ||
+                          unloadDetail.lines.length < 1
+                        }
+                        onClick={() => void submitDoc()}
+                        data-testid="ff-supplies-doc-submit"
+                      >
+                        Подтвердить
+                      </Button>
+                      {mpSubmitted ? (
+                        <Button
+                          variant="outlined"
+                          color="error"
+                          disabled={modalBusy}
+                          onClick={() => setMpCancelConfirmOpen(true)}
+                          data-testid="ff-mp-cancel-unload"
+                        >
+                          Отменить отгрузку
+                        </Button>
+                      ) : null}
+                    </Stack>
+                  ) : null}
+                  {mpConfirmed ? (
+                    <Stack direction="row" spacing={1} sx={{ flexWrap: 'wrap' }}>
+                      <Button
+                        variant="outlined"
+                        disabled={modalBusy || !docModalId || !token}
+                        onClick={() => setMpUnloadTab('packaging')}
+                        data-testid="ff-mp-open-packaging"
+                      >
+                        Упаковка
+                      </Button>
+                      <Button
+                        variant="contained"
+                        color="primary"
+                        disabled={
+                          modalBusy ||
+                          (mpCollectSummary?.distributed ?? 0) < 1
+                        }
+                        onClick={() => requestShipMpUnload()}
+                        data-testid="ff-mp-ship"
+                      >
+                        Отгружено
+                      </Button>
+                      {mpCancellable ? (
+                        <Button
+                          variant="outlined"
+                          color="error"
+                          disabled={modalBusy}
+                          onClick={() => setMpCancelConfirmOpen(true)}
+                          data-testid="ff-mp-cancel-unload"
+                        >
+                          Отменить отгрузку
+                        </Button>
+                      ) : null}
+                    </Stack>
+                  ) : null}
+                </Stack>
+              ) : null}
+            </Box>
+          ) : null}
+          {divergeDetail ? (
+            <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
+              {statusRu(divergeDetail.status)}
+              {divergeDetail.inbound_intake_request_id
+                ? ` · приёмка ${divergeDetail.inbound_intake_request_id.slice(0, 8)}…`
+                : ''}
+            </Typography>
+          ) : null}
+          {docModal !== 'marketplace_unload' ? (
+          <Table size="small" data-testid="ff-supplies-doc-lines" sx={{ tableLayout: 'fixed', width: '100%' }}>
+            <TableHead>
+              <TableRow>
+                <FfProductTableHeadCells />
+                <TableCell>Строка приёмки</TableCell>
+                <TableCell align="right">План</TableCell>
+                {draftDoc ? <TableCell align="right" width={56} /> : null}
+              </TableRow>
+            </TableHead>
+            <TableBody>
+              {(() => {
+                const lines = divergeDetail?.lines ?? []
+                const emptySpan = 7 + 1 + (draftDoc ? 1 : 0)
+                if (lines.length === 0) {
+                  return (
+                    <TableRow>
+                      <TableCell colSpan={emptySpan}>
+                        <Typography variant="body2" color="text.secondary">
+                          Пока нет строк
+                        </Typography>
+                      </TableCell>
+                    </TableRow>
+                  )
+                }
+                return lines.map((ln) => {
+                  const displayMeta = productDisplayMetaFromCatalog(ln.product_id, ln, catalogById)
+                  return (
+                    <TableRow
+                      key={ln.id}
+                      sx={
+                        ln.has_discrepancy
+                          ? { '& .MuiTableCell-root': { color: 'error.main' } }
+                          : undefined
+                      }
+                    >
+                      <FfProductLineCells
+                        meta={displayMeta}
+                        printTestId={`ff-mp-line-print-${ln.id}`}
+                      />
+                      <TableCell sx={{ color: 'text.secondary', fontSize: 13 }}>
+                        {ln.inbound_intake_line_id
+                          ? `${ln.inbound_intake_line_id.slice(0, 8)}…`
+                          : '—'}
+                      </TableCell>
+                      <TableCell align="right">{ln.quantity}</TableCell>
+                      {draftDoc ? (
+                        <TableCell align="right">
+                          <Tooltip title="Удалить строку">
+                            <IconButton
+                              size="small"
+                              aria-label="Удалить строку"
+                              data-testid={`ff-supplies-line-delete-${ln.id}`}
+                              disabled={modalBusy}
+                              onClick={(e) => {
+                                e.stopPropagation()
+                                void deleteDocLine(ln.id)
+                              }}
+                            >
+                              <DeleteOutlineOutlined fontSize="small" />
+                            </IconButton>
+                          </Tooltip>
+                        </TableCell>
+                      ) : null}
+                    </TableRow>
+                  )
+                })
+              })()}
+            </TableBody>
+          </Table>
           ) : null}
           {draftDoc && docModal === 'discrepancy_act' && docProductPicklist.length > 0 ? (
             <Stack spacing={1.5} sx={{ mt: 2 }}>
@@ -2217,95 +2830,6 @@ export function FfSuppliesShipmentsPage({
           ) : null}
         </DialogContent>
         <DialogActions>
-          {docModal === 'marketplace_unload' && unloadDetail && unloadDetail.lines.length > 0 ? (
-            <Button
-              variant="outlined"
-              disabled={modalBusy}
-              data-testid="ff-mp-print-waybill"
-              onClick={() => {
-                const wbName =
-                  wbMpWarehouses.find(
-                    (w) => w.wb_warehouse_id === unloadDetail.wb_mp_warehouse_id,
-                  )?.name ?? null
-                printMarketplaceUnloadWaybill({
-                  documentId: unloadDetail.id,
-                  statusLabel: statusRu(unloadDetail.status),
-                  warehouseName: unloadDetail.warehouse_name,
-                  sellerName: unloadDetail.seller_name,
-                  wbWarehouseLabel:
-                    wbName != null && unloadDetail.wb_mp_warehouse_id != null
-                      ? `${wbName} (${unloadDetail.wb_mp_warehouse_id})`
-                      : null,
-                  plannedDate: unloadDetail.planned_shipment_date,
-                  createdAt: unloadDetail.created_at
-                    ? formatDateTimeLocal(unloadDetail.created_at)
-                    : null,
-                  lines: unloadDetail.lines.map((ln) => ({
-                    sku_code: ln.sku_code,
-                    product_name: ln.product_name,
-                    quantity: ln.quantity,
-                  })),
-                  pickAllocations: unloadDetail.pick_allocations.map((a) => ({
-                    location_code: a.location_code,
-                    sku_code: a.sku_code,
-                    quantity: a.quantity,
-                  })),
-                })
-              }}
-            >
-              Печать накладной
-            </Button>
-          ) : null}
-          {mpPickEditable ? (
-            <Button
-              variant="outlined"
-              disabled={modalBusy || (unloadDetail?.lines.length ?? 0) < 1}
-              onClick={() => void openPickDialog()}
-              data-testid="ff-mp-start-picking"
-            >
-              Начать подбор
-            </Button>
-          ) : null}
-          {mpConfirmed ? (
-            <Button
-              variant="outlined"
-              disabled={modalBusy || !docModalId || !token}
-              onClick={() => setPackagingDialogOpen(true)}
-              data-testid="ff-mp-open-packaging"
-            >
-              Упаковка
-            </Button>
-          ) : null}
-          {mpConfirmed ? (
-            <Button
-              variant="contained"
-              color="primary"
-              disabled={
-                modalBusy ||
-                (mpCollectSummary?.picked ?? 0) < 1
-              }
-              onClick={() => void shipMpUnload()}
-              data-testid="ff-mp-ship"
-            >
-              Отгружено
-            </Button>
-          ) : null}
-          {docModal === 'marketplace_unload' && (mpDraft || mpSubmitted) ? (
-            <Button
-              variant="contained"
-              color="secondary"
-              disabled={
-                modalBusy ||
-                !confirmDate.trim() ||
-                (docModal === 'marketplace_unload' && unloadDetail?.wb_mp_warehouse_id == null) ||
-                (unloadDetail?.lines.length ?? 0) < 1
-              }
-              onClick={() => void submitDoc()}
-              data-testid="ff-supplies-doc-submit"
-            >
-              Подтвердить
-            </Button>
-          ) : null}
           {draftDoc && docModal !== 'marketplace_unload' ? (
             <Button
               variant="contained"
@@ -2323,90 +2847,6 @@ export function FfSuppliesShipmentsPage({
         </DialogActions>
       </Dialog>
 
-      <Dialog
-        open={pickDialogOpen}
-        onClose={() => setPickDialogOpen(false)}
-        maxWidth="md"
-        fullWidth
-        data-testid="ff-mp-picking-dialog"
-      >
-        <DialogTitle>Подбор в текущий короб</DialogTitle>
-        <DialogContent dividers>
-          <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
-            Укажите, сколько снять с каждой ячейки в открытый короб. Можно больше или меньше плана —
-            при отгрузке потребуется подтверждение расхождения.
-          </Typography>
-          <Stack spacing={2}>
-            {pickOptions.map((prod) => (
-              <Paper key={prod.product_id} variant="outlined" sx={{ p: 1.5 }}>
-                <Typography variant="subtitle2">
-                  {prod.sku_code} — {prod.product_name}{' '}
-                  <Typography component="span" variant="body2" color="text.secondary">
-                    (план: {prod.planned_qty}, собрано: {prod.picked_qty})
-                  </Typography>
-                </Typography>
-                {prod.locations.length === 0 ? (
-                  <Typography variant="body2" color="warning.main" sx={{ mt: 1 }}>
-                    Нет остатка в ячейках на этом складе.
-                  </Typography>
-                ) : (
-                  <Table size="small" sx={{ mt: 1 }}>
-                    <TableHead>
-                      <TableRow>
-                        <TableCell>Ячейка</TableCell>
-                        <TableCell align="right">Доступно</TableCell>
-                        <TableCell align="right">Снять</TableCell>
-                      </TableRow>
-                    </TableHead>
-                    <TableBody>
-                      {prod.locations.map((loc) => (
-                        <TableRow key={loc.storage_location_id}>
-                          <TableCell>{loc.location_code}</TableCell>
-                          <TableCell align="right">{loc.available}</TableCell>
-                          <TableCell align="right">
-                            <TextField
-                              size="small"
-                              type="number"
-                              slotProps={{ htmlInput: { min: 0 } }}
-                              value={
-                                pickQtyByProductLoc[prod.product_id]?.[loc.storage_location_id] ??
-                                ''
-                              }
-                              onChange={(e) => {
-                                const v = e.target.value
-                                setPickQtyByProductLoc((prev) => ({
-                                  ...prev,
-                                  [prod.product_id]: {
-                                    ...(prev[prod.product_id] ?? {}),
-                                    [loc.storage_location_id]: v,
-                                  },
-                                }))
-                              }}
-                              sx={{ width: 88 }}
-                              data-testid={`ff-mp-pick-qty-${loc.location_code}`}
-                            />
-                          </TableCell>
-                        </TableRow>
-                      ))}
-                    </TableBody>
-                  </Table>
-                )}
-              </Paper>
-            ))}
-          </Stack>
-        </DialogContent>
-        <DialogActions>
-          <Button onClick={() => setPickDialogOpen(false)}>Отмена</Button>
-          <Button
-            variant="contained"
-            disabled={modalBusy || pickOptions.length < 1}
-            onClick={() => void savePickAllocations()}
-            data-testid="ff-mp-pick-save"
-          >
-            Сохранить подбор
-          </Button>
-        </DialogActions>
-      </Dialog>
       <WbProductPickerDialog
         open={mpPickerOpen}
         busy={modalBusy}
@@ -2424,18 +2864,105 @@ export function FfSuppliesShipmentsPage({
         onClose={() => setMpPickerOpen(false)}
         onApply={applyMpProductPicker}
       />
-      {token && docModalId && docModal === 'marketplace_unload' ? (
-        <FfPackagingTaskDialog
-          open={packagingDialogOpen}
+      {token &&
+      docModalId &&
+      docModal === 'marketplace_unload' &&
+      boxAddDialogBoxId &&
+      boxById.get(boxAddDialogBoxId) ? (
+        <FfMarketplaceUnloadBoxAddDialog
+          open
+          onClose={() => setBoxAddDialogBoxId(null)}
+          requestId={docModalId}
+          boxId={boxAddDialogBoxId}
+          boxLabel={
+            boxById.get(boxAddDialogBoxId)?.internal_barcode ??
+            boxAddDialogBoxId.slice(0, 8)
+          }
+          boxClosed={Boolean(boxById.get(boxAddDialogBoxId)?.closed_at)}
           token={token}
-          unloadId={docModalId}
-          unloadLabel={docModalId.slice(0, 8)}
-          onClose={() => {
-            setPackagingDialogOpen(false)
-            void loadDocDetail()
+          addressStorageEnabled={addressStorageEnabled}
+          packagingGateActive={mpPackagingGateActive}
+          catalogById={catalogById}
+          warehouseStockByProductId={mpStockByProductId}
+          onUpdated={async () => {
+            await loadDocDetail()
+            await onRefreshFfSupplyExtras()
           }}
+          onAddSuccess={(quantity) =>
+            setBoxAddSuccessMsg(`Добавлено ${quantity} шт`)
+          }
         />
       ) : null}
+      <Snackbar
+        open={boxAddSuccessMsg !== null}
+        autoHideDuration={2500}
+        onClose={() => setBoxAddSuccessMsg(null)}
+        anchorOrigin={{ vertical: 'bottom', horizontal: 'center' }}
+      >
+        <Alert
+          severity="success"
+          variant="filled"
+          onClose={() => setBoxAddSuccessMsg(null)}
+          data-testid="ff-mp-box-add-success-snackbar"
+          sx={{ width: '100%' }}
+        >
+          {boxAddSuccessMsg}
+        </Alert>
+      </Snackbar>
+      <Dialog
+        open={mpShipConfirmOpen}
+        onClose={() => setMpShipConfirmOpen(false)}
+        data-testid="ff-mp-ship-discrepancy-dialog"
+      >
+        <DialogTitle>Недопоставка</DialogTitle>
+        <DialogContent>
+          <Typography variant="body2">
+            В коробах {mpCollectSummary?.distributed ?? 0} из {mpCollectSummary?.planned ?? 0} по
+            плану. Отгрузить неполную поставку?
+          </Typography>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setMpShipConfirmOpen(false)} disabled={modalBusy}>
+            Отмена
+          </Button>
+          <Button
+            variant="contained"
+            color="warning"
+            disabled={modalBusy}
+            onClick={() => void shipMpUnload(true)}
+            data-testid="ff-mp-ship-ack-discrepancy"
+          >
+            Отгрузить неполную
+          </Button>
+        </DialogActions>
+      </Dialog>
+      <Dialog
+        open={mpCancelConfirmOpen}
+        onClose={() => setMpCancelConfirmOpen(false)}
+        data-testid="ff-mp-cancel-unload-dialog"
+      >
+        <DialogTitle>Отменить отгрузку?</DialogTitle>
+        <DialogContent>
+          <Typography variant="body2">
+            Товар из коробов вернётся на сортировку — его нужно будет заново распределить по
+            ячейкам или использовать в других документах.
+          </Typography>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setMpCancelConfirmOpen(false)} disabled={modalBusy}>
+            Назад
+          </Button>
+          <Button
+            variant="contained"
+            color="error"
+            disabled={modalBusy}
+            onClick={() => void cancelMpUnload()}
+            data-testid="ff-mp-cancel-unload-confirm"
+          >
+            Отменить отгрузку
+          </Button>
+        </DialogActions>
+      </Dialog>
     </Box>
   )
 }

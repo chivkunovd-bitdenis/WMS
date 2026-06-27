@@ -7,6 +7,7 @@ import { setWmsDateField } from './wms-date-field-helpers';
 
 // TC-NEW-MP-04 — селлер создаёт отгрузку на МП, видит остаток и планирует.
 // TC-NEW-MP-06 — после «Запланировать» документ в списке со статусом «Запланировано».
+// TC-NEW-MP-020 — TASK-020 / DEC-015: plan-only UI, без коробов/упаковки/ship API.
 test('seller creates MP unload draft, plans with stock table', async ({ page }) => {
   test.setTimeout(120_000);
   const adminEmail = `e2e-smp-${Date.now()}@example.com`;
@@ -231,6 +232,11 @@ test('seller creates MP unload draft, plans with stock table', async ({ page }) 
   ]);
 
   await expect(page.getByTestId('seller-mp-unload-dialog')).toContainText('Запланировано');
+  // REV-FIX-012: hint that FF takes over after plan.
+  await expect(page.getByTestId('seller-mp-ff-handoff-hint')).toContainText('фулфилмент');
+  await expect(page.getByTestId('seller-mp-plan-only')).toBeVisible();
+  await expect(page.getByTestId('ff-mp-box-add-products')).toHaveCount(0);
+  await expect(page.getByTestId('ff-mp-packaging-complete')).toHaveCount(0);
 
   await page.getByTestId('seller-mp-close').click();
   const mpRow = page.locator('[data-doc-type="mp_unload"]').first();

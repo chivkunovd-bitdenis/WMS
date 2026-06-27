@@ -133,6 +133,65 @@ async def _post_inventory(
     return location_id
 
 
+async def _inventory_in_sorting_zone(
+    async_client: AsyncClient,
+    h: dict[str, str],
+    *,
+    warehouse_id: str,
+    product_id: str,
+    qty: int,
+) -> None:
+    base_in = "/operations/inbound-intake-requests"
+    inbound = await async_client.post(base_in, headers=h, json={"warehouse_id": warehouse_id})
+    assert inbound.status_code == 201, inbound.text
+    rid = inbound.json()["id"]
+    line = await async_client.post(
+        f"{base_in}/{rid}/lines",
+        headers=h,
+        json={"product_id": product_id, "expected_qty": qty},
+    )
+    assert line.status_code == 201, line.text
+    await async_client.post(f"{base_in}/{rid}/submit", headers=h)
+    await post_primary_accept(async_client, base_in, rid, h)
+    sku = line.json()["sku_code"]
+    await fulfill_inbound_via_box_scans(async_client, h, rid, sku, qty)
+    verify = await async_client.post(f"{base_in}/{rid}/verify", headers=h)
+    assert verify.status_code == 200, verify.text
+
+
+async def _finish_unload_packaging(
+    async_client: AsyncClient,
+    h: dict[str, str],
+    unload_id: str,
+) -> None:
+    pkg = await async_client.get(
+        f"/operations/packaging-tasks/by-unload/{unload_id}",
+        headers=h,
+    )
+    assert pkg.status_code == 200, pkg.text
+    task = pkg.json()
+    if not task["lines"]:
+        task = (
+            await async_client.get(f"/operations/packaging-tasks/{task['id']}", headers=h)
+        ).json()
+    line_id = task["lines"][0]["id"]
+    need = task["lines"][0]["qty_need_pack"]
+    if need > 0:
+        pack = await async_client.post(
+            f"/operations/packaging-tasks/{task['id']}/lines/{line_id}/pack",
+            headers=h,
+            json={"quantity": need},
+        )
+        assert pack.status_code == 200, pack.text
+    complete = await async_client.post(
+        f"/operations/packaging-tasks/{task['id']}/complete",
+        headers=h,
+        json={"acknowledge_all_packed": False},
+    )
+    assert complete.status_code == 200, complete.text
+    assert complete.json()["status"] == "done"
+
+
 async def _patch_mp_planned_date(
     async_client: AsyncClient,
     h: dict[str, str],
@@ -811,6 +870,9 @@ async def test_marketplace_unload_ship_deducts_stock_by_pick_and_scan(
         qty=5,
         location_code="MU-SHIP",
     )
+    await _inventory_in_sorting_zone(
+        async_client, h, warehouse_id=wid, product_id=pid, qty=5
+    )
 
     bal_before = await async_client.get(
         "/operations/inventory-balances/summary",
@@ -819,7 +881,7 @@ async def test_marketplace_unload_ship_deducts_stock_by_pick_and_scan(
     )
     assert bal_before.status_code == 200
     row_before = next(x for x in bal_before.json() if x["product_id"] == pid)
-    assert row_before["quantity"] == 5
+    assert row_before["quantity"] == 10
 
     mu = await async_client.post(
         "/operations/marketplace-unload-requests",
@@ -845,10 +907,11 @@ async def test_marketplace_unload_ship_deducts_stock_by_pick_and_scan(
     ship_blocked = await async_client.post(
         f"/operations/marketplace-unload-requests/{mid}/ship",
         headers=h,
-        json={"acknowledge_discrepancy": False},
     )
     assert ship_blocked.status_code == 422
-    assert ship_blocked.json()["detail"] == "pick_required"
+    assert ship_blocked.json()["detail"] == "packaging_not_done"
+
+    await _finish_unload_packaging(async_client, h, mid)
 
     loc = await async_client.get(f"/warehouses/{wid}/locations", headers=h)
     loc_barcode = next(x for x in loc.json() if x["id"] == loc_id)["barcode"]
@@ -880,30 +943,17 @@ async def test_marketplace_unload_ship_deducts_stock_by_pick_and_scan(
     detail = await async_client.get(f"/operations/marketplace-unload-requests/{mid}", headers=h)
     assert detail.json()["lines"][0]["picked_qty"] == 3
 
-    pkg = await async_client.get(
-        f"/operations/packaging-tasks/by-unload/{mid}",
+    bal_after_collect = await async_client.get(
+        "/operations/inventory-balances/summary",
         headers=h,
+        params={"warehouse_id": wid},
     )
-    assert pkg.status_code == 200, pkg.text
-    task = pkg.json()
-    if not task["lines"]:
-        task = (
-            await async_client.get(
-                f"/operations/packaging-tasks/{task['id']}",
-                headers=h,
-            )
-        ).json()
-    pkg_line = task["lines"][0]
-    await async_client.post(
-        f"/operations/packaging-tasks/{task['id']}/lines/{pkg_line['id']}/pack",
-        headers=h,
-        json={"quantity": pkg_line["qty_need_pack"]},
-    )
+    row_collect = next(x for x in bal_after_collect.json() if x["product_id"] == pid)
+    assert row_collect["quantity"] == 7
 
     ship = await async_client.post(
         f"/operations/marketplace-unload-requests/{mid}/ship",
         headers=h,
-        json={"acknowledge_discrepancy": False},
     )
     assert ship.status_code == 200, ship.text
     assert ship.json()["status"] == "shipped"
@@ -914,7 +964,7 @@ async def test_marketplace_unload_ship_deducts_stock_by_pick_and_scan(
         params={"warehouse_id": wid},
     )
     row_after = next(x for x in bal_after.json() if x["product_id"] == pid)
-    assert row_after["quantity"] == 2
+    assert row_after["quantity"] == 7
 
     ship_again = await async_client.post(
         f"/operations/marketplace-unload-requests/{mid}/ship",
@@ -925,7 +975,423 @@ async def test_marketplace_unload_ship_deducts_stock_by_pick_and_scan(
 
 
 @pytest.mark.asyncio
-async def test_marketplace_unload_packaging_task_on_create_and_line_sync(
+async def test_marketplace_unload_ship_no_double_inventory_movement(
+    async_client: AsyncClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # TASK-004: stock deducted at collect; ship must not create second movements
+    suffix = str(int(time.time() * 1000))
+    reg = await async_client.post(
+        "/auth/register",
+        json={
+            "organization_name": "MuNoDouble Co",
+            "slug": f"mund-{suffix}",
+            "admin_email": f"mund-{suffix}@example.com",
+            "password": "password123",
+        },
+    )
+    token = str(reg.json()["access_token"])
+    h = {"Authorization": f"Bearer {token}"}
+    wh = await async_client.post(
+        "/warehouses", headers=h, json={"name": "W", "code": f"w-{suffix}"}
+    )
+    wid = wh.json()["id"]
+    sid, wb_wid = await _seller_wb_mp_warehouse(async_client, h, monkeypatch)
+    pr = await async_client.post(
+        "/products",
+        headers=h,
+        json={
+            "name": "P",
+            "sku_code": f"S-{suffix}",
+            "length_mm": 1,
+            "width_mm": 1,
+            "height_mm": 1,
+            "seller_id": sid,
+        },
+    )
+    pid = pr.json()["id"]
+    await _link_product_wb_barcode(
+        async_client, h, seller_id=sid, product_id=pid, monkeypatch=monkeypatch
+    )
+    loc_id = await _post_inventory(
+        async_client,
+        h,
+        warehouse_id=wid,
+        product_id=pid,
+        qty=5,
+        location_code="MU-NODBL",
+    )
+    await _inventory_in_sorting_zone(
+        async_client, h, warehouse_id=wid, product_id=pid, qty=5
+    )
+
+    mu = await async_client.post(
+        "/operations/marketplace-unload-requests",
+        headers=h,
+        json={"warehouse_id": wid, "seller_id": sid, "wb_mp_warehouse_id": wb_wid},
+    )
+    mid = mu.json()["id"]
+    await async_client.post(
+        f"/operations/marketplace-unload-requests/{mid}/lines",
+        headers=h,
+        json={"product_id": pid, "quantity": 2},
+    )
+    await _patch_mp_planned_date(async_client, h, mid)
+    await _patch_packaging_instructions(async_client, h, pid)
+    await async_client.post(f"/operations/marketplace-unload-requests/{mid}/submit", headers=h)
+    await _finish_unload_packaging(async_client, h, mid)
+
+    box = await async_client.post(
+        f"/operations/marketplace-unload-requests/{mid}/boxes",
+        headers=h,
+        json={"box_preset": "60_40_40"},
+    )
+    box_id = box.json()["id"]
+    await async_client.post(
+        f"/operations/marketplace-unload-requests/{mid}/boxes/{box_id}/manual-line",
+        headers=h,
+        json={"product_id": pid, "storage_location_id": loc_id, "quantity": 2},
+    )
+
+    mov_before_ship = await async_client.get("/operations/inventory-movements", headers=h)
+    mp_moves_before = [
+        m
+        for m in mov_before_ship.json()
+        if m.get("movement_type") == "marketplace_unload" and m.get("product_id") == pid
+    ]
+    assert len(mp_moves_before) == 1
+    assert mp_moves_before[0]["quantity_delta"] == -2
+
+    ship = await async_client.post(
+        f"/operations/marketplace-unload-requests/{mid}/ship",
+        headers=h,
+    )
+    assert ship.status_code == 200, ship.text
+
+    mov_after_ship = await async_client.get("/operations/inventory-movements", headers=h)
+    mp_moves_after = [
+        m
+        for m in mov_after_ship.json()
+        if m.get("movement_type") == "marketplace_unload" and m.get("product_id") == pid
+    ]
+    assert len(mp_moves_after) == 1
+
+
+@pytest.mark.asyncio
+async def test_marketplace_unload_concurrent_collect_same_location(
+    async_client: AsyncClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # TASK-004 / DEC-017: parallel collect from one cell must not oversell
+    suffix = str(int(time.time() * 1000))
+    reg = await async_client.post(
+        "/auth/register",
+        json={
+            "organization_name": "MuConc Co",
+            "slug": f"muc-{suffix}",
+            "admin_email": f"muc-{suffix}@example.com",
+            "password": "password123",
+        },
+    )
+    token = str(reg.json()["access_token"])
+    h = {"Authorization": f"Bearer {token}"}
+    wh = await async_client.post(
+        "/warehouses", headers=h, json={"name": "W", "code": f"w-{suffix}"}
+    )
+    wid = wh.json()["id"]
+    sid, wb_wid = await _seller_wb_mp_warehouse(async_client, h, monkeypatch)
+    pr = await async_client.post(
+        "/products",
+        headers=h,
+        json={
+            "name": "P",
+            "sku_code": f"S-{suffix}",
+            "length_mm": 1,
+            "width_mm": 1,
+            "height_mm": 1,
+            "seller_id": sid,
+        },
+    )
+    pid = pr.json()["id"]
+    await _link_product_wb_barcode(
+        async_client, h, seller_id=sid, product_id=pid, monkeypatch=monkeypatch
+    )
+    loc_id = await _post_inventory(
+        async_client,
+        h,
+        warehouse_id=wid,
+        product_id=pid,
+        qty=5,
+        location_code="MU-CONC",
+    )
+    await _inventory_in_sorting_zone(
+        async_client, h, warehouse_id=wid, product_id=pid, qty=5
+    )
+
+    mu = await async_client.post(
+        "/operations/marketplace-unload-requests",
+        headers=h,
+        json={"warehouse_id": wid, "seller_id": sid, "wb_mp_warehouse_id": wb_wid},
+    )
+    mid = mu.json()["id"]
+    await async_client.post(
+        f"/operations/marketplace-unload-requests/{mid}/lines",
+        headers=h,
+        json={"product_id": pid, "quantity": 5},
+    )
+    await _patch_mp_planned_date(async_client, h, mid)
+    await _patch_packaging_instructions(async_client, h, pid)
+    await async_client.post(f"/operations/marketplace-unload-requests/{mid}/submit", headers=h)
+    await _finish_unload_packaging(async_client, h, mid)
+
+    box = await async_client.post(
+        f"/operations/marketplace-unload-requests/{mid}/boxes",
+        headers=h,
+        json={"box_preset": "60_40_40"},
+    )
+    assert box.status_code == 201, box.text
+    box_id = box.json()["id"]
+
+    async def collect() -> int:
+        resp = await async_client.post(
+            f"/operations/marketplace-unload-requests/{mid}/boxes/{box_id}/manual-line",
+            headers=h,
+            json={"product_id": pid, "storage_location_id": loc_id, "quantity": 4},
+        )
+        return resp.status_code
+
+    assert await collect() == 200
+    blocked = await async_client.post(
+        f"/operations/marketplace-unload-requests/{mid}/boxes/{box_id}/manual-line",
+        headers=h,
+        json={"product_id": pid, "storage_location_id": loc_id, "quantity": 4},
+    )
+    assert blocked.status_code == 422
+    assert blocked.json()["detail"] == "plan_limit_exceeded"
+
+    bal = await async_client.get(
+        "/operations/inventory-balances/summary",
+        headers=h,
+        params={"warehouse_id": wid},
+    )
+    row = next(x for x in bal.json() if x["product_id"] == pid)
+    assert row["quantity"] == 6
+
+
+@pytest.mark.asyncio
+async def test_marketplace_unload_ship_deletes_empty_boxes(
+    async_client: AsyncClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # TASK-004 / DEC-002: empty boxes removed on ship
+    suffix = str(int(time.time() * 1000))
+    reg = await async_client.post(
+        "/auth/register",
+        json={
+            "organization_name": "MuEmpty Co",
+            "slug": f"mue-{suffix}",
+            "admin_email": f"mue-{suffix}@example.com",
+            "password": "password123",
+        },
+    )
+    token = str(reg.json()["access_token"])
+    h = {"Authorization": f"Bearer {token}"}
+    wh = await async_client.post(
+        "/warehouses", headers=h, json={"name": "W", "code": f"w-{suffix}"}
+    )
+    wid = wh.json()["id"]
+    sid, wb_wid = await _seller_wb_mp_warehouse(async_client, h, monkeypatch)
+    pr = await async_client.post(
+        "/products",
+        headers=h,
+        json={
+            "name": "P",
+            "sku_code": f"S-{suffix}",
+            "length_mm": 1,
+            "width_mm": 1,
+            "height_mm": 1,
+            "seller_id": sid,
+        },
+    )
+    pid = pr.json()["id"]
+    await _link_product_wb_barcode(
+        async_client, h, seller_id=sid, product_id=pid, monkeypatch=monkeypatch
+    )
+    loc_id = await _post_inventory(
+        async_client,
+        h,
+        warehouse_id=wid,
+        product_id=pid,
+        qty=5,
+        location_code="MU-EMPTY",
+    )
+    await _inventory_in_sorting_zone(
+        async_client, h, warehouse_id=wid, product_id=pid, qty=5
+    )
+
+    mu = await async_client.post(
+        "/operations/marketplace-unload-requests",
+        headers=h,
+        json={"warehouse_id": wid, "seller_id": sid, "wb_mp_warehouse_id": wb_wid},
+    )
+    mid = mu.json()["id"]
+    await async_client.post(
+        f"/operations/marketplace-unload-requests/{mid}/lines",
+        headers=h,
+        json={"product_id": pid, "quantity": 1},
+    )
+    await _patch_mp_planned_date(async_client, h, mid)
+    await _patch_packaging_instructions(async_client, h, pid)
+    await async_client.post(f"/operations/marketplace-unload-requests/{mid}/submit", headers=h)
+    await _finish_unload_packaging(async_client, h, mid)
+
+    filled = await async_client.post(
+        f"/operations/marketplace-unload-requests/{mid}/boxes",
+        headers=h,
+        json={"box_preset": "60_40_40"},
+    )
+    assert filled.status_code == 201, filled.text
+    filled_id = filled.json()["id"]
+
+    await async_client.post(
+        f"/operations/marketplace-unload-requests/{mid}/boxes/{filled_id}/manual-line",
+        headers=h,
+        json={"product_id": pid, "storage_location_id": loc_id, "quantity": 1},
+    )
+    close_filled = await async_client.post(
+        f"/operations/marketplace-unload-requests/{mid}/boxes/{filled_id}/close",
+        headers=h,
+    )
+    assert close_filled.status_code == 200, close_filled.text
+
+    empty = await async_client.post(
+        f"/operations/marketplace-unload-requests/{mid}/boxes",
+        headers=h,
+        json={"box_preset": "60_40_40"},
+    )
+    assert empty.status_code == 201, empty.text
+    empty_id = empty.json()["id"]
+
+    ship = await async_client.post(
+        f"/operations/marketplace-unload-requests/{mid}/ship",
+        headers=h,
+    )
+    assert ship.status_code == 200, ship.text
+
+    detail = await async_client.get(f"/operations/marketplace-unload-requests/{mid}", headers=h)
+    box_ids = {b["id"] for b in detail.json()["boxes"]}
+    assert filled_id in box_ids
+    assert empty_id not in box_ids
+
+
+@pytest.mark.asyncio
+async def test_marketplace_unload_ship_blocked_when_distribution_incomplete(
+    async_client: AsyncClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # TASK-014 / DEC-010: ship without full box distribution is rejected
+    suffix = str(int(time.time() * 1000))
+    reg = await async_client.post(
+        "/auth/register",
+        json={
+            "organization_name": "MuPartial Co",
+            "slug": f"mup-{suffix}",
+            "admin_email": f"mup-{suffix}@example.com",
+            "password": "password123",
+        },
+    )
+    token = str(reg.json()["access_token"])
+    h = {"Authorization": f"Bearer {token}"}
+    wh = await async_client.post(
+        "/warehouses", headers=h, json={"name": "W", "code": f"w-{suffix}"}
+    )
+    wid = wh.json()["id"]
+    sid, wb_wid = await _seller_wb_mp_warehouse(async_client, h, monkeypatch)
+    pr = await async_client.post(
+        "/products",
+        headers=h,
+        json={
+            "name": "P",
+            "sku_code": f"S-{suffix}",
+            "length_mm": 1,
+            "width_mm": 1,
+            "height_mm": 1,
+            "seller_id": sid,
+        },
+    )
+    pid = pr.json()["id"]
+    await _link_product_wb_barcode(
+        async_client, h, seller_id=sid, product_id=pid, monkeypatch=monkeypatch
+    )
+    loc_id = await _post_inventory(
+        async_client,
+        h,
+        warehouse_id=wid,
+        product_id=pid,
+        qty=5,
+        location_code="MU-PART",
+    )
+    await _inventory_in_sorting_zone(async_client, h, warehouse_id=wid, product_id=pid, qty=5)
+
+    mu = await async_client.post(
+        "/operations/marketplace-unload-requests",
+        headers=h,
+        json={"warehouse_id": wid, "seller_id": sid, "wb_mp_warehouse_id": wb_wid},
+    )
+    mid = mu.json()["id"]
+    await async_client.post(
+        f"/operations/marketplace-unload-requests/{mid}/lines",
+        headers=h,
+        json={"product_id": pid, "quantity": 3},
+    )
+    await _patch_mp_planned_date(async_client, h, mid)
+    await _patch_packaging_instructions(async_client, h, pid)
+    await async_client.post(f"/operations/marketplace-unload-requests/{mid}/submit", headers=h)
+    await _finish_unload_packaging(async_client, h, mid)
+
+    loc = await async_client.get(f"/warehouses/{wid}/locations", headers=h)
+    loc_barcode = next(x for x in loc.json() if x["id"] == loc_id)["barcode"]
+
+    box = await async_client.post(
+        f"/operations/marketplace-unload-requests/{mid}/boxes",
+        headers=h,
+        json={"box_preset": "60_40_40"},
+    )
+    assert box.status_code == 201, box.text
+    box_id = box.json()["id"]
+
+    loc_scan = await async_client.post(
+        f"/operations/marketplace-unload-requests/{mid}/pick/scan",
+        headers=h,
+        json={"barcode": loc_barcode},
+    )
+    assert loc_scan.status_code == 200, loc_scan.text
+
+    prod_scan = await async_client.post(
+        f"/operations/marketplace-unload-requests/{mid}/boxes/{box_id}/scan",
+        headers=h,
+        json={"barcode": E2E_BARCODE, "storage_location_id": loc_id},
+    )
+    assert prod_scan.status_code == 200, prod_scan.text
+
+    ship = await async_client.post(
+        f"/operations/marketplace-unload-requests/{mid}/ship",
+        headers=h,
+    )
+    assert ship.status_code == 422
+    assert ship.json()["detail"] == "distribution_incomplete"
+
+    ship_ack = await async_client.post(
+        f"/operations/marketplace-unload-requests/{mid}/ship",
+        headers=h,
+        json={"acknowledge_discrepancy": True},
+    )
+    assert ship_ack.status_code == 200, ship_ack.text
+    assert ship_ack.json()["status"] == "shipped"
+    assert ship_ack.json()["ff_modified"] is True
+    line = ship_ack.json()["lines"][0]
+    assert line["picked_qty"] == 1
+    assert line["has_discrepancy"] is True
+
+
+@pytest.mark.asyncio
+async def test_marketplace_unload_packaging_task_sync_on_draft(
     async_client: AsyncClient, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     # TASK-006: packaging task on draft create; plan line sync; confirm idempotent
@@ -1066,3 +1532,813 @@ async def test_marketplace_unload_packaging_task_on_create_and_line_sync(
     )
     assert det_confirmed.json()["linked_packaging_task"]["task_id"] == task_id
     assert det_confirmed.json()["linked_packaging_task"]["qty_total"] == 4
+
+
+@pytest.mark.asyncio
+async def test_marketplace_unload_pick_allocations_admin_only(
+    async_client: AsyncClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """TASK-005: PUT pick-allocations — только админ FF; staff получает 403."""
+    suffix = str(int(time.time() * 1000))
+    reg = await async_client.post(
+        "/auth/register",
+        json={
+            "organization_name": "PickAlloc Co",
+            "slug": f"pickalloc-{suffix}",
+            "admin_email": f"adm-pick-{suffix}@example.com",
+            "password": "password123",
+        },
+    )
+    admin_tok = str(reg.json()["access_token"])
+    ah = {"Authorization": f"Bearer {admin_tok}"}
+    wh = await async_client.post(
+        "/warehouses", headers=ah, json={"name": "W", "code": f"w-pa-{suffix}"}
+    )
+    wid = wh.json()["id"]
+    sid, wb_wid = await _seller_wb_mp_warehouse(async_client, ah, monkeypatch)
+    pr = await async_client.post(
+        "/products",
+        headers=ah,
+        json={
+            "name": "P",
+            "sku_code": f"S-pa-{suffix}",
+            "length_mm": 1,
+            "width_mm": 1,
+            "height_mm": 1,
+            "seller_id": sid,
+        },
+    )
+    pid = pr.json()["id"]
+    await _patch_packaging_instructions(async_client, ah, pid)
+    loc_id = await _post_inventory(
+        async_client,
+        ah,
+        warehouse_id=wid,
+        product_id=pid,
+        qty=5,
+        location_code="PA-LOC",
+    )
+    await _inventory_in_sorting_zone(
+        async_client, ah, warehouse_id=wid, product_id=pid, qty=5
+    )
+    mu = await async_client.post(
+        "/operations/marketplace-unload-requests",
+        headers=ah,
+        json={"warehouse_id": wid, "seller_id": sid, "wb_mp_warehouse_id": wb_wid},
+    )
+    mid = mu.json()["id"]
+    await async_client.post(
+        f"/operations/marketplace-unload-requests/{mid}/lines",
+        headers=ah,
+        json={"product_id": pid, "quantity": 2},
+    )
+    await _patch_mp_planned_date(async_client, ah, mid)
+    await async_client.post(f"/operations/marketplace-unload-requests/{mid}/submit", headers=ah)
+    await _finish_unload_packaging(async_client, ah, mid)
+    box = await async_client.post(
+        f"/operations/marketplace-unload-requests/{mid}/boxes",
+        headers=ah,
+        json={"box_preset": "60_40_40"},
+    )
+    assert box.status_code == 201, box.text
+
+    staff_email = f"staff-pa-{suffix}@example.com"
+    created = await async_client.post(
+        "/auth/staff-accounts",
+        headers=ah,
+        json={"email": staff_email},
+    )
+    assert created.status_code == 201, created.text
+    staff_id = created.json()["id"]
+    await async_client.patch(
+        f"/auth/staff-accounts/{staff_id}/permissions",
+        headers=ah,
+        json={
+            "settings": False,
+            "mp_shipments": True,
+            "reception": False,
+            "cells": False,
+            "inventory": False,
+            "packaging": False,
+        },
+    )
+    await async_client.post(
+        "/auth/set-initial-password",
+        json={"email": staff_email, "password": "password123"},
+    )
+    login = await async_client.post(
+        "/auth/login",
+        json={"email": staff_email, "password": "password123"},
+    )
+    sh = {"Authorization": f"Bearer {login.json()['access_token']}"}
+
+    staff_forbidden = await async_client.put(
+        f"/operations/marketplace-unload-requests/{mid}/pick-allocations",
+        headers=sh,
+        json={
+            "allocations": [
+                {
+                    "product_id": pid,
+                    "storage_location_id": loc_id,
+                    "quantity": 1,
+                }
+            ]
+        },
+    )
+    assert staff_forbidden.status_code == 403
+    assert staff_forbidden.json()["detail"] == "admin_only"
+
+    admin_ok = await async_client.put(
+        f"/operations/marketplace-unload-requests/{mid}/pick-allocations",
+        headers=ah,
+        json={
+            "allocations": [
+                {
+                    "product_id": pid,
+                    "storage_location_id": loc_id,
+                    "quantity": 1,
+                }
+            ]
+        },
+    )
+    assert admin_ok.status_code == 200, admin_ok.text
+    assert len(admin_ok.json()) >= 1
+
+
+@pytest.mark.asyncio
+async def test_marketplace_unload_create_boxes_batch(
+    async_client: AsyncClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """REV-FIX-002 / S05: POST boxes/batch создаёт N открытых коробов и ШК."""
+    suffix = str(int(time.time() * 1000))
+    reg = await async_client.post(
+        "/auth/register",
+        json={
+            "organization_name": "BatchBox Co",
+            "slug": f"batchbox-{suffix}",
+            "admin_email": f"adm-bb-{suffix}@example.com",
+            "password": "password123",
+        },
+    )
+    ah = {"Authorization": f"Bearer {reg.json()['access_token']}"}
+    wh = await async_client.post(
+        "/warehouses", headers=ah, json={"name": "W", "code": f"w-bb-{suffix}"}
+    )
+    wid = wh.json()["id"]
+    sid, wb_wid = await _seller_wb_mp_warehouse(async_client, ah, monkeypatch)
+    pr = await async_client.post(
+        "/products",
+        headers=ah,
+        json={
+            "name": "P",
+            "sku_code": f"S-bb-{suffix}",
+            "length_mm": 1,
+            "width_mm": 1,
+            "height_mm": 1,
+            "seller_id": sid,
+        },
+    )
+    pid = pr.json()["id"]
+    await _patch_packaging_instructions(async_client, ah, pid)
+    loc_id = await _post_inventory(
+        async_client,
+        ah,
+        warehouse_id=wid,
+        product_id=pid,
+        qty=5,
+        location_code="BB-LOC",
+    )
+    await _inventory_in_sorting_zone(
+        async_client, ah, warehouse_id=wid, product_id=pid, qty=3
+    )
+    mu = await async_client.post(
+        "/operations/marketplace-unload-requests",
+        headers=ah,
+        json={"warehouse_id": wid, "seller_id": sid, "wb_mp_warehouse_id": wb_wid},
+    )
+    mid = mu.json()["id"]
+    await async_client.post(
+        f"/operations/marketplace-unload-requests/{mid}/lines",
+        headers=ah,
+        json={"product_id": pid, "quantity": 2},
+    )
+    await _patch_mp_planned_date(async_client, ah, mid)
+    sub = await async_client.post(
+        f"/operations/marketplace-unload-requests/{mid}/submit", headers=ah
+    )
+    assert sub.status_code == 200, sub.text
+    await _finish_unload_packaging(async_client, ah, mid)
+
+    invalid_count = await async_client.post(
+        f"/operations/marketplace-unload-requests/{mid}/boxes/batch",
+        headers=ah,
+        json={"count": 0, "box_preset": "60_40_40"},
+    )
+    assert invalid_count.status_code == 422
+
+    batch = await async_client.post(
+        f"/operations/marketplace-unload-requests/{mid}/boxes/batch",
+        headers=ah,
+        json={"count": 3, "box_preset": "60_40_40"},
+    )
+    assert batch.status_code == 201, batch.text
+    boxes = batch.json()
+    assert len(boxes) == 3
+    barcodes = {b["internal_barcode"] for b in boxes}
+    assert len(barcodes) == 3
+    assert all(b["closed_at"] is None for b in boxes)
+    assert all(b["lines"] == [] for b in boxes)
+
+    second_box_id = boxes[1]["id"]
+    manual = await async_client.post(
+        f"/operations/marketplace-unload-requests/{mid}/boxes/{second_box_id}/manual-line",
+        headers=ah,
+        json={"product_id": pid, "storage_location_id": loc_id, "quantity": 1},
+    )
+    assert manual.status_code == 200, manual.text
+
+    detail = await async_client.get(
+        f"/operations/marketplace-unload-requests/{mid}", headers=ah
+    )
+    assert len(detail.json()["boxes"]) == 3
+
+
+@pytest.mark.asyncio
+async def test_marketplace_unload_create_boxes_batch_one_by_one(
+    async_client: AsyncClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """REV-FIX-009: два последовательных batch create по 1 коробу — без open_box_exists."""
+    suffix = str(int(time.time() * 1000))
+    reg = await async_client.post(
+        "/auth/register",
+        json={
+            "organization_name": "BatchOne Co",
+            "slug": f"batchone-{suffix}",
+            "admin_email": f"adm-bo-{suffix}@example.com",
+            "password": "password123",
+        },
+    )
+    ah = {"Authorization": f"Bearer {reg.json()['access_token']}"}
+    wh = await async_client.post(
+        "/warehouses", headers=ah, json={"name": "W", "code": f"w-bo-{suffix}"}
+    )
+    wid = wh.json()["id"]
+    sid, wb_wid = await _seller_wb_mp_warehouse(async_client, ah, monkeypatch)
+    pr = await async_client.post(
+        "/products",
+        headers=ah,
+        json={
+            "name": "P",
+            "sku_code": f"S-bo-{suffix}",
+            "length_mm": 1,
+            "width_mm": 1,
+            "height_mm": 1,
+            "seller_id": sid,
+        },
+    )
+    pid = pr.json()["id"]
+    await _patch_packaging_instructions(async_client, ah, pid)
+    await _post_inventory(
+        async_client,
+        ah,
+        warehouse_id=wid,
+        product_id=pid,
+        qty=5,
+        location_code="BO-LOC",
+    )
+    await _inventory_in_sorting_zone(
+        async_client, ah, warehouse_id=wid, product_id=pid, qty=3
+    )
+    mu = await async_client.post(
+        "/operations/marketplace-unload-requests",
+        headers=ah,
+        json={"warehouse_id": wid, "seller_id": sid, "wb_mp_warehouse_id": wb_wid},
+    )
+    mid = mu.json()["id"]
+    await async_client.post(
+        f"/operations/marketplace-unload-requests/{mid}/lines",
+        headers=ah,
+        json={"product_id": pid, "quantity": 2},
+    )
+    await _patch_mp_planned_date(async_client, ah, mid)
+    await async_client.post(f"/operations/marketplace-unload-requests/{mid}/submit", headers=ah)
+    await _finish_unload_packaging(async_client, ah, mid)
+
+    first = await async_client.post(
+        f"/operations/marketplace-unload-requests/{mid}/boxes/batch",
+        headers=ah,
+        json={"count": 1, "box_preset": "60_40_40"},
+    )
+    assert first.status_code == 201, first.text
+    first_boxes = first.json()
+    assert len(first_boxes) == 1
+    assert first_boxes[0]["closed_at"] is None
+
+    second = await async_client.post(
+        f"/operations/marketplace-unload-requests/{mid}/boxes/batch",
+        headers=ah,
+        json={"count": 1, "box_preset": "60_40_40"},
+    )
+    assert second.status_code == 201, second.text
+    second_boxes = second.json()
+    assert len(second_boxes) == 1
+    assert second_boxes[0]["closed_at"] is None
+    assert second_boxes[0]["id"] != first_boxes[0]["id"]
+
+    detail = await async_client.get(
+        f"/operations/marketplace-unload-requests/{mid}", headers=ah
+    )
+    assert len(detail.json()["boxes"]) == 2
+
+
+@pytest.mark.asyncio
+async def test_marketplace_unload_box_remove_copy_delete(
+    async_client: AsyncClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """TASK-010 / DEC-007: remove line rolls back stock; delete only empty; copy within plan."""
+    suffix = str(int(time.time() * 1000))
+    reg = await async_client.post(
+        "/auth/register",
+        json={
+            "organization_name": "BoxAct Co",
+            "slug": f"boxact-{suffix}",
+            "admin_email": f"adm-ba-{suffix}@example.com",
+            "password": "password123",
+        },
+    )
+    ah = {"Authorization": f"Bearer {reg.json()['access_token']}"}
+    wh = await async_client.post(
+        "/warehouses", headers=ah, json={"name": "W", "code": f"w-ba-{suffix}"}
+    )
+    wid = wh.json()["id"]
+    sid, wb_wid = await _seller_wb_mp_warehouse(async_client, ah, monkeypatch)
+    pr = await async_client.post(
+        "/products",
+        headers=ah,
+        json={
+            "name": "P",
+            "sku_code": f"S-ba-{suffix}",
+            "length_mm": 1,
+            "width_mm": 1,
+            "height_mm": 1,
+            "seller_id": sid,
+        },
+    )
+    pid = pr.json()["id"]
+    loc_id = await _post_inventory(
+        async_client,
+        ah,
+        warehouse_id=wid,
+        product_id=pid,
+        qty=10,
+        location_code="BA-LOC",
+    )
+    await _inventory_in_sorting_zone(
+        async_client, ah, warehouse_id=wid, product_id=pid, qty=5
+    )
+    mu = await async_client.post(
+        "/operations/marketplace-unload-requests",
+        headers=ah,
+        json={"warehouse_id": wid, "seller_id": sid, "wb_mp_warehouse_id": wb_wid},
+    )
+    mid = mu.json()["id"]
+    await async_client.post(
+        f"/operations/marketplace-unload-requests/{mid}/lines",
+        headers=ah,
+        json={"product_id": pid, "quantity": 5},
+    )
+    await _patch_mp_planned_date(async_client, ah, mid)
+    await _patch_packaging_instructions(async_client, ah, pid)
+    await async_client.post(
+        f"/operations/marketplace-unload-requests/{mid}/submit", headers=ah
+    )
+    await _finish_unload_packaging(async_client, ah, mid)
+
+    box = await async_client.post(
+        f"/operations/marketplace-unload-requests/{mid}/boxes",
+        headers=ah,
+        json={"box_preset": "60_40_40"},
+    )
+    assert box.status_code == 201, box.text
+    box_id = box.json()["id"]
+    add = await async_client.post(
+        f"/operations/marketplace-unload-requests/{mid}/boxes/{box_id}/manual-line",
+        headers=ah,
+        json={"product_id": pid, "storage_location_id": loc_id, "quantity": 4},
+    )
+    assert add.status_code == 200, add.text
+    line_id = add.json()["id"]
+
+    bal_after_collect = await async_client.get(
+        "/operations/inventory-balances/summary",
+        headers=ah,
+        params={"warehouse_id": wid},
+    )
+    row_after = next(x for x in bal_after_collect.json() if x["product_id"] == pid)
+    assert row_after["quantity"] == 11
+
+    blocked_delete = await async_client.delete(
+        f"/operations/marketplace-unload-requests/{mid}/boxes/{box_id}",
+        headers=ah,
+    )
+    assert blocked_delete.status_code == 409
+    assert blocked_delete.json()["detail"] == "box_not_empty"
+
+    remove = await async_client.post(
+        f"/operations/marketplace-unload-requests/{mid}/boxes/{box_id}/lines/{line_id}/remove",
+        headers=ah,
+        json={"quantity": 2},
+    )
+    assert remove.status_code == 200, remove.text
+    assert remove.json()["quantity"] == 2
+
+    bal_after_remove = await async_client.get(
+        "/operations/inventory-balances/summary",
+        headers=ah,
+        params={"warehouse_id": wid},
+    )
+    row_removed = next(x for x in bal_after_remove.json() if x["product_id"] == pid)
+    assert row_removed["quantity"] == 13
+
+    await async_client.post(
+        f"/operations/marketplace-unload-requests/{mid}/boxes/{box_id}/lines/{line_id}/remove",
+        headers=ah,
+        json={},
+    )
+    empty_delete = await async_client.delete(
+        f"/operations/marketplace-unload-requests/{mid}/boxes/{box_id}",
+        headers=ah,
+    )
+    assert empty_delete.status_code == 204, empty_delete.text
+
+    box2 = await async_client.post(
+        f"/operations/marketplace-unload-requests/{mid}/boxes",
+        headers=ah,
+        json={"box_preset": "60_40_40"},
+    )
+    box2_id = box2.json()["id"]
+    await async_client.post(
+        f"/operations/marketplace-unload-requests/{mid}/boxes/{box2_id}/manual-line",
+        headers=ah,
+        json={"product_id": pid, "storage_location_id": loc_id, "quantity": 2},
+    )
+    await async_client.post(
+        f"/operations/marketplace-unload-requests/{mid}/boxes/{box2_id}/close",
+        headers=ah,
+    )
+
+    copy_ok = await async_client.post(
+        f"/operations/marketplace-unload-requests/{mid}/boxes/{box2_id}/copy",
+        headers=ah,
+    )
+    assert copy_ok.status_code == 201, copy_ok.text
+    copied = copy_ok.json()
+    assert copied["closed_at"]
+    detail_after_copy = await async_client.get(
+        f"/operations/marketplace-unload-requests/{mid}", headers=ah
+    )
+    copied_box = next(
+        b for b in detail_after_copy.json()["boxes"] if b["id"] == copied["id"]
+    )
+    assert len(copied_box["lines"]) == 1
+    assert copied_box["lines"][0]["quantity"] == 2
+
+    copy_blocked = await async_client.post(
+        f"/operations/marketplace-unload-requests/{mid}/boxes/{box2_id}/copy",
+        headers=ah,
+    )
+    assert copy_blocked.status_code == 422
+    assert copy_blocked.json()["detail"] == "plan_limit_exceeded"
+
+
+@pytest.mark.asyncio
+async def test_marketplace_unload_box_ops_blocked_before_packaging_done(
+    async_client: AsyncClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """TASK-008: create box / batch blocked until packaging task is done."""
+    suffix = str(int(time.time() * 1000))
+    reg = await async_client.post(
+        "/auth/register",
+        json={
+            "organization_name": "PkgGate Co",
+            "slug": f"pkggate-{suffix}",
+            "admin_email": f"pkggate-{suffix}@example.com",
+            "password": "password123",
+        },
+    )
+    ah = {"Authorization": f"Bearer {reg.json()['access_token']}"}
+    wh = await async_client.post(
+        "/warehouses", headers=ah, json={"name": "W", "code": f"w-pg-{suffix}"}
+    )
+    wid = wh.json()["id"]
+    sid, wb_wid = await _seller_wb_mp_warehouse(async_client, ah, monkeypatch)
+    pr = await async_client.post(
+        "/products",
+        headers=ah,
+        json={
+            "name": "P",
+            "sku_code": f"S-pg-{suffix}",
+            "length_mm": 1,
+            "width_mm": 1,
+            "height_mm": 1,
+            "seller_id": sid,
+        },
+    )
+    pid = pr.json()["id"]
+    await _patch_packaging_instructions(async_client, ah, pid)
+    await _post_inventory(
+        async_client,
+        ah,
+        warehouse_id=wid,
+        product_id=pid,
+        qty=5,
+        location_code="PG-LOC",
+    )
+    mu = await async_client.post(
+        "/operations/marketplace-unload-requests",
+        headers=ah,
+        json={"warehouse_id": wid, "seller_id": sid, "wb_mp_warehouse_id": wb_wid},
+    )
+    mid = mu.json()["id"]
+    await async_client.post(
+        f"/operations/marketplace-unload-requests/{mid}/lines",
+        headers=ah,
+        json={"product_id": pid, "quantity": 2},
+    )
+    await _patch_mp_planned_date(async_client, ah, mid)
+    sub = await async_client.post(
+        f"/operations/marketplace-unload-requests/{mid}/submit", headers=ah
+    )
+    assert sub.status_code == 200, sub.text
+
+    blocked_box = await async_client.post(
+        f"/operations/marketplace-unload-requests/{mid}/boxes",
+        headers=ah,
+        json={"box_preset": "60_40_40"},
+    )
+    assert blocked_box.status_code == 422
+    assert blocked_box.json()["detail"] == "packaging_not_done"
+
+    blocked_batch = await async_client.post(
+        f"/operations/marketplace-unload-requests/{mid}/boxes/batch",
+        headers=ah,
+        json={"count": 2, "box_preset": "60_40_40"},
+    )
+    assert blocked_batch.status_code == 422
+    assert blocked_batch.json()["detail"] == "packaging_not_done"
+
+
+@pytest.mark.asyncio
+async def test_marketplace_unload_ship_rejects_empty_boxes_only(
+    async_client: AsyncClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """TASK-015/016: ship requires full box distribution; empty boxes are not enough."""
+    suffix = str(int(time.time() * 1000))
+    reg = await async_client.post(
+        "/auth/register",
+        json={
+            "organization_name": "EmptyBox Co",
+            "slug": f"emptybox-{suffix}",
+            "admin_email": f"emptybox-{suffix}@example.com",
+            "password": "password123",
+        },
+    )
+    ah = {"Authorization": f"Bearer {reg.json()['access_token']}"}
+    wh = await async_client.post(
+        "/warehouses", headers=ah, json={"name": "W", "code": f"w-eb-{suffix}"}
+    )
+    wid = wh.json()["id"]
+    sid, wb_wid = await _seller_wb_mp_warehouse(async_client, ah, monkeypatch)
+    pr = await async_client.post(
+        "/products",
+        headers=ah,
+        json={
+            "name": "P",
+            "sku_code": f"S-eb-{suffix}",
+            "length_mm": 1,
+            "width_mm": 1,
+            "height_mm": 1,
+            "seller_id": sid,
+        },
+    )
+    pid = pr.json()["id"]
+    await _patch_packaging_instructions(async_client, ah, pid)
+    await _post_inventory(
+        async_client,
+        ah,
+        warehouse_id=wid,
+        product_id=pid,
+        qty=5,
+        location_code="EB-LOC",
+    )
+    await _inventory_in_sorting_zone(
+        async_client, ah, warehouse_id=wid, product_id=pid, qty=5
+    )
+    mu = await async_client.post(
+        "/operations/marketplace-unload-requests",
+        headers=ah,
+        json={"warehouse_id": wid, "seller_id": sid, "wb_mp_warehouse_id": wb_wid},
+    )
+    mid = mu.json()["id"]
+    await async_client.post(
+        f"/operations/marketplace-unload-requests/{mid}/lines",
+        headers=ah,
+        json={"product_id": pid, "quantity": 3},
+    )
+    await _patch_mp_planned_date(async_client, ah, mid)
+    await async_client.post(f"/operations/marketplace-unload-requests/{mid}/submit", headers=ah)
+    await _finish_unload_packaging(async_client, ah, mid)
+
+    batch = await async_client.post(
+        f"/operations/marketplace-unload-requests/{mid}/boxes/batch",
+        headers=ah,
+        json={"count": 2, "box_preset": "60_40_40"},
+    )
+    assert batch.status_code == 201, batch.text
+    assert all(b["lines"] == [] for b in batch.json())
+
+    ship = await async_client.post(
+        f"/operations/marketplace-unload-requests/{mid}/ship",
+        headers=ah,
+    )
+    assert ship.status_code == 422
+    assert ship.json()["detail"] == "distribution_incomplete"
+
+
+@pytest.mark.asyncio
+async def test_marketplace_unload_cancel_partial_distribution_restores_inventory(
+    async_client: AsyncClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """TASK-019 / DEC-016: cancel before ship rolls back box stock and clears reserves."""
+    suffix = str(int(time.time() * 1000))
+    reg = await async_client.post(
+        "/auth/register",
+        json={
+            "organization_name": "CancelMu Co",
+            "slug": f"cancelmu-{suffix}",
+            "admin_email": f"cancelmu-{suffix}@example.com",
+            "password": "password123",
+        },
+    )
+    ah = {"Authorization": f"Bearer {reg.json()['access_token']}"}
+    wh = await async_client.post(
+        "/warehouses", headers=ah, json={"name": "W", "code": f"w-cancel-{suffix}"}
+    )
+    wid = wh.json()["id"]
+    sid, wb_wid = await _seller_wb_mp_warehouse(async_client, ah, monkeypatch)
+    pr = await async_client.post(
+        "/products",
+        headers=ah,
+        json={
+            "name": "P",
+            "sku_code": f"S-cancel-{suffix}",
+            "length_mm": 1,
+            "width_mm": 1,
+            "height_mm": 1,
+            "seller_id": sid,
+        },
+    )
+    pid = pr.json()["id"]
+    await _patch_packaging_instructions(async_client, ah, pid)
+    loc_id = await _post_inventory(
+        async_client,
+        ah,
+        warehouse_id=wid,
+        product_id=pid,
+        qty=5,
+        location_code="CANCEL-LOC",
+    )
+    await _inventory_in_sorting_zone(
+        async_client, ah, warehouse_id=wid, product_id=pid, qty=5
+    )
+
+    bal_before = await async_client.get(
+        "/operations/inventory-balances/summary",
+        headers=ah,
+        params={"warehouse_id": wid},
+    )
+    row_before = next(x for x in bal_before.json() if x["product_id"] == pid)
+    assert row_before["quantity"] == 10
+
+    mu = await async_client.post(
+        "/operations/marketplace-unload-requests",
+        headers=ah,
+        json={"warehouse_id": wid, "seller_id": sid, "wb_mp_warehouse_id": wb_wid},
+    )
+    mid = mu.json()["id"]
+    await async_client.post(
+        f"/operations/marketplace-unload-requests/{mid}/lines",
+        headers=ah,
+        json={"product_id": pid, "quantity": 5},
+    )
+    await _patch_mp_planned_date(async_client, ah, mid)
+    sub = await async_client.post(
+        f"/operations/marketplace-unload-requests/{mid}/submit", headers=ah
+    )
+    assert sub.status_code == 200, sub.text
+    await _finish_unload_packaging(async_client, ah, mid)
+
+    box = await async_client.post(
+        f"/operations/marketplace-unload-requests/{mid}/boxes",
+        headers=ah,
+        json={"box_preset": "60_40_40"},
+    )
+    assert box.status_code == 201, box.text
+    box_id = box.json()["id"]
+    add = await async_client.post(
+        f"/operations/marketplace-unload-requests/{mid}/boxes/{box_id}/manual-line",
+        headers=ah,
+        json={"product_id": pid, "storage_location_id": loc_id, "quantity": 2},
+    )
+    assert add.status_code == 200, add.text
+
+    bal_partial = await async_client.get(
+        "/operations/inventory-balances/summary",
+        headers=ah,
+        params={"warehouse_id": wid},
+    )
+    row_partial = next(x for x in bal_partial.json() if x["product_id"] == pid)
+    assert row_partial["quantity"] == 8
+
+    locs = await async_client.get(f"/warehouses/{wid}/locations", headers=ah)
+    sorting_id = next(x for x in locs.json() if x["code"] == "__SORTING__")["id"]
+    bal_loc_before = await async_client.get(
+        "/operations/inventory-balances",
+        headers=ah,
+        params={"storage_location_id": loc_id},
+    )
+    bal_sort_before = await async_client.get(
+        "/operations/inventory-balances",
+        headers=ah,
+        params={"storage_location_id": sorting_id},
+    )
+    loc_qty_before = next(x for x in bal_loc_before.json() if x["product_id"] == pid)["quantity"]
+    sort_qty_before = next(x for x in bal_sort_before.json() if x["product_id"] == pid)["quantity"]
+
+    detail_partial = await async_client.get(
+        f"/operations/marketplace-unload-requests/{mid}", headers=ah
+    )
+    assert detail_partial.json()["lines"][0]["picked_qty"] == 2
+    assert detail_partial.json()["boxes"][0]["lines"][0]["quantity"] == 2
+
+    cancel = await async_client.post(
+        f"/operations/marketplace-unload-requests/{mid}/cancel",
+        headers=ah,
+    )
+    assert cancel.status_code == 200, cancel.text
+    assert cancel.json()["status"] == "cancelled"
+
+    detail_cancel = await async_client.get(
+        f"/operations/marketplace-unload-requests/{mid}", headers=ah
+    )
+    body = detail_cancel.json()
+    assert body["lines"][0]["picked_qty"] == 0
+    assert all(box["lines"] == [] for box in body["boxes"])
+
+    bal_after = await async_client.get(
+        "/operations/inventory-balances/summary",
+        headers=ah,
+        params={"warehouse_id": wid},
+    )
+    row_after = next(x for x in bal_after.json() if x["product_id"] == pid)
+    assert row_after["quantity"] == row_before["quantity"]
+
+    bal_loc_after = await async_client.get(
+        "/operations/inventory-balances",
+        headers=ah,
+        params={"storage_location_id": loc_id},
+    )
+    bal_sort_after = await async_client.get(
+        "/operations/inventory-balances",
+        headers=ah,
+        params={"storage_location_id": sorting_id},
+    )
+    loc_qty_after = next(x for x in bal_loc_after.json() if x["product_id"] == pid)["quantity"]
+    sort_qty_after = next(x for x in bal_sort_after.json() if x["product_id"] == pid)["quantity"]
+    assert loc_qty_after == loc_qty_before
+    assert sort_qty_after == sort_qty_before + 2
+
+    mu2 = await async_client.post(
+        "/operations/marketplace-unload-requests",
+        headers=ah,
+        json={"warehouse_id": wid, "seller_id": sid, "wb_mp_warehouse_id": wb_wid},
+    )
+    mid2 = mu2.json()["id"]
+    add_line = await async_client.post(
+        f"/operations/marketplace-unload-requests/{mid2}/lines",
+        headers=ah,
+        json={"product_id": pid, "quantity": 3},
+    )
+    assert add_line.status_code == 201, add_line.text
+    await _patch_mp_planned_date(async_client, ah, mid2)
+    sub2 = await async_client.post(
+        f"/operations/marketplace-unload-requests/{mid2}/submit", headers=ah
+    )
+    assert sub2.status_code == 200, sub2.text
+
+    ship_blocked = await async_client.post(
+        f"/operations/marketplace-unload-requests/{mid}/ship",
+        headers=ah,
+    )
+    assert ship_blocked.status_code == 409
+    assert ship_blocked.json()["detail"] == "bad_status"

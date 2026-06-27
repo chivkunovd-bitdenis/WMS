@@ -108,6 +108,17 @@ test('FF packaging page: create from sorting and pack line', async ({ page }) =>
     page.getByTestId('ff-packaging-pack-btn').click(),
   ]);
 
+  await Promise.all([
+    page.waitForResponse(
+      (r) =>
+        r.request().method() === 'POST' &&
+        r.url().includes('/complete') &&
+        r.status() >= 200 &&
+        r.status() < 300,
+    ),
+    page.getByTestId('ff-packaging-complete').click(),
+  ]);
+
   await expect(page.getByTestId('ff-packaging-task-status')).toContainText('Выполнено');
 });
 

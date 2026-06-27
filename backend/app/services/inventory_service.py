@@ -760,6 +760,24 @@ async def list_locations_for_product_in_warehouse(
     return product_rows
 
 
+async def _lock_inventory_balance(
+    session: AsyncSession,
+    tenant_id: uuid.UUID,
+    product_id: uuid.UUID,
+    storage_location_id: uuid.UUID,
+) -> InventoryBalance | None:
+    stmt = (
+        select(InventoryBalance)
+        .where(
+            InventoryBalance.tenant_id == tenant_id,
+            InventoryBalance.product_id == product_id,
+            InventoryBalance.storage_location_id == storage_location_id,
+        )
+        .with_for_update()
+    )
+    return (await session.execute(stmt)).scalar_one_or_none()
+
+
 async def apply_marketplace_unload_pick(
     session: AsyncSession,
     *,
@@ -772,6 +790,12 @@ async def apply_marketplace_unload_pick(
     if quantity < 1:
         msg = "quantity must be positive"
         raise ValueError(msg)
+    bal = await _lock_inventory_balance(
+        session, tenant_id, product_id, storage_location_id
+    )
+    if bal is None or int(bal.quantity) < quantity:
+        msg = "insufficient stock"
+        raise ValueError(msg)
     await record_movement_and_adjust_balance(
         session,
         tenant_id=tenant_id,
@@ -781,6 +805,30 @@ async def apply_marketplace_unload_pick(
         movement_type=MOVEMENT_TYPE_MARKETPLACE_UNLOAD,
         marketplace_unload_request_id=marketplace_unload_request_id,
         deduct_prefer="packed",
+    )
+
+
+async def reverse_marketplace_unload_pick(
+    session: AsyncSession,
+    *,
+    tenant_id: uuid.UUID,
+    product_id: uuid.UUID,
+    storage_location_id: uuid.UUID,
+    quantity: int,
+    marketplace_unload_request_id: uuid.UUID,
+) -> None:
+    """DEC-016: restore on_hand when removing qty from shipment box."""
+    if quantity < 1:
+        msg = "quantity must be positive"
+        raise ValueError(msg)
+    await record_movement_and_adjust_balance(
+        session,
+        tenant_id=tenant_id,
+        product_id=product_id,
+        storage_location_id=storage_location_id,
+        quantity_delta=quantity,
+        movement_type=MOVEMENT_TYPE_MARKETPLACE_UNLOAD,
+        marketplace_unload_request_id=marketplace_unload_request_id,
     )
 
 
@@ -857,3 +905,101 @@ async def list_recent_movements(
         stmt = stmt.where(Product.seller_id == seller_product_owner_id)
     res = await session.execute(stmt)
     return [(m, p) for m, p in res.all()]
+
+
+async def transfer_on_hand_between_locations(
+    session: AsyncSession,
+    tenant_id: uuid.UUID,
+    *,
+    from_storage_location_id: uuid.UUID,
+    to_storage_location_id: uuid.UUID,
+    product_id: uuid.UUID,
+    quantity: int,
+) -> None:
+    """Перемещение фактического on_hand между ячейками (DEC-019 migration)."""
+    if quantity < 1:
+        msg = "quantity must be positive"
+        raise ValueError(msg)
+    if from_storage_location_id == to_storage_location_id:
+        msg = "from and to must differ"
+        raise ValueError(msg)
+
+    loc_from = await session.get(StorageLocation, from_storage_location_id)
+    loc_to = await session.get(StorageLocation, to_storage_location_id)
+    if (
+        loc_from is None
+        or loc_to is None
+        or loc_from.tenant_id != tenant_id
+        or loc_to.tenant_id != tenant_id
+    ):
+        msg = "storage location not found"
+        raise ValueError(msg)
+    if loc_from.warehouse_id != loc_to.warehouse_id:
+        msg = "locations must be in the same warehouse"
+        raise ValueError(msg)
+
+    on_hand = await _physical_on_hand(
+        session, tenant_id, product_id, from_storage_location_id
+    )
+    if on_hand < quantity:
+        msg = "insufficient stock"
+        raise ValueError(msg)
+
+    group_id = uuid.uuid4()
+    await record_movement_and_adjust_balance(
+        session,
+        tenant_id=tenant_id,
+        product_id=product_id,
+        storage_location_id=from_storage_location_id,
+        quantity_delta=-quantity,
+        movement_type=MOVEMENT_TYPE_STOCK_TRANSFER_OUT,
+        transfer_group_id=group_id,
+    )
+    await record_movement_and_adjust_balance(
+        session,
+        tenant_id=tenant_id,
+        product_id=product_id,
+        storage_location_id=to_storage_location_id,
+        quantity_delta=quantity,
+        movement_type=MOVEMENT_TYPE_STOCK_TRANSFER_IN,
+        transfer_group_id=group_id,
+    )
+
+
+async def migrate_all_address_balances_to_sorting(
+    session: AsyncSession,
+    tenant_id: uuid.UUID,
+) -> None:
+    """DEC-019: move all address-cell on_hand balances to sorting virtual zone."""
+    from app.services import sorting_location_service as sort_loc_svc
+
+    stmt = (
+        select(InventoryBalance, StorageLocation)
+        .join(StorageLocation, StorageLocation.id == InventoryBalance.storage_location_id)
+        .where(
+            InventoryBalance.tenant_id == tenant_id,
+            InventoryBalance.quantity > 0,
+            StorageLocation.code != SORTING_LOCATION_CODE,
+        )
+    )
+    rows = (await session.execute(stmt)).all()
+    sorting_by_wh: dict[uuid.UUID, uuid.UUID] = {}
+
+    for bal, loc in rows:
+        qty = int(bal.quantity)
+        if qty < 1:
+            continue
+        wh_id = loc.warehouse_id
+        if wh_id not in sorting_by_wh:
+            sorting_loc = await sort_loc_svc.get_or_create_sorting_location(
+                session, tenant_id, wh_id
+            )
+            sorting_by_wh[wh_id] = sorting_loc.id
+        await transfer_on_hand_between_locations(
+            session,
+            tenant_id,
+            from_storage_location_id=bal.storage_location_id,
+            to_storage_location_id=sorting_by_wh[wh_id],
+            product_id=bal.product_id,
+            quantity=qty,
+        )

@@ -34,8 +34,10 @@ STATUS_DRAFT = "draft"
 STATUS_SUBMITTED = "submitted"
 STATUS_CONFIRMED = "confirmed"
 STATUS_SHIPPED = "shipped"
+STATUS_CANCELLED = "cancelled"
 
 RESERVE_STATUSES = (STATUS_SUBMITTED, STATUS_CONFIRMED)
+CANCELLABLE_STATUSES = (STATUS_SUBMITTED, STATUS_CONFIRMED)
 SELLER_EDITABLE_STATUSES = (STATUS_DRAFT,)
 FF_LINE_EDITABLE_STATUSES = (STATUS_DRAFT, STATUS_CONFIRMED)
 
@@ -61,17 +63,14 @@ def assert_request_visible(
         raise MarketplaceUnloadError("not_found")
 
 
-async def _sync_packaging_from_plan(
+async def _sync_packaging_task_for_unload(
     session: AsyncSession,
     tenant_id: uuid.UUID,
     request_id: uuid.UUID,
 ) -> None:
     from app.services import packaging_task_service as pkg_svc
 
-    task = await pkg_svc.get_task_for_unload(session, tenant_id, request_id)
-    if task is None:
-        return
-    await pkg_svc.sync_lines_from_unload_plan(session, tenant_id, task)
+    await pkg_svc.ensure_task_for_unload(session, tenant_id, request_id)
 
 
 async def create_request(
@@ -108,11 +107,7 @@ async def create_request(
 
     await notify_ff_marketplace_unload_created(session, req)
     await session.commit()
-
-    from app.services import packaging_task_service as pkg_svc
-
-    await pkg_svc.ensure_task_for_unload(session, tenant_id, req.id)
-
+    await _sync_packaging_task_for_unload(session, tenant_id, req.id)
     return req
 
 
@@ -400,7 +395,7 @@ async def add_line(
         req.ff_modified = True
     await session.commit()
     await session.refresh(line, attribute_names=["product"])
-    await _sync_packaging_from_plan(session, tenant_id, request_id)
+    await _sync_packaging_task_for_unload(session, tenant_id, request_id)
     return line
 
 
@@ -448,9 +443,9 @@ async def replace_lines(
             )
         )
     await session.commit()
+    await _sync_packaging_task_for_unload(session, tenant_id, request_id)
     r2 = await get_request(session, tenant_id, request_id)
     assert r2 is not None
-    await _sync_packaging_from_plan(session, tenant_id, request_id)
     return r2
 
 
@@ -575,6 +570,115 @@ async def release_reservations_for_shipped(
     await _release_reservations(session, request_id)
 
 
+async def reduce_reservation_for_collect(
+    session: AsyncSession,
+    request_id: uuid.UUID,
+    product_id: uuid.UUID,
+    quantity: int,
+) -> None:
+    """DEC-016: collect_into_box reduces warehouse reserve alongside on_hand deduct."""
+    if quantity < 1:
+        return
+    stmt = (
+        select(MarketplaceUnloadReservation)
+        .join(
+            MarketplaceUnloadLine,
+            MarketplaceUnloadLine.id
+            == MarketplaceUnloadReservation.marketplace_unload_line_id,
+        )
+        .where(
+            MarketplaceUnloadLine.request_id == request_id,
+            MarketplaceUnloadReservation.product_id == product_id,
+            MarketplaceUnloadReservation.quantity > 0,
+        )
+        .with_for_update()
+    )
+    res = await session.execute(stmt)
+    remaining = quantity
+    for reservation in res.scalars().all():
+        if remaining < 1:
+            break
+        take = min(int(reservation.quantity), remaining)
+        reservation.quantity = int(reservation.quantity) - take
+        remaining -= take
+
+
+async def restore_reservation_for_remove(
+    session: AsyncSession,
+    request_id: uuid.UUID,
+    product_id: uuid.UUID,
+    quantity: int,
+    *,
+    tenant_id: uuid.UUID,
+    warehouse_id: uuid.UUID,
+) -> None:
+    """DEC-016: remove-from-box restores warehouse reserve."""
+    if quantity < 1:
+        return
+    line_stmt = select(MarketplaceUnloadLine).where(
+        MarketplaceUnloadLine.request_id == request_id,
+        MarketplaceUnloadLine.product_id == product_id,
+    )
+    line_res = await session.execute(line_stmt)
+    unload_line = line_res.scalar_one_or_none()
+    if unload_line is None:
+        return
+    res_stmt = (
+        select(MarketplaceUnloadReservation)
+        .where(
+            MarketplaceUnloadReservation.marketplace_unload_line_id == unload_line.id,
+        )
+        .with_for_update()
+    )
+    res_row = await session.execute(res_stmt)
+    reservation = res_row.scalar_one_or_none()
+    if reservation is None:
+        reservation = MarketplaceUnloadReservation(
+            tenant_id=tenant_id,
+            marketplace_unload_line_id=unload_line.id,
+            product_id=product_id,
+            warehouse_id=warehouse_id,
+            quantity=0,
+        )
+        session.add(reservation)
+        await session.flush()
+    reservation.quantity = int(reservation.quantity) + quantity
+
+
+async def delete_empty_boxes_for_ship(
+    session: AsyncSession, req: MarketplaceUnloadRequest
+) -> None:
+    """DEC-002: empty boxes (no lines) are removed when shipment is posted."""
+    for box in list(req.boxes):
+        if not box.lines:
+            await session.delete(box)
+
+
+async def cancel_request(
+    session: AsyncSession,
+    tenant_id: uuid.UUID,
+    request_id: uuid.UUID,
+) -> MarketplaceUnloadRequest:
+    """TASK-019 / DEC-016: abandon unload before ship — restore box stock and clear reserves."""
+    req = await get_request(session, tenant_id, request_id)
+    if req is None:
+        raise MarketplaceUnloadError("not_found")
+    if req.status not in CANCELLABLE_STATUSES:
+        raise MarketplaceUnloadError("bad_status")
+
+    from app.services import marketplace_unload_collect_service as collect_svc
+
+    await collect_svc.rollback_all_collected_for_cancel(
+        session, tenant_id, req.warehouse_id, request_id
+    )
+    await _release_reservations(session, request_id)
+    req.status = STATUS_CANCELLED
+    await session.commit()
+    r2 = await get_request(session, tenant_id, request_id)
+    assert r2 is not None
+    return r2
+
+
 async def delete_line(
     session: AsyncSession,
     tenant_id: uuid.UUID,
@@ -596,4 +700,4 @@ async def delete_line(
     if allow_ff_confirmed and req.status == STATUS_CONFIRMED:
         req.ff_modified = True
     await session.commit()
-    await _sync_packaging_from_plan(session, tenant_id, request_id)
+    await _sync_packaging_task_for_unload(session, tenant_id, request_id)

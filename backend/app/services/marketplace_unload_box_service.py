@@ -3,7 +3,9 @@
 from __future__ import annotations
 
 import uuid
+from dataclasses import dataclass
 from datetime import UTC, datetime
+from typing import Literal
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -14,21 +16,38 @@ from app.models.marketplace_unload import (
     MarketplaceUnloadBox,
     MarketplaceUnloadBoxLine,
     MarketplaceUnloadLine,
+    MarketplaceUnloadPickAllocation,
     MarketplaceUnloadRequest,
 )
 from app.services import marketplace_unload_collect_service as collect_svc
 from app.services import marketplace_unload_service as mu_svc
+from app.services import tenant_settings_service as tenant_settings_svc
 from app.services import warehouse_box_service as wh_box_svc
-from app.services.marketplace_unload_pick_service import MarketplaceUnloadPickError
+from app.services.marketplace_unload_pick_service import (
+    MarketplaceUnloadPickError,
+    find_location_by_barcode,
+)
 from app.services.seller_wb_catalog_service import list_seller_wb_catalog_rows
 
 ALLOWED_BOX_PRESETS = frozenset({"60_40_40", "30_20_30"})
+MAX_BATCH_BOX_COUNT = 50
 
 
 class MarketplaceUnloadBoxError(Exception):
     def __init__(self, code: str) -> None:
         self.code = code
         super().__init__(code)
+
+
+@dataclass(frozen=True)
+class BoxScanResult:
+    """TSD scan flow: location (optional) → product → box line update."""
+
+    kind: Literal["location", "product"]
+    storage_location_id: uuid.UUID | None = None
+    location_code: str | None = None
+    box_line: MarketplaceUnloadBoxLine | None = None
+    picked_qty: int | None = None
 
 
 def _map_collect_err(exc: MarketplaceUnloadPickError) -> MarketplaceUnloadBoxError:
@@ -73,6 +92,23 @@ async def _open_box_for_request(
     return await collect_svc.get_open_box(session, request_id)
 
 
+async def _assert_packaging_done_for_boxes(
+    session: AsyncSession, tenant_id: uuid.UUID, request_id: uuid.UUID
+) -> None:
+    from app.services import packaging_task_service as pkg_svc
+
+    try:
+        await pkg_svc.assert_unload_packaging_done(session, tenant_id, request_id)
+    except pkg_svc.PackagingTaskServiceError as exc:
+        if exc.code in ("task_not_done", "marking_not_done"):
+            raise MarketplaceUnloadBoxError(
+                "packaging_not_done"
+                if exc.code == "task_not_done"
+                else "marking_not_done"
+            ) from exc
+        raise
+
+
 async def create_open_box(
     session: AsyncSession,
     tenant_id: uuid.UUID,
@@ -87,6 +123,9 @@ async def create_open_box(
     existing = await _open_box_for_request(session, request_id)
     if existing is not None:
         raise MarketplaceUnloadBoxError("open_box_exists")
+
+    await _assert_packaging_done_for_boxes(session, tenant_id, request_id)
+
     wh_box = await wh_box_svc.create_warehouse_box(
         session,
         tenant_id,
@@ -108,6 +147,51 @@ async def create_open_box(
     return res.scalar_one()
 
 
+async def create_boxes_batch(
+    session: AsyncSession,
+    tenant_id: uuid.UUID,
+    request_id: uuid.UUID,
+    *,
+    count: int,
+    box_preset: str,
+) -> list[MarketplaceUnloadBox]:
+    """Create N empty open boxes with barcodes (batch flow; no open_box_exists gate)."""
+    if count < 1 or count > MAX_BATCH_BOX_COUNT:
+        raise MarketplaceUnloadBoxError("invalid_batch_count")
+    preset = box_preset.strip()
+    if preset not in ALLOWED_BOX_PRESETS:
+        raise MarketplaceUnloadBoxError("invalid_preset")
+    req = await _request_for_picking(session, tenant_id, request_id)
+    await _assert_packaging_done_for_boxes(session, tenant_id, request_id)
+
+    created_ids: list[uuid.UUID] = []
+    for _ in range(count):
+        wh_box = await wh_box_svc.create_warehouse_box(
+            session,
+            tenant_id,
+            warehouse_id=req.warehouse_id,
+        )
+        box = MarketplaceUnloadBox(
+            request_id=request_id,
+            box_preset=preset,
+            warehouse_box_id=wh_box.id,
+            closed_at=None,
+        )
+        session.add(box)
+        await session.flush()
+        created_ids.append(box.id)
+
+    await session.commit()
+    stmt = (
+        select(MarketplaceUnloadBox)
+        .where(MarketplaceUnloadBox.id.in_(created_ids))
+        .options(selectinload(MarketplaceUnloadBox.warehouse_box))
+        .order_by(MarketplaceUnloadBox.created_at.asc())
+    )
+    res = await session.execute(stmt)
+    return list(res.scalars().all())
+
+
 async def _product_in_shipment(
     session: AsyncSession, request_id: uuid.UUID, product_id: uuid.UUID
 ) -> bool:
@@ -125,9 +209,10 @@ async def scan_barcode_into_box(
     box_id: uuid.UUID,
     *,
     barcode: str,
-    storage_location_id: uuid.UUID | None = None,
+    storage_location_id: uuid.UUID,
     quantity: int = 1,
-) -> MarketplaceUnloadBoxLine:
+) -> BoxScanResult:
+    """Scan flow for TSD/web: optional location barcode, then product → box line."""
     raw = barcode.strip()
     if not raw:
         raise MarketplaceUnloadBoxError("barcode_empty")
@@ -143,6 +228,16 @@ async def scan_barcode_into_box(
     req = await _request_for_picking(session, tenant_id, box.request_id)
     if req.seller_id is None:
         raise MarketplaceUnloadBoxError("seller_required")
+
+    address_on = await tenant_settings_svc.is_address_storage_enabled(session, tenant_id)
+    if address_on:
+        loc = await find_location_by_barcode(session, tenant_id, req.warehouse_id, raw)
+        if loc is not None:
+            return BoxScanResult(
+                kind="location",
+                storage_location_id=loc.id,
+                location_code=loc.code,
+            )
 
     idx = await _barcode_index_for_seller(session, tenant_id, req.seller_id)
     product_id = idx.get(raw)
@@ -164,7 +259,12 @@ async def scan_barcode_into_box(
         )
     except MarketplaceUnloadPickError as exc:
         raise _map_collect_err(exc) from None
-    return result.box_line
+    return BoxScanResult(
+        kind="product",
+        storage_location_id=result.allocation.storage_location_id,
+        box_line=result.box_line,
+        picked_qty=result.picked_qty,
+    )
 
 
 async def add_manual_qty_to_box(
@@ -173,7 +273,7 @@ async def add_manual_qty_to_box(
     box_id: uuid.UUID,
     *,
     product_id: uuid.UUID,
-    storage_location_id: uuid.UUID | None = None,
+    storage_location_id: uuid.UUID,
     quantity: int,
 ) -> MarketplaceUnloadBoxLine:
     if quantity < 1:
@@ -336,3 +436,157 @@ async def list_boxes_with_lines(
     )
     res = await session.execute(stmt)
     return list(res.scalars().unique().all())
+
+
+def _box_total_qty(box: MarketplaceUnloadBox) -> int:
+    return sum(int(ln.quantity) for ln in box.lines)
+
+
+async def remove_box_line(
+    session: AsyncSession,
+    tenant_id: uuid.UUID,
+    box_id: uuid.UUID,
+    line_id: uuid.UUID,
+    *,
+    quantity: int | None = None,
+) -> MarketplaceUnloadBoxLine | None:
+    box = await session.get(MarketplaceUnloadBox, box_id)
+    if box is None:
+        raise MarketplaceUnloadBoxError("box_not_found")
+    try:
+        return await collect_svc.remove_from_box(
+            session,
+            tenant_id,
+            box.request_id,
+            box_id=box_id,
+            line_id=line_id,
+            quantity=quantity,
+        )
+    except MarketplaceUnloadPickError as exc:
+        raise _map_collect_err(exc) from None
+
+
+async def delete_box(
+    session: AsyncSession,
+    tenant_id: uuid.UUID,
+    box_id: uuid.UUID,
+) -> None:
+    box = await session.get(
+        MarketplaceUnloadBox,
+        box_id,
+        options=[selectinload(MarketplaceUnloadBox.lines)],
+    )
+    if box is None:
+        raise MarketplaceUnloadBoxError("box_not_found")
+    await _request_for_picking(session, tenant_id, box.request_id)
+    if _box_total_qty(box) > 0:
+        raise MarketplaceUnloadBoxError("box_not_empty")
+    await session.delete(box)
+    await session.commit()
+
+
+async def copy_box(
+    session: AsyncSession,
+    tenant_id: uuid.UUID,
+    box_id: uuid.UUID,
+) -> MarketplaceUnloadBox:
+    """Duplicate a closed source box into a new closed box (REV-FIX-015).
+
+    Intentionally closed: copy is a snapshot for shipping labels / repeat shipment,
+    not for further manual add (use batch create for open boxes).
+    """
+    src = await session.get(
+        MarketplaceUnloadBox,
+        box_id,
+        options=[
+            selectinload(MarketplaceUnloadBox.lines),
+            selectinload(MarketplaceUnloadBox.warehouse_box),
+        ],
+    )
+    if src is None:
+        raise MarketplaceUnloadBoxError("box_not_found")
+    req = await _request_for_picking(session, tenant_id, src.request_id)
+    if not src.lines:
+        raise MarketplaceUnloadBoxError("box_empty")
+
+    picked = await collect_svc.picked_qty_by_product(session, req.id)
+    plan_by_product = {ln.product_id: int(ln.quantity) for ln in req.lines}
+    for ln in src.lines:
+        pid = ln.product_id
+        add_qty = int(ln.quantity)
+        if add_qty < 1:
+            continue
+        current = picked.get(pid, 0)
+        plan_qty = plan_by_product.get(pid, 0)
+        if current + add_qty > plan_qty:
+            raise MarketplaceUnloadBoxError("plan_limit_exceeded")
+
+    await _assert_packaging_done_for_boxes(session, tenant_id, req.id)
+
+    wh_box = await wh_box_svc.create_warehouse_box(
+        session,
+        tenant_id,
+        warehouse_id=req.warehouse_id,
+    )
+    new_box = MarketplaceUnloadBox(
+        request_id=req.id,
+        box_preset=src.box_preset,
+        warehouse_box_id=wh_box.id,
+    )
+    session.add(new_box)
+    await session.flush()
+
+    for ln in src.lines:
+        qty = int(ln.quantity)
+        if qty < 1:
+            continue
+        remaining = qty
+        alloc_stmt = (
+            select(MarketplaceUnloadPickAllocation)
+            .where(
+                MarketplaceUnloadPickAllocation.request_id == req.id,
+                MarketplaceUnloadPickAllocation.product_id == ln.product_id,
+                MarketplaceUnloadPickAllocation.quantity > 0,
+            )
+            .order_by(MarketplaceUnloadPickAllocation.quantity.desc())
+        )
+        alloc_res = await session.execute(alloc_stmt)
+        allocs = list(alloc_res.scalars().all())
+        if not allocs:
+            raise MarketplaceUnloadBoxError("insufficient_available")
+        for alloc in allocs:
+            if remaining < 1:
+                break
+            chunk = min(int(alloc.quantity), remaining)
+            try:
+                await collect_svc.collect_into_box(
+                    session,
+                    tenant_id,
+                    req.id,
+                    box_id=new_box.id,
+                    storage_location_id=alloc.storage_location_id,
+                    product_id=ln.product_id,
+                    quantity=chunk,
+                    require_open_box=False,
+                )
+            except MarketplaceUnloadPickError as exc:
+                raise _map_collect_err(exc) from None
+            remaining -= chunk
+        if remaining > 0:
+            raise MarketplaceUnloadBoxError("insufficient_available")
+
+    new_box.closed_at = datetime.now(tz=UTC)
+    await session.commit()
+
+    stmt = (
+        select(MarketplaceUnloadBox)
+        .where(MarketplaceUnloadBox.id == new_box.id)
+        .options(
+            selectinload(MarketplaceUnloadBox.lines).selectinload(
+                MarketplaceUnloadBoxLine.product
+            ),
+            selectinload(MarketplaceUnloadBox.warehouse_box),
+        )
+    )
+    res = await session.execute(stmt)
+    return res.scalars().unique().one()

@@ -67,7 +67,12 @@ async def _seed_printed_code(
     assert imp.status_code == 200, imp.text
 
     loc_id = await _inventory_at_location(
-        async_client, h, warehouse_id=wh_id, product_id=product_id, qty=1, location_code=f"a-{suffix}"
+        async_client,
+        h,
+        warehouse_id=wh_id,
+        product_id=product_id,
+        qty=1,
+        location_code=f"a-{suffix}",
     )
 
     task = await async_client.post(
@@ -163,7 +168,7 @@ async def test_defect_requires_packaging_access(async_client: AsyncClient) -> No
     )
     staff_h = {"Authorization": f"Bearer {login.json()['access_token']}"}
 
-    admin_h, line_id, code_id = await _seed_printed_code(async_client)
+    _admin_h, line_id, code_id = await _seed_printed_code(async_client)
     forbidden = await async_client.post(
         f"/operations/marking-codes/codes/{code_id}/defect",
         headers=staff_h,

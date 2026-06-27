@@ -18,19 +18,19 @@
 | 2 | **TASK-006** | Упаковка при create draft + sync строк | ✅ готово | `9467716` |
 | 3 | **TASK-002** | Collect/pick без ячейки при выкл. флаге (DEC-005) | ✅ готово | `908029c` |
 | 4 | **TASK-003** | Скрытие UI ячеек в отгрузке и приёмке | ✅ готово | см. коммит TASK-003 |
-| 5 | TASK-007 | Завершение упаковки | ⏳ | — |
-| 6 | TASK-008 | Gate коробов на упаковку | ⏳ | — |
+| 5 | TASK-007 | Завершение упаковки | ✅ готово | WIP (не закоммичено) |
+| 6 | TASK-008 | Gate коробов на упаковку | ✅ готово | WIP (не закоммичено) |
 | 7 | TASK-004 | Списание при collect (DEC-006) | ⏳ | — |
 | 8 | TASK-009 | Batch короба | ⏳ | — |
-| 9 | TASK-010 | Меню короба, remove line, delete empty | ⏳ | — |
-| 10 | TASK-011 | Модалка добавления в короб | ⏳ | — |
+| 9 | TASK-010 | Меню короба, remove line, delete empty | ✅ | pytest + UI data-testid |
+| 10 | TASK-011 | Модалка добавления в короб | ✅ | e2e TC-NEW-MP-006 |
 | 11 | TASK-005 | Удаление «Начать подбор» (legacy flow) | ⏳ | — |
 | 12 | TASK-013 | Счётчики + предупреждения (DEC-010) | ⏳ | — |
 | 13 | TASK-012 | Вкладочный UI | ⏳ | — |
 | 14 | TASK-015 | Refactor ship | ⏳ | — |
 | 15 | TASK-014 | Финал + print all ШК (DEC-011) | ⏳ | — |
 | 16 | TASK-016, 017 | Тесты по блокам; финальный CI | ⏳ | — |
-| 17 | TASK-018 | API-контракт ТСД | ⏳ | — |
+| 17 | TASK-018 | API-контракт ТСД | ✅ готово | WIP (не закоммичено) |
 
 ---
 
@@ -128,4 +128,45 @@
 
 ## Перегруз контекста
 
-**2026-06-27 — после TASK-003:** следующий срез — **TASK-007** (завершение упаковки) по Implementation Order.
+**2026-06-27 — после TASK-011:** модалка короба готова; pytest + e2e green. **Следующий срез — TASK-012** (вкладки) или TASK-005 по Implementation Order.
+
+**2026-06-27 — после TASK-007/008:** backend + UI + e2e правки готовы к коммиту; следующий срез — **TASK-004** (списание при collect).
+
+---
+
+## TASK-007 — явное завершение упаковки
+
+**Статус:** ✅ готово (WIP)
+
+### Что сделано
+
+- `POST /operations/packaging-tasks/{id}/complete` + `acknowledge_all_packed`.
+- `complete_task`, reopen при смене плана (`sync_lines_from_unload_plan` сравнивает qty до мутации).
+- UI: checkbox «Весь товар уже упакован», кнопка «Завершить упаковку» в `FfPackagingTaskPanel`.
+- pytest: `test_complete_packaging_explicit`, `test_packaging_reopens_when_unload_plan_changes`.
+
+### Проверки
+
+| Проверка | Результат |
+|----------|-----------|
+| `pytest tests/test_packaging_tasks.py -q` | 8 passed |
+
+---
+
+## TASK-008 — gate коробов до завершения упаковки
+
+**Статус:** ✅ готово (WIP)
+
+### Что сделано
+
+- `assert_unload_packaging_done` в `create_open_box` и `collect_into_box` → `packaging_not_done`.
+- UI: предупреждение + disabled «Открыть короб» / scan при незавершённой упаковке.
+- Сообщения в `readApiErrorMessage`: `packaging_not_done`, `packaging_incomplete`.
+- pytest + e2e: обновлены helper'ы (упаковка → короба).
+
+### Проверки
+
+| Проверка | Результат |
+|----------|-----------|
+| `pytest tests/test_packaging_tasks.py tests/test_marketplace_unload_address_storage.py -q` | 10 passed |
+| `npm run build` | OK |

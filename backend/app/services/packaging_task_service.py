@@ -38,6 +38,8 @@ PackagingTaskError = Literal[
     "invalid_qty",
     "insufficient_unpacked",
     "task_not_done",
+    "packaging_incomplete",
+    "marking_not_done",
     "unload_not_found",
     "no_lines",
     "linked_unload",
@@ -137,8 +139,6 @@ def _touch_task(task: PackagingTask) -> None:
         ln.qty_confirmed_packed > 0 or ln.qty_packed_in_task > 0 for ln in task.lines
     ):
         task.status = STATUS_IN_PROGRESS
-    if is_task_complete(task):
-        task.status = STATUS_DONE
 
 
 async def get_task(
@@ -300,6 +300,7 @@ async def sync_lines_from_unload_plan(
     existing = {
         ln.product_id: ln for ln in db_lines if ln.storage_location_id == location_id
     }
+    plan_qty_before = {pid: int(ln.qty_total) for pid, ln in existing.items()}
     seen: set[uuid.UUID] = set()
 
     for ul in unload_lines:
@@ -340,6 +341,12 @@ async def sync_lines_from_unload_plan(
 
     if pick_changed_with_progress:
         task.pick_resync_warning = True
+    if task.status == STATUS_DONE:
+        plan_qty_after = {ul.product_id: int(ul.quantity) for ul in unload_lines}
+        if plan_qty_after != plan_qty_before:
+            task.status = STATUS_IN_PROGRESS
+            task.completed_at = None
+            task.completed_by_user_id = None
     _touch_task(task)
     await session.commit()
     loaded = await get_task(session, tenant_id, task.id)
@@ -572,16 +579,46 @@ async def record_pack_progress(
     return loaded
 
 
-async def assert_unload_packaging_done(
+async def _apply_acknowledge_all_packed(
     session: AsyncSession,
     tenant_id: uuid.UUID,
-    unload_id: uuid.UUID,
+    task: PackagingTask,
 ) -> None:
-    task = await get_task_for_unload(session, tenant_id, unload_id)
-    if task is None:
-        raise PackagingTaskServiceError("task_not_done")
-    if task.status != STATUS_DONE and not is_task_complete(task):
-        raise PackagingTaskServiceError("task_not_done")
+    for line in task.lines:
+        if is_line_complete(line):
+            continue
+        unpacked, packed_on_hand = await _get_balance_split(
+            session, tenant_id, line.product_id, line.storage_location_id
+        )
+        shelf_target = min(int(line.qty_total), packed_on_hand)
+        if shelf_target > int(line.qty_confirmed_packed):
+            if shelf_target > packed_on_hand:
+                raise PackagingTaskServiceError("packaging_incomplete")
+            line.qty_confirmed_packed = shelf_target
+        need = qty_need_pack(line)
+        if need > 0:
+            if unpacked < need:
+                raise PackagingTaskServiceError("packaging_incomplete")
+            try:
+                await inv_svc.apply_packaging_convert(
+                    session,
+                    tenant_id=tenant_id,
+                    product_id=line.product_id,
+                    storage_location_id=line.storage_location_id,
+                    quantity=need,
+                )
+            except ValueError as exc:
+                if str(exc) == "insufficient_unpacked":
+                    raise PackagingTaskServiceError("packaging_incomplete") from exc
+                raise
+            line.qty_packed_in_task = int(line.qty_packed_in_task) + need
+
+
+async def _assert_marking_done_for_task(
+    session: AsyncSession,
+    tenant_id: uuid.UUID,
+    task: PackagingTask,
+) -> None:
     from app.services import marking_code_service as mc_svc
 
     for line in task.lines:
@@ -591,3 +628,60 @@ async def assert_unload_packaging_done(
             if exc.code == "marking_not_done":
                 raise PackagingTaskServiceError("marking_not_done") from exc
             raise
+
+
+async def complete_task(
+    session: AsyncSession,
+    tenant_id: uuid.UUID,
+    task_id: uuid.UUID,
+    *,
+    acknowledge_all_packed: bool = False,
+    acting_user_id: uuid.UUID | None = None,
+) -> PackagingTask:
+    task = await get_task(session, tenant_id, task_id)
+    if task is None:
+        raise PackagingTaskServiceError("not_found")
+    if task.status == STATUS_DONE:
+        loaded = await get_task(session, tenant_id, task_id)
+        assert loaded is not None
+        return loaded
+    if task.status == STATUS_CANCELLED:
+        raise PackagingTaskServiceError("bad_status")
+    if not task.lines:
+        raise PackagingTaskServiceError("no_lines")
+
+    if acknowledge_all_packed:
+        await _apply_acknowledge_all_packed(session, tenant_id, task)
+        _touch_task(task)
+
+    if not is_task_complete(task):
+        raise PackagingTaskServiceError("packaging_incomplete")
+
+    await _assert_marking_done_for_task(session, tenant_id, task)
+
+    task.status = STATUS_DONE
+    task.updated_at = datetime.now(UTC)
+    if acting_user_id is not None:
+        await billing_svc.finalize_task_billing(
+            session, task, completed_by_user_id=acting_user_id
+        )
+    else:
+        task.completed_at = datetime.now(UTC)
+        task.completed_by_user_id = None
+    await session.commit()
+    loaded = await get_task(session, tenant_id, task_id)
+    assert loaded is not None
+    return loaded
+
+
+async def assert_unload_packaging_done(
+    session: AsyncSession,
+    tenant_id: uuid.UUID,
+    unload_id: uuid.UUID,
+) -> None:
+    task = await get_task_for_unload(session, tenant_id, unload_id)
+    if task is None:
+        raise PackagingTaskServiceError("task_not_done")
+    if task.status != STATUS_DONE:
+        raise PackagingTaskServiceError("task_not_done")
+    await _assert_marking_done_for_task(session, tenant_id, task)

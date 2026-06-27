@@ -18,6 +18,7 @@ import {
   Paper,
   Select,
   Stack,
+  FormControlLabel,
   Table,
   TableBody,
   TableCell,
@@ -114,6 +115,7 @@ export function FfPackagingTaskPanel({
     quantity: number
     lines: { product_name: string; sku_code: string; quantity: number; shortage: number }[]
   } | null>(null)
+  const [ackAllPacked, setAckAllPacked] = useState(false)
   const { openPrint, dialog: markingPrintDialog } = useMarkingCodePrint()
 
   const authHeaders = {
@@ -218,10 +220,31 @@ export function FfPackagingTaskPanel({
     }
   }
 
+  const completeTask = async () => {
+    setBusy(true)
+    setError(null)
+    try {
+      const res = await fetch(apiUrl(`/operations/packaging-tasks/${task.id}/complete`), {
+        method: 'POST',
+        headers: authHeaders,
+        body: JSON.stringify({ acknowledge_all_packed: ackAllPacked }),
+      })
+      if (!res.ok) {
+        setError(await readApiErrorMessage(res))
+        return
+      }
+      onUpdated((await res.json()) as PackagingTask)
+    } finally {
+      setBusy(false)
+    }
+  }
+
   const manualTask =
     !task.marketplace_unload_request_id &&
     task.status !== 'done' &&
     task.status !== 'cancelled'
+
+  const taskEditable = task.status !== 'done' && task.status !== 'cancelled'
 
   const hasHonestSignLines = task.lines.some(
     (ln) => ln.requires_honest_sign && ln.qty_need_pack > ln.qty_marking_printed,
@@ -733,7 +756,7 @@ export function FfPackagingTaskPanel({
                     {ln.qty_confirmed_packed < ln.qty_suggested_packed ? (
                       <Button
                         size="small"
-                        disabled={busy || ln.qty_suggested_packed < 1}
+                        disabled={busy || !taskEditable || ln.qty_suggested_packed < 1}
                         onClick={() => void confirmPacked(ln.id)}
                         data-testid="ff-packaging-confirm-shelf"
                       >
@@ -744,7 +767,7 @@ export function FfPackagingTaskPanel({
                       <Button
                         size="small"
                         variant="contained"
-                        disabled={busy}
+                        disabled={busy || !taskEditable}
                         onClick={() => void packQty(ln.id, ln.qty_need_pack - ln.qty_packed_in_task)}
                         data-testid="ff-packaging-pack-btn"
                       >
@@ -758,6 +781,32 @@ export function FfPackagingTaskPanel({
           </TableBody>
         </Table>
       </TableContainer>
+      {taskEditable ? (
+        <Paper variant="outlined" sx={{ p: 2 }} data-testid="ff-packaging-complete-panel">
+          <Stack spacing={1.5}>
+            <FormControlLabel
+              control={
+                <Checkbox
+                  checked={ackAllPacked}
+                  disabled={busy}
+                  onChange={(e) => setAckAllPacked(e.target.checked)}
+                  data-testid="ff-packaging-ack-all-packed"
+                />
+              }
+              label="Весь товар уже упакован"
+            />
+            <Button
+              variant="contained"
+              color="success"
+              disabled={busy}
+              onClick={() => void completeTask()}
+              data-testid="ff-packaging-complete"
+            >
+              Завершить упаковку
+            </Button>
+          </Stack>
+        </Paper>
+      ) : null}
       {markingPrintDialog}
       <Dialog
         open={printAllOpen}

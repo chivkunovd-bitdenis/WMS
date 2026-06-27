@@ -56,7 +56,12 @@ async def test_pending_marking_lists_unprinted_lines(async_client: AsyncClient) 
     )
     assert imp.status_code == 200, imp.text
     loc_id = await _inventory_at_location(
-        async_client, h, warehouse_id=wh_id, product_id=product_id, qty=1, location_code=f"w-{suffix}"
+        async_client,
+        h,
+        warehouse_id=wh_id,
+        product_id=product_id,
+        qty=1,
+        location_code=f"w-{suffix}",
     )
     task = await async_client.post(
         "/operations/packaging-tasks",

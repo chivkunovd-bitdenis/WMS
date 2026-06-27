@@ -75,7 +75,11 @@ export function FfSettingsScreen({
   const [busy, setBusy] = useState(false)
   const [addressStorage, setAddressStorage] = useState(addressStorageEnabled)
   const [addressStorageBusy, setAddressStorageBusy] = useState(false)
-  const [addressStorageSaved, setAddressStorageSaved] = useState<string | null>(null)
+  const [addressStorageNotice, setAddressStorageNotice] = useState<{
+    severity: 'success' | 'info'
+    message: string
+    testId: string
+  } | null>(null)
   const [permBusyId, setPermBusyId] = useState<string | null>(null)
   const [rateBusyId, setRateBusyId] = useState<string | null>(null)
   const [rateDrafts, setRateDrafts] = useState<Record<string, string>>({})
@@ -242,7 +246,7 @@ export function FfSettingsScreen({
     const previous = addressStorage
     setAddressStorage(checked)
     setAddressStorageBusy(true)
-    setAddressStorageSaved(null)
+    setAddressStorageNotice(null)
     setError(null)
     try {
       const res = await fetch(apiUrl('/tenant/settings'), {
@@ -258,11 +262,19 @@ export function FfSettingsScreen({
       const data = (await res.json()) as { address_storage_enabled: boolean }
       setAddressStorage(data.address_storage_enabled)
       onAddressStorageChange?.(data.address_storage_enabled)
-      setAddressStorageSaved(
-        data.address_storage_enabled
-          ? 'Адресное хранение включено.'
-          : 'Адресное хранение выключено.',
-      )
+      if (data.address_storage_enabled) {
+        setAddressStorageNotice({
+          severity: 'success',
+          message: 'Адресное хранение включено.',
+          testId: 'ff-settings-address-storage-saved',
+        })
+      } else {
+        setAddressStorageNotice({
+          severity: 'info',
+          message: 'Остатки с ячеек перенесены на зону сортировки.',
+          testId: 'ff-settings-address-storage-migration-info',
+        })
+      }
     } catch (err) {
       setAddressStorage(previous)
       setError(err instanceof Error ? err.message : 'Не удалось сохранить настройку склада.')
@@ -292,9 +304,13 @@ export function FfSettingsScreen({
           <Typography variant="body2" color="text.secondary" sx={{ mb: 1.5 }}>
             Адресное хранение: учёт остатков по ячейкам в приёмке и отгрузке на маркетплейс.
           </Typography>
-          {addressStorageSaved ? (
-            <Alert severity="success" sx={{ mb: 2 }} data-testid="ff-settings-address-storage-saved">
-              {addressStorageSaved}
+          {addressStorageNotice ? (
+            <Alert
+              severity={addressStorageNotice.severity}
+              sx={{ mb: 2 }}
+              data-testid={addressStorageNotice.testId}
+            >
+              {addressStorageNotice.message}
             </Alert>
           ) : null}
           <Stack direction="row" spacing={1} sx={{ alignItems: 'center' }}>

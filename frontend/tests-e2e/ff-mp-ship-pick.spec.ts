@@ -4,7 +4,7 @@ import { waitForGetOk, waitForPostOk } from './api-waits';
 import { openFulfillmentRegistration } from './auth-flow';
 import { fulfillInboundViaBoxScans } from './inbound-boxes-helpers';
 
-// TC-NEW-MP-01 — отгрузка на МП: скан в короб, подбор по ячейке, «Отгружено» списывает остаток.
+// TC-NEW-MP-01 / TASK-017 — упаковка → короб → скан → ship; остаток списывается при collect, не при ship.
 test('FF marketplace unload: pick by cell and ship reduces stock', async ({ page }) => {
   const email = `e2e-mp-ship-${Date.now()}@example.com`;
   const password = 'password123';
@@ -122,6 +122,33 @@ test('FF marketplace unload: pick by cell and ship reduces stock', async ({ page
   await page.request.post(`${baseIn}/${inboundId}/verify`, { headers: auth });
   await page.request.post(`${baseIn}/${inboundId}/post`, { headers: auth });
 
+  const inboundSort = await page.request.post(baseIn, {
+    headers: auth,
+    data: JSON.stringify({ warehouse_id: whId }),
+  });
+  const sortInboundId = String(((await inboundSort.json()) as { id: string }).id);
+  await page.request.post(`${baseIn}/${sortInboundId}/lines`, {
+    headers: auth,
+    data: JSON.stringify({ product_id: productId, expected_qty: 5 }),
+  });
+  await page.request.post(`${baseIn}/${sortInboundId}/submit`, { headers: auth });
+  const primSort = await page.request.post(`${baseIn}/${sortInboundId}/primary-accept`, {
+    headers: auth,
+    data: { actual_box_count: 1 },
+  });
+  const primSortBody = (await primSort.json()) as {
+    boxes: { id: string; internal_barcode: string }[];
+  };
+  await fulfillInboundViaBoxScans(
+    page.request,
+    auth,
+    sortInboundId,
+    primSortBody.boxes,
+    barcode,
+    [5],
+  );
+  await page.request.post(`${baseIn}/${sortInboundId}/verify`, { headers: auth });
+
   const whs = await page.request.get(`${e2eApi}/operations/wb-mp-warehouses`, { headers: auth });
   const wbWid = Number(((await whs.json()) as { wb_warehouse_id: number }[])[0].wb_warehouse_id);
 
@@ -143,6 +170,32 @@ test('FF marketplace unload: pick by cell and ship reduces stock', async ({ page
     headers: auth,
     data: JSON.stringify({ planned_shipment_date: '2026-06-01' }),
   });
+
+  const pkgBeforeBox = await page.request.get(
+    `${e2eApi}/operations/packaging-tasks/by-unload/${mid}`,
+    { headers: auth },
+  );
+  expect(pkgBeforeBox.ok()).toBeTruthy();
+  const pkgBeforeBody = (await pkgBeforeBox.json()) as {
+    id: string;
+    lines: { id: string; qty_need_pack: number }[];
+  };
+  const pkgLineBefore = pkgBeforeBody.lines[0];
+  expect(pkgLineBefore?.id).toBeTruthy();
+  if (pkgLineBefore && pkgLineBefore.qty_need_pack > 0) {
+    await page.request.post(
+      `${e2eApi}/operations/packaging-tasks/${pkgBeforeBody.id}/lines/${pkgLineBefore.id}/pack`,
+      {
+        headers: auth,
+        data: JSON.stringify({ quantity: pkgLineBefore.qty_need_pack }),
+      },
+    );
+  }
+  const pkgComplete = await page.request.post(
+    `${e2eApi}/operations/packaging-tasks/${pkgBeforeBody.id}/complete`,
+    { headers: auth, data: JSON.stringify({ acknowledge_all_packed: false }) },
+  );
+  expect(pkgComplete.ok()).toBeTruthy();
 
   const box = await page.request.post(
     `${e2eApi}/operations/marketplace-unload-requests/${mid}/boxes`,
@@ -176,31 +229,6 @@ test('FF marketplace unload: pick by cell and ship reduces stock', async ({ page
     expect(prodScan.ok()).toBeTruthy();
   }
 
-  const pkgTask = await page.request.get(
-    `${e2eApi}/operations/packaging-tasks/by-unload/${mid}`,
-    { headers: auth },
-  );
-  expect(pkgTask.ok()).toBeTruthy();
-  const pkgBody = (await pkgTask.json()) as {
-    id: string;
-    lines: { id: string; qty_need_pack: number }[];
-  };
-  const pkgLineId = pkgBody.lines[0]?.id;
-  expect(pkgLineId).toBeTruthy();
-  if (pkgLineId) {
-    await page.request.post(
-      `${e2eApi}/operations/packaging-tasks/${pkgBody.id}/lines/${pkgLineId}/confirm-packed`,
-      { headers: auth, data: JSON.stringify({}) },
-    );
-    const needPack = pkgBody.lines[0].qty_need_pack;
-    if (needPack > 0) {
-      await page.request.post(
-        `${e2eApi}/operations/packaging-tasks/${pkgBody.id}/lines/${pkgLineId}/pack`,
-        { headers: auth, data: JSON.stringify({ quantity: needPack }) },
-      );
-    }
-  }
-
   const detail = await page.request.get(
     `${e2eApi}/operations/marketplace-unload-requests/${mid}`,
     { headers: auth },
@@ -209,9 +237,17 @@ test('FF marketplace unload: pick by cell and ship reduces stock', async ({ page
     3,
   );
 
+  const balAfterCollect = await page.request.get(
+    `${e2eApi}/operations/inventory-balances/summary`,
+    { headers: auth, params: { warehouse_id: whId } },
+  );
+  const rowAfterCollect = (
+    (await balAfterCollect.json()) as { product_id: string; quantity: number }[]
+  ).find((x) => x.product_id === productId);
+  expect(rowAfterCollect?.quantity).toBe(7);
+
   await page.request.post(`${e2eApi}/operations/marketplace-unload-requests/${mid}/ship`, {
     headers: auth,
-    data: JSON.stringify({ acknowledge_discrepancy: false }),
   });
 
   const bal = await page.request.get(`${e2eApi}/operations/inventory-balances/summary`, {
@@ -221,7 +257,7 @@ test('FF marketplace unload: pick by cell and ship reduces stock', async ({ page
   const row = ((await bal.json()) as { product_id: string; quantity: number }[]).find(
     (x) => x.product_id === productId,
   );
-  expect(row?.quantity).toBe(2);
+  expect(row?.quantity).toBe(7);
 
   await page.reload();
   await page.getByTestId('nav-ff-mp-shipments').click();

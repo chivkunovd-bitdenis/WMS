@@ -124,6 +124,8 @@ test('FF prints marketplace unload waybill from document dialog', async ({ page 
   await page.getByTestId('ff-docs-row').first().click();
   await expect(page.getByTestId('ff-supplies-doc-dialog')).toBeVisible();
   await expect(page.getByTestId('ff-supplies-doc-lines')).toContainText(sku);
+  await page.getByTestId('ff-mp-tab-final').click();
+  await expect(page.getByTestId('ff-mp-tab-final-panel')).toBeVisible();
   const printBtn = page.getByTestId('ff-mp-print-waybill');
   await expect(printBtn).toBeVisible();
   await expect(printBtn).toBeEnabled();

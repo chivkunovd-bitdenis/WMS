@@ -5,6 +5,7 @@ import uuid
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.tenant import Tenant
+from app.services import inventory_service as inv_svc
 
 
 async def get_tenant(session: AsyncSession, tenant_id: uuid.UUID) -> Tenant:
@@ -38,6 +39,8 @@ async def update_tenant_settings(
 ) -> dict[str, bool]:
     tenant = await get_tenant(session, tenant_id)
     if address_storage_enabled is not None:
+        if tenant.address_storage_enabled and not address_storage_enabled:
+            await inv_svc.migrate_all_address_balances_to_sorting(session, tenant_id)
         tenant.address_storage_enabled = address_storage_enabled
     await session.commit()
     await session.refresh(tenant)
