@@ -1,5 +1,12 @@
 # TASKLOG
 
+## TASK-027 — 2026-06-27 — CI mypy green for outbound-rework PR
+
+- What changed: mypy fixes — optional `storage_location_id` в collect API/services; marking imports (`LAYOUT_BLOCK_CZ`, `STATUS_AVAILABLE`, `EVENT_PRINTED`); rename query param `code_status` (shadow `status`); typed seller scope in print-templates.
+- What did NOT change: product behavior; e2e scenarios.
+- Verification: `mypy .` — Success; `pytest -q` — 224 passed; PR #47 CI — backend + e2e + pr-quality + tc-coverage all pass.
+- Commit: 39268c4
+
 ## TASK-026 — 2026-06-27 — REV-FIX-019, 020
 
 - What changed:
