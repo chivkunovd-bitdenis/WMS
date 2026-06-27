@@ -12,6 +12,7 @@
   - **MP-012 (partial):** плашка прогресса не на draft; «Продолжить упаковку» только на вкладке «Упаковка».
 - What did NOT change: MP-010…014 (2 вкладки, footer ship), MP-015…034, MP-021…023 (печать).
 - Verification: backend `pytest tests/test_packaging_tasks.py` + MP sync/box tests — 12 passed; e2e `ff-mp-packaging-gate.spec.ts`, `ff-mp-tabs.spec.ts` (draft banner) — green; `npm run build` — ok.
+- Commit: bdf297e (includes CZ P0/P1 marking fixes in same slice)
 
 ## TASK-027 — 2026-06-27 — CI mypy green for outbound-rework PR
 
