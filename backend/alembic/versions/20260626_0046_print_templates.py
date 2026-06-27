@@ -26,7 +26,7 @@ def upgrade() -> None:
         sa.Column("product_id", sa.Uuid(as_uuid=True), sa.ForeignKey("products.id", ondelete="CASCADE"), nullable=True),
         sa.Column("name", sa.String(length=256), nullable=False),
         sa.Column("layout_json", sa.Text(), nullable=False),
-        sa.Column("is_default", sa.Boolean(), nullable=False, server_default=sa.text("0")),
+        sa.Column("is_default", sa.Boolean(), nullable=False, server_default=sa.false()),
         sa.Column("created_at", sa.DateTime(timezone=True), server_default=sa.text("CURRENT_TIMESTAMP"), nullable=False),
     )
     op.create_index("ix_print_templates_tenant_id", "print_templates", ["tenant_id"])
