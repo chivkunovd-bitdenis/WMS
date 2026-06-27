@@ -381,15 +381,14 @@ async def _detail_with_packaging(
     sync_packaging: bool = False,
 ) -> MarketplaceUnloadRequestDetailOut:
     linked: LinkedPackagingTaskOut | None = None
-    if r.status in ("confirmed", "shipped"):
-        progress = await pkg_svc.progress_for_unload(
-            session,
-            tenant_id,
-            r.id,
-            sync_from_pick=sync_packaging,
-        )
-        if progress is not None:
-            linked = _linked_packaging_out(progress)
+    progress = await pkg_svc.progress_for_unload(
+        session,
+        tenant_id,
+        r.id,
+        sync_from_pick=sync_packaging and r.status in ("confirmed", "shipped"),
+    )
+    if progress is not None:
+        linked = _linked_packaging_out(progress)
     return _detail_out(
         r,
         warehouse_name=warehouse_name,

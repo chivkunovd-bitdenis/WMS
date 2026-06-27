@@ -11,6 +11,7 @@ from sqlalchemy.orm import selectinload
 
 from app.models.inventory_balance import InventoryBalance
 from app.models.marketplace_unload import (
+    MarketplaceUnloadLine,
     MarketplaceUnloadPickAllocation,
     MarketplaceUnloadRequest,
 )
@@ -252,6 +253,100 @@ async def create_manual_task(
     return loaded
 
 
+async def sync_lines_from_unload_plan(
+    session: AsyncSession,
+    tenant_id: uuid.UUID,
+    task: PackagingTask,
+) -> SyncPickResult:
+    pick_changed_with_progress = False
+    loaded = await get_task(session, tenant_id, task.id)
+    if loaded is None:
+        return SyncPickResult(task=task, pick_changed_with_progress=False)
+    task = loaded
+    if task.marketplace_unload_request_id is None:
+        return SyncPickResult(task=task, pick_changed_with_progress=False)
+
+    unload_id = task.marketplace_unload_request_id
+    pick_exists_stmt = (
+        select(MarketplaceUnloadPickAllocation.id)
+        .where(
+            MarketplaceUnloadPickAllocation.request_id == unload_id,
+            MarketplaceUnloadPickAllocation.quantity > 0,
+        )
+        .limit(1)
+    )
+    if (await session.execute(pick_exists_stmt)).scalar_one_or_none() is not None:
+        return SyncPickResult(task=task, pick_changed_with_progress=False)
+
+    unload_lines = list(
+        (
+            await session.execute(
+                select(MarketplaceUnloadLine).where(
+                    MarketplaceUnloadLine.request_id == unload_id
+                )
+            )
+        )
+        .scalars()
+        .all()
+    )
+
+    sorting_loc = await sorting_loc_svc.get_or_create_sorting_location(
+        session, tenant_id, task.warehouse_id
+    )
+    location_id = sorting_loc.id
+
+    line_stmt = select(PackagingTaskLine).where(PackagingTaskLine.task_id == task.id)
+    db_lines = list((await session.execute(line_stmt)).scalars().all())
+    existing = {
+        ln.product_id: ln for ln in db_lines if ln.storage_location_id == location_id
+    }
+    seen: set[uuid.UUID] = set()
+
+    for ul in unload_lines:
+        product_id = ul.product_id
+        seen.add(product_id)
+        qty = int(ul.quantity)
+        _unpacked, packed = await _get_balance_split(
+            session, tenant_id, product_id, location_id
+        )
+        suggested = min(packed, qty)
+        if product_id in existing:
+            ln = existing[product_id]
+            has_progress = ln.qty_packed_in_task > 0 or ln.qty_confirmed_packed > 0
+            if has_progress and (
+                ln.qty_total != qty or ln.qty_suggested_packed != suggested
+            ):
+                pick_changed_with_progress = True
+            if (ln.qty_packed_in_task == 0 and ln.qty_confirmed_packed == 0) or has_progress:
+                ln.qty_total = qty
+                ln.qty_suggested_packed = suggested
+        else:
+            session.add(
+                PackagingTaskLine(
+                    task_id=task.id,
+                    product_id=product_id,
+                    storage_location_id=location_id,
+                    qty_total=qty,
+                    qty_suggested_packed=suggested,
+                )
+            )
+
+    for product_id, ln in existing.items():
+        if product_id not in seen:
+            if ln.qty_packed_in_task > 0 or ln.qty_confirmed_packed > 0:
+                pick_changed_with_progress = True
+            if ln.qty_packed_in_task == 0 and ln.qty_confirmed_packed == 0:
+                await session.delete(ln)
+
+    if pick_changed_with_progress:
+        task.pick_resync_warning = True
+    _touch_task(task)
+    await session.commit()
+    loaded = await get_task(session, tenant_id, task.id)
+    assert loaded is not None
+    return SyncPickResult(task=loaded, pick_changed_with_progress=pick_changed_with_progress)
+
+
 async def sync_lines_from_pick_allocations(
     session: AsyncSession,
     tenant_id: uuid.UUID,
@@ -313,6 +408,22 @@ async def sync_lines_from_pick_allocations(
                 pick_changed_with_progress = True
             if ln.qty_packed_in_task == 0 and ln.qty_confirmed_packed == 0:
                 await session.delete(ln)
+
+    sorting_loc = await sorting_loc_svc.get_or_create_sorting_location(
+        session, tenant_id, task.warehouse_id
+    )
+    sorting_id = sorting_loc.id
+    picked_products = {alloc.product_id for alloc in allocs}
+    refreshed_lines = list((await session.execute(line_stmt)).scalars().all())
+    for ln in refreshed_lines:
+        if (
+            ln.storage_location_id == sorting_id
+            and ln.product_id in picked_products
+            and ln.qty_packed_in_task == 0
+            and ln.qty_confirmed_packed == 0
+        ):
+            await session.delete(ln)
+
     if pick_changed_with_progress:
         task.pick_resync_warning = True
     _touch_task(task)
@@ -331,7 +442,7 @@ async def ensure_task_for_unload(
 ) -> PackagingTask:
     existing = await get_task_for_unload(session, tenant_id, unload_id)
     if existing is not None:
-        synced = await sync_lines_from_pick_allocations(session, tenant_id, existing)
+        synced = await sync_lines_from_unload_plan(session, tenant_id, existing)
         return synced.task
 
     req = await session.get(MarketplaceUnloadRequest, unload_id)
@@ -350,7 +461,7 @@ async def ensure_task_for_unload(
     await assign_document_number_if_missing(
         session, tenant_id, DOC_TYPE_PACKAGING, task
     )
-    await sync_lines_from_pick_allocations(session, tenant_id, task)
+    await sync_lines_from_unload_plan(session, tenant_id, task)
     await session.commit()
     loaded = await get_task(session, tenant_id, task.id)
     assert loaded is not None

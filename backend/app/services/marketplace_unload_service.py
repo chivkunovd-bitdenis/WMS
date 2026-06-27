@@ -61,6 +61,19 @@ def assert_request_visible(
         raise MarketplaceUnloadError("not_found")
 
 
+async def _sync_packaging_from_plan(
+    session: AsyncSession,
+    tenant_id: uuid.UUID,
+    request_id: uuid.UUID,
+) -> None:
+    from app.services import packaging_task_service as pkg_svc
+
+    task = await pkg_svc.get_task_for_unload(session, tenant_id, request_id)
+    if task is None:
+        return
+    await pkg_svc.sync_lines_from_unload_plan(session, tenant_id, task)
+
+
 async def create_request(
     session: AsyncSession,
     tenant_id: uuid.UUID,
@@ -95,6 +108,11 @@ async def create_request(
 
     await notify_ff_marketplace_unload_created(session, req)
     await session.commit()
+
+    from app.services import packaging_task_service as pkg_svc
+
+    await pkg_svc.ensure_task_for_unload(session, tenant_id, req.id)
+
     return req
 
 
@@ -382,6 +400,7 @@ async def add_line(
         req.ff_modified = True
     await session.commit()
     await session.refresh(line, attribute_names=["product"])
+    await _sync_packaging_from_plan(session, tenant_id, request_id)
     return line
 
 
@@ -431,6 +450,7 @@ async def replace_lines(
     await session.commit()
     r2 = await get_request(session, tenant_id, request_id)
     assert r2 is not None
+    await _sync_packaging_from_plan(session, tenant_id, request_id)
     return r2
 
 
@@ -576,3 +596,4 @@ async def delete_line(
     if allow_ff_confirmed and req.status == STATUS_CONFIRMED:
         req.ff_modified = True
     await session.commit()
+    await _sync_packaging_from_plan(session, tenant_id, request_id)
