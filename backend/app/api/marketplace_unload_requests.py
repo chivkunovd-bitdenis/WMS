@@ -73,7 +73,7 @@ class MarketplaceUnloadLinesBulkReplace(BaseModel):
 
 class MarketplaceUnloadManualBoxLineBody(BaseModel):
     product_id: uuid.UUID
-    storage_location_id: uuid.UUID
+    storage_location_id: uuid.UUID | None = None
     quantity: int = Field(ge=1, le=1_000_000_000)
 
 
@@ -177,7 +177,7 @@ class MarketplaceUnloadPickScanOut(BaseModel):
 
 
 class MarketplaceUnloadPickAddBody(BaseModel):
-    storage_location_id: uuid.UUID
+    storage_location_id: uuid.UUID | None = None
     product_id: uuid.UUID
     quantity: int = Field(ge=1, le=1_000_000_000)
 
@@ -196,7 +196,7 @@ _DEFAULT_SHIP_BODY = MarketplaceUnloadShipBody()
 
 class PickAllocationItemIn(BaseModel):
     product_id: uuid.UUID
-    storage_location_id: uuid.UUID
+    storage_location_id: uuid.UUID | None = None
     quantity: int = Field(ge=1, le=1_000_000_000)
 
 
@@ -1131,8 +1131,6 @@ async def scan_marketplace_unload_box(
     if bx is None or bx.request_id != request_id:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="box_not_found")
     try:
-        if body.storage_location_id is None:
-            raise box_svc.MarketplaceUnloadBoxError("location_required")
         ln = await box_svc.scan_barcode_into_box(
             session,
             user.tenant_id,

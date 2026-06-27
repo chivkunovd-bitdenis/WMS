@@ -17,6 +17,7 @@ from app.models.marketplace_unload import (
 from app.models.storage_location import StorageLocation
 from app.services import inventory_service
 from app.services import marketplace_unload_service as mu_svc
+from app.services import tenant_settings_service as tenant_settings_svc
 from app.services.seller_wb_catalog_service import list_seller_wb_catalog_rows
 
 PICK_EDITABLE_STATUSES = (mu_svc.STATUS_CONFIRMED,)
@@ -31,7 +32,7 @@ class MarketplaceUnloadPickError(Exception):
 @dataclass(frozen=True)
 class PickAllocationRow:
     product_id: uuid.UUID
-    storage_location_id: uuid.UUID
+    storage_location_id: uuid.UUID | None
     quantity: int
 
 
@@ -195,7 +196,7 @@ async def add_pick_qty(
     tenant_id: uuid.UUID,
     request_id: uuid.UUID,
     *,
-    storage_location_id: uuid.UUID,
+    storage_location_id: uuid.UUID | None,
     product_id: uuid.UUID,
     quantity: int,
 ) -> MarketplaceUnloadPickAllocation:
@@ -233,17 +234,16 @@ async def pick_scan(
         raise MarketplaceUnloadPickError("barcode_empty")
 
     req = await _request_for_picking(session, tenant_id, request_id)
+    address_on = await tenant_settings_svc.is_address_storage_enabled(session, tenant_id)
 
-    loc = await find_location_by_barcode(session, tenant_id, req.warehouse_id, raw)
-    if loc is not None:
-        return PickScanResult(
-            kind="location",
-            storage_location_id=loc.id,
-            location_code=loc.code,
-        )
-
-    if storage_location_id is None:
-        raise MarketplaceUnloadPickError("location_required")
+    if address_on:
+        loc = await find_location_by_barcode(session, tenant_id, req.warehouse_id, raw)
+        if loc is not None:
+            return PickScanResult(
+                kind="location",
+                storage_location_id=loc.id,
+                location_code=loc.code,
+            )
 
     from app.services import marketplace_unload_collect_service as collect_svc
 
@@ -258,19 +258,28 @@ async def pick_scan(
     if product_id is None:
         raise MarketplaceUnloadPickError("barcode_unknown")
 
+    effective_location_id = storage_location_id
+    if address_on and effective_location_id is None:
+        cell_rows = await inventory_service.list_locations_for_product_in_warehouse(
+            session, tenant_id, req.warehouse_id, product_id
+        )
+        if cell_rows:
+            raise MarketplaceUnloadPickError("location_required")
+
     result = await collect_svc.collect_into_box(
         session,
         tenant_id,
         request_id,
         box_id=open_box.id,
-        storage_location_id=storage_location_id,
+        storage_location_id=effective_location_id,
         product_id=product_id,
         quantity=1,
     )
+    resolved_loc_id = result.allocation.storage_location_id
     p = result.box_line.product
     return PickScanResult(
         kind="product",
-        storage_location_id=storage_location_id,
+        storage_location_id=resolved_loc_id,
         product_id=product_id,
         sku_code=p.sku_code,
         product_name=p.name,
@@ -296,7 +305,7 @@ async def save_pick_allocations(
     if open_box is None:
         raise MarketplaceUnloadPickError("open_box_required")
 
-    merged: dict[tuple[uuid.UUID, uuid.UUID], int] = {}
+    merged: dict[tuple[uuid.UUID, uuid.UUID | None], int] = {}
     for row in rows:
         if row.quantity < 1:
             raise MarketplaceUnloadPickError("invalid_quantity")

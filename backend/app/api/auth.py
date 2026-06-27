@@ -89,6 +89,7 @@ class UserMeResponse(BaseModel):
     switchable_shops: list[SellerShopOut] = Field(default_factory=list)
     delegatable_shops: list[SellerShopOut] = Field(default_factory=list)
     permissions: StaffPermissionsOut | None = None
+    address_storage_enabled: bool = True
 
 
 class SwitchSellerBody(BaseModel):
@@ -334,6 +335,7 @@ async def me(
         switchable_shops=switchable_out,
         delegatable_shops=delegatable_out,
         permissions=permissions,
+        address_storage_enabled=tenant.address_storage_enabled,
     )
 
 
