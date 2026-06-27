@@ -18,12 +18,15 @@ from app.api.inventory_balances import router as inventory_balances_router
 from app.api.inventory_movements import router as inventory_movements_router
 from app.api.marketplace_unload_requests import router as marketplace_unload_requests_router
 from app.api.marking_codes import router as marking_codes_router
+from app.api.marking_credentials import router as marking_credentials_router
+from app.api.notifications import router as notifications_router
 from app.api.outbound_shipment import router as outbound_shipment_router
 from app.api.packaging_tasks import router as packaging_tasks_router
 from app.api.products import router as products_router
 from app.api.sellers import router as sellers_router
 from app.api.staff_accounts import router as staff_accounts_router
 from app.api.stock_transfer import router as stock_transfer_router
+from app.api.tenant_settings import router as tenant_settings_router
 from app.api.warehouses import router as warehouses_router
 from app.api.wb_mp_warehouses import router as wb_mp_warehouses_router
 from app.api.wildberries_integration import router as wildberries_integration_router
@@ -96,6 +99,7 @@ def create_app() -> FastAPI:
     app.include_router(health_router)
     app.include_router(auth_router)
     app.include_router(staff_accounts_router)
+    app.include_router(tenant_settings_router)
     app.include_router(sellers_router)
     app.include_router(warehouses_router)
     app.include_router(products_router)
@@ -107,6 +111,8 @@ def create_app() -> FastAPI:
     app.include_router(marketplace_unload_requests_router)
     app.include_router(packaging_tasks_router)
     app.include_router(marking_codes_router)
+    app.include_router(marking_credentials_router)
+    app.include_router(notifications_router)
     app.include_router(wb_mp_warehouses_router)
     app.include_router(discrepancy_acts_router)
     app.include_router(background_jobs_router)

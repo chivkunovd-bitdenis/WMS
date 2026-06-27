@@ -1,10 +1,317 @@
 # TASKLOG
 
+## TASK-027 — 2026-06-27 — CI mypy green for outbound-rework PR
+
+- What changed: mypy fixes — optional `storage_location_id` в collect API/services; marking imports (`LAYOUT_BLOCK_CZ`, `STATUS_AVAILABLE`, `EVENT_PRINTED`); rename query param `code_status` (shadow `status`); typed seller scope in print-templates.
+- What did NOT change: product behavior; e2e scenarios.
+- Verification: `mypy .` — Success; `pytest -q` — 224 passed; PR #47 CI — backend + e2e + pr-quality + tc-coverage all pass.
+- Commit: 39268c4
+
+## TASK-026 — 2026-06-27 — REV-FIX-019, 020
+
+- What changed:
+  - **REV-FIX-019:** e2e `ff-mp-full-flow.spec.ts` (TC-NEW-MP-FULL-01): seller plan → FF confirm → packaging UI → batch 2 короба → fill → ship full plan; green.
+  - **REV-FIX-020:** sanity docs — REQ-001 дополнен DEC-019 (миграция, не block); журнал батчей S03 в `04_release_manifest.md`; manifest S02/S04/S05 → works.
+  - **CI fixes:** ruff (duplicate test rename, line length); `complete_task` billing order (finalize before skip guard); `test_staff_packaging_billing` — billing после explicit complete.
+- What did NOT change: `04_release_implementation_review.md` (исторический снимок review).
+- Verification: `npm run test:e2e -- ff-mp-full-flow.spec.ts` — 1 passed; grep DEC-019 в spec/MVP/manifest — канон «миграция на зону сортировки, toggle не блокируется».
+- Commit: e6913ec
+
+## TASK-025 — 2026-06-27 — REV-FIX-014 … 018 (P2)
+
+- What changed:
+  - **REV-FIX-014:** зафиксирован MVP — plan total на «Товары» (draft), collect summary/warning только после confirm на «Короба»; комментарии в UI; регрессия ff-mp-tabs green.
+  - **REV-FIX-015:** docstring `copy_box` (closed by design); `docs/DATA_FLOW.md` — copy box; pytest `test_marketplace_unload_box_remove_copy_delete` green.
+  - **REV-FIX-016:** `PUT .../pick-allocations` помечен `deprecated=True` + docstring admin-only; pytest green.
+  - **REV-FIX-017:** cancel → sorting zone в `docs/DATA_FLOW.md`; pytest `-k cancel` green.
+  - **REV-FIX-018:** Snackbar `ff-mp-box-add-success-snackbar` «Добавлено N шт» после add в короб; e2e ff-mp-box-add-modal green.
+- What did NOT change: REV-FIX-019 (full-flow e2e), REV-FIX-020 (docs — уже в TASK-024).
+- Verification: e2e ff-mp-tabs, ff-mp-box-add-modal; pytest copy + cancel + pick_allocations.
+- Commit: e6913ec
+
+## TASK-024 — 2026-06-27 — REV-FIX-004, 020, 011–013
+
+- What changed:
+  - **REV-FIX-004:** info Alert `ff-settings-address-storage-migration-info` при выключении адресного хранения; e2e green.
+  - **REV-FIX-020:** DEC-019 → миграция на зону сортировки в `01_normalized_process_spec.md`, `MVP_DECISIONS_RU.md`, `04_release_manifest.md`.
+  - **REV-FIX-011:** subtitle «Отгрузки на МП» без «подбор по ячейкам»; e2e assert.
+  - **REV-FIX-012:** Alert `seller-mp-ff-handoff-hint` после «Запланировано»; e2e green.
+  - **REV-FIX-013:** `ff-mp-plan-total` на вкладке «Товары» черновика; e2e assert.
+- What did NOT change: REV-FIX-014+ (P2 docs/UX).
+- Verification: e2e ff-address-storage-setting, ff-mp-tabs, seller-mp-unload green.
+- Commit: e6913ec
+
+## TASK-023 — 2026-06-27 — REV-FIX P1 (007–010, 009)
+
+- What changed:
+  - **REV-FIX-007:** убран misleading copy «появится после подтверждения»; empty/created states на вкладке упаковки; e2e assert.
+  - **REV-FIX-008:** `ff-mp-packaging-progress` виден на draft при `linked_packaging_task`; e2e assert.
+  - **REV-FIX-010:** Alert `ff-mp-packaging-gate-alert` на вкладке «Короба» при gate; e2e assert.
+  - **REV-FIX-009:** batch API count≥1; UI всегда `/boxes/batch`; batch-create виден при открытых коробах; pytest one-by-one + e2e TC-NEW-MP-022.
+- What did NOT change: REV-FIX-003+ (DEC-019 migration), P2 copy/docs.
+- Verification: e2e ff-mp-tabs, ff-mp-packaging-gate, ff-mp-box-add-modal (two single-box); pytest create_boxes_batch*.
+- Commit: e6913ec
+
+## TASK-022 — 2026-06-27 — REV-FIX P0/P1 (001–006, 002a, 005)
+
+- What changed:
+  - **REV-FIX-001:** убран авто-`done` из `_touch_task`; gate `assert_unload_packaging_done` требует `status=done`; pytest explicit complete.
+  - **REV-FIX-002:** batch-короба создаются открытыми (`closed_at=NULL`); pytest batch + manual-line.
+  - **REV-FIX-002a:** UI — список всех открытых коробов; e2e TC-NEW-MP-021 batch 3 → add на 2-м коробе.
+  - **REV-FIX-005:** pytest `marking_not_done` на `POST .../complete`.
+  - **REV-FIX-006:** вкладка «Упаковка» enabled при `linked_packaging_task` (draft); e2e draft packaging tab.
+- What did NOT change: REV-FIX-007+ (copy, progress на draft, DEC-019 migration).
+- Verification: pytest packaging_tasks + batch; e2e ff-mp-box-add-modal + ff-mp-tabs green.
+- Commit: e6913ec
+
+## TASK-021 — 2026-06-27 — DEC-012 недопоставка + отмена на сортировку
+
+- What changed: ship с `acknowledge_discrepancy` при распределено < план; UI диалог «Отгрузить неполную»; кнопка «Отменить отгрузку» на FF; cancel возвращает товар на **сортировку** (не на исходные ячейки); pytest partial ship + cancel/sorting.
+- What did NOT change: DEC-019 (блок toggle) — по решению владельца не нужен; выключение адресного → перенос на виртуальную ячейку (отдельная задача).
+- Verification: pytest ship ack + cancel sorting; build green.
+- Commit: e6913ec
+
+## TASK-020 — 2026-06-27 — Селлер plan-only (DEC-015)
+
+- What changed: `_require_ff_execution` — seller 403 на короба/ship/confirm/cancel/pick; GET detail без boxes/pick_allocations/packaging для seller; `SellerMarketplaceUnloadDialog` — status cancelled, `seller-mp-plan-only`; pytest seller guards; e2e TC-NEW-MP-020.
+- What did NOT change: FF вкладки; seller plan/unplan/lines draft.
+- Verification: pytest seller test; e2e seller-mp-unload green; ruff.
+- Commit: e6913ec
+
+## TASK-019 — 2026-06-27 — Отмена отгрузки → откат инвентаря (DEC-016)
+
+- What changed: `POST .../cancel`; `cancel_request` + `rollback_all_collected_for_cancel`; status `cancelled`; pytest partial distribution cancel restores stock and clears reserves/box lines.
+- What did NOT change: UI кнопка отмены (FF); seller cancel (403 via TASK-020).
+- Verification: pytest `test_marketplace_unload_cancel_partial_distribution_restores_inventory`; ruff.
+- Commit: e6913ec
+
+## TASK-018 — 2026-06-27 — API-контракт scan-потока для ТСД
+
+- What changed: `POST .../boxes/{box_id}/scan` — единый flow location→product (`kind` в ответе); код ошибки `plan_limit_exceeded`; `pick/scan` deprecated; doc `docs/API_MP_UNLOAD_SCAN_TSD_RU.md`; pytest `test_marketplace_unload_tsd_scan_contract.py`; UI modal/box scan на один endpoint.
+- What did NOT change: мобильный клиент; seller parity.
+- Verification: pytest tsd contract + unload suite; e2e ff-mp-box-add-modal (after build).
+- Commit: e6913ec
+
+## TASK-017 — 2026-06-27 — E2E tests отгрузки на МП
+
+- What changed: e2e `ff-mp-packaging-gate.spec.ts` (TC-NEW-MP-008) — UI/API gate до упаковки; комментарий TASK-017 в `ff-mp-ship-pick`; ship без ack body (TASK-015).
+- What did NOT change: seller-mp-unload UI parity, ff-mp-print-waybill.
+- Verification: e2e ff-mp-packaging-gate + ff-mp-ship-pick + ff-mp-tabs + ff-mp-box-add-modal green.
+- Commit: e6913ec
+
+## TASK-016 — 2026-06-27 — Backend tests marketplace unload
+
+- What changed: pytest packaging gate before box/batch; ship rejects empty boxes (`distribution_incomplete`); seller test order упаковка→короба; batch test clarifies count=1 validation.
+- What did NOT change: pick-allocations admin-only test (legacy admin path).
+- Verification: pytest 32 passed (unload + address_storage + seller + packaging).
+- Commit: e6913ec
+
+## TASK-015 — 2026-06-27 — Рефактор ship_request после переноса списания
+
+- What changed: `ship_request` без `acknowledge_discrepancy` и без pick_allocations; проверка `distribution_incomplete` по коробам (DEC-010); `wb_mp_warehouse_required` на ship; API ship без body; UI/e2e без ack body; pytest + packaging test через manual-line в короб.
+- What did NOT change: seller parity, DEC-012 partial ship path.
+- Verification: pytest 25 passed (unload + packaging); e2e ff-mp-ship-pick + ff-mp-tabs.
+- Commit: e6913ec
+
+## TASK-014 — 2026-06-27 — Финальная вкладка: печать ШК и gate ship
+
+- What changed: кнопка «Печать всех ШК коробов» на вкладке «Финал»; ship блокируется при `remaining > 0` (UI + без confirm расхождения); pytest `test_marketplace_unload_ship_blocked_when_distribution_incomplete`; e2e ship disabled в `ff-mp-tabs`.
+- What did NOT change: refactor ship_request pick_allocations (TASK-015), seller parity.
+- Verification: pytest 1 passed; e2e ff-mp-tabs + ff-mp-ship-pick green; `npm run build`.
+- Commit: e6913ec
+
+## TASK-013 — 2026-06-27 — Счётчики плана, распределения и упаковки
+
+- What changed: `mpCollectSummary` — план / распределено по коробам / остаток + статус упаковки; предупреждение `ff-mp-collect-warning` при неполном распределении; колонка «Распределено» вместо «Собрано»; e2e asserts в `ff-mp-tabs.spec.ts` (TC-NEW-MP-007).
+- What did NOT change: ship validation (TASK-014), backend `picked_qty_by_product` (уже по коробам).
+- Verification: `npm run build`; e2e ff-mp-tabs green.
+- Commit: e6913ec
+
+## TASK-012 — 2026-06-27 — Вкладочная структура документа отгрузки на МП
+
+- What changed: MUI Tabs в `FfSuppliesShipmentsPage` — «Товары / Упаковка / Короба / Финальная отгрузка»; embed `FfPackagingTaskPanel` вместо `FfPackagingTaskDialog`; финал (дата, склад WB, печать, подтвердить/отгрузить) на вкладке «Финал»; e2e `ff-mp-tabs.spec.ts` (TC-NEW-MP-007).
+- What did NOT change: счётчики DEC-010 (TASK-013), ship validation DEC-012 (TASK-014/015), seller parity (`SellerMarketplaceUnloadDialog`).
+- Verification: `npm run build`; e2e ff-mp-tabs + ff-mp-box-add-modal + ff-address-storage-mp-ui + ff-mp-ship-pick green.
+- Commit: e6913ec
+
+
+- What changed: `FfMarketplaceUnloadBoxAddDialog` (фото, план/в коробах/доступно, scan ячейки+товара, ручной ввод); кнопка `ff-mp-box-add-products-{boxId}`; `plan_exceeded` в `collect_into_box` (BR-005); gate упаковки по `status === 'done'`; e2e `ff-mp-box-add-modal.spec.ts` (TC-NEW-MP-006).
+- What did NOT change: вкладочная структура (TASK-012), счётчики DEC-010 (TASK-013).
+- Verification: pytest 26 passed (unload + packaging + address_storage); `npm run build`; e2e `ff-mp-box-add-modal.spec.ts` green.
+- Commit: e6913ec
+
+## TASK-010 — 2026-06-27 — Действия короба: remove line, delete empty, copy, print ШК
+
+- What changed: `remove_from_box` (откат on_hand/reserved/pick allocation, DEC-016); `delete_box` (DEC-007, только пустой); `copy_box` (новый короб + collect по allocations, лимит плана BR-005); API `POST .../copy`, `DELETE .../boxes/{id}`, `POST .../lines/{id}/remove`; UI меню короба + печать ШК + удаление строки; pytest `test_marketplace_unload_box_remove_copy_delete`.
+- What did NOT change: модалка «Добавить товары» напротив короба (TASK-011), вкладочная структура (TASK-012).
+- Verification: pytest 26 passed (unload + address_storage + packaging); `npm run build`.
+- Commit: e6913ec
+
+## TASK-009 — 2026-06-27 — Массовое создание N коробов
+
+- What changed: `create_boxes_batch` в `marketplace_unload_box_service`; `POST .../boxes/batch` (count 2–50, закрытые пустые короба с ШК); UI — поле «Кол-во коробов» + кнопка «Создать короба» / «Открыть короб» (count=1); pytest batch.
+- What did NOT change: per-box modal add (TASK-011), copy/delete короба (TASK-010).
+- Verification: pytest `test_marketplace_unload_create_boxes_batch` + 25 unload tests passed; `npm run build`.
+- Commit: e6913ec
+
+## TASK-005 — 2026-06-27 — Удаление «Начать подбор» (legacy flow)
+
+- What changed: убраны кнопка `ff-mp-start-picking`, модалка `ff-mp-picking-dialog`, блок `ff-mp-pick-saved`; `PUT .../pick-allocations` — только `FULFILLMENT_ADMIN`; pytest + e2e TC-NEW-MP-005.
+- What did NOT change: сборка через скан в короб (`collect_into_box`); `GET pick-options` (без UI).
+- Verification: pytest 24 passed (unload + address_storage + packaging); e2e `ff-address-storage-mp-ui`, `ff-mp-ship-pick` green; `npm run build`.
+- Commit: e6913ec
+
+## TASK-004 — 2026-06-27 — Списание остатков при добавлении в короб (DEC-006)
+
+- What changed: `collect_into_box` вызывает `apply_marketplace_unload_pick` + `reduce_reservation_for_collect` в одной транзакции; `FOR UPDATE` на балансе и заявке; `ship_request` без повторного movement; `delete_empty_boxes_for_ship` (DEC-002); pytest + e2e `ff-mp-ship-pick` — остаток уменьшается после collect, не после ship.
+- What did NOT change: откат при remove-from-box (TASK-010), отмена/abandon (TASK-019).
+- Verification: `pytest tests/test_marketplace_unload_and_discrepancy_acts.py` + `test_marketplace_unload_address_storage.py` — 23 passed.
+- Commit: e6913ec
+
+## TASK-007 + TASK-008 — 2026-06-27 — Завершение упаковки и gate коробов
+
+- What changed: `POST .../packaging-tasks/{id}/complete`; reopen task при смене плана отгрузки; блок `create_open_box`/`collect_into_box` до `packaging_not_done`; UI complete panel + disabled box scan; e2e `ff-mp-ship-pick`, `ff-address-storage-mp-ui` — упаковка перед коробами.
+- What did NOT change: списание при collect (TASK-004), batch короба (TASK-009).
+- Verification: `pytest tests/test_packaging_tasks.py` 8 passed; `test_marketplace_unload_address_storage.py` 2 passed; `npm run build`.
+- Commit: e6913ec
+
+## TASK-003 — 2026-06-27 — Скрытие UI ячеек при выкл. адресном хранении
+
+- What changed: `addressStorageEnabled` prop в `FfSuppliesShipmentsPage`, `FfInboundRequestView`, `App.tsx`; скрыты chip ячейки, «Начать подбор», таблица pick_allocations, блок распределения приёмки; scan без шага ячейки; e2e `ff-address-storage-mp-ui.spec.ts`.
+- What did NOT change: списание при collect (TASK-004), backend API (TASK-002 уже в `908029c`).
+- Verification: `npm run build`; e2e `ff-address-storage-mp-ui.spec.ts` + `ff-address-storage-setting.spec.ts` green.
+- Commit: `2cd8062`.
+
+## TASK-001 — 2026-06-27 — Флаг «Адресное хранение» (UI)
+
+- What changed: checkbox на `FfSettingsScreen`, поле `address_storage_enabled` в `Me`/`useAuth`, reload me после PATCH; e2e `ff-address-storage-setting.spec.ts`. Backend/API — в `908029c`.
+- What did NOT change: скрытие UI ячеек (TASK-003).
+- Verification: e2e settings + build green.
+- Commit: `2cd8062` (UI; backend/API в `908029c`).
+
+## TASK-002 — 2026-06-27 — Условная обязательность ячеек в collect/pick API
+
+- What changed: `resolve_collect_storage_location` в `marketplace_unload_collect_service`; флаг `address_storage_enabled` через `tenant_settings_service` (TASK-001 dependency); optional `storage_location_id` в API scan/manual-line/pick-add; `pick_scan` — порядок ячейка→товар при вкл. флаге; pytest `test_marketplace_unload_address_storage.py`.
+- What did NOT change: списание при collect (TASK-004), скрытие UI ячеек (TASK-003), inventory movement moment on ship.
+- Verification: `ruff` + `mypy` on changed files green; pytest 2 new + `test_marketplace_unload_ship_deducts_stock_by_pick_and_scan` green.
+- Commit: `908029c`.
+
+## TASK-78 — 2026-06-26 — ЧЗ T4.1: хранилище кредов селлера
+
+- What changed: таблица `seller_marking_credentials` (шифрованные токены ЧЗ/СУЗ/МП, МЧД, signing_method, edo_route, auto_introduce, auto_emit_limit); API `GET/PATCH /operations/marking-codes/self/credentials` и `/sellers/{id}/credentials`; блок настроек в `SellerSettingsScreen`; pytest + e2e `seller-marking-credentials.spec.ts`.
+- What did NOT change: signing-service (T4.2), авто-ввод в оборот (T4.3).
+- Verification: `pytest tests/test_marking_credentials_api.py` 4 passed; `npm run build`; e2e `seller-marking-credentials.spec.ts` green.
+- Commit: `6840b15`.
+
+## TASK-77 — 2026-06-26 — ЧЗ T3.3–T3.5: прогноз, low-stock, дашборд селлера, триггеры ФФ
+
+- What changed: T3.3 расчёт `consumption_7d`/`forecast_days`, `PUT pools/{id}/threshold`, Celery `marking_low_stock`, KPI и пороги в UI; T3.4 карточки остатков селлера + e2e; T3.5 `notify_ff_portal` при создании приёмки/отгрузки МП.
+- What did NOT change: фаза 4 (креды ЧЗ, подпись).
+- Verification: pytest forecast+triggers; `npm run build`; e2e `seller-honest-sign-dashboard.spec.ts`.
+- Commit: `51876d2`.
+
+## TASK-76 — 2026-06-26 — ЧЗ T3.2: колокольчик и центр уведомлений
+
+- What changed: `NotificationBell` в шапке FF и селлера, страница «Уведомления», API-клиент, e2e seed `/_e2e/seed`, Playwright `ff-notifications.spec.ts`.
+- What did NOT change: пороги low-stock (T3.3), дашборд остатков селлера (T3.4), триггеры отгрузок (T3.5).
+- Verification: `npm run build`; e2e `ff-notifications.spec.ts` green.
+- Commit: `11c1ccd`.
+
+## TASK-75 — 2026-06-26 — ЧЗ T3.1: шина уведомлений
+
+- What changed: таблица `notifications`, сервис `notify`/`notify_ff_portal`, API `GET/POST /operations/notifications` (список, read, read-all), скоуп получателя user/seller/ff_portal.
+- What did NOT change: UI колокольчик (T3.2), триггеры low-stock и отгрузок (T3.3–T3.5).
+- Verification: `ruff`, `mypy`, `pytest tests/test_notifications.py` — 5 passed.
+- Commit: `9c8a449`.
+
+## TASK-74 — 2026-06-26 — ЧЗ T2.4–T2.5: verify-pair и ворклист pending
+
+- What changed: T2.4 `POST verify-pair` (match → `applied` + событие), мини-станция на упаковке; T2.5 `GET pending-marking`, экран «Осталось промаркировать», бейдж на упаковке.
+- What did NOT change: фаза 3 (уведомления T3.1).
+- Verification: pytest verify_pair + pending; e2e ff-marking-verify-pair + ff-pending-marking.
+- Commit: `15e290a`.
+
+## TASK-73 — 2026-06-26 — ЧЗ T2.1–T2.3: shift_lead, брак, очередь перепечатки
+
+- What changed: T2.1 `can_shift_lead`, `require_shift_lead`, nav «Перепечатки»; T2.2 `marking_reprint_requests`, `POST codes/{id}/defect`, кнопка «Брак» на упаковке; T2.3 approve/replace/reject API и кнопки на экране очереди.
+- What did NOT change: T2.4 скан-пара «товар=пакет»; колокольчик уведомлений (Э7).
+- Verification: pytest reprint_defect + shift_lead; `npm run build`; e2e ff-shift-lead + ff-marking-defect.
+- Commits: `78881e7` (T2.1), `f6d78d1` (T2.2), `ff6f9f9` (T2.3).
+
+## TASK-72 — 2026-06-26 — ЧЗ T1.6: рендер ленты по layout
+
+- What changed: `expandLayoutTape` в `markingPrintPresets.ts`; `printMarkingCodeTape` / обновлённый `printMarkingCodeLabels` с блоками `cz` и `label` (58×40); экспорт `buildProductLabelSectionHtml`; вызовы из `MarkingPrintDialog`, `FfPackagingPage` (scan/print-all/строка); vitest `markingPrintPresets.test.ts`; e2e constructor — пресет «Этикетки + ЧЗ», счётчик этикеток в предпросмотре.
+- What did NOT change: Фаза 2 (shift_lead, перепечатки).
+- Verification: `npm run test:unit` 2 passed; `npm run build`; e2e constructor + print-all green.
+- Commit: `a86def6`.
+
+- What changed: `print_all_for_packaging_task` + `POST /operations/marking-codes/packaging-tasks/{id}/print-all` (dry_run, allow_partial); кнопка «Печать всех ЧЗ» и диалог сводки на панели упаковки; pytest `test_marking_print_all.py`; e2e `ff-marking-print-all.spec.ts` (TC-NEW-003).
+- What did NOT change: рендер ленты по layout label-блокам (T1.6).
+- Verification: pytest print_all 2 passed; `npm run build`; e2e print-all green.
+- Commit: `7b33be6`.
+
+## TASK-70 — 2026-06-26 — ЧЗ T1.4: скан-печать
+
+- What changed: `units_to_print` в `print_codes_for_packaging_line` (инкремент `qty_marking_printed`); `scan_print_for_packaging_task` + `POST /operations/marking-codes/scan-print`; поле «Сканируйте товар» на панели упаковки; pytest `test_marking_scan_print.py`.
+- What did NOT change: print-all (T1.5), layout-рендер label (T1.6).
+- Verification: pytest scan + marking; `npm run build`.
+- Commit: `b1e27b1`.
+
+## TASK-69 — 2026-06-26 — ЧЗ T1.3: диалог-конструктор печати
+
+- What changed: `MarkingPrintDialog` — шапка (товар/документ, нужно/доступно), баннер нехватки, «печатать доступные M», пресеты (Парами/Этикетки+ЧЗ/…/Свой), конструктор блоков, предпросмотр 3 единиц, сохранение шаблона, тост «Запросить у селлера»; кнопка «Печать ЧЗ» доступна при available≥1; e2e `ff-marking-print-constructor.spec.ts` (TC-NEW-002).
+- What did NOT change: scan-print (T1.4), print-all (T1.5), рендер label-блоков (T1.6).
+- Verification: `npm run build`; e2e constructor + packaging.
+- Commit: `b1e27b1`.
+
+## TASK-68 — 2026-06-26 — ЧЗ T1.2: печать из пула
+
+- What changed: рефактор `print_codes_for_packaging_line` — коды из пула (`marking_pool_products`), reserve→printed, события с `document_number`, API `{layout_json, copies, allow_partial}`; ответ `{codes, layout, quantity, shortage}` вместо 422 при нехватке; фронт отправляет `layout_json` из шаблона; pytest `test_marking_print_pool.py`, обновлён `test_marking_insufficient_codes`.
+- What did NOT change: конструктор ленты Э5 (T1.3), scan-print (T1.4), рендер по layout на фронте (T1.6).
+- Verification: pytest marking print 9 passed; `npm run build`.
+- Commit: not yet.
+
+## TASK-67 — 2026-06-26 — ЧЗ T1.1: шаблоны печати
+
+- What changed: таблица `print_templates`, модель `PrintTemplate`, сервис `print_template_service.py` (CRUD + резолвер product→seller→системный «Парами»); API `GET/POST/PUT/DELETE /operations/marking-codes/print-templates` и `GET …/print-templates/resolve`; фронт `printTemplate.ts`, диалог печати подтягивает шаблон по товару; pytest `test_print_templates.py`.
+- What did NOT change: рефактор печати из пула (T1.2), конструктор ленты Э5 (T1.3), scan-print (T1.4).
+- Verification: `ruff`/`mypy` green; pytest print_templates 3 passed; `npm run build`; e2e packaging — по возможности.
+- Commit: not yet.
+
+## TASK-66 — 2026-06-26 — ЧЗ T0.4: привязка пул↔товары
+
+- What changed: `set_pool_products` / `add_pool_products` / `remove_pool_products` в `marking_code_service.py`; `PUT /operations/marking-codes/pools/{pool_id}/products` (422 `product_seller_mismatch`); диалог `MarkingPoolProductsDialog` + панель `MarkingPoolProductsPanel` (чипы товаров); e2e seed `POST …/_e2e/pools` при `WMS_AUTO_CREATE_SCHEMA=1`; pytest `test_marking_pool_products.py`, e2e `ff-pool-products-link.spec.ts` (TC-NEW-004).
+- What did NOT change: список пулов Э1 (T0.7), импорт в пулы (T0.3), GET ленты/пулов (T0.6).
+- Verification: `ruff`/`mypy` green; pytest marking 12 passed; `npm run build`; e2e `ff-pool-products-link.spec.ts` green.
+- Commit: `82180c8`.
+
+## TASK-65 — 2026-06-26 — ЧЗ T0.5: журнал marking_code_events
+
+- What changed: таблица `marking_code_events`, модель `MarkingCodeEvent`, константы типов событий; `record_event()` в `marking_code_service.py`; события `imported` при импорте, `printed`/`reprinted` при печати; pytest `test_marking_code_events.py`.
+- What did NOT change: API ленты (T0.6), привязка пул↔товары (T0.4), рефактор импорта в пулы (T0.3).
+- Verification: `ruff`/`mypy` green; `pytest` 156 passed.
+- Deploy: not yet.
+
+## TASK-64 — 2026-06-26 — ЧЗ T0.2: модель пулов и расширение кодов
+
+- What changed: таблицы `marking_pools`, `marking_pool_products`; расширение `marking_codes` (pool_id, serial, crypto_tail, reserved/applied/introduced/transferred/consumed, defective_reason, replaced_by_code_id); константы статусов; дата-миграция backfill пулов для существующих кодов; pytest `test_marking_pools.py`.
+- What did NOT change: API, фронт, импорт в пулы (T0.3), события `marking_code_events` (T0.5).
+- Verification: `ruff`/`mypy` green; `pytest` 154 passed.
+- Deploy: not yet.
+
+## TASK-63 — 2026-06-26 — ЧЗ T0.1: нумерация документов (УПАК/ПРИЕМ/ОТГР)
+
+- What changed: таблица `document_sequences`, колонка `document_number` на `packaging_tasks`, `inbound_intake_requests`, `marketplace_unload_requests`; сервис `document_number_service.py` (атомарный счётчик по МСК); номер при создании упаковки/приёмки/отгрузки; API + UI (упаковка, приёмка, списки отгрузок); pytest + e2e TC-NEW-DOCNUM-01.
+- What did NOT change: пулы ЧЗ, импорт кодов, события `marking_code_events` (T0.2+).
+- Verification: `ruff`/`mypy` green; `pytest` 152 passed; `npm run build`; e2e `ff-packaging-page.spec.ts` (create from sorting).
+- Deploy: not yet.
+
 ## TASK-62 — 2026-06-26 — FF каталог: поиск по артикулу и названию
 
 - What changed: в разделе «Каталог» ФФ — строка поиска сверху; фильтрация по `sku_code`, `wb_vendor_code` (артикул продавца) и названию; пустое состояние «ничего не найдено»; e2e TC-NEW-002 в `ff-products.spec.ts`.
 - What did NOT change: API `/products/ff-catalog`; фильтр по селлеру и сортировка.
 - Verification: `npm run build`; e2e `ff-products.spec.ts` — filter/sort/search.
+- Deploy: PR #46 → `main` `4e82c6b`; prod `194.87.96.144:8088` — `prod-update.sh`, HTTP 200.
 
 ## TASK-61 — 2026-06-24 — Фикс сброса даты отгрузки в WmsDateField
 

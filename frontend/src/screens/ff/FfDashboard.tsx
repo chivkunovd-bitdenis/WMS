@@ -17,6 +17,7 @@ import { FfWeekCalendar } from './FfWeekCalendar'
 
 export type FfInboundSummary = {
   id: string
+  document_number?: string | null
   status: string
   line_count: number
   planned_delivery_date: string | null

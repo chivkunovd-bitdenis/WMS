@@ -36,6 +36,7 @@ export type Me = {
     is_home?: boolean
   }[]
   permissions?: FfPermissions | null
+  address_storage_enabled?: boolean
 }
 
 export type AuthPortal = 'fulfillment' | 'seller'

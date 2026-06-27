@@ -41,6 +41,7 @@ export function FfHonestSignPage({ token }: Props) {
         selectedSellerId={selectedSellerId}
         onSelectedSellerIdChange={setSelectedSellerId}
         testIdPrefix="ff-honest-sign"
+        routeBase="/app/ff"
       />
     </>
   )

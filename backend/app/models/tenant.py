@@ -4,7 +4,7 @@ import uuid
 from datetime import datetime
 from typing import TYPE_CHECKING
 
-from sqlalchemy import DateTime, String, Uuid, func
+from sqlalchemy import Boolean, DateTime, String, Uuid, func
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.models.base import Base
@@ -14,6 +14,7 @@ if TYPE_CHECKING:
     from app.models.inbound_intake import InboundIntakeRequest
     from app.models.inventory_balance import InventoryBalance
     from app.models.inventory_movement import InventoryMovement
+    from app.models.notification import Notification
     from app.models.outbound_shipment import OutboundShipmentRequest
     from app.models.product import Product
     from app.models.seller import Seller
@@ -30,6 +31,11 @@ class Tenant(Base):
     )
     name: Mapped[str] = mapped_column(String(255), nullable=False)
     slug: Mapped[str] = mapped_column(String(64), unique=True, nullable=False, index=True)
+    address_storage_enabled: Mapped[bool] = mapped_column(
+        Boolean,
+        nullable=False,
+        server_default="true",
+    )
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), nullable=False
     )
@@ -61,5 +67,9 @@ class Tenant(Base):
     )
     background_jobs: Mapped[list[BackgroundJob]] = relationship(
         "BackgroundJob",
+        back_populates="tenant",
+    )
+    notifications: Mapped[list[Notification]] = relationship(
+        "Notification",
         back_populates="tenant",
     )

@@ -439,7 +439,7 @@ export function FfInboundSortingPanel({
 
       {locations.length === 0 ? (
         <Alert severity="warning" sx={{ mb: 2 }} data-testid="ff-sorting-no-locations">
-          На складе нет ячеек хранения — создайте их в «Каталог → Ячейки».
+          На складе нет ячеек хранения — создайте их в разделе «Ячейки».
         </Alert>
       ) : null}
 

@@ -26,6 +26,10 @@ from app.services.catalog_service import (
     get_storage_location_in_warehouse,
     get_warehouse,
 )
+from app.services.document_number_service import (
+    DOC_TYPE_INBOUND,
+    assign_document_number_if_missing,
+)
 
 STATUS_DRAFT = "draft"
 STATUS_SUBMITTED = "submitted"
@@ -65,10 +69,18 @@ async def create_request(
         planned_box_count=1,
     )
     session.add(req)
+    await assign_document_number_if_missing(
+        session, tenant_id, DOC_TYPE_INBOUND, req
+    )
     await session.commit()
     reloaded = await get_request(session, tenant_id, req.id)
     if reloaded is None:
         raise InboundIntakeError("request_not_found")
+    if seller_id is not None:
+        from app.services.notification_trigger_service import notify_ff_inbound_created
+
+        await notify_ff_inbound_created(session, reloaded)
+        await session.commit()
     return reloaded
 
 

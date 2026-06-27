@@ -33,3 +33,10 @@ def run_wb_mp_warehouses_daily_sync_task() -> None:
     from app.services.wb_mp_warehouse_service import run_daily_wb_mp_warehouses_sync_all_tenants
 
     asyncio.run(run_daily_wb_mp_warehouses_sync_all_tenants())
+
+
+@celery_app.task(name="wms.marking_low_stock")
+def run_marking_low_stock_task() -> None:
+    from app.services.marking_low_stock_service import run_marking_low_stock_all_tenants
+
+    asyncio.run(run_marking_low_stock_all_tenants())

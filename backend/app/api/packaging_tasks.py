@@ -40,6 +40,10 @@ class PackProgressIn(BaseModel):
     quantity: int = Field(ge=1, le=1_000_000_000)
 
 
+class CompletePackagingIn(BaseModel):
+    acknowledge_all_packed: bool = False
+
+
 class PackagingTaskLineOut(BaseModel):
     id: str
     product_id: str
@@ -62,6 +66,7 @@ class PackagingTaskLineOut(BaseModel):
 
 class PackagingTaskOut(BaseModel):
     id: str
+    document_number: str | None = None
     warehouse_id: str
     status: str
     marketplace_unload_request_id: str | None
@@ -112,6 +117,7 @@ async def _task_out(
         line_outs.append(_line_out(ln, marking_available=available))
     return PackagingTaskOut(
         id=str(task.id),
+        document_number=task.document_number,
         warehouse_id=str(task.warehouse_id),
         status=task.status,
         marketplace_unload_request_id=(
@@ -260,6 +266,26 @@ async def record_pack_progress(
             task_id,
             line_id,
             body.quantity,
+            acting_user_id=user.id,
+        )
+    except pkg_svc.PackagingTaskServiceError as exc:
+        raise _http_from_pkg_error(exc) from exc
+    return await _task_out(session, user.tenant_id, task)
+
+
+@router.post("/{task_id}/complete", response_model=PackagingTaskOut)
+async def complete_packaging_task(
+    task_id: uuid.UUID,
+    body: CompletePackagingIn,
+    user: Annotated[User, Depends(require_packaging_access)],
+    session: Annotated[AsyncSession, Depends(get_db)],
+) -> PackagingTaskOut:
+    try:
+        task = await pkg_svc.complete_task(
+            session,
+            user.tenant_id,
+            task_id,
+            acknowledge_all_packed=body.acknowledge_all_packed,
             acting_user_id=user.id,
         )
     except pkg_svc.PackagingTaskServiceError as exc:

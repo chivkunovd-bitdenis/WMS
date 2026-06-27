@@ -31,7 +31,7 @@ class MarketplaceUnloadPickError(Exception):
 @dataclass(frozen=True)
 class PickAllocationRow:
     product_id: uuid.UUID
-    storage_location_id: uuid.UUID
+    storage_location_id: uuid.UUID | None
     quantity: int
 
 
@@ -195,7 +195,7 @@ async def add_pick_qty(
     tenant_id: uuid.UUID,
     request_id: uuid.UUID,
     *,
-    storage_location_id: uuid.UUID,
+    storage_location_id: uuid.UUID | None,
     product_id: uuid.UUID,
     quantity: int,
 ) -> MarketplaceUnloadPickAllocation:
@@ -296,7 +296,7 @@ async def save_pick_allocations(
     if open_box is None:
         raise MarketplaceUnloadPickError("open_box_required")
 
-    merged: dict[tuple[uuid.UUID, uuid.UUID], int] = {}
+    merged: dict[tuple[uuid.UUID, uuid.UUID | None], int] = {}
     for row in rows:
         if row.quantity < 1:
             raise MarketplaceUnloadPickError("invalid_quantity")
@@ -323,12 +323,25 @@ async def save_pick_allocations(
     return await list_pick_allocations(session, tenant_id, request_id)
 
 
-def has_pick_discrepancy(req: MarketplaceUnloadRequest) -> bool:
+def _distributed_qty_by_product(req: MarketplaceUnloadRequest) -> dict[uuid.UUID, int]:
     picked: dict[uuid.UUID, int] = {}
     for b in req.boxes:
         for bl in b.lines:
             picked[bl.product_id] = picked.get(bl.product_id, 0) + int(bl.quantity)
-    return any(picked.get(ln.product_id, 0) != int(ln.quantity) for ln in req.lines)
+    return picked
+
+
+def has_incomplete_distribution(req: MarketplaceUnloadRequest) -> bool:
+    """DEC-010: ship only when box quantities match plan lines exactly."""
+    distributed = _distributed_qty_by_product(req)
+    if not distributed:
+        return True
+    return any(distributed.get(ln.product_id, 0) != int(ln.quantity) for ln in req.lines)
+
+
+def has_pick_discrepancy(req: MarketplaceUnloadRequest) -> bool:
+    """Legacy alias for detail/UI flags."""
+    return has_incomplete_distribution(req)
 
 
 async def ship_request(
@@ -347,24 +360,8 @@ async def ship_request(
         raise MarketplaceUnloadPickError("no_lines")
     if req.planned_shipment_date is None:
         raise MarketplaceUnloadPickError("planned_shipment_date_required")
-
-    allocs = await list_pick_allocations(session, tenant_id, request_id)
-    if not allocs:
-        raise MarketplaceUnloadPickError("pick_required")
-
-    pick_sum: dict[uuid.UUID, int] = {}
-    for a in allocs:
-        pick_sum[a.product_id] = pick_sum.get(a.product_id, 0) + int(a.quantity)
-
-    if sum(pick_sum.values()) < 1:
-        raise MarketplaceUnloadPickError("pick_required")
-
-    for ln in req.lines:
-        if pick_sum.get(ln.product_id, 0) < 1:
-            raise MarketplaceUnloadPickError("pick_required")
-
-    if has_pick_discrepancy(req) and not acknowledge_discrepancy:
-        raise MarketplaceUnloadPickError("discrepancy_requires_ack")
+    if req.wb_mp_warehouse_id is None:
+        raise MarketplaceUnloadPickError("wb_mp_warehouse_required")
 
     from app.services import packaging_task_service as pkg_svc
 
@@ -375,22 +372,16 @@ async def ship_request(
             raise MarketplaceUnloadPickError("packaging_not_done") from exc
         raise
 
-    for a in allocs:
-        if (
-            await inventory_service.available_at_location(
-                session, tenant_id, a.product_id, a.storage_location_id
-            )
-            < int(a.quantity)
-        ):
-            raise MarketplaceUnloadPickError("insufficient_available")
-        await inventory_service.apply_marketplace_unload_pick(
-            session,
-            tenant_id=tenant_id,
-            product_id=a.product_id,
-            storage_location_id=a.storage_location_id,
-            quantity=int(a.quantity),
-            marketplace_unload_request_id=req.id,
-        )
+    distributed = _distributed_qty_by_product(req)
+    if not distributed or sum(distributed.values()) < 1:
+        raise MarketplaceUnloadPickError("distribution_incomplete")
+
+    if has_incomplete_distribution(req):
+        if not acknowledge_discrepancy:
+            raise MarketplaceUnloadPickError("distribution_incomplete")
+        req.ff_modified = True
+
+    await mu_svc.delete_empty_boxes_for_ship(session, req)
 
     req.status = mu_svc.STATUS_SHIPPED
     await mu_svc.release_reservations_for_shipped(session, req.id)

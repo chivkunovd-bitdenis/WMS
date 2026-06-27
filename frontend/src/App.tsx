@@ -26,6 +26,7 @@ import {
 } from '@mui/material'
 import CloseIcon from '@mui/icons-material/Close'
 import { FfPackagingPage } from './screens/ff/FfPackagingPage'
+import { FfPendingMarkingPage } from './screens/ff/FfPendingMarkingPage'
 import { FfDashboard } from './screens/ff/FfDashboard'
 import {
   FfSuppliesShipmentsPage,
@@ -33,6 +34,11 @@ import {
   type FfMarketplaceUnloadSummary,
 } from './screens/ff/FfSuppliesShipmentsPage'
 import { FfHonestSignPage } from './screens/ff/FfHonestSignPage'
+import { HonestSignImportPage } from './screens/shared/HonestSignImportPage'
+import { FfHonestSignLedgerPage } from './screens/ff/FfHonestSignLedgerPage'
+import { FfHonestSignReprintsPage } from './screens/ff/FfHonestSignReprintsPage'
+import { NotificationsPage } from './screens/shared/NotificationsPage'
+import { HonestSignPoolPage } from './screens/shared/HonestSignPoolPage'
 import { FfPlaceholderPage } from './screens/ff/FfPlaceholderPage'
 import { FfInboundRequestView, type InboundRequestWorkspace } from './screens/ff/FfInboundRequestView'
 import { FfInboundQueuePage } from './screens/ff/FfInboundQueuePage'
@@ -220,6 +226,7 @@ export default function App() {
     onSetInitialPassword,
     onCancelPasswordSetup,
     logout,
+    reloadMe,
   } = useAuth('fulfillment')
   const navigate = useNavigate()
   const [pendingMpUnloadId, setPendingMpUnloadId] = useState<string | null>(null)
@@ -2391,6 +2398,7 @@ export default function App() {
                 infoNotice={ffSuppliesNotice}
                 onDismissInfoNotice={() => setFfSuppliesNotice(null)}
                 token={token}
+                addressStorageEnabled={me?.address_storage_enabled !== false}
                 sellers={sellers.map((s) => ({ id: s.id, name: s.name }))}
                 productPicklist={products.map((p) => ({
                   id: p.id,
@@ -2465,7 +2473,7 @@ export default function App() {
               token ? (
                 <FfProductsCatalogScreen token={token} authHeaders={authHeaders} sellers={sellers} />
               ) : (
-                <FfPlaceholderPage title="Товары" hint="Нет токена." testId="ff-products-placeholder" />
+                <FfPlaceholderPage title="Каталог" hint="Нет токена." testId="ff-products-placeholder" />
               )
             }
           />
@@ -2488,6 +2496,16 @@ export default function App() {
               )
             }
           />
+          <Route
+            path="ff/packaging/pending-marking"
+            element={
+              token && (isFulfillmentAdmin || canAccessFfBlock(me.role, me.permissions, 'packaging')) ? (
+                <FfPendingMarkingPage token={token} />
+              ) : (
+                <Navigate to={`${base}/dashboard`} replace />
+              )
+            }
+          />
 
           <Route
             path="ff/honest-sign"
@@ -2499,6 +2517,74 @@ export default function App() {
                   title="Честный знак"
                   hint="Нет токена."
                   testId="ff-honest-sign-placeholder"
+                />
+              )
+            }
+          />
+
+          <Route
+            path="ff/honest-sign/pool/:poolId"
+            element={
+              token ? (
+                <HonestSignPoolPage token={token} testIdPrefix="ff-honest-sign-pool" />
+              ) : (
+                <FfPlaceholderPage
+                  title="Пул ЧЗ"
+                  hint="Нет токена."
+                  testId="ff-honest-sign-pool-placeholder"
+                />
+              )
+            }
+          />
+          <Route
+            path="ff/honest-sign/ledger"
+            element={
+              token ? (
+                <FfHonestSignLedgerPage token={token} />
+              ) : (
+                <FfPlaceholderPage
+                  title="Лента расхода"
+                  hint="Нет токена."
+                  testId="ff-honest-sign-ledger-placeholder"
+                />
+              )
+            }
+          />
+          <Route
+            path="ff/honest-sign/reprints"
+            element={
+              token && canAccessFfBlock(me.role, me.permissions, 'shift_lead') ? (
+                <FfHonestSignReprintsPage token={token} />
+              ) : (
+                <Navigate to={`${base}/dashboard`} replace />
+              )
+            }
+          />
+          <Route
+            path="ff/honest-sign/import"
+            element={
+              token ? (
+                <HonestSignImportPage testIdPrefix="ff-honest-sign-import" />
+              ) : (
+                <FfPlaceholderPage
+                  title="Загрузка кодов"
+                  hint="Нет токена."
+                  testId="ff-honest-sign-import-placeholder"
+                />
+              )
+            }
+          />
+
+          <Route
+            path="ff/notifications"
+            element={
+              token ? (
+                <NotificationsPage token={token} portal="ff" testId="ff-notifications-page" />
+              ) : (
+                <FfPlaceholderPage
+                  title="Уведомления"
+                  hint="Нет токена."
+                  testId="ff-notifications-placeholder"
                 />
               )
             }
@@ -2527,6 +2613,10 @@ export default function App() {
                   token={token}
                   authHeaders={authHeaders}
                   isFulfillmentAdmin={isFulfillmentAdmin}
+                  addressStorageEnabled={me.address_storage_enabled !== false}
+                  onAddressStorageChange={() => {
+                    void reloadMe()
+                  }}
                 />
               ) : (
                 <Navigate to={`${base}/dashboard`} replace />
@@ -2545,7 +2635,7 @@ export default function App() {
           <Route
             path="catalog"
             element={
-              <Screen title="Каталог" subtitle="Склады и ячейки">
+              <Screen title="Ячейки" subtitle="Склады и ячейки">
                 <CatalogSection
                   isFulfillmentAdmin={isFulfillmentAdmin || canCellsOps}
                   catalogBusy={catalogBusy}
@@ -2786,6 +2876,7 @@ export default function App() {
                   requestId={selectedInboundId}
                   isFulfillmentAdmin={canReceptionOps}
                   workspace={ffInboundWorkspace}
+                  addressStorageEnabled={me?.address_storage_enabled !== false}
                   onClose={() => {
                     setFfDocModal(null)
                     setSelectedInboundId(null)

@@ -5,6 +5,7 @@ export type FfPermissions = {
   cells: boolean
   inventory: boolean
   packaging: boolean
+  shift_lead: boolean
 }
 
 export const FF_PERMISSION_BLOCKS: {
@@ -42,6 +43,11 @@ export const FF_PERMISSION_BLOCKS: {
     label: 'Упаковка',
     hint: 'Очередь и выполнение заданий на упаковку',
   },
+  {
+    key: 'shift_lead',
+    label: 'Старший смены',
+    hint: 'Очередь перепечатки ЧЗ и подтверждение брака',
+  },
 ]
 
 export function adminFfPermissions(): FfPermissions {
@@ -52,6 +58,7 @@ export function adminFfPermissions(): FfPermissions {
     cells: true,
     inventory: true,
     packaging: true,
+    shift_lead: true,
   }
 }
 
@@ -70,6 +77,7 @@ export function resolveFfPermissions(
       cells: false,
       inventory: false,
       packaging: false,
+      shift_lead: false,
     }
   )
 }

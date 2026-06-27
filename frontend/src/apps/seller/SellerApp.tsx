@@ -10,6 +10,7 @@ import { SellerInboundDraftScreen } from '../../screens/v2/SellerInboundDraftScr
 import { SellerProductsStockScreen } from '../../screens/v2/SellerProductsStockScreen'
 import { SellerHonestSignScreen } from '../../screens/v2/SellerHonestSignScreen'
 import { SellerSettingsScreen } from '../../screens/v2/SellerSettingsScreen'
+import { NotificationsPage } from '../../screens/shared/NotificationsPage'
 import { SellerLayout } from './SellerLayout'
 
 type InboundSummaryRow = {
@@ -374,7 +375,15 @@ export function SellerApp() {
           />
           <Route
             path="/honest-sign"
-            element={token ? <SellerHonestSignScreen key={catalogScopeKey} token={token} /> : null}
+            element={
+              token ? (
+                <SellerHonestSignScreen
+                  key={catalogScopeKey}
+                  token={token}
+                  sellerId={me.active_seller_id ?? me.seller_id ?? ''}
+                />
+              ) : null
+            }
           />
           <Route
             path="/settings"
@@ -385,6 +394,14 @@ export function SellerApp() {
                   token={token}
                   authHeaders={authHeaders}
                 />
+              ) : null
+            }
+          />
+          <Route
+            path="/notifications"
+            element={
+              token ? (
+                <NotificationsPage token={token} portal="seller" testId="seller-notifications-page" />
               ) : null
             }
           />

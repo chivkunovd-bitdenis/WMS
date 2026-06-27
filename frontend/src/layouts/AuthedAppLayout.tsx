@@ -15,6 +15,7 @@ import {
 import { alpha } from '@mui/material/styles'
 
 import { WmsBrandMark } from '../components/WmsBrandMark'
+import { NotificationBell } from '../components/NotificationBell'
 import type { FfPermissions } from '../utils/ffPermissions'
 import { canAccessFfBlock, isFulfillmentAdminRole } from '../utils/ffPermissions'
 
@@ -72,6 +73,7 @@ export function AuthedAppLayout({
                   {userRoleLabel ? <span> · {userRoleLabel}</span> : null}
                 </Box>
               ) : null}
+              <NotificationBell portal="seller" notificationsPath={`${base}/notifications`} />
               <MuiButton
                 type="button"
                 variant="outlined"
@@ -171,6 +173,7 @@ export function AuthedAppLayout({
                 {userRoleLabel ? <span> · {userRoleLabel}</span> : null}
               </Box>
             ) : null}
+            <NotificationBell portal="fulfillment" notificationsPath={`${base}/notifications`} />
             <MuiButton
               type="button"
               variant="outlined"
@@ -231,7 +234,7 @@ export function AuthedAppLayout({
             ) : null}
             {can('cells') ? (
               <ListItemButton component={NavLink} to="/app/catalog" data-testid="nav-catalog">
-                <ListItemText primary="Каталог" />
+                <ListItemText primary="Ячейки" />
               </ListItemButton>
             ) : null}
             {isAdmin ? (
@@ -241,7 +244,7 @@ export function AuthedAppLayout({
             ) : null}
             {isAdmin ? (
               <ListItemButton component={NavLink} to={`${base}/products`} data-testid="nav-ff-products">
-                <ListItemText primary="Товары" />
+                <ListItemText primary="Каталог" />
               </ListItemButton>
             ) : null}
             {can('inventory') ? (
@@ -260,6 +263,15 @@ export function AuthedAppLayout({
                 data-testid="nav-ff-honest-sign"
               >
                 <ListItemText primary="Честный знак" />
+              </ListItemButton>
+            ) : null}
+            {can('shift_lead') ? (
+              <ListItemButton
+                component={NavLink}
+                to={`${base}/honest-sign/reprints`}
+                data-testid="nav-ff-honest-sign-reprints"
+              >
+                <ListItemText primary="Перепечатки" />
               </ListItemButton>
             ) : null}
             {can('settings') || isAdmin ? (

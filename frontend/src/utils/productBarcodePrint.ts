@@ -1,5 +1,20 @@
-import { resolveProductPrimaryBarcode } from '../types/wbProductCatalog'
-import { printProductThermalLabels } from './printProductThermalLabel'
+import { resolveProductPrimaryBarcode, type ProductLineDisplayMeta } from '../types/wbProductCatalog'
+import { printProductThermalLabels, type ProductThermalLabelData } from './printProductThermalLabel'
+
+export function displayMetaToProductLabel(meta: ProductLineDisplayMeta): ProductThermalLabelData {
+  const barcode = resolveProductPrimaryBarcode(meta) ?? meta.sku_code
+  return {
+    product_name: meta.product_name,
+    sku_code: meta.sku_code,
+    barcode,
+    wb_vendor_code: meta.wb_vendor_code,
+    wb_size: meta.wb_size,
+    wb_color: meta.wb_color,
+    wb_brand: meta.wb_brand,
+    wb_composition: meta.wb_composition,
+    seller_name: meta.seller_name,
+  }
+}
 
 export function printProductBarcodeLabel(options: {
   sku_code: string

@@ -26,5 +26,6 @@ class FfStaffPermissions(Base):
     can_cells: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
     can_inventory: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
     can_packaging: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    can_shift_lead: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
 
     user: Mapped[User] = relationship("User", back_populates="ff_staff_permissions")

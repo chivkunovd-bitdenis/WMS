@@ -8,7 +8,10 @@ import pytest
 from httpx import AsyncClient
 from test_marketplace_unload_and_discrepancy_acts import (
     E2E_BARCODE,
+    _finish_unload_packaging,
+    _inventory_in_sorting_zone,
     _link_product_wb_barcode,
+    _patch_packaging_instructions,
     _post_inventory,
     _seller_wb_mp_warehouse,
 )
@@ -70,11 +73,15 @@ async def test_seller_mp_unload_plan_reserves_and_ff_confirms(
         },
     )
     pid = pr.json()["id"]
+    await _patch_packaging_instructions(async_client, ah, pid)
     await _link_product_wb_barcode(
         async_client, ah, seller_id=sid, product_id=pid, monkeypatch=monkeypatch
     )
     loc_id = await _post_inventory(
         async_client, ah, warehouse_id=wid, product_id=pid, qty=10, location_code="MP-A"
+    )
+    await _inventory_in_sorting_zone(
+        async_client, ah, warehouse_id=wid, product_id=pid, qty=10
     )
 
     stock = await async_client.get(
@@ -163,6 +170,37 @@ async def test_seller_mp_unload_plan_reserves_and_ff_confirms(
     )
     assert edit_blocked.status_code == 409
 
+    detail_seller = await async_client.get(
+        f"/operations/marketplace-unload-requests/{mid}", headers=sh
+    )
+    assert detail_seller.status_code == 200
+    seller_body = detail_seller.json()
+    assert seller_body["boxes"] == []
+    assert seller_body["pick_allocations"] == []
+    assert seller_body.get("linked_packaging_task") is None
+    assert seller_body["lines"][0]["picked_qty"] == 0
+
+    box_forbidden = await async_client.post(
+        f"/operations/marketplace-unload-requests/{mid}/boxes",
+        headers=sh,
+        json={"box_preset": "60_40_40"},
+    )
+    assert box_forbidden.status_code == 403
+    assert box_forbidden.json()["detail"] == "forbidden"
+
+    ship_forbidden = await async_client.post(
+        f"/operations/marketplace-unload-requests/{mid}/ship",
+        headers=sh,
+    )
+    assert ship_forbidden.status_code == 403
+
+    confirm_forbidden = await async_client.post(
+        f"/operations/marketplace-unload-requests/{mid}/confirm",
+        headers=sh,
+        json={"planned_shipment_date": "2026-06-01"},
+    )
+    assert confirm_forbidden.status_code == 403
+
     ff_list = await async_client.get("/operations/marketplace-unload-requests", headers=ah)
     assert any(x["id"] == mid and x["status"] == "submitted" for x in ff_list.json())
 
@@ -181,6 +219,8 @@ async def test_seller_mp_unload_plan_reserves_and_ff_confirms(
     assert confirm.status_code == 200, confirm.text
     assert confirm.json()["status"] == "confirmed"
     assert confirm.json()["planned_shipment_date"] == "2026-06-01"
+
+    await _finish_unload_packaging(async_client, ah, mid)
 
     box = await async_client.post(
         f"/operations/marketplace-unload-requests/{mid}/boxes",
@@ -219,32 +259,6 @@ async def test_seller_mp_unload_plan_reserves_and_ff_confirms(
     await async_client.post(
         f"/operations/marketplace-unload-requests/{mid}/boxes/{box_id}/close",
         headers=ah,
-    )
-
-    pkg = await async_client.get(
-        f"/operations/packaging-tasks/by-unload/{mid}",
-        headers=ah,
-    )
-    assert pkg.status_code == 200, pkg.text
-    task = pkg.json()
-    if not task["lines"]:
-        task = (
-            await async_client.get(
-                f"/operations/packaging-tasks/{task['id']}",
-                headers=ah,
-            )
-        ).json()
-    assert task["lines"], task
-    pkg_line = task["lines"][0]
-    await async_client.post(
-        f"/operations/packaging-tasks/{task['id']}/lines/{pkg_line['id']}/confirm-packed",
-        headers=ah,
-        json={},
-    )
-    await async_client.post(
-        f"/operations/packaging-tasks/{task['id']}/lines/{pkg_line['id']}/pack",
-        headers=ah,
-        json={"quantity": pkg_line["qty_need_pack"]},
     )
 
     ship = await async_client.post(

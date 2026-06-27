@@ -1,0 +1,99 @@
+from __future__ import annotations
+
+import json
+import uuid
+
+import pytest
+from httpx import AsyncClient
+from test_packaging_tasks import _inventory_at_location, _register_admin
+
+
+@pytest.mark.asyncio
+async def test_scan_print_one_unit_per_scan(async_client: AsyncClient) -> None:
+    h = await _register_admin(async_client)
+    seller = await async_client.post(
+        "/sellers",
+        headers=h,
+        json={"name": "Scan Print", "email": f"sp-{uuid.uuid4().hex[:8]}@example.com"},
+    )
+    assert seller.status_code == 201
+    seller_id = seller.json()["id"]
+
+    wh = await async_client.post("/warehouses", headers=h, json={"name": "WSP", "code": "w-sp"})
+    wh_id = wh.json()["id"]
+
+    sku = f"SCAN-{uuid.uuid4().hex[:6]}"
+    pr = await async_client.post(
+        "/products",
+        headers=h,
+        json={
+            "name": "Scan item",
+            "sku_code": sku,
+            "length_mm": 100,
+            "width_mm": 100,
+            "height_mm": 100,
+            "seller_id": seller_id,
+        },
+    )
+    product_id = pr.json()["id"]
+    await async_client.patch(
+        f"/products/{product_id}/packaging-instructions",
+        headers=h,
+        json={"requires_honest_sign": True},
+    )
+
+    codes = [f"01{'0' * 10}7777{'21'}{'F' * 20}{i:04d}" for i in range(3)]
+    await async_client.post(
+        "/operations/marking-codes/import",
+        headers=h,
+        data={
+            "seller_id": seller_id,
+            "pools_json": json.dumps(
+                [{"title": "Scan pool", "product_ids": [product_id]}],
+            ),
+        },
+        files=[("files", ("codes.csv", ("cis\n" + "\n".join(codes)).encode(), "text/csv"))],
+    )
+
+    loc_id = await _inventory_at_location(
+        async_client, h, warehouse_id=wh_id, product_id=product_id, qty=2, location_code="sp-a1"
+    )
+    task = await async_client.post(
+        "/operations/packaging-tasks",
+        headers=h,
+        json={
+            "warehouse_id": wh_id,
+            "lines": [{"product_id": product_id, "storage_location_id": loc_id, "quantity": 2}],
+        },
+    )
+    task_id = task.json()["id"]
+
+    first = await async_client.post(
+        "/operations/marking-codes/scan-print",
+        headers=h,
+        json={"packaging_task_id": task_id, "product_barcode": sku},
+    )
+    assert first.status_code == 200, first.text
+    assert first.json()["quantity"] == 1
+    assert len(first.json()["codes"]) == 1
+
+    second = await async_client.post(
+        "/operations/marking-codes/scan-print",
+        headers=h,
+        json={"packaging_task_id": task_id, "product_barcode": sku},
+    )
+    assert second.status_code == 200, second.text
+    assert second.json()["quantity"] == 1
+
+    task_after = await async_client.get(f"/operations/packaging-tasks/{task_id}", headers=h)
+    assert task_after.json()["lines"][0]["qty_marking_printed"] == 2
+
+    third = await async_client.post(
+        "/operations/marking-codes/scan-print",
+        headers=h,
+        json={"packaging_task_id": task_id, "product_barcode": sku},
+    )
+    assert third.status_code == 422
+    assert third.json()["detail"] == "marking_complete"
+
+    assert first.json()["codes"][0] != second.json()["codes"][0]

@@ -74,6 +74,7 @@ function statusRu(status: string): string {
   if (status === 'submitted') return 'Запланировано'
   if (status === 'confirmed') return 'Подтверждено'
   if (status === 'shipped') return 'Отгружено'
+  if (status === 'cancelled') return 'Отменено'
   return status
 }
 
@@ -660,7 +661,7 @@ export function SellerMarketplaceUnloadDialog({
     <>
       <Dialog open={open} onClose={onClose} fullScreen data-testid="seller-mp-unload-dialog">
         <DialogTitle>Отгрузка на маркетплейс</DialogTitle>
-        <DialogContent dividers>
+        <DialogContent dividers data-testid="seller-mp-plan-only">
           {modalError ? (
             <Alert severity="error" sx={{ mb: 2 }} data-testid="seller-mp-unload-error">
               {modalError}
@@ -671,6 +672,11 @@ export function SellerMarketplaceUnloadDialog({
               Склад ФФ: {detail.warehouse_name} · {statusRu(detail.status)}
               {detail.planned_shipment_date ? ` · отгрузка ${detail.planned_shipment_date}` : ''}
             </Typography>
+          ) : null}
+          {isSubmitted ? (
+            <Alert severity="info" sx={{ mb: 2 }} data-testid="seller-mp-ff-handoff-hint">
+              Дальше заявку обрабатывает фулфилмент.
+            </Alert>
           ) : null}
           {isDraft ? (
             <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1.25} sx={{ mb: 2 }}>

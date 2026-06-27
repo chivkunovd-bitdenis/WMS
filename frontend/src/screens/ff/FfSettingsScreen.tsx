@@ -6,6 +6,7 @@ import {
   Button,
   Checkbox,
   CircularProgress,
+  FormControlLabel,
   Paper,
   Snackbar,
   Stack,
@@ -43,6 +44,8 @@ type Props = {
   token: string
   authHeaders: (t: string) => Record<string, string>
   isFulfillmentAdmin: boolean
+  addressStorageEnabled?: boolean
+  onAddressStorageChange?: (enabled: boolean) => void
 }
 
 function currentBillingMonth(): string {
@@ -60,10 +63,23 @@ function formatRubDisplay(value: string): string {
   return n.toLocaleString('ru-RU', { minimumFractionDigits: 0, maximumFractionDigits: 2 })
 }
 
-export function FfSettingsScreen({ token, authHeaders, isFulfillmentAdmin }: Props) {
+export function FfSettingsScreen({
+  token,
+  authHeaders,
+  isFulfillmentAdmin,
+  addressStorageEnabled = true,
+  onAddressStorageChange,
+}: Props) {
   const [rows, setRows] = useState<StaffAccountRow[]>([])
   const [billingMonth, setBillingMonth] = useState(currentBillingMonth)
   const [busy, setBusy] = useState(false)
+  const [addressStorage, setAddressStorage] = useState(addressStorageEnabled)
+  const [addressStorageBusy, setAddressStorageBusy] = useState(false)
+  const [addressStorageNotice, setAddressStorageNotice] = useState<{
+    severity: 'success' | 'info'
+    message: string
+    testId: string
+  } | null>(null)
   const [permBusyId, setPermBusyId] = useState<string | null>(null)
   const [rateBusyId, setRateBusyId] = useState<string | null>(null)
   const [rateDrafts, setRateDrafts] = useState<Record<string, string>>({})
@@ -96,6 +112,10 @@ export function FfSettingsScreen({ token, authHeaders, isFulfillmentAdmin }: Pro
       setError(err instanceof Error ? err.message : 'Не удалось загрузить пользователей.')
     })
   }, [loadRows])
+
+  useEffect(() => {
+    setAddressStorage(addressStorageEnabled)
+  }, [addressStorageEnabled])
 
   useEffect(() => {
     if (!highlightRowId) {
@@ -219,6 +239,50 @@ export function FfSettingsScreen({ token, authHeaders, isFulfillmentAdmin }: Pro
     }
   }
 
+  async function onAddressStorageToggle(checked: boolean) {
+    if (!token || !isFulfillmentAdmin) {
+      return
+    }
+    const previous = addressStorage
+    setAddressStorage(checked)
+    setAddressStorageBusy(true)
+    setAddressStorageNotice(null)
+    setError(null)
+    try {
+      const res = await fetch(apiUrl('/tenant/settings'), {
+        method: 'PATCH',
+        headers: { ...authHeaders(token), 'Content-Type': 'application/json' },
+        body: JSON.stringify({ address_storage_enabled: checked }),
+      })
+      if (!res.ok) {
+        setAddressStorage(previous)
+        setError(await readApiErrorMessage(res))
+        return
+      }
+      const data = (await res.json()) as { address_storage_enabled: boolean }
+      setAddressStorage(data.address_storage_enabled)
+      onAddressStorageChange?.(data.address_storage_enabled)
+      if (data.address_storage_enabled) {
+        setAddressStorageNotice({
+          severity: 'success',
+          message: 'Адресное хранение включено.',
+          testId: 'ff-settings-address-storage-saved',
+        })
+      } else {
+        setAddressStorageNotice({
+          severity: 'info',
+          message: 'Остатки с ячеек перенесены на зону сортировки.',
+          testId: 'ff-settings-address-storage-migration-info',
+        })
+      }
+    } catch (err) {
+      setAddressStorage(previous)
+      setError(err instanceof Error ? err.message : 'Не удалось сохранить настройку склада.')
+    } finally {
+      setAddressStorageBusy(false)
+    }
+  }
+
   return (
     <Box data-testid="ff-settings-screen">
       <Typography variant="h5" gutterBottom>
@@ -227,6 +291,44 @@ export function FfSettingsScreen({ token, authHeaders, isFulfillmentAdmin }: Pro
       <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
         Сотрудники фулфилмента, доступ к разделам и расчёт зарплаты за упаковку.
       </Typography>
+
+      {isFulfillmentAdmin ? (
+        <Paper
+          variant="outlined"
+          sx={{ p: 2, mb: 3 }}
+          data-testid="ff-settings-warehouse-panel"
+        >
+          <Typography variant="subtitle1" gutterBottom>
+            Склад
+          </Typography>
+          <Typography variant="body2" color="text.secondary" sx={{ mb: 1.5 }}>
+            Адресное хранение: учёт остатков по ячейкам в приёмке и отгрузке на маркетплейс.
+          </Typography>
+          {addressStorageNotice ? (
+            <Alert
+              severity={addressStorageNotice.severity}
+              sx={{ mb: 2 }}
+              data-testid={addressStorageNotice.testId}
+            >
+              {addressStorageNotice.message}
+            </Alert>
+          ) : null}
+          <Stack direction="row" spacing={1} sx={{ alignItems: 'center' }}>
+            <FormControlLabel
+              control={
+                <Checkbox
+                  checked={addressStorage}
+                  disabled={addressStorageBusy}
+                  onChange={(e) => void onAddressStorageToggle(e.target.checked)}
+                  data-testid="ff-settings-address-storage-enabled"
+                />
+              }
+              label="Адресное хранение включено"
+            />
+            {addressStorageBusy ? <CircularProgress size={20} /> : null}
+          </Stack>
+        </Paper>
+      ) : null}
 
       {!isFulfillmentAdmin ? (
         <Alert severity="info" data-testid="ff-settings-users-admin-only">

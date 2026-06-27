@@ -72,6 +72,7 @@ class InboundIntakeRequest(Base):
     actual_box_count: Mapped[int | None] = mapped_column(Integer, nullable=True)
     boxes_discrepancy: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
     has_discrepancy: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    document_number: Mapped[str | None] = mapped_column(String(32), nullable=True)
 
     tenant: Mapped[Tenant] = relationship("Tenant", back_populates="inbound_intake_requests")
     warehouse: Mapped[Warehouse] = relationship(
