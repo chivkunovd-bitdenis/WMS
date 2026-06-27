@@ -5,12 +5,14 @@
 - What changed: `addressStorageEnabled` prop в `FfSuppliesShipmentsPage`, `FfInboundRequestView`, `App.tsx`; скрыты chip ячейки, «Начать подбор», таблица pick_allocations, блок распределения приёмки; scan без шага ячейки; e2e `ff-address-storage-mp-ui.spec.ts`.
 - What did NOT change: списание при collect (TASK-004), backend API (TASK-002 уже в `908029c`).
 - Verification: `npm run build`; e2e `ff-address-storage-mp-ui.spec.ts` + `ff-address-storage-setting.spec.ts` green.
+- Commit: `2cd8062`.
 
 ## TASK-001 — 2026-06-27 — Флаг «Адресное хранение» (UI)
 
 - What changed: checkbox на `FfSettingsScreen`, поле `address_storage_enabled` в `Me`/`useAuth`, reload me после PATCH; e2e `ff-address-storage-setting.spec.ts`. Backend/API — в `908029c`.
 - What did NOT change: скрытие UI ячеек (TASK-003).
 - Verification: e2e settings + build green.
+- Commit: `2cd8062` (UI; backend/API в `908029c`).
 
 ## TASK-002 — 2026-06-27 — Условная обязательность ячеек в collect/pick API
 
