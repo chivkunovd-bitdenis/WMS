@@ -79,7 +79,7 @@ async def _request_for_picking(
     req = await mu_svc.get_request(session, tenant_id, request_id)
     if req is None:
         raise MarketplaceUnloadBoxError("not_found")
-    if req.status != mu_svc.STATUS_CONFIRMED:
+    if req.status not in mu_svc.EXECUTION_STATUSES:
         raise MarketplaceUnloadBoxError("not_editable")
     if req.seller_id is None:
         raise MarketplaceUnloadBoxError("seller_required")
@@ -90,23 +90,6 @@ async def _open_box_for_request(
     session: AsyncSession, request_id: uuid.UUID
 ) -> MarketplaceUnloadBox | None:
     return await collect_svc.get_open_box(session, request_id)
-
-
-async def _assert_packaging_done_for_boxes(
-    session: AsyncSession, tenant_id: uuid.UUID, request_id: uuid.UUID
-) -> None:
-    from app.services import packaging_task_service as pkg_svc
-
-    try:
-        await pkg_svc.assert_unload_packaging_done(session, tenant_id, request_id)
-    except pkg_svc.PackagingTaskServiceError as exc:
-        if exc.code in ("task_not_done", "marking_not_done"):
-            raise MarketplaceUnloadBoxError(
-                "packaging_not_done"
-                if exc.code == "task_not_done"
-                else "marking_not_done"
-            ) from exc
-        raise
 
 
 async def create_open_box(
@@ -124,8 +107,6 @@ async def create_open_box(
     if existing is not None:
         raise MarketplaceUnloadBoxError("open_box_exists")
 
-    await _assert_packaging_done_for_boxes(session, tenant_id, request_id)
-
     wh_box = await wh_box_svc.create_warehouse_box(
         session,
         tenant_id,
@@ -137,6 +118,7 @@ async def create_open_box(
         warehouse_box_id=wh_box.id,
     )
     session.add(box)
+    mu_svc.enter_collecting_if_needed(req)
     await session.commit()
     stmt = (
         select(MarketplaceUnloadBox)
@@ -162,7 +144,6 @@ async def create_boxes_batch(
     if preset not in ALLOWED_BOX_PRESETS:
         raise MarketplaceUnloadBoxError("invalid_preset")
     req = await _request_for_picking(session, tenant_id, request_id)
-    await _assert_packaging_done_for_boxes(session, tenant_id, request_id)
 
     created_ids: list[uuid.UUID] = []
     for _ in range(count):
@@ -181,6 +162,7 @@ async def create_boxes_batch(
         await session.flush()
         created_ids.append(box.id)
 
+    mu_svc.enter_collecting_if_needed(req)
     await session.commit()
     stmt = (
         select(MarketplaceUnloadBox)
@@ -395,6 +377,7 @@ async def attach_existing_box_by_barcode(
             raise MarketplaceUnloadBoxError("box_already_attached")
 
     mp_box.closed_at = datetime.now(tz=UTC)
+    mu_svc.enter_collecting_if_needed(req)
     await session.commit()
     await session.refresh(mp_box, attribute_names=["warehouse_box", "lines"])
     return mp_box
@@ -520,8 +503,6 @@ async def copy_box(
         plan_qty = plan_by_product.get(pid, 0)
         if current + add_qty > plan_qty:
             raise MarketplaceUnloadBoxError("plan_limit_exceeded")
-
-    await _assert_packaging_done_for_boxes(session, tenant_id, req.id)
 
     wh_box = await wh_box_svc.create_warehouse_box(
         session,

@@ -396,7 +396,11 @@ def _detail_out(
         else [_pick_alloc_out(a) for a in getattr(r, "pick_allocations", []) or []]
     )
     picked_map = {} if seller_plan_only else _picked_by_product(r)
-    show_pick_discrepancy = (not seller_plan_only) and r.status in ("confirmed", "shipped")
+    show_pick_discrepancy = (not seller_plan_only) and r.status in (
+        "confirmed",
+        "collecting",
+        "shipped",
+    )
     return MarketplaceUnloadRequestDetailOut(
         id=str(r.id),
         document_number=r.document_number,
@@ -451,7 +455,7 @@ async def _detail_with_packaging(
             session,
             tenant_id,
             r.id,
-            sync_from_pick=sync_packaging and r.status in ("confirmed", "shipped"),
+            sync_from_pick=sync_packaging and r.status in ("confirmed", "collecting", "shipped"),
         )
         if progress is not None:
             linked = _linked_packaging_out(progress)

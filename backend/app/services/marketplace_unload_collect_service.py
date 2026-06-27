@@ -178,19 +178,6 @@ async def collect_into_box(
     if not await _product_in_shipment(session, req.id, product_id):
         raise MarketplaceUnloadPickError("product_not_in_shipment")
 
-    from app.services import packaging_task_service as pkg_svc
-
-    try:
-        await pkg_svc.assert_unload_packaging_done(session, tenant_id, request_id)
-    except pkg_svc.PackagingTaskServiceError as exc:
-        if exc.code in ("task_not_done", "marking_not_done"):
-            raise MarketplaceUnloadPickError(
-                "packaging_not_done"
-                if exc.code == "task_not_done"
-                else "marking_not_done"
-            ) from exc
-        raise
-
     box: MarketplaceUnloadBox | None
     if box_id is not None:
         box = await session.get(MarketplaceUnloadBox, box_id)
@@ -309,6 +296,7 @@ async def collect_into_box(
     else:
         box_line.quantity = int(box_line.quantity) + quantity
 
+    mu_svc.enter_collecting_if_needed(req)
     await session.commit()
 
     picked = await picked_qty_by_product(session, request_id)

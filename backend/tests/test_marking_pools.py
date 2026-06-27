@@ -169,3 +169,34 @@ async def test_migration_backfill_creates_pool_for_legacy_code(async_client: Asy
         ).scalars().all()
         assert len(links) == 1
         assert links[0].product_id == product_id
+
+
+@pytest.mark.asyncio
+async def test_list_inventory_does_not_auto_link_by_gtin(async_client: AsyncClient) -> None:
+    tenant_id, seller_id, product_id = await _seed_tenant_seller_product(async_client)
+    gtin = "04600000000099"
+    cis = f"01{gtin}21{'C' * 20}0099"
+    code_id = uuid.uuid4()
+
+    async with SessionLocal() as session:
+        session.add(
+            MarkingCode(
+                id=code_id,
+                tenant_id=tenant_id,
+                seller_id=seller_id,
+                product_id=None,
+                pool_id=None,
+                cis_code=cis,
+                gtin=gtin,
+                status=STATUS_AVAILABLE,
+            )
+        )
+        await session.commit()
+
+    async with SessionLocal() as session:
+        from app.services import marking_code_service as mc_svc
+
+        await mc_svc.list_inventory(session, tenant_id, seller_id=seller_id)
+        code = await session.get(MarkingCode, code_id)
+        assert code is not None
+        assert code.product_id is None

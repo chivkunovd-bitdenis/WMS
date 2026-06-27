@@ -363,6 +363,8 @@ def _http_from_mc_error(exc: mc_svc.MarkingCodeServiceError) -> HTTPException:
         status_code = status.HTTP_422_UNPROCESSABLE_CONTENT
     if code == "unsupported_file_type":
         status_code = status.HTTP_415_UNSUPPORTED_MEDIA_TYPE
+    if code in ("task_not_active",):
+        status_code = status.HTTP_409_CONFLICT
     return HTTPException(status_code=status_code, detail=code)
 
 
@@ -712,7 +714,7 @@ async def list_marking_pool_codes(
     user: Annotated[User, Depends(get_current_user)],
     session: Annotated[AsyncSession, Depends(get_db)],
     effective_seller_id: Annotated[uuid.UUID | None, Depends(get_effective_seller_id)],
-    code_status: Annotated[str | None, Query()] = None,
+    code_status: Annotated[str | None, Query(alias="status")] = None,
 ) -> list[PoolCodeOut]:
     from app.models.marking_code import MarkingPool
 
@@ -1107,15 +1109,19 @@ async def list_pending_marking(
     session: Annotated[AsyncSession, Depends(get_db)],
     warehouse_id: Annotated[uuid.UUID | None, Query()] = None,
     seller_id: Annotated[uuid.UUID | None, Query()] = None,
+    limit: Annotated[int, Query(ge=1, le=200)] = 50,
+    offset: Annotated[int, Query(ge=0)] = 0,
 ) -> PendingMarkingOut:
-    rows = await mc_svc.list_pending_marking_lines(
+    rows, total = await mc_svc.list_pending_marking_lines(
         session,
         user.tenant_id,
         warehouse_id=warehouse_id,
         seller_id=seller_id,
+        limit=limit,
+        offset=offset,
     )
     return PendingMarkingOut(
-        total=len(rows),
+        total=total,
         rows=[
             PendingMarkingLineOut(
                 packaging_task_id=str(row.packaging_task_id),

@@ -194,8 +194,8 @@ test('FF marketplace unload: tabs switch without losing document context', async
   await expect(page.getByTestId('ff-mp-unload-document-number')).toBeVisible()
 })
 
-// TC-NEW-MP-007 / REV-FIX-006: вкладка «Упаковка» доступна на черновике при linked_packaging_task.
-test('FF marketplace unload: packaging tab enabled on draft', async ({ page }) => {
+// TC-NEW-MP-011 / MP-012: на черновике нет плашки прогресса упаковки.
+test('FF marketplace unload: no packaging progress banner on draft', async ({ page }) => {
   const email = `e2e-mp-draft-pkg-${Date.now()}@example.com`
   const e2eApi = process.env.E2E_API_ORIGIN ?? 'http://127.0.0.1:18000'
   const barcode = 'E2E-MOCK-BARCODE'
@@ -332,16 +332,7 @@ test('FF marketplace unload: packaging tab enabled on draft', async ({ page }) =
   await expect(page.getByTestId('ff-supplies-doc-dialog')).toBeVisible()
   // REV-FIX-013: plan total visible on draft «Товары» tab.
   await expect(page.getByTestId('ff-mp-plan-total')).toContainText('2')
-  await expect(page.getByTestId('ff-mp-tab-packaging')).toBeEnabled()
-  // REV-FIX-008: packaging progress visible on draft when linked_packaging_task exists.
-  await expect(page.getByTestId('ff-mp-packaging-progress')).toBeVisible()
-
-  await page.getByTestId('ff-mp-tab-packaging').click()
-  await expect(page.getByTestId('ff-mp-tab-packaging-panel')).toBeVisible()
-  await expect(page.getByTestId('ff-packaging-task-panel')).toBeVisible()
+  await expect(page.getByTestId('ff-mp-packaging-progress')).toHaveCount(0)
+  await expect(page.getByTestId('ff-mp-tab-packaging')).toBeDisabled()
   await expect(page.getByTestId('ff-mp-tab-boxes')).toBeDisabled()
-  // REV-FIX-007: no misleading copy that packaging appears only after confirm.
-  await expect(page.getByTestId('ff-mp-tab-packaging-panel')).not.toContainText(
-    /после подтверждения/i,
-  )
 })

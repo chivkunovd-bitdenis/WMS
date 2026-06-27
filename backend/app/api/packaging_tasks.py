@@ -185,10 +185,9 @@ async def get_packaging_task_for_unload(
     user: Annotated[User, Depends(require_packaging_access)],
     session: Annotated[AsyncSession, Depends(get_db)],
 ) -> PackagingTaskOut:
-    try:
-        task = await pkg_svc.ensure_task_for_unload(session, user.tenant_id, unload_id)
-    except pkg_svc.PackagingTaskServiceError as exc:
-        raise _http_from_pkg_error(exc) from exc
+    task = await pkg_svc.get_task_for_unload(session, user.tenant_id, unload_id)
+    if task is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="not_found")
     return await _task_out(
         session,
         user.tenant_id,

@@ -261,13 +261,13 @@ async def test_packaging_blocks_mp_ship_until_done(
     )
     assert confirm.status_code == 200, confirm.text
 
-    blocked_box = await async_client.post(
+    box_before_pack = await async_client.post(
         f"/operations/marketplace-unload-requests/{mid}/boxes",
         headers=h,
         json={"box_preset": "60_40_40"},
     )
-    assert blocked_box.status_code == 422
-    assert blocked_box.json()["detail"] == "packaging_not_done"
+    assert box_before_pack.status_code == 201, box_before_pack.text
+    box_id = box_before_pack.json()["id"]
 
     pkg_get = await async_client.get(
         f"/operations/packaging-tasks/by-unload/{mid}",
@@ -277,13 +277,6 @@ async def test_packaging_blocks_mp_ship_until_done(
 
     await _finish_unload_packaging(async_client, h, mid)
 
-    box = await async_client.post(
-        f"/operations/marketplace-unload-requests/{mid}/boxes",
-        headers=h,
-        json={"box_preset": "60_40_40"},
-    )
-    assert box.status_code == 201, box.text
-    box_id = box.json()["id"]
     manual = await async_client.post(
         f"/operations/marketplace-unload-requests/{mid}/boxes/{box_id}/manual-line",
         headers=h,
@@ -713,10 +706,11 @@ async def test_complete_packaging_marking_not_done(async_client: AsyncClient) ->
 
 
 @pytest.mark.asyncio
-async def test_box_create_blocked_until_packaging_done(
+async def test_box_create_allowed_before_packaging_done(
     async_client: AsyncClient,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
+    """MP-005: boxes available while packaging task is in progress."""
     from app.core.settings import settings
 
     h = await _register_admin(async_client)
@@ -770,19 +764,100 @@ async def test_box_create_blocked_until_packaging_done(
         json={"planned_shipment_date": "2026-06-15"},
     )
     assert confirm.status_code == 200, confirm.text
-    blocked = await async_client.post(
-        f"/operations/marketplace-unload-requests/{mid}/boxes",
-        headers=h,
-        json={"box_preset": "60_40_40"},
-    )
-    assert blocked.status_code == 422
-    assert blocked.json()["detail"] == "packaging_not_done"
-
-    await _finish_unload_packaging(async_client, h, mid)
-
     box = await async_client.post(
         f"/operations/marketplace-unload-requests/{mid}/boxes",
         headers=h,
         json={"box_preset": "60_40_40"},
     )
     assert box.status_code == 201, box.text
+
+    detail = await async_client.get(
+        f"/operations/marketplace-unload-requests/{mid}", headers=h
+    )
+    assert detail.json()["status"] == "collecting"
+
+    await _finish_unload_packaging(async_client, h, mid)
+
+    box2 = await async_client.post(
+        f"/operations/marketplace-unload-requests/{mid}/boxes/batch",
+        headers=h,
+        json={"count": 1, "box_preset": "60_40_40"},
+    )
+    assert box2.status_code == 201, box2.text
+
+
+@pytest.mark.asyncio
+async def test_mp_unload_pack_counter_without_inventory(
+    async_client: AsyncClient,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """MP-004: MP-linked packaging increments qty_packed without inventory convert."""
+    from app.core.settings import settings
+
+    h = await _register_admin(async_client)
+    monkeypatch.setattr(settings, "e2e_mock_wb_warehouses", True)
+    wh = await async_client.post("/warehouses", headers=h, json={"name": "W", "code": "w-mpcnt"})
+    wh_id = wh.json()["id"]
+    seller_id, wb_wh_id = await _seller_wb_mp_warehouse(async_client, h, monkeypatch)
+    pr = await async_client.post(
+        "/products",
+        headers=h,
+        json={
+            "name": "Counter Pack",
+            "sku_code": f"mpcnt-{uuid.uuid4().hex[:6]}",
+            "length_mm": 1,
+            "width_mm": 1,
+            "height_mm": 1,
+            "seller_id": seller_id,
+        },
+    )
+    product_id = pr.json()["id"]
+    await async_client.patch(
+        f"/products/{product_id}/packaging-instructions",
+        headers=h,
+        json={"packaging_instructions": "Pack"},
+    )
+    loc_id = await _inventory_at_location(
+        async_client,
+        h,
+        warehouse_id=wh_id,
+        product_id=product_id,
+        qty=5,
+        location_code="MPCNT-1",
+    )
+    mp = await async_client.post(
+        "/operations/marketplace-unload-requests",
+        headers=h,
+        json={"warehouse_id": wh_id, "seller_id": seller_id, "wb_mp_warehouse_id": wb_wh_id},
+    )
+    mid = mp.json()["id"]
+    await async_client.post(
+        f"/operations/marketplace-unload-requests/{mid}/lines",
+        headers=h,
+        json={"product_id": product_id, "quantity": 3},
+    )
+    await async_client.patch(
+        f"/operations/marketplace-unload-requests/{mid}",
+        headers=h,
+        json={"planned_shipment_date": "2026-06-15"},
+    )
+    confirm = await async_client.post(
+        f"/operations/marketplace-unload-requests/{mid}/confirm",
+        headers=h,
+        json={"planned_shipment_date": "2026-06-15"},
+    )
+    assert confirm.status_code == 200, confirm.text
+    pkg = await async_client.get(
+        f"/operations/packaging-tasks/by-unload/{mid}",
+        headers=h,
+    )
+    task_id = pkg.json()["id"]
+    line_id = pkg.json()["lines"][0]["id"]
+    pack = await async_client.post(
+        f"/operations/packaging-tasks/{task_id}/lines/{line_id}/pack",
+        headers=h,
+        json={"quantity": 2},
+    )
+    assert pack.status_code == 200, pack.text
+    assert pack.json()["lines"][0]["qty_packed_in_task"] == 2
+    assert pack.json()["lines"][0]["qty_done"] == 2

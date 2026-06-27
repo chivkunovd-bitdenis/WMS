@@ -180,10 +180,10 @@ async def test_tsd_box_scan_error_codes_contract(
 
 
 @pytest.mark.asyncio
-async def test_tsd_box_scan_packaging_not_done(
+async def test_tsd_box_create_allowed_before_packaging_done(
     async_client: AsyncClient, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    """TC-NEW-MP-009: Negative — packaging_not_done blocks box create."""
+    """MP-005: box create allowed while packaging task is not done."""
     h = await _register_headers(async_client, f"tsd-pkg-{int(time.time())}")
     suffix = str(int(time.time() * 1000))
     wh = await async_client.post(
@@ -232,13 +232,12 @@ async def test_tsd_box_scan_packaging_not_done(
     sub = await async_client.post(f"{BASE}/{mid}/submit", headers=h)
     assert sub.status_code == 200, sub.text
 
-    pkg_blocked = await async_client.post(
+    pkg_ok = await async_client.post(
         f"{BASE}/{mid}/boxes",
         headers=h,
         json={"box_preset": "60_40_40"},
     )
-    assert pkg_blocked.status_code == 422
-    assert pkg_blocked.json()["detail"] == "packaging_not_done"
+    assert pkg_ok.status_code == 201, pkg_ok.text
 
 
 @pytest.mark.asyncio

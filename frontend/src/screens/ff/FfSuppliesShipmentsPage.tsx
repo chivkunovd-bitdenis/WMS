@@ -167,6 +167,7 @@ type UnifiedRow = {
 function statusRu(status: string): string {
   if (status === 'draft') return 'Черновик'
   if (status === 'confirmed') return 'Утверждено'
+  if (status === 'collecting') return 'На сборке'
   if (status === 'shipped') return 'Отгружено'
   if (status === 'submitted') return 'Запланировано'
   if (status === 'cancelled') return 'Отменено'
@@ -1044,7 +1045,7 @@ export function FfSuppliesShipmentsPage({
         <Button
           size="small"
           variant="outlined"
-          disabled={modalBusy || mpPackagingGateActive || boxClosed}
+          disabled={modalBusy || boxClosed}
           onClick={() => setBoxAddDialogBoxId(box.id)}
           data-testid={`ff-mp-box-add-products-${box.id}`}
         >
@@ -1393,13 +1394,11 @@ export function FfSuppliesShipmentsPage({
   const mpSubmitted =
     docModal === 'marketplace_unload' && unloadDetail?.status === 'submitted'
   const mpConfirmed = docModal === 'marketplace_unload' && unloadDetail?.status === 'confirmed'
-  const mpCancellable = mpSubmitted || mpConfirmed
+  const mpCollecting =
+    docModal === 'marketplace_unload' && unloadDetail?.status === 'collecting'
+  const mpExecutionPhase = mpConfirmed || mpCollecting
+  const mpCancellable = mpSubmitted || mpConfirmed || mpCollecting
   const mpShipped = docModal === 'marketplace_unload' && unloadDetail?.status === 'shipped'
-  const mpPackagingDone =
-    !unloadDetail?.linked_packaging_task ||
-    unloadDetail.linked_packaging_task.status === 'done'
-  const mpPackagingGateActive =
-    mpConfirmed && Boolean(unloadDetail?.linked_packaging_task) && !mpPackagingDone
 
   const loadPackagingTask = useCallback(async () => {
     if (!token || !authHeaders || !docModalId || docModal !== 'marketplace_unload') {
@@ -1443,7 +1442,7 @@ export function FfSuppliesShipmentsPage({
     mpTabInitForRef.current = docModalId
     if (unloadDetail.status === 'shipped') {
       setMpUnloadTab('final')
-    } else if (unloadDetail.status === 'confirmed') {
+    } else if (unloadDetail.status === 'confirmed' || unloadDetail.status === 'collecting') {
       setMpUnloadTab('boxes')
     } else {
       setMpUnloadTab('products')
@@ -1867,6 +1866,7 @@ export function FfSuppliesShipmentsPage({
             </Alert>
           ) : null}
           {docModal === 'marketplace_unload' &&
+          mpExecutionPhase &&
           unloadDetail?.linked_packaging_task ? (
             <Alert
               severity={
@@ -1875,33 +1875,14 @@ export function FfSuppliesShipmentsPage({
               sx={{ mb: 2 }}
               data-testid="ff-mp-packaging-progress"
             >
-              <Stack
-                direction={{ xs: 'column', sm: 'row' }}
-                spacing={1}
-                sx={{ alignItems: { sm: 'center' }, justifyContent: 'space-between' }}
-              >
-                <Typography variant="body2">
-                  Задание на упаковку:{' '}
-                  {unloadDetail.linked_packaging_task.qty_done}/
-                  {unloadDetail.linked_packaging_task.qty_total} шт
-                  {unloadDetail.linked_packaging_task.is_complete
-                    ? ' · выполнено'
-                    : ' · в работе'}
-                  {!unloadDetail.linked_packaging_task.is_complete
-                    ? ' · сначала завершите упаковку — сборка в короба недоступна'
-                    : ''}
-                </Typography>
-                {!unloadDetail.linked_packaging_task.is_complete ? (
-                  <Button
-                    size="small"
-                    variant="outlined"
-                    onClick={() => setMpUnloadTab('packaging')}
-                    data-testid="ff-mp-packaging-continue"
-                  >
-                    Продолжить упаковку
-                  </Button>
-                ) : null}
-              </Stack>
+              <Typography variant="body2">
+                Задание на упаковку:{' '}
+                {unloadDetail.linked_packaging_task.qty_done}/
+                {unloadDetail.linked_packaging_task.qty_total} шт
+                {unloadDetail.linked_packaging_task.is_complete
+                  ? ' · выполнено'
+                  : ' · в работе'}
+              </Typography>
             </Alert>
           ) : null}
           {docModal === 'marketplace_unload' && unloadDetail ? (
@@ -1923,7 +1904,7 @@ export function FfSuppliesShipmentsPage({
                 <Tab
                   label="Короба"
                   value="boxes"
-                  disabled={!mpConfirmed}
+                  disabled={!mpExecutionPhase}
                   data-testid="ff-mp-tab-boxes"
                 />
                 <Tab label="Финальная отгрузка" value="final" data-testid="ff-mp-tab-final" />
@@ -2001,7 +1982,7 @@ export function FfSuppliesShipmentsPage({
                       <TableRow>
                         <FfProductTableHeadCells />
                         <TableCell align="right">План</TableCell>
-                        {mpConfirmed ? (
+                        {mpExecutionPhase ? (
                           <>
                             <TableCell align="right">Распределено</TableCell>
                             <TableCell align="right">Осталось</TableCell>
@@ -2013,7 +1994,7 @@ export function FfSuppliesShipmentsPage({
                     <TableBody>
                       {(() => {
                         const lines = unloadDetail.lines
-                        const mpCols = mpConfirmed ? 2 : 0
+                        const mpCols = mpExecutionPhase ? 2 : 0
                         const emptySpan = 7 + mpCols + (draftDoc ? 1 : 0)
                         if (lines.length === 0) {
                           return (
@@ -2051,7 +2032,7 @@ export function FfSuppliesShipmentsPage({
                                 printTestId={`ff-mp-line-print-${ln.id}`}
                               />
                               <TableCell align="right">{ln.quantity}</TableCell>
-                              {mpConfirmed ? (
+                              {mpExecutionPhase ? (
                                 <>
                                   <TableCell align="right">{picked}</TableCell>
                                   <TableCell align="right">{remaining}</TableCell>
@@ -2090,6 +2071,20 @@ export function FfSuppliesShipmentsPage({
                       {packagingTaskError}
                     </Alert>
                   ) : null}
+                  {unloadDetail?.linked_packaging_task &&
+                  !unloadDetail.linked_packaging_task.is_complete ? (
+                    <Button
+                      size="small"
+                      variant="outlined"
+                      sx={{ mb: 2 }}
+                      onClick={() => {
+                        void loadPackagingTask()
+                      }}
+                      data-testid="ff-mp-packaging-continue"
+                    >
+                      Продолжить упаковку
+                    </Button>
+                  ) : null}
                   {packagingTask && token ? (
                     <FfPackagingTaskPanel
                       token={token}
@@ -2122,13 +2117,8 @@ export function FfSuppliesShipmentsPage({
                 </Box>
               ) : null}
               {/* REV-FIX-014: «План и распределение» + ff-mp-collect-warning only after confirm (not on draft). */}
-              {mpUnloadTab === 'boxes' && mpConfirmed ? (
+              {mpUnloadTab === 'boxes' && mpExecutionPhase ? (
                 <Stack spacing={2}>
-                  {mpPackagingGateActive ? (
-                    <Alert severity="warning" data-testid="ff-mp-packaging-gate-alert">
-                      Сначала завершите упаковку товара
-                    </Alert>
-                  ) : null}
                   {mpCollectSummary ? (
                     <Stack spacing={1.5}>
                       <Paper
@@ -2192,7 +2182,7 @@ export function FfSuppliesShipmentsPage({
                         : 'Отсканируйте готовый короб (WHB-…) — он попадёт в закрытые. Или откройте короб и отсканируйте товар (кол-во). Снятие — в открытую тару.'}
                     </Typography>
 
-                    {mpConfirmed ? (
+                    {mpExecutionPhase ? (
                       <Paper variant="outlined" sx={{ p: 1.5 }}>
                         <Stack spacing={1.25}>
                           <Stack
@@ -2241,7 +2231,7 @@ export function FfSuppliesShipmentsPage({
                                   void doCollectScan(openBox?.id ?? null)
                                 }
                               }}
-                              disabled={modalBusy || mpPackagingGateActive}
+                              disabled={modalBusy}
                               fullWidth
                               data-testid="ff-mp-pick-scan-input"
                             />
@@ -2253,13 +2243,13 @@ export function FfSuppliesShipmentsPage({
                               onChange={(e) => setCollectQty(e.target.value)}
                               slotProps={{ htmlInput: { min: 1 } }}
                               sx={{ width: { xs: '100%', sm: 96 } }}
-                              disabled={modalBusy || !openBox || mpPackagingGateActive}
+                              disabled={modalBusy || !openBox}
                               data-testid="ff-mp-collect-qty"
                             />
                             <Button
                               variant="contained"
                               onClick={() => void doCollectScan(openBox?.id ?? null)}
-                              disabled={modalBusy || mpPackagingGateActive}
+                              disabled={modalBusy}
                               data-testid="ff-mp-pick-scan"
                             >
                               Добавить
@@ -2343,7 +2333,7 @@ export function FfSuppliesShipmentsPage({
                               onChange={(e) => setBoxBatchCount(e.target.value)}
                               slotProps={{ htmlInput: { min: 1, max: 50 } }}
                               sx={{ width: 120 }}
-                              disabled={modalBusy || mpPackagingGateActive}
+                              disabled={modalBusy}
                               data-testid="ff-mp-box-batch-count"
                             />
                             <FormControl size="small" sx={{ minWidth: 160 }}>
@@ -2356,7 +2346,7 @@ export function FfSuppliesShipmentsPage({
                                   setBoxPreset(String(e.target.value) as '60_40_40' | '30_20_30')
                                 }
                                 data-testid="ff-mp-box-preset"
-                                disabled={modalBusy || mpPackagingGateActive}
+                                disabled={modalBusy}
                               >
                                 <MenuItem value="60_40_40">60×40×40</MenuItem>
                                 <MenuItem value="30_20_30">30×20×30</MenuItem>
@@ -2365,7 +2355,7 @@ export function FfSuppliesShipmentsPage({
                             <Button
                               variant="contained"
                               onClick={() => void createBox()}
-                              disabled={modalBusy || mpPackagingGateActive}
+                              disabled={modalBusy}
                               data-testid="ff-mp-box-batch-create"
                             >
                               {Number(boxBatchCount) === 1 ? 'Создать короб' : 'Создать короба'}
@@ -2552,7 +2542,7 @@ export function FfSuppliesShipmentsPage({
                         </Typography>
                       ) : null}
                     </Stack>
-                  ) : mpConfirmed ? (
+                  ) : mpExecutionPhase ? (
                     <Typography variant="body2" color="text.secondary">
                       Склад WB:{' '}
                       {wbMpWarehouses.find(
@@ -2560,7 +2550,7 @@ export function FfSuppliesShipmentsPage({
                       )?.name ?? unloadDetail.wb_mp_warehouse_id ?? '—'}
                     </Typography>
                   ) : null}
-                  {mpConfirmed && (unloadDetail.boxes.length ?? 0) > 0 ? (
+                  {mpExecutionPhase && (unloadDetail.boxes.length ?? 0) > 0 ? (
                     <Button
                       variant="outlined"
                       disabled={modalBusy}
@@ -2638,7 +2628,7 @@ export function FfSuppliesShipmentsPage({
                       ) : null}
                     </Stack>
                   ) : null}
-                  {mpConfirmed ? (
+                  {mpExecutionPhase ? (
                     <Stack direction="row" spacing={1} sx={{ flexWrap: 'wrap' }}>
                       <Button
                         variant="outlined"
@@ -2881,7 +2871,7 @@ export function FfSuppliesShipmentsPage({
           boxClosed={Boolean(boxById.get(boxAddDialogBoxId)?.closed_at)}
           token={token}
           addressStorageEnabled={addressStorageEnabled}
-          packagingGateActive={mpPackagingGateActive}
+          packagingGateActive={false}
           catalogById={catalogById}
           warehouseStockByProductId={mpStockByProductId}
           onUpdated={async () => {

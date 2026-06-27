@@ -1,5 +1,18 @@
 # TASKLOG
 
+## TASK-028 — 2026-06-28 — MP-unload Phase A + frontend unblock (MP-001…009, MP-006…008, MP-012 partial)
+
+- What changed:
+  - **MP-001:** статус `collecting` («На сборке») — переход при первом коробе/collect/attach; ship из `collecting`; label в UI.
+  - **MP-002/MP-009:** подтверждено — упаковка `done` только через `complete_task`; pytest marking_not_done green.
+  - **MP-003:** `PackagingTask` только после confirm; draft без `linked_packaging_task`; GET by-unload → 404 без task.
+  - **MP-004:** MP pack — счётчик `qty_packed` без `apply_packaging_convert`.
+  - **MP-005:** снят gate упаковки с create/collect/batch коробов (остался на ship).
+  - **MP-006/007/008:** UI — убран packaging gate; колонка «На полке упак.» скрыта для MP task; pack без ячейки.
+  - **MP-012 (partial):** плашка прогресса не на draft; «Продолжить упаковку» только на вкладке «Упаковка».
+- What did NOT change: MP-010…014 (2 вкладки, footer ship), MP-015…034, MP-021…023 (печать).
+- Verification: backend `pytest tests/test_packaging_tasks.py` + MP sync/box tests — 12 passed; e2e `ff-mp-packaging-gate.spec.ts`, `ff-mp-tabs.spec.ts` (draft banner) — green; `npm run build` — ok.
+
 ## TASK-027 — 2026-06-27 — CI mypy green for outbound-rework PR
 
 - What changed: mypy fixes — optional `storage_location_id` в collect API/services; marking imports (`LAYOUT_BLOCK_CZ`, `STATUS_AVAILABLE`, `EVENT_PRINTED`); rename query param `code_status` (shadow `status`); typed seller scope in print-templates.

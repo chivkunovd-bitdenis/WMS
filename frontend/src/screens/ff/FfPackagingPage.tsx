@@ -245,6 +245,7 @@ export function FfPackagingTaskPanel({
     task.status !== 'cancelled'
 
   const taskEditable = task.status !== 'done' && task.status !== 'cancelled'
+  const isMpUnloadTask = Boolean(task.marketplace_unload_request_id)
 
   const hasHonestSignLines = task.lines.some(
     (ln) => ln.requires_honest_sign && ln.qty_need_pack > ln.qty_marking_printed,
@@ -622,10 +623,14 @@ export function FfPackagingTaskPanel({
         >
           <TableHead>
             <TableRow>
-              <FfProductTableHeadCells nameLabel="Наименование / ячейка" />
+              <FfProductTableHeadCells
+                nameLabel={isMpUnloadTask ? 'Наименование' : 'Наименование / ячейка'}
+              />
               <TableCell>Инструкция</TableCell>
               <TableCell align="right">Всего</TableCell>
-              <TableCell align="right">На полке упак.</TableCell>
+              {!isMpUnloadTask ? (
+                <TableCell align="right">На полке упак.</TableCell>
+              ) : null}
               <TableCell align="right">Упаковать</TableCell>
               <TableCell align="right">Готово</TableCell>
               <TableCell align="right">ЧЗ</TableCell>
@@ -640,7 +645,9 @@ export function FfPackagingTaskPanel({
                 <FfProductLineCells
                   meta={{
                     ...displayMeta,
-                    product_name: `${displayMeta.product_name} · ${ln.storage_location_code}`,
+                    product_name: isMpUnloadTask
+                      ? displayMeta.product_name
+                      : `${displayMeta.product_name} · ${ln.storage_location_code}`,
                   }}
                   printTestId={`ff-packaging-line-print-${ln.id}`}
                 />
@@ -650,7 +657,9 @@ export function FfPackagingTaskPanel({
                   </Typography>
                 </TableCell>
                 <TableCell align="right">{ln.qty_total}</TableCell>
-                <TableCell align="right">{ln.qty_suggested_packed}</TableCell>
+                {!isMpUnloadTask ? (
+                  <TableCell align="right">{ln.qty_suggested_packed}</TableCell>
+                ) : null}
                 <TableCell align="right">{ln.qty_need_pack}</TableCell>
                 <TableCell align="right">{ln.qty_done}</TableCell>
                 <TableCell align="right">
@@ -753,7 +762,7 @@ export function FfPackagingTaskPanel({
                         Брак
                       </Button>
                     ) : null}
-                    {ln.qty_confirmed_packed < ln.qty_suggested_packed ? (
+                    {!isMpUnloadTask && ln.qty_confirmed_packed < ln.qty_suggested_packed ? (
                       <Button
                         size="small"
                         disabled={busy || !taskEditable || ln.qty_suggested_packed < 1}

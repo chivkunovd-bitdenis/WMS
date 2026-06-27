@@ -233,3 +233,53 @@ async def test_import_preview_groups_by_gtin(async_client: AsyncClient) -> None:
     assert body["total_codes"] == 1
     assert len(body["groups"]) == 1
     assert body["groups"][0]["gtin"] == gtin
+
+
+@pytest.mark.asyncio
+async def test_import_same_cis_twice_idempotent(async_client: AsyncClient) -> None:
+    """TC-NEW CZ-H7: repeat import of same CIS is safe and reports skipped duplicate."""
+    h = await _register_admin(async_client)
+    seller = await async_client.post(
+        "/sellers",
+        headers=h,
+        json={"name": "Idem", "email": f"idem-{uuid.uuid4().hex[:8]}@example.com"},
+    )
+    seller_id = seller.json()["id"]
+    gtin = "00000000007777"
+    cis = f"01{gtin}21{'F' * 20}0001"
+    pools = [{"title": "Idem pool", "product_ids": []}]
+    csv_body = f"cis\n{cis}".encode()
+
+    first = await _import_files(
+        async_client,
+        h,
+        seller_id=seller_id,
+        pools=pools,
+        files=[("codes.csv", csv_body)],
+    )
+    assert first.status_code == 200, first.text
+    assert first.json()["accepted_count"] == 1
+    first_doc = first.json()["document_number"]
+
+    second = await _import_files(
+        async_client,
+        h,
+        seller_id=seller_id,
+        pools=pools,
+        files=[("codes.csv", csv_body)],
+    )
+    assert second.status_code == 200, second.text
+    second_body = second.json()
+    assert second_body["accepted_count"] == 0
+    assert second_body["skipped_count"] == 1
+    assert any(r["reason"] == "duplicate" for r in second_body["skip_reasons"])
+    assert second_body["document_number"].startswith("ЗАГРКМ-")
+    assert second_body["document_number"] != first_doc
+
+    async with SessionLocal() as session:
+        count = (
+            await session.execute(
+                select(func.count(MarkingCode.id)).where(MarkingCode.cis_code == cis)
+            )
+        ).scalar_one()
+        assert int(count) == 1

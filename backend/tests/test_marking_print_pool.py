@@ -1,15 +1,18 @@
 from __future__ import annotations
 
+import asyncio
 import json
 import uuid
 
 import pytest
 from httpx import AsyncClient
-from sqlalchemy import select
+from sqlalchemy import func, select
 from test_packaging_tasks import _inventory_at_location, _register_admin
 
 from app.db.session import SessionLocal
 from app.models.marking_code import STATUS_PRINTED, MarkingCode
+from app.services import marking_code_service as mc_svc
+from app.services.tokens import decode_access_token
 
 
 async def _seed_product_with_pool_codes(
@@ -182,3 +185,89 @@ async def test_sequential_print_does_not_reuse_codes(async_client: AsyncClient) 
     assert len(all_codes) == 3
     assert len(codes_a) == 2
     assert len(codes_b) == 1
+
+
+@pytest.mark.asyncio
+async def test_concurrent_print_from_pool_no_double_issue(async_client: AsyncClient) -> None:
+    """TC-NEW CZ-H9: parallel prints from same pool do not double-issue CIS."""
+    h, _seller_id, product_id, wh_id = await _seed_product_with_pool_codes(
+        async_client, code_count=6
+    )
+    token = h["Authorization"].removeprefix("Bearer ")
+    claims = decode_access_token(token)
+    tenant_id = uuid.UUID(str(claims["tenant_id"]))
+    user_id = uuid.UUID(str(claims["sub"]))
+
+    loc_a = await _inventory_at_location(
+        async_client, h, warehouse_id=wh_id, product_id=product_id, qty=3, location_code="conc-a"
+    )
+    loc_b = await _inventory_at_location(
+        async_client, h, warehouse_id=wh_id, product_id=product_id, qty=3, location_code="conc-b"
+    )
+    task = await async_client.post(
+        "/operations/packaging-tasks",
+        headers=h,
+        json={
+            "warehouse_id": wh_id,
+            "lines": [
+                {"product_id": product_id, "storage_location_id": loc_a, "quantity": 3},
+                {"product_id": product_id, "storage_location_id": loc_b, "quantity": 3},
+            ],
+        },
+    )
+    assert task.status_code == 201, task.text
+    line_a = uuid.UUID(task.json()["lines"][0]["id"])
+    line_b = uuid.UUID(task.json()["lines"][1]["id"])
+
+    async def _print_line(line_id: uuid.UUID) -> mc_svc.PrintMarkingCodesResult:
+        async with SessionLocal() as session:
+            result = await mc_svc.print_codes_for_packaging_line(
+                session,
+                tenant_id,
+                line_id,
+                acting_user_id=user_id,
+                allow_partial=False,
+                duplicate_copies=1,
+            )
+            await session.commit()
+            return result
+
+    async def _print_via_api(line_id: uuid.UUID) -> list[str]:
+        resp = await async_client.post(
+            f"/operations/marking-codes/packaging-lines/{line_id}/print",
+            headers=h,
+            json={"allow_partial": False, "duplicate_copies": 1},
+        )
+        assert resp.status_code == 200, resp.text
+        return list(resp.json()["codes"])
+
+    async with SessionLocal() as session:
+        dialect = (await session.connection()).dialect.name
+
+    if dialect == "sqlite":
+        # aiosqlite does not enforce row locks like PostgreSQL SKIP LOCKED;
+        # verify pool accounting sequentially (concurrency covered on prod PG).
+        codes_a = await _print_via_api(line_a)
+        codes_b = await _print_via_api(line_b)
+        all_codes = codes_a + codes_b
+        assert len(all_codes) == len(set(all_codes))
+        assert len(all_codes) == 6
+        assert len(codes_a) == 3
+        assert len(codes_b) == 3
+    else:
+        results = await asyncio.gather(_print_line(line_a), _print_line(line_b))
+        all_codes = []
+        for result in results:
+            assert result.quantity == 3
+            assert result.shortage is None
+            all_codes.extend(result.codes)
+        assert len(all_codes) == len(set(all_codes))
+        assert len(all_codes) == 6
+
+    async with SessionLocal() as session:
+        printed_count = (
+            await session.execute(
+                select(func.count(MarkingCode.id)).where(MarkingCode.status == STATUS_PRINTED)
+            )
+        ).scalar_one()
+        assert int(printed_count) == 6

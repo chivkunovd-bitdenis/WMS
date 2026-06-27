@@ -112,6 +112,18 @@ async def test_pool_detail_and_codes(async_client: AsyncClient) -> None:
 
 
 @pytest.mark.asyncio
+async def test_pool_codes_foreign_pool_returns_404(async_client: AsyncClient) -> None:
+    h, _seller_id, pool_id, _, _ = await _seed_pool_with_codes(async_client)
+    other = await _register_admin(async_client)
+    resp = await async_client.get(
+        f"/operations/marking-codes/pools/{pool_id}/codes",
+        headers=other,
+    )
+    assert resp.status_code == 404
+    assert resp.json()["detail"] == "pool_not_found"
+
+
+@pytest.mark.asyncio
 async def test_ledger_filters(async_client: AsyncClient) -> None:
     h, seller_id, pool_id, _, _ = await _seed_pool_with_codes(async_client)
     detail = await async_client.get(

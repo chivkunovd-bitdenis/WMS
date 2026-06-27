@@ -1391,10 +1391,10 @@ async def test_marketplace_unload_ship_blocked_when_distribution_incomplete(
 
 
 @pytest.mark.asyncio
-async def test_marketplace_unload_packaging_task_sync_on_draft(
+async def test_marketplace_unload_packaging_task_only_on_confirm(
     async_client: AsyncClient, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    # TASK-006: packaging task on draft create; plan line sync; confirm idempotent
+    """MP-003: no packaging task on draft; task created on confirm with plan lines."""
     suffix = str(int(time.time() * 1000))
     reg = await async_client.post(
         "/auth/register",
@@ -1448,16 +1448,12 @@ async def test_marketplace_unload_packaging_task_sync_on_draft(
     )
     assert det0.status_code == 200, det0.text
     assert det0.json()["status"] == "draft"
-    linked0 = det0.json()["linked_packaging_task"]
-    assert linked0 is not None
-    task_id = linked0["task_id"]
-    assert linked0["qty_total"] == 0
+    assert det0.json()["linked_packaging_task"] is None
 
     by_unload0 = await async_client.get(
         f"/operations/packaging-tasks/by-unload/{mid}", headers=h
     )
-    assert by_unload0.status_code == 200, by_unload0.text
-    assert by_unload0.json()["id"] == task_id
+    assert by_unload0.status_code == 404, by_unload0.text
 
     ln = await async_client.post(
         f"/operations/marketplace-unload-requests/{mid}/lines",
@@ -1466,17 +1462,10 @@ async def test_marketplace_unload_packaging_task_sync_on_draft(
     )
     assert ln.status_code == 201, ln.text
 
-    task1 = (
-        await async_client.get(f"/operations/packaging-tasks/{task_id}", headers=h)
-    ).json()
-    assert len(task1["lines"]) == 1
-    assert task1["lines"][0]["product_id"] == pid
-    assert task1["lines"][0]["qty_total"] == 3
-
-    det1 = await async_client.get(
+    det_draft_lines = await async_client.get(
         f"/operations/marketplace-unload-requests/{mid}", headers=h
     )
-    assert det1.json()["linked_packaging_task"]["qty_total"] == 3
+    assert det_draft_lines.json()["linked_packaging_task"] is None
 
     replaced = await async_client.put(
         f"/operations/marketplace-unload-requests/{mid}/lines",
@@ -1484,11 +1473,6 @@ async def test_marketplace_unload_packaging_task_sync_on_draft(
         json={"lines": [{"product_id": pid, "quantity": 5}]},
     )
     assert replaced.status_code == 200, replaced.text
-
-    task2 = (
-        await async_client.get(f"/operations/packaging-tasks/{task_id}", headers=h)
-    ).json()
-    assert task2["lines"][0]["qty_total"] == 5
 
     detail_after_replace = await async_client.get(
         f"/operations/marketplace-unload-requests/{mid}", headers=h
@@ -1501,11 +1485,6 @@ async def test_marketplace_unload_packaging_task_sync_on_draft(
         headers=h,
     )
     assert deleted.status_code == 204, deleted.text
-
-    task3 = (
-        await async_client.get(f"/operations/packaging-tasks/{task_id}", headers=h)
-    ).json()
-    assert task3["lines"] == []
 
     await async_client.post(
         f"/operations/marketplace-unload-requests/{mid}/lines",
@@ -1525,7 +1504,9 @@ async def test_marketplace_unload_packaging_task_sync_on_draft(
         f"/operations/packaging-tasks/by-unload/{mid}", headers=h
     )
     assert by_unload1.status_code == 200, by_unload1.text
-    assert by_unload1.json()["id"] == task_id
+    task_id = by_unload1.json()["id"]
+    assert len(by_unload1.json()["lines"]) == 1
+    assert by_unload1.json()["lines"][0]["qty_total"] == 4
 
     det_confirmed = await async_client.get(
         f"/operations/marketplace-unload-requests/{mid}", headers=h
@@ -2012,10 +1993,10 @@ async def test_marketplace_unload_box_remove_copy_delete(
 
 
 @pytest.mark.asyncio
-async def test_marketplace_unload_box_ops_blocked_before_packaging_done(
+async def test_marketplace_unload_box_ops_allowed_before_packaging_done(
     async_client: AsyncClient, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    """TASK-008: create box / batch blocked until packaging task is done."""
+    """MP-005: create box / batch allowed while packaging in progress."""
     suffix = str(int(time.time() * 1000))
     reg = await async_client.post(
         "/auth/register",
@@ -2071,21 +2052,20 @@ async def test_marketplace_unload_box_ops_blocked_before_packaging_done(
     )
     assert sub.status_code == 200, sub.text
 
-    blocked_box = await async_client.post(
+    box_ok = await async_client.post(
         f"/operations/marketplace-unload-requests/{mid}/boxes",
         headers=ah,
         json={"box_preset": "60_40_40"},
     )
-    assert blocked_box.status_code == 422
-    assert blocked_box.json()["detail"] == "packaging_not_done"
+    assert box_ok.status_code == 201, box_ok.text
 
-    blocked_batch = await async_client.post(
+    batch_ok = await async_client.post(
         f"/operations/marketplace-unload-requests/{mid}/boxes/batch",
         headers=ah,
         json={"count": 2, "box_preset": "60_40_40"},
     )
-    assert blocked_batch.status_code == 422
-    assert blocked_batch.json()["detail"] == "packaging_not_done"
+    assert batch_ok.status_code == 201, batch_ok.text
+    assert len(batch_ok.json()) == 2
 
 
 @pytest.mark.asyncio

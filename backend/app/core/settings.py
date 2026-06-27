@@ -1,12 +1,18 @@
 from __future__ import annotations
 
-from pydantic import AliasChoices, Field
+from typing import Self
+
+from pydantic import AliasChoices, Field, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
 class Settings(BaseSettings):
     model_config = SettingsConfigDict(env_file=".env", env_ignore_empty=True, extra="ignore")
 
+    app_env: str = Field(
+        default="development",
+        description="development | staging | production",
+    )
     database_url: str = Field(
         default="postgresql+psycopg_async://postgres:postgres@localhost:5432/wms",
         description="Async SQLAlchemy URL (use postgresql+psycopg_async:// for PostgreSQL).",
@@ -61,6 +67,15 @@ class Settings(BaseSettings):
             "(in addition to users.can_manage_seller_shops and built-in email markers)."
         ),
     )
+
+    @model_validator(mode="after")
+    def _validate_prod_secrets(self) -> Self:
+        if self.app_env == "production":
+            if not self.wms_secrets_fernet_key:
+                raise ValueError("wms_secrets_fernet_key must be set in production")
+            if self.jwt_secret_key == "change-me-in-production-use-long-random-secret":
+                raise ValueError("jwt_secret_key must be overridden in production")
+        return self
 
     @property
     def database_url_sync(self) -> str:
