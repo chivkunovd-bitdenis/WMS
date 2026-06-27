@@ -8,15 +8,28 @@ Create Date: 2026-06-26
 
 from __future__ import annotations
 
+import re
 import uuid
 
 import sqlalchemy as sa
+
 from alembic import op
 
 revision = "20260626_0043"
 down_revision = "20260626_0042"
 branch_labels = None
 depends_on = None
+
+_GTIN_RE = re.compile(r"(?<!\d)(\d{14})(?!\d)")
+_GS1_GTIN_AI01_RE = re.compile(r"(?:^|\x1d)01(\d{14})")
+
+
+def _extract_gtin_from_cis(cis: str) -> str | None:
+    gs1_match = _GS1_GTIN_AI01_RE.search(cis)
+    if gs1_match:
+        return gs1_match.group(1)
+    match = _GTIN_RE.search(cis)
+    return match.group(1) if match else None
 
 
 def _uuid_sql(value: uuid.UUID | object) -> str:
@@ -26,8 +39,6 @@ def _uuid_sql(value: uuid.UUID | object) -> str:
 
 
 def _backfill_marking_pools(connection: sa.Connection) -> None:
-    from app.services.marking_code_service import extract_gtin_from_cis
-
     codes = connection.execute(
         sa.text(
             """
@@ -44,7 +55,7 @@ def _backfill_marking_pools(connection: sa.Connection) -> None:
     for row in codes:
         gtin_raw = (row.gtin or "").strip()
         if not gtin_raw:
-            gtin_raw = extract_gtin_from_cis(row.cis_code) or ""
+            gtin_raw = _extract_gtin_from_cis(row.cis_code) or ""
         pool_key = (row.tenant_id, row.seller_id, gtin_raw)
         pool_id = pool_by_key.get(pool_key)
         if pool_id is None:
