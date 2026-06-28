@@ -1,5 +1,11 @@
 # TASKLOG
 
+## TASK-037 — 2026-06-28 — REPRINTS-02: rejection reason field
+
+- What changed: `FfHonestSignReprintsPage` — диалог с полем «Причина отклонения» при reject; текст уходит в API вместо хардкода «Отклонено старшим».
+- What did NOT change: approve/replace actions; backend reject endpoint.
+- Verification: `npm run build` green in `.cursor/wt/REPRINTS-01`.
+
 ## TASK-036 — 2026-06-28 — CZ-000 barrier: MP commit + feat/cz-ux-fixes + autopilot backlog
 
 - What changed:
