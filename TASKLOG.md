@@ -1,5 +1,11 @@
 # TASKLOG
 
+## TASK-048 — 2026-06-28 — LEDGER-06: localize ledger events via markingStatus
+
+- What changed: `HonestSignLedgerPage` — фильтр и чипы событий через `ledgerEventLabel` из `markingStatus.ts`; e2e на русские подписи («Импорт», «Печать»).
+- What did NOT change: API `event_type` (англ. enum), логика фильтров (LEDGER-02–05).
+- Verification: `npm run build` + `npm run test:e2e tests-e2e/ff-honest-sign-ledger.spec.ts` in LEDGER-06 worktree — green. Commit `8c0c350`.
+
 ## TASK-036 — 2026-06-28 — CZ-000 barrier: MP commit + feat/cz-ux-fixes + autopilot backlog
 
 - What changed:
