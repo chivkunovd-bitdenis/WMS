@@ -39,15 +39,37 @@ cd /opt/wms
 ./scripts/deploy/prod-update.sh
 ```
 
-## CI (GitHub Actions)
+## CI / CD (GitHub Actions)
 
-На каждый PR и push в `main`:
+### CI — каждый PR и push в `main`
+
+Workflow `.github/workflows/ci.yml`:
 
 - `backend`: ruff, mypy, pytest
-- `frontend`: build, Playwright e2e
-- проверки Test coverage в PR
+- `frontend`: build, Playwright e2e (85+ сценариев)
+- PR: Test coverage + TC-ID в e2e
 
-Зелёный CI на `main` — обязательное условие перед `git pull` на прод.
+### CD — автодеплой после зелёного CI на `main`
+
+Workflow `.github/workflows/deploy.yml`:
+
+1. Триггер: push в `main` **после** успешного CI, либо вручную (*Actions → Deploy Production → Run workflow*).
+2. SSH на сервер → `./scripts/deploy/prod-update.sh` (`git pull` + `docker compose up -d --build` + миграции через celery_worker + WB re-sync).
+3. Smoke: HTTP 200 на `/`, `/seller/`, `/api/health`.
+
+**Secrets** (Settings → Secrets and variables → Actions):
+
+| Secret | Пример |
+|--------|--------|
+| `DEPLOY_SSH_HOST` | `194.87.96.144` |
+| `DEPLOY_SSH_USER` | `root` |
+| `DEPLOY_SSH_KEY` | private ed25519 key (только deploy, не личный) |
+| `DEPLOY_SSH_PORT` | `22` |
+| `DEPLOY_HTTP_PORT` | `8088` |
+
+Ключ `github-actions-wms-deploy` — в `authorized_keys` на сервере. Ротация: новый ключ → secret → pubkey на сервере.
+
+Зелёный CI на `main` — **обязательное** условие перед автодеплоем (deploy ждёт `workflow_run` CI).
 
 ## Проверка после деплоя
 
