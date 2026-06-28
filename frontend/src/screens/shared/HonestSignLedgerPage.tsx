@@ -22,6 +22,7 @@ import ArrowBackOutlined from '@mui/icons-material/ArrowBackOutlined'
 import { apiUrl } from '../../api'
 import { PageHeader } from '../../ui/PageHeader'
 import { readApiErrorMessage } from '../../utils/readApiErrorMessage'
+import { MarkingSellerPicker } from './MarkingSellerPicker'
 
 type LedgerRow = {
   id: string
@@ -131,24 +132,15 @@ export function HonestSignLedgerPage({
         <PageHeader title="Лента расхода" description="События по кодам маркировки." />
       </Stack>
 
-      {sellers.length > 0 ? (
-        <Stack direction="row" spacing={1} sx={{ flexWrap: 'wrap' }}>
-          {sellers.map((s) => (
-            <Button
-              key={s.id}
-              size="small"
-              variant={selectedSellerId === s.id ? 'contained' : 'outlined'}
-              onClick={() => {
-                setOffset(0)
-                onSelectedSellerIdChange?.(s.id)
-              }}
-              data-testid={`${testIdPrefix}-seller-${s.id}`}
-            >
-              {s.name}
-            </Button>
-          ))}
-        </Stack>
-      ) : null}
+      <MarkingSellerPicker
+        sellers={sellers}
+        selectedSellerId={selectedSellerId}
+        onSelectedSellerIdChange={(id) => {
+          setOffset(0)
+          onSelectedSellerIdChange?.(id)
+        }}
+        testIdPrefix={testIdPrefix}
+      />
 
       {poolIdFromUrl ? (
         <Alert severity="info">Фильтр по пулу: {poolIdFromUrl}</Alert>

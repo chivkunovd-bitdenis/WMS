@@ -2,6 +2,7 @@ import { expect, test } from '@playwright/test'
 
 import { waitForGetOk, waitForPostOk } from './api-waits'
 import { openFulfillmentRegistration } from './auth-flow'
+import { selectHonestSignSeller } from './ff-honest-sign-helpers'
 
 // TC-NEW-009 — T0.9: вкладки карточки пула и экспорт CSV кодов.
 // TC-NEW-011 — T-E3: таб «Лента» — превью + ссылка на полную ленту пула (без дубля).
@@ -49,7 +50,7 @@ test('FF honest sign pool card: tabs and CSV export', async ({ page }) => {
   const poolId = String(((await imp.json()) as { pools: { pool_id: string }[] }).pools[0].pool_id)
 
   await page.getByTestId('nav-ff-honest-sign').click()
-  await page.getByTestId(`ff-honest-sign-seller-${sellerId}`).click()
+  await selectHonestSignSeller(page, sellerId)
   await page.getByTestId(`ff-honest-sign-pool-row-${poolId}`).click()
   await expect(page.getByTestId('ff-honest-sign-pool-page')).toBeVisible()
   await expect(page.getByTestId('ff-honest-sign-pool-overview')).toBeVisible()

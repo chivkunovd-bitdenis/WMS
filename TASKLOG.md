@@ -83,6 +83,18 @@
   - **`ff-mp-packaging-print.spec.ts`:** e2e обновлён под qty-only UI (TC-NEW-MP-016).
 - What did NOT change: ЧЗ-ветка конструктора; каталог (`ProductBarcodePrintDialog`); множитель «× упаковка» (PRINT-04).
 - Verification: `npm run build` (exit 0) в `.cursor/wt/PRINT-01/frontend`.
+
+## TASK-037 — 2026-06-28 — CROSS-03: seller Autocomplete on ledger page
+
+- What changed:
+  - **`MarkingSellerPicker.tsx`** — shared MUI Autocomplete for seller selection (search, same testids as POOLS-01).
+  - **`HonestSignLedgerPage.tsx`** — replaced seller button row with `MarkingSellerPicker`.
+  - **`HonestSignScreen.tsx`** — uses shared picker (unified UX with ledger).
+  - **`ff-honest-sign-helpers.ts`** — `selectMarkingSeller` / `selectHonestSignSeller` for e2e.
+  - **e2e:** updated honest-sign specs; **TC-NEW-011** — ledger seller autocomplete filters events.
+- What did NOT change: ledger filter debounce/export (LEDGER-* lanes); pool link CTA (POOLS-06).
+- Verification: `npm run build`; `npm run test:e2e` on ff-honest-sign-ledger/spec/pools (4 passed).
+- Commit: `b8b85e4`
 ## TASK-036 — 2026-06-28 — CZ-000 barrier: MP commit + feat/cz-ux-fixes + autopilot backlog
 
 - What changed:
