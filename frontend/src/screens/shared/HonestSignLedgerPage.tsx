@@ -22,6 +22,7 @@ import ArrowBackOutlined from '@mui/icons-material/ArrowBackOutlined'
 import { apiUrl } from '../../api'
 import { PageHeader } from '../../ui/PageHeader'
 import { readApiErrorMessage } from '../../utils/readApiErrorMessage'
+import { ledgerEventLabel } from '../../utils/markingStatus'
 
 type LedgerRow = {
   id: string
@@ -210,7 +211,7 @@ export function HonestSignLedgerPage({
           <MenuItem value="">Все</MenuItem>
           {EVENT_TYPES.filter(Boolean).map((t) => (
             <MenuItem key={t} value={t}>
-              {t}
+              {ledgerEventLabel(t)}
             </MenuItem>
           ))}
         </TextField>
@@ -269,7 +270,7 @@ export function HonestSignLedgerPage({
                 <TableRow key={row.id} data-testid={`${testIdPrefix}-row-${row.id}`}>
                   <TableCell>{new Date(row.created_at).toLocaleString('ru-RU')}</TableCell>
                   <TableCell>
-                    <Chip size="small" label={row.event_type} />
+                    <Chip size="small" label={ledgerEventLabel(row.event_type)} />
                   </TableCell>
                   <TableCell>{row.cis_masked}</TableCell>
                   <TableCell>
