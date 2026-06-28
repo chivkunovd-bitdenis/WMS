@@ -1,6 +1,15 @@
 # TASKLOG
 
-## TASK-036 — 2026-06-28 — CZ-000 barrier: MP commit + feat/cz-ux-fixes + autopilot backlog
+## TASK-037 — 2026-06-28 — PACK-04: packaging page cleanup after removals
+
+- What changed:
+  - **`FfPackagingPage.tsx`:** removed orphaned code after PACK-01..03 — `hasHonestSignLines`, `hasPrintedMarkingLines`, print-all (`printAll*`, dialog), verify-pair (`pair*`), unused imports (`printMarkingCodeTape`, `MarkingTapeUnitInput`, `PrintLayout`).
+  - Deleted obsolete e2e: `ff-marking-print-all.spec.ts`, `ff-marking-verify-pair.spec.ts`.
+  - Row-wise «Печать ЧЗ» / «Повтор» via `openLinePrint` + `useMarkingCodePrint` unchanged.
+- What did NOT change: backend endpoints; `MarkingPrintDialog` constructor flow.
+- Verification: `npm run build` green; eslint on file — no unused-vars; e2e `ff-marking-print-constructor.spec.ts`.
+- Commit: `ac7f312`
+
 
 - What changed:
   - **CZ-000 done:** MP slice committed `304abf2` on `hotfix/alembic-marking-pools`; branch **`feat/cz-ux-fixes`** created.
