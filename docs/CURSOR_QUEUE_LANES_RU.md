@@ -26,7 +26,7 @@
 
 **depends_on:** задача runnable, когда у **всех** предшественников есть `.cursor/state/<id>.done`.
 
-**integration_branch:** `feat/cz-ux-fixes` (для WMS ЧЗ-backlog). Весь код фичи живёт здесь; `task/<id>` — черновик до merge.
+**integration_branch:** merged → `main` (PR #49, 2026-06-28). Для следующего эпика — новая ветка от `main`.
 
 **Изоляция:** worktree `.cursor/wt/<id>`, ветка `task/<id>`, база = **HEAD integration branch**.
 

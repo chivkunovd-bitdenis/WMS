@@ -4,7 +4,8 @@
 
 - What changed: `.github/workflows/deploy.yml` — автодеплой после green CI на `main` (SSH → `prod-update.sh`) + smoke HTTP; `docs/DEPLOY_SERVER_RU.md` — CI/CD секция и secrets; GitHub Secrets `DEPLOY_SSH_*`, `DEPLOY_HTTP_PORT`; deploy key `github-actions-wms-deploy` на сервере.
 - What did NOT change: `prod-update.sh` логика; `.env` на сервере; ручной деплой по-прежнему работает.
-- Deploy: PR #49 → `main` `6d375ab`; prod `194.87.96.144:8088` — `prod-update.sh`, FF/seller/health HTTP 200.
+- Deploy: PR #49 → `main` `6d375ab`; prod `194.87.96.144:8088` — `prod-update.sh`, FF/seller/health HTTP 200. CD PR #50 → `6f3c0ad`; Deploy Production workflow success.
+- Commit: `6f3c0ad` (PR #50 merge).
 
 ## TASK-066 — 2026-06-28 — FIX-05: ledger/pools abort + BACKEND-01 openapi + docs
 

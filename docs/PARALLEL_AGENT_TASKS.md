@@ -15,7 +15,7 @@
 6. **После verifier READY — обязательный merge** `task/<id>` → **integration branch** (`scripts/queue-integrate.sh <id>`). Только потом `.cursor/state/<id>.integrated` и `.done`.
 7. **Статус — в файлах `.cursor/state/`** (orchestrator), **таблицу НЕ редактируем**. Изоляция — `git worktree .cursor/wt/<id>`.
 
-**integration_branch:** `feat/cz-ux-fixes` — единственная собранная ветка фичи; PR в `main` только с неё после полного CI.
+**integration_branch:** ~~`feat/cz-ux-fixes`~~ → **merged в `main`** (PR #49, 2026-06-28). Новые фичи — от `main`, новая integration-ветка по необходимости.
 
 **Параллельность:** 8 независимых дорожек + общие. На старте (после CZ-000) сразу доступно ≥7 задач из разных файлов → 5 агентов загружены без коллизий.
 
