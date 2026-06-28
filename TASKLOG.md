@@ -1,5 +1,15 @@
 # TASKLOG
 
+## TASK-037 — 2026-06-28 — FINAL-03: docs sync (CHESTNY_ZNAK UX + FIX_TASKS)
+
+- What changed:
+  - **`docs/CHESTNY_ZNAK_UX_FIXES_RU.md`** — перенесён из корня; T-A7 закрыт как дубль MP-021/022/023; таблица сверки с `CHESTNY_ZNAK_FIX_TASKS_RU.md`.
+  - **`docs/CHESTNY_ZNAK_FIX_TASKS_RU.md`** — ссылка на UX-бэклог и пояснение независимости треков.
+  - **`docs/MASTER_BACKLOG_RU.md`**, **`docs/EXECUTION_PLAN_RU.md`**, **`docs/PARALLEL_AGENT_TASKS.md`** — пути и статусы X-1/X-2/X-3, FINAL-03 closed.
+- What did NOT change: код приложения; lane-задачи.
+- Verification: docs-only diff; ссылки на корневой `CHESTNY_ZNAK_UX_FIXES_RU.md` убраны.
+- Commit: `501d055`
+
 ## TASK-049 — 2026-06-28 — FINAL-02: аудит дублей поверхностей ЧЗ
 
 - What changed:
