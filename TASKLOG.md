@@ -9,6 +9,7 @@
   - **Tests:** pytest single reprint в `test_marking_import_and_packaging_print`; e2e TC-NEW-CROSS-01 в `ff-marking-packaging.spec.ts`; defect e2e через меню.
 - What did NOT change: первичная печать через конструктор; очередь перепечаток (shift_lead).
 - Verification: `pytest tests/test_marking_codes.py::test_marking_import_and_packaging_print` (passed); `npx playwright test … --grep "reprint single"` (passed); `npm run build` (exit 0).
+- Commit: `280944b` (feature `b20496f` + e2e proof)
 
 ## TASK-041 — 2026-06-28 — PACK-07: block complete with incomplete marking
 
