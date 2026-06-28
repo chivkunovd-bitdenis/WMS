@@ -12,6 +12,7 @@ from app.models.print_template import (
     LAYOUT_BLOCK_CZ,
     LAYOUT_BLOCKS,
     SYSTEM_PRESET_NAME,
+    USER_LAST_LAYOUT_NAME,
     PrintTemplate,
 )
 from app.services.catalog_service import get_product
@@ -45,6 +46,7 @@ class PrintTemplateRow:
     tenant_id: uuid.UUID
     seller_id: uuid.UUID | None
     product_id: uuid.UUID | None
+    user_id: uuid.UUID | None
     name: str
     layout: PrintLayout
     is_default: bool
@@ -60,6 +62,7 @@ def system_pairs_template(tenant_id: uuid.UUID) -> PrintTemplateRow:
         tenant_id=tenant_id,
         seller_id=None,
         product_id=None,
+        user_id=None,
         name=SYSTEM_PRESET_NAME,
         layout=SYSTEM_PAIRS_LAYOUT,
         is_default=False,
@@ -105,6 +108,7 @@ def _row_from_model(model: PrintTemplate) -> PrintTemplateRow:
         tenant_id=model.tenant_id,
         seller_id=model.seller_id,
         product_id=model.product_id,
+        user_id=model.user_id,
         name=model.name,
         layout=parse_layout(model.layout_json),
         is_default=model.is_default,
@@ -118,16 +122,70 @@ async def _clear_default_flags(
     *,
     product_id: uuid.UUID | None = None,
     seller_id: uuid.UUID | None = None,
+    user_id: uuid.UUID | None = None,
     exclude_id: uuid.UUID | None = None,
 ) -> None:
     conditions = [PrintTemplate.tenant_id == tenant_id, PrintTemplate.is_default.is_(True)]
-    if product_id is not None:
+    if user_id is not None:
+        conditions.append(PrintTemplate.user_id == user_id)
+        conditions.append(PrintTemplate.seller_id.is_(None))
+        conditions.append(PrintTemplate.product_id.is_(None))
+    elif product_id is not None:
         conditions.append(PrintTemplate.product_id == product_id)
+        conditions.append(PrintTemplate.user_id.is_(None))
     elif seller_id is not None:
         conditions.append(
             and_(PrintTemplate.seller_id == seller_id, PrintTemplate.product_id.is_(None))
         )
+        conditions.append(PrintTemplate.user_id.is_(None))
     stmt = update(PrintTemplate).where(*conditions).values(is_default=False)
+    if exclude_id is not None:
+        stmt = stmt.where(PrintTemplate.id != exclude_id)
+    await session.execute(stmt)
+
+
+async def _clear_user_product_default_flags(
+    session: AsyncSession,
+    tenant_id: uuid.UUID,
+    *,
+    user_id: uuid.UUID,
+    product_id: uuid.UUID,
+    exclude_id: uuid.UUID | None = None,
+) -> None:
+    stmt = (
+        update(PrintTemplate)
+        .where(
+            PrintTemplate.tenant_id == tenant_id,
+            PrintTemplate.user_id == user_id,
+            PrintTemplate.product_id == product_id,
+            PrintTemplate.is_default.is_(True),
+        )
+        .values(is_default=False)
+    )
+    if exclude_id is not None:
+        stmt = stmt.where(PrintTemplate.id != exclude_id)
+    await session.execute(stmt)
+
+
+async def _clear_user_seller_default_flags(
+    session: AsyncSession,
+    tenant_id: uuid.UUID,
+    *,
+    user_id: uuid.UUID,
+    seller_id: uuid.UUID,
+    exclude_id: uuid.UUID | None = None,
+) -> None:
+    stmt = (
+        update(PrintTemplate)
+        .where(
+            PrintTemplate.tenant_id == tenant_id,
+            PrintTemplate.user_id == user_id,
+            PrintTemplate.seller_id == seller_id,
+            PrintTemplate.product_id.is_(None),
+            PrintTemplate.is_default.is_(True),
+        )
+        .values(is_default=False)
+    )
     if exclude_id is not None:
         stmt = stmt.where(PrintTemplate.id != exclude_id)
     await session.execute(stmt)
@@ -155,10 +213,21 @@ async def list_print_templates(
     session: AsyncSession,
     tenant_id: uuid.UUID,
     *,
+    user_id: uuid.UUID | None = None,
     seller_id: uuid.UUID | None = None,
     product_id: uuid.UUID | None = None,
 ) -> list[PrintTemplateRow]:
-    stmt = select(PrintTemplate).where(PrintTemplate.tenant_id == tenant_id)
+    stmt = select(PrintTemplate).where(
+        PrintTemplate.tenant_id == tenant_id,
+        PrintTemplate.name != USER_LAST_LAYOUT_NAME,
+    )
+    if user_id is not None:
+        stmt = stmt.where(
+            or_(
+                PrintTemplate.user_id == user_id,
+                PrintTemplate.user_id.is_(None),
+            )
+        )
     if seller_id is not None:
         stmt = stmt.where(
             or_(
@@ -197,6 +266,7 @@ async def create_print_template(
     layout: PrintLayout | dict[str, Any],
     seller_id: uuid.UUID | None = None,
     product_id: uuid.UUID | None = None,
+    user_id: uuid.UUID | None = None,
     is_default: bool = False,
 ) -> PrintTemplateRow:
     clean_name = name.strip()
@@ -210,14 +280,25 @@ async def create_print_template(
         product_id=product_id,
     )
     if is_default:
-        if product_id is not None:
+        if user_id is not None and product_id is None and resolved_seller_id is None:
+            await _clear_default_flags(session, tenant_id, user_id=user_id)
+        elif product_id is not None and user_id is not None:
+            await _clear_user_product_default_flags(
+                session, tenant_id, user_id=user_id, product_id=product_id
+            )
+        elif product_id is not None:
             await _clear_default_flags(session, tenant_id, product_id=product_id)
+        elif resolved_seller_id is not None and user_id is not None:
+            await _clear_user_seller_default_flags(
+                session, tenant_id, user_id=user_id, seller_id=resolved_seller_id
+            )
         elif resolved_seller_id is not None:
             await _clear_default_flags(session, tenant_id, seller_id=resolved_seller_id)
     model = PrintTemplate(
         tenant_id=tenant_id,
         seller_id=resolved_seller_id,
         product_id=product_id,
+        user_id=user_id,
         name=clean_name,
         layout_json=layout_to_json(parsed_layout),
         is_default=is_default,
@@ -250,11 +331,34 @@ async def update_print_template(
         model.layout_json = layout_to_json(parsed_layout)
     if is_default is not None:
         if is_default:
-            if model.product_id is not None:
+            if model.user_id is not None and model.product_id is None and model.seller_id is None:
+                await _clear_default_flags(
+                    session,
+                    tenant_id,
+                    user_id=model.user_id,
+                    exclude_id=model.id,
+                )
+            elif model.product_id is not None and model.user_id is not None:
+                await _clear_user_product_default_flags(
+                    session,
+                    tenant_id,
+                    user_id=model.user_id,
+                    product_id=model.product_id,
+                    exclude_id=model.id,
+                )
+            elif model.product_id is not None:
                 await _clear_default_flags(
                     session,
                     tenant_id,
                     product_id=model.product_id,
+                    exclude_id=model.id,
+                )
+            elif model.seller_id is not None and model.user_id is not None:
+                await _clear_user_seller_default_flags(
+                    session,
+                    tenant_id,
+                    user_id=model.user_id,
+                    seller_id=model.seller_id,
                     exclude_id=model.id,
                 )
             elif model.seller_id is not None:
@@ -282,13 +386,70 @@ async def delete_print_template(
     await session.commit()
 
 
+async def _find_user_last_layout(
+    session: AsyncSession,
+    tenant_id: uuid.UUID,
+    user_id: uuid.UUID,
+) -> PrintTemplate | None:
+    stmt = (
+        select(PrintTemplate)
+        .where(
+            PrintTemplate.tenant_id == tenant_id,
+            PrintTemplate.user_id == user_id,
+            PrintTemplate.seller_id.is_(None),
+            PrintTemplate.product_id.is_(None),
+            PrintTemplate.name == USER_LAST_LAYOUT_NAME,
+        )
+        .limit(1)
+    )
+    result = await session.execute(stmt)
+    return result.scalar_one_or_none()
+
+
+async def save_user_last_print_layout(
+    session: AsyncSession,
+    tenant_id: uuid.UUID,
+    user_id: uuid.UUID,
+    layout: PrintLayout | dict[str, Any],
+) -> PrintTemplateRow:
+    parsed_layout = parse_layout(layout) if not isinstance(layout, PrintLayout) else layout
+    existing = await _find_user_last_layout(session, tenant_id, user_id)
+    if existing is not None:
+        existing.layout_json = layout_to_json(parsed_layout)
+        existing.is_default = True
+        await session.flush()
+        await session.commit()
+        return _row_from_model(existing)
+
+    await _clear_default_flags(session, tenant_id, user_id=user_id)
+    model = PrintTemplate(
+        tenant_id=tenant_id,
+        seller_id=None,
+        product_id=None,
+        user_id=user_id,
+        name=USER_LAST_LAYOUT_NAME,
+        layout_json=layout_to_json(parsed_layout),
+        is_default=True,
+    )
+    session.add(model)
+    await session.flush()
+    await session.commit()
+    return _row_from_model(model)
+
+
 async def resolve_default_print_template(
     session: AsyncSession,
     tenant_id: uuid.UUID,
     *,
+    user_id: uuid.UUID | None = None,
     product_id: uuid.UUID | None = None,
     seller_id: uuid.UUID | None = None,
 ) -> PrintTemplateRow:
+    if user_id is not None:
+        user_last = await _find_user_last_layout(session, tenant_id, user_id)
+        if user_last is not None:
+            return _row_from_model(user_last)
+
     if product_id is not None:
         product = await get_product(session, tenant_id, product_id)
         if product is None:
@@ -296,11 +457,27 @@ async def resolve_default_print_template(
         if seller_id is not None and product.seller_id != seller_id:
             raise PrintTemplateServiceError("product_seller_mismatch")
         seller_id = product.seller_id
+        if user_id is not None:
+            stmt = (
+                select(PrintTemplate)
+                .where(
+                    PrintTemplate.tenant_id == tenant_id,
+                    PrintTemplate.product_id == product_id,
+                    PrintTemplate.user_id == user_id,
+                    PrintTemplate.is_default.is_(True),
+                )
+                .limit(1)
+            )
+            result = await session.execute(stmt)
+            user_product_default = result.scalar_one_or_none()
+            if user_product_default is not None:
+                return _row_from_model(user_product_default)
         stmt = (
             select(PrintTemplate)
             .where(
                 PrintTemplate.tenant_id == tenant_id,
                 PrintTemplate.product_id == product_id,
+                PrintTemplate.user_id.is_(None),
                 PrintTemplate.is_default.is_(True),
             )
             .limit(1)
@@ -311,12 +488,29 @@ async def resolve_default_print_template(
             return _row_from_model(product_default)
 
     if seller_id is not None:
+        if user_id is not None:
+            stmt = (
+                select(PrintTemplate)
+                .where(
+                    PrintTemplate.tenant_id == tenant_id,
+                    PrintTemplate.seller_id == seller_id,
+                    PrintTemplate.product_id.is_(None),
+                    PrintTemplate.user_id == user_id,
+                    PrintTemplate.is_default.is_(True),
+                )
+                .limit(1)
+            )
+            result = await session.execute(stmt)
+            user_seller_default = result.scalar_one_or_none()
+            if user_seller_default is not None:
+                return _row_from_model(user_seller_default)
         stmt = (
             select(PrintTemplate)
             .where(
                 PrintTemplate.tenant_id == tenant_id,
                 PrintTemplate.seller_id == seller_id,
                 PrintTemplate.product_id.is_(None),
+                PrintTemplate.user_id.is_(None),
                 PrintTemplate.is_default.is_(True),
             )
             .limit(1)

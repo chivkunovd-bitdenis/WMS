@@ -28,6 +28,8 @@ export type ProductLineDisplayMeta = {
   wb_color: string | null
   wb_brand?: string | null
   wb_composition?: string | null
+  packaging_instructions?: string | null
+  units_in_pack?: number | null
 }
 
 export function productDisplayMetaFromCatalog(
@@ -82,6 +84,8 @@ export function catalogRowToDisplayMeta(row: {
   wb_color?: string | null
   wb_brand?: string | null
   wb_composition?: string | null
+  packaging_instructions?: string | null
+  units_in_pack?: number | null
 }): ProductLineDisplayMeta {
   return {
     sku_code: row.sku_code,
@@ -96,6 +100,8 @@ export function catalogRowToDisplayMeta(row: {
     wb_color: row.wb_color ?? null,
     wb_brand: row.wb_brand ?? null,
     wb_composition: row.wb_composition ?? null,
+    packaging_instructions: row.packaging_instructions ?? null,
+    units_in_pack: row.units_in_pack ?? null,
   }
 }
 

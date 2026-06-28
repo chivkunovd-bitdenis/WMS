@@ -14,6 +14,7 @@ export type PrintTemplate = {
   id: string | null
   seller_id: string | null
   product_id: string | null
+  user_id: string | null
   name: string
   layout: PrintLayout
   is_default: boolean

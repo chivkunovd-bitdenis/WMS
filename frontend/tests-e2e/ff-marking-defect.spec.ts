@@ -128,6 +128,10 @@ test('FF packaging: defect button creates pending reprint request', async ({ pag
     page.getByTestId('marking-print-confirm').click(),
   ])
 
+  await page.locator('[data-testid^="ff-packaging-line-menu-btn-"]').first().click()
+  await page.getByTestId('ff-packaging-defect-marking').click()
+  await expect(page.getByTestId('ff-packaging-defect-dialog')).toBeVisible()
+
   const defectWait = page.waitForResponse(
     (r) =>
       r.request().method() === 'POST' &&
@@ -136,8 +140,7 @@ test('FF packaging: defect button creates pending reprint request', async ({ pag
       r.status() >= 200 &&
       r.status() < 300,
   )
-  await page.locator('[data-testid^="ff-packaging-line-menu-btn-"]').first().click()
-  await Promise.all([defectWait, page.getByTestId('ff-packaging-defect-marking').click()])
+  await Promise.all([defectWait, page.getByTestId('ff-packaging-defect-confirm').click()])
   const defectBody = (await (await defectWait).json()) as { status: string }
   expect(defectBody.status).toBe('pending')
 
