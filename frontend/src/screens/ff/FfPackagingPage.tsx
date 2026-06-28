@@ -1,5 +1,6 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useState, type MouseEvent } from 'react'
 import { Link as RouterLink, useLocation } from 'react-router-dom'
+import { MoreVertOutlined } from '@mui/icons-material'
 import {
   Alert,
   Badge,
@@ -12,8 +13,10 @@ import {
   DialogContent,
   DialogTitle,
   FormControl,
+  IconButton,
   InputLabel,
   Link,
+  Menu,
   MenuItem,
   Paper,
   Select,
@@ -126,6 +129,8 @@ export function FfPackagingTaskPanel({
   const [defectReason, setDefectReason] = useState('')
   const [defectDialogBusy, setDefectDialogBusy] = useState(false)
   const [defectDialogError, setDefectDialogError] = useState<string | null>(null)
+  const [lineMenuAnchor, setLineMenuAnchor] = useState<null | HTMLElement>(null)
+  const [lineMenuLine, setLineMenuLine] = useState<PackagingTaskLine | null>(null)
   const { openPrint, dialog: markingPrintDialog } = useMarkingCodePrint()
 
   const authHeaders = {
@@ -348,6 +353,20 @@ export function FfPackagingTaskPanel({
   const taskEditable = task.status !== 'done' && task.status !== 'cancelled'
   const isMpUnloadTask = Boolean(task.marketplace_unload_request_id)
 
+  const lineHasOverflowActions = (ln: PackagingTaskLine) =>
+    ln.requires_honest_sign && ln.qty_marking_printed > 0
+
+  const openLineMenu = (event: MouseEvent<HTMLElement>, ln: PackagingTaskLine) => {
+    event.stopPropagation()
+    setLineMenuAnchor(event.currentTarget)
+    setLineMenuLine(ln)
+  }
+
+  const closeLineMenu = () => {
+    setLineMenuAnchor(null)
+    setLineMenuLine(null)
+  }
+
   return (
     <Stack spacing={2} data-testid="ff-packaging-task-panel">
       <Stack direction="row" spacing={1} sx={{ alignItems: 'center', flexWrap: 'wrap' }}>
@@ -489,28 +508,16 @@ export function FfPackagingTaskPanel({
                         Печать ЧЗ
                       </Button>
                     ) : null}
-                    {ln.requires_honest_sign && !isMpUnloadTask && ln.qty_marking_printed > 0 ? (
-                      <Button
+                    {lineHasOverflowActions(ln) ? (
+                      <IconButton
                         size="small"
-                        variant="text"
+                        aria-label="Дополнительные действия"
                         disabled={busy}
-                        onClick={() => openLinePrint(ln, { reprint: true })}
-                        data-testid="ff-packaging-reprint-marking"
+                        onClick={(e) => openLineMenu(e, ln)}
+                        data-testid={`ff-packaging-line-menu-btn-${ln.id}`}
                       >
-                        Повтор
-                      </Button>
-                    ) : null}
-                    {ln.requires_honest_sign && ln.qty_marking_printed > 0 ? (
-                      <Button
-                        size="small"
-                        variant="outlined"
-                        color="warning"
-                        disabled={busy}
-                        onClick={() => void openDefectDialog(ln.id)}
-                        data-testid="ff-packaging-defect-marking"
-                      >
-                        Брак
-                      </Button>
+                        <MoreVertOutlined fontSize="small" />
+                      </IconButton>
                     ) : null}
                     {!isMpUnloadTask && ln.qty_confirmed_packed < ln.qty_suggested_packed ? (
                       <Button
@@ -583,6 +590,42 @@ export function FfPackagingTaskPanel({
         </Paper>
       ) : null}
       {markingPrintDialog}
+      <Menu
+        anchorEl={lineMenuAnchor}
+        open={Boolean(lineMenuAnchor)}
+        onClose={closeLineMenu}
+        data-testid="ff-packaging-line-menu"
+      >
+        {lineMenuLine &&
+        lineMenuLine.requires_honest_sign &&
+        !isMpUnloadTask &&
+        lineMenuLine.qty_marking_printed > 0 ? (
+          <MenuItem
+            disabled={busy}
+            onClick={() => {
+              closeLineMenu()
+              openLinePrint(lineMenuLine, { reprint: true })
+            }}
+            data-testid="ff-packaging-reprint-marking"
+          >
+            Повтор
+          </MenuItem>
+        ) : null}
+        {lineMenuLine &&
+        lineMenuLine.requires_honest_sign &&
+        lineMenuLine.qty_marking_printed > 0 ? (
+          <MenuItem
+            disabled={busy}
+            onClick={() => {
+              closeLineMenu()
+              void openDefectDialog(lineMenuLine.id)
+            }}
+            data-testid="ff-packaging-defect-marking"
+          >
+            Брак
+          </MenuItem>
+        ) : null}
+      </Menu>
       <Dialog
         open={defectDialogOpen}
         onClose={closeDefectDialog}

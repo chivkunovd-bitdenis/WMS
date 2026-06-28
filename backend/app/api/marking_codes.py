@@ -95,6 +95,7 @@ class PrintMarkingCodesIn(BaseModel):
     copies: int | None = Field(default=None, ge=1, le=10)
     allow_partial: bool = False
     reprint: bool = False
+    code_ids: list[uuid.UUID] | None = None
     duplicate_copies: int | None = Field(default=None, ge=1, le=2)
 
 
@@ -1177,6 +1178,7 @@ async def print_marking_codes_for_line(
             layout=layout_payload,
             allow_partial=body.allow_partial,
             reprint=body.reprint,
+            reprint_code_ids=body.code_ids,
             duplicate_copies=legacy_copies,
         )
     except mc_svc.MarkingCodeServiceError as exc:

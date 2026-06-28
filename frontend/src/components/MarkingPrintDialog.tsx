@@ -38,6 +38,12 @@ import { printMarkingCodeTape } from '../utils/printMarkingCodeLabel'
 import type { ProductThermalLabelData } from '../utils/printProductThermalLabel'
 import { resolvePackUnits, resolveWbBarcodeLabelCount } from '../utils/productBarcodePrint'
 
+type PrintedCodeOption = {
+  id: string
+  cis_masked: string
+  status: string
+}
+
 /** Fixed layout for non-ЧЗ: one WB barcode label per unit, no constructor. */
 const NON_HONEST_SIGN_LABEL_LAYOUT: PrintLayout = {
   units: [{ block: 'label', copies: 1 }],
@@ -78,6 +84,9 @@ export function MarkingPrintDialog({ open, reprint, ctx, busy, onBusyChange, onC
   const [wbBarcodeQty, setWbBarcodeQty] = useState(1)
   const [saveName, setSaveName] = useState('')
   const [toast, setToast] = useState<string | null>(null)
+  const [reprintCodes, setReprintCodes] = useState<PrintedCodeOption[]>([])
+  const [selectedReprintCodeId, setSelectedReprintCodeId] = useState('')
+  const [reprintCodesLoading, setReprintCodesLoading] = useState(false)
 
   const requiresHonestSign = ctx?.requiresHonestSign ?? true
 
@@ -90,6 +99,9 @@ export function MarkingPrintDialog({ open, reprint, ctx, busy, onBusyChange, onC
     setLabelsPerProduct(1)
     setSaveName('')
     setWbBarcodeQty(1)
+    setReprintCodes([])
+    setSelectedReprintCodeId('')
+    setReprintCodesLoading(false)
     if (!requiresHonestSign) {
       setLayout(cloneLayout(NON_HONEST_SIGN_LABEL_LAYOUT))
       return
@@ -119,9 +131,38 @@ export function MarkingPrintDialog({ open, reprint, ctx, busy, onBusyChange, onC
         setLayout(cloneLayout(defaultPreset.layout))
       }
     })()
+    if (reprint) {
+      setReprintCodesLoading(true)
+      void (async () => {
+        try {
+          const res = await fetch(
+            apiUrl(`/operations/marking-codes/packaging-task-lines/${ctx.lineId}/printed-codes`),
+            { headers: { Authorization: `Bearer ${ctx.token}` } },
+          )
+          if (!res.ok) {
+            setError(await readApiErrorMessage(res))
+            setReprintCodes([])
+            return
+          }
+          const data = (await res.json()) as { codes: PrintedCodeOption[] }
+          const codes = data.codes ?? []
+          setReprintCodes(codes)
+          setSelectedReprintCodeId(codes[0]?.id ?? '')
+        } catch (e) {
+          setError(e instanceof Error ? e.message : 'Не удалось загрузить напечатанные коды.')
+          setReprintCodes([])
+        } finally {
+          setReprintCodesLoading(false)
+        }
+      })()
+    }
   }, [open, ctx, requiresHonestSign, reprint])
 
-  const qtyNeed = reprint ? (ctx?.qtyMarkingPrinted ?? 0) : (ctx?.qtyNeedPack ?? 0)
+  const qtyNeed = reprint
+    ? selectedReprintCodeId
+      ? 1
+      : (ctx?.qtyMarkingPrinted ?? 0)
+    : (ctx?.qtyNeedPack ?? 0)
   const packUnits = useMemo(
     () =>
       resolvePackUnits({
@@ -134,7 +175,9 @@ export function MarkingPrintDialog({ open, reprint, ctx, busy, onBusyChange, onC
   const available = ctx?.markingAvailable ?? 0
   const shortage = requiresHonestSign && !reprint && available < qtyNeed ? qtyNeed - available : 0
   const canPrintCount = reprint
-    ? qtyNeed
+    ? selectedReprintCodeId
+      ? 1
+      : 0
     : requiresHonestSign
       ? allowPartial
         ? Math.min(available, qtyNeed)
@@ -244,6 +287,9 @@ export function MarkingPrintDialog({ open, reprint, ctx, busy, onBusyChange, onC
             layout_json: layout,
             allow_partial: allowPartial,
             reprint,
+            ...(reprint && selectedReprintCodeId
+              ? { code_ids: [selectedReprintCodeId] }
+              : {}),
           }),
         },
       )
@@ -307,7 +353,8 @@ export function MarkingPrintDialog({ open, reprint, ctx, busy, onBusyChange, onC
 
   const printDisabled =
     busy ||
-    qtyNeed < 1 ||
+    (reprint && requiresHonestSign && (reprintCodesLoading || !selectedReprintCodeId)) ||
+    (!reprint && qtyNeed < 1) ||
     (requiresHonestSign && !reprint && available < 1) ||
     (requiresHonestSign && !reprint && !allowPartial && shortage > 0) ||
     (!requiresHonestSign && wbBarcodeQty < 1)
@@ -343,7 +390,9 @@ export function MarkingPrintDialog({ open, reprint, ctx, busy, onBusyChange, onC
                 </Typography>
                 <Typography variant="body2" data-testid="marking-print-qty">
                   {requiresHonestSign
-                    ? `Нужно: ${qtyNeed} · Доступно в пуле: ${available}`
+                    ? reprint
+                      ? `Выбрано для перепечатки: ${selectedReprintCodeId ? 1 : 0} из ${ctx.qtyMarkingPrinted}`
+                      : `Нужно: ${qtyNeed} · Доступно в пуле: ${available}`
                     : `К упаковке: ${qtyNeed}`}
                 </Typography>
               </Box>
@@ -557,9 +606,41 @@ export function MarkingPrintDialog({ open, reprint, ctx, busy, onBusyChange, onC
               </>
             ) : null}
 
-            {reprint ? (
-              <Typography variant="body2">
-                Будет повторно отправлено на печать {qtyNeed} код(ов).
+            {reprint && requiresHonestSign ? (
+              reprintCodesLoading ? (
+                <Typography variant="body2" color="text.secondary">
+                  Загрузка напечатанных кодов…
+                </Typography>
+              ) : reprintCodes.length < 1 ? (
+                <Alert severity="warning" data-testid="marking-reprint-no-codes">
+                  Нет напечатанных кодов для перепечатки
+                </Alert>
+              ) : (
+                <RadioGroup
+                  value={selectedReprintCodeId}
+                  onChange={(e) => setSelectedReprintCodeId(e.target.value)}
+                  data-testid="marking-reprint-code-list"
+                >
+                  {reprintCodes.map((code) => (
+                    <FormControlLabel
+                      key={code.id}
+                      value={code.id}
+                      control={
+                        <Radio
+                          size="small"
+                          data-testid={`marking-reprint-code-${code.id}`}
+                        />
+                      }
+                      label={code.cis_masked}
+                    />
+                  ))}
+                </RadioGroup>
+              )
+            ) : null}
+
+            {reprint && requiresHonestSign && selectedReprintCodeId ? (
+              <Typography variant="body2" data-testid="marking-print-will-print">
+                К перепечатке: 1 код
               </Typography>
             ) : null}
 

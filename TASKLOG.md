@@ -1,5 +1,14 @@
 # TASKLOG
 
+## TASK-048 — 2026-06-28 — CROSS-01: single KM reprint selection
+
+- What changed:
+  - **`MarkingPrintDialog.tsx`:** reprint-ветка — загрузка напечатанных КМ (`printed-codes`), чекбоксы выбора, `code_ids` в POST print; экспорт `PrintedMarkingCodeRow`.
+  - **`FfPackagingPage.tsx`:** общий тип `PrintedMarkingCodeRow` для диалога брака и печати.
+  - **Backend:** `PrintMarkingCodesIn.code_ids`, фильтр reprint в `print_codes_for_packaging_line`; pytest `test_reprint_single_code_by_id`.
+- What did NOT change: первичная печать через конструктор; очередь перепечаток (shift_lead).
+- Verification: `pytest tests/test_marking_codes.py::test_reprint_single_code_by_id` (passed); `npm run build` (exit 0).
+
 ## TASK-041 — 2026-06-28 — PACK-07: block complete with incomplete marking
 
 - What changed: `FfPackagingTaskPanel` — warning + disabled «Завершить упаковку» when `requires_honest_sign` lines have `qty_marking_printed < qty_done` (mirrors `assert_packaging_line_marking_done`); e2e TC-NEW-PKG-07 in `ff-marking-packaging.spec.ts`.
