@@ -1,5 +1,13 @@
 # TASKLOG
 
+## TASK-037 — 2026-06-28 — POOLCARD-03: таб «Лента» → превью + ссылка
+
+- What changed:
+  - **`HonestSignPoolPage.tsx`:** таб «Лента» показывает компактное превью (5 последних событий, 3 колонки) и кнопку «Вся лента пула» → `/honest-sign/ledger?pool_id=…`; убрана полная таблица с фильтрами/пагинацией (дубль `HonestSignLedgerPage`).
+  - **`ff-honest-sign-pool.spec.ts`:** TC-NEW-011 — превью, отсутствие фильтров ленты на карточке, переход на полную ленту.
+- What did NOT change: `HonestSignLedgerPage`, API ленты, другие табы карточки пула.
+- Verification: `npm run build` green; `playwright test ff-honest-sign-pool.spec.ts` passed.
+
 ## TASK-036 — 2026-06-28 — CZ-000 barrier: MP commit + feat/cz-ux-fixes + autopilot backlog
 
 - What changed:
