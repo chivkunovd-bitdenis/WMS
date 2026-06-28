@@ -341,6 +341,15 @@ def mask_cis_code(cis: str) -> str:
     return f"…{tail}"
 
 
+def normalize_cis_mask_query(mask: str) -> str:
+    text = mask.strip()
+    if text.startswith("…"):
+        text = text[1:]
+    elif text.startswith("..."):
+        text = text[3:]
+    return text.strip()
+
+
 def normalize_cis(raw: str) -> str | None:
     text = raw.strip().replace("\ufeff", "")
     if not text:
@@ -2041,6 +2050,7 @@ async def list_ledger(
     product_id: uuid.UUID | None,
     document_number: str | None,
     event_type: str | None,
+    cis_mask: str | None,
     date_from: datetime | None,
     date_to: datetime | None,
     limit: int,
@@ -2083,6 +2093,10 @@ async def list_ledger(
         stmt = stmt.where(MarkingCodeEvent.document_number == document_number)
     if event_type:
         stmt = stmt.where(MarkingCodeEvent.event_type == event_type)
+    if cis_mask:
+        needle = normalize_cis_mask_query(cis_mask)
+        if needle:
+            stmt = stmt.where(MarkingCode.cis_code.contains(needle))
     if date_from is not None:
         stmt = stmt.where(MarkingCodeEvent.created_at >= date_from)
     if date_to is not None:
