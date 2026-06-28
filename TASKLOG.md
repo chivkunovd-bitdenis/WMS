@@ -1,5 +1,16 @@
 # TASKLOG
 
+## TASK-039 — 2026-06-28 — PRINT-05: per-user print template layout
+
+- What changed:
+  - **`print_templates.user_id`:** миграция `20260628_0053`, FK на `users`; per-user «последняя раскладка» (`__user_last__`).
+  - **`print_template_service.py`:** `resolve` — сначала раскладка текущего пользователя, затем product/seller/system; `save_user_last_print_layout` (upsert без имени).
+  - **`marking_codes.py`:** `user_id` в API; после успешной печати с `layout_json` — авто-сохранение последней раскладки.
+  - **`printTemplate.ts`:** поле `user_id` в типе `PrintTemplate`.
+  - **`test_print_templates.py`:** user last > seller default; два пользователя; auto-save на print.
+- What did NOT change: именованные шаблоны (кнопка «Сохранить») — дополнение; drag-and-drop ленты.
+- Verification: `PYTHONPATH=. pytest tests/test_print_templates.py` (6 passed); `npm run build` (exit 0).
+
 ## TASK-038 — 2026-06-28 — PRINT-04: pack qty multiplier for WB barcode
 
 - What changed:
