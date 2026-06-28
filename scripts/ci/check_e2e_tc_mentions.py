@@ -34,6 +34,8 @@ def changed_spec_files(base_sha: str, head_sha: str) -> list[Path]:
         if not raw.endswith(".spec.ts"):
             continue
         p = (REPO_ROOT / raw).resolve()
+        if not p.is_file():
+            continue
         try:
             p.relative_to(E2E_PREFIX.resolve())
         except ValueError:
