@@ -4,7 +4,7 @@
 
 - What changed: `FfPendingMarkingPage` — чекбоксы строк, «Печать выбранных (N)», очередь последовательных `MarkingPrintDialog` (каждая лента по своему товару); e2e TC-NEW-008.
 - What did NOT change: API pending-marking, построчная кнопка «Печать», контракт total vs rows (CROSS-02).
-- Verification: `npm run build` — green; `npx playwright test tests-e2e/ff-pending-marking.spec.ts` (TC-NEW-007, TC-NEW-008) — 2 passed; fix `useMarkingCodePrint.close` (close after print while busy blocked queue). Commits: `ea31ed5` (bulk UI), `c93286c` (TC-NEW-008 assert + close fix). Backend `ruff check` — 4 pre-existing issues in unrelated test files (not introduced by PENDING-01).
+- Verification: `npm run build` — green; `npx playwright test tests-e2e/ff-pending-marking.spec.ts` (TC-NEW-007, TC-NEW-008) — 2 passed (33.6s); fix `useMarkingCodePrint.close` (close after print while busy blocked queue). Commits: `ea31ed5` (bulk UI), `c93286c` (close fix + per-product header assert), `1dffbba` (e2e asserts distinct packaging-line IDs). Backend `ruff check` — 4 pre-existing issues in unrelated test files (not introduced by PENDING-01).
 
 ## TASK-036 — 2026-06-28 — CZ-000 barrier: MP commit + feat/cz-ux-fixes + autopilot backlog
 
