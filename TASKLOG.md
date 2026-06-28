@@ -1,5 +1,13 @@
 # TASKLOG
 
+## TASK-037 — 2026-06-28 — PRINT-01: non-ЧЗ print qty-only (no constructor)
+
+- What changed:
+  - **`MarkingPrintDialog.tsx`:** для товара без ЧЗ — только поле «Количество ШК ВБ» (`marking-print-wb-qty`); пресеты, билдер, превью и сохранение шаблона скрыты; печать с фиксированным layout label×1.
+  - **`ff-mp-packaging-print.spec.ts`:** e2e обновлён под qty-only UI (TC-NEW-MP-016).
+- What did NOT change: ЧЗ-ветка конструктора; каталог (`ProductBarcodePrintDialog`); множитель «× упаковка» (PRINT-04).
+- Verification: `npm run build` (exit 0) в `.cursor/wt/PRINT-01/frontend`.
+
 ## TASK-036 — 2026-06-28 — CZ-000 barrier: MP commit + feat/cz-ux-fixes + autopilot backlog
 
 - What changed:

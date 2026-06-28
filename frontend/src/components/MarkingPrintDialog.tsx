@@ -37,6 +37,11 @@ import { readApiErrorMessage } from '../utils/readApiErrorMessage'
 import { printMarkingCodeTape } from '../utils/printMarkingCodeLabel'
 import type { ProductThermalLabelData } from '../utils/printProductThermalLabel'
 
+/** Fixed layout for non-ЧЗ: one WB barcode label per unit, no constructor. */
+const NON_HONEST_SIGN_LABEL_LAYOUT: PrintLayout = {
+  units: [{ block: 'label', copies: 1 }],
+}
+
 export type MarkingPrintContext = {
   token: string
   lineId: string
@@ -67,19 +72,11 @@ export function MarkingPrintDialog({ open, reprint, ctx, busy, onBusyChange, onC
   const [layout, setLayout] = useState<PrintLayout>(MARKING_PRINT_PRESETS[0].layout)
   const [allowPartial, setAllowPartial] = useState(false)
   const [labelsPerProduct, setLabelsPerProduct] = useState(1)
+  const [wbBarcodeQty, setWbBarcodeQty] = useState(1)
   const [saveName, setSaveName] = useState('')
   const [toast, setToast] = useState<string | null>(null)
 
   const requiresHonestSign = ctx?.requiresHonestSign ?? true
-  const visiblePresets = useMemo(
-    () =>
-      requiresHonestSign
-        ? MARKING_PRINT_PRESETS
-        : MARKING_PRINT_PRESETS.filter(
-            (preset) => preset.id === 'label_only' || preset.id === 'custom',
-          ),
-    [requiresHonestSign],
-  )
 
   useEffect(() => {
     if (!open || !ctx) {
@@ -89,7 +86,13 @@ export function MarkingPrintDialog({ open, reprint, ctx, busy, onBusyChange, onC
     setAllowPartial(false)
     setLabelsPerProduct(1)
     setSaveName('')
-    const defaultPresetId: PrintPresetId = requiresHonestSign ? 'pairs' : 'label_only'
+    const initialQty = reprint ? ctx.qtyMarkingPrinted : ctx.qtyNeedPack
+    setWbBarcodeQty(Math.max(1, initialQty))
+    if (!requiresHonestSign) {
+      setLayout(cloneLayout(NON_HONEST_SIGN_LABEL_LAYOUT))
+      return
+    }
+    const defaultPresetId: PrintPresetId = 'pairs'
     setPresetId(defaultPresetId)
     const defaultPreset =
       MARKING_PRINT_PRESETS.find((preset) => preset.id === defaultPresetId) ?? MARKING_PRINT_PRESETS[0]
@@ -97,7 +100,7 @@ export function MarkingPrintDialog({ open, reprint, ctx, busy, onBusyChange, onC
     void (async () => {
       try {
         const template = await resolvePrintTemplate(ctx.token, { productId: ctx.productId })
-        const matched = visiblePresets.find(
+        const matched = MARKING_PRINT_PRESETS.find(
           (preset) =>
             preset.id !== 'custom' &&
             JSON.stringify(preset.layout) === JSON.stringify(template.layout),
@@ -105,7 +108,7 @@ export function MarkingPrintDialog({ open, reprint, ctx, busy, onBusyChange, onC
         if (matched) {
           setPresetId(matched.id)
           setLayout(cloneLayout(matched.layout))
-        } else if (requiresHonestSign) {
+        } else {
           setPresetId('custom')
           setLayout(cloneLayout(template.layout))
         }
@@ -114,7 +117,7 @@ export function MarkingPrintDialog({ open, reprint, ctx, busy, onBusyChange, onC
         setLayout(cloneLayout(defaultPreset.layout))
       }
     })()
-  }, [open, ctx, requiresHonestSign, visiblePresets])
+  }, [open, ctx, requiresHonestSign, reprint])
 
   const qtyNeed = reprint ? (ctx?.qtyMarkingPrinted ?? 0) : (ctx?.qtyNeedPack ?? 0)
   const available = ctx?.markingAvailable ?? 0
@@ -127,7 +130,7 @@ export function MarkingPrintDialog({ open, reprint, ctx, busy, onBusyChange, onC
         : available >= qtyNeed
           ? qtyNeed
           : 0
-      : qtyNeed
+      : wbBarcodeQty
 
   const previewUnits = useMemo(() => buildTapePreviewUnits(layout, 3), [layout])
   const previewTapeCount = useMemo(
@@ -187,15 +190,14 @@ export function MarkingPrintDialog({ open, reprint, ctx, busy, onBusyChange, onC
   }
 
   const printLabelOnlyTape = async () => {
-    if (!ctx || canPrintCount < 1) {
+    if (!ctx || wbBarcodeQty < 1) {
       return
     }
-    const effectiveLayout = applyLabelsPerProductToLayout(layout, labelsPerProduct)
-    const units = Array.from({ length: canPrintCount }, (_, index) => ({
+    const units = Array.from({ length: wbBarcodeQty }, (_, index) => ({
       cis: `label-only-${index + 1}`,
       productLabel: ctx.productLabel ?? null,
     }))
-    await printMarkingCodeTape(units, effectiveLayout, ctx.productLabel)
+    await printMarkingCodeTape(units, NON_HONEST_SIGN_LABEL_LAYOUT, ctx.productLabel)
     ctx.onPrinted()
     onClose()
   }
@@ -297,7 +299,7 @@ export function MarkingPrintDialog({ open, reprint, ctx, busy, onBusyChange, onC
     qtyNeed < 1 ||
     (requiresHonestSign && !reprint && available < 1) ||
     (requiresHonestSign && !reprint && !allowPartial && shortage > 0) ||
-    (!requiresHonestSign && canPrintCount < 1)
+    (!requiresHonestSign && wbBarcodeQty < 1)
 
   const dialogTitle = reprint
     ? 'Повторная печать'
@@ -365,7 +367,22 @@ export function MarkingPrintDialog({ open, reprint, ctx, busy, onBusyChange, onC
               </Stack>
             ) : null}
 
-            {!reprint ? (
+            {!reprint && !requiresHonestSign ? (
+              <TextField
+                size="small"
+                label="Количество ШК ВБ"
+                type="number"
+                value={wbBarcodeQty}
+                onChange={(e) =>
+                  setWbBarcodeQty(Math.max(1, Math.min(999, Number(e.target.value) || 1)))
+                }
+                slotProps={{ htmlInput: { min: 1, max: 999 } }}
+                data-testid="marking-print-wb-qty"
+                sx={{ maxWidth: 220 }}
+              />
+            ) : null}
+
+            {!reprint && requiresHonestSign ? (
               <>
                 <TextField
                   size="small"
@@ -384,7 +401,7 @@ export function MarkingPrintDialog({ open, reprint, ctx, busy, onBusyChange, onC
                   value={presetId}
                   onChange={(e) => applyPreset(e.target.value as PrintPresetId)}
                 >
-                  {visiblePresets.map((preset) => (
+                  {MARKING_PRINT_PRESETS.map((preset) => (
                     <FormControlLabel
                       key={preset.id}
                       value={preset.id}
@@ -413,7 +430,7 @@ export function MarkingPrintDialog({ open, reprint, ctx, busy, onBusyChange, onC
                           }
                           sx={{ minWidth: 120 }}
                         >
-                          {requiresHonestSign ? <MenuItem value="cz">ЧЗ</MenuItem> : null}
+                          <MenuItem value="cz">ЧЗ</MenuItem>
                           <MenuItem value="label">Этикетка</MenuItem>
                         </TextField>
                         <TextField
@@ -456,11 +473,9 @@ export function MarkingPrintDialog({ open, reprint, ctx, busy, onBusyChange, onC
                       </Stack>
                     ))}
                     <Stack direction="row" spacing={1}>
-                      {requiresHonestSign ? (
-                        <Button size="small" startIcon={<AddIcon />} onClick={() => addUnit('cz')}>
-                          ЧЗ
-                        </Button>
-                      ) : null}
+                      <Button size="small" startIcon={<AddIcon />} onClick={() => addUnit('cz')}>
+                        ЧЗ
+                      </Button>
                       <Button size="small" startIcon={<AddIcon />} onClick={() => addUnit('label')}>
                         Этикетка
                       </Button>
@@ -524,15 +539,23 @@ export function MarkingPrintDialog({ open, reprint, ctx, busy, onBusyChange, onC
                   </Button>
                 </Stack>
               </>
-            ) : (
+            ) : null}
+
+            {reprint ? (
               <Typography variant="body2">
                 Будет повторно отправлено на печать {qtyNeed} код(ов).
               </Typography>
-            )}
+            ) : null}
 
-            {!reprint && canPrintCount > 0 ? (
+            {!reprint && requiresHonestSign && canPrintCount > 0 ? (
               <Typography variant="body2" data-testid="marking-print-will-print">
                 К печати: {canPrintCount} ед. · {totalTapeCount} этикеток в ленте
+              </Typography>
+            ) : null}
+
+            {!reprint && !requiresHonestSign && wbBarcodeQty > 0 ? (
+              <Typography variant="body2" data-testid="marking-print-will-print">
+                К печати: {wbBarcodeQty} этикеток
               </Typography>
             ) : null}
 
