@@ -26,9 +26,8 @@ import ArrowBackOutlined from '@mui/icons-material/ArrowBackOutlined'
 import DownloadOutlined from '@mui/icons-material/DownloadOutlined'
 import { apiUrl } from '../../api'
 import { PageHeader } from '../../ui/PageHeader'
-import { codeStatusLabel } from '../../utils/markingStatus'
-import { readApiErrorMessage } from '../../utils/readApiErrorMessage'
 import { codeStatusLabel, ledgerEventLabel } from '../../utils/markingStatus'
+import { readApiErrorMessage } from '../../utils/readApiErrorMessage'
 import { MarkingPoolProductsDialog } from './MarkingPoolProductsDialog'
 
 type PoolDetail = {

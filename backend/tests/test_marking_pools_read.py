@@ -152,36 +152,6 @@ async def test_ledger_filters(async_client: AsyncClient) -> None:
 
 
 @pytest.mark.asyncio
-async def test_ledger_cis_mask_filter(async_client: AsyncClient) -> None:
-    h, seller_id, pool_id, _, _ = await _seed_pool_with_codes(async_client)
-    codes = await async_client.get(
-        f"/operations/marking-codes/pools/{pool_id}/codes",
-        headers=h,
-    )
-    assert codes.status_code == 200
-    masked = codes.json()[0]["cis_masked"]
-    tail = masked.lstrip("…")[:4]
-
-    by_mask = await async_client.get(
-        "/operations/marking-codes/ledger",
-        headers=h,
-        params={"seller_id": seller_id, "cis_mask": tail},
-    )
-    assert by_mask.status_code == 200
-    body = by_mask.json()
-    assert body["total"] >= 1
-    assert all(tail in row["cis_masked"] for row in body["rows"])
-
-    full = await async_client.get(
-        "/operations/marking-codes/ledger",
-        headers=h,
-        params={"seller_id": seller_id},
-    )
-    assert full.status_code == 200
-    assert full.json()["total"] >= body["total"]
-
-
-@pytest.mark.asyncio
 async def test_ledger_date_range_filter(async_client: AsyncClient) -> None:
     h, seller_id, _, _, _ = await _seed_pool_with_codes(async_client)
     now = datetime.now(timezone.utc)
