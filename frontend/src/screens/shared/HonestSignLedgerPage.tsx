@@ -67,10 +67,17 @@ export function HonestSignLedgerPage({
   const [eventType, setEventType] = useState('')
   const [document, setDocument] = useState('')
   const [cisMask, setCisMask] = useState('')
+  const [poolTitle, setPoolTitle] = useState<string | null>(null)
 
   const limit = 50
 
   const authHeaders = useMemo(() => ({ Authorization: `Bearer ${token}` }), [token])
+
+  const poolNameFromRows = useMemo(
+    () => rows.find((r) => r.pool_title)?.pool_title ?? null,
+    [rows],
+  )
+  const poolFilterLabel = poolTitle ?? poolNameFromRows
 
   const load = useCallback(async () => {
     setBusy(true)
@@ -123,6 +130,31 @@ export function HonestSignLedgerPage({
     void load()
   }, [load])
 
+  useEffect(() => {
+    if (!poolIdFromUrl) {
+      setPoolTitle(null)
+      return
+    }
+    setPoolTitle(null)
+    let cancelled = false
+    void (async () => {
+      const res = await fetch(
+        apiUrl(`/operations/marking-codes/pools/${encodeURIComponent(poolIdFromUrl)}`),
+        { headers: authHeaders },
+      )
+      if (cancelled || !res.ok) {
+        return
+      }
+      const body = (await res.json()) as { title: string }
+      if (!cancelled) {
+        setPoolTitle(body.title)
+      }
+    })()
+    return () => {
+      cancelled = true
+    }
+  }, [authHeaders, poolIdFromUrl])
+
   return (
     <Stack spacing={2} data-testid={`${testIdPrefix}-page`}>
       <Stack direction="row" spacing={1} sx={{ alignItems: 'center' }}>
@@ -143,7 +175,9 @@ export function HonestSignLedgerPage({
       />
 
       {poolIdFromUrl ? (
-        <Alert severity="info">Фильтр по пулу: {poolIdFromUrl}</Alert>
+        <Alert severity="info" data-testid={`${testIdPrefix}-pool-filter`}>
+          Фильтр по пулу: {poolFilterLabel ?? '…'}
+        </Alert>
       ) : null}
 
       {error ? (
