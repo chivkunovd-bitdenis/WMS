@@ -30,7 +30,7 @@ import { apiUrl } from '../../api'
 import { PageHeader } from '../../ui/PageHeader'
 import { readApiErrorMessage } from '../../utils/readApiErrorMessage'
 import { MarkingPoolProductsDialog } from './MarkingPoolProductsDialog'
-import { MarkingImportDialog } from './MarkingImportDialog'
+import { MarkingImportDialog, type PoolImportContext } from './MarkingImportDialog'
 
 export type MarkingPoolRow = {
   id: string
@@ -144,13 +144,28 @@ export function HonestSignScreen({
   const [menuPool, setMenuPool] = useState<MarkingPoolRow | null>(null)
   const [linkPool, setLinkPool] = useState<MarkingPoolRow | null>(null)
   const [importOpen, setImportOpen] = useState(false)
+  const [importPoolContext, setImportPoolContext] = useState<PoolImportContext | null>(null)
   const [toastMessage, setToastMessage] = useState<string | null>(null)
 
-  const openImport = () => {
+  const openImport = (pool?: MarkingPoolRow) => {
     if (sellerIdRequiredForImport && !effectiveSellerId) {
       return
     }
+    setImportPoolContext(
+      pool
+        ? {
+            gtin: pool.gtin,
+            title: pool.title,
+            productIds: pool.products.map((p) => p.id),
+          }
+        : null,
+    )
     setImportOpen(true)
+  }
+
+  const closeImport = () => {
+    setImportOpen(false)
+    setImportPoolContext(null)
   }
 
   const effectiveSellerId = sellerId ?? selectedSellerId
@@ -325,7 +340,7 @@ export function HonestSignScreen({
                     size="small"
                     variant="contained"
                     startIcon={<UploadFileOutlined />}
-                    onClick={openImport}
+                    onClick={() => openImport(row)}
                     data-testid={`${testIdPrefix}-pool-card-upload-${row.id}`}
                   >
                     Догрузить
@@ -351,7 +366,7 @@ export function HonestSignScreen({
           variant="contained"
           startIcon={<UploadFileOutlined />}
           disabled={sellerIdRequiredForImport && !effectiveSellerId}
-          onClick={openImport}
+          onClick={() => openImport()}
           data-testid={`${testIdPrefix}-open-import`}
         >
           Загрузить коды
@@ -426,7 +441,7 @@ export function HonestSignScreen({
                         variant="contained"
                         size="small"
                         startIcon={<UploadFileOutlined />}
-                        onClick={openImport}
+                        onClick={() => openImport()}
                         data-testid={`${testIdPrefix}-empty-upload`}
                       >
                         Загрузить коды
@@ -562,7 +577,8 @@ export function HonestSignScreen({
           token={token}
           sellerId={effectiveSellerId}
           testIdPrefix={testIdPrefix}
-          onClose={() => setImportOpen(false)}
+          poolContext={importPoolContext}
+          onClose={closeImport}
           onImported={(message) => {
             setToastMessage(message)
             void loadPools()

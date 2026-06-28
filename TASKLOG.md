@@ -1,5 +1,21 @@
 # TASKLOG
 
+## TASK-039 — 2026-06-28 — IMPORT-05: highlight import groups missing title
+
+- What changed:
+  - **`MarkingImportDialog.tsx`:** при «Загрузить» с пустым названием — подсветка всех групп без `title` (border/error TextField), `data-testid` `…-title-missing`, скролл к первой; снятие подсветки при вводе названия. Хелперы `isImportGroupTitleMissing`, `gtinsWithMissingTitle`, `findFirstGtinWithMissingTitle`.
+  - **`markingImportMerge.test.ts`:** тесты хелперов валидации названия.
+- What did NOT change: контекст пула при «Догрузить» (CROSS-04).
+- Verification: `npm run test:unit -- markingImportMerge.test.ts`, `npm run build` — green.
+
+## TASK-038 — 2026-06-28 — IMPORT-04: delete uploaded import file chip
+
+- What changed:
+  - **`MarkingImportDialog.tsx`:** чипы файлов с `onDelete`; `removeImportFileAt` + `removeFileAt` — удаление файла, пересбор превью по оставшимся; при пустом списке — сброс групп и meta.
+  - **`markingImportMerge.test.ts`:** тесты `removeImportFileAt`.
+- What did NOT change: подсветка пустого названия (IMPORT-05), контекст пула (CROSS-04).
+- Verification: `npm run test:unit -- markingImportMerge.test.ts`, `npm run build` — green.
+
 ## TASK-037 — 2026-06-28 — POOLS-06: один CTA на привязку товаров в списке пулов
 
 - What changed:
