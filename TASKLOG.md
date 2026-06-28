@@ -95,6 +95,29 @@
 - What did NOT change: ledger filter debounce/export (LEDGER-* lanes); pool link CTA (POOLS-06).
 - Verification: `npm run build`; `npm run test:e2e` on ff-honest-sign-ledger/spec/pools (4 passed).
 - Commit: `b8b85e4`
+
+## TASK-039 — 2026-06-28 — IMPORT-05: highlight import groups missing title
+
+- What changed:
+  - **`MarkingImportDialog.tsx`:** при «Загрузить» с пустым названием — подсветка всех групп без `title` (border/error TextField), `data-testid` `…-title-missing`, скролл к первой; снятие подсветки при вводе названия. Хелперы `isImportGroupTitleMissing`, `gtinsWithMissingTitle`, `findFirstGtinWithMissingTitle`.
+  - **`markingImportMerge.test.ts`:** тесты хелперов валидации названия.
+- What did NOT change: контекст пула при «Догрузить» (CROSS-04).
+- Verification: `npm run test:unit -- markingImportMerge.test.ts`, `npm run build` — green.
+
+## TASK-038 — 2026-06-28 — IMPORT-04: delete uploaded import file chip
+
+- What changed:
+  - **`MarkingImportDialog.tsx`:** чипы файлов с `onDelete`; `removeImportFileAt` + `removeFileAt` — удаление файла, пересбор превью по оставшимся; при пустом списке — сброс групп и meta.
+  - **`markingImportMerge.test.ts`:** тесты `removeImportFileAt`.
+- What did NOT change: подсветка пустого названия (IMPORT-05), контекст пула (CROSS-04).
+- Verification: `npm run test:unit -- markingImportMerge.test.ts`, `npm run build` — green.
+
+## TASK-037 — 2026-06-28 — POOLS-06: один CTA на привязку товаров в списке пулов
+
+- What changed:
+  - **`HonestSignScreen.tsx`:** убран дублирующий чип «не привязан» в колонке «Пул»; привязка только через кнопку «Привязать» в колонке «Товары» (и пункт меню «Привязать товары»).
+- What did NOT change: диалог привязки, меню пула, e2e `ff-honest-sign-pools.spec.ts`.
+- Verification: `npm run build` в worktree POOLS-06 — OK. Commit: `e888b73`.
 ## TASK-036 — 2026-06-28 — CZ-000 barrier: MP commit + feat/cz-ux-fixes + autopilot backlog
 
 - What changed:
