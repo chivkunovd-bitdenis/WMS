@@ -110,7 +110,7 @@ function isLineMarkingProgressIncomplete(ln: PackagingTaskLine): boolean {
 }
 
 const MARKING_NOT_DONE_MESSAGE =
-  'Не хватает напечатанных кодов ЧЗ по заданию на упаковку.'
+  'Не хватает напечатанных КМ по заданию на упаковку.'
 
 export function FfPackagingTaskPanel({
   token,
@@ -249,7 +249,7 @@ export function FfPackagingTaskPanel({
       }
       const codes = ((await codesRes.json()) as { codes: PrintedMarkingCode[] }).codes
       if (codes.length < 1) {
-        setError('Нет напечатанных кодов для этой строки')
+        setError('Нет напечатанных КМ для этой строки')
         return
       }
       setDefectLineId(lineId)
@@ -643,10 +643,10 @@ export function FfPackagingTaskPanel({
               </Alert>
             ) : null}
             <FormControl fullWidth disabled={defectDialogBusy || defectCodes.length < 1}>
-              <InputLabel id="ff-packaging-defect-code-label">Код маркировки</InputLabel>
+              <InputLabel id="ff-packaging-defect-code-label">КМ</InputLabel>
               <Select
                 labelId="ff-packaging-defect-code-label"
-                label="Код маркировки"
+                label="КМ"
                 value={defectSelectedCodeId}
                 onChange={(e) => setDefectSelectedCodeId(e.target.value)}
                 data-testid="ff-packaging-defect-code-select"

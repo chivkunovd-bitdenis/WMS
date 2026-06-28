@@ -389,7 +389,7 @@ export function HonestSignPoolPage({
 
       {tab === 'products' && detail ? (
         <Stack spacing={2} data-testid={`${testIdPrefix}-products`}>
-          <Alert severity="info">Остаток кодов общий на весь пул, не на каждый товар.</Alert>
+          <Alert severity="info">Остаток КМ общий на весь пул, не на каждый товар.</Alert>
           <Button variant="outlined" onClick={() => setLinkOpen(true)} data-testid={`${testIdPrefix}-link-products`}>
             Привязать товары
           </Button>
@@ -567,7 +567,7 @@ export function HonestSignPoolPage({
       >
         <Box sx={{ width: 360, p: 2 }}>
           <Typography variant="h6" sx={{ mb: 2 }}>
-            История кода
+            История КМ
           </Typography>
           {historyBusy ? (
             <Skeleton height={80} />

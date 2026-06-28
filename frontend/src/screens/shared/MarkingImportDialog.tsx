@@ -452,7 +452,7 @@ export function MarkingImportDialog({
       maxWidth="md"
       data-testid={`${testIdPrefix}-import-dialog`}
     >
-      <DialogTitle>{poolContext ? 'Догрузить коды' : 'Загрузить коды'}</DialogTitle>
+      <DialogTitle>{poolContext ? 'Догрузить КМ' : 'Загрузить КМ'}</DialogTitle>
       <DialogContent>
         <Stack spacing={2} sx={{ pt: 0.5 }}>
           {poolContext ? (
@@ -557,7 +557,7 @@ export function MarkingImportDialog({
               >
                 <Stack spacing={1.5}>
                   <Typography variant="subtitle2">
-                    GTIN …{g.gtin.slice(-4)} — {g.codes_count} кодов
+                    GTIN …{g.gtin.slice(-4)} — {g.codes_count} КМ
                   </Typography>
                   <TextField
                     label="Название пула"
@@ -632,7 +632,7 @@ export function MarkingImportDialog({
           {groups.length > 0 ? (
             <Box data-testid={`${testIdPrefix}-import-summary`}>
               <Typography variant="body2">
-                Будет загружено: {summary.codeCount} кодов в {summary.poolCount} пул(ов), привязка к{' '}
+                Будет загружено: {summary.codeCount} КМ в {summary.poolCount} пул(ов), привязка к{' '}
                 {summary.productCount} товарам
               </Typography>
             </Box>

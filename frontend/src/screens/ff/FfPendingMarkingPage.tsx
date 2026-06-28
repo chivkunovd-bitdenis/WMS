@@ -141,7 +141,7 @@ export function FfPendingMarkingPage({ token }: Props) {
     <Box data-testid="ff-pending-marking-page">
       <PageHeader
         title="Осталось промаркировать"
-        description="Строки заданий на упаковку, где ЧЗ ещё не напечатаны полностью."
+        description="Строки заданий на упаковку, где КМ ещё не напечатаны полностью."
       />
       <Stack direction="row" spacing={1} sx={{ mb: 2, alignItems: 'center', flexWrap: 'wrap' }} useFlexGap>
         <Link component={RouterLink} to="/app/ff/packaging" variant="body2" data-testid="ff-pending-marking-back">
@@ -176,7 +176,7 @@ export function FfPendingMarkingPage({ token }: Props) {
       ) : rows.length < 1 ? (
         <Paper variant="outlined" sx={{ p: 3 }} data-testid="ff-pending-marking-empty">
           <Typography variant="body2" color="text.secondary">
-            Все строки с ЧЗ промаркированы.
+            Все требуемые КМ напечатаны.
           </Typography>
         </Paper>
       ) : (

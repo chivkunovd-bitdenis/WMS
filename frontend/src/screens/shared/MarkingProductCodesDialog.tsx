@@ -108,7 +108,7 @@ export function MarkingProductCodesDialog({
       maxWidth="md"
       data-testid={`${testIdPrefix}-codes-dialog`}
     >
-      <DialogTitle>Коды ЧЗ — {productLabel}</DialogTitle>
+      <DialogTitle>Коды КМ — {productLabel}</DialogTitle>
       <DialogContent>
         <Stack spacing={1.5} sx={{ pt: 0.5 }}>
           <FormControlLabel
@@ -130,7 +130,7 @@ export function MarkingProductCodesDialog({
             <Table size="small" data-testid={`${testIdPrefix}-codes-table`}>
               <TableHead>
                 <TableRow>
-                  <TableCell>Код (КИЗ)</TableCell>
+                  <TableCell>КМ</TableCell>
                   <TableCell>Статус</TableCell>
                   <TableCell align="right">Печать</TableCell>
                 </TableRow>
@@ -140,7 +140,7 @@ export function MarkingProductCodesDialog({
                   <TableRow>
                     <TableCell colSpan={3}>
                       <Typography variant="body2" color="text.secondary">
-                        {busy ? 'Загрузка…' : 'Кодов пока нет.'}
+                        {busy ? 'Загрузка…' : 'КМ пока нет.'}
                       </Typography>
                     </TableCell>
                   </TableRow>
@@ -156,7 +156,7 @@ export function MarkingProductCodesDialog({
                       <TableCell align="right">
                         <IconButton
                           size="small"
-                          aria-label="Печать кода"
+                          aria-label="Печать КМ"
                           disabled={printBusy}
                           onClick={() => void printCodes([r.cis_code])}
                           data-testid={`${testIdPrefix}-code-print-${r.id}`}

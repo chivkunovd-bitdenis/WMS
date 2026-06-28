@@ -253,7 +253,7 @@ export function HonestSignScreen({
     <Stack spacing={2} data-testid={`${testIdPrefix}-page`}>
       <PageHeader
         title="Честный знак"
-        description="Пулы кодов по GTIN: остаток общий на пул, товары привязываются вручную."
+        description="Пулы КМ по GTIN: остаток общий на пул, товары привязываются вручную."
       />
 
       {sellerIdRequiredForImport ? (
@@ -360,7 +360,7 @@ export function HonestSignScreen({
           onClick={() => openImport()}
           data-testid={`${testIdPrefix}-open-import`}
         >
-          Загрузить коды
+          Загрузить КМ
         </Button>
         <Button
           variant="outlined"
@@ -424,7 +424,7 @@ export function HonestSignScreen({
                   <Stack spacing={1} sx={{ py: 2, alignItems: 'flex-start' }}>
                     <Typography variant="body2" color="text.secondary">
                       {pools.length === 0
-                        ? 'Пулов пока нет — загрузите коды из файла.'
+                        ? 'Пулов пока нет — загрузите КМ из файла.'
                         : 'Ничего не найдено по фильтру.'}
                     </Typography>
                     {pools.length === 0 ? (
@@ -435,7 +435,7 @@ export function HonestSignScreen({
                         onClick={() => openImport()}
                         data-testid={`${testIdPrefix}-empty-upload`}
                       >
-                        Загрузить коды
+                        Загрузить КМ
                       </Button>
                     ) : null}
                   </Stack>

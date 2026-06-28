@@ -2529,7 +2529,7 @@ export default function App() {
                 <HonestSignPoolPage token={token} testIdPrefix="ff-honest-sign-pool" />
               ) : (
                 <FfPlaceholderPage
-                  title="Пул ЧЗ"
+                  title="Пул КМ"
                   hint="Нет токена."
                   testId="ff-honest-sign-pool-placeholder"
                 />

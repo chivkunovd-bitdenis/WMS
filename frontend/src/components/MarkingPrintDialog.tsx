@@ -149,7 +149,7 @@ export function MarkingPrintDialog({ open, reprint, ctx, busy, onBusyChange, onC
           setReprintCodes(codes)
           setSelectedReprintCodeId(codes[0]?.id ?? '')
         } catch (e) {
-          setError(e instanceof Error ? e.message : 'Не удалось загрузить напечатанные коды.')
+          setError(e instanceof Error ? e.message : 'Не удалось загрузить напечатанные КМ.')
           setReprintCodes([])
         } finally {
           setReprintCodesLoading(false)
@@ -307,8 +307,8 @@ export function MarkingPrintDialog({ open, reprint, ctx, busy, onBusyChange, onC
       if (data.quantity < 1) {
         setError(
           data.shortage
-            ? `Не хватает ${data.shortage} кодов ЧЗ в пуле.`
-            : 'Нет доступных кодов для печати.',
+            ? `Не хватает ${data.shortage} КМ в пуле.`
+            : 'Нет доступных КМ для печати.',
         )
         return
       }
@@ -400,7 +400,7 @@ export function MarkingPrintDialog({ open, reprint, ctx, busy, onBusyChange, onC
 
             {shortage > 0 ? (
               <Alert severity="error" data-testid="marking-print-shortage-banner">
-                Не хватает {shortage} из {qtyNeed} кодов
+                Не хватает {shortage} из {qtyNeed} КМ
               </Alert>
             ) : null}
 
@@ -555,7 +555,7 @@ export function MarkingPrintDialog({ open, reprint, ctx, busy, onBusyChange, onC
                     sx={{ mb: 0.5, display: 'block' }}
                     data-testid="marking-print-preview-tape-count"
                   >
-                    Предпросмотр ленты (один код на единицу) · {previewTapeCount} этикеток на 3 ед.
+                    Предпросмотр ленты (один КМ на единицу) · {previewTapeCount} этикеток на 3 ед.
                   </Typography>
                   {previewUnits.map((unit) => (
                     <Stack
@@ -578,7 +578,7 @@ export function MarkingPrintDialog({ open, reprint, ctx, busy, onBusyChange, onC
                         />
                       ))}
                       <Typography variant="caption" color="text.secondary">
-                        (код {unit.codeHint})
+                        (КМ {unit.codeHint})
                       </Typography>
                     </Stack>
                   ))}
@@ -609,11 +609,11 @@ export function MarkingPrintDialog({ open, reprint, ctx, busy, onBusyChange, onC
             {reprint && requiresHonestSign ? (
               reprintCodesLoading ? (
                 <Typography variant="body2" color="text.secondary">
-                  Загрузка напечатанных кодов…
+                  Загрузка напечатанных КМ…
                 </Typography>
               ) : reprintCodes.length < 1 ? (
                 <Alert severity="warning" data-testid="marking-reprint-no-codes">
-                  Нет напечатанных кодов для перепечатки
+                  Нет напечатанных КМ для перепечатки
                 </Alert>
               ) : (
                 <RadioGroup
@@ -640,7 +640,7 @@ export function MarkingPrintDialog({ open, reprint, ctx, busy, onBusyChange, onC
 
             {reprint && requiresHonestSign && selectedReprintCodeId ? (
               <Typography variant="body2" data-testid="marking-print-will-print">
-                К перепечатке: 1 код
+                К перепечатке: 1 КМ
               </Typography>
             ) : null}
 

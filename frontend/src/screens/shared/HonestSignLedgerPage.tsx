@@ -129,7 +129,7 @@ export function HonestSignLedgerPage({
         <IconButton component={RouterLink} to={`${routeBase}/honest-sign`} data-testid={`${testIdPrefix}-back`}>
           <ArrowBackOutlined />
         </IconButton>
-        <PageHeader title="Лента расхода" description="События по кодам маркировки." />
+        <PageHeader title="Лента расхода" description="События по КМ." />
       </Stack>
 
       <MarkingSellerPicker

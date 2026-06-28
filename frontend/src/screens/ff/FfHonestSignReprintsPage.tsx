@@ -95,7 +95,7 @@ export function FfHonestSignReprintsPage({
   return (
     <Box data-testid={testId}>
       <Typography variant="h5" gutterBottom>
-        Перепечатки ЧЗ
+        Перепечатка КМ
       </Typography>
       {error ? (
         <Typography color="error" data-testid={`${testId}-error`}>
@@ -120,7 +120,7 @@ export function FfHonestSignReprintsPage({
                 <TableCell>Время</TableCell>
                 <TableCell>Кто</TableCell>
                 <TableCell>Товар</TableCell>
-                <TableCell>Код</TableCell>
+                <TableCell>КМ</TableCell>
                 <TableCell>Причина</TableCell>
                 <TableCell>Документ</TableCell>
                 <TableCell align="right">Действия</TableCell>
