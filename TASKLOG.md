@@ -1,5 +1,13 @@
 # TASKLOG
 
+## TASK-037 — 2026-06-28 — IMPORT-02: per-group product search in import dialog
+
+- What changed:
+  - **`MarkingImportDialog.tsx`:** строка поиска товаров хранится в `GroupDraft.productSearch` — отдельно для каждой GTIN-группы; `filterProductsBySearch` фильтрует каталог локально; `mergePreviewGroups` сохраняет поиск при догрузке файла.
+  - **`markingImportMerge.test.ts`:** тесты на фильтр и сохранение `productSearch` при merge.
+- What did NOT change: лимит `.slice(0, 8)`, удаление файлов, подсветка пустого названия (IMPORT-03…).
+- Verification: `npm run build`, `npm run test:unit -- markingImportMerge.test.ts` — green.
+
 ## TASK-036 — 2026-06-28 — CZ-000 barrier: MP commit + feat/cz-ux-fixes + autopilot backlog
 
 - What changed:

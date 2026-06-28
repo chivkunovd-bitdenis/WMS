@@ -60,6 +60,22 @@ export type PoolImportSpec = {
 type GroupDraft = PreviewGroup & {
   title: string
   productIds: Set<string>
+  productSearch: string
+}
+
+export function filterProductsBySearch(
+  products: ProductOption[],
+  search: string,
+): ProductOption[] {
+  const needle = search.trim().toLowerCase()
+  if (!needle) {
+    return products
+  }
+  return products.filter(
+    (row) =>
+      row.sku_code.toLowerCase().includes(needle) ||
+      row.name.toLowerCase().includes(needle),
+  )
 }
 
 export function mergePreviewGroups(prev: GroupDraft[], incoming: PreviewGroup[]): GroupDraft[] {
@@ -71,12 +87,14 @@ export function mergePreviewGroups(prev: GroupDraft[], incoming: PreviewGroup[])
         ...g,
         title: existing.title,
         productIds: existing.productIds,
+        productSearch: existing.productSearch,
       }
     }
     return {
       ...g,
       title: g.suggested_title,
       productIds: new Set<string>(),
+      productSearch: '',
     }
   })
 }
@@ -110,31 +128,17 @@ export function MarkingImportDialog({
   const [parseBusy, setParseBusy] = useState(false)
   const [uploadBusy, setUploadBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
-  const [productSearch, setProductSearch] = useState('')
 
   const sellerProducts = useMemo(
     () => catalog.filter((row) => row.seller_id === sellerId),
     [catalog, sellerId],
   )
 
-  const filteredProducts = useMemo(() => {
-    const needle = productSearch.trim().toLowerCase()
-    if (!needle) {
-      return sellerProducts
-    }
-    return sellerProducts.filter(
-      (row) =>
-        row.sku_code.toLowerCase().includes(needle) ||
-        row.name.toLowerCase().includes(needle),
-    )
-  }, [productSearch, sellerProducts])
-
   const reset = useCallback(() => {
     setFiles([])
     setGroups([])
     setPreviewMeta(null)
     setError(null)
-    setProductSearch('')
   }, [])
 
   useEffect(() => {
@@ -198,6 +202,10 @@ export function MarkingImportDialog({
 
   const updateGroupTitle = (gtin: string, title: string) => {
     setGroups((prev) => prev.map((g) => (g.gtin === gtin ? { ...g, title } : g)))
+  }
+
+  const updateGroupProductSearch = (gtin: string, productSearch: string) => {
+    setGroups((prev) => prev.map((g) => (g.gtin === gtin ? { ...g, productSearch } : g)))
   }
 
   const toggleGroupProduct = (gtin: string, productId: string) => {
@@ -357,9 +365,9 @@ export function MarkingImportDialog({
                 />
                 <TextField
                   label="Поиск товаров"
-                  value={productSearch}
-                  onChange={(e) => setProductSearch(e.target.value)}
-                  data-testid={`${testIdPrefix}-import-product-search`}
+                  value={g.productSearch}
+                  onChange={(e) => updateGroupProductSearch(g.gtin, e.target.value)}
+                  data-testid={`${testIdPrefix}-import-product-search-${g.gtin}`}
                 />
                 <TableContainer>
                   <Table size="small">
@@ -371,7 +379,7 @@ export function MarkingImportDialog({
                       </TableRow>
                     </TableHead>
                     <TableBody>
-                      {filteredProducts.slice(0, 8).map((row) => (
+                      {filterProductsBySearch(sellerProducts, g.productSearch).slice(0, 8).map((row) => (
                         <TableRow key={`${g.gtin}-${row.id}`}>
                           <TableCell padding="checkbox">
                             <Checkbox
