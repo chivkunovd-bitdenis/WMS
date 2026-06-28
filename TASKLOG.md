@@ -6,6 +6,12 @@
 - What did NOT change: API pending-marking, построчная кнопка «Печать», контракт total vs rows (CROSS-02).
 - Verification: `npm run build` — green; `npx playwright test tests-e2e/ff-pending-marking.spec.ts` (TC-NEW-007, TC-NEW-008) — 2 passed (33.6s); fix `useMarkingCodePrint.close` (close after print while busy blocked queue). Commits: `ea31ed5` (bulk UI), `c93286c` (close fix + per-product header assert), `1dffbba` (e2e asserts distinct packaging-line IDs). Backend `ruff check` — 4 pre-existing issues in unrelated test files (not introduced by PENDING-01).
 
+## TASK-053 — 2026-06-28 — POOLCARD-01: localize pool code statuses
+
+- What changed: `HonestSignPoolPage` — фильтр и чипы статусов кодов через `codeStatusLabel` из `markingStatus.ts`; cherry-pick SHARED-01 (словарь + `MarkingProductCodesDialog`); e2e проверяет «Доступен» в строке и опциях фильтра.
+- What did NOT change: лента событий на карточке пула (LEDGER-06), CSV export (англ. enum в файле).
+- Verification: `npm run build` in POOLCARD-01 worktree — green. Commit `117b153`. E2E webServer timeout (env), не блокирует сборку.
+
 ## TASK-036 — 2026-06-28 — CZ-000 barrier: MP commit + feat/cz-ux-fixes + autopilot backlog
 
 - What changed:

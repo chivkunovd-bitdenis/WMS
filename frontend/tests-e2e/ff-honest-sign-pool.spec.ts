@@ -59,6 +59,13 @@ test('FF honest sign pool card: tabs and CSV export', async ({ page }) => {
   await page.getByTestId('ff-honest-sign-pool-tab-codes').click()
   await expect(page.getByTestId('ff-honest-sign-pool-codes')).toBeVisible()
   await expect(page.locator('[data-testid^="ff-honest-sign-pool-code-row-"]')).toHaveCount(1)
+  await expect(page.locator('[data-testid^="ff-honest-sign-pool-code-row-"]').first()).toContainText(
+    'Доступен',
+  )
+  await page.getByTestId('ff-honest-sign-pool-codes-status').click()
+  await expect(page.getByRole('option', { name: 'Доступен' })).toBeVisible()
+  await expect(page.getByRole('option', { name: 'Зарезервирован' })).toBeVisible()
+  await page.keyboard.press('Escape')
 
   const downloadPromise = page.waitForEvent('download')
   await page.getByTestId('ff-honest-sign-pool-codes-export').click()
