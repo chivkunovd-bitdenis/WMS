@@ -7,8 +7,9 @@ import re
 import uuid
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
+from typing import Any
 
-from sqlalchemy import func, or_, select
+from sqlalchemy import Select, func, or_, select
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.dialects.sqlite import insert as sqlite_insert
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -339,6 +340,31 @@ class CodeHistoryRow:
 def mask_cis_code(cis: str) -> str:
     tail = cis[-12:] if len(cis) > 12 else cis
     return f"…{tail}"
+
+
+def normalize_cis_mask_query(mask: str) -> str:
+    text = mask.strip()
+    if text.startswith("…"):
+        text = text[1:]
+    elif text.startswith("..."):
+        text = text[3:]
+    return text.strip()
+
+
+_LEDGER_EXPORT_MAX = 10_000
+
+_LEDGER_CSV_HEADER = (
+    "created_at",
+    "event_type",
+    "cis_masked",
+    "pool_title",
+    "gtin",
+    "product_name",
+    "product_sku",
+    "seller_name",
+    "document_number",
+    "actor_email",
+)
 
 
 def normalize_cis(raw: str) -> str | None:
@@ -2024,8 +2050,32 @@ async def list_pool_codes(
     return rows
 
 
-async def list_ledger(
-    session: AsyncSession,
+def _ledger_event_row(
+    event: MarkingCodeEvent,
+    cis: str,
+    gtin: str | None,
+    pool_title: str | None,
+    product_name: str | None,
+    product_sku: str | None,
+    seller_name: str | None,
+    actor_email: str | None,
+) -> LedgerEventRow:
+    return LedgerEventRow(
+        id=event.id,
+        created_at=event.created_at,
+        event_type=event.event_type,
+        cis_masked=mask_cis_code(cis),
+        pool_title=pool_title,
+        gtin=gtin,
+        product_name=product_name,
+        product_sku=product_sku,
+        seller_name=seller_name,
+        document_number=event.document_number,
+        actor_email=actor_email,
+    )
+
+
+def _ledger_filtered_stmt(
     tenant_id: uuid.UUID,
     *,
     seller_id: uuid.UUID | None,
@@ -2033,11 +2083,10 @@ async def list_ledger(
     product_id: uuid.UUID | None,
     document_number: str | None,
     event_type: str | None,
+    cis_mask: str | None,
     date_from: datetime | None,
     date_to: datetime | None,
-    limit: int,
-    offset: int,
-) -> LedgerPage:
+) -> Select[Any]:
     stmt = (
         select(
             MarkingCodeEvent,
@@ -2075,10 +2124,43 @@ async def list_ledger(
         stmt = stmt.where(MarkingCodeEvent.document_number == document_number)
     if event_type:
         stmt = stmt.where(MarkingCodeEvent.event_type == event_type)
+    if cis_mask:
+        needle = normalize_cis_mask_query(cis_mask)
+        if needle:
+            stmt = stmt.where(MarkingCode.cis_code.contains(needle))
     if date_from is not None:
         stmt = stmt.where(MarkingCodeEvent.created_at >= date_from)
     if date_to is not None:
         stmt = stmt.where(MarkingCodeEvent.created_at <= date_to)
+    return stmt
+
+
+async def list_ledger(
+    session: AsyncSession,
+    tenant_id: uuid.UUID,
+    *,
+    seller_id: uuid.UUID | None,
+    pool_id: uuid.UUID | None,
+    product_id: uuid.UUID | None,
+    document_number: str | None,
+    event_type: str | None,
+    cis_mask: str | None,
+    date_from: datetime | None,
+    date_to: datetime | None,
+    limit: int,
+    offset: int,
+) -> LedgerPage:
+    stmt = _ledger_filtered_stmt(
+        tenant_id,
+        seller_id=seller_id,
+        pool_id=pool_id,
+        product_id=product_id,
+        document_number=document_number,
+        event_type=event_type,
+        cis_mask=cis_mask,
+        date_from=date_from,
+        date_to=date_to,
+    )
 
     count_stmt = select(func.count()).select_from(stmt.subquery())
     total = int((await session.execute(count_stmt)).scalar_one())
@@ -2089,21 +2171,67 @@ async def list_ledger(
         await session.execute(stmt)
     ).all():
         rows.append(
-            LedgerEventRow(
-                id=event.id,
-                created_at=event.created_at,
-                event_type=event.event_type,
-                cis_masked=mask_cis_code(cis),
-                pool_title=pool_title,
-                gtin=gtin,
-                product_name=product_name,
-                product_sku=product_sku,
-                seller_name=seller_name,
-                document_number=event.document_number,
-                actor_email=actor_email,
+            _ledger_event_row(
+                event, cis, gtin, pool_title, product_name, product_sku, seller_name, actor_email
             )
         )
     return LedgerPage(rows=rows, total=total)
+
+
+async def export_ledger_csv(
+    session: AsyncSession,
+    tenant_id: uuid.UUID,
+    *,
+    seller_id: uuid.UUID | None,
+    pool_id: uuid.UUID | None,
+    product_id: uuid.UUID | None,
+    document_number: str | None,
+    event_type: str | None,
+    cis_mask: str | None,
+    date_from: datetime | None,
+    date_to: datetime | None,
+) -> str:
+    stmt = _ledger_filtered_stmt(
+        tenant_id,
+        seller_id=seller_id,
+        pool_id=pool_id,
+        product_id=product_id,
+        document_number=document_number,
+        event_type=event_type,
+        cis_mask=cis_mask,
+        date_from=date_from,
+        date_to=date_to,
+    )
+    count_stmt = select(func.count()).select_from(stmt.subquery())
+    total = int((await session.execute(count_stmt)).scalar_one())
+    if total > _LEDGER_EXPORT_MAX:
+        raise MarkingCodeServiceError("export_too_large")
+
+    stmt = stmt.order_by(MarkingCodeEvent.created_at.desc()).limit(_LEDGER_EXPORT_MAX)
+    buffer = io.StringIO()
+    writer = csv.writer(buffer)
+    writer.writerow(_LEDGER_CSV_HEADER)
+    for event, cis, gtin, pool_title, product_name, product_sku, seller_name, actor_email in (
+        await session.execute(stmt)
+    ).all():
+        row = _ledger_event_row(
+            event, cis, gtin, pool_title, product_name, product_sku, seller_name, actor_email
+        )
+        writer.writerow(
+            [
+                row.created_at.isoformat(),
+                row.event_type,
+                row.cis_masked,
+                row.pool_title or "",
+                row.gtin or "",
+                row.product_name or "",
+                row.product_sku or "",
+                row.seller_name or "",
+                row.document_number or "",
+                row.actor_email or "",
+            ]
+        )
+    return buffer.getvalue()
 
 
 async def get_code_history(

@@ -19,6 +19,7 @@ import {
   Typography,
 } from '@mui/material'
 import ArrowBackOutlined from '@mui/icons-material/ArrowBackOutlined'
+import FileDownloadOutlined from '@mui/icons-material/FileDownloadOutlined'
 import { apiUrl } from '../../api'
 import { PageHeader } from '../../ui/PageHeader'
 import { readApiErrorMessage } from '../../utils/readApiErrorMessage'
@@ -76,36 +77,54 @@ export function HonestSignLedgerPage({
   const [cisMask, setCisMask] = useState('')
   const [dateFrom, setDateFrom] = useState('')
   const [dateTo, setDateTo] = useState('')
+  const [exportBusy, setExportBusy] = useState(false)
 
   const limit = 50
 
   const authHeaders = useMemo(() => ({ Authorization: `Bearer ${token}` }), [token])
 
+  const buildFilterParams = useCallback(() => {
+    const params = new URLSearchParams()
+    if (selectedSellerId) {
+      params.set('seller_id', selectedSellerId)
+    }
+    if (poolIdFromUrl) {
+      params.set('pool_id', poolIdFromUrl)
+    }
+    if (eventType) {
+      params.set('event_type', eventType)
+    }
+    if (document.trim()) {
+      params.set('document', document.trim())
+    }
+    const mask = cisMask.trim()
+    if (mask) {
+      params.set('cis_mask', mask)
+    }
+    if (dateFrom) {
+      params.set('date_from', toDateFromParam(dateFrom))
+    }
+    if (dateTo) {
+      params.set('date_to', toDateToParam(dateTo))
+    }
+    return params
+  }, [
+    cisMask,
+    dateFrom,
+    dateTo,
+    document,
+    eventType,
+    poolIdFromUrl,
+    selectedSellerId,
+  ])
+
   const load = useCallback(async () => {
     setBusy(true)
     setError(null)
     try {
-      const params = new URLSearchParams()
+      const params = buildFilterParams()
       params.set('limit', String(limit))
       params.set('offset', String(offset))
-      if (selectedSellerId) {
-        params.set('seller_id', selectedSellerId)
-      }
-      if (poolIdFromUrl) {
-        params.set('pool_id', poolIdFromUrl)
-      }
-      if (eventType) {
-        params.set('event_type', eventType)
-      }
-      if (document.trim()) {
-        params.set('document', document.trim())
-      }
-      if (dateFrom) {
-        params.set('date_from', toDateFromParam(dateFrom))
-      }
-      if (dateTo) {
-        params.set('date_to', toDateToParam(dateTo))
-      }
       const res = await fetch(apiUrl(`/operations/marking-codes/ledger?${params.toString()}`), {
         headers: authHeaders,
       })
@@ -114,27 +133,39 @@ export function HonestSignLedgerPage({
         return
       }
       const data = (await res.json()) as { rows: LedgerRow[]; total: number }
-      let nextRows = data.rows
-      const mask = cisMask.trim()
-      if (mask) {
-        nextRows = nextRows.filter((r) => r.cis_masked.includes(mask))
-      }
-      setRows(nextRows)
+      setRows(data.rows)
       setTotal(data.total)
     } finally {
       setBusy(false)
     }
-  }, [
-    authHeaders,
-    cisMask,
-    dateFrom,
-    dateTo,
-    document,
-    eventType,
-    offset,
-    poolIdFromUrl,
-    selectedSellerId,
-  ])
+  }, [authHeaders, buildFilterParams, offset])
+
+  const exportCsv = async () => {
+    setExportBusy(true)
+    setError(null)
+    try {
+      const params = buildFilterParams()
+      const res = await fetch(
+        apiUrl(`/operations/marking-codes/ledger/export?${params.toString()}`),
+        { headers: authHeaders },
+      )
+      if (!res.ok) {
+        setError(await readApiErrorMessage(res))
+        return
+      }
+      const blob = await res.blob()
+      const url = URL.createObjectURL(blob)
+      const a = window.document.createElement('a')
+      a.href = url
+      const disposition = res.headers.get('Content-Disposition')
+      const match = disposition?.match(/filename="([^"]+)"/)
+      a.download = match?.[1] ?? 'ledger-export.csv'
+      a.click()
+      URL.revokeObjectURL(url)
+    } finally {
+      setExportBusy(false)
+    }
+  }
 
   useEffect(() => {
     void load()
@@ -238,11 +269,23 @@ export function HonestSignLedgerPage({
           size="small"
           label="Маска КМ"
           value={cisMask}
-          onChange={(e) => setCisMask(e.target.value)}
+          onChange={(e) => {
+            setOffset(0)
+            setCisMask(e.target.value)
+          }}
           data-testid={`${testIdPrefix}-cis-mask`}
         />
         <Button variant="outlined" onClick={() => void load()} data-testid={`${testIdPrefix}-apply`}>
           Применить
+        </Button>
+        <Button
+          variant="outlined"
+          startIcon={<FileDownloadOutlined />}
+          disabled={exportBusy || busy}
+          onClick={() => void exportCsv()}
+          data-testid={`${testIdPrefix}-export`}
+        >
+          Экспорт
         </Button>
       </Stack>
 
