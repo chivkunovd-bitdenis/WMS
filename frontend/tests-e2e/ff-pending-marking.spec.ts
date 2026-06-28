@@ -233,7 +233,15 @@ test('FF pending marking bulk print selected rows', async ({ page }) => {
   await page.getByTestId('ff-pending-marking-print-selected').click()
   await expect(page.getByTestId('marking-print-dialog')).toBeVisible()
 
+  const seenProducts: string[] = []
   for (let printed = 0; printed < 2; printed += 1) {
+    const header = page.getByTestId('marking-print-header')
+    await expect(header).toBeVisible()
+    if (printed > 0) {
+      await expect(header).not.toContainText(seenProducts[printed - 1] ?? '', { timeout: 15_000 })
+    }
+    const headerText = (await header.innerText()).trim()
+    seenProducts.push(headerText.split('\n')[0] ?? '')
     await Promise.all([
       page.waitForResponse(
         (r) =>
@@ -247,6 +255,8 @@ test('FF pending marking bulk print selected rows', async ({ page }) => {
       await expect(page.getByTestId('marking-print-dialog')).toBeVisible({ timeout: 15_000 })
     }
   }
+
+  expect(new Set(seenProducts)).toEqual(new Set(['E2E Bulk A', 'E2E Bulk B']))
 
   await expect(page.getByTestId('marking-print-dialog')).toBeHidden()
   await expect(page.getByTestId('ff-pending-marking-empty')).toBeVisible()
