@@ -5,6 +5,7 @@ import {
   mergePreviewGroups,
   paginateProductSearchResults,
   PRODUCT_SEARCH_INITIAL_LIMIT,
+  removeImportFileAt,
 } from './MarkingImportDialog'
 
 describe('filterProductsBySearch', () => {
@@ -17,6 +18,22 @@ describe('filterProductsBySearch', () => {
     expect(filterProductsBySearch(products, 'alpha')).toEqual([products[0]])
     expect(filterProductsBySearch(products, 'SKU-BETA')).toEqual([products[1]])
     expect(filterProductsBySearch(products, '')).toEqual(products)
+  })
+})
+
+describe('removeImportFileAt', () => {
+  const fileA = new File(['a'], 'a.csv', { type: 'text/csv' })
+  const fileB = new File(['b'], 'b.csv', { type: 'text/csv' })
+  const fileC = new File(['c'], 'c.csv', { type: 'text/csv' })
+
+  it('removes the file at the given index', () => {
+    expect(removeImportFileAt([fileA, fileB, fileC], 1)).toEqual([fileA, fileC])
+  })
+
+  it('returns the same list for out-of-range index', () => {
+    const files = [fileA, fileB]
+    expect(removeImportFileAt(files, -1)).toEqual(files)
+    expect(removeImportFileAt(files, 2)).toEqual(files)
   })
 })
 

@@ -1,5 +1,13 @@
 # TASKLOG
 
+## TASK-038 — 2026-06-28 — IMPORT-04: delete uploaded import file chip
+
+- What changed:
+  - **`MarkingImportDialog.tsx`:** чипы файлов с `onDelete`; `removeImportFileAt` + `removeFileAt` — удаление файла, пересбор превью по оставшимся; при пустом списке — сброс групп и meta.
+  - **`markingImportMerge.test.ts`:** тесты `removeImportFileAt`.
+- What did NOT change: подсветка пустого названия (IMPORT-05), контекст пула (CROSS-04).
+- Verification: `npm run test:unit -- markingImportMerge.test.ts`, `npm run build` — green.
+
 ## TASK-037 — 2026-06-28 — IMPORT-02: per-group product search in import dialog
 
 - What changed:

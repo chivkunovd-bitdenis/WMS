@@ -95,6 +95,13 @@ export function paginateProductSearchResults<T>(
   }
 }
 
+export function removeImportFileAt(files: File[], index: number): File[] {
+  if (index < 0 || index >= files.length) {
+    return files
+  }
+  return files.filter((_, i) => i !== index)
+}
+
 export function mergePreviewGroups(prev: GroupDraft[], incoming: PreviewGroup[]): GroupDraft[] {
   const prevByGtin = new Map(prev.map((g) => [g.gtin, g]))
   return incoming.map((g) => {
@@ -216,6 +223,26 @@ export function MarkingImportDialog({
     }
     const next = [...files, ...Array.from(picked)]
     setFiles(next)
+    void runPreview(next)
+  }
+
+  const clearPreview = () => {
+    setGroups([])
+    setPreviewMeta(null)
+    setError(null)
+    setExpandedProductLists(new Set())
+  }
+
+  const removeFileAt = (index: number) => {
+    if (busy) {
+      return
+    }
+    const next = removeImportFileAt(files, index)
+    setFiles(next)
+    if (next.length === 0) {
+      clearPreview()
+      return
+    }
     void runPreview(next)
   }
 
@@ -347,8 +374,17 @@ export function MarkingImportDialog({
             </Typography>
             {files.length > 0 ? (
               <Stack direction="row" spacing={0.75} sx={{ flexWrap: 'wrap', justifyContent: 'center', mt: 1 }}>
-                {files.map((f) => (
-                  <Chip key={f.name + f.size} size="small" label={f.name} />
+                {files.map((f, index) => (
+                  <Chip
+                    key={`${f.name}-${f.size}-${index}`}
+                    size="small"
+                    label={f.name}
+                    onDelete={(event) => {
+                      event.stopPropagation()
+                      removeFileAt(index)
+                    }}
+                    data-testid={`${testIdPrefix}-import-file-chip-${index}`}
+                  />
                 ))}
               </Stack>
             ) : null}
