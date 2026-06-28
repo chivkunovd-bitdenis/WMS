@@ -34,3 +34,7 @@ backend/alembic_autogen.db
 .vscode/
 .idea/
 
+# Cursor queue autopilot (local only)
+.cursor/state/
+.cursor/wt/
+
