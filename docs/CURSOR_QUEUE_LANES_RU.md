@@ -26,15 +26,15 @@
 
 | Маркер | Смысл |
 |--------|--------|
-| **` done`** в конце строки | Закрыто (verifier PASS). |
+| **` done`** в колонке **`id`** | Закрыто (verifier PASS), напр. `PACK-01 done`. |
 | **` blocked`** | 3 fix без зелёного CI — skip. |
 
 ---
 
 ## Правила планирования (orchestrator)
 
-1. **Skip:** строки с ` done` или ` blocked`.
-2. **depends_on:** задача runnable только если все ID из `depends_on` уже ` done` в QUEUE.
+1. **Skip:** id с ` done` или ` blocked`.
+2. **depends_on:** задача runnable только если все ID из `depends_on` уже **` done`** в backlog.
 3. **files:** не запускать две runnable задачи одновременно, если множества `files` **пересекаются** (хотя бы один общий путь).
 4. **lane:** в одном `lane` одновременно **не больше одной** активной задачи (даже если `files` формально разные — lane = общая дорожка экрана/модуля).
 5. **parallel_workers:** из промпта / `SESSION_HANDOFF` — максимум столько builder **одновременно**, сколько задач прошли правила 2–4.
@@ -42,26 +42,24 @@
 
 ---
 
-## Формат строки в `.cursor/QUEUE.md`
+## Формат backlog (WMS)
 
-Одна задача = одна строка. Атрибуты через ` | ` (пробел-вертикальная черта-пробел):
+**Файл:** **`docs/PARALLEL_AGENT_TASKS.md`** — markdown-таблицы по lane.
+
+| Колонка | Смысл |
+|---------|--------|
+| **`id`** | PACK-01, PRINT-01, …; закрыто → **`PACK-01 done`** |
+| **`depends_on`** | CZ-000, PACK-01, … (все должны быть done) |
+| **`do`** | что делать builder |
+| **`gate`** | критерий verifier |
+
+**Lane** = секция `## LANE-PACK`, `## LANE-PRINT`, …; `files` — в шапке lane или колонке CROSS.
+
+Альтернативный компактный формат (другие проекты) — одна строка:
 
 ```text
-ID — человекочитаемое описание | lane: имя-дорожки | files: path/a, path/b | depends_on: ID2, ID3
+ID — описание | lane: … | files: path/a, path/b | depends_on: ID2
 ```
-
-Примеры:
-
-```text
-MP-035 — TSD scan contract | lane: mp-api | files: backend/app/api/marketplace_unload_requests.py, backend/app/services/marketplace_unload_collect_service.py | depends_on:
-MP-036 — UI scan hints | lane: mp-shipments-ui | files: frontend/src/screens/ff/FfSuppliesShipmentsPage.tsx | depends_on: MP-035
-MP-037 — e2e full-flow | lane: mp-e2e | files: frontend/tests-e2e/ff-mp-full-flow.spec.ts | depends_on: MP-035, MP-036
-MP-038 — seller unload dialog | lane: seller-mp | files: frontend/src/components/SellerMarketplaceUnloadDialog.tsx | depends_on:
-```
-
-- **`depends_on:`** пустой или `depends_on: —` — нет предшественников.
-- **`files:`** для docs-only задач можно `files: docs/...` или один markdown.
-- **Имена lane:** kebab-case, по модулю/экрану: `mp-shipments-ui`, `mp-api`, `cz-ledger`, `seller-settings`.
 
 ---
 
@@ -77,7 +75,7 @@ MP-038 — seller unload dialog | lane: seller-mp | files: frontend/src/componen
 
 ## Resume после обрыва
 
-State на диске: ` done` / ` blocked` в QUEUE. Orchestrator снова применяет правила 1–6 к **открытым** строкам. `depends_on` пересчитывается по актуальному QUEUE.
+State на диске: ` done` / ` blocked` в **`docs/PARALLEL_AGENT_TASKS.md`** (колонка id).
 
 ---
 
@@ -85,9 +83,9 @@ State на диске: ` done` / ` blocked` в QUEUE. Orchestrator снова п
 
 | Файл | Роль |
 |------|------|
-| `.cursor/QUEUE.md` | Список задач с атрибутами |
+| **`docs/PARALLEL_AGENT_TASKS.md`** | Backlog + таблицы задач |
 | `.cursor/SESSION_HANDOFF.md` | `parallel_workers`, последняя закрытая |
-| `~/.cursor/agents/orchestrator.md` | Режим очереди + ссылка сюда |
+| `~/.cursor/agents/orchestrator.md` | Режим очереди |
 | `.cursor/rules/wms-queue.mdc` | Краткие правила queue mode |
 
 ---
@@ -95,7 +93,7 @@ State на диске: ` done` / ` blocked` в QUEUE. Orchestrator снова п
 ## Шпаргалка для старта orchestrator
 
 ```text
-orchestrator, continuous, queue mode, 5 агентов, resume. Продолжай .cursor/QUEUE.md.
-Планирование: docs/CURSOR_QUEUE_LANES_RU.md — lane, files, depends_on.
-1 задача = 1 builder. builder → verifier → fix.
+orchestrator, continuous, queue mode, 5 агентов.
+Backlog: docs/PARALLEL_AGENT_TASKS.md. 1 задача = 1 builder. builder → verifier → fix.
+Commit без моей команды не делать.
 ```

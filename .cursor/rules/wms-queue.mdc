@@ -1,67 +1,42 @@
 ---
-description: Backlog autopilot — очередь .cursor/QUEUE.md, retry при падении тестов, статус done. Режим orchestrator queue.
+description: Backlog autopilot — docs/PARALLEL_AGENT_TASKS.md, retry, done in id column. Orchestrator queue mode.
 alwaysApply: false
 ---
 
 # WMS backlog autopilot (queue mode)
 
-Активируется, когда пользователь запустил **orchestrator** в queue mode или в промпте есть «QUEUE.md» / «continuous backlog» / «queue mode».
+Активируется при **orchestrator** queue mode / «PARALLEL_AGENT_TASKS» / «continuous backlog».
 
-## Источники
+## Единственный backlog-файл
 
-- Очередь: `.cursor/QUEUE.md` — атрибуты **`lane`**, **`files`**, **`depends_on`** (полный формат: **`docs/CURSOR_QUEUE_LANES_RU.md`**).
-- Handoff: `.cursor/SESSION_HANDOFF.md` — обновлять после каждой закрытой задачи.
-- Продукт: `AGENTS.md`, `docs/MVP_DECISIONS_RU.md`.
+**`docs/PARALLEL_AGENT_TASKS.md`** — все задачи, lanes, depends_on, do, gate.
 
-## Планирование (orchestrator)
+- Контракт orchestrator — в начале файла.
+- **Закрыто:** в колонке **`id`** суффикс **` done`** (например `PACK-01 done`).
+- **Заблокировано:** **` blocked`** в id.
+- Планирование: **`docs/CURSOR_QUEUE_LANES_RU.md`**.
 
-Перед пачкой: прочитать **`docs/CURSOR_QUEUE_LANES_RU.md`**.
+Handoff: `.cursor/SESSION_HANDOFF.md`. Продукт: `AGENTS.md`.
 
-- Skip ` done` / ` blocked`.
-- **`depends_on`:** runnable только если предшественники ` done`.
-- **`files`:** без параллели при пересечении путей.
-- **`lane`:** одна активная задача на lane.
-- До **N** runnable задач параллельно (`parallel_workers`), **1 задача = 1 builder**.
+## Диспетчер
 
-## Диспетчер (orchestrator, queue mode)
+- Только `Task` субагентам; continuous; без «ок» владельца.
+- **`parallel_workers: N`** — из промпта или SESSION_HANDOFF (default 4).
+- **1 задача = 1 builder**; до N параллельно при соблюдении lane/files/depends_on.
+- **Commit** — только по явной команде владельца (контракт PARALLEL п.5 — игнорировать).
 
-- **Не писать код сам** — только `Task` субагентам.
-- **Continuous:** не спрашивать владельца между задачами; не ждать «ок».
-- **Число worker'ов:** владелец при старте (например «5 агентов») → `parallel_workers: N` в `.cursor/SESSION_HANDOFF.md`; без числа — **4**.
-- **Параллель:** до **N** builder одновременно (`run_in_background: true`), **строго 1 задача (1 строка QUEUE) на 1 builder**.
-- **Конфликты:** `lane`, `files`, `depends_on` — см. `docs/CURSOR_QUEUE_LANES_RU.md`.
-- **Новые чаты не создавать.**
+## Цикл
 
-## Цикл на одну задачу
+builder → verifier → fix (max 3) → optional adversarial-reviewer → **` done`** в id + TASKLOG + SESSION_HANDOFF.
 
-1. `Task` → **builder** — HANDOFF с текстом задачи из QUEUE (+ TC-ID из issue/docs если есть).
-2. `Task` → **verifier** (`readonly: true`) — только проверка.
-3. Verifier **NOT READY** → `Task` → **builder** (bugfix: приложить вывод pytest/e2e). Max **3** попытки fix на задачу.
-4. После 3 fail → в QUEUE суффикс **` blocked`**, SESSION_HANDOFF, следующая задача.
-5. Verifier **READY** → опционально `Task` → **adversarial-reviewer**; при BLOCK → builder fix → verifier (в лимите fix).
-6. Закрытие: в QUEUE заменить строку на **` done`**, запись в `TASKLOG.md`, обновить SESSION_HANDOFF.
+## Resume
 
-## Тесты (обязательно на каждую задачу)
+State на диске в PARALLEL (id + done/blocked). Тот же стартовый промпт; hook `stop` читает PARALLEL.
 
-Verifier запускает релевантный минимум (WMS layout):
-
-```bash
-cd backend && ruff check . && mypy . && pytest <subset> -q
-cd frontend && npm run build && npx playwright test <spec>  # если UI
-```
-
-Builder **не** помечает задачу done — только verifier.
-
-## Resume после обрыва (сон ноута, краш, новый чат)
-
-- **QUEUE.md на диске** — главный state: ` done` / ` blocked` / открыто.
-- Старт/resume — **тот же промпт** (+ слово `resume` опционально); hook прошлой сессии не нужен.
-- Orchestrator: skip done/blocked → **планирование по lane/files/depends_on** → runnable до N → `git status` на хвост → builder продолжает.
-- `parallel_workers` — из SESSION_HANDOFF, если в новом промпте число не указано.
-
-## Стартовая фраза (для владельца)
+## Старт
 
 ```text
-orchestrator, continuous, queue mode, 5 агентов. Гони .cursor/QUEUE.md до конца.
-Строго 1 задача = 1 builder. builder → verifier → fix loop. done только после verifier PASS. Без новых чатов.
+orchestrator, continuous, queue mode, 5 агентов.
+Backlog: docs/PARALLEL_AGENT_TASKS.md. 1 задача = 1 builder. builder → verifier → fix.
+Commit без моей команды не делать.
 ```

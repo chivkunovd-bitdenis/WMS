@@ -1,13 +1,13 @@
 #!/usr/bin/env bash
-# stop hook: if .cursor/QUEUE.md has open tasks, auto-continue orchestrator queue mode.
+# stop hook: auto-continue orchestrator while docs/PARALLEL_AGENT_TASKS.md has open tasks.
 set -euo pipefail
 
 input=$(cat)
 loop_count=$(echo "$input" | python3 -c "import sys,json; d=json.load(sys.stdin); print(d.get('loop_count',0))" 2>/dev/null || echo "0")
 loop_limit=25
 
-queue_file=".cursor/QUEUE.md"
-if [[ ! -f "$queue_file" ]]; then
+backlog_file="docs/PARALLEL_AGENT_TASKS.md"
+if [[ ! -f "$backlog_file" ]]; then
   echo '{}'
   exit 0
 fi
@@ -17,10 +17,9 @@ if [[ "$loop_count" -ge "$loop_limit" ]]; then
   exit 0
 fi
 
-# Open task: line with MP-/TASK- id, no trailing " done" or " blocked"
+# Open task: table row with task id (PACK-01, PRINT-01, …), id cell without done/blocked
 has_open=$(
-  grep -E '(MP-|TASK-)[0-9]+' "$queue_file" 2>/dev/null \
-    | grep -viE '(^#|^\s*$|^\s*\|)' \
+  grep -E '^\|[[:space:]]*(PACK|PRINT|LEDGER|IMPORT|POOLS|POOLCARD|REPRINTS|PENDING|SHARED|BACKEND|CROSS|FINAL|CZ)-' "$backlog_file" 2>/dev/null \
     | grep -viE '\bdone\b' \
     | grep -viE '\bblocked\b' \
     | head -1 \
@@ -42,12 +41,12 @@ python3 - <<PY
 import json
 workers = ${workers}
 msg = (
-    f"orchestrator, continuous, queue mode. Прочитай .cursor/QUEUE.md и .cursor/SESSION_HANDOFF.md. "
-    f"parallel_workers: {workers}. Раздай следующую пачку: до {workers} builder параллельно (run_in_background), "
-    f"строго 1 открытая задача QUEUE на 1 builder. "
-    f"На каждую: builder → verifier → fix до 3 раз. "
-    f"Закрывай задачу только суффиксом ' done' в QUEUE после verifier READY. "
-    f"Обнови TASKLOG и SESSION_HANDOFF. Без новых чатов, без вопросов владельцу."
+    f"orchestrator, continuous, queue mode. Прочитай docs/PARALLEL_AGENT_TASKS.md и .cursor/SESSION_HANDOFF.md. "
+    f"parallel_workers: {workers}. Планирование: lane, files, depends_on (docs/CURSOR_QUEUE_LANES_RU.md). "
+    f"До {workers} builder параллельно, строго 1 задача на 1 builder. "
+    f"builder → verifier → fix до 3 раз. "
+    f"Закрытие: ' done' в колонке id после verifier READY. "
+    f"Обнови TASKLOG и SESSION_HANDOFF. Commit без команды владельца не делать."
 )
 print(json.dumps({"followup_message": msg}))
 PY

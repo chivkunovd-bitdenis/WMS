@@ -1,18 +1,13 @@
 ---
 name: queue-lanes
-description: Scheduling for .cursor/QUEUE.md autopilot — lane, files, depends_on. Load when orchestrator assigns parallel builders or authoring QUEUE backlog.
+description: Scheduling for docs/PARALLEL_AGENT_TASKS.md — lane, files, depends_on. Load when orchestrator assigns parallel builders.
 ---
 
 # Queue lanes (scheduling)
 
-**Canonical reference (human + agent):** `docs/CURSOR_QUEUE_LANES_RU.md` in repo root.
+**Backlog file:** `docs/PARALLEL_AGENT_TASKS.md`  
+**Reference:** `docs/CURSOR_QUEUE_LANES_RU.md`
 
-**Attribute names (do not rename across projects):**
+**Close task:** ` done` in table **id** column (e.g. `PACK-01 done`).
 
-| Attribute | Rule |
-|-----------|------|
-| `lane` | Sequential within same lane |
-| `files` | Lock paths; no parallel if sets intersect |
-| `depends_on` | Wait until listed IDs are ` done` |
-
-Orchestrator: read reference → parse QUEUE → pick up to `parallel_workers` runnable tasks → 1 task = 1 builder.
+**Attributes:** `lane`, `files`, `depends_on` — see reference doc.
