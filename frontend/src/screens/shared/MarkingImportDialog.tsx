@@ -62,6 +62,25 @@ type GroupDraft = PreviewGroup & {
   productIds: Set<string>
 }
 
+export function mergePreviewGroups(prev: GroupDraft[], incoming: PreviewGroup[]): GroupDraft[] {
+  const prevByGtin = new Map(prev.map((g) => [g.gtin, g]))
+  return incoming.map((g) => {
+    const existing = prevByGtin.get(g.gtin)
+    if (existing) {
+      return {
+        ...g,
+        title: existing.title,
+        productIds: existing.productIds,
+      }
+    }
+    return {
+      ...g,
+      title: g.suggested_title,
+      productIds: new Set<string>(),
+    }
+  })
+}
+
 type Props = {
   open: boolean
   token: string
@@ -161,13 +180,7 @@ export function MarkingImportDialog({
         invalid_count: data.invalid_count,
         duplicates_in_file: data.duplicates_in_file,
       })
-      setGroups(
-        data.groups.map((g) => ({
-          ...g,
-          title: g.suggested_title,
-          productIds: new Set<string>(),
-        })),
-      )
+      setGroups((prev) => mergePreviewGroups(prev, data.groups))
       onError?.(null)
     } finally {
       setParseBusy(false)
