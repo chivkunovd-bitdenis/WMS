@@ -18,60 +18,42 @@ import {
   TableRow,
   Typography,
 } from '@mui/material'
-import { apiUrl } from '../../api'
 import { PageHeader } from '../../ui/PageHeader'
-import { readApiErrorMessage } from '../../utils/readApiErrorMessage'
+import {
+  fetchPendingMarking,
+  pendingMarkingLineCount,
+  type PendingMarkingLine,
+} from '../../utils/pendingMarkingApi'
 import { useMarkingCodePrint, type PrintLineArgs } from '../../utils/useMarkingCodePrint'
-
-type PendingRow = {
-  packaging_task_id: string
-  packaging_task_line_id: string
-  document_number: string | null
-  product_id: string
-  sku_code: string
-  product_name: string
-  storage_location_code: string
-  qty_need: number
-  qty_marking_printed: number
-  qty_remaining: number
-  marking_available_count: number
-}
 
 type Props = {
   token: string
 }
 
-function rowPrintable(row: PendingRow): boolean {
+function rowPrintable(row: PendingMarkingLine): boolean {
   return row.marking_available_count >= 1
 }
 
 export function FfPendingMarkingPage({ token }: Props) {
-  const [rows, setRows] = useState<PendingRow[]>([])
+  const [rows, setRows] = useState<PendingMarkingLine[]>([])
+  const [lineCount, setLineCount] = useState(0)
   const [error, setError] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
   const [selected, setSelected] = useState<Record<string, boolean>>({})
-  const printQueueRef = useRef<PendingRow[]>([])
+  const printQueueRef = useRef<PendingMarkingLine[]>([])
   const { openPrint, dialog: markingPrintDialog } = useMarkingCodePrint()
-
-  const authHeaders = {
-    Authorization: `Bearer ${token}`,
-    'Content-Type': 'application/json',
-  }
 
   const load = useCallback(async () => {
     setLoading(true)
     setError(null)
     try {
-      const res = await fetch(apiUrl('/operations/marking-codes/pending-marking'), {
-        headers: authHeaders,
-      })
-      if (!res.ok) {
-        setError(await readApiErrorMessage(res))
-        setRows([])
-        return
-      }
-      const body = (await res.json()) as { rows: PendingRow[] }
+      const body = await fetchPendingMarking(token)
       setRows(body.rows)
+      setLineCount(pendingMarkingLineCount(body))
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Не удалось загрузить список')
+      setRows([])
+      setLineCount(0)
     } finally {
       setLoading(false)
     }
@@ -91,7 +73,7 @@ export function FfPendingMarkingPage({ token }: Props) {
     selectedPrintableCount > 0 && selectedPrintableCount < printableRows.length
 
   const buildPrintArgs = useCallback(
-    (row: PendingRow, onDone: () => void): PrintLineArgs => ({
+    (row: PendingMarkingLine, onDone: () => void): PrintLineArgs => ({
       token,
       lineId: row.packaging_task_line_id,
       productId: row.product_id,
@@ -122,7 +104,7 @@ export function FfPendingMarkingPage({ token }: Props) {
     }, 100)
   }, [buildPrintArgs, openPrint])
 
-  const openRowPrint = (row: PendingRow) => {
+  const openRowPrint = (row: PendingMarkingLine) => {
     printQueueRef.current = []
     openPrint(buildPrintArgs(row, () => {}))
   }
@@ -167,7 +149,7 @@ export function FfPendingMarkingPage({ token }: Props) {
         </Link>
         <Chip
           size="small"
-          label={`${rows.length} строк`}
+          label={`${lineCount} строк`}
           data-testid="ff-pending-marking-count"
         />
         {rows.length > 0 ? (

@@ -100,8 +100,18 @@ test('FF pending marking worklist row disappears after print', async ({ page }) 
     page.getByTestId('ff-packaging-create-submit').click(),
   ])
 
+  // TC-NEW-011 — CROSS-02: бейдж на упаковке = число строк pending-marking.
+  await page.waitForResponse(
+    (r) =>
+      r.request().method() === 'GET' &&
+      r.url().includes('/operations/marking-codes/pending-marking') &&
+      r.status() === 200,
+  )
+  await expect(page.getByTestId('ff-packaging-pending-badge')).toContainText('1')
+
   await page.getByTestId('ff-packaging-pending-link').click()
   await expect(page.getByTestId('ff-pending-marking-page')).toBeVisible()
+  await expect(page.getByTestId('ff-pending-marking-count')).toHaveText('1 строк')
   await expect(page.getByTestId('ff-pending-marking-row')).toHaveCount(1)
 
   await page.locator('button[data-testid^="ff-pending-marking-print-"]:not([data-testid="ff-pending-marking-print-selected"])').click()
@@ -222,8 +232,19 @@ test('FF pending marking bulk print selected rows', async ({ page }) => {
     ),
     page.getByTestId('ff-packaging-create-submit').click(),
   ])
+
+  // TC-NEW-011 — CROSS-02: бейдж = число строк в списке pending-marking.
+  await page.waitForResponse(
+    (r) =>
+      r.request().method() === 'GET' &&
+      r.url().includes('/operations/marking-codes/pending-marking') &&
+      r.status() === 200,
+  )
+  await expect(page.getByTestId('ff-packaging-pending-badge')).toContainText('2')
+
   await page.getByTestId('ff-packaging-pending-link').click()
   await expect(page.getByTestId('ff-pending-marking-page')).toBeVisible()
+  await expect(page.getByTestId('ff-pending-marking-count')).toHaveText('2 строк')
   await expect(page.getByTestId('ff-pending-marking-row')).toHaveCount(2)
 
   await page.getByTestId('ff-pending-marking-select-all').click()
