@@ -114,6 +114,7 @@ export function HonestSignPoolPage({
   const [lowThreshold, setLowThreshold] = useState('')
   const [forecastThreshold, setForecastThreshold] = useState('')
   const [thresholdSaving, setThresholdSaving] = useState(false)
+  const [exportBusy, setExportBusy] = useState(false)
 
   const authHeaders = useMemo(
     () => ({ Authorization: `Bearer ${token}` }),
@@ -204,19 +205,51 @@ export function HonestSignPoolPage({
     return codes.filter((c) => c.cis_masked.includes(tail))
   }, [codeSearch, codes])
 
-  const exportCsv = () => {
+  const poolCodesTotal = detail?.loaded ?? codes.length
+  const isDisplayFiltered = filteredCodes.length !== codes.length
+  const isExportSubsetOfPool =
+    statusFilter !== '' && codes.length > 0 && codes.length < poolCodesTotal
+
+  const buildCodesCsv = (rows: PoolCode[]) => {
     const header = 'cis_masked,status,created_at,printed_by,document_number'
-    const lines = filteredCodes.map(
+    const lines = rows.map(
       (c) =>
         `${c.cis_masked},${c.status},${c.created_at},${c.printed_by ?? ''},${c.document_number ?? ''}`,
     )
-    const blob = new Blob([[header, ...lines].join('\n')], { type: 'text/csv;charset=utf-8' })
+    return [header, ...lines].join('\n')
+  }
+
+  const downloadCsv = (filename: string, content: string) => {
+    const blob = new Blob([content], { type: 'text/csv;charset=utf-8' })
     const url = URL.createObjectURL(blob)
     const a = document.createElement('a')
     a.href = url
-    a.download = `pool-${poolId}-codes.csv`
+    a.download = filename
     a.click()
     URL.revokeObjectURL(url)
+  }
+
+  const exportCsv = async () => {
+    if (!poolId) {
+      return
+    }
+    setExportBusy(true)
+    setError(null)
+    try {
+      const q = statusFilter ? `?status=${encodeURIComponent(statusFilter)}` : ''
+      const res = await fetch(apiUrl(`/operations/marking-codes/pools/${poolId}/codes${q}`), {
+        headers: authHeaders,
+      })
+      if (!res.ok) {
+        setError(await readApiErrorMessage(res))
+        return
+      }
+      const exportRows = (await res.json()) as PoolCode[]
+      setCodes(exportRows)
+      downloadCsv(`pool-${poolId}-codes.csv`, buildCodesCsv(exportRows))
+    } finally {
+      setExportBusy(false)
+    }
   }
 
   const saveThresholds = async () => {
@@ -426,13 +459,44 @@ export function HonestSignPoolPage({
             <Button
               variant="outlined"
               startIcon={<DownloadOutlined />}
-              onClick={exportCsv}
-              disabled={filteredCodes.length === 0}
+              onClick={() => void exportCsv()}
+              disabled={codes.length === 0 || exportBusy || codesBusy}
               data-testid={`${testIdPrefix}-codes-export`}
             >
-              Экспорт CSV
+              {exportBusy
+                ? 'Экспорт…'
+                : isExportSubsetOfPool
+                  ? `Экспорт CSV (${codes.length} из ${poolCodesTotal})`
+                  : `Экспорт CSV (${codes.length})`}
             </Button>
           </Stack>
+          {isDisplayFiltered ? (
+            <Typography
+              variant="body2"
+              color="text.secondary"
+              data-testid={`${testIdPrefix}-codes-count`}
+            >
+              Показано {filteredCodes.length} из {codes.length}. Экспорт выгружает все{' '}
+              {codes.length} кодов текущей выборки.
+            </Typography>
+          ) : isExportSubsetOfPool ? (
+            <Typography
+              variant="body2"
+              color="text.secondary"
+              data-testid={`${testIdPrefix}-codes-count`}
+            >
+              В выборке {codes.length} из {poolCodesTotal} кодов пула (фильтр по статусу). Экспорт
+              выгружает все {codes.length} кодов выборки.
+            </Typography>
+          ) : codes.length > 0 ? (
+            <Typography
+              variant="body2"
+              color="text.secondary"
+              data-testid={`${testIdPrefix}-codes-count`}
+            >
+              {codes.length} кодов
+            </Typography>
+          ) : null}
           <TableContainer component={Paper} variant="outlined">
             <Table size="small">
               <TableHead>
