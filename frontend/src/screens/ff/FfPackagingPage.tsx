@@ -35,7 +35,6 @@ import { PageHeader } from '../../ui/PageHeader'
 import { productDisplayMetaFromCatalog } from '../../types/wbProductCatalog'
 import { readApiErrorMessage } from '../../utils/readApiErrorMessage'
 import {
-  printMarkingCodeLabels,
   printMarkingCodeTape,
   type MarkingTapeUnitInput,
 } from '../../utils/printMarkingCodeLabel'
@@ -101,9 +100,6 @@ export function FfPackagingTaskPanel({
   const { catalogById } = useWbProductCatalog(token)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
-  const [scanBarcode, setScanBarcode] = useState('')
-  const [scanBusy, setScanBusy] = useState(false)
-  const [scanFlash, setScanFlash] = useState<'ok' | 'error' | null>(null)
   const [pairScan, setPairScan] = useState('')
   const [pairFirstCis, setPairFirstCis] = useState<string | null>(null)
   const [pairBusy, setPairBusy] = useState(false)
@@ -417,67 +413,6 @@ export function FfPackagingTaskPanel({
     }
   }
 
-  const submitScanPrint = async () => {
-    const code = scanBarcode.trim()
-    if (!code || scanBusy) {
-      return
-    }
-    setScanBusy(true)
-    setScanFlash(null)
-    setError(null)
-    try {
-      const res = await fetch(apiUrl('/operations/marking-codes/scan-print'), {
-        method: 'POST',
-        headers: authHeaders,
-        body: JSON.stringify({
-          packaging_task_id: task.id,
-          product_barcode: code,
-        }),
-      })
-      if (!res.ok) {
-        setScanFlash('error')
-        setError(await readApiErrorMessage(res))
-        return
-      }
-      const data = (await res.json()) as {
-        codes: string[]
-        duplicate_copies: number
-        quantity: number
-        shortage: number | null
-        packaging_task_line_id: string
-        layout: PrintLayout
-      }
-      if (data.quantity < 1) {
-        setScanFlash('error')
-        setError(
-          data.shortage
-            ? `Не хватает ${data.shortage} кодов ЧЗ в пуле.`
-            : 'Нет доступных кодов для печати.',
-        )
-        return
-      }
-      const line = task.lines.find((ln) => ln.id === data.packaging_task_line_id)
-      await printMarkingCodeLabels(data.codes, {
-        layout: data.layout,
-        duplicateCopies: data.duplicate_copies,
-        productLabel: line ? productLabelForLine(line) : undefined,
-      })
-      setScanBarcode('')
-      setScanFlash('ok')
-      const taskRes = await fetch(apiUrl(`/operations/packaging-tasks/${task.id}`), {
-        headers: authHeaders,
-      })
-      if (taskRes.ok) {
-        onUpdated((await taskRes.json()) as PackagingTask)
-      }
-    } catch (e) {
-      setScanFlash('error')
-      setError(e instanceof Error ? e.message : 'Скан-печать не удалась.')
-    } finally {
-      setScanBusy(false)
-    }
-  }
-
   const submitPairVerify = async () => {
     const raw = pairScan.trim()
     if (!raw || pairBusy) {
@@ -558,34 +493,6 @@ export function FfPackagingTaskPanel({
       ) : null}
       {hasHonestSignLines && manualTask ? (
         <Stack direction="row" spacing={1} sx={{ alignItems: 'flex-start', flexWrap: 'wrap' }}>
-          <TextField
-            size="small"
-            autoFocus
-            label="Сканируйте товар"
-            placeholder="Штрихкод или SKU"
-            value={scanBarcode}
-            disabled={scanBusy || busy}
-            onChange={(e) => setScanBarcode(e.target.value)}
-            onKeyDown={(e) => {
-              if (e.key === 'Enter') {
-                e.preventDefault()
-                void submitScanPrint()
-              }
-            }}
-            slotProps={{
-              htmlInput: { 'data-testid': 'marking-scan-print-input' },
-            }}
-            sx={{
-              flex: '1 1 280px',
-              maxWidth: 420,
-              ...(scanFlash === 'ok'
-                ? { '& .MuiOutlinedInput-root': { borderColor: 'success.main' } }
-                : scanFlash === 'error'
-                  ? { '& .MuiOutlinedInput-root': { borderColor: 'error.main' } }
-                  : {}),
-            }}
-            data-testid="marking-scan-print-field"
-          />
           <Button
             variant="outlined"
             disabled={busy || printAllBusy}
