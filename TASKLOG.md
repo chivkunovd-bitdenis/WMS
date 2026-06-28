@@ -4,7 +4,7 @@
 
 - What changed: merged PACK-09, PENDING-01, SHARED-01, POOLCARD-01/03, CROSS-01…04, PRINT-05 into `task/FINAL-01`; unified user-visible strings — **КМ** for code instances (pool, ledger, import, defect/reprint, errors), **ЧЗ** for system/requirement (column «ЧЗ», «Печать ЧЗ», product flag, presets, integration). Files: `FfPackagingPage`, `FfPendingMarkingPage`, `MarkingPrintDialog`, `MarkingProductCodesDialog`, `MarkingImportDialog`, `HonestSignScreen`/`PoolPage`/`LedgerPage`, `FfHonestSignReprintsPage`, `readApiErrorMessage`, `ffPermissions`, `App.tsx`.
 - What did NOT change: API payloads, `data-testid`, behavior, backend.
-- Verification: `npm run build` in FINAL-01 worktree — green (tsc + vite).
+- Verification: `npm run build` in FINAL-01 worktree — green (tsc + vite). Commit `c3d05c8`.
 
 ## TASK-053 — 2026-06-28 — CROSS-02: unified pending-marking total for badge + worklist
 
