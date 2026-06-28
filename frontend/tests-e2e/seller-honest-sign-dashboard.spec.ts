@@ -57,6 +57,7 @@ test('seller honest sign dashboard shows pool card and upload opens import', asy
   const card = page.getByTestId(`seller-honest-sign-pool-card-${poolId}`)
   await expect(card).toBeVisible()
   await expect(card).toContainText('E2E Dashboard Pool')
+  await expect(page.getByTestId(`seller-honest-sign-pool-row-${poolId}`)).toHaveCount(0)
 
   await card.getByTestId(`seller-honest-sign-pool-card-upload-${poolId}`).click()
   await expect(page.getByTestId('seller-honest-sign-import-dialog')).toBeVisible()

@@ -98,6 +98,10 @@ function isLowStock(row: MarkingPoolRow): boolean {
   return row.available > 0 && row.available <= 10
 }
 
+function isProblematicPool(row: MarkingPoolRow): boolean {
+  return row.available === 0 || isLowStock(row)
+}
+
 function ProductChips({
   products,
   testIdPrefix,
@@ -286,6 +290,19 @@ export function HonestSignScreen({
     })
   }, [pools, search, stockFilter])
 
+  const problematicPools = useMemo(
+    () => filteredPools.filter(isProblematicPool),
+    [filteredPools],
+  )
+
+  const tablePools = useMemo(() => {
+    if (!showSellerDashboard) {
+      return filteredPools
+    }
+    const problematicIds = new Set(problematicPools.map((row) => row.id))
+    return filteredPools.filter((row) => !problematicIds.has(row.id))
+  }, [filteredPools, problematicPools, showSellerDashboard])
+
   const openMenu = (event: React.MouseEvent<HTMLElement>, pool: MarkingPoolRow) => {
     event.stopPropagation()
     setMenuAnchor(event.currentTarget)
@@ -378,9 +395,12 @@ export function HonestSignScreen({
         ))}
       </Stack>
 
-      {showSellerDashboard && pools.length > 0 ? (
+      {showSellerDashboard && problematicPools.length > 0 ? (
         <Stack spacing={1} data-testid={`${testIdPrefix}-seller-dashboard`}>
-          {pools.map((row) => {
+          <Typography variant="subtitle2" color="text.secondary">
+            Требуют внимания
+          </Typography>
+          {problematicPools.map((row) => {
             const low = isLowStock(row)
             const spendPerDay =
               row.consumption_7d != null ? Math.round((row.consumption_7d / 7) * 10) / 10 : 0
@@ -507,14 +527,16 @@ export function HonestSignScreen({
                   </TableCell>
                 </TableRow>
               ))
-            ) : filteredPools.length === 0 ? (
+            ) : tablePools.length === 0 ? (
               <TableRow>
                 <TableCell colSpan={8}>
                   <Stack spacing={1} sx={{ py: 2, alignItems: 'flex-start' }}>
                     <Typography variant="body2" color="text.secondary">
                       {pools.length === 0
                         ? 'Пулов пока нет — загрузите КМ из файла.'
-                        : 'Ничего не найдено по фильтру.'}
+                        : showSellerDashboard && problematicPools.length > 0
+                          ? 'Проблемные пулы показаны в блоке выше. По фильтру в таблице ничего нет.'
+                          : 'Ничего не найдено по фильтру.'}
                     </Typography>
                     {pools.length === 0 ? (
                       <Button
@@ -531,7 +553,7 @@ export function HonestSignScreen({
                 </TableCell>
               </TableRow>
             ) : (
-              filteredPools.map((row) => {
+              tablePools.map((row) => {
                 const low = isLowStock(row)
                 return (
                   <TableRow
