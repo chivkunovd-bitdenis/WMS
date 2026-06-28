@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import {
   Alert,
+  Autocomplete,
   Box,
   Button,
   Chip,
@@ -155,6 +156,11 @@ export function HonestSignScreen({
 
   const effectiveSellerId = sellerId ?? selectedSellerId
 
+  const selectedSeller = useMemo(
+    () => sellers.find((s) => s.id === selectedSellerId) ?? null,
+    [sellers, selectedSellerId],
+  )
+
   const loadPools = useCallback(async () => {
     setBusy(true)
     setError(null)
@@ -241,22 +247,29 @@ export function HonestSignScreen({
       />
 
       {sellerIdRequiredForImport && sellers.length > 0 ? (
-        <Stack direction="row" spacing={1} sx={{ flexWrap: 'wrap', alignItems: 'center' }}>
-          <Typography variant="body2" color="text.secondary">
-            Селлер:
-          </Typography>
-          {sellers.map((s) => (
-            <Button
-              key={s.id}
-              size="small"
-              variant={selectedSellerId === s.id ? 'contained' : 'outlined'}
-              onClick={() => onSelectedSellerIdChange?.(s.id)}
-              data-testid={`${testIdPrefix}-seller-${s.id}`}
-            >
-              {s.name}
-            </Button>
-          ))}
-        </Stack>
+        <Autocomplete
+          size="small"
+          options={sellers}
+          value={selectedSeller}
+          onChange={(_, value) => onSelectedSellerIdChange?.(value?.id ?? null)}
+          getOptionLabel={(option) => option.name}
+          isOptionEqualToValue={(a, b) => a.id === b.id}
+          noOptionsText="Селлер не найден"
+          renderOption={(props, option) => (
+            <li {...props} key={option.id} data-testid={`${testIdPrefix}-seller-${option.id}`}>
+              {option.name}
+            </li>
+          )}
+          renderInput={(params) => (
+            <TextField
+              {...params}
+              label="Селлер"
+              placeholder="Поиск по названию"
+              data-testid={`${testIdPrefix}-seller-picker`}
+            />
+          )}
+          sx={{ maxWidth: 420 }}
+        />
       ) : null}
 
       {error ? (

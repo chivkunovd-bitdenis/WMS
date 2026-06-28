@@ -1,5 +1,11 @@
 # TASKLOG
 
+## TASK-037 — 2026-06-28 — POOLS-01: seller picker via autocomplete
+
+- What changed: `HonestSignScreen` — ряд кнопок селлеров заменён на MUI `Autocomplete` с поиском по названию; `data-testid` `{prefix}-seller-picker` и `{prefix}-seller-{id}` на опциях.
+- What did NOT change: e2e-хелперы выбора селлера (нужно открыть picker перед кликом по опции — отдельная задача при падении ff-honest-sign*).
+- Verification: `npm run build` в worktree `.cursor/wt/POOLS-01/frontend` — exit 0.
+
 ## TASK-036 — 2026-06-28 — CZ-000 barrier: MP commit + feat/cz-ux-fixes + autopilot backlog
 
 - What changed:
