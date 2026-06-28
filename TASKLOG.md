@@ -1,5 +1,13 @@
 # TASKLOG
 
+## TASK-042 — 2026-06-28 — POOLS-03: tooltip on disabled upload codes
+
+- What changed: `HonestSignScreen` — кнопка «Загрузить коды» при `sellerIdRequiredForImport` без выбранного селлера обёрнута в MUI `Tooltip` («Выберите селлера») через `span`-обёртку для disabled.
+- What did NOT change: empty-state «Загрузить коды», «Догрузить» на карточках пула, e2e.
+- Verification: `npm run build` в worktree `.cursor/wt/POOLS-03/frontend` — exit 0.
+
+## TASK-037 — 2026-06-28 — POOLS-01: seller picker via autocomplete
+
 ## TASK-037 — 2026-06-28 — POOLS-01: integrate (MarkingSellerPicker retained)
 
 - What changed: merged task/POOLS-01; seller UI stays `MarkingSellerPicker` (CROSS-03) not Autocomplete row from lane branch.
