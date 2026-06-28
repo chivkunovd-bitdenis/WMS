@@ -1,5 +1,11 @@
 # TASKLOG
 
+## TASK-049 — 2026-06-28 — POOLS-05: unified forecast format
+
+- What changed: `HonestSignScreen` — общий `ForecastLabel` (дата `ДД.ММ` + tooltip `(N дн.)`) в таблице и карточках селлера.
+- What did NOT change: расчёт `forecast_days` на бэкенде, POOLS-04 переключатель дашборд/таблица.
+- Verification: `npm run build` in POOLS-05 worktree (branch task/POOLS-05) — green. Commit `c32df5d`.
+
 ## TASK-036 — 2026-06-28 — CZ-000 barrier: MP commit + feat/cz-ux-fixes + autopilot backlog
 
 - What changed:
