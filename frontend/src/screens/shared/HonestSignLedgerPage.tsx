@@ -21,8 +21,11 @@ import {
 import ArrowBackOutlined from '@mui/icons-material/ArrowBackOutlined'
 import FileDownloadOutlined from '@mui/icons-material/FileDownloadOutlined'
 import { apiUrl } from '../../api'
+import { useDebouncedValue } from '../../hooks/useDebouncedValue'
 import { PageHeader } from '../../ui/PageHeader'
 import { readApiErrorMessage } from '../../utils/readApiErrorMessage'
+
+const TEXT_FILTER_DEBOUNCE_MS = 400
 
 type LedgerRow = {
   id: string
@@ -79,6 +82,9 @@ export function HonestSignLedgerPage({
   const [dateTo, setDateTo] = useState('')
   const [exportBusy, setExportBusy] = useState(false)
 
+  const debouncedDocument = useDebouncedValue(document, TEXT_FILTER_DEBOUNCE_MS)
+  const debouncedCisMask = useDebouncedValue(cisMask, TEXT_FILTER_DEBOUNCE_MS)
+
   const limit = 50
 
   const authHeaders = useMemo(() => ({ Authorization: `Bearer ${token}` }), [token])
@@ -94,10 +100,10 @@ export function HonestSignLedgerPage({
     if (eventType) {
       params.set('event_type', eventType)
     }
-    if (document.trim()) {
-      params.set('document', document.trim())
+    if (debouncedDocument.trim()) {
+      params.set('document', debouncedDocument.trim())
     }
-    const mask = cisMask.trim()
+    const mask = debouncedCisMask.trim()
     if (mask) {
       params.set('cis_mask', mask)
     }
@@ -109,10 +115,10 @@ export function HonestSignLedgerPage({
     }
     return params
   }, [
-    cisMask,
     dateFrom,
     dateTo,
-    document,
+    debouncedCisMask,
+    debouncedDocument,
     eventType,
     poolIdFromUrl,
     selectedSellerId,
@@ -275,9 +281,6 @@ export function HonestSignLedgerPage({
           }}
           data-testid={`${testIdPrefix}-cis-mask`}
         />
-        <Button variant="outlined" onClick={() => void load()} data-testid={`${testIdPrefix}-apply`}>
-          Применить
-        </Button>
         <Button
           variant="outlined"
           startIcon={<FileDownloadOutlined />}

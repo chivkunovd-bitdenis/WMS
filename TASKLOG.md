@@ -1,5 +1,11 @@
 # TASKLOG
 
+## TASK-042 — 2026-06-28 — LEDGER-05: unified ledger filter triggers
+
+- What changed: убрана кнопка «Применить» на `HonestSignLedgerPage`; текстовые фильтры «Документ» и «Маска КМ» через debounce 400ms (`useDebouncedValue`); select/даты/селлер — немедленный reload через `useEffect`; e2e без кликов по apply.
+- What did NOT change: экспорт CSV (LEDGER-04), backend API, CROSS-03 (Autocomplete селлера).
+- Verification: `npm run build` in worktree `LEDGER-05`.
+
 ## TASK-041 — 2026-06-28 — LEDGER-04: export ledger by filters
 
 - What changed: `GET /operations/marking-codes/ledger/export` — CSV по тем же фильтрам, что и лента (seller, pool, event_type, document, cis_mask, date_from/to); кнопка «Экспорт» на `HonestSignLedgerPage`; восстановлен серверный `cis_mask` (регресс LEDGER-03); pytest `test_ledger_export_csv`, `test_ledger_cis_mask_filter`.

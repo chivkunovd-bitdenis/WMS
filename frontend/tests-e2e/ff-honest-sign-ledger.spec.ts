@@ -3,6 +3,17 @@ import { expect, test } from '@playwright/test'
 import { waitForGetOk, waitForPostOk } from './api-waits'
 import { openFulfillmentRegistration } from './auth-flow'
 
+function waitForLedgerGet(page: import('@playwright/test').Page, urlPart: string) {
+  return page.waitForResponse(
+    (res) =>
+      res.url().includes('/operations/marking-codes/ledger') &&
+      res.url().includes(urlPart) &&
+      !res.url().includes('/export') &&
+      res.request().method() === 'GET' &&
+      res.status() === 200,
+  )
+}
+
 // TC-NEW-010 — T0.10: лента расхода, фильтр по типу и документу.
 test('FF honest sign ledger: imported events and document filter', async ({ page }) => {
   test.setTimeout(90_000)
@@ -53,37 +64,38 @@ test('FF honest sign ledger: imported events and document filter', async ({ page
   await expect(page.getByTestId('ff-honest-sign-ledger-page')).toBeVisible()
   await expect(page.getByTestId('ff-honest-sign-ledger-table')).toContainText('imported')
 
-  await page.getByTestId('ff-honest-sign-ledger-event-type').click()
-  await page.getByRole('option', { name: 'printed' }).click()
-  await page.getByTestId('ff-honest-sign-ledger-apply').click()
+  await Promise.all([
+    waitForLedgerGet(page, 'event_type=printed'),
+    page.getByTestId('ff-honest-sign-ledger-event-type').click(),
+    page.getByRole('option', { name: 'printed' }).click(),
+  ])
   await expect(page.getByTestId('ff-honest-sign-ledger-table')).not.toContainText('imported')
 
-  await page.getByTestId('ff-honest-sign-ledger-event-type').click()
-  await page.getByRole('option', { name: 'imported' }).click()
-  await page.getByRole('textbox', { name: 'Документ' }).fill(docNumber)
-  await page.getByTestId('ff-honest-sign-ledger-apply').click()
+  await Promise.all([
+    waitForLedgerGet(page, 'event_type=imported'),
+    page.getByTestId('ff-honest-sign-ledger-event-type').click(),
+    page.getByRole('option', { name: 'imported' }).click(),
+  ])
+  await Promise.all([
+    waitForLedgerGet(page, `document=${encodeURIComponent(docNumber)}`),
+    page.getByRole('textbox', { name: 'Документ' }).fill(docNumber),
+  ])
   await expect(page.getByTestId('ff-honest-sign-ledger-table')).toContainText(docNumber)
 
   const today = new Date().toISOString().slice(0, 10)
   await page.getByTestId('ff-honest-sign-ledger-date-from').fill(today)
-  await page.getByTestId('ff-honest-sign-ledger-date-to').fill(today)
   const [todayLedgerRes] = await Promise.all([
-    page.waitForResponse(
-      (res) =>
-        res.url().includes('/operations/marking-codes/ledger') &&
-        res.url().includes('date_from=') &&
-        res.url().includes('date_to=') &&
-        res.request().method() === 'GET' &&
-        res.status() === 200,
-    ),
-    page.getByTestId('ff-honest-sign-ledger-apply').click(),
+    waitForLedgerGet(page, 'date_to='),
+    page.getByTestId('ff-honest-sign-ledger-date-to').fill(today),
   ])
   expect(todayLedgerRes.url()).toContain('date_from=')
   expect(todayLedgerRes.url()).toContain('date_to=')
   await expect(page.getByTestId('ff-honest-sign-ledger-table')).toContainText('imported')
 
   await page.getByTestId('ff-honest-sign-ledger-date-from').fill('2099-01-01')
-  await page.getByTestId('ff-honest-sign-ledger-date-to').fill('2099-01-01')
-  await page.getByTestId('ff-honest-sign-ledger-apply').click()
+  await Promise.all([
+    waitForLedgerGet(page, 'date_to=2099-01-01'),
+    page.getByTestId('ff-honest-sign-ledger-date-to').fill('2099-01-01'),
+  ])
   await expect(page.getByTestId('ff-honest-sign-ledger-table')).toContainText('События не найдены')
 })
