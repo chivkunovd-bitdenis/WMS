@@ -405,26 +405,16 @@ export function MarkingPrintDialog({ open, reprint, ctx, busy, onBusyChange, onC
             ) : null}
 
             {!reprint && shortage > 0 ? (
-              <Stack direction="row" spacing={1} sx={{ alignItems: 'center', flexWrap: 'wrap' }}>
-                <FormControlLabel
-                  control={
-                    <Checkbox
-                      checked={allowPartial}
-                      onChange={(e) => setAllowPartial(e.target.checked)}
-                      data-testid="marking-print-allow-partial"
-                    />
-                  }
-                  label={`Печатать доступные ${available}`}
-                />
-                <Button
-                  size="small"
-                  variant="outlined"
-                  onClick={() => setToast('Запрос селлеру отправим в следующей версии')}
-                  data-testid="marking-print-request-seller"
-                >
-                  Запросить у селлера
-                </Button>
-              </Stack>
+              <FormControlLabel
+                control={
+                  <Checkbox
+                    checked={allowPartial}
+                    onChange={(e) => setAllowPartial(e.target.checked)}
+                    data-testid="marking-print-allow-partial"
+                  />
+                }
+                label={`Печатать доступные ${available}`}
+              />
             ) : null}
 
             {!reprint && !requiresHonestSign ? (
