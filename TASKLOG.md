@@ -1,5 +1,12 @@
 # TASKLOG
 
+## TASK-037 — 2026-06-28 — POOLS-06: один CTA на привязку товаров в списке пулов
+
+- What changed:
+  - **`HonestSignScreen.tsx`:** убран дублирующий чип «не привязан» в колонке «Пул»; привязка только через кнопку «Привязать» в колонке «Товары» (и пункт меню «Привязать товары»).
+- What did NOT change: диалог привязки, меню пула, e2e `ff-honest-sign-pools.spec.ts`.
+- Verification: `npm run build` в worktree POOLS-06 — OK. Commit: `e888b73`.
+
 ## TASK-036 — 2026-06-28 — CZ-000 barrier: MP commit + feat/cz-ux-fixes + autopilot backlog
 
 - What changed:

@@ -438,7 +438,6 @@ export function HonestSignScreen({
             ) : (
               filteredPools.map((row) => {
                 const low = isLowStock(row)
-                const unlinked = row.products.length === 0
                 return (
                   <TableRow
                     key={row.id}
@@ -455,18 +454,6 @@ export function HonestSignScreen({
                         <Typography variant="caption" color="text.secondary">
                           GTIN {row.gtin}
                         </Typography>
-                        {unlinked ? (
-                          <Chip
-                            size="small"
-                            color="warning"
-                            label="не привязан"
-                            onClick={(e) => {
-                              e.stopPropagation()
-                              setLinkPool(row)
-                            }}
-                            data-testid={`${testIdPrefix}-pool-unlinked-${row.id}`}
-                          />
-                        ) : null}
                       </Stack>
                     </TableCell>
                     <TableCell>
