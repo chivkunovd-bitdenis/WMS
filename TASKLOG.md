@@ -4,7 +4,7 @@
 
 - What changed: shared `frontend/src/utils/pendingMarkingApi.ts` (`fetchPendingMarking`, `pendingMarkingLineCount` → API `total`, `limit=200`); `FfPackagingPage` badge and `FfPendingMarkingPage` chip use the same helper; pending fetch runs even if packaging-tasks list fails; e2e TC-NEW-011 asserts (badge = chip = row count) folded into TC-NEW-007/008.
 - What did NOT change: backend `/pending-marking` contract; bulk print (PENDING-01); per-row print flow.
-- Verification: `npm run build` — green; `npx playwright test tests-e2e/ff-pending-marking.spec.ts` — 2 passed (10.8s: TC-NEW-007 + TC-NEW-011, TC-NEW-008 + TC-NEW-011). Backend not touched. Commits: `c997485`, `<follow-up>`.
+- Verification: `npm run build` — green; `npx playwright test tests-e2e/ff-pending-marking.spec.ts` — 2 passed (10.8s: TC-NEW-007 + TC-NEW-011, TC-NEW-008 + TC-NEW-011). Backend not touched. Commits: `c997485`, `d8ccd35`.
 
 ## TASK-052 — 2026-06-28 — PENDING-01: bulk print selected pending rows
 
