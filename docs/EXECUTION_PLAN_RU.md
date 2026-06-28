@@ -1,6 +1,6 @@
 # План выполнения: строгая последовательность задач (ЧЗ + хвост печати)
 
-> **Это файл порядка, не очередь autopilot.** Источник деталей: [`/CHESTNY_ZNAK_UX_FIXES_RU.md`](../CHESTNY_ZNAK_UX_FIXES_RU.md), [`docs/MASTER_BACKLOG_RU.md`](./MASTER_BACKLOG_RU.md), MP-эпик [`docs/analysis/06_mp_unload_unified_tasks_RU.md`](./analysis/06_mp_unload_unified_tasks_RU.md).
+> **Это файл порядка, не очередь autopilot.** Источник деталей: [`docs/CHESTNY_ZNAK_UX_FIXES_RU.md`](./CHESTNY_ZNAK_UX_FIXES_RU.md), [`docs/MASTER_BACKLOG_RU.md`](./MASTER_BACKLOG_RU.md), MP-эпик [`docs/analysis/06_mp_unload_unified_tasks_RU.md`](./analysis/06_mp_unload_unified_tasks_RU.md).
 > **Дата:** 2026-06-28
 
 ## Зафиксированные решения
@@ -108,9 +108,9 @@
 | # | Задача | Что сделать | Файлы | Зависит | Gate |
 |---|--------|-------------|-------|---------|------|
 | ORD-44 | T-A6 | Пометить deprecated эндпоинты `scan-print`, `print-all`, `verify-pair` (фронт их уже не зовёт) | backend `marking_codes` | ORD-06..08 | deprecated + тикет на удаление |
-| ORD-45 | X-1 | Перенести `CHESTNY_ZNAK_UX_FIXES_RU.md` в `docs/`, поправить ссылки | docs | — | файл в `docs/` |
-| ORD-46 | X-2 | Закрыть T-A7 как дубль MP-022/023 (отметка в логе) | docs | ORD-01..03 | в логе помечено done |
-| ORD-47 | X-3 | Свериться со старым `docs/CHESTNY_ZNAK_FIX_TASKS_RU.md` — что ещё актуально, убрать пересечения | docs | — | нет конфликтующих доков |
+| ORD-45 | X-1 | Перенести `CHESTNY_ZNAK_UX_FIXES_RU.md` в `docs/`, поправить ссылки | docs | — | ✅ FINAL-03 |
+| ORD-46 | X-2 | Закрыть T-A7 как дубль MP-022/023 (отметка в логе) | docs | ORD-01..03 | ✅ FINAL-03 |
+| ORD-47 | X-3 | Свериться со старым `docs/CHESTNY_ZNAK_FIX_TASKS_RU.md` — что ещё актуально, убрать пересечения | docs | — | ✅ FINAL-03 |
 
 ---
 
