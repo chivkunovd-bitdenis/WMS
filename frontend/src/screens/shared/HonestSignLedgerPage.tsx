@@ -47,6 +47,14 @@ type Props = {
 
 const EVENT_TYPES = ['', 'imported', 'printed', 'applied', 'shipped', 'voided', 'defective']
 
+function toDateFromParam(isoDate: string): string {
+  return `${isoDate}T00:00:00`
+}
+
+function toDateToParam(isoDate: string): string {
+  return `${isoDate}T23:59:59`
+}
+
 export function HonestSignLedgerPage({
   token,
   testIdPrefix = 'honest-sign-ledger',
@@ -66,6 +74,8 @@ export function HonestSignLedgerPage({
   const [eventType, setEventType] = useState('')
   const [document, setDocument] = useState('')
   const [cisMask, setCisMask] = useState('')
+  const [dateFrom, setDateFrom] = useState('')
+  const [dateTo, setDateTo] = useState('')
 
   const limit = 50
 
@@ -90,6 +100,12 @@ export function HonestSignLedgerPage({
       if (document.trim()) {
         params.set('document', document.trim())
       }
+      if (dateFrom) {
+        params.set('date_from', toDateFromParam(dateFrom))
+      }
+      if (dateTo) {
+        params.set('date_to', toDateToParam(dateTo))
+      }
       const res = await fetch(apiUrl(`/operations/marking-codes/ledger?${params.toString()}`), {
         headers: authHeaders,
       })
@@ -111,6 +127,8 @@ export function HonestSignLedgerPage({
   }, [
     authHeaders,
     cisMask,
+    dateFrom,
+    dateTo,
     document,
     eventType,
     offset,
@@ -189,6 +207,32 @@ export function HonestSignLedgerPage({
             setDocument(e.target.value)
           }}
           data-testid={`${testIdPrefix}-document`}
+        />
+        <TextField
+          size="small"
+          label="С"
+          type="date"
+          value={dateFrom}
+          onChange={(e) => {
+            setOffset(0)
+            setDateFrom(e.target.value)
+          }}
+          slotProps={{ inputLabel: { shrink: true } }}
+          sx={{ minWidth: 150 }}
+          data-testid={`${testIdPrefix}-date-from`}
+        />
+        <TextField
+          size="small"
+          label="По"
+          type="date"
+          value={dateTo}
+          onChange={(e) => {
+            setOffset(0)
+            setDateTo(e.target.value)
+          }}
+          slotProps={{ inputLabel: { shrink: true } }}
+          sx={{ minWidth: 150 }}
+          data-testid={`${testIdPrefix}-date-to`}
         />
         <TextField
           size="small"

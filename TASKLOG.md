@@ -1,5 +1,11 @@
 # TASKLOG
 
+## TASK-040 — 2026-06-28 — LEDGER-03: date range filter on ledger
+
+- What changed: `HonestSignLedgerPage` — поля «С»/«По» (`type="date"`), query `date_from`/`date_to` на `/operations/marking-codes/ledger`; e2e + pytest `test_ledger_date_range_filter`.
+- What did NOT change: экспорт (LEDGER-04), backend API (параметры уже были).
+- Verification: `pytest tests/test_marking_pools_read.py::test_ledger_date_range_filter`; `npm run build` in worktree `LEDGER-03`.
+
 ## TASK-036 — 2026-06-28 — CZ-000 barrier: MP commit + feat/cz-ux-fixes + autopilot backlog
 
 - What changed:
