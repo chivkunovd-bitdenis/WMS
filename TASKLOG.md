@@ -1,10 +1,10 @@
 # TASKLOG
 
-## TASK-047 — 2026-06-28 — REPRINTS-03: context links on reprint row
+## TASK-050 — 2026-06-28 — REPRINTS-03: context links on reprint row
 
-- What changed: `FfHonestSignReprintsPage` — колонка «Контекст»: ссылки «Задание» (упаковка), «Пул», «История кода» (drawer); API `reprint-requests` отдаёт `packaging_task_id` и `pool_id`.
-- What did NOT change: confirm/replace/reject flow (REPRINTS-01/02), e2e specs.
-- Verification: `npm run build` + `pytest tests/test_marking_reprint_defect.py tests/test_shift_lead.py` in REPRINTS-03 worktree — green. Commit `bb957a9`.
+- What changed: `FfHonestSignReprintsPage` — колонка «Контекст»: ссылки «Задание» (упаковка с `state.taskId`), «Пул», «История кода» (drawer); API `reprint-requests` отдаёт `packaging_task_id` и `pool_id`; e2e `ff-marking-defect.spec.ts` (TC-NEW-006) проверяет доступность контекста из строки. Сохранён диалог причины отклонения (REPRINTS-02).
+- What did NOT change: approve/replace API, навигация ЧЗ вне reprints.
+- Verification: `npm run build` + `npm run test:e2e tests-e2e/ff-marking-defect.spec.ts` + `PYTHONPATH=. pytest tests/test_marking_reprint_defect.py tests/test_shift_lead.py` in REPRINTS-03 worktree — green. Commits `320d7c6`, `1c22d6f`.
 
 ## TASK-036 — 2026-06-28 — CZ-000 barrier: MP commit + feat/cz-ux-fixes + autopilot backlog
 
