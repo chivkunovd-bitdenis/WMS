@@ -13,12 +13,14 @@ if TYPE_CHECKING:
     from app.models.product import Product
     from app.models.seller import Seller
     from app.models.tenant import Tenant
+    from app.models.user import User
 
 LAYOUT_BLOCK_LABEL = "label"
 LAYOUT_BLOCK_CZ = "cz"
 LAYOUT_BLOCKS = frozenset({LAYOUT_BLOCK_LABEL, LAYOUT_BLOCK_CZ})
 
 SYSTEM_PRESET_NAME = "Парами"
+USER_LAST_LAYOUT_NAME = "__user_last__"
 
 
 class PrintTemplate(Base):
@@ -42,6 +44,12 @@ class PrintTemplate(Base):
         nullable=True,
         index=True,
     )
+    user_id: Mapped[uuid.UUID | None] = mapped_column(
+        Uuid(as_uuid=True),
+        ForeignKey("users.id", ondelete="CASCADE"),
+        nullable=True,
+        index=True,
+    )
     name: Mapped[str] = mapped_column(String(256), nullable=False)
     layout_json: Mapped[str] = mapped_column(Text, nullable=False)
     is_default: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
@@ -52,3 +60,4 @@ class PrintTemplate(Base):
     tenant: Mapped[Tenant] = relationship("Tenant")
     seller: Mapped[Seller | None] = relationship("Seller")
     product: Mapped[Product | None] = relationship("Product")
+    user: Mapped[User | None] = relationship("User")

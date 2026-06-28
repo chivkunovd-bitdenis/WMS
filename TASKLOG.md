@@ -16,6 +16,37 @@
 - Verification: `npm run build` green; eslint on file — no unused-vars; e2e `ff-marking-print-constructor.spec.ts`.
 - Commit: `ac7f312`
 
+## TASK-039 — 2026-06-28 — PRINT-05: per-user print template layout
+
+- What changed:
+  - **`print_templates.user_id`:** миграция `20260628_0053`, FK на `users`; per-user «последняя раскладка» (`__user_last__`).
+  - **`print_template_service.py`:** `resolve` — сначала раскладка текущего пользователя, затем product/seller/system; `save_user_last_print_layout` (upsert без имени).
+  - **`marking_codes.py`:** `user_id` в API; после успешной печати с `layout_json` — авто-сохранение последней раскладки.
+  - **`printTemplate.ts`:** поле `user_id` в типе `PrintTemplate`.
+  - **`test_print_templates.py`:** user last > seller default; два пользователя; auto-save на print.
+- What did NOT change: именованные шаблоны (кнопка «Сохранить») — дополнение; drag-and-drop ленты.
+- Verification: `PYTHONPATH=. pytest tests/test_print_templates.py` (6 passed); `npm run build` (exit 0).
+
+## TASK-038 — 2026-06-28 — PRINT-04: pack qty multiplier for WB barcode
+
+- What changed:
+  - **`productBarcodePrint.ts`:** `resolvePackUnits` (из `pack_units:N` в ТЗ или `units_in_pack`), `resolveWbBarcodeLabelCount` — qty × pack; печать через умноженное количество.
+  - **`ProductBarcodePrintDialog.tsx`:** каталог — поле «Количество ШК ВБ», подсказка «× N шт в упаковке», итог «К печати».
+  - **`MarkingPrintDialog.tsx`:** не-ЧЗ упаковка — тот же множитель; `packagingInstructions` в контексте.
+  - **`wbProductCatalog.ts`:** `packaging_instructions` / `units_in_pack` в `ProductLineDisplayMeta`.
+  - **`productBarcodePrint.test.ts`:** gate qty 3 × pack 5 → 15.
+- What did NOT change: ЧЗ-конструктор; backend поля `units_in_pack` (пока парсинг из ТЗ).
+- Verification: `npm run test:unit src/utils/productBarcodePrint.test.ts` (3 passed); `npm run build` (exit 0).
+
+## TASK-037 — 2026-06-28 — PRINT-01: non-ЧЗ print qty-only (no constructor)
+
+- What changed:
+  - **`MarkingPrintDialog.tsx`:** для товара без ЧЗ — только поле «Количество ШК ВБ» (`marking-print-wb-qty`); пресеты, билдер, превью и сохранение шаблона скрыты; печать с фиксированным layout label×1.
+  - **`ff-mp-packaging-print.spec.ts`:** e2e обновлён под qty-only UI (TC-NEW-MP-016).
+- What did NOT change: ЧЗ-ветка конструктора; каталог (`ProductBarcodePrintDialog`); множитель «× упаковка» (PRINT-04).
+- Verification: `npm run build` (exit 0) в `.cursor/wt/PRINT-01/frontend`.
+
+## TASK-036 — 2026-06-28 — CZ-000 barrier: MP commit + feat/cz-ux-fixes + autopilot backlog
 
 - What changed:
   - **CZ-000 done:** MP slice committed `304abf2` on `hotfix/alembic-marking-pools`; branch **`feat/cz-ux-fixes`** created.

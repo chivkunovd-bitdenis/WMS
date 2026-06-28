@@ -18,6 +18,7 @@ from app.api.deps import (
 )
 from app.core.roles import FULFILLMENT_ADMIN, FULFILLMENT_SELLER
 from app.db.session import get_db
+from app.models.print_template import USER_LAST_LAYOUT_NAME
 from app.models.user import User
 from app.services import marking_code_service as mc_svc
 from app.services import print_template_service as pt_svc
@@ -281,6 +282,7 @@ class PrintTemplateOut(BaseModel):
     id: str | None
     seller_id: str | None
     product_id: str | None
+    user_id: str | None
     name: str
     layout: PrintLayoutOut
     is_default: bool
@@ -320,11 +322,15 @@ def _layout_in_to_dict(layout: PrintLayoutOut) -> dict[str, object]:
 
 
 def _print_template_out(row: pt_svc.PrintTemplateRow) -> PrintTemplateOut:
+    display_name = row.name
+    if display_name == USER_LAST_LAYOUT_NAME:
+        display_name = "Последняя раскладка"
     return PrintTemplateOut(
         id=str(row.id) if row.id is not None else None,
         seller_id=str(row.seller_id) if row.seller_id is not None else None,
         product_id=str(row.product_id) if row.product_id is not None else None,
-        name=row.name,
+        user_id=str(row.user_id) if row.user_id is not None else None,
+        name=display_name,
         layout=_layout_out(row.layout),
         is_default=row.is_default,
         is_system=row.is_system,
@@ -946,6 +952,7 @@ async def resolve_print_template(
         row = await pt_svc.resolve_default_print_template(
             session,
             user.tenant_id,
+            user_id=user.id,
             product_id=product_id,
             seller_id=scope_seller_id,
         )
@@ -966,6 +973,7 @@ async def list_print_templates(
     rows = await pt_svc.list_print_templates(
         session,
         user.tenant_id,
+        user_id=user.id,
         seller_id=scope,
         product_id=product_id,
     )
@@ -999,6 +1007,7 @@ async def create_print_template(
             layout=_layout_in_to_dict(body.layout),
             seller_id=target_seller_id,
             product_id=body.product_id,
+            user_id=user.id,
             is_default=body.is_default,
         )
     except pt_svc.PrintTemplateServiceError as exc:
@@ -1174,6 +1183,16 @@ async def print_marking_codes_for_line(
         raise _http_from_mc_error(exc) from exc
     except pt_svc.PrintTemplateServiceError as exc:
         raise _http_from_pt_error(exc) from exc
+    if result.quantity > 0 and layout_payload is not None and not body.reprint:
+        try:
+            await pt_svc.save_user_last_print_layout(
+                session,
+                user.tenant_id,
+                user.id,
+                layout_payload,
+            )
+        except pt_svc.PrintTemplateServiceError as exc:
+            raise _http_from_pt_error(exc) from exc
     return PrintMarkingCodesOut(
         packaging_task_line_id=str(result.packaging_task_line_id),
         quantity=result.quantity,
