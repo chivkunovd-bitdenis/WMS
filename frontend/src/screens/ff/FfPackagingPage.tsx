@@ -91,6 +91,18 @@ function statusLabel(status: string): string {
   return status
 }
 
+/** Mirrors backend assert_packaging_line_marking_done (qty_done vs qty_marking_printed). */
+function isLineMarkingIncomplete(ln: PackagingTaskLine): boolean {
+  if (!ln.requires_honest_sign) {
+    return false
+  }
+  const done = ln.qty_done
+  return done > 0 && ln.qty_marking_printed < done
+}
+
+const MARKING_NOT_DONE_MESSAGE =
+  'Не хватает напечатанных кодов ЧЗ по заданию на упаковку.'
+
 export function FfPackagingTaskPanel({
   token,
   task,
@@ -296,7 +308,14 @@ export function FfPackagingTaskPanel({
     }
   }
 
+  const incompleteMarkingLines = task.lines.filter(isLineMarkingIncomplete)
+  const hasIncompleteMarking = incompleteMarkingLines.length > 0
+
   const completeTask = async () => {
+    if (hasIncompleteMarking) {
+      setError(MARKING_NOT_DONE_MESSAGE)
+      return
+    }
     setBusy(true)
     setError(null)
     try {
@@ -494,6 +513,22 @@ export function FfPackagingTaskPanel({
       {taskEditable ? (
         <Paper variant="outlined" sx={{ p: 2 }} data-testid="ff-packaging-complete-panel">
           <Stack spacing={1.5}>
+            {hasIncompleteMarking ? (
+              <Alert severity="warning" data-testid="ff-packaging-marking-incomplete-warning">
+                {MARKING_NOT_DONE_MESSAGE}
+                {incompleteMarkingLines.map((ln) => (
+                  <Typography
+                    key={ln.id}
+                    variant="body2"
+                    sx={{ mt: 0.5 }}
+                    data-testid="ff-packaging-marking-incomplete-line"
+                  >
+                    {ln.product_name} ({ln.sku_code}): напечатано {ln.qty_marking_printed} из{' '}
+                    {ln.qty_done}
+                  </Typography>
+                ))}
+              </Alert>
+            ) : null}
             <FormControlLabel
               control={
                 <Checkbox
@@ -508,7 +543,7 @@ export function FfPackagingTaskPanel({
             <Button
               variant="contained"
               color="success"
-              disabled={busy}
+              disabled={busy || hasIncompleteMarking}
               onClick={() => void completeTask()}
               data-testid="ff-packaging-complete"
             >

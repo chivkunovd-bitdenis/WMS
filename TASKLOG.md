@@ -1,5 +1,11 @@
 # TASKLOG
 
+## TASK-041 — 2026-06-28 — PACK-07: block complete with incomplete marking
+
+- What changed: `FfPackagingTaskPanel` — warning + disabled «Завершить упаковку» when `requires_honest_sign` lines have `qty_marking_printed < qty_done` (mirrors `assert_packaging_line_marking_done`); e2e TC-NEW-PKG-07 in `ff-marking-packaging.spec.ts`.
+- What did NOT change: server `marking_not_done` gate; print/defect flows (PACK-05/06).
+- Verification: `npm run build` green in PACK-07 worktree.
+
 ## TASK-037 — 2026-06-28 — PACK-04: packaging page cleanup after removals
 
 - What changed:
