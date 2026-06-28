@@ -28,6 +28,7 @@ import { apiUrl } from '../../api'
 import { PageHeader } from '../../ui/PageHeader'
 import { codeStatusLabel } from '../../utils/markingStatus'
 import { readApiErrorMessage } from '../../utils/readApiErrorMessage'
+import { codeStatusLabel, ledgerEventLabel } from '../../utils/markingStatus'
 import { MarkingPoolProductsDialog } from './MarkingPoolProductsDialog'
 
 type PoolDetail = {
@@ -594,7 +595,7 @@ export function HonestSignPoolPage({
                     <TableRow key={row.id} data-testid={`${testIdPrefix}-ledger-row-${row.id}`}>
                       <TableCell>{new Date(row.created_at).toLocaleString('ru-RU')}</TableCell>
                       <TableCell>
-                        <Chip size="small" label={row.event_type} />
+                        <Chip size="small" label={ledgerEventLabel(row.event_type)} />
                       </TableCell>
                       <TableCell>{row.cis_masked}</TableCell>
                     </TableRow>
@@ -639,7 +640,7 @@ export function HonestSignPoolPage({
             <Stack spacing={1.5}>
               {history.map((ev) => (
                 <Paper key={ev.id} variant="outlined" sx={{ p: 1.5 }}>
-                  <Typography variant="subtitle2">{ev.event_type}</Typography>
+                  <Typography variant="subtitle2">{ledgerEventLabel(ev.event_type)}</Typography>
                   <Typography variant="caption" color="text.secondary">
                     {new Date(ev.created_at).toLocaleString('ru-RU')}
                   </Typography>

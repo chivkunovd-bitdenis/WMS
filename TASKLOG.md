@@ -1,5 +1,16 @@
 # TASKLOG
 
+## TASK-049 — 2026-06-28 — FINAL-02: аудит дублей поверхностей ЧЗ
+
+- What changed:
+  - **`docs/CZ_DUPLICATE_SURFACES_AUDIT_RU.md`:** канон по ленте / списку кодов / импорту; follow-up POOLS-04…06, CROSS-04.
+  - **`HonestSignImportPage.tsx`:** редирект `…/import` → список пулов (убрана заглушка-дубль; канон — `MarkingImportDialog`).
+  - **`HonestSignPoolPage.tsx`:** `codeStatusLabel` / `ledgerEventLabel` в табах «Коды» и «Лента» + drawer истории.
+  - **`MarkingProductCodesDialog.tsx`:** `@deprecated` — не монтируется, канон — таб «Коды» пула.
+  - Merge: `task/LEDGER-06`, `task/POOLCARD-03`.
+- What did NOT change: POOLS-04 (дашборд+таблица), удаление сироты `MarkingProductCodesDialog`, CROSS-04 (импорт с контекстом пула).
+- Verification: `npm run build`; e2e `ff-honest-sign-pool`, `ff-honest-sign-import`. Commit `f048585`.
+
 ## TASK-051 — 2026-06-28 — BACKEND-01: deprecate scan-print / print-all / verify-pair
 
 - What changed: `marking_codes.py` — `deprecated=True` + summary on `POST /scan-print`, `/verify-pair`, `/packaging-tasks/{id}/print-all`; comment BACKEND-01 / T-A6 (ORD-44).

@@ -79,7 +79,31 @@ test('FF honest sign pool card: tabs and CSV export', async ({ page }) => {
   await expect(page.getByTestId('ff-honest-sign-pool-ledger-preview')).toBeVisible()
   await expect(page.getByTestId('ff-honest-sign-pool-ledger-open-full')).toBeVisible()
   await expect(page.getByTestId('ff-honest-sign-ledger-event-type')).toHaveCount(0)
+  await expect(page.getByTestId('ff-honest-sign-pool-ledger-preview')).toContainText('Импорт')
   await page.getByTestId('ff-honest-sign-pool-ledger-open-full').click()
   await expect(page.getByTestId('ff-honest-sign-ledger-page')).toBeVisible()
-  await expect(page.getByTestId('ff-honest-sign-ledger-table')).toContainText('imported')
+  await expect(page.getByTestId('ff-honest-sign-ledger-table')).toContainText('Импорт')
+})
+
+// TC-NEW-012 — FINAL-02: legacy /import route redirects to pool list (no stub duplicate).
+test('FF honest sign: import route redirects to pool list', async ({ page }) => {
+  test.setTimeout(60_000)
+  const email = `e2e-imp-redir-${Date.now()}@example.com`
+  const password = 'password123'
+
+  await page.goto('/')
+  await openFulfillmentRegistration(page)
+  await page.getByTestId('register-form').getByLabel('Организация').fill('E2E Import Redirect')
+  await page.getByTestId('register-form').getByLabel('Email администратора').fill(email)
+  await page.getByTestId('register-form').getByLabel('Пароль').fill(password)
+  await Promise.all([
+    waitForPostOk(page, '/api/auth/register'),
+    waitForGetOk(page, '/api/auth/me'),
+    page.getByTestId('register-form').getByRole('button', { name: 'Создать аккаунт' }).click(),
+  ])
+
+  await page.goto('/app/ff/honest-sign/import')
+  await expect(page).toHaveURL(/\/app\/ff\/honest-sign\/?$/)
+  await expect(page.getByTestId('ff-honest-sign-page')).toBeVisible()
+  await expect(page.getByTestId('ff-honest-sign-import-page')).toHaveCount(0)
 })
