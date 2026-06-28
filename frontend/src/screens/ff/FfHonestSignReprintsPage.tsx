@@ -5,6 +5,10 @@ import {
   Alert,
   Box,
   Button,
+  Dialog,
+  DialogActions,
+  DialogContent,
+  DialogTitle,
   Drawer,
   Link,
   Paper,
@@ -16,6 +20,7 @@ import {
   TableContainer,
   TableHead,
   TableRow,
+  TextField,
   Tooltip,
   Typography,
 } from '@mui/material'
@@ -64,6 +69,8 @@ export function FfHonestSignReprintsPage({
   const [error, setError] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
   const [busyId, setBusyId] = useState<string | null>(null)
+  const [rejectTargetId, setRejectTargetId] = useState<string | null>(null)
+  const [rejectReason, setRejectReason] = useState('')
   const [historyCodeId, setHistoryCodeId] = useState<string | null>(null)
   const [historyCisMasked, setHistoryCisMasked] = useState<string | null>(null)
   const [history, setHistory] = useState<CodeHistoryEvent[]>([])
@@ -97,6 +104,14 @@ export function FfHonestSignReprintsPage({
     void load()
   }, [load])
 
+  const closeRejectDialog = () => {
+    if (busyId) {
+      return
+    }
+    setRejectTargetId(null)
+    setRejectReason('')
+  }
+
   const openCodeHistory = async (codeId: string, cisMasked: string) => {
     setHistoryCodeId(codeId)
     setHistoryCisMasked(cisMasked)
@@ -120,7 +135,11 @@ export function FfHonestSignReprintsPage({
     setHistory([])
   }
 
-  const resolveRequest = async (requestId: string, action: 'replace' | 'approve-reprint' | 'reject') => {
+  const resolveRequest = async (
+    requestId: string,
+    action: 'replace' | 'approve-reprint' | 'reject',
+    reason?: string,
+  ) => {
     setBusyId(requestId)
     setError(null)
     try {
@@ -129,17 +148,32 @@ export function FfHonestSignReprintsPage({
         {
           method: 'POST',
           headers: authHeaders,
-          body: action === 'reject' ? JSON.stringify({ reason: 'Отклонено старшим' }) : undefined,
+          body:
+            action === 'reject'
+              ? JSON.stringify({ reason: reason?.trim() || null })
+              : undefined,
         },
       )
       if (!res.ok) {
         setError(await readApiErrorMessage(res))
         return
       }
+      if (action === 'reject') {
+        setRejectTargetId(null)
+        setRejectReason('')
+      }
       await load()
     } finally {
       setBusyId(null)
     }
+  }
+
+  const confirmReject = async () => {
+    const trimmed = rejectReason.trim()
+    if (!rejectTargetId || !trimmed) {
+      return
+    }
+    await resolveRequest(rejectTargetId, 'reject', trimmed)
   }
 
   return (
@@ -268,7 +302,10 @@ export function FfHonestSignReprintsPage({
                         size="small"
                         color="inherit"
                         disabled={busyId === row.id}
-                        onClick={() => void resolveRequest(row.id, 'reject')}
+                        onClick={() => {
+                          setRejectTargetId(row.id)
+                          setRejectReason('')
+                        }}
                         data-testid={`${testId}-reject-${row.id}`}
                       >
                         Отклонить
@@ -281,6 +318,50 @@ export function FfHonestSignReprintsPage({
           </Table>
         </TableContainer>
       )}
+      <Dialog
+        open={rejectTargetId !== null}
+        onClose={closeRejectDialog}
+        maxWidth="sm"
+        fullWidth
+        data-testid={`${testId}-reject-dialog`}
+      >
+        <DialogTitle>Отклонить запрос на перепечатку</DialogTitle>
+        <DialogContent>
+          <TextField
+            autoFocus
+            fullWidth
+            multiline
+            minRows={2}
+            label="Причина отклонения"
+            placeholder="Укажите, почему запрос отклонён — это увидит заявитель"
+            value={rejectReason}
+            onChange={(e) => setRejectReason(e.target.value)}
+            disabled={busyId !== null}
+            slotProps={{ htmlInput: { maxLength: 512 } }}
+            helperText="Обязательное поле"
+            sx={{ mt: 0.5 }}
+            data-testid={`${testId}-reject-reason`}
+          />
+        </DialogContent>
+        <DialogActions>
+          <Button
+            onClick={closeRejectDialog}
+            disabled={busyId !== null}
+            data-testid={`${testId}-reject-cancel`}
+          >
+            Отмена
+          </Button>
+          <Button
+            variant="contained"
+            color="error"
+            disabled={busyId !== null || rejectReason.trim().length < 1}
+            onClick={() => void confirmReject()}
+            data-testid={`${testId}-reject-confirm`}
+          >
+            Отклонить
+          </Button>
+        </DialogActions>
+      </Dialog>
       <Drawer
         anchor="right"
         open={historyCodeId != null}

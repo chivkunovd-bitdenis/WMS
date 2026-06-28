@@ -149,6 +149,62 @@ test('FF packaging: defect button creates pending reprint request', async ({ pag
     '',
   )
   expect(requestId).toBeTruthy()
+
+  // TC-NEW-006 — контекст перепечатки: задание, пул, история кода доступны из строки.
+  await expect(page.getByTestId(`ff-honest-sign-reprints-page-context-${requestId}`)).toBeVisible()
+  await expect(
+    page.getByTestId(`ff-honest-sign-reprints-page-context-task-${requestId}`),
+  ).toBeVisible()
+  await expect(
+    page.getByTestId(`ff-honest-sign-reprints-page-context-pool-${requestId}`),
+  ).toBeVisible()
+  await expect(
+    page.getByTestId(`ff-honest-sign-reprints-page-context-history-${requestId}`),
+  ).toBeVisible()
+
+  await Promise.all([
+    page.waitForResponse(
+      (r) =>
+        r.request().method() === 'GET' &&
+        r.url().includes('/operations/marking-codes/codes/') &&
+        r.url().endsWith('/history') &&
+        r.status() >= 200 &&
+        r.status() < 300,
+    ),
+    page.getByTestId(`ff-honest-sign-reprints-page-context-history-${requestId}`).click(),
+  ])
+  await expect(page.getByTestId('ff-honest-sign-reprints-page-history-drawer')).toBeVisible()
+  await page.keyboard.press('Escape')
+
+  await Promise.all([
+    page.waitForResponse(
+      (r) =>
+        r.request().method() === 'GET' &&
+        r.url().includes('/operations/packaging-tasks/') &&
+        r.status() >= 200 &&
+        r.status() < 300,
+    ),
+    page.getByTestId(`ff-honest-sign-reprints-page-context-task-${requestId}`).click(),
+  ])
+  await expect(page).toHaveURL(/\/app\/ff\/packaging/)
+  await expect(page.getByTestId('ff-packaging-task-panel')).toBeVisible()
+  await page.getByTestId('nav-ff-honest-sign-reprints').click()
+  await expect(page.getByTestId('ff-honest-sign-reprints-page-table')).toBeVisible()
+
+  await Promise.all([
+    page.waitForResponse(
+      (r) =>
+        r.request().method() === 'GET' &&
+        r.url().includes('/operations/marking-codes/pools/') &&
+        r.status() >= 200 &&
+        r.status() < 300,
+    ),
+    page.getByTestId(`ff-honest-sign-reprints-page-context-pool-${requestId}`).click(),
+  ])
+  await expect(page).toHaveURL(/\/app\/ff\/honest-sign\/pool\//)
+  await page.getByTestId('nav-ff-honest-sign-reprints').click()
+  await expect(page.getByTestId('ff-honest-sign-reprints-page-table')).toBeVisible()
+
   await Promise.all([
     page.waitForResponse(
       (r) =>
