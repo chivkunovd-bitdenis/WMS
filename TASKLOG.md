@@ -1,5 +1,11 @@
 # TASKLOG
 
+## TASK-040 — 2026-06-28 — LEDGER-03: date range filter on ledger
+
+- What changed: `HonestSignLedgerPage` — поля «С»/«По» (`type="date"`), query `date_from`/`date_to` на `/operations/marking-codes/ledger`; e2e + pytest `test_ledger_date_range_filter`.
+- What did NOT change: экспорт (LEDGER-04), backend API (параметры уже были).
+- Verification: `pytest tests/test_marking_pools_read.py::test_ledger_date_range_filter`; `npm run build` in worktree `LEDGER-03`.
+
 ## TASK-054 — 2026-06-28 — FINAL-01: unify КМ/ЧЗ UI labels
 
 - What changed: merged PACK-09, PENDING-01, SHARED-01, POOLCARD-01/03, CROSS-01…04, PRINT-05 into `task/FINAL-01`; unified user-visible strings — **КМ** for code instances (pool, ledger, import, defect/reprint, errors), **ЧЗ** for system/requirement (column «ЧЗ», «Печать ЧЗ», product flag, presets, integration). Files: `FfPackagingPage`, `FfPendingMarkingPage`, `MarkingPrintDialog`, `MarkingProductCodesDialog`, `MarkingImportDialog`, `HonestSignScreen`/`PoolPage`/`LedgerPage`, `FfHonestSignReprintsPage`, `readApiErrorMessage`, `ffPermissions`, `App.tsx`.
@@ -122,6 +128,7 @@
   - **`HonestSignScreen.tsx`:** убран дублирующий чип «не привязан» в колонке «Пул»; привязка только через кнопку «Привязать» в колонке «Товары» (и пункт меню «Привязать товары»).
 - What did NOT change: диалог привязки, меню пула, e2e `ff-honest-sign-pools.spec.ts`.
 - Verification: `npm run build` в worktree POOLS-06 — OK. Commit: `e888b73`.
+
 ## TASK-036 — 2026-06-28 — CZ-000 barrier: MP commit + feat/cz-ux-fixes + autopilot backlog
 
 - What changed:

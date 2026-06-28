@@ -64,6 +64,29 @@ test('FF honest sign ledger: imported events and document filter', async ({ page
   await page.getByRole('textbox', { name: 'Документ' }).fill(docNumber)
   await page.getByTestId('ff-honest-sign-ledger-apply').click()
   await expect(page.getByTestId('ff-honest-sign-ledger-table')).toContainText(docNumber)
+
+  const today = new Date().toISOString().slice(0, 10)
+  await page.getByTestId('ff-honest-sign-ledger-date-from').fill(today)
+  await page.getByTestId('ff-honest-sign-ledger-date-to').fill(today)
+  const [todayLedgerRes] = await Promise.all([
+    page.waitForResponse(
+      (res) =>
+        res.url().includes('/operations/marking-codes/ledger') &&
+        res.url().includes('date_from=') &&
+        res.url().includes('date_to=') &&
+        res.request().method() === 'GET' &&
+        res.status() === 200,
+    ),
+    page.getByTestId('ff-honest-sign-ledger-apply').click(),
+  ])
+  expect(todayLedgerRes.url()).toContain('date_from=')
+  expect(todayLedgerRes.url()).toContain('date_to=')
+  await expect(page.getByTestId('ff-honest-sign-ledger-table')).toContainText('imported')
+
+  await page.getByTestId('ff-honest-sign-ledger-date-from').fill('2099-01-01')
+  await page.getByTestId('ff-honest-sign-ledger-date-to').fill('2099-01-01')
+  await page.getByTestId('ff-honest-sign-ledger-apply').click()
+  await expect(page.getByTestId('ff-honest-sign-ledger-table')).toContainText('События не найдены')
 })
 
 // TC-NEW-011 — CROSS-03: лента расхода — Autocomplete селлера (как на экране пулов).

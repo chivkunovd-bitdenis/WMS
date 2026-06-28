@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import uuid
+from datetime import datetime, timedelta, timezone
 
 import pytest
 from httpx import AsyncClient
@@ -178,6 +179,38 @@ async def test_ledger_cis_mask_filter(async_client: AsyncClient) -> None:
     )
     assert full.status_code == 200
     assert full.json()["total"] >= body["total"]
+
+
+@pytest.mark.asyncio
+async def test_ledger_date_range_filter(async_client: AsyncClient) -> None:
+    h, seller_id, _, _, _ = await _seed_pool_with_codes(async_client)
+    now = datetime.now(timezone.utc)
+    today = now.date().isoformat()
+    future = (now + timedelta(days=365)).date().isoformat()
+
+    today_ledger = await async_client.get(
+        "/operations/marking-codes/ledger",
+        headers=h,
+        params={
+            "seller_id": seller_id,
+            "date_from": f"{today}T00:00:00",
+            "date_to": f"{today}T23:59:59",
+        },
+    )
+    assert today_ledger.status_code == 200
+    assert today_ledger.json()["total"] >= 4
+
+    future_ledger = await async_client.get(
+        "/operations/marking-codes/ledger",
+        headers=h,
+        params={
+            "seller_id": seller_id,
+            "date_from": f"{future}T00:00:00",
+            "date_to": f"{future}T23:59:59",
+        },
+    )
+    assert future_ledger.status_code == 200
+    assert future_ledger.json()["total"] == 0
 
 
 @pytest.mark.asyncio
