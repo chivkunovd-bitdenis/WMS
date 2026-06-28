@@ -138,7 +138,8 @@ test('FF packaging: print honest sign codes for line quantity', async ({ page })
   expect(printBody.quantity).toBe(1)
   expect(printBody.codes).toHaveLength(1)
 
-  await expect(page.getByText('напеч. 1')).toBeVisible()
+  await expect(page.getByText('напечатано 1 / нужно 1')).toBeVisible()
+  await expect(page.getByText(/дост\.\s+\d+\s+в пуле/)).toBeVisible()
 })
 
 // TC-NEW-PKG-07 — нельзя завершить упаковку без напечатанных КМ по строкам ЧЗ.
@@ -232,6 +233,9 @@ test('FF packaging: block complete when honest sign codes missing', async ({ pag
   ])
 
   await expect(page.getByTestId('ff-packaging-task-panel')).toBeVisible()
+
+  await expect(page.getByTestId('ff-packaging-line-marking-incomplete')).toBeVisible()
+  await expect(page.getByText('напечатано 0 / нужно 1')).toBeVisible()
 
   await Promise.all([
     page.waitForResponse(

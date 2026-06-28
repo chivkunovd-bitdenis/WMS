@@ -100,6 +100,11 @@ function isLineMarkingIncomplete(ln: PackagingTaskLine): boolean {
   return done > 0 && ln.qty_marking_printed < done
 }
 
+/** Progress toward qty_need_pack — for ЧЗ column display and row highlight. */
+function isLineMarkingProgressIncomplete(ln: PackagingTaskLine): boolean {
+  return ln.requires_honest_sign && ln.qty_marking_printed < ln.qty_need_pack
+}
+
 const MARKING_NOT_DONE_MESSAGE =
   'Не хватает напечатанных кодов ЧЗ по заданию на упаковку.'
 
@@ -410,8 +415,24 @@ export function FfPackagingTaskPanel({
           <TableBody>
             {task.lines.map((ln) => {
               const displayMeta = productDisplayMetaFromCatalog(ln.product_id, ln, catalogById)
+              const markingProgressIncomplete = isLineMarkingProgressIncomplete(ln)
               return (
-              <TableRow key={ln.id} data-testid="ff-packaging-line">
+              <TableRow
+                key={ln.id}
+                data-testid={
+                  markingProgressIncomplete
+                    ? 'ff-packaging-line-marking-incomplete'
+                    : 'ff-packaging-line'
+                }
+                sx={
+                  markingProgressIncomplete
+                    ? {
+                        bgcolor: 'warning.light',
+                        '&:hover': { bgcolor: 'warning.light' },
+                      }
+                    : undefined
+                }
+              >
                 <FfProductLineCells
                   meta={{
                     ...displayMeta,
@@ -436,10 +457,18 @@ export function FfPackagingTaskPanel({
                 <TableCell align="right">
                   {ln.requires_honest_sign ? (
                     <Stack spacing={0.25} sx={{ alignItems: 'flex-end' }}>
-                      <Typography variant="caption" color="text.secondary">
-                        {ln.qty_marking_printed > 0
-                          ? `напеч. ${ln.qty_marking_printed}`
-                          : `дост. ${ln.marking_available_count}`}
+                      <Typography
+                        variant="body2"
+                        data-testid={`ff-packaging-marking-progress-${ln.id}`}
+                      >
+                        напечатано {ln.qty_marking_printed} / нужно {ln.qty_need_pack}
+                      </Typography>
+                      <Typography
+                        variant="caption"
+                        color="text.secondary"
+                        data-testid={`ff-packaging-marking-pool-${ln.id}`}
+                      >
+                        дост. {ln.marking_available_count} в пуле
                       </Typography>
                     </Stack>
                   ) : (
