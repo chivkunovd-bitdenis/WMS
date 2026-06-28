@@ -1,5 +1,11 @@
 # TASKLOG
 
+## TASK-047 — 2026-06-28 — REPRINTS-03: context links on reprint row
+
+- What changed: `FfHonestSignReprintsPage` — колонка «Контекст»: ссылки «Задание» (упаковка), «Пул», «История кода» (drawer); API `reprint-requests` отдаёт `packaging_task_id` и `pool_id`.
+- What did NOT change: confirm/replace/reject flow (REPRINTS-01/02), e2e specs.
+- Verification: `npm run build` + `pytest tests/test_marking_reprint_defect.py tests/test_shift_lead.py` in REPRINTS-03 worktree — green. Commit `bb957a9`.
+
 ## TASK-036 — 2026-06-28 — CZ-000 barrier: MP commit + feat/cz-ux-fixes + autopilot backlog
 
 - What changed:

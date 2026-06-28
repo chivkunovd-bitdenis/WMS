@@ -137,6 +137,8 @@ async def test_defect_creates_pending_reprint_request(async_client: AsyncClient)
     assert len(requests) == 1
     assert requests[0]["reason"] == "Порвана этикетка"
     assert requests[0]["code_id"] == code_id
+    assert requests[0]["packaging_task_id"]
+    assert requests[0]["pool_id"]
 
     dup = await async_client.post(
         f"/operations/marking-codes/codes/{code_id}/defect",

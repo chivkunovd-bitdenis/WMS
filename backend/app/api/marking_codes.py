@@ -1249,6 +1249,8 @@ class MarkingReprintRequestOut(BaseModel):
     product_sku: str
     cis_masked: str
     document_number: str | None = None
+    packaging_task_id: str
+    pool_id: str | None = None
 
 
 class MarkingReprintRequestsOut(BaseModel):
@@ -1343,6 +1345,8 @@ async def list_marking_reprint_requests(
                 product_sku=row.product_sku,
                 cis_masked=row.cis_masked,
                 document_number=row.document_number,
+                packaging_task_id=str(row.packaging_task_id),
+                pool_id=str(row.pool_id) if row.pool_id else None,
             )
             for row in rows
         ]
