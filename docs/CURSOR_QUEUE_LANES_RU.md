@@ -14,52 +14,59 @@
 
 ---
 
+## Статус задачи (единый контракт)
+
+**Таблицу backlog НЕ редактируем** после старта. Статус — только файлы:
+
+| Файл | Смысл |
+|------|--------|
+| **`.cursor/state/<id>.done`** | Закрыто: merge в integration branch + verifier PASS. Создаёт **orchestrator**. |
+| **`.cursor/state/<id>.integrated`** | Merge `task/<id>` → integration branch выполнен. |
+| **`.cursor/state/<id>.blocked`** | 3 fix без зелёного CI — skip. |
+
+**depends_on:** задача runnable, когда у **всех** предшественников есть `.cursor/state/<id>.done`.
+
+**integration_branch:** `feat/cz-ux-fixes` (для WMS ЧЗ-backlog). Весь код фичи живёт здесь; `task/<id>` — черновик до merge.
+
+**Изоляция:** worktree `.cursor/wt/<id>`, ветка `task/<id>`, база = **HEAD integration branch**.
+
+**Integrate (orchestrator, после verifier):** `./scripts/queue-integrate.sh <id>` — **один merge за раз** (global lock), конфликт → builder на integration branch.
+
+---
+
 ## Атрибуты (канонические имена — не переименовывать)
 
 | Атрибут | Обязателен | Смысл |
 |---------|------------|--------|
 | **`lane`** | рекомендуется | Дорожка: задачи с **одним `lane`** идут **строго по одной** (последовательно). |
 | **`files`** | да (для кода) | Список путей, которые задача **блокирует**. Нельзя параллелить две задачи с **пересечением** `files`. |
-| **`depends_on`** | если есть порядок | ID задач-предшественников (через запятую). Задача **не стартует**, пока все предшественники не **` done`**. |
-
-Дополнительно (как сейчас в WMS):
-
-| Маркер | Смысл |
-|--------|--------|
-| **` done`** в колонке **`id`** | Закрыто (verifier PASS), напр. `PACK-01 done`. |
-| **` blocked`** | 3 fix без зелёного CI — skip. |
+| **`depends_on`** | если есть порядок | ID задач-предшественников (через запятую). Runnable только если у всех есть **`.done`** в state. |
 
 ---
 
 ## Правила планирования (orchestrator)
 
-1. **Skip:** id с ` done` или ` blocked`.
-2. **depends_on:** задача runnable только если все ID из `depends_on` уже **` done`** в backlog.
-3. **files:** не запускать две runnable задачи одновременно, если множества `files` **пересекаются** (хотя бы один общий путь).
-4. **lane:** в одном `lane` одновременно **не больше одной** активной задачи (даже если `files` формально разные — lane = общая дорожка экрана/модуля).
+1. **Skip:** id, у которых есть `.cursor/state/<id>.done` или `.blocked`.
+2. **depends_on:** runnable только если у всех предшественников есть `.cursor/state/<id>.done`.
+3. **files:** не запускать две runnable задачи одновременно, если множества `files` **пересекаются**.
+4. **lane:** в одном `lane` одновременно **не больше одной** активной задачи.
 5. **parallel_workers:** из промпта / `SESSION_HANDOFF` — максимум столько builder **одновременно**, сколько задач прошли правила 2–4.
-6. **Строго 1 задача = 1 builder** (как в orchestrator).
+6. **Строго 1 задача = 1 builder.**
 
 ---
 
 ## Формат backlog (WMS)
 
-**Файл:** **`docs/PARALLEL_AGENT_TASKS.md`** — markdown-таблицы по lane.
+**Файл:** **`docs/PARALLEL_AGENT_TASKS.md`** — markdown-таблицы по lane (**read-only** для статуса).
 
 | Колонка | Смысл |
 |---------|--------|
-| **`id`** | PACK-01, PRINT-01, …; закрыто → **`PACK-01 done`** |
-| **`depends_on`** | CZ-000, PACK-01, … (все должны быть done) |
+| **`id`** | PACK-01, PRINT-01, … (**не** менять на `PACK-01 done`) |
+| **`depends_on`** | CZ-000, PACK-01, … (все должны быть `.done` в state) |
 | **`do`** | что делать builder |
 | **`gate`** | критерий verifier |
 
 **Lane** = секция `## LANE-PACK`, `## LANE-PRINT`, …; `files` — в шапке lane или колонке CROSS.
-
-Альтернативный компактный формат (другие проекты) — одна строка:
-
-```text
-ID — описание | lane: … | files: path/a, path/b | depends_on: ID2
-```
 
 ---
 
@@ -75,7 +82,8 @@ ID — описание | lane: … | files: path/a, path/b | depends_on: ID2
 
 ## Resume после обрыва
 
-State на диске: ` done` / ` blocked` в **`docs/PARALLEL_AGENT_TASKS.md`** (колонка id).
+На диске: `.cursor/state/*.done` / `*.blocked`, worktree `.cursor/wt/<id>`, коммиты в ветках `task/<id>`.  
+Тот же стартовый промпт в **новом чате** — orchestrator подхватит с state.
 
 ---
 
@@ -83,17 +91,20 @@ State на диске: ` done` / ` blocked` в **`docs/PARALLEL_AGENT_TASKS.md`*
 
 | Файл | Роль |
 |------|------|
-| **`docs/PARALLEL_AGENT_TASKS.md`** | Backlog + таблицы задач |
-| `.cursor/SESSION_HANDOFF.md` | `parallel_workers`, последняя закрытая |
+| **`docs/PARALLEL_AGENT_TASKS.md`** | Backlog (таблицы задач, read-only) |
+| `.cursor/state/` | `.done` / `.blocked` |
+| `.cursor/SESSION_HANDOFF.md` | `parallel_workers`, активные слоты |
 | `~/.cursor/agents/orchestrator.md` | Режим очереди |
-| `.cursor/rules/wms-queue.mdc` | Краткие правила queue mode |
+| `.cursor/rules/wms-queue.mdc` | Старт + краткие правила |
+| `~/.cursor/autopilot/hooks.py` | Hook arm/continue (глобально) |
 
 ---
 
 ## Шпаргалка для старта orchestrator
 
 ```text
-orchestrator, continuous, queue mode, 5 агентов.
-Backlog: docs/PARALLEL_AGENT_TASKS.md. 1 задача = 1 builder. builder → verifier → fix.
-Commit без моей команды не делать.
+orchestrator, continuous, queue mode, 5 агентов. backlog: docs/PARALLEL_AGENT_TASKS.md
+Worker pool: 1 id = 1 builder, refill on free slot.
+Изоляция: worktree .cursor/wt/<id>. Готово = touch .cursor/state/<id>.done после verifier.
+builder → verifier → fix.
 ```

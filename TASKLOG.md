@@ -1,5 +1,11 @@
 # TASKLOG
 
+## TASK-063 — 2026-06-28 — Queue integration: merge task/* → feat/cz-ux-fixes
+
+- What changed: собран весь ЧЗ UX backlog в одну ветку **`feat/cz-ux-fixes`**: база `task/FINAL-01` + догон LEDGER-05…06, POOLS-01…05, POOLCARD-02, REPRINTS-*, BACKEND-01, PRINT-02/03, FINAL-02/03; конфликты разрешены вручную; `scripts/queue-integrate.sh`; orchestrator/hook — обязательный integrate после verifier; `.gitignore` — `.cursor/state/`, `.cursor/wt/`.
+- What did NOT change: `main` (интеграция только в feature-ветке); `task/PACK-01..03` не мержились отдельно (уже в FINAL-01/PACK-09).
+- Verification: `npm run build` green; `pytest tests/test_marking_pools_read.py tests/test_print_templates.py` — 14 passed.
+
 ## TASK-037 — 2026-06-28 — FINAL-03: docs sync (CHESTNY_ZNAK UX + FIX_TASKS)
 
 - What changed:

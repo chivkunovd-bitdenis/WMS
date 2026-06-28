@@ -1,10 +1,16 @@
 {
   "version": 1,
   "hooks": {
+    "beforeSubmitPrompt": [
+      {
+        "command": "python3 /Users/deniscivkunov/.cursor/autopilot/hooks.py arm",
+        "matcher": "UserPromptSubmit"
+      }
+    ],
     "stop": [
       {
-        "command": ".cursor/hooks/continue-queue.sh",
-        "loop_limit": 25
+        "command": "python3 /Users/deniscivkunov/.cursor/autopilot/hooks.py continue",
+        "loop_limit": 500
       }
     ]
   }

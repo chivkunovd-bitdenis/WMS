@@ -33,6 +33,7 @@ backend/alembic_autogen.db
 # IDE
 .vscode/
 .idea/
+.cursor/.autopilot_armed.json
 
 # Cursor queue autopilot (local only)
 .cursor/state/

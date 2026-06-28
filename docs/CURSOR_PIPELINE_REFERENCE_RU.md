@@ -53,7 +53,7 @@
 2. System / tool instructions
 3. `000-pipeline-v2-supersedes-v1.mdc` — v2 побеждает старый блок User Rules
 4. Global rules с `alwaysApply: true`
-5. Workspace rules (`AGENTS.md`, `wms-autopilot.mdc`)
+5. Workspace rules (`AGENTS.md`, `wms-queue.mdc`, `wms-issues.mdc`)
 6. Requestable rules (`external-contracts`, `ui-engineering-checklist`, `buglog-distillation`)
 7. Скиллы — когда задача их требует
 
@@ -776,14 +776,19 @@ Modal scroll, drag/pointer, global keydown, polling, tableLayout, stale response
 - `waitForResponse` параллельно с click
 - Form reset: capture `currentTarget` before await
 
-### .cursor/rules/wms-autopilot.mdc
+### .cursor/rules/wms-issues.mdc
+
+Issues-режим (GitHub Issues `ready`) + инженерные хард-правила WMS. **Не queue autopilot** — см. `wms-queue.mdc`.
 
 - One feature per PR
 - Backend boundaries: api / services / models / db
 - No raw SQL in routes; types; no bare except; no print
 - UI change → Playwright e2e user-visible outcome
 - Issues `ready`; AGENTS.md + green CI
-- No required Cursor subagent chain — CI + branch protection
+
+### .cursor/rules/wms-queue.mdc
+
+Queue autopilot (`docs/PARALLEL_AGENT_TASKS.md`, worker pool, `.cursor/state/*.done`, worktree). Старт — только **новый чат**; см. файл.
 
 ---
 
