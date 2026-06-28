@@ -63,19 +63,19 @@ test('FF honest sign ledger: imported events and document filter', async ({ page
   await selectHonestSignSeller(page, sellerId)
   await page.getByTestId('ff-honest-sign-open-ledger').click()
   await expect(page.getByTestId('ff-honest-sign-ledger-page')).toBeVisible()
-  await expect(page.getByTestId('ff-honest-sign-ledger-table')).toContainText('imported')
+  await expect(page.getByTestId('ff-honest-sign-ledger-table')).toContainText('Импорт')
 
   await Promise.all([
     waitForLedgerGet(page, 'event_type=printed'),
     page.getByTestId('ff-honest-sign-ledger-event-type').click(),
-    page.getByRole('option', { name: 'printed' }).click(),
+    page.getByRole('option', { name: 'Печать' }).click(),
   ])
-  await expect(page.getByTestId('ff-honest-sign-ledger-table')).not.toContainText('imported')
+  await expect(page.getByTestId('ff-honest-sign-ledger-table')).not.toContainText('Импорт')
 
   await Promise.all([
     waitForLedgerGet(page, 'event_type=imported'),
     page.getByTestId('ff-honest-sign-ledger-event-type').click(),
-    page.getByRole('option', { name: 'imported' }).click(),
+    page.getByRole('option', { name: 'Импорт' }).click(),
   ])
   await Promise.all([
     waitForLedgerGet(page, `document=${encodeURIComponent(docNumber)}`),
@@ -91,7 +91,7 @@ test('FF honest sign ledger: imported events and document filter', async ({ page
   ])
   expect(todayLedgerRes.url()).toContain('date_from=')
   expect(todayLedgerRes.url()).toContain('date_to=')
-  await expect(page.getByTestId('ff-honest-sign-ledger-table')).toContainText('imported')
+  await expect(page.getByTestId('ff-honest-sign-ledger-table')).toContainText('Импорт')
 
   await page.getByTestId('ff-honest-sign-ledger-date-from').fill('2099-01-01')
   await Promise.all([
@@ -156,8 +156,8 @@ test('FF honest sign ledger: seller autocomplete on ledger page', async ({ page 
   await expect(page.getByTestId('ff-honest-sign-ledger-seller-picker')).toBeVisible()
 
   await selectMarkingSeller(page, 'ff-honest-sign-ledger', sellerAId)
-  await expect(page.getByTestId('ff-honest-sign-ledger-table')).toContainText('imported')
+  await expect(page.getByTestId('ff-honest-sign-ledger-table')).toContainText('Импорт')
 
   await selectMarkingSeller(page, 'ff-honest-sign-ledger', sellerBId)
-  await expect(page.getByTestId('ff-honest-sign-ledger-table')).not.toContainText('imported')
+  await expect(page.getByTestId('ff-honest-sign-ledger-table')).not.toContainText('Импорт')
 })

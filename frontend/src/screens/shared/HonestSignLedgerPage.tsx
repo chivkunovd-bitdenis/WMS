@@ -25,6 +25,7 @@ import { useDebouncedValue } from '../../hooks/useDebouncedValue'
 import { PageHeader } from '../../ui/PageHeader'
 import { readApiErrorMessage } from '../../utils/readApiErrorMessage'
 import { MarkingSellerPicker } from './MarkingSellerPicker'
+import { ledgerEventLabel } from '../../utils/markingStatus'
 
 const TEXT_FILTER_DEBOUNCE_MS = 400
 
@@ -257,7 +258,7 @@ export function HonestSignLedgerPage({
           <MenuItem value="">Все</MenuItem>
           {EVENT_TYPES.filter(Boolean).map((t) => (
             <MenuItem key={t} value={t}>
-              {t}
+              {ledgerEventLabel(t)}
             </MenuItem>
           ))}
         </TextField>
@@ -351,7 +352,7 @@ export function HonestSignLedgerPage({
                 <TableRow key={row.id} data-testid={`${testIdPrefix}-row-${row.id}`}>
                   <TableCell>{new Date(row.created_at).toLocaleString('ru-RU')}</TableCell>
                   <TableCell>
-                    <Chip size="small" label={row.event_type} />
+                    <Chip size="small" label={ledgerEventLabel(row.event_type)} />
                   </TableCell>
                   <TableCell>{row.cis_masked}</TableCell>
                   <TableCell>
