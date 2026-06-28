@@ -2,6 +2,7 @@ import { expect, test } from '@playwright/test'
 
 import { waitForGetOk, waitForPostOk } from './api-waits'
 import { openFulfillmentRegistration } from './auth-flow'
+import { selectHonestSignSeller } from './ff-honest-sign-helpers'
 
 // TC-NEW-008 — T0.8: диалог импорта, превью по GTIN, загрузка в пул.
 test('FF honest sign: import dialog uploads CSV into pool', async ({ page }) => {
@@ -43,7 +44,7 @@ test('FF honest sign: import dialog uploads CSV into pool', async ({ page }) => 
   })
 
   await page.getByTestId('nav-ff-honest-sign').click()
-  await page.getByTestId(`ff-honest-sign-seller-${sellerId}`).click()
+  await selectHonestSignSeller(page, sellerId)
   await page.getByTestId('ff-honest-sign-open-import').click()
   await expect(page.getByTestId('ff-honest-sign-import-dialog')).toBeVisible()
 
@@ -131,7 +132,7 @@ test('FF honest sign: re-import same codes reports duplicates', async ({ page })
   expect(first.ok()).toBeTruthy()
 
   await page.getByTestId('nav-ff-honest-sign').click()
-  await page.getByTestId(`ff-honest-sign-seller-${sellerId}`).click()
+  await selectHonestSignSeller(page, sellerId)
   await page.getByTestId('ff-honest-sign-open-import').click()
 
   const previewWait = page.waitForResponse((r) => r.url().includes('/import/preview') && r.ok())

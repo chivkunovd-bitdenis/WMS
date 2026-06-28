@@ -29,8 +29,9 @@ import MoreVertOutlined from '@mui/icons-material/MoreVertOutlined'
 import { apiUrl } from '../../api'
 import { PageHeader } from '../../ui/PageHeader'
 import { readApiErrorMessage } from '../../utils/readApiErrorMessage'
-import { MarkingPoolProductsDialog } from './MarkingPoolProductsDialog'
 import { MarkingImportDialog } from './MarkingImportDialog'
+import { MarkingPoolProductsDialog } from './MarkingPoolProductsDialog'
+import { MarkingSellerPicker } from './MarkingSellerPicker'
 
 export type MarkingPoolRow = {
   id: string
@@ -240,23 +241,13 @@ export function HonestSignScreen({
         description="Пулы кодов по GTIN: остаток общий на пул, товары привязываются вручную."
       />
 
-      {sellerIdRequiredForImport && sellers.length > 0 ? (
-        <Stack direction="row" spacing={1} sx={{ flexWrap: 'wrap', alignItems: 'center' }}>
-          <Typography variant="body2" color="text.secondary">
-            Селлер:
-          </Typography>
-          {sellers.map((s) => (
-            <Button
-              key={s.id}
-              size="small"
-              variant={selectedSellerId === s.id ? 'contained' : 'outlined'}
-              onClick={() => onSelectedSellerIdChange?.(s.id)}
-              data-testid={`${testIdPrefix}-seller-${s.id}`}
-            >
-              {s.name}
-            </Button>
-          ))}
-        </Stack>
+      {sellerIdRequiredForImport ? (
+        <MarkingSellerPicker
+          sellers={sellers}
+          selectedSellerId={selectedSellerId}
+          onSelectedSellerIdChange={(id) => onSelectedSellerIdChange?.(id)}
+          testIdPrefix={testIdPrefix}
+        />
       ) : null}
 
       {error ? (
