@@ -170,6 +170,7 @@ async def collect_into_box(
     product_id: uuid.UUID,
     quantity: int,
     require_open_box: bool = True,
+    allow_over_plan: bool = False,
 ) -> CollectResult:
     if quantity < 1:
         raise MarketplaceUnloadPickError("invalid_quantity")
@@ -212,7 +213,7 @@ async def collect_into_box(
         (int(ln.quantity) for ln in req.lines if ln.product_id == product_id),
         0,
     )
-    if picked.get(product_id, 0) + quantity > plan_qty:
+    if not allow_over_plan and picked.get(product_id, 0) + quantity > plan_qty:
         raise MarketplaceUnloadPickError("plan_limit_exceeded")
 
     effective_location_id = await resolve_collect_storage_location(

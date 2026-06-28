@@ -1,5 +1,7 @@
 # Technical Builder Plan
 
+> **Superseded (2026-06-28):** не выполнять слепо. Актуальный backlog и очередь задач — [`06_mp_unload_unified_tasks_RU.md`](./06_mp_unload_unified_tasks_RU.md). Канон требований — [`01_normalized_process_spec.md`](./01_normalized_process_spec.md).
+
 ## Input
 
 Used file:

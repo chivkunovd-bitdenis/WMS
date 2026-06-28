@@ -155,6 +155,7 @@ export function FfPendingMarkingPage({ token }: Props) {
                           qtyNeedPack: row.qty_remaining,
                           markingAvailable: row.marking_available_count,
                           qtyMarkingPrinted: row.qty_marking_printed,
+                          requiresHonestSign: true,
                           skuCode: row.sku_code,
                           productName: row.product_name,
                           onPrinted: () => {

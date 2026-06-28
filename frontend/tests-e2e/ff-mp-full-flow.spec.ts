@@ -41,8 +41,8 @@ async function addProductsToBoxViaModal(
   await expect(page.getByTestId('ff-mp-box-add-dialog')).not.toBeVisible()
 }
 
-// TC-NEW-MP-FULL-01 — REV-FIX-019: seller plan → FF confirm → packaging → 2 batch boxes → ship (full plan).
-test('MP unload full flow: seller plan through FF ship with two boxes', async ({ page }) => {
+// TC-NEW-MP-FULL-001 — MP-032: seller plan → FF confirm → boxes ∥ packaging → ship from footer.
+test('MP unload full flow: parallel boxes then packaging then ship', async ({ page }) => {
   test.setTimeout(180_000)
 
   const adminEmail = `e2e-mp-full-${Date.now()}@example.com`
@@ -288,8 +288,6 @@ test('MP unload full flow: seller plan through FF ship with two boxes', async ({
   await expect(page.getByTestId('ff-supplies-doc-dialog')).toBeVisible()
   await expect(page.getByTestId('ff-supplies-doc-dialog')).toContainText('Запланировано')
 
-  await page.getByTestId('ff-mp-tab-final').click()
-  await expect(page.getByTestId('ff-mp-tab-final-panel')).toBeVisible()
   await expect(page.getByTestId('ff-supplies-doc-submit')).toBeEnabled()
   await Promise.all([
     waitForPostOk(
@@ -300,6 +298,29 @@ test('MP unload full flow: seller plan through FF ship with two boxes', async ({
     page.getByTestId('ff-supplies-doc-submit').click(),
   ])
   await expect(page.getByTestId('ff-supplies-doc-dialog')).toContainText('Утверждено')
+
+  // Parallel path: fill boxes before packaging is done (MP-005 / MP-032).
+  await expect(page.getByTestId('ff-mp-boxes')).toBeVisible()
+  await expect(page.getByTestId('ff-mp-box-batch-create')).toBeEnabled()
+  await page.getByTestId('ff-mp-box-batch-count').locator('input').fill('2')
+  await Promise.all([
+    waitForPostOk(page, `/api/operations/marketplace-unload-requests/${requestId}/boxes/batch`),
+    page.getByTestId('ff-mp-box-batch-create').click(),
+  ])
+
+  const detailRes = await page.request.get(
+    `${e2eApi}/operations/marketplace-unload-requests/${requestId}`,
+    { headers: auth },
+  )
+  const boxes = ((await detailRes.json()) as { boxes: { id: string }[] }).boxes
+  expect(boxes.length).toBe(2)
+
+  await addProductsToBoxViaModal(page, requestId, boxes[0].id, locBarcode, productId, QTY_PER_BOX)
+  await addProductsToBoxViaModal(page, requestId, boxes[1].id, locBarcode, productId, QTY_PER_BOX)
+
+  await expect(page.getByTestId('ff-mp-collect-summary-distributed')).toHaveText(String(PLAN_QTY))
+  await expect(page.getByTestId('ff-mp-collect-summary-remaining')).toHaveText('0')
+  await expect(page.getByTestId('ff-mp-ship')).toBeDisabled()
 
   await page.getByTestId('ff-mp-tab-packaging').click()
   await expect(page.getByTestId('ff-mp-tab-packaging-panel')).toBeVisible()
@@ -326,29 +347,7 @@ test('MP unload full flow: seller plan through FF ship with two boxes', async ({
   ])
   await expect(page.getByTestId('ff-packaging-task-status')).toContainText('Выполнено')
 
-  await page.getByTestId('ff-mp-tab-boxes').click()
-  await expect(page.getByTestId('ff-mp-boxes')).toBeVisible()
-  await expect(page.getByTestId('ff-mp-box-batch-create')).toBeEnabled()
-  await page.getByTestId('ff-mp-box-batch-count').locator('input').fill('2')
-  await Promise.all([
-    waitForPostOk(page, `/api/operations/marketplace-unload-requests/${requestId}/boxes/batch`),
-    page.getByTestId('ff-mp-box-batch-create').click(),
-  ])
-
-  const detailRes = await page.request.get(
-    `${e2eApi}/operations/marketplace-unload-requests/${requestId}`,
-    { headers: auth },
-  )
-  const boxes = ((await detailRes.json()) as { boxes: { id: string }[] }).boxes
-  expect(boxes.length).toBe(2)
-
-  await addProductsToBoxViaModal(page, requestId, boxes[0].id, locBarcode, productId, QTY_PER_BOX)
-  await addProductsToBoxViaModal(page, requestId, boxes[1].id, locBarcode, productId, QTY_PER_BOX)
-
-  await expect(page.getByTestId('ff-mp-collect-summary-distributed')).toHaveText(String(PLAN_QTY))
-  await expect(page.getByTestId('ff-mp-collect-summary-remaining')).toHaveText('0')
-
-  await page.getByTestId('ff-mp-tab-final').click()
+  await page.getByTestId('ff-mp-tab-products').click()
   await expect(page.getByTestId('ff-mp-ship')).toBeEnabled()
   await Promise.all([
     waitForPostOk(page, `/api/operations/marketplace-unload-requests/${requestId}/ship`),

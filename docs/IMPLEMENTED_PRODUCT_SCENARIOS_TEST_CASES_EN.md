@@ -537,7 +537,7 @@ This document expands **[IMPLEMENTED_PRODUCT_SCENARIOS_EN.md](./IMPLEMENTED_PROD
 
 ## S16 — Seller marketplace unload (FC→MP intent, `marketplace_unload`)
 
-Distinct from **operational outbound** (S08) and **seller supply/inbound** (S06). Seller plans shipment to a **WB warehouse**; FF confirms, then boxes/scan/pick/ship.
+Distinct from **operational outbound** (S08) and **seller supply/inbound** (S06). Seller plans shipment to a **WB warehouse**; FF confirms, then **parallel** box collect + packaging, then ship from document footer. See also **§17** in `IMPLEMENTED_PRODUCT_SCENARIOS_EN.md`.
 
 ### TC-NEW-MP-04 Seller MP unload UI — no FF assembly blocks
 
@@ -567,19 +567,46 @@ Distinct from **operational outbound** (S08) and **seller supply/inbound** (S06)
 
 - **Actor:** fulfillment admin.
 - **Given:** seller **submitted** MP unload with lines and WB warehouse.
-- **When:** opens document, sets planned shipment date, **Confirm**.
-- **Then:** status **confirmed**; boxes/scan/picking UI enabled; seller cannot edit lines (only **unplan** while submitted).
+- **When:** opens document, sets planned shipment date, **Confirm** (footer).
+- **Then:** status **confirmed**; **linked packaging task** created; boxes/collect UI on **Products** tab enabled; **Shipped** disabled until packaging done and boxes filled.
 - **Negative:** seller role cannot call confirm.
 
-### TC-NEW-MP-11 Boxes and picking only after confirmed
+### TC-NEW-MP-11 Boxes only after confirmed; ship after packaging
 
 - **Actor:** fulfillment admin.
 - **Given:** MP unload **draft** or **submitted** with lines.
-- **When:** attempts create box / scan / pick allocations.
+- **When:** attempts create box / collect.
 - **Then:** rejected (`not_editable` / `bad_status`).
-- **When:** after **confirm**, creates box, scans, pick, then **Shipped**.
-- **Then:** status **shipped**; stock reduced; reservations released.
-- **Negative:** ship before scans → `scans_required`; ship before pick → `pick_required` after scans.
+- **When:** after **confirm**, creates open batch boxes, fills via modal **before** packaging complete.
+- **Then:** box add succeeds (no packaging gate); **Shipped** still disabled.
+- **When:** completes packaging task, full distribution in boxes, clicks **Shipped**.
+- **Then:** status **shipped**; stock reduced.
+- **Negative:** ship before packaging done → UI disabled + API `packaging_not_done`.
+
+### TC-NEW-MP-FULL-001 Full flow parallel (boxes ∥ packaging)
+
+- **Actor:** seller + FF admin (e2e).
+- **Given:** seller **Plan**; FF **Confirm** with date.
+- **When:** FF batch-creates 2+ boxes, fills plan via box modal **without** completing packaging; then completes packaging; then **Shipped** from footer.
+- **Then:** status **shipped**; `ff-mp-collect-summary-remaining` = 0.
+- **Negative:** **Shipped** enabled before packaging complete → must fail (MP-033).
+
+### TC-NEW-MP-015 Main scan WHB only on Products tab
+
+- **Actor:** fulfillment admin.
+- **Given:** confirmed MP unload with open box.
+- **When:** scans product barcode on main Products scan row.
+- **Then:** no collect; message to use box add modal.
+- **When:** scans WHB ready box.
+- **Then:** attach flow (confirm modals).
+
+### TC-NEW-MP-016 Print constructor tape on MP packaging tab
+
+- **Actor:** fulfillment admin.
+- **Given:** confirmed unload; packaging tab open.
+- **When:** opens print icon → `MarkingPrintDialog`, sets labels-per-product, prints.
+- **Then:** tape = layout × qty_to_pack × lpp (label blocks only per A-002).
+- **Negative:** no simple 58×40 product dialog on MP packaging lines.
 
 ### TC-NEW-MP-15 Seller reads WB MP warehouse catalog
 

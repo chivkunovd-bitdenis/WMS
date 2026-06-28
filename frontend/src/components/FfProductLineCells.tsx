@@ -1,5 +1,6 @@
 import type { ReactNode } from 'react'
-import { TableCell, Typography } from '@mui/material'
+import PrintOutlined from '@mui/icons-material/PrintOutlined'
+import { IconButton, TableCell, Tooltip, Typography } from '@mui/material'
 import { ProductPhotoThumb } from './ProductPhotoThumb'
 import { ProductBarcodePrintButton } from './ProductBarcodePrintButton'
 import {
@@ -33,6 +34,8 @@ type CellsProps = {
   meta: ProductLineDisplayMeta
   showPrint?: boolean
   printTestId?: string
+  /** Если задан — иконка печати вызывает callback вместо ProductBarcodePrintDialog. */
+  onPrintClick?: () => void
   nameExtra?: ReactNode
 }
 
@@ -40,6 +43,7 @@ export function FfProductLineCells({
   meta,
   showPrint = true,
   printTestId = 'ff-product-barcode-print',
+  onPrintClick,
   nameExtra,
 }: CellsProps) {
   const barcode = resolveProductPrimaryBarcode(meta)
@@ -83,7 +87,22 @@ export function FfProductLineCells({
       </TableCell>
       {showPrint ? (
         <TableCell align="center" sx={{ pr: 1 }}>
-          <ProductBarcodePrintButton meta={meta} testId={printTestId} />
+          {onPrintClick ? (
+            <Tooltip title="Печать этикеток">
+              <span>
+                <IconButton
+                  size="small"
+                  aria-label="Печать"
+                  data-testid={printTestId}
+                  onClick={onPrintClick}
+                >
+                  <PrintOutlined fontSize="small" />
+                </IconButton>
+              </span>
+            </Tooltip>
+          ) : (
+            <ProductBarcodePrintButton meta={meta} testId={printTestId} />
+          )}
         </TableCell>
       ) : null}
     </>

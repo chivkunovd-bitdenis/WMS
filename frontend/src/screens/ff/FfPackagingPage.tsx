@@ -126,6 +126,42 @@ export function FfPackagingTaskPanel({
   const productLabelForLine = (ln: PackagingTaskLine) =>
     displayMetaToProductLabel(productDisplayMetaFromCatalog(ln.product_id, ln, catalogById))
 
+  const refreshTask = async () => {
+    const res = await fetch(apiUrl(`/operations/packaging-tasks/${task.id}`), { headers: authHeaders })
+    if (res.ok) {
+      onUpdated((await res.json()) as PackagingTask)
+    }
+  }
+
+  const openLinePrint = (ln: PackagingTaskLine, opts?: { reprint?: boolean }) => {
+    const reprint =
+      opts?.reprint ??
+      Boolean(
+        ln.requires_honest_sign &&
+          ln.qty_marking_printed > 0 &&
+          ln.qty_marking_printed >= ln.qty_need_pack,
+      )
+    openPrint(
+      {
+        token,
+        lineId: ln.id,
+        productId: ln.product_id,
+        documentNumber: task.document_number,
+        qtyNeedPack: ln.qty_need_pack,
+        markingAvailable: ln.marking_available_count,
+        qtyMarkingPrinted: ln.qty_marking_printed,
+        requiresHonestSign: ln.requires_honest_sign,
+        skuCode: ln.sku_code,
+        productName: ln.product_name,
+        productLabel: productLabelForLine(ln),
+        onPrinted: () => {
+          void refreshTask()
+        },
+      },
+      { reprint },
+    )
+  }
+
   const confirmPacked = async (lineId: string) => {
     setBusy(true)
     setError(null)
@@ -650,6 +686,7 @@ export function FfPackagingTaskPanel({
                       : `${displayMeta.product_name} · ${ln.storage_location_code}`,
                   }}
                   printTestId={`ff-packaging-line-print-${ln.id}`}
+                  onPrintClick={isMpUnloadTask ? () => openLinePrint(ln) : undefined}
                 />
                 <TableCell sx={{ maxWidth: 220 }}>
                   <Typography variant="caption" data-testid="ff-packaging-instructions">
@@ -677,74 +714,23 @@ export function FfPackagingTaskPanel({
                 </TableCell>
                 <TableCell align="right">
                   <Stack direction="row" spacing={0.5} sx={{ justifyContent: 'flex-end', flexWrap: 'wrap' }}>
-                    {ln.requires_honest_sign && ln.qty_need_pack > 0 && ln.qty_marking_printed < 1 ? (
+                    {ln.requires_honest_sign && !isMpUnloadTask && ln.qty_need_pack > 0 && ln.qty_marking_printed < 1 ? (
                       <Button
                         size="small"
                         variant="outlined"
                         disabled={busy || ln.marking_available_count < 1}
-                        onClick={() =>
-                          openPrint({
-                            token,
-                            lineId: ln.id,
-                            productId: ln.product_id,
-                            documentNumber: task.document_number,
-                            qtyNeedPack: ln.qty_need_pack,
-                            markingAvailable: ln.marking_available_count,
-                            qtyMarkingPrinted: ln.qty_marking_printed,
-                            skuCode: ln.sku_code,
-                            productName: ln.product_name,
-                            productLabel: productLabelForLine(ln),
-                            onPrinted: () => {
-                              void (async () => {
-                                const res = await fetch(
-                                  apiUrl(`/operations/packaging-tasks/${task.id}`),
-                                  { headers: authHeaders },
-                                )
-                                if (res.ok) {
-                                  onUpdated((await res.json()) as PackagingTask)
-                                }
-                              })()
-                            },
-                          })
-                        }
+                        onClick={() => openLinePrint(ln)}
                         data-testid="ff-packaging-print-marking"
                       >
                         Печать ЧЗ
                       </Button>
                     ) : null}
-                    {ln.requires_honest_sign && ln.qty_marking_printed > 0 ? (
+                    {ln.requires_honest_sign && !isMpUnloadTask && ln.qty_marking_printed > 0 ? (
                       <Button
                         size="small"
                         variant="text"
                         disabled={busy}
-                        onClick={() =>
-                          openPrint(
-                            {
-                              token,
-                              lineId: ln.id,
-                              productId: ln.product_id,
-                              documentNumber: task.document_number,
-                              qtyNeedPack: ln.qty_need_pack,
-                              markingAvailable: ln.marking_available_count,
-                              qtyMarkingPrinted: ln.qty_marking_printed,
-                              skuCode: ln.sku_code,
-                              productName: ln.product_name,
-                              productLabel: productLabelForLine(ln),
-                              onPrinted: () => {
-                                void (async () => {
-                                  const res = await fetch(
-                                    apiUrl(`/operations/packaging-tasks/${task.id}`),
-                                    { headers: authHeaders },
-                                  )
-                                  if (res.ok) {
-                                    onUpdated((await res.json()) as PackagingTask)
-                                  }
-                                })()
-                              },
-                            },
-                            { reprint: true },
-                          )
-                        }
+                        onClick={() => openLinePrint(ln, { reprint: true })}
                         data-testid="ff-packaging-reprint-marking"
                       >
                         Повтор

@@ -259,3 +259,128 @@ async def test_pick_scan_deprecated_still_works(
     )
     assert legacy.status_code == 200, legacy.text
     assert legacy.json()["kind"] == "location"
+
+
+@pytest.mark.asyncio
+async def test_box_scan_product_after_location_mp018(
+    async_client: AsyncClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """MP-018: scan cell → product barcode adds line to open box."""
+    h = await _register_headers(async_client, f"tsd-mp018-{int(time.time())}")
+    mid, box_id, _pid, loc_id, wid = await _confirmed_unload_with_open_box(
+        async_client, h, monkeypatch, address_storage_enabled=True, plan_qty=5
+    )
+    loc = await async_client.get(f"/warehouses/{wid}/locations", headers=h)
+    loc_barcode = next(x for x in loc.json() if x["id"] == loc_id)["barcode"]
+
+    loc_scan = await async_client.post(
+        f"{BASE}/{mid}/boxes/{box_id}/scan",
+        headers=h,
+        json={"barcode": loc_barcode},
+    )
+    assert loc_scan.status_code == 200, loc_scan.text
+    assert loc_scan.json()["kind"] == "location"
+
+    prod_scan = await async_client.post(
+        f"{BASE}/{mid}/boxes/{box_id}/scan",
+        headers=h,
+        json={"barcode": E2E_BARCODE, "storage_location_id": loc_id, "quantity": 2},
+    )
+    assert prod_scan.status_code == 200, prod_scan.text
+    body = prod_scan.json()
+    assert body["kind"] == "product"
+    assert body["quantity"] == 2
+    assert body["picked_qty"] == 2
+
+
+@pytest.mark.asyncio
+async def test_box_scan_ready_box_into_open_box_mp018(
+    async_client: AsyncClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """MP-018: scan ready inbound box → contents collected into open shipment box."""
+    from inbound_box_intake_helpers import fulfill_inbound_via_box_scans, post_primary_accept
+    from test_marketplace_unload_and_discrepancy_acts import complete_inbound_to_storage
+
+    suffix = str(int(time.time() * 1000))
+    h = await _register_headers(async_client, f"tsd-rb-{suffix}")
+    wh = await async_client.post(
+        "/warehouses", headers=h, json={"name": "W", "code": f"w-rb-{suffix}"}
+    )
+    wid = wh.json()["id"]
+    sid, wb_wid = await _seller_wb_mp_warehouse(async_client, h, monkeypatch)
+    pr = await async_client.post(
+        "/products",
+        headers=h,
+        json={
+            "name": "RB",
+            "sku_code": f"RB-{suffix}",
+            "length_mm": 1,
+            "width_mm": 1,
+            "height_mm": 1,
+            "seller_id": sid,
+        },
+    )
+    pid = pr.json()["id"]
+    await _patch_packaging_instructions(async_client, h, pid)
+    loc_id = await _post_inventory(
+        async_client,
+        h,
+        warehouse_id=wid,
+        product_id=pid,
+        qty=20,
+        location_code=f"L-RB-{suffix}",
+    )
+
+    mu = await async_client.post(
+        BASE,
+        headers=h,
+        json={"warehouse_id": wid, "seller_id": sid, "wb_mp_warehouse_id": wb_wid},
+    )
+    mid = mu.json()["id"]
+    await async_client.post(
+        f"{BASE}/{mid}/lines",
+        headers=h,
+        json={"product_id": pid, "quantity": 5},
+    )
+    await _patch_mp_planned_date(async_client, h, mid)
+    await async_client.post(f"{BASE}/{mid}/submit", headers=h)
+
+    base_in = "/operations/inbound-intake-requests"
+    inbound = await async_client.post(base_in, headers=h, json={"warehouse_id": wid})
+    rid = inbound.json()["id"]
+    await async_client.post(
+        f"{base_in}/{rid}/lines",
+        headers=h,
+        json={"product_id": pid, "expected_qty": 4},
+    )
+    await async_client.post(f"{base_in}/{rid}/submit", headers=h)
+    await post_primary_accept(async_client, base_in, rid, h)
+    got = await async_client.get(f"{base_in}/{rid}", headers=h)
+    inb_barcode = got.json()["boxes"][0]["internal_barcode"]
+    sku = got.json()["lines"][0]["sku_code"]
+    await fulfill_inbound_via_box_scans(async_client, h, rid, sku, 4)
+    await async_client.post(f"{base_in}/{rid}/verify", headers=h)
+    await complete_inbound_to_storage(
+        async_client, h, rid, product_id=pid, storage_location_id=loc_id, quantity=4
+    )
+
+    box = await async_client.post(
+        f"{BASE}/{mid}/boxes",
+        headers=h,
+        json={"box_preset": "60_40_40"},
+    )
+    box_id = box.json()["id"]
+
+    ready = await async_client.post(
+        f"{BASE}/{mid}/boxes/{box_id}/scan",
+        headers=h,
+        json={"barcode": inb_barcode},
+    )
+    assert ready.status_code == 200, ready.text
+    body = ready.json()
+    assert body["kind"] == "ready_box"
+    assert body["total_qty"] == 4
+
+    detail = await async_client.get(f"{BASE}/{mid}", headers=h)
+    open_box = next(b for b in detail.json()["boxes"] if b["id"] == box_id)
+    assert sum(ln["quantity"] for ln in open_box["lines"]) == 4

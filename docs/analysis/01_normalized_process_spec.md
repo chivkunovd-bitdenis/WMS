@@ -345,9 +345,26 @@
 
 ### GAP-007. collecting missing
 - Тип: **DATA**
-- Проблема: нет статуса `collecting` в коде.
+- Проблема: ~~нет статуса `collecting` в коде~~ **RESOLVED (MP-001, 2026-06-28).**
 - Почему важно: «На сборке» не отображается.
-- Блокирует следующий шаг: **YES**
+- Блокирует следующий шаг: **NO**
+
+## Implementation status (2026-06-28)
+
+Реализовано по [`06_mp_unload_unified_tasks_RU.md`](./06_mp_unload_unified_tasks_RU.md) (MP-001…MP-034):
+
+| Область | Было (Code Findings выше) | Сейчас |
+|---------|---------------------------|--------|
+| Статус `collecting` | MISSING | **DONE** — переход при первом коробе/строке |
+| Task на draft | CONFLICT | **DONE** — task только при `confirmed` |
+| Gate упаковки на коробах | CONFLICT | **Снят** — parallel flow |
+| «На полке упак.» / convert по ячейке | CONFLICT | **DONE** — счётчик в task для MP |
+| 4 вкладки | PARTIAL | **DONE** — 2 вкладки + footer ship |
+| Attach over-plan | PARTIAL | **DONE** — confirm + `allow_over_plan` |
+| Печать 58×40 vs конструктор | GAP-006 | **DONE** — `MarkingPrintDialog` на упаковке MP |
+| DEC-019 миграция | — | **DONE** — MP-024/025 |
+
+Исторический release audit: [`04_release_implementation_review.md`](./04_release_implementation_review.md). Старые планы **02/03** помечены superseded.
 
 ## Questions
 

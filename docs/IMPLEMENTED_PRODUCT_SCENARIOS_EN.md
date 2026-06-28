@@ -317,6 +317,38 @@ This document describes **what is already built** from a user and process perspe
 
 ---
 
+## 17. FC→marketplace shipment (`marketplace_unload`, 2026 model)
+
+**Actors:** seller plans; FF confirms, collects into boxes, packs, ships.
+
+**Seller (plan-only)**
+
+- Fullscreen dialog: plan lines, WB warehouse, planned date; **Plan** → `submitted`; no boxes, packaging, or ship.
+- After plan: info hint that FF will process the request.
+
+**FF document UI**
+
+- **Two tabs:** **Products** (plan lines, box list, batch create, WHB scan, distribution summary) and **Packaging** (linked task, print constructor).
+- Footer: **Confirm** (draft/submitted), **Shipped** (execution phase), **Cancel**.
+- Status **collecting** when first box created or first product added to a box.
+
+**Parallel flows (after confirm)**
+
+1. **Boxes:** open batch boxes; fill via modal (cell/product/WHB scan); attach ready inbound box with confirm (over-plan allowed on OK).
+2. **Packaging:** counter progress per line — no shelf column; does **not** block box operations.
+
+**Ship**
+
+- Requires packaging task **done**, product distributed to boxes (full plan or acknowledged partial per DEC-010/012 rules), ЧZ gate where applicable.
+- Cancel returns collected qty to **sorting zone**, not original cells.
+
+**Boundaries**
+
+- Legacy `PUT pick-allocations` deprecated (admin-only); UI uses box collect path.
+- Copied MP boxes remain **closed** — add blocked by design.
+
+---
+
 ## Summary table (by actor)
 
 | Area | Admin | Seller |

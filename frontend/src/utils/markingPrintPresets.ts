@@ -97,3 +97,28 @@ export function cloneLayout(layout: PrintLayout): PrintLayout {
     units: layout.units.map((unit) => ({ ...unit })),
   }
 }
+
+/** Умножает копии блоков «Этикетка» на «этикеток на каждый товар» (A-002: ЧЗ не умножается). */
+export function applyLabelsPerProductToLayout(
+  layout: PrintLayout,
+  labelsPerProduct: number,
+): PrintLayout {
+  const lpp = Math.max(1, Math.min(99, Math.floor(labelsPerProduct) || 1))
+  return {
+    units: layout.units.map((unit) =>
+      unit.block === 'label' ? { ...unit, copies: unit.copies * lpp } : { ...unit },
+    ),
+  }
+}
+
+export function countTapeBlocks(
+  unitCount: number,
+  layout: PrintLayout,
+  labelsPerProduct = 1,
+): number {
+  if (unitCount < 1) {
+    return 0
+  }
+  const codes = Array.from({ length: unitCount }, (_, i) => `#${i + 1}`)
+  return expandLayoutTape(codes, applyLabelsPerProductToLayout(layout, labelsPerProduct)).length
+}
