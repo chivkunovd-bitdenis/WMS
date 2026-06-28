@@ -1,5 +1,11 @@
 # TASKLOG
 
+## TASK-051 — 2026-06-28 — BACKEND-01: deprecate scan-print / print-all / verify-pair
+
+- What changed: `marking_codes.py` — `deprecated=True` + summary on `POST /scan-print`, `/verify-pair`, `/packaging-tasks/{id}/print-all`; comment BACKEND-01 / T-A6 (ORD-44).
+- What did NOT change: endpoint behaviour, per-line print (`/packaging-lines/{line_id}/print`), service layer.
+- Verification: `ruff check app/api/marking_codes.py`; `mypy app/api/marking_codes.py`; `pytest tests/ -q -k marking` — 50 passed; all three routes `deprecated=True` in OpenAPI. Commit `d82fe3c`.
+
 ## TASK-036 — 2026-06-28 — CZ-000 barrier: MP commit + feat/cz-ux-fixes + autopilot backlog
 
 - What changed:

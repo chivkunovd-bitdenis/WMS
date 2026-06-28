@@ -1053,7 +1053,19 @@ async def delete_print_template(
         raise _http_from_pt_error(exc) from exc
 
 
-@router.post("/scan-print", response_model=PrintMarkingCodesOut)
+# BACKEND-01 / T-A6 (ORD-44): scan-print, print-all, verify-pair — UI removed in PACK-01..03.
+# No frontend callers after CZ UX fixes; scheduled for removal (MASTER_BACKLOG_RU.md T-A6).
+
+
+@router.post(
+    "/scan-print",
+    response_model=PrintMarkingCodesOut,
+    deprecated=True,
+    summary=(
+        "Deprecated (T-A6): scan-to-print removed from packaging UI; "
+        "use POST .../packaging-lines/{line_id}/print"
+    ),
+)
 async def scan_print_marking_codes(
     body: ScanPrintMarkingIn,
     user: Annotated[User, Depends(require_packaging_access)],
@@ -1080,7 +1092,12 @@ async def scan_print_marking_codes(
     )
 
 
-@router.post("/verify-pair", response_model=VerifyPairOut)
+@router.post(
+    "/verify-pair",
+    response_model=VerifyPairOut,
+    deprecated=True,
+    summary="Deprecated (T-A6): pair verification panel removed from packaging UI",
+)
 async def verify_marking_pair(
     body: VerifyPairIn,
     user: Annotated[User, Depends(require_packaging_access)],
@@ -1211,6 +1228,11 @@ def _print_all_out(result: mc_svc.PrintAllMarkingCodesResult) -> PrintAllMarking
 @router.post(
     "/packaging-tasks/{task_id}/print-all",
     response_model=PrintAllMarkingOut,
+    deprecated=True,
+    summary=(
+        "Deprecated (T-A6): bulk print-all removed from packaging UI; "
+        "use POST .../packaging-lines/{line_id}/print per line"
+    ),
 )
 async def print_all_marking_codes_for_task(
     task_id: uuid.UUID,
