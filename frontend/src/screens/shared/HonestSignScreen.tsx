@@ -22,6 +22,7 @@ import {
   TextField,
   ToggleButton,
   ToggleButtonGroup,
+  Tooltip,
   Typography,
 } from '@mui/material'
 import ChevronRightOutlined from '@mui/icons-material/ChevronRightOutlined'
@@ -166,6 +167,7 @@ export function HonestSignScreen({
   }
 
   const effectiveSellerId = sellerId ?? selectedSellerId
+  const importDisabled = sellerIdRequiredForImport && !effectiveSellerId
 
   const selectedSeller = useMemo(
     () => sellers.find((s) => s.id === selectedSellerId) ?? null,
@@ -438,15 +440,24 @@ export function HonestSignScreen({
       ) : null}
 
       <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1}>
-        <Button
-          variant="contained"
-          startIcon={<UploadFileOutlined />}
-          disabled={sellerIdRequiredForImport && !effectiveSellerId}
-          onClick={openImport}
-          data-testid={`${testIdPrefix}-open-import`}
+        <Tooltip
+          title="Выберите селлера"
+          disableHoverListener={!importDisabled}
+          disableFocusListener={!importDisabled}
+          disableTouchListener={!importDisabled}
         >
-          Загрузить коды
-        </Button>
+          <Box component="span" sx={{ display: 'inline-flex' }}>
+            <Button
+              variant="contained"
+              startIcon={<UploadFileOutlined />}
+              disabled={importDisabled}
+              onClick={openImport}
+              data-testid={`${testIdPrefix}-open-import`}
+            >
+              Загрузить коды
+            </Button>
+          </Box>
+        </Tooltip>
         <Button
           variant="outlined"
           startIcon={<TimelineOutlined />}
