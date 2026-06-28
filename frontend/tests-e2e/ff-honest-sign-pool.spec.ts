@@ -4,6 +4,7 @@ import { waitForGetOk, waitForPostOk } from './api-waits'
 import { openFulfillmentRegistration } from './auth-flow'
 
 // TC-NEW-009 — T0.9: вкладки карточки пула и экспорт CSV кодов.
+// TC-NEW-011 — T-E3: таб «Лента» — превью + ссылка на полную ленту пула (без дубля).
 test('FF honest sign pool card: tabs and CSV export', async ({ page }) => {
   test.setTimeout(90_000)
   const email = `e2e-pool-${Date.now()}@example.com`
@@ -74,5 +75,10 @@ test('FF honest sign pool card: tabs and CSV export', async ({ page }) => {
   expect(path).toBeTruthy()
 
   await page.getByTestId('ff-honest-sign-pool-tab-ledger').click()
-  await expect(page.getByTestId('ff-honest-sign-pool-ledger')).toBeVisible()
+  await expect(page.getByTestId('ff-honest-sign-pool-ledger-preview')).toBeVisible()
+  await expect(page.getByTestId('ff-honest-sign-pool-ledger-open-full')).toBeVisible()
+  await expect(page.getByTestId('ff-honest-sign-ledger-event-type')).toHaveCount(0)
+  await page.getByTestId('ff-honest-sign-pool-ledger-open-full').click()
+  await expect(page.getByTestId('ff-honest-sign-ledger-page')).toBeVisible()
+  await expect(page.getByTestId('ff-honest-sign-ledger-table')).toContainText('imported')
 })
