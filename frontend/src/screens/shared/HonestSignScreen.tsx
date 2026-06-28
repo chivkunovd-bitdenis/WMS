@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import {
   Alert,
@@ -23,6 +23,7 @@ import {
   ToggleButtonGroup,
   Typography,
 } from '@mui/material'
+import ChevronRightOutlined from '@mui/icons-material/ChevronRightOutlined'
 import UploadFileOutlined from '@mui/icons-material/UploadFileOutlined'
 import TimelineOutlined from '@mui/icons-material/TimelineOutlined'
 import MoreVertOutlined from '@mui/icons-material/MoreVertOutlined'
@@ -51,6 +52,15 @@ export type MarkingPoolRow = {
 }
 
 type StockFilter = 'all' | 'low' | 'empty'
+
+type KpiCardConfig = {
+  label: string
+  value: number
+  testId: string
+  interactive: boolean
+  active?: boolean
+  onClick?: () => void
+}
 
 type Props = {
   token: string
@@ -136,6 +146,7 @@ export function HonestSignScreen({
   showSellerDashboard = false,
 }: Props) {
   const navigate = useNavigate()
+  const poolsTableRef = useRef<HTMLDivElement>(null)
   const [pools, setPools] = useState<MarkingPoolRow[]>([])
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -212,6 +223,52 @@ export function HonestSignScreen({
     return { availableTotal, defectiveTotal, lowCount, spend7d }
   }, [pools])
 
+  const scrollToPoolsTable = useCallback(() => {
+    poolsTableRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+  }, [])
+
+  const kpiCards = useMemo((): KpiCardConfig[] => {
+    return [
+      {
+        label: 'Доступно всего',
+        value: kpis.availableTotal,
+        testId: 'kpi-available',
+        interactive: true,
+        active: stockFilter === 'all',
+        onClick: () => {
+          setStockFilter('all')
+          scrollToPoolsTable()
+        },
+      },
+      {
+        label: 'Расход 7 дней',
+        value: kpis.spend7d,
+        testId: 'kpi-spend-7d',
+        interactive: false,
+      },
+      {
+        label: 'Брак',
+        value: kpis.defectiveTotal,
+        testId: 'kpi-defective',
+        interactive: true,
+        onClick: () => {
+          navigate(`${routeBase}/honest-sign/ledger?event_type=defective`)
+        },
+      },
+      {
+        label: 'Пулы на исходе',
+        value: kpis.lowCount,
+        testId: 'kpi-low-stock',
+        interactive: true,
+        active: stockFilter === 'low',
+        onClick: () => {
+          setStockFilter('low')
+          scrollToPoolsTable()
+        },
+      },
+    ]
+  }, [kpis, navigate, routeBase, scrollToPoolsTable, stockFilter])
+
   const filteredPools = useMemo(() => {
     return pools.filter((row) => {
       if (!poolMatchesSearch(row, search)) {
@@ -272,28 +329,49 @@ export function HonestSignScreen({
       ) : null}
 
       <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1} sx={{ flexWrap: 'wrap' }}>
-        {[
-          { label: 'Доступно всего', value: kpis.availableTotal, testId: 'kpi-available' },
-          { label: 'Расход 7 дней', value: kpis.spend7d, testId: 'kpi-spend-7d' },
-          { label: 'Брак', value: kpis.defectiveTotal, testId: 'kpi-defective' },
-          {
-            label: 'Пулы на исходе',
-            value: kpis.lowCount,
-            testId: 'kpi-low-stock',
-            onClick: () => setStockFilter('low'),
-          },
-        ].map((kpi) => (
+        {kpiCards.map((kpi) => (
           <Paper
             key={kpi.testId}
             variant="outlined"
-            sx={{ p: 1.5, minWidth: 140, flex: 1, cursor: kpi.onClick ? 'pointer' : 'default' }}
-            onClick={kpi.onClick}
+            component={kpi.interactive ? 'button' : 'div'}
+            type={kpi.interactive ? 'button' : undefined}
+            onClick={kpi.interactive ? kpi.onClick : undefined}
+            sx={{
+              p: 1.5,
+              minWidth: 140,
+              flex: 1,
+              display: 'block',
+              width: '100%',
+              textAlign: 'left',
+              font: 'inherit',
+              color: 'inherit',
+              cursor: kpi.interactive ? 'pointer' : 'default',
+              borderColor: kpi.active ? 'primary.main' : 'divider',
+              bgcolor: kpi.active ? 'primary.50' : 'background.paper',
+              transition: 'background-color 0.15s ease, border-color 0.15s ease',
+              ...(kpi.interactive
+                ? {
+                    '&:hover': {
+                      borderColor: 'primary.main',
+                      bgcolor: kpi.active ? 'primary.50' : 'action.hover',
+                    },
+                  }
+                : {}),
+            }}
             data-testid={`${testIdPrefix}-${kpi.testId}`}
+            data-interactive={kpi.interactive ? 'true' : 'false'}
           >
-            <Typography variant="caption" color="text.secondary">
-              {kpi.label}
-            </Typography>
-            <Typography variant="h6">{kpi.value}</Typography>
+            <Stack direction="row" spacing={0.5} sx={{ justifyContent: 'space-between', alignItems: 'flex-start' }}>
+              <Box>
+                <Typography variant="caption" color="text.secondary">
+                  {kpi.label}
+                </Typography>
+                <Typography variant="h6">{kpi.value}</Typography>
+              </Box>
+              {kpi.interactive ? (
+                <ChevronRightOutlined fontSize="small" color="action" sx={{ mt: 0.25, flexShrink: 0 }} />
+              ) : null}
+            </Stack>
           </Paper>
         ))}
       </Stack>
@@ -395,7 +473,7 @@ export function HonestSignScreen({
         </ToggleButtonGroup>
       </Stack>
 
-      <TableContainer component={Paper} variant="outlined">
+      <TableContainer component={Paper} variant="outlined" ref={poolsTableRef}>
         <Table size="small" data-testid={`${testIdPrefix}-pools-table`}>
           <TableHead>
             <TableRow>
