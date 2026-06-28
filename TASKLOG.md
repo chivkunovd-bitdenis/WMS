@@ -1,5 +1,11 @@
 # TASKLOG
 
+## TASK-067 — 2026-06-28 — CD: GitHub Actions deploy + prod PR #49
+
+- What changed: `.github/workflows/deploy.yml` — автодеплой после green CI на `main` (SSH → `prod-update.sh`) + smoke HTTP; `docs/DEPLOY_SERVER_RU.md` — CI/CD секция и secrets; GitHub Secrets `DEPLOY_SSH_*`, `DEPLOY_HTTP_PORT`; deploy key `github-actions-wms-deploy` на сервере.
+- What did NOT change: `prod-update.sh` логика; `.env` на сервере; ручной деплой по-прежнему работает.
+- Deploy: PR #49 → `main` `6d375ab`; prod `194.87.96.144:8088` — `prod-update.sh`, FF/seller/health HTTP 200.
+
 ## TASK-066 — 2026-06-28 — FIX-05: ledger/pools abort + BACKEND-01 openapi + docs
 
 - What changed: `HonestSignLedgerPage.tsx`, `HonestSignScreen.tsx`, `HonestSignPoolPage.tsx` — `AbortController` в `load()`/`loadPools()`/`loadLedger()` против stale fetch; `ff-honest-sign-ledger.spec.ts` — e2e экспорт CSV (TC-NEW-LEDGER-04); `test_marking_deprecated_openapi.py` — pytest `deprecated` в OpenAPI; `MASTER_BACKLOG_RU.md` — статусы lane ✅ на `feat/cz-ux-fixes`; `CZ_DUPLICATE_SURFACES_AUDIT_RU.md` — ссылка `docs/` + §4 закрытые POOLS.
