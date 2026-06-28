@@ -63,6 +63,8 @@ type GroupDraft = PreviewGroup & {
   productSearch: string
 }
 
+export const PRODUCT_SEARCH_INITIAL_LIMIT = 8
+
 export function filterProductsBySearch(
   products: ProductOption[],
   search: string,
@@ -76,6 +78,21 @@ export function filterProductsBySearch(
       row.sku_code.toLowerCase().includes(needle) ||
       row.name.toLowerCase().includes(needle),
   )
+}
+
+export function paginateProductSearchResults<T>(
+  items: T[],
+  showAll: boolean,
+  limit = PRODUCT_SEARCH_INITIAL_LIMIT,
+): { visible: T[]; total: number; truncated: boolean; limit: number } {
+  const total = items.length
+  const truncated = total > limit && !showAll
+  return {
+    visible: truncated ? items.slice(0, limit) : items,
+    total,
+    truncated,
+    limit,
+  }
 }
 
 export function mergePreviewGroups(prev: GroupDraft[], incoming: PreviewGroup[]): GroupDraft[] {
@@ -128,6 +145,7 @@ export function MarkingImportDialog({
   const [parseBusy, setParseBusy] = useState(false)
   const [uploadBusy, setUploadBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [expandedProductLists, setExpandedProductLists] = useState<Set<string>>(new Set())
 
   const sellerProducts = useMemo(
     () => catalog.filter((row) => row.seller_id === sellerId),
@@ -139,6 +157,7 @@ export function MarkingImportDialog({
     setGroups([])
     setPreviewMeta(null)
     setError(null)
+    setExpandedProductLists(new Set())
   }, [])
 
   useEffect(() => {
@@ -206,6 +225,18 @@ export function MarkingImportDialog({
 
   const updateGroupProductSearch = (gtin: string, productSearch: string) => {
     setGroups((prev) => prev.map((g) => (g.gtin === gtin ? { ...g, productSearch } : g)))
+    setExpandedProductLists((prev) => {
+      if (!prev.has(gtin)) {
+        return prev
+      }
+      const next = new Set(prev)
+      next.delete(gtin)
+      return next
+    })
+  }
+
+  const expandProductList = (gtin: string) => {
+    setExpandedProductLists((prev) => new Set(prev).add(gtin))
   }
 
   const toggleGroupProduct = (gtin: string, productId: string) => {
@@ -351,60 +382,85 @@ export function MarkingImportDialog({
             </Typography>
           ) : null}
 
-          {groups.map((g) => (
-            <Paper key={g.gtin} variant="outlined" sx={{ p: 2 }} data-testid={`${testIdPrefix}-import-group-${g.gtin}`}>
-              <Stack spacing={1.5}>
-                <Typography variant="subtitle2">
-                  GTIN …{g.gtin.slice(-4)} — {g.codes_count} кодов
-                </Typography>
-                <TextField
-                  label="Название пула"
-                  value={g.title}
-                  onChange={(e) => updateGroupTitle(g.gtin, e.target.value)}
-                  data-testid={`${testIdPrefix}-import-title-${g.gtin}`}
-                />
-                <TextField
-                  label="Поиск товаров"
-                  value={g.productSearch}
-                  onChange={(e) => updateGroupProductSearch(g.gtin, e.target.value)}
-                  data-testid={`${testIdPrefix}-import-product-search-${g.gtin}`}
-                />
-                <TableContainer>
-                  <Table size="small">
-                    <TableHead>
-                      <TableRow>
-                        <TableCell padding="checkbox" />
-                        <TableCell>Артикул</TableCell>
-                        <TableCell>Название</TableCell>
-                      </TableRow>
-                    </TableHead>
-                    <TableBody>
-                      {filterProductsBySearch(sellerProducts, g.productSearch).slice(0, 8).map((row) => (
-                        <TableRow key={`${g.gtin}-${row.id}`}>
-                          <TableCell padding="checkbox">
-                            <Checkbox
-                              checked={g.productIds.has(row.id)}
-                              onChange={() => toggleGroupProduct(g.gtin, row.id)}
-                              slotProps={{
-                                input: {
-                                  'aria-label': `Привязать ${row.sku_code} к GTIN ${g.gtin}`,
-                                },
-                              }}
-                            />
-                          </TableCell>
-                          <TableCell>{row.sku_code}</TableCell>
-                          <TableCell>{row.name}</TableCell>
+          {groups.map((g) => {
+            const filteredProducts = filterProductsBySearch(sellerProducts, g.productSearch)
+            const showAllProducts = expandedProductLists.has(g.gtin)
+            const { visible: visibleProducts, total: productTotal, truncated } =
+              paginateProductSearchResults(filteredProducts, showAllProducts)
+
+            return (
+              <Paper key={g.gtin} variant="outlined" sx={{ p: 2 }} data-testid={`${testIdPrefix}-import-group-${g.gtin}`}>
+                <Stack spacing={1.5}>
+                  <Typography variant="subtitle2">
+                    GTIN …{g.gtin.slice(-4)} — {g.codes_count} кодов
+                  </Typography>
+                  <TextField
+                    label="Название пула"
+                    value={g.title}
+                    onChange={(e) => updateGroupTitle(g.gtin, e.target.value)}
+                    data-testid={`${testIdPrefix}-import-title-${g.gtin}`}
+                  />
+                  <TextField
+                    label="Поиск товаров"
+                    value={g.productSearch}
+                    onChange={(e) => updateGroupProductSearch(g.gtin, e.target.value)}
+                    data-testid={`${testIdPrefix}-import-product-search-${g.gtin}`}
+                  />
+                  <TableContainer>
+                    <Table size="small">
+                      <TableHead>
+                        <TableRow>
+                          <TableCell padding="checkbox" />
+                          <TableCell>Артикул</TableCell>
+                          <TableCell>Название</TableCell>
                         </TableRow>
-                      ))}
-                    </TableBody>
-                  </Table>
-                </TableContainer>
-                {g.productIds.size === 0 ? (
-                  <Chip size="small" color="warning" label="Товары не выбраны — можно привязать позже" />
-                ) : null}
-              </Stack>
-            </Paper>
-          ))}
+                      </TableHead>
+                      <TableBody>
+                        {visibleProducts.map((row) => (
+                          <TableRow key={`${g.gtin}-${row.id}`}>
+                            <TableCell padding="checkbox">
+                              <Checkbox
+                                checked={g.productIds.has(row.id)}
+                                onChange={() => toggleGroupProduct(g.gtin, row.id)}
+                                slotProps={{
+                                  input: {
+                                    'aria-label': `Привязать ${row.sku_code} к GTIN ${g.gtin}`,
+                                  },
+                                }}
+                              />
+                            </TableCell>
+                            <TableCell>{row.sku_code}</TableCell>
+                            <TableCell>{row.name}</TableCell>
+                          </TableRow>
+                        ))}
+                      </TableBody>
+                    </Table>
+                  </TableContainer>
+                  {truncated ? (
+                    <Stack direction="row" spacing={1} sx={{ alignItems: 'center', flexWrap: 'wrap' }}>
+                      <Typography
+                        variant="caption"
+                        color="text.secondary"
+                        data-testid={`${testIdPrefix}-import-products-truncated-${g.gtin}`}
+                      >
+                        Показаны первые {PRODUCT_SEARCH_INITIAL_LIMIT} из {productTotal}
+                      </Typography>
+                      <Button
+                        size="small"
+                        onClick={() => expandProductList(g.gtin)}
+                        data-testid={`${testIdPrefix}-import-products-show-more-${g.gtin}`}
+                      >
+                        Показать ещё
+                      </Button>
+                    </Stack>
+                  ) : null}
+                  {g.productIds.size === 0 ? (
+                    <Chip size="small" color="warning" label="Товары не выбраны — можно привязать позже" />
+                  ) : null}
+                </Stack>
+              </Paper>
+            )
+          })}
 
           {groups.length > 0 ? (
             <Box data-testid={`${testIdPrefix}-import-summary`}>

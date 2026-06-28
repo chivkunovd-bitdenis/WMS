@@ -1,6 +1,11 @@
 import { describe, expect, it } from 'vitest'
 
-import { filterProductsBySearch, mergePreviewGroups } from './MarkingImportDialog'
+import {
+  filterProductsBySearch,
+  mergePreviewGroups,
+  paginateProductSearchResults,
+  PRODUCT_SEARCH_INITIAL_LIMIT,
+} from './MarkingImportDialog'
 
 describe('filterProductsBySearch', () => {
   const products = [
@@ -57,5 +62,35 @@ describe('mergePreviewGroups', () => {
       productSearch: '',
     })
     expect([...merged[1].productIds]).toEqual([])
+  })
+})
+
+describe('paginateProductSearchResults', () => {
+  const items = Array.from({ length: 12 }, (_, index) => `item-${index + 1}`)
+
+  it('returns the first page when the list exceeds the limit', () => {
+    const result = paginateProductSearchResults(items, false)
+
+    expect(result.visible).toHaveLength(PRODUCT_SEARCH_INITIAL_LIMIT)
+    expect(result.total).toBe(12)
+    expect(result.truncated).toBe(true)
+    expect(result.limit).toBe(PRODUCT_SEARCH_INITIAL_LIMIT)
+    expect(result.visible[0]).toBe('item-1')
+    expect(result.visible.at(-1)).toBe(`item-${PRODUCT_SEARCH_INITIAL_LIMIT}`)
+  })
+
+  it('returns all items after show more is requested', () => {
+    const result = paginateProductSearchResults(items, true)
+
+    expect(result.visible).toEqual(items)
+    expect(result.truncated).toBe(false)
+  })
+
+  it('does not truncate short lists', () => {
+    const shortList = items.slice(0, 5)
+    const result = paginateProductSearchResults(shortList, false)
+
+    expect(result.visible).toEqual(shortList)
+    expect(result.truncated).toBe(false)
   })
 })
