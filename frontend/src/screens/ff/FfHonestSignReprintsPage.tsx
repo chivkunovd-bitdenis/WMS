@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from 'react'
+import { Link as RouterLink } from 'react-router-dom'
 import InfoOutlinedIcon from '@mui/icons-material/InfoOutlined'
 import {
   Alert,
@@ -8,7 +9,10 @@ import {
   DialogActions,
   DialogContent,
   DialogTitle,
+  Drawer,
+  Link,
   Paper,
+  Skeleton,
   Stack,
   Table,
   TableBody,
@@ -34,6 +38,16 @@ type ReprintRequest = {
   product_sku: string
   cis_masked: string
   document_number: string | null
+  packaging_task_id: string
+  pool_id: string | null
+}
+
+type CodeHistoryEvent = {
+  id: string
+  created_at: string
+  event_type: string
+  document_number: string | null
+  actor_email: string | null
 }
 
 type Props = {
@@ -57,6 +71,10 @@ export function FfHonestSignReprintsPage({
   const [busyId, setBusyId] = useState<string | null>(null)
   const [rejectTargetId, setRejectTargetId] = useState<string | null>(null)
   const [rejectReason, setRejectReason] = useState('')
+  const [historyCodeId, setHistoryCodeId] = useState<string | null>(null)
+  const [historyCisMasked, setHistoryCisMasked] = useState<string | null>(null)
+  const [history, setHistory] = useState<CodeHistoryEvent[]>([])
+  const [historyBusy, setHistoryBusy] = useState(false)
 
   const authHeaders = {
     Authorization: `Bearer ${token}`,
@@ -92,6 +110,29 @@ export function FfHonestSignReprintsPage({
     }
     setRejectTargetId(null)
     setRejectReason('')
+  }
+
+  const openCodeHistory = async (codeId: string, cisMasked: string) => {
+    setHistoryCodeId(codeId)
+    setHistoryCisMasked(cisMasked)
+    setHistory([])
+    setHistoryBusy(true)
+    try {
+      const res = await fetch(apiUrl(`/operations/marking-codes/codes/${codeId}/history`), {
+        headers: { Authorization: `Bearer ${token}` },
+      })
+      if (res.ok) {
+        setHistory((await res.json()) as CodeHistoryEvent[])
+      }
+    } finally {
+      setHistoryBusy(false)
+    }
+  }
+
+  const closeCodeHistory = () => {
+    setHistoryCodeId(null)
+    setHistoryCisMasked(null)
+    setHistory([])
   }
 
   const resolveRequest = async (
@@ -179,6 +220,7 @@ export function FfHonestSignReprintsPage({
                 <TableCell>КМ</TableCell>
                 <TableCell>Причина</TableCell>
                 <TableCell>Документ</TableCell>
+                <TableCell>Контекст</TableCell>
                 <TableCell align="right">Действия</TableCell>
               </TableRow>
             </TableHead>
@@ -193,6 +235,39 @@ export function FfHonestSignReprintsPage({
                   <TableCell>{row.cis_masked}</TableCell>
                   <TableCell>{row.reason?.trim() || '—'}</TableCell>
                   <TableCell>{row.document_number ?? '—'}</TableCell>
+                  <TableCell data-testid={`${testId}-context-${row.id}`}>
+                    <Stack direction="row" spacing={1} sx={{ flexWrap: 'wrap' }}>
+                      <Link
+                        component={RouterLink}
+                        to="/app/ff/packaging"
+                        state={{ taskId: row.packaging_task_id }}
+                        variant="body2"
+                        data-testid={`${testId}-context-task-${row.id}`}
+                      >
+                        Задание
+                      </Link>
+                      {row.pool_id ? (
+                        <Link
+                          component={RouterLink}
+                          to={`/app/ff/honest-sign/pool/${row.pool_id}`}
+                          variant="body2"
+                          data-testid={`${testId}-context-pool-${row.id}`}
+                        >
+                          Пул
+                        </Link>
+                      ) : null}
+                      <Link
+                        component="button"
+                        type="button"
+                        variant="body2"
+                        onClick={() => void openCodeHistory(row.code_id, row.cis_masked)}
+                        sx={{ verticalAlign: 'baseline' }}
+                        data-testid={`${testId}-context-history-${row.id}`}
+                      >
+                        История кода
+                      </Link>
+                    </Stack>
+                  </TableCell>
                   <TableCell align="right">
                     <Stack direction="row" spacing={0.5} sx={{ justifyContent: 'flex-end' }}>
                       <Tooltip title={APPROVE_REPRINT_HINT} arrow placement="top">
@@ -287,6 +362,47 @@ export function FfHonestSignReprintsPage({
           </Button>
         </DialogActions>
       </Dialog>
+      <Drawer
+        anchor="right"
+        open={historyCodeId != null}
+        onClose={closeCodeHistory}
+        data-testid={`${testId}-history-drawer`}
+      >
+        <Box sx={{ width: 360, p: 2 }}>
+          <Typography variant="h6" sx={{ mb: 0.5 }}>
+            История кода
+          </Typography>
+          {historyCisMasked ? (
+            <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+              {historyCisMasked}
+            </Typography>
+          ) : null}
+          {historyBusy ? (
+            <Skeleton height={80} />
+          ) : history.length === 0 ? (
+            <Typography variant="body2" color="text.secondary">
+              Событий пока нет.
+            </Typography>
+          ) : (
+            <Stack spacing={1.5}>
+              {history.map((ev) => (
+                <Paper key={ev.id} variant="outlined" sx={{ p: 1.5 }}>
+                  <Typography variant="subtitle2">{ev.event_type}</Typography>
+                  <Typography variant="caption" color="text.secondary">
+                    {new Date(ev.created_at).toLocaleString('ru-RU')}
+                  </Typography>
+                  {ev.document_number ? (
+                    <Typography variant="body2">Документ: {ev.document_number}</Typography>
+                  ) : null}
+                  {ev.actor_email ? (
+                    <Typography variant="body2">{ev.actor_email}</Typography>
+                  ) : null}
+                </Paper>
+              ))}
+            </Stack>
+          )}
+        </Box>
+      </Drawer>
     </Box>
   )
 }

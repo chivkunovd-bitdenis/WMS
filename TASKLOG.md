@@ -1,5 +1,11 @@
 # TASKLOG
 
+## TASK-050 — 2026-06-28 — REPRINTS-03: context links on reprint row
+
+- What changed: `FfHonestSignReprintsPage` — колонка «Контекст»: ссылки «Задание» (упаковка с `state.taskId`), «Пул», «История кода» (drawer); API `reprint-requests` отдаёт `packaging_task_id` и `pool_id`; e2e `ff-marking-defect.spec.ts` (TC-NEW-006) проверяет доступность контекста из строки. Сохранён диалог причины отклонения (REPRINTS-02).
+- What did NOT change: approve/replace API, навигация ЧЗ вне reprints.
+- Verification: `npm run build` + `npm run test:e2e tests-e2e/ff-marking-defect.spec.ts` + `PYTHONPATH=. pytest tests/test_marking_reprint_defect.py tests/test_shift_lead.py` in REPRINTS-03 worktree — green. Commits `320d7c6`, `1c22d6f`.
+
 ## TASK-037 — 2026-06-28 — REPRINTS-02: rejection reason field
 
 - What changed: `FfHonestSignReprintsPage` — диалог с полем «Причина отклонения» при reject; текст уходит в API вместо хардкода «Отклонено старшим».

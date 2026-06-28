@@ -2291,6 +2291,8 @@ class ReprintRequestRow:
     product_sku: str
     cis_masked: str
     document_number: str | None
+    packaging_task_id: uuid.UUID
+    pool_id: uuid.UUID | None
 
 
 async def list_printed_codes_for_packaging_line(
@@ -2375,9 +2377,11 @@ async def list_pending_reprint_requests(
         select(
             MarkingReprintRequest,
             MarkingCode.cis_code,
+            MarkingCode.pool_id,
             User.email,
             Product.name,
             Product.sku_code,
+            PackagingTask.id,
             PackagingTask.document_number,
         )
         .join(MarkingCode, MarkingCode.id == MarkingReprintRequest.code_id)
@@ -2395,7 +2399,9 @@ async def list_pending_reprint_requests(
         .order_by(MarkingReprintRequest.created_at.asc())
     )
     rows: list[ReprintRequestRow] = []
-    for req, cis, email, product_name, sku, doc_num in (await session.execute(stmt)).all():
+    for req, cis, pool_id, email, product_name, sku, task_id, doc_num in (
+        await session.execute(stmt)
+    ).all():
         rows.append(
             ReprintRequestRow(
                 id=req.id,
@@ -2408,6 +2414,8 @@ async def list_pending_reprint_requests(
                 product_sku=sku,
                 cis_masked=mask_cis_code(cis),
                 document_number=doc_num,
+                packaging_task_id=task_id,
+                pool_id=pool_id,
             )
         )
     return rows
