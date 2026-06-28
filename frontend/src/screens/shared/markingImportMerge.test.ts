@@ -2,6 +2,9 @@ import { describe, expect, it } from 'vitest'
 
 import {
   filterProductsBySearch,
+  findFirstGtinWithMissingTitle,
+  gtinsWithMissingTitle,
+  isImportGroupTitleMissing,
   mergePreviewGroups,
   paginateProductSearchResults,
   PRODUCT_SEARCH_INITIAL_LIMIT,
@@ -18,6 +21,29 @@ describe('filterProductsBySearch', () => {
     expect(filterProductsBySearch(products, 'alpha')).toEqual([products[0]])
     expect(filterProductsBySearch(products, 'SKU-BETA')).toEqual([products[1]])
     expect(filterProductsBySearch(products, '')).toEqual(products)
+  })
+})
+
+describe('import group title validation helpers', () => {
+  const groups = [
+    { gtin: '4600000000001', title: 'Pool A' },
+    { gtin: '4600000000002', title: '   ' },
+    { gtin: '4600000000003', title: '' },
+  ]
+
+  it('detects whitespace-only titles as missing', () => {
+    expect(isImportGroupTitleMissing('')).toBe(true)
+    expect(isImportGroupTitleMissing('   ')).toBe(true)
+    expect(isImportGroupTitleMissing('Pool')).toBe(false)
+  })
+
+  it('collects all gtins with missing titles in file order', () => {
+    expect(gtinsWithMissingTitle(groups)).toEqual(['4600000000002', '4600000000003'])
+  })
+
+  it('returns the first gtin with missing title for scroll target', () => {
+    expect(findFirstGtinWithMissingTitle(groups)).toBe('4600000000002')
+    expect(findFirstGtinWithMissingTitle([{ gtin: '1', title: 'Ok' }])).toBeNull()
   })
 })
 

@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import {
   Alert,
   Box,
@@ -21,6 +21,7 @@ import {
   TextField,
   Typography,
 } from '@mui/material'
+import { alpha } from '@mui/material/styles'
 import CloudUploadOutlined from '@mui/icons-material/CloudUploadOutlined'
 import { apiUrl } from '../../api'
 import { readApiErrorMessage } from '../../utils/readApiErrorMessage'
@@ -102,6 +103,20 @@ export function removeImportFileAt(files: File[], index: number): File[] {
   return files.filter((_, i) => i !== index)
 }
 
+export function isImportGroupTitleMissing(title: string): boolean {
+  return title.trim().length === 0
+}
+
+export function gtinsWithMissingTitle(groups: { gtin: string; title: string }[]): string[] {
+  return groups.filter((g) => isImportGroupTitleMissing(g.title)).map((g) => g.gtin)
+}
+
+export function findFirstGtinWithMissingTitle(
+  groups: { gtin: string; title: string }[],
+): string | null {
+  return groups.find((g) => isImportGroupTitleMissing(g.title))?.gtin ?? null
+}
+
 export function mergePreviewGroups(prev: GroupDraft[], incoming: PreviewGroup[]): GroupDraft[] {
   const prevByGtin = new Map(prev.map((g) => [g.gtin, g]))
   return incoming.map((g) => {
@@ -152,7 +167,9 @@ export function MarkingImportDialog({
   const [parseBusy, setParseBusy] = useState(false)
   const [uploadBusy, setUploadBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [titleErrorGtins, setTitleErrorGtins] = useState<Set<string>>(new Set())
   const [expandedProductLists, setExpandedProductLists] = useState<Set<string>>(new Set())
+  const scrollToTitleGtinRef = useRef<string | null>(null)
 
   const sellerProducts = useMemo(
     () => catalog.filter((row) => row.seller_id === sellerId),
@@ -164,7 +181,9 @@ export function MarkingImportDialog({
     setGroups([])
     setPreviewMeta(null)
     setError(null)
+    setTitleErrorGtins(new Set())
     setExpandedProductLists(new Set())
+    scrollToTitleGtinRef.current = null
   }, [])
 
   useEffect(() => {
@@ -230,7 +249,9 @@ export function MarkingImportDialog({
     setGroups([])
     setPreviewMeta(null)
     setError(null)
+    setTitleErrorGtins(new Set())
     setExpandedProductLists(new Set())
+    scrollToTitleGtinRef.current = null
   }
 
   const removeFileAt = (index: number) => {
@@ -248,6 +269,16 @@ export function MarkingImportDialog({
 
   const updateGroupTitle = (gtin: string, title: string) => {
     setGroups((prev) => prev.map((g) => (g.gtin === gtin ? { ...g, title } : g)))
+    if (!isImportGroupTitleMissing(title)) {
+      setTitleErrorGtins((prev) => {
+        if (!prev.has(gtin)) {
+          return prev
+        }
+        const next = new Set(prev)
+        next.delete(gtin)
+        return next
+      })
+    }
   }
 
   const updateGroupProductSearch = (gtin: string, productSearch: string) => {
@@ -294,14 +325,17 @@ export function MarkingImportDialog({
     if (files.length === 0 || groups.length === 0) {
       return
     }
-    for (const g of groups) {
-      if (!g.title.trim()) {
-        setError('Укажите название пула для каждого GTIN.')
-        return
-      }
+    const missingTitleGtins = gtinsWithMissingTitle(groups)
+    if (missingTitleGtins.length > 0) {
+      setTitleErrorGtins(new Set(missingTitleGtins))
+      scrollToTitleGtinRef.current = findFirstGtinWithMissingTitle(groups)
+      setError('Укажите название пула для каждого GTIN.')
+      return
     }
     setUploadBusy(true)
     setError(null)
+    setTitleErrorGtins(new Set())
+    scrollToTitleGtinRef.current = null
     try {
       const poolsJson: PoolImportSpec[] = groups.map((g) => ({
         gtin: g.gtin,
@@ -340,6 +374,17 @@ export function MarkingImportDialog({
   }
 
   const busy = parseBusy || uploadBusy
+
+  useEffect(() => {
+    const gtin = scrollToTitleGtinRef.current
+    if (!gtin) {
+      return
+    }
+    document
+      .querySelector(`[data-testid="${testIdPrefix}-import-group-${gtin}-title-missing"]`)
+      ?.scrollIntoView({ behavior: 'smooth', block: 'nearest' })
+    scrollToTitleGtinRef.current = null
+  }, [titleErrorGtins, testIdPrefix])
 
   return (
     <Dialog
@@ -423,9 +468,27 @@ export function MarkingImportDialog({
             const showAllProducts = expandedProductLists.has(g.gtin)
             const { visible: visibleProducts, total: productTotal, truncated } =
               paginateProductSearchResults(filteredProducts, showAllProducts)
+            const titleMissing = titleErrorGtins.has(g.gtin)
 
             return (
-              <Paper key={g.gtin} variant="outlined" sx={{ p: 2 }} data-testid={`${testIdPrefix}-import-group-${g.gtin}`}>
+              <Paper
+                key={g.gtin}
+                variant="outlined"
+                sx={{
+                  p: 2,
+                  ...(titleMissing
+                    ? {
+                        borderColor: 'error.main',
+                        backgroundColor: (theme) => alpha(theme.palette.error.main, 0.08),
+                      }
+                    : {}),
+                }}
+                data-testid={
+                  titleMissing
+                    ? `${testIdPrefix}-import-group-${g.gtin}-title-missing`
+                    : `${testIdPrefix}-import-group-${g.gtin}`
+                }
+              >
                 <Stack spacing={1.5}>
                   <Typography variant="subtitle2">
                     GTIN …{g.gtin.slice(-4)} — {g.codes_count} кодов
@@ -434,6 +497,8 @@ export function MarkingImportDialog({
                     label="Название пула"
                     value={g.title}
                     onChange={(e) => updateGroupTitle(g.gtin, e.target.value)}
+                    error={titleMissing}
+                    helperText={titleMissing ? 'Укажите название пула' : undefined}
                     data-testid={`${testIdPrefix}-import-title-${g.gtin}`}
                   />
                   <TextField
