@@ -1194,6 +1194,7 @@ async def print_codes_for_packaging_line(
     layout: PrintLayout | dict[str, object] | None = None,
     allow_partial: bool = False,
     reprint: bool = False,
+    reprint_code_ids: list[uuid.UUID] | None = None,
     duplicate_copies: int | None = None,
     units_to_print: int | None = None,
     commit: bool = True,
@@ -1245,6 +1246,13 @@ async def print_codes_for_packaging_line(
         codes = list((await session.execute(stmt)).scalars().all())
         if not codes:
             raise MarkingCodeServiceError("nothing_to_reprint")
+        if reprint_code_ids is not None:
+            if not reprint_code_ids:
+                raise MarkingCodeServiceError("invalid_reprint_selection")
+            wanted = set(reprint_code_ids)
+            codes = [code for code in codes if code.id in wanted]
+            if len(codes) != len(wanted):
+                raise MarkingCodeServiceError("code_not_found")
         for code in codes:
             await record_event(
                 session,

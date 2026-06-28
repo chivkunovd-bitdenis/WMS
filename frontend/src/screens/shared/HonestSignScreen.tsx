@@ -29,8 +29,9 @@ import MoreVertOutlined from '@mui/icons-material/MoreVertOutlined'
 import { apiUrl } from '../../api'
 import { PageHeader } from '../../ui/PageHeader'
 import { readApiErrorMessage } from '../../utils/readApiErrorMessage'
+import { MarkingImportDialog, type PoolImportContext } from './MarkingImportDialog'
 import { MarkingPoolProductsDialog } from './MarkingPoolProductsDialog'
-import { MarkingImportDialog } from './MarkingImportDialog'
+import { MarkingSellerPicker } from './MarkingSellerPicker'
 
 export type MarkingPoolRow = {
   id: string
@@ -144,13 +145,28 @@ export function HonestSignScreen({
   const [menuPool, setMenuPool] = useState<MarkingPoolRow | null>(null)
   const [linkPool, setLinkPool] = useState<MarkingPoolRow | null>(null)
   const [importOpen, setImportOpen] = useState(false)
+  const [importPoolContext, setImportPoolContext] = useState<PoolImportContext | null>(null)
   const [toastMessage, setToastMessage] = useState<string | null>(null)
 
-  const openImport = () => {
+  const openImport = (pool?: MarkingPoolRow) => {
     if (sellerIdRequiredForImport && !effectiveSellerId) {
       return
     }
+    setImportPoolContext(
+      pool
+        ? {
+            gtin: pool.gtin,
+            title: pool.title,
+            productIds: pool.products.map((p) => p.id),
+          }
+        : null,
+    )
     setImportOpen(true)
+  }
+
+  const closeImport = () => {
+    setImportOpen(false)
+    setImportPoolContext(null)
   }
 
   const effectiveSellerId = sellerId ?? selectedSellerId
@@ -237,26 +253,16 @@ export function HonestSignScreen({
     <Stack spacing={2} data-testid={`${testIdPrefix}-page`}>
       <PageHeader
         title="Честный знак"
-        description="Пулы кодов по GTIN: остаток общий на пул, товары привязываются вручную."
+        description="Пулы КМ по GTIN: остаток общий на пул, товары привязываются вручную."
       />
 
-      {sellerIdRequiredForImport && sellers.length > 0 ? (
-        <Stack direction="row" spacing={1} sx={{ flexWrap: 'wrap', alignItems: 'center' }}>
-          <Typography variant="body2" color="text.secondary">
-            Селлер:
-          </Typography>
-          {sellers.map((s) => (
-            <Button
-              key={s.id}
-              size="small"
-              variant={selectedSellerId === s.id ? 'contained' : 'outlined'}
-              onClick={() => onSelectedSellerIdChange?.(s.id)}
-              data-testid={`${testIdPrefix}-seller-${s.id}`}
-            >
-              {s.name}
-            </Button>
-          ))}
-        </Stack>
+      {sellerIdRequiredForImport ? (
+        <MarkingSellerPicker
+          sellers={sellers}
+          selectedSellerId={selectedSellerId}
+          onSelectedSellerIdChange={(id) => onSelectedSellerIdChange?.(id)}
+          testIdPrefix={testIdPrefix}
+        />
       ) : null}
 
       {error ? (
@@ -325,7 +331,7 @@ export function HonestSignScreen({
                     size="small"
                     variant="contained"
                     startIcon={<UploadFileOutlined />}
-                    onClick={openImport}
+                    onClick={() => openImport(row)}
                     data-testid={`${testIdPrefix}-pool-card-upload-${row.id}`}
                   >
                     Догрузить
@@ -351,10 +357,10 @@ export function HonestSignScreen({
           variant="contained"
           startIcon={<UploadFileOutlined />}
           disabled={sellerIdRequiredForImport && !effectiveSellerId}
-          onClick={openImport}
+          onClick={() => openImport()}
           data-testid={`${testIdPrefix}-open-import`}
         >
-          Загрузить коды
+          Загрузить КМ
         </Button>
         <Button
           variant="outlined"
@@ -418,7 +424,7 @@ export function HonestSignScreen({
                   <Stack spacing={1} sx={{ py: 2, alignItems: 'flex-start' }}>
                     <Typography variant="body2" color="text.secondary">
                       {pools.length === 0
-                        ? 'Пулов пока нет — загрузите коды из файла.'
+                        ? 'Пулов пока нет — загрузите КМ из файла.'
                         : 'Ничего не найдено по фильтру.'}
                     </Typography>
                     {pools.length === 0 ? (
@@ -426,10 +432,10 @@ export function HonestSignScreen({
                         variant="contained"
                         size="small"
                         startIcon={<UploadFileOutlined />}
-                        onClick={openImport}
+                        onClick={() => openImport()}
                         data-testid={`${testIdPrefix}-empty-upload`}
                       >
-                        Загрузить коды
+                        Загрузить КМ
                       </Button>
                     ) : null}
                   </Stack>
@@ -438,7 +444,6 @@ export function HonestSignScreen({
             ) : (
               filteredPools.map((row) => {
                 const low = isLowStock(row)
-                const unlinked = row.products.length === 0
                 return (
                   <TableRow
                     key={row.id}
@@ -455,18 +460,6 @@ export function HonestSignScreen({
                         <Typography variant="caption" color="text.secondary">
                           GTIN {row.gtin}
                         </Typography>
-                        {unlinked ? (
-                          <Chip
-                            size="small"
-                            color="warning"
-                            label="не привязан"
-                            onClick={(e) => {
-                              e.stopPropagation()
-                              setLinkPool(row)
-                            }}
-                            data-testid={`${testIdPrefix}-pool-unlinked-${row.id}`}
-                          />
-                        ) : null}
                       </Stack>
                     </TableCell>
                     <TableCell>
@@ -575,7 +568,8 @@ export function HonestSignScreen({
           token={token}
           sellerId={effectiveSellerId}
           testIdPrefix={testIdPrefix}
-          onClose={() => setImportOpen(false)}
+          poolContext={importPoolContext}
+          onClose={closeImport}
           onImported={(message) => {
             setToastMessage(message)
             void loadPools()

@@ -21,6 +21,7 @@ import {
   type ProductLabelPrintOptions,
 } from '../utils/productLabelText'
 import { printProductThermalLabels } from '../utils/printProductThermalLabel'
+import { resolvePackUnits, resolveWbBarcodeLabelCount } from '../utils/productBarcodePrint'
 import { resolveProductPrimaryBarcode, type ProductLineDisplayMeta } from '../types/wbProductCatalog'
 import { renderBarcodeDataUrl } from '../utils/renderBarcodeDataUrl'
 
@@ -55,6 +56,21 @@ export function ProductBarcodePrintDialog({ open, meta, onClose }: Props) {
   const article = meta ? resolveProductLabelArticle(meta) : ''
   const name = meta ? normalizeProductLabelName(meta.product_name) : ''
   const sellerName = meta?.seller_name?.trim() ?? ''
+  const packUnits = useMemo(
+    () =>
+      meta
+        ? resolvePackUnits({
+            units_in_pack: meta.units_in_pack,
+            packaging_instructions: meta.packaging_instructions,
+          })
+        : 1,
+    [meta?.units_in_pack, meta?.packaging_instructions],
+  )
+  const qtyMultiplier = Number(qty)
+  const totalLabels =
+    Number.isFinite(qtyMultiplier) && qtyMultiplier >= 1
+      ? resolveWbBarcodeLabelCount(Math.floor(qtyMultiplier), packUnits)
+      : 0
   const detailLines = useMemo(
     () => (meta ? productLabelDetailLines(meta, printOptions) : []),
     [meta, printOptions],
@@ -83,6 +99,7 @@ export function ProductBarcodePrintDialog({ open, meta, onClose }: Props) {
     }
     setError(null)
     try {
+      const labelsToPrint = resolveWbBarcodeLabelCount(Math.floor(n), packUnits)
       printProductThermalLabels(
         {
           product_name: meta.product_name,
@@ -95,7 +112,7 @@ export function ProductBarcodePrintDialog({ open, meta, onClose }: Props) {
           seller_name: meta.seller_name,
           barcode,
         },
-        Math.floor(n),
+        labelsToPrint,
         printOptions,
       )
       onClose()
@@ -248,16 +265,31 @@ export function ProductBarcodePrintDialog({ open, meta, onClose }: Props) {
         </FormGroup>
 
         <TextField
-          label="Количество этикеток"
+          label="Количество ШК ВБ"
           type="number"
           fullWidth
           size="small"
           value={qty}
           onChange={(e) => setQty(e.target.value)}
+          helperText={
+            packUnits > 1
+              ? `× ${packUnits} шт в упаковке → ${totalLabels > 0 ? totalLabels : '—'} этикеток`
+              : undefined
+          }
           slotProps={{
             htmlInput: { min: 1, max: 999, 'data-testid': 'ff-product-label-qty' },
           }}
         />
+        {packUnits > 1 && totalLabels > 0 ? (
+          <Typography
+            variant="body2"
+            color="text.secondary"
+            sx={{ mt: 0.5 }}
+            data-testid="ff-product-label-total"
+          >
+            К печати: {totalLabels} этикеток
+          </Typography>
+        ) : null}
         {error ? (
           <Typography variant="body2" color="error" sx={{ mt: 1 }} data-testid="ff-product-label-error">
             {error}

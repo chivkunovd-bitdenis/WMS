@@ -2,6 +2,7 @@ import { expect, test } from '@playwright/test'
 
 import { waitForGetOk, waitForPostOk } from './api-waits'
 import { openFulfillmentRegistration } from './auth-flow'
+import { selectHonestSignSeller } from './ff-honest-sign-helpers'
 
 // TC-NEW-002 — ЧЗ: список пулов после импорта через API.
 test('FF honest sign: pool list shows imported available count', async ({ page }) => {
@@ -49,7 +50,7 @@ test('FF honest sign: pool list shows imported available count', async ({ page }
 
   await page.getByTestId('nav-ff-honest-sign').click()
   await expect(page.getByTestId('ff-honest-sign-page')).toBeVisible()
-  await page.getByTestId(`ff-honest-sign-seller-${sellerId}`).click()
+  await selectHonestSignSeller(page, sellerId)
   await expect(page.getByTestId(`ff-honest-sign-pool-row-${poolId}`)).toBeVisible()
   await expect(page.getByTestId(`ff-honest-sign-pool-row-${poolId}`)).toContainText('1')
 })

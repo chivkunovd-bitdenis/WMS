@@ -115,6 +115,25 @@ async def test_marking_import_and_packaging_print(async_client: AsyncClient) -> 
     assert row2["available_count"] == 2
     assert row2["printed_count"] == 3
 
+    listed = await async_client.get(
+        f"/operations/marking-codes/packaging-task-lines/{line_id}/printed-codes",
+        headers=h,
+    )
+    assert listed.status_code == 200
+    code_rows = listed.json()["codes"]
+    assert len(code_rows) == 3
+    target_id = code_rows[1]["id"]
+
+    single_reprint = await async_client.post(
+        f"/operations/marking-codes/packaging-lines/{line_id}/print",
+        headers=h,
+        json={"duplicate_copies": 2, "reprint": True, "code_ids": [target_id]},
+    )
+    assert single_reprint.status_code == 200, single_reprint.text
+    assert single_reprint.json()["is_reprint"] is True
+    assert single_reprint.json()["quantity"] == 1
+    assert len(single_reprint.json()["codes"]) == 1
+
     dup = await async_client.post(
         f"/operations/marking-codes/packaging-lines/{line_id}/print",
         headers=h,

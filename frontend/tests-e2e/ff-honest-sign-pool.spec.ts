@@ -2,8 +2,10 @@ import { expect, test } from '@playwright/test'
 
 import { waitForGetOk, waitForPostOk } from './api-waits'
 import { openFulfillmentRegistration } from './auth-flow'
+import { selectHonestSignSeller } from './ff-honest-sign-helpers'
 
 // TC-NEW-009 — T0.9: вкладки карточки пула и экспорт CSV кодов.
+// TC-NEW-011 — T-E3: таб «Лента» — превью + ссылка на полную ленту пула (без дубля).
 test('FF honest sign pool card: tabs and CSV export', async ({ page }) => {
   test.setTimeout(90_000)
   const email = `e2e-pool-${Date.now()}@example.com`
@@ -48,7 +50,7 @@ test('FF honest sign pool card: tabs and CSV export', async ({ page }) => {
   const poolId = String(((await imp.json()) as { pools: { pool_id: string }[] }).pools[0].pool_id)
 
   await page.getByTestId('nav-ff-honest-sign').click()
-  await page.getByTestId(`ff-honest-sign-seller-${sellerId}`).click()
+  await selectHonestSignSeller(page, sellerId)
   await page.getByTestId(`ff-honest-sign-pool-row-${poolId}`).click()
   await expect(page.getByTestId('ff-honest-sign-pool-page')).toBeVisible()
   await expect(page.getByTestId('ff-honest-sign-pool-overview')).toBeVisible()
@@ -59,6 +61,13 @@ test('FF honest sign pool card: tabs and CSV export', async ({ page }) => {
   await page.getByTestId('ff-honest-sign-pool-tab-codes').click()
   await expect(page.getByTestId('ff-honest-sign-pool-codes')).toBeVisible()
   await expect(page.locator('[data-testid^="ff-honest-sign-pool-code-row-"]')).toHaveCount(1)
+  await expect(page.locator('[data-testid^="ff-honest-sign-pool-code-row-"]').first()).toContainText(
+    'Доступен',
+  )
+  await page.getByTestId('ff-honest-sign-pool-codes-status').click()
+  await expect(page.getByRole('option', { name: 'Доступен' })).toBeVisible()
+  await expect(page.getByRole('option', { name: 'Зарезервирован' })).toBeVisible()
+  await page.keyboard.press('Escape')
 
   const downloadPromise = page.waitForEvent('download')
   await page.getByTestId('ff-honest-sign-pool-codes-export').click()
@@ -67,5 +76,10 @@ test('FF honest sign pool card: tabs and CSV export', async ({ page }) => {
   expect(path).toBeTruthy()
 
   await page.getByTestId('ff-honest-sign-pool-tab-ledger').click()
-  await expect(page.getByTestId('ff-honest-sign-pool-ledger')).toBeVisible()
+  await expect(page.getByTestId('ff-honest-sign-pool-ledger-preview')).toBeVisible()
+  await expect(page.getByTestId('ff-honest-sign-pool-ledger-open-full')).toBeVisible()
+  await expect(page.getByTestId('ff-honest-sign-ledger-event-type')).toHaveCount(0)
+  await page.getByTestId('ff-honest-sign-pool-ledger-open-full').click()
+  await expect(page.getByTestId('ff-honest-sign-ledger-page')).toBeVisible()
+  await expect(page.getByTestId('ff-honest-sign-ledger-table')).toContainText('imported')
 })

@@ -139,5 +139,6 @@ test('FF packaging: marking print constructor shortage and pairs preview', async
   expect(printBody.quantity).toBe(2)
   expect(printBody.shortage).toBe(1)
 
-  await expect(page.getByText('напеч. 2')).toBeVisible()
+  await expect(page.getByText('напечатано 2 / нужно 2')).toBeVisible()
+  await expect(page.getByText(/дост\.\s+\d+\s+в пуле/)).toBeVisible()
 })

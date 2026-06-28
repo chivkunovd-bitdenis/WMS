@@ -5,8 +5,8 @@ import { loginAsSeller, openFulfillmentRegistration } from './auth-flow'
 import { fulfillInboundViaBoxScans } from './inbound-boxes-helpers'
 import { setWmsDateField } from './wms-date-field-helpers'
 
-// TC-NEW-MP-016 — MP-021…023: иконка печати на вкладке «Упаковка» → MarkingPrintDialog; без ЧЗ — только этикетки.
-test('MP packaging: print icon opens constructor without CZ presets for non-marked product', async ({
+// TC-NEW-MP-016 — MP-021…023: иконка печати на вкладке «Упаковка» → MarkingPrintDialog; без ЧЗ — только количество ШК ВБ.
+test('MP packaging: print icon opens qty-only dialog for non-marked product', async ({
   page,
 }) => {
   test.setTimeout(120_000)
@@ -216,11 +216,14 @@ test('MP packaging: print icon opens constructor without CZ presets for non-mark
   await expect(page.getByTestId('marking-print-dialog')).toBeVisible()
   await expect(page.getByTestId('product-barcode-print-dialog')).toHaveCount(0)
   await expect(page.getByTestId('marking-print-preset-pairs')).toHaveCount(0)
-  await expect(page.getByTestId('marking-print-preset-label_only')).toBeChecked()
-  await expect(page.getByTestId('marking-print-labels-per-product')).toBeVisible()
+  await expect(page.getByTestId('marking-print-preset-label_only')).toHaveCount(0)
+  await expect(page.getByTestId('marking-print-custom-builder')).toHaveCount(0)
+  await expect(page.getByTestId('marking-print-preview')).toHaveCount(0)
+  await expect(page.getByTestId('marking-print-labels-per-product')).toHaveCount(0)
+  await expect(page.getByTestId('marking-print-wb-qty')).toBeVisible()
 
-  await page.getByTestId('marking-print-labels-per-product').locator('input').fill('2')
-  await expect(page.getByTestId('marking-print-will-print')).toContainText('6 этикеток в ленте')
+  await page.getByTestId('marking-print-wb-qty').locator('input').fill('6')
+  await expect(page.getByTestId('marking-print-will-print')).toContainText('К печати: 6 этикеток')
 
   await page.getByTestId('marking-print-confirm').click()
   await expect(page.getByTestId('marking-print-dialog')).toBeHidden()
