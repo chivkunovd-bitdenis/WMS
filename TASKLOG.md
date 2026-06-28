@@ -1,5 +1,11 @@
 # TASKLOG
 
+## TASK-042 — 2026-06-28 — POOLCARD-02: honest pool codes CSV export
+
+- What changed: `HonestSignPoolPage` — экспорт CSV запрашивает свежий список кодов с сервера (не client-side `filteredCodes`); подписи «N из M» при фильтре по хвосту КМ или статусу; кнопка показывает объём выгрузки.
+- What did NOT change: API `/pools/{id}/codes`, локализация статусов (POOLCARD-01), таб «Лента» (POOLCARD-03).
+- Verification: `npm run build` in `.cursor/wt/POOLCARD-02/frontend` — green.
+
 ## TASK-049 — 2026-06-28 — POOLS-05: unified forecast format
 
 - What changed: `HonestSignScreen` — общий `ForecastLabel` (дата `ДД.ММ` + tooltip `(N дн.)`) в таблице и карточках селлера.
