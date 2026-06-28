@@ -1,6 +1,5 @@
 # TASKLOG
 
-<<<<<<< HEAD
 ## TASK-052 — 2026-06-28 — PENDING-01: bulk print selected pending rows
 
 - What changed: `FfPendingMarkingPage` — чекбоксы строк, «Печать выбранных (N)», очередь последовательных `MarkingPrintDialog` (каждая лента по своему товару); e2e TC-NEW-008.
@@ -12,7 +11,7 @@
 - What changed: `HonestSignPoolPage` — фильтр и чипы статусов кодов через `codeStatusLabel` из `markingStatus.ts`; cherry-pick SHARED-01 (словарь + `MarkingProductCodesDialog`); e2e проверяет «Доступен» в строке и опциях фильтра.
 - What did NOT change: лента событий на карточке пула (LEDGER-06), CSV export (англ. enum в файле).
 - Verification: `npm run build` in POOLCARD-01 worktree — green. Commit `117b153`. E2E webServer timeout (env), не блокирует сборку.
-=======
+
 ## TASK-037 — 2026-06-28 — POOLCARD-03: таб «Лента» → превью + ссылка
 
 - What changed:
@@ -20,7 +19,6 @@
   - **`ff-honest-sign-pool.spec.ts`:** TC-NEW-011 — превью, отсутствие фильтров ленты на карточке, переход на полную ленту.
 - What did NOT change: `HonestSignLedgerPage`, API ленты, другие табы карточки пула.
 - Verification: `npm run build` green; `playwright test ff-honest-sign-pool.spec.ts` passed.
->>>>>>> task/POOLCARD-03
 
 ## TASK-036 — 2026-06-28 — CZ-000 barrier: MP commit + feat/cz-ux-fixes + autopilot backlog
 
