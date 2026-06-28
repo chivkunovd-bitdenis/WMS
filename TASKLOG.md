@@ -1,5 +1,11 @@
 # TASKLOG
 
+## TASK-051 — 2026-06-28 — BACKEND-01: deprecate scan-print / print-all / verify-pair
+
+- What changed: `marking_codes.py` — `deprecated=True` + summary on `POST /scan-print`, `/verify-pair`, `/packaging-tasks/{id}/print-all`; comment BACKEND-01 / T-A6 (ORD-44).
+- What did NOT change: endpoint behaviour, per-line print (`/packaging-lines/{line_id}/print`), service layer.
+- Verification: `ruff check app/api/marking_codes.py`; `mypy app/api/marking_codes.py`; `pytest tests/ -q -k marking` — 50 passed; all three routes `deprecated=True` in OpenAPI. Commit `d82fe3c`.
+
 ## TASK-050 — 2026-06-28 — REPRINTS-03: context links on reprint row
 
 - What changed: `FfHonestSignReprintsPage` — колонка «Контекст»: ссылки «Задание» (упаковка с `state.taskId`), «Пул», «История кода» (drawer); API `reprint-requests` отдаёт `packaging_task_id` и `pool_id`; e2e `ff-marking-defect.spec.ts` (TC-NEW-006) проверяет доступность контекста из строки. Сохранён диалог причины отклонения (REPRINTS-02).
