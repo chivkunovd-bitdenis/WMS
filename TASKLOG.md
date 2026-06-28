@@ -1,5 +1,87 @@
 # TASKLOG
 
+## TASK-036 — 2026-06-28 — CZ-000 barrier: MP commit + feat/cz-ux-fixes + autopilot backlog
+
+- What changed:
+  - **CZ-000 done:** MP slice committed `304abf2` on `hotfix/alembic-marking-pools`; branch **`feat/cz-ux-fixes`** created.
+  - **Autopilot:** `.cursor/hooks`, `wms-queue.mdc`, `docs/PARALLEL_AGENT_TASKS.md`, `CURSOR_QUEUE_LANES_RU.md`, CZ backlog docs.
+  - **`PARALLEL_AGENT_TASKS.md`:** CZ-000 marked done; agents may start PACK/PRINT/… lanes.
+- What did NOT change: lane tasks (PACK-01…); orchestrator lives in `~/.cursor/agents/orchestrator.md`.
+- Verification: `git status` clean on `feat/cz-ux-fixes`.
+
+## TASK-035 — 2026-06-28 — Queue lanes: files, depends_on, lane scheduling doc
+
+- What changed:
+  - **`docs/CURSOR_QUEUE_LANES_RU.md`** — справка для человека и orchestrator (атрибуты lane/files/depends_on, правила параллели, примеры, resume).
+  - **`orchestrator.md`**, **`wms-queue.mdc`**, **`QUEUE.md`** — планирование по lanes; ссылка на справку (не alwaysApply).
+  - **`.cursor/skills/queue-lanes/SKILL.md`** — короткий указатель на справку.
+  - Orchestrator queue: **1 задача = 1 builder**, `parallel_workers` от владельца.
+- What did NOT change: содержимое backlog (владелец вставит в QUEUE).
+- Verification: docs-only.
+
+## TASK-034 — 2026-06-28 — Backlog autopilot: orchestrator queue mode, QUEUE, stop hook
+
+- What changed:
+  - **`~/.cursor/agents/orchestrator.md`** — режим очереди: 4×3 parallel builder, builder→verifier→fix (max 3), ` done` только после verifier.
+  - **`backlog-runner.md`** — stub → redirect на orchestrator queue mode.
+  - **`.cursor/QUEUE.md`** — очередь (формат: `ID — описание` / `… done` / `… blocked`).
+  - **`.cursor/SESSION_HANDOFF.md`** — handoff между пачками.
+  - **`.cursor/rules/wms-queue.mdc`** — правила queue mode.
+  - **`.cursor/hooks.json` + `continue-queue.sh`** — auto follow-up пока в QUEUE есть открытые задачи.
+- What did NOT change: orchestrator (режим одной фичи); backlog tasks — владелец вставит в QUEUE.
+- Verification: hook script exits `{}` on empty queue; `chmod +x` on continue-queue.sh.
+
+## TASK-033 — 2026-06-28 — MP-032…034: parallel full-flow e2e, ship UI gate, canonical docs
+
+- What changed:
+  - **MP-032:** `ff-mp-full-flow.spec.ts` — TC-NEW-MP-FULL-001: boxes filled **before** packaging complete, then pack → ship from footer.
+  - **MP-033:** `FfSuppliesShipmentsPage` — **«Отгружено»** disabled until `linked_packaging_task` done (`mpPackagingComplete`); guard in `requestShipMpUnload`.
+  - **MP-034:** docs — superseded banners on `02`/`03`; `MVP_DECISIONS_RU` MP packaging; `DATA_FLOW.md` lifecycle; `01_normalized_process_spec` implementation status; `IMPLEMENTED_PRODUCT_SCENARIOS_*` §17 + updated S16 cases.
+- What did NOT change: MP-024…031 (already in REV-FIX / prior tasks); `04_release_implementation_review.md` historical snapshot.
+- Verification: e2e `ff-mp-full-flow`, `ff-mp-packaging-gate`, `ff-mp-tabs` — 5 passed; backend pytest batch/ship subset — 9 passed.
+
+## TASK-032 — 2026-06-28 — MP-021…023: единый конструктор печати на упаковке MP
+
+- What changed:
+  - **MP-021:** иконка печати на вкладке «Упаковка» MP → `MarkingPrintDialog` (не `ProductBarcodePrintDialog`); печать убрана с вкладки «Товары».
+  - **MP-022:** поле «Этикеток на каждый товар»; для товаров без ЧЗ — только пресеты этикеток, без блоков ЧЗ.
+  - **MP-023:** `applyLabelsPerProductToLayout` / `countTapeBlocks` — lpp умножает только label-блоки (A-002); полная лента через `printMarkingCodeTape`.
+- What did NOT change: MP-024…034 (settings, docs polish).
+- Verification: `npm run test:unit -- markingPrintPresets` — 4 passed; e2e `ff-mp-packaging-print` — 1 passed; e2e `ff-mp-full-flow`, `ff-mp-tabs`, `ff-marking-print-constructor`, `ff-marking-packaging` — green; `npm run build` ok.
+
+## TASK-031 — 2026-06-28 — MP-018 + MP-020: модалка pick/scan, главный scan только WHB
+
+- What changed:
+  - **MP-018:** модалка «Добавить товары» — dropdown ячейки, scan товара/ячейки/WHB; backend `collect_ready_box_into_open_box` + `kind: ready_box` в scan API; confirm/over-plan для WHB в модалке; убран `packagingGateActive`.
+  - **MP-020:** главный scan на «Товарах» — только WHB/INB; товар/ячейка → сообщение «используйте Добавить товары»; e2e TC-NEW-MP-015.
+- What did NOT change: MP-021…034 (печать, docs polish).
+- Verification: `pytest tests/test_marketplace_unload_tsd_scan_contract.py` — 6 passed; e2e `ff-mp-box-add-modal` — 4 passed; e2e `ff-mp-tabs` — 3 passed; e2e `ff-mp-full-flow` — 1 passed; `npm run build` ok.
+
+## TASK-030 — 2026-06-28 — MP-015…020: batch open boxes, e2e parallel, attach over-plan, WHB scan
+
+- What changed:
+  - **MP-015:** подтверждено — `create_boxes_batch` с `closed_at=NULL`; pytest batch green.
+  - **MP-016:** e2e `ff-mp-box-add-modal` — 3 короба **без** complete packaging (параллельный flow).
+  - **MP-017:** подтверждено — UI всегда `/boxes/batch`; pytest one-by-one + e2e TC-NEW-MP-022 green.
+  - **MP-019:** `allow_over_plan` в collect/attach API; UI confirm «Весь короб» + «Больше плана»; pytest `test_marketplace_unload_attach_allow_over_plan`.
+  - **MP-020:** главный scan на «Товарах» — только WHB attach; ячейка/товар → модалка короба; кнопка «Закрыть» на строке открытого короба.
+- What did NOT change: MP-018 (WHB attach в модалке короба), MP-021…034, MP-020 dedicated e2e (product barcode на главном scan).
+- Verification: `pytest -k "batch or attach_allow_over"` — 4 passed; `npm run build` ok; e2e `ff-mp-box-add-modal` + `ff-mp-packaging-gate` — 4 passed.
+
+## TASK-029 — 2026-06-28 — MP-010/011/013: 2 вкладки, короба на «Товарах», footer ship
+
+- What changed:
+  - **MP-010:** убраны вкладки `ff-mp-tab-boxes` и `ff-mp-tab-final`; остались только «Товары» и «Упаковка».
+  - **MP-011:** блок коробов (`ff-mp-boxes`), сводка распределения, scan/batch — на вкладке «Товары» после confirm.
+  - **MP-013:** «Утвердить» / «Отгружено» / «Отменить» — в footer (`ff-mp-footer-bar`); дата/WB/печать на «Товарах».
+- What did NOT change: MP-012 (full re-check), MP-015+.
+- Verification: `npm run build` ok; e2e `ff-mp-tabs`, `ff-mp-full-flow`, `ff-mp-box-add-modal`, `ff-mp-print-waybill`, `ff-mp-packaging-gate`, `ff-dashboard` — green.
+
+## TASK-029b — 2026-06-28 — MP-014: шапка документа (склад ФФ + дата + WB)
+
+- What changed: `ff-mp-doc-header-fields` — дата (`ff-mp-planned-date`), склад ФФ (`ff-mp-ff-warehouse-name`), WB select/readonly; убрано дублирование с вкладки «Товары».
+- Verification: e2e draft test asserts header testids; build green.
+
 ## TASK-028 — 2026-06-28 — MP-unload Phase A + frontend unblock (MP-001…009, MP-006…008, MP-012 partial)
 
 - What changed:
