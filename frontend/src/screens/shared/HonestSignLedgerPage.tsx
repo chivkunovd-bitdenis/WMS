@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Link as RouterLink, useSearchParams } from 'react-router-dom'
 import {
   Alert,
@@ -88,6 +88,7 @@ export function HonestSignLedgerPage({
 
   const debouncedDocument = useDebouncedValue(document, TEXT_FILTER_DEBOUNCE_MS)
   const debouncedCisMask = useDebouncedValue(cisMask, TEXT_FILTER_DEBOUNCE_MS)
+  const loadAbortRef = useRef<AbortController | null>(null)
 
   const limit = 50
 
@@ -135,6 +136,9 @@ export function HonestSignLedgerPage({
   ])
 
   const load = useCallback(async () => {
+    loadAbortRef.current?.abort()
+    const ac = new AbortController()
+    loadAbortRef.current = ac
     setBusy(true)
     setError(null)
     try {
@@ -143,16 +147,30 @@ export function HonestSignLedgerPage({
       params.set('offset', String(offset))
       const res = await fetch(apiUrl(`/operations/marking-codes/ledger?${params.toString()}`), {
         headers: authHeaders,
+        signal: ac.signal,
       })
+      if (ac.signal.aborted) {
+        return
+      }
       if (!res.ok) {
         setError(await readApiErrorMessage(res))
         return
       }
       const data = (await res.json()) as { rows: LedgerRow[]; total: number }
+      if (ac.signal.aborted) {
+        return
+      }
       setRows(data.rows)
       setTotal(data.total)
+    } catch (err) {
+      if (err instanceof DOMException && err.name === 'AbortError') {
+        return
+      }
+      throw err
     } finally {
-      setBusy(false)
+      if (!ac.signal.aborted) {
+        setBusy(false)
+      }
     }
   }, [authHeaders, buildFilterParams, offset])
 
@@ -185,6 +203,9 @@ export function HonestSignLedgerPage({
 
   useEffect(() => {
     void load()
+    return () => {
+      loadAbortRef.current?.abort()
+    }
   }, [load])
 
   useEffect(() => {

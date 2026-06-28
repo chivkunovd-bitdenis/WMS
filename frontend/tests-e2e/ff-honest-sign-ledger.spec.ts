@@ -15,6 +15,10 @@ function waitForLedgerGet(page: import('@playwright/test').Page, urlPart: string
   )
 }
 
+async function fillLedgerDateField(page: import('@playwright/test').Page, testId: string, value: string) {
+  await page.getByTestId(testId).locator('input').fill(value)
+}
+
 // TC-NEW-010 — T0.10: лента расхода, фильтр по типу и документу.
 test('FF honest sign ledger: imported events and document filter', async ({ page }) => {
   test.setTimeout(90_000)
@@ -63,6 +67,7 @@ test('FF honest sign ledger: imported events and document filter', async ({ page
   await selectHonestSignSeller(page, sellerId)
   await page.getByTestId('ff-honest-sign-open-ledger').click()
   await expect(page.getByTestId('ff-honest-sign-ledger-page')).toBeVisible()
+  await selectMarkingSeller(page, 'ff-honest-sign-ledger', sellerId)
   await expect(page.getByTestId('ff-honest-sign-ledger-table')).toContainText('Импорт')
 
   await Promise.all([
@@ -84,19 +89,19 @@ test('FF honest sign ledger: imported events and document filter', async ({ page
   await expect(page.getByTestId('ff-honest-sign-ledger-table')).toContainText(docNumber)
 
   const today = new Date().toISOString().slice(0, 10)
-  await page.getByTestId('ff-honest-sign-ledger-date-from').fill(today)
+  await fillLedgerDateField(page, 'ff-honest-sign-ledger-date-from', today)
   const [todayLedgerRes] = await Promise.all([
     waitForLedgerGet(page, 'date_to='),
-    page.getByTestId('ff-honest-sign-ledger-date-to').fill(today),
+    fillLedgerDateField(page, 'ff-honest-sign-ledger-date-to', today),
   ])
   expect(todayLedgerRes.url()).toContain('date_from=')
   expect(todayLedgerRes.url()).toContain('date_to=')
   await expect(page.getByTestId('ff-honest-sign-ledger-table')).toContainText('Импорт')
 
-  await page.getByTestId('ff-honest-sign-ledger-date-from').fill('2099-01-01')
+  await fillLedgerDateField(page, 'ff-honest-sign-ledger-date-from', '2099-01-01')
   await Promise.all([
     waitForLedgerGet(page, 'date_to=2099-01-01'),
-    page.getByTestId('ff-honest-sign-ledger-date-to').fill('2099-01-01'),
+    fillLedgerDateField(page, 'ff-honest-sign-ledger-date-to', '2099-01-01'),
   ])
   await expect(page.getByTestId('ff-honest-sign-ledger-table')).toContainText('События не найдены')
 })
@@ -160,4 +165,69 @@ test('FF honest sign ledger: seller autocomplete on ledger page', async ({ page 
 
   await selectMarkingSeller(page, 'ff-honest-sign-ledger', sellerBId)
   await expect(page.getByTestId('ff-honest-sign-ledger-table')).not.toContainText('Импорт')
+})
+
+// TC-NEW-LEDGER-04 — LEDGER-04: экспорт CSV по текущим фильтрам.
+test('FF honest sign ledger: export CSV with current filters', async ({ page }) => {
+  test.setTimeout(90_000)
+  const email = `e2e-ledger-export-${Date.now()}@example.com`
+  const password = 'password123'
+  const e2eApi = process.env.E2E_API_ORIGIN ?? 'http://127.0.0.1:18000'
+
+  await page.goto('/')
+  await openFulfillmentRegistration(page)
+  await page.getByTestId('register-form').getByLabel('Организация').fill('E2E Ledger Export')
+  await page.getByTestId('register-form').getByLabel('Email администратора').fill(email)
+  await page.getByTestId('register-form').getByLabel('Пароль').fill(password)
+  const [regRes] = await Promise.all([
+    waitForPostOk(page, '/api/auth/register'),
+    waitForGetOk(page, '/api/auth/me'),
+    page.getByTestId('register-form').getByRole('button', { name: 'Создать аккаунт' }).click(),
+  ])
+  const token = String(((await regRes.json()) as { access_token: string }).access_token)
+  const bearer = { Authorization: `Bearer ${token}` }
+
+  const sellerRes = await page.request.post(`${e2eApi}/sellers`, {
+    headers: { ...bearer, 'Content-Type': 'application/json' },
+    data: JSON.stringify({ name: 'Export Seller', email: `exp-${Date.now()}@example.com` }),
+  })
+  const sellerId = String(((await sellerRes.json()) as { id: string }).id)
+
+  const gtin = '00000000006666'
+  const cis = `01${gtin}21${'E'.repeat(20)}0001`
+  const imp = await page.request.post(`${e2eApi}/operations/marking-codes/import`, {
+    headers: bearer,
+    multipart: {
+      seller_id: sellerId,
+      pools_json: JSON.stringify([{ title: 'Export Pool', product_ids: [] }]),
+      files: {
+        name: 'codes.csv',
+        mimeType: 'text/csv',
+        buffer: Buffer.from(`cis\n${cis}`),
+      },
+    },
+  })
+  expect(imp.ok()).toBeTruthy()
+
+  await page.getByTestId('nav-ff-honest-sign').click()
+  await selectHonestSignSeller(page, sellerId)
+  await page.getByTestId('ff-honest-sign-open-ledger').click()
+  await selectMarkingSeller(page, 'ff-honest-sign-ledger', sellerId)
+  await expect(page.getByTestId('ff-honest-sign-ledger-table')).toContainText('Импорт')
+
+  const [exportRes] = await Promise.all([
+    page.waitForResponse(
+      (res) =>
+        res.url().includes('/operations/marking-codes/ledger/export') &&
+        res.request().method() === 'GET' &&
+        res.status() === 200,
+    ),
+    page.getByTestId('ff-honest-sign-ledger-export').click(),
+  ])
+  const contentType = exportRes.headers()['content-type'] ?? ''
+  expect(contentType).toMatch(/text\/csv|application\/octet-stream/)
+  const exportApi = await page.request.get(exportRes.url(), { headers: bearer })
+  expect(exportApi.ok()).toBeTruthy()
+  const body = await exportApi.text()
+  expect(body.replace(/^\ufeff/, '')).toContain('imported')
 })

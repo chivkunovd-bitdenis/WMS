@@ -817,7 +817,7 @@ async def test_mp_unload_pack_counter_without_inventory(
         headers=h,
         json={"packaging_instructions": "Pack"},
     )
-    loc_id = await _inventory_at_location(
+    await _inventory_at_location(
         async_client,
         h,
         warehouse_id=wh_id,

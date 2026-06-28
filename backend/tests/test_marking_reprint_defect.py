@@ -20,6 +20,7 @@ from app.models.marking_code import (
     MarkingCodeEvent,
 )
 
+
 async def _seed_printed_code(
     async_client: AsyncClient,
 ) -> tuple[dict[str, str], str, str]:

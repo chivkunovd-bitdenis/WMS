@@ -98,7 +98,7 @@ export function cloneLayout(layout: PrintLayout): PrintLayout {
   }
 }
 
-/** Умножает копии блоков «Этикетка» на «этикеток на каждый товар» (A-002: ЧЗ не умножается). */
+/** Умножает копии блоков «ШК ВБ» на «ШК ВБ на каждый товар» (A-002: ЧЗ не умножается). */
 export function applyLabelsPerProductToLayout(
   layout: PrintLayout,
   labelsPerProduct: number,

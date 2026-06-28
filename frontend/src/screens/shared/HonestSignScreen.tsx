@@ -186,6 +186,7 @@ export function HonestSignScreen({
 }: Props) {
   const navigate = useNavigate()
   const poolsTableRef = useRef<HTMLDivElement>(null)
+  const poolsLoadAbortRef = useRef<AbortController | null>(null)
   const [pools, setPools] = useState<MarkingPoolRow[]>([])
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -223,6 +224,9 @@ export function HonestSignScreen({
   const importDisabled = sellerIdRequiredForImport && !effectiveSellerId
 
   const loadPools = useCallback(async () => {
+    poolsLoadAbortRef.current?.abort()
+    const ac = new AbortController()
+    poolsLoadAbortRef.current = ac
     setBusy(true)
     setError(null)
     try {
@@ -236,14 +240,25 @@ export function HonestSignScreen({
               : ''
       const res = await fetch(apiUrl(`/operations/marking-codes/pools${q}`), {
         headers: { Authorization: `Bearer ${token}` },
+        signal: ac.signal,
       })
+      if (ac.signal.aborted) {
+        return
+      }
       if (!res.ok) {
         setError(await readApiErrorMessage(res))
         return
       }
       setPools((await res.json()) as MarkingPoolRow[])
+    } catch (err) {
+      if (err instanceof DOMException && err.name === 'AbortError') {
+        return
+      }
+      throw err
     } finally {
-      setBusy(false)
+      if (!ac.signal.aborted) {
+        setBusy(false)
+      }
     }
   }, [effectiveSellerId, sellerId, token])
 
@@ -253,6 +268,9 @@ export function HonestSignScreen({
       return
     }
     void loadPools()
+    return () => {
+      poolsLoadAbortRef.current?.abort()
+    }
   }, [effectiveSellerId, loadPools, sellerIdRequiredForImport])
 
   const kpis = useMemo(() => {

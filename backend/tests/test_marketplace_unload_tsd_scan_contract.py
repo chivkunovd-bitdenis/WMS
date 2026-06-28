@@ -298,8 +298,11 @@ async def test_box_scan_ready_box_into_open_box_mp018(
     async_client: AsyncClient, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     """MP-018: scan ready inbound box → contents collected into open shipment box."""
-    from inbound_box_intake_helpers import fulfill_inbound_via_box_scans, post_primary_accept
-    from test_marketplace_unload_and_discrepancy_acts import complete_inbound_to_storage
+    from inbound_box_intake_helpers import (
+        complete_inbound_to_storage,
+        fulfill_inbound_via_box_scans,
+        post_primary_accept,
+    )
 
     suffix = str(int(time.time() * 1000))
     h = await _register_headers(async_client, f"tsd-rb-{suffix}")

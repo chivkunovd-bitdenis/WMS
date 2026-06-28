@@ -4,7 +4,6 @@ import { waitForGetOk, waitForPostOk } from './api-waits'
 import { selectHonestSignSeller } from './ff-honest-sign-helpers'
 import { fulfillInboundViaBoxScans } from './inbound-boxes-helpers'
 import { openFulfillmentRegistration } from './auth-flow'
-import { selectHonestSignSeller } from './ff-honest-sign-helpers'
 
 // TC-NEW-001 — ЧЗ: импорт кодов и печать пачкой из строки задания на упаковку.
 test('FF packaging: print honest sign codes for line quantity', async ({ page }) => {
@@ -123,6 +122,9 @@ test('FF packaging: print honest sign codes for line quantity', async ({ page })
 
   await expect(page.getByTestId('ff-packaging-task-panel')).toBeVisible()
   await expect(page.getByTestId('ff-packaging-print-marking')).toBeVisible()
+  await expect(page.getByTestId('marking-scan-print-field')).toHaveCount(0)
+  await expect(page.getByTestId('ff-packaging-print-all-marking')).toHaveCount(0)
+  await expect(page.getByTestId('marking-verify-pair-panel')).toHaveCount(0)
 
   const printWait = page.waitForResponse(
     (r) =>
@@ -134,12 +136,22 @@ test('FF packaging: print honest sign codes for line quantity', async ({ page })
   )
   await page.getByTestId('ff-packaging-print-marking').click()
   await expect(page.getByTestId('marking-print-dialog')).toBeVisible()
+  await expect(page.getByTestId('marking-print-request-seller')).toHaveCount(0)
+  await page.getByTestId('marking-print-preset-custom').click()
+  await expect(page.getByTestId('marking-print-custom-builder')).toBeVisible()
+  await page.getByTestId('marking-print-custom-builder').getByLabel('Блок').first().click()
+  const blockOptions = page.getByRole('listbox').getByRole('option')
+  await expect(blockOptions.filter({ hasText: 'Этикетка' })).toHaveCount(0)
+  await expect(blockOptions.filter({ hasText: 'ШК ВБ' })).toHaveCount(1)
+  await expect(blockOptions.filter({ hasText: 'ЧЗ' })).toHaveCount(1)
+  await page.keyboard.press('Escape')
   await Promise.all([printWait, page.getByTestId('marking-print-confirm').click()])
 
   const printBody = (await (await printWait).json()) as { quantity: number; codes: string[] }
   expect(printBody.quantity).toBe(1)
   expect(printBody.codes).toHaveLength(1)
 
+  await expect(page.locator('[data-testid^="ff-packaging-marking-progress-"]')).toBeVisible()
   await expect(page.getByText('напечатано 1 / нужно 1')).toBeVisible()
   await expect(page.getByText(/дост\.\s+\d+\s+в пуле/)).toBeVisible()
 })
@@ -272,6 +284,7 @@ test('FF packaging: reprint single selected marking code', async ({ page }) => {
   await expect(page.getByText('напечатано 2 / нужно 2')).toBeVisible()
 
   await page.locator('[data-testid^="ff-packaging-line-menu-btn-"]').first().click()
+  await expect(page.getByTestId('ff-packaging-reprint-marking')).toBeVisible()
   await page.getByTestId('ff-packaging-reprint-marking').click()
 
   await expect(page.getByTestId('marking-print-dialog')).toBeVisible()
@@ -283,7 +296,7 @@ test('FF packaging: reprint single selected marking code', async ({ page }) => {
   const secondCodeId = await codeRadios.nth(1).inputValue()
   expect(secondCodeId).toBeTruthy()
   await codeRadios.nth(1).click()
-  await expect(page.getByTestId('marking-print-will-print')).toContainText('К перепечатке: 1 код')
+  await expect(page.getByTestId('marking-print-will-print')).toContainText('К перепечатке: 1 КМ')
 
   const reprintWait = page.waitForResponse(
     (r) =>
@@ -399,6 +412,9 @@ test('FF packaging: block complete when honest sign codes missing', async ({ pag
   ])
 
   await expect(page.getByTestId('ff-packaging-task-panel')).toBeVisible()
+  await expect(page.getByTestId('marking-scan-print-field')).toHaveCount(0)
+  await expect(page.getByTestId('ff-packaging-print-all-marking')).toHaveCount(0)
+  await expect(page.getByTestId('marking-verify-pair-panel')).toHaveCount(0)
 
   await expect(page.getByTestId('ff-packaging-line-marking-incomplete')).toBeVisible()
   await expect(page.getByText('напечатано 0 / нужно 1')).toBeVisible()

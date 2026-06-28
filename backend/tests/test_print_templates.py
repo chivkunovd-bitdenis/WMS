@@ -6,7 +6,7 @@ import pytest
 from httpx import AsyncClient
 
 from app.db.session import SessionLocal
-from app.models.print_template import LAYOUT_BLOCK_CZ, LAYOUT_BLOCK_LABEL
+from app.models.print_template import LAYOUT_BLOCK_CZ, LAYOUT_BLOCK_LABEL, USER_LAST_LAYOUT_NAME
 from app.services import print_template_service as pt_svc
 from app.services.tokens import decode_access_token
 
@@ -394,7 +394,7 @@ async def test_print_auto_saves_user_last_layout(async_client: AsyncClient) -> N
         headers=h,
     )
     assert list_resp.status_code == 200, list_resp.text
-    assert all(row["name"] != pt_svc.USER_LAST_LAYOUT_NAME for row in list_resp.json())
+    assert all(row["name"] != USER_LAST_LAYOUT_NAME for row in list_resp.json())
 
     async with SessionLocal() as session:
         row = await pt_svc.resolve_default_print_template(

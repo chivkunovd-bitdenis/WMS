@@ -225,7 +225,7 @@ export async function printMarkingCodeTape(
   defaultProductLabel?: ProductThermalLabelData | null,
 ): Promise<void> {
   if (units.length === 0) {
-    throw new Error('Нет кодов для печати.')
+    throw new Error('Нет КМ для печати.')
   }
   const codes = units.map((unit) => unit.cis)
   const tape = expandLayoutTape(codes, layout)

@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import json
 import uuid
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 
 import pytest
 from httpx import AsyncClient
@@ -114,7 +114,7 @@ async def test_pool_detail_and_codes(async_client: AsyncClient) -> None:
 
 @pytest.mark.asyncio
 async def test_pool_codes_foreign_pool_returns_404(async_client: AsyncClient) -> None:
-    h, _seller_id, pool_id, _, _ = await _seed_pool_with_codes(async_client)
+    _h, _seller_id, pool_id, _, _ = await _seed_pool_with_codes(async_client)
     other = await _register_admin(async_client)
     resp = await async_client.get(
         f"/operations/marking-codes/pools/{pool_id}/codes",
@@ -154,7 +154,7 @@ async def test_ledger_filters(async_client: AsyncClient) -> None:
 @pytest.mark.asyncio
 async def test_ledger_date_range_filter(async_client: AsyncClient) -> None:
     h, seller_id, _, _, _ = await _seed_pool_with_codes(async_client)
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     today = now.date().isoformat()
     future = (now + timedelta(days=365)).date().isoformat()
 

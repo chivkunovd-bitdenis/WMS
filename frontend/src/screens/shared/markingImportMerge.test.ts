@@ -141,6 +141,73 @@ describe('mergePreviewGroups', () => {
     })
     expect([...merged[1].productIds]).toEqual([])
   })
+
+  it('does not re-apply pool context on re-preview for existing groups', () => {
+    const poolContext = {
+      gtin: '4601234567890',
+      title: 'Pool from dashboard',
+      productIds: ['prod-1', 'prod-2'],
+    }
+    const prev = [
+      {
+        gtin: '4601234567890',
+        codes_count: 2,
+        suggested_title: 'Suggested',
+        title: 'User edited title',
+        productIds: new Set(['prod-user-only']),
+        productSearch: 'alpha',
+      },
+    ]
+    const incoming = [
+      {
+        gtin: '4601234567890',
+        codes_count: 5,
+        suggested_title: 'New suggestion',
+      },
+    ]
+
+    const merged = mergePreviewGroups(prev, incoming, poolContext)
+
+    expect(merged).toHaveLength(1)
+    expect(merged[0]).toMatchObject({
+      gtin: '4601234567890',
+      codes_count: 5,
+      title: 'User edited title',
+      productSearch: 'alpha',
+    })
+    expect([...merged[0].productIds]).toEqual(['prod-user-only'])
+  })
+
+  it('preserves user edits when re-preview uses 14-digit gtin variant', () => {
+    const poolContext = {
+      gtin: '4601234567890',
+      title: 'Pool from dashboard',
+      productIds: ['prod-1'],
+    }
+    const prev = [
+      {
+        gtin: '04601234567890',
+        codes_count: 1,
+        suggested_title: 'File',
+        title: 'Kept title',
+        productIds: new Set(['prod-x']),
+        productSearch: '',
+      },
+    ]
+    const incoming = [
+      {
+        gtin: '4601234567890',
+        codes_count: 3,
+        suggested_title: 'Updated suggestion',
+      },
+    ]
+
+    const merged = mergePreviewGroups(prev, incoming, poolContext)
+
+    expect(merged[0].title).toBe('Kept title')
+    expect([...merged[0].productIds]).toEqual(['prod-x'])
+    expect(merged[0].codes_count).toBe(3)
+  })
 })
 
 describe('gtinMatches', () => {

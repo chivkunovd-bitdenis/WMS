@@ -286,12 +286,7 @@ export function FfPackagingTaskPanel({
         setDefectDialogError(await readApiErrorMessage(defectRes))
         return
       }
-      const taskRes = await fetch(apiUrl(`/operations/packaging-tasks/${task.id}`), {
-        headers: authHeaders,
-      })
-      if (taskRes.ok) {
-        onUpdated((await taskRes.json()) as PackagingTask)
-      }
+      await refreshTask()
       resetDefectDialog()
     } finally {
       setDefectDialogBusy(false)

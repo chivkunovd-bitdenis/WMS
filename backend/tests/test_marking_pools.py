@@ -173,7 +173,7 @@ async def test_migration_backfill_creates_pool_for_legacy_code(async_client: Asy
 
 @pytest.mark.asyncio
 async def test_list_inventory_does_not_auto_link_by_gtin(async_client: AsyncClient) -> None:
-    tenant_id, seller_id, product_id = await _seed_tenant_seller_product(async_client)
+    tenant_id, seller_id, _product_id = await _seed_tenant_seller_product(async_client)
     gtin = "04600000000099"
     cis = f"01{gtin}21{'C' * 20}0099"
     code_id = uuid.uuid4()

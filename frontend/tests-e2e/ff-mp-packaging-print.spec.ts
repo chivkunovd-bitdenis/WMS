@@ -223,7 +223,7 @@ test('MP packaging: print icon opens qty-only dialog for non-marked product', as
   await expect(page.getByTestId('marking-print-wb-qty')).toBeVisible()
 
   await page.getByTestId('marking-print-wb-qty').locator('input').fill('6')
-  await expect(page.getByTestId('marking-print-will-print')).toContainText('К печати: 6 этикеток')
+  await expect(page.getByTestId('marking-print-will-print')).toContainText('К печати: 6 ШК ВБ')
 
   await page.getByTestId('marking-print-confirm').click()
   await expect(page.getByTestId('marking-print-dialog')).toBeHidden()

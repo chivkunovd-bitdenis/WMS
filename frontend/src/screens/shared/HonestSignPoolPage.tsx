@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Link as RouterLink, useParams, useSearchParams } from 'react-router-dom'
 import {
   Alert,
@@ -123,6 +123,7 @@ export function HonestSignPoolPage({
     () => ({ Authorization: `Bearer ${token}` }),
     [token],
   )
+  const ledgerAbortRef = useRef<AbortController | null>(null)
 
   const loadDetail = useCallback(async () => {
     if (!poolId) {
@@ -173,15 +174,30 @@ export function HonestSignPoolPage({
     if (!poolId) {
       return
     }
-    const res = await fetch(
-      apiUrl(
-        `/operations/marking-codes/ledger?pool_id=${encodeURIComponent(poolId)}&limit=${LEDGER_PREVIEW_LIMIT}`,
-      ),
-      { headers: authHeaders },
-    )
-    if (res.ok) {
-      const data = (await res.json()) as { rows: LedgerRow[] }
-      setLedger(data.rows)
+    ledgerAbortRef.current?.abort()
+    const ac = new AbortController()
+    ledgerAbortRef.current = ac
+    try {
+      const res = await fetch(
+        apiUrl(
+          `/operations/marking-codes/ledger?pool_id=${encodeURIComponent(poolId)}&limit=${LEDGER_PREVIEW_LIMIT}`,
+        ),
+        { headers: authHeaders, signal: ac.signal },
+      )
+      if (ac.signal.aborted) {
+        return
+      }
+      if (res.ok) {
+        const data = (await res.json()) as { rows: LedgerRow[] }
+        if (!ac.signal.aborted) {
+          setLedger(data.rows)
+        }
+      }
+    } catch (err) {
+      if (err instanceof DOMException && err.name === 'AbortError') {
+        return
+      }
+      throw err
     }
   }, [authHeaders, poolId])
 
@@ -195,6 +211,9 @@ export function HonestSignPoolPage({
     }
     if (tab === 'ledger') {
       void loadLedger()
+    }
+    return () => {
+      ledgerAbortRef.current?.abort()
     }
   }, [tab, loadCodes, loadLedger])
 
@@ -219,7 +238,7 @@ export function HonestSignPoolPage({
     const header = 'cis_masked,status,created_at,printed_by,document_number'
     const lines = rows.map(
       (c) =>
-        `${c.cis_masked},${c.status},${c.created_at},${c.printed_by ?? ''},${c.document_number ?? ''}`,
+        `${c.cis_masked},${codeStatusLabel(c.status)},${c.created_at},${c.printed_by ?? ''},${c.document_number ?? ''}`,
     )
     return [header, ...lines].join('\n')
   }
@@ -482,7 +501,7 @@ export function HonestSignPoolPage({
               data-testid={`${testIdPrefix}-codes-count`}
             >
               Показано {filteredCodes.length} из {codes.length}. Экспорт выгружает все{' '}
-              {codes.length} кодов текущей выборки.
+              {codes.length} КМ текущей выборки.
             </Typography>
           ) : isExportSubsetOfPool ? (
             <Typography
@@ -490,8 +509,8 @@ export function HonestSignPoolPage({
               color="text.secondary"
               data-testid={`${testIdPrefix}-codes-count`}
             >
-              В выборке {codes.length} из {poolCodesTotal} кодов пула (фильтр по статусу). Экспорт
-              выгружает все {codes.length} кодов выборки.
+              В выборке {codes.length} из {poolCodesTotal} КМ пула (фильтр по статусу). Экспорт
+              выгружает все {codes.length} КМ выборки.
             </Typography>
           ) : codes.length > 0 ? (
             <Typography
@@ -499,7 +518,7 @@ export function HonestSignPoolPage({
               color="text.secondary"
               data-testid={`${testIdPrefix}-codes-count`}
             >
-              {codes.length} кодов
+              {codes.length} КМ
             </Typography>
           ) : null}
           <TableContainer component={Paper} variant="outlined">

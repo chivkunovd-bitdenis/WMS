@@ -163,24 +163,24 @@ export function applyPoolContextToGroup(
   }
 }
 
+function findExistingGroupByGtin(prev: GroupDraft[], gtin: string): GroupDraft | undefined {
+  return prev.find((g) => gtinMatches(g.gtin, gtin))
+}
+
 export function mergePreviewGroups(
   prev: GroupDraft[],
   incoming: PreviewGroup[],
   poolContext?: PoolImportContext | null,
 ): GroupDraft[] {
-  const prevByGtin = new Map(prev.map((g) => [g.gtin, g]))
   return incoming.map((g) => {
-    const existing = prevByGtin.get(g.gtin)
+    const existing = findExistingGroupByGtin(prev, g.gtin)
     if (existing) {
-      return applyPoolContextToGroup(
-        {
-          ...g,
-          title: existing.title,
-          productIds: existing.productIds,
-          productSearch: existing.productSearch,
-        },
-        poolContext,
-      )
+      return {
+        ...g,
+        title: existing.title,
+        productIds: existing.productIds,
+        productSearch: existing.productSearch,
+      }
     }
     return applyPoolContextToGroup(
       {
@@ -228,6 +228,7 @@ export function MarkingImportDialog({
   const [titleErrorGtins, setTitleErrorGtins] = useState<Set<string>>(new Set())
   const [expandedProductLists, setExpandedProductLists] = useState<Set<string>>(new Set())
   const scrollToTitleGtinRef = useRef<string | null>(null)
+  const previewAbortRef = useRef<AbortController | null>(null)
 
   const sellerProducts = useMemo(
     () => catalog.filter((row) => row.seller_id === sellerId),
@@ -235,6 +236,8 @@ export function MarkingImportDialog({
   )
 
   const reset = useCallback(() => {
+    previewAbortRef.current?.abort()
+    previewAbortRef.current = null
     setFiles([])
     setGroups([])
     setPreviewMeta(null)
@@ -263,6 +266,9 @@ export function MarkingImportDialog({
     if (picked.length === 0) {
       return
     }
+    previewAbortRef.current?.abort()
+    const abortController = new AbortController()
+    previewAbortRef.current = abortController
     setParseBusy(true)
     setError(null)
     try {
@@ -275,7 +281,11 @@ export function MarkingImportDialog({
         method: 'POST',
         headers: { Authorization: `Bearer ${token}` },
         body: form,
+        signal: abortController.signal,
       })
+      if (abortController.signal.aborted) {
+        return
+      }
       if (!res.ok) {
         const message = await readApiErrorMessage(res)
         setError(message)
@@ -283,14 +293,24 @@ export function MarkingImportDialog({
         return
       }
       const data = (await res.json()) as PreviewResponse
+      if (abortController.signal.aborted) {
+        return
+      }
       setPreviewMeta({
         invalid_count: data.invalid_count,
         duplicates_in_file: data.duplicates_in_file,
       })
       setGroups((prev) => mergePreviewGroups(prev, data.groups, poolContext))
       onError?.(null)
+    } catch (err) {
+      if (err instanceof DOMException && err.name === 'AbortError') {
+        return
+      }
+      throw err
     } finally {
-      setParseBusy(false)
+      if (previewAbortRef.current === abortController) {
+        setParseBusy(false)
+      }
     }
   }
 
@@ -611,6 +631,7 @@ export function MarkingImportDialog({
                         data-testid={`${testIdPrefix}-import-products-truncated-${g.gtin}`}
                       >
                         Показаны первые {PRODUCT_SEARCH_INITIAL_LIMIT} из {productTotal}
+                        {g.productIds.size > 0 ? ` · выбрано ${g.productIds.size}` : ''}
                       </Typography>
                       <Button
                         size="small"

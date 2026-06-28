@@ -83,7 +83,7 @@ test('FF honest sign: pool list row, link product via menu, open pool card', asy
   )
   await page.getByTestId('ff-honest-sign-kpi-defective').click()
   await expect(page).toHaveURL(/\/app\/ff\/honest-sign\/ledger\?event_type=defective/)
-  await expect(page.getByTestId('ff-honest-sign-ledger-event-type')).toHaveValue('defective')
+  await expect(page.getByTestId('ff-honest-sign-ledger-event-type').locator('input')).toHaveValue('defective')
   await page.getByTestId('ff-honest-sign-ledger-back').click()
   await selectHonestSignSeller(page, sellerId)
 

@@ -26,6 +26,7 @@ import {
 } from '@mui/material'
 import { apiUrl } from '../../api'
 import { readApiErrorMessage } from '../../utils/readApiErrorMessage'
+import { ledgerEventLabel } from '../../utils/markingStatus'
 
 type ReprintRequest = {
   id: string
@@ -56,10 +57,10 @@ type Props = {
 }
 
 const APPROVE_REPRINT_HINT =
-  'Разрешить повторную печать того же кода маркировки (КМ). Код в системе не меняется, в журнале — событие «перепечатка». Выбирайте, если этикетка испорчена при печати, а сам КМ ещё годен.'
+  'Разрешить повторную печать того же КМ. Запись в системе не меняется, в журнале — событие «перепечатка». Выбирайте, если этикетка испорчена при печати, а сам КМ ещё годен.'
 
 const REPLACE_REPRINT_HINT =
-  'Списать текущий КМ как брак и выдать новый из пула. Старый код станет «заменён», остаток пула уменьшится на 1. Выбирайте, если КМ повреждён или не годится к нанесению.'
+  'Списать текущий КМ как брак и выдать новый из пула. Старый КМ станет «заменён», остаток пула уменьшится на 1. Выбирайте, если КМ повреждён или не годится к нанесению.'
 
 export function FfHonestSignReprintsPage({
   token,
@@ -264,7 +265,7 @@ export function FfHonestSignReprintsPage({
                         sx={{ verticalAlign: 'baseline' }}
                         data-testid={`${testId}-context-history-${row.id}`}
                       >
-                        История кода
+                        История КМ
                       </Link>
                     </Stack>
                   </TableCell>
@@ -370,7 +371,7 @@ export function FfHonestSignReprintsPage({
       >
         <Box sx={{ width: 360, p: 2 }}>
           <Typography variant="h6" sx={{ mb: 0.5 }}>
-            История кода
+            История КМ
           </Typography>
           {historyCisMasked ? (
             <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
@@ -387,7 +388,7 @@ export function FfHonestSignReprintsPage({
             <Stack spacing={1.5}>
               {history.map((ev) => (
                 <Paper key={ev.id} variant="outlined" sx={{ p: 1.5 }}>
-                  <Typography variant="subtitle2">{ev.event_type}</Typography>
+                  <Typography variant="subtitle2">{ledgerEventLabel(ev.event_type)}</Typography>
                   <Typography variant="caption" color="text.secondary">
                     {new Date(ev.created_at).toLocaleString('ru-RU')}
                   </Typography>

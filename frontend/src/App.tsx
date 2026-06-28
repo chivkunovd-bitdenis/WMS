@@ -2567,7 +2567,7 @@ export default function App() {
                 <HonestSignImportPage />
               ) : (
                 <FfPlaceholderPage
-                  title="Загрузка кодов"
+                  title="Загрузка КМ"
                   hint="Нет токена."
                   testId="ff-honest-sign-import-placeholder"
                 />

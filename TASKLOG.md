@@ -1,5 +1,23 @@
 # TASKLOG
 
+## TASK-066 — 2026-06-28 — FIX-05: ledger/pools abort + BACKEND-01 openapi + docs
+
+- What changed: `HonestSignLedgerPage.tsx`, `HonestSignScreen.tsx`, `HonestSignPoolPage.tsx` — `AbortController` в `load()`/`loadPools()`/`loadLedger()` против stale fetch; `ff-honest-sign-ledger.spec.ts` — e2e экспорт CSV (TC-NEW-LEDGER-04); `test_marking_deprecated_openapi.py` — pytest `deprecated` в OpenAPI; `MASTER_BACKLOG_RU.md` — статусы lane ✅ на `feat/cz-ux-fixes`; `CZ_DUPLICATE_SURFACES_AUDIT_RU.md` — ссылка `docs/` + §4 закрытые POOLS.
+- What did NOT change: `FfHonestSignReprintsPage` (FIX-03); packaging/import dialogs; удаление deprecated routes (отдельный тикет).
+- Verification: `pytest tests/test_marking_deprecated_openapi.py` 1 passed; marking subset 20 passed; `npm run build` exit 0.
+
+## TASK-065 — 2026-06-28 — FIX-03: FINAL-01 terminology (КМ/ЧЗ)
+
+- What changed: `HonestSignPoolPage.tsx` — export captions «N КМ», CSV status via `codeStatusLabel`; `FfHonestSignReprintsPage.tsx` — «История КМ», hints без «код», `ledgerEventLabel` в drawer; `App.tsx` — placeholder «Загрузка КМ»; `printMarkingCodeLabel.ts` — «Нет КМ для печати»; e2e `ff-marking-packaging.spec.ts` — «К перепечатке: 1 КМ».
+- What did NOT change: `markingStatus.ts` (already RU); print/defect sections e2e (FIX-01/04); `HonestSignScreen.tsx` POOLS-03 (FIX-05).
+- Verification: `npm run build` exit 0; grep — no «кодов» in exclusive user strings.
+
+## TASK-064 — 2026-06-28 — FIX-01: PRINT-03 merge artifact + print terminology
+
+- What changed: `MarkingPrintDialog.tsx` — убраны дубли MenuItem (ЧЗ/Этикетка/ШК ВБ) в custom-builder; helper-тексты «этикеток» → «ШК ВБ»/«блоков»; `markingPrintPresets.ts` JSDoc; e2e TC-NEW-001 — assert нет «Этикетка» в select и нет `marking-print-request-seller`.
+- What did NOT change: PRINT-04/05 backend; `ff-mp-packaging-print.spec.ts` (expect «этикеток» — follow-up); reprint e2e «1 код» (FIX-03).
+- Verification: `npm run build` exit 0; playwright `-g "print honest sign codes for line quantity"` exit 0.
+
 ## TASK-063 — 2026-06-28 — Queue integration: merge task/* → feat/cz-ux-fixes
 
 - What changed: собран весь ЧЗ UX backlog в одну ветку **`feat/cz-ux-fixes`**: база `task/FINAL-01` + догон LEDGER-05…06, POOLS-01…05, POOLCARD-02, REPRINTS-*, BACKEND-01, PRINT-02/03, FINAL-02/03; конфликты разрешены вручную; `scripts/queue-integrate.sh`; orchestrator/hook — обязательный integrate после verifier; `.gitignore` — `.cursor/state/`, `.cursor/wt/`.

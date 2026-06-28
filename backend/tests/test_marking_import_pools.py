@@ -247,7 +247,7 @@ async def test_import_same_cis_twice_idempotent(async_client: AsyncClient) -> No
     seller_id = seller.json()["id"]
     gtin = "00000000007777"
     cis = f"01{gtin}21{'F' * 20}0001"
-    pools = [{"title": "Idem pool", "product_ids": []}]
+    pools: list[dict[str, object]] = [{"title": "Idem pool", "product_ids": []}]
     csv_body = f"cis\n{cis}".encode()
 
     first = await _import_files(

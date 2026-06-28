@@ -363,7 +363,7 @@ export function MarkingPrintDialog({ open, reprint, ctx, busy, onBusyChange, onC
     ? 'Повторная печать'
     : requiresHonestSign
       ? 'Печать ЧЗ'
-      : 'Печать этикеток'
+      : 'Печать ШК ВБ'
 
   return (
     <>
@@ -428,7 +428,7 @@ export function MarkingPrintDialog({ open, reprint, ctx, busy, onBusyChange, onC
                 }
                 helperText={
                   packUnits > 1
-                    ? `× ${packUnits} шт в упаковке → ${totalWbLabels} этикеток`
+                    ? `× ${packUnits} шт в упаковке → ${totalWbLabels} ШК ВБ`
                     : undefined
                 }
                 slotProps={{ htmlInput: { min: 1, max: 999 } }}
@@ -441,7 +441,7 @@ export function MarkingPrintDialog({ open, reprint, ctx, busy, onBusyChange, onC
               <>
                 <TextField
                   size="small"
-                  label="Этикеток на каждый товар"
+                  label="ШК ВБ на каждый товар"
                   type="number"
                   value={labelsPerProduct}
                   onChange={(e) =>
@@ -486,8 +486,6 @@ export function MarkingPrintDialog({ open, reprint, ctx, busy, onBusyChange, onC
                           sx={{ minWidth: 120 }}
                         >
                           <MenuItem value="cz">ЧЗ</MenuItem>
-                          <MenuItem value="label">Этикетка</MenuItem>
-                          {requiresHonestSign ? <MenuItem value="cz">ЧЗ</MenuItem> : null}
                           <MenuItem value="label">ШК ВБ</MenuItem>
                         </TextField>
                         <TextField
@@ -547,7 +545,7 @@ export function MarkingPrintDialog({ open, reprint, ctx, busy, onBusyChange, onC
                     sx={{ mb: 0.5, display: 'block' }}
                     data-testid="marking-print-preview-tape-count"
                   >
-                    Предпросмотр ленты (один КМ на единицу) · {previewTapeCount} этикеток на 3 ед.
+                    Предпросмотр ленты (один КМ на единицу) · {previewTapeCount} блоков на 3 ед.
                   </Typography>
                   {previewUnits.map((unit) => (
                     <Stack
@@ -638,13 +636,13 @@ export function MarkingPrintDialog({ open, reprint, ctx, busy, onBusyChange, onC
 
             {!reprint && requiresHonestSign && canPrintCount > 0 ? (
               <Typography variant="body2" data-testid="marking-print-will-print">
-                К печати: {canPrintCount} ед. · {totalTapeCount} этикеток в ленте
+                К печати: {canPrintCount} ед. · {totalTapeCount} блоков в ленте
               </Typography>
             ) : null}
 
             {!reprint && !requiresHonestSign && totalWbLabels > 0 ? (
               <Typography variant="body2" data-testid="marking-print-will-print">
-                К печати: {totalWbLabels} этикеток
+                К печати: {totalWbLabels} ШК ВБ
               </Typography>
             ) : null}
 
