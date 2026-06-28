@@ -19,10 +19,8 @@ export function useMarkingCodePrint() {
   }
 
   const close = () => {
-    if (!busy) {
-      setOpen(false)
-      setCtx(null)
-    }
+    setOpen(false)
+    setCtx(null)
   }
 
   const dialog = (
