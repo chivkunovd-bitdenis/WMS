@@ -8,6 +8,7 @@
   - **`docs/MASTER_BACKLOG_RU.md`**, **`docs/EXECUTION_PLAN_RU.md`**, **`docs/PARALLEL_AGENT_TASKS.md`** — пути и статусы X-1/X-2/X-3, FINAL-03 closed.
 - What did NOT change: код приложения; lane-задачи.
 - Verification: docs-only diff; ссылки на корневой `CHESTNY_ZNAK_UX_FIXES_RU.md` убраны.
+- Commit: `501d055`
 
 ## TASK-036 — 2026-06-28 — CZ-000 barrier: MP commit + feat/cz-ux-fixes + autopilot backlog
 
