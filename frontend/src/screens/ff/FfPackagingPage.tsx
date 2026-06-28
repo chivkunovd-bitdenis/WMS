@@ -154,6 +154,7 @@ export function FfPackagingTaskPanel({
         skuCode: ln.sku_code,
         productName: ln.product_name,
         productLabel: productLabelForLine(ln),
+        packagingInstructions: ln.packaging_instructions,
         onPrinted: () => {
           void refreshTask()
         },

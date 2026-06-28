@@ -1,5 +1,16 @@
 # TASKLOG
 
+## TASK-038 — 2026-06-28 — PRINT-04: pack qty multiplier for WB barcode
+
+- What changed:
+  - **`productBarcodePrint.ts`:** `resolvePackUnits` (из `pack_units:N` в ТЗ или `units_in_pack`), `resolveWbBarcodeLabelCount` — qty × pack; печать через умноженное количество.
+  - **`ProductBarcodePrintDialog.tsx`:** каталог — поле «Количество ШК ВБ», подсказка «× N шт в упаковке», итог «К печати».
+  - **`MarkingPrintDialog.tsx`:** не-ЧЗ упаковка — тот же множитель; `packagingInstructions` в контексте.
+  - **`wbProductCatalog.ts`:** `packaging_instructions` / `units_in_pack` в `ProductLineDisplayMeta`.
+  - **`productBarcodePrint.test.ts`:** gate qty 3 × pack 5 → 15.
+- What did NOT change: ЧЗ-конструктор; backend поля `units_in_pack` (пока парсинг из ТЗ).
+- Verification: `npm run test:unit src/utils/productBarcodePrint.test.ts` (3 passed); `npm run build` (exit 0).
+
 ## TASK-037 — 2026-06-28 — PRINT-01: non-ЧЗ print qty-only (no constructor)
 
 - What changed:

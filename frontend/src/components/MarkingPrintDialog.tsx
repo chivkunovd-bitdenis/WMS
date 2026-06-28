@@ -36,6 +36,7 @@ import { createPrintTemplate, resolvePrintTemplate, type PrintLayout } from '../
 import { readApiErrorMessage } from '../utils/readApiErrorMessage'
 import { printMarkingCodeTape } from '../utils/printMarkingCodeLabel'
 import type { ProductThermalLabelData } from '../utils/printProductThermalLabel'
+import { resolvePackUnits, resolveWbBarcodeLabelCount } from '../utils/productBarcodePrint'
 
 /** Fixed layout for non-ЧЗ: one WB barcode label per unit, no constructor. */
 const NON_HONEST_SIGN_LABEL_LAYOUT: PrintLayout = {
@@ -54,6 +55,8 @@ export type MarkingPrintContext = {
   skuCode: string
   productName: string
   productLabel?: ProductThermalLabelData | null
+  packagingInstructions?: string | null
+  unitsInPack?: number | null
   onPrinted: () => void
 }
 
@@ -86,8 +89,7 @@ export function MarkingPrintDialog({ open, reprint, ctx, busy, onBusyChange, onC
     setAllowPartial(false)
     setLabelsPerProduct(1)
     setSaveName('')
-    const initialQty = reprint ? ctx.qtyMarkingPrinted : ctx.qtyNeedPack
-    setWbBarcodeQty(Math.max(1, initialQty))
+    setWbBarcodeQty(1)
     if (!requiresHonestSign) {
       setLayout(cloneLayout(NON_HONEST_SIGN_LABEL_LAYOUT))
       return
@@ -120,6 +122,15 @@ export function MarkingPrintDialog({ open, reprint, ctx, busy, onBusyChange, onC
   }, [open, ctx, requiresHonestSign, reprint])
 
   const qtyNeed = reprint ? (ctx?.qtyMarkingPrinted ?? 0) : (ctx?.qtyNeedPack ?? 0)
+  const packUnits = useMemo(
+    () =>
+      resolvePackUnits({
+        units_in_pack: ctx?.unitsInPack,
+        packaging_instructions: ctx?.packagingInstructions,
+      }),
+    [ctx?.unitsInPack, ctx?.packagingInstructions],
+  )
+  const totalWbLabels = resolveWbBarcodeLabelCount(wbBarcodeQty, packUnits)
   const available = ctx?.markingAvailable ?? 0
   const shortage = requiresHonestSign && !reprint && available < qtyNeed ? qtyNeed - available : 0
   const canPrintCount = reprint
@@ -190,10 +201,10 @@ export function MarkingPrintDialog({ open, reprint, ctx, busy, onBusyChange, onC
   }
 
   const printLabelOnlyTape = async () => {
-    if (!ctx || wbBarcodeQty < 1) {
+    if (!ctx || wbBarcodeQty < 1 || totalWbLabels < 1) {
       return
     }
-    const units = Array.from({ length: wbBarcodeQty }, (_, index) => ({
+    const units = Array.from({ length: totalWbLabels }, (_, index) => ({
       cis: `label-only-${index + 1}`,
       productLabel: ctx.productLabel ?? null,
     }))
@@ -376,9 +387,14 @@ export function MarkingPrintDialog({ open, reprint, ctx, busy, onBusyChange, onC
                 onChange={(e) =>
                   setWbBarcodeQty(Math.max(1, Math.min(999, Number(e.target.value) || 1)))
                 }
+                helperText={
+                  packUnits > 1
+                    ? `× ${packUnits} шт в упаковке → ${totalWbLabels} этикеток`
+                    : undefined
+                }
                 slotProps={{ htmlInput: { min: 1, max: 999 } }}
                 data-testid="marking-print-wb-qty"
-                sx={{ maxWidth: 220 }}
+                sx={{ maxWidth: 280 }}
               />
             ) : null}
 
@@ -553,9 +569,9 @@ export function MarkingPrintDialog({ open, reprint, ctx, busy, onBusyChange, onC
               </Typography>
             ) : null}
 
-            {!reprint && !requiresHonestSign && wbBarcodeQty > 0 ? (
+            {!reprint && !requiresHonestSign && totalWbLabels > 0 ? (
               <Typography variant="body2" data-testid="marking-print-will-print">
-                К печати: {wbBarcodeQty} этикеток
+                К печати: {totalWbLabels} этикеток
               </Typography>
             ) : null}
 
