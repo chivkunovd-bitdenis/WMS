@@ -69,6 +69,12 @@ export type PackagingTask = {
   lines: PackagingTaskLine[]
 }
 
+type PrintedMarkingCode = {
+  id: string
+  cis_masked: string
+  status: string
+}
+
 type TaskPanelProps = {
   token: string
   task: PackagingTask
@@ -96,6 +102,13 @@ export function FfPackagingTaskPanel({
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [ackAllPacked, setAckAllPacked] = useState(false)
+  const [defectDialogOpen, setDefectDialogOpen] = useState(false)
+  const [defectLineId, setDefectLineId] = useState<string | null>(null)
+  const [defectCodes, setDefectCodes] = useState<PrintedMarkingCode[]>([])
+  const [defectSelectedCodeId, setDefectSelectedCodeId] = useState('')
+  const [defectReason, setDefectReason] = useState('')
+  const [defectDialogBusy, setDefectDialogBusy] = useState(false)
+  const [defectDialogError, setDefectDialogError] = useState<string | null>(null)
   const { openPrint, dialog: markingPrintDialog } = useMarkingCodePrint()
 
   const authHeaders = {
@@ -182,7 +195,23 @@ export function FfPackagingTaskPanel({
     }
   }
 
-  const reportDefectMarking = async (lineId: string) => {
+  const resetDefectDialog = () => {
+    setDefectDialogOpen(false)
+    setDefectLineId(null)
+    setDefectCodes([])
+    setDefectSelectedCodeId('')
+    setDefectReason('')
+    setDefectDialogError(null)
+  }
+
+  const closeDefectDialog = () => {
+    if (defectDialogBusy) {
+      return
+    }
+    resetDefectDialog()
+  }
+
+  const openDefectDialog = async (lineId: string) => {
     setBusy(true)
     setError(null)
     try {
@@ -194,23 +223,48 @@ export function FfPackagingTaskPanel({
         setError(await readApiErrorMessage(codesRes))
         return
       }
-      const codes = ((await codesRes.json()) as { codes: { id: string }[] }).codes
+      const codes = ((await codesRes.json()) as { codes: PrintedMarkingCode[] }).codes
       if (codes.length < 1) {
         setError('Нет напечатанных кодов для этой строки')
         return
       }
-      const codeId = codes[0].id
-      const defectRes = await fetch(apiUrl(`/operations/marking-codes/codes/${codeId}/defect`), {
-        method: 'POST',
-        headers: authHeaders,
-        body: JSON.stringify({ packaging_task_line_id: lineId }),
-      })
-      if (!defectRes.ok) {
-        setError(await readApiErrorMessage(defectRes))
-        return
-      }
+      setDefectLineId(lineId)
+      setDefectCodes(codes)
+      setDefectSelectedCodeId(codes[0].id)
+      setDefectReason('')
+      setDefectDialogError(null)
+      setDefectDialogOpen(true)
     } finally {
       setBusy(false)
+    }
+  }
+
+  const submitDefectMarking = async () => {
+    if (!defectLineId || !defectSelectedCodeId) {
+      return
+    }
+    setDefectDialogBusy(true)
+    setDefectDialogError(null)
+    try {
+      const reasonTrimmed = defectReason.trim()
+      const defectRes = await fetch(
+        apiUrl(`/operations/marking-codes/codes/${defectSelectedCodeId}/defect`),
+        {
+          method: 'POST',
+          headers: authHeaders,
+          body: JSON.stringify({
+            packaging_task_line_id: defectLineId,
+            reason: reasonTrimmed || null,
+          }),
+        },
+      )
+      if (!defectRes.ok) {
+        setDefectDialogError(await readApiErrorMessage(defectRes))
+        return
+      }
+      resetDefectDialog()
+    } finally {
+      setDefectDialogBusy(false)
     }
   }
 
@@ -397,7 +451,7 @@ export function FfPackagingTaskPanel({
                         variant="outlined"
                         color="warning"
                         disabled={busy}
-                        onClick={() => void reportDefectMarking(ln.id)}
+                        onClick={() => void openDefectDialog(ln.id)}
                         data-testid="ff-packaging-defect-marking"
                       >
                         Брак
@@ -458,6 +512,64 @@ export function FfPackagingTaskPanel({
         </Paper>
       ) : null}
       {markingPrintDialog}
+      <Dialog
+        open={defectDialogOpen}
+        onClose={closeDefectDialog}
+        maxWidth="sm"
+        fullWidth
+        data-testid="ff-packaging-defect-dialog"
+      >
+        <DialogTitle>Отметить брак КМ</DialogTitle>
+        <DialogContent>
+          <Stack spacing={2} sx={{ pt: 1 }}>
+            {defectDialogError ? (
+              <Alert severity="error" data-testid="ff-packaging-defect-dialog-error">
+                {defectDialogError}
+              </Alert>
+            ) : null}
+            <FormControl fullWidth disabled={defectDialogBusy || defectCodes.length < 1}>
+              <InputLabel id="ff-packaging-defect-code-label">Код маркировки</InputLabel>
+              <Select
+                labelId="ff-packaging-defect-code-label"
+                label="Код маркировки"
+                value={defectSelectedCodeId}
+                onChange={(e) => setDefectSelectedCodeId(e.target.value)}
+                data-testid="ff-packaging-defect-code-select"
+              >
+                {defectCodes.map((code) => (
+                  <MenuItem key={code.id} value={code.id}>
+                    {code.cis_masked}
+                  </MenuItem>
+                ))}
+              </Select>
+            </FormControl>
+            <TextField
+              label="Причина брака"
+              value={defectReason}
+              onChange={(e) => setDefectReason(e.target.value)}
+              disabled={defectDialogBusy}
+              multiline
+              minRows={2}
+              slotProps={{ htmlInput: { maxLength: 512 } }}
+              data-testid="ff-packaging-defect-reason"
+            />
+          </Stack>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={closeDefectDialog} disabled={defectDialogBusy}>
+            Отмена
+          </Button>
+          <Button
+            variant="contained"
+            color="warning"
+            disabled={defectDialogBusy || !defectSelectedCodeId}
+            onClick={() => void submitDefectMarking()}
+            data-testid="ff-packaging-defect-confirm"
+          >
+            Подтвердить брак
+          </Button>
+        </DialogActions>
+      </Dialog>
       {onClose ? (
         <Stack direction="row" spacing={1} sx={{ justifyContent: 'flex-end' }}>
           {manualTask ? (
