@@ -1,5 +1,11 @@
 # TASKLOG
 
+## TASK-049 — 2026-06-28 — POOLS-05: unified forecast format
+
+- What changed: `HonestSignScreen` — общий `ForecastLabel` (дата `ДД.ММ` + tooltip `(N дн.)`) в таблице и карточках селлера.
+- What did NOT change: расчёт `forecast_days` на бэкенде, POOLS-04 переключатель дашборд/таблица.
+- Verification: `npm run build` in POOLS-05 worktree (branch task/POOLS-05) — green. Commit `c32df5d`.
+
 ## TASK-042 — 2026-06-28 — POOLS-03: tooltip on disabled upload codes
 
 - What changed: `HonestSignScreen` — кнопка «Загрузить коды» при `sellerIdRequiredForImport` без выбранного селлера обёрнута в MUI `Tooltip` («Выберите селлера») через `span`-обёртку для disabled.
