@@ -16,7 +16,7 @@ export const MARKING_PRINT_PRESETS: PrintPreset[] = [
   },
   {
     id: 'label_cz',
-    label: 'Этикетки + ЧЗ',
+    label: 'ШК ВБ + ЧЗ',
     layout: {
       units: [
         { block: 'label', copies: 1 },
@@ -31,7 +31,7 @@ export const MARKING_PRINT_PRESETS: PrintPreset[] = [
   },
   {
     id: 'label_only',
-    label: 'Только этикетки',
+    label: 'Только ШК ВБ',
     layout: { units: [{ block: 'label', copies: 1 }] },
   },
   {
@@ -64,7 +64,7 @@ export function expandLayoutTape(codes: string[], layout: PrintLayout): LayoutTa
 }
 
 export function blockLabel(block: PrintLayoutUnit['block']): string {
-  return block === 'cz' ? 'ЧЗ' : 'Этикетка'
+  return block === 'cz' ? 'ЧЗ' : 'ШК ВБ'
 }
 
 export type TapePreviewUnit = {

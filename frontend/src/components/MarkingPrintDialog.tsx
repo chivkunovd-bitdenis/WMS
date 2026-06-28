@@ -487,6 +487,8 @@ export function MarkingPrintDialog({ open, reprint, ctx, busy, onBusyChange, onC
                         >
                           <MenuItem value="cz">ЧЗ</MenuItem>
                           <MenuItem value="label">Этикетка</MenuItem>
+                          {requiresHonestSign ? <MenuItem value="cz">ЧЗ</MenuItem> : null}
+                          <MenuItem value="label">ШК ВБ</MenuItem>
                         </TextField>
                         <TextField
                           size="small"
@@ -532,7 +534,7 @@ export function MarkingPrintDialog({ open, reprint, ctx, busy, onBusyChange, onC
                         ЧЗ
                       </Button>
                       <Button size="small" startIcon={<AddIcon />} onClick={() => addUnit('label')}>
-                        Этикетка
+                        ШК ВБ
                       </Button>
                     </Stack>
                   </Stack>
