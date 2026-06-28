@@ -10,6 +10,7 @@
   - **e2e:** updated honest-sign specs; **TC-NEW-011** — ledger seller autocomplete filters events.
 - What did NOT change: ledger filter debounce/export (LEDGER-* lanes); pool link CTA (POOLS-06).
 - Verification: `npm run build`; `npm run test:e2e` on ff-honest-sign-ledger/spec/pools (4 passed).
+- Commit: `b8b85e4`
 
 ## TASK-036 — 2026-06-28 — CZ-000 barrier: MP commit + feat/cz-ux-fixes + autopilot backlog
 
