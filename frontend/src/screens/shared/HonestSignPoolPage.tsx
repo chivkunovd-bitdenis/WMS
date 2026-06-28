@@ -26,6 +26,7 @@ import ArrowBackOutlined from '@mui/icons-material/ArrowBackOutlined'
 import DownloadOutlined from '@mui/icons-material/DownloadOutlined'
 import { apiUrl } from '../../api'
 import { PageHeader } from '../../ui/PageHeader'
+import { codeStatusLabel } from '../../utils/markingStatus'
 import { readApiErrorMessage } from '../../utils/readApiErrorMessage'
 import { MarkingPoolProductsDialog } from './MarkingPoolProductsDialog'
 
@@ -411,7 +412,7 @@ export function HonestSignPoolPage({
               <MenuItem value="">Все</MenuItem>
               {STATUS_OPTIONS.filter(Boolean).map((s) => (
                 <MenuItem key={s} value={s}>
-                  {s}
+                  {codeStatusLabel(s)}
                 </MenuItem>
               ))}
             </TextField>
@@ -464,7 +465,7 @@ export function HonestSignPoolPage({
                     <TableRow key={c.id} data-testid={`${testIdPrefix}-code-row-${c.id}`}>
                       <TableCell>{c.cis_masked}</TableCell>
                       <TableCell>
-                        <Chip size="small" label={c.status} />
+                        <Chip size="small" label={codeStatusLabel(c.status)} />
                       </TableCell>
                       <TableCell>{new Date(c.created_at).toLocaleString('ru-RU')}</TableCell>
                       <TableCell>{c.document_number ?? '—'}</TableCell>
