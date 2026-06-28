@@ -21,6 +21,7 @@ import {
 import PrintOutlined from '@mui/icons-material/PrintOutlined'
 import { apiUrl } from '../../api'
 import { readApiErrorMessage } from '../../utils/readApiErrorMessage'
+import { codeStatusLabel } from '../../utils/markingStatus'
 import { maskCisCode, printMarkingCodeLabels } from '../../utils/printMarkingCodeLabel'
 
 type CodeRow = {
@@ -37,12 +38,6 @@ type Props = {
   productLabel: string
   testIdPrefix: string
   onClose: () => void
-}
-
-const STATUS_LABEL: Record<string, string> = {
-  available: 'Доступен',
-  printed: 'Напечатан',
-  void: 'Аннулирован',
 }
 
 export function MarkingProductCodesDialog({
@@ -157,7 +152,7 @@ export function MarkingProductCodesDialog({
                           {maskCisCode(r.cis_code)}
                         </Typography>
                       </TableCell>
-                      <TableCell>{STATUS_LABEL[r.status] ?? r.status}</TableCell>
+                      <TableCell>{codeStatusLabel(r.status)}</TableCell>
                       <TableCell align="right">
                         <IconButton
                           size="small"
