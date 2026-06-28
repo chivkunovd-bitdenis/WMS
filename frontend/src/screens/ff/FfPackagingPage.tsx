@@ -34,6 +34,7 @@ import {
 import { FfProductLineCells, FfProductTableHeadCells } from '../../components/FfProductLineCells'
 import { useWbProductCatalog } from '../../hooks/useWbProductCatalog'
 import { apiUrl } from '../../api'
+import { fetchPendingMarking, pendingMarkingLineCount } from '../../utils/pendingMarkingApi'
 import { PageHeader } from '../../ui/PageHeader'
 import { productDisplayMetaFromCatalog } from '../../types/wbProductCatalog'
 import { readApiErrorMessage } from '../../utils/readApiErrorMessage'
@@ -1266,15 +1267,14 @@ export function FfPackagingPage({ token }: PageProps) {
     })
     if (!res.ok) {
       setError(await readApiErrorMessage(res))
-      return
+    } else {
+      setTasks((await res.json()) as PackagingTask[])
     }
-    setTasks((await res.json()) as PackagingTask[])
-    const pendingRes = await fetch(apiUrl('/operations/marking-codes/pending-marking'), {
-      headers: { Authorization: `Bearer ${token}` },
-    })
-    if (pendingRes.ok) {
-      const pending = (await pendingRes.json()) as { total: number }
-      setPendingMarkingCount(pending.total)
+    try {
+      const pending = await fetchPendingMarking(token)
+      setPendingMarkingCount(pendingMarkingLineCount(pending))
+    } catch {
+      setPendingMarkingCount(0)
     }
   }, [token])
 
