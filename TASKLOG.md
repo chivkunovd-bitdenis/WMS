@@ -1,5 +1,11 @@
 # TASKLOG
 
+## TASK-037 — 2026-06-28 — POOLS-01: integrate (MarkingSellerPicker retained)
+
+- What changed: merged task/POOLS-01; seller UI stays `MarkingSellerPicker` (CROSS-03) not Autocomplete row from lane branch.
+- What did NOT change: e2e helpers `selectMarkingSeller` / ledger waits (HEAD).
+- Verification: merge conflict resolution on `feat/cz-ux-fixes`.
+
 ## TASK-048 — 2026-06-28 — LEDGER-06: localize ledger events via markingStatus
 
 - What changed: `HonestSignLedgerPage` — фильтр и чипы событий через `ledgerEventLabel` из `markingStatus.ts`; e2e на русские подписи («Импорт», «Печать»).

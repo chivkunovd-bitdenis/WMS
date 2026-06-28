@@ -1,6 +1,7 @@
 import { expect, test } from '@playwright/test'
 
 import { waitForGetOk, waitForPostOk } from './api-waits'
+import { selectHonestSignSeller } from './ff-honest-sign-helpers'
 import { fulfillInboundViaBoxScans } from './inbound-boxes-helpers'
 import { openFulfillmentRegistration } from './auth-flow'
 import { selectHonestSignSeller } from './ff-honest-sign-helpers'
