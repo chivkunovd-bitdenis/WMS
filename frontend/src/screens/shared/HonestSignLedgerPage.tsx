@@ -57,6 +57,7 @@ export function HonestSignLedgerPage({
 }: Props) {
   const [searchParams] = useSearchParams()
   const poolIdFromUrl = searchParams.get('pool_id')
+  const eventTypeFromUrl = searchParams.get('event_type') ?? ''
 
   const [rows, setRows] = useState<LedgerRow[]>([])
   const [total, setTotal] = useState(0)
@@ -121,6 +122,13 @@ export function HonestSignLedgerPage({
   useEffect(() => {
     void load()
   }, [load])
+
+  useEffect(() => {
+    if (eventTypeFromUrl && EVENT_TYPES.includes(eventTypeFromUrl)) {
+      setEventType(eventTypeFromUrl)
+      setOffset(0)
+    }
+  }, [eventTypeFromUrl])
 
   return (
     <Stack spacing={2} data-testid={`${testIdPrefix}-page`}>

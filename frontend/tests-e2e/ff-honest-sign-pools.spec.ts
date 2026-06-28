@@ -69,6 +69,24 @@ test('FF honest sign: pool list row, link product via menu, open pool card', asy
   await expect(poolRow).toContainText('E2E List Pool')
   await expect(poolRow).toContainText('1')
 
+  // TC-NEW-POOLS-02 — KPI: static vs interactive cards, filter toggle, ledger link
+  await expect(page.getByTestId('ff-honest-sign-kpi-spend-7d')).toHaveAttribute('data-interactive', 'false')
+  await page.getByTestId('ff-honest-sign-kpi-low-stock').click()
+  await expect(page.getByTestId('ff-honest-sign-stock-filter').getByRole('button', { name: 'На исходе' })).toHaveAttribute(
+    'aria-pressed',
+    'true',
+  )
+  await page.getByTestId('ff-honest-sign-kpi-available').click()
+  await expect(page.getByTestId('ff-honest-sign-stock-filter').getByRole('button', { name: 'Все' })).toHaveAttribute(
+    'aria-pressed',
+    'true',
+  )
+  await page.getByTestId('ff-honest-sign-kpi-defective').click()
+  await expect(page).toHaveURL(/\/app\/ff\/honest-sign\/ledger\?event_type=defective/)
+  await expect(page.getByTestId('ff-honest-sign-ledger-event-type')).toHaveValue('defective')
+  await page.getByTestId('ff-honest-sign-ledger-back').click()
+  await selectHonestSignSeller(page, sellerId)
+
   await page.getByTestId(`ff-honest-sign-pool-menu-${poolId}`).click()
   await page.getByTestId('ff-honest-sign-menu-link-products').click()
   await expect(page.getByTestId('ff-honest-sign-pool-products-dialog')).toBeVisible()
