@@ -3,11 +3,12 @@
 ## TASK-048 — 2026-06-28 — CROSS-01: single KM reprint selection
 
 - What changed:
-  - **`MarkingPrintDialog.tsx`:** reprint-ветка — загрузка напечатанных КМ (`printed-codes`), чекбоксы выбора, `code_ids` в POST print; экспорт `PrintedMarkingCodeRow`.
-  - **`FfPackagingPage.tsx`:** общий тип `PrintedMarkingCodeRow` для диалога брака и печати.
-  - **Backend:** `PrintMarkingCodesIn.code_ids`, фильтр reprint в `print_codes_for_packaging_line`; pytest `test_reprint_single_code_by_id`.
+  - **`MarkingPrintDialog.tsx`:** reprint-ветка — загрузка напечатанных КМ (`printed-codes`), radio-выбор одного кода, `code_ids` в POST print.
+  - **`FfPackagingPage.tsx`:** «Повтор»/«Брак» в overflow-меню строки (`…`); `openLinePrint(..., { reprint: true })`.
+  - **Backend:** `PrintMarkingCodesIn.code_ids`, фильтр reprint в `print_codes_for_packaging_line`.
+  - **Tests:** pytest single reprint в `test_marking_import_and_packaging_print`; e2e TC-NEW-CROSS-01 в `ff-marking-packaging.spec.ts`; defect e2e через меню.
 - What did NOT change: первичная печать через конструктор; очередь перепечаток (shift_lead).
-- Verification: `pytest tests/test_marking_codes.py::test_reprint_single_code_by_id` (passed); `npm run build` (exit 0).
+- Verification: `pytest tests/test_marking_codes.py::test_marking_import_and_packaging_print` (passed); `npx playwright test … --grep "reprint single"` (passed); `npm run build` (exit 0).
 
 ## TASK-041 — 2026-06-28 — PACK-07: block complete with incomplete marking
 

@@ -619,7 +619,7 @@ export function MarkingPrintDialog({ open, reprint, ctx, busy, onBusyChange, onC
                 <RadioGroup
                   value={selectedReprintCodeId}
                   onChange={(e) => setSelectedReprintCodeId(e.target.value)}
-                  data-testid="marking-reprint-code-list"
+                  data-testid="marking-reprint-pick-list"
                 >
                   {reprintCodes.map((code) => (
                     <FormControlLabel
@@ -628,7 +628,7 @@ export function MarkingPrintDialog({ open, reprint, ctx, busy, onBusyChange, onC
                       control={
                         <Radio
                           size="small"
-                          data-testid={`marking-reprint-code-${code.id}`}
+                          data-testid={`marking-reprint-pick-${code.id}`}
                         />
                       }
                       label={code.cis_masked}

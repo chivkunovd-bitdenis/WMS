@@ -115,6 +115,25 @@ async def test_marking_import_and_packaging_print(async_client: AsyncClient) -> 
     assert row2["available_count"] == 2
     assert row2["printed_count"] == 3
 
+    listed = await async_client.get(
+        f"/operations/marking-codes/packaging-task-lines/{line_id}/printed-codes",
+        headers=h,
+    )
+    assert listed.status_code == 200
+    code_rows = listed.json()["codes"]
+    assert len(code_rows) == 3
+    target_id = code_rows[1]["id"]
+
+    single_reprint = await async_client.post(
+        f"/operations/marking-codes/packaging-lines/{line_id}/print",
+        headers=h,
+        json={"duplicate_copies": 2, "reprint": True, "code_ids": [target_id]},
+    )
+    assert single_reprint.status_code == 200, single_reprint.text
+    assert single_reprint.json()["is_reprint"] is True
+    assert single_reprint.json()["quantity"] == 1
+    assert len(single_reprint.json()["codes"]) == 1
+
     dup = await async_client.post(
         f"/operations/marking-codes/packaging-lines/{line_id}/print",
         headers=h,
@@ -135,103 +154,6 @@ async def test_marking_import_and_packaging_print(async_client: AsyncClient) -> 
     task_after = await async_client.get(f"/operations/packaging-tasks/{task_id}", headers=h)
     assert task_after.status_code == 200
     assert task_after.json()["lines"][0]["qty_marking_printed"] == 3
-
-
-@pytest.mark.asyncio
-async def test_reprint_single_code_by_id(async_client: AsyncClient) -> None:
-    """CROSS-01: reprint one selected KM without reprinting the rest."""
-    h = await _register_admin(async_client)
-    seller = await async_client.post(
-        "/sellers",
-        headers=h,
-        json={"name": "ЧЗ Seller", "email": f"cz-{uuid.uuid4().hex[:8]}@example.com"},
-    )
-    assert seller.status_code == 201, seller.text
-    seller_id = seller.json()["id"]
-
-    wh = await async_client.post("/warehouses", headers=h, json={"name": "W", "code": "w-cz2"})
-    assert wh.status_code == 200
-    wh_id = wh.json()["id"]
-
-    pr = await async_client.post(
-        "/products",
-        headers=h,
-        json={
-            "name": "Куртка",
-            "sku_code": f"SKU-CZ2-{uuid.uuid4().hex[:6]}",
-            "length_mm": 100,
-            "width_mm": 100,
-            "height_mm": 100,
-            "seller_id": seller_id,
-        },
-    )
-    assert pr.status_code == 200, pr.text
-    product_id = pr.json()["id"]
-
-    patch = await async_client.patch(
-        f"/products/{product_id}/packaging-instructions",
-        headers=h,
-        json={"requires_honest_sign": True, "packaging_instructions": "ЧЗ"},
-    )
-    assert patch.status_code == 200, patch.text
-
-    codes = [f"01{'0' * 10}5678{'21'}{'B' * 20}{i:04d}" for i in range(5)]
-    csv_body = "cis,sku_code\n" + "\n".join(f"{c},{pr.json()['sku_code']}" for c in codes)
-    imp = await async_client.post(
-        "/operations/marking-codes/import",
-        headers=h,
-        data={
-            "seller_id": seller_id,
-            "pools_json": json.dumps(
-                [{"title": "Куртка пул", "product_ids": [product_id]}],
-            ),
-        },
-        files=[("files", ("codes.csv", csv_body.encode(), "text/csv"))],
-    )
-    assert imp.status_code == 200, imp.text
-
-    loc_id = await _inventory_at_location(
-        async_client, h, warehouse_id=wh_id, product_id=product_id, qty=3, location_code="cz-b1"
-    )
-
-    task = await async_client.post(
-        "/operations/packaging-tasks",
-        headers=h,
-        json={
-            "warehouse_id": wh_id,
-            "lines": [{"product_id": product_id, "storage_location_id": loc_id, "quantity": 3}],
-        },
-    )
-    assert task.status_code == 201, task.text
-    line_id = task.json()["lines"][0]["id"]
-
-    printed = await async_client.post(
-        f"/operations/marking-codes/packaging-lines/{line_id}/print",
-        headers=h,
-        json={"duplicate_copies": 1, "reprint": False},
-    )
-    assert printed.status_code == 200, printed.text
-    assert len(printed.json()["codes"]) == 3
-
-    listed = await async_client.get(
-        f"/operations/marking-codes/packaging-task-lines/{line_id}/printed-codes",
-        headers=h,
-    )
-    assert listed.status_code == 200
-    code_rows = listed.json()["codes"]
-    assert len(code_rows) == 3
-    target_id = code_rows[1]["id"]
-
-    single_reprint = await async_client.post(
-        f"/operations/marking-codes/packaging-lines/{line_id}/print",
-        headers=h,
-        json={"duplicate_copies": 1, "reprint": True, "code_ids": [target_id]},
-    )
-    assert single_reprint.status_code == 200, single_reprint.text
-    body = single_reprint.json()
-    assert body["is_reprint"] is True
-    assert body["quantity"] == 1
-    assert len(body["codes"]) == 1
 
 
 @pytest.mark.asyncio
