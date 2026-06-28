@@ -1,10 +1,29 @@
 # TASKLOG
 
+## TASK-049 — 2026-06-28 — FINAL-02: аудит дублей поверхностей ЧЗ
+
+- What changed:
+  - **`docs/CZ_DUPLICATE_SURFACES_AUDIT_RU.md`:** канон по ленте / списку кодов / импорту; follow-up POOLS-04…06, CROSS-04.
+  - **`HonestSignImportPage.tsx`:** редирект `…/import` → список пулов (убрана заглушка-дубль; канон — `MarkingImportDialog`).
+  - **`HonestSignPoolPage.tsx`:** `codeStatusLabel` / `ledgerEventLabel` в табах «Коды» и «Лента» + drawer истории.
+  - **`MarkingProductCodesDialog.tsx`:** `@deprecated` — не монтируется, канон — таб «Коды» пула.
+  - Merge: `task/LEDGER-06`, `task/POOLCARD-03`.
+- What did NOT change: POOLS-04 (дашборд+таблица), удаление сироты `MarkingProductCodesDialog`, CROSS-04 (импорт с контекстом пула).
+- Verification: `npm run build`; e2e `ff-honest-sign-pool`, `ff-honest-sign-import`.
+
 ## TASK-048 — 2026-06-28 — LEDGER-06: localize ledger events via markingStatus
 
 - What changed: `HonestSignLedgerPage` — фильтр и чипы событий через `ledgerEventLabel` из `markingStatus.ts`; e2e на русские подписи («Импорт», «Печать»).
 - What did NOT change: API `event_type` (англ. enum), логика фильтров (LEDGER-02–05).
 - Verification: `npm run build` + `npm run test:e2e tests-e2e/ff-honest-sign-ledger.spec.ts` in LEDGER-06 worktree — green. Commit `8c0c350`.
+
+## TASK-037 — 2026-06-28 — POOLCARD-03: таб «Лента» → превью + ссылка
+
+- What changed:
+  - **`HonestSignPoolPage.tsx`:** таб «Лента» показывает компактное превью (5 последних событий, 3 колонки) и кнопку «Вся лента пула» → `/honest-sign/ledger?pool_id=…`; убрана полная таблица с фильтрами/пагинацией (дубль `HonestSignLedgerPage`).
+  - **`ff-honest-sign-pool.spec.ts`:** TC-NEW-011 — превью, отсутствие фильтров ленты на карточке, переход на полную ленту.
+- What did NOT change: `HonestSignLedgerPage`, API ленты, другие табы карточки пула.
+- Verification: `npm run build` green; `playwright test ff-honest-sign-pool.spec.ts` passed.
 
 ## TASK-036 — 2026-06-28 — CZ-000 barrier: MP commit + feat/cz-ux-fixes + autopilot backlog
 

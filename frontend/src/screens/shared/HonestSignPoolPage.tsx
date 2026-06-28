@@ -27,6 +27,7 @@ import DownloadOutlined from '@mui/icons-material/DownloadOutlined'
 import { apiUrl } from '../../api'
 import { PageHeader } from '../../ui/PageHeader'
 import { readApiErrorMessage } from '../../utils/readApiErrorMessage'
+import { codeStatusLabel, ledgerEventLabel } from '../../utils/markingStatus'
 import { MarkingPoolProductsDialog } from './MarkingPoolProductsDialog'
 
 type PoolDetail = {
@@ -83,6 +84,8 @@ type LedgerRow = {
 type TabKey = 'overview' | 'products' | 'codes' | 'ledger'
 
 const STATUS_OPTIONS = ['', 'available', 'reserved', 'printed', 'applied', 'defective', 'void']
+
+const LEDGER_PREVIEW_LIMIT = 5
 
 type Props = {
   token: string
@@ -170,7 +173,9 @@ export function HonestSignPoolPage({
       return
     }
     const res = await fetch(
-      apiUrl(`/operations/marking-codes/ledger?pool_id=${encodeURIComponent(poolId)}&limit=50`),
+      apiUrl(
+        `/operations/marking-codes/ledger?pool_id=${encodeURIComponent(poolId)}&limit=${LEDGER_PREVIEW_LIMIT}`,
+      ),
       { headers: authHeaders },
     )
     if (res.ok) {
@@ -411,7 +416,7 @@ export function HonestSignPoolPage({
               <MenuItem value="">Все</MenuItem>
               {STATUS_OPTIONS.filter(Boolean).map((s) => (
                 <MenuItem key={s} value={s}>
-                  {s}
+                  {codeStatusLabel(s)}
                 </MenuItem>
               ))}
             </TextField>
@@ -464,7 +469,7 @@ export function HonestSignPoolPage({
                     <TableRow key={c.id} data-testid={`${testIdPrefix}-code-row-${c.id}`}>
                       <TableCell>{c.cis_masked}</TableCell>
                       <TableCell>
-                        <Chip size="small" label={c.status} />
+                        <Chip size="small" label={codeStatusLabel(c.status)} />
                       </TableCell>
                       <TableCell>{new Date(c.created_at).toLocaleString('ru-RU')}</TableCell>
                       <TableCell>{c.document_number ?? '—'}</TableCell>
@@ -483,42 +488,58 @@ export function HonestSignPoolPage({
       ) : null}
 
       {tab === 'ledger' ? (
-        <TableContainer component={Paper} variant="outlined" data-testid={`${testIdPrefix}-ledger`}>
-          <Table size="small">
-            <TableHead>
-              <TableRow>
-                <TableCell>Время</TableCell>
-                <TableCell>Событие</TableCell>
-                <TableCell>КМ</TableCell>
-                <TableCell>Документ</TableCell>
-                <TableCell>Пользователь</TableCell>
-              </TableRow>
-            </TableHead>
-            <TableBody>
-              {ledger.length === 0 ? (
+        <Stack spacing={1.5} data-testid={`${testIdPrefix}-ledger-preview`}>
+          <Stack
+            direction={{ xs: 'column', sm: 'row' }}
+            spacing={1}
+            sx={{ alignItems: { sm: 'center' }, justifyContent: 'space-between' }}
+          >
+            <Typography variant="subtitle2">
+              Последние {LEDGER_PREVIEW_LIMIT} событий
+            </Typography>
+            <Button
+              component={RouterLink}
+              to={`${routeBase}/honest-sign/ledger?pool_id=${encodeURIComponent(poolId)}`}
+              variant="outlined"
+              size="small"
+              data-testid={`${testIdPrefix}-ledger-open-full`}
+            >
+              Вся лента пула
+            </Button>
+          </Stack>
+          <TableContainer component={Paper} variant="outlined">
+            <Table size="small">
+              <TableHead>
                 <TableRow>
-                  <TableCell colSpan={5}>
-                    <Typography variant="body2" color="text.secondary">
-                      Событий пока нет.
-                    </Typography>
-                  </TableCell>
+                  <TableCell>Время</TableCell>
+                  <TableCell>Событие</TableCell>
+                  <TableCell>КМ</TableCell>
                 </TableRow>
-              ) : (
-                ledger.map((row) => (
-                  <TableRow key={row.id}>
-                    <TableCell>{new Date(row.created_at).toLocaleString('ru-RU')}</TableCell>
-                    <TableCell>
-                      <Chip size="small" label={row.event_type} />
+              </TableHead>
+              <TableBody>
+                {ledger.length === 0 ? (
+                  <TableRow>
+                    <TableCell colSpan={3}>
+                      <Typography variant="body2" color="text.secondary">
+                        Событий пока нет.
+                      </Typography>
                     </TableCell>
-                    <TableCell>{row.cis_masked}</TableCell>
-                    <TableCell>{row.document_number ?? '—'}</TableCell>
-                    <TableCell>{row.actor_email ?? '—'}</TableCell>
                   </TableRow>
-                ))
-              )}
-            </TableBody>
-          </Table>
-        </TableContainer>
+                ) : (
+                  ledger.map((row) => (
+                    <TableRow key={row.id} data-testid={`${testIdPrefix}-ledger-row-${row.id}`}>
+                      <TableCell>{new Date(row.created_at).toLocaleString('ru-RU')}</TableCell>
+                      <TableCell>
+                        <Chip size="small" label={ledgerEventLabel(row.event_type)} />
+                      </TableCell>
+                      <TableCell>{row.cis_masked}</TableCell>
+                    </TableRow>
+                  ))
+                )}
+              </TableBody>
+            </Table>
+          </TableContainer>
+        </Stack>
       ) : null}
 
       {detail && linkOpen ? (
@@ -554,7 +575,7 @@ export function HonestSignPoolPage({
             <Stack spacing={1.5}>
               {history.map((ev) => (
                 <Paper key={ev.id} variant="outlined" sx={{ p: 1.5 }}>
-                  <Typography variant="subtitle2">{ev.event_type}</Typography>
+                  <Typography variant="subtitle2">{ledgerEventLabel(ev.event_type)}</Typography>
                   <Typography variant="caption" color="text.secondary">
                     {new Date(ev.created_at).toLocaleString('ru-RU')}
                   </Typography>

@@ -2564,7 +2564,7 @@ export default function App() {
             path="ff/honest-sign/import"
             element={
               token ? (
-                <HonestSignImportPage testIdPrefix="ff-honest-sign-import" />
+                <HonestSignImportPage />
               ) : (
                 <FfPlaceholderPage
                   title="Загрузка кодов"

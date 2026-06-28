@@ -24,6 +24,10 @@ import { readApiErrorMessage } from '../../utils/readApiErrorMessage'
 import { codeStatusLabel } from '../../utils/markingStatus'
 import { maskCisCode, printMarkingCodeLabels } from '../../utils/printMarkingCodeLabel'
 
+/**
+ * @deprecated FINAL-02: не монтируется в UI. Канон — таб «Коды» в `HonestSignPoolPage`.
+ * Оставлен до тикета на удаление / переиспользование печати из каталога.
+ */
 type CodeRow = {
   id: string
   cis_code: string
