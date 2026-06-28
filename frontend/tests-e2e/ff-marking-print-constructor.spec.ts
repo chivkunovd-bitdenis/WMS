@@ -121,7 +121,7 @@ test('FF packaging: marking print constructor shortage and pairs preview', async
 
   await page.getByTestId('marking-print-preset-label_cz').check()
   await expect(page.getByTestId('marking-print-preview-tape-count')).toContainText('6 этикеток на 3 ед.')
-  await expect(page.getByTestId('marking-print-preview-chip-1-0')).toHaveText('Этикетка')
+  await expect(page.getByTestId('marking-print-preview-chip-1-0')).toHaveText('ШК ВБ')
   await expect(page.getByTestId('marking-print-preview-chip-1-1')).toHaveText('ЧЗ')
 
   await page.getByTestId('marking-print-allow-partial').check()
