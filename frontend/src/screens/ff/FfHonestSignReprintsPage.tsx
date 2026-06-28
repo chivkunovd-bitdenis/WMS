@@ -1,5 +1,7 @@
 import { useCallback, useEffect, useState } from 'react'
+import InfoOutlinedIcon from '@mui/icons-material/InfoOutlined'
 import {
+  Alert,
   Box,
   Button,
   Paper,
@@ -10,6 +12,7 @@ import {
   TableContainer,
   TableHead,
   TableRow,
+  Tooltip,
   Typography,
 } from '@mui/material'
 import { apiUrl } from '../../api'
@@ -32,6 +35,12 @@ type Props = {
   token: string
   testId?: string
 }
+
+const APPROVE_REPRINT_HINT =
+  'Разрешить повторную печать того же кода маркировки (КМ). Код в системе не меняется, в журнале — событие «перепечатка». Выбирайте, если этикетка испорчена при печати, а сам КМ ещё годен.'
+
+const REPLACE_REPRINT_HINT =
+  'Списать текущий КМ как брак и выдать новый из пула. Старый код станет «заменён», остаток пула уменьшится на 1. Выбирайте, если КМ повреждён или не годится к нанесению.'
 
 export function FfHonestSignReprintsPage({
   token,
@@ -97,6 +106,19 @@ export function FfHonestSignReprintsPage({
       <Typography variant="h5" gutterBottom>
         Перепечатки ЧЗ
       </Typography>
+      <Alert
+        severity="info"
+        icon={<InfoOutlinedIcon fontSize="inherit" />}
+        sx={{ mb: 2 }}
+        data-testid={`${testId}-actions-help`}
+      >
+        <Typography variant="body2" component="span" sx={{ display: 'block', mb: 0.5 }}>
+          <strong>Подтвердить</strong> — {APPROVE_REPRINT_HINT}
+        </Typography>
+        <Typography variant="body2" component="span" sx={{ display: 'block' }}>
+          <strong>Заменить</strong> — {REPLACE_REPRINT_HINT}
+        </Typography>
+      </Alert>
       {error ? (
         <Typography color="error" data-testid={`${testId}-error`}>
           {error}
@@ -139,24 +161,34 @@ export function FfHonestSignReprintsPage({
                   <TableCell>{row.document_number ?? '—'}</TableCell>
                   <TableCell align="right">
                     <Stack direction="row" spacing={0.5} sx={{ justifyContent: 'flex-end' }}>
-                      <Button
-                        size="small"
-                        variant="outlined"
-                        disabled={busyId === row.id}
-                        onClick={() => void resolveRequest(row.id, 'approve-reprint')}
-                        data-testid={`${testId}-approve-${row.id}`}
-                      >
-                        Подтвердить
-                      </Button>
-                      <Button
-                        size="small"
-                        variant="contained"
-                        disabled={busyId === row.id}
-                        onClick={() => void resolveRequest(row.id, 'replace')}
-                        data-testid={`${testId}-replace-${row.id}`}
-                      >
-                        Заменить
-                      </Button>
+                      <Tooltip title={APPROVE_REPRINT_HINT} arrow placement="top">
+                        <span>
+                          <Button
+                            size="small"
+                            variant="outlined"
+                            disabled={busyId === row.id}
+                            onClick={() => void resolveRequest(row.id, 'approve-reprint')}
+                            data-testid={`${testId}-approve-${row.id}`}
+                            aria-label={`Подтвердить: ${APPROVE_REPRINT_HINT}`}
+                          >
+                            Подтвердить
+                          </Button>
+                        </span>
+                      </Tooltip>
+                      <Tooltip title={REPLACE_REPRINT_HINT} arrow placement="top">
+                        <span>
+                          <Button
+                            size="small"
+                            variant="contained"
+                            disabled={busyId === row.id}
+                            onClick={() => void resolveRequest(row.id, 'replace')}
+                            data-testid={`${testId}-replace-${row.id}`}
+                            aria-label={`Заменить: ${REPLACE_REPRINT_HINT}`}
+                          >
+                            Заменить
+                          </Button>
+                        </span>
+                      </Tooltip>
                       <Button
                         size="small"
                         color="inherit"
