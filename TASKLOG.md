@@ -1,5 +1,11 @@
 # TASKLOG
 
+## TASK-041 — 2026-06-28 — LEDGER-04: export ledger by filters
+
+- What changed: `GET /operations/marking-codes/ledger/export` — CSV по тем же фильтрам, что и лента (seller, pool, event_type, document, cis_mask, date_from/to); кнопка «Экспорт» на `HonestSignLedgerPage`; восстановлен серверный `cis_mask` (регресс LEDGER-03); pytest `test_ledger_export_csv`, `test_ledger_cis_mask_filter`.
+- What did NOT change: LEDGER-05 (единая модель «Применить»), e2e Playwright для экспорта.
+- Verification: `PYTHONPATH=. pytest tests/test_marking_pools_read.py`; `npm run build` in worktree `LEDGER-04`.
+
 ## TASK-040 — 2026-06-28 — LEDGER-03: date range filter on ledger
 
 - What changed: `HonestSignLedgerPage` — поля «С»/«По» (`type="date"`), query `date_from`/`date_to` на `/operations/marking-codes/ledger`; e2e + pytest `test_ledger_date_range_filter`.

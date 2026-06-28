@@ -19,6 +19,7 @@ import {
   Typography,
 } from '@mui/material'
 import ArrowBackOutlined from '@mui/icons-material/ArrowBackOutlined'
+import FileDownloadOutlined from '@mui/icons-material/FileDownloadOutlined'
 import { apiUrl } from '../../api'
 import { PageHeader } from '../../ui/PageHeader'
 import { readApiErrorMessage } from '../../utils/readApiErrorMessage'
@@ -78,6 +79,7 @@ export function HonestSignLedgerPage({
   const [poolTitle, setPoolTitle] = useState<string | null>(null)
   const [dateFrom, setDateFrom] = useState('')
   const [dateTo, setDateTo] = useState('')
+  const [exportBusy, setExportBusy] = useState(false)
 
   const limit = 50
 
@@ -89,35 +91,48 @@ export function HonestSignLedgerPage({
   )
   const poolFilterLabel = poolTitle ?? poolNameFromRows
 
+  const buildFilterParams = useCallback(() => {
+    const params = new URLSearchParams()
+    if (selectedSellerId) {
+      params.set('seller_id', selectedSellerId)
+    }
+    if (poolIdFromUrl) {
+      params.set('pool_id', poolIdFromUrl)
+    }
+    if (eventType) {
+      params.set('event_type', eventType)
+    }
+    if (document.trim()) {
+      params.set('document', document.trim())
+    }
+    const mask = cisMask.trim()
+    if (mask) {
+      params.set('cis_mask', mask)
+    }
+    if (dateFrom) {
+      params.set('date_from', toDateFromParam(dateFrom))
+    }
+    if (dateTo) {
+      params.set('date_to', toDateToParam(dateTo))
+    }
+    return params
+  }, [
+    cisMask,
+    dateFrom,
+    dateTo,
+    document,
+    eventType,
+    poolIdFromUrl,
+    selectedSellerId,
+  ])
+
   const load = useCallback(async () => {
     setBusy(true)
     setError(null)
     try {
-      const params = new URLSearchParams()
+      const params = buildFilterParams()
       params.set('limit', String(limit))
       params.set('offset', String(offset))
-      if (selectedSellerId) {
-        params.set('seller_id', selectedSellerId)
-      }
-      if (poolIdFromUrl) {
-        params.set('pool_id', poolIdFromUrl)
-      }
-      if (eventType) {
-        params.set('event_type', eventType)
-      }
-      if (document.trim()) {
-        params.set('document', document.trim())
-      }
-      const mask = cisMask.trim()
-      if (mask) {
-        params.set('cis_mask', mask)
-      }
-      if (dateFrom) {
-        params.set('date_from', toDateFromParam(dateFrom))
-      }
-      if (dateTo) {
-        params.set('date_to', toDateToParam(dateTo))
-      }
       const res = await fetch(apiUrl(`/operations/marking-codes/ledger?${params.toString()}`), {
         headers: authHeaders,
       })
@@ -131,17 +146,34 @@ export function HonestSignLedgerPage({
     } finally {
       setBusy(false)
     }
-  }, [
-    authHeaders,
-    cisMask,
-    dateFrom,
-    dateTo,
-    document,
-    eventType,
-    offset,
-    poolIdFromUrl,
-    selectedSellerId,
-  ])
+  }, [authHeaders, buildFilterParams, offset])
+
+  const exportCsv = async () => {
+    setExportBusy(true)
+    setError(null)
+    try {
+      const params = buildFilterParams()
+      const res = await fetch(
+        apiUrl(`/operations/marking-codes/ledger/export?${params.toString()}`),
+        { headers: authHeaders },
+      )
+      if (!res.ok) {
+        setError(await readApiErrorMessage(res))
+        return
+      }
+      const blob = await res.blob()
+      const url = URL.createObjectURL(blob)
+      const a = window.document.createElement('a')
+      a.href = url
+      const disposition = res.headers.get('Content-Disposition')
+      const match = disposition?.match(/filename="([^"]+)"/)
+      a.download = match?.[1] ?? 'ledger-export.csv'
+      a.click()
+      URL.revokeObjectURL(url)
+    } finally {
+      setExportBusy(false)
+    }
+  }
 
   useEffect(() => {
     void load()
@@ -271,6 +303,15 @@ export function HonestSignLedgerPage({
         />
         <Button variant="outlined" onClick={() => void load()} data-testid={`${testIdPrefix}-apply`}>
           Применить
+        </Button>
+        <Button
+          variant="outlined"
+          startIcon={<FileDownloadOutlined />}
+          disabled={exportBusy || busy}
+          onClick={() => void exportCsv()}
+          data-testid={`${testIdPrefix}-export`}
+        >
+          Экспорт
         </Button>
       </Stack>
 

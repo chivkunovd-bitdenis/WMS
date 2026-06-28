@@ -7,6 +7,7 @@ from datetime import datetime
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, UploadFile, status
+from fastapi.responses import Response
 from pydantic import BaseModel, Field
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -797,6 +798,43 @@ async def list_marking_ledger(
             )
             for r in page.rows
         ],
+    )
+
+
+@router.get("/ledger/export")
+async def export_marking_ledger(
+    user: Annotated[User, Depends(get_current_user)],
+    session: Annotated[AsyncSession, Depends(get_db)],
+    effective_seller_id: Annotated[uuid.UUID | None, Depends(get_effective_seller_id)],
+    seller_id: Annotated[uuid.UUID | None, Query()] = None,
+    pool_id: Annotated[uuid.UUID | None, Query()] = None,
+    product_id: Annotated[uuid.UUID | None, Query()] = None,
+    document: Annotated[str | None, Query()] = None,
+    event_type: Annotated[str | None, Query()] = None,
+    cis_mask: Annotated[str | None, Query()] = None,
+    date_from: Annotated[datetime | None, Query()] = None,
+    date_to: Annotated[datetime | None, Query()] = None,
+) -> Response:
+    scope = _resolve_marking_seller_scope(user, effective_seller_id, seller_id)
+    try:
+        csv_text = await mc_svc.export_ledger_csv(
+            session,
+            user.tenant_id,
+            seller_id=scope,
+            pool_id=pool_id,
+            product_id=product_id,
+            document_number=document,
+            event_type=event_type,
+            cis_mask=cis_mask,
+            date_from=date_from,
+            date_to=date_to,
+        )
+    except mc_svc.MarkingCodeServiceError as exc:
+        raise _http_from_mc_error(exc) from exc
+    return Response(
+        content=("\ufeff" + csv_text).encode("utf-8"),
+        media_type="text/csv; charset=utf-8",
+        headers={"Content-Disposition": 'attachment; filename="ledger-export.csv"'},
     )
 
 
