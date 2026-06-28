@@ -19,7 +19,7 @@ from app.services import inventory_service
 from app.services import marketplace_unload_service as mu_svc
 from app.services.seller_wb_catalog_service import list_seller_wb_catalog_rows
 
-PICK_EDITABLE_STATUSES = (mu_svc.STATUS_CONFIRMED,)
+PICK_EDITABLE_STATUSES = mu_svc.EXECUTION_STATUSES
 
 
 class MarketplaceUnloadPickError(Exception):
@@ -354,7 +354,7 @@ async def ship_request(
     req = await mu_svc.get_request(session, tenant_id, request_id)
     if req is None:
         raise MarketplaceUnloadPickError("not_found")
-    if req.status != mu_svc.STATUS_CONFIRMED:
+    if req.status not in mu_svc.EXECUTION_STATUSES:
         raise MarketplaceUnloadPickError("bad_status")
     if not req.lines:
         raise MarketplaceUnloadPickError("no_lines")

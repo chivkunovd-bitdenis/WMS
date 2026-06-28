@@ -2,6 +2,7 @@ import { expect, test } from '@playwright/test'
 
 import { waitForGetOk, waitForPostOk } from './api-waits'
 import { openFulfillmentRegistration } from './auth-flow'
+import { selectHonestSignSeller } from './ff-honest-sign-helpers'
 
 // TC-NEW-007 — T0.7: список пулов, меню «Привязать товары», переход в карточку пула.
 test('FF honest sign: pool list row, link product via menu, open pool card', async ({ page }) => {
@@ -62,11 +63,29 @@ test('FF honest sign: pool list row, link product via menu, open pool card', asy
   const poolId = String(((await poolRes.json()) as { pools: { pool_id: string }[] }).pools[0].pool_id)
 
   await page.getByTestId('nav-ff-honest-sign').click()
-  await page.getByTestId(`ff-honest-sign-seller-${sellerId}`).click()
+  await selectHonestSignSeller(page, sellerId)
   const poolRow = page.getByTestId(`ff-honest-sign-pool-row-${poolId}`)
   await expect(poolRow).toBeVisible()
   await expect(poolRow).toContainText('E2E List Pool')
   await expect(poolRow).toContainText('1')
+
+  // TC-NEW-POOLS-02 — KPI: static vs interactive cards, filter toggle, ledger link
+  await expect(page.getByTestId('ff-honest-sign-kpi-spend-7d')).toHaveAttribute('data-interactive', 'false')
+  await page.getByTestId('ff-honest-sign-kpi-low-stock').click()
+  await expect(page.getByTestId('ff-honest-sign-stock-filter').getByRole('button', { name: 'На исходе' })).toHaveAttribute(
+    'aria-pressed',
+    'true',
+  )
+  await page.getByTestId('ff-honest-sign-kpi-available').click()
+  await expect(page.getByTestId('ff-honest-sign-stock-filter').getByRole('button', { name: 'Все' })).toHaveAttribute(
+    'aria-pressed',
+    'true',
+  )
+  await page.getByTestId('ff-honest-sign-kpi-defective').click()
+  await expect(page).toHaveURL(/\/app\/ff\/honest-sign\/ledger\?event_type=defective/)
+  await expect(page.getByTestId('ff-honest-sign-ledger-event-type').locator('input')).toHaveValue('defective')
+  await page.getByTestId('ff-honest-sign-ledger-back').click()
+  await selectHonestSignSeller(page, sellerId)
 
   await page.getByTestId(`ff-honest-sign-pool-menu-${poolId}`).click()
   await page.getByTestId('ff-honest-sign-menu-link-products').click()

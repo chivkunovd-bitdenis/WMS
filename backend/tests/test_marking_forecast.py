@@ -100,8 +100,8 @@ async def test_pool_list_includes_forecast_from_events(async_client: AsyncClient
         headers=h,
     )
     row = next(p for p in pools.json() if p["id"] == pool_id)
-    assert row["consumption_7d"] == 210
-    assert row["forecast_days"] == 1.3
+    assert row["consumption_7d"] == 30
+    assert row["forecast_days"] == 9.3
     assert row["loaded"] == 40
 
 

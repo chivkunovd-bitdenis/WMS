@@ -5,7 +5,20 @@ import uuid
 
 import pytest
 from httpx import AsyncClient
+from sqlalchemy import select
 from test_packaging_tasks import _inventory_at_location, _register_admin
+
+from app.db.session import SessionLocal
+from app.models.marking_code import (
+    EVENT_DEFECTIVE,
+    EVENT_PRINTED,
+    EVENT_REPLACED,
+    STATUS_APPLIED,
+    STATUS_PRINTED,
+    STATUS_REPLACED,
+    MarkingCode,
+    MarkingCodeEvent,
+)
 
 
 async def _seed_printed_code(
@@ -125,6 +138,8 @@ async def test_defect_creates_pending_reprint_request(async_client: AsyncClient)
     assert len(requests) == 1
     assert requests[0]["reason"] == "Порвана этикетка"
     assert requests[0]["code_id"] == code_id
+    assert requests[0]["packaging_task_id"]
+    assert requests[0]["pool_id"]
 
     dup = await async_client.post(
         f"/operations/marking-codes/codes/{code_id}/defect",
@@ -198,10 +213,57 @@ async def test_replace_reprint_request_clears_queue(async_client: AsyncClient) -
     assert body["status"] == "approved"
     assert body["replacement_code_id"] is not None
 
+    async with SessionLocal() as session:
+        old = await session.get(MarkingCode, uuid.UUID(code_id))
+        new = await session.get(MarkingCode, uuid.UUID(body["replacement_code_id"]))
+        assert old is not None and new is not None
+        assert old.status == STATUS_REPLACED
+        assert old.replaced_by_code_id == new.id
+        assert new.status == STATUS_PRINTED
+        old_events = (
+            await session.execute(
+                select(MarkingCodeEvent.event_type).where(MarkingCodeEvent.code_id == old.id)
+            )
+        ).scalars().all()
+        assert EVENT_DEFECTIVE in old_events
+        assert EVENT_REPLACED in old_events
+        new_events = (
+            await session.execute(
+                select(MarkingCodeEvent.event_type).where(MarkingCodeEvent.code_id == new.id)
+            )
+        ).scalars().all()
+        assert EVENT_PRINTED in new_events
+
     queue = await async_client.get(
         "/operations/marking-codes/reprint-requests",
         headers=admin_h,
     )
     assert queue.status_code == 200
     assert queue.json()["requests"] == []
+
+
+@pytest.mark.asyncio
+async def test_approve_reprint_rejects_non_printed_code(async_client: AsyncClient) -> None:
+    admin_h, line_id, code_id = await _seed_printed_code(async_client)
+
+    created = await async_client.post(
+        f"/operations/marking-codes/codes/{code_id}/defect",
+        headers=admin_h,
+        json={"packaging_task_line_id": line_id},
+    )
+    assert created.status_code == 200
+    request_id = created.json()["request_id"]
+
+    async with SessionLocal() as session:
+        code = await session.get(MarkingCode, uuid.UUID(code_id))
+        assert code is not None
+        code.status = STATUS_APPLIED
+        await session.commit()
+
+    approved = await async_client.post(
+        f"/operations/marking-codes/reprint-requests/{request_id}/approve-reprint",
+        headers=admin_h,
+    )
+    assert approved.status_code == 422
+    assert approved.json()["detail"] == "code_not_printed"
 

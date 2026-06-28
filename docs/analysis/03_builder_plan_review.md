@@ -1,5 +1,7 @@
 # Builder Plan Review
 
+> **Superseded (2026-06-28):** вердикт PASS относился к **старой** модели (4 вкладки, gate упаковки на коробах, task на draft). Актуальный план — [`06_mp_unload_unified_tasks_RU.md`](./06_mp_unload_unified_tasks_RU.md).
+
 ## Verdict
 
 - Статус: **PASS**

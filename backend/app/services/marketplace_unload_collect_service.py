@@ -170,6 +170,7 @@ async def collect_into_box(
     product_id: uuid.UUID,
     quantity: int,
     require_open_box: bool = True,
+    allow_over_plan: bool = False,
 ) -> CollectResult:
     if quantity < 1:
         raise MarketplaceUnloadPickError("invalid_quantity")
@@ -177,19 +178,6 @@ async def collect_into_box(
     req = await _request_for_collect(session, tenant_id, request_id)
     if not await _product_in_shipment(session, req.id, product_id):
         raise MarketplaceUnloadPickError("product_not_in_shipment")
-
-    from app.services import packaging_task_service as pkg_svc
-
-    try:
-        await pkg_svc.assert_unload_packaging_done(session, tenant_id, request_id)
-    except pkg_svc.PackagingTaskServiceError as exc:
-        if exc.code in ("task_not_done", "marking_not_done"):
-            raise MarketplaceUnloadPickError(
-                "packaging_not_done"
-                if exc.code == "task_not_done"
-                else "marking_not_done"
-            ) from exc
-        raise
 
     box: MarketplaceUnloadBox | None
     if box_id is not None:
@@ -225,7 +213,7 @@ async def collect_into_box(
         (int(ln.quantity) for ln in req.lines if ln.product_id == product_id),
         0,
     )
-    if picked.get(product_id, 0) + quantity > plan_qty:
+    if not allow_over_plan and picked.get(product_id, 0) + quantity > plan_qty:
         raise MarketplaceUnloadPickError("plan_limit_exceeded")
 
     effective_location_id = await resolve_collect_storage_location(
@@ -309,6 +297,7 @@ async def collect_into_box(
     else:
         box_line.quantity = int(box_line.quantity) + quantity
 
+    mu_svc.enter_collecting_if_needed(req)
     await session.commit()
 
     picked = await picked_qty_by_product(session, request_id)

@@ -33,11 +33,14 @@ from app.services.wb_mp_warehouse_service import get_cached_mp_warehouse
 STATUS_DRAFT = "draft"
 STATUS_SUBMITTED = "submitted"
 STATUS_CONFIRMED = "confirmed"
+STATUS_COLLECTING = "collecting"
 STATUS_SHIPPED = "shipped"
 STATUS_CANCELLED = "cancelled"
 
-RESERVE_STATUSES = (STATUS_SUBMITTED, STATUS_CONFIRMED)
-CANCELLABLE_STATUSES = (STATUS_SUBMITTED, STATUS_CONFIRMED)
+EXECUTION_STATUSES = (STATUS_CONFIRMED, STATUS_COLLECTING)
+PACKAGING_SYNC_STATUSES = EXECUTION_STATUSES
+RESERVE_STATUSES = (STATUS_SUBMITTED, STATUS_CONFIRMED, STATUS_COLLECTING)
+CANCELLABLE_STATUSES = (STATUS_SUBMITTED, STATUS_CONFIRMED, STATUS_COLLECTING)
 SELLER_EDITABLE_STATUSES = (STATUS_DRAFT,)
 FF_LINE_EDITABLE_STATUSES = (STATUS_DRAFT, STATUS_CONFIRMED)
 
@@ -63,11 +66,20 @@ def assert_request_visible(
         raise MarketplaceUnloadError("not_found")
 
 
+def enter_collecting_if_needed(req: MarketplaceUnloadRequest) -> None:
+    """REQ-001: first box/line collect moves confirmed → collecting."""
+    if req.status == STATUS_CONFIRMED:
+        req.status = STATUS_COLLECTING
+
+
 async def _sync_packaging_task_for_unload(
     session: AsyncSession,
     tenant_id: uuid.UUID,
     request_id: uuid.UUID,
 ) -> None:
+    req = await get_request(session, tenant_id, request_id)
+    if req is None or req.status not in PACKAGING_SYNC_STATUSES:
+        return
     from app.services import packaging_task_service as pkg_svc
 
     await pkg_svc.ensure_task_for_unload(session, tenant_id, request_id)
@@ -107,7 +119,6 @@ async def create_request(
 
     await notify_ff_marketplace_unload_created(session, req)
     await session.commit()
-    await _sync_packaging_task_for_unload(session, tenant_id, req.id)
     return req
 
 

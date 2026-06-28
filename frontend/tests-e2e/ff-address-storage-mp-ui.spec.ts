@@ -210,7 +210,7 @@ test('address storage off hides cell UI on marketplace unload', async ({ page })
   await expect(page.getByTestId('ff-mp-boxes')).toBeVisible()
   await expect(page.getByTestId('ff-mp-active-location')).toHaveCount(0)
   await expect(page.getByTestId('ff-mp-start-picking')).toHaveCount(0)
-  await expect(page.getByLabel('Штрихкод товара / короба')).toBeVisible()
+  await expect(page.getByTestId('ff-mp-pick-scan-input')).toBeVisible()
 
   await page.getByTestId('ff-supplies-doc-close').click()
 

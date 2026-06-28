@@ -1,5 +1,336 @@
 # TASKLOG
 
+## TASK-066 — 2026-06-28 — FIX-05: ledger/pools abort + BACKEND-01 openapi + docs
+
+- What changed: `HonestSignLedgerPage.tsx`, `HonestSignScreen.tsx`, `HonestSignPoolPage.tsx` — `AbortController` в `load()`/`loadPools()`/`loadLedger()` против stale fetch; `ff-honest-sign-ledger.spec.ts` — e2e экспорт CSV (TC-NEW-LEDGER-04); `test_marking_deprecated_openapi.py` — pytest `deprecated` в OpenAPI; `MASTER_BACKLOG_RU.md` — статусы lane ✅ на `feat/cz-ux-fixes`; `CZ_DUPLICATE_SURFACES_AUDIT_RU.md` — ссылка `docs/` + §4 закрытые POOLS.
+- What did NOT change: `FfHonestSignReprintsPage` (FIX-03); packaging/import dialogs; удаление deprecated routes (отдельный тикет).
+- Verification: `pytest tests/test_marking_deprecated_openapi.py` 1 passed; marking subset 20 passed; `npm run build` exit 0.
+
+## TASK-065 — 2026-06-28 — FIX-03: FINAL-01 terminology (КМ/ЧЗ)
+
+- What changed: `HonestSignPoolPage.tsx` — export captions «N КМ», CSV status via `codeStatusLabel`; `FfHonestSignReprintsPage.tsx` — «История КМ», hints без «код», `ledgerEventLabel` в drawer; `App.tsx` — placeholder «Загрузка КМ»; `printMarkingCodeLabel.ts` — «Нет КМ для печати»; e2e `ff-marking-packaging.spec.ts` — «К перепечатке: 1 КМ».
+- What did NOT change: `markingStatus.ts` (already RU); print/defect sections e2e (FIX-01/04); `HonestSignScreen.tsx` POOLS-03 (FIX-05).
+- Verification: `npm run build` exit 0; grep — no «кодов» in exclusive user strings.
+
+## TASK-064 — 2026-06-28 — FIX-01: PRINT-03 merge artifact + print terminology
+
+- What changed: `MarkingPrintDialog.tsx` — убраны дубли MenuItem (ЧЗ/Этикетка/ШК ВБ) в custom-builder; helper-тексты «этикеток» → «ШК ВБ»/«блоков»; `markingPrintPresets.ts` JSDoc; e2e TC-NEW-001 — assert нет «Этикетка» в select и нет `marking-print-request-seller`.
+- What did NOT change: PRINT-04/05 backend; `ff-mp-packaging-print.spec.ts` (expect «этикеток» — follow-up); reprint e2e «1 код» (FIX-03).
+- Verification: `npm run build` exit 0; playwright `-g "print honest sign codes for line quantity"` exit 0.
+
+## TASK-063 — 2026-06-28 — Queue integration: merge task/* → feat/cz-ux-fixes
+
+- What changed: собран весь ЧЗ UX backlog в одну ветку **`feat/cz-ux-fixes`**: база `task/FINAL-01` + догон LEDGER-05…06, POOLS-01…05, POOLCARD-02, REPRINTS-*, BACKEND-01, PRINT-02/03, FINAL-02/03; конфликты разрешены вручную; `scripts/queue-integrate.sh`; orchestrator/hook — обязательный integrate после verifier; `.gitignore` — `.cursor/state/`, `.cursor/wt/`.
+- What did NOT change: `main` (интеграция только в feature-ветке); `task/PACK-01..03` не мержились отдельно (уже в FINAL-01/PACK-09).
+- Verification: `npm run build` green; `pytest tests/test_marking_pools_read.py tests/test_print_templates.py` — 14 passed.
+
+## TASK-037 — 2026-06-28 — FINAL-03: docs sync (CHESTNY_ZNAK UX + FIX_TASKS)
+
+- What changed:
+  - **`docs/CHESTNY_ZNAK_UX_FIXES_RU.md`** — перенесён из корня; T-A7 закрыт как дубль MP-021/022/023; таблица сверки с `CHESTNY_ZNAK_FIX_TASKS_RU.md`.
+  - **`docs/CHESTNY_ZNAK_FIX_TASKS_RU.md`** — ссылка на UX-бэклог и пояснение независимости треков.
+  - **`docs/MASTER_BACKLOG_RU.md`**, **`docs/EXECUTION_PLAN_RU.md`**, **`docs/PARALLEL_AGENT_TASKS.md`** — пути и статусы X-1/X-2/X-3, FINAL-03 closed.
+- What did NOT change: код приложения; lane-задачи.
+- Verification: docs-only diff; ссылки на корневой `CHESTNY_ZNAK_UX_FIXES_RU.md` убраны.
+- Commit: `501d055`
+
+## TASK-049 — 2026-06-28 — FINAL-02: аудит дублей поверхностей ЧЗ
+
+- What changed:
+  - **`docs/CZ_DUPLICATE_SURFACES_AUDIT_RU.md`:** канон по ленте / списку кодов / импорту; follow-up POOLS-04…06, CROSS-04.
+  - **`HonestSignImportPage.tsx`:** редирект `…/import` → список пулов (убрана заглушка-дубль; канон — `MarkingImportDialog`).
+  - **`HonestSignPoolPage.tsx`:** `codeStatusLabel` / `ledgerEventLabel` в табах «Коды» и «Лента» + drawer истории.
+  - **`MarkingProductCodesDialog.tsx`:** `@deprecated` — не монтируется, канон — таб «Коды» пула.
+  - Merge: `task/LEDGER-06`, `task/POOLCARD-03`.
+- What did NOT change: POOLS-04 (дашборд+таблица), удаление сироты `MarkingProductCodesDialog`, CROSS-04 (импорт с контекстом пула).
+- Verification: `npm run build`; e2e `ff-honest-sign-pool`, `ff-honest-sign-import`. Commit `f048585`.
+
+## TASK-051 — 2026-06-28 — BACKEND-01: deprecate scan-print / print-all / verify-pair
+
+- What changed: `marking_codes.py` — `deprecated=True` + summary on `POST /scan-print`, `/verify-pair`, `/packaging-tasks/{id}/print-all`; comment BACKEND-01 / T-A6 (ORD-44).
+- What did NOT change: endpoint behaviour, per-line print (`/packaging-lines/{line_id}/print`), service layer.
+- Verification: `ruff check app/api/marking_codes.py`; `mypy app/api/marking_codes.py`; `pytest tests/ -q -k marking` — 50 passed; all three routes `deprecated=True` in OpenAPI. Commit `d82fe3c`.
+
+## TASK-050 — 2026-06-28 — REPRINTS-03: context links on reprint row
+
+- What changed: `FfHonestSignReprintsPage` — колонка «Контекст»: ссылки «Задание» (упаковка с `state.taskId`), «Пул», «История кода» (drawer); API `reprint-requests` отдаёт `packaging_task_id` и `pool_id`; e2e `ff-marking-defect.spec.ts` (TC-NEW-006) проверяет доступность контекста из строки. Сохранён диалог причины отклонения (REPRINTS-02).
+- What did NOT change: approve/replace API, навигация ЧЗ вне reprints.
+- Verification: `npm run build` + `npm run test:e2e tests-e2e/ff-marking-defect.spec.ts` + `PYTHONPATH=. pytest tests/test_marking_reprint_defect.py tests/test_shift_lead.py` in REPRINTS-03 worktree — green. Commits `320d7c6`, `1c22d6f`.
+
+## TASK-037 — 2026-06-28 — REPRINTS-02: rejection reason field
+
+- What changed: `FfHonestSignReprintsPage` — диалог с полем «Причина отклонения» при reject; текст уходит в API вместо хардкода «Отклонено старшим».
+- What did NOT change: approve/replace actions; backend reject endpoint.
+- Verification: `npm run build` green in `.cursor/wt/REPRINTS-01`.
+
+## TASK-042 — 2026-06-28 — POOLCARD-02: honest pool codes CSV export
+
+- What changed: `HonestSignPoolPage` — экспорт CSV запрашивает свежий список кодов с сервера (не client-side `filteredCodes`); подписи «N из M» при фильтре по хвосту КМ или статусу; кнопка показывает объём выгрузки.
+- What did NOT change: API `/pools/{id}/codes`, локализация статусов (POOLCARD-01), таб «Лента» (POOLCARD-03).
+- Verification: `npm run build` in `.cursor/wt/POOLCARD-02/frontend` — green.
+
+## TASK-049 — 2026-06-28 — POOLS-05: unified forecast format
+
+- What changed: `HonestSignScreen` — общий `ForecastLabel` (дата `ДД.ММ` + tooltip `(N дн.)`) в таблице и карточках селлера.
+- What did NOT change: расчёт `forecast_days` на бэкенде, POOLS-04 переключатель дашборд/таблица.
+- Verification: `npm run build` in POOLS-05 worktree (branch task/POOLS-05) — green. Commit `c32df5d`.
+
+## TASK-042 — 2026-06-28 — POOLS-03: tooltip on disabled upload codes
+
+- What changed: `HonestSignScreen` — кнопка «Загрузить коды» при `sellerIdRequiredForImport` без выбранного селлера обёрнута в MUI `Tooltip` («Выберите селлера») через `span`-обёртку для disabled.
+- What did NOT change: empty-state «Загрузить коды», «Догрузить» на карточках пула, e2e.
+- Verification: `npm run build` в worktree `.cursor/wt/POOLS-03/frontend` — exit 0.
+
+## TASK-037 — 2026-06-28 — POOLS-01: seller picker via autocomplete
+
+## TASK-037 — 2026-06-28 — POOLS-01: integrate (MarkingSellerPicker retained)
+
+- What changed: merged task/POOLS-01; seller UI stays `MarkingSellerPicker` (CROSS-03) not Autocomplete row from lane branch.
+- What did NOT change: e2e helpers `selectMarkingSeller` / ledger waits (HEAD).
+- Verification: merge conflict resolution on `feat/cz-ux-fixes`.
+
+## TASK-048 — 2026-06-28 — LEDGER-06: localize ledger events via markingStatus
+
+- What changed: `HonestSignLedgerPage` — фильтр и чипы событий через `ledgerEventLabel` из `markingStatus.ts`; e2e на русские подписи («Импорт», «Печать»).
+- What did NOT change: API `event_type` (англ. enum), логика фильтров (LEDGER-02–05).
+- Verification: `npm run build` + `npm run test:e2e tests-e2e/ff-honest-sign-ledger.spec.ts` in LEDGER-06 worktree — green. Commit `8c0c350`.
+## TASK-042 — 2026-06-28 — LEDGER-05: unified ledger filter triggers
+
+- What changed: убрана кнопка «Применить» на `HonestSignLedgerPage`; текстовые фильтры «Документ» и «Маска КМ» через debounce 400ms (`useDebouncedValue`); select/даты/селлер — немедленный reload через `useEffect`; e2e без кликов по apply.
+- What did NOT change: экспорт CSV (LEDGER-04), backend API, CROSS-03 (Autocomplete селлера).
+- Verification: `npm run build` in worktree `LEDGER-05`.
+
+## TASK-041 — 2026-06-28 — LEDGER-04: export ledger by filters
+
+- What changed: `GET /operations/marking-codes/ledger/export` — CSV по тем же фильтрам, что и лента (seller, pool, event_type, document, cis_mask, date_from/to); кнопка «Экспорт» на `HonestSignLedgerPage`; восстановлен серверный `cis_mask` (регресс LEDGER-03); pytest `test_ledger_export_csv`, `test_ledger_cis_mask_filter`.
+- What did NOT change: LEDGER-05 (единая модель «Применить»), e2e Playwright для экспорта.
+- Verification: `PYTHONPATH=. pytest tests/test_marking_pools_read.py`; `npm run build` in worktree `LEDGER-04`.
+
+## TASK-040 — 2026-06-28 — LEDGER-03: date range filter on ledger
+
+- What changed: `HonestSignLedgerPage` — поля «С»/«По» (`type="date"`), query `date_from`/`date_to` на `/operations/marking-codes/ledger`; e2e + pytest `test_ledger_date_range_filter`.
+- What did NOT change: экспорт (LEDGER-04), backend API (параметры уже были).
+- Verification: `pytest tests/test_marking_pools_read.py::test_ledger_date_range_filter`; `npm run build` in worktree `LEDGER-03`.
+
+## TASK-054 — 2026-06-28 — FINAL-01: unify КМ/ЧЗ UI labels
+
+- What changed: merged PACK-09, PENDING-01, SHARED-01, POOLCARD-01/03, CROSS-01…04, PRINT-05 into `task/FINAL-01`; unified user-visible strings — **КМ** for code instances (pool, ledger, import, defect/reprint, errors), **ЧЗ** for system/requirement (column «ЧЗ», «Печать ЧЗ», product flag, presets, integration). Files: `FfPackagingPage`, `FfPendingMarkingPage`, `MarkingPrintDialog`, `MarkingProductCodesDialog`, `MarkingImportDialog`, `HonestSignScreen`/`PoolPage`/`LedgerPage`, `FfHonestSignReprintsPage`, `readApiErrorMessage`, `ffPermissions`, `App.tsx`.
+- What did NOT change: API payloads, `data-testid`, behavior, backend.
+- Verification: `npm run build` in FINAL-01 worktree — green (tsc + vite). Commit `c3d05c8`.
+
+## TASK-053 — 2026-06-28 — CROSS-02: unified pending-marking total for badge + worklist
+
+- What changed: shared `frontend/src/utils/pendingMarkingApi.ts` (`fetchPendingMarking`, `pendingMarkingLineCount` → API `total`, `limit=200`); `FfPackagingPage` badge and `FfPendingMarkingPage` chip use the same helper; pending fetch runs even if packaging-tasks list fails; e2e TC-NEW-011 asserts (badge = chip = row count) folded into TC-NEW-007/008.
+- What did NOT change: backend `/pending-marking` contract; bulk print (PENDING-01); per-row print flow.
+- Verification: `npm run build` — green; `npx playwright test tests-e2e/ff-pending-marking.spec.ts` — 2 passed (10.8s: TC-NEW-007 + TC-NEW-011, TC-NEW-008 + TC-NEW-011). Backend not touched. Commits: `c997485`, `d8ccd35`.
+## TASK-052 — 2026-06-28 — PENDING-01: bulk print selected pending rows
+
+- What changed: `FfPendingMarkingPage` — чекбоксы строк, «Печать выбранных (N)», очередь последовательных `MarkingPrintDialog` (каждая лента по своему товару); e2e TC-NEW-008.
+- What did NOT change: API pending-marking, построчная кнопка «Печать», контракт total vs rows (CROSS-02).
+- Verification: `npm run build` — green; `npx playwright test tests-e2e/ff-pending-marking.spec.ts` (TC-NEW-007, TC-NEW-008) — 2 passed (33.6s); fix `useMarkingCodePrint.close` (close after print while busy blocked queue). Commits: `ea31ed5` (bulk UI), `c93286c` (close fix + per-product header assert), `1dffbba` (e2e asserts distinct packaging-line IDs). Backend `ruff check` — 4 pre-existing issues in unrelated test files (not introduced by PENDING-01).
+
+## TASK-053 — 2026-06-28 — POOLCARD-01: localize pool code statuses
+
+- What changed: `HonestSignPoolPage` — фильтр и чипы статусов кодов через `codeStatusLabel` из `markingStatus.ts`; cherry-pick SHARED-01 (словарь + `MarkingProductCodesDialog`); e2e проверяет «Доступен» в строке и опциях фильтра.
+- What did NOT change: лента событий на карточке пула (LEDGER-06), CSV export (англ. enum в файле).
+- Verification: `npm run build` in POOLCARD-01 worktree — green. Commit `117b153`. E2E webServer timeout (env), не блокирует сборку.
+
+## TASK-037 — 2026-06-28 — POOLCARD-03: таб «Лента» → превью + ссылка
+
+- What changed:
+  - **`HonestSignPoolPage.tsx`:** таб «Лента» показывает компактное превью (5 последних событий, 3 колонки) и кнопку «Вся лента пула» → `/honest-sign/ledger?pool_id=…`; убрана полная таблица с фильтрами/пагинацией (дубль `HonestSignLedgerPage`).
+  - **`ff-honest-sign-pool.spec.ts`:** TC-NEW-011 — превью, отсутствие фильтров ленты на карточке, переход на полную ленту.
+- What did NOT change: `HonestSignLedgerPage`, API ленты, другие табы карточки пула.
+- Verification: `npm run build` green; `playwright test ff-honest-sign-pool.spec.ts` passed.
+
+## TASK-048 — 2026-06-28 — CROSS-01: single KM reprint selection
+
+- What changed:
+  - **`MarkingPrintDialog.tsx`:** reprint-ветка — загрузка напечатанных КМ (`printed-codes`), radio-выбор одного кода, `code_ids` в POST print.
+  - **`FfPackagingPage.tsx`:** «Повтор»/«Брак» в overflow-меню строки (`…`); `openLinePrint(..., { reprint: true })`.
+  - **Backend:** `PrintMarkingCodesIn.code_ids`, фильтр reprint в `print_codes_for_packaging_line`.
+  - **Tests:** pytest single reprint в `test_marking_import_and_packaging_print`; e2e TC-NEW-CROSS-01 в `ff-marking-packaging.spec.ts`; defect e2e через меню.
+- What did NOT change: первичная печать через конструктор; очередь перепечаток (shift_lead).
+- Verification: `pytest tests/test_marking_codes.py::test_marking_import_and_packaging_print` (passed); `npx playwright test … --grep "reprint single"` (passed); `npm run build` (exit 0).
+- Commit: `280944b` (feature `b20496f` + e2e proof)
+
+## TASK-041 — 2026-06-28 — PACK-07: block complete with incomplete marking
+
+- What changed: `FfPackagingTaskPanel` — warning + disabled «Завершить упаковку» when `requires_honest_sign` lines have `qty_marking_printed < qty_done` (mirrors `assert_packaging_line_marking_done`); e2e TC-NEW-PKG-07 in `ff-marking-packaging.spec.ts`.
+- What did NOT change: server `marking_not_done` gate; print/defect flows (PACK-05/06).
+- Verification: `npm run build` green in PACK-07 worktree.
+
+## TASK-037 — 2026-06-28 — PACK-04: packaging page cleanup after removals
+
+- What changed:
+  - **`FfPackagingPage.tsx`:** removed orphaned code after PACK-01..03 — `hasHonestSignLines`, `hasPrintedMarkingLines`, print-all (`printAll*`, dialog), verify-pair (`pair*`), unused imports (`printMarkingCodeTape`, `MarkingTapeUnitInput`, `PrintLayout`).
+  - Deleted obsolete e2e: `ff-marking-print-all.spec.ts`, `ff-marking-verify-pair.spec.ts`.
+  - Row-wise «Печать ЧЗ» / «Повтор» via `openLinePrint` + `useMarkingCodePrint` unchanged.
+- What did NOT change: backend endpoints; `MarkingPrintDialog` constructor flow.
+- Verification: `npm run build` green; eslint on file — no unused-vars; e2e `ff-marking-print-constructor.spec.ts`.
+- Commit: `ac7f312`
+
+## TASK-039 — 2026-06-28 — PRINT-05: per-user print template layout
+
+- What changed:
+  - **`print_templates.user_id`:** миграция `20260628_0053`, FK на `users`; per-user «последняя раскладка» (`__user_last__`).
+  - **`print_template_service.py`:** `resolve` — сначала раскладка текущего пользователя, затем product/seller/system; `save_user_last_print_layout` (upsert без имени).
+  - **`marking_codes.py`:** `user_id` в API; после успешной печати с `layout_json` — авто-сохранение последней раскладки.
+  - **`printTemplate.ts`:** поле `user_id` в типе `PrintTemplate`.
+  - **`test_print_templates.py`:** user last > seller default; два пользователя; auto-save на print.
+- What did NOT change: именованные шаблоны (кнопка «Сохранить») — дополнение; drag-and-drop ленты.
+- Verification: `PYTHONPATH=. pytest tests/test_print_templates.py` (6 passed); `npm run build` (exit 0).
+
+## TASK-038 — 2026-06-28 — PRINT-04: pack qty multiplier for WB barcode
+
+- What changed:
+  - **`productBarcodePrint.ts`:** `resolvePackUnits` (из `pack_units:N` в ТЗ или `units_in_pack`), `resolveWbBarcodeLabelCount` — qty × pack; печать через умноженное количество.
+  - **`ProductBarcodePrintDialog.tsx`:** каталог — поле «Количество ШК ВБ», подсказка «× N шт в упаковке», итог «К печати».
+  - **`MarkingPrintDialog.tsx`:** не-ЧЗ упаковка — тот же множитель; `packagingInstructions` в контексте.
+  - **`wbProductCatalog.ts`:** `packaging_instructions` / `units_in_pack` в `ProductLineDisplayMeta`.
+  - **`productBarcodePrint.test.ts`:** gate qty 3 × pack 5 → 15.
+- What did NOT change: ЧЗ-конструктор; backend поля `units_in_pack` (пока парсинг из ТЗ).
+- Verification: `npm run test:unit src/utils/productBarcodePrint.test.ts` (3 passed); `npm run build` (exit 0).
+
+## TASK-037 — 2026-06-28 — PRINT-01: non-ЧЗ print qty-only (no constructor)
+
+- What changed:
+  - **`MarkingPrintDialog.tsx`:** для товара без ЧЗ — только поле «Количество ШК ВБ» (`marking-print-wb-qty`); пресеты, билдер, превью и сохранение шаблона скрыты; печать с фиксированным layout label×1.
+  - **`ff-mp-packaging-print.spec.ts`:** e2e обновлён под qty-only UI (TC-NEW-MP-016).
+- What did NOT change: ЧЗ-ветка конструктора; каталог (`ProductBarcodePrintDialog`); множитель «× упаковка» (PRINT-04).
+- Verification: `npm run build` (exit 0) в `.cursor/wt/PRINT-01/frontend`.
+
+## TASK-037 — 2026-06-28 — CROSS-03: seller Autocomplete on ledger page
+
+- What changed:
+  - **`MarkingSellerPicker.tsx`** — shared MUI Autocomplete for seller selection (search, same testids as POOLS-01).
+  - **`HonestSignLedgerPage.tsx`** — replaced seller button row with `MarkingSellerPicker`.
+  - **`HonestSignScreen.tsx`** — uses shared picker (unified UX with ledger).
+  - **`ff-honest-sign-helpers.ts`** — `selectMarkingSeller` / `selectHonestSignSeller` for e2e.
+  - **e2e:** updated honest-sign specs; **TC-NEW-011** — ledger seller autocomplete filters events.
+- What did NOT change: ledger filter debounce/export (LEDGER-* lanes); pool link CTA (POOLS-06).
+- Verification: `npm run build`; `npm run test:e2e` on ff-honest-sign-ledger/spec/pools (4 passed).
+- Commit: `b8b85e4`
+
+## TASK-039 — 2026-06-28 — IMPORT-05: highlight import groups missing title
+
+- What changed:
+  - **`MarkingImportDialog.tsx`:** при «Загрузить» с пустым названием — подсветка всех групп без `title` (border/error TextField), `data-testid` `…-title-missing`, скролл к первой; снятие подсветки при вводе названия. Хелперы `isImportGroupTitleMissing`, `gtinsWithMissingTitle`, `findFirstGtinWithMissingTitle`.
+  - **`markingImportMerge.test.ts`:** тесты хелперов валидации названия.
+- What did NOT change: контекст пула при «Догрузить» (CROSS-04).
+- Verification: `npm run test:unit -- markingImportMerge.test.ts`, `npm run build` — green.
+
+## TASK-038 — 2026-06-28 — IMPORT-04: delete uploaded import file chip
+
+- What changed:
+  - **`MarkingImportDialog.tsx`:** чипы файлов с `onDelete`; `removeImportFileAt` + `removeFileAt` — удаление файла, пересбор превью по оставшимся; при пустом списке — сброс групп и meta.
+  - **`markingImportMerge.test.ts`:** тесты `removeImportFileAt`.
+- What did NOT change: подсветка пустого названия (IMPORT-05), контекст пула (CROSS-04).
+- Verification: `npm run test:unit -- markingImportMerge.test.ts`, `npm run build` — green.
+
+## TASK-037 — 2026-06-28 — POOLS-06: один CTA на привязку товаров в списке пулов
+
+- What changed:
+  - **`HonestSignScreen.tsx`:** убран дублирующий чип «не привязан» в колонке «Пул»; привязка только через кнопку «Привязать» в колонке «Товары» (и пункт меню «Привязать товары»).
+- What did NOT change: диалог привязки, меню пула, e2e `ff-honest-sign-pools.spec.ts`.
+- Verification: `npm run build` в worktree POOLS-06 — OK. Commit: `e888b73`.
+
+## TASK-036 — 2026-06-28 — CZ-000 barrier: MP commit + feat/cz-ux-fixes + autopilot backlog
+
+- What changed:
+  - **CZ-000 done:** MP slice committed `304abf2` on `hotfix/alembic-marking-pools`; branch **`feat/cz-ux-fixes`** created.
+  - **Autopilot:** `.cursor/hooks`, `wms-queue.mdc`, `docs/PARALLEL_AGENT_TASKS.md`, `CURSOR_QUEUE_LANES_RU.md`, CZ backlog docs.
+  - **`PARALLEL_AGENT_TASKS.md`:** CZ-000 marked done; agents may start PACK/PRINT/… lanes.
+- What did NOT change: lane tasks (PACK-01…); orchestrator lives in `~/.cursor/agents/orchestrator.md`.
+- Verification: `git status` clean on `feat/cz-ux-fixes`.
+
+## TASK-035 — 2026-06-28 — Queue lanes: files, depends_on, lane scheduling doc
+
+- What changed:
+  - **`docs/CURSOR_QUEUE_LANES_RU.md`** — справка для человека и orchestrator (атрибуты lane/files/depends_on, правила параллели, примеры, resume).
+  - **`orchestrator.md`**, **`wms-queue.mdc`**, **`QUEUE.md`** — планирование по lanes; ссылка на справку (не alwaysApply).
+  - **`.cursor/skills/queue-lanes/SKILL.md`** — короткий указатель на справку.
+  - Orchestrator queue: **1 задача = 1 builder**, `parallel_workers` от владельца.
+- What did NOT change: содержимое backlog (владелец вставит в QUEUE).
+- Verification: docs-only.
+
+## TASK-034 — 2026-06-28 — Backlog autopilot: orchestrator queue mode, QUEUE, stop hook
+
+- What changed:
+  - **`~/.cursor/agents/orchestrator.md`** — режим очереди: 4×3 parallel builder, builder→verifier→fix (max 3), ` done` только после verifier.
+  - **`backlog-runner.md`** — stub → redirect на orchestrator queue mode.
+  - **`.cursor/QUEUE.md`** — очередь (формат: `ID — описание` / `… done` / `… blocked`).
+  - **`.cursor/SESSION_HANDOFF.md`** — handoff между пачками.
+  - **`.cursor/rules/wms-queue.mdc`** — правила queue mode.
+  - **`.cursor/hooks.json` + `continue-queue.sh`** — auto follow-up пока в QUEUE есть открытые задачи.
+- What did NOT change: orchestrator (режим одной фичи); backlog tasks — владелец вставит в QUEUE.
+- Verification: hook script exits `{}` on empty queue; `chmod +x` on continue-queue.sh.
+
+## TASK-033 — 2026-06-28 — MP-032…034: parallel full-flow e2e, ship UI gate, canonical docs
+
+- What changed:
+  - **MP-032:** `ff-mp-full-flow.spec.ts` — TC-NEW-MP-FULL-001: boxes filled **before** packaging complete, then pack → ship from footer.
+  - **MP-033:** `FfSuppliesShipmentsPage` — **«Отгружено»** disabled until `linked_packaging_task` done (`mpPackagingComplete`); guard in `requestShipMpUnload`.
+  - **MP-034:** docs — superseded banners on `02`/`03`; `MVP_DECISIONS_RU` MP packaging; `DATA_FLOW.md` lifecycle; `01_normalized_process_spec` implementation status; `IMPLEMENTED_PRODUCT_SCENARIOS_*` §17 + updated S16 cases.
+- What did NOT change: MP-024…031 (already in REV-FIX / prior tasks); `04_release_implementation_review.md` historical snapshot.
+- Verification: e2e `ff-mp-full-flow`, `ff-mp-packaging-gate`, `ff-mp-tabs` — 5 passed; backend pytest batch/ship subset — 9 passed.
+
+## TASK-032 — 2026-06-28 — MP-021…023: единый конструктор печати на упаковке MP
+
+- What changed:
+  - **MP-021:** иконка печати на вкладке «Упаковка» MP → `MarkingPrintDialog` (не `ProductBarcodePrintDialog`); печать убрана с вкладки «Товары».
+  - **MP-022:** поле «Этикеток на каждый товар»; для товаров без ЧЗ — только пресеты этикеток, без блоков ЧЗ.
+  - **MP-023:** `applyLabelsPerProductToLayout` / `countTapeBlocks` — lpp умножает только label-блоки (A-002); полная лента через `printMarkingCodeTape`.
+- What did NOT change: MP-024…034 (settings, docs polish).
+- Verification: `npm run test:unit -- markingPrintPresets` — 4 passed; e2e `ff-mp-packaging-print` — 1 passed; e2e `ff-mp-full-flow`, `ff-mp-tabs`, `ff-marking-print-constructor`, `ff-marking-packaging` — green; `npm run build` ok.
+
+## TASK-031 — 2026-06-28 — MP-018 + MP-020: модалка pick/scan, главный scan только WHB
+
+- What changed:
+  - **MP-018:** модалка «Добавить товары» — dropdown ячейки, scan товара/ячейки/WHB; backend `collect_ready_box_into_open_box` + `kind: ready_box` в scan API; confirm/over-plan для WHB в модалке; убран `packagingGateActive`.
+  - **MP-020:** главный scan на «Товарах» — только WHB/INB; товар/ячейка → сообщение «используйте Добавить товары»; e2e TC-NEW-MP-015.
+- What did NOT change: MP-021…034 (печать, docs polish).
+- Verification: `pytest tests/test_marketplace_unload_tsd_scan_contract.py` — 6 passed; e2e `ff-mp-box-add-modal` — 4 passed; e2e `ff-mp-tabs` — 3 passed; e2e `ff-mp-full-flow` — 1 passed; `npm run build` ok.
+
+## TASK-030 — 2026-06-28 — MP-015…020: batch open boxes, e2e parallel, attach over-plan, WHB scan
+
+- What changed:
+  - **MP-015:** подтверждено — `create_boxes_batch` с `closed_at=NULL`; pytest batch green.
+  - **MP-016:** e2e `ff-mp-box-add-modal` — 3 короба **без** complete packaging (параллельный flow).
+  - **MP-017:** подтверждено — UI всегда `/boxes/batch`; pytest one-by-one + e2e TC-NEW-MP-022 green.
+  - **MP-019:** `allow_over_plan` в collect/attach API; UI confirm «Весь короб» + «Больше плана»; pytest `test_marketplace_unload_attach_allow_over_plan`.
+  - **MP-020:** главный scan на «Товарах» — только WHB attach; ячейка/товар → модалка короба; кнопка «Закрыть» на строке открытого короба.
+- What did NOT change: MP-018 (WHB attach в модалке короба), MP-021…034, MP-020 dedicated e2e (product barcode на главном scan).
+- Verification: `pytest -k "batch or attach_allow_over"` — 4 passed; `npm run build` ok; e2e `ff-mp-box-add-modal` + `ff-mp-packaging-gate` — 4 passed.
+
+## TASK-029 — 2026-06-28 — MP-010/011/013: 2 вкладки, короба на «Товарах», footer ship
+
+- What changed:
+  - **MP-010:** убраны вкладки `ff-mp-tab-boxes` и `ff-mp-tab-final`; остались только «Товары» и «Упаковка».
+  - **MP-011:** блок коробов (`ff-mp-boxes`), сводка распределения, scan/batch — на вкладке «Товары» после confirm.
+  - **MP-013:** «Утвердить» / «Отгружено» / «Отменить» — в footer (`ff-mp-footer-bar`); дата/WB/печать на «Товарах».
+- What did NOT change: MP-012 (full re-check), MP-015+.
+- Verification: `npm run build` ok; e2e `ff-mp-tabs`, `ff-mp-full-flow`, `ff-mp-box-add-modal`, `ff-mp-print-waybill`, `ff-mp-packaging-gate`, `ff-dashboard` — green.
+
+## TASK-029b — 2026-06-28 — MP-014: шапка документа (склад ФФ + дата + WB)
+
+- What changed: `ff-mp-doc-header-fields` — дата (`ff-mp-planned-date`), склад ФФ (`ff-mp-ff-warehouse-name`), WB select/readonly; убрано дублирование с вкладки «Товары».
+- Verification: e2e draft test asserts header testids; build green.
+
+## TASK-028 — 2026-06-28 — MP-unload Phase A + frontend unblock (MP-001…009, MP-006…008, MP-012 partial)
+
+- What changed:
+  - **MP-001:** статус `collecting` («На сборке») — переход при первом коробе/collect/attach; ship из `collecting`; label в UI.
+  - **MP-002/MP-009:** подтверждено — упаковка `done` только через `complete_task`; pytest marking_not_done green.
+  - **MP-003:** `PackagingTask` только после confirm; draft без `linked_packaging_task`; GET by-unload → 404 без task.
+  - **MP-004:** MP pack — счётчик `qty_packed` без `apply_packaging_convert`.
+  - **MP-005:** снят gate упаковки с create/collect/batch коробов (остался на ship).
+  - **MP-006/007/008:** UI — убран packaging gate; колонка «На полке упак.» скрыта для MP task; pack без ячейки.
+  - **MP-012 (partial):** плашка прогресса не на draft; «Продолжить упаковку» только на вкладке «Упаковка».
+- What did NOT change: MP-010…014 (2 вкладки, footer ship), MP-015…034, MP-021…023 (печать).
+- Verification: backend `pytest tests/test_packaging_tasks.py` + MP sync/box tests — 12 passed; e2e `ff-mp-packaging-gate.spec.ts`, `ff-mp-tabs.spec.ts` (draft banner) — green; `npm run build` — ok.
+- Commit: bdf297e (includes CZ P0/P1 marking fixes in same slice)
+
 ## TASK-027 — 2026-06-27 — CI mypy green for outbound-rework PR
 
 - What changed: mypy fixes — optional `storage_location_id` в collect API/services; marking imports (`LAYOUT_BLOCK_CZ`, `STATUS_AVAILABLE`, `EVENT_PRINTED`); rename query param `code_status` (shadow `status`); typed seller scope in print-templates.

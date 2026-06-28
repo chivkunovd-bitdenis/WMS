@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import uuid
+from datetime import UTC, datetime, timedelta
 
 import pytest
 from httpx import AsyncClient
@@ -112,6 +113,18 @@ async def test_pool_detail_and_codes(async_client: AsyncClient) -> None:
 
 
 @pytest.mark.asyncio
+async def test_pool_codes_foreign_pool_returns_404(async_client: AsyncClient) -> None:
+    _h, _seller_id, pool_id, _, _ = await _seed_pool_with_codes(async_client)
+    other = await _register_admin(async_client)
+    resp = await async_client.get(
+        f"/operations/marking-codes/pools/{pool_id}/codes",
+        headers=other,
+    )
+    assert resp.status_code == 404
+    assert resp.json()["detail"] == "pool_not_found"
+
+
+@pytest.mark.asyncio
 async def test_ledger_filters(async_client: AsyncClient) -> None:
     h, seller_id, pool_id, _, _ = await _seed_pool_with_codes(async_client)
     detail = await async_client.get(
@@ -136,6 +149,97 @@ async def test_ledger_filters(async_client: AsyncClient) -> None:
     )
     assert by_doc.status_code == 200
     assert by_doc.json()["total"] == 4
+
+
+@pytest.mark.asyncio
+async def test_ledger_date_range_filter(async_client: AsyncClient) -> None:
+    h, seller_id, _, _, _ = await _seed_pool_with_codes(async_client)
+    now = datetime.now(UTC)
+    today = now.date().isoformat()
+    future = (now + timedelta(days=365)).date().isoformat()
+
+    today_ledger = await async_client.get(
+        "/operations/marking-codes/ledger",
+        headers=h,
+        params={
+            "seller_id": seller_id,
+            "date_from": f"{today}T00:00:00",
+            "date_to": f"{today}T23:59:59",
+        },
+    )
+    assert today_ledger.status_code == 200
+    assert today_ledger.json()["total"] >= 4
+
+    future_ledger = await async_client.get(
+        "/operations/marking-codes/ledger",
+        headers=h,
+        params={
+            "seller_id": seller_id,
+            "date_from": f"{future}T00:00:00",
+            "date_to": f"{future}T23:59:59",
+        },
+    )
+    assert future_ledger.status_code == 200
+    assert future_ledger.json()["total"] == 0
+
+
+@pytest.mark.asyncio
+async def test_ledger_cis_mask_filter(async_client: AsyncClient) -> None:
+    h, seller_id, pool_id, _, _ = await _seed_pool_with_codes(async_client)
+    codes = await async_client.get(
+        f"/operations/marking-codes/pools/{pool_id}/codes",
+        headers=h,
+    )
+    assert codes.status_code == 200
+    masked = codes.json()[0]["cis_masked"]
+    tail = masked.lstrip("…")[:4]
+
+    by_mask = await async_client.get(
+        "/operations/marking-codes/ledger",
+        headers=h,
+        params={"seller_id": seller_id, "cis_mask": tail},
+    )
+    assert by_mask.status_code == 200
+    body = by_mask.json()
+    assert body["total"] >= 1
+    assert all(tail in row["cis_masked"] for row in body["rows"])
+
+    full = await async_client.get(
+        "/operations/marking-codes/ledger",
+        headers=h,
+        params={"seller_id": seller_id},
+    )
+    assert full.status_code == 200
+    assert full.json()["total"] >= body["total"]
+
+
+@pytest.mark.asyncio
+async def test_ledger_export_csv(async_client: AsyncClient) -> None:
+    h, seller_id, _, _, _ = await _seed_pool_with_codes(async_client)
+    params = {"seller_id": seller_id, "event_type": "imported"}
+
+    ledger = await async_client.get(
+        "/operations/marking-codes/ledger",
+        headers=h,
+        params=params,
+    )
+    assert ledger.status_code == 200
+    expected_total = ledger.json()["total"]
+    assert expected_total >= 4
+
+    export = await async_client.get(
+        "/operations/marking-codes/ledger/export",
+        headers=h,
+        params=params,
+    )
+    assert export.status_code == 200
+    assert "text/csv" in export.headers["content-type"]
+    assert "attachment" in export.headers["content-disposition"]
+    text = export.content.decode("utf-8-sig")
+    lines = [line for line in text.strip().splitlines() if line]
+    assert lines[0].startswith("created_at,event_type,cis_masked")
+    assert len(lines) - 1 == expected_total
+    assert all("imported" in line for line in lines[1:])
 
 
 @pytest.mark.asyncio

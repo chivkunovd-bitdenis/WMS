@@ -4,6 +4,7 @@ import time
 
 import pytest
 from httpx import AsyncClient
+from test_marking_reprint_defect import _seed_printed_code
 
 
 async def _register_admin(async_client: AsyncClient) -> tuple[str, dict[str, str]]:
@@ -96,3 +97,43 @@ async def test_reprint_requests_require_shift_lead(async_client: AsyncClient) ->
         headers=admin_headers,
     )
     assert admin_ok.status_code == 200
+
+
+@pytest.mark.asyncio
+async def test_reprint_mutations_require_shift_lead(async_client: AsyncClient) -> None:
+    """TC-NEW CZ-H10: replace/approve/reject reprint requests require shift_lead."""
+    admin_h, line_id, code_id = await _seed_printed_code(async_client)
+    suffix = str(int(time.time() * 1000))
+    no_perm = await _create_staff_with_login(
+        async_client, admin_h, suffix, shift_lead=False
+    )
+
+    created = await async_client.post(
+        f"/operations/marking-codes/codes/{code_id}/defect",
+        headers=admin_h,
+        json={"packaging_task_line_id": line_id},
+    )
+    assert created.status_code == 200, created.text
+    request_id = created.json()["request_id"]
+
+    replace = await async_client.post(
+        f"/operations/marking-codes/reprint-requests/{request_id}/replace",
+        headers=no_perm,
+    )
+    assert replace.status_code == 403
+    assert replace.json()["detail"] == "forbidden"
+
+    approve = await async_client.post(
+        f"/operations/marking-codes/reprint-requests/{request_id}/approve-reprint",
+        headers=no_perm,
+    )
+    assert approve.status_code == 403
+    assert approve.json()["detail"] == "forbidden"
+
+    reject = await async_client.post(
+        f"/operations/marking-codes/reprint-requests/{request_id}/reject",
+        headers=no_perm,
+        json={"reason": "test"},
+    )
+    assert reject.status_code == 403
+    assert reject.json()["detail"] == "forbidden"

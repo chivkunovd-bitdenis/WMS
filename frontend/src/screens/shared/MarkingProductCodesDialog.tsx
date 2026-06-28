@@ -21,8 +21,13 @@ import {
 import PrintOutlined from '@mui/icons-material/PrintOutlined'
 import { apiUrl } from '../../api'
 import { readApiErrorMessage } from '../../utils/readApiErrorMessage'
+import { codeStatusLabel } from '../../utils/markingStatus'
 import { maskCisCode, printMarkingCodeLabels } from '../../utils/printMarkingCodeLabel'
 
+/**
+ * @deprecated FINAL-02: не монтируется в UI. Канон — таб «Коды» в `HonestSignPoolPage`.
+ * Оставлен до тикета на удаление / переиспользование печати из каталога.
+ */
 type CodeRow = {
   id: string
   cis_code: string
@@ -37,12 +42,6 @@ type Props = {
   productLabel: string
   testIdPrefix: string
   onClose: () => void
-}
-
-const STATUS_LABEL: Record<string, string> = {
-  available: 'Доступен',
-  printed: 'Напечатан',
-  void: 'Аннулирован',
 }
 
 export function MarkingProductCodesDialog({
@@ -113,7 +112,7 @@ export function MarkingProductCodesDialog({
       maxWidth="md"
       data-testid={`${testIdPrefix}-codes-dialog`}
     >
-      <DialogTitle>Коды ЧЗ — {productLabel}</DialogTitle>
+      <DialogTitle>Коды КМ — {productLabel}</DialogTitle>
       <DialogContent>
         <Stack spacing={1.5} sx={{ pt: 0.5 }}>
           <FormControlLabel
@@ -135,7 +134,7 @@ export function MarkingProductCodesDialog({
             <Table size="small" data-testid={`${testIdPrefix}-codes-table`}>
               <TableHead>
                 <TableRow>
-                  <TableCell>Код (КИЗ)</TableCell>
+                  <TableCell>КМ</TableCell>
                   <TableCell>Статус</TableCell>
                   <TableCell align="right">Печать</TableCell>
                 </TableRow>
@@ -145,7 +144,7 @@ export function MarkingProductCodesDialog({
                   <TableRow>
                     <TableCell colSpan={3}>
                       <Typography variant="body2" color="text.secondary">
-                        {busy ? 'Загрузка…' : 'Кодов пока нет.'}
+                        {busy ? 'Загрузка…' : 'КМ пока нет.'}
                       </Typography>
                     </TableCell>
                   </TableRow>
@@ -157,11 +156,11 @@ export function MarkingProductCodesDialog({
                           {maskCisCode(r.cis_code)}
                         </Typography>
                       </TableCell>
-                      <TableCell>{STATUS_LABEL[r.status] ?? r.status}</TableCell>
+                      <TableCell>{codeStatusLabel(r.status)}</TableCell>
                       <TableCell align="right">
                         <IconButton
                           size="small"
-                          aria-label="Печать кода"
+                          aria-label="Печать КМ"
                           disabled={printBusy}
                           onClick={() => void printCodes([r.cis_code])}
                           data-testid={`${testIdPrefix}-code-print-${r.id}`}

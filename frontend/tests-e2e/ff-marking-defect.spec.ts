@@ -59,7 +59,8 @@ test('FF packaging: defect button creates pending reprint request', async ({ pag
   const gtin = '000000001234'
   const cis = `01${gtin}21${'D'.repeat(20)}0001`
   const cis2 = `01${gtin}21${'D'.repeat(20)}0002`
-  const csv = `cis,sku_code\n${cis},${sku}\n${cis2},${sku}`
+  const cis3 = `01${gtin}21${'D'.repeat(20)}0003`
+  const csv = `cis,sku_code\n${cis},${sku}\n${cis2},${sku}\n${cis3},${sku}`
   const imp = await page.request.post(`${e2eApi}/operations/marking-codes/import`, {
     headers: bearer,
     multipart: {
@@ -82,7 +83,7 @@ test('FF packaging: defect button creates pending reprint request', async ({ pag
   const inboundId = String(((await inbound.json()) as { id: string }).id)
   await page.request.post(`${baseIn}/${inboundId}/lines`, {
     headers: auth,
-    data: JSON.stringify({ product_id: productId, expected_qty: 1 }),
+    data: JSON.stringify({ product_id: productId, expected_qty: 2 }),
   })
   await page.request.post(`${baseIn}/${inboundId}/submit`, { headers: auth })
   const primIn = await page.request.post(`${baseIn}/${inboundId}/primary-accept`, {
@@ -92,7 +93,7 @@ test('FF packaging: defect button creates pending reprint request', async ({ pag
   const primInBody = (await primIn.json()) as {
     boxes: { id: string; internal_barcode: string }[]
   }
-  await fulfillInboundViaBoxScans(page.request, auth, inboundId, primInBody.boxes, sku, [1])
+  await fulfillInboundViaBoxScans(page.request, auth, inboundId, primInBody.boxes, sku, [2])
   await page.request.post(`${baseIn}/${inboundId}/verify`, { headers: auth })
   await page.request.post(`${baseIn}/${inboundId}/post`, { headers: auth })
 
@@ -114,19 +115,48 @@ test('FF packaging: defect button creates pending reprint request', async ({ pag
   ])
 
   await expect(page.getByTestId('ff-packaging-task-panel')).toBeVisible()
+
+  const printWait = page.waitForResponse(
+    (r) =>
+      r.request().method() === 'POST' &&
+      r.url().includes('/operations/marking-codes/packaging-lines/') &&
+      r.url().endsWith('/print') &&
+      r.status() >= 200 &&
+      r.status() < 300,
+  )
   await page.getByTestId('ff-packaging-print-marking').click()
   await expect(page.getByTestId('marking-print-dialog')).toBeVisible()
+  await Promise.all([printWait, page.getByTestId('marking-print-confirm').click()])
+  const printBody = (await (await printWait).json()) as { quantity: number; codes: string[] }
+  expect(printBody.quantity).toBe(2)
+  expect(printBody.codes).toHaveLength(2)
+
+  await page.locator('[data-testid^="ff-packaging-line-menu-btn-"]').first().click()
+  const printedCodesWait = page.waitForResponse(
+    (r) =>
+      r.request().method() === 'GET' &&
+      r.url().includes('/operations/marking-codes/packaging-task-lines/') &&
+      r.url().endsWith('/printed-codes') &&
+      r.status() >= 200 &&
+      r.status() < 300,
+  )
   await Promise.all([
-    page.waitForResponse(
-      (r) =>
-        r.request().method() === 'POST' &&
-        r.url().includes('/operations/marking-codes/packaging-lines/') &&
-        r.url().endsWith('/print') &&
-        r.status() >= 200 &&
-        r.status() < 300,
-    ),
-    page.getByTestId('marking-print-confirm').click(),
+    printedCodesWait,
+    page.getByTestId('ff-packaging-defect-marking').click(),
   ])
+  const printedCodesBody = (await (await printedCodesWait).json()) as {
+    codes: { id: string; cis_masked: string }[]
+  }
+  expect(printedCodesBody.codes.length).toBeGreaterThanOrEqual(2)
+  const secondPrintedCode = printedCodesBody.codes[1]
+  expect(secondPrintedCode.id).toBeTruthy()
+
+  await expect(page.getByTestId('ff-packaging-defect-dialog')).toBeVisible()
+  // T-B1 / PACK-05 — выбор не-первого КМ и причина брака.
+  await page.getByTestId('ff-packaging-defect-code-select').click()
+  await page.getByRole('option', { name: secondPrintedCode.cis_masked }).click()
+  const defectReason = 'Порвана этикетка при наклейке'
+  await page.getByTestId('ff-packaging-defect-reason').getByRole('textbox').fill(defectReason)
 
   const defectWait = page.waitForResponse(
     (r) =>
@@ -136,7 +166,15 @@ test('FF packaging: defect button creates pending reprint request', async ({ pag
       r.status() >= 200 &&
       r.status() < 300,
   )
-  await Promise.all([defectWait, page.getByTestId('ff-packaging-defect-marking').click()])
+  await Promise.all([defectWait, page.getByTestId('ff-packaging-defect-confirm').click()])
+  const defectReq = (await defectWait).request()
+  expect(defectReq.url()).toContain(secondPrintedCode.id)
+  const defectPayload = defectReq.postDataJSON() as {
+    reason: string
+    packaging_task_line_id: string
+  }
+  expect(defectPayload.reason).toBe(defectReason)
+  expect(defectPayload.packaging_task_line_id).toBeTruthy()
   const defectBody = (await (await defectWait).json()) as { status: string }
   expect(defectBody.status).toBe('pending')
 
@@ -149,6 +187,62 @@ test('FF packaging: defect button creates pending reprint request', async ({ pag
     '',
   )
   expect(requestId).toBeTruthy()
+
+  // TC-NEW-006 — контекст перепечатки: задание, пул, история кода доступны из строки.
+  await expect(page.getByTestId(`ff-honest-sign-reprints-page-context-${requestId}`)).toBeVisible()
+  await expect(
+    page.getByTestId(`ff-honest-sign-reprints-page-context-task-${requestId}`),
+  ).toBeVisible()
+  await expect(
+    page.getByTestId(`ff-honest-sign-reprints-page-context-pool-${requestId}`),
+  ).toBeVisible()
+  await expect(
+    page.getByTestId(`ff-honest-sign-reprints-page-context-history-${requestId}`),
+  ).toBeVisible()
+
+  await Promise.all([
+    page.waitForResponse(
+      (r) =>
+        r.request().method() === 'GET' &&
+        r.url().includes('/operations/marking-codes/codes/') &&
+        r.url().endsWith('/history') &&
+        r.status() >= 200 &&
+        r.status() < 300,
+    ),
+    page.getByTestId(`ff-honest-sign-reprints-page-context-history-${requestId}`).click(),
+  ])
+  await expect(page.getByTestId('ff-honest-sign-reprints-page-history-drawer')).toBeVisible()
+  await page.keyboard.press('Escape')
+
+  await Promise.all([
+    page.waitForResponse(
+      (r) =>
+        r.request().method() === 'GET' &&
+        r.url().includes('/operations/packaging-tasks/') &&
+        r.status() >= 200 &&
+        r.status() < 300,
+    ),
+    page.getByTestId(`ff-honest-sign-reprints-page-context-task-${requestId}`).click(),
+  ])
+  await expect(page).toHaveURL(/\/app\/ff\/packaging/)
+  await expect(page.getByTestId('ff-packaging-task-panel')).toBeVisible()
+  await page.getByTestId('nav-ff-honest-sign-reprints').click()
+  await expect(page.getByTestId('ff-honest-sign-reprints-page-table')).toBeVisible()
+
+  await Promise.all([
+    page.waitForResponse(
+      (r) =>
+        r.request().method() === 'GET' &&
+        r.url().includes('/operations/marking-codes/pools/') &&
+        r.status() >= 200 &&
+        r.status() < 300,
+    ),
+    page.getByTestId(`ff-honest-sign-reprints-page-context-pool-${requestId}`).click(),
+  ])
+  await expect(page).toHaveURL(/\/app\/ff\/honest-sign\/pool\//)
+  await page.getByTestId('nav-ff-honest-sign-reprints').click()
+  await expect(page.getByTestId('ff-honest-sign-reprints-page-table')).toBeVisible()
+
   await Promise.all([
     page.waitForResponse(
       (r) =>

@@ -4,8 +4,8 @@ import { waitForGetOk, waitForPostOk } from './api-waits'
 import { openFulfillmentRegistration } from './auth-flow'
 import { fulfillInboundViaBoxScans } from './inbound-boxes-helpers'
 
-// TC-NEW-MP-008 — TASK-008/017: короба заблокированы в UI до завершения упаковки.
-test('FF marketplace unload: box create disabled until packaging done', async ({ page }) => {
+// TC-NEW-MP-006 / MP-005: короба доступны до завершения упаковки.
+test('FF marketplace unload: box create enabled before packaging done', async ({ page }) => {
   const email = `e2e-mp-pkg-gate-${Date.now()}@example.com`
   const e2eApi = process.env.E2E_API_ORIGIN ?? 'http://127.0.0.1:18000'
   const barcode = 'E2E-MOCK-BARCODE'
@@ -135,12 +135,11 @@ test('FF marketplace unload: box create disabled until packaging done', async ({
     data: JSON.stringify({ planned_shipment_date: '2026-06-01' }),
   })
 
-  const blockedBox = await page.request.post(
+  const boxOk = await page.request.post(
     `${e2eApi}/operations/marketplace-unload-requests/${mid}/boxes`,
     { headers: auth, data: JSON.stringify({ box_preset: '60_40_40' }) },
   )
-  expect(blockedBox.status()).toBe(422)
-  expect(((await blockedBox.json()) as { detail: string }).detail).toBe('packaging_not_done')
+  expect(boxOk.status()).toBe(201)
 
   await page.reload()
   await page.getByTestId('nav-ff-mp-shipments').click()
@@ -151,13 +150,9 @@ test('FF marketplace unload: box create disabled until packaging done', async ({
   ])
 
   await expect(page.getByTestId('ff-supplies-doc-dialog')).toBeVisible()
-  // REV-FIX-010: explicit alert on «Короба» tab when packaging gate active.
-  await expect(page.getByTestId('ff-mp-packaging-gate-alert')).toBeVisible()
+  await expect(page.getByTestId('ff-mp-packaging-gate-alert')).toHaveCount(0)
   await expect(page.getByTestId('ff-mp-packaging-progress')).toBeVisible()
-  await expect(page.getByTestId('ff-mp-packaging-continue')).toBeVisible()
-  await expect(page.getByTestId('ff-mp-box-batch-create')).toBeDisabled()
+  await expect(page.getByTestId('ff-mp-box-batch-create')).toBeEnabled()
 
-  await page.getByTestId('ff-mp-tab-final').click()
-  await expect(page.getByTestId('ff-mp-tab-final-panel')).toBeVisible()
   await expect(page.getByTestId('ff-mp-ship')).toBeDisabled()
 })

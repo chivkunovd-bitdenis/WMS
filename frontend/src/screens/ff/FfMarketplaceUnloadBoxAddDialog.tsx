@@ -5,9 +5,14 @@ import {
   Button,
   Chip,
   Dialog,
+  DialogActions,
   DialogContent,
   DialogTitle,
+  FormControl,
   IconButton,
+  InputLabel,
+  MenuItem,
+  Select,
   Stack,
   Table,
   TableBody,
@@ -49,7 +54,6 @@ type Props = {
   boxClosed: boolean
   token: string
   addressStorageEnabled: boolean
-  packagingGateActive: boolean
   catalogById: Map<string, WbProductPickerCatalogRow>
   warehouseStockByProductId: Map<string, number>
   onUpdated: () => Promise<void>
@@ -88,6 +92,10 @@ function addableQty(
   return Math.min(planRemaining, physical)
 }
 
+function looksLikeReadyBoxBarcode(raw: string): boolean {
+  return raw.startsWith('WHB-') || raw.startsWith('INB-')
+}
+
 export function FfMarketplaceUnloadBoxAddDialog({
   open,
   onClose,
@@ -97,7 +105,6 @@ export function FfMarketplaceUnloadBoxAddDialog({
   boxClosed,
   token,
   addressStorageEnabled,
-  packagingGateActive,
   catalogById,
   warehouseStockByProductId,
   onUpdated,
@@ -115,6 +122,31 @@ export function FfMarketplaceUnloadBoxAddDialog({
   const [activeLocationId, setActiveLocationId] = useState<string | null>(null)
   const [activeLocationCode, setActiveLocationCode] = useState<string | null>(null)
   const [manualQtyByProduct, setManualQtyByProduct] = useState<Record<string, string>>({})
+  const [readyBoxConfirmOpen, setReadyBoxConfirmOpen] = useState(false)
+  const [readyBoxOverPlanOpen, setReadyBoxOverPlanOpen] = useState(false)
+  const [pendingReadyBoxBarcode, setPendingReadyBoxBarcode] = useState<string | null>(null)
+
+  const locationOptions = useMemo(() => {
+    const byId = new Map<string, string>()
+    for (const row of pickOptions) {
+      for (const loc of row.locations) {
+        if (loc.available > 0) {
+          byId.set(loc.storage_location_id, loc.location_code)
+        }
+      }
+    }
+    return [...byId.entries()].map(([id, code]) => ({ id, code }))
+  }, [pickOptions])
+
+  const scanPlaceholder = useMemo(() => {
+    if (addressStorageEnabled && !activeLocationId) {
+      return 'Штрихкод ячейки, товара или готового короба (WHB-…)'
+    }
+    if (addressStorageEnabled) {
+      return 'Штрихкод товара или готового короба (WHB-…)'
+    }
+    return 'Штрихкод товара или готового короба (WHB-…)'
+  }, [addressStorageEnabled, activeLocationId])
 
   const loadPickOptions = useCallback(async (opts?: { silent?: boolean }) => {
     if (!opts?.silent) {
@@ -153,13 +185,26 @@ export function FfMarketplaceUnloadBoxAddDialog({
       setActiveLocationCode(null)
       setManualQtyByProduct({})
       setError(null)
+      setReadyBoxConfirmOpen(false)
+      setReadyBoxOverPlanOpen(false)
+      setPendingReadyBoxBarcode(null)
       return
     }
     void loadPickOptions()
   }, [open, loadPickOptions])
 
+  const selectLocation = (locationId: string) => {
+    const loc = locationOptions.find((l) => l.id === locationId)
+    setActiveLocationId(locationId || null)
+    setActiveLocationCode(loc?.code ?? null)
+  }
+
   const addManual = async (productId: string, quantity: number) => {
-    if (boxClosed || packagingGateActive) {
+    if (boxClosed) {
+      return
+    }
+    if (addressStorageEnabled && !activeLocationId) {
+      setError('Выберите ячейку или отсканируйте её штрихкод.')
       return
     }
     setBusy(true)
@@ -197,21 +242,19 @@ export function FfMarketplaceUnloadBoxAddDialog({
     }
   }
 
-  const doScan = async () => {
-    if (boxClosed || packagingGateActive) {
-      return
-    }
-    const raw = scanBarcode.trim()
-    if (!raw) {
-      setError('Введите штрихкод.')
-      return
-    }
+  const runScan = async (barcode: string, allowOverPlan: boolean) => {
     setBusy(true)
     setError(null)
     try {
-      const scanBody: { barcode: string; quantity: number; storage_location_id?: string } = {
-        barcode: raw,
+      const scanBody: {
+        barcode: string
+        quantity: number
+        storage_location_id?: string
+        allow_over_plan?: boolean
+      } = {
+        barcode,
         quantity: 1,
+        allow_over_plan: allowOverPlan,
       }
       if (addressStorageEnabled && activeLocationId) {
         scanBody.storage_location_id = activeLocationId
@@ -232,11 +275,19 @@ export function FfMarketplaceUnloadBoxAddDialog({
           kind: string
           storage_location_id?: string | null
           location_code?: string | null
+          total_qty?: number | null
         }
         if (j.kind === 'location' && j.storage_location_id) {
           setActiveLocationId(j.storage_location_id)
           setActiveLocationCode(j.location_code ?? j.storage_location_id)
           setScanBarcode('')
+          return
+        }
+        if (j.kind === 'ready_box') {
+          setScanBarcode('')
+          onAddSuccess?.(j.total_qty ?? 1)
+          await onUpdated()
+          await loadPickOptions({ silent: true })
           return
         }
         setScanBarcode('')
@@ -245,11 +296,24 @@ export function FfMarketplaceUnloadBoxAddDialog({
         await loadPickOptions({ silent: true })
         return
       }
-      if (addressStorageEnabled && !activeLocationId) {
-        setError('Сначала отсканируйте ячейку.')
+      const errText = await scanRes.text()
+      let errDetail: string | null = null
+      try {
+        const errBody = JSON.parse(errText) as { detail?: unknown }
+        errDetail = typeof errBody.detail === 'string' ? errBody.detail : null
+      } catch {
+        errDetail = null
+      }
+      if (errDetail === 'plan_limit_exceeded' && !allowOverPlan) {
+        setPendingReadyBoxBarcode(barcode)
+        setReadyBoxOverPlanOpen(true)
         return
       }
-      setError(await readApiErrorMessage(scanRes))
+      if (addressStorageEnabled && !activeLocationId && errDetail === 'location_required') {
+        setError('Сначала выберите ячейку или отсканируйте её штрихкод.')
+        return
+      }
+      setError(errDetail ?? errText.slice(0, 200) ?? 'Не удалось выполнить скан.')
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Не удалось выполнить скан.')
     } finally {
@@ -257,193 +321,321 @@ export function FfMarketplaceUnloadBoxAddDialog({
     }
   }
 
-  const gateBlocked = boxClosed || packagingGateActive
+  const doScan = () => {
+    if (boxClosed) {
+      return
+    }
+    const raw = scanBarcode.trim()
+    if (!raw) {
+      setError('Введите штрихкод.')
+      return
+    }
+    if (looksLikeReadyBoxBarcode(raw)) {
+      setPendingReadyBoxBarcode(raw)
+      setReadyBoxConfirmOpen(true)
+      return
+    }
+    void runScan(raw, false)
+  }
+
+  const confirmReadyBox = () => {
+    setReadyBoxConfirmOpen(false)
+    const barcode = pendingReadyBoxBarcode
+    if (!barcode) {
+      return
+    }
+    void runScan(barcode, false)
+  }
+
+  const confirmReadyBoxOverPlan = () => {
+    setReadyBoxOverPlanOpen(false)
+    const barcode = pendingReadyBoxBarcode
+    if (!barcode) {
+      return
+    }
+    void runScan(barcode, true)
+  }
+
+  const gateBlocked = boxClosed
 
   return (
-    <Dialog
-      open={open}
-      onClose={onClose}
-      maxWidth="lg"
-      fullWidth
-      data-testid="ff-mp-box-add-dialog"
-    >
-      <DialogTitle sx={{ pr: 6 }}>
-        Добавить товары в короб
-        <Typography variant="body2" color="text.secondary">
-          {boxLabel}
-        </Typography>
-        <IconButton
-          aria-label="Закрыть"
-          onClick={onClose}
-          sx={{ position: 'absolute', right: 8, top: 8 }}
-          data-testid="ff-mp-box-add-close"
-        >
-          <CloseOutlined />
-        </IconButton>
-      </DialogTitle>
-      <DialogContent>
-        <Stack spacing={2}>
-          {packagingGateActive ? (
-            <Alert severity="warning">Сначала завершите упаковку товара.</Alert>
-          ) : null}
-          {boxClosed ? (
-            <Alert severity="info">Короб закрыт — добавление недоступно.</Alert>
-          ) : null}
-          {error ? (
-            <Alert severity="error" data-testid="ff-mp-box-add-error">
-              {error}
-            </Alert>
-          ) : null}
+    <>
+      <Dialog
+        open={open}
+        onClose={onClose}
+        maxWidth="lg"
+        fullWidth
+        data-testid="ff-mp-box-add-dialog"
+      >
+        <DialogTitle sx={{ pr: 6 }}>
+          Добавить товары в короб
+          <Typography variant="body2" color="text.secondary">
+            {boxLabel}
+          </Typography>
+          <IconButton
+            aria-label="Закрыть"
+            onClick={onClose}
+            sx={{ position: 'absolute', right: 8, top: 8 }}
+            data-testid="ff-mp-box-add-close"
+          >
+            <CloseOutlined />
+          </IconButton>
+        </DialogTitle>
+        <DialogContent>
+          <Stack spacing={2}>
+            {boxClosed ? (
+              <Alert severity="info">Короб закрыт — добавление недоступно.</Alert>
+            ) : null}
+            {error ? (
+              <Alert severity="error" data-testid="ff-mp-box-add-error">
+                {error}
+              </Alert>
+            ) : null}
 
-          {!gateBlocked ? (
-            <Stack
-              direction={{ xs: 'column', sm: 'row' }}
-              spacing={1}
-              sx={{ alignItems: 'center' }}
-            >
-              {addressStorageEnabled ? (
-                activeLocationCode ? (
-                  <Chip
+            {!gateBlocked ? (
+              <Stack spacing={1}>
+                {addressStorageEnabled ? (
+                  <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1} sx={{ alignItems: 'center' }}>
+                    <FormControl size="small" sx={{ minWidth: 200 }} data-testid="ff-mp-box-add-location-select">
+                      <InputLabel id="ff-mp-box-add-location-label">Ячейка</InputLabel>
+                      <Select
+                        labelId="ff-mp-box-add-location-label"
+                        label="Ячейка"
+                        value={activeLocationId ?? ''}
+                        onChange={(e) => selectLocation(String(e.target.value))}
+                        disabled={busy || initialLoading}
+                      >
+                        <MenuItem value="">
+                          <em>Не выбрана</em>
+                        </MenuItem>
+                        {locationOptions.map((loc) => (
+                          <MenuItem key={loc.id} value={loc.id}>
+                            {loc.code}
+                          </MenuItem>
+                        ))}
+                      </Select>
+                    </FormControl>
+                    {activeLocationCode ? (
+                      <Chip
+                        size="small"
+                        label={`Ячейка: ${activeLocationCode}`}
+                        data-testid="ff-mp-box-add-active-location"
+                      />
+                    ) : (
+                      <Typography variant="caption" color="warning.main">
+                        Выберите ячейку или отсканируйте её
+                      </Typography>
+                    )}
+                  </Stack>
+                ) : null}
+                <Stack
+                  direction={{ xs: 'column', sm: 'row' }}
+                  spacing={1}
+                  sx={{ alignItems: 'center' }}
+                >
+                  <TextField
                     size="small"
-                    label={`Ячейка: ${activeLocationCode}`}
-                    data-testid="ff-mp-box-add-active-location"
+                    label={scanPlaceholder}
+                    value={scanBarcode}
+                    onChange={(e) => setScanBarcode(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter') {
+                        e.preventDefault()
+                        doScan()
+                      }
+                    }}
+                    disabled={busy || initialLoading}
+                    fullWidth
+                    slotProps={{ htmlInput: { 'data-testid': 'ff-mp-box-add-scan-input' } }}
+                    data-testid="ff-mp-box-add-scan"
                   />
-                ) : (
-                  <Typography variant="caption" color="warning.main">
-                    Сначала отсканируйте ячейку
-                  </Typography>
-                )
-              ) : null}
-              <TextField
-                size="small"
-                label={
-                  addressStorageEnabled ? 'Штрихкод ячейки / товара' : 'Штрихкод товара'
-                }
-                value={scanBarcode}
-                onChange={(e) => setScanBarcode(e.target.value)}
-                onKeyDown={(e) => {
-                  if (e.key === 'Enter') {
-                    e.preventDefault()
-                    void doScan()
-                  }
-                }}
-                disabled={busy || initialLoading}
-                fullWidth
-                slotProps={{ htmlInput: { 'data-testid': 'ff-mp-box-add-scan-input' } }}
-                data-testid="ff-mp-box-add-scan"
-              />
-              <Button
-                variant="contained"
-                onClick={() => void doScan()}
-                disabled={busy || initialLoading}
-                data-testid="ff-mp-box-add-scan-submit"
-              >
-                Скан
-              </Button>
-            </Stack>
-          ) : null}
+                  <Button
+                    variant="contained"
+                    onClick={() => doScan()}
+                    disabled={busy || initialLoading}
+                    data-testid="ff-mp-box-add-scan-submit"
+                  >
+                    Скан
+                  </Button>
+                </Stack>
+              </Stack>
+            ) : null}
 
-          {initialLoading ? (
-            <Typography variant="body2" color="text.secondary">
-              Загрузка…
-            </Typography>
-          ) : (
-            <Box sx={{ overflowX: 'auto' }}>
-              <Table size="small" data-testid="ff-mp-box-add-table">
-                <TableHead>
-                  <TableRow>
-                    <TableCell width={56} />
-                    <TableCell>Артикул</TableCell>
-                    <TableCell>Товар</TableCell>
-                    <TableCell align="right">План</TableCell>
-                    <TableCell align="right">В коробах</TableCell>
-                    <TableCell align="right">Доступно</TableCell>
-                    <TableCell align="right">Кол-во</TableCell>
-                    <TableCell align="right" />
-                  </TableRow>
-                </TableHead>
-                <TableBody>
-                  {pickOptions.length === 0 ? (
+            {initialLoading ? (
+              <Typography variant="body2" color="text.secondary">
+                Загрузка…
+              </Typography>
+            ) : (
+              <Box sx={{ overflowX: 'auto' }}>
+                <Table size="small" data-testid="ff-mp-box-add-table">
+                  <TableHead>
                     <TableRow>
-                      <TableCell colSpan={8}>
-                        <Typography variant="body2" color="text.secondary">
-                          Нет товаров в плане отгрузки
-                        </Typography>
-                      </TableCell>
+                      <TableCell width={56} />
+                      <TableCell>Артикул</TableCell>
+                      <TableCell>Товар</TableCell>
+                      <TableCell align="right">План</TableCell>
+                      <TableCell align="right">В коробах</TableCell>
+                      <TableCell align="right">Доступно</TableCell>
+                      <TableCell align="right">Кол-во</TableCell>
+                      <TableCell align="right" />
                     </TableRow>
-                  ) : (
-                    pickOptions.map((row) => {
-                      const cat = catalogById.get(row.product_id)
-                      const available = addableQty(
-                        row,
-                        addressStorageEnabled,
-                        activeLocationId,
-                        warehouseStockByProductId,
-                      )
-                      const qtyStr = manualQtyByProduct[row.product_id] ?? '1'
-                      const qtyNum = Number(qtyStr)
-                      const qtyValid = Number.isInteger(qtyNum) && qtyNum >= 1
-                      return (
-                        <TableRow
-                          key={row.product_id}
-                          data-testid={`ff-mp-box-add-row-${row.product_id}`}
-                        >
-                          <TableCell>
-                            <ProductPhotoThumb
-                              src={cat?.wb_primary_image_url}
-                              alt={row.product_name}
-                            />
-                          </TableCell>
-                          <TableCell>{row.sku_code}</TableCell>
-                          <TableCell>{row.product_name}</TableCell>
-                          <TableCell align="right">{row.planned_qty}</TableCell>
-                          <TableCell align="right">{row.picked_qty}</TableCell>
-                          <TableCell align="right" data-testid={`ff-mp-box-add-available-${row.product_id}`}>
-                            {available}
-                          </TableCell>
-                          <TableCell align="right">
-                            <TextField
-                              size="small"
-                              type="number"
-                              value={qtyStr}
-                              onChange={(e) =>
-                                setManualQtyByProduct((prev) => ({
-                                  ...prev,
-                                  [row.product_id]: e.target.value,
-                                }))
-                              }
-                              slotProps={{ htmlInput: { min: 1, 'data-testid': `ff-mp-box-add-qty-${row.product_id}` } }}
-                              sx={{ width: 72 }}
-                              disabled={gateBlocked || busy}
-                            />
-                          </TableCell>
-                          <TableCell align="right">
-                            <Button
-                              size="small"
-                              variant="outlined"
-                              disabled={
-                                gateBlocked ||
-                                busy ||
-                                available < 1 ||
-                                !qtyValid ||
-                                qtyNum > available
-                              }
-                              onClick={() => void addManual(row.product_id, qtyNum)}
-                              data-testid={`ff-mp-box-add-manual-${row.product_id}`}
-                            >
-                              Добавить
-                            </Button>
-                          </TableCell>
-                        </TableRow>
-                      )
-                    })
-                  )}
-                </TableBody>
-              </Table>
-            </Box>
-          )}
-        </Stack>
-      </DialogContent>
-    </Dialog>
+                  </TableHead>
+                  <TableBody>
+                    {pickOptions.length === 0 ? (
+                      <TableRow>
+                        <TableCell colSpan={8}>
+                          <Typography variant="body2" color="text.secondary">
+                            Нет товаров в плане отгрузки
+                          </Typography>
+                        </TableCell>
+                      </TableRow>
+                    ) : (
+                      pickOptions.map((row) => {
+                        const cat = catalogById.get(row.product_id)
+                        const available = addableQty(
+                          row,
+                          addressStorageEnabled,
+                          activeLocationId,
+                          warehouseStockByProductId,
+                        )
+                        const qtyStr = manualQtyByProduct[row.product_id] ?? '1'
+                        const qtyNum = Number(qtyStr)
+                        const qtyValid = Number.isInteger(qtyNum) && qtyNum >= 1
+                        const needsLocation = addressStorageEnabled && !activeLocationId
+                        return (
+                          <TableRow
+                            key={row.product_id}
+                            data-testid={`ff-mp-box-add-row-${row.product_id}`}
+                          >
+                            <TableCell>
+                              <ProductPhotoThumb
+                                src={cat?.wb_primary_image_url}
+                                alt={row.product_name}
+                              />
+                            </TableCell>
+                            <TableCell>{row.sku_code}</TableCell>
+                            <TableCell>{row.product_name}</TableCell>
+                            <TableCell align="right">{row.planned_qty}</TableCell>
+                            <TableCell align="right">{row.picked_qty}</TableCell>
+                            <TableCell align="right" data-testid={`ff-mp-box-add-available-${row.product_id}`}>
+                              {available}
+                            </TableCell>
+                            <TableCell align="right">
+                              <TextField
+                                size="small"
+                                type="number"
+                                value={qtyStr}
+                                onChange={(e) =>
+                                  setManualQtyByProduct((prev) => ({
+                                    ...prev,
+                                    [row.product_id]: e.target.value,
+                                  }))
+                                }
+                                slotProps={{ htmlInput: { min: 1, 'data-testid': `ff-mp-box-add-qty-${row.product_id}` } }}
+                                sx={{ width: 72 }}
+                                disabled={gateBlocked || busy}
+                              />
+                            </TableCell>
+                            <TableCell align="right">
+                              <Button
+                                size="small"
+                                variant="outlined"
+                                disabled={
+                                  gateBlocked ||
+                                  busy ||
+                                  needsLocation ||
+                                  available < 1 ||
+                                  !qtyValid ||
+                                  qtyNum > available
+                                }
+                                onClick={() => void addManual(row.product_id, qtyNum)}
+                                data-testid={`ff-mp-box-add-manual-${row.product_id}`}
+                              >
+                                Добавить
+                              </Button>
+                            </TableCell>
+                          </TableRow>
+                        )
+                      })
+                    )}
+                  </TableBody>
+                </Table>
+              </Box>
+            )}
+          </Stack>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog
+        open={readyBoxConfirmOpen}
+        onClose={() => {
+          setReadyBoxConfirmOpen(false)
+          setPendingReadyBoxBarcode(null)
+        }}
+        data-testid="ff-mp-box-add-ready-box-dialog"
+      >
+        <DialogTitle>Добавить готовый короб?</DialogTitle>
+        <DialogContent>
+          <Typography variant="body2">
+            Весь состав готового короба будет добавлен в этот короб отгрузки.
+          </Typography>
+        </DialogContent>
+        <DialogActions>
+          <Button
+            onClick={() => {
+              setReadyBoxConfirmOpen(false)
+              setPendingReadyBoxBarcode(null)
+            }}
+            disabled={busy}
+          >
+            Отмена
+          </Button>
+          <Button
+            variant="contained"
+            disabled={busy}
+            onClick={confirmReadyBox}
+            data-testid="ff-mp-box-add-ready-box-confirm"
+          >
+            Добавить
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      <Dialog
+        open={readyBoxOverPlanOpen}
+        onClose={() => {
+          setReadyBoxOverPlanOpen(false)
+          setPendingReadyBoxBarcode(null)
+        }}
+        data-testid="ff-mp-box-add-over-plan-dialog"
+      >
+        <DialogTitle>Больше, чем в плане</DialogTitle>
+        <DialogContent>
+          <Typography variant="body2">
+            В коробе больше товара, чем осталось по плану. Добавить всё содержимое?
+          </Typography>
+        </DialogContent>
+        <DialogActions>
+          <Button
+            onClick={() => {
+              setReadyBoxOverPlanOpen(false)
+              setPendingReadyBoxBarcode(null)
+            }}
+            disabled={busy}
+          >
+            Отмена
+          </Button>
+          <Button
+            variant="contained"
+            color="warning"
+            disabled={busy}
+            onClick={confirmReadyBoxOverPlan}
+            data-testid="ff-mp-box-add-over-plan-confirm"
+          >
+            Добавить всё
+          </Button>
+        </DialogActions>
+      </Dialog>
+    </>
   )
 }

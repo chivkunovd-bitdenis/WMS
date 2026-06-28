@@ -24,6 +24,7 @@ from app.models.packaging_task import (
     PackagingTaskLine,
 )
 from app.services import inventory_service as inv_svc
+from app.services import marketplace_unload_service as mu_svc
 from app.services import sorting_location_service as sorting_loc_svc
 from app.services import staff_packaging_billing_service as billing_svc
 from app.services.document_number_service import (
@@ -41,6 +42,7 @@ PackagingTaskError = Literal[
     "packaging_incomplete",
     "marking_not_done",
     "unload_not_found",
+    "unload_not_confirmed",
     "no_lines",
     "linked_unload",
 ]
@@ -125,6 +127,10 @@ def qty_done(line: PackagingTaskLine) -> int:
 
 def is_line_complete(line: PackagingTaskLine) -> bool:
     return qty_done(line) >= int(line.qty_total)
+
+
+def _is_mp_unload_task(task: PackagingTask) -> bool:
+    return task.marketplace_unload_request_id is not None
 
 
 def is_task_complete(task: PackagingTask) -> bool:
@@ -455,6 +461,8 @@ async def ensure_task_for_unload(
     req = await session.get(MarketplaceUnloadRequest, unload_id)
     if req is None or req.tenant_id != tenant_id:
         raise PackagingTaskServiceError("unload_not_found")
+    if req.status not in mu_svc.PACKAGING_SYNC_STATUSES:
+        raise PackagingTaskServiceError("unload_not_confirmed")
 
     task = PackagingTask(
         tenant_id=tenant_id,
@@ -555,19 +563,22 @@ async def record_pack_progress(
     remaining = need - int(line.qty_packed_in_task)
     if qty > remaining:
         raise PackagingTaskServiceError("invalid_qty")
-    try:
-        await inv_svc.apply_packaging_convert(
-            session,
-            tenant_id=tenant_id,
-            product_id=line.product_id,
-            storage_location_id=line.storage_location_id,
-            quantity=qty,
-        )
-    except ValueError as exc:
-        if str(exc) == "insufficient_unpacked":
-            raise PackagingTaskServiceError("insufficient_unpacked") from exc
-        raise
-    line.qty_packed_in_task = int(line.qty_packed_in_task) + qty
+    if _is_mp_unload_task(task):
+        line.qty_packed_in_task = int(line.qty_packed_in_task) + qty
+    else:
+        try:
+            await inv_svc.apply_packaging_convert(
+                session,
+                tenant_id=tenant_id,
+                product_id=line.product_id,
+                storage_location_id=line.storage_location_id,
+                quantity=qty,
+            )
+        except ValueError as exc:
+            if str(exc) == "insufficient_unpacked":
+                raise PackagingTaskServiceError("insufficient_unpacked") from exc
+            raise
+        line.qty_packed_in_task = int(line.qty_packed_in_task) + qty
     _touch_task(task)
     if acting_user_id is not None:
         await billing_svc.finalize_task_billing(
@@ -584,6 +595,14 @@ async def _apply_acknowledge_all_packed(
     tenant_id: uuid.UUID,
     task: PackagingTask,
 ) -> None:
+    if _is_mp_unload_task(task):
+        for line in task.lines:
+            if is_line_complete(line):
+                continue
+            need = qty_need_pack(line)
+            if need > 0:
+                line.qty_packed_in_task = int(line.qty_packed_in_task) + need
+        return
     for line in task.lines:
         if is_line_complete(line):
             continue

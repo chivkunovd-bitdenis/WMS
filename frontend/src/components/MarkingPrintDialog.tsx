@@ -26,16 +26,28 @@ import DeleteOutlined from '@mui/icons-material/DeleteOutlined'
 import { apiUrl } from '../api'
 import {
   MARKING_PRINT_PRESETS,
+  applyLabelsPerProductToLayout,
   buildTapePreviewUnits,
   cloneLayout,
-  expandLayoutTape,
+  countTapeBlocks,
   type PrintPresetId,
 } from '../utils/markingPrintPresets'
 import { createPrintTemplate, resolvePrintTemplate, type PrintLayout } from '../utils/printTemplate'
-import { displayMetaToProductLabel } from '../utils/productBarcodePrint'
 import { readApiErrorMessage } from '../utils/readApiErrorMessage'
-import { printMarkingCodeLabels } from '../utils/printMarkingCodeLabel'
+import { printMarkingCodeTape } from '../utils/printMarkingCodeLabel'
 import type { ProductThermalLabelData } from '../utils/printProductThermalLabel'
+import { resolvePackUnits, resolveWbBarcodeLabelCount } from '../utils/productBarcodePrint'
+
+type PrintedCodeOption = {
+  id: string
+  cis_masked: string
+  status: string
+}
+
+/** Fixed layout for non-ЧЗ: one WB barcode label per unit, no constructor. */
+const NON_HONEST_SIGN_LABEL_LAYOUT: PrintLayout = {
+  units: [{ block: 'label', copies: 1 }],
+}
 
 export type MarkingPrintContext = {
   token: string
@@ -45,9 +57,12 @@ export type MarkingPrintContext = {
   qtyNeedPack: number
   markingAvailable: number
   qtyMarkingPrinted: number
+  requiresHonestSign: boolean
   skuCode: string
   productName: string
   productLabel?: ProductThermalLabelData | null
+  packagingInstructions?: string | null
+  unitsInPack?: number | null
   onPrinted: () => void
 }
 
@@ -65,8 +80,15 @@ export function MarkingPrintDialog({ open, reprint, ctx, busy, onBusyChange, onC
   const [presetId, setPresetId] = useState<PrintPresetId>('pairs')
   const [layout, setLayout] = useState<PrintLayout>(MARKING_PRINT_PRESETS[0].layout)
   const [allowPartial, setAllowPartial] = useState(false)
+  const [labelsPerProduct, setLabelsPerProduct] = useState(1)
+  const [wbBarcodeQty, setWbBarcodeQty] = useState(1)
   const [saveName, setSaveName] = useState('')
   const [toast, setToast] = useState<string | null>(null)
+  const [reprintCodes, setReprintCodes] = useState<PrintedCodeOption[]>([])
+  const [selectedReprintCodeId, setSelectedReprintCodeId] = useState('')
+  const [reprintCodesLoading, setReprintCodesLoading] = useState(false)
+
+  const requiresHonestSign = ctx?.requiresHonestSign ?? true
 
   useEffect(() => {
     if (!open || !ctx) {
@@ -74,9 +96,21 @@ export function MarkingPrintDialog({ open, reprint, ctx, busy, onBusyChange, onC
     }
     setError(null)
     setAllowPartial(false)
+    setLabelsPerProduct(1)
     setSaveName('')
-    setPresetId('pairs')
-    setLayout(cloneLayout(MARKING_PRINT_PRESETS[0].layout))
+    setWbBarcodeQty(1)
+    setReprintCodes([])
+    setSelectedReprintCodeId('')
+    setReprintCodesLoading(false)
+    if (!requiresHonestSign) {
+      setLayout(cloneLayout(NON_HONEST_SIGN_LABEL_LAYOUT))
+      return
+    }
+    const defaultPresetId: PrintPresetId = 'pairs'
+    setPresetId(defaultPresetId)
+    const defaultPreset =
+      MARKING_PRINT_PRESETS.find((preset) => preset.id === defaultPresetId) ?? MARKING_PRINT_PRESETS[0]
+    setLayout(cloneLayout(defaultPreset.layout))
     void (async () => {
       try {
         const template = await resolvePrintTemplate(ctx.token, { productId: ctx.productId })
@@ -93,27 +127,73 @@ export function MarkingPrintDialog({ open, reprint, ctx, busy, onBusyChange, onC
           setLayout(cloneLayout(template.layout))
         }
       } catch {
-        setPresetId('pairs')
-        setLayout(cloneLayout(MARKING_PRINT_PRESETS[0].layout))
+        setPresetId(defaultPresetId)
+        setLayout(cloneLayout(defaultPreset.layout))
       }
     })()
-  }, [open, ctx])
+    if (reprint) {
+      setReprintCodesLoading(true)
+      void (async () => {
+        try {
+          const res = await fetch(
+            apiUrl(`/operations/marking-codes/packaging-task-lines/${ctx.lineId}/printed-codes`),
+            { headers: { Authorization: `Bearer ${ctx.token}` } },
+          )
+          if (!res.ok) {
+            setError(await readApiErrorMessage(res))
+            setReprintCodes([])
+            return
+          }
+          const data = (await res.json()) as { codes: PrintedCodeOption[] }
+          const codes = data.codes ?? []
+          setReprintCodes(codes)
+          setSelectedReprintCodeId(codes[0]?.id ?? '')
+        } catch (e) {
+          setError(e instanceof Error ? e.message : 'Не удалось загрузить напечатанные КМ.')
+          setReprintCodes([])
+        } finally {
+          setReprintCodesLoading(false)
+        }
+      })()
+    }
+  }, [open, ctx, requiresHonestSign, reprint])
 
-  const qtyNeed = reprint ? (ctx?.qtyMarkingPrinted ?? 0) : (ctx?.qtyNeedPack ?? 0)
+  const qtyNeed = reprint
+    ? selectedReprintCodeId
+      ? 1
+      : (ctx?.qtyMarkingPrinted ?? 0)
+    : (ctx?.qtyNeedPack ?? 0)
+  const packUnits = useMemo(
+    () =>
+      resolvePackUnits({
+        units_in_pack: ctx?.unitsInPack,
+        packaging_instructions: ctx?.packagingInstructions,
+      }),
+    [ctx?.unitsInPack, ctx?.packagingInstructions],
+  )
+  const totalWbLabels = resolveWbBarcodeLabelCount(wbBarcodeQty, packUnits)
   const available = ctx?.markingAvailable ?? 0
-  const shortage = !reprint && available < qtyNeed ? qtyNeed - available : 0
+  const shortage = requiresHonestSign && !reprint && available < qtyNeed ? qtyNeed - available : 0
   const canPrintCount = reprint
-    ? qtyNeed
-    : allowPartial
-      ? Math.min(available, qtyNeed)
-      : available >= qtyNeed
-        ? qtyNeed
-        : 0
+    ? selectedReprintCodeId
+      ? 1
+      : 0
+    : requiresHonestSign
+      ? allowPartial
+        ? Math.min(available, qtyNeed)
+        : available >= qtyNeed
+          ? qtyNeed
+          : 0
+      : wbBarcodeQty
 
   const previewUnits = useMemo(() => buildTapePreviewUnits(layout, 3), [layout])
   const previewTapeCount = useMemo(
-    () => expandLayoutTape(['#1', '#2', '#3'], layout).length,
-    [layout],
+    () => countTapeBlocks(3, layout, labelsPerProduct),
+    [layout, labelsPerProduct],
+  )
+  const totalTapeCount = useMemo(
+    () => countTapeBlocks(canPrintCount, layout, labelsPerProduct),
+    [canPrintCount, layout, labelsPerProduct],
   )
 
   const applyPreset = (id: PrintPresetId) => {
@@ -154,14 +234,42 @@ export function MarkingPrintDialog({ open, reprint, ctx, busy, onBusyChange, onC
   }
 
   const addUnit = (block: 'label' | 'cz') => {
+    if (!requiresHonestSign && block === 'cz') {
+      return
+    }
     setLayout((prev) => ({
       units: [...prev.units, { block, copies: 1 }],
     }))
     setPresetId('custom')
   }
 
+  const printLabelOnlyTape = async () => {
+    if (!ctx || wbBarcodeQty < 1 || totalWbLabels < 1) {
+      return
+    }
+    const units = Array.from({ length: totalWbLabels }, (_, index) => ({
+      cis: `label-only-${index + 1}`,
+      productLabel: ctx.productLabel ?? null,
+    }))
+    await printMarkingCodeTape(units, NON_HONEST_SIGN_LABEL_LAYOUT, ctx.productLabel)
+    ctx.onPrinted()
+    onClose()
+  }
+
   const handlePrint = async () => {
     if (!ctx) {
+      return
+    }
+    if (!requiresHonestSign) {
+      onBusyChange(true)
+      setError(null)
+      try {
+        await printLabelOnlyTape()
+      } catch (e) {
+        setError(e instanceof Error ? e.message : 'Не удалось напечатать этикетки.')
+      } finally {
+        onBusyChange(false)
+      }
       return
     }
     onBusyChange(true)
@@ -179,6 +287,9 @@ export function MarkingPrintDialog({ open, reprint, ctx, busy, onBusyChange, onC
             layout_json: layout,
             allow_partial: allowPartial,
             reprint,
+            ...(reprint && selectedReprintCodeId
+              ? { code_ids: [selectedReprintCodeId] }
+              : {}),
           }),
         },
       )
@@ -196,29 +307,19 @@ export function MarkingPrintDialog({ open, reprint, ctx, busy, onBusyChange, onC
       if (data.quantity < 1) {
         setError(
           data.shortage
-            ? `Не хватает ${data.shortage} кодов ЧЗ в пуле.`
-            : 'Нет доступных кодов для печати.',
+            ? `Не хватает ${data.shortage} КМ в пуле.`
+            : 'Нет доступных КМ для печати.',
         )
         return
       }
-      await printMarkingCodeLabels(data.codes, {
-        layout: data.layout ?? layout,
-        duplicateCopies: data.duplicate_copies,
-        productLabel:
-          ctx.productLabel ??
-          displayMetaToProductLabel({
-            sku_code: ctx.skuCode,
-            product_name: ctx.productName,
-            seller_name: null,
-            wb_primary_image_url: null,
-            wb_primary_barcode: null,
-            wb_barcodes: [],
-            wb_vendor_code: null,
-            wb_nm_id: null,
-            wb_size: null,
-            wb_color: null,
-          }),
-      })
+      await printMarkingCodeTape(
+        data.codes.map((cis) => ({
+          cis,
+          productLabel: ctx.productLabel ?? null,
+        })),
+        applyLabelsPerProductToLayout(data.layout ?? layout, labelsPerProduct),
+        ctx.productLabel,
+      )
       ctx.onPrinted()
       onClose()
     } catch (e) {
@@ -252,9 +353,17 @@ export function MarkingPrintDialog({ open, reprint, ctx, busy, onBusyChange, onC
 
   const printDisabled =
     busy ||
-    qtyNeed < 1 ||
-    (!reprint && available < 1) ||
-    (!reprint && !allowPartial && shortage > 0)
+    (reprint && requiresHonestSign && (reprintCodesLoading || !selectedReprintCodeId)) ||
+    (!reprint && qtyNeed < 1) ||
+    (requiresHonestSign && !reprint && available < 1) ||
+    (requiresHonestSign && !reprint && !allowPartial && shortage > 0) ||
+    (!requiresHonestSign && wbBarcodeQty < 1)
+
+  const dialogTitle = reprint
+    ? 'Повторная печать'
+    : requiresHonestSign
+      ? 'Печать ЧЗ'
+      : 'Печать ШК ВБ'
 
   return (
     <>
@@ -269,7 +378,7 @@ export function MarkingPrintDialog({ open, reprint, ctx, busy, onBusyChange, onC
         fullWidth
         data-testid="marking-print-dialog"
       >
-        <DialogTitle>{reprint ? 'Повторная печать ЧЗ' : 'Печать ЧЗ'}</DialogTitle>
+        <DialogTitle>{dialogTitle}</DialogTitle>
         <DialogContent>
           <Stack spacing={2} sx={{ pt: 0.5 }}>
             {ctx ? (
@@ -280,42 +389,69 @@ export function MarkingPrintDialog({ open, reprint, ctx, busy, onBusyChange, onC
                   {ctx.documentNumber ? ` · ${ctx.documentNumber}` : ''}
                 </Typography>
                 <Typography variant="body2" data-testid="marking-print-qty">
-                  Нужно: {qtyNeed} · Доступно в пуле: {available}
+                  {requiresHonestSign
+                    ? reprint
+                      ? `Выбрано для перепечатки: ${selectedReprintCodeId ? 1 : 0} из ${ctx.qtyMarkingPrinted}`
+                      : `Нужно: ${qtyNeed} · Доступно в пуле: ${available}`
+                    : `К упаковке: ${qtyNeed}`}
                 </Typography>
               </Box>
             ) : null}
 
             {shortage > 0 ? (
               <Alert severity="error" data-testid="marking-print-shortage-banner">
-                Не хватает {shortage} из {qtyNeed} кодов
+                Не хватает {shortage} из {qtyNeed} КМ
               </Alert>
             ) : null}
 
             {!reprint && shortage > 0 ? (
-              <Stack direction="row" spacing={1} sx={{ alignItems: 'center', flexWrap: 'wrap' }}>
-                <FormControlLabel
-                  control={
-                    <Checkbox
-                      checked={allowPartial}
-                      onChange={(e) => setAllowPartial(e.target.checked)}
-                      data-testid="marking-print-allow-partial"
-                    />
-                  }
-                  label={`Печатать доступные ${available}`}
-                />
-                <Button
-                  size="small"
-                  variant="outlined"
-                  onClick={() => setToast('Запрос селлеру отправим в следующей версии')}
-                  data-testid="marking-print-request-seller"
-                >
-                  Запросить у селлера
-                </Button>
-              </Stack>
+              <FormControlLabel
+                control={
+                  <Checkbox
+                    checked={allowPartial}
+                    onChange={(e) => setAllowPartial(e.target.checked)}
+                    data-testid="marking-print-allow-partial"
+                  />
+                }
+                label={`Печатать доступные ${available}`}
+              />
             ) : null}
 
-            {!reprint ? (
+            {!reprint && !requiresHonestSign ? (
+              <TextField
+                size="small"
+                label="Количество ШК ВБ"
+                type="number"
+                value={wbBarcodeQty}
+                onChange={(e) =>
+                  setWbBarcodeQty(Math.max(1, Math.min(999, Number(e.target.value) || 1)))
+                }
+                helperText={
+                  packUnits > 1
+                    ? `× ${packUnits} шт в упаковке → ${totalWbLabels} ШК ВБ`
+                    : undefined
+                }
+                slotProps={{ htmlInput: { min: 1, max: 999 } }}
+                data-testid="marking-print-wb-qty"
+                sx={{ maxWidth: 280 }}
+              />
+            ) : null}
+
+            {!reprint && requiresHonestSign ? (
               <>
+                <TextField
+                  size="small"
+                  label="ШК ВБ на каждый товар"
+                  type="number"
+                  value={labelsPerProduct}
+                  onChange={(e) =>
+                    setLabelsPerProduct(Math.max(1, Math.min(99, Number(e.target.value) || 1)))
+                  }
+                  slotProps={{ htmlInput: { min: 1, max: 99 } }}
+                  data-testid="marking-print-labels-per-product"
+                  sx={{ maxWidth: 220 }}
+                />
+
                 <RadioGroup
                   value={presetId}
                   onChange={(e) => applyPreset(e.target.value as PrintPresetId)}
@@ -350,7 +486,7 @@ export function MarkingPrintDialog({ open, reprint, ctx, busy, onBusyChange, onC
                           sx={{ minWidth: 120 }}
                         >
                           <MenuItem value="cz">ЧЗ</MenuItem>
-                          <MenuItem value="label">Этикетка</MenuItem>
+                          <MenuItem value="label">ШК ВБ</MenuItem>
                         </TextField>
                         <TextField
                           size="small"
@@ -396,7 +532,7 @@ export function MarkingPrintDialog({ open, reprint, ctx, busy, onBusyChange, onC
                         ЧЗ
                       </Button>
                       <Button size="small" startIcon={<AddIcon />} onClick={() => addUnit('label')}>
-                        Этикетка
+                        ШК ВБ
                       </Button>
                     </Stack>
                   </Stack>
@@ -409,7 +545,7 @@ export function MarkingPrintDialog({ open, reprint, ctx, busy, onBusyChange, onC
                     sx={{ mb: 0.5, display: 'block' }}
                     data-testid="marking-print-preview-tape-count"
                   >
-                    Предпросмотр ленты (один код на единицу) · {previewTapeCount} этикеток на 3 ед.
+                    Предпросмотр ленты (один КМ на единицу) · {previewTapeCount} блоков на 3 ед.
                   </Typography>
                   {previewUnits.map((unit) => (
                     <Stack
@@ -432,7 +568,7 @@ export function MarkingPrintDialog({ open, reprint, ctx, busy, onBusyChange, onC
                         />
                       ))}
                       <Typography variant="caption" color="text.secondary">
-                        (код {unit.codeHint})
+                        (КМ {unit.codeHint})
                       </Typography>
                     </Stack>
                   ))}
@@ -458,15 +594,55 @@ export function MarkingPrintDialog({ open, reprint, ctx, busy, onBusyChange, onC
                   </Button>
                 </Stack>
               </>
-            ) : (
-              <Typography variant="body2">
-                Будет повторно отправлено на печать {qtyNeed} код(ов).
-              </Typography>
-            )}
+            ) : null}
 
-            {!reprint && canPrintCount > 0 ? (
+            {reprint && requiresHonestSign ? (
+              reprintCodesLoading ? (
+                <Typography variant="body2" color="text.secondary">
+                  Загрузка напечатанных КМ…
+                </Typography>
+              ) : reprintCodes.length < 1 ? (
+                <Alert severity="warning" data-testid="marking-reprint-no-codes">
+                  Нет напечатанных КМ для перепечатки
+                </Alert>
+              ) : (
+                <RadioGroup
+                  value={selectedReprintCodeId}
+                  onChange={(e) => setSelectedReprintCodeId(e.target.value)}
+                  data-testid="marking-reprint-pick-list"
+                >
+                  {reprintCodes.map((code) => (
+                    <FormControlLabel
+                      key={code.id}
+                      value={code.id}
+                      control={
+                        <Radio
+                          size="small"
+                          data-testid={`marking-reprint-pick-${code.id}`}
+                        />
+                      }
+                      label={code.cis_masked}
+                    />
+                  ))}
+                </RadioGroup>
+              )
+            ) : null}
+
+            {reprint && requiresHonestSign && selectedReprintCodeId ? (
               <Typography variant="body2" data-testid="marking-print-will-print">
-                К печати: {canPrintCount} код(ов)
+                К перепечатке: 1 КМ
+              </Typography>
+            ) : null}
+
+            {!reprint && requiresHonestSign && canPrintCount > 0 ? (
+              <Typography variant="body2" data-testid="marking-print-will-print">
+                К печати: {canPrintCount} ед. · {totalTapeCount} блоков в ленте
+              </Typography>
+            ) : null}
+
+            {!reprint && !requiresHonestSign && totalWbLabels > 0 ? (
+              <Typography variant="body2" data-testid="marking-print-will-print">
+                К печати: {totalWbLabels} ШК ВБ
               </Typography>
             ) : null}
 

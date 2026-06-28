@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Link as RouterLink, useSearchParams } from 'react-router-dom'
 import {
   Alert,
@@ -19,9 +19,15 @@ import {
   Typography,
 } from '@mui/material'
 import ArrowBackOutlined from '@mui/icons-material/ArrowBackOutlined'
+import FileDownloadOutlined from '@mui/icons-material/FileDownloadOutlined'
 import { apiUrl } from '../../api'
+import { useDebouncedValue } from '../../hooks/useDebouncedValue'
 import { PageHeader } from '../../ui/PageHeader'
 import { readApiErrorMessage } from '../../utils/readApiErrorMessage'
+import { MarkingSellerPicker } from './MarkingSellerPicker'
+import { ledgerEventLabel } from '../../utils/markingStatus'
+
+const TEXT_FILTER_DEBOUNCE_MS = 400
 
 type LedgerRow = {
   id: string
@@ -47,6 +53,14 @@ type Props = {
 
 const EVENT_TYPES = ['', 'imported', 'printed', 'applied', 'shipped', 'voided', 'defective']
 
+function toDateFromParam(isoDate: string): string {
+  return `${isoDate}T00:00:00`
+}
+
+function toDateToParam(isoDate: string): string {
+  return `${isoDate}T23:59:59`
+}
+
 export function HonestSignLedgerPage({
   token,
   testIdPrefix = 'honest-sign-ledger',
@@ -57,6 +71,7 @@ export function HonestSignLedgerPage({
 }: Props) {
   const [searchParams] = useSearchParams()
   const poolIdFromUrl = searchParams.get('pool_id')
+  const eventTypeFromUrl = searchParams.get('event_type') ?? ''
 
   const [rows, setRows] = useState<LedgerRow[]>([])
   const [total, setTotal] = useState(0)
@@ -66,61 +81,164 @@ export function HonestSignLedgerPage({
   const [eventType, setEventType] = useState('')
   const [document, setDocument] = useState('')
   const [cisMask, setCisMask] = useState('')
+  const [poolTitle, setPoolTitle] = useState<string | null>(null)
+  const [dateFrom, setDateFrom] = useState('')
+  const [dateTo, setDateTo] = useState('')
+  const [exportBusy, setExportBusy] = useState(false)
+
+  const debouncedDocument = useDebouncedValue(document, TEXT_FILTER_DEBOUNCE_MS)
+  const debouncedCisMask = useDebouncedValue(cisMask, TEXT_FILTER_DEBOUNCE_MS)
+  const loadAbortRef = useRef<AbortController | null>(null)
 
   const limit = 50
 
   const authHeaders = useMemo(() => ({ Authorization: `Bearer ${token}` }), [token])
 
+  const poolNameFromRows = useMemo(
+    () => rows.find((r) => r.pool_title)?.pool_title ?? null,
+    [rows],
+  )
+  const poolFilterLabel = poolTitle ?? poolNameFromRows
+
+  const buildFilterParams = useCallback(() => {
+    const params = new URLSearchParams()
+    if (selectedSellerId) {
+      params.set('seller_id', selectedSellerId)
+    }
+    if (poolIdFromUrl) {
+      params.set('pool_id', poolIdFromUrl)
+    }
+    if (eventType) {
+      params.set('event_type', eventType)
+    }
+    if (debouncedDocument.trim()) {
+      params.set('document', debouncedDocument.trim())
+    }
+    const mask = debouncedCisMask.trim()
+    if (mask) {
+      params.set('cis_mask', mask)
+    }
+    if (dateFrom) {
+      params.set('date_from', toDateFromParam(dateFrom))
+    }
+    if (dateTo) {
+      params.set('date_to', toDateToParam(dateTo))
+    }
+    return params
+  }, [
+    dateFrom,
+    dateTo,
+    debouncedCisMask,
+    debouncedDocument,
+    eventType,
+    poolIdFromUrl,
+    selectedSellerId,
+  ])
+
   const load = useCallback(async () => {
+    loadAbortRef.current?.abort()
+    const ac = new AbortController()
+    loadAbortRef.current = ac
     setBusy(true)
     setError(null)
     try {
-      const params = new URLSearchParams()
+      const params = buildFilterParams()
       params.set('limit', String(limit))
       params.set('offset', String(offset))
-      if (selectedSellerId) {
-        params.set('seller_id', selectedSellerId)
-      }
-      if (poolIdFromUrl) {
-        params.set('pool_id', poolIdFromUrl)
-      }
-      if (eventType) {
-        params.set('event_type', eventType)
-      }
-      if (document.trim()) {
-        params.set('document', document.trim())
-      }
       const res = await fetch(apiUrl(`/operations/marking-codes/ledger?${params.toString()}`), {
         headers: authHeaders,
+        signal: ac.signal,
       })
+      if (ac.signal.aborted) {
+        return
+      }
       if (!res.ok) {
         setError(await readApiErrorMessage(res))
         return
       }
       const data = (await res.json()) as { rows: LedgerRow[]; total: number }
-      let nextRows = data.rows
-      const mask = cisMask.trim()
-      if (mask) {
-        nextRows = nextRows.filter((r) => r.cis_masked.includes(mask))
+      if (ac.signal.aborted) {
+        return
       }
-      setRows(nextRows)
+      setRows(data.rows)
       setTotal(data.total)
+    } catch (err) {
+      if (err instanceof DOMException && err.name === 'AbortError') {
+        return
+      }
+      throw err
     } finally {
-      setBusy(false)
+      if (!ac.signal.aborted) {
+        setBusy(false)
+      }
     }
-  }, [
-    authHeaders,
-    cisMask,
-    document,
-    eventType,
-    offset,
-    poolIdFromUrl,
-    selectedSellerId,
-  ])
+  }, [authHeaders, buildFilterParams, offset])
+
+  const exportCsv = async () => {
+    setExportBusy(true)
+    setError(null)
+    try {
+      const params = buildFilterParams()
+      const res = await fetch(
+        apiUrl(`/operations/marking-codes/ledger/export?${params.toString()}`),
+        { headers: authHeaders },
+      )
+      if (!res.ok) {
+        setError(await readApiErrorMessage(res))
+        return
+      }
+      const blob = await res.blob()
+      const url = URL.createObjectURL(blob)
+      const a = window.document.createElement('a')
+      a.href = url
+      const disposition = res.headers.get('Content-Disposition')
+      const match = disposition?.match(/filename="([^"]+)"/)
+      a.download = match?.[1] ?? 'ledger-export.csv'
+      a.click()
+      URL.revokeObjectURL(url)
+    } finally {
+      setExportBusy(false)
+    }
+  }
 
   useEffect(() => {
     void load()
+    return () => {
+      loadAbortRef.current?.abort()
+    }
   }, [load])
+
+  useEffect(() => {
+    if (!poolIdFromUrl) {
+      setPoolTitle(null)
+      return
+    }
+    setPoolTitle(null)
+    let cancelled = false
+    void (async () => {
+      const res = await fetch(
+        apiUrl(`/operations/marking-codes/pools/${encodeURIComponent(poolIdFromUrl)}`),
+        { headers: authHeaders },
+      )
+      if (cancelled || !res.ok) {
+        return
+      }
+      const body = (await res.json()) as { title: string }
+      if (!cancelled) {
+        setPoolTitle(body.title)
+      }
+    })()
+    return () => {
+      cancelled = true
+    }
+  }, [authHeaders, poolIdFromUrl])
+
+  useEffect(() => {
+    if (eventTypeFromUrl && EVENT_TYPES.includes(eventTypeFromUrl)) {
+      setEventType(eventTypeFromUrl)
+      setOffset(0)
+    }
+  }, [eventTypeFromUrl])
 
   return (
     <Stack spacing={2} data-testid={`${testIdPrefix}-page`}>
@@ -128,30 +246,23 @@ export function HonestSignLedgerPage({
         <IconButton component={RouterLink} to={`${routeBase}/honest-sign`} data-testid={`${testIdPrefix}-back`}>
           <ArrowBackOutlined />
         </IconButton>
-        <PageHeader title="Лента расхода" description="События по кодам маркировки." />
+        <PageHeader title="Лента расхода" description="События по КМ." />
       </Stack>
 
-      {sellers.length > 0 ? (
-        <Stack direction="row" spacing={1} sx={{ flexWrap: 'wrap' }}>
-          {sellers.map((s) => (
-            <Button
-              key={s.id}
-              size="small"
-              variant={selectedSellerId === s.id ? 'contained' : 'outlined'}
-              onClick={() => {
-                setOffset(0)
-                onSelectedSellerIdChange?.(s.id)
-              }}
-              data-testid={`${testIdPrefix}-seller-${s.id}`}
-            >
-              {s.name}
-            </Button>
-          ))}
-        </Stack>
-      ) : null}
+      <MarkingSellerPicker
+        sellers={sellers}
+        selectedSellerId={selectedSellerId}
+        onSelectedSellerIdChange={(id) => {
+          setOffset(0)
+          onSelectedSellerIdChange?.(id)
+        }}
+        testIdPrefix={testIdPrefix}
+      />
 
       {poolIdFromUrl ? (
-        <Alert severity="info">Фильтр по пулу: {poolIdFromUrl}</Alert>
+        <Alert severity="info" data-testid={`${testIdPrefix}-pool-filter`}>
+          Фильтр по пулу: {poolFilterLabel ?? '…'}
+        </Alert>
       ) : null}
 
       {error ? (
@@ -176,7 +287,7 @@ export function HonestSignLedgerPage({
           <MenuItem value="">Все</MenuItem>
           {EVENT_TYPES.filter(Boolean).map((t) => (
             <MenuItem key={t} value={t}>
-              {t}
+              {ledgerEventLabel(t)}
             </MenuItem>
           ))}
         </TextField>
@@ -192,13 +303,48 @@ export function HonestSignLedgerPage({
         />
         <TextField
           size="small"
+          label="С"
+          type="date"
+          value={dateFrom}
+          onChange={(e) => {
+            setOffset(0)
+            setDateFrom(e.target.value)
+          }}
+          slotProps={{ inputLabel: { shrink: true } }}
+          sx={{ minWidth: 150 }}
+          data-testid={`${testIdPrefix}-date-from`}
+        />
+        <TextField
+          size="small"
+          label="По"
+          type="date"
+          value={dateTo}
+          onChange={(e) => {
+            setOffset(0)
+            setDateTo(e.target.value)
+          }}
+          slotProps={{ inputLabel: { shrink: true } }}
+          sx={{ minWidth: 150 }}
+          data-testid={`${testIdPrefix}-date-to`}
+        />
+        <TextField
+          size="small"
           label="Маска КМ"
           value={cisMask}
-          onChange={(e) => setCisMask(e.target.value)}
+          onChange={(e) => {
+            setOffset(0)
+            setCisMask(e.target.value)
+          }}
           data-testid={`${testIdPrefix}-cis-mask`}
         />
-        <Button variant="outlined" onClick={() => void load()} data-testid={`${testIdPrefix}-apply`}>
-          Применить
+        <Button
+          variant="outlined"
+          startIcon={<FileDownloadOutlined />}
+          disabled={exportBusy || busy}
+          onClick={() => void exportCsv()}
+          data-testid={`${testIdPrefix}-export`}
+        >
+          Экспорт
         </Button>
       </Stack>
 
@@ -235,7 +381,7 @@ export function HonestSignLedgerPage({
                 <TableRow key={row.id} data-testid={`${testIdPrefix}-row-${row.id}`}>
                   <TableCell>{new Date(row.created_at).toLocaleString('ru-RU')}</TableCell>
                   <TableCell>
-                    <Chip size="small" label={row.event_type} />
+                    <Chip size="small" label={ledgerEventLabel(row.event_type)} />
                   </TableCell>
                   <TableCell>{row.cis_masked}</TableCell>
                   <TableCell>

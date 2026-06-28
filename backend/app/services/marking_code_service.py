@@ -7,8 +7,11 @@ import re
 import uuid
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
+from typing import Any
 
-from sqlalchemy import func, or_, select
+from sqlalchemy import Select, func, or_, select
+from sqlalchemy.dialects.postgresql import insert as pg_insert
+from sqlalchemy.dialects.sqlite import insert as sqlite_insert
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 from sqlalchemy.sql.elements import ColumnElement
@@ -28,6 +31,7 @@ from app.models.marking_code import (
     STATUS_AVAILABLE,
     STATUS_DEFECTIVE,
     STATUS_PRINTED,
+    STATUS_REPLACED,
     STATUS_RESERVED,
     MarkingCode,
     MarkingCodeEvent,
@@ -36,7 +40,12 @@ from app.models.marking_code import (
     MarkingPoolProduct,
     MarkingReprintRequest,
 )
-from app.models.packaging_task import PackagingTask, PackagingTaskLine
+from app.models.packaging_task import (
+    STATUS_DRAFT,
+    STATUS_IN_PROGRESS,
+    PackagingTask,
+    PackagingTaskLine,
+)
 from app.models.print_template import LAYOUT_BLOCK_CZ
 from app.models.product import Product
 from app.models.seller import Seller
@@ -332,6 +341,30 @@ def mask_cis_code(cis: str) -> str:
     tail = cis[-12:] if len(cis) > 12 else cis
     return f"…{tail}"
 
+
+def normalize_cis_mask_query(mask: str) -> str:
+    text = mask.strip()
+    if text.startswith("…"):
+        text = text[1:]
+    elif text.startswith("..."):
+        text = text[3:]
+    return text.strip()
+
+
+_LEDGER_EXPORT_MAX = 10_000
+
+_LEDGER_CSV_HEADER = (
+    "created_at",
+    "event_type",
+    "cis_masked",
+    "pool_title",
+    "gtin",
+    "product_name",
+    "product_sku",
+    "seller_name",
+    "document_number",
+    "actor_email",
+)
 
 def normalize_cis(raw: str) -> str | None:
     text = raw.strip().replace("\ufeff", "")
@@ -665,40 +698,6 @@ async def create_marking_pool(
     return pool
 
 
-async def relink_unlinked_marking_codes(
-    session: AsyncSession,
-    tenant_id: uuid.UUID,
-    seller_id: uuid.UUID,
-) -> int:
-    """Try to attach imported codes (product_id=NULL) to catalog products by GTIN."""
-    stmt = select(MarkingCode).where(
-        MarkingCode.tenant_id == tenant_id,
-        MarkingCode.seller_id == seller_id,
-        MarkingCode.product_id.is_(None),
-        MarkingCode.pool_id.is_(None),
-        MarkingCode.status == STATUS_AVAILABLE,
-    )
-    codes = list((await session.execute(stmt)).scalars().all())
-    linked = 0
-    for code in codes:
-        gtin = (code.gtin or "").strip() or extract_gtin_from_cis(code.cis_code)
-        if not gtin:
-            continue
-        product = await _resolve_product_for_row(
-            session,
-            tenant_id,
-            seller_id,
-            gtin=gtin,
-            sku="",
-        )
-        if product is not None:
-            code.product_id = product.id
-            linked += 1
-    if linked:
-        await session.commit()
-    return linked
-
-
 def _group_cis_codes_from_rows(
     parsed_rows: list[dict[str, str]],
 ) -> tuple[dict[str, list[str]], int, int]:
@@ -721,6 +720,44 @@ def _group_cis_codes_from_rows(
             continue
         by_gtin.setdefault(gtin, []).append(cis)
     return by_gtin, invalid_count, duplicate_count
+
+
+async def _try_insert_imported_code(
+    session: AsyncSession,
+    *,
+    tenant_id: uuid.UUID,
+    seller_id: uuid.UUID,
+    pool_id: uuid.UUID,
+    import_batch_id: uuid.UUID,
+    cis_code: str,
+    gtin: str,
+) -> MarkingCode | None:
+    conn = await session.connection()
+    insert_cls = sqlite_insert if conn.dialect.name == "sqlite" else pg_insert
+    code_id = uuid.uuid4()
+    stmt = (
+        insert_cls(MarkingCode)
+        .values(
+            id=code_id,
+            tenant_id=tenant_id,
+            seller_id=seller_id,
+            pool_id=pool_id,
+            import_batch_id=import_batch_id,
+            cis_code=cis_code,
+            gtin=gtin,
+            status=STATUS_AVAILABLE,
+        )
+        .on_conflict_do_nothing(index_elements=["tenant_id", "cis_code"])
+        .returning(MarkingCode.id)
+    )
+    result = await session.execute(stmt)
+    inserted_id = result.scalar_one_or_none()
+    if inserted_id is None:
+        return None
+    code = await session.get(MarkingCode, inserted_id)
+    if code is None:
+        raise MarkingCodeServiceError("import_insert_failed")
+    return code
 
 
 async def preview_marking_import(
@@ -834,6 +871,29 @@ async def _pool_ids_for_product(
     return list((await session.execute(stmt)).scalars().all())
 
 
+def _marking_supply_key(pool_ids: list[uuid.UUID], product_id: uuid.UUID) -> tuple[str, ...]:
+    if pool_ids:
+        return ("pool", *(str(pool_id) for pool_id in sorted(pool_ids, key=str)))
+    return ("product", str(product_id))
+
+
+async def _code_filter_for_product(
+    session: AsyncSession,
+    tenant_id: uuid.UUID,
+    product_id: uuid.UUID,
+) -> tuple[ColumnElement[bool] | None, Product | None]:
+    product = await get_product(session, tenant_id, product_id)
+    if product is None:
+        return None, None
+    pool_ids = await _pool_ids_for_product(session, tenant_id, product_id)
+    code_filter: ColumnElement[bool]
+    if pool_ids:
+        code_filter = MarkingCode.pool_id.in_(pool_ids)
+    else:
+        code_filter = MarkingCode.product_id == product.id
+    return code_filter, product
+
+
 async def import_marking_codes(
     session: AsyncSession,
     tenant_id: uuid.UUID,
@@ -909,26 +969,18 @@ async def import_marking_codes(
         pool_invalid = 0
 
         for cis in cis_list:
-            existing = await session.execute(
-                select(MarkingCode.id).where(
-                    MarkingCode.tenant_id == tenant_id,
-                    MarkingCode.cis_code == cis,
-                )
-            )
-            if existing.scalar_one_or_none() is not None:
-                pool_duplicates += 1
-                continue
-            code = MarkingCode(
+            code = await _try_insert_imported_code(
+                session,
                 tenant_id=tenant_id,
                 seller_id=seller_id,
                 pool_id=pool.id,
                 import_batch_id=batch.id,
                 cis_code=cis,
                 gtin=gtin,
-                status=STATUS_AVAILABLE,
             )
-            session.add(code)
-            await session.flush()
+            if code is None:
+                pool_duplicates += 1
+                continue
             await record_event(
                 session,
                 code=code,
@@ -979,9 +1031,6 @@ async def list_inventory(
     *,
     seller_id: uuid.UUID | None,
 ) -> MarkingInventoryResult:
-    if seller_id is not None:
-        await relink_unlinked_marking_codes(session, tenant_id, seller_id)
-
     product_stmt = select(Product).where(Product.tenant_id == tenant_id)
     if seller_id is not None:
         product_stmt = product_stmt.where(Product.seller_id == seller_id)
@@ -1094,21 +1143,71 @@ async def count_available_for_product(
     tenant_id: uuid.UUID,
     product_id: uuid.UUID,
 ) -> int:
-    product = await get_product(session, tenant_id, product_id)
-    if product is None:
+    code_filter, product = await _code_filter_for_product(session, tenant_id, product_id)
+    if product is None or code_filter is None:
         return 0
-    pool_ids = await _pool_ids_for_product(session, tenant_id, product_id)
-    filters = [MarkingCode.product_id == product_id]
-    if pool_ids:
-        filters.append(MarkingCode.pool_id.in_(pool_ids))
     stmt = select(func.count(MarkingCode.id)).where(
         MarkingCode.tenant_id == tenant_id,
         MarkingCode.seller_id == product.seller_id,
         MarkingCode.status == STATUS_AVAILABLE,
-        or_(*filters),
+        code_filter,
     )
     res = await session.execute(stmt)
     return int(res.scalar_one())
+
+
+async def count_available_for_products_batch(
+    session: AsyncSession,
+    tenant_id: uuid.UUID,
+    product_ids: set[uuid.UUID],
+) -> dict[uuid.UUID, int]:
+    if not product_ids:
+        return {}
+
+    counts: dict[uuid.UUID, int] = dict.fromkeys(product_ids, 0)
+
+    pool_stmt = (
+        select(
+            MarkingPoolProduct.product_id,
+            func.count(func.distinct(MarkingCode.id)),
+        )
+        .join(
+            MarkingCode,
+            (MarkingCode.pool_id == MarkingPoolProduct.pool_id)
+            & (MarkingCode.tenant_id == MarkingPoolProduct.tenant_id),
+        )
+        .join(Product, Product.id == MarkingPoolProduct.product_id)
+        .where(
+            MarkingPoolProduct.tenant_id == tenant_id,
+            MarkingPoolProduct.product_id.in_(product_ids),
+            MarkingCode.status == STATUS_AVAILABLE,
+            MarkingCode.seller_id == Product.seller_id,
+        )
+        .group_by(MarkingPoolProduct.product_id)
+    )
+    for product_id, available in (await session.execute(pool_stmt)).all():
+        counts[product_id] = int(available)
+
+    linked_products = select(MarkingPoolProduct.product_id).where(
+        MarkingPoolProduct.tenant_id == tenant_id,
+        MarkingPoolProduct.product_id.in_(product_ids),
+    )
+    product_stmt = (
+        select(MarkingCode.product_id, func.count(MarkingCode.id))
+        .join(Product, Product.id == MarkingCode.product_id)
+        .where(
+            MarkingCode.tenant_id == tenant_id,
+            MarkingCode.product_id.in_(product_ids),
+            MarkingCode.product_id.not_in(linked_products),
+            MarkingCode.status == STATUS_AVAILABLE,
+            MarkingCode.seller_id == Product.seller_id,
+        )
+        .group_by(MarkingCode.product_id)
+    )
+    for product_id, available in (await session.execute(product_stmt)).all():
+        counts[product_id] = int(available)
+
+    return counts
 
 
 async def print_codes_for_packaging_line(
@@ -1120,8 +1219,10 @@ async def print_codes_for_packaging_line(
     layout: PrintLayout | dict[str, object] | None = None,
     allow_partial: bool = False,
     reprint: bool = False,
+    reprint_code_ids: list[uuid.UUID] | None = None,
     duplicate_copies: int | None = None,
     units_to_print: int | None = None,
+    commit: bool = True,
 ) -> PrintMarkingCodesResult:
     print_layout = resolve_print_layout(layout, duplicate_copies=duplicate_copies)
     event_copies = cz_copies_from_layout(print_layout)
@@ -1137,6 +1238,8 @@ async def print_codes_for_packaging_line(
     task = line.task
     if task.tenant_id != tenant_id:
         raise MarkingCodeServiceError("line_not_found")
+    if task.status not in (STATUS_DRAFT, STATUS_IN_PROGRESS):
+        raise MarkingCodeServiceError("task_not_active")
 
     product = await get_product(session, tenant_id, line.product_id)
     if product is None:
@@ -1168,6 +1271,13 @@ async def print_codes_for_packaging_line(
         codes = list((await session.execute(stmt)).scalars().all())
         if not codes:
             raise MarkingCodeServiceError("nothing_to_reprint")
+        if reprint_code_ids is not None:
+            if not reprint_code_ids:
+                raise MarkingCodeServiceError("invalid_reprint_selection")
+            wanted = set(reprint_code_ids)
+            codes = [code for code in codes if code.id in wanted]
+            if len(codes) != len(wanted):
+                raise MarkingCodeServiceError("code_not_found")
         for code in codes:
             await record_event(
                 session,
@@ -1178,7 +1288,10 @@ async def print_codes_for_packaging_line(
                 packaging_task=line,
                 copies=event_copies,
             )
-        await session.commit()
+        if commit:
+            await session.commit()
+        else:
+            await session.flush()
         return PrintMarkingCodesResult(
             packaging_task_line_id=line_id,
             quantity=len(codes),
@@ -1203,11 +1316,13 @@ async def print_codes_for_packaging_line(
     else:
         target_qty = quantity_needed
 
-    pool_ids = await _pool_ids_for_product(session, tenant_id, product.id)
-    if pool_ids:
-        code_filter: ColumnElement[bool] = MarkingCode.pool_id.in_(pool_ids)
-    else:
-        code_filter = MarkingCode.product_id == product.id
+    code_filter, filter_product = await _code_filter_for_product(
+        session,
+        tenant_id,
+        product.id,
+    )
+    if filter_product is None or code_filter is None:
+        raise MarkingCodeServiceError("product_not_found")
 
     stmt = (
         select(MarkingCode)
@@ -1219,14 +1334,15 @@ async def print_codes_for_packaging_line(
         )
         .order_by(MarkingCode.created_at.asc())
         .limit(target_qty)
-        .with_for_update()
+        .with_for_update(skip_locked=True)
     )
     codes = list((await session.execute(stmt)).scalars().all())
     available = len(codes)
     shortage = max(0, target_qty - available)
 
     if shortage > 0 and not allow_partial:
-        await session.rollback()
+        if commit:
+            await session.rollback()
         return PrintMarkingCodesResult(
             packaging_task_line_id=line_id,
             quantity=0,
@@ -1239,7 +1355,8 @@ async def print_codes_for_packaging_line(
 
     quantity = available if shortage > 0 else target_qty
     if quantity < 1:
-        await session.rollback()
+        if commit:
+            await session.rollback()
         return PrintMarkingCodesResult(
             packaging_task_line_id=line_id,
             quantity=0,
@@ -1276,7 +1393,10 @@ async def print_codes_for_packaging_line(
         )
 
     line.qty_marking_printed = already_printed + quantity
-    await session.commit()
+    if commit:
+        await session.commit()
+    else:
+        await session.flush()
 
     return PrintMarkingCodesResult(
         packaging_task_line_id=line_id,
@@ -1418,36 +1538,65 @@ async def _resolve_line_print_layout(
     return template.layout
 
 
-async def _preview_line_print(
+async def _preview_all_lines_print(
     session: AsyncSession,
     tenant_id: uuid.UUID,
-    line: PackagingTaskLine,
+    lines: list[PackagingTaskLine],
     *,
     allow_partial: bool,
-) -> PrintAllLineResult:
+) -> list[PrintAllLineResult]:
+    """Preview print-all with shared pool budget (same filters as issuance)."""
     from app.services.packaging_task_service import qty_need_pack
 
-    product = line.product
-    if product is None:
-        raise MarkingCodeServiceError("product_not_found")
-    remaining = qty_need_pack(line) - int(line.qty_marking_printed)
-    available = await count_available_for_product(session, tenant_id, product.id)
-    shortage = max(0, remaining - available)
-    if shortage > 0 and not allow_partial:
-        quantity = 0
-        codes: list[str] = []
-    else:
-        quantity = min(remaining, available) if shortage > 0 else remaining
-        codes = [f"__preview_{line.id}_{i}" for i in range(quantity)]
-    return PrintAllLineResult(
-        packaging_task_line_id=line.id,
-        product_id=product.id,
-        sku_code=product.sku_code,
-        product_name=product.name,
-        quantity=quantity,
-        shortage=shortage,
-        codes=codes,
-    )
+    budget: dict[tuple[str, ...], int] = {}
+    pool_ids_cache: dict[uuid.UUID, list[uuid.UUID]] = {}
+    results: list[PrintAllLineResult] = []
+
+    for line in lines:
+        product = line.product
+        if product is None:
+            raise MarkingCodeServiceError("product_not_found")
+
+        if line.product_id not in pool_ids_cache:
+            pool_ids_cache[line.product_id] = await _pool_ids_for_product(
+                session,
+                tenant_id,
+                line.product_id,
+            )
+        pool_ids = pool_ids_cache[line.product_id]
+        supply_key = _marking_supply_key(pool_ids, line.product_id)
+
+        if supply_key not in budget:
+            budget[supply_key] = await count_available_for_product(
+                session,
+                tenant_id,
+                line.product_id,
+            )
+
+        remaining = qty_need_pack(line) - int(line.qty_marking_printed)
+        available = budget[supply_key]
+        shortage = max(0, remaining - available)
+        if shortage > 0 and not allow_partial:
+            quantity = 0
+            codes: list[str] = []
+        else:
+            quantity = min(remaining, available) if shortage > 0 else remaining
+            codes = [f"__preview_{line.id}_{i}" for i in range(quantity)]
+            budget[supply_key] -= quantity
+
+        results.append(
+            PrintAllLineResult(
+                packaging_task_line_id=line.id,
+                product_id=product.id,
+                sku_code=product.sku_code,
+                product_name=product.name,
+                quantity=quantity,
+                shortage=shortage,
+                codes=codes,
+            ),
+        )
+
+    return results
 
 
 async def print_all_for_packaging_task(
@@ -1473,45 +1622,48 @@ async def print_all_for_packaging_task(
     )
     duplicate_copies = cz_copies_from_layout(response_layout)
 
+    print_line_results: list[PrintAllLineResult] = []
+
     if dry_run:
-        line_results: list[PrintAllLineResult] = []
-        for line in lines:
-            preview = await _preview_line_print(
-                session,
-                tenant_id,
-                line,
-                allow_partial=allow_partial,
+        previews = await _preview_all_lines_print(
+            session,
+            tenant_id,
+            lines,
+            allow_partial=allow_partial,
+        )
+        print_line_results = [
+            PrintAllLineResult(
+                packaging_task_line_id=preview.packaging_task_line_id,
+                product_id=preview.product_id,
+                sku_code=preview.sku_code,
+                product_name=preview.product_name,
+                quantity=preview.quantity,
+                shortage=preview.shortage,
+                codes=[],
             )
-            line_results.append(
-                PrintAllLineResult(
-                    packaging_task_line_id=preview.packaging_task_line_id,
-                    product_id=preview.product_id,
-                    sku_code=preview.sku_code,
-                    product_name=preview.product_name,
-                    quantity=preview.quantity,
-                    shortage=preview.shortage,
-                    codes=[],
-                ),
-            )
-        total_qty = sum(r.quantity for r in line_results)
+            for preview in previews
+        ]
+        total_qty = sum(r.quantity for r in print_line_results)
         return PrintAllMarkingCodesResult(
-            packaging_task_id=task.id,
+            packaging_task_id=packaging_task_id,
             quantity=total_qty,
             duplicate_copies=duplicate_copies,
             codes=[],
             layout=response_layout,
-            lines=line_results,
+            lines=print_line_results,
             dry_run=True,
         )
 
     if not allow_partial:
-        previews = [
-            await _preview_line_print(session, tenant_id, line, allow_partial=False)
-            for line in lines
-        ]
+        previews = await _preview_all_lines_print(
+            session,
+            tenant_id,
+            lines,
+            allow_partial=False,
+        )
         if any(p.shortage > 0 for p in previews):
             return PrintAllMarkingCodesResult(
-                packaging_task_id=task.id,
+                packaging_task_id=packaging_task_id,
                 quantity=0,
                 duplicate_copies=duplicate_copies,
                 codes=[],
@@ -1531,44 +1683,86 @@ async def print_all_for_packaging_task(
                 dry_run=False,
             )
 
-    line_results = []
+    line_results: list[PrintAllLineResult] = []
     all_codes: list[str] = []
     total_qty = 0
-    for line in lines:
-        line_layout = await _resolve_line_print_layout(
-            session,
-            tenant_id,
-            line,
-            global_layout=layout,
-        )
-        result = await print_codes_for_packaging_line(
-            session,
-            tenant_id,
-            line.id,
-            acting_user_id=acting_user_id,
-            layout=line_layout,
-            allow_partial=allow_partial,
-        )
-        product = line.product
-        sku = product.sku_code if product is not None else ""
-        name = product.name if product is not None else ""
-        shortage = int(result.shortage or 0)
-        line_results.append(
-            PrintAllLineResult(
-                packaging_task_line_id=line.id,
-                product_id=line.product_id,
-                sku_code=sku,
-                product_name=name,
-                quantity=result.quantity,
-                shortage=shortage,
-                codes=result.codes,
-            ),
-        )
-        all_codes.extend(result.codes)
-        total_qty += result.quantity
+    try:
+        for line in lines:
+            line_id = line.id
+            line_product_id = line.product_id
+            line_layout = await _resolve_line_print_layout(
+                session,
+                tenant_id,
+                line,
+                global_layout=layout,
+            )
+            result = await print_codes_for_packaging_line(
+                session,
+                tenant_id,
+                line_id,
+                acting_user_id=acting_user_id,
+                layout=line_layout,
+                allow_partial=allow_partial,
+                commit=False,
+            )
+            product = await get_product(session, tenant_id, line_product_id)
+            sku = product.sku_code if product is not None else ""
+            name = product.name if product is not None else ""
+            shortage = int(result.shortage or 0)
+            if shortage > 0 and not allow_partial:
+                await session.rollback()
+                failure_lines = [
+                    PrintAllLineResult(
+                        packaging_task_line_id=lr.packaging_task_line_id,
+                        product_id=lr.product_id,
+                        sku_code=lr.sku_code,
+                        product_name=lr.product_name,
+                        quantity=0,
+                        shortage=0,
+                        codes=[],
+                    )
+                    for lr in line_results
+                ]
+                failure_lines.append(
+                    PrintAllLineResult(
+                        packaging_task_line_id=line_id,
+                        product_id=line_product_id,
+                        sku_code=sku,
+                        product_name=name,
+                        quantity=0,
+                        shortage=shortage,
+                        codes=[],
+                    ),
+                )
+                return PrintAllMarkingCodesResult(
+                    packaging_task_id=packaging_task_id,
+                    quantity=0,
+                    duplicate_copies=duplicate_copies,
+                    codes=[],
+                    layout=response_layout,
+                    lines=failure_lines,
+                    dry_run=False,
+                )
+            line_results.append(
+                PrintAllLineResult(
+                    packaging_task_line_id=line_id,
+                    product_id=line_product_id,
+                    sku_code=sku,
+                    product_name=name,
+                    quantity=result.quantity,
+                    shortage=shortage,
+                    codes=result.codes,
+                ),
+            )
+            all_codes.extend(result.codes)
+            total_qty += result.quantity
+        await session.commit()
+    except Exception:
+        await session.rollback()
+        raise
 
     return PrintAllMarkingCodesResult(
-        packaging_task_id=task.id,
+        packaging_task_id=packaging_task_id,
         quantity=total_qty,
         duplicate_copies=duplicate_copies,
         codes=all_codes,
@@ -1661,7 +1855,7 @@ async def _pool_consumption_7d_batch(
     stmt = (
         select(
             MarkingCodeEvent.pool_id,
-            func.coalesce(func.sum(MarkingCodeEvent.copies), 0),
+            func.count(func.distinct(MarkingCodeEvent.code_id)),
         )
         .where(
             MarkingCodeEvent.tenant_id == tenant_id,
@@ -1863,8 +2057,32 @@ async def list_pool_codes(
     return rows
 
 
-async def list_ledger(
-    session: AsyncSession,
+def _ledger_event_row(
+    event: MarkingCodeEvent,
+    cis: str,
+    gtin: str | None,
+    pool_title: str | None,
+    product_name: str | None,
+    product_sku: str | None,
+    seller_name: str | None,
+    actor_email: str | None,
+) -> LedgerEventRow:
+    return LedgerEventRow(
+        id=event.id,
+        created_at=event.created_at,
+        event_type=event.event_type,
+        cis_masked=mask_cis_code(cis),
+        pool_title=pool_title,
+        gtin=gtin,
+        product_name=product_name,
+        product_sku=product_sku,
+        seller_name=seller_name,
+        document_number=event.document_number,
+        actor_email=actor_email,
+    )
+
+
+def _ledger_filtered_stmt(
     tenant_id: uuid.UUID,
     *,
     seller_id: uuid.UUID | None,
@@ -1872,11 +2090,10 @@ async def list_ledger(
     product_id: uuid.UUID | None,
     document_number: str | None,
     event_type: str | None,
+    cis_mask: str | None,
     date_from: datetime | None,
     date_to: datetime | None,
-    limit: int,
-    offset: int,
-) -> LedgerPage:
+) -> Select[Any]:
     stmt = (
         select(
             MarkingCodeEvent,
@@ -1914,10 +2131,43 @@ async def list_ledger(
         stmt = stmt.where(MarkingCodeEvent.document_number == document_number)
     if event_type:
         stmt = stmt.where(MarkingCodeEvent.event_type == event_type)
+    if cis_mask:
+        needle = normalize_cis_mask_query(cis_mask)
+        if needle:
+            stmt = stmt.where(MarkingCode.cis_code.contains(needle))
     if date_from is not None:
         stmt = stmt.where(MarkingCodeEvent.created_at >= date_from)
     if date_to is not None:
         stmt = stmt.where(MarkingCodeEvent.created_at <= date_to)
+    return stmt
+
+
+async def list_ledger(
+    session: AsyncSession,
+    tenant_id: uuid.UUID,
+    *,
+    seller_id: uuid.UUID | None,
+    pool_id: uuid.UUID | None,
+    product_id: uuid.UUID | None,
+    document_number: str | None,
+    event_type: str | None,
+    cis_mask: str | None,
+    date_from: datetime | None,
+    date_to: datetime | None,
+    limit: int,
+    offset: int,
+) -> LedgerPage:
+    stmt = _ledger_filtered_stmt(
+        tenant_id,
+        seller_id=seller_id,
+        pool_id=pool_id,
+        product_id=product_id,
+        document_number=document_number,
+        event_type=event_type,
+        cis_mask=cis_mask,
+        date_from=date_from,
+        date_to=date_to,
+    )
 
     count_stmt = select(func.count()).select_from(stmt.subquery())
     total = int((await session.execute(count_stmt)).scalar_one())
@@ -1928,21 +2178,67 @@ async def list_ledger(
         await session.execute(stmt)
     ).all():
         rows.append(
-            LedgerEventRow(
-                id=event.id,
-                created_at=event.created_at,
-                event_type=event.event_type,
-                cis_masked=mask_cis_code(cis),
-                pool_title=pool_title,
-                gtin=gtin,
-                product_name=product_name,
-                product_sku=product_sku,
-                seller_name=seller_name,
-                document_number=event.document_number,
-                actor_email=actor_email,
+            _ledger_event_row(
+                event, cis, gtin, pool_title, product_name, product_sku, seller_name, actor_email
             )
         )
     return LedgerPage(rows=rows, total=total)
+
+
+async def export_ledger_csv(
+    session: AsyncSession,
+    tenant_id: uuid.UUID,
+    *,
+    seller_id: uuid.UUID | None,
+    pool_id: uuid.UUID | None,
+    product_id: uuid.UUID | None,
+    document_number: str | None,
+    event_type: str | None,
+    cis_mask: str | None,
+    date_from: datetime | None,
+    date_to: datetime | None,
+) -> str:
+    stmt = _ledger_filtered_stmt(
+        tenant_id,
+        seller_id=seller_id,
+        pool_id=pool_id,
+        product_id=product_id,
+        document_number=document_number,
+        event_type=event_type,
+        cis_mask=cis_mask,
+        date_from=date_from,
+        date_to=date_to,
+    )
+    count_stmt = select(func.count()).select_from(stmt.subquery())
+    total = int((await session.execute(count_stmt)).scalar_one())
+    if total > _LEDGER_EXPORT_MAX:
+        raise MarkingCodeServiceError("export_too_large")
+
+    stmt = stmt.order_by(MarkingCodeEvent.created_at.desc()).limit(_LEDGER_EXPORT_MAX)
+    buffer = io.StringIO()
+    writer = csv.writer(buffer)
+    writer.writerow(_LEDGER_CSV_HEADER)
+    for event, cis, gtin, pool_title, product_name, product_sku, seller_name, actor_email in (
+        await session.execute(stmt)
+    ).all():
+        row = _ledger_event_row(
+            event, cis, gtin, pool_title, product_name, product_sku, seller_name, actor_email
+        )
+        writer.writerow(
+            [
+                row.created_at.isoformat(),
+                row.event_type,
+                row.cis_masked,
+                row.pool_title or "",
+                row.gtin or "",
+                row.product_name or "",
+                row.product_sku or "",
+                row.seller_name or "",
+                row.document_number or "",
+                row.actor_email or "",
+            ]
+        )
+    return buffer.getvalue()
 
 
 async def get_code_history(
@@ -1995,6 +2291,8 @@ class ReprintRequestRow:
     product_sku: str
     cis_masked: str
     document_number: str | None
+    packaging_task_id: uuid.UUID
+    pool_id: uuid.UUID | None
 
 
 async def list_printed_codes_for_packaging_line(
@@ -2079,9 +2377,11 @@ async def list_pending_reprint_requests(
         select(
             MarkingReprintRequest,
             MarkingCode.cis_code,
+            MarkingCode.pool_id,
             User.email,
             Product.name,
             Product.sku_code,
+            PackagingTask.id,
             PackagingTask.document_number,
         )
         .join(MarkingCode, MarkingCode.id == MarkingReprintRequest.code_id)
@@ -2099,7 +2399,9 @@ async def list_pending_reprint_requests(
         .order_by(MarkingReprintRequest.created_at.asc())
     )
     rows: list[ReprintRequestRow] = []
-    for req, cis, email, product_name, sku, doc_num in (await session.execute(stmt)).all():
+    for req, cis, pool_id, email, product_name, sku, task_id, doc_num in (
+        await session.execute(stmt)
+    ).all():
         rows.append(
             ReprintRequestRow(
                 id=req.id,
@@ -2112,6 +2414,8 @@ async def list_pending_reprint_requests(
                 product_sku=sku,
                 cis_masked=mask_cis_code(cis),
                 document_number=doc_num,
+                packaging_task_id=task_id,
+                pool_id=pool_id,
             )
         )
     return rows
@@ -2157,6 +2461,9 @@ async def approve_reprint_request(
     task = await session.get(PackagingTask, line.task_id)
     if task is None or task.tenant_id != tenant_id:
         raise MarkingCodeServiceError("line_not_found")
+
+    if code.status != STATUS_PRINTED:
+        raise MarkingCodeServiceError("code_not_printed")
 
     await record_event(
         session,
@@ -2223,7 +2530,7 @@ async def replace_reprint_request(
         )
         .order_by(MarkingCode.created_at.asc())
         .limit(1)
-        .with_for_update()
+        .with_for_update(skip_locked=True)
     )
     new_code = (await session.execute(new_stmt)).scalar_one_or_none()
     if new_code is None:
@@ -2258,6 +2565,7 @@ async def replace_reprint_request(
         packaging_task=line,
         reason=req.reason,
     )
+    old_code.status = STATUS_REPLACED
     await record_event(
         session,
         code=new_code,
@@ -2326,13 +2634,20 @@ async def verify_pair_and_apply(
     if norm_a != norm_b:
         return VerifyPairResult(match=False, applied=False)
 
-    stmt = select(MarkingCode).where(
-        MarkingCode.tenant_id == tenant_id,
-        MarkingCode.cis_code == norm_a,
+    stmt = (
+        select(MarkingCode)
+        .where(
+            MarkingCode.tenant_id == tenant_id,
+            MarkingCode.cis_code == norm_a,
+        )
+        .with_for_update()
     )
     code = (await session.execute(stmt)).scalar_one_or_none()
     if code is None:
         return VerifyPairResult(match=True, applied=False)
+
+    if code.status == STATUS_APPLIED:
+        return VerifyPairResult(match=True, applied=False, code_id=code.id)
 
     if code.status != STATUS_PRINTED:
         return VerifyPairResult(match=True, applied=False, code_id=code.id)
@@ -2385,33 +2700,54 @@ async def list_pending_marking_lines(
     *,
     warehouse_id: uuid.UUID | None = None,
     seller_id: uuid.UUID | None = None,
-) -> list[PendingMarkingRow]:
+    limit: int = 50,
+    offset: int = 0,
+) -> tuple[list[PendingMarkingRow], int]:
     from app.services.packaging_task_service import qty_need_pack
+
+    qty_need_expr = PackagingTaskLine.qty_total - PackagingTaskLine.qty_confirmed_packed
+    base_filters = [
+        PackagingTask.tenant_id == tenant_id,
+        PackagingTask.status.in_(("draft", "in_progress")),
+        Product.requires_honest_sign.is_(True),
+        qty_need_expr > 0,
+        PackagingTaskLine.qty_marking_printed < qty_need_expr,
+    ]
+    if warehouse_id is not None:
+        base_filters.append(PackagingTask.warehouse_id == warehouse_id)
+    if seller_id is not None:
+        base_filters.append(Product.seller_id == seller_id)
+
+    count_stmt = (
+        select(func.count(PackagingTaskLine.id))
+        .join(PackagingTask, PackagingTask.id == PackagingTaskLine.task_id)
+        .join(Product, Product.id == PackagingTaskLine.product_id)
+        .where(*base_filters)
+    )
+    total = int((await session.execute(count_stmt)).scalar_one())
 
     stmt = (
         select(PackagingTaskLine, PackagingTask, Product, StorageLocation)
         .join(PackagingTask, PackagingTask.id == PackagingTaskLine.task_id)
         .join(Product, Product.id == PackagingTaskLine.product_id)
         .join(StorageLocation, StorageLocation.id == PackagingTaskLine.storage_location_id)
-        .where(
-            PackagingTask.tenant_id == tenant_id,
-            PackagingTask.status.in_(("draft", "in_progress")),
-            Product.requires_honest_sign.is_(True),
-        )
-        .order_by(PackagingTask.created_at.asc())
+        .where(*base_filters)
+        .order_by(PackagingTask.created_at.asc(), PackagingTaskLine.id.asc())
+        .limit(limit)
+        .offset(offset)
     )
-    if warehouse_id is not None:
-        stmt = stmt.where(PackagingTask.warehouse_id == warehouse_id)
-    if seller_id is not None:
-        stmt = stmt.where(Product.seller_id == seller_id)
+    page_rows = (await session.execute(stmt)).all()
+    product_ids = {product.id for _line, _task, product, _loc in page_rows}
+    available_by_product = await count_available_for_products_batch(
+        session,
+        tenant_id,
+        product_ids,
+    )
 
     rows: list[PendingMarkingRow] = []
-    for line, task, product, loc in (await session.execute(stmt)).all():
+    for line, task, product, loc in page_rows:
         qty_need = qty_need_pack(line)
         printed = int(line.qty_marking_printed)
-        if printed >= qty_need or qty_need < 1:
-            continue
-        available = await count_available_for_product(session, tenant_id, product.id)
         rows.append(
             PendingMarkingRow(
                 packaging_task_id=task.id,
@@ -2426,7 +2762,7 @@ async def list_pending_marking_lines(
                 qty_need=qty_need,
                 qty_marking_printed=printed,
                 qty_remaining=qty_need - printed,
-                marking_available_count=available,
+                marking_available_count=available_by_product.get(product.id, 0),
             )
         )
-    return rows
+    return rows, total

@@ -120,8 +120,8 @@ test('FF packaging: marking print constructor shortage and pairs preview', async
   await expect(page.getByTestId('marking-print-preview-chip-1-1')).toHaveText('ЧЗ')
 
   await page.getByTestId('marking-print-preset-label_cz').check()
-  await expect(page.getByTestId('marking-print-preview-tape-count')).toContainText('6 этикеток на 3 ед.')
-  await expect(page.getByTestId('marking-print-preview-chip-1-0')).toHaveText('Этикетка')
+  await expect(page.getByTestId('marking-print-preview-tape-count')).toContainText('6 блоков на 3 ед.')
+  await expect(page.getByTestId('marking-print-preview-chip-1-0')).toHaveText('ШК ВБ')
   await expect(page.getByTestId('marking-print-preview-chip-1-1')).toHaveText('ЧЗ')
 
   await page.getByTestId('marking-print-allow-partial').check()
@@ -139,5 +139,6 @@ test('FF packaging: marking print constructor shortage and pairs preview', async
   expect(printBody.quantity).toBe(2)
   expect(printBody.shortage).toBe(1)
 
-  await expect(page.getByText('напеч. 2')).toBeVisible()
+  await expect(page.getByText('напечатано 2 / нужно 3')).toBeVisible()
+  await expect(page.getByText(/дост\.\s+\d+\s+в пуле/)).toBeVisible()
 })

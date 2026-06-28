@@ -16,7 +16,7 @@ export const MARKING_PRINT_PRESETS: PrintPreset[] = [
   },
   {
     id: 'label_cz',
-    label: 'Этикетки + ЧЗ',
+    label: 'ШК ВБ + ЧЗ',
     layout: {
       units: [
         { block: 'label', copies: 1 },
@@ -31,7 +31,7 @@ export const MARKING_PRINT_PRESETS: PrintPreset[] = [
   },
   {
     id: 'label_only',
-    label: 'Только этикетки',
+    label: 'Только ШК ВБ',
     layout: { units: [{ block: 'label', copies: 1 }] },
   },
   {
@@ -64,7 +64,7 @@ export function expandLayoutTape(codes: string[], layout: PrintLayout): LayoutTa
 }
 
 export function blockLabel(block: PrintLayoutUnit['block']): string {
-  return block === 'cz' ? 'ЧЗ' : 'Этикетка'
+  return block === 'cz' ? 'ЧЗ' : 'ШК ВБ'
 }
 
 export type TapePreviewUnit = {
@@ -96,4 +96,29 @@ export function cloneLayout(layout: PrintLayout): PrintLayout {
   return {
     units: layout.units.map((unit) => ({ ...unit })),
   }
+}
+
+/** Умножает копии блоков «ШК ВБ» на «ШК ВБ на каждый товар» (A-002: ЧЗ не умножается). */
+export function applyLabelsPerProductToLayout(
+  layout: PrintLayout,
+  labelsPerProduct: number,
+): PrintLayout {
+  const lpp = Math.max(1, Math.min(99, Math.floor(labelsPerProduct) || 1))
+  return {
+    units: layout.units.map((unit) =>
+      unit.block === 'label' ? { ...unit, copies: unit.copies * lpp } : { ...unit },
+    ),
+  }
+}
+
+export function countTapeBlocks(
+  unitCount: number,
+  layout: PrintLayout,
+  labelsPerProduct = 1,
+): number {
+  if (unitCount < 1) {
+    return 0
+  }
+  const codes = Array.from({ length: unitCount }, (_, i) => `#${i + 1}`)
+  return expandLayoutTape(codes, applyLabelsPerProductToLayout(layout, labelsPerProduct)).length
 }

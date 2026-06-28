@@ -200,9 +200,6 @@ test('fulfillment admin sees week calendar and supplies-shipments page', async (
   ]);
   await expect(page.getByTestId('ff-supplies-doc-lines')).toContainText('E2E FF product');
 
-  await page.getByTestId('ff-mp-tab-final').click();
-  await expect(page.getByTestId('ff-mp-tab-final-panel')).toBeVisible();
-
   const wbSelect = page.getByTestId('ff-mp-wb-warehouse-select');
   const wbLabel = (await wbSelect.textContent()) ?? '';
   if (!wbLabel.includes('E2E WB склад')) {
@@ -233,6 +230,5 @@ test('fulfillment admin sees week calendar and supplies-shipments page', async (
     page.getByTestId('ff-supplies-doc-submit').click(),
   ]);
   await expect(page.getByTestId('ff-supplies-doc-dialog')).toContainText('Утверждено');
-  await page.getByTestId('ff-mp-tab-boxes').click();
   await expect(page.getByTestId('ff-mp-boxes')).toBeVisible();
 });

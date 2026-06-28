@@ -1,0 +1,76 @@
+---
+description: Backlog autopilot — docs/PARALLEL_AGENT_TASKS.md. Orchestrator queue mode.
+alwaysApply: false
+---
+
+# WMS backlog autopilot (queue mode)
+
+**Backlog:** `docs/PARALLEL_AGENT_TASKS.md`  
+**Integration branch:** `feat/cz-ux-fixes` (весь код собирается сюда)  
+**Закрыто:** `.cursor/state/<id>.done` — только **после** merge в integration branch  
+**Интегрировано:** `.cursor/state/<id>.integrated`  
+**Заблокировано:** `.cursor/state/<id>.blocked`  
+**Изоляция:** `git worktree .cursor/wt/<id>` → ветка `task/<id>`; merge: `scripts/queue-integrate.sh <id>`
+
+> **Queue mode** (`~/.cursor/autopilot/` + hook).  
+> **НЕ** Issues-режим (`wms-issues.mdc`, AGENTS.md «Autopilot loop», skill `autopilot-backlog`).
+
+---
+
+## Запуск (только новый чат)
+
+**Ручных команд не нужно** — hook при queue-промпте сам создаёт `.cursor/state/` и барьеры с `**closed:**` в backlog (напр. CZ-000).
+
+1. **Новый чат** (не чат «просто спросить»).
+2. Вставь **один** промпт (integrate встроен в orchestrator — ничего дописывать не нужно):
+
+```text
+orchestrator, continuous, queue mode, 5 агентов. backlog: docs/PARALLEL_AGENT_TASKS.md
+```
+
+3. **Enter** — уходи.
+
+**Цикл (автоматически):** builder → verifier → **merge в `feat/cz-ux-fixes`** → `.done`
+
+**Стоп:** `стоп` в чате или **Stop** в UI.  
+**Resume:** тот же короткий промпт в новом чате.
+
+---
+
+## Разовый догон (если прогон был БЕЗ integrate)
+
+Код размазан по `task/*`, в `feat/cz-ux-fixes` пусто — **один раз вручную**:
+
+```bash
+cd "/Users/deniscivkunov/Desktop/WMS "
+chmod +x scripts/queue-integrate.sh
+./scripts/queue-integrate.sh --all
+```
+
+- Остановится на первом конфликте → в Cursor: «разреши merge на `feat/cz-ux-fixes`» → `git add` → `git commit` → снова `./scripts/queue-integrate.sh --all`
+- Когда `--all` дошёл до конца → полный CI (`backend/` + `frontend/`) на **`feat/cz-ux-fixes`**
+- Потом PR **`feat/cz-ux-fixes` → `main`** (не отдельные `task/*`)
+
+**Где должен жить код:** рабочая ветка **`feat/cz-ux-fixes`** → после зелёного CI в **`main`**. Ветки `task/*` — черновики агентов, не продукт.
+
+### Где «глобальный» hook
+
+| Что | Где | Смысл |
+|-----|-----|--------|
+| **Мозг** | `~/.cursor/autopilot/hooks.py` | один на все проекты |
+| **Подключение** | `.cursor/hooks.json` в репо (у WMS уже есть) | Cursor вызывает мозг |
+| **Arm** | только чат, куда отправил queue-промпт | **не** во все чаты подряд |
+| **Continue** | только этот же чат, пока backlog открыт | Stop / `стоп` = стоп |
+
+В другом проекте один раз: `~/.cursor/autopilot/new-project.sh` — дальше тот же промпт с `backlog: .cursor/backlog.md`.
+
+---
+
+## Как работает
+
+- До **5** builder параллельно в worktree; **merge в `feat/cz-ux-fixes` — строго по одному** (очередь integrate).
+- Hook: queue-промпт **вооружает этот чат**; followup напоминает integrate; **Stop** / `стоп` → стоп.
+
+## Планирование
+
+`docs/CURSOR_QUEUE_LANES_RU.md`

@@ -9,7 +9,7 @@ from sqlalchemy import func, select
 from test_packaging_tasks import _inventory_at_location, _register_admin
 
 from app.db.session import SessionLocal
-from app.models.marking_code import STATUS_PRINTED, MarkingCode
+from app.models.marking_code import STATUS_AVAILABLE, STATUS_PRINTED, MarkingCode
 
 
 async def _seed_product_with_pool_codes(
@@ -186,3 +186,77 @@ async def test_print_all_shortage_without_partial(async_client: AsyncClient) -> 
     assert partial.status_code == 200, partial.text
     assert partial.json()["quantity"] == 2
     assert partial.json()["lines"][0]["shortage"] == 3
+
+
+@pytest.mark.asyncio
+async def test_print_all_rolls_back_on_mid_task_shortage(async_client: AsyncClient) -> None:
+    """TC-NEW: two lines share one pool; preview and print must agree on aggregate shortage."""
+    h, _seller_id, product_id, wh_id = await _seed_product_with_pool_codes(
+        async_client, code_count=3, sku_suffix="atomic"
+    )
+    loc_a = await _inventory_at_location(
+        async_client, h, warehouse_id=wh_id, product_id=product_id, qty=2, location_code="pa-at-a"
+    )
+    loc_b = await _inventory_at_location(
+        async_client, h, warehouse_id=wh_id, product_id=product_id, qty=2, location_code="pa-at-b"
+    )
+    task = await async_client.post(
+        "/operations/packaging-tasks",
+        headers=h,
+        json={
+            "warehouse_id": wh_id,
+            "lines": [
+                {"product_id": product_id, "storage_location_id": loc_a, "quantity": 2},
+                {"product_id": product_id, "storage_location_id": loc_b, "quantity": 2},
+            ],
+        },
+    )
+    assert task.status_code == 201, task.text
+    task_id = task.json()["id"]
+    line_ids = [ln["id"] for ln in task.json()["lines"]]
+
+    preview = await async_client.post(
+        f"/operations/marking-codes/packaging-tasks/{task_id}/print-all",
+        headers=h,
+        json={"dry_run": True, "allow_partial": False},
+    )
+    assert preview.status_code == 200, preview.text
+    preview_body = preview.json()
+    assert preview_body["quantity"] == 2
+    assert preview_body["lines"][0]["shortage"] == 0
+    assert preview_body["lines"][0]["quantity"] == 2
+    assert preview_body["lines"][1]["shortage"] == 1
+    assert preview_body["lines"][1]["quantity"] == 0
+
+    printed = await async_client.post(
+        f"/operations/marking-codes/packaging-tasks/{task_id}/print-all",
+        headers=h,
+        json={"allow_partial": False},
+    )
+    assert printed.status_code == 200, printed.text
+    body = printed.json()
+    assert body["quantity"] == 0
+    assert body["codes"] == []
+    assert body["lines"][0]["shortage"] == 0
+    assert body["lines"][1]["shortage"] == 1
+
+    async with SessionLocal() as session:
+        for line_id in line_ids:
+            count = (
+                await session.execute(
+                    select(func.count(MarkingCode.id)).where(
+                        MarkingCode.packaging_task_line_id == uuid.UUID(line_id),
+                        MarkingCode.status == STATUS_PRINTED,
+                    )
+                )
+            ).scalar_one()
+            assert int(count) == 0
+
+        available = (
+            await session.execute(
+                select(func.count(MarkingCode.id)).where(
+                    MarkingCode.status == STATUS_AVAILABLE,
+                )
+            )
+        ).scalar_one()
+        assert int(available) == 3

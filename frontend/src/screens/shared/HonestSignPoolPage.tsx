@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Link as RouterLink, useParams, useSearchParams } from 'react-router-dom'
 import {
   Alert,
@@ -26,6 +26,7 @@ import ArrowBackOutlined from '@mui/icons-material/ArrowBackOutlined'
 import DownloadOutlined from '@mui/icons-material/DownloadOutlined'
 import { apiUrl } from '../../api'
 import { PageHeader } from '../../ui/PageHeader'
+import { codeStatusLabel, ledgerEventLabel } from '../../utils/markingStatus'
 import { readApiErrorMessage } from '../../utils/readApiErrorMessage'
 import { MarkingPoolProductsDialog } from './MarkingPoolProductsDialog'
 
@@ -84,6 +85,8 @@ type TabKey = 'overview' | 'products' | 'codes' | 'ledger'
 
 const STATUS_OPTIONS = ['', 'available', 'reserved', 'printed', 'applied', 'defective', 'void']
 
+const LEDGER_PREVIEW_LIMIT = 5
+
 type Props = {
   token: string
   testIdPrefix?: string
@@ -114,11 +117,13 @@ export function HonestSignPoolPage({
   const [lowThreshold, setLowThreshold] = useState('')
   const [forecastThreshold, setForecastThreshold] = useState('')
   const [thresholdSaving, setThresholdSaving] = useState(false)
+  const [exportBusy, setExportBusy] = useState(false)
 
   const authHeaders = useMemo(
     () => ({ Authorization: `Bearer ${token}` }),
     [token],
   )
+  const ledgerAbortRef = useRef<AbortController | null>(null)
 
   const loadDetail = useCallback(async () => {
     if (!poolId) {
@@ -169,13 +174,30 @@ export function HonestSignPoolPage({
     if (!poolId) {
       return
     }
-    const res = await fetch(
-      apiUrl(`/operations/marking-codes/ledger?pool_id=${encodeURIComponent(poolId)}&limit=50`),
-      { headers: authHeaders },
-    )
-    if (res.ok) {
-      const data = (await res.json()) as { rows: LedgerRow[] }
-      setLedger(data.rows)
+    ledgerAbortRef.current?.abort()
+    const ac = new AbortController()
+    ledgerAbortRef.current = ac
+    try {
+      const res = await fetch(
+        apiUrl(
+          `/operations/marking-codes/ledger?pool_id=${encodeURIComponent(poolId)}&limit=${LEDGER_PREVIEW_LIMIT}`,
+        ),
+        { headers: authHeaders, signal: ac.signal },
+      )
+      if (ac.signal.aborted) {
+        return
+      }
+      if (res.ok) {
+        const data = (await res.json()) as { rows: LedgerRow[] }
+        if (!ac.signal.aborted) {
+          setLedger(data.rows)
+        }
+      }
+    } catch (err) {
+      if (err instanceof DOMException && err.name === 'AbortError') {
+        return
+      }
+      throw err
     }
   }, [authHeaders, poolId])
 
@@ -189,6 +211,9 @@ export function HonestSignPoolPage({
     }
     if (tab === 'ledger') {
       void loadLedger()
+    }
+    return () => {
+      ledgerAbortRef.current?.abort()
     }
   }, [tab, loadCodes, loadLedger])
 
@@ -204,19 +229,51 @@ export function HonestSignPoolPage({
     return codes.filter((c) => c.cis_masked.includes(tail))
   }, [codeSearch, codes])
 
-  const exportCsv = () => {
+  const poolCodesTotal = detail?.loaded ?? codes.length
+  const isDisplayFiltered = filteredCodes.length !== codes.length
+  const isExportSubsetOfPool =
+    statusFilter !== '' && codes.length > 0 && codes.length < poolCodesTotal
+
+  const buildCodesCsv = (rows: PoolCode[]) => {
     const header = 'cis_masked,status,created_at,printed_by,document_number'
-    const lines = filteredCodes.map(
+    const lines = rows.map(
       (c) =>
-        `${c.cis_masked},${c.status},${c.created_at},${c.printed_by ?? ''},${c.document_number ?? ''}`,
+        `${c.cis_masked},${codeStatusLabel(c.status)},${c.created_at},${c.printed_by ?? ''},${c.document_number ?? ''}`,
     )
-    const blob = new Blob([[header, ...lines].join('\n')], { type: 'text/csv;charset=utf-8' })
+    return [header, ...lines].join('\n')
+  }
+
+  const downloadCsv = (filename: string, content: string) => {
+    const blob = new Blob([content], { type: 'text/csv;charset=utf-8' })
     const url = URL.createObjectURL(blob)
     const a = document.createElement('a')
     a.href = url
-    a.download = `pool-${poolId}-codes.csv`
+    a.download = filename
     a.click()
     URL.revokeObjectURL(url)
+  }
+
+  const exportCsv = async () => {
+    if (!poolId) {
+      return
+    }
+    setExportBusy(true)
+    setError(null)
+    try {
+      const q = statusFilter ? `?status=${encodeURIComponent(statusFilter)}` : ''
+      const res = await fetch(apiUrl(`/operations/marking-codes/pools/${poolId}/codes${q}`), {
+        headers: authHeaders,
+      })
+      if (!res.ok) {
+        setError(await readApiErrorMessage(res))
+        return
+      }
+      const exportRows = (await res.json()) as PoolCode[]
+      setCodes(exportRows)
+      downloadCsv(`pool-${poolId}-codes.csv`, buildCodesCsv(exportRows))
+    } finally {
+      setExportBusy(false)
+    }
   }
 
   const saveThresholds = async () => {
@@ -384,7 +441,7 @@ export function HonestSignPoolPage({
 
       {tab === 'products' && detail ? (
         <Stack spacing={2} data-testid={`${testIdPrefix}-products`}>
-          <Alert severity="info">Остаток кодов общий на весь пул, не на каждый товар.</Alert>
+          <Alert severity="info">Остаток КМ общий на весь пул, не на каждый товар.</Alert>
           <Button variant="outlined" onClick={() => setLinkOpen(true)} data-testid={`${testIdPrefix}-link-products`}>
             Привязать товары
           </Button>
@@ -411,7 +468,7 @@ export function HonestSignPoolPage({
               <MenuItem value="">Все</MenuItem>
               {STATUS_OPTIONS.filter(Boolean).map((s) => (
                 <MenuItem key={s} value={s}>
-                  {s}
+                  {codeStatusLabel(s)}
                 </MenuItem>
               ))}
             </TextField>
@@ -426,13 +483,44 @@ export function HonestSignPoolPage({
             <Button
               variant="outlined"
               startIcon={<DownloadOutlined />}
-              onClick={exportCsv}
-              disabled={filteredCodes.length === 0}
+              onClick={() => void exportCsv()}
+              disabled={codes.length === 0 || exportBusy || codesBusy}
               data-testid={`${testIdPrefix}-codes-export`}
             >
-              Экспорт CSV
+              {exportBusy
+                ? 'Экспорт…'
+                : isExportSubsetOfPool
+                  ? `Экспорт CSV (${codes.length} из ${poolCodesTotal})`
+                  : `Экспорт CSV (${codes.length})`}
             </Button>
           </Stack>
+          {isDisplayFiltered ? (
+            <Typography
+              variant="body2"
+              color="text.secondary"
+              data-testid={`${testIdPrefix}-codes-count`}
+            >
+              Показано {filteredCodes.length} из {codes.length}. Экспорт выгружает все{' '}
+              {codes.length} КМ текущей выборки.
+            </Typography>
+          ) : isExportSubsetOfPool ? (
+            <Typography
+              variant="body2"
+              color="text.secondary"
+              data-testid={`${testIdPrefix}-codes-count`}
+            >
+              В выборке {codes.length} из {poolCodesTotal} КМ пула (фильтр по статусу). Экспорт
+              выгружает все {codes.length} КМ выборки.
+            </Typography>
+          ) : codes.length > 0 ? (
+            <Typography
+              variant="body2"
+              color="text.secondary"
+              data-testid={`${testIdPrefix}-codes-count`}
+            >
+              {codes.length} КМ
+            </Typography>
+          ) : null}
           <TableContainer component={Paper} variant="outlined">
             <Table size="small">
               <TableHead>
@@ -464,7 +552,7 @@ export function HonestSignPoolPage({
                     <TableRow key={c.id} data-testid={`${testIdPrefix}-code-row-${c.id}`}>
                       <TableCell>{c.cis_masked}</TableCell>
                       <TableCell>
-                        <Chip size="small" label={c.status} />
+                        <Chip size="small" label={codeStatusLabel(c.status)} />
                       </TableCell>
                       <TableCell>{new Date(c.created_at).toLocaleString('ru-RU')}</TableCell>
                       <TableCell>{c.document_number ?? '—'}</TableCell>
@@ -483,42 +571,58 @@ export function HonestSignPoolPage({
       ) : null}
 
       {tab === 'ledger' ? (
-        <TableContainer component={Paper} variant="outlined" data-testid={`${testIdPrefix}-ledger`}>
-          <Table size="small">
-            <TableHead>
-              <TableRow>
-                <TableCell>Время</TableCell>
-                <TableCell>Событие</TableCell>
-                <TableCell>КМ</TableCell>
-                <TableCell>Документ</TableCell>
-                <TableCell>Пользователь</TableCell>
-              </TableRow>
-            </TableHead>
-            <TableBody>
-              {ledger.length === 0 ? (
+        <Stack spacing={1.5} data-testid={`${testIdPrefix}-ledger-preview`}>
+          <Stack
+            direction={{ xs: 'column', sm: 'row' }}
+            spacing={1}
+            sx={{ alignItems: { sm: 'center' }, justifyContent: 'space-between' }}
+          >
+            <Typography variant="subtitle2">
+              Последние {LEDGER_PREVIEW_LIMIT} событий
+            </Typography>
+            <Button
+              component={RouterLink}
+              to={`${routeBase}/honest-sign/ledger?pool_id=${encodeURIComponent(poolId)}`}
+              variant="outlined"
+              size="small"
+              data-testid={`${testIdPrefix}-ledger-open-full`}
+            >
+              Вся лента пула
+            </Button>
+          </Stack>
+          <TableContainer component={Paper} variant="outlined">
+            <Table size="small">
+              <TableHead>
                 <TableRow>
-                  <TableCell colSpan={5}>
-                    <Typography variant="body2" color="text.secondary">
-                      Событий пока нет.
-                    </Typography>
-                  </TableCell>
+                  <TableCell>Время</TableCell>
+                  <TableCell>Событие</TableCell>
+                  <TableCell>КМ</TableCell>
                 </TableRow>
-              ) : (
-                ledger.map((row) => (
-                  <TableRow key={row.id}>
-                    <TableCell>{new Date(row.created_at).toLocaleString('ru-RU')}</TableCell>
-                    <TableCell>
-                      <Chip size="small" label={row.event_type} />
+              </TableHead>
+              <TableBody>
+                {ledger.length === 0 ? (
+                  <TableRow>
+                    <TableCell colSpan={3}>
+                      <Typography variant="body2" color="text.secondary">
+                        Событий пока нет.
+                      </Typography>
                     </TableCell>
-                    <TableCell>{row.cis_masked}</TableCell>
-                    <TableCell>{row.document_number ?? '—'}</TableCell>
-                    <TableCell>{row.actor_email ?? '—'}</TableCell>
                   </TableRow>
-                ))
-              )}
-            </TableBody>
-          </Table>
-        </TableContainer>
+                ) : (
+                  ledger.map((row) => (
+                    <TableRow key={row.id} data-testid={`${testIdPrefix}-ledger-row-${row.id}`}>
+                      <TableCell>{new Date(row.created_at).toLocaleString('ru-RU')}</TableCell>
+                      <TableCell>
+                        <Chip size="small" label={ledgerEventLabel(row.event_type)} />
+                      </TableCell>
+                      <TableCell>{row.cis_masked}</TableCell>
+                    </TableRow>
+                  ))
+                )}
+              </TableBody>
+            </Table>
+          </TableContainer>
+        </Stack>
       ) : null}
 
       {detail && linkOpen ? (
@@ -546,7 +650,7 @@ export function HonestSignPoolPage({
       >
         <Box sx={{ width: 360, p: 2 }}>
           <Typography variant="h6" sx={{ mb: 2 }}>
-            История кода
+            История КМ
           </Typography>
           {historyBusy ? (
             <Skeleton height={80} />
@@ -554,7 +658,7 @@ export function HonestSignPoolPage({
             <Stack spacing={1.5}>
               {history.map((ev) => (
                 <Paper key={ev.id} variant="outlined" sx={{ p: 1.5 }}>
-                  <Typography variant="subtitle2">{ev.event_type}</Typography>
+                  <Typography variant="subtitle2">{ledgerEventLabel(ev.event_type)}</Typography>
                   <Typography variant="caption" color="text.secondary">
                     {new Date(ev.created_at).toLocaleString('ru-RU')}
                   </Typography>

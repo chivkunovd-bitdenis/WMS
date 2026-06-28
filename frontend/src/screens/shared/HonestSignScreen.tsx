@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import {
   Alert,
@@ -21,16 +21,19 @@ import {
   TextField,
   ToggleButton,
   ToggleButtonGroup,
+  Tooltip,
   Typography,
 } from '@mui/material'
+import ChevronRightOutlined from '@mui/icons-material/ChevronRightOutlined'
 import UploadFileOutlined from '@mui/icons-material/UploadFileOutlined'
 import TimelineOutlined from '@mui/icons-material/TimelineOutlined'
 import MoreVertOutlined from '@mui/icons-material/MoreVertOutlined'
 import { apiUrl } from '../../api'
 import { PageHeader } from '../../ui/PageHeader'
 import { readApiErrorMessage } from '../../utils/readApiErrorMessage'
+import { MarkingImportDialog, type PoolImportContext } from './MarkingImportDialog'
 import { MarkingPoolProductsDialog } from './MarkingPoolProductsDialog'
-import { MarkingImportDialog } from './MarkingImportDialog'
+import { MarkingSellerPicker } from './MarkingSellerPicker'
 
 export type MarkingPoolRow = {
   id: string
@@ -50,6 +53,15 @@ export type MarkingPoolRow = {
 }
 
 type StockFilter = 'all' | 'low' | 'empty'
+
+type KpiCardConfig = {
+  label: string
+  value: number
+  testId: string
+  interactive: boolean
+  active?: boolean
+  onClick?: () => void
+}
 
 type Props = {
   token: string
@@ -86,6 +98,10 @@ function isLowStock(row: MarkingPoolRow): boolean {
   return row.available > 0 && row.available <= 10
 }
 
+function isProblematicPool(row: MarkingPoolRow): boolean {
+  return row.available === 0 || isLowStock(row)
+}
+
 function ProductChips({
   products,
   testIdPrefix,
@@ -114,13 +130,47 @@ function ProductChips({
   )
 }
 
-function forecastUntilLabel(forecastDays: number | null): string {
-  if (forecastDays == null || forecastDays <= 0) return '—'
+function forecastDateLabel(forecastDays: number): string {
   const d = new Date()
   d.setDate(d.getDate() + Math.ceil(forecastDays))
   const dd = String(d.getDate()).padStart(2, '0')
   const mm = String(d.getMonth() + 1).padStart(2, '0')
   return `${dd}.${mm}`
+}
+
+function forecastDaysHint(forecastDays: number): string {
+  const rounded = Math.round(forecastDays * 10) / 10
+  return `(${rounded} дн.)`
+}
+
+function ForecastLabel({
+  forecastDays,
+  testId,
+}: {
+  forecastDays: number | null
+  testId?: string
+}) {
+  if (forecastDays == null || forecastDays <= 0) {
+    return (
+      <Typography component="span" variant="inherit" data-testid={testId}>
+        —
+      </Typography>
+    )
+  }
+  const dateLabel = forecastDateLabel(forecastDays)
+  const hint = forecastDaysHint(forecastDays)
+  return (
+    <Tooltip title={hint}>
+      <Typography
+        component="span"
+        variant="inherit"
+        data-testid={testId}
+        sx={{ cursor: 'help', borderBottom: '1px dotted', borderColor: 'text.disabled' }}
+      >
+        {dateLabel}
+      </Typography>
+    </Tooltip>
+  )
 }
 
 export function HonestSignScreen({
@@ -135,6 +185,8 @@ export function HonestSignScreen({
   showSellerDashboard = false,
 }: Props) {
   const navigate = useNavigate()
+  const poolsTableRef = useRef<HTMLDivElement>(null)
+  const poolsLoadAbortRef = useRef<AbortController | null>(null)
   const [pools, setPools] = useState<MarkingPoolRow[]>([])
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -144,18 +196,37 @@ export function HonestSignScreen({
   const [menuPool, setMenuPool] = useState<MarkingPoolRow | null>(null)
   const [linkPool, setLinkPool] = useState<MarkingPoolRow | null>(null)
   const [importOpen, setImportOpen] = useState(false)
+  const [importPoolContext, setImportPoolContext] = useState<PoolImportContext | null>(null)
   const [toastMessage, setToastMessage] = useState<string | null>(null)
 
-  const openImport = () => {
+  const openImport = (pool?: MarkingPoolRow) => {
     if (sellerIdRequiredForImport && !effectiveSellerId) {
       return
     }
+    setImportPoolContext(
+      pool
+        ? {
+            gtin: pool.gtin,
+            title: pool.title,
+            productIds: pool.products.map((p) => p.id),
+          }
+        : null,
+    )
     setImportOpen(true)
   }
 
+  const closeImport = () => {
+    setImportOpen(false)
+    setImportPoolContext(null)
+  }
+
   const effectiveSellerId = sellerId ?? selectedSellerId
+  const importDisabled = sellerIdRequiredForImport && !effectiveSellerId
 
   const loadPools = useCallback(async () => {
+    poolsLoadAbortRef.current?.abort()
+    const ac = new AbortController()
+    poolsLoadAbortRef.current = ac
     setBusy(true)
     setError(null)
     try {
@@ -169,14 +240,25 @@ export function HonestSignScreen({
               : ''
       const res = await fetch(apiUrl(`/operations/marking-codes/pools${q}`), {
         headers: { Authorization: `Bearer ${token}` },
+        signal: ac.signal,
       })
+      if (ac.signal.aborted) {
+        return
+      }
       if (!res.ok) {
         setError(await readApiErrorMessage(res))
         return
       }
       setPools((await res.json()) as MarkingPoolRow[])
+    } catch (err) {
+      if (err instanceof DOMException && err.name === 'AbortError') {
+        return
+      }
+      throw err
     } finally {
-      setBusy(false)
+      if (!ac.signal.aborted) {
+        setBusy(false)
+      }
     }
   }, [effectiveSellerId, sellerId, token])
 
@@ -186,6 +268,9 @@ export function HonestSignScreen({
       return
     }
     void loadPools()
+    return () => {
+      poolsLoadAbortRef.current?.abort()
+    }
   }, [effectiveSellerId, loadPools, sellerIdRequiredForImport])
 
   const kpis = useMemo(() => {
@@ -195,6 +280,52 @@ export function HonestSignScreen({
     const spend7d = pools.reduce((s, p) => s + (p.consumption_7d ?? 0), 0)
     return { availableTotal, defectiveTotal, lowCount, spend7d }
   }, [pools])
+
+  const scrollToPoolsTable = useCallback(() => {
+    poolsTableRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+  }, [])
+
+  const kpiCards = useMemo((): KpiCardConfig[] => {
+    return [
+      {
+        label: 'Доступно всего',
+        value: kpis.availableTotal,
+        testId: 'kpi-available',
+        interactive: true,
+        active: stockFilter === 'all',
+        onClick: () => {
+          setStockFilter('all')
+          scrollToPoolsTable()
+        },
+      },
+      {
+        label: 'Расход 7 дней',
+        value: kpis.spend7d,
+        testId: 'kpi-spend-7d',
+        interactive: false,
+      },
+      {
+        label: 'Брак',
+        value: kpis.defectiveTotal,
+        testId: 'kpi-defective',
+        interactive: true,
+        onClick: () => {
+          navigate(`${routeBase}/honest-sign/ledger?event_type=defective`)
+        },
+      },
+      {
+        label: 'Пулы на исходе',
+        value: kpis.lowCount,
+        testId: 'kpi-low-stock',
+        interactive: true,
+        active: stockFilter === 'low',
+        onClick: () => {
+          setStockFilter('low')
+          scrollToPoolsTable()
+        },
+      },
+    ]
+  }, [kpis, navigate, routeBase, scrollToPoolsTable, stockFilter])
 
   const filteredPools = useMemo(() => {
     return pools.filter((row) => {
@@ -210,6 +341,19 @@ export function HonestSignScreen({
       return true
     })
   }, [pools, search, stockFilter])
+
+  const problematicPools = useMemo(
+    () => filteredPools.filter(isProblematicPool),
+    [filteredPools],
+  )
+
+  const tablePools = useMemo(() => {
+    if (!showSellerDashboard) {
+      return filteredPools
+    }
+    const problematicIds = new Set(problematicPools.map((row) => row.id))
+    return filteredPools.filter((row) => !problematicIds.has(row.id))
+  }, [filteredPools, problematicPools, showSellerDashboard])
 
   const openMenu = (event: React.MouseEvent<HTMLElement>, pool: MarkingPoolRow) => {
     event.stopPropagation()
@@ -237,26 +381,16 @@ export function HonestSignScreen({
     <Stack spacing={2} data-testid={`${testIdPrefix}-page`}>
       <PageHeader
         title="Честный знак"
-        description="Пулы кодов по GTIN: остаток общий на пул, товары привязываются вручную."
+        description="Пулы КМ по GTIN: остаток общий на пул, товары привязываются вручную."
       />
 
-      {sellerIdRequiredForImport && sellers.length > 0 ? (
-        <Stack direction="row" spacing={1} sx={{ flexWrap: 'wrap', alignItems: 'center' }}>
-          <Typography variant="body2" color="text.secondary">
-            Селлер:
-          </Typography>
-          {sellers.map((s) => (
-            <Button
-              key={s.id}
-              size="small"
-              variant={selectedSellerId === s.id ? 'contained' : 'outlined'}
-              onClick={() => onSelectedSellerIdChange?.(s.id)}
-              data-testid={`${testIdPrefix}-seller-${s.id}`}
-            >
-              {s.name}
-            </Button>
-          ))}
-        </Stack>
+      {sellerIdRequiredForImport ? (
+        <MarkingSellerPicker
+          sellers={sellers}
+          selectedSellerId={selectedSellerId}
+          onSelectedSellerIdChange={(id) => onSelectedSellerIdChange?.(id)}
+          testIdPrefix={testIdPrefix}
+        />
       ) : null}
 
       {error ? (
@@ -266,35 +400,59 @@ export function HonestSignScreen({
       ) : null}
 
       <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1} sx={{ flexWrap: 'wrap' }}>
-        {[
-          { label: 'Доступно всего', value: kpis.availableTotal, testId: 'kpi-available' },
-          { label: 'Расход 7 дней', value: kpis.spend7d, testId: 'kpi-spend-7d' },
-          { label: 'Брак', value: kpis.defectiveTotal, testId: 'kpi-defective' },
-          {
-            label: 'Пулы на исходе',
-            value: kpis.lowCount,
-            testId: 'kpi-low-stock',
-            onClick: () => setStockFilter('low'),
-          },
-        ].map((kpi) => (
+        {kpiCards.map((kpi) => (
           <Paper
             key={kpi.testId}
             variant="outlined"
-            sx={{ p: 1.5, minWidth: 140, flex: 1, cursor: kpi.onClick ? 'pointer' : 'default' }}
-            onClick={kpi.onClick}
+            component={kpi.interactive ? 'button' : 'div'}
+            type={kpi.interactive ? 'button' : undefined}
+            onClick={kpi.interactive ? kpi.onClick : undefined}
+            sx={{
+              p: 1.5,
+              minWidth: 140,
+              flex: 1,
+              display: 'block',
+              width: '100%',
+              textAlign: 'left',
+              font: 'inherit',
+              color: 'inherit',
+              cursor: kpi.interactive ? 'pointer' : 'default',
+              borderColor: kpi.active ? 'primary.main' : 'divider',
+              bgcolor: kpi.active ? 'primary.50' : 'background.paper',
+              transition: 'background-color 0.15s ease, border-color 0.15s ease',
+              ...(kpi.interactive
+                ? {
+                    '&:hover': {
+                      borderColor: 'primary.main',
+                      bgcolor: kpi.active ? 'primary.50' : 'action.hover',
+                    },
+                  }
+                : {}),
+            }}
             data-testid={`${testIdPrefix}-${kpi.testId}`}
+            data-interactive={kpi.interactive ? 'true' : 'false'}
           >
-            <Typography variant="caption" color="text.secondary">
-              {kpi.label}
-            </Typography>
-            <Typography variant="h6">{kpi.value}</Typography>
+            <Stack direction="row" spacing={0.5} sx={{ justifyContent: 'space-between', alignItems: 'flex-start' }}>
+              <Box>
+                <Typography variant="caption" color="text.secondary">
+                  {kpi.label}
+                </Typography>
+                <Typography variant="h6">{kpi.value}</Typography>
+              </Box>
+              {kpi.interactive ? (
+                <ChevronRightOutlined fontSize="small" color="action" sx={{ mt: 0.25, flexShrink: 0 }} />
+              ) : null}
+            </Stack>
           </Paper>
         ))}
       </Stack>
 
-      {showSellerDashboard && pools.length > 0 ? (
+      {showSellerDashboard && problematicPools.length > 0 ? (
         <Stack spacing={1} data-testid={`${testIdPrefix}-seller-dashboard`}>
-          {pools.map((row) => {
+          <Typography variant="subtitle2" color="text.secondary">
+            Требуют внимания
+          </Typography>
+          {problematicPools.map((row) => {
             const low = isLowStock(row)
             const spendPerDay =
               row.consumption_7d != null ? Math.round((row.consumption_7d / 7) * 10) / 10 : 0
@@ -325,7 +483,7 @@ export function HonestSignScreen({
                     size="small"
                     variant="contained"
                     startIcon={<UploadFileOutlined />}
-                    onClick={openImport}
+                    onClick={() => openImport(row)}
                     data-testid={`${testIdPrefix}-pool-card-upload-${row.id}`}
                   >
                     Догрузить
@@ -337,7 +495,7 @@ export function HonestSignScreen({
                   <Typography variant="body2">Доступно: {row.available}</Typography>
                   <Typography variant="body2">Расход/день: {spendPerDay}</Typography>
                   <Typography variant="body2">
-                    Прогноз до: {forecastUntilLabel(row.forecast_days)}
+                    Прогноз: <ForecastLabel forecastDays={row.forecast_days} />
                   </Typography>
                 </Stack>
               </Paper>
@@ -347,15 +505,24 @@ export function HonestSignScreen({
       ) : null}
 
       <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1}>
-        <Button
-          variant="contained"
-          startIcon={<UploadFileOutlined />}
-          disabled={sellerIdRequiredForImport && !effectiveSellerId}
-          onClick={openImport}
-          data-testid={`${testIdPrefix}-open-import`}
+        <Tooltip
+          title="Выберите селлера"
+          disableHoverListener={!importDisabled}
+          disableFocusListener={!importDisabled}
+          disableTouchListener={!importDisabled}
         >
-          Загрузить коды
-        </Button>
+          <Box component="span" sx={{ display: 'inline-flex' }}>
+            <Button
+              variant="contained"
+              startIcon={<UploadFileOutlined />}
+              disabled={importDisabled}
+              onClick={() => openImport()}
+              data-testid={`${testIdPrefix}-open-import`}
+            >
+              Загрузить КМ
+            </Button>
+          </Box>
+        </Tooltip>
         <Button
           variant="outlined"
           startIcon={<TimelineOutlined />}
@@ -389,7 +556,7 @@ export function HonestSignScreen({
         </ToggleButtonGroup>
       </Stack>
 
-      <TableContainer component={Paper} variant="outlined">
+      <TableContainer component={Paper} variant="outlined" ref={poolsTableRef}>
         <Table size="small" data-testid={`${testIdPrefix}-pools-table`}>
           <TableHead>
             <TableRow>
@@ -412,33 +579,34 @@ export function HonestSignScreen({
                   </TableCell>
                 </TableRow>
               ))
-            ) : filteredPools.length === 0 ? (
+            ) : tablePools.length === 0 ? (
               <TableRow>
                 <TableCell colSpan={8}>
                   <Stack spacing={1} sx={{ py: 2, alignItems: 'flex-start' }}>
                     <Typography variant="body2" color="text.secondary">
                       {pools.length === 0
-                        ? 'Пулов пока нет — загрузите коды из файла.'
-                        : 'Ничего не найдено по фильтру.'}
+                        ? 'Пулов пока нет — загрузите КМ из файла.'
+                        : showSellerDashboard && problematicPools.length > 0
+                          ? 'Проблемные пулы показаны в блоке выше. По фильтру в таблице ничего нет.'
+                          : 'Ничего не найдено по фильтру.'}
                     </Typography>
                     {pools.length === 0 ? (
                       <Button
                         variant="contained"
                         size="small"
                         startIcon={<UploadFileOutlined />}
-                        onClick={openImport}
+                        onClick={() => openImport()}
                         data-testid={`${testIdPrefix}-empty-upload`}
                       >
-                        Загрузить коды
+                        Загрузить КМ
                       </Button>
                     ) : null}
                   </Stack>
                 </TableCell>
               </TableRow>
             ) : (
-              filteredPools.map((row) => {
+              tablePools.map((row) => {
                 const low = isLowStock(row)
-                const unlinked = row.products.length === 0
                 return (
                   <TableRow
                     key={row.id}
@@ -455,18 +623,6 @@ export function HonestSignScreen({
                         <Typography variant="caption" color="text.secondary">
                           GTIN {row.gtin}
                         </Typography>
-                        {unlinked ? (
-                          <Chip
-                            size="small"
-                            color="warning"
-                            label="не привязан"
-                            onClick={(e) => {
-                              e.stopPropagation()
-                              setLinkPool(row)
-                            }}
-                            data-testid={`${testIdPrefix}-pool-unlinked-${row.id}`}
-                          />
-                        ) : null}
                       </Stack>
                     </TableCell>
                     <TableCell>
@@ -499,7 +655,10 @@ export function HonestSignScreen({
                     <TableCell align="right">{row.printed}</TableCell>
                     <TableCell align="right">{row.defective}</TableCell>
                     <TableCell align="right">
-                      {row.forecast_days != null ? `${row.forecast_days} д` : '—'}
+                      <ForecastLabel
+                        forecastDays={row.forecast_days}
+                        testId={`${testIdPrefix}-pool-forecast-${row.id}`}
+                      />
                     </TableCell>
                     <TableCell padding="checkbox" align="right">
                       <IconButton
@@ -575,7 +734,8 @@ export function HonestSignScreen({
           token={token}
           sellerId={effectiveSellerId}
           testIdPrefix={testIdPrefix}
-          onClose={() => setImportOpen(false)}
+          poolContext={importPoolContext}
+          onClose={closeImport}
           onImported={(message) => {
             setToastMessage(message)
             void loadPools()

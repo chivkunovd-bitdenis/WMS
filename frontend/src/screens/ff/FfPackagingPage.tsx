@@ -1,5 +1,6 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useState, type MouseEvent } from 'react'
 import { Link as RouterLink, useLocation } from 'react-router-dom'
+import { MoreVertOutlined } from '@mui/icons-material'
 import {
   Alert,
   Badge,
@@ -12,8 +13,10 @@ import {
   DialogContent,
   DialogTitle,
   FormControl,
+  IconButton,
   InputLabel,
   Link,
+  Menu,
   MenuItem,
   Paper,
   Select,
@@ -31,16 +34,11 @@ import {
 import { FfProductLineCells, FfProductTableHeadCells } from '../../components/FfProductLineCells'
 import { useWbProductCatalog } from '../../hooks/useWbProductCatalog'
 import { apiUrl } from '../../api'
+import { fetchPendingMarking, pendingMarkingLineCount } from '../../utils/pendingMarkingApi'
 import { PageHeader } from '../../ui/PageHeader'
 import { productDisplayMetaFromCatalog } from '../../types/wbProductCatalog'
 import { readApiErrorMessage } from '../../utils/readApiErrorMessage'
-import {
-  printMarkingCodeLabels,
-  printMarkingCodeTape,
-  type MarkingTapeUnitInput,
-} from '../../utils/printMarkingCodeLabel'
 import { displayMetaToProductLabel } from '../../utils/productBarcodePrint'
-import type { PrintLayout } from '../../utils/printTemplate'
 import { useMarkingCodePrint } from '../../utils/useMarkingCodePrint'
 
 export type PackagingTaskLine = {
@@ -75,6 +73,12 @@ export type PackagingTask = {
   lines: PackagingTaskLine[]
 }
 
+type PrintedMarkingCode = {
+  id: string
+  cis_masked: string
+  status: string
+}
+
 type TaskPanelProps = {
   token: string
   task: PackagingTask
@@ -91,6 +95,23 @@ function statusLabel(status: string): string {
   return status
 }
 
+/** Mirrors backend assert_packaging_line_marking_done (qty_done vs qty_marking_printed). */
+function isLineMarkingIncomplete(ln: PackagingTaskLine): boolean {
+  if (!ln.requires_honest_sign) {
+    return false
+  }
+  const done = ln.qty_done
+  return done > 0 && ln.qty_marking_printed < done
+}
+
+/** Progress toward qty_need_pack — for ЧЗ column display and row highlight. */
+function isLineMarkingProgressIncomplete(ln: PackagingTaskLine): boolean {
+  return ln.requires_honest_sign && ln.qty_marking_printed < ln.qty_need_pack
+}
+
+const MARKING_NOT_DONE_MESSAGE =
+  'Не хватает напечатанных КМ по заданию на упаковку.'
+
 export function FfPackagingTaskPanel({
   token,
   task,
@@ -101,21 +122,16 @@ export function FfPackagingTaskPanel({
   const { catalogById } = useWbProductCatalog(token)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
-  const [scanBarcode, setScanBarcode] = useState('')
-  const [scanBusy, setScanBusy] = useState(false)
-  const [scanFlash, setScanFlash] = useState<'ok' | 'error' | null>(null)
-  const [pairScan, setPairScan] = useState('')
-  const [pairFirstCis, setPairFirstCis] = useState<string | null>(null)
-  const [pairBusy, setPairBusy] = useState(false)
-  const [pairFlash, setPairFlash] = useState<'ok' | 'error' | null>(null)
-  const [printAllOpen, setPrintAllOpen] = useState(false)
-  const [printAllBusy, setPrintAllBusy] = useState(false)
-  const [printAllAllowPartial, setPrintAllAllowPartial] = useState(false)
-  const [printAllPreview, setPrintAllPreview] = useState<{
-    quantity: number
-    lines: { product_name: string; sku_code: string; quantity: number; shortage: number }[]
-  } | null>(null)
   const [ackAllPacked, setAckAllPacked] = useState(false)
+  const [defectDialogOpen, setDefectDialogOpen] = useState(false)
+  const [defectLineId, setDefectLineId] = useState<string | null>(null)
+  const [defectCodes, setDefectCodes] = useState<PrintedMarkingCode[]>([])
+  const [defectSelectedCodeId, setDefectSelectedCodeId] = useState('')
+  const [defectReason, setDefectReason] = useState('')
+  const [defectDialogBusy, setDefectDialogBusy] = useState(false)
+  const [defectDialogError, setDefectDialogError] = useState<string | null>(null)
+  const [lineMenuAnchor, setLineMenuAnchor] = useState<null | HTMLElement>(null)
+  const [lineMenuLine, setLineMenuLine] = useState<PackagingTaskLine | null>(null)
   const { openPrint, dialog: markingPrintDialog } = useMarkingCodePrint()
 
   const authHeaders = {
@@ -125,6 +141,43 @@ export function FfPackagingTaskPanel({
 
   const productLabelForLine = (ln: PackagingTaskLine) =>
     displayMetaToProductLabel(productDisplayMetaFromCatalog(ln.product_id, ln, catalogById))
+
+  const refreshTask = async () => {
+    const res = await fetch(apiUrl(`/operations/packaging-tasks/${task.id}`), { headers: authHeaders })
+    if (res.ok) {
+      onUpdated((await res.json()) as PackagingTask)
+    }
+  }
+
+  const openLinePrint = (ln: PackagingTaskLine, opts?: { reprint?: boolean }) => {
+    const reprint =
+      opts?.reprint ??
+      Boolean(
+        ln.requires_honest_sign &&
+          ln.qty_marking_printed > 0 &&
+          ln.qty_marking_printed >= ln.qty_need_pack,
+      )
+    openPrint(
+      {
+        token,
+        lineId: ln.id,
+        productId: ln.product_id,
+        documentNumber: task.document_number,
+        qtyNeedPack: ln.qty_need_pack,
+        markingAvailable: ln.marking_available_count,
+        qtyMarkingPrinted: ln.qty_marking_printed,
+        requiresHonestSign: ln.requires_honest_sign,
+        skuCode: ln.sku_code,
+        productName: ln.product_name,
+        productLabel: productLabelForLine(ln),
+        packagingInstructions: ln.packaging_instructions,
+        onPrinted: () => {
+          void refreshTask()
+        },
+      },
+      { reprint },
+    )
+  }
 
   const confirmPacked = async (lineId: string) => {
     setBusy(true)
@@ -166,7 +219,23 @@ export function FfPackagingTaskPanel({
     }
   }
 
-  const reportDefectMarking = async (lineId: string) => {
+  const resetDefectDialog = () => {
+    setDefectDialogOpen(false)
+    setDefectLineId(null)
+    setDefectCodes([])
+    setDefectSelectedCodeId('')
+    setDefectReason('')
+    setDefectDialogError(null)
+  }
+
+  const closeDefectDialog = () => {
+    if (defectDialogBusy) {
+      return
+    }
+    resetDefectDialog()
+  }
+
+  const openDefectDialog = async (lineId: string) => {
     setBusy(true)
     setError(null)
     try {
@@ -178,23 +247,49 @@ export function FfPackagingTaskPanel({
         setError(await readApiErrorMessage(codesRes))
         return
       }
-      const codes = ((await codesRes.json()) as { codes: { id: string }[] }).codes
+      const codes = ((await codesRes.json()) as { codes: PrintedMarkingCode[] }).codes
       if (codes.length < 1) {
-        setError('Нет напечатанных кодов для этой строки')
+        setError('Нет напечатанных КМ для этой строки')
         return
       }
-      const codeId = codes[0].id
-      const defectRes = await fetch(apiUrl(`/operations/marking-codes/codes/${codeId}/defect`), {
-        method: 'POST',
-        headers: authHeaders,
-        body: JSON.stringify({ packaging_task_line_id: lineId }),
-      })
-      if (!defectRes.ok) {
-        setError(await readApiErrorMessage(defectRes))
-        return
-      }
+      setDefectLineId(lineId)
+      setDefectCodes(codes)
+      setDefectSelectedCodeId(codes[0].id)
+      setDefectReason('')
+      setDefectDialogError(null)
+      setDefectDialogOpen(true)
     } finally {
       setBusy(false)
+    }
+  }
+
+  const submitDefectMarking = async () => {
+    if (!defectLineId || !defectSelectedCodeId) {
+      return
+    }
+    setDefectDialogBusy(true)
+    setDefectDialogError(null)
+    try {
+      const reasonTrimmed = defectReason.trim()
+      const defectRes = await fetch(
+        apiUrl(`/operations/marking-codes/codes/${defectSelectedCodeId}/defect`),
+        {
+          method: 'POST',
+          headers: authHeaders,
+          body: JSON.stringify({
+            packaging_task_line_id: defectLineId,
+            reason: reasonTrimmed || null,
+          }),
+        },
+      )
+      if (!defectRes.ok) {
+        setDefectDialogError(await readApiErrorMessage(defectRes))
+        return
+      }
+      await refreshTask()
+      resetDefectDialog()
+    } finally {
+      setDefectDialogBusy(false)
     }
   }
 
@@ -220,7 +315,14 @@ export function FfPackagingTaskPanel({
     }
   }
 
+  const incompleteMarkingLines = task.lines.filter(isLineMarkingIncomplete)
+  const hasIncompleteMarking = incompleteMarkingLines.length > 0
+
   const completeTask = async () => {
+    if (hasIncompleteMarking) {
+      setError(MARKING_NOT_DONE_MESSAGE)
+      return
+    }
     setBusy(true)
     setError(null)
     try {
@@ -245,245 +347,20 @@ export function FfPackagingTaskPanel({
     task.status !== 'cancelled'
 
   const taskEditable = task.status !== 'done' && task.status !== 'cancelled'
+  const isMpUnloadTask = Boolean(task.marketplace_unload_request_id)
 
-  const hasHonestSignLines = task.lines.some(
-    (ln) => ln.requires_honest_sign && ln.qty_need_pack > ln.qty_marking_printed,
-  )
+  const lineHasOverflowActions = (ln: PackagingTaskLine) =>
+    ln.requires_honest_sign && ln.qty_marking_printed > 0
 
-  const hasPrintedMarkingLines = task.lines.some(
-    (ln) => ln.requires_honest_sign && ln.qty_marking_printed > 0,
-  )
-
-  const shortageLineCount =
-    printAllPreview?.lines.filter((ln) => ln.shortage > 0).length ?? 0
-
-  const loadPrintAllPreview = useCallback(async (allowPartial = printAllAllowPartial) => {
-    const res = await fetch(
-      apiUrl(`/operations/marking-codes/packaging-tasks/${task.id}/print-all`),
-      {
-        method: 'POST',
-        headers: authHeaders,
-        body: JSON.stringify({ dry_run: true, allow_partial: allowPartial }),
-      },
-    )
-    if (!res.ok) {
-      throw new Error(await readApiErrorMessage(res))
-    }
-    const data = (await res.json()) as {
-      quantity: number
-      lines: { product_name: string; sku_code: string; quantity: number; shortage: number }[]
-    }
-    setPrintAllPreview(data)
-    return data
-  }, [authHeaders, printAllAllowPartial, task.id])
-
-  const openPrintAllDialog = () => {
-    setPrintAllOpen(true)
-    setError(null)
-    setPrintAllBusy(true)
-    void (async () => {
-      try {
-        await loadPrintAllPreview()
-      } catch (e) {
-        setError(e instanceof Error ? e.message : 'Не удалось загрузить сводку печати.')
-        setPrintAllOpen(false)
-      } finally {
-        setPrintAllBusy(false)
-      }
-    })()
+  const openLineMenu = (event: MouseEvent<HTMLElement>, ln: PackagingTaskLine) => {
+    event.stopPropagation()
+    setLineMenuAnchor(event.currentTarget)
+    setLineMenuLine(ln)
   }
 
-  const onPrintAllAllowPartialChange = (checked: boolean) => {
-    setPrintAllAllowPartial(checked)
-    if (!printAllOpen) {
-      return
-    }
-    setPrintAllBusy(true)
-    void (async () => {
-      try {
-        await loadPrintAllPreview(checked)
-      } catch (e) {
-        setError(e instanceof Error ? e.message : 'Не удалось обновить сводку печати.')
-      } finally {
-        setPrintAllBusy(false)
-      }
-    })()
-  }
-
-  const confirmPrintAll = async () => {
-    setPrintAllBusy(true)
-    setError(null)
-    try {
-      const res = await fetch(
-        apiUrl(`/operations/marking-codes/packaging-tasks/${task.id}/print-all`),
-        {
-          method: 'POST',
-          headers: authHeaders,
-          body: JSON.stringify({ allow_partial: printAllAllowPartial }),
-        },
-      )
-      if (!res.ok) {
-        setError(await readApiErrorMessage(res))
-        return
-      }
-      const data = (await res.json()) as {
-        codes: string[]
-        duplicate_copies: number
-        quantity: number
-        layout: PrintLayout
-        lines: {
-          codes: string[]
-          sku_code: string
-          product_name: string
-          product_id: string
-        }[]
-      }
-      if (data.quantity < 1) {
-        setError('Нет доступных кодов для печати по всем строкам.')
-        await loadPrintAllPreview(printAllAllowPartial)
-        return
-      }
-      const units: MarkingTapeUnitInput[] = []
-      for (const line of data.lines) {
-        const taskLine = task.lines.find((ln) => ln.product_id === line.product_id)
-        const productLabel = taskLine
-          ? productLabelForLine(taskLine)
-          : displayMetaToProductLabel({
-              sku_code: line.sku_code,
-              product_name: line.product_name,
-              seller_name: null,
-              wb_primary_image_url: null,
-              wb_primary_barcode: null,
-              wb_barcodes: [],
-              wb_vendor_code: null,
-              wb_nm_id: null,
-              wb_size: null,
-              wb_color: null,
-            })
-        for (const cis of line.codes) {
-          units.push({ cis, productLabel })
-        }
-      }
-      await printMarkingCodeTape(units, data.layout)
-      setPrintAllOpen(false)
-      setPrintAllPreview(null)
-      const taskRes = await fetch(apiUrl(`/operations/packaging-tasks/${task.id}`), {
-        headers: authHeaders,
-      })
-      if (taskRes.ok) {
-        onUpdated((await taskRes.json()) as PackagingTask)
-      }
-    } catch (e) {
-      setError(e instanceof Error ? e.message : 'Печать всех ЧЗ не удалась.')
-    } finally {
-      setPrintAllBusy(false)
-    }
-  }
-
-  const submitScanPrint = async () => {
-    const code = scanBarcode.trim()
-    if (!code || scanBusy) {
-      return
-    }
-    setScanBusy(true)
-    setScanFlash(null)
-    setError(null)
-    try {
-      const res = await fetch(apiUrl('/operations/marking-codes/scan-print'), {
-        method: 'POST',
-        headers: authHeaders,
-        body: JSON.stringify({
-          packaging_task_id: task.id,
-          product_barcode: code,
-        }),
-      })
-      if (!res.ok) {
-        setScanFlash('error')
-        setError(await readApiErrorMessage(res))
-        return
-      }
-      const data = (await res.json()) as {
-        codes: string[]
-        duplicate_copies: number
-        quantity: number
-        shortage: number | null
-        packaging_task_line_id: string
-        layout: PrintLayout
-      }
-      if (data.quantity < 1) {
-        setScanFlash('error')
-        setError(
-          data.shortage
-            ? `Не хватает ${data.shortage} кодов ЧЗ в пуле.`
-            : 'Нет доступных кодов для печати.',
-        )
-        return
-      }
-      const line = task.lines.find((ln) => ln.id === data.packaging_task_line_id)
-      await printMarkingCodeLabels(data.codes, {
-        layout: data.layout,
-        duplicateCopies: data.duplicate_copies,
-        productLabel: line ? productLabelForLine(line) : undefined,
-      })
-      setScanBarcode('')
-      setScanFlash('ok')
-      const taskRes = await fetch(apiUrl(`/operations/packaging-tasks/${task.id}`), {
-        headers: authHeaders,
-      })
-      if (taskRes.ok) {
-        onUpdated((await taskRes.json()) as PackagingTask)
-      }
-    } catch (e) {
-      setScanFlash('error')
-      setError(e instanceof Error ? e.message : 'Скан-печать не удалась.')
-    } finally {
-      setScanBusy(false)
-    }
-  }
-
-  const submitPairVerify = async () => {
-    const raw = pairScan.trim()
-    if (!raw || pairBusy) {
-      return
-    }
-    if (pairFirstCis === null) {
-      setPairFirstCis(raw)
-      setPairScan('')
-      setPairFlash(null)
-      return
-    }
-    setPairBusy(true)
-    setPairFlash(null)
-    setError(null)
-    try {
-      const res = await fetch(apiUrl('/operations/marking-codes/verify-pair'), {
-        method: 'POST',
-        headers: authHeaders,
-        body: JSON.stringify({ cis_a: pairFirstCis, cis_b: raw }),
-      })
-      if (!res.ok) {
-        setPairFlash('error')
-        setError(await readApiErrorMessage(res))
-        return
-      }
-      const data = (await res.json()) as { match: boolean; applied: boolean }
-      if (data.match && data.applied) {
-        setPairFlash('ok')
-      } else if (data.match) {
-        setPairFlash('error')
-        setError('Коды совпали, но ЧЗ уже проверен или ещё не напечатан.')
-      } else {
-        setPairFlash('error')
-        setError('Наклейки не совпали — проверьте товар и пакет.')
-      }
-    } catch (e) {
-      setPairFlash('error')
-      setError(e instanceof Error ? e.message : 'Проверка пары не удалась.')
-    } finally {
-      setPairFirstCis(null)
-      setPairScan('')
-      setPairBusy(false)
-    }
+  const closeLineMenu = () => {
+    setLineMenuAnchor(null)
+    setLineMenuLine(null)
   }
 
   return (
@@ -519,91 +396,6 @@ export function FfPackagingTaskPanel({
           {error}
         </Alert>
       ) : null}
-      {hasHonestSignLines && manualTask ? (
-        <Stack direction="row" spacing={1} sx={{ alignItems: 'flex-start', flexWrap: 'wrap' }}>
-          <TextField
-            size="small"
-            autoFocus
-            label="Сканируйте товар"
-            placeholder="Штрихкод или SKU"
-            value={scanBarcode}
-            disabled={scanBusy || busy}
-            onChange={(e) => setScanBarcode(e.target.value)}
-            onKeyDown={(e) => {
-              if (e.key === 'Enter') {
-                e.preventDefault()
-                void submitScanPrint()
-              }
-            }}
-            slotProps={{
-              htmlInput: { 'data-testid': 'marking-scan-print-input' },
-            }}
-            sx={{
-              flex: '1 1 280px',
-              maxWidth: 420,
-              ...(scanFlash === 'ok'
-                ? { '& .MuiOutlinedInput-root': { borderColor: 'success.main' } }
-                : scanFlash === 'error'
-                  ? { '& .MuiOutlinedInput-root': { borderColor: 'error.main' } }
-                  : {}),
-            }}
-            data-testid="marking-scan-print-field"
-          />
-          <Button
-            variant="outlined"
-            disabled={busy || printAllBusy}
-            onClick={openPrintAllDialog}
-            data-testid="ff-packaging-print-all-marking"
-          >
-            Печать всех ЧЗ
-          </Button>
-        </Stack>
-      ) : null}
-      {hasPrintedMarkingLines && manualTask ? (
-        <Paper variant="outlined" sx={{ p: 2 }} data-testid="marking-verify-pair-panel">
-          <Typography variant="subtitle2" gutterBottom>
-            Проверка пары ЧЗ (товар = пакет)
-          </Typography>
-          <Stack spacing={1}>
-            {pairFirstCis ? (
-              <Typography variant="caption" color="text.secondary" data-testid="marking-verify-pair-step">
-                Первая наклейка принята — сканируйте вторую (пакет)
-              </Typography>
-            ) : (
-              <Typography variant="caption" color="text.secondary" data-testid="marking-verify-pair-step">
-                Сканируйте наклейку на товаре, затем на пакете
-              </Typography>
-            )}
-            <TextField
-              size="small"
-              label={pairFirstCis ? 'Скан 2: пакет' : 'Скан 1: товар'}
-              value={pairScan}
-              disabled={pairBusy || busy}
-              onChange={(e) => setPairScan(e.target.value)}
-              onKeyDown={(e) => {
-                if (e.key === 'Enter') {
-                  e.preventDefault()
-                  void submitPairVerify()
-                }
-              }}
-              slotProps={{
-                htmlInput: { 'data-testid': 'marking-verify-pair-input' },
-              }}
-              sx={{ maxWidth: 480 }}
-            />
-            {pairFlash === 'ok' ? (
-              <Alert severity="success" data-testid="marking-verify-pair-ok">
-                Совпало — ЧЗ применён
-              </Alert>
-            ) : null}
-            {pairFlash === 'error' ? (
-              <Alert severity="error" data-testid="marking-verify-pair-error">
-                Не совпало или не применено
-              </Alert>
-            ) : null}
-          </Stack>
-        </Paper>
-      ) : null}
       {task.pick_resync_warning ? (
         <Alert severity="warning" data-testid="ff-packaging-pick-resync-warning">
           Подбор по ячейкам изменился. Количества в задании пересчитаны; уже упакованное в
@@ -622,10 +414,14 @@ export function FfPackagingTaskPanel({
         >
           <TableHead>
             <TableRow>
-              <FfProductTableHeadCells nameLabel="Наименование / ячейка" />
+              <FfProductTableHeadCells
+                nameLabel={isMpUnloadTask ? 'Наименование' : 'Наименование / ячейка'}
+              />
               <TableCell>Инструкция</TableCell>
               <TableCell align="right">Всего</TableCell>
-              <TableCell align="right">На полке упак.</TableCell>
+              {!isMpUnloadTask ? (
+                <TableCell align="right">На полке упак.</TableCell>
+              ) : null}
               <TableCell align="right">Упаковать</TableCell>
               <TableCell align="right">Готово</TableCell>
               <TableCell align="right">ЧЗ</TableCell>
@@ -635,14 +431,33 @@ export function FfPackagingTaskPanel({
           <TableBody>
             {task.lines.map((ln) => {
               const displayMeta = productDisplayMetaFromCatalog(ln.product_id, ln, catalogById)
+              const markingProgressIncomplete = isLineMarkingProgressIncomplete(ln)
               return (
-              <TableRow key={ln.id} data-testid="ff-packaging-line">
+              <TableRow
+                key={ln.id}
+                data-testid={
+                  markingProgressIncomplete
+                    ? 'ff-packaging-line-marking-incomplete'
+                    : 'ff-packaging-line'
+                }
+                sx={
+                  markingProgressIncomplete
+                    ? {
+                        bgcolor: 'warning.light',
+                        '&:hover': { bgcolor: 'warning.light' },
+                      }
+                    : undefined
+                }
+              >
                 <FfProductLineCells
                   meta={{
                     ...displayMeta,
-                    product_name: `${displayMeta.product_name} · ${ln.storage_location_code}`,
+                    product_name: isMpUnloadTask
+                      ? displayMeta.product_name
+                      : `${displayMeta.product_name} · ${ln.storage_location_code}`,
                   }}
                   printTestId={`ff-packaging-line-print-${ln.id}`}
+                  onPrintClick={isMpUnloadTask ? () => openLinePrint(ln) : undefined}
                 />
                 <TableCell sx={{ maxWidth: 220 }}>
                   <Typography variant="caption" data-testid="ff-packaging-instructions">
@@ -650,16 +465,26 @@ export function FfPackagingTaskPanel({
                   </Typography>
                 </TableCell>
                 <TableCell align="right">{ln.qty_total}</TableCell>
-                <TableCell align="right">{ln.qty_suggested_packed}</TableCell>
+                {!isMpUnloadTask ? (
+                  <TableCell align="right">{ln.qty_suggested_packed}</TableCell>
+                ) : null}
                 <TableCell align="right">{ln.qty_need_pack}</TableCell>
                 <TableCell align="right">{ln.qty_done}</TableCell>
                 <TableCell align="right">
                   {ln.requires_honest_sign ? (
                     <Stack spacing={0.25} sx={{ alignItems: 'flex-end' }}>
-                      <Typography variant="caption" color="text.secondary">
-                        {ln.qty_marking_printed > 0
-                          ? `напеч. ${ln.qty_marking_printed}`
-                          : `дост. ${ln.marking_available_count}`}
+                      <Typography
+                        variant="body2"
+                        data-testid={`ff-packaging-marking-progress-${ln.id}`}
+                      >
+                        напечатано {ln.qty_marking_printed} / нужно {ln.qty_need_pack}
+                      </Typography>
+                      <Typography
+                        variant="caption"
+                        color="text.secondary"
+                        data-testid={`ff-packaging-marking-pool-${ln.id}`}
+                      >
+                        дост. {ln.marking_available_count} в пуле
                       </Typography>
                     </Stack>
                   ) : (
@@ -668,92 +493,29 @@ export function FfPackagingTaskPanel({
                 </TableCell>
                 <TableCell align="right">
                   <Stack direction="row" spacing={0.5} sx={{ justifyContent: 'flex-end', flexWrap: 'wrap' }}>
-                    {ln.requires_honest_sign && ln.qty_need_pack > 0 && ln.qty_marking_printed < 1 ? (
+                    {ln.requires_honest_sign && !isMpUnloadTask && ln.qty_need_pack > 0 && ln.qty_marking_printed < 1 ? (
                       <Button
                         size="small"
                         variant="outlined"
                         disabled={busy || ln.marking_available_count < 1}
-                        onClick={() =>
-                          openPrint({
-                            token,
-                            lineId: ln.id,
-                            productId: ln.product_id,
-                            documentNumber: task.document_number,
-                            qtyNeedPack: ln.qty_need_pack,
-                            markingAvailable: ln.marking_available_count,
-                            qtyMarkingPrinted: ln.qty_marking_printed,
-                            skuCode: ln.sku_code,
-                            productName: ln.product_name,
-                            productLabel: productLabelForLine(ln),
-                            onPrinted: () => {
-                              void (async () => {
-                                const res = await fetch(
-                                  apiUrl(`/operations/packaging-tasks/${task.id}`),
-                                  { headers: authHeaders },
-                                )
-                                if (res.ok) {
-                                  onUpdated((await res.json()) as PackagingTask)
-                                }
-                              })()
-                            },
-                          })
-                        }
+                        onClick={() => openLinePrint(ln)}
                         data-testid="ff-packaging-print-marking"
                       >
                         Печать ЧЗ
                       </Button>
                     ) : null}
-                    {ln.requires_honest_sign && ln.qty_marking_printed > 0 ? (
-                      <Button
+                    {lineHasOverflowActions(ln) ? (
+                      <IconButton
                         size="small"
-                        variant="text"
+                        aria-label="Дополнительные действия"
                         disabled={busy}
-                        onClick={() =>
-                          openPrint(
-                            {
-                              token,
-                              lineId: ln.id,
-                              productId: ln.product_id,
-                              documentNumber: task.document_number,
-                              qtyNeedPack: ln.qty_need_pack,
-                              markingAvailable: ln.marking_available_count,
-                              qtyMarkingPrinted: ln.qty_marking_printed,
-                              skuCode: ln.sku_code,
-                              productName: ln.product_name,
-                              productLabel: productLabelForLine(ln),
-                              onPrinted: () => {
-                                void (async () => {
-                                  const res = await fetch(
-                                    apiUrl(`/operations/packaging-tasks/${task.id}`),
-                                    { headers: authHeaders },
-                                  )
-                                  if (res.ok) {
-                                    onUpdated((await res.json()) as PackagingTask)
-                                  }
-                                })()
-                              },
-                            },
-                            { reprint: true },
-                          )
-                        }
-                        data-testid="ff-packaging-reprint-marking"
+                        onClick={(e) => openLineMenu(e, ln)}
+                        data-testid={`ff-packaging-line-menu-btn-${ln.id}`}
                       >
-                        Повтор
-                      </Button>
+                        <MoreVertOutlined fontSize="small" />
+                      </IconButton>
                     ) : null}
-                    {ln.requires_honest_sign && ln.qty_marking_printed > 0 ? (
-                      <Button
-                        size="small"
-                        variant="outlined"
-                        color="warning"
-                        disabled={busy}
-                        onClick={() => void reportDefectMarking(ln.id)}
-                        data-testid="ff-packaging-defect-marking"
-                      >
-                        Брак
-                      </Button>
-                    ) : null}
-                    {ln.qty_confirmed_packed < ln.qty_suggested_packed ? (
+                    {!isMpUnloadTask && ln.qty_confirmed_packed < ln.qty_suggested_packed ? (
                       <Button
                         size="small"
                         disabled={busy || !taskEditable || ln.qty_suggested_packed < 1}
@@ -784,6 +546,22 @@ export function FfPackagingTaskPanel({
       {taskEditable ? (
         <Paper variant="outlined" sx={{ p: 2 }} data-testid="ff-packaging-complete-panel">
           <Stack spacing={1.5}>
+            {hasIncompleteMarking ? (
+              <Alert severity="warning" data-testid="ff-packaging-marking-incomplete-warning">
+                {MARKING_NOT_DONE_MESSAGE}
+                {incompleteMarkingLines.map((ln) => (
+                  <Typography
+                    key={ln.id}
+                    variant="body2"
+                    sx={{ mt: 0.5 }}
+                    data-testid="ff-packaging-marking-incomplete-line"
+                  >
+                    {ln.product_name} ({ln.sku_code}): напечатано {ln.qty_marking_printed} из{' '}
+                    {ln.qty_done}
+                  </Typography>
+                ))}
+              </Alert>
+            ) : null}
             <FormControlLabel
               control={
                 <Checkbox
@@ -798,7 +576,7 @@ export function FfPackagingTaskPanel({
             <Button
               variant="contained"
               color="success"
-              disabled={busy}
+              disabled={busy || hasIncompleteMarking}
               onClick={() => void completeTask()}
               data-testid="ff-packaging-complete"
             >
@@ -808,77 +586,97 @@ export function FfPackagingTaskPanel({
         </Paper>
       ) : null}
       {markingPrintDialog}
+      <Menu
+        anchorEl={lineMenuAnchor}
+        open={Boolean(lineMenuAnchor)}
+        onClose={closeLineMenu}
+        data-testid="ff-packaging-line-menu"
+      >
+        {lineMenuLine &&
+        lineMenuLine.requires_honest_sign &&
+        !isMpUnloadTask &&
+        lineMenuLine.qty_marking_printed > 0 ? (
+          <MenuItem
+            disabled={busy}
+            onClick={() => {
+              closeLineMenu()
+              openLinePrint(lineMenuLine, { reprint: true })
+            }}
+            data-testid="ff-packaging-reprint-marking"
+          >
+            Повтор
+          </MenuItem>
+        ) : null}
+        {lineMenuLine &&
+        lineMenuLine.requires_honest_sign &&
+        lineMenuLine.qty_marking_printed > 0 ? (
+          <MenuItem
+            disabled={busy}
+            onClick={() => {
+              closeLineMenu()
+              void openDefectDialog(lineMenuLine.id)
+            }}
+            data-testid="ff-packaging-defect-marking"
+          >
+            Брак
+          </MenuItem>
+        ) : null}
+      </Menu>
       <Dialog
-        open={printAllOpen}
-        onClose={() => {
-          if (!printAllBusy) {
-            setPrintAllOpen(false)
-            setPrintAllPreview(null)
-          }
-        }}
+        open={defectDialogOpen}
+        onClose={closeDefectDialog}
         maxWidth="sm"
         fullWidth
-        data-testid="marking-print-all-dialog"
+        data-testid="ff-packaging-defect-dialog"
       >
-        <DialogTitle>Печать всех ЧЗ</DialogTitle>
+        <DialogTitle>Отметить брак КМ</DialogTitle>
         <DialogContent>
-          <Stack spacing={2} sx={{ pt: 0.5 }}>
-            {printAllBusy && !printAllPreview ? (
-              <Typography variant="body2" color="text.secondary">
-                Загрузка сводки…
-              </Typography>
+          <Stack spacing={2} sx={{ pt: 1 }}>
+            {defectDialogError ? (
+              <Alert severity="error" data-testid="ff-packaging-defect-dialog-error">
+                {defectDialogError}
+              </Alert>
             ) : null}
-            {printAllPreview ? (
-              <>
-                <Typography variant="body1" data-testid="marking-print-all-summary">
-                  Будет напечатано {printAllPreview.quantity} кодов
-                  {shortageLineCount > 0
-                    ? `, нехватка по ${shortageLineCount} строкам`
-                    : ''}
-                  .
-                </Typography>
-                {printAllPreview.lines.map((ln) => (
-                  <Typography
-                    key={`${ln.sku_code}-${ln.product_name}`}
-                    variant="body2"
-                    color={ln.shortage > 0 ? 'warning.main' : 'text.secondary'}
-                    data-testid="marking-print-all-line"
-                  >
-                    {ln.product_name} ({ln.sku_code}): {ln.quantity} кодов
-                    {ln.shortage > 0 ? `, не хватает ${ln.shortage}` : ''}
-                  </Typography>
+            <FormControl fullWidth disabled={defectDialogBusy || defectCodes.length < 1}>
+              <InputLabel id="ff-packaging-defect-code-label">КМ</InputLabel>
+              <Select
+                labelId="ff-packaging-defect-code-label"
+                label="КМ"
+                value={defectSelectedCodeId}
+                onChange={(e) => setDefectSelectedCodeId(e.target.value)}
+                data-testid="ff-packaging-defect-code-select"
+              >
+                {defectCodes.map((code) => (
+                  <MenuItem key={code.id} value={code.id}>
+                    {code.cis_masked}
+                  </MenuItem>
                 ))}
-              </>
-            ) : null}
-            <Stack direction="row" sx={{ alignItems: 'center' }}>
-              <Checkbox
-                checked={printAllAllowPartial}
-                disabled={printAllBusy}
-                onChange={(e) => onPrintAllAllowPartialChange(e.target.checked)}
-                data-testid="marking-print-all-allow-partial"
-              />
-              <Typography variant="body2">Печатать доступные при нехватке</Typography>
-            </Stack>
+              </Select>
+            </FormControl>
+            <TextField
+              label="Причина брака"
+              value={defectReason}
+              onChange={(e) => setDefectReason(e.target.value)}
+              disabled={defectDialogBusy}
+              multiline
+              minRows={2}
+              slotProps={{ htmlInput: { maxLength: 512 } }}
+              data-testid="ff-packaging-defect-reason"
+            />
           </Stack>
         </DialogContent>
         <DialogActions>
-          <Button
-            disabled={printAllBusy}
-            onClick={() => {
-              setPrintAllOpen(false)
-              setPrintAllPreview(null)
-            }}
-            data-testid="marking-print-all-cancel"
-          >
+          <Button onClick={closeDefectDialog} disabled={defectDialogBusy}>
             Отмена
           </Button>
           <Button
             variant="contained"
-            disabled={printAllBusy || !printAllPreview || printAllPreview.quantity < 1}
-            onClick={() => void confirmPrintAll()}
-            data-testid="marking-print-all-confirm"
+            color="warning"
+            disabled={defectDialogBusy || !defectSelectedCodeId}
+            onClick={() => void submitDefectMarking()}
+            data-testid="ff-packaging-defect-confirm"
           >
-            Печать
+            Подтвердить брак
           </Button>
         </DialogActions>
       </Dialog>
@@ -1228,15 +1026,14 @@ export function FfPackagingPage({ token }: PageProps) {
     })
     if (!res.ok) {
       setError(await readApiErrorMessage(res))
-      return
+    } else {
+      setTasks((await res.json()) as PackagingTask[])
     }
-    setTasks((await res.json()) as PackagingTask[])
-    const pendingRes = await fetch(apiUrl('/operations/marking-codes/pending-marking'), {
-      headers: { Authorization: `Bearer ${token}` },
-    })
-    if (pendingRes.ok) {
-      const pending = (await pendingRes.json()) as { total: number }
-      setPendingMarkingCount(pending.total)
+    try {
+      const pending = await fetchPendingMarking(token)
+      setPendingMarkingCount(pendingMarkingLineCount(pending))
+    } catch {
+      setPendingMarkingCount(0)
     }
   }, [token])
 

@@ -165,7 +165,7 @@ export function MarkingPoolProductsDialog({
       <DialogContent>
         <Stack spacing={2} sx={{ pt: 0.5 }}>
           <Typography variant="body2" color="text.secondary">
-            Остаток кодов общий на весь пул. Выберите товары селлера, к которым относится этот GTIN.
+            Остаток КМ общий на весь пул. Выберите товары селлера, к которым относится этот GTIN.
           </Typography>
           {error ? (
             <Alert severity="error" data-testid={`${testIdPrefix}-pool-products-error`}>

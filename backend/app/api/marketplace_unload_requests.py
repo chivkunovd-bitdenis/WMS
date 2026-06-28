@@ -97,7 +97,7 @@ class MarketplaceUnloadBoxLineOut(BaseModel):
 
 
 class MarketplaceUnloadBoxScanOut(BaseModel):
-    """TSD scan response: location step or product added to box."""
+    """TSD scan response: location step, ready box, or product added to box."""
 
     kind: str
     storage_location_id: str | None = None
@@ -108,6 +108,8 @@ class MarketplaceUnloadBoxScanOut(BaseModel):
     product_name: str | None = None
     quantity: int | None = None
     picked_qty: int | None = None
+    lines_added: int | None = None
+    total_qty: int | None = None
 
 
 class MarketplaceUnloadBoxOut(BaseModel):
@@ -131,6 +133,7 @@ class MarketplaceUnloadScanBody(BaseModel):
     barcode: str = Field(min_length=1, max_length=128)
     storage_location_id: uuid.UUID | None = None
     quantity: int = Field(default=1, ge=1, le=1_000_000_000)
+    allow_over_plan: bool = False
 
 
 class MarketplaceUnloadLineCreate(BaseModel):
@@ -215,6 +218,7 @@ class MarketplaceUnloadPickAddBody(BaseModel):
 class MarketplaceUnloadAttachBoxBody(BaseModel):
     barcode: str = Field(min_length=1, max_length=128)
     box_preset: str = Field(default="60_40_40", min_length=1, max_length=32)
+    allow_over_plan: bool = False
 
 
 class PickAllocationItemIn(BaseModel):
@@ -261,6 +265,12 @@ def _box_scan_out(result: box_svc.BoxScanResult) -> MarketplaceUnloadBoxScanOut:
             if result.storage_location_id is not None
             else None,
             location_code=result.location_code,
+        )
+    if result.kind == "ready_box":
+        return MarketplaceUnloadBoxScanOut(
+            kind="ready_box",
+            lines_added=result.lines_added,
+            total_qty=result.total_qty,
         )
     ln = result.box_line
     assert ln is not None
@@ -396,7 +406,11 @@ def _detail_out(
         else [_pick_alloc_out(a) for a in getattr(r, "pick_allocations", []) or []]
     )
     picked_map = {} if seller_plan_only else _picked_by_product(r)
-    show_pick_discrepancy = (not seller_plan_only) and r.status in ("confirmed", "shipped")
+    show_pick_discrepancy = (not seller_plan_only) and r.status in (
+        "confirmed",
+        "collecting",
+        "shipped",
+    )
     return MarketplaceUnloadRequestDetailOut(
         id=str(r.id),
         document_number=r.document_number,
@@ -451,7 +465,7 @@ async def _detail_with_packaging(
             session,
             tenant_id,
             r.id,
-            sync_from_pick=sync_packaging and r.status in ("confirmed", "shipped"),
+            sync_from_pick=sync_packaging and r.status in ("confirmed", "collecting", "shipped"),
         )
         if progress is not None:
             linked = _linked_packaging_out(progress)
@@ -1262,6 +1276,7 @@ async def attach_marketplace_unload_box(
             request_id,
             barcode=body.barcode,
             box_preset=body.box_preset,
+            allow_over_plan=body.allow_over_plan,
         )
     except MarketplaceUnloadBoxError as exc:
         raise _map_box_err(exc) from None
@@ -1298,6 +1313,7 @@ async def scan_marketplace_unload_box(
             barcode=body.barcode,
             storage_location_id=body.storage_location_id,
             quantity=body.quantity,
+            allow_over_plan=body.allow_over_plan,
         )
     except MarketplaceUnloadBoxError as exc:
         raise _map_box_err(exc) from None

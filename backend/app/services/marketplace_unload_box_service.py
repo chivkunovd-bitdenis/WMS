@@ -41,13 +41,15 @@ class MarketplaceUnloadBoxError(Exception):
 
 @dataclass(frozen=True)
 class BoxScanResult:
-    """TSD scan flow: location (optional) → product → box line update."""
+    """TSD scan flow: location (optional) → ready box / product → box line update."""
 
-    kind: Literal["location", "product"]
+    kind: Literal["location", "product", "ready_box"]
     storage_location_id: uuid.UUID | None = None
     location_code: str | None = None
     box_line: MarketplaceUnloadBoxLine | None = None
     picked_qty: int | None = None
+    lines_added: int | None = None
+    total_qty: int | None = None
 
 
 def _map_collect_err(exc: MarketplaceUnloadPickError) -> MarketplaceUnloadBoxError:
@@ -79,7 +81,7 @@ async def _request_for_picking(
     req = await mu_svc.get_request(session, tenant_id, request_id)
     if req is None:
         raise MarketplaceUnloadBoxError("not_found")
-    if req.status != mu_svc.STATUS_CONFIRMED:
+    if req.status not in mu_svc.EXECUTION_STATUSES:
         raise MarketplaceUnloadBoxError("not_editable")
     if req.seller_id is None:
         raise MarketplaceUnloadBoxError("seller_required")
@@ -90,23 +92,6 @@ async def _open_box_for_request(
     session: AsyncSession, request_id: uuid.UUID
 ) -> MarketplaceUnloadBox | None:
     return await collect_svc.get_open_box(session, request_id)
-
-
-async def _assert_packaging_done_for_boxes(
-    session: AsyncSession, tenant_id: uuid.UUID, request_id: uuid.UUID
-) -> None:
-    from app.services import packaging_task_service as pkg_svc
-
-    try:
-        await pkg_svc.assert_unload_packaging_done(session, tenant_id, request_id)
-    except pkg_svc.PackagingTaskServiceError as exc:
-        if exc.code in ("task_not_done", "marking_not_done"):
-            raise MarketplaceUnloadBoxError(
-                "packaging_not_done"
-                if exc.code == "task_not_done"
-                else "marking_not_done"
-            ) from exc
-        raise
 
 
 async def create_open_box(
@@ -124,8 +109,6 @@ async def create_open_box(
     if existing is not None:
         raise MarketplaceUnloadBoxError("open_box_exists")
 
-    await _assert_packaging_done_for_boxes(session, tenant_id, request_id)
-
     wh_box = await wh_box_svc.create_warehouse_box(
         session,
         tenant_id,
@@ -137,6 +120,7 @@ async def create_open_box(
         warehouse_box_id=wh_box.id,
     )
     session.add(box)
+    mu_svc.enter_collecting_if_needed(req)
     await session.commit()
     stmt = (
         select(MarketplaceUnloadBox)
@@ -162,7 +146,6 @@ async def create_boxes_batch(
     if preset not in ALLOWED_BOX_PRESETS:
         raise MarketplaceUnloadBoxError("invalid_preset")
     req = await _request_for_picking(session, tenant_id, request_id)
-    await _assert_packaging_done_for_boxes(session, tenant_id, request_id)
 
     created_ids: list[uuid.UUID] = []
     for _ in range(count):
@@ -181,6 +164,7 @@ async def create_boxes_batch(
         await session.flush()
         created_ids.append(box.id)
 
+    mu_svc.enter_collecting_if_needed(req)
     await session.commit()
     stmt = (
         select(MarketplaceUnloadBox)
@@ -203,6 +187,96 @@ async def _product_in_shipment(
     return res.scalar_one_or_none() is not None
 
 
+async def collect_ready_box_into_open_box(
+    session: AsyncSession,
+    tenant_id: uuid.UUID,
+    box_id: uuid.UUID,
+    *,
+    barcode: str,
+    allow_over_plan: bool = False,
+) -> BoxScanResult:
+    """Развернуть состав готового короба (WHB / приёмочный) в открытый короб отгрузки."""
+    raw = barcode.strip()
+    if not raw:
+        raise MarketplaceUnloadBoxError("barcode_empty")
+
+    box = await session.get(MarketplaceUnloadBox, box_id)
+    if box is None:
+        raise MarketplaceUnloadBoxError("box_not_found")
+    if box.closed_at is not None:
+        raise MarketplaceUnloadBoxError("box_closed")
+
+    req = await _request_for_picking(session, tenant_id, box.request_id)
+    wh_box, inb_box = await wh_box_svc.resolve_barcode(session, tenant_id, raw)
+    if wh_box is None and inb_box is None:
+        raise MarketplaceUnloadBoxError("box_barcode_unknown")
+    if wh_box is not None and wh_box.warehouse_id != req.warehouse_id:
+        raise MarketplaceUnloadBoxError("warehouse_mismatch")
+
+    picks_added = 0
+    total_qty = 0
+    if inb_box is not None:
+        distro = await wh_box_svc.distribution_lines_for_inbound_box(session, inb_box.id)
+        if distro:
+            for dl in distro:
+                if not await _product_in_shipment(session, req.id, dl.product_id):
+                    continue
+                qty = int(dl.quantity)
+                try:
+                    await collect_svc.collect_into_box(
+                        session,
+                        tenant_id,
+                        req.id,
+                        box_id=box_id,
+                        storage_location_id=dl.storage_location_id,
+                        product_id=dl.product_id,
+                        quantity=qty,
+                        allow_over_plan=allow_over_plan,
+                    )
+                except MarketplaceUnloadPickError as exc:
+                    raise _map_collect_err(exc) from None
+                picks_added += 1
+                total_qty += qty
+        else:
+            stmt = select(InboundIntakeBoxLine).where(
+                InboundIntakeBoxLine.box_id == inb_box.id
+            )
+            res = await session.execute(stmt)
+            for bl in res.scalars().all():
+                qty = int(bl.posted_qty) if int(bl.posted_qty) > 0 else int(bl.quantity)
+                if qty < 1:
+                    continue
+                if not await _product_in_shipment(session, req.id, bl.product_id):
+                    continue
+                if wh_box is not None and wh_box.storage_location_id is not None:
+                    try:
+                        await collect_svc.collect_into_box(
+                            session,
+                            tenant_id,
+                            req.id,
+                            box_id=box_id,
+                            storage_location_id=wh_box.storage_location_id,
+                            product_id=bl.product_id,
+                            quantity=qty,
+                            allow_over_plan=allow_over_plan,
+                        )
+                    except MarketplaceUnloadPickError as exc:
+                        raise _map_collect_err(exc) from None
+                    picks_added += 1
+                    total_qty += qty
+
+    if inb_box is not None and picks_added < 1:
+        raise MarketplaceUnloadBoxError("box_needs_location")
+
+    mu_svc.enter_collecting_if_needed(req)
+    await session.commit()
+    return BoxScanResult(
+        kind="ready_box",
+        lines_added=picks_added,
+        total_qty=total_qty,
+    )
+
+
 async def scan_barcode_into_box(
     session: AsyncSession,
     tenant_id: uuid.UUID,
@@ -211,6 +285,7 @@ async def scan_barcode_into_box(
     barcode: str,
     storage_location_id: uuid.UUID | None,
     quantity: int = 1,
+    allow_over_plan: bool = False,
 ) -> BoxScanResult:
     """Scan flow for TSD/web: optional location barcode, then product → box line."""
     raw = barcode.strip()
@@ -238,6 +313,16 @@ async def scan_barcode_into_box(
                 storage_location_id=loc.id,
                 location_code=loc.code,
             )
+
+    wh_box, inb_box = await wh_box_svc.resolve_barcode(session, tenant_id, raw)
+    if wh_box is not None or inb_box is not None:
+        return await collect_ready_box_into_open_box(
+            session,
+            tenant_id,
+            box_id,
+            barcode=raw,
+            allow_over_plan=allow_over_plan,
+        )
 
     idx = await _barcode_index_for_seller(session, tenant_id, req.seller_id)
     product_id = idx.get(raw)
@@ -311,6 +396,7 @@ async def attach_existing_box_by_barcode(
     *,
     barcode: str,
     box_preset: str = "60_40_40",
+    allow_over_plan: bool = False,
 ) -> MarketplaceUnloadBox:
     """Привязать существующий короб (WHB или приёмочный) и развернуть состав в подбор."""
     preset = box_preset.strip()
@@ -350,6 +436,7 @@ async def attach_existing_box_by_barcode(
                         product_id=dl.product_id,
                         quantity=int(dl.quantity),
                         require_open_box=False,
+                        allow_over_plan=allow_over_plan,
                     )
                 except MarketplaceUnloadPickError as exc:
                     raise _map_collect_err(exc) from None
@@ -376,6 +463,7 @@ async def attach_existing_box_by_barcode(
                             product_id=bl.product_id,
                             quantity=qty,
                             require_open_box=False,
+                            allow_over_plan=allow_over_plan,
                         )
                     except MarketplaceUnloadPickError as exc:
                         raise _map_collect_err(exc) from None
@@ -395,6 +483,7 @@ async def attach_existing_box_by_barcode(
             raise MarketplaceUnloadBoxError("box_already_attached")
 
     mp_box.closed_at = datetime.now(tz=UTC)
+    mu_svc.enter_collecting_if_needed(req)
     await session.commit()
     await session.refresh(mp_box, attribute_names=["warehouse_box", "lines"])
     return mp_box
@@ -520,8 +609,6 @@ async def copy_box(
         plan_qty = plan_by_product.get(pid, 0)
         if current + add_qty > plan_qty:
             raise MarketplaceUnloadBoxError("plan_limit_exceeded")
-
-    await _assert_packaging_done_for_boxes(session, tenant_id, req.id)
 
     wh_box = await wh_box_svc.create_warehouse_box(
         session,

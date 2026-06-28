@@ -7,6 +7,7 @@ from datetime import datetime
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, UploadFile, status
+from fastapi.responses import Response
 from pydantic import BaseModel, Field
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -18,6 +19,7 @@ from app.api.deps import (
 )
 from app.core.roles import FULFILLMENT_ADMIN, FULFILLMENT_SELLER
 from app.db.session import get_db
+from app.models.print_template import USER_LAST_LAYOUT_NAME
 from app.models.user import User
 from app.services import marking_code_service as mc_svc
 from app.services import print_template_service as pt_svc
@@ -94,6 +96,7 @@ class PrintMarkingCodesIn(BaseModel):
     copies: int | None = Field(default=None, ge=1, le=10)
     allow_partial: bool = False
     reprint: bool = False
+    code_ids: list[uuid.UUID] | None = None
     duplicate_copies: int | None = Field(default=None, ge=1, le=2)
 
 
@@ -281,6 +284,7 @@ class PrintTemplateOut(BaseModel):
     id: str | None
     seller_id: str | None
     product_id: str | None
+    user_id: str | None
     name: str
     layout: PrintLayoutOut
     is_default: bool
@@ -320,11 +324,15 @@ def _layout_in_to_dict(layout: PrintLayoutOut) -> dict[str, object]:
 
 
 def _print_template_out(row: pt_svc.PrintTemplateRow) -> PrintTemplateOut:
+    display_name = row.name
+    if display_name == USER_LAST_LAYOUT_NAME:
+        display_name = "Последняя раскладка"
     return PrintTemplateOut(
         id=str(row.id) if row.id is not None else None,
         seller_id=str(row.seller_id) if row.seller_id is not None else None,
         product_id=str(row.product_id) if row.product_id is not None else None,
-        name=row.name,
+        user_id=str(row.user_id) if row.user_id is not None else None,
+        name=display_name,
         layout=_layout_out(row.layout),
         is_default=row.is_default,
         is_system=row.is_system,
@@ -363,6 +371,8 @@ def _http_from_mc_error(exc: mc_svc.MarkingCodeServiceError) -> HTTPException:
         status_code = status.HTTP_422_UNPROCESSABLE_CONTENT
     if code == "unsupported_file_type":
         status_code = status.HTTP_415_UNSUPPORTED_MEDIA_TYPE
+    if code in ("task_not_active",):
+        status_code = status.HTTP_409_CONFLICT
     return HTTPException(status_code=status_code, detail=code)
 
 
@@ -712,7 +722,7 @@ async def list_marking_pool_codes(
     user: Annotated[User, Depends(get_current_user)],
     session: Annotated[AsyncSession, Depends(get_db)],
     effective_seller_id: Annotated[uuid.UUID | None, Depends(get_effective_seller_id)],
-    code_status: Annotated[str | None, Query()] = None,
+    code_status: Annotated[str | None, Query(alias="status")] = None,
 ) -> list[PoolCodeOut]:
     from app.models.marking_code import MarkingPool
 
@@ -749,6 +759,7 @@ async def list_marking_ledger(
     product_id: Annotated[uuid.UUID | None, Query()] = None,
     document: Annotated[str | None, Query()] = None,
     event_type: Annotated[str | None, Query()] = None,
+    cis_mask: Annotated[str | None, Query()] = None,
     date_from: Annotated[datetime | None, Query()] = None,
     date_to: Annotated[datetime | None, Query()] = None,
     limit: Annotated[int, Query(ge=1, le=200)] = 50,
@@ -763,6 +774,7 @@ async def list_marking_ledger(
         product_id=product_id,
         document_number=document,
         event_type=event_type,
+        cis_mask=cis_mask,
         date_from=date_from,
         date_to=date_to,
         limit=limit,
@@ -786,6 +798,43 @@ async def list_marking_ledger(
             )
             for r in page.rows
         ],
+    )
+
+
+@router.get("/ledger/export")
+async def export_marking_ledger(
+    user: Annotated[User, Depends(get_current_user)],
+    session: Annotated[AsyncSession, Depends(get_db)],
+    effective_seller_id: Annotated[uuid.UUID | None, Depends(get_effective_seller_id)],
+    seller_id: Annotated[uuid.UUID | None, Query()] = None,
+    pool_id: Annotated[uuid.UUID | None, Query()] = None,
+    product_id: Annotated[uuid.UUID | None, Query()] = None,
+    document: Annotated[str | None, Query()] = None,
+    event_type: Annotated[str | None, Query()] = None,
+    cis_mask: Annotated[str | None, Query()] = None,
+    date_from: Annotated[datetime | None, Query()] = None,
+    date_to: Annotated[datetime | None, Query()] = None,
+) -> Response:
+    scope = _resolve_marking_seller_scope(user, effective_seller_id, seller_id)
+    try:
+        csv_text = await mc_svc.export_ledger_csv(
+            session,
+            user.tenant_id,
+            seller_id=scope,
+            pool_id=pool_id,
+            product_id=product_id,
+            document_number=document,
+            event_type=event_type,
+            cis_mask=cis_mask,
+            date_from=date_from,
+            date_to=date_to,
+        )
+    except mc_svc.MarkingCodeServiceError as exc:
+        raise _http_from_mc_error(exc) from exc
+    return Response(
+        content=("\ufeff" + csv_text).encode("utf-8"),
+        media_type="text/csv; charset=utf-8",
+        headers={"Content-Disposition": 'attachment; filename="ledger-export.csv"'},
     )
 
 
@@ -944,6 +993,7 @@ async def resolve_print_template(
         row = await pt_svc.resolve_default_print_template(
             session,
             user.tenant_id,
+            user_id=user.id,
             product_id=product_id,
             seller_id=scope_seller_id,
         )
@@ -964,6 +1014,7 @@ async def list_print_templates(
     rows = await pt_svc.list_print_templates(
         session,
         user.tenant_id,
+        user_id=user.id,
         seller_id=scope,
         product_id=product_id,
     )
@@ -997,6 +1048,7 @@ async def create_print_template(
             layout=_layout_in_to_dict(body.layout),
             seller_id=target_seller_id,
             product_id=body.product_id,
+            user_id=user.id,
             is_default=body.is_default,
         )
     except pt_svc.PrintTemplateServiceError as exc:
@@ -1051,7 +1103,19 @@ async def delete_print_template(
         raise _http_from_pt_error(exc) from exc
 
 
-@router.post("/scan-print", response_model=PrintMarkingCodesOut)
+# BACKEND-01 / T-A6 (ORD-44): scan-print, print-all, verify-pair — UI removed in PACK-01..03.
+# No frontend callers after CZ UX fixes; scheduled for removal (MASTER_BACKLOG_RU.md T-A6).
+
+
+@router.post(
+    "/scan-print",
+    response_model=PrintMarkingCodesOut,
+    deprecated=True,
+    summary=(
+        "Deprecated (T-A6): scan-to-print removed from packaging UI; "
+        "use POST .../packaging-lines/{line_id}/print"
+    ),
+)
 async def scan_print_marking_codes(
     body: ScanPrintMarkingIn,
     user: Annotated[User, Depends(require_packaging_access)],
@@ -1078,7 +1142,12 @@ async def scan_print_marking_codes(
     )
 
 
-@router.post("/verify-pair", response_model=VerifyPairOut)
+@router.post(
+    "/verify-pair",
+    response_model=VerifyPairOut,
+    deprecated=True,
+    summary="Deprecated (T-A6): pair verification panel removed from packaging UI",
+)
 async def verify_marking_pair(
     body: VerifyPairIn,
     user: Annotated[User, Depends(require_packaging_access)],
@@ -1107,15 +1176,19 @@ async def list_pending_marking(
     session: Annotated[AsyncSession, Depends(get_db)],
     warehouse_id: Annotated[uuid.UUID | None, Query()] = None,
     seller_id: Annotated[uuid.UUID | None, Query()] = None,
+    limit: Annotated[int, Query(ge=1, le=200)] = 50,
+    offset: Annotated[int, Query(ge=0)] = 0,
 ) -> PendingMarkingOut:
-    rows = await mc_svc.list_pending_marking_lines(
+    rows, total = await mc_svc.list_pending_marking_lines(
         session,
         user.tenant_id,
         warehouse_id=warehouse_id,
         seller_id=seller_id,
+        limit=limit,
+        offset=offset,
     )
     return PendingMarkingOut(
-        total=len(rows),
+        total=total,
         rows=[
             PendingMarkingLineOut(
                 packaging_task_id=str(row.packaging_task_id),
@@ -1162,12 +1235,23 @@ async def print_marking_codes_for_line(
             layout=layout_payload,
             allow_partial=body.allow_partial,
             reprint=body.reprint,
+            reprint_code_ids=body.code_ids,
             duplicate_copies=legacy_copies,
         )
     except mc_svc.MarkingCodeServiceError as exc:
         raise _http_from_mc_error(exc) from exc
     except pt_svc.PrintTemplateServiceError as exc:
         raise _http_from_pt_error(exc) from exc
+    if result.quantity > 0 and layout_payload is not None and not body.reprint:
+        try:
+            await pt_svc.save_user_last_print_layout(
+                session,
+                user.tenant_id,
+                user.id,
+                layout_payload,
+            )
+        except pt_svc.PrintTemplateServiceError as exc:
+            raise _http_from_pt_error(exc) from exc
     return PrintMarkingCodesOut(
         packaging_task_line_id=str(result.packaging_task_line_id),
         quantity=result.quantity,
@@ -1205,6 +1289,11 @@ def _print_all_out(result: mc_svc.PrintAllMarkingCodesResult) -> PrintAllMarking
 @router.post(
     "/packaging-tasks/{task_id}/print-all",
     response_model=PrintAllMarkingOut,
+    deprecated=True,
+    summary=(
+        "Deprecated (T-A6): bulk print-all removed from packaging UI; "
+        "use POST .../packaging-lines/{line_id}/print per line"
+    ),
 )
 async def print_all_marking_codes_for_task(
     task_id: uuid.UUID,
@@ -1243,6 +1332,8 @@ class MarkingReprintRequestOut(BaseModel):
     product_sku: str
     cis_masked: str
     document_number: str | None = None
+    packaging_task_id: str
+    pool_id: str | None = None
 
 
 class MarkingReprintRequestsOut(BaseModel):
@@ -1337,6 +1428,8 @@ async def list_marking_reprint_requests(
                 product_sku=row.product_sku,
                 cis_masked=row.cis_masked,
                 document_number=row.document_number,
+                packaging_task_id=str(row.packaging_task_id),
+                pool_id=str(row.pool_id) if row.pool_id else None,
             )
             for row in rows
         ]
