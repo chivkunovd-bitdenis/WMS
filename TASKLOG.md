@@ -9,7 +9,7 @@
   - **`MarkingProductCodesDialog.tsx`:** `@deprecated` — не монтируется, канон — таб «Коды» пула.
   - Merge: `task/LEDGER-06`, `task/POOLCARD-03`.
 - What did NOT change: POOLS-04 (дашборд+таблица), удаление сироты `MarkingProductCodesDialog`, CROSS-04 (импорт с контекстом пула).
-- Verification: `npm run build`; e2e `ff-honest-sign-pool`, `ff-honest-sign-import`.
+- Verification: `npm run build`; e2e `ff-honest-sign-pool`, `ff-honest-sign-import`. Commit `f048585`.
 
 ## TASK-048 — 2026-06-28 — LEDGER-06: localize ledger events via markingStatus
 
