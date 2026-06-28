@@ -1,5 +1,11 @@
 # TASKLOG
 
+## TASK-052 — 2026-06-28 — POOLCARD-01: localize pool code statuses
+
+- What changed: `HonestSignPoolPage` — фильтр и чипы статусов кодов через `codeStatusLabel` из `markingStatus.ts`; cherry-pick SHARED-01 (словарь + `MarkingProductCodesDialog`); e2e проверяет «Доступен» в строке и опциях фильтра.
+- What did NOT change: лента событий на карточке пула (LEDGER-06), CSV export (англ. enum в файле).
+- Verification: `npm run build` in POOLCARD-01 worktree — green. Commit `117b153`. E2E webServer timeout (env), не блокирует сборку.
+
 ## TASK-036 — 2026-06-28 — CZ-000 barrier: MP commit + feat/cz-ux-fixes + autopilot backlog
 
 - What changed:
