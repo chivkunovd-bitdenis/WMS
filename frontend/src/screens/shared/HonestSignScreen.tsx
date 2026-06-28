@@ -21,6 +21,7 @@ import {
   TextField,
   ToggleButton,
   ToggleButtonGroup,
+  Tooltip,
   Typography,
 } from '@mui/material'
 import UploadFileOutlined from '@mui/icons-material/UploadFileOutlined'
@@ -114,13 +115,47 @@ function ProductChips({
   )
 }
 
-function forecastUntilLabel(forecastDays: number | null): string {
-  if (forecastDays == null || forecastDays <= 0) return '—'
+function forecastDateLabel(forecastDays: number): string {
   const d = new Date()
   d.setDate(d.getDate() + Math.ceil(forecastDays))
   const dd = String(d.getDate()).padStart(2, '0')
   const mm = String(d.getMonth() + 1).padStart(2, '0')
   return `${dd}.${mm}`
+}
+
+function forecastDaysHint(forecastDays: number): string {
+  const rounded = Math.round(forecastDays * 10) / 10
+  return `(${rounded} дн.)`
+}
+
+function ForecastLabel({
+  forecastDays,
+  testId,
+}: {
+  forecastDays: number | null
+  testId?: string
+}) {
+  if (forecastDays == null || forecastDays <= 0) {
+    return (
+      <Typography component="span" variant="inherit" data-testid={testId}>
+        —
+      </Typography>
+    )
+  }
+  const dateLabel = forecastDateLabel(forecastDays)
+  const hint = forecastDaysHint(forecastDays)
+  return (
+    <Tooltip title={hint}>
+      <Typography
+        component="span"
+        variant="inherit"
+        data-testid={testId}
+        sx={{ cursor: 'help', borderBottom: '1px dotted', borderColor: 'text.disabled' }}
+      >
+        {dateLabel}
+      </Typography>
+    </Tooltip>
+  )
 }
 
 export function HonestSignScreen({
@@ -337,7 +372,7 @@ export function HonestSignScreen({
                   <Typography variant="body2">Доступно: {row.available}</Typography>
                   <Typography variant="body2">Расход/день: {spendPerDay}</Typography>
                   <Typography variant="body2">
-                    Прогноз до: {forecastUntilLabel(row.forecast_days)}
+                    Прогноз: <ForecastLabel forecastDays={row.forecast_days} />
                   </Typography>
                 </Stack>
               </Paper>
@@ -499,7 +534,10 @@ export function HonestSignScreen({
                     <TableCell align="right">{row.printed}</TableCell>
                     <TableCell align="right">{row.defective}</TableCell>
                     <TableCell align="right">
-                      {row.forecast_days != null ? `${row.forecast_days} д` : '—'}
+                      <ForecastLabel
+                        forecastDays={row.forecast_days}
+                        testId={`${testIdPrefix}-pool-forecast-${row.id}`}
+                      />
                     </TableCell>
                     <TableCell padding="checkbox" align="right">
                       <IconButton
