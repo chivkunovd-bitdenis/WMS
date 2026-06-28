@@ -1,5 +1,11 @@
 # TASKLOG
 
+## TASK-052 — 2026-06-28 — PENDING-01: bulk print selected pending rows
+
+- What changed: `FfPendingMarkingPage` — чекбоксы строк, «Печать выбранных (N)», очередь последовательных `MarkingPrintDialog` (каждая лента по своему товару); e2e TC-NEW-008.
+- What did NOT change: API pending-marking, построчная кнопка «Печать», контракт total vs rows (CROSS-02).
+- Verification: `npm run build` in PENDING-01 worktree — green; e2e `ff-pending-marking.spec.ts` (TC-NEW-007, TC-NEW-008) — green по отдельности. Commit `5799fe6`.
+
 ## TASK-036 — 2026-06-28 — CZ-000 barrier: MP commit + feat/cz-ux-fixes + autopilot backlog
 
 - What changed:
