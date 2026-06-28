@@ -1,6 +1,7 @@
 import { expect, test } from '@playwright/test'
 
 import { waitForGetOk, waitForPostOk } from './api-waits'
+import { selectHonestSignSeller } from './ff-honest-sign-helpers'
 import { fulfillInboundViaBoxScans } from './inbound-boxes-helpers'
 import { openFulfillmentRegistration } from './auth-flow'
 
@@ -98,7 +99,7 @@ test('FF packaging: print honest sign codes for line quantity', async ({ page })
 
   await page.getByTestId('nav-ff-honest-sign').click()
   await expect(page.getByTestId('ff-honest-sign-page')).toBeVisible()
-  await page.getByTestId(`ff-honest-sign-seller-${sellerId}`).click()
+  await selectHonestSignSeller(page, sellerId)
   await expect(page.getByTestId(`ff-honest-sign-pool-row-${poolId}`)).toBeVisible()
   await expect(page.getByTestId(`ff-honest-sign-pool-chip-${poolId}-${productId}`)).toBeVisible()
 

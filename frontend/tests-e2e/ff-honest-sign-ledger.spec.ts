@@ -2,6 +2,7 @@ import { expect, test } from '@playwright/test'
 
 import { waitForGetOk, waitForPostOk } from './api-waits'
 import { openFulfillmentRegistration } from './auth-flow'
+import { selectHonestSignSeller } from './ff-honest-sign-helpers'
 
 // TC-NEW-010 — T0.10: лента расхода, фильтр по типу и документу.
 test('FF honest sign ledger: imported events and document filter', async ({ page }) => {
@@ -48,7 +49,7 @@ test('FF honest sign ledger: imported events and document filter', async ({ page
   const docNumber = String(((await imp.json()) as { document_number: string }).document_number)
 
   await page.getByTestId('nav-ff-honest-sign').click()
-  await page.getByTestId(`ff-honest-sign-seller-${sellerId}`).click()
+  await selectHonestSignSeller(page, sellerId)
   await page.getByTestId('ff-honest-sign-open-ledger').click()
   await expect(page.getByTestId('ff-honest-sign-ledger-page')).toBeVisible()
   await expect(page.getByTestId('ff-honest-sign-ledger-table')).toContainText('imported')
