@@ -1185,15 +1185,18 @@ async def list_product_codes(
     tenant_id: uuid.UUID,
     product_id: uuid.UUID,
 ) -> list[ProductMarkingCodeRow]:
-    product = await get_product(session, tenant_id, product_id)
+    code_filter, product = await _code_filter_for_product(session, tenant_id, product_id)
     if product is None:
         raise MarkingCodeServiceError("product_not_found")
+    if code_filter is None:
+        return []
 
     stmt = (
         select(MarkingCode)
         .where(
             MarkingCode.tenant_id == tenant_id,
-            MarkingCode.product_id == product_id,
+            MarkingCode.seller_id == product.seller_id,
+            code_filter,
         )
         .order_by(MarkingCode.created_at.desc())
     )
