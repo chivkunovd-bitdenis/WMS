@@ -1,5 +1,11 @@
 # TASKLOG
 
+## TASK-068 — 2026-06-29 — API-02: is_shared and shared_with on pool responses
+
+- What changed: `marking_codes.py` — `PoolListItemOut` + `linked_products_count`, `is_shared`; `PoolDetailOut` + `shared_with`; маппинг из SVC-02 `PoolListRow`/`PoolDetailRow`. `test_marking_pool_linked_products.py` — API list/detail для personal/shared пулов.
+- What did NOT change: сервисный слой (SVC-02); фронт (UI-02).
+- Verification: `ruff check . && mypy . && pytest` — 261 passed.
+
 ## TASK-067 — 2026-06-28 — CD: GitHub Actions deploy + prod PR #49
 
 - What changed: `.github/workflows/deploy.yml` — автодеплой после green CI на `main` (SSH → `prod-update.sh`) + smoke HTTP; `docs/DEPLOY_SERVER_RU.md` — CI/CD секция и secrets; GitHub Secrets `DEPLOY_SSH_*`, `DEPLOY_HTTP_PORT`; deploy key `github-actions-wms-deploy` на сервере.

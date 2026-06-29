@@ -244,6 +244,8 @@ class PoolListItemOut(BaseModel):
     title: str
     gtin: str
     products: list[PoolProductOut]
+    is_shared: bool
+    linked_products_count: int
     available: int
     reserved: int
     printed: int
@@ -271,6 +273,7 @@ class PoolImportBatchOut(BaseModel):
 
 class PoolDetailOut(PoolListItemOut):
     seller_id: str
+    shared_with: list[PoolProductOut]
     import_batches: list[PoolImportBatchOut]
 
 
@@ -525,14 +528,18 @@ def _product_marking_overview_out(
     )
 
 
+def _pool_product_out(product: mc_svc.PoolProductRow) -> PoolProductOut:
+    return PoolProductOut(id=str(product.id), sku_code=product.sku_code, name=product.name)
+
+
 def _pool_list_item_out(row: mc_svc.PoolListRow) -> PoolListItemOut:
     return PoolListItemOut(
         id=str(row.id),
         title=row.title,
         gtin=row.gtin,
-        products=[
-            PoolProductOut(id=str(p.id), sku_code=p.sku_code, name=p.name) for p in row.products
-        ],
+        products=[_pool_product_out(p) for p in row.products],
+        is_shared=row.is_shared,
+        linked_products_count=row.linked_products_count,
         available=row.available,
         reserved=row.reserved,
         printed=row.printed,
@@ -801,9 +808,10 @@ async def get_marking_pool(
         seller_id=str(detail.seller_id),
         title=detail.title,
         gtin=detail.gtin,
-        products=[
-            PoolProductOut(id=str(p.id), sku_code=p.sku_code, name=p.name) for p in detail.products
-        ],
+        products=[_pool_product_out(p) for p in detail.products],
+        is_shared=detail.is_shared,
+        linked_products_count=detail.linked_products_count,
+        shared_with=[_pool_product_out(p) for p in detail.products],
         available=detail.available,
         reserved=detail.reserved,
         printed=detail.printed,
