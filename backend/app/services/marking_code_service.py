@@ -7,7 +7,7 @@ import re
 import uuid
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
-from typing import Any
+from typing import Any, cast
 
 from sqlalchemy import Select, func, or_, select
 from sqlalchemy.dialects.postgresql import insert as pg_insert
@@ -335,7 +335,7 @@ class LedgerEventRow:
     id: uuid.UUID
     created_at: datetime
     event_type: str
-    cis_masked: str
+    cis_masked: str | None
     pool_title: str | None
     gtin: str | None
     product_name: str | None
@@ -343,6 +343,7 @@ class LedgerEventRow:
     seller_name: str | None
     document_number: str | None
     actor_email: str | None
+    aggregated_count: int | None = None
 
 
 @dataclass(frozen=True)
@@ -2146,12 +2147,16 @@ def _ledger_event_row(
     product_sku: str | None,
     seller_name: str | None,
     actor_email: str | None,
+    *,
+    row_id: uuid.UUID | None = None,
+    created_at: datetime | None = None,
+    aggregated_count: int | None = None,
 ) -> LedgerEventRow:
     return LedgerEventRow(
-        id=event.id,
-        created_at=event.created_at,
+        id=row_id or event.id,
+        created_at=created_at or event.created_at,
         event_type=event.event_type,
-        cis_masked=mask_cis_code(cis),
+        cis_masked=None if aggregated_count is not None else mask_cis_code(cis),
         pool_title=pool_title,
         gtin=gtin,
         product_name=product_name,
@@ -2159,7 +2164,128 @@ def _ledger_event_row(
         seller_name=seller_name,
         document_number=event.document_number,
         actor_email=actor_email,
+        aggregated_count=aggregated_count,
     )
+
+
+def _import_ledger_group_key(
+    event: MarkingCodeEvent,
+    import_batch_id: uuid.UUID | None,
+) -> str | uuid.UUID:
+    if import_batch_id is not None:
+        return import_batch_id
+    minute_bucket = event.created_at.replace(second=0, microsecond=0)
+    return f"{event.document_number or ''}:{minute_bucket.isoformat()}"
+
+
+_LedgerRawRow = tuple[
+    MarkingCodeEvent,
+    str,
+    str | None,
+    str | None,
+    str | None,
+    str | None,
+    str | None,
+    str | None,
+    uuid.UUID | None,
+    datetime | None,
+]
+
+
+def _collapse_ledger_rows(raw_rows: list[_LedgerRawRow]) -> list[LedgerEventRow]:
+    non_imported: list[LedgerEventRow] = []
+    import_groups: dict[
+        str | uuid.UUID,
+        list[
+            tuple[
+                MarkingCodeEvent,
+                str,
+                str | None,
+                str | None,
+                str | None,
+                str | None,
+                str | None,
+                str | None,
+                uuid.UUID | None,
+                datetime | None,
+            ]
+        ],
+    ] = {}
+
+    for (
+        event,
+        cis,
+        gtin,
+        pool_title,
+        product_name,
+        product_sku,
+        seller_name,
+        actor_email,
+        import_batch_id,
+        batch_created_at,
+    ) in raw_rows:
+        if event.event_type != EVENT_IMPORTED:
+            non_imported.append(
+                _ledger_event_row(
+                    event,
+                    cis,
+                    gtin,
+                    pool_title,
+                    product_name,
+                    product_sku,
+                    seller_name,
+                    actor_email,
+                )
+            )
+            continue
+        key = _import_ledger_group_key(event, import_batch_id)
+        import_groups.setdefault(key, []).append(
+            (
+                event,
+                cis,
+                gtin,
+                pool_title,
+                product_name,
+                product_sku,
+                seller_name,
+                actor_email,
+                import_batch_id,
+                batch_created_at,
+            )
+        )
+
+    collapsed_imports: list[LedgerEventRow] = []
+    for group in import_groups.values():
+        head = group[0]
+        event = head[0]
+        cis = head[1]
+        gtin = head[2]
+        pool_title = head[3]
+        product_name = head[4]
+        product_sku = head[5]
+        seller_name = head[6]
+        actor_email = head[7]
+        import_batch_id = head[8]
+        batch_created_at = head[9]
+        collapsed_imports.append(
+            _ledger_event_row(
+                event,
+                cis,
+                gtin,
+                pool_title,
+                product_name,
+                product_sku,
+                seller_name,
+                actor_email,
+                row_id=import_batch_id or event.id,
+                created_at=batch_created_at or event.created_at,
+                aggregated_count=len(group),
+            )
+        )
+
+    merged = non_imported + collapsed_imports
+    merged.sort(key=lambda row: row.created_at, reverse=True)
+    return merged
 
 
 def _ledger_filtered_stmt(
@@ -2184,8 +2310,11 @@ def _ledger_filtered_stmt(
             Product.sku_code,
             Seller.name,
             User.email,
+            MarkingCode.import_batch_id,
+            MarkingCodeImport.created_at,
         )
         .join(MarkingCode, MarkingCode.id == MarkingCodeEvent.code_id)
+        .outerjoin(MarkingCodeImport, MarkingCode.import_batch_id == MarkingCodeImport.id)
         .outerjoin(MarkingPool, MarkingPool.id == MarkingCodeEvent.pool_id)
         .outerjoin(Product, Product.id == MarkingCode.product_id)
         .outerjoin(Seller, Seller.id == MarkingCodeEvent.seller_id)
@@ -2248,21 +2377,12 @@ async def list_ledger(
         date_from=date_from,
         date_to=date_to,
     )
-
-    count_stmt = select(func.count()).select_from(stmt.subquery())
-    total = int((await session.execute(count_stmt)).scalar_one())
-
-    stmt = stmt.order_by(MarkingCodeEvent.created_at.desc()).limit(limit).offset(offset)
-    rows: list[LedgerEventRow] = []
-    for event, cis, gtin, pool_title, product_name, product_sku, seller_name, actor_email in (
-        await session.execute(stmt)
-    ).all():
-        rows.append(
-            _ledger_event_row(
-                event, cis, gtin, pool_title, product_name, product_sku, seller_name, actor_email
-            )
-        )
-    return LedgerPage(rows=rows, total=total)
+    stmt = stmt.order_by(MarkingCodeEvent.created_at.desc()).limit(_LEDGER_EXPORT_MAX)
+    raw_rows = cast(list[_LedgerRawRow], list((await session.execute(stmt)).all()))
+    collapsed = _collapse_ledger_rows(raw_rows)
+    total = len(collapsed)
+    page_rows = collapsed[offset : offset + limit]
+    return LedgerPage(rows=page_rows, total=total)
 
 
 async def export_ledger_csv(
@@ -2298,24 +2418,34 @@ async def export_ledger_csv(
     buffer = io.StringIO()
     writer = csv.writer(buffer)
     writer.writerow(_LEDGER_CSV_HEADER)
-    for event, cis, gtin, pool_title, product_name, product_sku, seller_name, actor_email in (
-        await session.execute(stmt)
-    ).all():
-        row = _ledger_event_row(
+    for raw in (await session.execute(stmt)).all():
+        (
+            event,
+            cis,
+            gtin,
+            pool_title,
+            product_name,
+            product_sku,
+            seller_name,
+            actor_email,
+            _import_batch_id,
+            _batch_created_at,
+        ) = raw
+        ledger_row = _ledger_event_row(
             event, cis, gtin, pool_title, product_name, product_sku, seller_name, actor_email
         )
         writer.writerow(
             [
-                row.created_at.isoformat(),
-                row.event_type,
-                row.cis_masked,
-                row.pool_title or "",
-                row.gtin or "",
-                row.product_name or "",
-                row.product_sku or "",
-                row.seller_name or "",
-                row.document_number or "",
-                row.actor_email or "",
+                ledger_row.created_at.isoformat(),
+                ledger_row.event_type,
+                ledger_row.cis_masked or "",
+                ledger_row.pool_title or "",
+                ledger_row.gtin or "",
+                ledger_row.product_name or "",
+                ledger_row.product_sku or "",
+                ledger_row.seller_name or "",
+                ledger_row.document_number or "",
+                ledger_row.actor_email or "",
             ]
         )
     return buffer.getvalue()
