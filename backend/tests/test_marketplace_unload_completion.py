@@ -140,6 +140,71 @@ async def _collect_qty_via_scan(
         assert prod_scan.status_code == 200, prod_scan.text
 
 
+def _ship_url(mid: uuid.UUID) -> str:
+    return f"/operations/marketplace-unload-requests/{mid}/ship"
+
+
+@pytest.mark.asyncio
+async def test_ship_unload_without_discrepancy_http(
+    async_client: AsyncClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """TC-NEW-OUT-001: HTTP POST /ship completes when plan equals picked qty."""
+    h, mid, loc_id = await _confirmed_unload_with_stock(
+        async_client, monkeypatch, plan_qty=2
+    )
+    await _collect_qty_via_scan(async_client, h, mid, loc_id=loc_id, qty=2)
+
+    ship = await async_client.post(_ship_url(mid), headers=h)
+    assert ship.status_code == 200, ship.text
+    body = ship.json()
+    assert body["status"] == "shipped"
+    assert body["ff_modified"] is False
+    line = body["lines"][0]
+    assert line["picked_qty"] == 2
+    assert line["quantity"] == 2
+    assert line["has_discrepancy"] is False
+
+
+@pytest.mark.asyncio
+async def test_ship_unload_with_discrepancy_rejects_without_ack_http(
+    async_client: AsyncClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """TC-NEW-OUT-002: HTTP POST /ship without ack → 422 distribution_incomplete."""
+    h, mid, loc_id = await _confirmed_unload_with_stock(
+        async_client, monkeypatch, plan_qty=3
+    )
+    await _collect_qty_via_scan(async_client, h, mid, loc_id=loc_id, qty=1)
+
+    ship = await async_client.post(_ship_url(mid), headers=h)
+    assert ship.status_code == 422
+    assert ship.json()["detail"] == "distribution_incomplete"
+
+
+@pytest.mark.asyncio
+async def test_ship_unload_with_discrepancy_succeeds_with_ack_http(
+    async_client: AsyncClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """TC-NEW-OUT-002: HTTP POST /ship with acknowledge_discrepancy completes."""
+    h, mid, loc_id = await _confirmed_unload_with_stock(
+        async_client, monkeypatch, plan_qty=3
+    )
+    await _collect_qty_via_scan(async_client, h, mid, loc_id=loc_id, qty=1)
+
+    ship = await async_client.post(
+        _ship_url(mid),
+        headers=h,
+        json={"acknowledge_discrepancy": True},
+    )
+    assert ship.status_code == 200, ship.text
+    body = ship.json()
+    assert body["status"] == "shipped"
+    assert body["ff_modified"] is True
+    line = body["lines"][0]
+    assert line["picked_qty"] == 1
+    assert line["quantity"] == 3
+    assert line["has_discrepancy"] is True
+
+
 @pytest.mark.asyncio
 async def test_complete_unload_without_discrepancy(
     async_client: AsyncClient, monkeypatch: pytest.MonkeyPatch
