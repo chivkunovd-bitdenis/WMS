@@ -124,16 +124,16 @@ async def test_inbound_intake_flow_post_all(async_client: AsyncClient) -> None:
 
     prim = await post_primary_accept(async_client, base, rid, ah)
     assert prim.status_code == 200, prim.text
-    assert prim.json()["status"] == "primary_accepted"
+    assert prim.json()["status"] == "receiving"
     await fulfill_inbound_via_box_scans(async_client, ah, rid, sku, 5)
 
     ver = await async_client.post(f"{base}/{rid}/verify", headers=ah)
     assert ver.status_code == 200, ver.text
-    assert ver.json()["status"] == "verified"
+    assert ver.json()["status"] == "sorting"
 
     post = await async_client.post(f"{base}/{rid}/post", headers=ah)
     assert post.status_code == 200, post.text
-    assert post.json()["status"] == "posted"
+    assert post.json()["status"] == "done"
     assert post.json()["lines"][0]["posted_qty"] == 5
 
     bal = await async_client.get(
@@ -169,7 +169,7 @@ async def test_inbound_intake_flow_post_all(async_client: AsyncClient) -> None:
     assert listed.status_code == 200
     assert len(listed.json()) == 1
     assert listed.json()[0]["line_count"] == 1
-    assert listed.json()[0]["status"] == "posted"
+    assert listed.json()[0]["status"] == "done"
 
     closed = await async_client.post(
         f"{base}/{rid}/lines",
@@ -249,7 +249,7 @@ async def test_inbound_partial_receive_then_complete(async_client: AsyncClient) 
         json={"quantity": 3},
     )
     assert r1.status_code == 200, r1.text
-    assert r1.json()["status"] == "verified"
+    assert r1.json()["status"] == "sorting"
     assert r1.json()["lines"][0]["posted_qty"] == 3
 
     r2 = await async_client.post(
@@ -258,7 +258,7 @@ async def test_inbound_partial_receive_then_complete(async_client: AsyncClient) 
         json={"quantity": 7},
     )
     assert r2.status_code == 200, r2.text
-    assert r2.json()["status"] == "posted"
+    assert r2.json()["status"] == "done"
     assert r2.json()["lines"][0]["posted_qty"] == 10
 
     mov = await async_client.get(f"{base}/{rid}/movements", headers=ah)
@@ -328,7 +328,7 @@ async def test_inbound_patch_storage_after_line_create(async_client: AsyncClient
     await async_client.post(f"{base}/{rid}/verify", headers=h)
     post = await async_client.post(f"{base}/{rid}/post", headers=h)
     assert post.status_code == 200, post.text
-    assert post.json()["status"] == "posted"
+    assert post.json()["status"] == "done"
 
 
 @pytest.mark.asyncio

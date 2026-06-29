@@ -290,7 +290,7 @@ class LedgerEventOut(BaseModel):
     id: str
     created_at: str
     event_type: str
-    cis_masked: str
+    cis_masked: str | None = None
     pool_title: str | None
     gtin: str | None
     product_name: str | None
@@ -298,6 +298,7 @@ class LedgerEventOut(BaseModel):
     seller_name: str | None
     document_number: str | None
     actor_email: str | None
+    aggregated_count: int | None = None
 
 
 class LedgerPageOut(BaseModel):
@@ -914,6 +915,7 @@ async def list_marking_ledger(
                 seller_name=r.seller_name,
                 document_number=r.document_number,
                 actor_email=r.actor_email,
+                aggregated_count=r.aggregated_count,
             )
             for r in page.rows
         ],

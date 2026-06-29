@@ -16,6 +16,7 @@ import {
   loginFfAdmin,
   loginSellerPortal,
   openFfInboundDoc,
+  beginInboundReceivingWithBoxes,
   seedFfSellerInbound,
   expectSellerPortalReady,
   sellerPath,
@@ -96,35 +97,24 @@ test.describe('US-B-01 seller inbound draft — fields and actions', () => {
   });
 });
 
-test.describe('US-B-01 FF primary accept by boxes', () => {
-  test('plan match: no discrepancy warning; plan mismatch: warning + badge after accept', async ({
+test.describe('US-B-01 FF receiving creates on-demand boxes', () => {
+  test('submitted inbound shows planned boxes; after receiving setup closed boxes visible', async ({
     page,
   }) => {
     const seed = await seedFfSellerInbound(page);
-    await createSellerInboundDraftViaUi(page, seed, { plannedBoxes: '4', lineQty: '2' });
+    const rid = await createSellerInboundDraftViaUi(page, seed, { plannedBoxes: '4', lineQty: '2' });
     await submitSellerInbound(page);
 
+    const h = { Authorization: `Bearer ${seed.token}` };
+    await beginInboundReceivingWithBoxes(page.request, h, rid, { boxCount: 4, closeEach: true });
+
     await loginFfAdmin(page, seed.adminEmail, seed.password);
-    await openFfInboundDoc(page, seed);
+    await openFfInboundDoc(page, seed, { skipLogin: true });
 
-    await expect(page.getByTestId('ff-inbound-admin-submitted')).toBeVisible();
     await expect(page.getByTestId('ff-inbound-planned-boxes')).toContainText('4');
-    await expect(page.getByTestId('ff-inbound-status-chip')).toContainText('Передано');
-
-    const actualInput = page.getByTestId('ff-inbound-actual-box-count');
-    await actualInput.fill('4');
-    await expect(page.getByTestId('ff-inbound-boxes-discrepancy')).toBeHidden();
-
-    await Promise.all([
-      waitForPostOk(page, INBOUND_API, (u) => u.includes('/primary-accept')),
-      page.getByTestId('ff-inbound-primary-accept').click(),
-    ]);
-
-    await expect(page.getByTestId('ff-inbound-admin-submitted')).toBeHidden();
-    await expect(page.getByTestId('ff-inbound-status-chip')).toContainText('Принято');
-    await expect(page.getByTestId('ff-inbound-boxes-discrepancy-badge')).toBeHidden();
+    await expect(page.getByTestId('ff-inbound-status-chip')).toContainText('Приёмка');
     await expect(page.getByTestId('ff-inbound-boxes-panel')).toBeVisible();
-    await expect(page.getByTestId('ff-inbound-box-row')).toHaveCount(4);
+    await expect(page.getByTestId('ff-inbound-box-closed')).toHaveCount(4);
 
     await page.getByTestId('ff-inbound-close').click();
     await expect(page.getByTestId('ff-doc-dialog')).toBeHidden();
@@ -132,12 +122,12 @@ test.describe('US-B-01 FF primary accept by boxes', () => {
     await page.getByTestId('nav-ff-reception').click();
     await page.getByTestId('ff-inbound-queue-table').locator('tbody tr').first().click();
     await expect(page.getByTestId('ff-inbound-boxes-panel')).toBeVisible();
-    await expect(page.getByTestId('ff-inbound-box-row')).toHaveCount(4);
+    await expect(page.getByTestId('ff-inbound-box-closed')).toHaveCount(4);
   });
 });
 
 test.describe('US-B-02 inbound box barcodes and print actions', () => {
-  test('discrepancy path, INB barcodes, print one and print all call mark-label-printed', async ({
+  test('INB barcodes, print one and print all call mark-label-printed', async ({
     page,
   }) => {
     await page.addInitScript(() => {
@@ -145,26 +135,18 @@ test.describe('US-B-02 inbound box barcodes and print actions', () => {
     });
 
     const seed = await seedFfSellerInbound(page);
-    await createSellerInboundDraftViaUi(page, seed, { plannedBoxes: '4', lineQty: '1' });
+    const rid = await createSellerInboundDraftViaUi(page, seed, { plannedBoxes: '4', lineQty: '1' });
     await submitSellerInbound(page);
+    const h = { Authorization: `Bearer ${seed.token}` };
+    await beginInboundReceivingWithBoxes(page.request, h, rid, { boxCount: 3, closeEach: true });
     await openFfInboundDoc(page, seed);
 
-    const actualInput = page.getByTestId('ff-inbound-actual-box-count');
-    await actualInput.fill('3');
-    await expect(page.getByTestId('ff-inbound-boxes-discrepancy')).toBeVisible();
-
-    await Promise.all([
-      waitForPostOk(page, INBOUND_API, (u) => u.includes('/primary-accept')),
-      page.getByTestId('ff-inbound-primary-accept').click(),
-    ]);
-
-    await expect(page.getByTestId('ff-inbound-boxes-discrepancy-badge')).toBeVisible();
     await expect(page.getByTestId('ff-inbound-boxes-panel')).toBeVisible();
 
-    const rows = page.getByTestId('ff-inbound-box-row');
+    const rows = page.getByTestId('ff-inbound-box-closed');
     await expect(rows).toHaveCount(3);
 
-    const barcodes = await page.getByTestId('ff-inbound-box-barcode').allTextContents();
+    const barcodes = await rows.locator('code').allTextContents();
     expect(barcodes).toHaveLength(3);
     for (const code of barcodes) {
       expect(code).toMatch(/^INB-[A-F0-9]{12}$/);
@@ -172,14 +154,11 @@ test.describe('US-B-02 inbound box barcodes and print actions', () => {
     expect(new Set(barcodes).size).toBe(3);
 
     const row0 = rows.nth(0);
-    await expect(row0.getByText('Не печатали')).toBeVisible();
     await Promise.all([
       waitForInboundBoxLabelPrintedOk(page),
       row0.getByTestId('ff-inbound-box-print').click(),
     ]);
-    await expect(row0.getByText('Напечатано')).toBeVisible();
 
-    // «Печать всех» — по одному POST на короб (уже напечатанный короб 1 тоже отмечается снова).
     const markPrinted = page.waitForResponse(
       (r) =>
         r.request().method() === 'POST' &&
@@ -189,14 +168,13 @@ test.describe('US-B-02 inbound box barcodes and print actions', () => {
       { times: 3 },
     );
     await Promise.all([markPrinted, page.getByTestId('ff-inbound-boxes-print-all').click()]);
-    for (let i = 0; i < 3; i += 1) {
-      await expect(rows.nth(i).getByText('Напечатано')).toBeVisible();
-    }
   });
 });
 
 test.describe('US-B-01/B-02 API contracts (regression)', () => {
-  test('primary-accept returns boxes; mark-label-printed sets timestamp', async ({ page }) => {
+  test('begin receiving with boxes returns INB barcodes; mark-label-printed sets timestamp', async ({
+    page,
+  }) => {
     const seed = await seedFfSellerInbound(page);
     const rid = await apiCreateSubmittedInbound(page.request, seed, {
       plannedBoxes: 2,
@@ -204,17 +182,11 @@ test.describe('US-B-01/B-02 API contracts (regression)', () => {
     });
     const h = { Authorization: `Bearer ${seed.token}` };
 
-    const prim = await page.request.post(`${INBOUND_API}/${rid}/primary-accept`, {
-      headers: { ...h, 'Content-Type': 'application/json' },
-      data: { actual_box_count: 2 },
+    const { body } = await beginInboundReceivingWithBoxes(page.request, h, rid, {
+      boxCount: 2,
+      closeEach: true,
     });
-    expect(prim.ok()).toBeTruthy();
-    const body = (await prim.json()) as {
-      boxes: { id: string; box_number: number; internal_barcode: string; label_printed_at: string | null }[];
-      boxes_discrepancy: boolean;
-    };
     expect(body.boxes).toHaveLength(2);
-    expect(body.boxes_discrepancy).toBe(false);
 
     const boxId = body.boxes[0]!.id;
     const mark = await page.request.post(

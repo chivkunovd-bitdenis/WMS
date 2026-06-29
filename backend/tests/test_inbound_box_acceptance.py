@@ -102,16 +102,32 @@ async def test_inbound_box_plan_vs_actual_discrepancy(async_client: AsyncClient)
     )
     assert sub.status_code == 200, sub.text
 
-    prim = await async_client.post(
-        f"/operations/inbound-intake-requests/{rid}/primary-accept",
-        headers=ah,
-        json={"actual_box_count": 2},
+    base = f"/operations/inbound-intake-requests/{rid}"
+    from inbound_box_intake_helpers import post_primary_accept
+
+    prim = await post_primary_accept(
+        async_client,
+        "/operations/inbound-intake-requests",
+        rid,
+        ah,
+        actual_box_count=0,
+        create_boxes=False,
     )
     assert prim.status_code == 200, prim.text
-    body = prim.json()
-    assert body["status"] == "primary_accepted"
-    assert body["actual_box_count"] == 2
-    assert body["boxes_discrepancy"] is True
+    assert prim.json()["status"] == "receiving"
+
+    box1 = await async_client.post(f"{base}/boxes", headers=ah)
+    assert box1.status_code == 201, box1.text
+    close1 = await async_client.post(
+        f"{base}/boxes/{box1.json()['id']}/close", headers=ah
+    )
+    assert close1.status_code == 200, close1.text
+    box2 = await async_client.post(f"{base}/boxes", headers=ah)
+    assert box2.status_code == 201, box2.text
+
+    got = await async_client.get(base, headers=ah)
+    assert got.status_code == 200, got.text
+    body = got.json()
     assert len(body["boxes"]) == 2
     nums = sorted(b["box_number"] for b in body["boxes"])
     assert nums == [1, 2]
@@ -121,7 +137,8 @@ async def test_inbound_box_plan_vs_actual_discrepancy(async_client: AsyncClient)
 
 
 @pytest.mark.asyncio
-async def test_primary_accept_creates_idempotent_boxes(async_client: AsyncClient) -> None:
+async def test_on_demand_boxes_and_mark_label(async_client: AsyncClient) -> None:
+    """On-demand POST /boxes creates boxes; label can be marked printed."""
     suffix = str(int(time.time() * 1000) + 1)
     reg = await async_client.post(
         "/auth/register",
@@ -174,13 +191,24 @@ async def test_primary_accept_creates_idempotent_boxes(async_client: AsyncClient
         f"/operations/inbound-intake-requests/{rid}/submit",
         headers=sh,
     )
-    prim = await async_client.post(
-        f"/operations/inbound-intake-requests/{rid}/primary-accept",
-        headers=ah,
-        json={"actual_box_count": 2},
+    base = f"/operations/inbound-intake-requests/{rid}"
+    from inbound_box_intake_helpers import post_primary_accept
+
+    await post_primary_accept(
+        async_client,
+        "/operations/inbound-intake-requests",
+        rid,
+        ah,
+        actual_box_count=0,
+        create_boxes=False,
     )
-    assert prim.status_code == 200, prim.text
-    box_ids = [b["id"] for b in prim.json()["boxes"]]
+    b1 = await async_client.post(f"{base}/boxes", headers=ah)
+    assert b1.status_code == 201, b1.text
+    await async_client.post(f"{base}/boxes/{b1.json()['id']}/close", headers=ah)
+    b2 = await async_client.post(f"{base}/boxes", headers=ah)
+    assert b2.status_code == 201, b2.text
+    got = await async_client.get(base, headers=ah)
+    box_ids = [b["id"] for b in got.json()["boxes"]]
     mark = await async_client.post(
         f"/operations/inbound-intake-requests/{rid}/boxes/{box_ids[0]}/mark-label-printed",
         headers=ah,

@@ -2,6 +2,7 @@ import { test, expect } from '@playwright/test';
 
 import {
   waitForGetOk,
+  waitForPatchOk,
   waitForPostOk,
 } from './api-waits';
 import { openFulfillmentRegistration } from './auth-flow';
@@ -70,9 +71,11 @@ test('удаление строки отгрузки в draft снимает р�
     page.getByTestId('inbound-submit-request').click(),
   ]);
   await Promise.all([
-    waitForPostOk(page, baseIn, (u) => u.includes('/primary-accept')),
+    waitForPatchOk(page, baseIn, (u) => u.includes('/actual')),
+    waitForPostOk(page, baseIn, (u) => u.includes('/boxes')),
     page.getByTestId('inbound-primary-accept').click(),
   ]);
+  await expect(page.getByTestId('inbound-detail-status')).toContainText('receiving');
   const { v2InboundBoxIntakeUi } = await import('./inbound-boxes-helpers');
   await v2InboundBoxIntakeUi(page, h, sku, 10);
   await Promise.all([

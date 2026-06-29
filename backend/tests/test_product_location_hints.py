@@ -4,7 +4,7 @@ import time
 
 import pytest
 from httpx import AsyncClient
-from inbound_box_intake_helpers import fulfill_inbound_via_box_scans
+from inbound_box_intake_helpers import fulfill_inbound_via_box_scans, post_primary_accept
 
 
 @pytest.mark.asyncio
@@ -54,9 +54,7 @@ async def test_locations_by_product_returns_cells_with_stock(
         f"{base}/{rid}/lines", headers=ah, json={"product_id": pid, "expected_qty": 4}
     )
     await async_client.post(f"{base}/{rid}/submit", headers=ah)
-    await async_client.post(
-        f"{base}/{rid}/primary-accept", headers=ah, json={"actual_box_count": 1}
-    )
+    await post_primary_accept(async_client, base, rid, ah)
     await fulfill_inbound_via_box_scans(async_client, ah, rid, sku, 4)
     await async_client.post(f"{base}/{rid}/verify", headers=ah)
     got = await async_client.get(f"{base}/{rid}", headers=ah)

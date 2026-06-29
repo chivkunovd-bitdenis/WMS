@@ -2,7 +2,6 @@ import { test, expect } from '@playwright/test';
 
 import { waitForGetOk, waitForPostOk } from './api-waits';
 import { openFulfillmentRegistration } from './auth-flow';
-import { fillFfInboundBoxLineQty } from './inbound-boxes-helpers';
 
 // TC-S06-007 — остаток после verify (зона сортировки); разкладка → доступно в ячейках.
 test('ff verify posts to sorting zone; sorting queue and product columns', async ({ page }) => {
@@ -49,30 +48,27 @@ test('ff verify posts to sorting zone; sorting queue and product columns', async
     data: { product_id: pid, expected_qty: 4 },
   });
   await page.request.post(`${base}/${rid}/submit`, { headers: h });
-  const prim = await page.request.post(`${base}/${rid}/primary-accept`, {
-    headers: h,
-    data: { actual_box_count: 1 },
-  });
-  const inb = ((await prim.json()) as { boxes: { internal_barcode: string }[] }).boxes[0]!
-    .internal_barcode;
 
   await page.goto('/app/ff/reception');
   await expect(page.getByTestId('ff-reception-page')).toBeVisible();
   await page.getByTestId('ff-inbound-queue-row').first().click();
   await expect(page.getByTestId('ff-doc-dialog')).toBeVisible();
 
-  await page.getByTestId('ff-inbound-box-open-scan').fill(inb);
-  await Promise.all([
-    waitForPostOk(page, base, (u) => u.includes('/boxes/open')),
-    page.getByTestId('ff-inbound-box-open-submit').click(),
-  ]);
-  await fillFfInboundBoxLineQty(page, 4);
+  await page.getByTestId('ff-inbound-add-to-box').click();
+  await expect(page.getByTestId('ff-inbound-box-add-dialog')).toBeVisible();
+  for (let i = 0; i < 4; i++) {
+    await page.getByTestId('ff-inbound-box-add-scan-input').fill(sku);
+    await Promise.all([
+      waitForPostOk(page, base, (u) => u.includes('/boxes/') && u.includes('/scan')),
+      page.getByTestId('ff-inbound-box-add-scan-submit').click(),
+    ]);
+  }
   await Promise.all([
     waitForPostOk(page, base, (u) => u.includes('/close')),
-    page.getByTestId('ff-inbound-box-close').click(),
+    page.getByTestId('ff-inbound-box-add-close-box').click(),
   ]);
   await Promise.all([
-    waitForPostOk(page, base, (u) => u.includes('/verify')),
+    waitForPostOk(page, base, (u) => u.includes('/complete-receiving')),
     page.getByTestId('ff-inbound-verify-complete').click(),
   ]);
 
@@ -103,18 +99,17 @@ test('ff verify posts to sorting zone; sorting queue and product columns', async
   await expect(page.getByTestId('ff-product-label-print-dialog')).toBeVisible();
   await page.getByTestId('ff-product-label-cancel').click();
 
-  const boxCard = page.getByTestId('ff-sorting-box-card').first();
-  await boxCard.getByTestId('ff-sorting-box-location').click();
+  const productCard = page.getByTestId('ff-sorting-product-card').first();
+  await productCard.getByTestId('ff-sorting-add-cell').click();
+  const cellRow = productCard.getByTestId('ff-sorting-cell-row').first();
+  await cellRow.getByTestId('ff-sorting-cell-location').click();
   await page.getByRole('option', { name: /STORE-1/ }).click();
+  await cellRow.getByTestId('ff-sorting-cell-qty').fill('4');
   await Promise.all([
-    waitForPostOk(page, base, (u) => u.includes('/putaway')),
-    boxCard.getByTestId('ff-sorting-box-putaway-whole').click(),
+    waitForPostOk(page, base, (u) => u.includes('/distribution-complete')),
+    page.getByTestId('ff-sorting-apply').click(),
   ]);
-  await expect(boxCard.getByTestId('ff-sorting-putaway-history')).toBeVisible();
-  const cellGroup = boxCard.getByTestId('ff-sorting-putaway-cell-group').filter({ hasText: 'STORE-1' });
-  await expect(cellGroup).toBeVisible();
-  await expect(cellGroup.getByTestId('ff-sorting-putaway-cell-summary')).toHaveText('STORE-1');
-  await expect(cellGroup.getByTestId('ff-sorting-putaway-product-row')).toBeVisible();
+  await expect(page.getByTestId('ff-sorting-all-done')).toBeVisible();
 
   const balDone = await page.request.get('/api/operations/inventory-balances/summary', { headers: h });
   const doneRow = ((await balDone.json()) as {

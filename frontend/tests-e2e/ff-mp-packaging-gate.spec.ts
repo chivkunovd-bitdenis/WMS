@@ -2,7 +2,7 @@ import { test, expect } from '@playwright/test'
 
 import { waitForGetOk, waitForPostOk } from './api-waits'
 import { openFulfillmentRegistration } from './auth-flow'
-import { fulfillInboundViaBoxScans } from './inbound-boxes-helpers'
+import {beginInboundReceivingWithBoxes,  fulfillInboundViaBoxScans } from './inbound-boxes-helpers'
 
 // TC-NEW-MP-006 / MP-005: короба доступны до завершения упаковки.
 test('FF marketplace unload: box create enabled before packaging done', async ({ page }) => {
@@ -103,14 +103,8 @@ test('FF marketplace unload: box create enabled before packaging done', async ({
     }),
   })
   await page.request.post(`${baseIn}/${inboundId}/submit`, { headers: auth })
-  const primIn = await page.request.post(`${baseIn}/${inboundId}/primary-accept`, {
-    headers: auth,
-    data: { actual_box_count: 1 },
-  })
-  const primInBody = (await primIn.json()) as {
-    boxes: { id: string; internal_barcode: string }[]
-  }
-  await fulfillInboundViaBoxScans(page.request, auth, inboundId, primInBody.boxes, barcode, [5])
+  const { boxes: inboundBoxes } = await beginInboundReceivingWithBoxes(page.request, auth, inboundId, { boxCount: 1 })
+  await fulfillInboundViaBoxScans(page.request, auth, inboundId, inboundBoxes, barcode, [5])
   await page.request.post(`${baseIn}/${inboundId}/verify`, { headers: auth })
   await page.request.post(`${baseIn}/${inboundId}/post`, { headers: auth })
 

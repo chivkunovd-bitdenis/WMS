@@ -198,6 +198,9 @@ async def list_open_tasks(
         )
         .options(
             selectinload(PackagingTask.lines).selectinload(PackagingTaskLine.product),
+            selectinload(PackagingTask.lines).selectinload(
+                PackagingTaskLine.storage_location
+            ),
             selectinload(PackagingTask.marketplace_unload_request),
         )
         .order_by(PackagingTask.updated_at.desc())

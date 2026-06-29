@@ -52,10 +52,6 @@ class InboundIntakeRequestPlannedPatch(BaseModel):
     planned_box_count: int | None = Field(default=None, ge=1, le=100_000)
 
 
-class InboundPrimaryAcceptBody(BaseModel):
-    actual_box_count: int = Field(ge=0, le=100_000)
-
-
 class InboundIntakeLineCreate(BaseModel):
     product_id: uuid.UUID
     expected_qty: int = Field(ge=1, le=1_000_000_000)
@@ -107,6 +103,10 @@ class InboundBoxScanBody(BaseModel):
     barcode: str = Field(min_length=1, max_length=128)
 
 
+class InboundReceivingScanBody(BaseModel):
+    barcode: str = Field(min_length=1, max_length=128)
+
+
 class InboundBoxLineQuantityBody(BaseModel):
     quantity: int = Field(ge=0, le=100_000)
 
@@ -128,6 +128,7 @@ class InboundIntakeLineOut(BaseModel):
     product_name: str
     expected_qty: int
     actual_qty: int | None
+    effective_actual_qty: int | None = None
     posted_qty: int
     storage_location_id: str | None
     storage_location_code: str | None
@@ -241,6 +242,69 @@ def _map_inbound_box_err(exc: InboundIntakeBoxError) -> HTTPException:
     )
 
 
+def _map_inbound_svc_err(exc: InboundIntakeError) -> HTTPException:
+    code = exc.code
+    if code in ("request_not_found", "line_not_found"):
+        return HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=code)
+    if code in (
+        "not_draft",
+        "not_submitted",
+        "not_verifying",
+        "not_verified",
+        "not_editable",
+        "line_closed",
+        "line_already_posted",
+        "already_posted",
+        "open_box_exists",
+        "duplicate_line",
+        "not_distributable",
+        "distribution_completed",
+        "not_reopenable",
+        "distribution_not_completed",
+        "already_posted_partial",
+    ):
+        return HTTPException(status_code=status.HTTP_409_CONFLICT, detail=code)
+    if code in (
+        "barcode_empty",
+        "invalid_qty",
+        "invalid_planned_box_count",
+        "submit_empty",
+        "actual_missing",
+        "nothing_to_receive",
+        "storage_not_assigned",
+        "lines_missing_storage",
+        "product_not_on_request",
+        "product_seller_mismatch",
+        "mixed_seller_lines",
+        "qty_exceeds_accepted",
+        "qty_exceeds_box_remaining",
+        "product_not_accepted",
+        "product_not_in_box",
+        "nothing_to_putaway",
+        "sorting_location_reserved",
+        "insufficient_sorting_stock",
+        "distribution_incomplete",
+        "invalid_actual_box_count",
+        "planned_boxes_missing",
+    ):
+        return HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+            detail=code,
+        )
+    if code in (
+        "warehouse_not_found",
+        "seller_not_found",
+        "product_not_found",
+        "location_not_found",
+        "box_not_found",
+    ):
+        return HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=code)
+    return HTTPException(
+        status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+        detail=code,
+    )
+
+
 def _request_out(
     r: InboundIntakeRequest,
     lines: list[InboundIntakeLineOut] | None = None,
@@ -280,7 +344,12 @@ def _request_out(
     )
 
 
-def _line_out_from_orm(line: InboundIntakeLine, product: Product) -> InboundIntakeLineOut:
+def _line_out_from_orm(
+    line: InboundIntakeLine,
+    product: Product,
+    *,
+    effective_actual_qty: int | None = None,
+) -> InboundIntakeLineOut:
     loc = line.storage_location
     return InboundIntakeLineOut(
         id=str(line.id),
@@ -289,12 +358,28 @@ def _line_out_from_orm(line: InboundIntakeLine, product: Product) -> InboundInta
         product_name=product.name,
         expected_qty=line.expected_qty,
         actual_qty=line.actual_qty,
+        effective_actual_qty=effective_actual_qty,
         posted_qty=line.posted_qty,
         storage_location_id=str(line.storage_location_id)
         if line.storage_location_id
         else None,
         storage_location_code=loc.code if loc is not None else None,
     )
+
+
+async def _line_out_for_request(
+    session: AsyncSession,
+    request_id: uuid.UUID,
+    request_status: str,
+    line: InboundIntakeLine,
+    product: Product,
+) -> InboundIntakeLineOut:
+    effective: int | None = None
+    if request_status in svc.RECEIVING_STATUSES:
+        effective = await svc.effective_actual_qty(
+            session, request_id, line, request_status=request_status
+        )
+    return _line_out_from_orm(line, product, effective_actual_qty=effective)
 
 
 def _movement_out(m: InventoryMovement) -> InventoryMovementOut:
@@ -447,7 +532,9 @@ async def get_inbound_request(
     lines_out: list[InboundIntakeLineOut] = []
     for ln in r.lines:
         p = ln.product
-        lines_out.append(_line_out_from_orm(ln, p))
+        lines_out.append(
+            await _line_out_for_request(session, request_id, r.status, ln, p)
+        )
     return _request_out(r, lines=lines_out)
 
 
@@ -505,40 +592,71 @@ async def patch_inbound_request_planned(
     return _request_out(r2)
 
 
-@router.post("/{request_id}/primary-accept", response_model=InboundIntakeRequestOut)
-async def primary_accept_inbound_request(
+@router.post(
+    "/{request_id}/boxes",
+    response_model=InboundIntakeBoxOut,
+    status_code=status.HTTP_201_CREATED,
+)
+async def create_inbound_box(
     request_id: uuid.UUID,
-    body: InboundPrimaryAcceptBody,
+    user: Annotated[User, Depends(require_reception_access)],
+    session: Annotated[AsyncSession, Depends(get_db)],
+) -> InboundIntakeBoxOut:
+    try:
+        box = await inbound_box_svc.create_open_box(
+            session, user.tenant_id, request_id
+        )
+    except InboundIntakeBoxError as exc:
+        raise _map_inbound_box_err(exc) from None
+    return _box_out(box)
+
+
+@router.post(
+    "/{request_id}/receiving/scan",
+    response_model=InboundIntakeLineOut,
+)
+async def scan_barcode_to_loose_intake(
+    request_id: uuid.UUID,
+    body: InboundReceivingScanBody,
+    user: Annotated[User, Depends(require_reception_access)],
+    session: Annotated[AsyncSession, Depends(get_db)],
+) -> InboundIntakeLineOut:
+    try:
+        line = await svc.scan_barcode_to_loose_intake(
+            session,
+            user.tenant_id,
+            request_id,
+            barcode=body.barcode,
+        )
+    except InboundIntakeError as exc:
+        raise _map_inbound_svc_err(exc) from None
+    prod = await session.get(Product, line.product_id)
+    if prod is None:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="product_missing",
+        )
+    await session.refresh(line, attribute_names=["storage_location"])
+    req = await svc.get_request(session, user.tenant_id, request_id)
+    assert req is not None
+    return await _line_out_for_request(
+        session, request_id, req.status, line, prod
+    )
+
+
+@router.post(
+    "/{request_id}/complete-receiving",
+    response_model=InboundIntakeRequestOut,
+)
+async def complete_inbound_receiving(
+    request_id: uuid.UUID,
     user: Annotated[User, Depends(require_reception_access)],
     session: Annotated[AsyncSession, Depends(get_db)],
 ) -> InboundIntakeRequestOut:
     try:
-        r = await svc.primary_accept_request(
-            session,
-            user.tenant_id,
-            request_id,
-            actual_box_count=body.actual_box_count,
-        )
+        r = await svc.complete_receiving(session, user.tenant_id, request_id)
     except InboundIntakeError as exc:
-        if exc.code == "request_not_found":
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail="request_not_found",
-            ) from None
-        if exc.code == "not_submitted":
-            raise HTTPException(
-                status_code=status.HTTP_409_CONFLICT,
-                detail="not_submitted",
-            ) from None
-        if exc.code in (
-            "invalid_actual_box_count",
-            "planned_boxes_missing",
-        ):
-            raise HTTPException(
-                status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
-                detail=exc.code,
-            ) from None
-        raise
+        raise _map_inbound_svc_err(exc) from None
     r2 = await svc.get_request(session, user.tenant_id, r.id)
     if r2 is None:
         raise HTTPException(
@@ -835,7 +953,11 @@ async def patch_inbound_line_actual(
             detail="product_missing",
         )
     await session.refresh(line, attribute_names=["storage_location"])
-    return _line_out_from_orm(line, prod)
+    req = await svc.get_request(session, user.tenant_id, request_id)
+    assert req is not None
+    return await _line_out_for_request(
+        session, request_id, req.status, line, prod
+    )
 
 
 @router.post("/{request_id}/verify", response_model=InboundIntakeRequestOut)
@@ -844,25 +966,11 @@ async def complete_inbound_verification(
     user: Annotated[User, Depends(require_reception_access)],
     session: Annotated[AsyncSession, Depends(get_db)],
 ) -> InboundIntakeRequestOut:
+    """Legacy alias for POST .../complete-receiving."""
     try:
-        r = await svc.complete_verification(session, user.tenant_id, request_id)
+        r = await svc.complete_receiving(session, user.tenant_id, request_id)
     except InboundIntakeError as exc:
-        if exc.code == "request_not_found":
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail="request_not_found",
-            ) from None
-        if exc.code in ("not_verifying", "open_box_exists"):
-            raise HTTPException(
-                status_code=status.HTTP_409_CONFLICT,
-                detail=exc.code,
-            ) from None
-        if exc.code == "actual_missing":
-            raise HTTPException(
-                status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
-                detail="actual_missing",
-            ) from None
-        raise
+        raise _map_inbound_svc_err(exc) from None
     r2 = await svc.get_request(session, user.tenant_id, r.id)
     if r2 is None:
         raise HTTPException(
@@ -981,7 +1089,11 @@ async def add_inbound_line(
             detail="product_missing",
         )
     await session.refresh(line, attribute_names=["storage_location"])
-    return _line_out_from_orm(line, prod)
+    req = await svc.get_request(session, user.tenant_id, request_id)
+    assert req is not None
+    return await _line_out_for_request(
+        session, request_id, req.status, line, prod
+    )
 
 
 @router.patch(
@@ -1042,7 +1154,11 @@ async def patch_inbound_line_expected(
             detail="product_missing",
         )
     await session.refresh(line, attribute_names=["storage_location"])
-    return _line_out_from_orm(line, prod)
+    req = await svc.get_request(session, user.tenant_id, request_id)
+    assert req is not None
+    return await _line_out_for_request(
+        session, request_id, req.status, line, prod
+    )
 
 
 @router.delete(
@@ -1140,7 +1256,11 @@ async def patch_inbound_line_storage(
             detail="product_missing",
         )
     await session.refresh(line, attribute_names=["storage_location"])
-    return _line_out_from_orm(line, prod)
+    req = await svc.get_request(session, user.tenant_id, request_id)
+    assert req is not None
+    return await _line_out_for_request(
+        session, request_id, req.status, line, prod
+    )
 
 
 @router.post(

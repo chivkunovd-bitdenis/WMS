@@ -18,14 +18,17 @@ from app.models.product import Product
 from app.services import inbound_intake_service as intake_svc
 from app.services.seller_wb_catalog_service import list_seller_wb_catalog_rows
 
+# IN-BE-01 collapsed chain — keep in sync with inbound_intake_service status constants.
 BOX_STATUSES_AFTER_PRIMARY = (
-    "primary_accepted",
-    "verifying",
-    "verified",
-    "posted",
+    intake_svc.STATUS_RECEIVING,
+    intake_svc.STATUS_SORTING,
+    intake_svc.STATUS_DONE,
 )
 
-INTAKE_STATUSES = ("primary_accepted", "verifying")
+INTAKE_STATUSES = (
+    intake_svc.STATUS_SUBMITTED,
+    intake_svc.STATUS_RECEIVING,
+)
 
 
 class InboundIntakeBoxError(Exception):
@@ -36,6 +39,45 @@ class InboundIntakeBoxError(Exception):
 
 def _new_barcode() -> str:
     return f"INB-{uuid.uuid4().hex[:12].upper()}"
+
+
+async def _next_box_number(session: AsyncSession, request_id: uuid.UUID) -> int:
+    stmt = select(func.coalesce(func.max(InboundIntakeBox.box_number), 0)).where(
+        InboundIntakeBox.request_id == request_id,
+    )
+    res = await session.execute(stmt)
+    return int(res.scalar_one()) + 1
+
+
+async def create_open_box(
+    session: AsyncSession,
+    tenant_id: uuid.UUID,
+    request_id: uuid.UUID,
+) -> InboundIntakeBox:
+    """Create a new inbound box and open it for piece intake (on demand)."""
+    req = await _get_request_for_intake(session, tenant_id, request_id)
+    if await _open_box_for_request(session, request_id) is not None:
+        raise InboundIntakeBoxError("open_box_exists")
+
+    box_number = await _next_box_number(session, req.id)
+    now = datetime.now(UTC)
+    for _ in range(8):
+        box = InboundIntakeBox(
+            tenant_id=tenant_id,
+            request_id=req.id,
+            box_number=box_number,
+            internal_barcode=_new_barcode(),
+            intake_opened_at=now,
+        )
+        session.add(box)
+        try:
+            await session.flush()
+            await session.commit()
+            return await _load_box(session, box.id)
+        except IntegrityError:
+            session.expunge(box)
+            continue
+    raise InboundIntakeBoxError("barcode_collision")
 
 
 async def create_boxes_for_request(
@@ -278,30 +320,28 @@ async def _product_recorded_in_boxes(
     return res.scalar_one_or_none() is not None
 
 
-async def sync_request_actuals_from_boxes(
+async def _sync_line_actuals_from_box_totals(
     session: AsyncSession,
     req: InboundIntakeRequest,
 ) -> None:
-    """Сумма по закрытым/открытым коробам → actual_qty на строках заявки."""
-    await _sync_request_actuals(session, req)
-
-
-async def _sync_request_actuals(
-    session: AsyncSession,
-    req: InboundIntakeRequest,
-) -> None:
+    """During receiving: validate effective fact; keep actual_qty as loose-only component."""
     for ln in req.lines:
         recorded = await _product_recorded_in_boxes(session, req.id, ln.product_id)
         if not recorded:
             continue
-        total = await _total_scanned_for_product(session, req.id, ln.product_id)
-        if ln.posted_qty > total:
+        effective = await intake_svc.effective_actual_qty(
+            session, req.id, ln, request_status=req.status
+        )
+        if ln.posted_qty > effective:
             raise InboundIntakeBoxError("actual_below_posted")
-        ln.actual_qty = total
-    if req.status == intake_svc.STATUS_PRIMARY_ACCEPTED and any(
-        ln.actual_qty is not None for ln in req.lines
-    ):
-        req.status = intake_svc.STATUS_VERIFYING
+    if req.status == intake_svc.STATUS_SUBMITTED:
+        for ln in req.lines:
+            effective = await intake_svc.effective_actual_qty(
+                session, req.id, ln, request_status=req.status
+            )
+            if effective > 0:
+                req.status = intake_svc.STATUS_RECEIVING
+                break
 
 
 async def open_box_by_barcode(
@@ -389,7 +429,7 @@ async def scan_product_into_box(
     req_loaded = await intake_svc.get_request(session, tenant_id, request_id)
     if req_loaded is None:
         raise InboundIntakeBoxError("request_not_found")
-    await _sync_request_actuals(session, req_loaded)
+    await _sync_line_actuals_from_box_totals(session, req_loaded)
     await session.commit()
 
     stmt2 = (
@@ -451,7 +491,7 @@ async def set_product_quantity_in_open_box(
     req_loaded = await intake_svc.get_request(session, tenant_id, request_id)
     if req_loaded is None:
         raise InboundIntakeBoxError("request_not_found")
-    await _sync_request_actuals(session, req_loaded)
+    await _sync_line_actuals_from_box_totals(session, req_loaded)
     await session.commit()
     return await _load_box(session, box.id)
 
@@ -474,7 +514,7 @@ async def close_box_intake(
     req_loaded = await intake_svc.get_request(session, tenant_id, request_id)
     if req_loaded is None:
         raise InboundIntakeBoxError("request_not_found")
-    await _sync_request_actuals(session, req_loaded)
+    await _sync_line_actuals_from_box_totals(session, req_loaded)
     await session.commit()
     return await _load_box(session, box.id)
 

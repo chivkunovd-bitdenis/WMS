@@ -54,18 +54,13 @@ test('FF packaging page: create from sorting and pack line', async ({ page }) =>
     data: JSON.stringify({ product_id: productId, expected_qty: 4 }),
   });
   await page.request.post(`${baseIn}/${inboundId}/submit`, { headers: auth });
-  const primIn = await page.request.post(`${baseIn}/${inboundId}/primary-accept`, {
-    headers: auth,
-    data: { actual_box_count: 1 },
-  });
-  const primInBody = (await primIn.json()) as {
-    boxes: { id: string; internal_barcode: string }[];
-  };
+  const inboundBox = await page.request.post(`${baseIn}/${inboundId}/boxes`, { headers: auth });
+  const inboundBoxBody = (await inboundBox.json()) as { id: string; internal_barcode: string };
   await fulfillInboundViaBoxScans(
     page.request,
     auth,
     inboundId,
-    primInBody.boxes,
+    [inboundBoxBody],
     sku,
     [4],
   );
@@ -179,18 +174,13 @@ test('FF packaging page: create from storage cell', async ({ page }) => {
   });
   const lineId = String(((await lineRes.json()) as { id: string }).id);
   await page.request.post(`${baseIn}/${inboundId}/submit`, { headers: auth });
-  const primIn = await page.request.post(`${baseIn}/${inboundId}/primary-accept`, {
-    headers: auth,
-    data: { actual_box_count: 1 },
-  });
+  const inboundBox = await page.request.post(`${baseIn}/${inboundId}/boxes`, { headers: auth });
   await page.request.patch(`${baseIn}/${inboundId}/lines/${lineId}`, {
     headers: auth,
     data: JSON.stringify({ storage_location_id: locId }),
   });
-  const primInBody = (await primIn.json()) as {
-    boxes: { id: string; internal_barcode: string }[];
-  };
-  await fulfillInboundViaBoxScans(page.request, auth, inboundId, primInBody.boxes, sku, [3]);
+  const inboundBoxBody = (await inboundBox.json()) as { id: string; internal_barcode: string };
+  await fulfillInboundViaBoxScans(page.request, auth, inboundId, [inboundBoxBody], sku, [3]);
   await page.request.post(`${baseIn}/${inboundId}/verify`, { headers: auth });
   await page.request.post(`${baseIn}/${inboundId}/post`, { headers: auth });
 
@@ -266,14 +256,9 @@ test('FF packaging page: cancel manual task', async ({ page }) => {
     data: JSON.stringify({ product_id: productId, expected_qty: 2 }),
   });
   await page.request.post(`${baseIn}/${inboundId}/submit`, { headers: auth });
-  const primIn = await page.request.post(`${baseIn}/${inboundId}/primary-accept`, {
-    headers: auth,
-    data: { actual_box_count: 1 },
-  });
-  const primInBody = (await primIn.json()) as {
-    boxes: { id: string; internal_barcode: string }[];
-  };
-  await fulfillInboundViaBoxScans(page.request, auth, inboundId, primInBody.boxes, sku, [2]);
+  const inboundBox = await page.request.post(`${baseIn}/${inboundId}/boxes`, { headers: auth });
+  const inboundBoxBody = (await inboundBox.json()) as { id: string; internal_barcode: string };
+  await fulfillInboundViaBoxScans(page.request, auth, inboundId, [inboundBoxBody], sku, [2]);
   await page.request.post(`${baseIn}/${inboundId}/verify`, { headers: auth });
   await page.request.post(`${baseIn}/${inboundId}/post`, { headers: auth });
 

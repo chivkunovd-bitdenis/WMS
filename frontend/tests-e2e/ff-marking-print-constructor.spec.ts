@@ -1,7 +1,7 @@
 import { expect, test } from '@playwright/test'
 
 import { waitForGetOk, waitForPostOk } from './api-waits'
-import { fulfillInboundViaBoxScans } from './inbound-boxes-helpers'
+import {beginInboundReceivingWithBoxes,  fulfillInboundViaBoxScans } from './inbound-boxes-helpers'
 import { openFulfillmentRegistration } from './auth-flow'
 
 // TC-NEW-002 — ЧЗ T1.3: конструктор печати — баннер нехватки, пресет «Парами», частичная печать.
@@ -83,14 +83,8 @@ test('FF packaging: marking print constructor shortage and pairs preview', async
     data: JSON.stringify({ product_id: productId, expected_qty: 3 }),
   })
   await page.request.post(`${baseIn}/${inboundId}/submit`, { headers: auth })
-  const primIn = await page.request.post(`${baseIn}/${inboundId}/primary-accept`, {
-    headers: auth,
-    data: { actual_box_count: 1 },
-  })
-  const primInBody = (await primIn.json()) as {
-    boxes: { id: string; internal_barcode: string }[]
-  }
-  await fulfillInboundViaBoxScans(page.request, auth, inboundId, primInBody.boxes, sku, [3])
+  const { boxes: inboundBoxes } = await beginInboundReceivingWithBoxes(page.request, auth, inboundId, { boxCount: 1 })
+  await fulfillInboundViaBoxScans(page.request, auth, inboundId, inboundBoxes, sku, [3])
   await page.request.post(`${baseIn}/${inboundId}/verify`, { headers: auth })
   await page.request.post(`${baseIn}/${inboundId}/post`, { headers: auth })
 

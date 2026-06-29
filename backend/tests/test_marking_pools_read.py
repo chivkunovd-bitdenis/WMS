@@ -139,8 +139,11 @@ async def test_ledger_filters(async_client: AsyncClient) -> None:
         params={"seller_id": seller_id, "event_type": "imported"},
     )
     assert ledger.status_code == 200
-    assert ledger.json()["total"] >= 4
-    assert all(r["event_type"] == "imported" for r in ledger.json()["rows"])
+    assert ledger.json()["total"] == 1
+    rows = ledger.json()["rows"]
+    assert len(rows) == 1
+    assert rows[0]["event_type"] == "imported"
+    assert rows[0]["aggregated_count"] == 4
 
     by_doc = await async_client.get(
         "/operations/marking-codes/ledger",
@@ -148,7 +151,8 @@ async def test_ledger_filters(async_client: AsyncClient) -> None:
         params={"document": doc},
     )
     assert by_doc.status_code == 200
-    assert by_doc.json()["total"] == 4
+    assert by_doc.json()["total"] == 1
+    assert by_doc.json()["rows"][0]["aggregated_count"] == 4
 
 
 @pytest.mark.asyncio
@@ -168,7 +172,7 @@ async def test_ledger_date_range_filter(async_client: AsyncClient) -> None:
         },
     )
     assert today_ledger.status_code == 200
-    assert today_ledger.json()["total"] >= 4
+    assert today_ledger.json()["total"] >= 1
 
     future_ledger = await async_client.get(
         "/operations/marking-codes/ledger",
@@ -202,7 +206,12 @@ async def test_ledger_cis_mask_filter(async_client: AsyncClient) -> None:
     assert by_mask.status_code == 200
     body = by_mask.json()
     assert body["total"] >= 1
-    assert all(tail in row["cis_masked"] for row in body["rows"])
+    for row in body["rows"]:
+        if row.get("aggregated_count"):
+            assert row["cis_masked"] is None
+        else:
+            assert row["cis_masked"] is not None
+            assert tail in row["cis_masked"]
 
     full = await async_client.get(
         "/operations/marking-codes/ledger",
@@ -225,7 +234,7 @@ async def test_ledger_export_csv(async_client: AsyncClient) -> None:
     )
     assert ledger.status_code == 200
     expected_total = ledger.json()["total"]
-    assert expected_total >= 4
+    assert expected_total == 1
 
     export = await async_client.get(
         "/operations/marking-codes/ledger/export",
@@ -238,7 +247,8 @@ async def test_ledger_export_csv(async_client: AsyncClient) -> None:
     text = export.content.decode("utf-8-sig")
     lines = [line for line in text.strip().splitlines() if line]
     assert lines[0].startswith("created_at,event_type,cis_masked")
-    assert len(lines) - 1 == expected_total
+    # CSV export keeps one row per raw event (not collapsed).
+    assert len(lines) - 1 == 4
     assert all("imported" in line for line in lines[1:])
 
 

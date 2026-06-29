@@ -1,5 +1,49 @@
 # TASKLOG
 
+## TASK-086 — 2026-06-29 — IN-BE-03: e2e stabilization after primary-accept removal
+
+- What changed: `inbound-boxes-helpers.ts` — `fulfillInboundViaBoxScans` fallback create on closed box; `v2InboundBoxIntakeUi` skip open if box already open; legacy primary-accept tests wait PATCH+POST /boxes. ~25 e2e specs migrated from `primary-accept` to `beginInboundReceivingWithBoxes`; `App.tsx` primary accept → PATCH actual + POST /boxes; `InboundScreen.tsx` statuses `receiving`/`sorting`; backend tests use `effective_actual_qty`.
+- What did NOT change: FF inbound UI flow (IN-FE-01); API `/verify` alias kept for legacy callers.
+- Verification: backend `ruff+mypy+pytest` 303 passed; frontend `npm run test:e2e` 93 passed (~7m); commit `c27dd0a`.
+
+## TASK-085 — 2026-06-29 — REV-SORT-FE-02: distribution-lines load error handling
+
+- What changed: `FfInboundSortingPanel.tsx` — failed GET не сбрасывает draft; Alert+retry; save/apply disabled until loaded. E2e TC-REV-SORT-FE-02.
+- Verification: build + 3 e2e passed; integrate merge; commit `a78b407`.
+
+## TASK-084 — 2026-06-29 — REV-IN-FE-01: manual receiving edit saves loose not total
+
+- What changed: `inboundReceivingHelpers.ts`, `FfInboundRequestView.tsx` — effective total in UI, PATCH loose (`total − box`); e2e TC-NEW-IN-04.
+- Verification: build + 4 e2e passed; integrate merge; commit `1bc3702`.
+
+## TASK-083 — 2026-06-29 — REV-CZ-FE-01: multi-pool threshold + navigation race fix
+
+- What changed: per-pool threshold on `HonestSignPoolPage`; multi-pool hint on product page; race fix (poolId reset, loadRequestId, disabled while busy). Commits `a316d79`, `d671ca2`.
+- Verification: build + e2e honest-sign green; integrate merge.
+
+## TASK-081 — 2026-06-29 — REV-CZ-TEST-01: tenant/seller isolation CZ tests
+
+- What changed: TC-NEW-CZISO-001..004 in marking inventory/product-code filter tests.
+- Verification: pytest 8 passed; integrate merge; commit `44784cd`.
+
+## TASK-075 — 2026-06-29 — IN-FE-01: inbound receiving UI new flow
+
+- What changed: `FfInboundRequestView.tsx` — факт=0, красные строки при расхождении, общий скан `/receiving/scan`, ручная правка через кнопку, модалка короба, одна «Завершить» + модалка расхождений; убраны primary-accept и boxIntakeMode. `FfInboundBoxAddDialog.tsx`, `inboundReceivingHelpers.ts`; `inboundQueues.ts` — статусы `receiving`/`sorting`; e2e `inbound-receiving-v2.spec.ts`.
+- What did NOT change: `FfInboundSortingPanel` (SORT-FE-01); legacy e2e с primary-accept (inbound-intake.spec.ts).
+- Verification: `npm run build` green; `npx playwright test inbound-receiving-v2.spec.ts` 3 passed; commit `d709506`.
+
+## TASK-074 — 2026-06-29 — OUT-FE-01: unified outbound finish with discrepancy modal
+
+- What changed: `FfSuppliesShipmentsPage.tsx` — одна кнопка «Завершить»; модалка «Есть расхождения, точно провести?» при plan≠fact; `mpHasDiscrepancy` по строкам; кнопка короба «Добавить в короб». `FfMarketplaceUnloadBoxAddDialog.tsx` — заголовок модалки «Добавить в короб».
+- What did NOT change: e2e (optional); OUT-FE-02 (колонки/краснота/печать); backend OUT-BE-01 уже на ветке.
+- Verification: `npm run build` — не выполнен локально (ENOSPC, диск 100%); IDE lint без ошибок.
+
+## TASK-073 — 2026-06-29 — IN-BE-02: on-demand inbound intake boxes
+
+- What changed: `inbound_intake_box_service.create_open_box` — короб приёмки по требованию (открыт сразу); `INTAKE_STATUSES` включает `submitted`; факт из коробов без primary-accept; тесты `test_inbound_intake_box_ondemand.py`.
+- What did NOT change: API эндпоинты (IN-BE-03); `primary_accept_request` всё ещё вызывает `create_boxes_for_request` для legacy.
+- Verification: `PYTHONPATH=worktree/backend ruff check . && mypy . && pytest` — 271 passed; commit `27dfe13`.
+
 ## TASK-072 — 2026-06-29 — Печать ТЗ на упаковку (A4)
 
 - What changed: кнопка «Печать» в модалке ТЗ (`FfProductsCatalogScreen`, `SellerProductsStockScreen`); утилита `printPackagingInstructions.ts` — A4 с SKU, товаром, селлером, инструкцией и флагом ЧЗ; e2e assert `ff-packaging-print`.

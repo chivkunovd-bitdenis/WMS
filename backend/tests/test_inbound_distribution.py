@@ -75,12 +75,12 @@ async def test_inbound_distribution_lines_validate_limits_and_lock(
     await async_client.post(f"{base}/{rid}/submit", headers=ah)
     prim = await post_primary_accept(async_client, base, rid, ah)
     assert prim.status_code == 200, prim.text
-    assert prim.json()["status"] == "primary_accepted"
+    assert prim.json()["status"] == "receiving"
 
     await fulfill_inbound_via_box_scans(async_client, ah, rid, sku, 5)
     ver = await async_client.post(f"{base}/{rid}/verify", headers=ah)
     assert ver.status_code == 200, ver.text
-    assert ver.json()["status"] == "verified"
+    assert ver.json()["status"] == "sorting"
 
     got = await async_client.get(f"{base}/{rid}", headers=ah)
     assert got.status_code == 200, got.text
@@ -134,7 +134,7 @@ async def test_inbound_distribution_lines_validate_limits_and_lock(
     )
     assert rest.status_code == 200, rest.text
     done = rest
-    assert done.json()["status"] == "posted"
+    assert done.json()["status"] == "done"
     assert done.json()["lines"][0]["posted_qty"] == 5
 
     movements = await async_client.get(f"{base}/{rid}/movements", headers=ah)

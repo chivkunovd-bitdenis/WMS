@@ -14,7 +14,13 @@ export type InboundQueueRow = {
   sorting_remaining_qty?: number
 }
 
-const RECEPTION_STATUSES = new Set(['draft', 'submitted', 'primary_accepted', 'verifying'])
+const RECEPTION_STATUSES = new Set([
+  'draft',
+  'submitted',
+  'receiving',
+  'primary_accepted',
+  'verifying',
+])
 
 export function filterReceptionQueue(rows: InboundQueueRow[]): InboundQueueRow[] {
   return rows.filter((r) => RECEPTION_STATUSES.has(r.status))
@@ -22,6 +28,8 @@ export function filterReceptionQueue(rows: InboundQueueRow[]): InboundQueueRow[]
 
 export function filterSortingQueue(rows: InboundQueueRow[]): InboundQueueRow[] {
   return rows.filter(
-    (r) => r.status === 'verified' && (r.sorting_remaining_qty ?? 0) > 0,
+    (r) =>
+      (r.status === 'sorting' || r.status === 'verified') &&
+      (r.sorting_remaining_qty ?? 0) > 0,
   )
 }

@@ -2,7 +2,7 @@ import { test, expect } from '@playwright/test'
 
 import { waitForGetOk, waitForPatchOk, waitForPostOk } from './api-waits'
 import { openFulfillmentRegistration } from './auth-flow'
-import { fulfillInboundViaBoxScans } from './inbound-boxes-helpers'
+import {beginInboundReceivingWithBoxes,  fulfillInboundViaBoxScans } from './inbound-boxes-helpers'
 
 // TC-NEW-MP-003 — TASK-003: при выкл. адресном хранении UI ячеек скрыт на отгрузке МП.
 test('address storage off hides cell UI on marketplace unload', async ({ page }) => {
@@ -104,18 +104,17 @@ test('address storage off hides cell UI on marketplace unload', async ({ page })
     }),
   })
   await page.request.post(`${baseIn}/${inboundId}/submit`, { headers: auth })
-  const primIn = await page.request.post(`${baseIn}/${inboundId}/primary-accept`, {
-    headers: auth,
-    data: { actual_box_count: 1 },
-  })
-  const primInBody = (await primIn.json()) as {
-    boxes: { id: string; internal_barcode: string }[]
-  }
+  const { boxes: inboundBoxes } = await beginInboundReceivingWithBoxes(
+    page.request,
+    auth,
+    inboundId,
+    { boxCount: 1 },
+  )
   await fulfillInboundViaBoxScans(
     page.request,
     auth,
     inboundId,
-    primInBody.boxes,
+    inboundBoxes,
     barcode,
     [5],
   )
@@ -132,18 +131,17 @@ test('address storage off hides cell UI on marketplace unload', async ({ page })
     data: JSON.stringify({ product_id: productId, expected_qty: 5 }),
   })
   await page.request.post(`${baseIn}/${sortInboundId}/submit`, { headers: auth })
-  const primSort = await page.request.post(`${baseIn}/${sortInboundId}/primary-accept`, {
-    headers: auth,
-    data: { actual_box_count: 1 },
-  })
-  const primSortBody = (await primSort.json()) as {
-    boxes: { id: string; internal_barcode: string }[];
-  }
+  const { boxes: sortInboundBoxes } = await beginInboundReceivingWithBoxes(
+    page.request,
+    auth,
+    sortInboundId,
+    { boxCount: 1 },
+  )
   await fulfillInboundViaBoxScans(
     page.request,
     auth,
     sortInboundId,
-    primSortBody.boxes,
+    sortInboundBoxes,
     barcode,
     [5],
   )

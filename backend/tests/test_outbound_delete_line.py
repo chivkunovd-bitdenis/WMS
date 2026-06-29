@@ -4,7 +4,7 @@ import time
 
 import pytest
 from httpx import AsyncClient
-from inbound_box_intake_helpers import fulfill_inbound_via_box_scans
+from inbound_box_intake_helpers import fulfill_inbound_via_box_scans, post_primary_accept
 
 
 @pytest.mark.asyncio
@@ -61,9 +61,7 @@ async def test_delete_draft_line_releases_reservation(async_client: AsyncClient)
     await async_client.post(
         f"/operations/inbound-intake-requests/{rid}/submit", headers=h
     )
-    await async_client.post(
-        f"/operations/inbound-intake-requests/{rid}/primary-accept", headers=h
-    , json={"actual_box_count": 1})
+    await post_primary_accept(async_client, "/operations/inbound-intake-requests", rid, h)
     lines = await async_client.get(
         f"/operations/inbound-intake-requests/{rid}",
         headers=h,
@@ -181,9 +179,7 @@ async def test_delete_line_not_draft_returns_409(async_client: AsyncClient) -> N
     await async_client.post(
         f"/operations/inbound-intake-requests/{rid}/submit", headers=h
     )
-    await async_client.post(
-        f"/operations/inbound-intake-requests/{rid}/primary-accept", headers=h
-    , json={"actual_box_count": 1})
+    await post_primary_accept(async_client, "/operations/inbound-intake-requests", rid, h)
     inb = await async_client.get(
         f"/operations/inbound-intake-requests/{rid}", headers=h
     )

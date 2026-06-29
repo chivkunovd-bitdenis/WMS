@@ -2,7 +2,7 @@ import { test, expect } from '@playwright/test'
 
 import { waitForGetOk, waitForPostOk } from './api-waits'
 import { loginAsSeller, openFulfillmentRegistration } from './auth-flow'
-import { fulfillInboundViaBoxScans } from './inbound-boxes-helpers'
+import {beginInboundReceivingWithBoxes,  fulfillInboundViaBoxScans } from './inbound-boxes-helpers'
 import { setWmsDateField } from './wms-date-field-helpers'
 
 // TC-NEW-MP-016 — MP-021…023: иконка печати на вкладке «Упаковка» → MarkingPrintDialog; без ЧЗ — только количество ШК ВБ.
@@ -110,14 +110,8 @@ test('MP packaging: print icon opens qty-only dialog for non-marked product', as
     }),
   })
   await page.request.post(`${baseIn}/${inboundId}/submit`, { headers: auth })
-  const primIn = await page.request.post(`${baseIn}/${inboundId}/primary-accept`, {
-    headers: auth,
-    data: { actual_box_count: 1 },
-  })
-  const primInBody = (await primIn.json()) as {
-    boxes: { id: string; internal_barcode: string }[]
-  }
-  await fulfillInboundViaBoxScans(page.request, auth, inboundId, primInBody.boxes, barcode, [
+  const { boxes: inboundBoxes } = await beginInboundReceivingWithBoxes(page.request, auth, inboundId, { boxCount: 1 })
+  await fulfillInboundViaBoxScans(page.request, auth, inboundId, inboundBoxes, barcode, [
     planQty,
   ])
   await page.request.post(`${baseIn}/${inboundId}/verify`, { headers: auth })

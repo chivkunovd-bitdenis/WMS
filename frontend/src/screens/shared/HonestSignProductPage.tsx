@@ -73,9 +73,15 @@ type LedgerRow = {
   cis_masked: string
   document_number: string | null
   actor_email: string | null
+  aggregated_count?: number | null
 }
 
 type TabKey = 'codes' | 'ledger'
+
+type PoolThresholdDetail = {
+  low_stock_threshold: number | null
+  forecast_days_threshold: number | null
+}
 
 const STATUS_OPTIONS = ['', 'available', 'reserved', 'printed', 'applied', 'defective', 'void']
 
@@ -104,8 +110,14 @@ export function HonestSignProductPage({
   const [codesBusy, setCodesBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [statusFilter, setStatusFilter] = useState('')
+  const [lowThreshold, setLowThreshold] = useState('')
+  const [forecastDaysThreshold, setForecastDaysThreshold] = useState('')
+  const [thresholdLoading, setThresholdLoading] = useState(false)
+  const [thresholdSaving, setThresholdSaving] = useState(false)
+  const [thresholdError, setThresholdError] = useState<string | null>(null)
   const loadRequestId = useRef(0)
   const codesRequestId = useRef(0)
+  const thresholdRequestId = useRef(0)
   const ledgerAbortRef = useRef<AbortController | null>(null)
 
   const authHeaders = useMemo(
@@ -224,7 +236,103 @@ export function HonestSignProductPage({
     [overview],
   )
 
+  const personalPools = overview?.personal_pools ?? []
+  const singlePersonalPool =
+    personalPools.length === 1 ? personalPools[0] : null
+
   const sharedBasketsCount = overview?.shared_baskets.length ?? 0
+
+  const loadThreshold = useCallback(
+    async (poolId: string) => {
+      const requestId = ++thresholdRequestId.current
+      setThresholdLoading(true)
+      setThresholdError(null)
+      try {
+        const res = await fetch(apiUrl(`/operations/marking-codes/pools/${poolId}`), {
+          headers: authHeaders,
+        })
+        if (requestId !== thresholdRequestId.current) {
+          return
+        }
+        if (!res.ok) {
+          setThresholdError(await readApiErrorMessage(res))
+          return
+        }
+        const body = (await res.json()) as PoolThresholdDetail
+        if (requestId !== thresholdRequestId.current) {
+          return
+        }
+        setLowThreshold(
+          body.low_stock_threshold != null ? String(body.low_stock_threshold) : '',
+        )
+        setForecastDaysThreshold(
+          body.forecast_days_threshold != null
+            ? String(body.forecast_days_threshold)
+            : '',
+        )
+      } finally {
+        if (requestId === thresholdRequestId.current) {
+          setThresholdLoading(false)
+        }
+      }
+    },
+    [authHeaders],
+  )
+
+  const saveThreshold = useCallback(async () => {
+    if (!singlePersonalPool) {
+      return
+    }
+    setThresholdSaving(true)
+    setThresholdError(null)
+    try {
+      const res = await fetch(
+        apiUrl(
+          `/operations/marking-codes/pools/${singlePersonalPool.pool_id}/threshold`,
+        ),
+        {
+          method: 'PUT',
+          headers: { ...authHeaders, 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            low_stock_threshold: lowThreshold.trim() ? Number(lowThreshold) : null,
+            forecast_days_threshold: forecastDaysThreshold.trim()
+              ? Number(forecastDaysThreshold)
+              : null,
+          }),
+        },
+      )
+      if (!res.ok) {
+        setThresholdError(await readApiErrorMessage(res))
+        return
+      }
+      const body = (await res.json()) as PoolThresholdDetail
+      setLowThreshold(
+        body.low_stock_threshold != null ? String(body.low_stock_threshold) : '',
+      )
+      setForecastDaysThreshold(
+        body.forecast_days_threshold != null
+          ? String(body.forecast_days_threshold)
+          : '',
+      )
+    } finally {
+      setThresholdSaving(false)
+    }
+  }, [
+    authHeaders,
+    forecastDaysThreshold,
+    lowThreshold,
+    singlePersonalPool,
+  ])
+
+  useEffect(() => {
+    if (!singlePersonalPool) {
+      setLowThreshold('')
+      setForecastDaysThreshold('')
+      setThresholdError(null)
+      return
+    }
+    void loadThreshold(singlePersonalPool.pool_id)
+  }, [loadThreshold, singlePersonalPool])
 
   const setTab = (next: TabKey | null) => {
     setSearchParams(next ? { tab: next } : {})
@@ -296,6 +404,62 @@ export function HonestSignProductPage({
               </Typography>
             </Paper>
           </Stack>
+
+          {personalPools.length > 1 ? (
+            <Alert severity="info" data-testid={`${testIdPrefix}-threshold-multi-pool-hint`}>
+              У товара несколько личных пулов — порог остатка настраивается в карточке каждого
+              пула ниже.
+            </Alert>
+          ) : null}
+
+          {singlePersonalPool ? (
+            <Paper variant="outlined" sx={{ p: 2 }} data-testid={`${testIdPrefix}-threshold`}>
+              <Typography variant="subtitle1" sx={{ mb: 1.5 }}>
+                Порог остатка
+              </Typography>
+              {thresholdError ? (
+                <Alert severity="error" sx={{ mb: 1.5 }} data-testid={`${testIdPrefix}-threshold-error`}>
+                  {thresholdError}
+                </Alert>
+              ) : null}
+              <Stack
+                direction={{ xs: 'column', sm: 'row' }}
+                spacing={1.5}
+                sx={{ alignItems: { sm: 'flex-end' } }}
+              >
+                <TextField
+                  size="small"
+                  label="Мин. остаток"
+                  type="number"
+                  value={lowThreshold}
+                  onChange={(e) => setLowThreshold(e.target.value)}
+                  disabled={thresholdLoading || thresholdSaving}
+                  slotProps={{ htmlInput: { min: 0 } }}
+                  data-testid={`${testIdPrefix}-threshold-low`}
+                />
+                <TextField
+                  size="small"
+                  label="Предупреждать за N дней до конца"
+                  type="number"
+                  value={forecastDaysThreshold}
+                  onChange={(e) => setForecastDaysThreshold(e.target.value)}
+                  disabled={thresholdLoading || thresholdSaving}
+                  slotProps={{ htmlInput: { min: 0 } }}
+                  sx={{ minWidth: { sm: 280 } }}
+                  data-testid={`${testIdPrefix}-threshold-forecast-days`}
+                />
+                <Button
+                  variant="contained"
+                  size="small"
+                  disabled={thresholdLoading || thresholdSaving}
+                  onClick={() => void saveThreshold()}
+                  data-testid={`${testIdPrefix}-threshold-save`}
+                >
+                  Сохранить
+                </Button>
+              </Stack>
+            </Paper>
+          ) : null}
 
           <Typography variant="subtitle1" data-testid={`${testIdPrefix}-sources-heading`}>
             Откуда коды
@@ -521,15 +685,31 @@ export function HonestSignProductPage({
                     </TableCell>
                   </TableRow>
                 ) : (
-                  ledger.map((row) => (
-                    <TableRow key={row.id} data-testid={`${testIdPrefix}-ledger-row-${row.id}`}>
-                      <TableCell>{new Date(row.created_at).toLocaleString('ru-RU')}</TableCell>
-                      <TableCell>
-                        <Chip size="small" label={ledgerEventLabel(row.event_type)} />
-                      </TableCell>
-                      <TableCell>{row.cis_masked}</TableCell>
-                    </TableRow>
-                  ))
+                  ledger.map((row) => {
+                    const isAggregatedImport =
+                      row.event_type === 'imported' &&
+                      row.aggregated_count != null &&
+                      row.aggregated_count > 0
+                    return (
+                      <TableRow key={row.id} data-testid={`${testIdPrefix}-ledger-row-${row.id}`}>
+                        <TableCell>{new Date(row.created_at).toLocaleString('ru-RU')}</TableCell>
+                        <TableCell>
+                          {isAggregatedImport ? (
+                            <Typography
+                              variant="body2"
+                              data-testid={`${testIdPrefix}-ledger-import-summary`}
+                            >
+                              Загружено {row.aggregated_count}
+                              {row.document_number ? `, ${row.document_number}` : ''}
+                            </Typography>
+                          ) : (
+                            <Chip size="small" label={ledgerEventLabel(row.event_type)} />
+                          )}
+                        </TableCell>
+                        <TableCell>{isAggregatedImport ? '—' : row.cis_masked}</TableCell>
+                      </TableRow>
+                    )
+                  })
                 )}
               </TableBody>
             </Table>

@@ -2,7 +2,7 @@ import { test, expect } from '@playwright/test';
 
 import { waitForGetOk, waitForPostOk } from './api-waits';
 import { openFulfillmentRegistration } from './auth-flow';
-import { fillFfInboundBoxLineQty } from './inbound-boxes-helpers';
+import { beginInboundReceivingWithBoxes, ffInboundBoxAddManualQty } from './inbound-boxes-helpers';
 
 // TC-NEW-FF-001 — распределение приёмки по ячейкам (FF): частично, остаток в «Без ячейки», завершение фиксирует read-only.
 test('ff inbound distribution: partial, leftover without cell, complete -> readonly', async ({ page }) => {
@@ -64,11 +64,7 @@ test('ff inbound distribution: partial, leftover without cell, complete -> reado
 
   const sub = await page.request.post(`${base}/${rid}/submit`, { headers: h });
   expect(sub.ok()).toBeTruthy();
-  const prim = await page.request.post(`${base}/${rid}/primary-accept`, { headers: h, data: { actual_box_count: 1 }  });
-  expect(prim.ok()).toBeTruthy();
-  const primBody = (await prim.json()) as {
-    boxes: { id: string; internal_barcode: string }[];
-  };
+  await beginInboundReceivingWithBoxes(page.request, h, rid, { boxCount: 0 });
 
   await page.goto('/app/ff/dashboard');
   await expect(page.getByTestId('ff-dashboard-inbound-block')).toBeVisible();
@@ -76,22 +72,14 @@ test('ff inbound distribution: partial, leftover without cell, complete -> reado
   await page.getByTestId('ff-dash-inbound-row').filter({ hasText: planned }).first().click();
   await expect(page.getByTestId('ff-doc-dialog')).toBeVisible();
   await expect(page.getByTestId('ff-inbound-doc-root')).toBeVisible();
-  await expect(page.getByTestId('ff-inbound-status-chip')).toContainText('Принято на складе');
+  await expect(page.getByTestId('ff-inbound-status-chip')).toContainText('Приёмка');
 
-  const inb = primBody.boxes[0]!.internal_barcode;
-  await page.getByTestId('ff-inbound-box-open-scan').fill(inb);
-  await Promise.all([
-    waitForPostOk(page, base, (u) => u.includes('/boxes/open')),
-    page.getByTestId('ff-inbound-box-open-submit').click(),
-  ]);
-  await fillFfInboundBoxLineQty(page, 5);
-  await Promise.all([
-    waitForPostOk(page, base, (u) => u.includes('/close')),
-    page.getByTestId('ff-inbound-box-close').click(),
-  ]);
+  await ffInboundBoxAddManualQty(page, 5);
 
   const [verifyRes] = await Promise.all([
-    waitForPostOk(page, '/api/operations/inbound-intake-requests', (u) => u.includes('/verify')),
+    waitForPostOk(page, '/api/operations/inbound-intake-requests', (u) =>
+      u.includes('/complete-receiving'),
+    ),
     page.getByTestId('ff-inbound-verify-complete').click(),
   ]);
   expect(verifyRes.ok()).toBeTruthy();

@@ -30,19 +30,91 @@ from app.services.document_number_service import (
     DOC_TYPE_INBOUND,
     assign_document_number_if_missing,
 )
+from app.services.seller_wb_catalog_service import list_seller_wb_catalog_rows
 
 STATUS_DRAFT = "draft"
 STATUS_SUBMITTED = "submitted"
-STATUS_PRIMARY_ACCEPTED = "primary_accepted"
-STATUS_VERIFYING = "verifying"
-STATUS_VERIFIED = "verified"
-STATUS_POSTED = "posted"
+STATUS_RECEIVING = "receiving"
+STATUS_SORTING = "sorting"
+STATUS_DONE = "done"
+
+# Collapsed legacy names (same values — IN-BE-03 updates API labels)
+STATUS_PRIMARY_ACCEPTED = STATUS_RECEIVING
+STATUS_VERIFYING = STATUS_RECEIVING
+STATUS_VERIFIED = STATUS_SORTING
+STATUS_POSTED = STATUS_DONE
+
+RECEIVING_STATUSES = frozenset({STATUS_RECEIVING})
+SORTING_STATUSES = frozenset({STATUS_SORTING})
+DONE_STATUSES = frozenset({STATUS_DONE})
 
 
 class InboundIntakeError(Exception):
     def __init__(self, code: str) -> None:
         self.code = code
         super().__init__(code)
+
+
+def _loose_qty(line: InboundIntakeLine) -> int:
+    """General (non-box) intake quantity; default 0 — never falls back to expected."""
+    return line.actual_qty if line.actual_qty is not None else 0
+
+
+async def _box_total_for_product(
+    session: AsyncSession,
+    request_id: uuid.UUID,
+    product_id: uuid.UUID,
+) -> int:
+    stmt = (
+        select(sa.func.coalesce(sa.func.sum(InboundIntakeBoxLine.quantity), 0))
+        .join(InboundIntakeBox, InboundIntakeBoxLine.box_id == InboundIntakeBox.id)
+        .where(
+            InboundIntakeBox.request_id == request_id,
+            InboundIntakeBoxLine.product_id == product_id,
+        )
+    )
+    res = await session.execute(stmt)
+    return int(res.scalar_one())
+
+
+async def effective_actual_qty(
+    session: AsyncSession,
+    request_id: uuid.UUID,
+    line: InboundIntakeLine,
+    *,
+    request_status: str | None = None,
+) -> int:
+    """Accepted fact: loose+box while receiving; after sorting actual_qty is total."""
+    raw = _loose_qty(line)
+    status = request_status
+    if status is None:
+        stmt = select(InboundIntakeRequest.status).where(
+            InboundIntakeRequest.id == request_id
+        )
+        res = await session.execute(stmt)
+        status = res.scalar_one_or_none()
+    if status in SORTING_STATUSES | DONE_STATUSES:
+        return raw
+    box_total = await _box_total_for_product(session, request_id, line.product_id)
+    return raw + box_total
+
+
+def _accepted_qty_for_line(line: InboundIntakeLine) -> int:
+    """Accepted quantity for sorting/posting; default 0 — never falls back to expected."""
+    return line.actual_qty if line.actual_qty is not None else 0
+
+
+async def sync_request_actuals_from_boxes(
+    session: AsyncSession,
+    req: InboundIntakeRequest,
+) -> None:
+    """Validate posted qty against loose + boxes; does not overwrite loose intake."""
+    for ln in req.lines:
+        total = await effective_actual_qty(
+            session, req.id, ln, request_status=req.status
+        )
+        if ln.posted_qty > total:
+            raise InboundIntakeError("actual_below_posted")
 
 
 async def create_request(
@@ -66,7 +138,7 @@ async def create_request(
         status=STATUS_DRAFT,
         seller_id=seller_id,
         planned_delivery_date=planned_delivery_date,
-        planned_box_count=1,
+        planned_box_count=None,
     )
     session.add(req)
     await assign_document_number_if_missing(
@@ -300,7 +372,7 @@ async def patch_request_draft(
     if planned_delivery_date_set:
         req.planned_delivery_date = planned_delivery_date
     if planned_box_count_set:
-        if planned_box_count is None or planned_box_count < 1:
+        if planned_box_count is not None and planned_box_count < 1:
             raise InboundIntakeError("invalid_planned_box_count")
         req.planned_box_count = planned_box_count
     await session.commit()
@@ -341,13 +413,14 @@ async def set_line_storage_location(
     if req.status not in (
         STATUS_DRAFT,
         STATUS_SUBMITTED,
-        STATUS_PRIMARY_ACCEPTED,
-        STATUS_VERIFYING,
-        STATUS_VERIFIED,
+        *RECEIVING_STATUSES,
+        *SORTING_STATUSES,
     ):
         raise InboundIntakeError("not_editable")
-    target = line.actual_qty if line.actual_qty is not None else line.expected_qty
-    if line.posted_qty >= target:
+    if (
+        req.status in SORTING_STATUSES | DONE_STATUSES
+        and line.posted_qty >= _accepted_qty_for_line(line)
+    ):
         raise InboundIntakeError("line_closed")
     loc = await get_storage_location_in_warehouse(
         session, tenant_id, req.warehouse_id, storage_location_id
@@ -381,10 +454,6 @@ async def submit_request(
         raise InboundIntakeError("not_draft")
     if len(req.lines) == 0:
         raise InboundIntakeError("submit_empty")
-    if req.planned_box_count is None:
-        req.planned_box_count = 1
-    if req.planned_box_count < 1:
-        raise InboundIntakeError("planned_boxes_missing")
     req.status = STATUS_SUBMITTED
     req.submitted_at = datetime.now(UTC)
     await session.commit()
@@ -393,13 +462,10 @@ async def submit_request(
 
 
 def _maybe_complete_request(req: InboundIntakeRequest) -> None:
-    def _target_qty(ln: InboundIntakeLine) -> int:
-        # If verified, target is actual_qty; otherwise fall back to expected_qty.
-        # We never allow posting beyond actual_qty once it's set.
-        return ln.actual_qty if ln.actual_qty is not None else ln.expected_qty
-
-    if all(ln.posted_qty >= _target_qty(ln) for ln in req.lines):
-        req.status = STATUS_POSTED
+    if req.status != STATUS_SORTING:
+        return
+    if all(ln.posted_qty >= _accepted_qty_for_line(ln) for ln in req.lines):
+        req.status = STATUS_DONE
         if req.posted_at is None:
             req.posted_at = datetime.now(UTC)
 
@@ -409,32 +475,106 @@ async def primary_accept_request(
     tenant_id: uuid.UUID,
     request_id: uuid.UUID,
     *,
-    actual_box_count: int,
+    actual_box_count: int | None = None,
 ) -> InboundIntakeRequest:
-    if actual_box_count < 0:
+    """Start receiving (legacy primary-accept entry point; no auto-box creation)."""
+    if actual_box_count is not None and actual_box_count < 0:
         raise InboundIntakeError("invalid_actual_box_count")
     req = await get_request(session, tenant_id, request_id)
     if req is None:
         raise InboundIntakeError("request_not_found")
     if req.status != STATUS_SUBMITTED:
         raise InboundIntakeError("not_submitted")
-    if req.planned_box_count is None:
-        req.planned_box_count = actual_box_count
-    req.actual_box_count = actual_box_count
-    req.boxes_discrepancy = actual_box_count != req.planned_box_count
-    req.status = STATUS_PRIMARY_ACCEPTED
+    if actual_box_count is not None:
+        req.actual_box_count = actual_box_count
+        if req.planned_box_count is not None:
+            req.boxes_discrepancy = actual_box_count != req.planned_box_count
+    req.status = STATUS_RECEIVING
     req.primary_accepted_at = datetime.now(UTC)
-    from app.services import inbound_intake_box_service as inbound_box_svc
-
-    await inbound_box_svc.create_boxes_for_request(
-        session,
-        tenant_id,
-        req,
-        box_count=actual_box_count,
-    )
     await session.commit()
-    await session.refresh(req, attribute_names=["boxes"])
+    await session.refresh(req)
     return req
+
+
+async def begin_receiving(
+    session: AsyncSession,
+    tenant_id: uuid.UUID,
+    request_id: uuid.UUID,
+) -> InboundIntakeRequest:
+    return await primary_accept_request(
+        session, tenant_id, request_id, actual_box_count=None
+    )
+
+
+async def _request_barcode_index(
+    session: AsyncSession,
+    tenant_id: uuid.UUID,
+    req: InboundIntakeRequest,
+) -> dict[str, uuid.UUID]:
+    product_ids = {ln.product_id for ln in req.lines}
+    if not product_ids:
+        return {}
+    stmt = select(Product).where(
+        Product.tenant_id == tenant_id,
+        Product.id.in_(product_ids),
+    )
+    res = await session.execute(stmt)
+    products = list(res.scalars().all())
+    idx: dict[str, uuid.UUID] = {}
+    for p in products:
+        key = p.sku_code.strip()
+        if key:
+            idx[key] = p.id
+    if req.seller_id is not None:
+        rows = await list_seller_wb_catalog_rows(session, tenant_id, req.seller_id)
+        for row in rows:
+            if row.product_id not in product_ids:
+                continue
+            for b in row.wb_barcodes:
+                key = str(b).strip()
+                if key:
+                    idx[key] = row.product_id
+            if row.wb_primary_barcode:
+                k = row.wb_primary_barcode.strip()
+                if k:
+                    idx[k] = row.product_id
+    return idx
+
+
+async def scan_barcode_to_loose_intake(
+    session: AsyncSession,
+    tenant_id: uuid.UUID,
+    request_id: uuid.UUID,
+    *,
+    barcode: str,
+) -> InboundIntakeLine:
+    """Scan product barcode into general (non-box) intake: +1 to loose actual_qty."""
+    raw = barcode.strip()
+    if not raw:
+        raise InboundIntakeError("barcode_empty")
+    req = await get_request(session, tenant_id, request_id)
+    if req is None:
+        raise InboundIntakeError("request_not_found")
+    if req.status == STATUS_SUBMITTED:
+        req.status = STATUS_RECEIVING
+        req.primary_accepted_at = datetime.now(UTC)
+    elif req.status not in RECEIVING_STATUSES:
+        raise InboundIntakeError("not_verifying")
+    idx = await _request_barcode_index(session, tenant_id, req)
+    product_id = idx.get(raw) or idx.get(raw.upper())
+    if product_id is None:
+        raise InboundIntakeError("product_not_on_request")
+    line = next((ln for ln in req.lines if ln.product_id == product_id), None)
+    if line is None:
+        raise InboundIntakeError("product_not_on_request")
+    new_loose = _loose_qty(line) + 1
+    box_total = await _box_total_for_product(session, request_id, line.product_id)
+    if line.posted_qty > new_loose + box_total:
+        raise InboundIntakeError("actual_below_posted")
+    line.actual_qty = new_loose
+    await session.commit()
+    await session.refresh(line)
+    return line
 
 
 async def set_line_actual_qty(
@@ -451,19 +591,21 @@ async def set_line_actual_qty(
     if pair is None:
         raise InboundIntakeError("line_not_found")
     req, line = pair
-    if req.status not in (STATUS_PRIMARY_ACCEPTED, STATUS_VERIFYING):
+    if req.status == STATUS_SUBMITTED:
+        req.status = STATUS_RECEIVING
+        req.primary_accepted_at = datetime.now(UTC)
+    elif req.status not in RECEIVING_STATUSES:
         raise InboundIntakeError("not_verifying")
-    if line.posted_qty > actual_qty:
+    box_total = await _box_total_for_product(session, request_id, line.product_id)
+    if line.posted_qty > actual_qty + box_total:
         raise InboundIntakeError("actual_below_posted")
     line.actual_qty = actual_qty
-    if req.status == STATUS_PRIMARY_ACCEPTED:
-        req.status = STATUS_VERIFYING
     await session.commit()
     await session.refresh(line)
     return line
 
 
-async def complete_verification(
+async def complete_receiving(
     session: AsyncSession,
     tenant_id: uuid.UUID,
     request_id: uuid.UUID,
@@ -473,7 +615,7 @@ async def complete_verification(
     req = await get_request(session, tenant_id, request_id)
     if req is None:
         raise InboundIntakeError("request_not_found")
-    if req.status not in (STATUS_PRIMARY_ACCEPTED, STATUS_VERIFYING):
+    if req.status not in RECEIVING_STATUSES:
         raise InboundIntakeError("not_verifying")
     try:
         await inbound_box_svc.assert_no_open_intake_box(session, request_id)
@@ -481,19 +623,23 @@ async def complete_verification(
         if exc.code == "open_box_exists":
             raise InboundIntakeError("open_box_exists") from None
         raise
-    if await inbound_box_svc.request_has_boxes(session, tenant_id, request_id):
-        await inbound_box_svc.sync_request_actuals_from_boxes(session, req)
-    if any(ln.actual_qty is None for ln in req.lines):
-        raise InboundIntakeError("actual_missing")
-    req.status = STATUS_VERIFIED
-    req.verified_at = datetime.now(UTC)
-    line_discrepancy = any((ln.actual_qty or 0) != ln.expected_qty for ln in req.lines)
+    await sync_request_actuals_from_boxes(session, req)
+    line_discrepancy = False
+    for line in req.lines:
+        effective = await effective_actual_qty(
+            session, req.id, line, request_status=req.status
+        )
+        line.actual_qty = effective
+        if effective != line.expected_qty:
+            line_discrepancy = True
     req.has_discrepancy = bool(req.boxes_discrepancy) or line_discrepancy
+    req.status = STATUS_SORTING
+    req.verified_at = datetime.now(UTC)
     sorting_loc = await sorting_loc_svc.get_or_create_sorting_location(
         session, tenant_id, req.warehouse_id
     )
     for line in req.lines:
-        qty = line.actual_qty or 0
+        qty = _accepted_qty_for_line(line)
         if qty < 1:
             continue
         await inv_svc.apply_inbound_receive(
@@ -510,6 +656,15 @@ async def complete_verification(
     return req
 
 
+async def complete_verification(
+    session: AsyncSession,
+    tenant_id: uuid.UUID,
+    request_id: uuid.UUID,
+) -> InboundIntakeRequest:
+    """Legacy alias for complete_receiving."""
+    return await complete_receiving(session, tenant_id, request_id)
+
+
 async def receive_line(
     session: AsyncSession,
     tenant_id: uuid.UUID,
@@ -522,13 +677,12 @@ async def receive_line(
     if pair is None:
         raise InboundIntakeError("line_not_found")
     req, line = pair
-    if req.status == STATUS_POSTED:
+    if req.status == STATUS_DONE:
         raise InboundIntakeError("already_posted")
-    if req.status != STATUS_VERIFIED:
+    if req.status != STATUS_SORTING:
         raise InboundIntakeError("not_verified")
-    if line.actual_qty is None:
-        raise InboundIntakeError("actual_missing")
-    remaining = line.actual_qty - line.posted_qty
+    accepted = _accepted_qty_for_line(line)
+    remaining = accepted - line.posted_qty
     if remaining <= 0:
         raise InboundIntakeError("nothing_to_receive")
     if line.storage_location_id is None:
@@ -565,18 +719,17 @@ async def post_all_remaining(
     req = await get_request(session, tenant_id, request_id)
     if req is None:
         raise InboundIntakeError("request_not_found")
-    if req.status == STATUS_POSTED:
+    if req.status == STATUS_DONE:
         raise InboundIntakeError("already_posted")
-    if req.status != STATUS_VERIFIED:
+    if req.status != STATUS_SORTING:
         raise InboundIntakeError("not_verified")
     sorting_loc = await sorting_loc_svc.get_or_create_sorting_location(
         session, tenant_id, req.warehouse_id
     )
     to_receive: list[tuple[InboundIntakeLine, int]] = []
     for line in req.lines:
-        if line.actual_qty is None:
-            raise InboundIntakeError("actual_missing")
-        rem = line.actual_qty - line.posted_qty
+        accepted = _accepted_qty_for_line(line)
+        rem = accepted - line.posted_qty
         if rem <= 0:
             continue
         if line.storage_location_id is None:
@@ -606,14 +759,9 @@ async def post_all_remaining(
     return req
 
 
-def _accepted_qty_for_line(line: InboundIntakeLine) -> int:
-    # Если факт пересчитан — он приоритетен; иначе используем план.
-    return line.actual_qty if line.actual_qty is not None else line.expected_qty
-
-
 def sorting_remaining_qty(req: InboundIntakeRequest) -> int:
     """Сколько штук ещё не разложено по ячейкам хранения (остаётся в зоне сортировки)."""
-    if req.status != STATUS_VERIFIED:
+    if req.status != STATUS_SORTING:
         return 0
     total = 0
     for ln in req.lines:
@@ -630,12 +778,39 @@ def box_remaining_qty(box: InboundIntakeBox) -> int:
     return sum(box_line_remaining_qty(ln) for ln in box.lines)
 
 
-def _request_uses_box_putaway(req: InboundIntakeRequest) -> bool:
-    return len(req.boxes) > 0
+def _box_remainder_total_for_product(
+    req: InboundIntakeRequest,
+    product_id: uuid.UUID,
+) -> int:
+    total = 0
+    for box in req.boxes:
+        for bl in box.lines:
+            if bl.product_id == product_id:
+                total += box_line_remaining_qty(bl)
+    return total
+
+
+def _loose_pool_for_product(
+    req: InboundIntakeRequest,
+    product_id: uuid.UUID,
+    accepted: int,
+) -> int:
+    """Portion of accepted qty not tied to open box remainders (rosyp / loose)."""
+    return max(0, accepted - _box_remainder_total_for_product(req, product_id))
+
+
+def _box_lines_by_key(
+    req: InboundIntakeRequest,
+) -> dict[tuple[uuid.UUID, uuid.UUID], InboundIntakeBoxLine]:
+    out: dict[tuple[uuid.UUID, uuid.UUID], InboundIntakeBoxLine] = {}
+    for box in req.boxes:
+        for bl in box.lines:
+            out[(box.id, bl.product_id)] = bl
+    return out
 
 
 def _maybe_set_distribution_completed(req: InboundIntakeRequest) -> None:
-    if req.status != STATUS_VERIFIED:
+    if req.status != STATUS_SORTING:
         return
     if (
         all(
@@ -656,7 +831,7 @@ async def _get_box_for_putaway(
     req = await get_request(session, tenant_id, request_id)
     if req is None:
         raise InboundIntakeError("request_not_found")
-    if req.status != STATUS_VERIFIED:
+    if req.status != STATUS_SORTING:
         raise InboundIntakeError("not_distributable")
     box = await session.get(InboundIntakeBox, box_id)
     if box is None or box.request_id != request_id or box.tenant_id != tenant_id:
@@ -724,7 +899,7 @@ async def apply_box_putaway(
     req, box = await _get_box_for_putaway(session, tenant_id, request_id, box_id)
 
     if await inbound_box_svc.request_has_boxes(session, tenant_id, request_id):
-        await inbound_box_svc.sync_request_actuals_from_boxes(session, req)
+        await sync_request_actuals_from_boxes(session, req)
 
     loc = await get_storage_location_in_warehouse(
         session, tenant_id, req.warehouse_id, storage_location_id
@@ -820,10 +995,10 @@ async def resync_sorting_stock_for_request(
     req = await get_request(session, tenant_id, request_id)
     if req is None:
         raise InboundIntakeError("request_not_found")
-    if req.status != STATUS_VERIFIED:
+    if req.status != STATUS_SORTING:
         raise InboundIntakeError("not_distributable")
     if await inbound_box_svc.request_has_boxes(session, tenant_id, request_id):
-        await inbound_box_svc.sync_request_actuals_from_boxes(session, req)
+        await sync_request_actuals_from_boxes(session, req)
 
     sorting_loc = await sorting_loc_svc.get_or_create_sorting_location(
         session, tenant_id, req.warehouse_id
@@ -884,15 +1059,10 @@ async def replace_distribution_lines(
         raise InboundIntakeError("request_not_found")
     if req.distribution_completed_at is not None:
         raise InboundIntakeError("distribution_completed")
-    if req.status != STATUS_VERIFIED:
+    if req.status != STATUS_SORTING:
         raise InboundIntakeError("not_distributable")
 
-    uses_boxes = _request_uses_box_putaway(req)
-    box_lines_by_key: dict[tuple[uuid.UUID, uuid.UUID], InboundIntakeBoxLine] = {}
-    if uses_boxes:
-        for box in req.boxes:
-            for bl in box.lines:
-                box_lines_by_key[(box.id, bl.product_id)] = bl
+    box_lines_by_key = _box_lines_by_key(req)
 
     accepted_by_product: dict[uuid.UUID, int] = {}
     for ln in req.lines:
@@ -900,11 +1070,10 @@ async def replace_distribution_lines(
 
     sum_by_product: dict[uuid.UUID, int] = {}
     sum_by_box_product: dict[tuple[uuid.UUID, uuid.UUID], int] = {}
+    sum_loose_by_product: dict[uuid.UUID, int] = {}
     for box_id, product_id, storage_location_id, qty in lines:
         if qty < 1:
             raise InboundIntakeError("invalid_qty")
-        if uses_boxes and box_id is None:
-            raise InboundIntakeError("box_required")
         accepted = accepted_by_product.get(product_id)
         if accepted is None:
             raise InboundIntakeError("product_not_on_request")
@@ -918,6 +1087,11 @@ async def replace_distribution_lines(
             if next_box_sum > box_line_remaining_qty(box_line):
                 raise InboundIntakeError("qty_exceeds_box_remaining")
             sum_by_box_product[(box_id, product_id)] = next_box_sum
+        else:
+            next_loose_sum = sum_loose_by_product.get(product_id, 0) + qty
+            if next_loose_sum > _loose_pool_for_product(req, product_id, accepted):
+                raise InboundIntakeError("qty_exceeds_accepted")
+            sum_loose_by_product[product_id] = next_loose_sum
         loc = await get_storage_location_in_warehouse(
             session, tenant_id, req.warehouse_id, storage_location_id
         )
@@ -957,7 +1131,7 @@ async def complete_distribution(
     req = await get_request(session, tenant_id, request_id)
     if req is None:
         raise InboundIntakeError("request_not_found")
-    if req.status != STATUS_VERIFIED:
+    if req.status != STATUS_SORTING:
         raise InboundIntakeError("not_distributable")
 
     # Safety net: validate saved distribution lines against accepted quantities
@@ -978,23 +1152,18 @@ async def complete_distribution(
     if not rows:
         raise InboundIntakeError("distribution_incomplete")
 
-    uses_boxes = _request_uses_box_putaway(req)
-    box_lines_by_key: dict[tuple[uuid.UUID, uuid.UUID], InboundIntakeBoxLine] = {}
-    if uses_boxes:
-        for box in req.boxes:
-            for bl in box.lines:
-                box_lines_by_key[(box.id, bl.product_id)] = bl
+    box_lines_by_key = _box_lines_by_key(req)
 
     sorting_loc = await sorting_loc_svc.get_or_create_sorting_location(
         session, tenant_id, req.warehouse_id
     )
 
     sum_by_product: dict[uuid.UUID, int] = {}
+    sum_by_box_product: dict[tuple[uuid.UUID, uuid.UUID], int] = {}
+    sum_loose_by_product: dict[uuid.UUID, int] = {}
     for r in rows:
         if r.quantity < 1:
             raise InboundIntakeError("invalid_qty")
-        if uses_boxes and r.box_id is None:
-            raise InboundIntakeError("box_required")
         accepted = accepted_by_product.get(r.product_id)
         if accepted is None:
             raise InboundIntakeError("product_not_on_request")
@@ -1004,6 +1173,15 @@ async def complete_distribution(
             box_line = box_lines_by_key.get((r.box_id, r.product_id))
             if box_line is None:
                 raise InboundIntakeError("product_not_in_box")
+            next_box_sum = sum_by_box_product.get((r.box_id, r.product_id), 0) + r.quantity
+            if next_box_sum > box_line_remaining_qty(box_line):
+                raise InboundIntakeError("qty_exceeds_box_remaining")
+            sum_by_box_product[(r.box_id, r.product_id)] = next_box_sum
+        else:
+            next_loose_sum = sum_loose_by_product.get(r.product_id, 0) + r.quantity
+            if next_loose_sum > _loose_pool_for_product(req, r.product_id, accepted):
+                raise InboundIntakeError("qty_exceeds_accepted")
+            sum_loose_by_product[r.product_id] = next_loose_sum
         target_loc = await session.get(StorageLocation, r.storage_location_id)
         if target_loc is None or target_loc.tenant_id != tenant_id:
             raise InboundIntakeError("location_not_found")
@@ -1061,7 +1239,7 @@ async def reopen_distribution(
     req = await get_request(session, tenant_id, request_id)
     if req is None:
         raise InboundIntakeError("request_not_found")
-    if req.status != STATUS_VERIFIED:
+    if req.status != STATUS_SORTING:
         raise InboundIntakeError("not_reopenable")
     if req.distribution_completed_at is None:
         raise InboundIntakeError("distribution_not_completed")
