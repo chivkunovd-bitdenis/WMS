@@ -27,7 +27,6 @@ import { useWbProductCatalog } from '../../hooks/useWbProductCatalog'
 import { apiUrl } from '../../api'
 import { productDisplayMetaFromCatalog } from '../../types/wbProductCatalog'
 import { readApiErrorMessage } from '../../utils/readApiErrorMessage'
-import { effectiveActualQty, type InboundBoxRef } from './inboundReceivingHelpers'
 
 type LocationRow = { id: string; code: string; warehouse_id: string; barcode: string }
 
@@ -110,13 +109,26 @@ function emptyDraftRow(defaultBoxId: string | null): CellDraftRow {
   }
 }
 
+function distributionRowBoxId(
+  row: DistributionLineOut,
+  defaultBoxId: string | null,
+  loosePool: number,
+): string | null {
+  if (row.box_id != null && row.box_id !== '') {
+    return row.box_id
+  }
+  // API returns box_id: null for loose lines — do not assign defaultBoxId when loose pool exists.
+  return loosePool > 0 ? null : defaultBoxId
+}
+
 function linesFromDistributionRows(
   rows: DistributionLineOut[],
   defaultBoxId: string | null,
+  loosePool: number,
 ): CellDraftRow[] {
   return rows.map((r) => ({
     key: nextDraftKey(),
-    box_id: r.box_id ?? defaultBoxId,
+    box_id: distributionRowBoxId(r, defaultBoxId, loosePool),
     storage_location_id: r.storage_location_id,
     quantity: String(r.quantity),
   }))
@@ -162,18 +174,14 @@ export function FfInboundSortingPanel({
 
   const defaultBoxId = closedBoxes.length === 1 ? closedBoxes[0]!.id : null
 
-  const boxRefs: InboundBoxRef[] = useMemo(
-    () => boxes.map((b) => ({ lines: b.lines.map((ln) => ({ product_id: ln.product_id, quantity: ln.quantity })) })),
-    [boxes],
-  )
-
   const acceptedByProductId = useMemo(() => {
     const m = new Map<string, number>()
     for (const ln of lines) {
-      m.set(ln.product_id, effectiveActualQty(ln, boxRefs))
+      // In sorting workspace actual_qty is finalized total from complete_receiving, not loose-only.
+      m.set(ln.product_id, ln.actual_qty ?? 0)
     }
     return m
-  }, [boxRefs, lines])
+  }, [lines])
 
   const postedByProductId = useMemo(() => {
     const m = new Map<string, number>()
@@ -265,11 +273,15 @@ export function FfInboundSortingPanel({
     setProductStates(
       sortableProducts.map((p) => ({
         ...p,
-        rows: linesFromDistributionRows(byProduct.get(p.product_id) ?? [], defaultBoxId),
+        rows: linesFromDistributionRows(
+          byProduct.get(p.product_id) ?? [],
+          defaultBoxId,
+          loosePoolByProductId.get(p.product_id) ?? 0,
+        ),
       })),
     )
     setDistributionLoaded(true)
-  }, [authHeaders, defaultBoxId, requestId, sortableProducts])
+  }, [authHeaders, defaultBoxId, loosePoolByProductId, requestId, sortableProducts])
 
   useEffect(() => {
     void loadLocations()
@@ -392,11 +404,17 @@ export function FfInboundSortingPanel({
         },
       )
       if (!res.ok) {
-        const code = await readApiErrorMessage(res)
-        if (code === 'qty_exceeds_accepted') {
+        const text = await res.text()
+        let detail: unknown = null
+        try {
+          detail = (JSON.parse(text) as { detail?: unknown }).detail
+        } catch {
+          /* use readApiErrorMessage fallback */
+        }
+        if (detail === 'qty_exceeds_accepted') {
           setError('Превышено принятое количество по товару.')
         } else {
-          setError(code)
+          setError(await readApiErrorMessage(new Response(text, { status: res.status })))
         }
         return false
       }
@@ -410,7 +428,11 @@ export function FfInboundSortingPanel({
       setProductStates((prev) =>
         prev.map((p) => ({
           ...p,
-          rows: linesFromDistributionRows(byProduct.get(p.product_id) ?? [], defaultBoxId),
+          rows: linesFromDistributionRows(
+            byProduct.get(p.product_id) ?? [],
+            defaultBoxId,
+            loosePoolByProductId.get(p.product_id) ?? 0,
+          ),
         })),
       )
       return true
