@@ -2037,7 +2037,7 @@ export function FfSuppliesShipmentsPage({
                   >
                     <TableHead>
                       <TableRow>
-                        <FfProductTableHeadCells />
+                        <FfProductTableHeadCells showPrint={false} />
                         <TableCell align="right">План</TableCell>
                         {mpExecutionPhase ? (
                           <>
@@ -2051,8 +2051,9 @@ export function FfSuppliesShipmentsPage({
                     <TableBody>
                       {(() => {
                         const lines = unloadDetail.lines
+                        const productCols = 6
                         const mpCols = mpExecutionPhase ? 2 : 0
-                        const emptySpan = 7 + mpCols + (draftDoc ? 1 : 0)
+                        const emptySpan = productCols + 1 + mpCols + (draftDoc ? 1 : 0)
                         if (lines.length === 0) {
                           return (
                             <TableRow>
@@ -2067,6 +2068,8 @@ export function FfSuppliesShipmentsPage({
                         return lines.map((ln) => {
                           const picked = ln.picked_qty ?? 0
                           const remaining = ln.quantity - picked
+                          const lineShowsDiscrepancy =
+                            unloadDetail.status === 'shipped' && Boolean(ln.has_discrepancy)
                           const displayMeta = productDisplayMetaFromCatalog(
                             ln.product_id,
                             ln,
@@ -2076,23 +2079,37 @@ export function FfSuppliesShipmentsPage({
                             <TableRow
                               key={ln.id}
                               sx={
-                                ln.has_discrepancy
+                                lineShowsDiscrepancy
                                   ? { '& .MuiTableCell-root': { color: 'error.main' } }
                                   : undefined
                               }
                               data-testid={
-                                ln.has_discrepancy ? `ff-mp-line-discrepancy-${ln.id}` : undefined
+                                lineShowsDiscrepancy
+                                  ? `ff-mp-line-discrepancy-${ln.id}`
+                                  : `ff-mp-line-row-${ln.id}`
                               }
                             >
                               <FfProductLineCells
                                 meta={displayMeta}
                                 showPrint={false}
                               />
-                              <TableCell align="right">{ln.quantity}</TableCell>
+                              <TableCell align="right" data-testid={`ff-mp-line-plan-${ln.id}`}>
+                                {ln.quantity}
+                              </TableCell>
                               {mpExecutionPhase ? (
                                 <>
-                                  <TableCell align="right">{picked}</TableCell>
-                                  <TableCell align="right">{remaining}</TableCell>
+                                  <TableCell
+                                    align="right"
+                                    data-testid={`ff-mp-line-picked-${ln.id}`}
+                                  >
+                                    {picked}
+                                  </TableCell>
+                                  <TableCell
+                                    align="right"
+                                    data-testid={`ff-mp-line-remaining-${ln.id}`}
+                                  >
+                                    {remaining}
+                                  </TableCell>
                                 </>
                               ) : null}
                               {draftDoc ? (
@@ -2119,54 +2136,67 @@ export function FfSuppliesShipmentsPage({
                       })()}
                     </TableBody>
                   </Table>
-                  {mpExecutionPhase && (unloadDetail.boxes.length ?? 0) > 0 ? (
-                    <Button
-                      variant="outlined"
-                      disabled={modalBusy}
-                      data-testid="ff-mp-print-all-box-barcodes"
-                      onClick={() => printAllMpBoxBarcodes()}
+                  {(unloadDetail.lines.length > 0 ||
+                    (mpExecutionPhase && (unloadDetail.boxes.length ?? 0) > 0)) ? (
+                    <Stack
+                      direction="row"
+                      spacing={1}
+                      useFlexGap
+                      data-testid="ff-mp-print-actions"
+                      sx={{ mt: 1, flexWrap: 'wrap' }}
                     >
-                      Печать всех ШК коробов
-                    </Button>
-                  ) : null}
-                  {unloadDetail.lines.length > 0 ? (
-                    <Button
-                      variant="outlined"
-                      disabled={modalBusy}
-                      data-testid="ff-mp-print-waybill"
-                      onClick={() => {
-                        const wbName =
-                          wbMpWarehouses.find(
-                            (w) => w.wb_warehouse_id === unloadDetail.wb_mp_warehouse_id,
-                          )?.name ?? null
-                        printMarketplaceUnloadWaybill({
-                          documentId: unloadDetail.id,
-                          statusLabel: statusRu(unloadDetail.status),
-                          warehouseName: unloadDetail.warehouse_name,
-                          sellerName: unloadDetail.seller_name,
-                          wbWarehouseLabel:
-                            wbName != null && unloadDetail.wb_mp_warehouse_id != null
-                              ? `${wbName} (${unloadDetail.wb_mp_warehouse_id})`
-                              : null,
-                          plannedDate: unloadDetail.planned_shipment_date,
-                          createdAt: unloadDetail.created_at
-                            ? formatDateTimeLocal(unloadDetail.created_at)
-                            : null,
-                          lines: unloadDetail.lines.map((ln) => ({
-                            sku_code: ln.sku_code,
-                            product_name: ln.product_name,
-                            quantity: ln.quantity,
-                          })),
-                          pickAllocations: unloadDetail.pick_allocations.map((a) => ({
-                            location_code: a.location_code,
-                            sku_code: a.sku_code,
-                            quantity: a.quantity,
-                          })),
-                        })
-                      }}
-                    >
-                      Печать накладной
-                    </Button>
+                      {(unloadDetail.boxes.length ?? 0) > 0 ? (
+                        <Button
+                          variant="outlined"
+                          size="small"
+                          disabled={modalBusy}
+                          data-testid="ff-mp-print-all-box-barcodes"
+                          onClick={() => printAllMpBoxBarcodes()}
+                        >
+                          Печать всех ШК коробов
+                        </Button>
+                      ) : null}
+                      {unloadDetail.lines.length > 0 ? (
+                        <Button
+                          variant="outlined"
+                          size="small"
+                          disabled={modalBusy}
+                          data-testid="ff-mp-print-waybill"
+                          onClick={() => {
+                            const wbName =
+                              wbMpWarehouses.find(
+                                (w) => w.wb_warehouse_id === unloadDetail.wb_mp_warehouse_id,
+                              )?.name ?? null
+                            printMarketplaceUnloadWaybill({
+                              documentId: unloadDetail.id,
+                              statusLabel: statusRu(unloadDetail.status),
+                              warehouseName: unloadDetail.warehouse_name,
+                              sellerName: unloadDetail.seller_name,
+                              wbWarehouseLabel:
+                                wbName != null && unloadDetail.wb_mp_warehouse_id != null
+                                  ? `${wbName} (${unloadDetail.wb_mp_warehouse_id})`
+                                  : null,
+                              plannedDate: unloadDetail.planned_shipment_date,
+                              createdAt: unloadDetail.created_at
+                                ? formatDateTimeLocal(unloadDetail.created_at)
+                                : null,
+                              lines: unloadDetail.lines.map((ln) => ({
+                                sku_code: ln.sku_code,
+                                product_name: ln.product_name,
+                                quantity: ln.quantity,
+                              })),
+                              pickAllocations: unloadDetail.pick_allocations.map((a) => ({
+                                location_code: a.location_code,
+                                sku_code: a.sku_code,
+                                quantity: a.quantity,
+                              })),
+                            })
+                          }}
+                        >
+                          Печать накладной
+                        </Button>
+                      ) : null}
+                    </Stack>
                   ) : null}
               {/* REV-FIX-014: «План и распределение» + ff-mp-collect-warning only after confirm (not on draft). */}
                                 {mpCollectSummary ? (
@@ -2544,7 +2574,7 @@ export function FfSuppliesShipmentsPage({
           <Table size="small" data-testid="ff-supplies-doc-lines" sx={{ tableLayout: 'fixed', width: '100%' }}>
             <TableHead>
               <TableRow>
-                <FfProductTableHeadCells />
+                <FfProductTableHeadCells showPrint={false} />
                 <TableCell>Строка приёмки</TableCell>
                 <TableCell align="right">План</TableCell>
                 {draftDoc ? <TableCell align="right" width={56} /> : null}
@@ -2553,7 +2583,7 @@ export function FfSuppliesShipmentsPage({
             <TableBody>
               {(() => {
                 const lines = divergeDetail?.lines ?? []
-                const emptySpan = 7 + 1 + (draftDoc ? 1 : 0)
+                const emptySpan = 6 + 1 + 1 + (draftDoc ? 1 : 0)
                 if (lines.length === 0) {
                   return (
                     <TableRow>
