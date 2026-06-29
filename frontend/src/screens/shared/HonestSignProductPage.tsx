@@ -73,6 +73,7 @@ type LedgerRow = {
   cis_masked: string
   document_number: string | null
   actor_email: string | null
+  aggregated_count?: number | null
 }
 
 type TabKey = 'codes' | 'ledger'
@@ -688,15 +689,31 @@ export function HonestSignProductPage({
                     </TableCell>
                   </TableRow>
                 ) : (
-                  ledger.map((row) => (
-                    <TableRow key={row.id} data-testid={`${testIdPrefix}-ledger-row-${row.id}`}>
-                      <TableCell>{new Date(row.created_at).toLocaleString('ru-RU')}</TableCell>
-                      <TableCell>
-                        <Chip size="small" label={ledgerEventLabel(row.event_type)} />
-                      </TableCell>
-                      <TableCell>{row.cis_masked}</TableCell>
-                    </TableRow>
-                  ))
+                  ledger.map((row) => {
+                    const isAggregatedImport =
+                      row.event_type === 'imported' &&
+                      row.aggregated_count != null &&
+                      row.aggregated_count > 0
+                    return (
+                      <TableRow key={row.id} data-testid={`${testIdPrefix}-ledger-row-${row.id}`}>
+                        <TableCell>{new Date(row.created_at).toLocaleString('ru-RU')}</TableCell>
+                        <TableCell>
+                          {isAggregatedImport ? (
+                            <Typography
+                              variant="body2"
+                              data-testid={`${testIdPrefix}-ledger-import-summary`}
+                            >
+                              Загружено {row.aggregated_count}
+                              {row.document_number ? `, ${row.document_number}` : ''}
+                            </Typography>
+                          ) : (
+                            <Chip size="small" label={ledgerEventLabel(row.event_type)} />
+                          )}
+                        </TableCell>
+                        <TableCell>{isAggregatedImport ? '—' : row.cis_masked}</TableCell>
+                      </TableRow>
+                    )
+                  })
                 )}
               </TableBody>
             </Table>
