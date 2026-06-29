@@ -1,5 +1,11 @@
 # TASKLOG
 
+## TASK-076 — 2026-06-29 — REV-CZ-TEST-01: ЧЗ tenant/seller isolation tests
+
+- What changed: `test_marking_inventory_cz_filter.py` — tenant/seller isolation для `list_inventory` (одинаковый SKU/GTIN/pool title между tenant; title/GTIN/pool между seller). `test_marking_product_codes_pool_filter.py` — tenant/seller isolation для `list_product_codes` + API 404 cross-tenant.
+- What did NOT change: production marking_code_service; существующие FIX-01/FIX-02 сценарии.
+- Verification: `cd backend && pytest tests/test_marking_inventory_cz_filter.py tests/test_marking_product_codes_pool_filter.py` — 8 passed.
+
 ## TASK-075 — 2026-06-29 — IN-FE-01: inbound receiving UI new flow
 
 - What changed: `FfInboundRequestView.tsx` — факт=0, красные строки при расхождении, общий скан `/receiving/scan`, ручная правка через кнопку, модалка короба, одна «Завершить» + модалка расхождений; убраны primary-accept и boxIntakeMode. `FfInboundBoxAddDialog.tsx`, `inboundReceivingHelpers.ts`; `inboundQueues.ts` — статусы `receiving`/`sorting`; e2e `inbound-receiving-v2.spec.ts`.
