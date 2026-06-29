@@ -84,8 +84,9 @@ test('FF honest sign: import dialog uploads CSV into pool', async ({ page }) => 
   await Promise.all([importWait, page.getByTestId('ff-honest-sign-import-submit').click()])
 
   await expect(page.getByTestId('ff-honest-sign-import-toast')).toContainText('Загружено 1')
-  await expect(page.getByTestId('ff-honest-sign-pools-table')).toContainText('UI Import Pool')
-  await expect(page.getByTestId('ff-honest-sign-pools-table')).toContainText('1')
+  const productsTable = page.getByTestId('ff-honest-sign-products-table')
+  await expect(productsTable).toContainText(sku)
+  await expect(productsTable).toContainText('1')
 })
 
 // TC-NEW-008 — негатив: повторная загрузка тех же кодов → дубликаты.

@@ -4,7 +4,15 @@
 - backlog: CHESTNY_ZNAK_PRODUCT_FIRST_TASKS_RU.md
 - integration_branch: feat/cz-product-first
 - mode: continuous + hook
-- status: **ACTIVE** — wave 1 started 2026-06-29
+- status: **BACKLOG COMPLETE** — all ids `.done` on `feat/cz-product-first` (2026-06-29)
+
+## Closed (full backlog)
+
+SVC-01, SVC-02, API-01, API-02, LIST-01, PROD-01, PROD-02, POOL-01, APP-01, E2E-01 — integrated
+
+## Next step (owner)
+
+PR `feat/cz-product-first` → `main` after full CI. Note: legacy honest-sign e2e specs still pool-row — may need follow-up.
 
 ## Runnable queue (after deps)
 
@@ -30,6 +38,10 @@
 - SVC-02: integrated
 - API-01: integrated
 
-## Active builders (wave 3)
+- API-02: integrated
 
-- API-02: pending start (depends SVC-02 + API-01 — now runnable)
+## Active builders (wave 4 — full 3 slots)
+
+- LIST-01: in progress
+- PROD-01: in progress
+- POOL-01: in progress
