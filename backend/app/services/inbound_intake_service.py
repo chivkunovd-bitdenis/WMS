@@ -30,6 +30,7 @@ from app.services.document_number_service import (
     DOC_TYPE_INBOUND,
     assign_document_number_if_missing,
 )
+from app.services.seller_wb_catalog_service import list_seller_wb_catalog_rows
 
 STATUS_DRAFT = "draft"
 STATUS_SUBMITTED = "submitted"
@@ -496,6 +497,76 @@ async def begin_receiving(
     return await primary_accept_request(
         session, tenant_id, request_id, actual_box_count=None
     )
+
+
+async def _request_barcode_index(
+    session: AsyncSession,
+    tenant_id: uuid.UUID,
+    req: InboundIntakeRequest,
+) -> dict[str, uuid.UUID]:
+    product_ids = {ln.product_id for ln in req.lines}
+    if not product_ids:
+        return {}
+    stmt = select(Product).where(
+        Product.tenant_id == tenant_id,
+        Product.id.in_(product_ids),
+    )
+    res = await session.execute(stmt)
+    products = list(res.scalars().all())
+    idx: dict[str, uuid.UUID] = {}
+    for p in products:
+        key = p.sku_code.strip()
+        if key:
+            idx[key] = p.id
+    if req.seller_id is not None:
+        rows = await list_seller_wb_catalog_rows(session, tenant_id, req.seller_id)
+        for row in rows:
+            if row.product_id not in product_ids:
+                continue
+            for b in row.wb_barcodes:
+                key = str(b).strip()
+                if key:
+                    idx[key] = row.product_id
+            if row.wb_primary_barcode:
+                k = row.wb_primary_barcode.strip()
+                if k:
+                    idx[k] = row.product_id
+    return idx
+
+
+async def scan_barcode_to_loose_intake(
+    session: AsyncSession,
+    tenant_id: uuid.UUID,
+    request_id: uuid.UUID,
+    *,
+    barcode: str,
+) -> InboundIntakeLine:
+    """Scan product barcode into general (non-box) intake: +1 to loose actual_qty."""
+    raw = barcode.strip()
+    if not raw:
+        raise InboundIntakeError("barcode_empty")
+    req = await get_request(session, tenant_id, request_id)
+    if req is None:
+        raise InboundIntakeError("request_not_found")
+    if req.status == STATUS_SUBMITTED:
+        req.status = STATUS_RECEIVING
+        req.primary_accepted_at = datetime.now(UTC)
+    elif req.status not in RECEIVING_STATUSES:
+        raise InboundIntakeError("not_verifying")
+    idx = await _request_barcode_index(session, tenant_id, req)
+    product_id = idx.get(raw) or idx.get(raw.upper())
+    if product_id is None:
+        raise InboundIntakeError("product_not_on_request")
+    line = next((ln for ln in req.lines if ln.product_id == product_id), None)
+    if line is None:
+        raise InboundIntakeError("product_not_on_request")
+    new_qty = _loose_qty(line) + 1
+    if line.posted_qty > new_qty:
+        raise InboundIntakeError("actual_below_posted")
+    line.actual_qty = new_qty
+    await session.commit()
+    await session.refresh(line)
+    return line
 
 
 async def set_line_actual_qty(

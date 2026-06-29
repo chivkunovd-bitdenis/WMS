@@ -4,7 +4,7 @@ import time
 
 import pytest
 from httpx import AsyncClient
-from inbound_box_intake_helpers import fulfill_inbound_via_box_scans
+from inbound_box_intake_helpers import fulfill_inbound_via_box_scans, post_primary_accept
 
 
 @pytest.mark.asyncio
@@ -64,9 +64,7 @@ async def test_second_outbound_line_blocks_when_reserved_exceeds_on_hand(
     await async_client.post(
         f"/operations/inbound-intake-requests/{rid}/submit", headers=h
     )
-    await async_client.post(
-        f"/operations/inbound-intake-requests/{rid}/primary-accept", headers=h
-    , json={"actual_box_count": 1})
+    await post_primary_accept(async_client, "/operations/inbound-intake-requests", rid, h)
     inb = await async_client.get(
         f"/operations/inbound-intake-requests/{rid}", headers=h
     )
@@ -164,9 +162,7 @@ async def test_stock_transfer_blocked_by_outbound_reservation(
     await async_client.post(
         f"/operations/inbound-intake-requests/{rid}/submit", headers=h
     )
-    await async_client.post(
-        f"/operations/inbound-intake-requests/{rid}/primary-accept", headers=h
-    , json={"actual_box_count": 1})
+    await post_primary_accept(async_client, "/operations/inbound-intake-requests", rid, h)
     inb = await async_client.get(
         f"/operations/inbound-intake-requests/{rid}", headers=h
     )
@@ -261,9 +257,7 @@ async def test_inventory_balances_include_reserved_and_available(
     await async_client.post(
         f"/operations/inbound-intake-requests/{rid}/submit", headers=h
     )
-    await async_client.post(
-        f"/operations/inbound-intake-requests/{rid}/primary-accept", headers=h
-    , json={"actual_box_count": 1})
+    await post_primary_accept(async_client, "/operations/inbound-intake-requests", rid, h)
     await fulfill_inbound_via_box_scans(async_client, h, rid, sku, 10)
     await async_client.post(
         f"/operations/inbound-intake-requests/{rid}/verify", headers=h

@@ -4,7 +4,7 @@ import time
 
 import pytest
 from httpx import AsyncClient
-from inbound_box_intake_helpers import fulfill_inbound_via_box_scans
+from inbound_box_intake_helpers import fulfill_inbound_via_box_scans, post_primary_accept
 
 
 @pytest.mark.asyncio
@@ -64,11 +64,7 @@ async def test_outbound_submit_warehouse_reserve_without_cell(
     await async_client.post(
         f"/operations/inbound-intake-requests/{rid}/submit", headers=h
     )
-    await async_client.post(
-        f"/operations/inbound-intake-requests/{rid}/primary-accept",
-        headers=h,
-        json={"actual_box_count": 1},
-    )
+    await post_primary_accept(async_client, "/operations/inbound-intake-requests", rid, h)
     await fulfill_inbound_via_box_scans(async_client, h, rid, sku, 10)
     await async_client.post(
         f"/operations/inbound-intake-requests/{rid}/verify", headers=h

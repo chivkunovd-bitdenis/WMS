@@ -4,7 +4,7 @@ import time
 
 import pytest
 from httpx import AsyncClient
-from inbound_box_intake_helpers import fulfill_inbound_via_box_scans
+from inbound_box_intake_helpers import fulfill_inbound_via_box_scans, post_primary_accept
 
 
 @pytest.mark.asyncio
@@ -62,9 +62,7 @@ async def test_outbound_shipment_decrements_stock(async_client: AsyncClient) -> 
     await async_client.post(
         f"/operations/inbound-intake-requests/{rid}/submit", headers=h
     )
-    await async_client.post(
-        f"/operations/inbound-intake-requests/{rid}/primary-accept", headers=h
-    , json={"actual_box_count": 1})
+    await post_primary_accept(async_client, "/operations/inbound-intake-requests", rid, h)
     inb = await async_client.get(f"/operations/inbound-intake-requests/{rid}", headers=h)
     inb.json()["lines"][0]["id"]
     await fulfill_inbound_via_box_scans(async_client, h, rid, sku, 20)
@@ -159,9 +157,7 @@ async def test_outbound_partial_ship_then_post_rest(async_client: AsyncClient) -
     await async_client.post(
         f"/operations/inbound-intake-requests/{rid}/submit", headers=h
     )
-    await async_client.post(
-        f"/operations/inbound-intake-requests/{rid}/primary-accept", headers=h
-    , json={"actual_box_count": 1})
+    await post_primary_accept(async_client, "/operations/inbound-intake-requests", rid, h)
     inb = await async_client.get(
         f"/operations/inbound-intake-requests/{rid}", headers=h
     )
@@ -273,9 +269,7 @@ async def test_outbound_post_duplicate_after_fully_shipped_returns_409(
     await async_client.post(
         f"/operations/inbound-intake-requests/{rid}/submit", headers=h
     )
-    await async_client.post(
-        f"/operations/inbound-intake-requests/{rid}/primary-accept", headers=h
-    , json={"actual_box_count": 1})
+    await post_primary_accept(async_client, "/operations/inbound-intake-requests", rid, h)
     await fulfill_inbound_via_box_scans(async_client, h, rid, sku, 4)
     await async_client.post(
         f"/operations/inbound-intake-requests/{rid}/verify", headers=h
