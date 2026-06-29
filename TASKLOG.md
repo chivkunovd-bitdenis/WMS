@@ -1,5 +1,11 @@
 # TASKLOG
 
+## TASK-072 — 2026-06-29 — Печать ТЗ на упаковку (A4)
+
+- What changed: кнопка «Печать» в модалке ТЗ (`FfProductsCatalogScreen`, `SellerProductsStockScreen`); утилита `printPackagingInstructions.ts` — A4 с SKU, товаром, селлером, инструкцией и флагом ЧЗ; e2e assert `ff-packaging-print`.
+- What did NOT change: API, сохранение ТЗ, печать этикеток/ЧЗ.
+- Verification: `npm run test:unit` 26 passed; `npm run build` green; `npm run test:e2e -- ff-products.spec.ts` 2 passed.
+
 ## TASK-071 — 2026-06-29 — CZ product-first: PR #52
 
 - Full backlog `CHESTNY_ZNAK_PRODUCT_FIRST_TASKS_RU.md` integrated on `feat/cz-product-first`.

@@ -26,6 +26,7 @@ import {
 import { apiUrl } from '../../api'
 import { ProductPhotoThumb } from '../../components/ProductPhotoThumb'
 import { readApiErrorMessage } from '../../utils/readApiErrorMessage'
+import { printPackagingInstructions } from '../../utils/printPackagingInstructions'
 
 type WbCatalogRow = {
   id: string
@@ -136,6 +137,16 @@ export function SellerProductsStockScreen({
     setEditProduct(p)
     setEditText(p.packaging_instructions ?? '')
     setEditRequiresHonestSign(Boolean(p.requires_honest_sign))
+  }
+
+  function printPackagingTz() {
+    if (!editProduct) return
+    printPackagingInstructions({
+      sku_code: editProduct.sku_code,
+      product_name: editProduct.name,
+      instructions: editText,
+      requires_honest_sign: editRequiresHonestSign,
+    })
   }
 
   async function savePackagingInstructions() {
@@ -367,6 +378,14 @@ export function SellerProductsStockScreen({
         <DialogActions>
           <Button onClick={() => setEditProduct(null)} disabled={editBusy}>
             Отмена
+          </Button>
+          <Button
+            variant="outlined"
+            disabled={editBusy || !editProduct}
+            onClick={printPackagingTz}
+            data-testid="seller-packaging-print"
+          >
+            Печать
           </Button>
           <Button
             variant="contained"
