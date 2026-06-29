@@ -696,8 +696,35 @@ def box_remaining_qty(box: InboundIntakeBox) -> int:
     return sum(box_line_remaining_qty(ln) for ln in box.lines)
 
 
-def _request_uses_box_putaway(req: InboundIntakeRequest) -> bool:
-    return len(req.boxes) > 0
+def _box_remainder_total_for_product(
+    req: InboundIntakeRequest,
+    product_id: uuid.UUID,
+) -> int:
+    total = 0
+    for box in req.boxes:
+        for bl in box.lines:
+            if bl.product_id == product_id:
+                total += box_line_remaining_qty(bl)
+    return total
+
+
+def _loose_pool_for_product(
+    req: InboundIntakeRequest,
+    product_id: uuid.UUID,
+    accepted: int,
+) -> int:
+    """Portion of accepted qty not tied to open box remainders (rosyp / loose)."""
+    return max(0, accepted - _box_remainder_total_for_product(req, product_id))
+
+
+def _box_lines_by_key(
+    req: InboundIntakeRequest,
+) -> dict[tuple[uuid.UUID, uuid.UUID], InboundIntakeBoxLine]:
+    out: dict[tuple[uuid.UUID, uuid.UUID], InboundIntakeBoxLine] = {}
+    for box in req.boxes:
+        for bl in box.lines:
+            out[(box.id, bl.product_id)] = bl
+    return out
 
 
 def _maybe_set_distribution_completed(req: InboundIntakeRequest) -> None:
@@ -953,12 +980,7 @@ async def replace_distribution_lines(
     if req.status != STATUS_SORTING:
         raise InboundIntakeError("not_distributable")
 
-    uses_boxes = _request_uses_box_putaway(req)
-    box_lines_by_key: dict[tuple[uuid.UUID, uuid.UUID], InboundIntakeBoxLine] = {}
-    if uses_boxes:
-        for box in req.boxes:
-            for bl in box.lines:
-                box_lines_by_key[(box.id, bl.product_id)] = bl
+    box_lines_by_key = _box_lines_by_key(req)
 
     accepted_by_product: dict[uuid.UUID, int] = {}
     for ln in req.lines:
@@ -966,11 +988,10 @@ async def replace_distribution_lines(
 
     sum_by_product: dict[uuid.UUID, int] = {}
     sum_by_box_product: dict[tuple[uuid.UUID, uuid.UUID], int] = {}
+    sum_loose_by_product: dict[uuid.UUID, int] = {}
     for box_id, product_id, storage_location_id, qty in lines:
         if qty < 1:
             raise InboundIntakeError("invalid_qty")
-        if uses_boxes and box_id is None:
-            raise InboundIntakeError("box_required")
         accepted = accepted_by_product.get(product_id)
         if accepted is None:
             raise InboundIntakeError("product_not_on_request")
@@ -984,6 +1005,11 @@ async def replace_distribution_lines(
             if next_box_sum > box_line_remaining_qty(box_line):
                 raise InboundIntakeError("qty_exceeds_box_remaining")
             sum_by_box_product[(box_id, product_id)] = next_box_sum
+        else:
+            next_loose_sum = sum_loose_by_product.get(product_id, 0) + qty
+            if next_loose_sum > _loose_pool_for_product(req, product_id, accepted):
+                raise InboundIntakeError("qty_exceeds_accepted")
+            sum_loose_by_product[product_id] = next_loose_sum
         loc = await get_storage_location_in_warehouse(
             session, tenant_id, req.warehouse_id, storage_location_id
         )
@@ -1044,23 +1070,18 @@ async def complete_distribution(
     if not rows:
         raise InboundIntakeError("distribution_incomplete")
 
-    uses_boxes = _request_uses_box_putaway(req)
-    box_lines_by_key: dict[tuple[uuid.UUID, uuid.UUID], InboundIntakeBoxLine] = {}
-    if uses_boxes:
-        for box in req.boxes:
-            for bl in box.lines:
-                box_lines_by_key[(box.id, bl.product_id)] = bl
+    box_lines_by_key = _box_lines_by_key(req)
 
     sorting_loc = await sorting_loc_svc.get_or_create_sorting_location(
         session, tenant_id, req.warehouse_id
     )
 
     sum_by_product: dict[uuid.UUID, int] = {}
+    sum_by_box_product: dict[tuple[uuid.UUID, uuid.UUID], int] = {}
+    sum_loose_by_product: dict[uuid.UUID, int] = {}
     for r in rows:
         if r.quantity < 1:
             raise InboundIntakeError("invalid_qty")
-        if uses_boxes and r.box_id is None:
-            raise InboundIntakeError("box_required")
         accepted = accepted_by_product.get(r.product_id)
         if accepted is None:
             raise InboundIntakeError("product_not_on_request")
@@ -1070,6 +1091,15 @@ async def complete_distribution(
             box_line = box_lines_by_key.get((r.box_id, r.product_id))
             if box_line is None:
                 raise InboundIntakeError("product_not_in_box")
+            next_box_sum = sum_by_box_product.get((r.box_id, r.product_id), 0) + r.quantity
+            if next_box_sum > box_line_remaining_qty(box_line):
+                raise InboundIntakeError("qty_exceeds_box_remaining")
+            sum_by_box_product[(r.box_id, r.product_id)] = next_box_sum
+        else:
+            next_loose_sum = sum_loose_by_product.get(r.product_id, 0) + r.quantity
+            if next_loose_sum > _loose_pool_for_product(req, r.product_id, accepted):
+                raise InboundIntakeError("qty_exceeds_accepted")
+            sum_loose_by_product[r.product_id] = next_loose_sum
         target_loc = await session.get(StorageLocation, r.storage_location_id)
         if target_loc is None or target_loc.tenant_id != tenant_id:
             raise InboundIntakeError("location_not_found")
