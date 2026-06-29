@@ -9,6 +9,7 @@ from httpx import AsyncClient
 
 from app.db.session import SessionLocal
 from app.models.inbound_intake import InboundIntakeBoxLine
+from app.models.product import Product
 from app.services import inbound_intake_box_service as box_svc
 from app.services import inbound_intake_service as svc
 from app.services.catalog_service import create_product, create_warehouse
@@ -87,7 +88,43 @@ async def test_loose_only_receiving_no_boxes(async_client: AsyncClient) -> None:
 
 
 @pytest.mark.asyncio
-async def test_mixed_loose_and_box_fact_is_sum(async_client: AsyncClient) -> None:
+async def test_mixed_box_then_loose_fact_is_sum(async_client: AsyncClient) -> None:
+    """REV-IN-BE-01: box scan first, then loose — total = box + loose, no double count."""
+    tenant_id = await _tenant_id(async_client)
+    request_id, product_id = await _setup_request(async_client, tenant_id, expected_qty=10)
+    async with SessionLocal() as session:
+        req_loaded = await svc.get_request(session, tenant_id, request_id)
+        assert req_loaded is not None
+        boxes = await box_svc.create_boxes_for_request(
+            session, tenant_id, req_loaded, box_count=1
+        )
+        box = await box_svc.open_box_by_barcode(
+            session,
+            tenant_id,
+            request_id,
+            barcode=boxes[0].internal_barcode,
+        )
+        prod = await session.get(Product, product_id)
+        assert prod is not None
+        for _ in range(6):
+            await box_svc.scan_product_into_box(
+                session, tenant_id, request_id, box.id, barcode=prod.sku_code
+            )
+        await box_svc.close_box_intake(session, tenant_id, request_id, box.id)
+        req_after = await svc.get_request(session, tenant_id, request_id)
+        assert req_after is not None
+        line = req_after.lines[0]
+        assert line.actual_qty in (None, 0)
+        await svc.set_line_actual_qty(
+            session, tenant_id, request_id, line.id, actual_qty=4
+        )
+        done = await svc.complete_receiving(session, tenant_id, request_id)
+        assert done.lines[0].actual_qty == 10
+        assert done.has_discrepancy is False
+
+
+@pytest.mark.asyncio
+async def test_mixed_loose_then_box_fact_is_sum(async_client: AsyncClient) -> None:
     tenant_id = await _tenant_id(async_client)
     request_id, product_id = await _setup_request(async_client, tenant_id, expected_qty=10)
     async with SessionLocal() as session:
@@ -171,6 +208,27 @@ async def test_status_transitions_collapsed_chain(async_client: AsyncClient) -> 
         assert still.status == svc.STATUS_RECEIVING
         done = await svc.complete_receiving(session, tenant_id, request_id)
         assert done.status == svc.STATUS_SORTING
+
+
+@pytest.mark.asyncio
+async def test_box_only_under_receive_sets_discrepancy(async_client: AsyncClient) -> None:
+    """REV-IN-BE-01: box=6, loose=0, planned=10 → total=6, discrepancy=true."""
+    tenant_id = await _tenant_id(async_client)
+    request_id, product_id = await _setup_request(async_client, tenant_id, expected_qty=10)
+    async with SessionLocal() as session:
+        await svc.begin_receiving(session, tenant_id, request_id)
+        req_loaded = await svc.get_request(session, tenant_id, request_id)
+        assert req_loaded is not None
+        boxes = await box_svc.create_boxes_for_request(
+            session, tenant_id, req_loaded, box_count=1
+        )
+        session.add(
+            InboundIntakeBoxLine(box_id=boxes[0].id, product_id=product_id, quantity=6)
+        )
+        await session.flush()
+        done = await svc.complete_receiving(session, tenant_id, request_id)
+        assert done.lines[0].actual_qty == 6
+        assert done.has_discrepancy is True
 
 
 @pytest.mark.asyncio
