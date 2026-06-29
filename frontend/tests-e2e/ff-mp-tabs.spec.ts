@@ -10,21 +10,35 @@ const MP_SELLER_NAME_MAIN_SCAN = 'Main Scan Seller'
 const MP_SELLER_NAME_OUT_FE_02 = 'OUT FE 02 Seller'
 
 function mpUnloadListRow(page: Page, sellerName: string) {
-  return page.locator('[data-doc-kind="marketplace_unload"]').filter({ hasText: sellerName })
+  return page.getByTestId('ff-docs-row').filter({ hasText: sellerName })
 }
 
 async function openMpUnloadFromList(
   page: Page,
   unloadId: string,
   sellerName: string,
-): Promise<void> {
-  const row = mpUnloadListRow(page, sellerName)
+): Promise<string> {
+  const token = await page.evaluate(() => localStorage.getItem('wms_token_ff'))
+  expect(token).toBeTruthy()
+  const unloadRes = await page.request.get(`/api/operations/marketplace-unload-requests/${unloadId}`, {
+    headers: { Authorization: `Bearer ${token}` },
+  })
+  expect(unloadRes.ok(), await unloadRes.text()).toBeTruthy()
+  const unloadBody = (await unloadRes.json()) as { document_number: string | null }
+  const unloadDocumentNumber = unloadBody.document_number ?? ''
+  expect(unloadDocumentNumber).toBeTruthy()
+
+  const row = mpUnloadListRow(page, sellerName).filter({
+    hasText: unloadDocumentNumber,
+  })
   await expect(row).toHaveCount(1)
   await Promise.all([
     waitForGetOk(page, `/api/operations/marketplace-unload-requests/${unloadId}`),
     waitForGetOk(page, '/api/operations/marketplace-unload-requests/'),
     row.click(),
   ])
+
+  return unloadDocumentNumber
 }
 
 async function expectMpTabSelected(page: Page, tabTestId: string): Promise<void> {
@@ -74,7 +88,6 @@ async function postInboundLineToStorage(
 test('FF marketplace unload: tabs switch without losing document context', async ({ page }) => {
   const email = `e2e-mp-tabs-${Date.now()}@example.com`
   const e2eApi = process.env.E2E_API_ORIGIN ?? 'http://127.0.0.1:18000'
-  const barcode = 'E2E-MOCK-BARCODE'
 
   await page.goto('/')
   await openFulfillmentRegistration(page)
@@ -238,9 +251,10 @@ test('FF marketplace unload: tabs switch without losing document context', async
   await page.getByTestId('nav-ff-mp-shipments').click()
   // REV-FIX-011: page description must not mention legacy «подбор по ячейкам».
   await expect(page.getByTestId('ff-mp-shipments-page')).not.toContainText(/подбор по ячейкам/i)
-  await openMpUnloadFromList(page, mid, MP_SELLER_NAME_TABS)
+  const unloadDocumentNumber = await openMpUnloadFromList(page, mid, MP_SELLER_NAME_TABS)
 
   await expect(page.getByTestId('ff-supplies-doc-dialog')).toBeVisible()
+  await expect(page.getByTestId('ff-mp-unload-document-number')).toHaveText(unloadDocumentNumber)
   await expect(page.getByTestId('ff-mp-tab-products')).toBeVisible()
   await expect(page.getByTestId('ff-mp-tab-boxes')).toHaveCount(0)
   await expect(page.getByTestId('ff-mp-tab-final')).toHaveCount(0)
@@ -264,14 +278,13 @@ test('FF marketplace unload: tabs switch without losing document context', async
   await expect(page.getByTestId('ff-mp-boxes')).toBeVisible()
   await expectMpTabSelected(page, 'ff-mp-tab-products')
   await expect(page.getByTestId('ff-mp-ship')).toBeDisabled()
-  await expect(page.getByTestId('ff-mp-unload-document-number')).toBeVisible()
+  await expect(page.getByTestId('ff-mp-unload-document-number')).toHaveText(unloadDocumentNumber)
 })
 
 // TC-NEW-MP-011 / MP-012: на черновике нет плашки прогресса упаковки.
 test('FF marketplace unload: no packaging progress banner on draft', async ({ page }) => {
   const email = `e2e-mp-draft-pkg-${Date.now()}@example.com`
   const e2eApi = process.env.E2E_API_ORIGIN ?? 'http://127.0.0.1:18000'
-  const barcode = 'E2E-MOCK-BARCODE'
 
   await page.goto('/')
   await openFulfillmentRegistration(page)
@@ -587,7 +600,6 @@ test('FF marketplace unload: main scan rejects product barcode', async ({ page }
 test('TC-NEW-OUT-FE-02: shipment table columns no early red', async ({ page }) => {
   const email = `e2e-out-fe-02-${Date.now()}@example.com`
   const e2eApi = process.env.E2E_API_ORIGIN ?? 'http://127.0.0.1:18000'
-  const barcode = 'E2E-MOCK-BARCODE'
 
   await page.goto('/')
   await openFulfillmentRegistration(page)

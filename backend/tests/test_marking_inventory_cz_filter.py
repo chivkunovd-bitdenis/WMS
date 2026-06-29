@@ -288,6 +288,8 @@ async def test_inventory_tenant_isolation_same_sku_pool_title(
     assert row_b.sku_code == shared_sku
     assert row_a.personal_available == 3
     assert row_b.personal_available == 7
+    assert row_a.shared_baskets == []
+    assert row_b.shared_baskets == []
 
 
 @pytest.mark.asyncio
@@ -298,6 +300,8 @@ async def test_inventory_seller_isolation_same_sku_pool_title(
     shared_name = "ЧЗ seller isolation"
     shared_gtin = "04600000000089"
     shared_pool_title = "Seller pool"
+    # SKU is tenant-unique in this model, so seller isolation keeps the
+    # human-readable metadata aligned and varies only the SKU code.
 
     tenant_id, seller_a, headers = await _seed_tenant_seller(async_client)
     seller_b = await _second_seller(async_client, headers)
@@ -337,3 +341,5 @@ async def test_inventory_seller_isolation_same_sku_pool_title(
     assert result_b.rows[0].personal_available == 9
     assert product_b.id not in _product_ids(result_a)
     assert product_a.id not in _product_ids(result_b)
+    assert result_a.rows[0].shared_baskets == []
+    assert result_b.rows[0].shared_baskets == []

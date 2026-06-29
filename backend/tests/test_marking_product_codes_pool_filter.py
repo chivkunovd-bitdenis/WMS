@@ -122,7 +122,7 @@ async def test_list_product_codes_includes_pool_import_without_product_id(
     )
 
     code_count = 16
-    codes = await _import_pool_codes(
+    await _import_pool_codes(
         async_client,
         h,
         seller_id=seller_id,
@@ -217,11 +217,13 @@ async def test_list_product_codes_tenant_isolation_same_sku_pool(
 async def test_list_product_codes_seller_isolation_same_sku_pool(
     async_client: AsyncClient,
 ) -> None:
-    """TC-NEW-CZISO-004: other seller with same title/pool must not share code lookup."""
+    """TC-NEW-CZISO-004: other seller with same title/pool metadata must not share code lookup."""
     headers, tenant_id = await _register_tenant_admin(async_client, org_prefix="cz-iso-seller")
 
     seller_a = await _create_seller(async_client, headers)
     seller_b = await _create_seller(async_client, headers)
+    # SKU remains distinct because this tenant enforces SKU uniqueness, but the
+    # lookup contract should still ignore same product/pool metadata across sellers.
     product_a = await _create_cz_product(
         async_client,
         headers,

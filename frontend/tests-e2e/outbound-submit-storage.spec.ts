@@ -5,7 +5,7 @@ import {
   waitForPostOk,
 } from './api-waits';
 import { openFulfillmentRegistration } from './auth-flow';
-import { fulfillInboundViaBoxScans } from './inbound-boxes-helpers';
+import {beginInboundReceivingWithBoxes,  fulfillInboundViaBoxScans } from './inbound-boxes-helpers';
 
 // TC-NEW-13-001 — submit без ячейки: складской резерв; списание — только с ячейкой.
 test('outbound submit without cell reserves warehouse; post needs cell', async ({
@@ -98,18 +98,17 @@ test('outbound submit without cell reserves warehouse; post needs cell', async (
     }),
   });
   await page.request.post(`${baseIn}/${inboundId}/submit`, { headers: auth });
-  const prim = await page.request.post(`${baseIn}/${inboundId}/primary-accept`, {
-    headers: auth,
-    data: { actual_box_count: 1 },
-  });
-  const boxes = (await prim.json()) as {
-    boxes: { id: string; internal_barcode: string }[];
-  };
+  const { boxes: inboundBoxes } = await beginInboundReceivingWithBoxes(
+    page.request,
+    auth,
+    inboundId,
+    { boxCount: 1 },
+  );
   await fulfillInboundViaBoxScans(
     page.request,
     auth,
     inboundId,
-    boxes.boxes,
+    inboundBoxes,
     'E2E-MOCK-BARCODE',
     [10],
   );

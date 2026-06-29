@@ -2,7 +2,7 @@ import { expect, test } from '@playwright/test'
 
 import { waitForGetOk, waitForPostOk } from './api-waits'
 import { selectHonestSignSeller } from './ff-honest-sign-helpers'
-import { fulfillInboundViaBoxScans } from './inbound-boxes-helpers'
+import {beginInboundReceivingWithBoxes,  fulfillInboundViaBoxScans } from './inbound-boxes-helpers'
 import { openFulfillmentRegistration } from './auth-flow'
 
 // TC-NEW-001 — ЧЗ: импорт кодов и печать пачкой из строки задания на упаковку.
@@ -86,14 +86,8 @@ test('FF packaging: print honest sign codes for line quantity', async ({ page })
     data: JSON.stringify({ product_id: productId, expected_qty: 1 }),
   })
   await page.request.post(`${baseIn}/${inboundId}/submit`, { headers: auth })
-  const primIn = await page.request.post(`${baseIn}/${inboundId}/primary-accept`, {
-    headers: auth,
-    data: { actual_box_count: 1 },
-  })
-  const primInBody = (await primIn.json()) as {
-    boxes: { id: string; internal_barcode: string }[]
-  }
-  await fulfillInboundViaBoxScans(page.request, auth, inboundId, primInBody.boxes, sku, [1])
+  const { boxes: inboundBoxes } = await beginInboundReceivingWithBoxes(page.request, auth, inboundId, { boxCount: 1 })
+  await fulfillInboundViaBoxScans(page.request, auth, inboundId, inboundBoxes, sku, [1])
   await page.request.post(`${baseIn}/${inboundId}/verify`, { headers: auth })
   await page.request.post(`${baseIn}/${inboundId}/post`, { headers: auth })
 
@@ -239,14 +233,8 @@ test('FF packaging: reprint single selected marking code', async ({ page }) => {
     data: JSON.stringify({ product_id: productId, expected_qty: 2 }),
   })
   await page.request.post(`${baseIn}/${inboundId}/submit`, { headers: auth })
-  const primIn = await page.request.post(`${baseIn}/${inboundId}/primary-accept`, {
-    headers: auth,
-    data: { actual_box_count: 1 },
-  })
-  const primInBody = (await primIn.json()) as {
-    boxes: { id: string; internal_barcode: string }[]
-  }
-  await fulfillInboundViaBoxScans(page.request, auth, inboundId, primInBody.boxes, sku, [2])
+  const { boxes: inboundBoxes } = await beginInboundReceivingWithBoxes(page.request, auth, inboundId, { boxCount: 1 })
+  await fulfillInboundViaBoxScans(page.request, auth, inboundId, inboundBoxes, sku, [2])
   await page.request.post(`${baseIn}/${inboundId}/verify`, { headers: auth })
   await page.request.post(`${baseIn}/${inboundId}/post`, { headers: auth })
 
@@ -385,14 +373,8 @@ test('FF packaging: block complete when honest sign codes missing', async ({ pag
     data: JSON.stringify({ product_id: productId, expected_qty: 1 }),
   })
   await page.request.post(`${baseIn}/${inboundId}/submit`, { headers: auth })
-  const primIn = await page.request.post(`${baseIn}/${inboundId}/primary-accept`, {
-    headers: auth,
-    data: { actual_box_count: 1 },
-  })
-  const primInBody = (await primIn.json()) as {
-    boxes: { id: string; internal_barcode: string }[]
-  }
-  await fulfillInboundViaBoxScans(page.request, auth, inboundId, primInBody.boxes, sku, [1])
+  const { boxes: inboundBoxes } = await beginInboundReceivingWithBoxes(page.request, auth, inboundId, { boxCount: 1 })
+  await fulfillInboundViaBoxScans(page.request, auth, inboundId, inboundBoxes, sku, [1])
   await page.request.post(`${baseIn}/${inboundId}/verify`, { headers: auth })
   await page.request.post(`${baseIn}/${inboundId}/post`, { headers: auth })
 

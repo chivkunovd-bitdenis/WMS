@@ -3,15 +3,21 @@ import { test, expect, type Locator } from '@playwright/test';
 import { waitForGetOk, waitForPostOk } from './api-waits';
 import { openFulfillmentRegistration } from './auth-flow';
 
-async function sortingRowByQty(card: Locator, qty: string): Promise<Locator> {
+async function sortingRowByIdentity(
+  card: Locator,
+  identity: { sourceText: string; locationText: string },
+): Promise<Locator> {
   const rows = card.getByTestId('ff-sorting-cell-row');
   const count = await rows.count();
   for (let i = 0; i < count; i++) {
     const row = rows.nth(i);
-    const value = await row.getByTestId('ff-sorting-cell-qty').inputValue();
-    if (value === qty) return row;
+    const sourceText = (await row.getByTestId('ff-sorting-cell-source').textContent())?.replace(/\s+/g, ' ').trim() ?? '';
+    const locationText = (await row.getByTestId('ff-sorting-cell-location').textContent())?.replace(/\s+/g, ' ').trim() ?? '';
+    if (sourceText.includes(identity.sourceText) && locationText.includes(identity.locationText)) return row;
   }
-  throw new Error(`sorting row with qty ${qty} not found`);
+  throw new Error(
+    `sorting row with source "${identity.sourceText}" and location "${identity.locationText}" not found`,
+  );
 }
 
 // TC-NEW-SORT-01 — mixed loose + box distribution survives save/reload with correct sources.
@@ -71,7 +77,8 @@ test('ff sorting product-centric: loose and box sources persist after save reloa
 
   const boxRes = await page.request.post(`${base}/${rid}/boxes`, { headers: h });
   expect(boxRes.ok()).toBeTruthy();
-  const boxId = ((await boxRes.json()) as { id: string }).id;
+  const box = (await boxRes.json()) as { id: string; box_number: number };
+  const boxId = box.id;
   const putBox = await page.request.put(`${base}/${rid}/boxes/${boxId}/lines/${pid}`, {
     headers: { ...h, 'Content-Type': 'application/json' },
     data: { quantity: 6 },
@@ -137,8 +144,16 @@ test('ff sorting product-centric: loose and box sources persist after save reloa
   const reloadedCard = page.getByTestId('ff-sorting-product-card').first();
   await expect(reloadedCard.getByTestId('ff-sorting-cell-row')).toHaveCount(2);
 
-  looseRow = await sortingRowByQty(reloadedCard, '4');
-  const reloadedBoxRow = await sortingRowByQty(reloadedCard, '6');
+  looseRow = await sortingRowByIdentity(reloadedCard, {
+    sourceText: 'Россыпь',
+    locationText: 'LOOSE-1',
+  });
+  const reloadedBoxRow = await sortingRowByIdentity(reloadedCard, {
+    sourceText: `Короб №${box.box_number}`,
+    locationText: 'BOX-1',
+  });
+  await expect(looseRow.getByTestId('ff-sorting-cell-qty')).toHaveValue('4');
+  await expect(reloadedBoxRow.getByTestId('ff-sorting-cell-qty')).toHaveValue('6');
   await expect(looseRow.getByTestId('ff-sorting-cell-source')).toContainText('Россыпь');
   await expect(reloadedBoxRow.getByTestId('ff-sorting-cell-source')).toContainText('Короб');
 });

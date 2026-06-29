@@ -1,7 +1,7 @@
 import { expect, test } from '@playwright/test'
 
 import { waitForGetOk, waitForPostOk } from './api-waits'
-import { fulfillInboundViaBoxScans } from './inbound-boxes-helpers'
+import {beginInboundReceivingWithBoxes,  fulfillInboundViaBoxScans } from './inbound-boxes-helpers'
 import { openFulfillmentRegistration } from './auth-flow'
 
 // TC-NEW-007 — ворклист pending-marking: строка есть до печати и исчезает после.
@@ -74,14 +74,8 @@ test('FF pending marking worklist row disappears after print', async ({ page }) 
     data: JSON.stringify({ product_id: productId, expected_qty: 1 }),
   })
   await page.request.post(`${baseIn}/${inboundId}/submit`, { headers: auth })
-  const primIn = await page.request.post(`${baseIn}/${inboundId}/primary-accept`, {
-    headers: auth,
-    data: { actual_box_count: 1 },
-  })
-  const primInBody = (await primIn.json()) as {
-    boxes: { id: string; internal_barcode: string }[]
-  }
-  await fulfillInboundViaBoxScans(page.request, auth, inboundId, primInBody.boxes, sku, [1])
+  const { boxes: inboundBoxes } = await beginInboundReceivingWithBoxes(page.request, auth, inboundId, { boxCount: 1 })
+  await fulfillInboundViaBoxScans(page.request, auth, inboundId, inboundBoxes, sku, [1])
   await page.request.post(`${baseIn}/${inboundId}/verify`, { headers: auth })
   await page.request.post(`${baseIn}/${inboundId}/post`, { headers: auth })
 
@@ -205,14 +199,8 @@ test('FF pending marking bulk print selected rows', async ({ page }) => {
       data: JSON.stringify({ product_id: productId, expected_qty: 1 }),
     })
     await page.request.post(`${baseIn}/${inboundId}/submit`, { headers: auth })
-    const primIn = await page.request.post(`${baseIn}/${inboundId}/primary-accept`, {
-      headers: auth,
-      data: { actual_box_count: 1 },
-    })
-    const primInBody = (await primIn.json()) as {
-      boxes: { id: string; internal_barcode: string }[]
-    }
-    await fulfillInboundViaBoxScans(page.request, auth, inboundId, primInBody.boxes, spec.sku, [1])
+    const { boxes: inboundBoxes } = await beginInboundReceivingWithBoxes(page.request, auth, inboundId, { boxCount: 1 })
+  await fulfillInboundViaBoxScans(page.request, auth, inboundId, inboundBoxes, spec.sku, [1])
     await page.request.post(`${baseIn}/${inboundId}/verify`, { headers: auth })
     await page.request.post(`${baseIn}/${inboundId}/post`, { headers: auth })
   }

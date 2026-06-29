@@ -106,21 +106,17 @@ test('ff products: filter by seller and sort by name/quantity', async ({ page })
     })
     const line = (await addLineRes.json()) as { id: string }
     await apiPost(`/operations/inbound-intake-requests/${req.id}/submit`, {})
-    const prim = await apiPost(`/operations/inbound-intake-requests/${req.id}/primary-accept`, {
-      actual_box_count: 1,
-    })
+    const inboundBox = await apiPost(`/operations/inbound-intake-requests/${req.id}/boxes`, {})
     await apiPatch(`/operations/inbound-intake-requests/${req.id}/lines/${line.id}`, {
       storage_location_id: loc.id,
     })
-    const primBody = (await prim.json()) as {
-      boxes: { id: string; internal_barcode: string }[]
-    }
+    const inboundBoxBody = (await inboundBox.json()) as { id: string; internal_barcode: string }
     const { fulfillInboundViaBoxScans } = await import('./inbound-boxes-helpers')
     await fulfillInboundViaBoxScans(
       page.request,
       h,
       req.id,
-      primBody.boxes,
+      [inboundBoxBody],
       skuCode,
       [actualQty],
     )
@@ -230,13 +226,10 @@ test('ff products: edit packaging instructions in catalog', async ({ page }) => 
     data: JSON.stringify({ product_id: productId, expected_qty: 1 }),
   })
   await page.request.post(`${baseIn}/${inboundId}/submit`, { headers: h })
-  const primIn = await page.request.post(`${baseIn}/${inboundId}/primary-accept`, {
-    headers: h,
-    data: { actual_box_count: 1 },
-  })
-  const primInBody = (await primIn.json()) as { boxes: { id: string; internal_barcode: string }[] }
+  const inboundBox = await page.request.post(`${baseIn}/${inboundId}/boxes`, { headers: h })
+  const inboundBoxBody = (await inboundBox.json()) as { id: string; internal_barcode: string }
   const { fulfillInboundViaBoxScans } = await import('./inbound-boxes-helpers')
-  await fulfillInboundViaBoxScans(page.request, h, inboundId, primInBody.boxes, sku, [1])
+  await fulfillInboundViaBoxScans(page.request, h, inboundId, [inboundBoxBody], sku, [1])
   await page.request.post(`${baseIn}/${inboundId}/verify`, { headers: h })
   await page.request.post(`${baseIn}/${inboundId}/post`, { headers: h })
 
@@ -261,4 +254,3 @@ test('ff products: edit packaging instructions in catalog', async ({ page }) => 
   ])
   await expect(page.getByTestId(`ff-packaging-status-${productId}`)).toContainText('Заполнено')
 })
-

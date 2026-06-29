@@ -82,10 +82,11 @@ test.describe('Full WMS user journey', () => {
     await expect(page.getByTestId('inbound-detail-status')).toContainText('submitted');
 
     await Promise.all([
-      waitForPostOk(page, '/api/operations/inbound-intake-requests', (u) => u.includes('/primary-accept')),
+      waitForPatchOk(page, '/api/operations/inbound-intake-requests', (u) => u.includes('/actual')),
+      waitForPostOk(page, '/api/operations/inbound-intake-requests', (u) => u.includes('/boxes')),
       page.getByTestId('inbound-primary-accept').click(),
     ]);
-    await expect(page.getByTestId('inbound-detail-status')).toContainText('primary_accepted');
+    await expect(page.getByTestId('inbound-detail-status')).toContainText('receiving');
 
     const { v2InboundBoxIntakeUi } = await import('./inbound-boxes-helpers');
     await v2InboundBoxIntakeUi(page, h, sku, 5);
@@ -93,7 +94,7 @@ test.describe('Full WMS user journey', () => {
       waitForPostOk(page, '/api/operations/inbound-intake-requests', (u) => u.includes('/verify')),
       page.getByTestId('inbound-verify-complete').click(),
     ]);
-    await expect(page.getByTestId('inbound-detail-status')).toContainText('verified');
+    await expect(page.getByTestId('inbound-detail-status')).toContainText('sorting');
 
     await page.getByTestId('inbound-line-storage-select').selectOption({ label: 'BIN-A1' });
     const [patchRes] = await Promise.all([
@@ -110,7 +111,7 @@ test.describe('Full WMS user journey', () => {
       page.getByTestId('inbound-post-submit').click(),
     ]);
     expect(postRes.ok()).toBeTruthy();
-    await expect(page.getByTestId('inbound-detail-status')).toContainText('posted');
+    await expect(page.getByTestId('inbound-detail-status')).toContainText('done');
     const movementsAfterPost = page
       .getByTestId('inbound-movements-list')
       .getByTestId('inbound-movement-row');
@@ -188,10 +189,11 @@ test.describe('Full WMS user journey', () => {
     await expect(page.getByTestId('inbound-detail-status')).toContainText('submitted');
 
     await Promise.all([
-      waitForPostOk(page, '/api/operations/inbound-intake-requests', (u) => u.includes('/primary-accept')),
+      waitForPatchOk(page, '/api/operations/inbound-intake-requests', (u) => u.includes('/actual')),
+      waitForPostOk(page, '/api/operations/inbound-intake-requests', (u) => u.includes('/boxes')),
       page.getByTestId('inbound-primary-accept').click(),
     ]);
-    await expect(page.getByTestId('inbound-detail-status')).toContainText('primary_accepted');
+    await expect(page.getByTestId('inbound-detail-status')).toContainText('receiving');
 
     const { v2InboundBoxIntakeUi: v2IntakeB } = await import('./inbound-boxes-helpers');
     await v2IntakeB(page, h, sku, 8);
@@ -199,7 +201,7 @@ test.describe('Full WMS user journey', () => {
       waitForPostOk(page, '/api/operations/inbound-intake-requests', (u) => u.includes('/verify')),
       page.getByTestId('inbound-verify-complete').click(),
     ]);
-    await expect(page.getByTestId('inbound-detail-status')).toContainText('verified');
+    await expect(page.getByTestId('inbound-detail-status')).toContainText('sorting');
 
     await page.getByTestId('inbound-line-receive-qty').fill('3');
     const [recv1] = await Promise.all([
@@ -207,7 +209,7 @@ test.describe('Full WMS user journey', () => {
       page.getByTestId('inbound-line-receive-submit').click(),
     ]);
     expect(recv1.ok()).toBeTruthy();
-    await expect(page.getByTestId('inbound-detail-status')).toContainText('verified');
+    await expect(page.getByTestId('inbound-detail-status')).toContainText('sorting');
     await expect(page.getByTestId('inbound-detail-line')).toContainText('принято 3');
     await expect(
       page.getByTestId('inbound-movements-list').getByTestId('inbound-movement-row').filter({ hasText: '+3' }),
@@ -218,7 +220,7 @@ test.describe('Full WMS user journey', () => {
       page.getByTestId('inbound-post-submit').click(),
     ]);
     expect(postRes.ok()).toBeTruthy();
-    await expect(page.getByTestId('inbound-detail-status')).toContainText('posted');
+    await expect(page.getByTestId('inbound-detail-status')).toContainText('done');
     await expect(page.getByTestId('inbound-detail-line')).toContainText('принято 8');
 
     const movements = page.getByTestId('inbound-movements-list').getByTestId('inbound-movement-row');

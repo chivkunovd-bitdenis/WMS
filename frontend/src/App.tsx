@@ -1187,25 +1187,40 @@ export default function App() {
   }
 
   async function onPrimaryAcceptInboundRequest() {
-    if (!token || !selectedInboundId) {
+    if (!token || !selectedInboundId || !inboundDetail) {
       return
     }
     setOpsError(null)
     setOpsBusy(true)
     try {
-      const plannedBoxes = inboundDetail?.planned_box_count ?? 1
-      const res = await fetch(
-        apiUrl(`/operations/inbound-intake-requests/${selectedInboundId}/primary-accept`),
-        {
-          method: 'POST',
-          headers: { ...authHeaders(token), 'Content-Type': 'application/json' },
-          body: JSON.stringify({ actual_box_count: plannedBoxes }),
-        },
-      )
-      if (!res.ok) {
-        setOpsError(await readApiErrorMessage(res))
-        return
+      const firstLine = inboundDetail.lines[0]
+      if (firstLine != null && inboundDetail.status === 'submitted') {
+        const patchRes = await fetch(
+          apiUrl(
+            `/operations/inbound-intake-requests/${selectedInboundId}/lines/${firstLine.id}/actual`,
+          ),
+          {
+            method: 'PATCH',
+            headers: {
+              ...authHeaders(token),
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({ actual_qty: 0 }),
+          },
+        )
+        if (!patchRes.ok) {
+          setOpsError(await readApiErrorMessage(patchRes))
+          return
+        }
       }
+      const boxRes = await fetch(
+          apiUrl(`/operations/inbound-intake-requests/${selectedInboundId}/boxes`),
+          { method: 'POST', headers: authHeaders(token) },
+        )
+        if (!boxRes.ok) {
+          setOpsError(await readApiErrorMessage(boxRes))
+          return
+        }
       await refreshInboundList(token)
       await refreshInboundDetail(token, selectedInboundId)
     } catch (e) {

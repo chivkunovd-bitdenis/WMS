@@ -2,7 +2,7 @@ import { test, expect } from '@playwright/test';
 
 import { waitForGetOk, waitForPostOk } from './api-waits';
 import { loginAsSeller, openFulfillmentRegistration } from './auth-flow';
-import { fulfillInboundViaBoxScans } from './inbound-boxes-helpers';
+import {beginInboundReceivingWithBoxes,  fulfillInboundViaBoxScans } from './inbound-boxes-helpers';
 import { setWmsDateField } from './wms-date-field-helpers';
 
 // TC-NEW-MP-04 — селлер создаёт отгрузку на МП, видит остаток и планирует.
@@ -114,18 +114,17 @@ test('seller creates MP unload draft, plans with stock table', async ({ page }) 
     }),
   });
   await page.request.post(`${baseIn}/${inboundId}/submit`, { headers: auth });
-  const primIn = await page.request.post(`${baseIn}/${inboundId}/primary-accept`, {
-    headers: auth,
-    data: { actual_box_count: 1 },
-  });
-  const primInBody = (await primIn.json()) as {
-    boxes: { id: string; internal_barcode: string }[];
-  };
+  const { boxes: inboundBoxes } = await beginInboundReceivingWithBoxes(
+    page.request,
+    auth,
+    inboundId,
+    { boxCount: 1 },
+  )
   await fulfillInboundViaBoxScans(
     page.request,
     auth,
     inboundId,
-    primInBody.boxes,
+    inboundBoxes,
     barcode,
     [10],
   );

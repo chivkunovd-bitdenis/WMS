@@ -147,19 +147,18 @@ test('fulfillment admin sees week calendar and supplies-shipments page', async (
     throw new Error(`inbound line failed: ${inboundLine.status()} ${await inboundLine.text()}`);
   }
   await page.request.post(`${baseIn}/${inboundId}/submit`, { headers: { Authorization: `Bearer ${token}` } });
-  const primRes = await page.request.post(`${baseIn}/${inboundId}/primary-accept`, {
-    headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
-    data: { actual_box_count: 1 },
-  });
-  const primBody = (await primRes.json()) as {
-    boxes: { id: string; internal_barcode: string }[];
-  };
-  const { fulfillInboundViaBoxScans } = await import('./inbound-boxes-helpers');
+  const { beginInboundReceivingWithBoxes, fulfillInboundViaBoxScans } = await import('./inbound-boxes-helpers');
+  const { boxes: inboundBoxes } = await beginInboundReceivingWithBoxes(
+    page.request,
+    { Authorization: `Bearer ${token}` },
+    inboundId,
+    { boxCount: 1 },
+  );
   await fulfillInboundViaBoxScans(
     page.request,
     { Authorization: `Bearer ${token}` },
     inboundId,
-    primBody.boxes,
+    inboundBoxes,
     barcode,
     [5],
   );

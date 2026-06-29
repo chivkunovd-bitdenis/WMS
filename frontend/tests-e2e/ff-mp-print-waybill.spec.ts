@@ -2,7 +2,7 @@ import { test, expect } from '@playwright/test';
 
 import { waitForGetOk, waitForPostOk } from './api-waits';
 import { openFulfillmentRegistration } from './auth-flow';
-import { fulfillInboundViaBoxScans } from './inbound-boxes-helpers';
+import {beginInboundReceivingWithBoxes,  fulfillInboundViaBoxScans } from './inbound-boxes-helpers';
 
 // TC-NEW-G13-001 — печать накладной отгрузки на МП (US-G-13).
 test('FF prints marketplace unload waybill from document dialog', async ({ page }) => {
@@ -95,12 +95,8 @@ test('FF prints marketplace unload waybill from document dialog', async ({ page 
     data: JSON.stringify({ product_id: pid, expected_qty: 5, storage_location_id: lid }),
   });
   await page.request.post(`${baseIn}/${inboundId}/submit`, { headers: auth });
-  const prim = await page.request.post(`${baseIn}/${inboundId}/primary-accept`, {
-    headers: auth,
-    data: { actual_box_count: 1 },
-  });
-  const boxes = (await prim.json()) as { boxes: { id: string; internal_barcode: string }[] };
-  await fulfillInboundViaBoxScans(page.request, auth, inboundId, boxes.boxes, barcode, [5]);
+  const { boxes: inboundBoxes } = await beginInboundReceivingWithBoxes(page.request, auth, inboundId, { boxCount: 1 });
+  await fulfillInboundViaBoxScans(page.request, auth, inboundId, inboundBoxes, barcode, [5]);
   await page.request.post(`${baseIn}/${inboundId}/verify`, { headers: auth });
   await page.request.post(`${baseIn}/${inboundId}/post`, { headers: auth });
 

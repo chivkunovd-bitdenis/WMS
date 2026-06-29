@@ -2,7 +2,7 @@ import { test, expect } from '@playwright/test';
 
 import { waitForGetOk, waitForPostOk } from './api-waits';
 import { openFulfillmentRegistration } from './auth-flow';
-import { fillFfInboundBoxLineQty } from './inbound-boxes-helpers';
+import { beginInboundReceiving, beginInboundReceivingWithBoxes, ffInboundBoxAddManualQty } from './inbound-boxes-helpers';
 
 // TC-NEW-C02 — подсказки ячеек при распределении: где уже лежит товар.
 test('ff inbound distribution shows cell hints from existing stock', async ({ page }) => {
@@ -51,12 +51,10 @@ test('ff inbound distribution shows cell hints from existing stock', async ({ pa
       data: { product_id: pid, expected_qty: qty },
     });
     await page.request.post(`${base}/${rid}/submit`, { headers: h });
-    const prim = await page.request.post(`${base}/${rid}/primary-accept`, {
-      headers: h,
-      data: { actual_box_count: 1 },
+    const { boxes: inboundBoxes } = await beginInboundReceivingWithBoxes(page.request, h, rid, {
+      boxCount: 1,
     });
-    const inb = ((await prim.json()) as { boxes: { internal_barcode: string }[] }).boxes[0]!
-      .internal_barcode;
+    const inb = inboundBoxes[0]!.internal_barcode;
     await page.request.post(`${base}/${rid}/boxes/open`, {
       headers: { ...h, 'Content-Type': 'application/json' },
       data: { barcode: inb },
@@ -107,29 +105,15 @@ test('ff inbound distribution shows cell hints from existing stock', async ({ pa
     data: { product_id: pid, expected_qty: 2 },
   });
   await page.request.post(`${base}/${rid2}/submit`, { headers: h });
-  const prim2 = await page.request.post(`${base}/${rid2}/primary-accept`, {
-    headers: h,
-    data: { actual_box_count: 1 },
-  });
-  const inb2 = ((await prim2.json()) as { boxes: { internal_barcode: string }[] }).boxes[0]!
-    .internal_barcode;
+  await beginInboundReceiving(page.request, h, rid2);
 
   await page.goto('/app/ff/dashboard');
   await page.getByTestId('ff-dash-inbound-row').filter({ hasText: planned }).first().click();
   await expect(page.getByTestId('ff-doc-dialog')).toBeVisible();
 
-  await page.getByTestId('ff-inbound-box-open-scan').fill(inb2);
+  await ffInboundBoxAddManualQty(page, 2);
   await Promise.all([
-    waitForPostOk(page, base, (u) => u.includes('/boxes/open')),
-    page.getByTestId('ff-inbound-box-open-submit').click(),
-  ]);
-  await fillFfInboundBoxLineQty(page, 2);
-  await Promise.all([
-    waitForPostOk(page, base, (u) => u.includes('/close')),
-    page.getByTestId('ff-inbound-box-close').click(),
-  ]);
-  await Promise.all([
-    waitForPostOk(page, base, (u) => u.includes('/verify')),
+    waitForPostOk(page, base, (u) => u.includes('/complete-receiving')),
     page.getByTestId('ff-inbound-verify-complete').click(),
   ]);
 

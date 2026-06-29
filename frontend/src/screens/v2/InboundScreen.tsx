@@ -412,7 +412,9 @@ export function InboundScreen(props: Props) {
                   </div>
                 ) : null}
 
-                {inboundDetail.status === 'primary_accepted' || inboundDetail.status === 'verifying' ? (
+                {inboundDetail.status === 'primary_accepted' ||
+                inboundDetail.status === 'verifying' ||
+                inboundDetail.status === 'receiving' ? (
                   <div data-testid="inbound-verify-panel">
                     {isFulfillmentAdmin ? (
                       <>
@@ -536,7 +538,7 @@ export function InboundScreen(props: Props) {
                   </div>
                 ) : null}
 
-                {inboundDetail.status === 'verified' ? (
+                {inboundDetail.status === 'verified' || inboundDetail.status === 'sorting' ? (
                   <div data-testid="inbound-receiving-panel">
                     {inboundDetail.has_discrepancy ? (
                       <p className="error" data-testid="inbound-discrepancy-flag">

@@ -173,7 +173,8 @@ async def test_inbound_box_intake_manual_qty_and_verify(async_client: AsyncClien
     assert got.status_code == 200, got.text
     body = got.json()
     assert body["status"] == "receiving"
-    assert body["lines"][0]["actual_qty"] == 5
+    assert body["lines"][0]["actual_qty"] in (None, 0)
+    assert body["lines"][0]["effective_actual_qty"] == 5
 
     verify = await async_client.post(f"{base}/verify", headers=ah)
     assert verify.status_code == 200, verify.text
@@ -228,7 +229,8 @@ async def test_inbound_box_over_receive_allowed(async_client: AsyncClient) -> No
     await async_client.post(f"{base}/boxes/{box['id']}/close", headers=ah)
     got = await async_client.get(base, headers=ah)
     body = got.json()
-    assert body["lines"][0]["actual_qty"] == 220
+    assert body["lines"][0]["actual_qty"] in (None, 0)
+    assert body["lines"][0]["effective_actual_qty"] == 220
     verify = await async_client.post(f"{base}/verify", headers=ah)
     assert verify.status_code == 200, verify.text
     assert verify.json()["has_discrepancy"] is True

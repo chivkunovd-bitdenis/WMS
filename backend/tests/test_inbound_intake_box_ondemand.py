@@ -92,7 +92,7 @@ async def _submitted_request(
 async def test_create_open_box_on_demand_scan_close_updates_actual(
     async_client: AsyncClient,
 ) -> None:
-    """TC-NEW-IN-BE-02: on-demand box → scan +1 → close → actual_qty from box."""
+    """TC-NEW-IN-BE-02: on-demand box scan contributes to effective actual qty."""
     suffix = str(int(time.time() * 1000))
     ah, tenant_id = await _register_admin(async_client, suffix)
     rid, pid, sku = await _submitted_request(async_client, ah, suffix, expected_qty=5)
@@ -120,7 +120,16 @@ async def test_create_open_box_on_demand_scan_close_updates_actual(
         assert req is not None
         assert req.status == intake_svc.STATUS_VERIFYING
         req_line = next(ln for ln in req.lines if ln.product_id == pid)
-        assert req_line.actual_qty == 1
+        assert req_line.actual_qty in (None, 0)
+        assert (
+            await intake_svc.effective_actual_qty(
+                session,
+                rid,
+                req_line,
+                request_status=req.status,
+            )
+            == 1
+        )
 
 
 @pytest.mark.asyncio

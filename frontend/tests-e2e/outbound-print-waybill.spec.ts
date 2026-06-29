@@ -2,7 +2,7 @@ import { test, expect } from '@playwright/test';
 
 import { waitForGetOk, waitForPostOk } from './api-waits';
 import { openFulfillmentRegistration } from './auth-flow';
-import { fulfillInboundViaBoxScans } from './inbound-boxes-helpers';
+import {beginInboundReceivingWithBoxes,  fulfillInboundViaBoxScans } from './inbound-boxes-helpers';
 
 // TC-NEW-G13-002 — накладная operational outbound (US-G-13).
 test('FF prints operational outbound waybill from ops screen', async ({ page }) => {
@@ -93,16 +93,17 @@ test('FF prints operational outbound waybill from ops screen', async ({ page }) 
     }),
   });
   await page.request.post(`${baseIn}/${inboundId}/submit`, { headers: auth });
-  const prim = await page.request.post(`${baseIn}/${inboundId}/primary-accept`, {
-    headers: auth,
-    data: { actual_box_count: 1 },
-  });
-  const boxes = (await prim.json()) as { boxes: { id: string; internal_barcode: string }[] };
+  const { boxes: inboundBoxes } = await beginInboundReceivingWithBoxes(
+    page.request,
+    auth,
+    inboundId,
+    { boxCount: 1 },
+  );
   await fulfillInboundViaBoxScans(
     page.request,
     auth,
     inboundId,
-    boxes.boxes,
+    inboundBoxes,
     'E2E-MOCK-BARCODE',
     [10],
   );

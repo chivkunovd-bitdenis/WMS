@@ -223,8 +223,109 @@ export async function openFfInboundDoc(
 
 type InboundBoxRef = { id: string; internal_barcode: string };
 
+export type InboundRequestJson = {
+  id: string;
+  status: string;
+  lines: {
+    id: string;
+    product_id: string;
+    actual_qty?: number | null;
+    effective_actual_qty?: number | null;
+  }[];
+  boxes: {
+    id: string;
+    internal_barcode: string;
+    box_number?: number;
+    is_open?: boolean;
+    label_printed_at?: string | null;
+    intake_closed_at?: string | null;
+  }[];
+  boxes_discrepancy?: boolean;
+  actual_box_count?: number | null;
+  planned_box_count?: number | null;
+};
+
+/** Begin receiving on a submitted inbound (replaces legacy primary-accept). */
+export async function beginInboundReceiving(
+  req: APIRequestContext,
+  adminHeaders: { Authorization: string },
+  rid: string,
+): Promise<void> {
+  const base = `${INBOUND_API}/${rid}`;
+  const got = await req.get(base, { headers: adminHeaders });
+  if (!got.ok()) {
+    throw new Error(`inbound get: ${got.status()} ${await got.text()}`);
+  }
+  const body = (await got.json()) as InboundRequestJson;
+  if (body.status !== 'submitted') {
+    return;
+  }
+  const lineId = body.lines[0]?.id;
+  if (!lineId) {
+    throw new Error('inbound has no lines');
+  }
+  const patch = await req.patch(`${base}/lines/${lineId}/actual`, {
+    headers: { ...adminHeaders, 'Content-Type': 'application/json' },
+    data: { actual_qty: 0 },
+  });
+  if (!patch.ok()) {
+    throw new Error(`begin receiving: ${patch.status()} ${await patch.text()}`);
+  }
+}
+
+/** Create N on-demand inbound boxes (optionally close each after creation). */
+export async function createInboundBoxes(
+  req: APIRequestContext,
+  adminHeaders: { Authorization: string },
+  rid: string,
+  boxCount: number,
+  opts?: { closeEach?: boolean },
+): Promise<InboundBoxRef[]> {
+  const base = `${INBOUND_API}/${rid}`;
+  const boxes: InboundBoxRef[] = [];
+  const closeEach = opts?.closeEach ?? false;
+  for (let i = 0; i < boxCount; i += 1) {
+    const boxRes = await req.post(`${base}/boxes`, { headers: adminHeaders });
+    if (!boxRes.ok()) {
+      throw new Error(`create box: ${boxRes.status()} ${await boxRes.text()}`);
+    }
+    const box = (await boxRes.json()) as {
+      id: string;
+      internal_barcode: string;
+      is_open?: boolean;
+    };
+    if (closeEach && box.is_open !== false) {
+      const close = await req.post(`${base}/boxes/${box.id}/close`, { headers: adminHeaders });
+      if (!close.ok()) {
+        throw new Error(`close box: ${close.status()} ${await close.text()}`);
+      }
+    }
+    boxes.push({ id: box.id, internal_barcode: box.internal_barcode });
+  }
+  return boxes;
+}
+
+/** Replaces removed POST .../primary-accept for e2e/API seeding. */
+export async function beginInboundReceivingWithBoxes(
+  req: APIRequestContext,
+  adminHeaders: { Authorization: string },
+  rid: string,
+  opts?: { boxCount?: number; closeEach?: boolean },
+): Promise<{ boxes: InboundBoxRef[]; body: InboundRequestJson }> {
+  await beginInboundReceiving(req, adminHeaders, rid);
+  const count = opts?.boxCount ?? 0;
+  const closeEach = opts?.closeEach ?? false;
+  const boxes =
+    count > 0 ? await createInboundBoxes(req, adminHeaders, rid, count, { closeEach }) : [];
+  const got = await req.get(`${INBOUND_API}/${rid}`, { headers: adminHeaders });
+  if (!got.ok()) {
+    throw new Error(`inbound get: ${got.status()} ${await got.text()}`);
+  }
+  return { boxes, body: (await got.json()) as InboundRequestJson };
+}
+
 /** TC-NEW-C01 — поштучный факт через скан INB и ШК товара (sku_code или WB). */
-/** Заполнить факт на экране /app/ops/inbound после primary-accept (один короб). */
+/** Заполнить факт на экране /app/ops/inbound после начала приёмки (один короб). */
 export async function v2InboundBoxIntakeUi(
   page: Page,
   headers: { Authorization: string },
@@ -236,19 +337,30 @@ export async function v2InboundBoxIntakeUi(
     throw new Error(`inbound list: ${list.status()}`);
   }
   const rid = String(((await list.json()) as { id: string }[])[0]!.id);
-  const got = await page.request.get(`${INBOUND_API}/${rid}`, { headers });
+  let got = await page.request.get(`${INBOUND_API}/${rid}`, { headers });
   if (!got.ok()) {
     throw new Error(`inbound get: ${got.status()}`);
   }
-  const inb = String(
-    ((await got.json()) as { boxes: { internal_barcode: string }[] }).boxes[0]!
-      .internal_barcode,
-  );
-  await page.getByTestId('inbound-box-open-scan').fill(inb);
-  await Promise.all([
-    waitForPostOk(page, INBOUND_API, (u) => u.includes('/boxes/open')),
-    page.getByTestId('inbound-box-open-submit').click(),
-  ]);
+  let body = (await got.json()) as InboundRequestJson;
+  if (body.status === 'submitted') {
+    await beginInboundReceiving(page.request, headers, rid);
+    got = await page.request.get(`${INBOUND_API}/${rid}`, { headers });
+    body = (await got.json()) as InboundRequestJson;
+  }
+  if (!body.boxes?.length) {
+    await createInboundBoxes(page.request, headers, rid, 1);
+    got = await page.request.get(`${INBOUND_API}/${rid}`, { headers });
+    body = (await got.json()) as InboundRequestJson;
+  }
+  const inb = String(body.boxes[0]!.internal_barcode);
+  const openBox = body.boxes.find((b) => b.is_open);
+  if (!openBox) {
+    await page.getByTestId('inbound-box-open-scan').fill(inb);
+    await Promise.all([
+      waitForPostOk(page, INBOUND_API, (u) => u.includes('/boxes/open')),
+      page.getByTestId('inbound-box-open-submit').click(),
+    ]);
+  }
   for (let n = 0; n < totalQty; n++) {
     await page.getByTestId('inbound-product-scan').fill(sku);
     await Promise.all([
@@ -271,18 +383,40 @@ export async function fulfillInboundViaBoxScans(
   scanCounts: number[],
 ): Promise<void> {
   const base = `${INBOUND_API}/${rid}`;
-  for (let i = 0; i < boxes.length; i++) {
-    const box = boxes[i]!;
+  if (!Array.isArray(boxes)) {
+    throw new Error('fulfillInboundViaBoxScans expected inbound boxes array');
+  }
+  const rounds = Math.max(boxes.length, scanCounts.length);
+  for (let i = 0; i < rounds; i += 1) {
     const count = scanCounts[i] ?? 0;
-    const open = await req.post(`${base}/boxes/open`, {
-      headers: { ...adminHeaders, 'Content-Type': 'application/json' },
-      data: { barcode: box.internal_barcode },
-    });
-    if (!open.ok()) {
-      throw new Error(`open inbound box: ${open.status()} ${await open.text()}`);
+    if (count <= 0) {
+      continue;
     }
-    for (let n = 0; n < count; n++) {
-      const scan = await req.post(`${base}/boxes/${box.id}/scan`, {
+    let boxId = boxes[i]?.id ?? '';
+    const prefBarcode = boxes[i]?.internal_barcode;
+    if (prefBarcode) {
+      const open = await req.post(`${base}/boxes/open`, {
+        headers: { ...adminHeaders, 'Content-Type': 'application/json' },
+        data: { barcode: prefBarcode },
+      });
+      if (open.ok()) {
+        boxId = String(((await open.json()) as { id: string }).id);
+      } else {
+        const created = await req.post(`${base}/boxes`, { headers: adminHeaders });
+        if (!created.ok()) {
+          throw new Error(`create inbound box: ${created.status()} ${await created.text()}`);
+        }
+        boxId = String(((await created.json()) as { id: string }).id);
+      }
+    } else {
+      const created = await req.post(`${base}/boxes`, { headers: adminHeaders });
+      if (!created.ok()) {
+        throw new Error(`create inbound box: ${created.status()} ${await created.text()}`);
+      }
+      boxId = String(((await created.json()) as { id: string }).id);
+    }
+    for (let n = 0; n < count; n += 1) {
+      const scan = await req.post(`${base}/boxes/${boxId}/scan`, {
         headers: { ...adminHeaders, 'Content-Type': 'application/json' },
         data: { barcode: productBarcode },
       });
@@ -290,7 +424,7 @@ export async function fulfillInboundViaBoxScans(
         throw new Error(`scan product into box: ${scan.status()} ${await scan.text()}`);
       }
     }
-    const close = await req.post(`${base}/boxes/${box.id}/close`, {
+    const close = await req.post(`${base}/boxes/${boxId}/close`, {
       headers: adminHeaders,
     });
     if (!close.ok()) {
@@ -304,7 +438,6 @@ export async function apiCreateSubmittedInbound(
   seed: InboundBoxesSeed,
   opts: { plannedBoxes: number; expectedQty: number },
 ): Promise<string> {
-  const h = { Authorization: `Bearer ${seed.token}` };
   const sh = await sellerToken(req, seed);
   const cr = await req.post(INBOUND_API, {
     headers: sh,
@@ -327,6 +460,24 @@ export async function apiCreateSubmittedInbound(
     throw new Error(`submit: ${sub.status()}`);
   }
   return rid;
+}
+
+/** FF modal: manual qty in open box, then close box. */
+export async function ffInboundBoxAddManualQty(page: Page, quantity: number): Promise<void> {
+  await page.getByTestId('ff-inbound-add-to-box').click();
+  await expect(page.getByTestId('ff-inbound-box-add-dialog')).toBeVisible();
+  await page.getByTestId('ff-inbound-box-add-manual-edit').first().click();
+  const qtyInput = page.getByTestId('ff-inbound-box-add-manual-qty').first();
+  await qtyInput.fill(String(quantity));
+  await Promise.all([
+    waitForPutOk(page, INBOUND_API, (u) => u.includes('/boxes/') && u.includes('/lines/')),
+    qtyInput.press('Enter'),
+  ]);
+  await Promise.all([
+    waitForPostOk(page, INBOUND_API, (u) => u.includes('/close')),
+    page.getByTestId('ff-inbound-box-add-close-box').click(),
+  ]);
+  await expect(page.getByTestId('ff-inbound-box-add-dialog')).toBeHidden();
 }
 
 /** Set quantity for the first line in the active open box (blur saves via PUT). */

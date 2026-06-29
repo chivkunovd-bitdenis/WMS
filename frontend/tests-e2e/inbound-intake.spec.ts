@@ -3,6 +3,7 @@ import { test, expect } from '@playwright/test';
 import {
   waitForGetOk,
   waitForLocationsListGet,
+  waitForPatchOk,
   waitForPostOk,
 } from './api-waits';
 import { openFulfillmentRegistration } from './auth-flow';
@@ -96,13 +97,16 @@ test('create inbound request, add line, submit — UI and API', async ({ page })
   ).toContainText('submitted');
 
   const [primRes] = await Promise.all([
+    waitForPatchOk(page, '/api/operations/inbound-intake-requests', (u) =>
+      u.includes('/actual'),
+    ),
     waitForPostOk(page, '/api/operations/inbound-intake-requests', (u) =>
-      u.includes('/primary-accept'),
+      u.includes('/boxes'),
     ),
     page.getByTestId('inbound-primary-accept').click(),
   ]);
   expect(primRes.ok()).toBeTruthy();
-  await expect(page.getByTestId('inbound-detail-status')).toContainText('primary_accepted');
+  await expect(page.getByTestId('inbound-detail-status')).toContainText('receiving');
 
   const { v2InboundBoxIntakeUi } = await import('./inbound-boxes-helpers');
   await v2InboundBoxIntakeUi(page, h, sku, 4);
@@ -114,7 +118,7 @@ test('create inbound request, add line, submit — UI and API', async ({ page })
     page.getByTestId('inbound-verify-complete').click(),
   ]);
   expect(verifyRes.ok()).toBeTruthy();
-  await expect(page.getByTestId('inbound-detail-status')).toContainText('verified');
+  await expect(page.getByTestId('inbound-detail-status')).toContainText('sorting');
 
   const [postRes] = await Promise.all([
     waitForPostOk(page, '/api/operations/inbound-intake-requests', (u) =>
@@ -123,7 +127,7 @@ test('create inbound request, add line, submit — UI and API', async ({ page })
     page.getByTestId('inbound-post-submit').click(),
   ]);
   expect(postRes.ok()).toBeTruthy();
-    await expect(page.getByTestId('inbound-detail-status')).toContainText('posted');
+    await expect(page.getByTestId('inbound-detail-status')).toContainText('done');
     await expect(
       page
         .getByTestId('inbound-movements-list')
