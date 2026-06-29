@@ -41,16 +41,18 @@ async def post_primary_accept(
     actual_box_count: int = 1,
     create_boxes: bool = True,
 ) -> Response:
-    res = await async_client.post(
-        f"{base}/{request_id}/primary-accept",
-        headers=headers,
-        json={"actual_box_count": actual_box_count},
-    )
-    if res.status_code == 200 and create_boxes and actual_box_count > 0:
+    """Begin receiving without legacy primary-accept API (IN-BE-03)."""
+    tenant_id = _tenant_id_from_headers(headers)
+    async with SessionLocal() as session:
+        await intake_svc.begin_receiving(
+            session, tenant_id, uuid.UUID(request_id)
+        )
+        await session.commit()
+    if create_boxes and actual_box_count > 0:
         await _create_boxes_for_request(
             headers, request_id, box_count=actual_box_count
         )
-    return res
+    return await async_client.get(f"{base}/{request_id}", headers=headers)
 
 
 async def fulfill_inbound_via_box_scans(

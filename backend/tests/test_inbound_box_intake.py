@@ -100,15 +100,16 @@ async def _submitted_inbound_with_boxes(
         f"/operations/inbound-intake-requests/{rid}/submit",
         headers=sh,
     )
-    prim = await async_client.post(
-        f"/operations/inbound-intake-requests/{rid}/primary-accept",
-        headers=ah,
-        json={"actual_box_count": box_count},
+    from inbound_box_intake_helpers import post_primary_accept
+
+    prim = await post_primary_accept(
+        async_client,
+        "/operations/inbound-intake-requests",
+        rid,
+        ah,
+        actual_box_count=box_count,
     )
     assert prim.status_code == 200, prim.text
-    from inbound_box_intake_helpers import _create_boxes_for_request
-
-    await _create_boxes_for_request(ah, rid, box_count=box_count)
     got = await async_client.get(
         f"/operations/inbound-intake-requests/{rid}",
         headers=ah,
