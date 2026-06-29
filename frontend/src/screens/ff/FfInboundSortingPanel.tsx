@@ -161,6 +161,7 @@ export function FfInboundSortingPanel({
   const [locations, setLocations] = useState<LocationRow[]>([])
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [distributionLoadError, setDistributionLoadError] = useState<string | null>(null)
   const [productStates, setProductStates] = useState<ProductSortState[]>([])
   const [distributionLoaded, setDistributionLoaded] = useState(false)
   const distributionLoadSeq = useRef(0)
@@ -259,15 +260,11 @@ export function FfInboundSortingPanel({
       return
     }
     if (!res.ok) {
-      setProductStates(
-        sortableProducts.map((p) => ({
-          ...p,
-          rows: [],
-        })),
-      )
-      setDistributionLoaded(true)
+      setDistributionLoadError(await readApiErrorMessage(res))
+      setDistributionLoaded(false)
       return
     }
+    setDistributionLoadError(null)
     const rows = (await res.json()) as DistributionLineOut[]
     const byProduct = new Map<string, DistributionLineOut[]>()
     for (const r of rows) {
@@ -294,7 +291,13 @@ export function FfInboundSortingPanel({
 
   useEffect(() => {
     setDistributionLoaded(false)
+    setDistributionLoadError(null)
   }, [lines, boxes, requestId])
+
+  const retryDistributionLoad = () => {
+    setDistributionLoadError(null)
+    void loadDistribution()
+  }
 
   useEffect(() => {
     if (!distributionLoaded) {
@@ -448,6 +451,9 @@ export function FfInboundSortingPanel({
   }
 
   const saveDistribution = async () => {
+    if (!distributionReady) {
+      return
+    }
     if (hasValidationError) {
       setError('Превышено принятое количество — уменьшите количество в строках.')
       return
@@ -461,6 +467,9 @@ export function FfInboundSortingPanel({
   }
 
   const applyDistribution = async () => {
+    if (!distributionReady) {
+      return
+    }
     if (hasValidationError) {
       setError('Превышено принятое количество — исправьте строки перед применением.')
       return
@@ -551,9 +560,25 @@ export function FfInboundSortingPanel({
   }
 
   const editable = !completed
+  const distributionReady = distributionLoaded
 
   return (
     <Box data-testid="ff-sorting-panel">
+      {distributionLoadError ? (
+        <Alert
+          severity="error"
+          sx={{ mb: 2 }}
+          data-testid="ff-sorting-distribution-load-error"
+          action={
+            <Button color="inherit" size="small" onClick={retryDistributionLoad} data-testid="ff-sorting-distribution-retry">
+              Повторить
+            </Button>
+          }
+        >
+          {distributionLoadError}
+        </Alert>
+      ) : null}
+
       {error ? (
         <Alert severity="error" sx={{ mb: 2 }} data-testid="ff-sorting-error">
           {error}
@@ -586,7 +611,7 @@ export function FfInboundSortingPanel({
             <Button
               variant="outlined"
               size="small"
-              disabled={busy || hasValidationError}
+              disabled={busy || hasValidationError || !distributionReady}
               onClick={() => void saveDistribution()}
               data-testid="ff-sorting-save"
             >
@@ -595,7 +620,7 @@ export function FfInboundSortingPanel({
             <Button
               variant="contained"
               size="small"
-              disabled={busy || hasValidationError || sortingRemainingQty <= 0}
+              disabled={busy || hasValidationError || sortingRemainingQty <= 0 || !distributionReady}
               onClick={() => void applyDistribution()}
               data-testid="ff-sorting-apply"
             >
@@ -688,7 +713,7 @@ export function FfInboundSortingPanel({
                                 <FormControl size="small" fullWidth>
                                   <Select
                                     value={row.box_id ?? ''}
-                                    disabled={busy || !editable}
+                                    disabled={busy || !editable || !distributionReady}
                                     displayEmpty
                                     onChange={(e) => {
                                       const v = String(e.target.value)
@@ -720,7 +745,7 @@ export function FfInboundSortingPanel({
                               <FormControl size="small" fullWidth>
                                 <Select
                                   value={row.storage_location_id}
-                                  disabled={busy || !editable || locations.length === 0}
+                                  disabled={busy || !editable || !distributionReady || locations.length === 0}
                                   displayEmpty
                                   onChange={(e) => {
                                     const v = String(e.target.value)
@@ -748,7 +773,7 @@ export function FfInboundSortingPanel({
                                 type="number"
                                 size="small"
                                 value={row.quantity}
-                                disabled={busy || !editable}
+                                disabled={busy || !editable || !distributionReady}
                                 error={exceeds}
                                 onChange={(e) => {
                                   const v = e.target.value
@@ -796,7 +821,7 @@ export function FfInboundSortingPanel({
                   size="small"
                   variant="outlined"
                   startIcon={<AddIcon />}
-                  disabled={busy || locations.length === 0}
+                  disabled={busy || !distributionReady || locations.length === 0}
                   onClick={() =>
                     updateProductRows(product.product_id, (rows) => [
                       ...rows,

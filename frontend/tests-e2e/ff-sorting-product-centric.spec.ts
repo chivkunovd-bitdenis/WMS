@@ -220,3 +220,125 @@ test('ff sorting: pack button navigates to app packaging with task', async ({ pa
   await expect(page).toHaveURL(/\/app\/ff\/packaging$/);
   await expect(page.getByTestId('ff-packaging-task-panel')).toBeVisible();
 });
+
+// TC-REV-SORT-FE-02 — failed GET distribution-lines keeps last-known-good and blocks save/apply.
+test('ff sorting: failed distribution-lines load shows error and blocks save', async ({ page }) => {
+  const email = `e2e-sort-fail-${Date.now()}@example.com`;
+  const sku = `SKU-SORT-FAIL-${Date.now()}`;
+  const whCode = `wh-sort-fail-${Date.now()}`;
+
+  await page.goto('/');
+  await openFulfillmentRegistration(page);
+  await page.getByTestId('register-form').getByLabel('Организация').fill('E2E Sort Fail');
+  await page.getByTestId('register-form').getByLabel('Email администратора').fill(email);
+  await page.getByTestId('register-form').getByLabel('Пароль').fill('password123');
+  const [regRes] = await Promise.all([
+    waitForPostOk(page, '/api/auth/register'),
+    waitForGetOk(page, '/api/auth/me'),
+    page.getByTestId('register-form').getByRole('button', { name: 'Создать аккаунт' }).click(),
+  ]);
+  const token = ((await regRes.json()) as { access_token: string }).access_token;
+  const h = { Authorization: `Bearer ${token}` };
+
+  const wh = await page.request.post('/api/warehouses', {
+    headers: h,
+    data: { name: 'Склад', code: whCode },
+  });
+  const wid = ((await wh.json()) as { id: string }).id;
+
+  const loc = await page.request.post(`/api/warehouses/${wid}/locations`, {
+    headers: h,
+    data: { code: 'CELL-A' },
+  });
+  expect(loc.ok()).toBeTruthy();
+
+  const pr = await page.request.post('/api/products', {
+    headers: h,
+    data: { name: 'Товар', sku_code: sku, length_mm: 10, width_mm: 10, height_mm: 10 },
+  });
+  const pid = ((await pr.json()) as { id: string }).id;
+
+  const base = '/api/operations/inbound-intake-requests';
+  const cr = await page.request.post(base, { headers: h, data: { warehouse_id: wid } });
+  const rid = ((await cr.json()) as { id: string }).id;
+  await page.request.post(`${base}/${rid}/lines`, {
+    headers: { ...h, 'Content-Type': 'application/json' },
+    data: { product_id: pid, expected_qty: 5 },
+  });
+  await page.request.post(`${base}/${rid}/submit`, { headers: h });
+
+  const doc = await page.request.get(`${base}/${rid}`, { headers: h });
+  expect(doc.ok()).toBeTruthy();
+  const lineId = ((await doc.json()) as { lines: { id: string }[] }).lines[0]!.id;
+
+  const patchActual = await page.request.patch(`${base}/${rid}/lines/${lineId}/actual`, {
+    headers: { ...h, 'Content-Type': 'application/json' },
+    data: { actual_qty: 5 },
+  });
+  expect(patchActual.ok()).toBeTruthy();
+
+  const complete = await page.request.post(`${base}/${rid}/complete-receiving`, { headers: h });
+  expect(complete.ok()).toBeTruthy();
+
+  await page.goto('/app/ff/sorting');
+  const [distributionRes] = await Promise.all([
+    page.waitForResponse(
+      (r) => r.request().method() === 'GET' && r.url().includes('/distribution-lines') && r.ok(),
+    ),
+    page.getByTestId('ff-inbound-queue-row').first().click(),
+  ]);
+  expect(distributionRes.ok()).toBeTruthy();
+  await expect(page.getByTestId('ff-sorting-panel')).toBeVisible();
+
+  const productCard = page.getByTestId('ff-sorting-product-card').first();
+  await productCard.getByTestId('ff-sorting-add-cell').click();
+  const row = productCard.getByTestId('ff-sorting-cell-row').first();
+  await row.getByTestId('ff-sorting-cell-location').click();
+  await page.getByRole('option', { name: /CELL-A/ }).click();
+  await row.getByTestId('ff-sorting-cell-qty').fill('5');
+
+  await Promise.all([
+    page.waitForResponse(
+      (r) => r.request().method() === 'PUT' && r.url().includes('/distribution-lines') && r.ok(),
+    ),
+    page.getByTestId('ff-sorting-save').click(),
+  ]);
+  await expect(productCard.getByTestId('ff-sorting-cell-row')).toHaveCount(1);
+  await expect(row.getByTestId('ff-sorting-cell-qty')).toHaveValue('5');
+
+  await page.route('**/distribution-lines', async (route) => {
+    if (route.request().method() === 'GET') {
+      await route.fulfill({
+        status: 500,
+        contentType: 'application/json',
+        body: JSON.stringify({ detail: 'distribution load failed' }),
+      });
+      return;
+    }
+    await route.continue();
+  });
+
+  await page.reload();
+  await expect(page.getByTestId('ff-sorting-page')).toBeVisible();
+  await Promise.all([
+    page.waitForResponse(
+      (r) =>
+        r.request().method() === 'GET' &&
+        r.url().includes('/distribution-lines') &&
+        r.status() === 500,
+    ),
+    page.getByTestId('ff-inbound-queue-row').first().click(),
+  ]);
+
+  await expect(page.getByTestId('ff-sorting-distribution-load-error')).toBeVisible();
+  await expect(page.getByTestId('ff-sorting-distribution-retry')).toBeVisible();
+  await expect(page.getByTestId('ff-sorting-save')).toBeDisabled();
+  await expect(page.getByTestId('ff-sorting-apply')).toBeDisabled();
+
+  const putPromise = page.waitForRequest(
+    (req) => req.method() === 'PUT' && req.url().includes('/distribution-lines'),
+    { timeout: 1500 },
+  );
+  await page.getByTestId('ff-sorting-save').click({ force: true }).catch(() => undefined);
+  await expect(putPromise).rejects.toThrow();
+});
