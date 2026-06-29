@@ -32,6 +32,7 @@ import { ProductPhotoThumb } from '../../components/ProductPhotoThumb'
 import { ProductBarcodeCell } from '../../components/ProductBarcodeCell'
 import { ProductBarcodePrintButton } from '../../components/ProductBarcodePrintButton'
 import { readApiErrorMessage } from '../../utils/readApiErrorMessage'
+import { printPackagingInstructions } from '../../utils/printPackagingInstructions'
 import {
   catalogRowToDisplayMeta,
   resolveProductPrimaryBarcode,
@@ -191,6 +192,17 @@ export function FfProductsCatalogScreen({ token, authHeaders, sellers }: Props) 
     setEditProduct(p)
     setEditText(p.packaging_instructions ?? '')
     setEditRequiresHonestSign(Boolean(p.requires_honest_sign))
+  }
+
+  function printPackagingTz() {
+    if (!editProduct) return
+    printPackagingInstructions({
+      sku_code: editProduct.sku_code,
+      product_name: editProduct.name,
+      seller_name: editProduct.seller_name,
+      instructions: editText,
+      requires_honest_sign: editRequiresHonestSign,
+    })
   }
 
   async function savePackagingInstructions() {
@@ -438,6 +450,14 @@ export function FfProductsCatalogScreen({ token, authHeaders, sellers }: Props) 
         <DialogActions>
           <Button onClick={() => setEditProduct(null)} disabled={editBusy}>
             Отмена
+          </Button>
+          <Button
+            variant="outlined"
+            disabled={editBusy || !editProduct}
+            onClick={printPackagingTz}
+            data-testid="ff-packaging-print"
+          >
+            Печать
           </Button>
           <Button
             variant="contained"

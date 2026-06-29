@@ -247,6 +247,7 @@ test('ff products: edit packaging instructions in catalog', async ({ page }) => 
 
   await page.getByTestId(`ff-packaging-edit-${productId}`).click()
   await expect(page.getByTestId('ff-packaging-dialog')).toBeVisible()
+  await expect(page.getByTestId('ff-packaging-print')).toBeVisible()
   await page.getByTestId('ff-packaging-text').fill('E2E: пакет + бирка')
   await Promise.all([
     page.waitForResponse(
