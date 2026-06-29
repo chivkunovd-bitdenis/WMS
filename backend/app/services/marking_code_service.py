@@ -261,12 +261,22 @@ class PoolProductsResult:
     products: list[PoolProductRow]
 
 
+def _pool_linked_product_flags(
+    products_map: dict[uuid.UUID, list[PoolProductRow]],
+    pool_id: uuid.UUID,
+) -> tuple[int, bool]:
+    linked_products_count = len(products_map.get(pool_id, []))
+    return linked_products_count, linked_products_count >= 2
+
+
 @dataclass(frozen=True)
 class PoolListRow:
     id: uuid.UUID
     title: str
     gtin: str
     products: list[PoolProductRow]
+    linked_products_count: int
+    is_shared: bool
     available: int
     reserved: int
     printed: int
@@ -295,6 +305,8 @@ class PoolDetailRow:
     title: str
     gtin: str
     products: list[PoolProductRow]
+    linked_products_count: int
+    is_shared: bool
     available: int
     reserved: int
     printed: int
@@ -1992,12 +2004,15 @@ async def list_pools(
         available = _status_count(pool_counts, STATUS_AVAILABLE)
         consumption_7d = consumption_map.get(pool.id, 0)
         loaded, used = _pool_loaded_used(pool_counts)
+        linked_products_count, is_shared = _pool_linked_product_flags(products_map, pool.id)
         rows.append(
             PoolListRow(
                 id=pool.id,
                 title=pool.title,
                 gtin=pool.gtin,
                 products=products_map.get(pool.id, []),
+                linked_products_count=linked_products_count,
+                is_shared=is_shared,
                 available=available,
                 reserved=_status_count(pool_counts, STATUS_RESERVED),
                 printed=_status_count(pool_counts, STATUS_PRINTED),
@@ -2042,6 +2057,7 @@ async def get_pool_detail(
     )
     batches = list((await session.execute(batch_stmt)).scalars().all())
     products_map = await _products_by_pool(session, tenant_id, [pool_id])
+    linked_products_count, is_shared = _pool_linked_product_flags(products_map, pool_id)
 
     return PoolDetailRow(
         id=pool.id,
@@ -2049,6 +2065,8 @@ async def get_pool_detail(
         title=pool.title,
         gtin=pool.gtin,
         products=products_map.get(pool_id, []),
+        linked_products_count=linked_products_count,
+        is_shared=is_shared,
         available=available,
         reserved=_status_count(pool_counts, STATUS_RESERVED),
         printed=_status_count(pool_counts, STATUS_PRINTED),
