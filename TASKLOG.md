@@ -1,18 +1,24 @@
 # TASKLOG
 
+## TASK-070 — 2026-06-29 — API-02: is_shared and shared_with on pool responses
+
+- What changed: `marking_codes.py` — `PoolListItemOut` + `linked_products_count`, `is_shared`; `PoolDetailOut` + `shared_with`; API tests personal/shared pools.
+- Verification: ruff/mypy/pytest — 261 passed; commit `bbc63fd`; merged → `feat/cz-product-first`.
+
 ## TASK-069 — 2026-06-29 — SVC-02 + API-01: pool flags + product-centric API
 
-- SVC-02: `linked_products_count`, `is_shared` on pool rows; `test_marking_pool_linked_products.py`; commit `50d0e6b`.
-- API-01: `/inventory` personal+shared; `GET marking-overview`; `test_marking_inventory_api.py`; commit `20087b1`.
-- Merged both → `feat/cz-product-first`. API-02 started (wave 3).
+- SVC-02: `linked_products_count`, `is_shared` on pool rows; commit `50d0e6b`.
+- API-01: `/inventory` personal+shared; `GET marking-overview`; commit `20087b1`.
+- Merged both → `feat/cz-product-first`.
 
 ## TASK-068 — 2026-06-29 — SVC-01: personal inventory + shared baskets
 
 - What changed: `marking_code_service.py` — `personal_available`, `personal_printed`, `shared_baskets` in `list_inventory`; `available_count` = personal (fix double-count shared pools); `test_marking_inventory_personal_shared.py` — 4 pytest cases.
-- What did NOT change: API serialization (API-01 in progress); frontend screens.
+- What did NOT change: API serialization (API-01 followed); frontend screens.
 - Verification: `PYTHONPATH=. ruff/mypy/pytest` — 252 passed in worktree; merged `task/SVC-01` → `feat/cz-product-first`.
 - Commit: `4768058` on `task/SVC-01`.
 
+## TASK-067 — 2026-06-28 — CD: GitHub Actions deploy + prod PR #49
 
 - What changed: `.github/workflows/deploy.yml` — автодеплой после green CI на `main` (SSH → `prod-update.sh`) + smoke HTTP; `docs/DEPLOY_SERVER_RU.md` — CI/CD секция и secrets; GitHub Secrets `DEPLOY_SSH_*`, `DEPLOY_HTTP_PORT`; deploy key `github-actions-wms-deploy` на сервере.
 - What did NOT change: `prod-update.sh` логика; `.env` на сервере; ручной деплой по-прежнему работает.
