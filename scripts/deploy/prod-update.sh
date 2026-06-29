@@ -27,7 +27,11 @@ echo "==> status"
 
 echo "==> WB products re-sync (all sellers; legacy SKUs → OLD/…)"
 if [[ -x scripts/deploy/sync-all-wb-products.sh ]]; then
-  ./scripts/deploy/sync-all-wb-products.sh
+  if ! ./scripts/deploy/sync-all-wb-products.sh; then
+    sync_rc=$?
+    echo "WARN: WB products sync failed (exit ${sync_rc}; 137 often OOM) — deploy continues."
+    echo "      Re-run later: ./scripts/deploy/sync-all-wb-products.sh"
+  fi
 else
   echo "skip: scripts/deploy/sync-all-wb-products.sh not found"
 fi
