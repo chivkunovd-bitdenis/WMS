@@ -1,5 +1,11 @@
 # TASKLOG
 
+## TASK-074 — 2026-06-29 — OUT-FE-01: unified outbound finish with discrepancy modal
+
+- What changed: `FfSuppliesShipmentsPage.tsx` — одна кнопка «Завершить»; модалка «Есть расхождения, точно провести?» при plan≠fact; `mpHasDiscrepancy` по строкам; кнопка короба «Добавить в короб». `FfMarketplaceUnloadBoxAddDialog.tsx` — заголовок модалки «Добавить в короб».
+- What did NOT change: e2e (optional); OUT-FE-02 (колонки/краснота/печать); backend OUT-BE-01 уже на ветке.
+- Verification: `npm run build` — не выполнен локально (ENOSPC, диск 100%); IDE lint без ошибок.
+
 ## TASK-073 — 2026-06-29 — IN-BE-02: on-demand inbound intake boxes
 
 - What changed: `inbound_intake_box_service.create_open_box` — короб приёмки по требованию (открыт сразу); `INTAKE_STATUSES` включает `submitted`; факт из коробов без primary-accept; тесты `test_inbound_intake_box_ondemand.py`.
