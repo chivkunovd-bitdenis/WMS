@@ -525,7 +525,7 @@ export function FfInboundSortingPanel({
         return
       }
       const task = (await res.json()) as { id: string }
-      navigate('/ff/packaging', { state: { taskId: task.id } })
+      navigate('/app/ff/packaging', { state: { taskId: task.id } })
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Не удалось создать задание.')
     } finally {

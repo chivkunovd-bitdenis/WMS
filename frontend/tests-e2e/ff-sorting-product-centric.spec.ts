@@ -142,3 +142,81 @@ test('ff sorting product-centric: loose and box sources persist after save reloa
   await expect(looseRow.getByTestId('ff-sorting-cell-source')).toContainText('Россыпь');
   await expect(reloadedBoxRow.getByTestId('ff-sorting-cell-source')).toContainText('Короб');
 });
+
+// TC-REV-SORT-FE-01 — «Упаковать» из сортировки открывает /app/ff/packaging с заданием.
+test('ff sorting: pack button navigates to app packaging with task', async ({ page }) => {
+  const email = `e2e-sort-pack-${Date.now()}@example.com`;
+  const sku = `SKU-SORT-PACK-${Date.now()}`;
+  const whCode = `wh-sort-pack-${Date.now()}`;
+
+  await page.goto('/');
+  await openFulfillmentRegistration(page);
+  await page.getByTestId('register-form').getByLabel('Организация').fill('E2E Sort Pack');
+  await page.getByTestId('register-form').getByLabel('Email администратора').fill(email);
+  await page.getByTestId('register-form').getByLabel('Пароль').fill('password123');
+  const [regRes] = await Promise.all([
+    waitForPostOk(page, '/api/auth/register'),
+    waitForGetOk(page, '/api/auth/me'),
+    page.getByTestId('register-form').getByRole('button', { name: 'Создать аккаунт' }).click(),
+  ]);
+  const token = ((await regRes.json()) as { access_token: string }).access_token;
+  const h = { Authorization: `Bearer ${token}` };
+
+  const wh = await page.request.post('/api/warehouses', {
+    headers: h,
+    data: { name: 'Склад', code: whCode },
+  });
+  const wid = ((await wh.json()) as { id: string }).id;
+
+  const pr = await page.request.post('/api/products', {
+    headers: h,
+    data: { name: 'Товар', sku_code: sku, length_mm: 10, width_mm: 10, height_mm: 10 },
+  });
+  const pid = ((await pr.json()) as { id: string }).id;
+
+  const base = '/api/operations/inbound-intake-requests';
+  const cr = await page.request.post(base, { headers: h, data: { warehouse_id: wid } });
+  const rid = ((await cr.json()) as { id: string }).id;
+  await page.request.post(`${base}/${rid}/lines`, {
+    headers: { ...h, 'Content-Type': 'application/json' },
+    data: { product_id: pid, expected_qty: 4 },
+  });
+  await page.request.post(`${base}/${rid}/submit`, { headers: h });
+
+  const doc = await page.request.get(`${base}/${rid}`, { headers: h });
+  expect(doc.ok()).toBeTruthy();
+  const lineId = ((await doc.json()) as { lines: { id: string }[] }).lines[0]!.id;
+
+  const patchActual = await page.request.patch(`${base}/${rid}/lines/${lineId}/actual`, {
+    headers: { ...h, 'Content-Type': 'application/json' },
+    data: { actual_qty: 4 },
+  });
+  expect(patchActual.ok()).toBeTruthy();
+
+  const complete = await page.request.post(`${base}/${rid}/complete-receiving`, { headers: h });
+  expect(complete.ok()).toBeTruthy();
+
+  await page.goto('/app/ff/sorting');
+  const [distributionRes] = await Promise.all([
+    page.waitForResponse(
+      (r) => r.request().method() === 'GET' && r.url().includes('/distribution-lines') && r.ok(),
+    ),
+    page.getByTestId('ff-inbound-queue-row').first().click(),
+  ]);
+  expect(distributionRes.ok()).toBeTruthy();
+  await expect(page.getByTestId('ff-sorting-panel')).toBeVisible();
+  await expect(page.getByTestId('ff-sorting-pack-btn')).toBeVisible();
+
+  await Promise.all([
+    page.waitForResponse(
+      (r) =>
+        r.request().method() === 'POST' &&
+        r.url().includes('/operations/packaging-tasks') &&
+        r.ok(),
+    ),
+    page.getByTestId('ff-sorting-pack-btn').click(),
+  ]);
+
+  await expect(page).toHaveURL(/\/app\/ff\/packaging$/);
+  await expect(page.getByTestId('ff-packaging-task-panel')).toBeVisible();
+});
