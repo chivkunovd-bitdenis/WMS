@@ -1287,6 +1287,13 @@ export function FfInboundRequestView({
                 requestId={requestId}
                 warehouseId={detail.warehouse_id}
                 completed={isDoneStatus(detail.status)}
+                lines={(detail.lines ?? []).map((ln) => ({
+                  product_id: ln.product_id,
+                  sku_code: ln.sku_code,
+                  product_name: ln.product_name,
+                  actual_qty: ln.actual_qty,
+                  posted_qty: ln.posted_qty ?? 0,
+                }))}
                 boxes={(detail.boxes ?? []).map((b) => ({
                   ...b,
                   remaining_qty: b.remaining_qty ?? 0,
