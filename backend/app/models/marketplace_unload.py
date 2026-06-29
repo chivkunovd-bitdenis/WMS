@@ -56,6 +56,7 @@ class MarketplaceUnloadRequest(Base):
     status: Mapped[str] = mapped_column(String(32), nullable=False)
     planned_shipment_date: Mapped[date | None] = mapped_column(Date, nullable=True)
     ff_modified: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default="false")
+    has_discrepancy: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default="false")
     document_number: Mapped[str | None] = mapped_column(String(32), nullable=True)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), nullable=False

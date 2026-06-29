@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import uuid
 from datetime import date
+from typing import TYPE_CHECKING
 
 from sqlalchemy import and_, delete, func, or_, select
 from sqlalchemy.exc import IntegrityError
@@ -29,6 +30,9 @@ from app.services.document_number_service import (
     assign_document_number_if_missing,
 )
 from app.services.wb_mp_warehouse_service import get_cached_mp_warehouse
+
+if TYPE_CHECKING:
+    from app.services.marketplace_unload_box_service import BoxScanResult
 
 STATUS_DRAFT = "draft"
 STATUS_SUBMITTED = "submitted"
@@ -663,6 +667,130 @@ async def delete_empty_boxes_for_ship(
     for box in list(req.boxes):
         if not box.lines:
             await session.delete(box)
+
+
+def distributed_qty_by_product(req: MarketplaceUnloadRequest) -> dict[uuid.UUID, int]:
+    """Fact qty per product from shipment box lines."""
+    picked: dict[uuid.UUID, int] = {}
+    for b in req.boxes:
+        for bl in b.lines:
+            picked[bl.product_id] = picked.get(bl.product_id, 0) + int(bl.quantity)
+    return picked
+
+
+def compute_has_discrepancy(req: MarketplaceUnloadRequest) -> bool:
+    """Plan (request lines) vs fact (box quantities), mirroring inbound complete_verification."""
+    distributed = distributed_qty_by_product(req)
+    return any(distributed.get(ln.product_id, 0) != int(ln.quantity) for ln in req.lines)
+
+
+def has_incomplete_distribution(req: MarketplaceUnloadRequest) -> bool:
+    """True when nothing collected or any line plan ≠ fact."""
+    distributed = distributed_qty_by_product(req)
+    if not distributed:
+        return True
+    return compute_has_discrepancy(req)
+
+
+async def complete_unload(
+    session: AsyncSession,
+    tenant_id: uuid.UUID,
+    request_id: uuid.UUID,
+    *,
+    acknowledge_discrepancy: bool = False,
+) -> MarketplaceUnloadRequest:
+    """Single completion op: ship unload; set has_discrepancy when plan ≠ fact."""
+    req = await get_request(session, tenant_id, request_id)
+    if req is None:
+        raise MarketplaceUnloadError("not_found")
+    if req.status not in EXECUTION_STATUSES:
+        raise MarketplaceUnloadError("bad_status")
+    if not req.lines:
+        raise MarketplaceUnloadError("no_lines")
+    if req.planned_shipment_date is None:
+        raise MarketplaceUnloadError("planned_shipment_date_required")
+    if req.wb_mp_warehouse_id is None:
+        raise MarketplaceUnloadError("wb_mp_warehouse_required")
+
+    from app.services import packaging_task_service as pkg_svc
+
+    try:
+        await pkg_svc.assert_unload_packaging_done(session, tenant_id, request_id)
+    except pkg_svc.PackagingTaskServiceError as exc:
+        if exc.code == "task_not_done":
+            raise MarketplaceUnloadError("packaging_not_done") from exc
+        raise
+
+    distributed = distributed_qty_by_product(req)
+    if not distributed or sum(distributed.values()) < 1:
+        raise MarketplaceUnloadError("distribution_incomplete")
+
+    has_discrepancy = compute_has_discrepancy(req)
+    if has_discrepancy:
+        if not acknowledge_discrepancy:
+            raise MarketplaceUnloadError("distribution_incomplete")
+        req.ff_modified = True
+
+    req.has_discrepancy = has_discrepancy
+    await delete_empty_boxes_for_ship(session, req)
+    req.status = STATUS_SHIPPED
+    await release_reservations_for_shipped(session, req.id)
+    await session.commit()
+    r2 = await get_request(session, tenant_id, request_id)
+    assert r2 is not None
+    return r2
+
+
+async def scan_barcode_into_box(
+    session: AsyncSession,
+    tenant_id: uuid.UUID,
+    box_id: uuid.UUID,
+    *,
+    barcode: str,
+    storage_location_id: uuid.UUID | None,
+    quantity: int = 1,
+    allow_over_plan: bool = False,
+) -> BoxScanResult:
+    """Parity entry point with inbound box scan — delegates to box service."""
+    from app.services import marketplace_unload_box_service as box_svc
+
+    try:
+        return await box_svc.scan_barcode_into_box(
+            session,
+            tenant_id,
+            box_id,
+            barcode=barcode,
+            storage_location_id=storage_location_id,
+            quantity=quantity,
+            allow_over_plan=allow_over_plan,
+        )
+    except box_svc.MarketplaceUnloadBoxError as exc:
+        raise MarketplaceUnloadError(exc.code) from None
+
+
+async def add_manual_qty_to_box(
+    session: AsyncSession,
+    tenant_id: uuid.UUID,
+    box_id: uuid.UUID,
+    *,
+    product_id: uuid.UUID,
+    storage_location_id: uuid.UUID | None,
+    quantity: int,
+) -> MarketplaceUnloadBoxLine:
+    """Parity entry point with inbound manual qty — delegates to box service."""
+    from app.services import marketplace_unload_box_service as box_svc
+
+    try:
+        return await box_svc.add_manual_qty_to_box(
+            session,
+            tenant_id,
+            box_id,
+            product_id=product_id,
+            storage_location_id=storage_location_id,
+            quantity=quantity,
+        )
+    except box_svc.MarketplaceUnloadBoxError as exc:
+        raise MarketplaceUnloadError(exc.code) from None
 
 
 async def cancel_request(
