@@ -1,6 +1,6 @@
 import { expect, test } from '@playwright/test'
 
-import { waitForGetOk, waitForPostOk } from './api-waits'
+import { waitForGetOk, waitForPostOk, waitForPutOk } from './api-waits'
 import { openFulfillmentRegistration } from './auth-flow'
 import { seedHonestSignProductFirstInventory, selectHonestSignSeller } from './ff-honest-sign-helpers'
 
@@ -81,4 +81,93 @@ test('FF honest sign product-first: list, product card, shared basket pool', asy
   await expect(page.getByTestId('ff-honest-sign-pool-shared-badge')).toContainText(
     'Общая корзина · на 3 товаров',
   )
+})
+
+// TC-NEW-REV-CZ-FE-01 — multi-pool product: per-pool threshold on pool card persists after reload.
+test('FF honest sign multi-pool product: pool threshold persists after reload', async ({ page }) => {
+  test.setTimeout(180_000)
+  const email = `e2e-hs-mp-${Date.now()}@example.com`
+  const password = 'password123'
+  const e2eApi = process.env.E2E_API_ORIGIN ?? 'http://127.0.0.1:18000'
+  const skuPrefix = `HS-MP-${Date.now()}`
+
+  await page.goto('/')
+  await openFulfillmentRegistration(page)
+  await page.getByTestId('register-form').getByLabel('Организация').fill('E2E HS Multi Pool')
+  await page.getByTestId('register-form').getByLabel('Email администратора').fill(email)
+  await page.getByTestId('register-form').getByLabel('Пароль').fill(password)
+  const [regRes] = await Promise.all([
+    waitForPostOk(page, '/api/auth/register'),
+    waitForGetOk(page, '/api/auth/me'),
+    page.getByTestId('register-form').getByRole('button', { name: 'Создать аккаунт' }).click(),
+  ])
+  const token = String(((await regRes.json()) as { access_token: string }).access_token)
+  const auth = { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' }
+  const bearer = { Authorization: `Bearer ${token}` }
+
+  const sellerRes = await page.request.post(`${e2eApi}/sellers`, {
+    headers: auth,
+    data: JSON.stringify({ name: 'E2E HS MP Seller', email: `hs-mp-${Date.now()}@example.com` }),
+  })
+  const sellerId = String(((await sellerRes.json()) as { id: string }).id)
+
+  const productRes = await page.request.post(`${e2eApi}/products`, {
+    headers: auth,
+    data: JSON.stringify({
+      name: 'Multi Pool Product',
+      sku_code: `${skuPrefix}-M`,
+      length_mm: 10,
+      width_mm: 10,
+      height_mm: 10,
+      seller_id: sellerId,
+    }),
+  })
+  expect(productRes.ok()).toBeTruthy()
+  const product = (await productRes.json()) as { id: string }
+
+  async function importPersonalPool(title: string, gtin: string, serialChar: string): Promise<string> {
+    const imp = await page.request.post(`${e2eApi}/operations/marking-codes/import`, {
+      headers: bearer,
+      multipart: {
+        seller_id: sellerId,
+        pools_json: JSON.stringify([
+          { title, gtin, product_ids: [product.id] },
+        ]),
+        files: {
+          name: `${gtin}.csv`,
+          mimeType: 'text/csv',
+          buffer: Buffer.from(`cis\n01${gtin}21${serialChar.repeat(16)}0001`),
+        },
+      },
+    })
+    expect(imp.ok()).toBeTruthy()
+    return String(((await imp.json()) as { pools: { pool_id: string }[] }).pools[0].pool_id)
+  }
+
+  const personalPoolA = await importPersonalPool('Personal A', '04600000000011', 'A')
+  const personalPoolB = await importPersonalPool('Personal B', '04600000000012', 'B')
+
+  await page.getByTestId('nav-ff-honest-sign').click()
+  await selectHonestSignSeller(page, sellerId)
+  await page.goto(`/app/ff/honest-sign/product/${product.id}`)
+  await expect(page.getByTestId('ff-honest-sign-product-page')).toBeVisible()
+  await expect(page.getByTestId('ff-honest-sign-product-threshold-multi-pool-hint')).toBeVisible()
+  await expect(page.getByTestId('ff-honest-sign-product-threshold')).toHaveCount(0)
+  await expect(page.getByTestId(`ff-honest-sign-product-personal-pool-${personalPoolA}`)).toBeVisible()
+  await expect(page.getByTestId(`ff-honest-sign-product-personal-pool-${personalPoolB}`)).toBeVisible()
+
+  await page.getByTestId(`ff-honest-sign-product-personal-pool-${personalPoolA}`).click()
+  await expect(page).toHaveURL(new RegExp(`/app/ff/honest-sign/pool/${personalPoolA}`))
+  await expect(page.getByTestId('ff-honest-sign-pool-thresholds')).toBeVisible()
+
+  await page.getByTestId('ff-honest-sign-pool-threshold-low').locator('input').fill('42')
+  await page.getByTestId('ff-honest-sign-pool-threshold-forecast').locator('input').fill('7')
+  await Promise.all([
+    waitForPutOk(page, `/api/operations/marking-codes/pools/${personalPoolA}/threshold`),
+    page.getByTestId('ff-honest-sign-pool-threshold-save').click(),
+  ])
+
+  await page.reload()
+  await expect(page.getByTestId('ff-honest-sign-pool-threshold-low').locator('input')).toHaveValue('42')
+  await expect(page.getByTestId('ff-honest-sign-pool-threshold-forecast').locator('input')).toHaveValue('7')
 })
