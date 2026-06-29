@@ -49,6 +49,7 @@ import {
   isDoneStatus,
   isReceivingStatus,
   isSortingStatus,
+  looseQtyFromDisplayedTotal,
   scanErrorMessageRu,
 } from './inboundReceivingHelpers'
 import { suggestNextLocationCode } from '../../utils/suggestNextLocationCode'
@@ -87,6 +88,7 @@ type InboundLine = {
   product_name: string
   expected_qty: number
   actual_qty: number | null
+  effective_actual_qty?: number | null
   posted_qty: number
   storage_location_id: string | null
   storage_location_code: string | null
@@ -370,6 +372,7 @@ export function FfInboundRequestView({
       setActualDraftByLineId({})
       return
     }
+    const boxes = detail.boxes ?? []
     setActualDraftByLineId((prev) => {
       const next: Record<string, string> = {}
       for (const ln of detail.lines) {
@@ -378,7 +381,7 @@ export function FfInboundRequestView({
           next[ln.id] = existing
           continue
         }
-        next[ln.id] = String(ln.actual_qty ?? 0)
+        next[ln.id] = String(effectiveActualQty(ln, boxes, detail.status))
       }
       return next
     })
@@ -472,7 +475,7 @@ export function FfInboundRequestView({
     if (!detail) return m
     const boxes = detail.boxes ?? []
     for (const ln of detail.lines) {
-      m.set(ln.product_id, effectiveActualQty(ln, boxes))
+      m.set(ln.product_id, effectiveActualQty(ln, boxes, detail.status))
     }
     return m
   }, [detail])
@@ -480,7 +483,9 @@ export function FfInboundRequestView({
   const hasLineDiscrepancy = useMemo(() => {
     if (!detail) return false
     const boxes = detail.boxes ?? []
-    return detail.lines.some((ln) => effectiveActualQty(ln, boxes) !== ln.expected_qty)
+    return detail.lines.some(
+      (ln) => effectiveActualQty(ln, boxes, detail.status) !== ln.expected_qty,
+    )
   }, [detail])
 
   const distributableProducts = useMemo(() => {
@@ -491,7 +496,7 @@ export function FfInboundRequestView({
         product_id: ln.product_id,
         sku_code: ln.sku_code,
         product_name: ln.product_name,
-        accepted_qty: effectiveActualQty(ln, boxes),
+        accepted_qty: effectiveActualQty(ln, boxes, detail.status),
       }))
       .filter((x) => x.accepted_qty > 0)
     const seen = new Set<string>()
@@ -1060,7 +1065,14 @@ export function FfInboundRequestView({
       setError('Укажите целое количество ≥ 0.')
       return
     }
-    await setLineActual(lineId, Math.floor(v))
+    const displayed = Math.floor(v)
+    const line = detail?.lines.find((ln) => ln.id === lineId)
+    if (!line) {
+      return
+    }
+    const boxes = detail?.boxes ?? []
+    const loose = looseQtyFromDisplayedTotal(displayed, line, boxes)
+    await setLineActual(lineId, loose)
     setManualEditLineId(null)
   }
 
@@ -1343,7 +1355,7 @@ export function FfInboundRequestView({
                 {detail.lines.map((ln) => {
                   const displayMeta = productDisplayMetaFromCatalog(ln.product_id, ln, catalogById)
                   const boxes = detail.boxes ?? []
-                  const effective = effectiveActualQty(ln, boxes)
+                  const effective = effectiveActualQty(ln, boxes, detail.status)
                   const hasDiscrepancy = effective !== ln.expected_qty
                   const matchesExpected = effective === ln.expected_qty && effective > 0
                   const rowTestId = matchesExpected
@@ -1392,7 +1404,10 @@ export function FfInboundRequestView({
                             <TextField
                               type="number"
                               size="small"
-                              value={actualDraftByLineId[ln.id] ?? String(ln.actual_qty ?? 0)}
+                              value={
+                                actualDraftByLineId[ln.id] ??
+                                String(effectiveActualQty(ln, boxes, detail.status))
+                              }
                               disabled={busy}
                               onChange={(e) =>
                                 setActualDraftByLineId((prev) => ({
@@ -1436,7 +1451,7 @@ export function FfInboundRequestView({
                                 setManualEditLineId(ln.id)
                                 setActualDraftByLineId((prev) => ({
                                   ...prev,
-                                  [ln.id]: String(ln.actual_qty ?? 0),
+                                  [ln.id]: String(effectiveActualQty(ln, boxes, detail.status)),
                                 }))
                               }}
                               data-testid="ff-inbound-line-manual-edit"

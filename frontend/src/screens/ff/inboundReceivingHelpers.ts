@@ -10,6 +10,7 @@ export type InboundBoxRef = {
 export type InboundLineRef = {
   product_id: string
   actual_qty: number | null
+  effective_actual_qty?: number | null
 }
 
 export function isReceivingStatus(status: string): boolean {
@@ -44,20 +45,33 @@ export function boxTotalForProduct(boxes: InboundBoxRef[], productId: string): n
   return sum
 }
 
-/** Mirrors backend effective_actual_qty during receiving. */
-export function effectiveActualQty(line: InboundLineRef, boxes: InboundBoxRef[]): number {
+/** Mirrors backend effective_actual_qty: API field during receiving, else loose + boxes. */
+export function effectiveActualQty(
+  line: InboundLineRef,
+  boxes: InboundBoxRef[],
+  requestStatus?: string,
+): number {
+  if (line.effective_actual_qty != null) {
+    return line.effective_actual_qty
+  }
   const loose = line.actual_qty ?? 0
-  const boxTotal = boxTotalForProduct(boxes, line.product_id)
-  if (boxTotal <= 0) {
+  if (requestStatus != null && (isSortingStatus(requestStatus) || isDoneStatus(requestStatus))) {
     return loose
   }
-  if (loose > boxTotal) {
-    return loose + boxTotal
+  return loose + boxTotalForProduct(boxes, line.product_id)
+}
+
+/** Convert displayed total (what user edits) to loose qty for PATCH while boxes exist. */
+export function looseQtyFromDisplayedTotal(
+  displayedTotal: number,
+  line: InboundLineRef,
+  boxes: InboundBoxRef[],
+): number {
+  const boxTotal = boxTotalForProduct(boxes, line.product_id)
+  if (boxTotal <= 0) {
+    return displayedTotal
   }
-  if (loose < boxTotal) {
-    return boxTotal + loose
-  }
-  return boxTotal
+  return Math.max(0, displayedTotal - boxTotal)
 }
 
 export function scanErrorMessageRu(code: string): string {

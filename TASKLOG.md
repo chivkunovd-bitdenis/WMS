@@ -1,9 +1,14 @@
 # TASKLOG
 
+## TASK-084 — 2026-06-29 — REV-IN-FE-01: manual receiving edit saves loose not total
+
+- What changed: `inboundReceivingHelpers.ts`, `FfInboundRequestView.tsx` — effective total in UI, PATCH loose (`total − box`); e2e TC-NEW-IN-04.
+- Verification: build + 4 e2e passed; integrate merge; commit `1bc3702`.
+
 ## TASK-083 — 2026-06-29 — REV-CZ-FE-01: multi-pool threshold + navigation race fix
 
 - What changed: per-pool threshold on `HonestSignPoolPage`; multi-pool hint on product page; race fix (poolId reset, loadRequestId, disabled while busy). Commits `a316d79`, `d671ca2`.
-- Verification: build + e2e honest-sign green; integrate merge. Adversarial BLOCK fix verified by orchestrator static review (Composer pool exhausted).
+- Verification: build + e2e honest-sign green; integrate merge.
 
 ## TASK-081 — 2026-06-29 — REV-CZ-TEST-01: tenant/seller isolation CZ tests
 
