@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import AddIcon from '@mui/icons-material/Add'
 import {
@@ -163,6 +163,7 @@ export function FfInboundSortingPanel({
   const [error, setError] = useState<string | null>(null)
   const [productStates, setProductStates] = useState<ProductSortState[]>([])
   const [distributionLoaded, setDistributionLoaded] = useState(false)
+  const distributionLoadSeq = useRef(0)
 
   const closedBoxes = useMemo(
     () =>
@@ -249,10 +250,14 @@ export function FfInboundSortingPanel({
   }, [authHeaders, warehouseId])
 
   const loadDistribution = useCallback(async () => {
+    const seq = ++distributionLoadSeq.current
     const res = await fetch(
       apiUrl(`/operations/inbound-intake-requests/${requestId}/distribution-lines`),
       { headers: authHeaders },
     )
+    if (seq !== distributionLoadSeq.current) {
+      return
+    }
     if (!res.ok) {
       setProductStates(
         sortableProducts.map((p) => ({

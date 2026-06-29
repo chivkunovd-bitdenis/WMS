@@ -198,9 +198,8 @@ export function FfInboundRequestView({
 
   const sortingRemainingTotal = useMemo(() => {
     if (!detail) return 0
-    const boxes = detail.boxes ?? []
     return detail.lines.reduce((sum, ln) => {
-      const accepted = effectiveActualQty(ln, boxes)
+      const accepted = ln.actual_qty ?? 0
       return sum + Math.max(0, accepted - ln.posted_qty)
     }, 0)
   }, [detail])

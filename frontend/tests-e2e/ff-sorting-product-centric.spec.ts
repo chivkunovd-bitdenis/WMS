@@ -90,7 +90,13 @@ test('ff sorting product-centric: loose and box sources persist after save reloa
   expect(complete.ok()).toBeTruthy();
 
   await page.goto('/app/ff/sorting');
-  await page.getByTestId('ff-inbound-queue-row').first().click();
+  const [distributionRes] = await Promise.all([
+    page.waitForResponse(
+      (r) => r.request().method() === 'GET' && r.url().includes('/distribution-lines') && r.ok(),
+    ),
+    page.getByTestId('ff-inbound-queue-row').first().click(),
+  ]);
+  expect(distributionRes.ok()).toBeTruthy();
   await expect(page.getByTestId('ff-sorting-panel')).toBeVisible();
   await expect(page.getByTestId('ff-sorting-product-accepted')).toHaveText('10');
 
@@ -120,11 +126,19 @@ test('ff sorting product-centric: loose and box sources persist after save reloa
 
   await page.reload();
   await expect(page.getByTestId('ff-sorting-page')).toBeVisible();
-  await page.getByTestId('ff-inbound-queue-row').first().click();
+  const [reloadDistributionRes] = await Promise.all([
+    page.waitForResponse(
+      (r) => r.request().method() === 'GET' && r.url().includes('/distribution-lines') && r.ok(),
+    ),
+    page.getByTestId('ff-inbound-queue-row').first().click(),
+  ]);
+  expect(reloadDistributionRes.ok()).toBeTruthy();
   await expect(page.getByTestId('ff-sorting-panel')).toBeVisible();
+  const reloadedCard = page.getByTestId('ff-sorting-product-card').first();
+  await expect(reloadedCard.getByTestId('ff-sorting-cell-row')).toHaveCount(2);
 
-  looseRow = await sortingRowByQty(page.getByTestId('ff-sorting-product-card').first(), '4');
-  const reloadedBoxRow = await sortingRowByQty(page.getByTestId('ff-sorting-product-card').first(), '6');
+  looseRow = await sortingRowByQty(reloadedCard, '4');
+  const reloadedBoxRow = await sortingRowByQty(reloadedCard, '6');
   await expect(looseRow.getByTestId('ff-sorting-cell-source')).toContainText('Россыпь');
   await expect(reloadedBoxRow.getByTestId('ff-sorting-cell-source')).toContainText('Короб');
 });
