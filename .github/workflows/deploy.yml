@@ -35,6 +35,7 @@ jobs:
           script: |
             set -euo pipefail
             cd "${WMS_REPO_DIR:-/opt/wms}"
+            git config --global --add safe.directory "${WMS_REPO_DIR:-/opt/wms}"
             ./scripts/deploy/prod-update.sh
 
       - name: Smoke check (HTTP 200)

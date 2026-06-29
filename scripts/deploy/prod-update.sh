@@ -5,6 +5,9 @@ set -euo pipefail
 REPO_DIR="${WMS_REPO_DIR:-$(cd "$(dirname "$0")/../.." && pwd)}"
 cd "$REPO_DIR"
 
+# Deploy SSH user may differ from repo owner (git 2.35+ safe.directory).
+git config --global --add safe.directory "$REPO_DIR"
+
 echo "==> git pull"
 git fetch origin
 git checkout main
