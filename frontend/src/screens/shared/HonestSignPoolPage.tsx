@@ -20,10 +20,12 @@ import {
   TableHead,
   TableRow,
   TextField,
+  Tooltip,
   Typography,
 } from '@mui/material'
 import ArrowBackOutlined from '@mui/icons-material/ArrowBackOutlined'
 import DownloadOutlined from '@mui/icons-material/DownloadOutlined'
+import LinkOutlined from '@mui/icons-material/LinkOutlined'
 import { apiUrl } from '../../api'
 import { PageHeader } from '../../ui/PageHeader'
 import { codeStatusLabel, ledgerEventLabel } from '../../utils/markingStatus'
@@ -466,36 +468,79 @@ export function HonestSignPoolPage({
       ) : null}
 
       {tab === 'products' && detail && basketMeta ? (
-        <Stack spacing={2} data-testid={`${testIdPrefix}-products`}>
+        <Stack spacing={1.5} data-testid={`${testIdPrefix}-products`}>
+          <Stack
+            direction="row"
+            spacing={1}
+            sx={{ alignItems: 'center', flexWrap: 'wrap' }}
+            data-testid={`${testIdPrefix}-products-header`}
+          >
+            <Typography variant="subtitle2">
+              {basketMeta.isShared ? 'Состав корзины' : 'Привязанные товары'}
+            </Typography>
+            <Box sx={{ flex: 1 }} />
+            <Tooltip title="Привязать товары">
+              <IconButton
+                size="small"
+                color="primary"
+                onClick={() => setLinkOpen(true)}
+                aria-label="Привязать товары"
+                data-testid={`${testIdPrefix}-link-products`}
+              >
+                <LinkOutlined fontSize="small" />
+              </IconButton>
+            </Tooltip>
+          </Stack>
           {basketMeta.isShared ? (
             <Alert severity="info" data-testid={`${testIdPrefix}-shared-alert`}>
               Остаток КМ общий на всю корзину. Коды расходуются по факту отгрузки и не делятся
               поровну между товарами.
             </Alert>
           ) : (
-            <Alert severity="info">Остаток КМ общий на весь пул, не на каждый товар.</Alert>
+            <Alert severity="info" data-testid={`${testIdPrefix}-pool-shared-km-alert`}>
+              Остаток КМ общий на весь пул, не на каждый товар.
+            </Alert>
           )}
-          <Button variant="outlined" onClick={() => setLinkOpen(true)} data-testid={`${testIdPrefix}-link-products`}>
-            Привязать товары
-          </Button>
-          <Typography variant="subtitle2">
-            {basketMeta.isShared ? 'Состав корзины' : 'Привязанные товары'}
-          </Typography>
-          {basketMeta.basketProducts.length === 0 ? (
-            <Typography variant="body2" color="text.secondary" data-testid={`${testIdPrefix}-products-empty`}>
-              Товары не привязаны.
-            </Typography>
-          ) : (
-            <Stack direction="row" spacing={0.75} sx={{ flexWrap: 'wrap' }}>
-              {basketMeta.basketProducts.map((p) => (
-                <Chip
-                  key={p.id}
-                  label={`${p.sku_code} — ${p.name}`}
-                  data-testid={`${testIdPrefix}-product-${p.id}`}
-                />
-              ))}
-            </Stack>
-          )}
+          <TableContainer component={Paper} variant="outlined" data-testid={`${testIdPrefix}-products-table`}>
+            <Table size="small" sx={{ tableLayout: 'fixed' }}>
+              <TableHead>
+                <TableRow>
+                  <TableCell width={140}>SKU</TableCell>
+                  <TableCell>Название</TableCell>
+                  <TableCell align="right" width={100}>
+                    Доступно
+                  </TableCell>
+                </TableRow>
+              </TableHead>
+              <TableBody>
+                {basketMeta.basketProducts.length === 0 ? (
+                  <TableRow data-testid={`${testIdPrefix}-products-empty`}>
+                    <TableCell colSpan={3}>
+                      <Typography variant="body2" color="text.secondary">
+                        Товары не привязаны.
+                      </Typography>
+                    </TableCell>
+                  </TableRow>
+                ) : (
+                  basketMeta.basketProducts.map((p) => (
+                    <TableRow
+                      key={p.id}
+                      hover
+                      data-testid={`${testIdPrefix}-product-${p.id}`}
+                    >
+                      <TableCell sx={{ fontFamily: 'monospace', fontSize: '0.8125rem' }}>
+                        {p.sku_code}
+                      </TableCell>
+                      <TableCell sx={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                        {p.name}
+                      </TableCell>
+                      <TableCell align="right">{detail.available}</TableCell>
+                    </TableRow>
+                  ))
+                )}
+              </TableBody>
+            </Table>
+          </TableContainer>
         </Stack>
       ) : null}
 
