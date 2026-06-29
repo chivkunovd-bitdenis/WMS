@@ -1,5 +1,11 @@
 # TASKLOG
 
+## TASK-076 — 2026-06-29 — REV-IN-FE-01: manual edit loose vs box total
+
+- What changed: `inboundReceivingHelpers.ts` — `effectiveActualQty` mirrors backend (`effective_actual_qty` from API or loose+box); `looseQtyFromDisplayedTotal` for PATCH. `FfInboundRequestView.tsx` — display/edit effective total, save loose part when boxes exist. e2e `TC-NEW-IN-04` in `inbound-receiving-v2.spec.ts`.
+- What did NOT change: box discrepancy warning (REV-IN-FE-02); backend REV-IN-BE-01 already merged.
+- Verification: `npm run build` green; `npm run test:e2e -- tests-e2e/inbound-receiving-v2.spec.ts` 4 passed.
+
 ## TASK-075 — 2026-06-29 — IN-FE-01: inbound receiving UI new flow
 
 - What changed: `FfInboundRequestView.tsx` — факт=0, красные строки при расхождении, общий скан `/receiving/scan`, ручная правка через кнопку, модалка короба, одна «Завершить» + модалка расхождений; убраны primary-accept и boxIntakeMode. `FfInboundBoxAddDialog.tsx`, `inboundReceivingHelpers.ts`; `inboundQueues.ts` — статусы `receiving`/`sorting`; e2e `inbound-receiving-v2.spec.ts`.
