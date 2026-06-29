@@ -1007,7 +1007,7 @@ export function FfSuppliesShipmentsPage({
           onClick={() => setBoxAddDialogBoxId(box.id)}
           data-testid={`ff-mp-box-add-products-${box.id}`}
         >
-          Добавить товары
+          Добавить в короб
         </Button>
         {!boxClosed ? (
           <Button
@@ -1054,6 +1054,13 @@ export function FfSuppliesShipmentsPage({
   }
 
 
+  const mpHasDiscrepancy = useMemo(() => {
+    if (!unloadDetail || docModal !== 'marketplace_unload') {
+      return false
+    }
+    return unloadDetail.lines.some((ln) => (ln.picked_qty ?? 0) !== ln.quantity)
+  }, [unloadDetail, docModal])
+
   const shipMpUnload = async (acknowledgeDiscrepancy = false) => {
     if (!token || !authHeaders || !docModalId) {
       return
@@ -1074,8 +1081,8 @@ export function FfSuppliesShipmentsPage({
         if (msg.includes('distribution_incomplete')) {
           setModalError(
             acknowledgeDiscrepancy
-              ? 'Не удалось отгрузить: нет товаров в коробах или нужно подтверждение недопоставки.'
-              : 'Распределено меньше плана. Подтвердите недопоставку или заполните короба.',
+              ? 'Не удалось завершить: нет товаров в коробах или нужно подтверждение расхождения.'
+              : 'План и факт не совпадают. Подтвердите расхождение или скорректируйте короба.',
           )
         } else {
           setModalError(msg)
@@ -1086,7 +1093,7 @@ export function FfSuppliesShipmentsPage({
       await loadDocDetail()
       await onRefreshFfSupplyExtras()
     } catch (e) {
-      setModalError(e instanceof Error ? e.message : 'Не удалось отгрузить.')
+      setModalError(e instanceof Error ? e.message : 'Не удалось завершить отгрузку.')
     } finally {
       setModalBusy(false)
     }
@@ -1104,7 +1111,7 @@ export function FfSuppliesShipmentsPage({
       setModalError('Завершите упаковку перед отгрузкой.')
       return
     }
-    if ((mpCollectSummary?.remaining ?? 0) > 0) {
+    if (mpHasDiscrepancy) {
       setMpShipConfirmOpen(true)
       return
     }
@@ -2203,10 +2210,11 @@ export function FfSuppliesShipmentsPage({
                           ) : null}
                         </Typography>
                       </Paper>
-                      {mpCollectSummary.remaining > 0 ? (
+                      {mpHasDiscrepancy ? (
                         <Alert severity="warning" data-testid="ff-mp-collect-warning">
-                          Распределено {mpCollectSummary.distributed} из {mpCollectSummary.planned}.
-                          Можно отгрузить неполную поставку с подтверждением при нажатии «Отгружено».
+                          План и факт не совпадают: распределено {mpCollectSummary.distributed} из{' '}
+                          {mpCollectSummary.planned}. При нажатии «Завершить» потребуется
+                          подтверждение расхождения.
                         </Alert>
                       ) : null}
                     </Stack>
@@ -2728,7 +2736,7 @@ export function FfSuppliesShipmentsPage({
                   onClick={() => requestShipMpUnload()}
                   data-testid="ff-mp-ship"
                 >
-                  Отгружено
+                  Завершить
                 </Button>
                 {mpCancellable ? (
                   <Button
@@ -2827,11 +2835,11 @@ export function FfSuppliesShipmentsPage({
         onClose={() => setMpShipConfirmOpen(false)}
         data-testid="ff-mp-ship-discrepancy-dialog"
       >
-        <DialogTitle>Недопоставка</DialogTitle>
+        <DialogTitle>Есть расхождения, точно провести?</DialogTitle>
         <DialogContent>
           <Typography variant="body2">
-            В коробах {mpCollectSummary?.distributed ?? 0} из {mpCollectSummary?.planned ?? 0} по
-            плану. Отгрузить неполную поставку?
+            Распределено по коробам {mpCollectSummary?.distributed ?? 0} из{' '}
+            {mpCollectSummary?.planned ?? 0} по плану. Отгрузка будет проведена с расхождением.
           </Typography>
         </DialogContent>
         <DialogActions>
@@ -2845,7 +2853,7 @@ export function FfSuppliesShipmentsPage({
             onClick={() => void shipMpUnload(true)}
             data-testid="ff-mp-ship-ack-discrepancy"
           >
-            Отгрузить неполную
+            Завершить
           </Button>
         </DialogActions>
       </Dialog>

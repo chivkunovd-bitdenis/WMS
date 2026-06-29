@@ -368,7 +368,7 @@ export function FfMarketplaceUnloadBoxAddDialog({
         data-testid="ff-mp-box-add-dialog"
       >
         <DialogTitle sx={{ pr: 6 }}>
-          Добавить товары в короб
+          Добавить в короб
           <Typography variant="body2" color="text.secondary">
             {boxLabel}
           </Typography>
