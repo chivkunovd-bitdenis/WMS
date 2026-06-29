@@ -128,6 +128,7 @@ class InboundIntakeLineOut(BaseModel):
     product_name: str
     expected_qty: int
     actual_qty: int | None
+    effective_actual_qty: int | None = None
     posted_qty: int
     storage_location_id: str | None
     storage_location_code: str | None
@@ -343,7 +344,12 @@ def _request_out(
     )
 
 
-def _line_out_from_orm(line: InboundIntakeLine, product: Product) -> InboundIntakeLineOut:
+def _line_out_from_orm(
+    line: InboundIntakeLine,
+    product: Product,
+    *,
+    effective_actual_qty: int | None = None,
+) -> InboundIntakeLineOut:
     loc = line.storage_location
     return InboundIntakeLineOut(
         id=str(line.id),
@@ -352,12 +358,28 @@ def _line_out_from_orm(line: InboundIntakeLine, product: Product) -> InboundInta
         product_name=product.name,
         expected_qty=line.expected_qty,
         actual_qty=line.actual_qty,
+        effective_actual_qty=effective_actual_qty,
         posted_qty=line.posted_qty,
         storage_location_id=str(line.storage_location_id)
         if line.storage_location_id
         else None,
         storage_location_code=loc.code if loc is not None else None,
     )
+
+
+async def _line_out_for_request(
+    session: AsyncSession,
+    request_id: uuid.UUID,
+    request_status: str,
+    line: InboundIntakeLine,
+    product: Product,
+) -> InboundIntakeLineOut:
+    effective: int | None = None
+    if request_status in svc.RECEIVING_STATUSES:
+        effective = await svc.effective_actual_qty(
+            session, request_id, line, request_status=request_status
+        )
+    return _line_out_from_orm(line, product, effective_actual_qty=effective)
 
 
 def _movement_out(m: InventoryMovement) -> InventoryMovementOut:
@@ -510,7 +532,9 @@ async def get_inbound_request(
     lines_out: list[InboundIntakeLineOut] = []
     for ln in r.lines:
         p = ln.product
-        lines_out.append(_line_out_from_orm(ln, p))
+        lines_out.append(
+            await _line_out_for_request(session, request_id, r.status, ln, p)
+        )
     return _request_out(r, lines=lines_out)
 
 
@@ -613,7 +637,11 @@ async def scan_barcode_to_loose_intake(
             detail="product_missing",
         )
     await session.refresh(line, attribute_names=["storage_location"])
-    return _line_out_from_orm(line, prod)
+    req = await svc.get_request(session, user.tenant_id, request_id)
+    assert req is not None
+    return await _line_out_for_request(
+        session, request_id, req.status, line, prod
+    )
 
 
 @router.post(
@@ -925,7 +953,11 @@ async def patch_inbound_line_actual(
             detail="product_missing",
         )
     await session.refresh(line, attribute_names=["storage_location"])
-    return _line_out_from_orm(line, prod)
+    req = await svc.get_request(session, user.tenant_id, request_id)
+    assert req is not None
+    return await _line_out_for_request(
+        session, request_id, req.status, line, prod
+    )
 
 
 @router.post("/{request_id}/verify", response_model=InboundIntakeRequestOut)
@@ -1057,7 +1089,11 @@ async def add_inbound_line(
             detail="product_missing",
         )
     await session.refresh(line, attribute_names=["storage_location"])
-    return _line_out_from_orm(line, prod)
+    req = await svc.get_request(session, user.tenant_id, request_id)
+    assert req is not None
+    return await _line_out_for_request(
+        session, request_id, req.status, line, prod
+    )
 
 
 @router.patch(
@@ -1118,7 +1154,11 @@ async def patch_inbound_line_expected(
             detail="product_missing",
         )
     await session.refresh(line, attribute_names=["storage_location"])
-    return _line_out_from_orm(line, prod)
+    req = await svc.get_request(session, user.tenant_id, request_id)
+    assert req is not None
+    return await _line_out_for_request(
+        session, request_id, req.status, line, prod
+    )
 
 
 @router.delete(
@@ -1216,7 +1256,11 @@ async def patch_inbound_line_storage(
             detail="product_missing",
         )
     await session.refresh(line, attribute_names=["storage_location"])
-    return _line_out_from_orm(line, prod)
+    req = await svc.get_request(session, user.tenant_id, request_id)
+    assert req is not None
+    return await _line_out_for_request(
+        session, request_id, req.status, line, prod
+    )
 
 
 @router.post(

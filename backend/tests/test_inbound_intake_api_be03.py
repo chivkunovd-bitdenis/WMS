@@ -200,6 +200,51 @@ async def test_complete_receiving_with_discrepancy(async_client: AsyncClient) ->
 
 
 @pytest.mark.asyncio
+async def test_complete_receiving_mixed_box_then_loose_api(
+    async_client: AsyncClient,
+) -> None:
+    """REV-IN-BE-01: API box scan + loose manual + complete-receiving → total=10."""
+    suffix = str(int(time.time() * 1000))
+    ah = await _admin_headers(async_client, suffix)
+    rid, _pid, sku = await _submitted_request(async_client, ah, suffix, expected_qty=10)
+    base = f"/operations/inbound-intake-requests/{rid}"
+
+    box = await async_client.post(f"{base}/boxes", headers=ah)
+    assert box.status_code == 201, box.text
+    box_id = box.json()["id"]
+
+    for _ in range(6):
+        scan = await async_client.post(
+            f"{base}/boxes/{box_id}/scan",
+            headers=ah,
+            json={"barcode": sku},
+        )
+        assert scan.status_code == 200, scan.text
+
+    close = await async_client.post(f"{base}/boxes/{box_id}/close", headers=ah)
+    assert close.status_code == 200, close.text
+
+    got = await async_client.get(base, headers=ah)
+    line_id = got.json()["lines"][0]["id"]
+    assert got.json()["lines"][0]["actual_qty"] in (None, 0)
+
+    patch = await async_client.patch(
+        f"{base}/lines/{line_id}/actual",
+        headers=ah,
+        json={"actual_qty": 4},
+    )
+    assert patch.status_code == 200, patch.text
+    assert patch.json()["actual_qty"] == 4
+
+    done = await async_client.post(f"{base}/complete-receiving", headers=ah)
+    assert done.status_code == 200, done.text
+    body = done.json()
+    assert body["status"] == "sorting"
+    assert body["lines"][0]["actual_qty"] == 10
+    assert body["has_discrepancy"] is False
+
+
+@pytest.mark.asyncio
 async def test_complete_receiving_no_discrepancy(async_client: AsyncClient) -> None:
     """TC-NEW-IN-BE-03: complete-receiving clean when fact matches plan."""
     suffix = str(int(time.time() * 1000))

@@ -324,19 +324,24 @@ async def _sync_line_actuals_from_box_totals(
     session: AsyncSession,
     req: InboundIntakeRequest,
 ) -> None:
-    """During receiving: box line sums → actual_qty on request lines (box-recorded SKUs only)."""
+    """During receiving: validate effective fact; keep actual_qty as loose-only component."""
     for ln in req.lines:
         recorded = await _product_recorded_in_boxes(session, req.id, ln.product_id)
         if not recorded:
             continue
-        total = await _total_scanned_for_product(session, req.id, ln.product_id)
-        if ln.posted_qty > total:
+        effective = await intake_svc.effective_actual_qty(
+            session, req.id, ln, request_status=req.status
+        )
+        if ln.posted_qty > effective:
             raise InboundIntakeBoxError("actual_below_posted")
-        ln.actual_qty = total
-    if req.status == intake_svc.STATUS_SUBMITTED and any(
-        ln.actual_qty is not None for ln in req.lines
-    ):
-        req.status = intake_svc.STATUS_RECEIVING
+    if req.status == intake_svc.STATUS_SUBMITTED:
+        for ln in req.lines:
+            effective = await intake_svc.effective_actual_qty(
+                session, req.id, ln, request_status=req.status
+            )
+            if effective > 0:
+                req.status = intake_svc.STATUS_RECEIVING
+                break
 
 
 async def open_box_by_barcode(
