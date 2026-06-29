@@ -142,23 +142,39 @@ export function HonestSignPoolPage({
     () => ({ Authorization: `Bearer ${token}` }),
     [token],
   )
+  const loadRequestId = useRef(0)
   const ledgerAbortRef = useRef<AbortController | null>(null)
+
+  useEffect(() => {
+    setDetail(null)
+    setLowThreshold('')
+    setForecastThreshold('')
+    setError(null)
+  }, [poolId])
 
   const loadDetail = useCallback(async () => {
     if (!poolId) {
       return
     }
+    const requestId = ++loadRequestId.current
     setBusy(true)
     setError(null)
     try {
       const res = await fetch(apiUrl(`/operations/marking-codes/pools/${poolId}`), {
         headers: authHeaders,
       })
+      if (requestId !== loadRequestId.current) {
+        return
+      }
       if (!res.ok) {
         setError(await readApiErrorMessage(res))
+        setDetail(null)
         return
       }
       const body = (await res.json()) as PoolDetail
+      if (requestId !== loadRequestId.current) {
+        return
+      }
       setDetail(body)
       setLowThreshold(
         body.low_stock_threshold != null ? String(body.low_stock_threshold) : '',
@@ -167,7 +183,9 @@ export function HonestSignPoolPage({
         body.forecast_days_threshold != null ? String(body.forecast_days_threshold) : '',
       )
     } finally {
-      setBusy(false)
+      if (requestId === loadRequestId.current) {
+        setBusy(false)
+      }
     }
   }, [authHeaders, poolId])
 
@@ -436,7 +454,7 @@ export function HonestSignPoolPage({
                 type="number"
                 value={lowThreshold}
                 onChange={(e) => setLowThreshold(e.target.value)}
-                disabled={thresholdSaving}
+                disabled={thresholdSaving || busy}
                 slotProps={{ htmlInput: { min: 0 } }}
                 data-testid={`${testIdPrefix}-threshold-low`}
               />
@@ -446,7 +464,7 @@ export function HonestSignPoolPage({
                 type="number"
                 value={forecastThreshold}
                 onChange={(e) => setForecastThreshold(e.target.value)}
-                disabled={thresholdSaving}
+                disabled={thresholdSaving || busy}
                 slotProps={{ htmlInput: { min: 0 } }}
                 sx={{ minWidth: { sm: 280 } }}
                 data-testid={`${testIdPrefix}-threshold-forecast`}
@@ -454,7 +472,7 @@ export function HonestSignPoolPage({
               <Button
                 variant="contained"
                 size="small"
-                disabled={thresholdSaving}
+                disabled={thresholdSaving || busy}
                 onClick={() => void saveThresholds()}
                 data-testid={`${testIdPrefix}-threshold-save`}
               >

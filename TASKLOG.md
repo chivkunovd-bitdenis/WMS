@@ -1,5 +1,11 @@
 # TASKLOG
 
+## TASK-076 — 2026-06-29 — REV-CZ-FE-01: pool threshold race on fast navigation
+
+- What changed: `HonestSignPoolPage.tsx` — сброс `detail`/порогов при смене `poolId`, `loadRequestId` guard в `loadDetail` (как на product page), `disabled={thresholdSaving || busy}` на полях и кнопке сохранения порогов.
+- What did NOT change: backend threshold API; e2e specs.
+- Verification: `npm run build` green (worktree); e2e `ff-honest-sign.spec.ts` + `ff-honest-sign-pool.spec.ts` — 3 passed; commit `683ca50`.
+
 ## TASK-075 — 2026-06-29 — IN-FE-01: inbound receiving UI new flow
 
 - What changed: `FfInboundRequestView.tsx` — факт=0, красные строки при расхождении, общий скан `/receiving/scan`, ручная правка через кнопку, модалка короба, одна «Завершить» + модалка расхождений; убраны primary-accept и boxIntakeMode. `FfInboundBoxAddDialog.tsx`, `inboundReceivingHelpers.ts`; `inboundQueues.ts` — статусы `receiving`/`sorting`; e2e `inbound-receiving-v2.spec.ts`.
