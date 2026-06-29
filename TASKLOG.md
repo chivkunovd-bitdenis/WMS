@@ -1,5 +1,11 @@
 # TASKLOG
 
+## TASK-075 — 2026-06-29 — IN-FE-01: inbound receiving UI new flow
+
+- What changed: `FfInboundRequestView.tsx` — факт=0, красные строки при расхождении, общий скан `/receiving/scan`, ручная правка через кнопку, модалка короба, одна «Завершить» + модалка расхождений; убраны primary-accept и boxIntakeMode. `FfInboundBoxAddDialog.tsx`, `inboundReceivingHelpers.ts`; `inboundQueues.ts` — статусы `receiving`/`sorting`; e2e `inbound-receiving-v2.spec.ts`.
+- What did NOT change: `FfInboundSortingPanel` (SORT-FE-01); legacy e2e с primary-accept (inbound-intake.spec.ts).
+- Verification: `npm run build` green; `npx playwright test inbound-receiving-v2.spec.ts` 3 passed; commit `d709506`.
+
 ## TASK-074 — 2026-06-29 — OUT-FE-01: unified outbound finish with discrepancy modal
 
 - What changed: `FfSuppliesShipmentsPage.tsx` — одна кнопка «Завершить»; модалка «Есть расхождения, точно провести?» при plan≠fact; `mpHasDiscrepancy` по строкам; кнопка короба «Добавить в короб». `FfMarketplaceUnloadBoxAddDialog.tsx` — заголовок модалки «Добавить в короб».
