@@ -1,12 +1,13 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
+import AddIcon from '@mui/icons-material/Add'
 import {
   Alert,
   Box,
   Button,
   Chip,
   FormControl,
-  InputLabel,
+  IconButton,
   MenuItem,
   Paper,
   Select,
@@ -29,7 +30,7 @@ import { readApiErrorMessage } from '../../utils/readApiErrorMessage'
 
 type LocationRow = { id: string; code: string; warehouse_id: string; barcode: string }
 
-type BoxLine = {
+type SortingBoxLine = {
   id: string
   product_id: string
   sku_code: string
@@ -45,141 +46,110 @@ type SortingBox = {
   internal_barcode: string
   intake_closed_at: string | null
   remaining_qty: number
-  lines: BoxLine[]
+  lines: SortingBoxLine[]
 }
 
-type PutawayHistoryRow = {
-  id: string
-  box_id: string | null
-  product_id: string
-  storage_location_code: string
-  quantity: number
-  created_at: string
-}
-
-type CellProductLine = {
+type SortingInboundLine = {
   product_id: string
   sku_code: string
   product_name: string
+  actual_qty: number | null
+  posted_qty: number
+}
+
+type DistributionLineOut = {
+  id: string
+  box_id: string | null
+  product_id: string
+  storage_location_id: string
+  storage_location_code: string
   quantity: number
 }
 
-type CellWholeBoxLine = {
-  created_at: string
-  total_qty: number
-  products: CellProductLine[]
+type CellDraftRow = {
+  key: string
+  box_id: string | null
+  storage_location_id: string
+  quantity: string
 }
 
-type CellPutawayGroup = {
-  cell_code: string
-  total_qty: number
-  whole_box_batches: CellWholeBoxLine[]
-  products: CellProductLine[]
+type ProductSortState = {
+  product_id: string
+  sku_code: string
+  product_name: string
+  accepted: number
+  posted: number
+  rows: CellDraftRow[]
 }
 
 type Props = {
   token: string
   requestId: string
   warehouseId: string
+  lines: SortingInboundLine[]
   boxes: SortingBox[]
   sortingRemainingQty: number
-  /** Заявка уже оприходована — только просмотр разкладки. */
   completed?: boolean
   onReload: () => Promise<void>
 }
 
-function resolveBoxPutawayHistory(
-  boxId: string,
-  closedBoxes: SortingBox[],
-  putawayHistory: PutawayHistoryRow[],
-  byBoxId: Map<string, PutawayHistoryRow[]>,
-): PutawayHistoryRow[] {
-  const direct = byBoxId.get(boxId) ?? []
-  if (direct.length > 0) {
-    return direct
-  }
-  if (closedBoxes.length !== 1 || closedBoxes[0]?.id !== boxId) {
-    return direct
-  }
-  return putawayHistory
-    .filter((r) => !r.box_id)
-    .sort((a, b) => a.created_at.localeCompare(b.created_at))
+let draftRowSeq = 0
+
+function nextDraftKey(): string {
+  draftRowSeq += 1
+  return `draft-${draftRowSeq}`
 }
 
-function buildCellPutawayGroups(
-  boxHistory: PutawayHistoryRow[],
-  productMetaById: Map<string, { sku_code: string; product_name: string }>,
-): CellPutawayGroup[] {
-  const byCell = new Map<string, PutawayHistoryRow[]>()
-  for (const row of boxHistory) {
-    const list = byCell.get(row.storage_location_code) ?? []
-    list.push(row)
-    byCell.set(row.storage_location_code, list)
+function emptyDraftRow(defaultBoxId: string | null): CellDraftRow {
+  return {
+    key: nextDraftKey(),
+    box_id: defaultBoxId,
+    storage_location_id: '',
+    quantity: '',
   }
+}
 
-  const groups: CellPutawayGroup[] = []
-
-  for (const [cell_code, rows] of byCell) {
-    const byTime = new Map<string, PutawayHistoryRow[]>()
-    for (const row of rows) {
-      const list = byTime.get(row.created_at) ?? []
-      list.push(row)
-      byTime.set(row.created_at, list)
-    }
-
-    const whole_box_batches: CellWholeBoxLine[] = []
-    const productQty = new Map<string, number>()
-
-    for (const [created_at, batch] of byTime) {
-      if (batch.length >= 2) {
-        const products: CellProductLine[] = batch.map((r) => {
-          const meta = productMetaById.get(r.product_id)
-          return {
-            product_id: r.product_id,
-            sku_code: meta?.sku_code ?? '—',
-            product_name: meta?.product_name ?? r.product_id.slice(0, 8),
-            quantity: r.quantity,
-          }
-        })
-        whole_box_batches.push({
-          created_at,
-          total_qty: batch.reduce((s, r) => s + r.quantity, 0),
-          products,
-        })
-        continue
-      }
-      for (const r of batch) {
-        productQty.set(r.product_id, (productQty.get(r.product_id) ?? 0) + r.quantity)
-      }
-    }
-
-    const products: CellProductLine[] = Array.from(productQty.entries())
-      .map(([product_id, quantity]) => {
-        const meta = productMetaById.get(product_id)
-        return {
-          product_id,
-          sku_code: meta?.sku_code ?? '—',
-          product_name: meta?.product_name ?? product_id.slice(0, 8),
-          quantity,
-        }
-      })
-      .sort((a, b) => a.product_name.localeCompare(b.product_name))
-
-    const total_qty =
-      whole_box_batches.reduce((s, b) => s + b.total_qty, 0) +
-      products.reduce((s, p) => s + p.quantity, 0)
-
-    groups.push({ cell_code, total_qty, whole_box_batches, products })
+function distributionRowBoxId(
+  row: DistributionLineOut,
+  defaultBoxId: string | null,
+  loosePool: number,
+): string | null {
+  if (row.box_id != null && row.box_id !== '') {
+    return row.box_id
   }
+  // API returns box_id: null for loose lines — do not assign defaultBoxId when loose pool exists.
+  return loosePool > 0 ? null : defaultBoxId
+}
 
-  groups.sort((a, b) => a.cell_code.localeCompare(b.cell_code))
-  return groups
+function linesFromDistributionRows(
+  rows: DistributionLineOut[],
+  defaultBoxId: string | null,
+  loosePool: number,
+): CellDraftRow[] {
+  return rows.map((r) => ({
+    key: nextDraftKey(),
+    box_id: distributionRowBoxId(r, defaultBoxId, loosePool),
+    storage_location_id: r.storage_location_id,
+    quantity: String(r.quantity),
+  }))
+}
+
+function sumDraftQty(rows: CellDraftRow[]): number {
+  let sum = 0
+  for (const r of rows) {
+    const q = Math.floor(Number(r.quantity))
+    if (Number.isFinite(q) && q > 0) {
+      sum += q
+    }
+  }
+  return sum
 }
 
 export function FfInboundSortingPanel({
   token,
   requestId,
   warehouseId,
+  lines,
   boxes,
   sortingRemainingQty,
   completed = false,
@@ -191,60 +161,8 @@ export function FfInboundSortingPanel({
   const [locations, setLocations] = useState<LocationRow[]>([])
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
-  const [selectedBoxId, setSelectedBoxId] = useState<string>('')
-  const [cellByBoxId, setCellByBoxId] = useState<Record<string, string>>({})
-  const [partialQtyByKey, setPartialQtyByKey] = useState<Record<string, string>>({})
-  const [putawayHistory, setPutawayHistory] = useState<PutawayHistoryRow[]>([])
-  const [historyLoadFailed, setHistoryLoadFailed] = useState(false)
-
-  const productMetaById = useMemo(() => {
-    const m = new Map<string, { sku_code: string; product_name: string }>()
-    for (const box of boxes) {
-      for (const ln of box.lines) {
-        m.set(ln.product_id, { sku_code: ln.sku_code, product_name: ln.product_name })
-      }
-    }
-    return m
-  }, [boxes])
-
-  const locationIdByCode = useMemo(() => {
-    const m = new Map<string, string>()
-    for (const loc of locations) {
-      m.set(loc.code, loc.id)
-    }
-    return m
-  }, [locations])
-
-  const loadPutawayHistory = useCallback(async () => {
-    const res = await fetch(
-      apiUrl(`/operations/inbound-intake-requests/${requestId}/distribution-lines`),
-      { headers: authHeaders },
-    )
-    if (!res.ok) {
-      setPutawayHistory([])
-      setHistoryLoadFailed(true)
-      return
-    }
-    setHistoryLoadFailed(false)
-    setPutawayHistory((await res.json()) as PutawayHistoryRow[])
-  }, [authHeaders, requestId])
-
-  useEffect(() => {
-    void loadPutawayHistory()
-  }, [loadPutawayHistory, boxes])
-
-  const putawayHistoryByBoxId = useMemo(() => {
-    const m = new Map<string, PutawayHistoryRow[]>()
-    for (const row of putawayHistory) {
-      if (!row.box_id) {
-        continue
-      }
-      const list = m.get(row.box_id) ?? []
-      list.push(row)
-      m.set(row.box_id, list)
-    }
-    return m
-  }, [putawayHistory])
+  const [productStates, setProductStates] = useState<ProductSortState[]>([])
+  const [distributionLoaded, setDistributionLoaded] = useState(false)
 
   const closedBoxes = useMemo(
     () =>
@@ -253,6 +171,70 @@ export function FfInboundSortingPanel({
         .sort((a, b) => a.box_number - b.box_number),
     [boxes],
   )
+
+  const defaultBoxId = closedBoxes.length === 1 ? closedBoxes[0]!.id : null
+
+  const acceptedByProductId = useMemo(() => {
+    const m = new Map<string, number>()
+    for (const ln of lines) {
+      // In sorting workspace actual_qty is finalized total from complete_receiving, not loose-only.
+      m.set(ln.product_id, ln.actual_qty ?? 0)
+    }
+    return m
+  }, [lines])
+
+  const postedByProductId = useMemo(() => {
+    const m = new Map<string, number>()
+    for (const ln of lines) {
+      m.set(ln.product_id, ln.posted_qty)
+    }
+    return m
+  }, [lines])
+
+  const loosePoolByProductId = useMemo(() => {
+    const m = new Map<string, number>()
+    for (const ln of lines) {
+      const accepted = acceptedByProductId.get(ln.product_id) ?? 0
+      let boxRemainder = 0
+      for (const box of closedBoxes) {
+        const bl = box.lines.find((l) => l.product_id === ln.product_id)
+        if (bl) {
+          boxRemainder += bl.remaining_qty
+        }
+      }
+      m.set(ln.product_id, Math.max(0, accepted - boxRemainder))
+    }
+    return m
+  }, [acceptedByProductId, closedBoxes, lines])
+
+  const boxRemainderByKey = useMemo(() => {
+    const m = new Map<string, number>()
+    for (const box of closedBoxes) {
+      for (const bl of box.lines) {
+        m.set(`${box.id}:${bl.product_id}`, bl.remaining_qty)
+      }
+    }
+    return m
+  }, [closedBoxes])
+
+  const sortableProducts = useMemo(() => {
+    const seen = new Set<string>()
+    const out: { product_id: string; sku_code: string; product_name: string; accepted: number; posted: number }[] = []
+    for (const ln of lines) {
+      if (seen.has(ln.product_id)) continue
+      seen.add(ln.product_id)
+      const accepted = acceptedByProductId.get(ln.product_id) ?? 0
+      if (accepted <= 0 && (postedByProductId.get(ln.product_id) ?? 0) <= 0) continue
+      out.push({
+        product_id: ln.product_id,
+        sku_code: ln.sku_code,
+        product_name: ln.product_name,
+        accepted,
+        posted: postedByProductId.get(ln.product_id) ?? 0,
+      })
+    }
+    return out.sort((a, b) => a.sku_code.localeCompare(b.sku_code))
+  }, [acceptedByProductId, lines, postedByProductId])
 
   const loadLocations = useCallback(async () => {
     const res = await fetch(
@@ -266,104 +248,252 @@ export function FfInboundSortingPanel({
     setLocations((await res.json()) as LocationRow[])
   }, [authHeaders, warehouseId])
 
+  const loadDistribution = useCallback(async () => {
+    const res = await fetch(
+      apiUrl(`/operations/inbound-intake-requests/${requestId}/distribution-lines`),
+      { headers: authHeaders },
+    )
+    if (!res.ok) {
+      setProductStates(
+        sortableProducts.map((p) => ({
+          ...p,
+          rows: [],
+        })),
+      )
+      setDistributionLoaded(true)
+      return
+    }
+    const rows = (await res.json()) as DistributionLineOut[]
+    const byProduct = new Map<string, DistributionLineOut[]>()
+    for (const r of rows) {
+      const list = byProduct.get(r.product_id) ?? []
+      list.push(r)
+      byProduct.set(r.product_id, list)
+    }
+    setProductStates(
+      sortableProducts.map((p) => ({
+        ...p,
+        rows: linesFromDistributionRows(
+          byProduct.get(p.product_id) ?? [],
+          defaultBoxId,
+          loosePoolByProductId.get(p.product_id) ?? 0,
+        ),
+      })),
+    )
+    setDistributionLoaded(true)
+  }, [authHeaders, defaultBoxId, loosePoolByProductId, requestId, sortableProducts])
+
   useEffect(() => {
     void loadLocations()
   }, [loadLocations])
 
   useEffect(() => {
-    if (closedBoxes.length === 0) {
-      setSelectedBoxId('')
-      return
-    }
-    if (!selectedBoxId || !closedBoxes.some((b) => b.id === selectedBoxId)) {
-      const firstWithRemain = closedBoxes.find((b) => b.remaining_qty > 0)
-      setSelectedBoxId(firstWithRemain?.id ?? closedBoxes[0]!.id)
-    }
-  }, [closedBoxes, selectedBoxId])
+    setDistributionLoaded(false)
+  }, [lines, boxes, requestId])
 
-  const putawayBox = async (
-    boxId: string,
-    storageLocationId: string,
-    lines: { product_id: string; quantity: number }[] | null,
-  ) => {
-    setBusy(true)
+  useEffect(() => {
+    if (!distributionLoaded) {
+      void loadDistribution()
+    }
+  }, [distributionLoaded, loadDistribution])
+
+  const updateProductRows = (productId: string, updater: (rows: CellDraftRow[]) => CellDraftRow[]) => {
+    setProductStates((prev) =>
+      prev.map((p) => (p.product_id === productId ? { ...p, rows: updater(p.rows) } : p)),
+    )
+  }
+
+  const draftSumByProductId = useMemo(() => {
+    const m = new Map<string, number>()
+    for (const p of productStates) {
+      m.set(p.product_id, sumDraftQty(p.rows))
+    }
+    return m
+  }, [productStates])
+
+  const remainingByProductId = useMemo(() => {
+    const m = new Map<string, number>()
+    for (const p of productStates) {
+      const draft = draftSumByProductId.get(p.product_id) ?? 0
+      m.set(p.product_id, Math.max(0, p.accepted - draft))
+    }
+    return m
+  }, [draftSumByProductId, productStates])
+
+  const rowMaxQty = (productId: string, row: CellDraftRow): number => {
+    const accepted = acceptedByProductId.get(productId) ?? 0
+    const productRows = productStates.find((p) => p.product_id === productId)?.rows ?? []
+    const otherSum = productRows
+      .filter((r) => r.key !== row.key)
+      .reduce((s, r) => {
+        const q = Math.floor(Number(r.quantity))
+        return s + (Number.isFinite(q) && q > 0 ? q : 0)
+      }, 0)
+    const productCap = Math.max(accepted - otherSum, 0)
+
+    if (row.box_id) {
+      const boxCap = boxRemainderByKey.get(`${row.box_id}:${productId}`) ?? 0
+      const boxUsed = productRows
+        .filter((r) => r.key !== row.key && r.box_id === row.box_id)
+        .reduce((s, r) => {
+          const q = Math.floor(Number(r.quantity))
+          return s + (Number.isFinite(q) && q > 0 ? q : 0)
+        }, 0)
+      return Math.min(productCap, Math.max(boxCap - boxUsed, 0))
+    }
+
+    const looseCap = loosePoolByProductId.get(productId) ?? 0
+    const looseUsed = productRows
+      .filter((r) => r.key !== row.key && !r.box_id)
+      .reduce((s, r) => {
+        const q = Math.floor(Number(r.quantity))
+        return s + (Number.isFinite(q) && q > 0 ? q : 0)
+      }, 0)
+    return Math.min(productCap, Math.max(looseCap - looseUsed, 0))
+  }
+
+  const rowExceeds = (productId: string, row: CellDraftRow): boolean => {
+    const q = Math.floor(Number(row.quantity))
+    if (!Number.isFinite(q) || q <= 0) return false
+    return q > rowMaxQty(productId, row)
+  }
+
+  const hasValidationError = useMemo(() => {
+    for (const p of productStates) {
+      const draft = draftSumByProductId.get(p.product_id) ?? 0
+      if (draft > p.accepted) return true
+      for (const row of p.rows) {
+        if (rowExceeds(p.product_id, row)) return true
+      }
+    }
+    return false
+  }, [draftSumByProductId, productStates])
+
+  const buildPayload = () => {
+    const payload: {
+      box_id: string | null
+      product_id: string
+      storage_location_id: string
+      quantity: number
+    }[] = []
+    for (const p of productStates) {
+      for (const row of p.rows) {
+        if (!row.storage_location_id || !row.quantity) continue
+        const q = Math.floor(Number(row.quantity))
+        if (!Number.isFinite(q) || q <= 0) continue
+        payload.push({
+          box_id: row.box_id || null,
+          product_id: p.product_id,
+          storage_location_id: row.storage_location_id,
+          quantity: q,
+        })
+      }
+    }
+    return payload
+  }
+
+  const persistDistribution = async (): Promise<boolean> => {
     setError(null)
     try {
       const res = await fetch(
-        apiUrl(`/operations/inbound-intake-requests/${requestId}/boxes/${boxId}/putaway`),
+        apiUrl(`/operations/inbound-intake-requests/${requestId}/distribution-lines`),
         {
-          method: 'POST',
+          method: 'PUT',
           headers: { ...authHeaders, 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            storage_location_id: storageLocationId,
-            lines: lines ?? undefined,
-          }),
+          body: JSON.stringify(buildPayload()),
         },
+      )
+      if (!res.ok) {
+        const text = await res.text()
+        let detail: unknown = null
+        try {
+          detail = (JSON.parse(text) as { detail?: unknown }).detail
+        } catch {
+          /* use readApiErrorMessage fallback */
+        }
+        if (detail === 'qty_exceeds_accepted') {
+          setError('Превышено принятое количество по товару.')
+        } else {
+          setError(await readApiErrorMessage(new Response(text, { status: res.status })))
+        }
+        return false
+      }
+      const rows = (await res.json()) as DistributionLineOut[]
+      const byProduct = new Map<string, DistributionLineOut[]>()
+      for (const r of rows) {
+        const list = byProduct.get(r.product_id) ?? []
+        list.push(r)
+        byProduct.set(r.product_id, list)
+      }
+      setProductStates((prev) =>
+        prev.map((p) => ({
+          ...p,
+          rows: linesFromDistributionRows(
+            byProduct.get(p.product_id) ?? [],
+            defaultBoxId,
+            loosePoolByProductId.get(p.product_id) ?? 0,
+          ),
+        })),
+      )
+      return true
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Не удалось сохранить разкладку.')
+      return false
+    }
+  }
+
+  const saveDistribution = async () => {
+    if (hasValidationError) {
+      setError('Превышено принятое количество — уменьшите количество в строках.')
+      return
+    }
+    setBusy(true)
+    try {
+      await persistDistribution()
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  const applyDistribution = async () => {
+    if (hasValidationError) {
+      setError('Превышено принятое количество — исправьте строки перед применением.')
+      return
+    }
+    setBusy(true)
+    setError(null)
+    try {
+      const saved = await persistDistribution()
+      if (!saved) return
+      const res = await fetch(
+        apiUrl(`/operations/inbound-intake-requests/${requestId}/distribution-complete`),
+        { method: 'POST', headers: authHeaders },
       )
       if (!res.ok) {
         setError(await readApiErrorMessage(res))
         return
       }
       await onReload()
-      await loadPutawayHistory()
-      setPartialQtyByKey({})
+      setDistributionLoaded(false)
     } catch (e) {
-      setError(e instanceof Error ? e.message : 'Не удалось разложить короб.')
+      setError(e instanceof Error ? e.message : 'Не удалось применить разкладку.')
     } finally {
       setBusy(false)
     }
   }
 
-  const putawayWholeBoxToLocation = async (box: SortingBox, storageLocationId: string) => {
-    if (!storageLocationId.trim()) {
-      setError('Выберите ячейку.')
-      return
-    }
-    await putawayBox(box.id, storageLocationId, null)
-  }
-
-  const putawayPartialLine = async (box: SortingBox, line: BoxLine) => {
-    const locId = cellByBoxId[box.id]?.trim()
-    if (!locId) {
-      setError('Выберите ячейку для разкладки.')
-      return
-    }
-    const key = `${box.id}:${line.product_id}`
-    const raw = partialQtyByKey[key] ?? String(line.remaining_qty)
-    const qty = Math.floor(Number(raw))
-    if (!Number.isFinite(qty) || qty < 1) {
-      setError('Укажите количество ≥ 1.')
-      return
-    }
-    if (qty > line.remaining_qty) {
-      setError(`В коробе осталось ${line.remaining_qty} шт.`)
-      return
-    }
-    await putawayBox(box.id, locId, [{ product_id: line.product_id, quantity: qty }])
-  }
-
-  const sortingPackLines = useMemo(() => {
-    const m = new Map<string, { product_id: string; sku_code: string; product_name: string; quantity: number }>()
-    for (const box of closedBoxes) {
-      for (const ln of box.lines) {
-        if (ln.remaining_qty <= 0) {
-          continue
-        }
-        const prev = m.get(ln.product_id)
-        if (prev) {
-          prev.quantity += ln.remaining_qty
-        } else {
-          m.set(ln.product_id, {
-            product_id: ln.product_id,
-            sku_code: ln.sku_code,
-            product_name: ln.product_name,
-            quantity: ln.remaining_qty,
-          })
-        }
-      }
-    }
-    return Array.from(m.values())
-  }, [closedBoxes])
+  const sortingPackLines = useMemo(
+    () =>
+      sortableProducts
+        .map((p) => ({
+          product_id: p.product_id,
+          sku_code: p.sku_code,
+          product_name: p.product_name,
+          quantity: Math.max(0, p.accepted - p.posted),
+        }))
+        .filter((ln) => ln.quantity > 0),
+    [sortableProducts],
+  )
 
   const createPackagingFromSorting = async () => {
     if (sortingPackLines.length === 0) {
@@ -398,13 +528,24 @@ export function FfInboundSortingPanel({
     }
   }
 
-  if (closedBoxes.length === 0) {
+  const boxSourcesForProduct = (productId: string) =>
+    closedBoxes
+      .map((box) => {
+        const bl = box.lines.find((l) => l.product_id === productId)
+        if (!bl || bl.remaining_qty <= 0) return null
+        return { box_id: box.id, box_number: box.box_number, remaining: bl.remaining_qty }
+      })
+      .filter((x): x is { box_id: string; box_number: number; remaining: number } => x != null)
+
+  if (sortableProducts.length === 0) {
     return (
-      <Alert severity="info" data-testid="ff-sorting-no-boxes">
-        Нет закрытых коробов для разкладки. Завершите приёмку в разделе «Приёмка».
+      <Alert severity="info" data-testid="ff-sorting-no-products">
+        Нет принятого товара для разкладки. Завершите приёмку в разделе «Приёмка».
       </Alert>
     )
   }
+
+  const editable = !completed
 
   return (
     <Box data-testid="ff-sorting-panel">
@@ -424,7 +565,7 @@ export function FfInboundSortingPanel({
           size="small"
           data-testid="ff-sorting-remaining-total"
         />
-        {!completed && sortingRemainingQty > 0 ? (
+        {editable && sortingRemainingQty > 0 ? (
           <Button
             variant="outlined"
             size="small"
@@ -435,6 +576,28 @@ export function FfInboundSortingPanel({
             Упаковать
           </Button>
         ) : null}
+        {editable ? (
+          <>
+            <Button
+              variant="outlined"
+              size="small"
+              disabled={busy || hasValidationError}
+              onClick={() => void saveDistribution()}
+              data-testid="ff-sorting-save"
+            >
+              Сохранить
+            </Button>
+            <Button
+              variant="contained"
+              size="small"
+              disabled={busy || hasValidationError || sortingRemainingQty <= 0}
+              onClick={() => void applyDistribution()}
+              data-testid="ff-sorting-apply"
+            >
+              Применить разкладку
+            </Button>
+          </>
+        ) : null}
       </Stack>
 
       {locations.length === 0 ? (
@@ -444,295 +607,204 @@ export function FfInboundSortingPanel({
       ) : null}
 
       <Stack spacing={2}>
-        {closedBoxes.map((box) => {
-          const done = completed || box.remaining_qty <= 0
-          const cellId = cellByBoxId[box.id] ?? ''
-          const boxHistory = resolveBoxPutawayHistory(
-            box.id,
-            closedBoxes,
-            putawayHistory,
-            putawayHistoryByBoxId,
-          )
-          const cellGroups = buildCellPutawayGroups(boxHistory, productMetaById)
-          const boxPostedQty = box.lines.reduce((s, ln) => s + ln.posted_qty, 0)
-          const showPutawayBlock = cellGroups.length > 0 || boxPostedQty > 0
-          const usedCellCodes = new Set(cellGroups.map((g) => g.cell_code))
+        {productStates.map((product) => {
+          const displayMeta = productDisplayMetaFromCatalog(product.product_id, product, catalogById)
+          const draftSum = draftSumByProductId.get(product.product_id) ?? 0
+          const remaining = remainingByProductId.get(product.product_id) ?? 0
+          const boxSources = boxSourcesForProduct(product.product_id)
+          const loosePool = loosePoolByProductId.get(product.product_id) ?? 0
+          const done = completed || remaining <= 0
 
           return (
             <Paper
-              key={box.id}
+              key={product.product_id}
               variant="outlined"
               sx={{
                 p: 2,
                 ...(done
-                  ? {
-                      opacity: 0.72,
-                      bgcolor: (theme) => alpha(theme.palette.success.main, 0.06),
-                    }
-                  : selectedBoxId === box.id
-                    ? {
-                        borderColor: (theme) => theme.palette.primary.main,
-                        borderWidth: 2,
-                      }
-                    : null),
+                  ? { opacity: 0.85, bgcolor: (theme) => alpha(theme.palette.success.main, 0.06) }
+                  : null),
               }}
-              data-testid="ff-sorting-box-card"
-              data-box-id={box.id}
-              onClick={() => setSelectedBoxId(box.id)}
+              data-testid="ff-sorting-product-card"
+              data-product-id={product.product_id}
             >
-              <Stack
-                direction={{ xs: 'column', sm: 'row' }}
-                spacing={1.5}
-                sx={{ mb: 1.5, alignItems: { sm: 'center' } }}
-              >
-                <Box sx={{ flexGrow: 1 }}>
-                  <Typography variant="subtitle2" sx={{ fontWeight: 800 }}>
-                    Короб № {box.box_number}
-                  </Typography>
-                  <Typography variant="body2" component="code" color="text.secondary">
-                    {box.internal_barcode}
-                  </Typography>
-                </Box>
-                <Chip
-                  size="small"
-                  label={done ? 'Разложен' : `Осталось ${box.remaining_qty} шт`}
-                  color={done ? 'success' : 'warning'}
-                  variant="outlined"
-                  data-testid="ff-sorting-box-remaining"
-                />
-              </Stack>
+              <Table size="small" sx={{ mb: 1.5 }}>
+                <TableHead>
+                  <TableRow>
+                    <FfProductTableHeadCells />
+                    <TableCell align="right">Принято</TableCell>
+                    <TableCell align="right">Разложено</TableCell>
+                    <TableCell align="right">Осталось</TableCell>
+                  </TableRow>
+                </TableHead>
+                <TableBody>
+                  <TableRow data-testid="ff-sorting-product-summary">
+                    <FfProductLineCells meta={displayMeta} />
+                    <TableCell align="right" data-testid="ff-sorting-product-accepted">
+                      {product.accepted}
+                    </TableCell>
+                    <TableCell align="right" data-testid="ff-sorting-product-distributed">
+                      {draftSum}
+                    </TableCell>
+                    <TableCell align="right" data-testid="ff-sorting-product-remaining">
+                      {remaining}
+                    </TableCell>
+                  </TableRow>
+                </TableBody>
+              </Table>
 
-              <Box onClick={(e) => e.stopPropagation()}>
-                <TableContainer>
-                <Table size="small" data-testid="ff-sorting-box-lines">
-                  <TableHead>
-                    <TableRow>
-                      <FfProductTableHeadCells />
-                      <TableCell align="right">В коробе</TableCell>
-                      <TableCell align="right">Разложено</TableCell>
-                      <TableCell align="right">Остаток</TableCell>
-                      {!done ? <TableCell align="right">Частично</TableCell> : null}
-                    </TableRow>
-                  </TableHead>
-                  <TableBody>
-                    {box.lines.map((ln) => {
-                      const key = `${box.id}:${ln.product_id}`
-                      const displayMeta = productDisplayMetaFromCatalog(ln.product_id, ln, catalogById)
-                      return (
-                        <TableRow key={ln.id} data-testid="ff-sorting-box-line">
-                          <FfProductLineCells
-                            meta={displayMeta}
-                            printTestId={`ff-sorting-line-print-${ln.id}`}
-                          />
-                          <TableCell align="right">{ln.quantity}</TableCell>
-                          <TableCell align="right">{ln.posted_qty}</TableCell>
-                          <TableCell align="right">{ln.remaining_qty}</TableCell>
-                          {!done && ln.remaining_qty > 0 ? (
-                            <TableCell align="right">
-                              <Stack
-                                direction="row"
-                                spacing={0.5}
-                                sx={{ justifyContent: 'flex-end' }}
-                              >
-                                <TextField
-                                  type="number"
-                                  size="small"
-                                  value={partialQtyByKey[key] ?? ''}
-                                  placeholder={String(ln.remaining_qty)}
-                                  disabled={busy}
-                                  onChange={(e) =>
-                                    setPartialQtyByKey((prev) => ({
-                                      ...prev,
-                                      [key]: e.target.value,
-                                    }))
-                                  }
-                                  slotProps={{
-                                    htmlInput: {
-                                      min: 1,
-                                      max: ln.remaining_qty,
-                                      'data-testid': 'ff-sorting-partial-qty',
-                                    },
-                                  }}
-                                  sx={{ width: 88 }}
-                                />
-                                <Button
-                                  size="small"
-                                  variant="outlined"
-                                  disabled={busy || !cellId}
-                                  onClick={() => void putawayPartialLine(box, ln)}
-                                  data-testid="ff-sorting-partial-apply"
-                                >
-                                  OK
-                                </Button>
-                              </Stack>
-                            </TableCell>
-                          ) : !done ? (
-                            <TableCell />
-                          ) : null}
-                        </TableRow>
-                      )
-                    })}
-                  </TableBody>
-                </Table>
-                </TableContainer>
-
-                {!done ? (
-                  <Stack spacing={1.5} sx={{ mt: 1.5, mb: 1.5 }}>
-                    <Typography variant="subtitle2" sx={{ fontWeight: 700 }}>
-                      Разложить остаток
-                    </Typography>
-                    <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1}>
-                      <FormControl size="small" sx={{ minWidth: 200, flexGrow: 1 }}>
-                        <InputLabel id={`ff-sort-cell-${box.id}`}>Ячейка</InputLabel>
-                        <Select
-                          labelId={`ff-sort-cell-${box.id}`}
-                          label="Ячейка"
-                          value={cellId}
-                          disabled={busy || locations.length === 0}
-                          onChange={(e) =>
-                            setCellByBoxId((prev) => ({
-                              ...prev,
-                              [box.id]: String(e.target.value),
-                            }))
-                          }
-                          data-testid="ff-sorting-box-location"
-                        >
-                          <MenuItem value="">
-                            <em>Выберите ячейку</em>
-                          </MenuItem>
-                          {locations.map((loc) => (
-                            <MenuItem key={loc.id} value={loc.id}>
-                              {loc.code}
-                              {usedCellCodes.has(loc.code) ? ' (уже есть)' : ''}
-                            </MenuItem>
-                          ))}
-                        </Select>
-                      </FormControl>
-                      <Button
-                        variant="contained"
-                        disabled={busy || !cellId}
-                        onClick={() => void putawayWholeBoxToLocation(box, cellId)}
-                        data-testid="ff-sorting-box-putaway-whole"
-                      >
-                        Весь короб в ячейку
-                      </Button>
-                    </Stack>
-                    {cellGroups.length > 0 ? (
-                      <Typography variant="caption" color="text.secondary">
-                        Или «Весь остаток короба сюда» в блоке «Уже в ячейках» ниже.
-                      </Typography>
-                    ) : null}
-                  </Stack>
-                ) : null}
-
-                {showPutawayBlock ? (
-                  <Box sx={{ mt: 2 }} data-testid="ff-sorting-putaway-history">
-                    <Typography variant="subtitle2" sx={{ fontWeight: 800, mb: 1 }}>
-                      Уже в ячейках
-                    </Typography>
-                    {historyLoadFailed ? (
-                      <Alert severity="warning" sx={{ mb: 1 }}>
-                        Не удалось загрузить историю разкладки. Обновите страницу.
-                      </Alert>
-                    ) : null}
-                    {cellGroups.length === 0 && boxPostedQty > 0 ? (
-                      <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
-                        Разложено {boxPostedQty} шт, но детализация по ячейкам недоступна (старая
-                        разкладка).
-                      </Typography>
-                    ) : null}
-                    <Stack spacing={1.25}>
-                      {cellGroups.map((group) => {
-                        const locId = locationIdByCode.get(group.cell_code) ?? ''
+              {product.rows.length > 0 ? (
+                <TableContainer sx={{ mb: 1 }}>
+                  <Table size="small" data-testid="ff-sorting-cell-rows">
+                    <TableHead>
+                      <TableRow>
+                        {boxSources.length > 0 || loosePool > 0 ? (
+                          <TableCell sx={{ width: 160 }}>Источник</TableCell>
+                        ) : null}
+                        <TableCell sx={{ minWidth: 180 }}>Ячейка</TableCell>
+                        <TableCell align="right" sx={{ width: 120 }}>
+                          Шт
+                        </TableCell>
+                        {editable ? <TableCell align="right" sx={{ width: 48 }} /> : null}
+                      </TableRow>
+                    </TableHead>
+                    <TableBody>
+                      {product.rows.map((row) => {
+                        const maxQty = rowMaxQty(product.product_id, row)
+                        const exceeds = rowExceeds(product.product_id, row)
                         return (
-                          <Paper
-                            key={group.cell_code}
-                            variant="outlined"
-                            sx={{
-                              p: 1.25,
-                              bgcolor: (theme) => alpha(theme.palette.info.main, 0.04),
-                            }}
-                            data-testid="ff-sorting-putaway-cell-group"
-                            data-cell-code={group.cell_code}
+                          <TableRow
+                            key={row.key}
+                            data-testid="ff-sorting-cell-row"
+                            sx={exceeds ? { bgcolor: (theme) => alpha(theme.palette.error.main, 0.08) } : null}
                           >
-                            <Stack
-                              direction="row"
-                              spacing={1}
-                              sx={{ mb: 1, alignItems: 'center', flexWrap: 'wrap' }}
-                            >
-                              <Chip
-                                label={group.cell_code}
-                                color="info"
-                                size="small"
-                                sx={{ fontWeight: 700 }}
-                                data-testid="ff-sorting-putaway-cell-summary"
-                              />
-                              <Typography variant="caption" color="text.secondary">
-                                всего {group.total_qty} шт
-                              </Typography>
-                            </Stack>
-
-                            <Stack spacing={0.75} sx={{ mb: !done && locId ? 1 : 0 }}>
-                              {group.whole_box_batches.map((batch) => (
-                                <Box
-                                  key={batch.created_at}
-                                  data-testid="ff-sorting-putaway-whole-box-row"
-                                >
-                                  <Typography variant="body2" sx={{ fontWeight: 700 }}>
-                                    Короб № {box.box_number}{' '}
-                                    <Typography
-                                      component="span"
-                                      variant="body2"
-                                      color="text.secondary"
-                                      sx={{ fontWeight: 400 }}
-                                    >
-                                      {box.internal_barcode} — {batch.total_qty} шт
-                                    </Typography>
-                                  </Typography>
-                                  <Stack component="ul" sx={{ m: 0, pl: 2.5, mt: 0.25 }}>
-                                    {batch.products.map((p) => (
-                                      <Typography
-                                        key={`${batch.created_at}-${p.product_id}`}
-                                        component="li"
-                                        variant="body2"
-                                        color="text.secondary"
-                                      >
-                                        {p.sku_code} · {p.product_name} — {p.quantity} шт
-                                      </Typography>
+                            {boxSources.length > 0 || loosePool > 0 ? (
+                              <TableCell>
+                                <FormControl size="small" fullWidth>
+                                  <Select
+                                    value={row.box_id ?? ''}
+                                    disabled={busy || !editable}
+                                    displayEmpty
+                                    onChange={(e) => {
+                                      const v = String(e.target.value)
+                                      updateProductRows(product.product_id, (rows) =>
+                                        rows.map((r) =>
+                                          r.key === row.key
+                                            ? { ...r, box_id: v ? v : null }
+                                            : r,
+                                        ),
+                                      )
+                                    }}
+                                    data-testid="ff-sorting-cell-source"
+                                  >
+                                    {loosePool > 0 ? (
+                                      <MenuItem value="">
+                                        <em>Россыпь</em>
+                                      </MenuItem>
+                                    ) : null}
+                                    {boxSources.map((bs) => (
+                                      <MenuItem key={bs.box_id} value={bs.box_id}>
+                                        Короб №{bs.box_number}
+                                      </MenuItem>
                                     ))}
-                                  </Stack>
-                                </Box>
-                              ))}
-                              {group.products.map((p) => (
-                                <Typography
-                                  key={p.product_id}
-                                  variant="body2"
-                                  data-testid="ff-sorting-putaway-product-row"
-                                >
-                                  {p.sku_code} · {p.product_name} —{' '}
-                                  <strong>{p.quantity} шт</strong>
-                                </Typography>
-                              ))}
-                            </Stack>
-
-                            {!done && locId ? (
-                              <Button
-                                size="small"
-                                variant="outlined"
-                                disabled={busy}
-                                onClick={() => void putawayWholeBoxToLocation(box, locId)}
-                                data-testid="ff-sorting-cell-putaway-whole"
-                              >
-                                Весь остаток короба сюда
-                              </Button>
+                                  </Select>
+                                </FormControl>
+                              </TableCell>
                             ) : null}
-                          </Paper>
+                            <TableCell>
+                              <FormControl size="small" fullWidth>
+                                <Select
+                                  value={row.storage_location_id}
+                                  disabled={busy || !editable || locations.length === 0}
+                                  displayEmpty
+                                  onChange={(e) => {
+                                    const v = String(e.target.value)
+                                    updateProductRows(product.product_id, (rows) =>
+                                      rows.map((r) =>
+                                        r.key === row.key ? { ...r, storage_location_id: v } : r,
+                                      ),
+                                    )
+                                  }}
+                                  data-testid="ff-sorting-cell-location"
+                                >
+                                  <MenuItem value="">
+                                    <em>Выберите ячейку</em>
+                                  </MenuItem>
+                                  {locations.map((loc) => (
+                                    <MenuItem key={loc.id} value={loc.id}>
+                                      {loc.code}
+                                    </MenuItem>
+                                  ))}
+                                </Select>
+                              </FormControl>
+                            </TableCell>
+                            <TableCell align="right">
+                              <TextField
+                                type="number"
+                                size="small"
+                                value={row.quantity}
+                                disabled={busy || !editable}
+                                error={exceeds}
+                                onChange={(e) => {
+                                  const v = e.target.value
+                                  updateProductRows(product.product_id, (rows) =>
+                                    rows.map((r) => (r.key === row.key ? { ...r, quantity: v } : r)),
+                                  )
+                                }}
+                                slotProps={{
+                                  htmlInput: {
+                                    min: 1,
+                                    max: maxQty > 0 ? maxQty : undefined,
+                                    'data-testid': 'ff-sorting-cell-qty',
+                                  },
+                                }}
+                                sx={{ width: 96 }}
+                              />
+                            </TableCell>
+                            {editable ? (
+                              <TableCell align="right">
+                                <IconButton
+                                  size="small"
+                                  disabled={busy}
+                                  aria-label="Удалить строку"
+                                  onClick={() =>
+                                    updateProductRows(product.product_id, (rows) =>
+                                      rows.filter((r) => r.key !== row.key),
+                                    )
+                                  }
+                                  data-testid="ff-sorting-cell-remove"
+                                >
+                                  ×
+                                </IconButton>
+                              </TableCell>
+                            ) : null}
+                          </TableRow>
                         )
                       })}
-                    </Stack>
-                  </Box>
-                ) : null}
-              </Box>
+                    </TableBody>
+                  </Table>
+                </TableContainer>
+              ) : null}
+
+              {editable && remaining > 0 ? (
+                <Button
+                  size="small"
+                  variant="outlined"
+                  startIcon={<AddIcon />}
+                  disabled={busy || locations.length === 0}
+                  onClick={() =>
+                    updateProductRows(product.product_id, (rows) => [
+                      ...rows,
+                      emptyDraftRow(
+                        loosePool > 0 ? null : (boxSources[0]?.box_id ?? defaultBoxId),
+                      ),
+                    ])
+                  }
+                  data-testid="ff-sorting-add-cell"
+                >
+                  + ячейка
+                </Button>
+              ) : null}
             </Paper>
           )
         })}
