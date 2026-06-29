@@ -1,5 +1,11 @@
 # TASKLOG
 
+## TASK-071 — 2026-06-29 — CZ product-first: PR #52
+
+- Full backlog `CHESTNY_ZNAK_PRODUCT_FIRST_TASKS_RU.md` integrated on `feat/cz-product-first`.
+- PR: https://github.com/chivkunovd-bitdenis/WMS/pull/52 → `main`
+- Verification: backend 261 pytest; frontend build + 85 e2e passed locally.
+
 ## TASK-070 — 2026-06-29 — API-02: is_shared and shared_with on pool responses
 
 - What changed: `marking_codes.py` — `PoolListItemOut` + `linked_products_count`, `is_shared`; `PoolDetailOut` + `shared_with`; API tests personal/shared pools.
