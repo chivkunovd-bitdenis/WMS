@@ -1,10 +1,14 @@
 # TASKLOG
 
-## TASK-076 — 2026-06-29 — REV-CZ-TEST-01: ЧЗ tenant/seller isolation tests
+## TASK-083 — 2026-06-29 — REV-CZ-FE-01: multi-pool threshold + navigation race fix
 
-- What changed: `test_marking_inventory_cz_filter.py` — tenant/seller isolation для `list_inventory` (одинаковый SKU/GTIN/pool title между tenant; title/GTIN/pool между seller). `test_marking_product_codes_pool_filter.py` — tenant/seller isolation для `list_product_codes` + API 404 cross-tenant.
-- What did NOT change: production marking_code_service; существующие FIX-01/FIX-02 сценарии.
-- Verification: `cd backend && pytest tests/test_marking_inventory_cz_filter.py tests/test_marking_product_codes_pool_filter.py` — 8 passed.
+- What changed: per-pool threshold on `HonestSignPoolPage`; multi-pool hint on product page; race fix (poolId reset, loadRequestId, disabled while busy). Commits `a316d79`, `d671ca2`.
+- Verification: build + e2e honest-sign green; integrate merge. Adversarial BLOCK fix verified by orchestrator static review (Composer pool exhausted).
+
+## TASK-081 — 2026-06-29 — REV-CZ-TEST-01: tenant/seller isolation CZ tests
+
+- What changed: TC-NEW-CZISO-001..004 in marking inventory/product-code filter tests.
+- Verification: pytest 8 passed; integrate merge; commit `44784cd`.
 
 ## TASK-075 — 2026-06-29 — IN-FE-01: inbound receiving UI new flow
 

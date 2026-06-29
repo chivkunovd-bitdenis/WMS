@@ -239,7 +239,6 @@ export function HonestSignProductPage({
   const personalPools = overview?.personal_pools ?? []
   const singlePersonalPool =
     personalPools.length === 1 ? personalPools[0] : null
-  const hasMultiplePersonalPools = personalPools.length > 1
 
   const sharedBasketsCount = overview?.shared_baskets.length ?? 0
 
@@ -406,13 +405,10 @@ export function HonestSignProductPage({
             </Paper>
           </Stack>
 
-          {hasMultiplePersonalPools ? (
-            <Alert
-              severity="warning"
-              data-testid={`${testIdPrefix}-threshold-multiple-pools`}
-            >
-              У товара несколько личных пулов — настройка порога остатка для каждого пула пока
-              недоступна (TODO).
+          {personalPools.length > 1 ? (
+            <Alert severity="info" data-testid={`${testIdPrefix}-threshold-multi-pool-hint`}>
+              У товара несколько личных пулов — порог остатка настраивается в карточке каждого
+              пула ниже.
             </Alert>
           ) : null}
 
