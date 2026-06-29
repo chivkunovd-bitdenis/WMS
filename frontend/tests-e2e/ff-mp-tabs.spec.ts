@@ -186,6 +186,13 @@ test('FF marketplace unload: tabs switch without losing document context', async
 
   await page.getByTestId('ff-mp-tab-products').click()
   await expect(page.getByTestId('ff-supplies-doc-lines')).toBeVisible()
+  // TC-NEW-OUT-FE-02: fresh confirmed unload — no early red rows; qty under correct columns.
+  await expect(page.locator('[data-testid^="ff-mp-line-discrepancy-"]')).toHaveCount(0)
+  await expect(page.locator('[data-testid^="ff-mp-line-row-"]').first()).toBeVisible()
+  await expect(page.locator('[data-testid^="ff-mp-line-plan-"]').first()).toHaveText('2')
+  await expect(page.locator('[data-testid^="ff-mp-line-picked-"]').first()).toHaveText('0')
+  await expect(page.locator('[data-testid^="ff-mp-line-remaining-"]').first()).toHaveText('2')
+  await expect(page.getByTestId('ff-mp-print-actions')).toBeVisible()
   await expect(page.getByTestId('ff-mp-boxes')).toBeVisible()
   await expect(page.getByTestId('ff-mp-ship')).toBeDisabled()
 
