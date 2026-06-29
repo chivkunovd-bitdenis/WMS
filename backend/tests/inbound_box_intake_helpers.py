@@ -1,6 +1,35 @@
 from __future__ import annotations
 
+import uuid
+
 from httpx import AsyncClient, Response
+
+from app.db.session import SessionLocal
+from app.services import inbound_intake_box_service as box_svc
+from app.services import inbound_intake_service as intake_svc
+from app.services.tokens import decode_access_token
+
+
+def _tenant_id_from_headers(headers: dict[str, str]) -> uuid.UUID:
+    token = headers["Authorization"].removeprefix("Bearer ")
+    return uuid.UUID(str(decode_access_token(token)["tenant_id"]))
+
+
+async def _create_boxes_for_request(
+    headers: dict[str, str],
+    request_id: str,
+    *,
+    box_count: int,
+) -> None:
+    tenant_id = _tenant_id_from_headers(headers)
+    async with SessionLocal() as session:
+        req = await intake_svc.get_request(session, tenant_id, uuid.UUID(request_id))
+        if req is None:
+            raise AssertionError("request_not_found")
+        await box_svc.create_boxes_for_request(
+            session, tenant_id, req, box_count=box_count
+        )
+        await session.commit()
 
 
 async def post_primary_accept(
@@ -8,12 +37,20 @@ async def post_primary_accept(
     base: str,
     request_id: str,
     headers: dict[str, str],
+    *,
+    actual_box_count: int = 1,
+    create_boxes: bool = True,
 ) -> Response:
-    return await async_client.post(
+    res = await async_client.post(
         f"{base}/{request_id}/primary-accept",
         headers=headers,
-        json={"actual_box_count": 1},
+        json={"actual_box_count": actual_box_count},
     )
+    if res.status_code == 200 and create_boxes and actual_box_count > 0:
+        await _create_boxes_for_request(
+            headers, request_id, box_count=actual_box_count
+        )
+    return res
 
 
 async def fulfill_inbound_via_box_scans(
@@ -30,7 +67,13 @@ async def fulfill_inbound_via_box_scans(
     assert got.status_code == 200, got.text
     body = got.json()
     boxes = body["boxes"]
-    assert boxes, "expected inbound boxes after primary accept"
+    if not boxes:
+        await _create_boxes_for_request(headers, request_id, box_count=1)
+        got = await async_client.get(base, headers=headers)
+        assert got.status_code == 200, got.text
+        body = got.json()
+        boxes = body["boxes"]
+    assert boxes, "expected inbound boxes for box intake helper"
     lines = body["lines"]
     assert lines, "expected inbound lines"
     product_id = lines[0]["product_id"]

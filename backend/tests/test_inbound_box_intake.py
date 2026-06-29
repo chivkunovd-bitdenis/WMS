@@ -106,7 +106,15 @@ async def _submitted_inbound_with_boxes(
         json={"actual_box_count": box_count},
     )
     assert prim.status_code == 200, prim.text
-    boxes = prim.json()["boxes"]
+    from inbound_box_intake_helpers import _create_boxes_for_request
+
+    await _create_boxes_for_request(ah, rid, box_count=box_count)
+    got = await async_client.get(
+        f"/operations/inbound-intake-requests/{rid}",
+        headers=ah,
+    )
+    assert got.status_code == 200, got.text
+    boxes = got.json()["boxes"]
     return ah, rid, pid, sku, boxes
 
 
@@ -163,12 +171,12 @@ async def test_inbound_box_intake_manual_qty_and_verify(async_client: AsyncClien
     got = await async_client.get(base, headers=ah)
     assert got.status_code == 200, got.text
     body = got.json()
-    assert body["status"] == "verifying"
+    assert body["status"] == "receiving"
     assert body["lines"][0]["actual_qty"] == 5
 
     verify = await async_client.post(f"{base}/verify", headers=ah)
     assert verify.status_code == 200, verify.text
-    assert verify.json()["status"] == "verified"
+    assert verify.json()["status"] == "sorting"
 
 
 @pytest.mark.asyncio
@@ -268,7 +276,7 @@ async def test_inbound_manual_actual_allowed_when_boxes_exist(
         headers=ah,
     )
     assert verify.status_code == 200
-    assert verify.json()["status"] == "verified"
+    assert verify.json()["status"] == "sorting"
 
 
 @pytest.mark.asyncio

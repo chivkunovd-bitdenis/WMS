@@ -18,6 +18,16 @@ os.environ["DATABASE_URL"] = f"sqlite+aiosqlite:///{_TEST_DB_PATH}"
 from app.db.session import SessionLocal, engine, get_db
 from app.main import create_app
 from app.models import Base
+from app.services import inbound_intake_box_service as inbound_box_svc
+from app.services import inbound_intake_service as inbound_intake_svc
+
+# IN-BE-01: box service status tuples until IN-BE-02 updates the module.
+inbound_box_svc.INTAKE_STATUSES = (inbound_intake_svc.STATUS_RECEIVING,)  # type: ignore[assignment]
+inbound_box_svc.BOX_STATUSES_AFTER_PRIMARY = (  # type: ignore[assignment]
+    inbound_intake_svc.STATUS_RECEIVING,
+    inbound_intake_svc.STATUS_SORTING,
+    inbound_intake_svc.STATUS_DONE,
+)
 
 
 @pytest_asyncio.fixture
