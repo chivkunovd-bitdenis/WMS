@@ -3,8 +3,10 @@ import { Link as RouterLink, useParams, useSearchParams } from 'react-router-dom
 import {
   Alert,
   Box,
+  Button,
   Chip,
   IconButton,
+  MenuItem,
   Paper,
   Skeleton,
   Stack,
@@ -16,12 +18,15 @@ import {
   TableContainer,
   TableHead,
   TableRow,
+  TextField,
   Typography,
 } from '@mui/material'
 import ArrowBackOutlined from '@mui/icons-material/ArrowBackOutlined'
 import ChevronRightOutlined from '@mui/icons-material/ChevronRightOutlined'
 import { apiUrl } from '../../api'
 import { PageHeader } from '../../ui/PageHeader'
+import { codeStatusLabel, ledgerEventLabel } from '../../utils/markingStatus'
+import { maskCisCode } from '../../utils/printMarkingCodeLabel'
 import { readApiErrorMessage } from '../../utils/readApiErrorMessage'
 
 type MarkingOverviewProduct = {
@@ -54,7 +59,27 @@ type MarkingOverview = {
   shared_baskets: SharedBasket[]
 }
 
+type ProductCode = {
+  id: string
+  cis_code: string
+  status: string
+  created_at: string
+}
+
+type LedgerRow = {
+  id: string
+  created_at: string
+  event_type: string
+  cis_masked: string
+  document_number: string | null
+  actor_email: string | null
+}
+
 type TabKey = 'codes' | 'ledger'
+
+const STATUS_OPTIONS = ['', 'available', 'reserved', 'printed', 'applied', 'defective', 'void']
+
+const LEDGER_PREVIEW_LIMIT = 5
 
 type Props = {
   token: string
@@ -73,9 +98,15 @@ export function HonestSignProductPage({
   const tab: TabKey | null = tabParam === 'codes' || tabParam === 'ledger' ? tabParam : null
 
   const [overview, setOverview] = useState<MarkingOverview | null>(null)
+  const [codes, setCodes] = useState<ProductCode[]>([])
+  const [ledger, setLedger] = useState<LedgerRow[]>([])
   const [busy, setBusy] = useState(false)
+  const [codesBusy, setCodesBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [statusFilter, setStatusFilter] = useState('')
   const loadRequestId = useRef(0)
+  const codesRequestId = useRef(0)
+  const ledgerAbortRef = useRef<AbortController | null>(null)
 
   const authHeaders = useMemo(
     () => ({ Authorization: `Bearer ${token}` }),
@@ -110,9 +141,83 @@ export function HonestSignProductPage({
     }
   }, [authHeaders, productId])
 
+  const loadCodes = useCallback(async () => {
+    if (!productId) {
+      return
+    }
+    const requestId = ++codesRequestId.current
+    setCodesBusy(true)
+    try {
+      const res = await fetch(
+        apiUrl(`/operations/marking-codes/products/${productId}/codes`),
+        { headers: authHeaders },
+      )
+      if (requestId !== codesRequestId.current) {
+        return
+      }
+      if (res.ok) {
+        setCodes((await res.json()) as ProductCode[])
+      }
+    } finally {
+      if (requestId === codesRequestId.current) {
+        setCodesBusy(false)
+      }
+    }
+  }, [authHeaders, productId])
+
+  const loadLedger = useCallback(async () => {
+    if (!productId) {
+      return
+    }
+    ledgerAbortRef.current?.abort()
+    const ac = new AbortController()
+    ledgerAbortRef.current = ac
+    try {
+      const res = await fetch(
+        apiUrl(
+          `/operations/marking-codes/ledger?product_id=${encodeURIComponent(productId)}&limit=${LEDGER_PREVIEW_LIMIT}`,
+        ),
+        { headers: authHeaders, signal: ac.signal },
+      )
+      if (ac.signal.aborted) {
+        return
+      }
+      if (res.ok) {
+        const data = (await res.json()) as { rows: LedgerRow[] }
+        if (!ac.signal.aborted) {
+          setLedger(data.rows)
+        }
+      }
+    } catch (err) {
+      if (err instanceof DOMException && err.name === 'AbortError') {
+        return
+      }
+      throw err
+    }
+  }, [authHeaders, productId])
+
   useEffect(() => {
     void loadOverview()
   }, [loadOverview])
+
+  useEffect(() => {
+    if (tab === 'codes') {
+      void loadCodes()
+    }
+    if (tab === 'ledger') {
+      void loadLedger()
+    }
+    return () => {
+      ledgerAbortRef.current?.abort()
+    }
+  }, [tab, loadCodes, loadLedger])
+
+  const filteredCodes = useMemo(() => {
+    if (!statusFilter) {
+      return codes
+    }
+    return codes.filter((c) => c.status === statusFilter)
+  }, [codes, statusFilter])
 
   const personalAvailable = useMemo(
     () => (overview?.personal_pools ?? []).reduce((sum, pool) => sum + pool.available, 0),
@@ -302,19 +407,134 @@ export function HonestSignProductPage({
       </Tabs>
 
       {tab === 'codes' ? (
-        <Paper variant="outlined" sx={{ p: 2 }} data-testid={`${testIdPrefix}-codes`}>
-          <Typography variant="body2" color="text.secondary">
-            Список кодов маркировки появится на этой вкладке.
-          </Typography>
-        </Paper>
+        <Stack spacing={1.5} data-testid={`${testIdPrefix}-codes`}>
+          <TextField
+            select
+            size="small"
+            label="Статус"
+            value={statusFilter}
+            onChange={(e) => setStatusFilter(e.target.value)}
+            sx={{ minWidth: 160, maxWidth: 240 }}
+            data-testid={`${testIdPrefix}-codes-status`}
+          >
+            <MenuItem value="">Все</MenuItem>
+            {STATUS_OPTIONS.filter(Boolean).map((s) => (
+              <MenuItem key={s} value={s}>
+                {codeStatusLabel(s)}
+              </MenuItem>
+            ))}
+          </TextField>
+          {statusFilter && codes.length > 0 ? (
+            <Typography
+              variant="body2"
+              color="text.secondary"
+              data-testid={`${testIdPrefix}-codes-count`}
+            >
+              Показано {filteredCodes.length} из {codes.length}
+            </Typography>
+          ) : codes.length > 0 ? (
+            <Typography
+              variant="body2"
+              color="text.secondary"
+              data-testid={`${testIdPrefix}-codes-count`}
+            >
+              {codes.length} КМ
+            </Typography>
+          ) : null}
+          <TableContainer component={Paper} variant="outlined">
+            <Table size="small" sx={{ tableLayout: 'fixed' }}>
+              <TableHead>
+                <TableRow>
+                  <TableCell>КМ</TableCell>
+                  <TableCell>Статус</TableCell>
+                  <TableCell>Дата</TableCell>
+                </TableRow>
+              </TableHead>
+              <TableBody>
+                {codesBusy ? (
+                  <TableRow>
+                    <TableCell colSpan={3}>
+                      <Skeleton height={32} />
+                    </TableCell>
+                  </TableRow>
+                ) : filteredCodes.length === 0 ? (
+                  <TableRow>
+                    <TableCell colSpan={3}>
+                      <Typography variant="body2" color="text.secondary">
+                        Коды не найдены.
+                      </Typography>
+                    </TableCell>
+                  </TableRow>
+                ) : (
+                  filteredCodes.map((c) => (
+                    <TableRow key={c.id} data-testid={`${testIdPrefix}-code-row-${c.id}`}>
+                      <TableCell>{maskCisCode(c.cis_code)}</TableCell>
+                      <TableCell>
+                        <Chip size="small" label={codeStatusLabel(c.status)} />
+                      </TableCell>
+                      <TableCell>{new Date(c.created_at).toLocaleString('ru-RU')}</TableCell>
+                    </TableRow>
+                  ))
+                )}
+              </TableBody>
+            </Table>
+          </TableContainer>
+        </Stack>
       ) : null}
 
       {tab === 'ledger' ? (
-        <Paper variant="outlined" sx={{ p: 2 }} data-testid={`${testIdPrefix}-ledger`}>
-          <Typography variant="body2" color="text.secondary">
-            Лента событий по товару появится на этой вкладке.
-          </Typography>
-        </Paper>
+        <Stack spacing={1.5} data-testid={`${testIdPrefix}-ledger`}>
+          <Stack
+            direction={{ xs: 'column', sm: 'row' }}
+            spacing={1}
+            sx={{ alignItems: { sm: 'center' }, justifyContent: 'space-between' }}
+          >
+            <Typography variant="subtitle2">
+              Последние {LEDGER_PREVIEW_LIMIT} событий
+            </Typography>
+            <Button
+              component={RouterLink}
+              to={`${routeBase}/honest-sign/ledger?product_id=${encodeURIComponent(productId)}`}
+              variant="outlined"
+              size="small"
+              data-testid={`${testIdPrefix}-ledger-open-full`}
+            >
+              Вся лента товара
+            </Button>
+          </Stack>
+          <TableContainer component={Paper} variant="outlined">
+            <Table size="small" sx={{ tableLayout: 'fixed' }}>
+              <TableHead>
+                <TableRow>
+                  <TableCell>Время</TableCell>
+                  <TableCell>Событие</TableCell>
+                  <TableCell>КМ</TableCell>
+                </TableRow>
+              </TableHead>
+              <TableBody>
+                {ledger.length === 0 ? (
+                  <TableRow>
+                    <TableCell colSpan={3}>
+                      <Typography variant="body2" color="text.secondary">
+                        Событий пока нет.
+                      </Typography>
+                    </TableCell>
+                  </TableRow>
+                ) : (
+                  ledger.map((row) => (
+                    <TableRow key={row.id} data-testid={`${testIdPrefix}-ledger-row-${row.id}`}>
+                      <TableCell>{new Date(row.created_at).toLocaleString('ru-RU')}</TableCell>
+                      <TableCell>
+                        <Chip size="small" label={ledgerEventLabel(row.event_type)} />
+                      </TableCell>
+                      <TableCell>{row.cis_masked}</TableCell>
+                    </TableRow>
+                  ))
+                )}
+              </TableBody>
+            </Table>
+          </TableContainer>
+        </Stack>
       ) : null}
     </Stack>
   )
