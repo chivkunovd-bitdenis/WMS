@@ -5,9 +5,6 @@ import {
   Box,
   Button,
   Chip,
-  IconButton,
-  Menu,
-  MenuItem,
   Paper,
   Skeleton,
   Snackbar,
@@ -27,14 +24,13 @@ import {
 import ChevronRightOutlined from '@mui/icons-material/ChevronRightOutlined'
 import UploadFileOutlined from '@mui/icons-material/UploadFileOutlined'
 import TimelineOutlined from '@mui/icons-material/TimelineOutlined'
-import MoreVertOutlined from '@mui/icons-material/MoreVertOutlined'
 import { apiUrl } from '../../api'
 import { PageHeader } from '../../ui/PageHeader'
 import { readApiErrorMessage } from '../../utils/readApiErrorMessage'
-import { MarkingImportDialog, type PoolImportContext } from './MarkingImportDialog'
-import { MarkingPoolProductsDialog } from './MarkingPoolProductsDialog'
+import { MarkingImportDialog } from './MarkingImportDialog'
 import { MarkingSellerPicker } from './MarkingSellerPicker'
 
+/** @deprecated Pool-centric type; kept for imports from legacy tests/helpers. */
 export type MarkingPoolRow = {
   id: string
   title: string
@@ -52,11 +48,35 @@ export type MarkingPoolRow = {
   used?: number
 }
 
+type SharedBasketRow = {
+  pool_id: string
+  gtin: string
+  title: string
+  available: number
+  products_count: number
+}
+
+type ProductInventoryRow = {
+  product_id: string
+  sku_code: string
+  product_name: string
+  requires_honest_sign: boolean
+  available_count: number
+  printed_count: number
+  personal_available: number
+  shared_baskets: SharedBasketRow[]
+}
+
+type MarkingInventoryResponse = {
+  rows: ProductInventoryRow[]
+  unlinked_available_count: number
+}
+
 type StockFilter = 'all' | 'low' | 'empty'
 
 type KpiCardConfig = {
   label: string
-  value: number
+  value: number | string
   testId: string
   interactive: boolean
   active?: boolean
@@ -73,59 +93,65 @@ type Props = {
   testIdPrefix?: string
   /** FF: /app/ff · seller: /seller */
   routeBase?: string
-  /** T3.4: карточки остатков вместо только таблицы */
+  /** Seller portal: highlight low-stock product cards above the table */
   showSellerDashboard?: boolean
 }
 
-function poolMatchesSearch(row: MarkingPoolRow, query: string): boolean {
+function productMatchesSearch(row: ProductInventoryRow, query: string): boolean {
   const needle = query.trim().toLowerCase()
   if (!needle) {
     return true
   }
-  if (row.title.toLowerCase().includes(needle) || row.gtin.toLowerCase().includes(needle)) {
-    return true
-  }
-  return row.products.some(
-    (p) =>
-      p.sku_code.toLowerCase().includes(needle) || p.name.toLowerCase().includes(needle),
+  return (
+    row.product_name.toLowerCase().includes(needle) ||
+    row.sku_code.toLowerCase().includes(needle)
   )
 }
 
-function isLowStock(row: MarkingPoolRow): boolean {
-  if (row.low_stock_threshold != null) {
-    return row.available < row.low_stock_threshold
-  }
-  return row.available > 0 && row.available <= 10
+function isLowPersonalStock(row: ProductInventoryRow): boolean {
+  return row.personal_available > 0 && row.personal_available <= 10
 }
 
-function isProblematicPool(row: MarkingPoolRow): boolean {
-  return row.available === 0 || isLowStock(row)
+function isProblematicProduct(row: ProductInventoryRow): boolean {
+  return row.personal_available === 0 || isLowPersonalStock(row)
 }
 
-function ProductChips({
-  products,
+function hasMarkingActivity(row: ProductInventoryRow): boolean {
+  return (
+    row.personal_available > 0 ||
+    row.printed_count > 0 ||
+    row.shared_baskets.length > 0 ||
+    row.requires_honest_sign
+  )
+}
+
+function SharedBasketChips({
+  baskets,
   testIdPrefix,
-  poolId,
+  productId,
 }: {
-  products: MarkingPoolRow['products']
+  baskets: SharedBasketRow[]
   testIdPrefix: string
-  poolId: string
+  productId: string
 }) {
-  const visible = products.slice(0, 3)
-  const rest = products.length - visible.length
+  if (baskets.length === 0) {
+    return (
+      <Typography variant="body2" color="text.secondary">
+        —
+      </Typography>
+    )
+  }
   return (
     <Stack direction="row" spacing={0.5} sx={{ flexWrap: 'wrap' }}>
-      {visible.map((p) => (
+      {baskets.map((b) => (
         <Chip
-          key={p.id}
+          key={b.pool_id}
           size="small"
-          label={p.sku_code}
-          data-testid={`${testIdPrefix}-pool-chip-${poolId}-${p.id}`}
+          variant="outlined"
+          label={`🧺 ${b.available} · на ${b.products_count} тов.`}
+          data-testid={`${testIdPrefix}-product-basket-${productId}-${b.pool_id}`}
         />
       ))}
-      {rest > 0 ? (
-        <Chip size="small" variant="outlined" label={`ещё ${rest}`} />
-      ) : null}
     </Stack>
   )
 }
@@ -185,48 +211,24 @@ export function HonestSignScreen({
   showSellerDashboard = false,
 }: Props) {
   const navigate = useNavigate()
-  const poolsTableRef = useRef<HTMLDivElement>(null)
-  const poolsLoadAbortRef = useRef<AbortController | null>(null)
-  const [pools, setPools] = useState<MarkingPoolRow[]>([])
+  const productsTableRef = useRef<HTMLDivElement>(null)
+  const inventoryLoadAbortRef = useRef<AbortController | null>(null)
+  const [products, setProducts] = useState<ProductInventoryRow[]>([])
+  const [unlinkedAvailable, setUnlinkedAvailable] = useState(0)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [search, setSearch] = useState('')
   const [stockFilter, setStockFilter] = useState<StockFilter>('all')
-  const [menuAnchor, setMenuAnchor] = useState<HTMLElement | null>(null)
-  const [menuPool, setMenuPool] = useState<MarkingPoolRow | null>(null)
-  const [linkPool, setLinkPool] = useState<MarkingPoolRow | null>(null)
   const [importOpen, setImportOpen] = useState(false)
-  const [importPoolContext, setImportPoolContext] = useState<PoolImportContext | null>(null)
   const [toastMessage, setToastMessage] = useState<string | null>(null)
-
-  const openImport = (pool?: MarkingPoolRow) => {
-    if (sellerIdRequiredForImport && !effectiveSellerId) {
-      return
-    }
-    setImportPoolContext(
-      pool
-        ? {
-            gtin: pool.gtin,
-            title: pool.title,
-            productIds: pool.products.map((p) => p.id),
-          }
-        : null,
-    )
-    setImportOpen(true)
-  }
-
-  const closeImport = () => {
-    setImportOpen(false)
-    setImportPoolContext(null)
-  }
 
   const effectiveSellerId = sellerId ?? selectedSellerId
   const importDisabled = sellerIdRequiredForImport && !effectiveSellerId
 
-  const loadPools = useCallback(async () => {
-    poolsLoadAbortRef.current?.abort()
+  const loadInventory = useCallback(async () => {
+    inventoryLoadAbortRef.current?.abort()
     const ac = new AbortController()
-    poolsLoadAbortRef.current = ac
+    inventoryLoadAbortRef.current = ac
     setBusy(true)
     setError(null)
     try {
@@ -238,7 +240,7 @@ export function HonestSignScreen({
             : effectiveSellerId
               ? `?seller_id=${encodeURIComponent(effectiveSellerId)}`
               : ''
-      const res = await fetch(apiUrl(`/operations/marking-codes/pools${q}`), {
+      const res = await fetch(apiUrl(`/operations/marking-codes/inventory${q}`), {
         headers: { Authorization: `Bearer ${token}` },
         signal: ac.signal,
       })
@@ -249,7 +251,9 @@ export function HonestSignScreen({
         setError(await readApiErrorMessage(res))
         return
       }
-      setPools((await res.json()) as MarkingPoolRow[])
+      const body = (await res.json()) as MarkingInventoryResponse
+      setProducts(body.rows)
+      setUnlinkedAvailable(body.unlinked_available_count)
     } catch (err) {
       if (err instanceof DOMException && err.name === 'AbortError') {
         return
@@ -264,49 +268,49 @@ export function HonestSignScreen({
 
   useEffect(() => {
     if (sellerIdRequiredForImport && !effectiveSellerId) {
-      setPools([])
+      setProducts([])
+      setUnlinkedAvailable(0)
       return
     }
-    void loadPools()
+    void loadInventory()
     return () => {
-      poolsLoadAbortRef.current?.abort()
+      inventoryLoadAbortRef.current?.abort()
     }
-  }, [effectiveSellerId, loadPools, sellerIdRequiredForImport])
+  }, [effectiveSellerId, loadInventory, sellerIdRequiredForImport])
 
   const kpis = useMemo(() => {
-    const availableTotal = pools.reduce((s, p) => s + p.available, 0)
-    const defectiveTotal = pools.reduce((s, p) => s + p.defective, 0)
-    const lowCount = pools.filter(isLowStock).length
-    const spend7d = pools.reduce((s, p) => s + (p.consumption_7d ?? 0), 0)
-    return { availableTotal, defectiveTotal, lowCount, spend7d }
-  }, [pools])
+    const personalTotal = products.reduce((s, p) => s + p.personal_available, 0)
+    const lowCount = products.filter(isLowPersonalStock).length
+    const sharedBasketProducts = products.filter((p) => p.shared_baskets.length > 0).length
+    return { personalTotal, lowCount, sharedBasketProducts }
+  }, [products])
 
-  const scrollToPoolsTable = useCallback(() => {
-    poolsTableRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+  const scrollToProductsTable = useCallback(() => {
+    productsTableRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' })
   }, [])
 
   const kpiCards = useMemo((): KpiCardConfig[] => {
     return [
       {
-        label: 'Доступно всего',
-        value: kpis.availableTotal,
+        label: 'Доступно личных',
+        value: kpis.personalTotal,
         testId: 'kpi-available',
         interactive: true,
         active: stockFilter === 'all',
         onClick: () => {
           setStockFilter('all')
-          scrollToPoolsTable()
+          scrollToProductsTable()
         },
       },
       {
-        label: 'Расход 7 дней',
-        value: kpis.spend7d,
+        label: 'С общими корзинами',
+        value: kpis.sharedBasketProducts,
         testId: 'kpi-spend-7d',
         interactive: false,
       },
       {
         label: 'Брак',
-        value: kpis.defectiveTotal,
+        value: '→',
         testId: 'kpi-defective',
         interactive: true,
         onClick: () => {
@@ -314,74 +318,77 @@ export function HonestSignScreen({
         },
       },
       {
-        label: 'Пулы на исходе',
+        label: 'На исходе',
         value: kpis.lowCount,
         testId: 'kpi-low-stock',
         interactive: true,
         active: stockFilter === 'low',
         onClick: () => {
           setStockFilter('low')
-          scrollToPoolsTable()
+          scrollToProductsTable()
         },
       },
     ]
-  }, [kpis, navigate, routeBase, scrollToPoolsTable, stockFilter])
+  }, [kpis, navigate, routeBase, scrollToProductsTable, stockFilter])
 
-  const filteredPools = useMemo(() => {
-    return pools.filter((row) => {
-      if (!poolMatchesSearch(row, search)) {
+  const filteredProducts = useMemo(() => {
+    return products.filter((row) => {
+      if (!productMatchesSearch(row, search)) {
         return false
       }
       if (stockFilter === 'empty') {
-        return row.available === 0
+        return row.personal_available === 0
       }
       if (stockFilter === 'low') {
-        return isLowStock(row)
+        return isLowPersonalStock(row)
       }
       return true
     })
-  }, [pools, search, stockFilter])
+  }, [products, search, stockFilter])
 
-  const problematicPools = useMemo(
-    () => filteredPools.filter(isProblematicPool),
-    [filteredPools],
+  const problematicProducts = useMemo(
+    () =>
+      filteredProducts.filter(
+        (row) => isProblematicProduct(row) && hasMarkingActivity(row),
+      ),
+    [filteredProducts],
   )
 
-  const tablePools = useMemo(() => {
+  const tableProducts = useMemo(() => {
     if (!showSellerDashboard) {
-      return filteredPools
+      return filteredProducts
     }
-    const problematicIds = new Set(problematicPools.map((row) => row.id))
-    return filteredPools.filter((row) => !problematicIds.has(row.id))
-  }, [filteredPools, problematicPools, showSellerDashboard])
+    const problematicIds = new Set(problematicProducts.map((row) => row.product_id))
+    return filteredProducts.filter((row) => !problematicIds.has(row.product_id))
+  }, [filteredProducts, problematicProducts, showSellerDashboard])
 
-  const openMenu = (event: React.MouseEvent<HTMLElement>, pool: MarkingPoolRow) => {
-    event.stopPropagation()
-    setMenuAnchor(event.currentTarget)
-    setMenuPool(pool)
-  }
-
-  const closeMenu = () => {
-    setMenuAnchor(null)
-    setMenuPool(null)
-  }
-
-  const onLinkedProductsSaved = (products: MarkingPoolRow['products']) => {
-    if (!linkPool) {
+  const openImport = () => {
+    if (sellerIdRequiredForImport && !effectiveSellerId) {
       return
     }
-    setPools((prev) =>
-      prev.map((p) => (p.id === linkPool.id ? { ...p, products } : p)),
-    )
-    setLinkPool(null)
-    void loadPools()
+    setImportOpen(true)
   }
+
+  const closeImport = () => {
+    setImportOpen(false)
+  }
+
+  const hasAnyMarkingData = useMemo(
+    () =>
+      products.some(
+        (p) =>
+          p.personal_available > 0 ||
+          p.printed_count > 0 ||
+          p.shared_baskets.length > 0,
+      ) || unlinkedAvailable > 0,
+    [products, unlinkedAvailable],
+  )
 
   return (
     <Stack spacing={2} data-testid={`${testIdPrefix}-page`}>
       <PageHeader
         title="Честный знак"
-        description="Пулы КМ по GTIN: остаток общий на пул, товары привязываются вручную."
+        description="Остатки кодов маркировки по товарам: личный запас и общие корзины на несколько SKU."
       />
 
       {sellerIdRequiredForImport ? (
@@ -396,6 +403,13 @@ export function HonestSignScreen({
       {error ? (
         <Alert severity="error" data-testid={`${testIdPrefix}-error`}>
           {error}
+        </Alert>
+      ) : null}
+
+      {unlinkedAvailable > 0 ? (
+        <Alert severity="info" data-testid={`${testIdPrefix}-unlinked-hint`}>
+          Кодов без привязки к товару: {unlinkedAvailable}. Загрузите файл и привяжите товары при
+          импорте.
         </Alert>
       ) : null}
 
@@ -447,24 +461,22 @@ export function HonestSignScreen({
         ))}
       </Stack>
 
-      {showSellerDashboard && problematicPools.length > 0 ? (
+      {showSellerDashboard && problematicProducts.length > 0 ? (
         <Stack spacing={1} data-testid={`${testIdPrefix}-seller-dashboard`}>
           <Typography variant="subtitle2" color="text.secondary">
             Требуют внимания
           </Typography>
-          {problematicPools.map((row) => {
-            const low = isLowStock(row)
-            const spendPerDay =
-              row.consumption_7d != null ? Math.round((row.consumption_7d / 7) * 10) / 10 : 0
+          {problematicProducts.map((row) => {
+            const low = isLowPersonalStock(row)
             return (
               <Paper
-                key={row.id}
+                key={row.product_id}
                 variant="outlined"
                 sx={{
                   p: 2,
-                  bgcolor: low ? 'error.50' : row.available <= 20 ? 'warning.50' : 'background.paper',
+                  bgcolor: low ? 'error.50' : row.personal_available === 0 ? 'warning.50' : 'background.paper',
                 }}
-                data-testid={`${testIdPrefix}-pool-card-${row.id}`}
+                data-testid={`${testIdPrefix}-product-card-${row.product_id}`}
               >
                 <Stack
                   direction={{ xs: 'column', sm: 'row' }}
@@ -473,30 +485,35 @@ export function HonestSignScreen({
                 >
                   <Box>
                     <Typography variant="subtitle1" sx={{ fontWeight: 600 }}>
-                      {row.title}
+                      {row.product_name}
                     </Typography>
                     <Typography variant="caption" color="text.secondary">
-                      GTIN {row.gtin}
+                      {row.sku_code}
                     </Typography>
                   </Box>
                   <Button
                     size="small"
                     variant="contained"
                     startIcon={<UploadFileOutlined />}
-                    onClick={() => openImport(row)}
-                    data-testid={`${testIdPrefix}-pool-card-upload-${row.id}`}
+                    onClick={() => openImport()}
+                    data-testid={`${testIdPrefix}-product-card-upload-${row.product_id}`}
                   >
                     Догрузить
                   </Button>
                 </Stack>
                 <Stack direction="row" spacing={2} sx={{ mt: 1, flexWrap: 'wrap' }}>
-                  <Typography variant="body2">Загружено: {row.loaded ?? '—'}</Typography>
-                  <Typography variant="body2">Использовано: {row.used ?? '—'}</Typography>
-                  <Typography variant="body2">Доступно: {row.available}</Typography>
-                  <Typography variant="body2">Расход/день: {spendPerDay}</Typography>
-                  <Typography variant="body2">
-                    Прогноз: <ForecastLabel forecastDays={row.forecast_days} />
-                  </Typography>
+                  <Typography variant="body2">Личный остаток: {row.personal_available}</Typography>
+                  <Typography variant="body2">Напечатано: {row.printed_count}</Typography>
+                  {row.shared_baskets.length > 0 ? (
+                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
+                      <Typography variant="body2">Корзины:</Typography>
+                      <SharedBasketChips
+                        baskets={row.shared_baskets}
+                        testIdPrefix={testIdPrefix}
+                        productId={row.product_id}
+                      />
+                    </Box>
+                  ) : null}
                 </Stack>
               </Paper>
             )
@@ -533,64 +550,74 @@ export function HonestSignScreen({
         </Button>
       </Stack>
 
-      <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1.5} sx={{ alignItems: { sm: 'center' } }}>
-        <TextField
-          size="small"
-          label="Поиск"
-          placeholder="Название, GTIN, артикул"
-          value={search}
-          onChange={(e) => setSearch(e.target.value)}
-          sx={{ flex: 1 }}
-          data-testid={`${testIdPrefix}-search`}
-        />
-        <ToggleButtonGroup
-          exclusive
-          size="small"
-          value={stockFilter}
-          onChange={(_, v: StockFilter | null) => v && setStockFilter(v)}
-          data-testid={`${testIdPrefix}-stock-filter`}
-        >
-          <ToggleButton value="all">Все</ToggleButton>
-          <ToggleButton value="low">На исходе</ToggleButton>
-          <ToggleButton value="empty">Пустые</ToggleButton>
-        </ToggleButtonGroup>
-      </Stack>
+      <Paper variant="outlined" sx={{ p: 2 }}>
+        <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1.5} sx={{ alignItems: { sm: 'center' } }}>
+          <TextField
+            size="small"
+            label="Поиск"
+            placeholder="Артикул или название"
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            sx={{ flex: 1 }}
+            data-testid={`${testIdPrefix}-search`}
+          />
+          <ToggleButtonGroup
+            exclusive
+            size="small"
+            value={stockFilter}
+            onChange={(_, v: StockFilter | null) => v && setStockFilter(v)}
+            data-testid={`${testIdPrefix}-stock-filter`}
+          >
+            <ToggleButton value="all">Все</ToggleButton>
+            <ToggleButton value="low">На исходе</ToggleButton>
+            <ToggleButton value="empty">Пустые</ToggleButton>
+          </ToggleButtonGroup>
+        </Stack>
+      </Paper>
 
-      <TableContainer component={Paper} variant="outlined" ref={poolsTableRef}>
-        <Table size="small" data-testid={`${testIdPrefix}-pools-table`}>
+      <TableContainer component={Paper} variant="outlined" ref={productsTableRef}>
+        <Table
+          size="small"
+          sx={{ tableLayout: 'fixed' }}
+          data-testid={`${testIdPrefix}-products-table`}
+        >
           <TableHead>
             <TableRow>
-              <TableCell>Пул</TableCell>
-              <TableCell>Товары</TableCell>
-              <TableCell align="right">Доступно</TableCell>
-              <TableCell align="right">Резерв</TableCell>
-              <TableCell align="right">Напечатано</TableCell>
-              <TableCell align="right">Брак</TableCell>
-              <TableCell align="right">Прогноз</TableCell>
-              <TableCell padding="checkbox" />
+              <TableCell sx={{ width: '28%' }}>Товар</TableCell>
+              <TableCell align="right" sx={{ width: '12%' }}>
+                Личный остаток
+              </TableCell>
+              <TableCell sx={{ width: '28%' }}>Общая корзина</TableCell>
+              <TableCell align="right" sx={{ width: '12%' }}>
+                Напечатано
+              </TableCell>
+              <TableCell align="right" sx={{ width: '12%' }}>
+                Прогноз
+              </TableCell>
+              <TableCell padding="checkbox" sx={{ width: 48 }} />
             </TableRow>
           </TableHead>
           <TableBody>
             {busy ? (
               Array.from({ length: 3 }).map((_, i) => (
                 <TableRow key={i}>
-                  <TableCell colSpan={8}>
+                  <TableCell colSpan={6}>
                     <Skeleton height={32} />
                   </TableCell>
                 </TableRow>
               ))
-            ) : tablePools.length === 0 ? (
+            ) : tableProducts.length === 0 ? (
               <TableRow>
-                <TableCell colSpan={8}>
+                <TableCell colSpan={6}>
                   <Stack spacing={1} sx={{ py: 2, alignItems: 'flex-start' }}>
                     <Typography variant="body2" color="text.secondary">
-                      {pools.length === 0
-                        ? 'Пулов пока нет — загрузите КМ из файла.'
-                        : showSellerDashboard && problematicPools.length > 0
-                          ? 'Проблемные пулы показаны в блоке выше. По фильтру в таблице ничего нет.'
+                      {!hasAnyMarkingData
+                        ? 'Пока нет кодов маркировки — загрузите КМ из файла.'
+                        : showSellerDashboard && problematicProducts.length > 0
+                          ? 'Товары, требующие внимания, показаны в блоке выше. По фильтру в таблице ничего нет.'
                           : 'Ничего не найдено по фильтру.'}
                     </Typography>
-                    {pools.length === 0 ? (
+                    {!hasAnyMarkingData ? (
                       <Button
                         variant="contained"
                         size="small"
@@ -605,70 +632,59 @@ export function HonestSignScreen({
                 </TableCell>
               </TableRow>
             ) : (
-              tablePools.map((row) => {
-                const low = isLowStock(row)
+              tableProducts.map((row) => {
+                const low = isLowPersonalStock(row)
                 return (
                   <TableRow
-                    key={row.id}
+                    key={row.product_id}
                     hover
                     sx={{ cursor: 'pointer' }}
-                    onClick={() => navigate(`${routeBase}/honest-sign/pool/${row.id}`)}
-                    data-testid={`${testIdPrefix}-pool-row-${row.id}`}
+                    onClick={() =>
+                      navigate(`${routeBase}/honest-sign/product/${row.product_id}`)
+                    }
+                    data-testid={`${testIdPrefix}-product-row-${row.product_id}`}
                   >
                     <TableCell>
                       <Stack spacing={0.25}>
                         <Typography variant="body2" sx={{ fontWeight: 600 }}>
-                          {row.title}
+                          {row.sku_code}
                         </Typography>
-                        <Typography variant="caption" color="text.secondary">
-                          GTIN {row.gtin}
+                        <Typography variant="caption" color="text.secondary" noWrap title={row.product_name}>
+                          {row.product_name}
                         </Typography>
+                        {row.requires_honest_sign ? (
+                          <Chip
+                            size="small"
+                            color="primary"
+                            variant="outlined"
+                            label="ЧЗ"
+                            sx={{ alignSelf: 'flex-start', mt: 0.25 }}
+                          />
+                        ) : null}
                       </Stack>
-                    </TableCell>
-                    <TableCell>
-                      {row.products.length > 0 ? (
-                        <ProductChips
-                          products={row.products}
-                          testIdPrefix={testIdPrefix}
-                          poolId={row.id}
-                        />
-                      ) : (
-                        <Button
-                          size="small"
-                          onClick={(e) => {
-                            e.stopPropagation()
-                            setLinkPool(row)
-                          }}
-                          data-testid={`${testIdPrefix}-pool-link-quick-${row.id}`}
-                        >
-                          Привязать
-                        </Button>
-                      )}
                     </TableCell>
                     <TableCell
                       align="right"
                       sx={{ color: low ? 'error.main' : undefined, fontWeight: low ? 600 : 400 }}
                     >
-                      {row.available}
+                      {row.personal_available}
                     </TableCell>
-                    <TableCell align="right">{row.reserved}</TableCell>
-                    <TableCell align="right">{row.printed}</TableCell>
-                    <TableCell align="right">{row.defective}</TableCell>
+                    <TableCell>
+                      <SharedBasketChips
+                        baskets={row.shared_baskets}
+                        testIdPrefix={testIdPrefix}
+                        productId={row.product_id}
+                      />
+                    </TableCell>
+                    <TableCell align="right">{row.printed_count}</TableCell>
                     <TableCell align="right">
                       <ForecastLabel
-                        forecastDays={row.forecast_days}
-                        testId={`${testIdPrefix}-pool-forecast-${row.id}`}
+                        forecastDays={null}
+                        testId={`${testIdPrefix}-product-forecast-${row.product_id}`}
                       />
                     </TableCell>
                     <TableCell padding="checkbox" align="right">
-                      <IconButton
-                        size="small"
-                        aria-label="Действия пула"
-                        onClick={(e) => openMenu(e, row)}
-                        data-testid={`${testIdPrefix}-pool-menu-${row.id}`}
-                      >
-                        <MoreVertOutlined fontSize="small" />
-                      </IconButton>
+                      <ChevronRightOutlined fontSize="small" color="action" />
                     </TableCell>
                   </TableRow>
                 )
@@ -678,67 +694,16 @@ export function HonestSignScreen({
         </Table>
       </TableContainer>
 
-      <Menu anchorEl={menuAnchor} open={Boolean(menuAnchor)} onClose={closeMenu}>
-        <MenuItem
-          onClick={() => {
-            if (menuPool) {
-              setLinkPool(menuPool)
-            }
-            closeMenu()
-          }}
-          data-testid={`${testIdPrefix}-menu-link-products`}
-        >
-          Привязать товары
-        </MenuItem>
-        <MenuItem
-          onClick={() => {
-            if (menuPool) {
-              navigate(`${routeBase}/honest-sign/pool/${menuPool.id}?tab=codes`)
-            }
-            closeMenu()
-          }}
-          data-testid={`${testIdPrefix}-menu-codes`}
-        >
-          Коды
-        </MenuItem>
-        <MenuItem
-          onClick={() => {
-            if (menuPool) {
-              navigate(`${routeBase}/honest-sign/ledger?pool_id=${menuPool.id}`)
-            }
-            closeMenu()
-          }}
-          data-testid={`${testIdPrefix}-menu-ledger`}
-        >
-          Лента пула
-        </MenuItem>
-      </Menu>
-
-      {linkPool && effectiveSellerId ? (
-        <MarkingPoolProductsDialog
-          open
-          token={token}
-          poolId={linkPool.id}
-          poolTitle={linkPool.title}
-          sellerId={effectiveSellerId}
-          linkedProducts={linkPool.products}
-          testIdPrefix={testIdPrefix}
-          onClose={() => setLinkPool(null)}
-          onSaved={onLinkedProductsSaved}
-        />
-      ) : null}
-
       {importOpen && effectiveSellerId ? (
         <MarkingImportDialog
           open
           token={token}
           sellerId={effectiveSellerId}
           testIdPrefix={testIdPrefix}
-          poolContext={importPoolContext}
           onClose={closeImport}
           onImported={(message) => {
             setToastMessage(message)
-            void loadPools()
+            void loadInventory()
           }}
         />
       ) : null}
