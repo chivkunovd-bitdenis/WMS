@@ -1,5 +1,11 @@
 # TASKLOG
 
+## TASK-073 — 2026-06-29 — IN-BE-02: on-demand inbound intake boxes
+
+- What changed: `inbound_intake_box_service.create_open_box` — короб приёмки по требованию (открыт сразу); `INTAKE_STATUSES` включает `submitted`; факт из коробов без primary-accept; тесты `test_inbound_intake_box_ondemand.py`.
+- What did NOT change: API эндпоинты (IN-BE-03); `primary_accept_request` всё ещё вызывает `create_boxes_for_request` для legacy.
+- Verification: `PYTHONPATH=worktree/backend ruff check . && mypy . && pytest` — 271 passed; commit `27dfe13`.
+
 ## TASK-072 — 2026-06-29 — Печать ТЗ на упаковку (A4)
 
 - What changed: кнопка «Печать» в модалке ТЗ (`FfProductsCatalogScreen`, `SellerProductsStockScreen`); утилита `printPackagingInstructions.ts` — A4 с SKU, товаром, селлером, инструкцией и флагом ЧЗ; e2e assert `ff-packaging-print`.

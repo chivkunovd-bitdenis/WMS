@@ -25,7 +25,7 @@ BOX_STATUSES_AFTER_PRIMARY = (
     "posted",
 )
 
-INTAKE_STATUSES = ("primary_accepted", "verifying")
+INTAKE_STATUSES = ("submitted", "primary_accepted", "verifying")
 
 
 class InboundIntakeBoxError(Exception):
@@ -36,6 +36,45 @@ class InboundIntakeBoxError(Exception):
 
 def _new_barcode() -> str:
     return f"INB-{uuid.uuid4().hex[:12].upper()}"
+
+
+async def _next_box_number(session: AsyncSession, request_id: uuid.UUID) -> int:
+    stmt = select(func.coalesce(func.max(InboundIntakeBox.box_number), 0)).where(
+        InboundIntakeBox.request_id == request_id,
+    )
+    res = await session.execute(stmt)
+    return int(res.scalar_one()) + 1
+
+
+async def create_open_box(
+    session: AsyncSession,
+    tenant_id: uuid.UUID,
+    request_id: uuid.UUID,
+) -> InboundIntakeBox:
+    """Create a new inbound box and open it for piece intake (on demand)."""
+    req = await _get_request_for_intake(session, tenant_id, request_id)
+    if await _open_box_for_request(session, request_id) is not None:
+        raise InboundIntakeBoxError("open_box_exists")
+
+    box_number = await _next_box_number(session, req.id)
+    now = datetime.now(UTC)
+    for _ in range(8):
+        box = InboundIntakeBox(
+            tenant_id=tenant_id,
+            request_id=req.id,
+            box_number=box_number,
+            internal_barcode=_new_barcode(),
+            intake_opened_at=now,
+        )
+        session.add(box)
+        try:
+            await session.flush()
+            await session.commit()
+            return await _load_box(session, box.id)
+        except IntegrityError:
+            session.expunge(box)
+            continue
+    raise InboundIntakeBoxError("barcode_collision")
 
 
 async def create_boxes_for_request(
@@ -298,9 +337,10 @@ async def _sync_request_actuals(
         if ln.posted_qty > total:
             raise InboundIntakeBoxError("actual_below_posted")
         ln.actual_qty = total
-    if req.status == intake_svc.STATUS_PRIMARY_ACCEPTED and any(
-        ln.actual_qty is not None for ln in req.lines
-    ):
+    if req.status in (
+        intake_svc.STATUS_SUBMITTED,
+        intake_svc.STATUS_PRIMARY_ACCEPTED,
+    ) and any(ln.actual_qty is not None for ln in req.lines):
         req.status = intake_svc.STATUS_VERIFYING
 
 
