@@ -4,8 +4,8 @@ import { waitForGetOk, waitForPostOk } from './api-waits'
 import { openFulfillmentRegistration } from './auth-flow'
 import { selectHonestSignSeller } from './ff-honest-sign-helpers'
 
-// TC-NEW-007 — T0.7: список пулов, меню «Привязать товары», переход в карточку пула.
-test('FF honest sign: pool list row, link product via menu, open pool card', async ({ page }) => {
+// TC-NEW-007 — product-first vitrine: товар в списке, привязка через API, переход в карточку пула.
+test('FF honest sign: product list row, link product via API, open pool card', async ({ page }) => {
   test.setTimeout(90_000)
   const email = `e2e-pools-${Date.now()}@example.com`
   const password = 'password123'
@@ -62,12 +62,21 @@ test('FF honest sign: pool list row, link product via menu, open pool card', asy
   expect(poolRes.ok()).toBeTruthy()
   const poolId = String(((await poolRes.json()) as { pools: { pool_id: string }[] }).pools[0].pool_id)
 
+  const linkRes = await page.request.put(
+    `${e2eApi}/operations/marking-codes/pools/${poolId}/products`,
+    {
+      headers: { ...auth, 'Content-Type': 'application/json' },
+      data: JSON.stringify({ product_ids: [productId] }),
+    },
+  )
+  expect(linkRes.ok()).toBeTruthy()
+
   await page.getByTestId('nav-ff-honest-sign').click()
   await selectHonestSignSeller(page, sellerId)
-  const poolRow = page.getByTestId(`ff-honest-sign-pool-row-${poolId}`)
-  await expect(poolRow).toBeVisible()
-  await expect(poolRow).toContainText('E2E List Pool')
-  await expect(poolRow).toContainText('1')
+  const productRow = page.getByTestId(`ff-honest-sign-product-row-${productId}`)
+  await expect(productRow).toBeVisible()
+  await expect(productRow).toContainText(sku)
+  await expect(productRow).toContainText('1')
 
   // TC-NEW-POOLS-02 — KPI: static vs interactive cards, filter toggle, ledger link
   await expect(page.getByTestId('ff-honest-sign-kpi-spend-7d')).toHaveAttribute('data-interactive', 'false')
@@ -87,21 +96,9 @@ test('FF honest sign: pool list row, link product via menu, open pool card', asy
   await page.getByTestId('ff-honest-sign-ledger-back').click()
   await selectHonestSignSeller(page, sellerId)
 
-  await page.getByTestId(`ff-honest-sign-pool-menu-${poolId}`).click()
-  await page.getByTestId('ff-honest-sign-menu-link-products').click()
-  await expect(page.getByTestId('ff-honest-sign-pool-products-dialog')).toBeVisible()
-
-  const saveWait = page.waitForResponse(
-    (r) =>
-      r.request().method() === 'PUT' &&
-      r.url().includes(`/operations/marking-codes/pools/${poolId}/products`) &&
-      r.status() >= 200 &&
-      r.status() < 300,
-  )
-  await page.getByRole('checkbox', { name: `Выбрать ${sku}` }).check()
-  await Promise.all([saveWait, page.getByTestId('ff-honest-sign-pool-products-save').click()])
-  await expect(page.getByTestId(`ff-honest-sign-pool-chip-${poolId}-${productId}`)).toBeVisible()
-
-  await poolRow.click()
+  await productRow.click()
+  await expect(page).toHaveURL(new RegExp(`/app/ff/honest-sign/product/${productId}`))
+  await expect(page.getByTestId('ff-honest-sign-product-page')).toBeVisible()
+  await page.getByTestId(`ff-honest-sign-product-personal-pool-${poolId}`).click()
   await expect(page.getByTestId('ff-honest-sign-pool-page')).toBeVisible()
 })

@@ -39,6 +39,7 @@ import { FfHonestSignLedgerPage } from './screens/ff/FfHonestSignLedgerPage'
 import { FfHonestSignReprintsPage } from './screens/ff/FfHonestSignReprintsPage'
 import { NotificationsPage } from './screens/shared/NotificationsPage'
 import { HonestSignPoolPage } from './screens/shared/HonestSignPoolPage'
+import { HonestSignProductPage } from './screens/shared/HonestSignProductPage'
 import { FfPlaceholderPage } from './screens/ff/FfPlaceholderPage'
 import { FfInboundRequestView, type InboundRequestWorkspace } from './screens/ff/FfInboundRequestView'
 import { FfInboundQueuePage } from './screens/ff/FfInboundQueuePage'
@@ -2532,6 +2533,20 @@ export default function App() {
                   title="Пул КМ"
                   hint="Нет токена."
                   testId="ff-honest-sign-pool-placeholder"
+                />
+              )
+            }
+          />
+          <Route
+            path="ff/honest-sign/product/:productId"
+            element={
+              token ? (
+                <HonestSignProductPage token={token} testIdPrefix="ff-honest-sign-product" />
+              ) : (
+                <FfPlaceholderPage
+                  title="Карточка товара"
+                  hint="Нет токена."
+                  testId="ff-honest-sign-product-placeholder"
                 />
               )
             }

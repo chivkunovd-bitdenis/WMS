@@ -30,12 +30,17 @@ import { codeStatusLabel, ledgerEventLabel } from '../../utils/markingStatus'
 import { readApiErrorMessage } from '../../utils/readApiErrorMessage'
 import { MarkingPoolProductsDialog } from './MarkingPoolProductsDialog'
 
+type PoolProduct = { id: string; sku_code: string; name: string }
+
 type PoolDetail = {
   id: string
   seller_id: string
   title: string
   gtin: string
-  products: { id: string; sku_code: string; name: string }[]
+  products: PoolProduct[]
+  linked_products_count?: number
+  is_shared?: boolean
+  shared_with?: PoolProduct[]
   available: number
   reserved: number
   printed: number
@@ -86,6 +91,13 @@ type TabKey = 'overview' | 'products' | 'codes' | 'ledger'
 const STATUS_OPTIONS = ['', 'available', 'reserved', 'printed', 'applied', 'defective', 'void']
 
 const LEDGER_PREVIEW_LIMIT = 5
+
+function poolBasketMeta(detail: PoolDetail) {
+  const linkedProductsCount = detail.linked_products_count ?? detail.products.length
+  const isShared = detail.is_shared ?? linkedProductsCount >= 2
+  const basketProducts = detail.shared_with ?? detail.products
+  return { linkedProductsCount, isShared, basketProducts }
+}
 
 type Props = {
   token: string
@@ -318,6 +330,8 @@ export function HonestSignPoolPage({
     return null
   }
 
+  const basketMeta = detail ? poolBasketMeta(detail) : null
+
   return (
     <Stack spacing={2} data-testid={`${testIdPrefix}-page`}>
       <Stack direction="row" spacing={1} sx={{ alignItems: 'center' }}>
@@ -329,10 +343,22 @@ export function HonestSignPoolPage({
         >
           <ArrowBackOutlined />
         </IconButton>
-        <PageHeader
-          title={detail?.title ?? 'Карточка пула'}
-          description={detail ? `GTIN ${detail.gtin}` : 'Загрузка…'}
-        />
+        <Box sx={{ flex: 1 }}>
+          <PageHeader
+            title={detail?.title ?? 'Карточка пула'}
+            description={detail ? `GTIN ${detail.gtin}` : 'Загрузка…'}
+          />
+          {basketMeta?.isShared ? (
+            <Chip
+              label={`Общая корзина · на ${basketMeta.linkedProductsCount} товаров`}
+              color="info"
+              size="small"
+              variant="outlined"
+              sx={{ mt: -1, mb: 1 }}
+              data-testid={`${testIdPrefix}-shared-badge`}
+            />
+          ) : null}
+        </Box>
       </Stack>
 
       {error ? (
@@ -439,17 +465,37 @@ export function HonestSignPoolPage({
         </Stack>
       ) : null}
 
-      {tab === 'products' && detail ? (
+      {tab === 'products' && detail && basketMeta ? (
         <Stack spacing={2} data-testid={`${testIdPrefix}-products`}>
-          <Alert severity="info">Остаток КМ общий на весь пул, не на каждый товар.</Alert>
+          {basketMeta.isShared ? (
+            <Alert severity="info" data-testid={`${testIdPrefix}-shared-alert`}>
+              Остаток КМ общий на всю корзину. Коды расходуются по факту отгрузки и не делятся
+              поровну между товарами.
+            </Alert>
+          ) : (
+            <Alert severity="info">Остаток КМ общий на весь пул, не на каждый товар.</Alert>
+          )}
           <Button variant="outlined" onClick={() => setLinkOpen(true)} data-testid={`${testIdPrefix}-link-products`}>
             Привязать товары
           </Button>
-          <Stack direction="row" spacing={0.75} sx={{ flexWrap: 'wrap' }}>
-            {detail.products.map((p) => (
-              <Chip key={p.id} label={`${p.sku_code} — ${p.name}`} data-testid={`${testIdPrefix}-product-${p.id}`} />
-            ))}
-          </Stack>
+          <Typography variant="subtitle2">
+            {basketMeta.isShared ? 'Состав корзины' : 'Привязанные товары'}
+          </Typography>
+          {basketMeta.basketProducts.length === 0 ? (
+            <Typography variant="body2" color="text.secondary" data-testid={`${testIdPrefix}-products-empty`}>
+              Товары не привязаны.
+            </Typography>
+          ) : (
+            <Stack direction="row" spacing={0.75} sx={{ flexWrap: 'wrap' }}>
+              {basketMeta.basketProducts.map((p) => (
+                <Chip
+                  key={p.id}
+                  label={`${p.sku_code} — ${p.name}`}
+                  data-testid={`${testIdPrefix}-product-${p.id}`}
+                />
+              ))}
+            </Stack>
+          )}
         </Stack>
       ) : null}
 

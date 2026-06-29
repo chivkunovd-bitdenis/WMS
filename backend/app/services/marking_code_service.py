@@ -175,6 +175,16 @@ class ProductMarkingCodeRow:
 
 
 @dataclass(frozen=True)
+class SharedBasketRow:
+    pool_id: uuid.UUID
+    gtin: str
+    title: str
+    available: int
+    printed: int
+    products_count: int
+
+
+@dataclass(frozen=True)
 class ProductMarkingInventoryRow:
     product_id: uuid.UUID
     sku_code: str
@@ -182,6 +192,9 @@ class ProductMarkingInventoryRow:
     requires_honest_sign: bool
     available_count: int
     printed_count: int
+    personal_available: int
+    personal_printed: int
+    shared_baskets: list[SharedBasketRow]
 
 
 @dataclass(frozen=True)
@@ -248,12 +261,22 @@ class PoolProductsResult:
     products: list[PoolProductRow]
 
 
+def _pool_linked_product_flags(
+    products_map: dict[uuid.UUID, list[PoolProductRow]],
+    pool_id: uuid.UUID,
+) -> tuple[int, bool]:
+    linked_products_count = len(products_map.get(pool_id, []))
+    return linked_products_count, linked_products_count >= 2
+
+
 @dataclass(frozen=True)
 class PoolListRow:
     id: uuid.UUID
     title: str
     gtin: str
     products: list[PoolProductRow]
+    linked_products_count: int
+    is_shared: bool
     available: int
     reserved: int
     printed: int
@@ -282,6 +305,8 @@ class PoolDetailRow:
     title: str
     gtin: str
     products: list[PoolProductRow]
+    linked_products_count: int
+    is_shared: bool
     available: int
     reserved: int
     printed: int
@@ -1080,26 +1105,63 @@ async def list_inventory(
             MarkingPool, MarkingPool.id == MarkingPoolProduct.pool_id
         ).where(MarkingPool.seller_id == seller_id)
     pool_links = (await session.execute(pool_links_stmt)).all()
+    linked_count: dict[uuid.UUID, int] = {}
+    pools_by_product: dict[uuid.UUID, list[uuid.UUID]] = {}
     for pool_id, product_id in pool_links:
-        if pool_id in available_by_pool:
-            available_by_product[product_id] = (
-                available_by_product.get(product_id, 0) + available_by_pool[pool_id]
+        linked_count[pool_id] = linked_count.get(pool_id, 0) + 1
+        pools_by_product.setdefault(product_id, []).append(pool_id)
+
+    shared_pool_ids = {pid for pid, cnt in linked_count.items() if cnt >= 2}
+    pool_meta: dict[uuid.UUID, MarkingPool] = {}
+    if shared_pool_ids:
+        pool_rows = (
+            await session.execute(
+                select(MarkingPool).where(
+                    MarkingPool.tenant_id == tenant_id,
+                    MarkingPool.id.in_(shared_pool_ids),
+                )
             )
-        if pool_id in printed_by_pool:
-            printed_by_product[product_id] = (
-                printed_by_product.get(product_id, 0) + printed_by_pool[pool_id]
-            )
+        ).scalars().all()
+        pool_meta = {p.id: p for p in pool_rows}
 
     rows: list[ProductMarkingInventoryRow] = []
     for p in products:
+        personal_available = available_by_product.get(p.id, 0)
+        personal_printed = printed_by_product.get(p.id, 0)
+        shared_baskets: list[SharedBasketRow] = []
+        for pool_id in pools_by_product.get(p.id, []):
+            products_in_pool = linked_count.get(pool_id, 0)
+            pool_available = available_by_pool.get(pool_id, 0)
+            pool_printed = printed_by_pool.get(pool_id, 0)
+            if products_in_pool == 1:
+                personal_available += pool_available
+                personal_printed += pool_printed
+            elif products_in_pool >= 2:
+                meta = pool_meta.get(pool_id)
+                if meta is None:
+                    continue
+                shared_baskets.append(
+                    SharedBasketRow(
+                        pool_id=pool_id,
+                        gtin=meta.gtin,
+                        title=meta.title,
+                        available=pool_available,
+                        printed=pool_printed,
+                        products_count=products_in_pool,
+                    )
+                )
+        shared_baskets.sort(key=lambda b: b.title)
         rows.append(
             ProductMarkingInventoryRow(
                 product_id=p.id,
                 sku_code=p.sku_code,
                 product_name=p.name,
                 requires_honest_sign=bool(p.requires_honest_sign),
-                available_count=available_by_product.get(p.id, 0),
-                printed_count=printed_by_product.get(p.id, 0),
+                available_count=personal_available,
+                printed_count=personal_printed,
+                personal_available=personal_available,
+                personal_printed=personal_printed,
+                shared_baskets=shared_baskets,
             )
         )
     rows.sort(key=lambda r: r.sku_code)
@@ -1942,12 +2004,15 @@ async def list_pools(
         available = _status_count(pool_counts, STATUS_AVAILABLE)
         consumption_7d = consumption_map.get(pool.id, 0)
         loaded, used = _pool_loaded_used(pool_counts)
+        linked_products_count, is_shared = _pool_linked_product_flags(products_map, pool.id)
         rows.append(
             PoolListRow(
                 id=pool.id,
                 title=pool.title,
                 gtin=pool.gtin,
                 products=products_map.get(pool.id, []),
+                linked_products_count=linked_products_count,
+                is_shared=is_shared,
                 available=available,
                 reserved=_status_count(pool_counts, STATUS_RESERVED),
                 printed=_status_count(pool_counts, STATUS_PRINTED),
@@ -1992,6 +2057,7 @@ async def get_pool_detail(
     )
     batches = list((await session.execute(batch_stmt)).scalars().all())
     products_map = await _products_by_pool(session, tenant_id, [pool_id])
+    linked_products_count, is_shared = _pool_linked_product_flags(products_map, pool_id)
 
     return PoolDetailRow(
         id=pool.id,
@@ -1999,6 +2065,8 @@ async def get_pool_detail(
         title=pool.title,
         gtin=pool.gtin,
         products=products_map.get(pool_id, []),
+        linked_products_count=linked_products_count,
+        is_shared=is_shared,
         available=available,
         reserved=_status_count(pool_counts, STATUS_RESERVED),
         printed=_status_count(pool_counts, STATUS_PRINTED),

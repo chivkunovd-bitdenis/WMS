@@ -3,8 +3,8 @@ import { expect, test } from '@playwright/test'
 import { waitForGetOk, waitForPostOk } from './api-waits'
 import { loginAsSeller, openFulfillmentRegistration } from './auth-flow'
 
-// TC-NEW-CROSS-004 — CROSS-04: «Догрузить» передаёт контекст пула в импорт.
-test('seller pool card upload prefills import with pool context', async ({ page }) => {
+// TC-NEW-CROSS-004 — product-first: «Догрузить» с карточки товара открывает импорт; файл с GTIN пула подхватывается.
+test('seller product card upload opens import and accepts pool GTIN file', async ({ page }) => {
   test.setTimeout(90_000)
   const adminEmail = `e2e-cross04-adm-${Date.now()}@example.com`
   const sellerEmail = `e2e-cross04-sl-${Date.now()}@example.com`
@@ -75,19 +75,29 @@ test('seller pool card upload prefills import with pool context', async ({ page 
   )
   expect(linkRes.ok()).toBeTruthy()
 
+  const seedCis = `01${gtin14}21${'S'.repeat(20)}0001`
+  const seedImp = await page.request.post(`${e2eApi}/operations/marking-codes/import`, {
+    headers: sellerAuth,
+    multipart: {
+      pools_json: JSON.stringify([{ title: poolTitle, product_ids: [productId] }]),
+      files: {
+        name: 'seed.csv',
+        mimeType: 'text/csv',
+        buffer: Buffer.from(`cis\n${seedCis}`),
+      },
+    },
+  })
+  expect(seedImp.ok()).toBeTruthy()
+
   await page.getByTestId('nav-seller-honest-sign').click()
   await expect(page.getByTestId('seller-honest-sign-page')).toBeVisible()
   await expect(page.getByTestId('seller-honest-sign-seller-dashboard')).toBeVisible()
 
-  const card = page.getByTestId(`seller-honest-sign-pool-card-${poolId}`)
-  await expect(card).toContainText(poolTitle)
+  const card = page.getByTestId(`seller-honest-sign-product-card-${productId}`)
+  await expect(card).toContainText(sku)
 
-  await card.getByTestId(`seller-honest-sign-pool-card-upload-${poolId}`).click()
+  await card.getByTestId(`seller-honest-sign-product-card-upload-${productId}`).click()
   await expect(page.getByTestId('seller-honest-sign-import-dialog')).toBeVisible()
-  const contextBanner = page.getByTestId('seller-honest-sign-import-pool-context')
-  await expect(contextBanner).toBeVisible()
-  await expect(contextBanner).toContainText(poolTitle)
-  await expect(contextBanner).toContainText(gtin)
 
   const cis = `01${gtin14}21${'C'.repeat(20)}0001`
   const previewWait = page.waitForResponse(
@@ -107,10 +117,12 @@ test('seller pool card upload prefills import with pool context', async ({ page 
   ])
 
   await expect(page.getByTestId(`seller-honest-sign-import-group-${gtin14}`)).toBeVisible()
-  await expect(
-    page.getByTestId(`seller-honest-sign-import-title-${gtin14}`).getByRole('textbox'),
-  ).toHaveValue(poolTitle)
-  await expect(
-    page.getByRole('checkbox', { name: `Привязать ${sku} к GTIN ${gtin14}` }),
-  ).toBeChecked()
+  await page
+    .getByTestId(`seller-honest-sign-import-group-${gtin14}`)
+    .getByRole('textbox', { name: 'Название пула' })
+    .fill(poolTitle)
+  const linkCheckbox = page.getByRole('checkbox', { name: `Привязать ${sku} к GTIN ${gtin14}` })
+  await expect(linkCheckbox).toBeVisible()
+  await linkCheckbox.check()
+  await expect(linkCheckbox).toBeChecked()
 })

@@ -51,7 +51,7 @@ test('FF honest sign pool card: tabs and CSV export', async ({ page }) => {
 
   await page.getByTestId('nav-ff-honest-sign').click()
   await selectHonestSignSeller(page, sellerId)
-  await page.getByTestId(`ff-honest-sign-pool-row-${poolId}`).click()
+  await page.goto(`/app/ff/honest-sign/pool/${poolId}`)
   await expect(page.getByTestId('ff-honest-sign-pool-page')).toBeVisible()
   await expect(page.getByTestId('ff-honest-sign-pool-overview')).toBeVisible()
 

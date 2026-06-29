@@ -20,6 +20,7 @@ from app.api.deps import (
 from app.core.roles import FULFILLMENT_ADMIN, FULFILLMENT_SELLER
 from app.db.session import get_db
 from app.models.print_template import USER_LAST_LAYOUT_NAME
+from app.models.product import Product
 from app.models.user import User
 from app.services import marking_code_service as mc_svc
 from app.services import print_template_service as pt_svc
@@ -70,6 +71,14 @@ class MarkingImportPreviewOut(BaseModel):
     duplicates_in_file: int
 
 
+class SharedBasketInventoryOut(BaseModel):
+    pool_id: str
+    gtin: str
+    title: str
+    available: int
+    products_count: int
+
+
 class MarkingInventoryRowOut(BaseModel):
     product_id: str
     sku_code: str
@@ -77,11 +86,43 @@ class MarkingInventoryRowOut(BaseModel):
     requires_honest_sign: bool
     available_count: int
     printed_count: int
+    personal_available: int
+    shared_baskets: list[SharedBasketInventoryOut]
 
 
 class MarkingInventoryOut(BaseModel):
     rows: list[MarkingInventoryRowOut]
     unlinked_available_count: int
+
+
+class MarkingOverviewProductOut(BaseModel):
+    id: str
+    sku_code: str
+    name: str
+    requires_honest_sign: bool
+
+
+class PersonalPoolOut(BaseModel):
+    pool_id: str
+    gtin: str
+    title: str
+    available: int
+    printed: int
+    loaded: int
+
+
+class SharedBasketOverviewOut(BaseModel):
+    pool_id: str
+    gtin: str
+    title: str
+    available: int
+    products_count: int
+
+
+class ProductMarkingOverviewOut(BaseModel):
+    product: MarkingOverviewProductOut
+    personal_pools: list[PersonalPoolOut]
+    shared_baskets: list[SharedBasketOverviewOut]
 
 
 class ProductMarkingCodeOut(BaseModel):
@@ -203,6 +244,8 @@ class PoolListItemOut(BaseModel):
     title: str
     gtin: str
     products: list[PoolProductOut]
+    is_shared: bool
+    linked_products_count: int
     available: int
     reserved: int
     printed: int
@@ -230,6 +273,7 @@ class PoolImportBatchOut(BaseModel):
 
 class PoolDetailOut(PoolListItemOut):
     seller_id: str
+    shared_with: list[PoolProductOut]
     import_batches: list[PoolImportBatchOut]
 
 
@@ -414,14 +458,88 @@ def _resolve_marking_seller_scope(
     raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="forbidden")
 
 
+def _shared_basket_inventory_out(row: mc_svc.SharedBasketRow) -> SharedBasketInventoryOut:
+    return SharedBasketInventoryOut(
+        pool_id=str(row.pool_id),
+        gtin=row.gtin,
+        title=row.title,
+        available=row.available,
+        products_count=row.products_count,
+    )
+
+
+async def _assert_product_marking_access(
+    user: User,
+    product: Product,
+    effective_seller_id: uuid.UUID | None,
+) -> None:
+    if user.role == FULFILLMENT_SELLER:
+        if effective_seller_id is None:
+            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="seller_not_linked")
+        if product.seller_id != effective_seller_id:
+            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="forbidden")
+    elif user.role != FULFILLMENT_ADMIN:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="forbidden")
+
+
+def _product_marking_overview_out(
+    product: Product,
+    pools: list[mc_svc.PoolListRow],
+) -> ProductMarkingOverviewOut:
+    product_id = product.id
+    personal_pools: list[PersonalPoolOut] = []
+    shared_baskets: list[SharedBasketOverviewOut] = []
+    for pool in pools:
+        linked_ids = [p.id for p in pool.products]
+        if product_id not in linked_ids:
+            continue
+        if len(linked_ids) == 1:
+            personal_pools.append(
+                PersonalPoolOut(
+                    pool_id=str(pool.id),
+                    gtin=pool.gtin,
+                    title=pool.title,
+                    available=pool.available,
+                    printed=pool.printed,
+                    loaded=pool.loaded,
+                )
+            )
+        elif len(linked_ids) >= 2:
+            shared_baskets.append(
+                SharedBasketOverviewOut(
+                    pool_id=str(pool.id),
+                    gtin=pool.gtin,
+                    title=pool.title,
+                    available=pool.available,
+                    products_count=len(linked_ids),
+                )
+            )
+    personal_pools.sort(key=lambda p: p.title)
+    shared_baskets.sort(key=lambda b: b.title)
+    return ProductMarkingOverviewOut(
+        product=MarkingOverviewProductOut(
+            id=str(product.id),
+            sku_code=product.sku_code,
+            name=product.name,
+            requires_honest_sign=bool(product.requires_honest_sign),
+        ),
+        personal_pools=personal_pools,
+        shared_baskets=shared_baskets,
+    )
+
+
+def _pool_product_out(product: mc_svc.PoolProductRow) -> PoolProductOut:
+    return PoolProductOut(id=str(product.id), sku_code=product.sku_code, name=product.name)
+
+
 def _pool_list_item_out(row: mc_svc.PoolListRow) -> PoolListItemOut:
     return PoolListItemOut(
         id=str(row.id),
         title=row.title,
         gtin=row.gtin,
-        products=[
-            PoolProductOut(id=str(p.id), sku_code=p.sku_code, name=p.name) for p in row.products
-        ],
+        products=[_pool_product_out(p) for p in row.products],
+        is_shared=row.is_shared,
+        linked_products_count=row.linked_products_count,
         available=row.available,
         reserved=row.reserved,
         printed=row.printed,
@@ -690,9 +808,10 @@ async def get_marking_pool(
         seller_id=str(detail.seller_id),
         title=detail.title,
         gtin=detail.gtin,
-        products=[
-            PoolProductOut(id=str(p.id), sku_code=p.sku_code, name=p.name) for p in detail.products
-        ],
+        products=[_pool_product_out(p) for p in detail.products],
+        is_shared=detail.is_shared,
+        linked_products_count=detail.linked_products_count,
+        shared_with=[_pool_product_out(p) for p in detail.products],
         available=detail.available,
         reserved=detail.reserved,
         printed=detail.printed,
@@ -933,11 +1052,31 @@ async def get_marking_inventory(
                 requires_honest_sign=r.requires_honest_sign,
                 available_count=r.available_count,
                 printed_count=r.printed_count,
+                personal_available=r.personal_available,
+                shared_baskets=[_shared_basket_inventory_out(b) for b in r.shared_baskets],
             )
             for r in result.rows
         ],
         unlinked_available_count=result.unlinked_available_count,
     )
+
+
+@router.get(
+    "/products/{product_id}/marking-overview",
+    response_model=ProductMarkingOverviewOut,
+)
+async def get_product_marking_overview(
+    product_id: uuid.UUID,
+    user: Annotated[User, Depends(get_current_user)],
+    session: Annotated[AsyncSession, Depends(get_db)],
+    effective_seller_id: Annotated[uuid.UUID | None, Depends(get_effective_seller_id)],
+) -> ProductMarkingOverviewOut:
+    product = await get_product(session, user.tenant_id, product_id)
+    if product is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="product_not_found")
+    await _assert_product_marking_access(user, product, effective_seller_id)
+    pools = await mc_svc.list_pools(session, user.tenant_id, seller_id=product.seller_id)
+    return _product_marking_overview_out(product, pools)
 
 
 @router.get("/products/{product_id}/codes", response_model=list[ProductMarkingCodeOut])
@@ -947,16 +1086,10 @@ async def list_product_marking_codes(
     session: Annotated[AsyncSession, Depends(get_db)],
     effective_seller_id: Annotated[uuid.UUID | None, Depends(get_effective_seller_id)],
 ) -> list[ProductMarkingCodeOut]:
-    if user.role == FULFILLMENT_SELLER:
-        if effective_seller_id is None:
-            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="seller_not_linked")
-        product = await get_product(session, user.tenant_id, product_id)
-        if product is None:
-            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="product_not_found")
-        if product.seller_id != effective_seller_id:
-            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="forbidden")
-    elif user.role != FULFILLMENT_ADMIN:
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="forbidden")
+    product = await get_product(session, user.tenant_id, product_id)
+    if product is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="product_not_found")
+    await _assert_product_marking_access(user, product, effective_seller_id)
 
     try:
         rows = await mc_svc.list_product_codes(session, user.tenant_id, product_id)
