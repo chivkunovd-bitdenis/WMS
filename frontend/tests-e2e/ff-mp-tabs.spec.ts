@@ -3,34 +3,44 @@ import type { APIRequestContext } from '@playwright/test'
 
 import { waitForGetOk, waitForPostOk } from './api-waits'
 import { openFulfillmentRegistration } from './auth-flow'
-import { fulfillInboundViaBoxScans } from './inbound-boxes-helpers'
 
-async function putawayInboundToLocation(
+async function postInboundLineToSorting(
   req: APIRequestContext,
   auth: { Authorization: string },
   baseIn: string,
   inboundId: string,
-  productId: string,
-  locId: string,
+  lineId: string,
   qty: number,
-  boxId?: string,
 ): Promise<void> {
-  let resolvedBoxId = boxId
-  if (!resolvedBoxId) {
-    const got = await req.get(`${baseIn}/${inboundId}`, { headers: auth })
-    expect(got.ok(), await got.text()).toBeTruthy()
-    const boxes = ((await got.json()) as { boxes: { id: string }[] }).boxes
-    resolvedBoxId = boxes[0]?.id
-  }
-  expect(resolvedBoxId).toBeTruthy()
-  const putawayRes = await req.post(`${baseIn}/${inboundId}/boxes/${resolvedBoxId}/putaway`, {
+  const patchActual = await req.patch(`${baseIn}/${inboundId}/lines/${lineId}/actual`, {
     headers: { ...auth, 'Content-Type': 'application/json' },
-    data: JSON.stringify({
-      storage_location_id: locId,
-      lines: [{ product_id: productId, quantity: qty }],
-    }),
+    data: JSON.stringify({ actual_qty: qty }),
   })
-  expect(putawayRes.ok(), await putawayRes.text()).toBeTruthy()
+  expect(patchActual.ok(), await patchActual.text()).toBeTruthy()
+  const verifyRes = await req.post(`${baseIn}/${inboundId}/verify`, { headers: auth })
+  expect(verifyRes.ok(), await verifyRes.text()).toBeTruthy()
+}
+
+async function postInboundLineToStorage(
+  req: APIRequestContext,
+  auth: { Authorization: string },
+  baseIn: string,
+  inboundId: string,
+  lineId: string,
+  qty: number,
+): Promise<void> {
+  const patchActual = await req.patch(`${baseIn}/${inboundId}/lines/${lineId}/actual`, {
+    headers: { ...auth, 'Content-Type': 'application/json' },
+    data: JSON.stringify({ actual_qty: qty }),
+  })
+  expect(patchActual.ok(), await patchActual.text()).toBeTruthy()
+  const verifyRes = await req.post(`${baseIn}/${inboundId}/verify`, { headers: auth })
+  expect(verifyRes.ok(), await verifyRes.text()).toBeTruthy()
+  const receiveRes = await req.post(`${baseIn}/${inboundId}/lines/${lineId}/receive`, {
+    headers: { ...auth, 'Content-Type': 'application/json' },
+    data: JSON.stringify({ quantity: qty }),
+  })
+  expect(receiveRes.ok(), await receiveRes.text()).toBeTruthy()
 }
 
 // TC-NEW-MP-007 — TASK-012: вкладки документа отгрузки на МП без потери контекста.
@@ -123,7 +133,7 @@ test('FF marketplace unload: tabs switch without losing document context', async
     data: JSON.stringify({ warehouse_id: whId }),
   })
   const inboundId = String(((await inbound.json()) as { id: string }).id)
-  await page.request.post(`${baseIn}/${inboundId}/lines`, {
+  const locLineRes = await page.request.post(`${baseIn}/${inboundId}/lines`, {
     headers: auth,
     data: JSON.stringify({
       product_id: productId,
@@ -131,44 +141,24 @@ test('FF marketplace unload: tabs switch without losing document context', async
       storage_location_id: locId,
     }),
   })
+  expect(locLineRes.ok()).toBeTruthy()
+  const locLineId = String(((await locLineRes.json()) as { id: string }).id)
   await page.request.post(`${baseIn}/${inboundId}/submit`, { headers: auth })
-  const primIn = await page.request.post(`${baseIn}/${inboundId}/primary-accept`, {
-    headers: auth,
-    data: { actual_box_count: 1 },
-  })
-  const primInBody = (await primIn.json()) as {
-    boxes: { id: string; internal_barcode: string }[]
-  }
-  await fulfillInboundViaBoxScans(page.request, auth, inboundId, primInBody.boxes, barcode, [5])
-  await page.request.post(`${baseIn}/${inboundId}/verify`, { headers: auth })
-  await putawayInboundToLocation(page.request, auth, baseIn, inboundId, productId, locId, 5)
+  await postInboundLineToStorage(page.request, auth, baseIn, inboundId, locLineId, 5)
 
   const inboundSort = await page.request.post(baseIn, {
     headers: auth,
     data: JSON.stringify({ warehouse_id: whId }),
   })
   const sortInboundId = String(((await inboundSort.json()) as { id: string }).id)
-  await page.request.post(`${baseIn}/${sortInboundId}/lines`, {
+  const sortLineRes = await page.request.post(`${baseIn}/${sortInboundId}/lines`, {
     headers: auth,
     data: JSON.stringify({ product_id: productId, expected_qty: 5 }),
   })
+  expect(sortLineRes.ok()).toBeTruthy()
+  const sortLineId = String(((await sortLineRes.json()) as { id: string }).id)
   await page.request.post(`${baseIn}/${sortInboundId}/submit`, { headers: auth })
-  const primSort = await page.request.post(`${baseIn}/${sortInboundId}/primary-accept`, {
-    headers: auth,
-    data: { actual_box_count: 1 },
-  })
-  const primSortBody = (await primSort.json()) as {
-    boxes: { id: string; internal_barcode: string }[]
-  }
-  await fulfillInboundViaBoxScans(
-    page.request,
-    auth,
-    sortInboundId,
-    primSortBody.boxes,
-    barcode,
-    [5],
-  )
-  await page.request.post(`${baseIn}/${sortInboundId}/verify`, { headers: auth })
+  await postInboundLineToSorting(page.request, auth, baseIn, sortInboundId, sortLineId, 5)
 
   const whs = await page.request.get(`${e2eApi}/operations/wb-mp-warehouses`, { headers: auth })
   const wbWid = Number(((await whs.json()) as { wb_warehouse_id: number }[])[0].wb_warehouse_id)
@@ -338,7 +328,7 @@ test('FF marketplace unload: no packaging progress banner on draft', async ({ pa
     data: JSON.stringify({ warehouse_id: whId }),
   })
   const inboundId = String(((await inbound.json()) as { id: string }).id)
-  await page.request.post(`${baseIn}/${inboundId}/lines`, {
+  const locLineRes = await page.request.post(`${baseIn}/${inboundId}/lines`, {
     headers: auth,
     data: JSON.stringify({
       product_id: productId,
@@ -346,44 +336,24 @@ test('FF marketplace unload: no packaging progress banner on draft', async ({ pa
       storage_location_id: locId,
     }),
   })
+  expect(locLineRes.ok()).toBeTruthy()
+  const locLineId = String(((await locLineRes.json()) as { id: string }).id)
   await page.request.post(`${baseIn}/${inboundId}/submit`, { headers: auth })
-  const primIn = await page.request.post(`${baseIn}/${inboundId}/primary-accept`, {
-    headers: auth,
-    data: { actual_box_count: 1 },
-  })
-  const primInBody = (await primIn.json()) as {
-    boxes: { id: string; internal_barcode: string }[]
-  }
-  await fulfillInboundViaBoxScans(page.request, auth, inboundId, primInBody.boxes, barcode, [5])
-  await page.request.post(`${baseIn}/${inboundId}/verify`, { headers: auth })
-  await putawayInboundToLocation(page.request, auth, baseIn, inboundId, productId, locId, 5)
+  await postInboundLineToStorage(page.request, auth, baseIn, inboundId, locLineId, 5)
 
   const inboundSort = await page.request.post(baseIn, {
     headers: auth,
     data: JSON.stringify({ warehouse_id: whId }),
   })
   const sortInboundId = String(((await inboundSort.json()) as { id: string }).id)
-  await page.request.post(`${baseIn}/${sortInboundId}/lines`, {
+  const sortLineRes = await page.request.post(`${baseIn}/${sortInboundId}/lines`, {
     headers: auth,
     data: JSON.stringify({ product_id: productId, expected_qty: 5 }),
   })
+  expect(sortLineRes.ok()).toBeTruthy()
+  const sortLineId = String(((await sortLineRes.json()) as { id: string }).id)
   await page.request.post(`${baseIn}/${sortInboundId}/submit`, { headers: auth })
-  const primSort = await page.request.post(`${baseIn}/${sortInboundId}/primary-accept`, {
-    headers: auth,
-    data: { actual_box_count: 1 },
-  })
-  const primSortBody = (await primSort.json()) as {
-    boxes: { id: string; internal_barcode: string }[]
-  }
-  await fulfillInboundViaBoxScans(
-    page.request,
-    auth,
-    sortInboundId,
-    primSortBody.boxes,
-    barcode,
-    [5],
-  )
-  await page.request.post(`${baseIn}/${sortInboundId}/verify`, { headers: auth })
+  await postInboundLineToSorting(page.request, auth, baseIn, sortInboundId, sortLineId, 5)
 
   const whs = await page.request.get(`${e2eApi}/operations/wb-mp-warehouses`, { headers: auth })
   const wbWid = Number(((await whs.json()) as { wb_warehouse_id: number }[])[0].wb_warehouse_id)
@@ -517,7 +487,7 @@ test('FF marketplace unload: main scan rejects product barcode', async ({ page }
     data: JSON.stringify({ warehouse_id: whId }),
   })
   const inboundId = String(((await inbound.json()) as { id: string }).id)
-  await page.request.post(`${baseIn}/${inboundId}/lines`, {
+  const locLineRes = await page.request.post(`${baseIn}/${inboundId}/lines`, {
     headers: auth,
     data: JSON.stringify({
       product_id: productId,
@@ -525,44 +495,24 @@ test('FF marketplace unload: main scan rejects product barcode', async ({ page }
       storage_location_id: locId,
     }),
   })
+  expect(locLineRes.ok()).toBeTruthy()
+  const locLineId = String(((await locLineRes.json()) as { id: string }).id)
   await page.request.post(`${baseIn}/${inboundId}/submit`, { headers: auth })
-  const primIn = await page.request.post(`${baseIn}/${inboundId}/primary-accept`, {
-    headers: auth,
-    data: { actual_box_count: 1 },
-  })
-  const primInBody = (await primIn.json()) as {
-    boxes: { id: string; internal_barcode: string }[]
-  }
-  await fulfillInboundViaBoxScans(page.request, auth, inboundId, primInBody.boxes, barcode, [5])
-  await page.request.post(`${baseIn}/${inboundId}/verify`, { headers: auth })
-  await putawayInboundToLocation(page.request, auth, baseIn, inboundId, productId, locId, 5)
+  await postInboundLineToStorage(page.request, auth, baseIn, inboundId, locLineId, 5)
 
   const inboundSort = await page.request.post(baseIn, {
     headers: auth,
     data: JSON.stringify({ warehouse_id: whId }),
   })
   const sortInboundId = String(((await inboundSort.json()) as { id: string }).id)
-  await page.request.post(`${baseIn}/${sortInboundId}/lines`, {
+  const sortLineRes = await page.request.post(`${baseIn}/${sortInboundId}/lines`, {
     headers: auth,
     data: JSON.stringify({ product_id: productId, expected_qty: 5 }),
   })
+  expect(sortLineRes.ok()).toBeTruthy()
+  const sortLineId = String(((await sortLineRes.json()) as { id: string }).id)
   await page.request.post(`${baseIn}/${sortInboundId}/submit`, { headers: auth })
-  const primSort = await page.request.post(`${baseIn}/${sortInboundId}/primary-accept`, {
-    headers: auth,
-    data: { actual_box_count: 1 },
-  })
-  const primSortBody = (await primSort.json()) as {
-    boxes: { id: string; internal_barcode: string }[]
-  }
-  await fulfillInboundViaBoxScans(
-    page.request,
-    auth,
-    sortInboundId,
-    primSortBody.boxes,
-    barcode,
-    [5],
-  )
-  await page.request.post(`${baseIn}/${sortInboundId}/verify`, { headers: auth })
+  await postInboundLineToSorting(page.request, auth, baseIn, sortInboundId, sortLineId, 5)
 
   const whs = await page.request.get(`${e2eApi}/operations/wb-mp-warehouses`, { headers: auth })
   const wbWid = Number(((await whs.json()) as { wb_warehouse_id: number }[])[0].wb_warehouse_id)
@@ -700,7 +650,7 @@ test('TC-NEW-OUT-FE-02: shipment table columns no early red', async ({ page }) =
     data: JSON.stringify({ warehouse_id: whId }),
   })
   const inboundId = String(((await inbound.json()) as { id: string }).id)
-  await page.request.post(`${baseIn}/${inboundId}/lines`, {
+  const lineRes = await page.request.post(`${baseIn}/${inboundId}/lines`, {
     headers: auth,
     data: JSON.stringify({
       product_id: productId,
@@ -708,18 +658,10 @@ test('TC-NEW-OUT-FE-02: shipment table columns no early red', async ({ page }) =
       storage_location_id: locId,
     }),
   })
+  expect(lineRes.ok()).toBeTruthy()
+  const lineId = String(((await lineRes.json()) as { id: string }).id)
   await page.request.post(`${baseIn}/${inboundId}/submit`, { headers: auth })
-  const primIn = await page.request.post(`${baseIn}/${inboundId}/primary-accept`, {
-    headers: auth,
-    data: { actual_box_count: 1 },
-  })
-  const primInBody = (await primIn.json()) as {
-    boxes: { id: string; internal_barcode: string }[]
-  }
-  await fulfillInboundViaBoxScans(page.request, auth, inboundId, primInBody.boxes, barcode, [5])
-  const verifyRes = await page.request.post(`${baseIn}/${inboundId}/verify`, { headers: auth })
-  expect(verifyRes.ok(), await verifyRes.text()).toBeTruthy()
-  await putawayInboundToLocation(page.request, auth, baseIn, inboundId, productId, locId, 5)
+  await postInboundLineToStorage(page.request, auth, baseIn, inboundId, lineId, 5)
 
   const whs = await page.request.get(`${e2eApi}/operations/wb-mp-warehouses`, { headers: auth })
   const wbWid = Number(((await whs.json()) as { wb_warehouse_id: number }[])[0].wb_warehouse_id)
