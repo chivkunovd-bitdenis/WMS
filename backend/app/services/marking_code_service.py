@@ -2366,7 +2366,7 @@ async def list_ledger(
     limit: int,
     offset: int,
 ) -> LedgerPage:
-    stmt = _ledger_filtered_stmt(
+    base_stmt = _ledger_filtered_stmt(
         tenant_id,
         seller_id=seller_id,
         pool_id=pool_id,
@@ -2377,7 +2377,12 @@ async def list_ledger(
         date_from=date_from,
         date_to=date_to,
     )
-    stmt = stmt.order_by(MarkingCodeEvent.created_at.desc()).limit(_LEDGER_EXPORT_MAX)
+    count_stmt = select(func.count()).select_from(base_stmt.subquery())
+    raw_total = int((await session.execute(count_stmt)).scalar_one())
+    if raw_total > _LEDGER_EXPORT_MAX:
+        raise MarkingCodeServiceError("ledger_too_large")
+
+    stmt = base_stmt.order_by(MarkingCodeEvent.created_at.desc())
     raw_rows = cast(list[_LedgerRawRow], list((await session.execute(stmt)).all()))
     collapsed = _collapse_ledger_rows(raw_rows)
     total = len(collapsed)
