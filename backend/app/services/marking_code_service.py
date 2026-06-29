@@ -1151,6 +1151,15 @@ async def list_inventory(
                     )
                 )
         shared_baskets.sort(key=lambda b: b.title)
+        has_pool_link = bool(pools_by_product.get(p.id))
+        is_cz_relevant = (
+            bool(p.requires_honest_sign)
+            or personal_available > 0
+            or bool(shared_baskets)
+            or has_pool_link
+        )
+        if not is_cz_relevant:
+            continue
         rows.append(
             ProductMarkingInventoryRow(
                 product_id=p.id,
