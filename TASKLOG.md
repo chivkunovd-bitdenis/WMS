@@ -4,7 +4,7 @@
 
 - What changed: `inbound-boxes-helpers.ts` — `fulfillInboundViaBoxScans` fallback create on closed box; `v2InboundBoxIntakeUi` skip open if box already open; legacy primary-accept tests wait PATCH+POST /boxes. ~25 e2e specs migrated from `primary-accept` to `beginInboundReceivingWithBoxes`; `App.tsx` primary accept → PATCH actual + POST /boxes; `InboundScreen.tsx` statuses `receiving`/`sorting`; backend tests use `effective_actual_qty`.
 - What did NOT change: FF inbound UI flow (IN-FE-01); API `/verify` alias kept for legacy callers.
-- Verification: backend `ruff+mypy+pytest` 303 passed; frontend `npm run test:e2e` 93 passed (~7m).
+- Verification: backend `ruff+mypy+pytest` 303 passed; frontend `npm run test:e2e` 93 passed (~7m); commit `c27dd0a`.
 
 ## TASK-085 — 2026-06-29 — REV-SORT-FE-02: distribution-lines load error handling
 
