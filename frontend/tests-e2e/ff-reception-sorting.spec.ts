@@ -98,11 +98,12 @@ test('ff verify posts to sorting zone; sorting queue and product columns', async
   await page.getByTestId('ff-product-label-cancel').click();
 
   const productCard = page.getByTestId('ff-sorting-product-card').first();
-  await productCard.getByTestId('ff-sorting-add-cell').click();
+  await expect(productCard.getByTestId('ff-sorting-cell-row')).toHaveCount(1);
   const cellRow = productCard.getByTestId('ff-sorting-cell-row').first();
+  await expect(cellRow.getByTestId('ff-sorting-cell-source')).toContainText('Короб');
   await cellRow.getByTestId('ff-sorting-cell-location').click();
   await page.getByRole('option', { name: /STORE-1/ }).click();
-  await cellRow.getByTestId('ff-sorting-cell-qty').fill('4');
+  await expect(cellRow.getByTestId('ff-sorting-cell-qty')).toHaveValue('4');
   await Promise.all([
     waitForPostOk(page, base, (u) => u.includes('/distribution-complete')),
     page.getByTestId('ff-sorting-apply').click(),
