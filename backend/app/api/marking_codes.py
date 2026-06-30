@@ -25,6 +25,7 @@ from app.models.user import User
 from app.services import marking_code_service as mc_svc
 from app.services import print_template_service as pt_svc
 from app.services.catalog_service import get_product
+from app.services.marking_label_artifact_service import pdf_bytes_to_png
 
 router = APIRouter(
     prefix="/operations/marking-codes",
@@ -130,6 +131,13 @@ class ProductMarkingCodeOut(BaseModel):
     cis_code: str
     status: str
     created_at: str
+    has_label_artifact: bool = False
+
+
+class PrintedCodeOut(BaseModel):
+    id: str
+    cis_code: str
+    has_label_artifact: bool
 
 
 class PrintMarkingCodesIn(BaseModel):
@@ -149,6 +157,7 @@ class PrintMarkingCodesOut(BaseModel):
     codes: list[str]
     layout: PrintLayoutOut
     shortage: int | None = None
+    printed_codes: list[PrintedCodeOut] = Field(default_factory=list)
 
 
 class ScanPrintMarkingIn(BaseModel):
@@ -366,6 +375,26 @@ def _layout_out(layout: pt_svc.PrintLayout) -> PrintLayoutOut:
 
 def _layout_in_to_dict(layout: PrintLayoutOut) -> dict[str, object]:
     return {"units": [{"block": u.block, "copies": u.copies} for u in layout.units]}
+
+
+def _print_marking_codes_out(result: mc_svc.PrintMarkingCodesResult) -> PrintMarkingCodesOut:
+    return PrintMarkingCodesOut(
+        packaging_task_line_id=str(result.packaging_task_line_id),
+        quantity=result.quantity,
+        duplicate_copies=result.duplicate_copies,
+        is_reprint=result.is_reprint,
+        codes=result.codes,
+        layout=_layout_out(result.layout),
+        shortage=result.shortage,
+        printed_codes=[
+            PrintedCodeOut(
+                id=str(row.id),
+                cis_code=row.cis_code,
+                has_label_artifact=row.has_label_artifact,
+            )
+            for row in result.printed_codes
+        ],
+    )
 
 
 def _print_template_out(row: pt_svc.PrintTemplateRow) -> PrintTemplateOut:
@@ -1103,9 +1132,37 @@ async def list_product_marking_codes(
             cis_code=r.cis_code,
             status=r.status,
             created_at=r.created_at.isoformat(),
+            has_label_artifact=r.has_label_artifact,
         )
         for r in rows
     ]
+
+
+@router.get("/codes/{code_id}/label-artifact")
+async def get_marking_code_label_artifact(
+    code_id: uuid.UUID,
+    user: Annotated[User, Depends(require_packaging_access)],
+    session: Annotated[AsyncSession, Depends(get_db)],
+    format: Annotated[str, Query(pattern="^(pdf|png)$")] = "png",
+) -> Response:
+    from app.models.marking_code import MarkingCode
+
+    code = await session.get(MarkingCode, code_id)
+    if code is None or code.tenant_id != user.tenant_id:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="code_not_found")
+    pdf_bytes = code.label_artifact_pdf
+    if not pdf_bytes:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="label_artifact_missing")
+    if format == "pdf":
+        return Response(content=pdf_bytes, media_type="application/pdf")
+    try:
+        png_bytes = pdf_bytes_to_png(pdf_bytes)
+    except (RuntimeError, ValueError) as exc:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="label_artifact_render_failed",
+        ) from exc
+    return Response(content=png_bytes, media_type="image/png")
 
 
 @router.get("/print-templates/resolve", response_model=PrintTemplateOut)
@@ -1266,15 +1323,7 @@ async def scan_print_marking_codes(
         )
     except mc_svc.MarkingCodeServiceError as exc:
         raise _http_from_mc_error(exc) from exc
-    return PrintMarkingCodesOut(
-        packaging_task_line_id=str(result.packaging_task_line_id),
-        quantity=result.quantity,
-        duplicate_copies=result.duplicate_copies,
-        is_reprint=result.is_reprint,
-        codes=result.codes,
-        layout=_layout_out(result.layout),
-        shortage=result.shortage,
-    )
+    return _print_marking_codes_out(result)
 
 
 @router.post(
@@ -1387,15 +1436,7 @@ async def print_marking_codes_for_line(
             )
         except pt_svc.PrintTemplateServiceError as exc:
             raise _http_from_pt_error(exc) from exc
-    return PrintMarkingCodesOut(
-        packaging_task_line_id=str(result.packaging_task_line_id),
-        quantity=result.quantity,
-        duplicate_copies=result.duplicate_copies,
-        is_reprint=result.is_reprint,
-        codes=result.codes,
-        layout=_layout_out(result.layout),
-        shortage=result.shortage,
-    )
+    return _print_marking_codes_out(result)
 
 
 def _print_all_out(result: mc_svc.PrintAllMarkingCodesResult) -> PrintAllMarkingOut:

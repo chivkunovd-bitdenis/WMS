@@ -38,4 +38,3 @@ backend/alembic_autogen.db
 # Cursor queue autopilot (local only)
 .cursor/state/
 .cursor/wt/
-

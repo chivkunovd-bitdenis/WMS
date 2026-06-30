@@ -75,7 +75,6 @@ class Settings(BaseSettings):
             "(in addition to users.can_manage_seller_shops and built-in email markers)."
         ),
     )
-
     @field_validator("database_url", mode="before")
     @classmethod
     def _normalize_database_url(cls, value: str) -> str:

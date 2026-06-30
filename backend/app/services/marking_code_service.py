@@ -172,6 +172,7 @@ class ProductMarkingCodeRow:
     cis_code: str
     status: str
     created_at: datetime
+    has_label_artifact: bool
 
 
 @dataclass(frozen=True)
@@ -198,6 +199,13 @@ class ProductMarkingInventoryRow:
 
 
 @dataclass(frozen=True)
+class PrintedCodeInfo:
+    id: uuid.UUID
+    cis_code: str
+    has_label_artifact: bool
+
+
+@dataclass(frozen=True)
 class PrintMarkingCodesResult:
     packaging_task_line_id: uuid.UUID
     quantity: int
@@ -206,6 +214,7 @@ class PrintMarkingCodesResult:
     codes: list[str]
     layout: PrintLayout
     shortage: int | None = None
+    printed_codes: tuple[PrintedCodeInfo, ...] = ()
 
 
 @dataclass(frozen=True)
@@ -233,6 +242,17 @@ class PrintAllMarkingCodesResult:
 def cz_copies_from_layout(layout: PrintLayout) -> int:
     total = sum(unit.copies for unit in layout.units if unit.block == LAYOUT_BLOCK_CZ)
     return total if total > 0 else 1
+
+
+def _printed_code_infos(codes: list[MarkingCode]) -> tuple[PrintedCodeInfo, ...]:
+    return tuple(
+        PrintedCodeInfo(
+            id=code.id,
+            cis_code=code.cis_code,
+            has_label_artifact=bool(code.label_artifact_pdf),
+        )
+        for code in codes
+    )
 
 
 def resolve_print_layout(
@@ -467,45 +487,70 @@ def _parse_csv_rows(content: bytes) -> list[dict[str, str]]:
     return []
 
 
-def _parse_pdf_text_rows(content: bytes) -> list[dict[str, str]]:
+def _extract_cis_codes_from_text(text: str, seen: set[str]) -> list[str]:
+    found: list[str] = []
+    for match in _CIS_CANDIDATE_RE.finditer(text):
+        cis = normalize_cis(match.group(0))
+        if cis is None or cis in seen:
+            continue
+        seen.add(cis)
+        found.append(cis)
+    if text.strip():
+        for line in text.splitlines():
+            cis = normalize_cis(line)
+            if cis is None or cis in seen:
+                continue
+            if len(cis) >= 20:
+                seen.add(cis)
+                found.append(cis)
+    return found
+
+
+def _single_page_pdf_bytes(doc: object, page_index: int) -> bytes:
+    import fitz  # pymupdf
+
+    src = cast(fitz.Document, doc)
+    single = fitz.open()
+    try:
+        single.insert_pdf(src, from_page=page_index, to_page=page_index)
+        return cast(bytes, single.tobytes())
+    finally:
+        single.close()
+
+
+def _parse_pdf_label_rows(content: bytes) -> list[dict[str, str | bytes]]:
     try:
         import fitz  # pymupdf
     except ImportError as exc:
         raise MarkingCodeServiceError("pdf_support_unavailable") from exc
-    rows: list[dict[str, str]] = []
+    rows: list[dict[str, str | bytes]] = []
     seen: set[str] = set()
     doc = fitz.open(stream=content, filetype="pdf")
     try:
-        for page in doc:
-            text = page.get_text("text")
-            for match in _CIS_CANDIDATE_RE.finditer(text):
-                cis = normalize_cis(match.group(0))
-                if cis is None or cis in seen:
-                    continue
-                seen.add(cis)
+        for page_index in range(doc.page_count):
+            page_pdf = _single_page_pdf_bytes(doc, page_index)
+            text = doc[page_index].get_text("text")
+            for cis in _extract_cis_codes_from_text(text, seen):
                 gtin = extract_gtin_from_cis(cis) or ""
-                rows.append({"cis": cis, "gtin": gtin, "sku": ""})
-            if not text.strip():
-                continue
-            for line in text.splitlines():
-                cis = normalize_cis(line)
-                if cis is None or cis in seen:
-                    continue
-                if len(cis) >= 20:
-                    seen.add(cis)
-                    gtin = extract_gtin_from_cis(cis) or ""
-                    rows.append({"cis": cis, "gtin": gtin, "sku": ""})
+                rows.append({"cis": cis, "gtin": gtin, "sku": "", "label_pdf": page_pdf})
     finally:
         doc.close()
     return rows
 
 
-def parse_import_file(filename: str, content: bytes) -> list[dict[str, str]]:
+def _parse_pdf_text_rows(content: bytes) -> list[dict[str, str]]:
+    return [
+        {"cis": str(row["cis"]), "gtin": str(row["gtin"]), "sku": str(row.get("sku") or "")}
+        for row in _parse_pdf_label_rows(content)
+    ]
+
+
+def parse_import_file(filename: str, content: bytes) -> list[dict[str, str | bytes]]:
     lower = filename.lower()
     if lower.endswith(".pdf"):
-        return _parse_pdf_text_rows(content)
+        return _parse_pdf_label_rows(content)
     if lower.endswith((".csv", ".txt", ".tsv")):
-        return _parse_csv_rows(content)
+        return [{**row, "label_pdf": b""} for row in _parse_csv_rows(content)]
     raise MarkingCodeServiceError("unsupported_file_type")
 
 
@@ -725,14 +770,15 @@ async def create_marking_pool(
 
 
 def _group_cis_codes_from_rows(
-    parsed_rows: list[dict[str, str]],
-) -> tuple[dict[str, list[str]], int, int]:
+    parsed_rows: list[dict[str, str | bytes]],
+) -> tuple[dict[str, list[str]], int, int, dict[str, bytes]]:
     seen_in_upload: set[str] = set()
     by_gtin: dict[str, list[str]] = {}
+    label_pdf_by_cis: dict[str, bytes] = {}
     invalid_count = 0
     duplicate_count = 0
     for row in parsed_rows:
-        cis = normalize_cis(row.get("cis", ""))
+        cis = normalize_cis(str(row.get("cis", "")))
         if cis is None:
             invalid_count += 1
             continue
@@ -740,12 +786,15 @@ def _group_cis_codes_from_rows(
             duplicate_count += 1
             continue
         seen_in_upload.add(cis)
-        gtin = (row.get("gtin") or "").strip() or extract_gtin_from_cis(cis)
+        gtin = str(row.get("gtin") or "").strip() or extract_gtin_from_cis(cis)
         if not gtin:
             invalid_count += 1
             continue
         by_gtin.setdefault(gtin, []).append(cis)
-    return by_gtin, invalid_count, duplicate_count
+        label_pdf = row.get("label_pdf")
+        if isinstance(label_pdf, bytes) and label_pdf and cis not in label_pdf_by_cis:
+            label_pdf_by_cis[cis] = label_pdf
+    return by_gtin, invalid_count, duplicate_count, label_pdf_by_cis
 
 
 async def _try_insert_imported_code(
@@ -757,6 +806,7 @@ async def _try_insert_imported_code(
     import_batch_id: uuid.UUID,
     cis_code: str,
     gtin: str,
+    label_pdf: bytes | None = None,
 ) -> MarkingCode | None:
     conn = await session.connection()
     insert_cls = sqlite_insert if conn.dialect.name == "sqlite" else pg_insert
@@ -783,6 +833,8 @@ async def _try_insert_imported_code(
     code = await session.get(MarkingCode, inserted_id)
     if code is None:
         raise MarkingCodeServiceError("import_insert_failed")
+    if label_pdf:
+        code.label_artifact_pdf = label_pdf
     return code
 
 
@@ -799,7 +851,7 @@ async def preview_marking_import(
     if not files:
         raise MarkingCodeServiceError("empty_file")
 
-    parsed_rows: list[dict[str, str]] = []
+    parsed_rows: list[dict[str, str | bytes]] = []
     for filename, content in files:
         try:
             rows = parse_import_file(filename, content)
@@ -812,7 +864,8 @@ async def preview_marking_import(
     if not parsed_rows:
         raise MarkingCodeServiceError("empty_file")
 
-    by_gtin, invalid_count, duplicates_in_file = _group_cis_codes_from_rows(parsed_rows)
+    grouped = _group_cis_codes_from_rows(parsed_rows)
+    by_gtin, invalid_count, duplicates_in_file, _label_pdfs = grouped
     if not by_gtin:
         raise MarkingCodeServiceError("no_valid_codes")
 
@@ -935,7 +988,7 @@ async def import_marking_codes(
     if not files:
         raise MarkingCodeServiceError("empty_file")
 
-    parsed_rows: list[dict[str, str]] = []
+    parsed_rows: list[dict[str, str | bytes]] = []
     filenames: list[str] = []
     for filename, content in files:
         try:
@@ -971,7 +1024,9 @@ async def import_marking_codes(
     )
     assert document_number is not None
 
-    by_gtin, invalid_count, duplicate_count = _group_cis_codes_from_rows(parsed_rows)
+    by_gtin, invalid_count, duplicate_count, label_pdf_by_cis = _group_cis_codes_from_rows(
+        parsed_rows
+    )
 
     pool_results: list[PoolImportResultRow] = []
     total_accepted = 0
@@ -1003,6 +1058,7 @@ async def import_marking_codes(
                 import_batch_id=batch.id,
                 cis_code=cis,
                 gtin=gtin,
+                label_pdf=label_pdf_by_cis.get(cis),
             )
             if code is None:
                 pool_duplicates += 1
@@ -1208,6 +1264,7 @@ async def list_product_codes(
             cis_code=code.cis_code,
             status=code.status,
             created_at=code.created_at,
+            has_label_artifact=bool(code.label_artifact_pdf),
         )
         for code in codes
     ]
@@ -1374,6 +1431,7 @@ async def print_codes_for_packaging_line(
             is_reprint=True,
             codes=[c.cis_code for c in codes],
             layout=print_layout,
+            printed_codes=_printed_code_infos(codes),
         )
 
     if int(line.qty_marking_printed) > 0 and units_to_print is None:
@@ -1473,14 +1531,16 @@ async def print_codes_for_packaging_line(
     else:
         await session.flush()
 
+    printed_slice = codes[:quantity]
     return PrintMarkingCodesResult(
         packaging_task_line_id=line_id,
         quantity=quantity,
         duplicate_copies=event_copies,
         is_reprint=False,
-        codes=[c.cis_code for c in codes[:quantity]],
+        codes=[c.cis_code for c in printed_slice],
         layout=print_layout,
         shortage=shortage if shortage > 0 else None,
+        printed_codes=_printed_code_infos(printed_slice),
     )
 
 

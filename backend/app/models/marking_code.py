@@ -4,7 +4,17 @@ import uuid
 from datetime import datetime
 from typing import TYPE_CHECKING
 
-from sqlalchemy import DateTime, ForeignKey, Integer, String, Text, UniqueConstraint, Uuid, func
+from sqlalchemy import (
+    DateTime,
+    ForeignKey,
+    Integer,
+    LargeBinary,
+    String,
+    Text,
+    UniqueConstraint,
+    Uuid,
+    func,
+)
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.models.base import Base
@@ -208,6 +218,7 @@ class MarkingCode(Base):
     )
     cis_code: Mapped[str] = mapped_column(String(512), nullable=False)
     gtin: Mapped[str | None] = mapped_column(String(32), nullable=True)
+    label_artifact_pdf: Mapped[bytes | None] = mapped_column(LargeBinary, nullable=True)
     serial: Mapped[str | None] = mapped_column(String(128), nullable=True)
     crypto_tail: Mapped[str | None] = mapped_column(String(256), nullable=True)
     status: Mapped[str] = mapped_column(String(32), nullable=False, default=STATUS_AVAILABLE)
