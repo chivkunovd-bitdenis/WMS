@@ -389,7 +389,7 @@ async def scan_product_into_box(
     if box.intake_closed_at is not None:
         raise InboundIntakeBoxError("box_closed")
     if box.intake_opened_at is None:
-        raise InboundIntakeBoxError("no_open_box")
+        box.intake_opened_at = datetime.now(UTC)
 
     idx = await _barcode_index_for_request(session, tenant_id, req)
     product_id = idx.get(raw) or idx.get(raw.upper())
@@ -447,7 +447,7 @@ async def set_product_quantity_in_open_box(
     if box.intake_closed_at is not None:
         raise InboundIntakeBoxError("box_closed")
     if box.intake_opened_at is None:
-        raise InboundIntakeBoxError("no_open_box")
+        box.intake_opened_at = datetime.now(UTC)
 
     expected = await _expected_qty(session, req.id, product_id)
     if expected <= 0:
@@ -500,6 +500,29 @@ async def close_box_intake(
     await _sync_line_actuals_from_box_totals(session, req_loaded)
     await session.commit()
     return await _load_box(session, box.id)
+
+
+async def delete_empty_box(
+    session: AsyncSession,
+    tenant_id: uuid.UUID,
+    request_id: uuid.UUID,
+    box_id: uuid.UUID,
+) -> None:
+    await _get_request_for_intake(session, tenant_id, request_id)
+    box = await session.get(
+        InboundIntakeBox,
+        box_id,
+        options=[selectinload(InboundIntakeBox.lines)],
+    )
+    if box is None or box.request_id != request_id or box.tenant_id != tenant_id:
+        raise InboundIntakeBoxError("box_not_found")
+    if box.intake_closed_at is not None:
+        raise InboundIntakeBoxError("box_closed")
+    total_qty = sum(int(ln.quantity) for ln in box.lines)
+    if total_qty > 0:
+        raise InboundIntakeBoxError("box_not_empty")
+    await session.delete(box)
+    await session.commit()
 
 
 async def assert_no_open_intake_box(

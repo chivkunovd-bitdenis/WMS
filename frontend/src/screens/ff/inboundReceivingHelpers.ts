@@ -84,5 +84,8 @@ export function scanErrorMessageRu(code: string): string {
   if (code === 'open_box_exists') {
     return 'Сначала закройте открытый короб.'
   }
+  if (code === 'box_not_empty') {
+    return 'Нельзя удалить короб с товарами.'
+  }
   return code
 }

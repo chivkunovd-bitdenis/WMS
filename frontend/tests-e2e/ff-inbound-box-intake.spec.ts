@@ -55,6 +55,7 @@ test.describe('FF inbound box piece intake', () => {
     await openFfInboundDoc(page, seed, { skipLogin: true });
 
     await page.getByTestId('ff-inbound-add-to-box').click();
+    await page.getByTestId('ff-inbound-box-open').first().getByRole('button', { name: 'Наполнить' }).click();
     await expect(page.getByTestId('ff-inbound-box-add-dialog')).toBeVisible();
     await page.getByTestId('ff-inbound-box-add-manual-edit').first().click();
     const qtyInput = page.getByTestId('ff-inbound-box-add-manual-qty').first();
@@ -184,11 +185,11 @@ test('STAB-IN-FE-03 box add modal product row and target box qty', async ({ page
       waitForPostOk(page, INBOUND_API, (u) => u.endsWith('/boxes')),
       page.getByTestId('ff-inbound-add-to-box').click(),
     ]);
-    await page.getByTestId('ff-inbound-box-add-close').click();
+    await expect(page.getByTestId('ff-inbound-box-add-dialog')).toHaveCount(0);
   }
   await expect(page.getByTestId('ff-inbound-box-open')).toHaveCount(2);
 
-  await page.getByTestId('ff-inbound-box-open').nth(1).getByRole('button', { name: 'Добавить товары' }).click();
+  await page.getByTestId('ff-inbound-box-open').nth(1).getByRole('button', { name: 'Наполнить' }).click();
   await expect(page.getByTestId('ff-inbound-box-add-dialog')).toBeVisible();
   await expect(page.getByTestId('ff-inbound-box-add-box-label')).toContainText('Короб № 2');
 
