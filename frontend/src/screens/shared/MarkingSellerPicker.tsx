@@ -1,4 +1,4 @@
-import { Autocomplete, TextField } from '@mui/material'
+import { Autocomplete, Skeleton, TextField } from '@mui/material'
 import { useMemo } from 'react'
 
 export type MarkingSellerOption = { id: string; name: string }
@@ -8,6 +8,7 @@ type Props = {
   selectedSellerId: string | null
   onSelectedSellerIdChange: (id: string | null) => void
   testIdPrefix: string
+  loading?: boolean
 }
 
 export function MarkingSellerPicker({
@@ -15,14 +16,36 @@ export function MarkingSellerPicker({
   selectedSellerId,
   onSelectedSellerIdChange,
   testIdPrefix,
+  loading = false,
 }: Props) {
   const selectedSeller = useMemo(
     () => sellers.find((s) => s.id === selectedSellerId) ?? null,
     [sellers, selectedSellerId],
   )
 
+  if (loading) {
+    return (
+      <Skeleton
+        variant="rounded"
+        height={40}
+        sx={{ minWidth: 260, maxWidth: 420, flex: { sm: '0 0 280px' } }}
+        data-testid={`${testIdPrefix}-seller-picker-loading`}
+      />
+    )
+  }
+
   if (sellers.length === 0) {
-    return null
+    return (
+      <TextField
+        size="small"
+        label="Селлер"
+        value=""
+        placeholder="Нет селлеров"
+        disabled
+        sx={{ minWidth: 260, maxWidth: 420, flex: { sm: '0 0 280px' } }}
+        data-testid={`${testIdPrefix}-seller-picker`}
+      />
+    )
   }
 
   return (
@@ -47,7 +70,7 @@ export function MarkingSellerPicker({
           data-testid={`${testIdPrefix}-seller-picker`}
         />
       )}
-      sx={{ maxWidth: 420 }}
+      sx={{ minWidth: 260, maxWidth: 420, flex: { sm: '0 0 280px' } }}
     />
   )
 }

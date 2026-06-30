@@ -360,15 +360,6 @@ export function HonestSignScreen({
         description="Остатки кодов маркировки по товарам: личный запас и общие корзины на несколько SKU."
       />
 
-      {sellerIdRequiredForImport ? (
-        <MarkingSellerPicker
-          sellers={sellers}
-          selectedSellerId={selectedSellerId}
-          onSelectedSellerIdChange={(id) => onSelectedSellerIdChange?.(id)}
-          testIdPrefix={testIdPrefix}
-        />
-      ) : null}
-
       {error ? (
         <Alert severity="error" data-testid={`${testIdPrefix}-error`}>
           {error}
@@ -520,16 +511,27 @@ export function HonestSignScreen({
       </Stack>
 
       <Paper variant="outlined" sx={{ p: 2 }}>
-        <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1.5} sx={{ alignItems: { sm: 'center' } }}>
-          <TextField
-            size="small"
-            label="Поиск"
-            placeholder="Артикул или название"
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            sx={{ flex: 1 }}
-            data-testid={`${testIdPrefix}-search`}
-          />
+        <Stack spacing={1.5}>
+          <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1.5} sx={{ alignItems: { sm: 'center' } }}>
+            {sellerIdRequiredForImport ? (
+              <MarkingSellerPicker
+                sellers={sellers}
+                selectedSellerId={selectedSellerId}
+                onSelectedSellerIdChange={(id) => onSelectedSellerIdChange?.(id)}
+                testIdPrefix={testIdPrefix}
+              />
+            ) : null}
+            <TextField
+              size="small"
+              label="Поиск"
+              placeholder="Артикул или название"
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              sx={{ flex: 1, minWidth: 0 }}
+              data-testid={`${testIdPrefix}-search`}
+            />
+          </Stack>
+          <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1.5} sx={{ alignItems: { sm: 'center' } }}>
           <ToggleButtonGroup
             exclusive
             size="small"
@@ -541,26 +543,26 @@ export function HonestSignScreen({
             <ToggleButton value="low">На исходе</ToggleButton>
             <ToggleButton value="empty">Пустые</ToggleButton>
           </ToggleButtonGroup>
+          </Stack>
         </Stack>
       </Paper>
 
       <TableContainer component={Paper} variant="outlined" ref={productsTableRef}>
-        <Table
-          size="small"
-          sx={{ tableLayout: 'fixed' }}
-          data-testid={`${testIdPrefix}-products-table`}
-        >
+        <Table size="small" data-testid={`${testIdPrefix}-products-table`}>
           <TableHead>
             <TableRow>
-              <TableCell sx={{ minWidth: 280 }}>Товар</TableCell>
-              <TableCell align="right" sx={{ width: 110, whiteSpace: 'nowrap' }}>
+              <TableCell sx={{ minWidth: 240 }}>Товар</TableCell>
+              <TableCell
+                align="right"
+                sx={{ minWidth: 132, width: '12%', whiteSpace: 'nowrap' }}
+              >
                 Личный остаток
               </TableCell>
-              <TableCell sx={{ minWidth: 160 }}>Общая корзина</TableCell>
-              <TableCell align="right" sx={{ width: 100, whiteSpace: 'nowrap' }}>
+              <TableCell sx={{ minWidth: 148, width: '22%' }}>Общая корзина</TableCell>
+              <TableCell align="right" sx={{ minWidth: 104, width: '10%', whiteSpace: 'nowrap' }}>
                 Напечатано
               </TableCell>
-              <TableCell align="right" sx={{ width: 88, whiteSpace: 'nowrap' }}>
+              <TableCell align="right" sx={{ minWidth: 96, width: '10%', whiteSpace: 'nowrap' }}>
                 Действия
               </TableCell>
             </TableRow>

@@ -2527,7 +2527,10 @@ export default function App() {
             path="ff/honest-sign"
             element={
               token ? (
-                <FfHonestSignPage token={token} />
+                <FfHonestSignPage
+                  token={token}
+                  sellers={sellers.map((s) => ({ id: s.id, name: s.name }))}
+                />
               ) : (
                 <FfPlaceholderPage
                   title="Честный знак"
@@ -2570,7 +2573,10 @@ export default function App() {
             path="ff/honest-sign/ledger"
             element={
               token ? (
-                <FfHonestSignLedgerPage token={token} />
+                <FfHonestSignLedgerPage
+                  token={token}
+                  sellers={sellers.map((s) => ({ id: s.id, name: s.name }))}
+                />
               ) : (
                 <FfPlaceholderPage
                   title="Лента расхода"
