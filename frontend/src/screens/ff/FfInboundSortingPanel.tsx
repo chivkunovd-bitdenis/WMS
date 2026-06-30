@@ -1,5 +1,4 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { useNavigate } from 'react-router-dom'
 import AddIcon from '@mui/icons-material/Add'
 import {
   Alert,
@@ -100,38 +99,112 @@ function nextDraftKey(): string {
   return `draft-${draftRowSeq}`
 }
 
-function emptyDraftRow(defaultBoxId: string | null): CellDraftRow {
+function emptyLooseDraftRow(): CellDraftRow {
   return {
     key: nextDraftKey(),
-    box_id: defaultBoxId,
+    box_id: null,
     storage_location_id: '',
     quantity: '',
   }
 }
 
-function distributionRowBoxId(
-  row: DistributionLineOut,
-  defaultBoxId: string | null,
+function boxLineRemaining(bl: SortingBoxLine): number {
+  return bl.remaining_qty ?? Math.max(0, bl.quantity - (bl.posted_qty ?? 0))
+}
+
+function defaultRowsForProduct(
+  productId: string,
+  sortableBoxes: SortingBox[],
   loosePool: number,
-): string | null {
+): CellDraftRow[] {
+  const rows: CellDraftRow[] = []
+  for (const box of sortableBoxes) {
+    const bl = box.lines.find((l) => l.product_id === productId)
+    if (bl == null) {
+      continue
+    }
+    const rem = boxLineRemaining(bl)
+    if (rem <= 0) {
+      continue
+    }
+    rows.push({
+      key: nextDraftKey(),
+      box_id: box.id,
+      storage_location_id: '',
+      quantity: String(rem),
+    })
+  }
+  if (loosePool > 0) {
+    rows.push(emptyLooseDraftRow())
+  }
+  return rows
+}
+
+function distributionRowBoxId(row: DistributionLineOut): string | null {
   if (row.box_id != null && row.box_id !== '') {
     return row.box_id
   }
-  // API returns box_id: null for loose lines — do not assign defaultBoxId when loose pool exists.
-  return loosePool > 0 ? null : defaultBoxId
+  return null
 }
 
-function linesFromDistributionRows(
-  rows: DistributionLineOut[],
-  defaultBoxId: string | null,
-  loosePool: number,
-): CellDraftRow[] {
+function linesFromDistributionRows(rows: DistributionLineOut[]): CellDraftRow[] {
   return rows.map((r) => ({
     key: nextDraftKey(),
-    box_id: distributionRowBoxId(r, defaultBoxId, loosePool),
+    box_id: distributionRowBoxId(r),
     storage_location_id: r.storage_location_id,
     quantity: String(r.quantity),
   }))
+}
+
+function mergeSavedRowsWithDefaults(
+  saved: DistributionLineOut[],
+  productId: string,
+  sortableBoxes: SortingBox[],
+  loosePool: number,
+): CellDraftRow[] {
+  const draft = saved.length > 0 ? linesFromDistributionRows(saved) : []
+  const boxIdsWithRow = new Set(draft.filter((r) => r.box_id != null).map((r) => r.box_id as string))
+  for (const box of sortableBoxes) {
+    if (boxIdsWithRow.has(box.id)) {
+      continue
+    }
+    const bl = box.lines.find((l) => l.product_id === productId)
+    if (bl == null) {
+      continue
+    }
+    const rem = boxLineRemaining(bl)
+    if (rem <= 0) {
+      continue
+    }
+    draft.push({
+      key: nextDraftKey(),
+      box_id: box.id,
+      storage_location_id: '',
+      quantity: String(rem),
+    })
+  }
+  const hasLooseRow = draft.some((r) => r.box_id == null)
+  if (loosePool > 0 && !hasLooseRow) {
+    draft.push(emptyLooseDraftRow())
+  }
+  if (draft.length === 0) {
+    return defaultRowsForProduct(productId, sortableBoxes, loosePool)
+  }
+  return draft
+}
+
+function looseDraftQty(rows: CellDraftRow[]): number {
+  let sum = 0
+  for (const r of rows) {
+    if (r.box_id != null) {
+      continue
+    }
+    const q = Math.floor(Number(r.quantity))
+    if (Number.isFinite(q) && q > 0) {
+      sum += q
+    }
+  }
+  return sum
 }
 
 function sumDraftQty(rows: CellDraftRow[]): number {
@@ -155,7 +228,6 @@ export function FfInboundSortingPanel({
   completed = false,
   onReload,
 }: Props) {
-  const navigate = useNavigate()
   const authHeaders = useMemo(() => ({ Authorization: `Bearer ${token}` }), [token])
   const { catalogById } = useWbProductCatalog(token)
   const [locations, setLocations] = useState<LocationRow[]>([])
@@ -179,7 +251,13 @@ export function FfInboundSortingPanel({
     [boxes],
   )
 
-  const defaultBoxId = sortableBoxes.length === 1 ? sortableBoxes[0]!.id : null
+  const boxNumberById = useMemo(() => {
+    const m = new Map<string, number>()
+    for (const box of sortableBoxes) {
+      m.set(box.id, box.box_number)
+    }
+    return m
+  }, [sortableBoxes])
 
   const acceptedByProductId = useMemo(() => {
     const m = new Map<string, number>()
@@ -280,15 +358,16 @@ export function FfInboundSortingPanel({
     setProductStates(
       sortableProducts.map((p) => ({
         ...p,
-        rows: linesFromDistributionRows(
+        rows: mergeSavedRowsWithDefaults(
           byProduct.get(p.product_id) ?? [],
-          defaultBoxId,
+          p.product_id,
+          sortableBoxes,
           loosePoolByProductId.get(p.product_id) ?? 0,
         ),
       })),
     )
     setDistributionLoaded(true)
-  }, [authHeaders, defaultBoxId, loosePoolByProductId, requestId, sortableProducts])
+  }, [authHeaders, loosePoolByProductId, requestId, sortableProducts, sortableBoxes])
 
   useEffect(() => {
     void loadLocations()
@@ -441,9 +520,10 @@ export function FfInboundSortingPanel({
       setProductStates((prev) =>
         prev.map((p) => ({
           ...p,
-          rows: linesFromDistributionRows(
+          rows: mergeSavedRowsWithDefaults(
             byProduct.get(p.product_id) ?? [],
-            defaultBoxId,
+            p.product_id,
+            sortableBoxes,
             loosePoolByProductId.get(p.product_id) ?? 0,
           ),
         })),
@@ -501,61 +581,6 @@ export function FfInboundSortingPanel({
     }
   }
 
-  const sortingPackLines = useMemo(
-    () =>
-      sortableProducts
-        .map((p) => ({
-          product_id: p.product_id,
-          sku_code: p.sku_code,
-          product_name: p.product_name,
-          quantity: Math.max(0, p.accepted - p.posted),
-        }))
-        .filter((ln) => ln.quantity > 0),
-    [sortableProducts],
-  )
-
-  const createPackagingFromSorting = async () => {
-    if (sortingPackLines.length === 0) {
-      setError('Нет товара в сортировке для упаковки.')
-      return
-    }
-    setBusy(true)
-    setError(null)
-    try {
-      const res = await fetch(apiUrl('/operations/packaging-tasks'), {
-        method: 'POST',
-        headers: { ...authHeaders, 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          warehouse_id: warehouseId,
-          inbound_intake_request_id: requestId,
-          lines: sortingPackLines.map((ln) => ({
-            product_id: ln.product_id,
-            quantity: ln.quantity,
-          })),
-        }),
-      })
-      if (!res.ok) {
-        setError(await readApiErrorMessage(res))
-        return
-      }
-      const task = (await res.json()) as { id: string }
-      navigate('/app/ff/packaging', { state: { taskId: task.id } })
-    } catch (e) {
-      setError(e instanceof Error ? e.message : 'Не удалось создать задание.')
-    } finally {
-      setBusy(false)
-    }
-  }
-
-  const boxSourcesForProduct = (productId: string) =>
-    sortableBoxes
-      .map((box) => {
-        const bl = box.lines.find((l) => l.product_id === productId)
-        if (!bl || bl.remaining_qty <= 0) return null
-        return { box_id: box.id, box_number: box.box_number, remaining: bl.remaining_qty }
-      })
-      .filter((x): x is { box_id: string; box_number: number; remaining: number } => x != null)
-
   if (sortableProducts.length === 0) {
     if (sortingRemainingQty > 0) {
       return (
@@ -608,17 +633,6 @@ export function FfInboundSortingPanel({
           size="small"
           data-testid="ff-sorting-remaining-total"
         />
-        {editable && sortingRemainingQty > 0 ? (
-          <Button
-            variant="outlined"
-            size="small"
-            disabled={busy}
-            onClick={() => void createPackagingFromSorting()}
-            data-testid="ff-sorting-pack-btn"
-          >
-            Упаковать
-          </Button>
-        ) : null}
         {editable ? (
           <>
             <Button
@@ -654,8 +668,13 @@ export function FfInboundSortingPanel({
           const displayMeta = productDisplayMetaFromCatalog(product.product_id, product, catalogById)
           const draftSum = draftSumByProductId.get(product.product_id) ?? 0
           const remaining = remainingByProductId.get(product.product_id) ?? 0
-          const boxSources = boxSourcesForProduct(product.product_id)
           const loosePool = loosePoolByProductId.get(product.product_id) ?? 0
+          const looseAllocated = looseDraftQty(product.rows)
+          const looseRemaining = Math.max(0, loosePool - looseAllocated)
+          const hasBoxRows = product.rows.some((r) => r.box_id != null)
+          const hasLooseRows = loosePool > 0
+          const showSourceColumn = hasBoxRows || hasLooseRows
+          const looseRowCount = product.rows.filter((r) => r.box_id == null).length
           const done = completed || remaining <= 0
 
           return (
@@ -701,9 +720,7 @@ export function FfInboundSortingPanel({
                   <Table size="small" data-testid="ff-sorting-cell-rows">
                     <TableHead>
                       <TableRow>
-                        {boxSources.length > 0 || loosePool > 0 ? (
-                          <TableCell sx={{ width: 160 }}>Источник</TableCell>
-                        ) : null}
+                        {showSourceColumn ? <TableCell sx={{ width: 160 }}>Источник</TableCell> : null}
                         <TableCell sx={{ minWidth: 180 }}>Ячейка</TableCell>
                         <TableCell align="right" sx={{ width: 120 }}>
                           Шт
@@ -715,43 +732,21 @@ export function FfInboundSortingPanel({
                       {product.rows.map((row) => {
                         const maxQty = rowMaxQty(product.product_id, row)
                         const exceeds = rowExceeds(product.product_id, row)
+                        const isBoxRow = row.box_id != null
+                        const sourceLabel = isBoxRow
+                          ? `Короб №${boxNumberById.get(row.box_id!) ?? '?'}`
+                          : 'Россыпь'
                         return (
                           <TableRow
                             key={row.key}
                             data-testid="ff-sorting-cell-row"
                             sx={exceeds ? { bgcolor: (theme) => alpha(theme.palette.error.main, 0.08) } : null}
                           >
-                            {boxSources.length > 0 || loosePool > 0 ? (
+                            {showSourceColumn ? (
                               <TableCell>
-                                <FormControl size="small" fullWidth>
-                                  <Select
-                                    value={row.box_id ?? ''}
-                                    disabled={busy || !editable || !distributionReady}
-                                    displayEmpty
-                                    onChange={(e) => {
-                                      const v = String(e.target.value)
-                                      updateProductRows(product.product_id, (rows) =>
-                                        rows.map((r) =>
-                                          r.key === row.key
-                                            ? { ...r, box_id: v ? v : null }
-                                            : r,
-                                        ),
-                                      )
-                                    }}
-                                    data-testid="ff-sorting-cell-source"
-                                  >
-                                    {loosePool > 0 ? (
-                                      <MenuItem value="">
-                                        <em>Россыпь</em>
-                                      </MenuItem>
-                                    ) : null}
-                                    {boxSources.map((bs) => (
-                                      <MenuItem key={bs.box_id} value={bs.box_id}>
-                                        Короб №{bs.box_number}
-                                      </MenuItem>
-                                    ))}
-                                  </Select>
-                                </FormControl>
+                                <Typography variant="body2" data-testid="ff-sorting-cell-source">
+                                  {sourceLabel}
+                                </Typography>
                               </TableCell>
                             ) : null}
                             <TableCell>
@@ -786,7 +781,7 @@ export function FfInboundSortingPanel({
                                 type="number"
                                 size="small"
                                 value={row.quantity}
-                                disabled={busy || !editable || !distributionReady}
+                                disabled={busy || !editable || !distributionReady || isBoxRow}
                                 error={exceeds}
                                 onChange={(e) => {
                                   const v = e.target.value
@@ -799,6 +794,7 @@ export function FfInboundSortingPanel({
                                     min: 1,
                                     max: maxQty > 0 ? maxQty : undefined,
                                     'data-testid': 'ff-sorting-cell-qty',
+                                    readOnly: isBoxRow ? true : undefined,
                                   },
                                 }}
                                 sx={{ width: 96 }}
@@ -806,19 +802,21 @@ export function FfInboundSortingPanel({
                             </TableCell>
                             {editable ? (
                               <TableCell align="right">
-                                <IconButton
-                                  size="small"
-                                  disabled={busy}
-                                  aria-label="Удалить строку"
-                                  onClick={() =>
-                                    updateProductRows(product.product_id, (rows) =>
-                                      rows.filter((r) => r.key !== row.key),
-                                    )
-                                  }
-                                  data-testid="ff-sorting-cell-remove"
-                                >
-                                  ×
-                                </IconButton>
+                                {!isBoxRow && looseRowCount > 1 ? (
+                                  <IconButton
+                                    size="small"
+                                    disabled={busy}
+                                    aria-label="Удалить строку"
+                                    onClick={() =>
+                                      updateProductRows(product.product_id, (rows) =>
+                                        rows.filter((r) => r.key !== row.key),
+                                      )
+                                    }
+                                    data-testid="ff-sorting-cell-remove"
+                                  >
+                                    ×
+                                  </IconButton>
+                                ) : null}
                               </TableCell>
                             ) : null}
                           </TableRow>
@@ -829,19 +827,14 @@ export function FfInboundSortingPanel({
                 </TableContainer>
               ) : null}
 
-              {editable && remaining > 0 ? (
+              {editable && looseRemaining > 0 ? (
                 <Button
                   size="small"
                   variant="outlined"
                   startIcon={<AddIcon />}
                   disabled={busy || !distributionReady || locations.length === 0}
                   onClick={() =>
-                    updateProductRows(product.product_id, (rows) => [
-                      ...rows,
-                      emptyDraftRow(
-                        loosePool > 0 ? null : (boxSources[0]?.box_id ?? defaultBoxId),
-                      ),
-                    ])
+                    updateProductRows(product.product_id, (rows) => [...rows, emptyLooseDraftRow()])
                   }
                   data-testid="ff-sorting-add-cell"
                 >

@@ -1,10 +1,16 @@
 # TASKLOG
 
+## TASK-091 — 2026-06-30 — Сортировка: убрать «Упаковать», авто-строки короб/россыпь
+
+- What changed: `FfInboundSortingPanel` — удалена кнопка «Упаковать»; под товаром авто-строки: по одной на каждый короб приёмки + «Россыпь»; источник текстом (не Select); «+ ячейка» только для остатка россыпи; qty короба read-only.
+- What did NOT change: раздел «Упаковка»; prod docker.
+- Verification: `npm run build`; e2e `ff-reception-sorting`, `ff-sorting-product-centric` 3/3.
+
 ## TASK-090 — 2026-06-30 — IN-01: единая модель коробов приёмки + отгрузка, модалка 2×
 
 - What changed: убрана UX-модель «закрыть короб» (приёмка + отгрузка МП); короба редактируются до завершения документа; `FfInboundBoxAddDialog` / `FfMarketplaceUnloadBoxAddDialog` — общий layout `boxFillDialogLayout.ts` (~2× размер, скролл внутри, прямое поле qty без карандаша); факт по строке = Σ коробов + россыпь (`effective_actual_qty`); backend снял блокировки `box_closed` на scan/PUT; GET приёмки грузит `boxes` с линиями явно.
 - What did NOT change: API `POST .../close` остаётся для legacy; отдельная кнопка «удалить строку» в приёмке (qty→0 работает); деплой Railway.
-- Verification: backend `ruff`/`mypy` + pytest inbound box 19/19; frontend `npm run build`; e2e `ff-inbound-box-intake`, `inbound-receiving-v2`, `ff-inbound-boxes`, `ff-mp-box-add-modal`, `stab-inbound-sort-outbound` — green. Commit `d3a4bdf`.
+- Verification: backend `ruff`/`mypy` + pytest inbound box 19/19; frontend `npm run build`; e2e inbound/mp/stab — green; merged `2d4a48d` (#62); Railway staging web+WMS deploy OK.
 
 ## TASK-089 — 2026-06-30 — CZ print: seller PDF page per CIS (not generated template)
 
