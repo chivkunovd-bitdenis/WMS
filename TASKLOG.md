@@ -1,5 +1,12 @@
 # TASKLOG
 
+## TASK-089 — 2026-06-30 — CZ print: seller PDF page per CIS (not generated template)
+
+- What was wrong: печать собирала «свою» HTML-этикетку из CIS — не совпадала с PDF селлера.
+- What changed: при **PDF-импорте** каждая страница сохраняется как PDF-артефакт прямо в `marking_codes.label_artifact_pdf`; CIS по-прежнему в БД. Печать: если у КМ есть артефакт — грузится **PNG из сохранённого PDF** и печатается как есть; иначе fallback (CSV без PDF). API: `GET .../codes/{id}/label-artifact?format=pdf|png`, в ответе печати — `printed_codes[].has_label_artifact`.
+- What did NOT change: CSV/TXT импорт без картинки; конструктор ленты `cz`/`label`.
+- Verification: backend `ruff`/`mypy` targeted green; `pytest tests/test_marking_pdf_label_artifact.py` 1/1; frontend build + vitest 6/6 + e2e marking 4/4.
+
 ## TASK-088 — 2026-06-30 — STAB-IN-FE-03 + handoff 09 + Railway smoke tooling
 
 - What changed: `FfInboundBoxAddDialog` / `FfProductLineCells` — testid на строку товара (фото/sku/название/размер); e2e `STAB-IN-FE-03`; mock WB photo в `wildberries_client.py`; `scripts/railway-staging-smoke.sh`; обновлены `09_STABILIZATION_HANDOFF`, `RAILWAY_STAGING_RU.md`, `SESSION_HANDOFF.md`.

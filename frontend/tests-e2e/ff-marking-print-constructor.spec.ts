@@ -5,8 +5,13 @@ import {beginInboundReceivingWithBoxes,  fulfillInboundViaBoxScans } from './inb
 import { openFulfillmentRegistration } from './auth-flow'
 
 // TC-NEW-002 — ЧЗ T1.3: конструктор печати — баннер нехватки, пресет «Парами», частичная печать.
+// TC-NEW-CZ-PRINT-01 — ЧЗ этикетка 58×40: DataMatrix слева + служебный блок справа.
 test('FF packaging: marking print constructor shortage and pairs preview', async ({ page }) => {
   test.setTimeout(120_000)
+  await page.addInitScript(() => {
+    window.__WMS_CAPTURE_PRINT_HTML__ = true
+    window.print = () => {}
+  })
   const email = `e2e-cz-short-${Date.now()}@example.com`
   const password = 'password123'
   const e2eApi = process.env.E2E_API_ORIGIN ?? 'http://127.0.0.1:18000'
@@ -137,6 +142,15 @@ test('FF packaging: marking print constructor shortage and pairs preview', async
   const printBody = (await (await printWait).json()) as { quantity: number; shortage: number | null }
   expect(printBody.quantity).toBe(2)
   expect(printBody.shortage).toBe(1)
+
+  await page.waitForFunction(() => Boolean(window.__WMS_LAST_PRINT_HTML__))
+  const printHtml = await page.evaluate(() => window.__WMS_LAST_PRINT_HTML__ ?? '')
+  expect(printHtml).toContain('label--cz')
+  expect(printHtml).toContain('cz-label-info')
+  expect(printHtml).toContain('data-tape-block="cz"')
+  expect(printHtml).toContain('data-tape-block="label"')
+  expect(printHtml).toContain('cz-matrix')
+  expect(printHtml).not.toContain('class="tail"')
 
   await expect(page.getByText('напечатано 2 / нужно 3')).toBeVisible()
   await expect(page.getByText(/дост\.\s+\d+\s+в пуле/)).toBeVisible()

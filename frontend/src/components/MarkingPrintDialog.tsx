@@ -267,19 +267,27 @@ export function MarkingPrintDialog({ open, reprint, ctx, busy, onBusyChange, onC
     if (!res.ok) {
       throw new Error(await readApiErrorMessage(res))
     }
-    const rows = (await res.json()) as { cis_code: string; status: string }[]
-    const available = rows.filter((r) => r.status === 'available').map((r) => r.cis_code)
+    const rows = (await res.json()) as {
+      id: string
+      cis_code: string
+      status: string
+      has_label_artifact?: boolean
+    }[]
+    const available = rows.filter((r) => r.status === 'available')
     if (available.length < canPrintCount) {
       throw new Error(`Не хватает ${canPrintCount - available.length} КМ в пуле.`)
     }
-    const codes = available.slice(0, canPrintCount)
+    const picked = available.slice(0, canPrintCount)
     await printMarkingCodeTape(
-      codes.map((cis) => ({
-        cis,
+      picked.map((row) => ({
+        cis: row.cis_code,
+        codeId: row.id,
+        hasLabelArtifact: row.has_label_artifact ?? false,
         productLabel: ctx.productLabel ?? null,
       })),
       layout,
       ctx.productLabel,
+      { authToken: ctx.token },
     )
     ctx.onPrinted()
     onClose()
@@ -348,6 +356,11 @@ export function MarkingPrintDialog({ open, reprint, ctx, busy, onBusyChange, onC
         quantity: number
         shortage: number | null
         layout: PrintLayout
+        printed_codes?: {
+          id: string
+          cis_code: string
+          has_label_artifact: boolean
+        }[]
       }
       if (data.quantity < 1) {
         setError(
@@ -357,13 +370,22 @@ export function MarkingPrintDialog({ open, reprint, ctx, busy, onBusyChange, onC
         )
         return
       }
+      const printedByCis = new Map(
+        (data.printed_codes ?? []).map((row) => [row.cis_code, row]),
+      )
       await printMarkingCodeTape(
-        data.codes.map((cis) => ({
-          cis,
-          productLabel: ctx.productLabel ?? null,
-        })),
+        data.codes.map((cis) => {
+          const meta = printedByCis.get(cis)
+          return {
+            cis,
+            codeId: meta?.id,
+            hasLabelArtifact: meta?.has_label_artifact ?? false,
+            productLabel: ctx.productLabel ?? null,
+          }
+        }),
         data.layout ?? layout,
         ctx.productLabel,
+        { authToken: ctx.token },
       )
       ctx.onPrinted()
       onClose()

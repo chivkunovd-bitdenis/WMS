@@ -1,4 +1,6 @@
+import { apiUrl } from '../api'
 import { expandLayoutTape } from './markingPrintPresets'
+import { maskCisTail, parseGs1Cis } from './parseGs1Cis'
 import {
   buildProductLabelSectionHtml,
   type ProductThermalLabelData,
@@ -23,23 +25,87 @@ const TAPE_PAGE_CSS = `
   .label--cz {
     padding: 1.5mm;
     display: flex;
-    flex-direction: column;
+    flex-direction: row;
+    align-items: stretch;
+  }
+  .cz-layout {
+    width: 100%;
+    height: 100%;
+    display: flex;
+    flex-direction: row;
+    align-items: stretch;
+    gap: 1mm;
+  }
+  .cz-matrix {
+    flex: 0 0 27mm;
+    display: flex;
     align-items: center;
     justify-content: center;
+    min-width: 0;
   }
-  .matrix img {
-    width: 28mm;
-    height: 28mm;
+  .cz-matrix img {
+    width: 24mm;
+    height: 24mm;
     object-fit: contain;
     display: block;
   }
-  .tail {
-    margin: 0.5mm 0 0;
-    font-size: 5.5pt;
-    text-align: center;
-    word-break: break-all;
+  .cz-info {
+    flex: 1 1 auto;
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    justify-content: flex-start;
+    padding: 0.2mm 0 0;
+  }
+  .cz-brand {
+    margin: 0;
+    font-size: 5.4pt;
+    font-weight: 700;
+    line-height: 1.05;
+    letter-spacing: -0.02em;
+    text-transform: uppercase;
+  }
+  .cz-mark {
+    margin: 0.4mm 0 0.6mm;
+    width: 5.5mm;
+    height: 5.5mm;
+    border: 0.35mm solid #111;
+    border-radius: 0.6mm;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 5pt;
+    font-weight: 700;
+    line-height: 1;
+  }
+  .cz-field {
+    margin: 0;
+    font-size: 5pt;
+    line-height: 1.15;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  .cz-field + .cz-field { margin-top: 0.35mm; }
+  .cz-field-label {
+    font-weight: 700;
+    margin-right: 0.5mm;
+  }
+  .cz-code {
+    margin: auto 0 0;
+    padding-top: 0.5mm;
+    font-size: 4.6pt;
     line-height: 1.1;
-    max-width: 54mm;
+    word-break: break-all;
+  }
+  .label--cz-artifact {
+    padding: 0;
+  }
+  .cz-artifact-img {
+    width: 58mm;
+    height: 40mm;
+    object-fit: contain;
+    display: block;
   }
   .label:not(.label--cz) {
     padding: 1.4mm 1.8mm 1mm;
@@ -115,12 +181,29 @@ const TAPE_PAGE_CSS = `
   }
 `
 
-export function maskCisCode(cis: string): string {
-  const t = cis.trim()
-  if (t.length <= 12) {
-    return t
+export { maskCisTail as maskCisCode }
+
+async function blobToDataUrl(blob: Blob): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader()
+    reader.onload = () => resolve(String(reader.result))
+    reader.onerror = () => reject(reader.error ?? new Error('blob_read_failed'))
+    reader.readAsDataURL(blob)
+  })
+}
+
+export async function fetchLabelArtifactDataUrl(
+  codeId: string,
+  authToken: string,
+): Promise<string> {
+  const res = await fetch(
+    apiUrl(`/operations/marking-codes/codes/${codeId}/label-artifact?format=png`),
+    { headers: { Authorization: `Bearer ${authToken}` } },
+  )
+  if (!res.ok) {
+    throw new Error('Не удалось загрузить этикетку ЧЗ из файла селлера.')
   }
-  return `…${t.slice(-12)}`
+  return blobToDataUrl(await res.blob())
 }
 
 export async function renderDataMatrixDataUrl(cis: string): Promise<string> {
@@ -136,16 +219,43 @@ export async function renderDataMatrixDataUrl(cis: string): Promise<string> {
   return canvas.toDataURL('image/png')
 }
 
-function buildCzLabelHtml(cis: string, matrixDataUrl: string): string {
+export function buildCzLabelHtml(cis: string, matrixDataUrl: string): string {
+  const parsed = parseGs1Cis(cis)
+  const gtinLine = parsed.gtinDisplay
+    ? `<p class="cz-field cz-field--gtin"><span class="cz-field-label">GTIN</span>${escapeLabelHtml(parsed.gtinDisplay)}</p>`
+    : ''
+  const serialLine = parsed.serial
+    ? `<p class="cz-field cz-field--serial"><span class="cz-field-label">КМ</span>${escapeLabelHtml(parsed.serial)}</p>`
+    : ''
   return `<section class="label label--cz" data-testid="marking-thermal-label" data-tape-block="cz">
-  <div class="matrix"><img src="${matrixDataUrl}" alt="ЧЗ" /></div>
-  <p class="tail">${escapeLabelHtml(maskCisCode(cis))}</p>
+  <div class="cz-layout">
+    <div class="matrix cz-matrix"><img src="${matrixDataUrl}" alt="ЧЗ" /></div>
+    <div class="cz-info" data-testid="cz-label-info">
+      <p class="cz-brand">Честный<br />знак</p>
+      <div class="cz-mark" aria-hidden="true">ЧЗ</div>
+      ${gtinLine}
+      ${serialLine}
+      <p class="cz-code">${escapeLabelHtml(parsed.displayCode)}</p>
+    </div>
+  </div>
+</section>`
+}
+
+export function buildCzArtifactLabelHtml(imageDataUrl: string): string {
+  return `<section class="label label--cz label--cz-artifact" data-testid="marking-thermal-label" data-tape-block="cz">
+  <img class="cz-artifact-img" src="${imageDataUrl}" alt="ЧЗ" data-testid="cz-label-artifact-img" />
 </section>`
 }
 
 export type MarkingTapeUnitInput = {
   cis: string
+  codeId?: string | null
+  hasLabelArtifact?: boolean
   productLabel?: ProductThermalLabelData | null
+}
+
+export type PrintMarkingTapeOptions = {
+  authToken?: string | null
 }
 
 export type PrintMarkingCodeLabelsOptions = {
@@ -204,7 +314,7 @@ function resolveProductLabel(
   if (fallback?.barcode?.trim()) {
     return fallback
   }
-  const sku = unit.productLabel?.sku_code ?? fallback?.sku_code ?? maskCisCode(unit.cis)
+  const sku = unit.productLabel?.sku_code ?? fallback?.sku_code ?? maskCisTail(unit.cis)
   const barcode = sku.trim()
   return {
     product_name: unit.productLabel?.product_name ?? fallback?.product_name ?? sku,
@@ -223,6 +333,7 @@ export async function printMarkingCodeTape(
   units: MarkingTapeUnitInput[],
   layout: PrintLayout,
   defaultProductLabel?: ProductThermalLabelData | null,
+  options?: PrintMarkingTapeOptions,
 ): Promise<void> {
   if (units.length === 0) {
     throw new Error('Нет КМ для печати.')
@@ -237,12 +348,37 @@ export async function printMarkingCodeTape(
     }),
   )
 
+  const artifactByCodeId = new Map<string, string>()
+  const authToken = options?.authToken?.trim()
+  if (authToken) {
+    const artifactCodeIds = [
+      ...new Set(
+        units
+          .filter((unit) => unit.hasLabelArtifact && unit.codeId)
+          .map((unit) => unit.codeId as string),
+      ),
+    ]
+    await Promise.all(
+      artifactCodeIds.map(async (codeId) => {
+        artifactByCodeId.set(codeId, await fetchLabelArtifactDataUrl(codeId, authToken))
+      }),
+    )
+  }
+
   const barcodeBySku = new Map<string, string>()
   const sections: string[] = []
   for (const item of tape) {
     const unitInput = units[item.unitIndex]
     if (item.block === 'cz') {
-      sections.push(buildCzLabelHtml(item.cis, matrixByCis.get(item.cis) ?? ''))
+      const artifactDataUrl =
+        unitInput.codeId && unitInput.hasLabelArtifact
+          ? artifactByCodeId.get(unitInput.codeId)
+          : undefined
+      if (artifactDataUrl) {
+        sections.push(buildCzArtifactLabelHtml(artifactDataUrl))
+      } else {
+        sections.push(buildCzLabelHtml(item.cis, matrixByCis.get(item.cis) ?? ''))
+      }
       continue
     }
     const product = resolveProductLabel(unitInput, defaultProductLabel)
@@ -276,7 +412,18 @@ export async function printMarkingCodeLabels(
   await printMarkingCodeTape(units, layout, options.productLabel)
 }
 
+declare global {
+  interface Window {
+    __WMS_CAPTURE_PRINT_HTML__?: boolean
+    __WMS_LAST_PRINT_HTML__?: string
+  }
+}
+
 async function printHtmlInIframe(html: string): Promise<void> {
+  if (typeof window !== 'undefined' && window.__WMS_CAPTURE_PRINT_HTML__) {
+    window.__WMS_LAST_PRINT_HTML__ = html
+  }
+
   const iframe = document.createElement('iframe')
   iframe.setAttribute('aria-hidden', 'true')
   iframe.style.position = 'fixed'
