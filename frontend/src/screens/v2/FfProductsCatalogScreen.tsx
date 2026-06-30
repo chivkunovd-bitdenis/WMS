@@ -31,6 +31,7 @@ import { apiUrl } from '../../api'
 import { ProductPhotoThumb } from '../../components/ProductPhotoThumb'
 import { ProductBarcodeCell } from '../../components/ProductBarcodeCell'
 import { ProductBarcodePrintButton } from '../../components/ProductBarcodePrintButton'
+import { FfProductMarkingPrintProvider } from '../../components/FfProductMarkingPrintProvider'
 import { readApiErrorMessage } from '../../utils/readApiErrorMessage'
 import { printPackagingInstructions } from '../../utils/printPackagingInstructions'
 import {
@@ -232,6 +233,7 @@ export function FfProductsCatalogScreen({ token, authHeaders, sellers }: Props) 
   }
 
   return (
+    <FfProductMarkingPrintProvider token={token}>
     <Box>
       <Typography variant="h5" gutterBottom>
         Каталог
@@ -386,6 +388,8 @@ export function FfProductsCatalogScreen({ token, authHeaders, sellers }: Props) 
                   <ProductBarcodePrintButton
                     meta={displayMeta}
                     testId={`ff-catalog-print-${p.id}`}
+                    productId={p.id}
+                    requiresHonestSign={p.requires_honest_sign}
                   />
                 </TableCell>
               </TableRow>
@@ -470,5 +474,6 @@ export function FfProductsCatalogScreen({ token, authHeaders, sellers }: Props) 
         </DialogActions>
       </Dialog>
     </Box>
+    </FfProductMarkingPrintProvider>
   )
 }

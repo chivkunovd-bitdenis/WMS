@@ -90,14 +90,14 @@ test('ff verify posts to sorting zone; sorting queue and product columns', async
   await page.getByTestId('ff-inbound-queue-row').first().click();
   await expect(page.getByTestId('ff-sorting-panel')).toBeVisible();
 
-  // TC-NEW-PRINT-02 — после закрытия приёмки печать ШК доступна в сортировке.
-  const linesTable = page.getByTestId('ff-inbound-lines-table');
-  await expect(linesTable).toBeVisible();
-  await linesTable.getByRole('button', { name: 'Печать ШК товара' }).first().click();
-  await expect(page.getByTestId('ff-product-label-print-dialog')).toBeVisible();
-  await page.getByTestId('ff-product-label-cancel').click();
-
+  // TC-NEW-PRINT-02 — печать в сортировке: единый диалог (как в отгрузке).
   const productCard = page.getByTestId('ff-sorting-product-card').first();
+  await productCard.getByRole('button', { name: 'Печать ШК товара' }).click();
+  await expect(page.getByTestId('marking-print-dialog')).toBeVisible();
+  await expect(page.getByTestId('marking-print-wb-qty')).toBeVisible();
+  await page.getByTestId('marking-print-dialog').getByRole('button', { name: 'Отмена' }).click();
+  await expect(page.getByTestId('marking-print-dialog')).toBeHidden();
+
   await expect(productCard.getByTestId('ff-sorting-cell-row')).toHaveCount(1);
   const cellRow = productCard.getByTestId('ff-sorting-cell-row').first();
   await expect(cellRow.getByTestId('ff-sorting-cell-source')).toContainText('Короб');
@@ -126,8 +126,10 @@ test('ff verify posts to sorting zone; sorting queue and product columns', async
   await expect(prodRow.getByTestId('ff-product-qty-sorting')).toHaveText('0');
   await expect(prodRow).toContainText('4');
 
-  // TC-NEW-PRINT-03 — печать ШК из каталога товаров ФФ.
+  // TC-NEW-PRINT-03 — печать из каталога: единый диалог MarkingPrintDialog.
   await prodRow.getByRole('button', { name: 'Печать ШК товара' }).click();
-  await expect(page.getByTestId('ff-product-label-print-dialog')).toBeVisible();
-  await page.getByTestId('ff-product-label-cancel').click();
+  await expect(page.getByTestId('marking-print-dialog')).toBeVisible();
+  await expect(page.getByTestId('marking-print-wb-qty')).toBeVisible();
+  await page.getByTestId('marking-print-dialog').getByRole('button', { name: 'Отмена' }).click();
+  await expect(page.getByTestId('marking-print-dialog')).toBeHidden();
 });

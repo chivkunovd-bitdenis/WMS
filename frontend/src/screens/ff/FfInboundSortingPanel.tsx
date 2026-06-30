@@ -22,6 +22,7 @@ import {
 } from '@mui/material'
 import { alpha } from '@mui/material/styles'
 import { FfProductLineCells, FfProductTableHeadCells } from '../../components/FfProductLineCells'
+import { FfProductMarkingPrintProvider } from '../../components/FfProductMarkingPrintProvider'
 import { useWbProductCatalog } from '../../hooks/useWbProductCatalog'
 import { apiUrl } from '../../api'
 import { productDisplayMetaFromCatalog } from '../../types/wbProductCatalog'
@@ -601,6 +602,7 @@ export function FfInboundSortingPanel({
   const distributionReady = distributionLoaded
 
   return (
+    <FfProductMarkingPrintProvider token={token}>
     <Box data-testid="ff-sorting-panel">
       {distributionLoadError ? (
         <Alert
@@ -701,7 +703,10 @@ export function FfInboundSortingPanel({
                 </TableHead>
                 <TableBody>
                   <TableRow data-testid="ff-sorting-product-summary">
-                    <FfProductLineCells meta={displayMeta} />
+                    <FfProductLineCells
+                      meta={displayMeta}
+                      productId={product.product_id}
+                    />
                     <TableCell align="right" data-testid="ff-sorting-product-accepted">
                       {product.accepted}
                     </TableCell>
@@ -852,5 +857,6 @@ export function FfInboundSortingPanel({
         </Alert>
       ) : null}
     </Box>
+    </FfProductMarkingPrintProvider>
   )
 }
