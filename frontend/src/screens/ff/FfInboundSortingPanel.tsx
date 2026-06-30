@@ -166,15 +166,20 @@ export function FfInboundSortingPanel({
   const [distributionLoaded, setDistributionLoaded] = useState(false)
   const distributionLoadSeq = useRef(0)
 
-  const closedBoxes = useMemo(
+  const sortableBoxes = useMemo(
     () =>
       boxes
-        .filter((b) => b.intake_closed_at != null)
+        .filter((b) =>
+          b.lines.some((l) => {
+            const rem = l.remaining_qty ?? Math.max(0, l.quantity - (l.posted_qty ?? 0))
+            return rem > 0
+          }),
+        )
         .sort((a, b) => a.box_number - b.box_number),
     [boxes],
   )
 
-  const defaultBoxId = closedBoxes.length === 1 ? closedBoxes[0]!.id : null
+  const defaultBoxId = sortableBoxes.length === 1 ? sortableBoxes[0]!.id : null
 
   const acceptedByProductId = useMemo(() => {
     const m = new Map<string, number>()
@@ -198,7 +203,7 @@ export function FfInboundSortingPanel({
     for (const ln of lines) {
       const accepted = acceptedByProductId.get(ln.product_id) ?? 0
       let boxRemainder = 0
-      for (const box of closedBoxes) {
+      for (const box of sortableBoxes) {
         const bl = box.lines.find((l) => l.product_id === ln.product_id)
         if (bl) {
           boxRemainder += bl.remaining_qty
@@ -207,17 +212,17 @@ export function FfInboundSortingPanel({
       m.set(ln.product_id, Math.max(0, accepted - boxRemainder))
     }
     return m
-  }, [acceptedByProductId, closedBoxes, lines])
+  }, [acceptedByProductId, sortableBoxes, lines])
 
   const boxRemainderByKey = useMemo(() => {
     const m = new Map<string, number>()
-    for (const box of closedBoxes) {
+    for (const box of sortableBoxes) {
       for (const bl of box.lines) {
         m.set(`${box.id}:${bl.product_id}`, bl.remaining_qty)
       }
     }
     return m
-  }, [closedBoxes])
+  }, [sortableBoxes])
 
   const sortableProducts = useMemo(() => {
     const seen = new Set<string>()
@@ -543,7 +548,7 @@ export function FfInboundSortingPanel({
   }
 
   const boxSourcesForProduct = (productId: string) =>
-    closedBoxes
+    sortableBoxes
       .map((box) => {
         const bl = box.lines.find((l) => l.product_id === productId)
         if (!bl || bl.remaining_qty <= 0) return null

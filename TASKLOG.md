@@ -1,5 +1,11 @@
 # TASKLOG
 
+## TASK-090 — 2026-06-30 — IN-01: единая модель коробов приёмки + отгрузка, модалка 2×
+
+- What changed: убрана UX-модель «закрыть короб» (приёмка + отгрузка МП); короба редактируются до завершения документа; `FfInboundBoxAddDialog` / `FfMarketplaceUnloadBoxAddDialog` — общий layout `boxFillDialogLayout.ts` (~2× размер, скролл внутри, прямое поле qty без карандаша); факт по строке = Σ коробов + россыпь (`effective_actual_qty`); backend снял блокировки `box_closed` на scan/PUT; GET приёмки грузит `boxes` с линиями явно.
+- What did NOT change: API `POST .../close` остаётся для legacy; отдельная кнопка «удалить строку» в приёмке (qty→0 работает); деплой Railway.
+- Verification: backend `ruff`/`mypy` + pytest inbound box 19/19; frontend `npm run build`; e2e `ff-inbound-box-intake`, `inbound-receiving-v2`, `ff-inbound-boxes`, `ff-mp-box-add-modal`, `stab-inbound-sort-outbound` — green. Commit `d3a4bdf`.
+
 ## TASK-089 — 2026-06-30 — CZ print: seller PDF page per CIS (not generated template)
 
 - What was wrong: печать собирала «свою» HTML-этикетку из CIS — не совпадала с PDF селлера.

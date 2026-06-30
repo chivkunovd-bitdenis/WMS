@@ -55,7 +55,7 @@ test('ff verify posts to sorting zone; sorting queue and product columns', async
   await expect(page.getByTestId('ff-doc-dialog')).toBeVisible();
 
   await page.getByTestId('ff-inbound-add-to-box').click();
-  await page.getByTestId('ff-inbound-box-open').first().getByRole('button', { name: 'Наполнить' }).click();
+  await page.getByTestId('ff-inbound-box-row').first().getByRole('button', { name: 'Наполнить' }).click();
   await expect(page.getByTestId('ff-inbound-box-add-dialog')).toBeVisible();
   for (let i = 0; i < 4; i++) {
     await page.getByTestId('ff-inbound-box-add-scan-input').fill(sku);
@@ -64,10 +64,7 @@ test('ff verify posts to sorting zone; sorting queue and product columns', async
       page.getByTestId('ff-inbound-box-add-scan-submit').click(),
     ]);
   }
-  await Promise.all([
-    waitForPostOk(page, base, (u) => u.includes('/close')),
-    page.getByTestId('ff-inbound-box-add-close-box').click(),
-  ]);
+  await page.getByTestId('ff-inbound-box-add-dismiss').click();
   await Promise.all([
     waitForPostOk(page, base, (u) => u.includes('/complete-receiving')),
     page.getByTestId('ff-inbound-verify-complete').click(),

@@ -28,6 +28,12 @@ import { ProductPhotoThumb } from '../../components/ProductPhotoThumb'
 import type { WbProductPickerCatalogRow } from '../../components/WbProductPickerDialog'
 import { storageLocationLabel, SORTING_LOCATION_CODE } from '../../utils/inboundQueues'
 import { readApiErrorMessage } from '../../utils/readApiErrorMessage'
+import {
+  boxFillDialogContentSx,
+  boxFillDialogPaperSx,
+  boxFillProductCellSx,
+  boxFillTableScrollSx,
+} from './boxFillDialogLayout'
 
 type PickOptionLocation = {
   storage_location_id: string
@@ -52,7 +58,7 @@ type Props = {
   requestId: string
   boxId: string
   boxLabel: string
-  boxClosed: boolean
+  readOnly: boolean
   token: string
   addressStorageEnabled: boolean
   catalogById: Map<string, WbProductPickerCatalogRow>
@@ -121,7 +127,7 @@ export function FfMarketplaceUnloadBoxAddDialog({
   requestId,
   boxId,
   boxLabel,
-  boxClosed,
+  readOnly,
   token,
   addressStorageEnabled,
   catalogById,
@@ -231,7 +237,7 @@ export function FfMarketplaceUnloadBoxAddDialog({
   }
 
   const addManual = async (productId: string, quantity: number) => {
-    if (boxClosed) {
+    if (readOnly) {
       return
     }
     const row = pickOptions.find((p) => p.product_id === productId)
@@ -364,7 +370,7 @@ export function FfMarketplaceUnloadBoxAddDialog({
   }
 
   const doScan = () => {
-    if (boxClosed) {
+    if (readOnly) {
       return
     }
     const raw = scanBarcode.trim()
@@ -398,19 +404,20 @@ export function FfMarketplaceUnloadBoxAddDialog({
     void runScan(barcode, true)
   }
 
-  const gateBlocked = boxClosed
+  const gateBlocked = readOnly
 
   return (
     <>
       <Dialog
         open={open}
         onClose={onClose}
-        maxWidth="lg"
+        maxWidth={false}
         fullWidth
         data-testid="ff-mp-box-add-dialog"
+        slotProps={{ paper: { sx: boxFillDialogPaperSx } }}
       >
-        <DialogTitle sx={{ pr: 6 }}>
-          Добавить в короб
+        <DialogTitle sx={{ pr: 6, flexShrink: 0 }}>
+          Наполнить короб
           <Typography variant="body2" color="text.secondary">
             {boxLabel}
           </Typography>
@@ -423,10 +430,10 @@ export function FfMarketplaceUnloadBoxAddDialog({
             <CloseOutlined />
           </IconButton>
         </DialogTitle>
-        <DialogContent>
-          <Stack spacing={2}>
-            {boxClosed ? (
-              <Alert severity="info">Короб закрыт — добавление недоступно.</Alert>
+        <DialogContent sx={boxFillDialogContentSx}>
+          <Stack spacing={2} sx={{ flex: 1, minHeight: 0 }}>
+            {readOnly ? (
+              <Alert severity="info">Отгрузка проведена — состав короба только для просмотра.</Alert>
             ) : null}
             {error ? (
               <Alert severity="error" data-testid="ff-mp-box-add-error">
@@ -516,8 +523,8 @@ export function FfMarketplaceUnloadBoxAddDialog({
                 Загрузка…
               </Typography>
             ) : (
-              <Box sx={{ overflowX: 'auto' }}>
-                <Table size="small" data-testid="ff-mp-box-add-table">
+              <Box sx={boxFillTableScrollSx}>
+                <Table size="small" stickyHeader data-testid="ff-mp-box-add-table">
                   <TableHead>
                     <TableRow>
                       <TableCell width={56} />
@@ -565,8 +572,10 @@ export function FfMarketplaceUnloadBoxAddDialog({
                                 alt={row.product_name}
                               />
                             </TableCell>
-                            <TableCell>{row.sku_code}</TableCell>
-                            <TableCell>{row.product_name}</TableCell>
+                            <TableCell sx={boxFillProductCellSx}>{row.sku_code}</TableCell>
+                            <TableCell sx={boxFillProductCellSx} title={row.product_name}>
+                              {row.product_name}
+                            </TableCell>
                             <TableCell align="right">{row.planned_qty}</TableCell>
                             <TableCell align="right">{row.picked_qty}</TableCell>
                             <TableCell align="right" data-testid={`ff-mp-box-add-available-${row.product_id}`}>

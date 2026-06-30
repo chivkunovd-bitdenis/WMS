@@ -114,7 +114,7 @@ test.describe('US-B-01 FF receiving creates on-demand boxes', () => {
     await expect(page.getByTestId('ff-inbound-planned-boxes')).toContainText('4');
     await expect(page.getByTestId('ff-inbound-status-chip')).toContainText('Приёмка');
     await expect(page.getByTestId('ff-inbound-boxes-panel')).toBeVisible();
-    await expect(page.getByTestId('ff-inbound-box-closed')).toHaveCount(4);
+    await expect(page.getByTestId('ff-inbound-box-row')).toHaveCount(4);
 
     await page.getByTestId('ff-inbound-close').click();
     await expect(page.getByTestId('ff-doc-dialog')).toBeHidden();
@@ -122,7 +122,7 @@ test.describe('US-B-01 FF receiving creates on-demand boxes', () => {
     await page.getByTestId('nav-ff-reception').click();
     await page.getByTestId('ff-inbound-queue-table').locator('tbody tr').first().click();
     await expect(page.getByTestId('ff-inbound-boxes-panel')).toBeVisible();
-    await expect(page.getByTestId('ff-inbound-box-closed')).toHaveCount(4);
+    await expect(page.getByTestId('ff-inbound-box-row')).toHaveCount(4);
   });
 });
 
@@ -143,7 +143,7 @@ test.describe('US-B-02 inbound box barcodes and print actions', () => {
 
     await expect(page.getByTestId('ff-inbound-boxes-panel')).toBeVisible();
 
-    const rows = page.getByTestId('ff-inbound-box-closed');
+    const rows = page.getByTestId('ff-inbound-box-row');
     await expect(rows).toHaveCount(3);
 
     const barcodes = await rows.locator('code').allTextContents();
@@ -156,7 +156,7 @@ test.describe('US-B-02 inbound box barcodes and print actions', () => {
     const row0 = rows.nth(0);
     await Promise.all([
       waitForInboundBoxLabelPrintedOk(page),
-      row0.getByTestId('ff-inbound-box-print').click(),
+      row0.getByTestId(/^ff-inbound-box-print-/).click(),
     ]);
 
     const markPrinted = page.waitForResponse(

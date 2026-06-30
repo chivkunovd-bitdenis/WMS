@@ -117,6 +117,39 @@ async def test_loose_scan_increments_actual(async_client: AsyncClient) -> None:
 
 
 @pytest.mark.asyncio
+async def test_two_boxes_manual_qty_effective_in_get(async_client: AsyncClient) -> None:
+    """IN-05: GET effective_actual_qty sums qty across all boxes."""
+    suffix = str(int(time.time() * 1000))
+    ah = await _admin_headers(async_client, suffix)
+    rid, pid, _sku = await _submitted_request(async_client, ah, suffix, expected_qty=5)
+    base = f"/operations/inbound-intake-requests/{rid}"
+
+    b1 = await async_client.post(f"{base}/boxes", headers=ah)
+    b2 = await async_client.post(f"{base}/boxes", headers=ah)
+    assert b1.status_code == 201 and b2.status_code == 201
+
+    put1 = await async_client.put(
+        f"{base}/boxes/{b1.json()['id']}/lines/{pid}",
+        headers=ah,
+        json={"quantity": 3},
+    )
+    put2 = await async_client.put(
+        f"{base}/boxes/{b2.json()['id']}/lines/{pid}",
+        headers=ah,
+        json={"quantity": 2},
+    )
+    assert put1.status_code == 200, put1.text
+    assert put2.status_code == 200, put2.text
+
+    got = await async_client.get(base, headers=ah)
+    assert got.status_code == 200
+    body = got.json()
+    assert body["lines"][0]["effective_actual_qty"] == 5
+    box_lines = [ln for b in body["boxes"] for ln in b["lines"]]
+    assert sum(int(ln["quantity"]) for ln in box_lines) == 5
+
+
+@pytest.mark.asyncio
 async def test_loose_scan_unknown_barcode_422(async_client: AsyncClient) -> None:
     """TC-NEW-IN-BE-03: foreign barcode → product_not_on_request."""
     suffix = str(int(time.time() * 1000))

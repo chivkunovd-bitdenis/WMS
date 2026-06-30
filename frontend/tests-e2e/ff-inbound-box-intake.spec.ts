@@ -29,9 +29,13 @@ test.describe('FF inbound box piece intake', () => {
     await expect(page.getByTestId('ff-inbound-status-chip')).toContainText('Приёмка');
 
     await ffInboundBoxAddManualQty(page, 3);
+    await expect(page.getByTestId('ff-inbound-box-row').first()).toContainText(': 3');
     await ffInboundBoxAddManualQty(page, 2);
+    await expect(page.getByTestId('ff-inbound-box-row').nth(1)).toContainText(': 2');
 
-    await expect(page.getByTestId('ff-inbound-line-actual-display').first()).toHaveText('5');
+    await expect(page.getByTestId('ff-inbound-line-actual-display').first()).toHaveText('5', {
+      timeout: 15_000,
+    });
     await expect(page.getByTestId('ff-inbound-line-row-match')).toBeVisible();
 
     const [verifyRes] = await Promise.all([
@@ -42,7 +46,7 @@ test.describe('FF inbound box piece intake', () => {
     await expect(page.getByTestId('ff-inbound-status-chip')).toContainText('В сортировке');
   });
 
-  test('TC-NEW-C01 verify with open box saves qty and auto-closes', async ({ page }) => {
+  test('TC-NEW-C01 verify with open box saves qty without closing box', async ({ page }) => {
     const seed = await seedFfSellerInbound(page);
     const rid = await apiCreateSubmittedInbound(page.request, seed, {
       plannedBoxes: 1,
@@ -55,20 +59,16 @@ test.describe('FF inbound box piece intake', () => {
     await openFfInboundDoc(page, seed, { skipLogin: true });
 
     await page.getByTestId('ff-inbound-add-to-box').click();
-    await page.getByTestId('ff-inbound-box-open').first().getByRole('button', { name: 'Наполнить' }).click();
+    await page.getByTestId('ff-inbound-box-row').first().getByRole('button', { name: 'Наполнить' }).click();
     await expect(page.getByTestId('ff-inbound-box-add-dialog')).toBeVisible();
-    await page.getByTestId('ff-inbound-box-add-manual-edit').first().click();
     const qtyInput = page.getByTestId('ff-inbound-box-add-manual-qty').first();
     await qtyInput.fill('4');
     await Promise.all([
       waitForPutOk(page, INBOUND_API, (u) => u.includes('/boxes/') && u.includes('/lines/')),
-      qtyInput.press('Enter'),
+      qtyInput.blur(),
     ]);
 
-    await Promise.all([
-      waitForPostOk(page, INBOUND_API, (u) => u.includes('/close')),
-      page.getByTestId('ff-inbound-box-add-close-box').click(),
-    ]);
+    await page.getByTestId('ff-inbound-box-add-dismiss').click();
     await expect(page.getByTestId('ff-inbound-box-add-dialog')).toBeHidden();
 
     const [verifyRes] = await Promise.all([
@@ -80,7 +80,7 @@ test.describe('FF inbound box piece intake', () => {
     await expect(page.getByTestId('ff-inbound-box-add-dialog')).toBeHidden();
   });
 
-  test('TC-NEW-C01-N2 set line qty without open box shows error', async ({ page }) => {
+  test('TC-NEW-C01-N2 set line qty on previously closed box still works', async ({ page }) => {
     const seed = await seedFfSellerInbound(page);
     const rid = await apiCreateSubmittedInbound(page.request, seed, {
       plannedBoxes: 1,
@@ -99,8 +99,16 @@ test.describe('FF inbound box piece intake', () => {
         data: { quantity: 1 },
       },
     );
-    expect(put.status()).toBe(409);
-    expect(((await put.json()) as { detail: string }).detail).toBe('box_closed');
+    expect(put.status()).toBe(200);
+    const got = await page.request.get(`${INBOUND_API}/${rid}`, { headers: h });
+    expect(got.ok()).toBeTruthy();
+    const detail = (await got.json()) as {
+      boxes: { id: string; lines: { quantity: number }[] }[];
+      lines: { effective_actual_qty?: number }[];
+    };
+    const box = detail.boxes.find((b) => b.id === boxId);
+    expect(box?.lines.some((ln) => ln.quantity === 1)).toBeTruthy();
+    expect(detail.lines[0]?.effective_actual_qty).toBe(1);
   });
 
   test('TC-NEW-C02 manual line actual without opening box completes verification', async ({
@@ -187,9 +195,9 @@ test('STAB-IN-FE-03 box add modal product row and target box qty', async ({ page
     ]);
     await expect(page.getByTestId('ff-inbound-box-add-dialog')).toHaveCount(0);
   }
-  await expect(page.getByTestId('ff-inbound-box-open')).toHaveCount(2);
+  await expect(page.getByTestId('ff-inbound-box-row')).toHaveCount(2);
 
-  await page.getByTestId('ff-inbound-box-open').nth(1).getByRole('button', { name: 'Наполнить' }).click();
+  await page.getByTestId('ff-inbound-box-row').nth(1).getByRole('button', { name: 'Наполнить' }).click();
   await expect(page.getByTestId('ff-inbound-box-add-dialog')).toBeVisible();
   await expect(page.getByTestId('ff-inbound-box-add-box-label')).toContainText('Короб № 2');
 
@@ -206,17 +214,15 @@ test('STAB-IN-FE-03 box add modal product row and target box qty', async ({ page
   await photo.hover();
   await expect(page.getByTestId('product-photo-enlarged')).toBeVisible();
 
-  await page.getByTestId('ff-inbound-box-add-manual-edit').first().click();
   const qtyInput = page.getByTestId('ff-inbound-box-add-manual-qty').first();
   await qtyInput.fill('3');
   await Promise.all([
     waitForPutOk(page, INBOUND_API, (u) => u.includes('/boxes/') && u.includes('/lines/')),
-    qtyInput.press('Enter'),
+    qtyInput.blur(),
   ]);
-  await expect(page.getByTestId('ff-inbound-box-add-qty')).toHaveText('3');
   await page.getByTestId('ff-inbound-box-add-close').click();
 
-  await expect(page.getByTestId('ff-inbound-box-open').nth(0)).toContainText('Пока нет товаров');
-  await expect(page.getByTestId('ff-inbound-box-open').nth(1)).toContainText('3');
+  await expect(page.getByTestId('ff-inbound-box-row').nth(0)).toContainText('Пока нет товаров');
+  await expect(page.getByTestId('ff-inbound-box-row').nth(1)).toContainText('3');
   await expect(page.getByText(/закройте короб/i)).toHaveCount(0);
 });
