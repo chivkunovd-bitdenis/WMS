@@ -19,7 +19,7 @@ def _build_label_pdf(cis: str, footer_text: str) -> bytes:
     page.insert_text((12, 24), "Честный знак", fontsize=8)
     page.insert_text((12, 42), cis, fontsize=6)
     page.insert_text((12, 58), footer_text, fontsize=7)
-    pdf_bytes = doc.tobytes()
+    pdf_bytes = bytes(doc.tobytes())
     doc.close()
     return pdf_bytes
 
