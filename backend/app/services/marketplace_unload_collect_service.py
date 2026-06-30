@@ -169,7 +169,7 @@ async def collect_into_box(
     storage_location_id: uuid.UUID | None = None,
     product_id: uuid.UUID,
     quantity: int,
-    require_open_box: bool = True,
+    require_open_box: bool = False,
     allow_over_plan: bool = False,
 ) -> CollectResult:
     if quantity < 1:

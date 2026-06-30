@@ -360,9 +360,6 @@ async def open_box_by_barcode(
     box = next((b for b in boxes if b.internal_barcode.upper() == raw), None)
     if box is None:
         raise InboundIntakeBoxError("box_not_found")
-    if box.intake_closed_at is not None:
-        raise InboundIntakeBoxError("box_closed")
-
     if box.intake_opened_at is None:
         box.intake_opened_at = datetime.now(UTC)
     await session.flush()
@@ -386,8 +383,6 @@ async def scan_product_into_box(
     box = await session.get(InboundIntakeBox, box_id)
     if box is None or box.request_id != request_id or box.tenant_id != tenant_id:
         raise InboundIntakeBoxError("box_not_found")
-    if box.intake_closed_at is not None:
-        raise InboundIntakeBoxError("box_closed")
     if box.intake_opened_at is None:
         box.intake_opened_at = datetime.now(UTC)
 
@@ -444,14 +439,8 @@ async def set_product_quantity_in_open_box(
     box = await session.get(InboundIntakeBox, box_id)
     if box is None or box.request_id != request_id or box.tenant_id != tenant_id:
         raise InboundIntakeBoxError("box_not_found")
-    if box.intake_closed_at is not None:
-        raise InboundIntakeBoxError("box_closed")
     if box.intake_opened_at is None:
         box.intake_opened_at = datetime.now(UTC)
-
-    expected = await _expected_qty(session, req.id, product_id)
-    if expected <= 0:
-        raise InboundIntakeBoxError("product_not_on_request")
 
     stmt = select(InboundIntakeBoxLine).where(
         InboundIntakeBoxLine.box_id == box_id,
@@ -459,16 +448,29 @@ async def set_product_quantity_in_open_box(
     )
     res = await session.execute(stmt)
     line = res.scalar_one_or_none()
-    if line is None:
-        session.add(
-            InboundIntakeBoxLine(
-                box_id=box_id,
-                product_id=product_id,
-                quantity=quantity,
-            )
-        )
+
+    if quantity == 0:
+        if line is None:
+            return await _load_box(session, box.id)
+        if int(line.posted_qty) > 0:
+            raise InboundIntakeBoxError("actual_below_posted")
+        await session.delete(line)
     else:
-        line.quantity = quantity
+        expected = await _expected_qty(session, req.id, product_id)
+        if expected <= 0:
+            raise InboundIntakeBoxError("product_not_on_request")
+        if line is None:
+            session.add(
+                InboundIntakeBoxLine(
+                    box_id=box_id,
+                    product_id=product_id,
+                    quantity=quantity,
+                )
+            )
+        else:
+            if quantity < int(line.posted_qty):
+                raise InboundIntakeBoxError("actual_below_posted")
+            line.quantity = quantity
 
     await session.flush()
     req_loaded = await intake_svc.get_request(session, tenant_id, request_id)
@@ -516,8 +518,6 @@ async def delete_empty_box(
     )
     if box is None or box.request_id != request_id or box.tenant_id != tenant_id:
         raise InboundIntakeBoxError("box_not_found")
-    if box.intake_closed_at is not None:
-        raise InboundIntakeBoxError("box_closed")
     total_qty = sum(int(ln.quantity) for ln in box.lines)
     if total_qty > 0:
         raise InboundIntakeBoxError("box_not_empty")

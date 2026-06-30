@@ -378,7 +378,7 @@ async def _line_out_for_request(
     product: Product,
 ) -> InboundIntakeLineOut:
     effective: int | None = None
-    if request_status in svc.RECEIVING_STATUSES:
+    if request_status in (svc.STATUS_SUBMITTED, svc.STATUS_RECEIVING):
         effective = await svc.effective_actual_qty(
             session, request_id, line, request_status=request_status
         )
@@ -538,7 +538,11 @@ async def get_inbound_request(
         lines_out.append(
             await _line_out_for_request(session, request_id, r.status, ln, p)
         )
-    return _request_out(r, lines=lines_out)
+    boxes = await inbound_box_svc.list_boxes_with_lines(
+        session, user.tenant_id, request_id
+    )
+    boxes_out = [_box_out(b) for b in boxes]
+    return _request_out(r, lines=lines_out, boxes=boxes_out)
 
 
 @router.patch("/{request_id}", response_model=InboundIntakeRequestOut)

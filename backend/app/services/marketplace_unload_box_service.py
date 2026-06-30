@@ -203,8 +203,6 @@ async def collect_ready_box_into_open_box(
     box = await session.get(MarketplaceUnloadBox, box_id)
     if box is None:
         raise MarketplaceUnloadBoxError("box_not_found")
-    if box.closed_at is not None:
-        raise MarketplaceUnloadBoxError("box_closed")
 
     req = await _request_for_picking(session, tenant_id, box.request_id)
     wh_box, inb_box = await wh_box_svc.resolve_barcode(session, tenant_id, raw)
@@ -297,8 +295,6 @@ async def scan_barcode_into_box(
     box = await session.get(MarketplaceUnloadBox, box_id)
     if box is None:
         raise MarketplaceUnloadBoxError("box_not_found")
-    if box.closed_at is not None:
-        raise MarketplaceUnloadBoxError("box_closed")
 
     req = await _request_for_picking(session, tenant_id, box.request_id)
     if req.seller_id is None:
@@ -367,8 +363,6 @@ async def add_manual_qty_to_box(
     box = await session.get(MarketplaceUnloadBox, box_id)
     if box is None:
         raise MarketplaceUnloadBoxError("box_not_found")
-    if box.closed_at is not None:
-        raise MarketplaceUnloadBoxError("box_closed")
 
     req = await _request_for_picking(session, tenant_id, box.request_id)
     if not await _product_in_shipment(session, req.id, product_id):

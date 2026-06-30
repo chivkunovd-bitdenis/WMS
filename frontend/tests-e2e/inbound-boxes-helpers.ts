@@ -462,24 +462,26 @@ export async function apiCreateSubmittedInbound(
   return rid;
 }
 
-/** FF modal: create box, open fill, manual qty, then close box. */
+/** FF modal: create box, open fill, direct qty field, hide modal. */
 export async function ffInboundBoxAddManualQty(page: Page, quantity: number): Promise<void> {
+  const boxRows = page.getByTestId('ff-inbound-box-row');
+  const boxCountBefore = await boxRows.count();
   await Promise.all([
     waitForPostOk(page, INBOUND_API, (u) => u.endsWith('/boxes')),
     page.getByTestId('ff-inbound-add-to-box').click(),
   ]);
-  await page.getByTestId('ff-inbound-box-open').last().getByRole('button', { name: 'Наполнить' }).click();
+  await expect(boxRows).toHaveCount(boxCountBefore + 1);
+  await boxRows.nth(boxCountBefore).getByRole('button', { name: 'Наполнить' }).click();
   await expect(page.getByTestId('ff-inbound-box-add-dialog')).toBeVisible();
-  await page.getByTestId('ff-inbound-box-add-manual-edit').first().click();
   const qtyInput = page.getByTestId('ff-inbound-box-add-manual-qty').first();
   await qtyInput.fill(String(quantity));
   await Promise.all([
     waitForPutOk(page, INBOUND_API, (u) => u.includes('/boxes/') && u.includes('/lines/')),
-    qtyInput.press('Enter'),
+    qtyInput.blur(),
   ]);
   await Promise.all([
-    waitForPostOk(page, INBOUND_API, (u) => u.includes('/close')),
-    page.getByTestId('ff-inbound-box-add-close-box').click(),
+    waitForGetOk(page, INBOUND_API, (u) => /\/operations\/inbound-intake-requests\/[^/]+$/.test(u)),
+    page.getByTestId('ff-inbound-box-add-dismiss').click(),
   ]);
   await expect(page.getByTestId('ff-inbound-box-add-dialog')).toBeHidden();
 }

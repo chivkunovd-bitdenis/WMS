@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import EditOutlined from '@mui/icons-material/EditOutlined'
 import PrintOutlined from '@mui/icons-material/PrintOutlined'
 import {
@@ -183,6 +183,7 @@ export function FfInboundRequestView({
   const [scanToastError, setScanToastError] = useState<string | null>(null)
   const [newLocationCode, setNewLocationCode] = useState('')
   const [requestWarehouse, setRequestWarehouse] = useState<WarehouseRow | null>(null)
+  const loadDetailSeq = useRef(0)
 
   const sortingView = workspace === 'sorting'
   const receptionClosed =
@@ -192,9 +193,11 @@ export function FfInboundRequestView({
     (detail.status === 'submitted' || isReceivingStatus(detail.status))
   const showInboundLinesTable = !sortingView || receptionClosed
   const defaultPutawayBoxId = useMemo(() => {
-    const closed = (detail?.boxes ?? []).filter((b) => b.intake_closed_at != null)
-    if (closed.length === 1) {
-      return closed[0]!.id
+    const withQty = (detail?.boxes ?? []).filter((b) =>
+      b.lines.some((ln) => ln.quantity > 0),
+    )
+    if (withQty.length === 1) {
+      return withQty[0]!.id
     }
     return ''
   }, [detail?.boxes])
@@ -211,6 +214,7 @@ export function FfInboundRequestView({
   }, [detail])
 
   const loadDetail = useCallback(async (): Promise<InboundDetail> => {
+    const seq = ++loadDetailSeq.current
     const res = await fetch(apiUrl(`/operations/inbound-intake-requests/${requestId}`), {
       headers: authHeaders,
     })
@@ -218,7 +222,9 @@ export function FfInboundRequestView({
       throw new Error(await readApiErrorMessage(res))
     }
     const data = (await res.json()) as InboundDetail
-    setDetail(data)
+    if (seq === loadDetailSeq.current) {
+      setDetail(data)
+    }
     return data
   }, [authHeaders, requestId])
 
@@ -1104,10 +1110,6 @@ export function FfInboundRequestView({
     [boxAddDialogBoxId, boxes],
   )
 
-  const closedBoxes = useMemo(() => boxes.filter((b) => b.intake_closed_at != null), [boxes])
-
-  const fillableBoxes = useMemo(() => boxes.filter((b) => !b.intake_closed_at), [boxes])
-
   const actualEditable =
     isFulfillmentAdmin &&
     receivingActive
@@ -1572,7 +1574,7 @@ export function FfInboundRequestView({
                   </Typography>
                   <Typography variant="body2" color="text.secondary">
                     Создайте короб — он появится в списке. Наполняйте по кнопке «Наполнить»; можно
-                    возвращаться и добавлять товары снова, пока короб не завершён.
+                    возвращаться и менять состав, пока приёмка не завершена.
                   </Typography>
                 </Box>
                 <Button
@@ -1584,10 +1586,11 @@ export function FfInboundRequestView({
                   Печать всех
                 </Button>
               </Stack>
-              {fillableBoxes.length > 0 ? (
-                <Stack spacing={1.5} sx={{ mb: closedBoxes.length > 0 ? 1.5 : 0 }}>
-                  {fillableBoxes.map((box) => (
-                    <Paper key={box.id} variant="outlined" sx={{ p: 1.5 }} data-testid="ff-inbound-box-open">
+              <Stack spacing={1.5}>
+                {boxes.map((box) => {
+                  const visibleLines = box.lines.filter((ln) => ln.quantity > 0)
+                  return (
+                    <Paper key={box.id} variant="outlined" sx={{ p: 1.5 }} data-testid="ff-inbound-box-row">
                       <Stack
                         direction={{ xs: 'column', sm: 'row' }}
                         spacing={1}
@@ -1604,7 +1607,7 @@ export function FfInboundRequestView({
                           <Button
                             size="small"
                             variant="contained"
-                            disabled={busy}
+                            disabled={busy || !receivingActive}
                             onClick={() => openBoxAddDialog(box.id)}
                             data-testid={`ff-inbound-box-fill-${box.id}`}
                           >
@@ -1613,17 +1616,26 @@ export function FfInboundRequestView({
                           <Button
                             size="small"
                             variant="outlined"
-                            disabled={busy || box.lines.some((ln) => ln.quantity > 0)}
+                            disabled={busy || !receivingActive || visibleLines.length > 0}
                             onClick={() => void deleteInboundBox(box.id)}
                             data-testid={`ff-inbound-box-delete-${box.id}`}
                           >
                             Удалить
                           </Button>
+                          <Button
+                            size="small"
+                            variant="outlined"
+                            disabled={busy}
+                            onClick={() => void printInboundBoxLabel(box)}
+                            data-testid={`ff-inbound-box-print-${box.id}`}
+                          >
+                            Печать
+                          </Button>
                         </Stack>
                       </Stack>
-                      {box.lines.length > 0 ? (
+                      {visibleLines.length > 0 ? (
                         <Stack spacing={0.25}>
-                          {box.lines.map((ln) => (
+                          {visibleLines.map((ln) => (
                             <Typography key={ln.id} variant="body2" color="text.secondary">
                               {ln.sku_code} · {ln.product_name}: {ln.quantity}
                             </Typography>
@@ -1635,56 +1647,9 @@ export function FfInboundRequestView({
                         </Typography>
                       )}
                     </Paper>
-                  ))}
-                </Stack>
-              ) : (
-                <Typography variant="body2" color="text.secondary" sx={{ mb: 1.5 }}>
-                  Коробов пока нет — нажмите «Создать короб».
-                </Typography>
-              )}
-              {closedBoxes.length > 0 ? (
-                <Stack spacing={1.5} sx={{ mb: 1.5 }}>
-                  {closedBoxes.map((box) => (
-                    <Paper key={box.id} variant="outlined" sx={{ p: 1.5 }} data-testid="ff-inbound-box-closed">
-                      <Stack
-                        direction={{ xs: 'column', sm: 'row' }}
-                        spacing={1}
-                        sx={{ alignItems: { sm: 'center' }, mb: 1 }}
-                      >
-                        <Typography variant="body2" sx={{ fontWeight: 700 }}>
-                          Короб № {box.box_number}{' '}
-                          <Typography component="code" variant="body2">
-                            {box.internal_barcode}
-                          </Typography>
-                        </Typography>
-                        <Box sx={{ flexGrow: 1 }} />
-                        <Button
-                          size="small"
-                          variant="outlined"
-                          disabled={busy}
-                          onClick={() => void printInboundBoxLabel(box)}
-                          data-testid="ff-inbound-box-print"
-                        >
-                          Печать
-                        </Button>
-                      </Stack>
-                      {box.lines.length > 0 ? (
-                        <Stack spacing={0.25}>
-                          {box.lines.map((ln) => (
-                            <Typography key={ln.id} variant="body2" color="text.secondary">
-                              {ln.sku_code} · {ln.product_name}: {ln.quantity}
-                            </Typography>
-                          ))}
-                        </Stack>
-                      ) : (
-                        <Typography variant="body2" color="text.secondary">
-                          Пустой короб
-                        </Typography>
-                      )}
-                    </Paper>
-                  ))}
-                </Stack>
-              ) : null}
+                  )
+                })}
+              </Stack>
             </Paper>
           ) : null}
 
@@ -2086,7 +2051,7 @@ export function FfInboundRequestView({
           requestId={requestId}
           boxId={boxAddDialogBoxId}
           boxLabel={`Короб № ${boxAddDialogBox.box_number} · ${boxAddDialogBox.internal_barcode}`}
-          boxClosed={boxAddDialogBox.intake_closed_at != null}
+          readOnly={!receivingActive}
           token={token}
           requestLines={detail?.lines ?? []}
           boxLines={boxAddDialogBox.lines}

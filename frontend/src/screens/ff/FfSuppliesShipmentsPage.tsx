@@ -840,33 +840,6 @@ export function FfSuppliesShipmentsPage({
     requestAttachBoxScan()
   }
 
-  const closeBox = async (boxId: string) => {
-    if (!token || !authHeaders || docModal !== 'marketplace_unload' || !docModalId) {
-      return
-    }
-    setModalBusy(true)
-    setModalError(null)
-    try {
-      const res = await fetch(
-        apiUrl(`/operations/marketplace-unload-requests/${docModalId}/boxes/${boxId}/close`),
-        {
-          method: 'POST',
-          headers: authHeaders,
-        },
-      )
-      if (!res.ok) {
-        setModalError(await readApiErrorMessage(res))
-        return
-      }
-      await loadDocDetail()
-      await onRefreshFfSupplyExtras()
-    } catch (e) {
-      setModalError(e instanceof Error ? e.message : 'Не удалось закрыть короб.')
-    } finally {
-      setModalBusy(false)
-    }
-  }
-
   const boxById = useMemo(() => {
     const map = new Map<string, MarketplaceUnloadBox>()
     for (const b of unloadDetail?.boxes ?? []) {
@@ -991,35 +964,26 @@ export function FfSuppliesShipmentsPage({
     }
   }
 
+  const mpBoxesReadOnly =
+    docModal === 'marketplace_unload' && unloadDetail?.status === 'shipped'
+
   const renderBoxActions = (box: MarketplaceUnloadBox) => {
     const totalQty = box.lines.reduce((sum, ln) => sum + ln.quantity, 0)
-    const boxClosed = Boolean(box.closed_at)
     return (
       <Stack direction="row" spacing={0.5} sx={{ alignItems: 'center', flexWrap: 'wrap' }}>
         <Typography variant="body2" color="text.secondary" sx={{ flex: 1 }}>
-          {box.internal_barcode ?? box.id.slice(0, 8)} · {box.box_preset} ·{' '}
-          {boxClosed ? box.closed_at!.slice(0, 19).replace('T', ' ') : 'открыт'}
+          {box.internal_barcode ?? box.id.slice(0, 8)} · {box.box_preset}
+          {totalQty > 0 ? ` · ${totalQty} шт` : ''}
         </Typography>
         <Button
           size="small"
           variant="outlined"
-          disabled={modalBusy || boxClosed}
+          disabled={modalBusy || mpBoxesReadOnly}
           onClick={() => setBoxAddDialogBoxId(box.id)}
           data-testid={`ff-mp-box-add-products-${box.id}`}
         >
-          Добавить в короб
+          Наполнить
         </Button>
-        {!boxClosed ? (
-          <Button
-            size="small"
-            variant="outlined"
-            disabled={modalBusy}
-            onClick={() => void closeBox(box.id)}
-            data-testid={`ff-mp-box-close-${box.id}`}
-          >
-            Закрыть
-          </Button>
-        ) : null}
         <IconButton
           size="small"
           aria-label="Действия с коробом"
@@ -2251,14 +2215,13 @@ export function FfSuppliesShipmentsPage({
                   ) : null}
                   <Box data-testid="ff-mp-boxes">
               {(() => {
-                const openBoxes = unloadDetail.boxes.filter((b) => !b.closed_at)
-                const closed = unloadDetail.boxes.filter((b) => Boolean(b.closed_at))
+                const allBoxes = unloadDetail.boxes
                 return (
                   <Stack spacing={1.5}>
                     <Typography variant="subtitle2">Сборка в короба</Typography>
                     <Typography variant="body2" color="text.secondary">
-                      Отсканируйте готовый короб (WHB-…) — он попадёт в закрытые. Для сборки по
-                      ячейкам и товарам используйте «Добавить товары» у открытого короба.
+                      Создайте короба или привяжите готовый (WHB-…). Наполняйте по кнопке «Наполнить»;
+                      состав можно менять до отгрузки.
                     </Typography>
 
                     {mpExecutionPhase ? (
@@ -2291,10 +2254,10 @@ export function FfSuppliesShipmentsPage({
                             </Button>
                           </Stack>
 
-                          {openBoxes.length > 0 ? (
+                          {allBoxes.length > 0 ? (
                             <Stack spacing={1.5}>
-                              {openBoxes.map((b, idx) => (
-                                <Box key={b.id} data-testid={`ff-mp-box-open-row-${b.id}`}>
+                              {allBoxes.map((b, idx) => (
+                                <Box key={b.id} data-testid={`ff-mp-box-row-${b.id}`}>
                                   {renderBoxActions(b)}
                                   <Table
                                     size="small"
@@ -2390,117 +2353,57 @@ export function FfSuppliesShipmentsPage({
                       </Paper>
                     ) : null}
 
-                    {closed.length > 0 ? (
-                      <Paper variant="outlined" sx={{ p: 1.5 }}>
-                        <Typography variant="body2" sx={{ mb: 1 }}>
-                          Закрытые короба: {closed.length}
-                        </Typography>
-                        <Stack spacing={1}>
-                          {closed.map((b) => (
-                            <Box
-                              key={b.id}
-                              sx={{ borderTop: '1px solid', borderColor: 'divider', pt: 1 }}
-                              data-testid="ff-mp-box-closed-row"
-                            >
-                              {renderBoxActions(b)}
-                              <Table size="small" sx={{ mt: 0.5 }}>
-                                <TableHead>
-                                  <TableRow>
-                                    <TableCell>Артикул</TableCell>
-                                    <TableCell>Товар</TableCell>
-                                    <TableCell align="right">Кол-во</TableCell>
-                                    <TableCell align="right" />
-                                  </TableRow>
-                                </TableHead>
-                                <TableBody>
-                                  {b.lines.length === 0 ? (
-                                    <TableRow>
-                                      <TableCell colSpan={4}>
-                                        <Typography variant="body2" color="text.secondary">
-                                          Нет строк
-                                        </Typography>
-                                      </TableCell>
-                                    </TableRow>
-                                  ) : (
-                                    b.lines.map((ln) => (
-                                      <TableRow key={ln.id}>
-                                        <TableCell>{ln.sku_code}</TableCell>
-                                        <TableCell>{ln.product_name}</TableCell>
-                                        <TableCell align="right">{ln.quantity}</TableCell>
-                                        <TableCell align="right">
-                                          <Tooltip title="Убрать из короба">
-                                            <IconButton
-                                              size="small"
-                                              aria-label="Убрать из короба"
-                                              data-testid={`ff-mp-box-line-remove-${ln.id}`}
-                                              disabled={modalBusy}
-                                              onClick={() => void removeBoxLine(b.id, ln.id)}
-                                            >
-                                              <DeleteOutlineOutlined fontSize="small" />
-                                            </IconButton>
-                                          </Tooltip>
-                                        </TableCell>
-                                      </TableRow>
-                                    ))
-                                  )}
-                                </TableBody>
-                              </Table>
-                            </Box>
-                          ))}
-                          <Menu
-                            anchorEl={boxMenuAnchor}
-                            open={Boolean(boxMenuAnchor)}
-                            onClose={closeBoxMenu}
-                            data-testid="ff-mp-box-menu"
-                          >
-                            <MenuItem
-                              data-testid="ff-mp-box-menu-print"
-                              disabled={!boxMenuTargetId || !boxById.get(boxMenuTargetId ?? '')?.internal_barcode}
-                              onClick={() => {
-                                const box = boxMenuTargetId ? boxById.get(boxMenuTargetId) : null
-                                if (box) {
-                                  printBoxBarcode(box)
-                                }
-                                closeBoxMenu()
-                              }}
-                            >
-                              Печать ШК
-                            </MenuItem>
-                            <MenuItem
-                              data-testid="ff-mp-box-menu-copy"
-                              disabled={!boxMenuTargetId || modalBusy}
-                              onClick={() => {
-                                if (boxMenuTargetId) {
-                                  void copyBox(boxMenuTargetId)
-                                }
-                              }}
-                            >
-                              Копировать в новый короб
-                            </MenuItem>
-                            <MenuItem
-                              data-testid="ff-mp-box-menu-delete"
-                              disabled={
-                                !boxMenuTargetId ||
-                                modalBusy ||
-                                (boxMenuTargetId
-                                  ? (boxById.get(boxMenuTargetId)?.lines.reduce(
-                                      (s, ln) => s + ln.quantity,
-                                      0,
-                                    ) ?? 0) > 0
-                                  : true)
-                              }
-                              onClick={() => {
-                                if (boxMenuTargetId) {
-                                  void deleteBox(boxMenuTargetId)
-                                }
-                              }}
-                            >
-                              Удалить короб
-                            </MenuItem>
-                          </Menu>
-                        </Stack>
-                      </Paper>
-                    ) : null}
+                    <Menu
+                      anchorEl={boxMenuAnchor}
+                      open={Boolean(boxMenuAnchor)}
+                      onClose={closeBoxMenu}
+                      data-testid="ff-mp-box-menu"
+                    >
+                      <MenuItem
+                        data-testid="ff-mp-box-menu-print"
+                        disabled={!boxMenuTargetId || !boxById.get(boxMenuTargetId ?? '')?.internal_barcode}
+                        onClick={() => {
+                          const box = boxMenuTargetId ? boxById.get(boxMenuTargetId) : null
+                          if (box) {
+                            printBoxBarcode(box)
+                          }
+                          closeBoxMenu()
+                        }}
+                      >
+                        Печать ШК
+                      </MenuItem>
+                      <MenuItem
+                        data-testid="ff-mp-box-menu-copy"
+                        disabled={!boxMenuTargetId || modalBusy}
+                        onClick={() => {
+                          if (boxMenuTargetId) {
+                            void copyBox(boxMenuTargetId)
+                          }
+                        }}
+                      >
+                        Копировать в новый короб
+                      </MenuItem>
+                      <MenuItem
+                        data-testid="ff-mp-box-menu-delete"
+                        disabled={
+                          !boxMenuTargetId ||
+                          modalBusy ||
+                          (boxMenuTargetId
+                            ? (boxById.get(boxMenuTargetId)?.lines.reduce(
+                                (s, ln) => s + ln.quantity,
+                                0,
+                              ) ?? 0) > 0
+                            : true)
+                        }
+                        onClick={() => {
+                          if (boxMenuTargetId) {
+                            void deleteBox(boxMenuTargetId)
+                          }
+                        }}
+                      >
+                        Удалить короб
+                      </MenuItem>
+                    </Menu>
                   </Stack>
                 )
               })()}
@@ -2830,7 +2733,7 @@ export function FfSuppliesShipmentsPage({
             boxById.get(boxAddDialogBoxId)?.internal_barcode ??
             boxAddDialogBoxId.slice(0, 8)
           }
-          boxClosed={Boolean(boxById.get(boxAddDialogBoxId)?.closed_at)}
+          readOnly={mpBoxesReadOnly}
           token={token}
           addressStorageEnabled={addressStorageEnabled}
           catalogById={catalogById}

@@ -83,9 +83,9 @@ test('stab inbound sort outbound — receive, see sorting, ship from buffer with
     ]);
     await expect(page.getByTestId('ff-inbound-box-add-dialog')).toHaveCount(0);
   }
-  await expect(page.getByTestId('ff-inbound-box-open')).toHaveCount(2);
+  await expect(page.getByTestId('ff-inbound-box-row')).toHaveCount(2);
 
-  await page.getByTestId('ff-inbound-box-open').nth(1).getByRole('button', { name: 'Наполнить' }).click();
+  await page.getByTestId('ff-inbound-box-row').nth(1).getByRole('button', { name: 'Наполнить' }).click();
   await expect(page.getByTestId('ff-inbound-box-add-box-label')).toContainText('Короб № 2');
   for (let i = 0; i < BOX2_QTY; i++) {
     await page.getByTestId('ff-inbound-box-add-scan-input').fill(seed.sku);
@@ -94,9 +94,9 @@ test('stab inbound sort outbound — receive, see sorting, ship from buffer with
       page.getByTestId('ff-inbound-box-add-scan-submit').click(),
     ]);
   }
-  await expect(page.getByTestId('ff-inbound-box-add-qty')).toHaveText(String(BOX2_QTY));
+  await expect(page.getByTestId('ff-inbound-box-add-manual-qty').first()).toHaveValue(String(BOX2_QTY));
   await page.getByTestId('ff-inbound-box-add-close').click();
-  await expect(page.getByTestId('ff-inbound-box-open').nth(1)).toContainText(seed.sku);
+  await expect(page.getByTestId('ff-inbound-box-row').nth(1)).toContainText(seed.sku);
 
   for (let i = 0; i < LOOSE_QTY; i++) {
     await page.getByTestId('ff-inbound-receiving-scan-input').fill(seed.sku);
