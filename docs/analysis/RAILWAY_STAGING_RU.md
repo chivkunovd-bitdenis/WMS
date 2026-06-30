@@ -61,6 +61,16 @@
 6. Set `WMS_CORS_ORIGINS` on `api` to include the Railway web origin if the browser will talk to the API cross-origin.
 7. Flip `WMS_BOOTSTRAP_ADMIN` back to `0` after the first successful boot.
 
+### Build failed сразу после GitHub connect
+
+**Причина:** сервис создан из корня репозитория `/`. В корне WMS нет Dockerfile — Railway не знает, что собирать.
+
+**Исправление:** сервис **WMS** → **Settings** → **Source** → **Root Directory** = `backend` → Save → **Redeploy**.
+
+Фронт — **отдельный** сервис с Root Directory = `frontend`. Postgres — плагин **+ New → Database**.
+
+В репозитории есть `backend/railway.toml` и `frontend/railway.toml` — после смены Root Directory Railway подхватит `Dockerfile.railway` автоматически.
+
 ## Smoke after deploy
 
 ```bash
