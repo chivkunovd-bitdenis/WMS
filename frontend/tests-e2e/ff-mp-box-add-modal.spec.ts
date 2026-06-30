@@ -2,7 +2,7 @@ import { test, expect } from '@playwright/test'
 
 import { waitForGetOk, waitForPostOk } from './api-waits'
 import { openFulfillmentRegistration } from './auth-flow'
-import {beginInboundReceivingWithBoxes,  fulfillInboundViaBoxScans } from './inbound-boxes-helpers'
+import { beginInboundReceiving, beginInboundReceivingWithBoxes, fulfillInboundViaBoxScans } from './inbound-boxes-helpers'
 
 // TC-NEW-MP-006 — TASK-011: модалка «Добавить товары» напротив короба; лимит по плану.
 test('FF marketplace unload: box add-products modal respects plan limit', async ({ page }) => {
@@ -607,5 +607,175 @@ test('FF marketplace unload: box modal manual location and product scan', async 
   ])
   await expect(page.getByTestId('ff-mp-box-add-success-snackbar')).toContainText('Добавлено 1 шт')
   await expect(page.getByTestId(`ff-mp-box-add-available-${productId}`)).toHaveText('2')
+  await expect(page.getByTestId('ff-mp-open-box-lines')).toContainText('1')
+})
+
+// TC-NEW-OUT-FE-01 — STAB-OUT-FE-01: товар только в зоне сортировки — без выбора ячейки.
+test('FF marketplace unload: sorting buffer pick without cell selection', async ({ page }) => {
+  const email = `e2e-mp-sortbuf-${Date.now()}@example.com`
+  const e2eApi = process.env.E2E_API_ORIGIN ?? 'http://127.0.0.1:18000'
+  const barcode = 'E2E-MOCK-BARCODE'
+
+  await page.goto('/')
+  await openFulfillmentRegistration(page)
+  await page.getByTestId('register-form').getByLabel('Организация').fill('E2E MP SortBuf')
+  await page.getByTestId('register-form').getByLabel('Email администратора').fill(email)
+  await page.getByTestId('register-form').getByLabel('Пароль').fill('password123')
+  await Promise.all([
+    waitForPostOk(page, '/api/auth/register'),
+    waitForGetOk(page, '/api/auth/me'),
+    page.getByTestId('register-form').getByRole('button', { name: 'Создать аккаунт' }).click(),
+  ])
+
+  const token = await page.evaluate(() => localStorage.getItem('wms_token_ff'))
+  expect(token).toBeTruthy()
+  const auth = { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' }
+
+  const whRes = await page.request.post(`${e2eApi}/warehouses`, {
+    headers: auth,
+    data: JSON.stringify({ name: 'W', code: `w-sortbuf-${Date.now()}` }),
+  })
+  const whId = String(((await whRes.json()) as { id: string }).id)
+
+  const sellerRes = await page.request.post(`${e2eApi}/sellers`, {
+    headers: auth,
+    data: JSON.stringify({ name: 'SortBuf Seller' }),
+  })
+  const sellerId = String(((await sellerRes.json()) as { id: string }).id)
+
+  await page.request.patch(`${e2eApi}/integrations/wildberries/sellers/${sellerId}/tokens`, {
+    headers: auth,
+    data: JSON.stringify({
+      content_api_token: 'e2e-content',
+      supplies_api_token: 'e2e-supplies',
+    }),
+  })
+
+  const jobRes = await page.request.post(`${e2eApi}/operations/background-jobs`, {
+    headers: auth,
+    data: JSON.stringify({ job_type: 'wildberries_cards_sync', seller_id: sellerId }),
+  })
+  const jobId = String(((await jobRes.json()) as { id: string }).id)
+  await expect
+    .poll(async () => {
+      const jr = await page.request.get(`${e2eApi}/operations/background-jobs/${jobId}`, {
+        headers: auth,
+      })
+      return (await jr.json()) as { status: string }
+    })
+    .toMatchObject({ status: 'done' })
+
+  const prRes = await page.request.post(`${e2eApi}/products`, {
+    headers: auth,
+    data: JSON.stringify({
+      name: 'SortBuf Product',
+      sku_code: `sortbuf-sku-${Date.now()}`,
+      length_mm: 1,
+      width_mm: 1,
+      height_mm: 1,
+      seller_id: sellerId,
+    }),
+  })
+  const productId = String(((await prRes.json()) as { id: string }).id)
+
+  await page.request.post(`${e2eApi}/integrations/wildberries/sellers/${sellerId}/link-product`, {
+    headers: auth,
+    data: JSON.stringify({ product_id: productId, nm_id: 424242 }),
+  })
+
+  await page.request.patch(`${e2eApi}/products/${productId}/packaging-instructions`, {
+    headers: auth,
+    data: JSON.stringify({ packaging_instructions: 'E2E sort buffer' }),
+  })
+
+  const baseIn = `${e2eApi}/operations/inbound-intake-requests`
+  const inbound = await page.request.post(baseIn, {
+    headers: auth,
+    data: JSON.stringify({ warehouse_id: whId }),
+  })
+  const inboundId = String(((await inbound.json()) as { id: string }).id)
+  await page.request.post(`${baseIn}/${inboundId}/lines`, {
+    headers: auth,
+    data: JSON.stringify({ product_id: productId, expected_qty: 4 }),
+  })
+  await page.request.post(`${baseIn}/${inboundId}/submit`, { headers: auth })
+  await beginInboundReceiving(page.request, auth, inboundId)
+  for (let i = 0; i < 4; i++) {
+    const scanRecv = await page.request.post(`${baseIn}/${inboundId}/receiving/scan`, {
+      headers: auth,
+      data: JSON.stringify({ barcode }),
+    })
+    expect(scanRecv.ok()).toBeTruthy()
+  }
+  const complete = await page.request.post(`${baseIn}/${inboundId}/complete-receiving`, {
+    headers: auth,
+  })
+  expect(complete.ok()).toBeTruthy()
+
+  const balAfter = await page.request.get(
+    `${e2eApi}/operations/inventory-balances/summary?warehouse_id=${whId}`,
+    { headers: auth },
+  )
+  const sortRow = ((await balAfter.json()) as { product_id: string; quantity_in_sorting: number }[]).find(
+    (r) => r.product_id === productId,
+  )
+  expect(sortRow?.quantity_in_sorting).toBe(4)
+
+  const whs = await page.request.get(`${e2eApi}/operations/wb-mp-warehouses`, { headers: auth })
+  const wbWid = Number(((await whs.json()) as { wb_warehouse_id: number }[])[0].wb_warehouse_id)
+
+  const mu = await page.request.post(`${e2eApi}/operations/marketplace-unload-requests`, {
+    headers: auth,
+    data: JSON.stringify({
+      warehouse_id: whId,
+      seller_id: sellerId,
+      wb_mp_warehouse_id: wbWid,
+    }),
+  })
+  const mid = String(((await mu.json()) as { id: string }).id)
+  await page.request.post(`${e2eApi}/operations/marketplace-unload-requests/${mid}/lines`, {
+    headers: auth,
+    data: JSON.stringify({ product_id: productId, quantity: 2 }),
+  })
+  const confirmRes = await page.request.post(
+    `${e2eApi}/operations/marketplace-unload-requests/${mid}/confirm`,
+    {
+      headers: auth,
+      data: JSON.stringify({ planned_shipment_date: '2026-06-01' }),
+    },
+  )
+  expect(confirmRes.ok()).toBeTruthy()
+
+  await page.reload()
+  await page.getByTestId('nav-ff-mp-shipments').click()
+  await Promise.all([
+    waitForGetOk(page, `/api/operations/marketplace-unload-requests/${mid}`),
+    waitForGetOk(page, '/api/operations/marketplace-unload-requests/'),
+    page.locator('[data-doc-kind="marketplace_unload"]').first().click(),
+  ])
+  await expect(page.getByTestId('ff-supplies-doc-dialog')).toBeVisible()
+
+  await Promise.all([
+    waitForPostOk(page, `/api/operations/marketplace-unload-requests/${mid}/boxes/batch`),
+    page.getByTestId('ff-mp-box-batch-create').click(),
+  ])
+
+  const addBtn = page.locator('[data-testid^="ff-mp-box-add-products-"]')
+  const addTestId = await addBtn.getAttribute('data-testid')
+  const boxId = addTestId?.replace('ff-mp-box-add-products-', '') ?? ''
+  await addBtn.click()
+  await expect(page.getByTestId('ff-mp-box-add-dialog')).toBeVisible()
+  await expect(page.getByTestId('ff-mp-box-add-sorting-buffer-hint')).toBeVisible()
+  await expect(page.getByTestId(`ff-mp-box-add-available-${productId}`)).toHaveText('2')
+
+  await page.getByTestId('ff-mp-box-add-scan-input').fill(barcode)
+  await Promise.all([
+    waitForPostOk(
+      page,
+      `/api/operations/marketplace-unload-requests/${mid}/boxes/${boxId}/scan`,
+    ),
+    page.getByTestId('ff-mp-box-add-scan-submit').click(),
+  ])
+  await expect(page.getByTestId('ff-mp-box-add-success-snackbar')).toContainText('Добавлено 1 шт')
   await expect(page.getByTestId('ff-mp-open-box-lines')).toContainText('1')
 })

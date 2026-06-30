@@ -25,8 +25,14 @@ import ChevronRightOutlined from '@mui/icons-material/ChevronRightOutlined'
 import UploadFileOutlined from '@mui/icons-material/UploadFileOutlined'
 import TimelineOutlined from '@mui/icons-material/TimelineOutlined'
 import { apiUrl } from '../../api'
+import { ProductBarcodePrintButton } from '../../components/ProductBarcodePrintButton'
+import { ProductPhotoThumb } from '../../components/ProductPhotoThumb'
+import { useWbProductCatalog } from '../../hooks/useWbProductCatalog'
 import { PageHeader } from '../../ui/PageHeader'
+import { productDisplayMetaFromCatalog } from '../../types/wbProductCatalog'
 import { readApiErrorMessage } from '../../utils/readApiErrorMessage'
+import { displayMetaToProductLabel } from '../../utils/productBarcodePrint'
+import { useMarkingCodePrint } from '../../utils/useMarkingCodePrint'
 import { MarkingImportDialog } from './MarkingImportDialog'
 import { MarkingSellerPicker } from './MarkingSellerPicker'
 
@@ -156,49 +162,6 @@ function SharedBasketChips({
   )
 }
 
-function forecastDateLabel(forecastDays: number): string {
-  const d = new Date()
-  d.setDate(d.getDate() + Math.ceil(forecastDays))
-  const dd = String(d.getDate()).padStart(2, '0')
-  const mm = String(d.getMonth() + 1).padStart(2, '0')
-  return `${dd}.${mm}`
-}
-
-function forecastDaysHint(forecastDays: number): string {
-  const rounded = Math.round(forecastDays * 10) / 10
-  return `(${rounded} дн.)`
-}
-
-function ForecastLabel({
-  forecastDays,
-  testId,
-}: {
-  forecastDays: number | null
-  testId?: string
-}) {
-  if (forecastDays == null || forecastDays <= 0) {
-    return (
-      <Typography component="span" variant="inherit" data-testid={testId}>
-        —
-      </Typography>
-    )
-  }
-  const dateLabel = forecastDateLabel(forecastDays)
-  const hint = forecastDaysHint(forecastDays)
-  return (
-    <Tooltip title={hint}>
-      <Typography
-        component="span"
-        variant="inherit"
-        data-testid={testId}
-        sx={{ cursor: 'help', borderBottom: '1px dotted', borderColor: 'text.disabled' }}
-      >
-        {dateLabel}
-      </Typography>
-    </Tooltip>
-  )
-}
-
 export function HonestSignScreen({
   token,
   sellerId,
@@ -224,6 +187,12 @@ export function HonestSignScreen({
 
   const effectiveSellerId = sellerId ?? selectedSellerId
   const importDisabled = sellerIdRequiredForImport && !effectiveSellerId
+  const { catalogById } = useWbProductCatalog(
+    token,
+    !sellerIdRequiredForImport || Boolean(effectiveSellerId),
+    effectiveSellerId,
+  )
+  const { openPrint, dialog: markingPrintDialog } = useMarkingCodePrint()
 
   const loadInventory = useCallback(async () => {
     inventoryLoadAbortRef.current?.abort()
@@ -583,32 +552,31 @@ export function HonestSignScreen({
         >
           <TableHead>
             <TableRow>
-              <TableCell sx={{ width: '28%' }}>Товар</TableCell>
-              <TableCell align="right" sx={{ width: '12%' }}>
+              <TableCell sx={{ minWidth: 280 }}>Товар</TableCell>
+              <TableCell align="right" sx={{ width: 110, whiteSpace: 'nowrap' }}>
                 Личный остаток
               </TableCell>
-              <TableCell sx={{ width: '28%' }}>Общая корзина</TableCell>
-              <TableCell align="right" sx={{ width: '12%' }}>
+              <TableCell sx={{ minWidth: 160 }}>Общая корзина</TableCell>
+              <TableCell align="right" sx={{ width: 100, whiteSpace: 'nowrap' }}>
                 Напечатано
               </TableCell>
-              <TableCell align="right" sx={{ width: '12%' }}>
-                Прогноз
+              <TableCell align="right" sx={{ width: 88, whiteSpace: 'nowrap' }}>
+                Действия
               </TableCell>
-              <TableCell padding="checkbox" sx={{ width: 48 }} />
             </TableRow>
           </TableHead>
           <TableBody>
             {busy ? (
               Array.from({ length: 3 }).map((_, i) => (
                 <TableRow key={i}>
-                  <TableCell colSpan={6}>
+                  <TableCell colSpan={5}>
                     <Skeleton height={32} />
                   </TableCell>
                 </TableRow>
               ))
             ) : tableProducts.length === 0 ? (
               <TableRow>
-                <TableCell colSpan={6}>
+                <TableCell colSpan={5}>
                   <Stack spacing={1} sx={{ py: 2, alignItems: 'flex-start' }}>
                     <Typography variant="body2" color="text.secondary">
                       {!hasAnyMarkingData
@@ -634,6 +602,11 @@ export function HonestSignScreen({
             ) : (
               tableProducts.map((row) => {
                 const low = isLowPersonalStock(row)
+                const displayMeta = productDisplayMetaFromCatalog(
+                  row.product_id,
+                  { sku_code: row.sku_code, product_name: row.product_name },
+                  catalogById,
+                )
                 return (
                   <TableRow
                     key={row.product_id}
@@ -645,22 +618,47 @@ export function HonestSignScreen({
                     data-testid={`${testIdPrefix}-product-row-${row.product_id}`}
                   >
                     <TableCell>
-                      <Stack spacing={0.25}>
-                        <Typography variant="body2" sx={{ fontWeight: 600 }}>
-                          {row.sku_code}
-                        </Typography>
-                        <Typography variant="caption" color="text.secondary" noWrap title={row.product_name}>
-                          {row.product_name}
-                        </Typography>
-                        {row.requires_honest_sign ? (
-                          <Chip
-                            size="small"
-                            color="primary"
-                            variant="outlined"
-                            label="ЧЗ"
-                            sx={{ alignSelf: 'flex-start', mt: 0.25 }}
-                          />
-                        ) : null}
+                      <Stack direction="row" spacing={1.5} sx={{ alignItems: 'center', minWidth: 0 }}>
+                        <ProductPhotoThumb
+                          src={displayMeta.wb_primary_image_url}
+                          alt={displayMeta.product_name}
+                          testId={`${testIdPrefix}-product-photo-${row.product_id}`}
+                        />
+                        <Box sx={{ minWidth: 0, flex: 1 }}>
+                          <Typography
+                            variant="body2"
+                            sx={{ fontWeight: 700 }}
+                            data-testid={`${testIdPrefix}-product-sku-${row.product_id}`}
+                          >
+                            {displayMeta.sku_code}
+                          </Typography>
+                          <Typography
+                            variant="body2"
+                            noWrap
+                            title={displayMeta.product_name}
+                            data-testid={`${testIdPrefix}-product-name-${row.product_id}`}
+                          >
+                            {displayMeta.product_name}
+                          </Typography>
+                          {displayMeta.wb_size ? (
+                            <Typography
+                              variant="caption"
+                              color="text.secondary"
+                              data-testid={`${testIdPrefix}-product-size-${row.product_id}`}
+                            >
+                              Размер: {displayMeta.wb_size}
+                            </Typography>
+                          ) : null}
+                          {row.requires_honest_sign ? (
+                            <Chip
+                              size="small"
+                              color="primary"
+                              variant="outlined"
+                              label="ЧЗ"
+                              sx={{ alignSelf: 'flex-start', mt: 0.25 }}
+                            />
+                          ) : null}
+                        </Box>
                       </Stack>
                     </TableCell>
                     <TableCell
@@ -677,14 +675,32 @@ export function HonestSignScreen({
                       />
                     </TableCell>
                     <TableCell align="right">{row.printed_count}</TableCell>
-                    <TableCell align="right">
-                      <ForecastLabel
-                        forecastDays={null}
-                        testId={`${testIdPrefix}-product-forecast-${row.product_id}`}
-                      />
-                    </TableCell>
-                    <TableCell padding="checkbox" align="right">
-                      <ChevronRightOutlined fontSize="small" color="action" />
+                    <TableCell align="right" onClick={(e) => e.stopPropagation()}>
+                      <Stack direction="row" spacing={0.25} sx={{ justifyContent: 'flex-end' }}>
+                        <ProductBarcodePrintButton
+                          meta={displayMeta}
+                          testId={`${testIdPrefix}-product-print-${row.product_id}`}
+                          onMarkingPrint={() =>
+                            openPrint({
+                              token,
+                              source: 'catalog',
+                              productId: row.product_id,
+                              documentNumber: null,
+                              qtyNeedPack: 1,
+                              markingAvailable: row.personal_available,
+                              qtyMarkingPrinted: row.printed_count,
+                              requiresHonestSign: true,
+                              skuCode: displayMeta.sku_code,
+                              productName: displayMeta.product_name,
+                              productLabel: displayMetaToProductLabel(displayMeta),
+                              onPrinted: () => {
+                                void loadInventory()
+                              },
+                            })
+                          }
+                        />
+                        <ChevronRightOutlined fontSize="small" color="action" sx={{ mt: 0.75 }} />
+                      </Stack>
                     </TableCell>
                   </TableRow>
                 )
@@ -715,6 +731,7 @@ export function HonestSignScreen({
         message={toastMessage ?? ''}
         data-testid={`${testIdPrefix}-import-toast`}
       />
+      {markingPrintDialog}
     </Stack>
   )
 }

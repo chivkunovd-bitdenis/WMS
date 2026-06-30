@@ -87,11 +87,16 @@ async def test_primary_accept_endpoint_removed(async_client: AsyncClient) -> Non
 
 @pytest.mark.asyncio
 async def test_loose_scan_increments_actual(async_client: AsyncClient) -> None:
-    """TC-NEW-IN-BE-03: receiving/scan +1 to loose intake."""
+    """TC-NEW-IN-BE-03: receiving/scan +1 to loose intake, not the last box."""
     suffix = str(int(time.time() * 1000))
     ah = await _admin_headers(async_client, suffix)
     rid, _pid, sku = await _submitted_request(async_client, ah, suffix, expected_qty=3)
     base = f"/operations/inbound-intake-requests/{rid}"
+
+    first_box = await async_client.post(f"{base}/boxes", headers=ah)
+    assert first_box.status_code == 201, first_box.text
+    second_box = await async_client.post(f"{base}/boxes", headers=ah)
+    assert second_box.status_code == 201, second_box.text
 
     for i in range(3):
         scan = await async_client.post(
@@ -104,8 +109,11 @@ async def test_loose_scan_increments_actual(async_client: AsyncClient) -> None:
 
     got = await async_client.get(base, headers=ah)
     assert got.status_code == 200
-    assert got.json()["status"] == "receiving"
-    assert got.json()["lines"][0]["actual_qty"] == 3
+    body = got.json()
+    assert body["status"] == "receiving"
+    assert body["lines"][0]["actual_qty"] == 3
+    last_box = next(b for b in body["boxes"] if b["id"] == second_box.json()["id"])
+    assert last_box["lines"] == []
 
 
 @pytest.mark.asyncio
@@ -153,27 +161,40 @@ async def test_manual_actual_qty_absolute(async_client: AsyncClient) -> None:
 
 @pytest.mark.asyncio
 async def test_create_box_and_scan_into_box(async_client: AsyncClient) -> None:
-    """TC-NEW-IN-BE-03: on-demand box + scan into box."""
+    """TC-NEW-IN-BE-03: on-demand boxes stay independent and completion does not require close."""
     suffix = str(int(time.time() * 1000))
     ah = await _admin_headers(async_client, suffix)
     rid, _pid, sku = await _submitted_request(async_client, ah, suffix, expected_qty=4)
     base = f"/operations/inbound-intake-requests/{rid}"
 
-    box = await async_client.post(f"{base}/boxes", headers=ah)
-    assert box.status_code == 201, box.text
-    box_id = box.json()["id"]
-    assert box.json()["is_open"] is True
+    box1 = await async_client.post(f"{base}/boxes", headers=ah)
+    assert box1.status_code == 201, box1.text
+    box2 = await async_client.post(f"{base}/boxes", headers=ah)
+    assert box2.status_code == 201, box2.text
+    box3 = await async_client.post(f"{base}/boxes", headers=ah)
+    assert box3.status_code == 201, box3.text
+    assert [
+        box1.json()["box_number"],
+        box2.json()["box_number"],
+        box3.json()["box_number"],
+    ] == [1, 2, 3]
 
+    box2_id = box2.json()["id"]
     for _ in range(4):
         scan = await async_client.post(
-            f"{base}/boxes/{box_id}/scan",
+            f"{base}/boxes/{box2_id}/scan",
             headers=ah,
             json={"barcode": sku},
         )
         assert scan.status_code == 200, scan.text
 
-    close = await async_client.post(f"{base}/boxes/{box_id}/close", headers=ah)
-    assert close.status_code == 200, close.text
+    done = await async_client.post(f"{base}/complete-receiving", headers=ah)
+    assert done.status_code == 200, done.text
+    body = done.json()
+    assert body["status"] == "sorting"
+    assert [b["box_number"] for b in body["boxes"]] == [1, 2, 3]
+    box2_body = next(b for b in body["boxes"] if b["box_number"] == 2)
+    assert box2_body["lines"][0]["quantity"] == 4
 
 
 @pytest.mark.asyncio

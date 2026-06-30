@@ -457,7 +457,11 @@ export function FfPackagingTaskPanel({
                       : `${displayMeta.product_name} · ${ln.storage_location_code}`,
                   }}
                   printTestId={`ff-packaging-line-print-${ln.id}`}
-                  onPrintClick={isMpUnloadTask ? () => openLinePrint(ln) : undefined}
+                  onPrintClick={
+                    ln.requires_honest_sign || isMpUnloadTask
+                      ? () => openLinePrint(ln)
+                      : undefined
+                  }
                 />
                 <TableCell sx={{ maxWidth: 220 }}>
                   <Typography variant="caption" data-testid="ff-packaging-instructions">

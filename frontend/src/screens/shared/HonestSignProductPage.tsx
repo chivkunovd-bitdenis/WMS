@@ -115,6 +115,7 @@ export function HonestSignProductPage({
   const [thresholdLoading, setThresholdLoading] = useState(false)
   const [thresholdSaving, setThresholdSaving] = useState(false)
   const [thresholdError, setThresholdError] = useState<string | null>(null)
+  const [thresholdPoolId, setThresholdPoolId] = useState('')
   const loadRequestId = useRef(0)
   const codesRequestId = useRef(0)
   const thresholdRequestId = useRef(0)
@@ -237,10 +238,24 @@ export function HonestSignProductPage({
   )
 
   const personalPools = overview?.personal_pools ?? []
-  const singlePersonalPool =
-    personalPools.length === 1 ? personalPools[0] : null
+  const thresholdPool = useMemo(() => {
+    if (personalPools.length === 0) {
+      return null
+    }
+    return personalPools.find((pool) => pool.pool_id === thresholdPoolId) ?? personalPools[0]
+  }, [personalPools, thresholdPoolId])
 
   const sharedBasketsCount = overview?.shared_baskets.length ?? 0
+
+  useEffect(() => {
+    if (personalPools.length === 0) {
+      setThresholdPoolId('')
+      return
+    }
+    if (!personalPools.some((pool) => pool.pool_id === thresholdPoolId)) {
+      setThresholdPoolId(personalPools[0].pool_id)
+    }
+  }, [personalPools, thresholdPoolId])
 
   const loadThreshold = useCallback(
     async (poolId: string) => {
@@ -280,7 +295,7 @@ export function HonestSignProductPage({
   )
 
   const saveThreshold = useCallback(async () => {
-    if (!singlePersonalPool) {
+    if (!thresholdPool) {
       return
     }
     setThresholdSaving(true)
@@ -288,7 +303,7 @@ export function HonestSignProductPage({
     try {
       const res = await fetch(
         apiUrl(
-          `/operations/marking-codes/pools/${singlePersonalPool.pool_id}/threshold`,
+          `/operations/marking-codes/pools/${thresholdPool.pool_id}/threshold`,
         ),
         {
           method: 'PUT',
@@ -321,18 +336,18 @@ export function HonestSignProductPage({
     authHeaders,
     forecastDaysThreshold,
     lowThreshold,
-    singlePersonalPool,
+    thresholdPool,
   ])
 
   useEffect(() => {
-    if (!singlePersonalPool) {
+    if (!thresholdPool) {
       setLowThreshold('')
       setForecastDaysThreshold('')
       setThresholdError(null)
       return
     }
-    void loadThreshold(singlePersonalPool.pool_id)
-  }, [loadThreshold, singlePersonalPool])
+    void loadThreshold(thresholdPool.pool_id)
+  }, [loadThreshold, thresholdPool])
 
   const setTab = (next: TabKey | null) => {
     setSearchParams(next ? { tab: next } : {})
@@ -405,14 +420,7 @@ export function HonestSignProductPage({
             </Paper>
           </Stack>
 
-          {personalPools.length > 1 ? (
-            <Alert severity="info" data-testid={`${testIdPrefix}-threshold-multi-pool-hint`}>
-              У товара несколько личных пулов — порог остатка настраивается в карточке каждого
-              пула ниже.
-            </Alert>
-          ) : null}
-
-          {singlePersonalPool ? (
+          {personalPools.length > 0 ? (
             <Paper variant="outlined" sx={{ p: 2 }} data-testid={`${testIdPrefix}-threshold`}>
               <Typography variant="subtitle1" sx={{ mb: 1.5 }}>
                 Порог остатка
@@ -427,6 +435,24 @@ export function HonestSignProductPage({
                 spacing={1.5}
                 sx={{ alignItems: { sm: 'flex-end' } }}
               >
+                {personalPools.length > 1 ? (
+                  <TextField
+                    select
+                    size="small"
+                    label="Личный пул"
+                    value={thresholdPool?.pool_id ?? ''}
+                    onChange={(e) => setThresholdPoolId(e.target.value)}
+                    disabled={thresholdLoading || thresholdSaving}
+                    sx={{ minWidth: { sm: 220 } }}
+                    data-testid={`${testIdPrefix}-threshold-pool`}
+                  >
+                    {personalPools.map((pool) => (
+                      <MenuItem key={pool.pool_id} value={pool.pool_id}>
+                        {pool.title}
+                      </MenuItem>
+                    ))}
+                  </TextField>
+                ) : null}
                 <TextField
                   size="small"
                   label="Мин. остаток"

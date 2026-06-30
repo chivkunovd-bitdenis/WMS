@@ -67,6 +67,52 @@ export function blockLabel(block: PrintLayoutUnit['block']): string {
   return block === 'cz' ? 'ЧЗ' : 'ШК ВБ'
 }
 
+export type TapeBlock = PrintLayoutUnit['block']
+
+/** Разворачивает layout одной единицы в плоскую ленту блоков. */
+export function expandLayoutToTape(layout: PrintLayout): TapeBlock[] {
+  const units = layout.units.length > 0 ? layout.units : [{ block: 'cz' as const, copies: 1 }]
+  const out: TapeBlock[] = []
+  for (const unit of units) {
+    const copies = Math.max(1, unit.copies)
+    for (let c = 0; c < copies; c += 1) {
+      out.push(unit.block)
+    }
+  }
+  return out
+}
+
+/** Лента по умолчанию: сначала все ЧЗ, затем все ШК ВБ. */
+export function buildDefaultTape(czCount: number, wbCount: number): TapeBlock[] {
+  const cz = Math.max(0, Math.min(99, Math.floor(czCount) || 0))
+  const wb = Math.max(0, Math.min(99, Math.floor(wbCount) || 0))
+  return [...Array(cz).fill('cz' as const), ...Array(wb).fill('label' as const)]
+}
+
+/** Сжимает соседние одинаковые блоки в layout.units (порядок сохраняется). */
+export function tapeToLayout(tape: TapeBlock[]): PrintLayout {
+  if (tape.length < 1) {
+    return { units: [{ block: 'cz', copies: 1 }] }
+  }
+  const units: PrintLayoutUnit[] = []
+  for (const block of tape) {
+    const last = units[units.length - 1]
+    if (last && last.block === block) {
+      last.copies += 1
+    } else {
+      units.push({ block, copies: 1 })
+    }
+  }
+  return { units }
+}
+
+export function countTapeBlocksFromTape(tape: TapeBlock[], unitCount: number): number {
+  if (unitCount < 1 || tape.length < 1) {
+    return 0
+  }
+  return tape.length * unitCount
+}
+
 export type TapePreviewUnit = {
   unitIndex: number
   blocks: string[]

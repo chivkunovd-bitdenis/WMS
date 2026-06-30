@@ -10,8 +10,6 @@ import {
   DialogContent,
   DialogTitle,
   FormControlLabel,
-  IconButton,
-  MenuItem,
   Radio,
   RadioGroup,
   Snackbar,
@@ -19,18 +17,17 @@ import {
   TextField,
   Typography,
 } from '@mui/material'
-import AddIcon from '@mui/icons-material/Add'
-import ArrowDownwardIcon from '@mui/icons-material/ArrowDownward'
-import ArrowUpwardIcon from '@mui/icons-material/ArrowUpward'
-import DeleteOutlined from '@mui/icons-material/DeleteOutlined'
 import { apiUrl } from '../api'
 import {
   MARKING_PRINT_PRESETS,
-  applyLabelsPerProductToLayout,
+  blockLabel,
+  buildDefaultTape,
   buildTapePreviewUnits,
   cloneLayout,
-  countTapeBlocks,
-  type PrintPresetId,
+  countTapeBlocksFromTape,
+  expandLayoutToTape,
+  tapeToLayout,
+  type TapeBlock,
 } from '../utils/markingPrintPresets'
 import { createPrintTemplate, resolvePrintTemplate, type PrintLayout } from '../utils/printTemplate'
 import { readApiErrorMessage } from '../utils/readApiErrorMessage'
@@ -51,7 +48,9 @@ const NON_HONEST_SIGN_LABEL_LAYOUT: PrintLayout = {
 
 export type MarkingPrintContext = {
   token: string
-  lineId: string
+  /** Пустой или отсутствует — печать из каталога/ЧЗ без строки упаковки (client-side). */
+  lineId?: string
+  source?: 'packaging' | 'catalog'
   productId: string
   documentNumber: string | null
   qtyNeedPack: number
@@ -77,10 +76,13 @@ type Props = {
 
 export function MarkingPrintDialog({ open, reprint, ctx, busy, onBusyChange, onClose }: Props) {
   const [error, setError] = useState<string | null>(null)
-  const [presetId, setPresetId] = useState<PrintPresetId>('pairs')
   const [layout, setLayout] = useState<PrintLayout>(MARKING_PRINT_PRESETS[0].layout)
   const [allowPartial, setAllowPartial] = useState(false)
-  const [labelsPerProduct, setLabelsPerProduct] = useState(1)
+  const [czQty, setCzQty] = useState(2)
+  const [wbQty, setWbQty] = useState(0)
+  const [tapeOrder, setTapeOrder] = useState<TapeBlock[]>(buildDefaultTape(2, 0))
+  const [dragTapeIndex, setDragTapeIndex] = useState<number | null>(null)
+  const [catalogPrintQty, setCatalogPrintQty] = useState(1)
   const [wbBarcodeQty, setWbBarcodeQty] = useState(1)
   const [saveName, setSaveName] = useState('')
   const [toast, setToast] = useState<string | null>(null)
@@ -89,6 +91,24 @@ export function MarkingPrintDialog({ open, reprint, ctx, busy, onBusyChange, onC
   const [reprintCodesLoading, setReprintCodesLoading] = useState(false)
 
   const requiresHonestSign = ctx?.requiresHonestSign ?? true
+  const isCatalogSource = ctx?.source === 'catalog' || !ctx?.lineId
+
+  const applyTapeCounts = (nextCz: number, nextWb: number) => {
+    const cz = Math.max(0, Math.min(99, Math.floor(nextCz) || 0))
+    const wb = Math.max(0, Math.min(99, Math.floor(nextWb) || 0))
+    const tape = buildDefaultTape(cz > 0 || wb > 0 ? cz : 1, wb)
+    setCzQty(cz > 0 || wb > 0 ? cz : 1)
+    setWbQty(wb)
+    setTapeOrder(tape)
+    setLayout(tapeToLayout(tape))
+  }
+
+  const applyTapeOrder = (nextTape: TapeBlock[]) => {
+    setTapeOrder(nextTape)
+    setLayout(tapeToLayout(nextTape))
+    setCzQty(nextTape.filter((b) => b === 'cz').length)
+    setWbQty(nextTape.filter((b) => b === 'label').length)
+  }
 
   useEffect(() => {
     if (!open || !ctx) {
@@ -96,20 +116,24 @@ export function MarkingPrintDialog({ open, reprint, ctx, busy, onBusyChange, onC
     }
     setError(null)
     setAllowPartial(false)
-    setLabelsPerProduct(1)
     setSaveName('')
     setWbBarcodeQty(1)
+    setCatalogPrintQty(1)
     setReprintCodes([])
     setSelectedReprintCodeId('')
     setReprintCodesLoading(false)
+    setDragTapeIndex(null)
     if (!requiresHonestSign) {
       setLayout(cloneLayout(NON_HONEST_SIGN_LABEL_LAYOUT))
       return
     }
-    const defaultPresetId: PrintPresetId = 'pairs'
-    setPresetId(defaultPresetId)
+    const defaultPresetId = 'pairs' as const
     const defaultPreset =
       MARKING_PRINT_PRESETS.find((preset) => preset.id === defaultPresetId) ?? MARKING_PRINT_PRESETS[0]
+    const defaultTape = expandLayoutToTape(defaultPreset.layout)
+    setCzQty(defaultTape.filter((b) => b === 'cz').length)
+    setWbQty(defaultTape.filter((b) => b === 'label').length)
+    setTapeOrder(defaultTape)
     setLayout(cloneLayout(defaultPreset.layout))
     void (async () => {
       try {
@@ -120,18 +144,27 @@ export function MarkingPrintDialog({ open, reprint, ctx, busy, onBusyChange, onC
             JSON.stringify(preset.layout) === JSON.stringify(template.layout),
         )
         if (matched) {
-          setPresetId(matched.id)
+          const tape = expandLayoutToTape(matched.layout)
+          setCzQty(tape.filter((b) => b === 'cz').length)
+          setWbQty(tape.filter((b) => b === 'label').length)
+          setTapeOrder(tape)
           setLayout(cloneLayout(matched.layout))
         } else {
-          setPresetId('custom')
+          const tape = expandLayoutToTape(template.layout)
+          setCzQty(tape.filter((b) => b === 'cz').length || 1)
+          setWbQty(tape.filter((b) => b === 'label').length)
+          setTapeOrder(tape.length > 0 ? tape : buildDefaultTape(1, 0))
           setLayout(cloneLayout(template.layout))
         }
       } catch {
-        setPresetId(defaultPresetId)
+        const tape = expandLayoutToTape(defaultPreset.layout)
+        setCzQty(tape.filter((b) => b === 'cz').length)
+        setWbQty(tape.filter((b) => b === 'label').length)
+        setTapeOrder(tape)
         setLayout(cloneLayout(defaultPreset.layout))
       }
     })()
-    if (reprint) {
+    if (reprint && ctx.lineId) {
       setReprintCodesLoading(true)
       void (async () => {
         try {
@@ -162,7 +195,9 @@ export function MarkingPrintDialog({ open, reprint, ctx, busy, onBusyChange, onC
     ? selectedReprintCodeId
       ? 1
       : (ctx?.qtyMarkingPrinted ?? 0)
-    : (ctx?.qtyNeedPack ?? 0)
+    : isCatalogSource
+      ? catalogPrintQty
+      : (ctx?.qtyNeedPack ?? 0)
   const packUnits = useMemo(
     () =>
       resolvePackUnits({
@@ -188,59 +223,25 @@ export function MarkingPrintDialog({ open, reprint, ctx, busy, onBusyChange, onC
 
   const previewUnits = useMemo(() => buildTapePreviewUnits(layout, 3), [layout])
   const previewTapeCount = useMemo(
-    () => countTapeBlocks(3, layout, labelsPerProduct),
-    [layout, labelsPerProduct],
+    () => countTapeBlocksFromTape(tapeOrder, 3),
+    [tapeOrder],
   )
   const totalTapeCount = useMemo(
-    () => countTapeBlocks(canPrintCount, layout, labelsPerProduct),
-    [canPrintCount, layout, labelsPerProduct],
+    () => countTapeBlocksFromTape(tapeOrder, canPrintCount),
+    [tapeOrder, canPrintCount],
   )
 
-  const applyPreset = (id: PrintPresetId) => {
-    setPresetId(id)
-    const preset = MARKING_PRINT_PRESETS.find((p) => p.id === id)
-    if (preset) {
-      setLayout(cloneLayout(preset.layout))
-    }
-  }
-
-  const updateUnit = (index: number, patch: Partial<PrintLayout['units'][number]>) => {
-    setLayout((prev) => ({
-      units: prev.units.map((unit, i) => (i === index ? { ...unit, ...patch } : unit)),
-    }))
-    setPresetId('custom')
-  }
-
-  const moveUnit = (index: number, direction: -1 | 1) => {
-    setLayout((prev) => {
-      const next = [...prev.units]
-      const target = index + direction
-      if (target < 0 || target >= next.length) {
-        return prev
-      }
-      const tmp = next[index]
-      next[index] = next[target]
-      next[target] = tmp
-      return { units: next }
-    })
-    setPresetId('custom')
-  }
-
-  const removeUnit = (index: number) => {
-    setLayout((prev) => ({
-      units: prev.units.filter((_, i) => i !== index),
-    }))
-    setPresetId('custom')
-  }
-
-  const addUnit = (block: 'label' | 'cz') => {
-    if (!requiresHonestSign && block === 'cz') {
+  const reorderTape = (fromIndex: number, toIndex: number) => {
+    if (fromIndex === toIndex) {
       return
     }
-    setLayout((prev) => ({
-      units: [...prev.units, { block, copies: 1 }],
-    }))
-    setPresetId('custom')
+    const next = [...tapeOrder]
+    const [item] = next.splice(fromIndex, 1)
+    if (!item) {
+      return
+    }
+    next.splice(toIndex, 0, item)
+    applyTapeOrder(next)
   }
 
   const printLabelOnlyTape = async () => {
@@ -252,6 +253,34 @@ export function MarkingPrintDialog({ open, reprint, ctx, busy, onBusyChange, onC
       productLabel: ctx.productLabel ?? null,
     }))
     await printMarkingCodeTape(units, NON_HONEST_SIGN_LABEL_LAYOUT, ctx.productLabel)
+    ctx.onPrinted()
+    onClose()
+  }
+
+  const printCatalogTape = async () => {
+    if (!ctx || canPrintCount < 1) {
+      return
+    }
+    const res = await fetch(apiUrl(`/operations/marking-codes/products/${ctx.productId}/codes`), {
+      headers: { Authorization: `Bearer ${ctx.token}` },
+    })
+    if (!res.ok) {
+      throw new Error(await readApiErrorMessage(res))
+    }
+    const rows = (await res.json()) as { cis_code: string; status: string }[]
+    const available = rows.filter((r) => r.status === 'available').map((r) => r.cis_code)
+    if (available.length < canPrintCount) {
+      throw new Error(`Не хватает ${canPrintCount - available.length} КМ в пуле.`)
+    }
+    const codes = available.slice(0, canPrintCount)
+    await printMarkingCodeTape(
+      codes.map((cis) => ({
+        cis,
+        productLabel: ctx.productLabel ?? null,
+      })),
+      layout,
+      ctx.productLabel,
+    )
     ctx.onPrinted()
     onClose()
   }
@@ -270,6 +299,22 @@ export function MarkingPrintDialog({ open, reprint, ctx, busy, onBusyChange, onC
       } finally {
         onBusyChange(false)
       }
+      return
+    }
+    if (isCatalogSource && !reprint) {
+      onBusyChange(true)
+      setError(null)
+      try {
+        await printCatalogTape()
+      } catch (e) {
+        setError(e instanceof Error ? e.message : 'Не удалось напечатать ЧЗ.')
+      } finally {
+        onBusyChange(false)
+      }
+      return
+    }
+    if (!ctx.lineId) {
+      setError('Нет строки упаковки для печати КМ.')
       return
     }
     onBusyChange(true)
@@ -317,7 +362,7 @@ export function MarkingPrintDialog({ open, reprint, ctx, busy, onBusyChange, onC
           cis,
           productLabel: ctx.productLabel ?? null,
         })),
-        applyLabelsPerProductToLayout(data.layout ?? layout, labelsPerProduct),
+        data.layout ?? layout,
         ctx.productLabel,
       )
       ctx.onPrinted()
@@ -392,7 +437,9 @@ export function MarkingPrintDialog({ open, reprint, ctx, busy, onBusyChange, onC
                   {requiresHonestSign
                     ? reprint
                       ? `Выбрано для перепечатки: ${selectedReprintCodeId ? 1 : 0} из ${ctx.qtyMarkingPrinted}`
-                      : `Нужно: ${qtyNeed} · Доступно в пуле: ${available}`
+                      : isCatalogSource
+                        ? `К печати: ${catalogPrintQty} · Доступно в пуле: ${available}`
+                        : `Нужно: ${qtyNeed} · Доступно в пуле: ${available}`
                     : `К упаковке: ${qtyNeed}`}
                 </Typography>
               </Box>
@@ -439,114 +486,85 @@ export function MarkingPrintDialog({ open, reprint, ctx, busy, onBusyChange, onC
 
             {!reprint && requiresHonestSign ? (
               <>
-                <TextField
-                  size="small"
-                  label="ШК ВБ на каждый товар"
-                  type="number"
-                  value={labelsPerProduct}
-                  onChange={(e) =>
-                    setLabelsPerProduct(Math.max(1, Math.min(99, Number(e.target.value) || 1)))
-                  }
-                  slotProps={{ htmlInput: { min: 1, max: 99 } }}
-                  data-testid="marking-print-labels-per-product"
-                  sx={{ maxWidth: 220 }}
-                />
-
-                <RadioGroup
-                  value={presetId}
-                  onChange={(e) => applyPreset(e.target.value as PrintPresetId)}
-                >
-                  {MARKING_PRINT_PRESETS.map((preset) => (
-                    <FormControlLabel
-                      key={preset.id}
-                      value={preset.id}
-                      control={<Radio size="small" data-testid={`marking-print-preset-${preset.id}`} />}
-                      label={preset.label}
-                    />
-                  ))}
-                </RadioGroup>
-
-                {presetId === 'custom' ? (
-                  <Stack spacing={1} data-testid="marking-print-custom-builder">
-                    {layout.units.map((unit, index) => (
-                      <Stack
-                        key={`${unit.block}-${index}`}
-                        direction="row"
-                        spacing={1}
-                        sx={{ alignItems: 'center' }}
-                      >
-                        <TextField
-                          select
-                          size="small"
-                          label="Блок"
-                          value={unit.block}
-                          onChange={(e) =>
-                            updateUnit(index, { block: e.target.value as 'label' | 'cz' })
-                          }
-                          sx={{ minWidth: 120 }}
-                        >
-                          <MenuItem value="cz">ЧЗ</MenuItem>
-                          <MenuItem value="label">ШК ВБ</MenuItem>
-                        </TextField>
-                        <TextField
-                          size="small"
-                          label="Копий"
-                          type="number"
-                          value={unit.copies}
-                          onChange={(e) =>
-                            updateUnit(index, {
-                              copies: Math.max(1, Math.min(10, Number(e.target.value) || 1)),
-                            })
-                          }
-                          slotProps={{ htmlInput: { min: 1, max: 10 } }}
-                          sx={{ width: 88 }}
-                        />
-                        <IconButton
-                          size="small"
-                          aria-label="Выше"
-                          onClick={() => moveUnit(index, -1)}
-                          disabled={index === 0}
-                        >
-                          <ArrowUpwardIcon fontSize="small" />
-                        </IconButton>
-                        <IconButton
-                          size="small"
-                          aria-label="Ниже"
-                          onClick={() => moveUnit(index, 1)}
-                          disabled={index === layout.units.length - 1}
-                        >
-                          <ArrowDownwardIcon fontSize="small" />
-                        </IconButton>
-                        <IconButton
-                          size="small"
-                          aria-label="Удалить"
-                          onClick={() => removeUnit(index)}
-                          disabled={layout.units.length <= 1}
-                        >
-                          <DeleteOutlined fontSize="small" />
-                        </IconButton>
-                      </Stack>
-                    ))}
-                    <Stack direction="row" spacing={1}>
-                      <Button size="small" startIcon={<AddIcon />} onClick={() => addUnit('cz')}>
-                        ЧЗ
-                      </Button>
-                      <Button size="small" startIcon={<AddIcon />} onClick={() => addUnit('label')}>
-                        ШК ВБ
-                      </Button>
-                    </Stack>
-                  </Stack>
+                {isCatalogSource ? (
+                  <TextField
+                    size="small"
+                    label="Количество товаров"
+                    type="number"
+                    value={catalogPrintQty}
+                    onChange={(e) =>
+                      setCatalogPrintQty(Math.max(1, Math.min(999, Number(e.target.value) || 1)))
+                    }
+                    slotProps={{ htmlInput: { min: 1, max: 999 } }}
+                    data-testid="marking-print-catalog-qty"
+                    sx={{ maxWidth: 220 }}
+                  />
                 ) : null}
 
-                <Box data-testid="marking-print-preview">
+                <Stack direction="row" spacing={1.5} sx={{ flexWrap: 'wrap' }}>
+                  <TextField
+                    size="small"
+                    label="ЧЗ"
+                    type="number"
+                    value={czQty}
+                    onChange={(e) => applyTapeCounts(Number(e.target.value) || 0, wbQty)}
+                    slotProps={{ htmlInput: { min: 0, max: 99 } }}
+                    data-testid="marking-print-cz-qty"
+                    sx={{ width: 120 }}
+                  />
+                  <TextField
+                    size="small"
+                    label="ШК ВБ"
+                    type="number"
+                    value={wbQty}
+                    onChange={(e) => applyTapeCounts(czQty, Number(e.target.value) || 0)}
+                    slotProps={{ htmlInput: { min: 0, max: 99 } }}
+                    data-testid="marking-print-wb-qty"
+                    sx={{ width: 120 }}
+                  />
+                </Stack>
+
+                <Box data-testid="marking-print-tape">
                   <Typography
                     variant="caption"
                     color="text.secondary"
                     sx={{ mb: 0.5, display: 'block' }}
                     data-testid="marking-print-preview-tape-count"
                   >
-                    Предпросмотр ленты (один КМ на единицу) · {previewTapeCount} блоков на 3 ед.
+                    Лента на одну единицу · {tapeOrder.length} блоков · {previewTapeCount} блоков на 3 ед.
                   </Typography>
+                  <Stack
+                    direction="row"
+                    spacing={0.5}
+                    sx={{ flexWrap: 'wrap', alignItems: 'center', minHeight: 32 }}
+                  >
+                    {tapeOrder.map((block, index) => (
+                      <Chip
+                        key={`${block}-${index}`}
+                        size="small"
+                        label={blockLabel(block)}
+                        variant="outlined"
+                        draggable
+                        onDragStart={() => setDragTapeIndex(index)}
+                        onDragOver={(e) => e.preventDefault()}
+                        onDrop={() => {
+                          if (dragTapeIndex !== null) {
+                            reorderTape(dragTapeIndex, index)
+                          }
+                          setDragTapeIndex(null)
+                        }}
+                        onDragEnd={() => setDragTapeIndex(null)}
+                        sx={{
+                          cursor: 'grab',
+                          opacity: dragTapeIndex === index ? 0.45 : 1,
+                        }}
+                        data-testid={`marking-print-tape-item-${index}`}
+                      />
+                    ))}
+                  </Stack>
+                </Box>
+
+                <Box data-testid="marking-print-preview">
                   {previewUnits.map((unit) => (
                     <Stack
                       key={unit.unitIndex}

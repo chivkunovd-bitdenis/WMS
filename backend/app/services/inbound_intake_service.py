@@ -610,19 +610,11 @@ async def complete_receiving(
     tenant_id: uuid.UUID,
     request_id: uuid.UUID,
 ) -> InboundIntakeRequest:
-    from app.services import inbound_intake_box_service as inbound_box_svc
-
     req = await get_request(session, tenant_id, request_id)
     if req is None:
         raise InboundIntakeError("request_not_found")
     if req.status not in RECEIVING_STATUSES:
         raise InboundIntakeError("not_verifying")
-    try:
-        await inbound_box_svc.assert_no_open_intake_box(session, request_id)
-    except inbound_box_svc.InboundIntakeBoxError as exc:
-        if exc.code == "open_box_exists":
-            raise InboundIntakeError("open_box_exists") from None
-        raise
     await sync_request_actuals_from_boxes(session, req)
     line_discrepancy = False
     for line in req.lines:

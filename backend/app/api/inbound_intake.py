@@ -165,6 +165,7 @@ class InboundIntakeRequestOut(BaseModel):
     seller_name: str | None = None
     created_at: str | None = None
     distribution_completed_at: str | None = None
+    sorting_remaining_qty: int = 0
     boxes: list[InboundIntakeBoxOut] = Field(default_factory=list)
     lines: list[InboundIntakeLineOut]
 
@@ -339,6 +340,7 @@ def _request_out(
         distribution_completed_at=r.distribution_completed_at.isoformat()
         if r.distribution_completed_at is not None
         else None,
+        sorting_remaining_qty=svc.sorting_remaining_qty(r),
         boxes=boxes_out,
         lines=lines_out,
     )

@@ -107,6 +107,7 @@ type InboundDetail = {
   seller_name?: string | null
   created_at?: string | null
   distribution_completed_at: string | null
+  sorting_remaining_qty?: number
   boxes: InboundBox[]
   lines: InboundLine[]
 }
@@ -200,6 +201,9 @@ export function FfInboundRequestView({
 
   const sortingRemainingTotal = useMemo(() => {
     if (!detail) return 0
+    if (detail.sorting_remaining_qty != null) {
+      return detail.sorting_remaining_qty
+    }
     return detail.lines.reduce((sum, ln) => {
       const accepted = ln.actual_qty ?? 0
       return sum + Math.max(0, accepted - ln.posted_qty)
@@ -986,15 +990,14 @@ export function FfInboundRequestView({
     }
   }
 
-  const openBoxAddDialog = async () => {
-    const openBox = detail?.boxes?.find((b) => b.is_open) ?? null
-    if (openBox) {
-      setBoxAddDialogBoxId(openBox.id)
-      return
-    }
-    const boxId = await createInboundBox()
+  const openBoxAddDialog = async (boxId?: string) => {
     if (boxId) {
       setBoxAddDialogBoxId(boxId)
+      return
+    }
+    const createdBoxId = await createInboundBox()
+    if (createdBoxId) {
+      setBoxAddDialogBoxId(createdBoxId)
     }
   }
 
@@ -1007,12 +1010,7 @@ export function FfInboundRequestView({
         { method: 'POST', headers: authHeaders },
       )
       if (!res.ok) {
-        const msg = await readApiErrorMessage(res)
-        setError(
-          msg === 'open_box_exists'
-            ? 'Сначала закройте открытый короб.'
-            : scanErrorMessageRu(msg),
-        )
+        setError(scanErrorMessageRu(await readApiErrorMessage(res)))
         return
       }
       setFinishConfirmOpen(false)
@@ -1076,20 +1074,19 @@ export function FfInboundRequestView({
     setManualEditLineId(null)
   }
 
+  const boxes = useMemo(
+    () => [...(detail?.boxes ?? [])].sort((a, b) => a.box_number - b.box_number),
+    [detail?.boxes],
+  )
+
   const boxAddDialogBox = useMemo(
-    () => detail?.boxes?.find((b) => b.id === boxAddDialogBoxId) ?? null,
-    [boxAddDialogBoxId, detail?.boxes],
+    () => boxes.find((b) => b.id === boxAddDialogBoxId) ?? null,
+    [boxAddDialogBoxId, boxes],
   )
 
-  const closedBoxes = useMemo(
-    () => (detail?.boxes ?? []).filter((b) => b.intake_closed_at != null),
-    [detail?.boxes],
-  )
+  const closedBoxes = useMemo(() => boxes.filter((b) => b.intake_closed_at != null), [boxes])
 
-  const openBoxes = useMemo(
-    () => (detail?.boxes ?? []).filter((b) => b.is_open),
-    [detail?.boxes],
-  )
+  const openBoxes = useMemo(() => boxes.filter((b) => b.is_open), [boxes])
 
   const actualEditable =
     isFulfillmentAdmin &&
@@ -1176,11 +1173,11 @@ export function FfInboundRequestView({
               receivingActive ? (
                 <Button
                   variant="contained"
-                  disabled={busy || openBoxes.length > 0}
+                  disabled={busy}
                   onClick={() => void requestCompleteReceiving()}
                   data-testid="ff-inbound-verify-complete"
                 >
-                  Завершить
+                  Завершить приёмку
                 </Button>
               ) : null}
 
@@ -1490,8 +1487,8 @@ export function FfInboundRequestView({
                 Скан приёмки
               </Typography>
               <Typography variant="body2" color="text.secondary" sx={{ mb: 1.5 }}>
-                Скан штрихкода товара добавляет +1 к принятому количеству. Скан в короб — только в
-                модалке «Добавить в короб».
+                Скан штрихкода товара добавляет +1 к принятому количеству. Скан в короб — только
+                в карточке короба.
               </Typography>
               <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1}>
                 <TextField
@@ -1519,11 +1516,19 @@ export function FfInboundRequestView({
                 </Button>
                 <Button
                   variant="outlined"
-                  disabled={busy || openBoxes.length > 0}
+                  disabled={busy}
                   onClick={() => void openBoxAddDialog()}
                   data-testid="ff-inbound-add-to-box"
                 >
-                  Добавить в короб
+                  Создать короб
+                </Button>
+                <Button
+                  variant="contained"
+                  disabled={busy}
+                  onClick={() => void requestCompleteReceiving()}
+                  data-testid="ff-inbound-verify-complete-panel"
+                >
+                  Завершить приёмку
                 </Button>
               </Stack>
               {hasLineDiscrepancy ? (
@@ -1534,7 +1539,7 @@ export function FfInboundRequestView({
             </Paper>
           ) : null}
 
-          {isFulfillmentAdmin && !sortingView && (detail.boxes?.length ?? 0) > 0 ? (
+          {isFulfillmentAdmin && !sortingView && boxes.length > 0 ? (
             <Paper variant="outlined" sx={{ p: 2, mt: 2 }} data-testid="ff-inbound-boxes-panel">
               <Stack
                 direction={{ xs: 'column', sm: 'row' }}
@@ -1546,7 +1551,7 @@ export function FfInboundRequestView({
                     Короба приёмки
                   </Typography>
                   <Typography variant="body2" color="text.secondary">
-                    Закрытые короба с составом. Этикетки 58×40 (CODE128).
+                    Открытые короба доступны для добавления товаров. Этикетки 58×40 (CODE128).
                   </Typography>
                 </Box>
                 <Button
@@ -1558,6 +1563,53 @@ export function FfInboundRequestView({
                   Печать всех
                 </Button>
               </Stack>
+              {openBoxes.length > 0 ? (
+                <Stack spacing={1.5} sx={{ mb: closedBoxes.length > 0 ? 1.5 : 0 }}>
+                  {openBoxes.map((box) => (
+                    <Paper key={box.id} variant="outlined" sx={{ p: 1.5 }} data-testid="ff-inbound-box-open">
+                      <Stack
+                        direction={{ xs: 'column', sm: 'row' }}
+                        spacing={1}
+                        sx={{ alignItems: { sm: 'center' }, mb: 1 }}
+                      >
+                        <Typography variant="body2" sx={{ fontWeight: 700 }}>
+                          Короб № {box.box_number}{' '}
+                          <Typography component="code" variant="body2">
+                            {box.internal_barcode}
+                          </Typography>
+                        </Typography>
+                        <Box sx={{ flexGrow: 1 }} />
+                        <Button
+                          size="small"
+                          variant="outlined"
+                          disabled={busy}
+                          onClick={() => void openBoxAddDialog(box.id)}
+                          data-testid={`ff-inbound-box-add-products-${box.id}`}
+                        >
+                          Добавить товары
+                        </Button>
+                      </Stack>
+                      {box.lines.length > 0 ? (
+                        <Stack spacing={0.25}>
+                          {box.lines.map((ln) => (
+                            <Typography key={ln.id} variant="body2" color="text.secondary">
+                              {ln.sku_code} · {ln.product_name}: {ln.quantity}
+                            </Typography>
+                          ))}
+                        </Stack>
+                      ) : (
+                        <Typography variant="body2" color="text.secondary">
+                          Пока нет товаров
+                        </Typography>
+                      )}
+                    </Paper>
+                  ))}
+                </Stack>
+              ) : (
+                <Typography variant="body2" color="text.secondary" sx={{ mb: 1.5 }}>
+                  Открытых коробов пока нет.
+                </Typography>
+              )}
               {closedBoxes.length > 0 ? (
                 <Stack spacing={1.5} sx={{ mb: 1.5 }}>
                   {closedBoxes.map((box) => (
@@ -1600,16 +1652,6 @@ export function FfInboundRequestView({
                     </Paper>
                   ))}
                 </Stack>
-              ) : (
-                <Typography variant="body2" color="text.secondary" sx={{ mb: 1.5 }}>
-                  Закрытых коробов пока нет.
-                </Typography>
-              )}
-              {openBoxes.length > 0 ? (
-                <Alert severity="info" data-testid="ff-inbound-open-box-hint">
-                  Открыт короб № {openBoxes[0]!.box_number}. Закройте его в модалке «Добавить в
-                  короб» перед завершением приёмки.
-                </Alert>
               ) : null}
             </Paper>
           ) : null}
@@ -2045,7 +2087,7 @@ export function FfInboundRequestView({
         onClose={() => setFinishConfirmOpen(false)}
         data-testid="ff-inbound-discrepancy-dialog"
       >
-        <DialogTitle>Есть расхождения, точно провести?</DialogTitle>
+        <DialogTitle>Есть расхождения, провести приёмку?</DialogTitle>
         <DialogContent>
           <Typography variant="body2">
             Факт по одной или нескольким позициям не совпадает с планом. Приёмка будет проведена с
@@ -2063,11 +2105,10 @@ export function FfInboundRequestView({
             onClick={() => void completeReceiving()}
             data-testid="ff-inbound-discrepancy-confirm"
           >
-            Завершить
+            Завершить приёмку
           </Button>
         </DialogActions>
       </Dialog>
     </Box>
   )
 }
-

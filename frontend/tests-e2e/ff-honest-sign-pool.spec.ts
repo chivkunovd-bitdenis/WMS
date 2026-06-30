@@ -1,6 +1,6 @@
 import { expect, test } from '@playwright/test'
 
-import { waitForGetOk, waitForPostOk, waitForPutOk } from './api-waits'
+import { waitForGetOk, waitForPostOk } from './api-waits'
 import { openFulfillmentRegistration } from './auth-flow'
 import { selectHonestSignSeller } from './ff-honest-sign-helpers'
 
@@ -54,15 +54,7 @@ test('FF honest sign pool card: tabs and CSV export', async ({ page }) => {
   await page.goto(`/app/ff/honest-sign/pool/${poolId}`)
   await expect(page.getByTestId('ff-honest-sign-pool-page')).toBeVisible()
   await expect(page.getByTestId('ff-honest-sign-pool-overview')).toBeVisible()
-  await expect(page.getByTestId('ff-honest-sign-pool-thresholds')).toBeVisible()
-
-  await page.getByTestId('ff-honest-sign-pool-threshold-low').locator('input').fill('15')
-  await Promise.all([
-    waitForPutOk(page, `/api/operations/marking-codes/pools/${poolId}/threshold`),
-    page.getByTestId('ff-honest-sign-pool-threshold-save').click(),
-  ])
-  await page.reload()
-  await expect(page.getByTestId('ff-honest-sign-pool-threshold-low').locator('input')).toHaveValue('15')
+  await expect(page.getByTestId('ff-honest-sign-pool-thresholds')).toHaveCount(0)
 
   await page.getByTestId('ff-honest-sign-pool-tab-products').click()
   await expect(page.getByTestId('ff-honest-sign-pool-products')).toBeVisible()

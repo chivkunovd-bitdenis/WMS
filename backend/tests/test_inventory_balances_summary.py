@@ -194,13 +194,27 @@ async def test_available_matches_mp_reserve_only_after_putaway(
         json={"warehouse_id": wid},
     )
     mid = mp.json()["id"]
-    blocked = await async_client.put(
+    # STAB-OUT-BE-01: товар в зоне сортировки доступен для плана до post/раскладки.
+    ok_from_sorting = await async_client.put(
         f"/operations/marketplace-unload-requests/{mid}/lines",
         headers=sh,
         json={"lines": [{"product_id": pid, "quantity": 4}]},
     )
-    assert blocked.status_code == 422
-    assert blocked.json()["detail"] == "insufficient_available"
+    assert ok_from_sorting.status_code == 200, ok_from_sorting.text
+
+    over = await async_client.put(
+        f"/operations/marketplace-unload-requests/{mid}/lines",
+        headers=sh,
+        json={"lines": [{"product_id": pid, "quantity": 11}]},
+    )
+    assert over.status_code == 422
+    assert over.json()["detail"] == "insufficient_available"
+
+    await async_client.put(
+        f"/operations/marketplace-unload-requests/{mid}/lines",
+        headers=sh,
+        json={"lines": [{"product_id": pid, "quantity": 4}]},
+    )
 
     post = await async_client.post(f"{base}/{rid}/post", headers=ah)
     assert post.status_code == 200, post.text

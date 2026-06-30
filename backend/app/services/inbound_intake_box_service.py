@@ -56,9 +56,6 @@ async def create_open_box(
 ) -> InboundIntakeBox:
     """Create a new inbound box and open it for piece intake (on demand)."""
     req = await _get_request_for_intake(session, tenant_id, request_id)
-    if await _open_box_for_request(session, request_id) is not None:
-        raise InboundIntakeBoxError("open_box_exists")
-
     box_number = await _next_box_number(session, req.id)
     now = datetime.now(UTC)
     for _ in range(8):
@@ -366,12 +363,6 @@ async def open_box_by_barcode(
     if box.intake_closed_at is not None:
         raise InboundIntakeBoxError("box_closed")
 
-    open_box = await _open_box_for_request(session, request_id)
-    if open_box is not None:
-        if open_box.id == box.id:
-            return await _load_box(session, box.id)
-        await _close_open_boxes(session, request_id)
-
     if box.intake_opened_at is None:
         box.intake_opened_at = datetime.now(UTC)
     await session.flush()
@@ -398,10 +389,6 @@ async def scan_product_into_box(
     if box.intake_closed_at is not None:
         raise InboundIntakeBoxError("box_closed")
     if box.intake_opened_at is None:
-        raise InboundIntakeBoxError("no_open_box")
-
-    open_box = await _open_box_for_request(session, request_id)
-    if open_box is None or open_box.id != box.id:
         raise InboundIntakeBoxError("no_open_box")
 
     idx = await _barcode_index_for_request(session, tenant_id, req)
@@ -460,10 +447,6 @@ async def set_product_quantity_in_open_box(
     if box.intake_closed_at is not None:
         raise InboundIntakeBoxError("box_closed")
     if box.intake_opened_at is None:
-        raise InboundIntakeBoxError("no_open_box")
-
-    open_box = await _open_box_for_request(session, request_id)
-    if open_box is None or open_box.id != box.id:
         raise InboundIntakeBoxError("no_open_box")
 
     expected = await _expected_qty(session, req.id, product_id)

@@ -51,7 +51,21 @@ test('FF honest sign product-first: list, product card, shared basket pool', asy
 
   const productRow = page.getByTestId(`ff-honest-sign-product-row-${productX.id}`)
   await expect(productRow).toBeVisible()
-  await expect(productRow).toContainText(productX.sku_code)
+  await expect(productRow.getByTestId(`ff-honest-sign-product-sku-${productX.id}`)).toContainText(
+    productX.sku_code,
+  )
+  await expect(productRow.getByTestId(`ff-honest-sign-product-name-${productX.id}`)).toContainText(
+    'Product X',
+  )
+  await expect(productRow.getByTestId(`ff-honest-sign-product-photo-${productX.id}`)).toBeVisible()
+  await expect(productRow.getByTestId(`ff-honest-sign-product-print-${productX.id}`)).toBeVisible()
+  await productRow.getByTestId(`ff-honest-sign-product-print-${productX.id}`).click()
+  await expect(page.getByTestId('marking-print-dialog')).toBeVisible()
+  await expect(page.getByTestId('marking-print-cz-qty')).toBeVisible()
+  await expect(page.getByTestId('marking-print-wb-qty')).toBeVisible()
+  await expect(page.getByTestId('marking-print-tape')).toBeVisible()
+  await page.getByTestId('marking-print-dialog').getByRole('button', { name: 'Отмена' }).click()
+  await expect(page.getByTestId('marking-print-dialog')).toBeHidden()
   await expect(productRow).toContainText('100')
 
   const basketChip = page.getByTestId(`ff-honest-sign-product-basket-${productX.id}-${sharedPoolId}`)
@@ -83,8 +97,8 @@ test('FF honest sign product-first: list, product card, shared basket pool', asy
   )
 })
 
-// TC-NEW-REV-CZ-FE-01 — multi-pool product: per-pool threshold on pool card persists after reload.
-test('FF honest sign multi-pool product: pool threshold persists after reload', async ({ page }) => {
+// TC-STAB-CZ-FE-01 — multi-pool product: per-pool threshold is configured from product page.
+test('FF honest sign multi-pool product: product page threshold persists after reload', async ({ page }) => {
   test.setTimeout(180_000)
   const email = `e2e-hs-mp-${Date.now()}@example.com`
   const password = 'password123'
@@ -151,23 +165,27 @@ test('FF honest sign multi-pool product: pool threshold persists after reload', 
   await selectHonestSignSeller(page, sellerId)
   await page.goto(`/app/ff/honest-sign/product/${product.id}`)
   await expect(page.getByTestId('ff-honest-sign-product-page')).toBeVisible()
-  await expect(page.getByTestId('ff-honest-sign-product-threshold-multi-pool-hint')).toBeVisible()
-  await expect(page.getByTestId('ff-honest-sign-product-threshold')).toHaveCount(0)
+  await expect(page.getByTestId('ff-honest-sign-product-threshold')).toBeVisible()
+  await expect(page.getByTestId('ff-honest-sign-product-threshold-pool')).toBeVisible()
   await expect(page.getByTestId(`ff-honest-sign-product-personal-pool-${personalPoolA}`)).toBeVisible()
   await expect(page.getByTestId(`ff-honest-sign-product-personal-pool-${personalPoolB}`)).toBeVisible()
 
-  await page.getByTestId(`ff-honest-sign-product-personal-pool-${personalPoolA}`).click()
-  await expect(page).toHaveURL(new RegExp(`/app/ff/honest-sign/pool/${personalPoolA}`))
-  await expect(page.getByTestId('ff-honest-sign-pool-thresholds')).toBeVisible()
-
-  await page.getByTestId('ff-honest-sign-pool-threshold-low').locator('input').fill('42')
-  await page.getByTestId('ff-honest-sign-pool-threshold-forecast').locator('input').fill('7')
+  await page.getByTestId('ff-honest-sign-product-threshold-pool').click()
+  await page.getByRole('option', { name: 'Personal A' }).click()
+  await page.getByTestId('ff-honest-sign-product-threshold-low').locator('input').fill('42')
+  await page.getByTestId('ff-honest-sign-product-threshold-forecast-days').locator('input').fill('7')
   await Promise.all([
     waitForPutOk(page, `/api/operations/marking-codes/pools/${personalPoolA}/threshold`),
-    page.getByTestId('ff-honest-sign-pool-threshold-save').click(),
+    page.getByTestId('ff-honest-sign-product-threshold-save').click(),
   ])
 
   await page.reload()
-  await expect(page.getByTestId('ff-honest-sign-pool-threshold-low').locator('input')).toHaveValue('42')
-  await expect(page.getByTestId('ff-honest-sign-pool-threshold-forecast').locator('input')).toHaveValue('7')
+  await page.getByTestId('ff-honest-sign-product-threshold-pool').click()
+  await page.getByRole('option', { name: 'Personal A' }).click()
+  await expect(page.getByTestId('ff-honest-sign-product-threshold-low').locator('input')).toHaveValue('42')
+  await expect(page.getByTestId('ff-honest-sign-product-threshold-forecast-days').locator('input')).toHaveValue('7')
+
+  await page.getByTestId(`ff-honest-sign-product-personal-pool-${personalPoolA}`).click()
+  await expect(page).toHaveURL(new RegExp(`/app/ff/honest-sign/pool/${personalPoolA}`))
+  await expect(page.getByTestId('ff-honest-sign-pool-thresholds')).toHaveCount(0)
 })

@@ -34,6 +34,8 @@ type CellsProps = {
   meta: ProductLineDisplayMeta
   showPrint?: boolean
   printTestId?: string
+  /** Префикс data-testid для фото/sku/названия в операционных таблицах. */
+  lineTestIdPrefix?: string
   /** Если задан — иконка печати вызывает callback вместо ProductBarcodePrintDialog. */
   onPrintClick?: () => void
   nameExtra?: ReactNode
@@ -43,6 +45,7 @@ export function FfProductLineCells({
   meta,
   showPrint = true,
   printTestId = 'ff-product-barcode-print',
+  lineTestIdPrefix,
   onPrintClick,
   nameExtra,
 }: CellsProps) {
@@ -51,9 +54,17 @@ export function FfProductLineCells({
   return (
     <>
       <TableCell>
-        <ProductPhotoThumb src={meta.wb_primary_image_url} />
+        <ProductPhotoThumb
+          src={meta.wb_primary_image_url}
+          alt={meta.product_name}
+          testId={lineTestIdPrefix ? `${lineTestIdPrefix}-photo` : undefined}
+        />
       </TableCell>
-      <TableCell sx={{ whiteSpace: 'nowrap', pl: 2 }} title={meta.sku_code}>
+      <TableCell
+        sx={{ whiteSpace: 'nowrap', pl: 2 }}
+        title={meta.sku_code}
+        data-testid={lineTestIdPrefix ? `${lineTestIdPrefix}-sku` : undefined}
+      >
         {meta.sku_code}
       </TableCell>
       <TableCell sx={{ maxWidth: 220 }}>
@@ -80,7 +91,11 @@ export function FfProductLineCells({
           overflow: 'hidden',
         }}
       >
-        <Typography variant="body2" sx={{ lineHeight: 1.25 }}>
+        <Typography
+          variant="body2"
+          sx={{ lineHeight: 1.25 }}
+          data-testid={lineTestIdPrefix ? `${lineTestIdPrefix}-name` : undefined}
+        >
           {meta.product_name}
         </Typography>
         {nameExtra}

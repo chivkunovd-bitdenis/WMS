@@ -26,6 +26,7 @@ import CloseOutlined from '@mui/icons-material/CloseOutlined'
 import { apiUrl } from '../../api'
 import { ProductPhotoThumb } from '../../components/ProductPhotoThumb'
 import type { WbProductPickerCatalogRow } from '../../components/WbProductPickerDialog'
+import { storageLocationLabel, SORTING_LOCATION_CODE } from '../../utils/inboundQueues'
 import { readApiErrorMessage } from '../../utils/readApiErrorMessage'
 
 type PickOptionLocation = {
@@ -92,6 +93,24 @@ function addableQty(
   return Math.min(planRemaining, physical)
 }
 
+function hasStorageCellBalances(locations: PickOptionLocation[]): boolean {
+  return locations.some((l) => l.location_code !== SORTING_LOCATION_CODE)
+}
+
+function sortingZoneAvailable(locations: PickOptionLocation[]): number {
+  return locations.find((l) => l.location_code === SORTING_LOCATION_CODE)?.available ?? 0
+}
+
+function productNeedsExplicitLocation(
+  row: PickOptionProduct,
+  addressStorageEnabled: boolean,
+): boolean {
+  if (!addressStorageEnabled) {
+    return false
+  }
+  return hasStorageCellBalances(row.locations)
+}
+
 function looksLikeReadyBoxBarcode(raw: string): boolean {
   return raw.startsWith('WHB-') || raw.startsWith('INB-')
 }
@@ -131,12 +150,24 @@ export function FfMarketplaceUnloadBoxAddDialog({
     for (const row of pickOptions) {
       for (const loc of row.locations) {
         if (loc.available > 0) {
-          byId.set(loc.storage_location_id, loc.location_code)
+          byId.set(loc.storage_location_id, storageLocationLabel(loc.location_code))
         }
       }
     }
     return [...byId.entries()].map(([id, code]) => ({ id, code }))
   }, [pickOptions])
+
+  const sortingBufferPickAllowed = useMemo(
+    () =>
+      addressStorageEnabled &&
+      !activeLocationId &&
+      pickOptions.some(
+        (row) =>
+          sortingZoneAvailable(row.locations) > 0 &&
+          !productNeedsExplicitLocation(row, addressStorageEnabled),
+      ),
+    [activeLocationId, addressStorageEnabled, pickOptions],
+  )
 
   const scanPlaceholder = useMemo(() => {
     if (addressStorageEnabled && !activeLocationId) {
@@ -203,7 +234,12 @@ export function FfMarketplaceUnloadBoxAddDialog({
     if (boxClosed) {
       return
     }
-    if (addressStorageEnabled && !activeLocationId) {
+    const row = pickOptions.find((p) => p.product_id === productId)
+    if (
+      row &&
+      productNeedsExplicitLocation(row, addressStorageEnabled) &&
+      !activeLocationId
+    ) {
       setError('Выберите ячейку или отсканируйте её штрихкод.')
       return
     }
@@ -311,6 +347,12 @@ export function FfMarketplaceUnloadBoxAddDialog({
       }
       if (addressStorageEnabled && !activeLocationId && errDetail === 'location_required') {
         setError('Сначала выберите ячейку или отсканируйте её штрихкод.')
+        return
+      }
+      if (errDetail === 'insufficient_available') {
+        setError(
+          'Недостаточно остатка в выбранной ячейке. Если товар ещё в зоне сортировки — не выбирайте ячейку и сканируйте товар снова.',
+        )
         return
       }
       setError(errDetail ?? errText.slice(0, 200) ?? 'Не удалось выполнить скан.')
@@ -421,6 +463,14 @@ export function FfMarketplaceUnloadBoxAddDialog({
                         label={`Ячейка: ${activeLocationCode}`}
                         data-testid="ff-mp-box-add-active-location"
                       />
+                    ) : sortingBufferPickAllowed ? (
+                      <Typography
+                        variant="caption"
+                        color="text.secondary"
+                        data-testid="ff-mp-box-add-sorting-buffer-hint"
+                      >
+                        Остаток в зоне сортировки — можно сканировать товар без выбора ячейки
+                      </Typography>
                     ) : (
                       <Typography variant="caption" color="warning.main">
                         Выберите ячейку или отсканируйте её
@@ -501,7 +551,9 @@ export function FfMarketplaceUnloadBoxAddDialog({
                         const qtyStr = manualQtyByProduct[row.product_id] ?? '1'
                         const qtyNum = Number(qtyStr)
                         const qtyValid = Number.isInteger(qtyNum) && qtyNum >= 1
-                        const needsLocation = addressStorageEnabled && !activeLocationId
+                        const needsLocation =
+                          productNeedsExplicitLocation(row, addressStorageEnabled) &&
+                          !activeLocationId
                         return (
                           <TableRow
                             key={row.product_id}

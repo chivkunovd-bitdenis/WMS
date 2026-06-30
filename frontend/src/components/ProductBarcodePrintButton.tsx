@@ -7,22 +7,35 @@ import { resolveProductPrimaryBarcode, type ProductLineDisplayMeta } from '../ty
 type Props = {
   meta: ProductLineDisplayMeta
   testId?: string
+  /** Для товаров с ЧЗ — открыть полный конструктор вместо простого 58×40. */
+  onMarkingPrint?: () => void
 }
 
 export function ProductBarcodePrintButton({
   meta,
   testId = 'ff-product-barcode-print',
+  onMarkingPrint,
 }: Props) {
   const [printOpen, setPrintOpen] = useState(false)
   const printable = Boolean(resolveProductPrimaryBarcode(meta))
+
+  const handleClick = () => {
+    if (onMarkingPrint) {
+      onMarkingPrint()
+      return
+    }
+    setPrintOpen(true)
+  }
 
   return (
     <>
       <Tooltip
         title={
-          printable
-            ? 'Печать этикетки 58×40'
-            : 'Нет баркода WB — откройте диалог и синхронизируйте карточки'
+          onMarkingPrint
+            ? 'Печать ЧЗ и ШК ВБ'
+            : printable
+              ? 'Печать этикетки 58×40'
+              : 'Нет баркода WB — откройте диалог и синхронизируйте карточки'
         }
       >
         <span>
@@ -30,17 +43,19 @@ export function ProductBarcodePrintButton({
             size="small"
             aria-label="Печать ШК товара"
             data-testid={testId}
-            onClick={() => setPrintOpen(true)}
+            onClick={handleClick}
           >
             <PrintOutlined fontSize="small" />
           </IconButton>
         </span>
       </Tooltip>
-      <ProductBarcodePrintDialog
-        open={printOpen}
-        meta={meta}
-        onClose={() => setPrintOpen(false)}
-      />
+      {onMarkingPrint ? null : (
+        <ProductBarcodePrintDialog
+          open={printOpen}
+          meta={meta}
+          onClose={() => setPrintOpen(false)}
+        />
+      )}
     </>
   )
 }

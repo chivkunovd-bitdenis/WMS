@@ -552,6 +552,14 @@ export function FfInboundSortingPanel({
       .filter((x): x is { box_id: string; box_number: number; remaining: number } => x != null)
 
   if (sortableProducts.length === 0) {
+    if (sortingRemainingQty > 0) {
+      return (
+        <Alert severity="warning" data-testid="ff-sorting-products-loading-gap">
+          Осталось разложить {sortingRemainingQty} шт., но состав строк не загрузился. Обновите
+          страницу или откройте заявку снова.
+        </Alert>
+      )
+    }
     return (
       <Alert severity="info" data-testid="ff-sorting-no-products">
         Нет принятого товара для разкладки. Завершите приёмку в разделе «Приёмка».

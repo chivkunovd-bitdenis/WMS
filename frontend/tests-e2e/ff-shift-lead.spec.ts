@@ -20,7 +20,8 @@ test('shift_lead permission shows reprints nav and grants queue API', async ({ p
     page.getByTestId('register-form').getByRole('button', { name: 'Создать аккаунт' }).click(),
   ])
 
-  await expect(page.getByTestId('nav-ff-honest-sign-reprints')).toBeVisible()
+  // STAB-REPRINTS-FE-01: пункт «Перепечатки» убран из общего меню; только shift_lead видит его ниже.
+  await expect(page.getByTestId('nav-ff-honest-sign-reprints')).toHaveCount(0)
 
   await page.getByTestId('nav-ff-settings').click()
   await page.getByTestId('ff-staff-email').fill(staffEmail)
@@ -75,8 +76,8 @@ test('shift_lead permission shows reprints nav and grants queue API', async ({ p
     page.getByTestId('login-form').getByRole('button', { name: 'Войти' }).click(),
   ])
 
-  await expect(page.getByTestId('nav-ff-honest-sign-reprints')).toBeVisible()
-  await page.getByTestId('nav-ff-honest-sign-reprints').click()
+  await expect(page.getByTestId('nav-ff-honest-sign-reprints')).toHaveCount(0)
+  await page.goto('/app/ff/honest-sign/reprints')
   await expect(page).toHaveURL(/\/app\/ff\/honest-sign\/reprints/)
   await expect(page.getByTestId('ff-honest-sign-reprints-page')).toBeVisible()
   await expect(page.getByTestId('ff-honest-sign-reprints-page-empty')).toBeVisible()

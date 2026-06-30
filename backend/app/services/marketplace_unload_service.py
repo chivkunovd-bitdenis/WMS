@@ -295,6 +295,9 @@ async def _available_product_qty_in_warehouse(
     on_hand = await inventory_service.storage_on_hand_in_warehouse(
         session, tenant_id, warehouse_id, product_id
     )
+    sorting_on_hand = await inventory_service.sorting_on_hand_in_warehouse(
+        session, tenant_id, warehouse_id, product_id
+    )
     reserved_outbound_stmt = (
         select(func.coalesce(func.sum(InventoryReservation.quantity), 0))
         .join(
@@ -334,7 +337,7 @@ async def _available_product_qty_in_warehouse(
         product_id,
         exclude_request_id=exclude_request_id,
     )
-    return on_hand - reserved_outbound - reserved_mp
+    return on_hand + sorting_on_hand - reserved_outbound - reserved_mp
 
 
 async def _release_reservations(session: AsyncSession, request_id: uuid.UUID) -> None:
