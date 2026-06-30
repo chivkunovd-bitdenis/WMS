@@ -77,7 +77,7 @@ test('inbound receiving v2 — multiple boxes stay independent', async ({ page }
 
   await page.getByTestId('ff-inbound-box-open').nth(1).getByRole('button', { name: 'Добавить товары' }).click();
   await expect(page.getByTestId('ff-inbound-box-add-box-label')).toContainText('Короб № 2');
-  await expect(page.getByTestId('ff-inbound-box-add-line-row').first()).toBeVisible();
+  await expect(page.getByTestId(`ff-inbound-box-add-line-row-${seed.productId}`)).toBeVisible();
   await expect(page.getByTestId('ff-inbound-box-add-dialog')).toContainText('Короб № 2');
   await page.getByTestId('ff-inbound-box-add-scan-input').fill(seed.sku);
   await Promise.all([

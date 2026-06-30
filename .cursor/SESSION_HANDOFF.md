@@ -6,29 +6,32 @@
 - integration_branch: hotfix/deploy-wb-sync-nonfatal
 - mode: continuous + hook
 - armed_at: 2026-06-30
-- note: незакоммиченный stabilization WIP в основном worktree (handoff 09); builders правят только свои files из backlog
+- note: STAB backlog закрыт; остался Railway smoke + commit WIP
 
 ## Closed (.done)
 
-- STAGE-00, STAB-IN-BE-01, STAB-IN-FE-01, STAB-SORT-BE-01, STAB-CZ-FE-01, STAB-REPRINTS-FE-01
+- STAGE-00, STAB-IN-BE-01, STAB-IN-FE-01, STAB-IN-FE-02, STAB-IN-FE-03
+- STAB-SORT-BE-01, STAB-SORT-FE-01
+- STAB-OUT-BE-01, STAB-OUT-FE-01
+- STAB-CZ-FE-01, STAB-CZ-FE-02, STAB-PRINT-FE-01, STAB-REPRINTS-FE-01
+- STAB-E2E-01, STAB-E2E-02
 
-## Wave A (2026-06-30) — DONE (sequential, parent agent)
+## Proof summary
 
-| id | status | proof |
-|----|--------|-------|
-| STAB-IN-FE-02 | done | inbound-receiving-v2.spec.ts 4/4 |
-| STAB-SORT-FE-01 | done | ff-reception-sorting + ff-sorting-product-centric 4/4 |
-| STAB-OUT-BE-01 | done | marketplace_unload pytest 30/30 (no code change needed) |
-
-| STAB-OUT-FE-01 | done | ff-mp-box-add-modal sorting buffer e2e |
+| id | proof |
+|----|-------|
+| STAB-IN-FE-03 | ff-inbound-box-intake STAB test + inbound e2e 9/9 |
+| STAB-E2E-01 | stab-inbound-sort-outbound.spec.ts 1/1 |
+| STAB-E2E-02 | stab-cz-ui-print.spec.ts 1/1 |
 
 ## Runnable next
 
-- STAB-CZ-FE-02 — список товаров ЧЗ
-- STAB-PRINT-FE-01 — конструктор печати
-- Railway staging smoke (см. docs/analysis/RAILWAY_STAGING_RU.md)
+- Railway: `railway link` → deploy → `WMS_STAGING_URL=… ./scripts/railway-staging-smoke.sh`
+- Commit WIP на integration branch
+- PR → main
 
 ## Handoff refs
 
-- docs/analysis/09_STABILIZATION_HANDOFF_2026-06-30_RU.md
+- docs/analysis/09_STABILIZATION_HANDOFF_2026-06-30_RU.md (обновлён 2026-06-30)
+- docs/analysis/RAILWAY_STAGING_RU.md
 - WMS_REQUIREMENTS_TRACKER_RU.md

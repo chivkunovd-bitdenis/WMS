@@ -288,13 +288,22 @@ export function FfInboundBoxAddDialog({
                   const manualOpen = manualEditProductId === ln.product_id
                   const displayMeta = productDisplayMetaFromCatalog(ln.product_id, ln, catalogById)
                   return (
-                    <TableRow key={ln.id} data-testid="ff-inbound-box-add-line-row">
+                    <TableRow
+                      key={ln.id}
+                      data-testid={`ff-inbound-box-add-line-row-${ln.product_id}`}
+                    >
                       <FfProductLineCells
                         meta={displayMeta}
                         showPrint={false}
+                        lineTestIdPrefix={`ff-inbound-box-add-product-${ln.product_id}`}
                         nameExtra={
                           displayMeta.wb_size ? (
-                            <Typography variant="caption" color="text.secondary" sx={{ display: 'block' }}>
+                            <Typography
+                              variant="caption"
+                              color="text.secondary"
+                              sx={{ display: 'block' }}
+                              data-testid={`ff-inbound-box-add-size-${ln.product_id}`}
+                            >
                               Размер: {displayMeta.wb_size}
                             </Typography>
                           ) : null

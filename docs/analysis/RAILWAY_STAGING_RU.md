@@ -60,3 +60,20 @@
 5. Set `WMS_API_UPSTREAM` on `web`.
 6. Set `WMS_CORS_ORIGINS` on `api` to include the Railway web origin if the browser will talk to the API cross-origin.
 7. Flip `WMS_BOOTSTRAP_ADMIN` back to `0` after the first successful boot.
+
+## Smoke after deploy
+
+```bash
+cd "/Users/deniscivkunov/Desktop/WMS "
+railway link   # один раз, если проект ещё не привязан
+# публичный URL web-сервиса из Railway dashboard:
+WMS_STAGING_URL=https://your-web.up.railway.app ./scripts/railway-staging-smoke.sh
+```
+
+Скрипт проверяет: `GET /` (SPA), `GET /api/health` (через Caddy proxy), наличие root-контейнера React.
+
+Если API на отдельном домене:
+
+```bash
+WMS_STAGING_URL=https://web.example.com WMS_STAGING_API_URL=https://api.example.com ./scripts/railway-staging-smoke.sh
+```

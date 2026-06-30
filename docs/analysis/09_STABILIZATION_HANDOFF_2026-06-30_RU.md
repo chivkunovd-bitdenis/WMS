@@ -39,9 +39,9 @@ Railway-документ уже создан:
 
 ## 2. Состояние Railway/test environment
 
-Railway-подготовка в коде сделана, но реальный Railway project/link/deploy из текущей машины не завершён.
+Railway-подготовка в коде сделана. **2026-06-30 (поздний срез):** ветка `hotfix/deploy-wb-sync-nonfatal` запушена на GitHub; Railway CLI через `npx @railway/cli` доступен (логин `chivkunov.d@gmail.com`), но **WMS-проект на Railway ещё не создан/не привязан** (`railway link`). Smoke-скрипт: `scripts/railway-staging-smoke.sh` (нужен `WMS_STAGING_URL`).
 
-Причины:
+Исторические причины задержки деплоя:
 
 1. Railway CLI не был установлен/доступен.
 2. Попытки через `npx` сначала упирались в проблемы npm/места на диске.
@@ -319,87 +319,74 @@ npm run test:e2e -- tests-e2e/ff-marking-defect.spec.ts
 
 Результат: прошло.
 
-## 4. Что ещё не сделано
-
-Эти задачи есть в `docs/analysis/08_confirmed_bug_stabilization_autopilot_RU.md`, но на момент среза не были закрыты.
-
 ### STAB-IN-FE-02 — кнопка завершения приёмки
 
-Статус: не начинали отдельно.
+Статус: сделано (волна A, 2026-06-30). Proof: `inbound-receiving-v2.spec.ts`.
 
-Нужно проверить после STAB-IN-FE-01, возможно часть поведения уже исправлена. Но отдельный acceptance всё равно нужен:
+### STAB-SORT-FE-01 — frontend остаток зоны сортировки
 
-1. Кнопка завершения приёмки не должна зависеть от наличия открытых коробов.
-2. Кнопка должна быть доступна, если документ готов к завершению по бизнес-условиям.
-3. Не должно быть старой логики “сначала закройте все короба”.
-4. E2E должен явно проверять завершение приёмки с несколькими открытыми коробами.
-
-Рекомендуемый агент: `gpt-5.4-mini`.
-
-### STAB-IN-FE-03 — UX modal добавления товаров в короб
-
-Статус: частично могло быть покрыто STAB-IN-FE-01, но отдельно не закрыто.
-
-Нужно проверить:
-
-1. Везде ли старое “закрыть короб” заменено на “добавить товары” там, где короб больше не закрывается.
-2. Нет ли misleading empty states.
-3. Нет ли старых disabled reasons.
-4. Все кнопки и test ids соответствуют новому UX.
-
-Рекомендуемый агент: только после просмотра diff `STAB-IN-FE-01`, чтобы не делать дубль.
-
-### STAB-SORT-FE-01 — frontend отображение остатка зоны сортировки
-
-Статус: не начинали.
-
-Backend `sorting_remaining_qty` уже добавлен. Нужно:
-
-1. Найти frontend экран приёмки/раскладки, где пользователю показывается итог приёмки и/или зона сортировки.
-2. Подключить `sorting_remaining_qty`.
-3. Показать понятный остаток после частичной раскладки.
-4. Не ломать существующие totals.
-5. Добавить тест на частичную раскладку и видимый остаток.
-
-Рекомендуемый агент: `gpt-5.4-mini`.
+Статус: сделано (волна A). Proof: `ff-reception-sorting` + `ff-sorting-product-centric` 4/4.
 
 ### STAB-OUT-BE-01 — outbound backend
 
-Статус: не начинали.
-
-Точную постановку брать из `08_confirmed_bug_stabilization_autopilot_RU.md`.
-
-Рекомендуемый агент: `gpt-5.4-mini`, backend-only.
+Статус: сделано (волна A, код не менялся). Proof: marketplace_unload pytest 30/30.
 
 ### STAB-OUT-FE-01 — outbound frontend
 
-Статус: не начинали.
+Статус: сделано. Proof: `stab-inbound-sort-outbound.spec.ts` 1/1.
 
-Запускать после `STAB-OUT-BE-01` или параллельно только если контракт уже ясен и не меняется.
+### STAB-CZ-FE-02 — список товаров ЧЗ
 
-Рекомендуемый агент: `gpt-5.4-mini`.
+Статус: сделано (волна A). Proof: `ff-honest-sign.spec.ts`.
 
-### STAB-CZ-FE-02 — ЧЗ UX follow-up
+### STAB-PRINT-FE-01 — единый конструктор печати
 
-Статус: не начинали.
+Статус: сделано (волна A). Proof: `ff-marking-print-constructor.spec.ts` и связанные e2e.
 
-Запускать после просмотра diff `STAB-CZ-FE-01`, чтобы не вернуть thresholds обратно на pool page.
+### STAB-IN-FE-03 — UX модалки добавления в короб
 
-Рекомендуемый агент: `gpt-5.4-mini`.
+Статус: сделано (2026-06-30).
 
-### STAB-PRINT-FE-01 — печать/print frontend
+Файлы: `FfInboundBoxAddDialog.tsx`, `FfProductLineCells.tsx`, mock photo в `wildberries_client.py`, `ff-inbound-box-intake.spec.ts`.
 
-Статус: не начинали.
+Proof: `STAB-IN-FE-03 box add modal…` 1/1; inbound e2e 9/9.
 
-Точную постановку брать из `08_confirmed_bug_stabilization_autopilot_RU.md`.
+### STAB-E2E-01 / STAB-E2E-02 — финальные e2e
 
-Рекомендуемый агент: `gpt-5.4-mini`.
+Статус: сделано. Proof: `stab-inbound-sort-outbound.spec.ts`, `stab-cz-ui-print.spec.ts` по 1/1.
 
-### STAB-E2E-01 / STAB-E2E-02 — итоговые e2e
+## 4. Что ещё не сделано
 
-Статус: не начинали.
+**Продуктовых STAB-задач из `08_confirmed_bug_stabilization_autopilot_RU.md` не осталось.**
 
-Запускать только после завершения всех функциональных задач. Не запускать раньше, иначе будет шум и ложные падения.
+Остаётся только операционное:
+
+### Railway staging smoke
+
+Статус: **не пройден** — WMS-проект на Railway не создан/не привязан (`railway list` не показывает WMS; нужен `railway link` + deploy).
+
+Шаги:
+
+1. Поднять services по `docs/analysis/RAILWAY_STAGING_RU.md`.
+2. Задеплоить ветку `hotfix/deploy-wb-sync-nonfatal` (или merge в main + deploy).
+3. `WMS_STAGING_URL=https://… ./scripts/railway-staging-smoke.sh`.
+4. Ручной smoke: логин bootstrap admin → приёмка → ЧЗ.
+
+### Незакоммиченный WIP
+
+Локально могут быть незакоммиченные spec/handoff/TASKLOG — перед merge проверить `git status`.
+
+---
+
+*Ниже — архив утреннего среза §4 (задачи, которые позже закрыты в волне A).*
+
+### STAB-IN-FE-02 — кнопка завершения приёмки
+
+Статус: ~~не начинали~~ → закрыто (см. §3).
+
+Статус: ~~частично~~ → закрыто (см. §3 STAB-IN-FE-03).
+
+Статус: ~~не начинали~~ → закрыто (см. §3).
 
 ## 5. Текущее рабочее дерево
 
@@ -515,28 +502,15 @@ git diff -- backend/app/core/settings.py backend/app/main.py backend/Dockerfile.
 
 ## 8. Рекомендуемая следующая волна агентов
 
-Все агенты: `gpt-5.4-mini`.
+**STAB backlog закрыт.** Следующий шаг — не код, а инфраструктура:
 
-Не запускать одновременно задачи, которые меняют одни и те же файлы.
+1. Создать/привязать Railway project WMS (`railway link`).
+2. Deploy ветки `hotfix/deploy-wb-sync-nonfatal`.
+3. `WMS_STAGING_URL=… ./scripts/railway-staging-smoke.sh`.
+4. Ручной smoke критического пути.
+5. PR → main, обновить `WMS_REQUIREMENTS_TRACKER_RU.md` по результатам smoke.
 
-Волна A:
-
-1. `STAB-IN-FE-02` — проверить и добить завершение приёмки с открытыми коробами.
-2. `STAB-SORT-FE-01` — вывести `sorting_remaining_qty` на фронт.
-3. `STAB-OUT-BE-01` — backend outbound, если файлы не пересекаются.
-4. `STAB-CZ-FE-02` — follow-up ЧЗ, если он не трогает те же места, что `STAB-CZ-FE-01`.
-
-Волна B:
-
-1. `STAB-IN-FE-03` — только после ревью diff `STAB-IN-FE-01`, чтобы не дублировать уже сделанное.
-2. `STAB-OUT-FE-01` — после backend/outbound контракта.
-3. `STAB-PRINT-FE-01`.
-
-Финальная волна:
-
-1. `STAB-E2E-01`.
-2. `STAB-E2E-02`.
-3. Railway deploy/staging smoke.
+~~Волна A / B / финальная e2e — выполнены.~~
 
 ## 9. Готовый prompt для Composer
 
@@ -586,25 +560,21 @@ docs/analysis/RAILWAY_STAGING_RU.md
 
 ## 11. Короткий итог состояния
 
-Уже закрыто:
+Уже закрыто (полный STAB backlog):
 
-1. Railway code/config preparation.
-2. Backend multiple open inbound boxes.
-3. Frontend multiple open inbound boxes.
-4. Backend sorting remaining quantity.
-5. ЧЗ thresholds перенесены с pool page на product page.
-6. Отдельный nav item “Перепечатки” убран.
+1. Railway code/config preparation (STAGE-00).
+2. Приёмка: короба BE/FE, завершение, модалка короба (STAB-IN-*).
+3. Сортировка BE/FE (STAB-SORT-*).
+4. Отгрузка из буфера BE/FE (STAB-OUT-*).
+5. ЧЗ: пороги, строка товара, печать, без «Перепечатки» в меню (STAB-CZ-*, STAB-PRINT-*, STAB-REPRINTS-*).
+6. Финальные e2e STAB-E2E-01/02.
 
 Осталось:
 
-1. Добить/подтвердить finish receiving UX.
-2. Вывести sorting remainder на frontend.
-3. Сделать outbound backend/frontend задачи из backlog.
-4. Сделать ЧЗ follow-up.
-5. Сделать print задачу.
-6. Прогнать финальные e2e.
-7. Поднять Railway staging и провести smoke.
+1. **Railway staging smoke** — проект WMS не привязан, живой URL не проверен.
+2. **Merge/commit** незакоммиченного WIP в git.
+3. **Обновить tracker** после smoke на staging.
 
 Главный риск:
 
-Рабочее дерево уже содержит изменения от нескольких агентов. Перед новыми агентами обязательно проверить diff и не запускать параллельно задачи, которые трогают одни и те же frontend screens/tests.
+Документ `09` обновлён 2026-06-30 вечером; при расхождении с `SESSION_HANDOFF.md` приоритет у более свежего `SESSION_HANDOFF.md`.

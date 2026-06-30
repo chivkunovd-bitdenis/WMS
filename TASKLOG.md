@@ -1,5 +1,17 @@
 # TASKLOG
 
+## TASK-088 — 2026-06-30 — STAB-IN-FE-03 + handoff 09 + Railway smoke tooling
+
+- What changed: `FfInboundBoxAddDialog` / `FfProductLineCells` — testid на строку товара (фото/sku/название/размер); e2e `STAB-IN-FE-03`; mock WB photo в `wildberries_client.py`; `scripts/railway-staging-smoke.sh`; обновлены `09_STABILIZATION_HANDOFF`, `RAILWAY_STAGING_RU.md`, `SESSION_HANDOFF.md`.
+- What did NOT change: Railway project WMS не создан (CLI login ok, `railway link` не выполнен).
+- Verification: `npm run test:e2e -- tests-e2e/ff-inbound-box-intake.spec.ts tests-e2e/inbound-receiving-v2.spec.ts` 9/9 passed.
+
+## TASK-087 — 2026-06-30 — STAB-E2E-02: ЧЗ UI + печать (финальный proof)
+
+- What changed: `frontend/tests-e2e/stab-cz-ui-print.spec.ts` — сквозной e2e: товарная строка (фото/название/артикул/размер), карточка пула без threshold, единый конструктор печати с drag ленты, нет «Перепечатки» в навигации.
+- What did NOT change: продуктовый UI/API ЧЗ; деплой Railway (только git push ветки `hotfix/deploy-wb-sync-nonfatal`).
+- Verification: `npm run test:e2e -- tests-e2e/stab-cz-ui-print.spec.ts` 1/1 passed; push `4a22fc6..` на origin.
+
 ## TASK-086 — 2026-06-29 — IN-BE-03: e2e stabilization after primary-accept removal
 
 - What changed: `inbound-boxes-helpers.ts` — `fulfillInboundViaBoxScans` fallback create on closed box; `v2InboundBoxIntakeUi` skip open if box already open; legacy primary-accept tests wait PATCH+POST /boxes. ~25 e2e specs migrated from `primary-accept` to `beginInboundReceivingWithBoxes`; `App.tsx` primary accept → PATCH actual + POST /boxes; `InboundScreen.tsx` statuses `receiving`/`sorting`; backend tests use `effective_actual_qty`.
