@@ -1,47 +1,32 @@
 # Session handoff (autopilot)
 
 - parallel_workers: 3
-- backlog: CHESTNY_ZNAK_PRODUCT_FIRST_TASKS_RU.md
-- integration_branch: feat/cz-product-first
+- subagent_model: composer-2.5
+- backlog: docs/analysis/08_confirmed_bug_stabilization_autopilot_RU.md
+- integration_branch: hotfix/deploy-wb-sync-nonfatal
 - mode: continuous + hook
-- status: **BACKLOG COMPLETE** — all ids `.done` on `feat/cz-product-first` (2026-06-29)
+- armed_at: 2026-06-30
+- note: незакоммиченный stabilization WIP в основном worktree (handoff 09); builders правят только свои files из backlog
 
-## Closed (full backlog)
+## Closed (.done)
 
-SVC-01, SVC-02, API-01, API-02, LIST-01, PROD-01, PROD-02, POOL-01, APP-01, E2E-01 — integrated
+- STAGE-00, STAB-IN-BE-01, STAB-IN-FE-01, STAB-SORT-BE-01, STAB-CZ-FE-01, STAB-REPRINTS-FE-01
 
-## Next step (owner)
+## Wave A (2026-06-30) — DONE (sequential, parent agent)
 
-PR `feat/cz-product-first` → `main` after full CI. Note: legacy honest-sign e2e specs still pool-row — may need follow-up.
+| id | status | proof |
+|----|--------|-------|
+| STAB-IN-FE-02 | done | inbound-receiving-v2.spec.ts 4/4 |
+| STAB-SORT-FE-01 | done | ff-reception-sorting + ff-sorting-product-centric 4/4 |
+| STAB-OUT-BE-01 | done | marketplace_unload pytest 30/30 (no code change needed) |
 
-## Runnable queue (after deps)
+## Runnable next
 
-| Wave | ids | note |
-|------|-----|------|
-| 1 | SVC-01 | only runnable at start (BE service) |
-| 2 | SVC-02 ∥ API-01 | after SVC-01 .done |
-| 3 | API-02 | after SVC-02 + API-01 |
-| 4 | LIST-01 ∥ PROD-01 ∥ POOL-01 | after API-02 — **full 3 slots** |
-| 5 | APP-01 | after PROD-01 |
-| 6 | PROD-02 | after PROD-01 |
-| 7 | E2E-01 | after all FE |
+- STAB-IN-FE-03 — модалка короба (фото, колонки)
+- STAB-OUT-FE-01 — UI отгрузки из буфера
+- STAB-CZ-FE-02 — список товаров ЧЗ
 
-## Invariants (ЧЗ product-first)
+## Handoff refs
 
-- Пул = один GTIN; остаток на пуле, не на товаре
-- personal_available = пулы с 1 товаром; shared_baskets = пулы с ≥2
-- available_count = personal_available (без задвоения общих)
-
-## Closed
-
-- SVC-01: integrated
-- SVC-02: integrated
-- API-01: integrated
-
-- API-02: integrated
-
-## Active builders (wave 4 — full 3 slots)
-
-- LIST-01: in progress
-- PROD-01: in progress
-- POOL-01: in progress
+- docs/analysis/09_STABILIZATION_HANDOFF_2026-06-30_RU.md
+- WMS_REQUIREMENTS_TRACKER_RU.md

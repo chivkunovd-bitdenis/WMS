@@ -205,13 +205,19 @@ export function FfInboundBoxAddDialog({
       data-testid="ff-inbound-box-add-dialog"
       slotProps={{ paper: { sx: { maxHeight: 'calc(100vh - 48px)' } } }}
     >
-      <DialogTitle sx={{ pr: 6 }}>
-        Добавить в короб
-        <Typography variant="body2" color="text.secondary">
+      <DialogTitle component="div" sx={{ pr: 6 }} data-testid="ff-inbound-box-add-title">
+        <Typography component="span" variant="h6" sx={{ display: 'block', fontWeight: 700 }}>
+          Добавить товары
+        </Typography>
+        <Typography
+          variant="body2"
+          sx={{ fontWeight: 700, mt: 0.5 }}
+          data-testid="ff-inbound-box-add-box-label"
+        >
           {boxLabel}
         </Typography>
         <IconButton
-          aria-label="Закрыть"
+          aria-label="Скрыть окно"
           onClick={onClose}
           sx={{ position: 'absolute', right: 8, top: 8 }}
           data-testid="ff-inbound-box-add-close"
@@ -222,7 +228,7 @@ export function FfInboundBoxAddDialog({
       <DialogContent dividers sx={{ overflowY: 'auto' }}>
         <Stack spacing={2}>
           {boxClosed ? (
-            <Alert severity="info">Короб закрыт — добавление недоступно.</Alert>
+            <Alert severity="info">Короб завершён — добавление недоступно.</Alert>
           ) : null}
           {error ? (
             <Alert severity="error" data-testid="ff-inbound-box-add-error">
@@ -267,7 +273,7 @@ export function FfInboundBoxAddDialog({
             >
               <TableHead>
                 <TableRow>
-                  <FfProductTableHeadCells />
+                  <FfProductTableHeadCells showPrint={false} />
                   <TableCell align="right" sx={{ width: 90 }}>
                     Заявлено
                   </TableCell>
@@ -283,7 +289,17 @@ export function FfInboundBoxAddDialog({
                   const displayMeta = productDisplayMetaFromCatalog(ln.product_id, ln, catalogById)
                   return (
                     <TableRow key={ln.id} data-testid="ff-inbound-box-add-line-row">
-                      <FfProductLineCells meta={displayMeta} />
+                      <FfProductLineCells
+                        meta={displayMeta}
+                        showPrint={false}
+                        nameExtra={
+                          displayMeta.wb_size ? (
+                            <Typography variant="caption" color="text.secondary" display="block">
+                              Размер: {displayMeta.wb_size}
+                            </Typography>
+                          ) : null
+                        }
+                      />
                       <TableCell align="right">{ln.expected_qty}</TableCell>
                       <TableCell align="right">
                         <Stack
@@ -358,16 +374,15 @@ export function FfInboundBoxAddDialog({
       {!boxClosed ? (
         <DialogActions>
           <Button onClick={onClose} disabled={busy}>
-            Закрыть окно
+            Скрыть окно
           </Button>
           <Button
-            variant="contained"
-            color="secondary"
+            variant="outlined"
             onClick={() => void closeBox()}
             disabled={busy}
             data-testid="ff-inbound-box-add-close-box"
           >
-            Закрыть короб
+            Завершить короб
           </Button>
         </DialogActions>
       ) : null}

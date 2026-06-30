@@ -89,92 +89,80 @@ async def _submitted_request(
 
 
 @pytest.mark.asyncio
-async def test_create_open_box_on_demand_scan_close_updates_actual(
+async def test_create_three_boxes_on_demand_are_distinct(
     async_client: AsyncClient,
 ) -> None:
-    """TC-NEW-IN-BE-02: on-demand box scan contributes to effective actual qty."""
     suffix = str(int(time.time() * 1000))
     ah, tenant_id = await _register_admin(async_client, suffix)
-    rid, pid, sku = await _submitted_request(async_client, ah, suffix, expected_qty=5)
+    rid, _pid, _sku = await _submitted_request(async_client, ah, suffix, expected_qty=3)
 
     async with SessionLocal() as session:
-        box = await box_svc.create_open_box(session, tenant_id, rid)
-        assert box.intake_opened_at is not None
-        assert box.intake_closed_at is None
-        assert box.box_number == 1
-        assert box.internal_barcode.startswith("INB-")
+        boxes = [await box_svc.create_open_box(session, tenant_id, rid) for _ in range(3)]
+        assert [b.box_number for b in boxes] == [1, 2, 3]
+        assert len({b.id for b in boxes}) == 3
+        assert all(b.intake_opened_at is not None for b in boxes)
+        assert all(b.intake_closed_at is None for b in boxes)
 
-        line = await box_svc.scan_product_into_box(
-            session,
-            tenant_id,
-            rid,
-            box.id,
-            barcode=sku,
-        )
-        assert line.quantity == 1
-
-        closed = await box_svc.close_box_intake(session, tenant_id, rid, box.id)
-        assert closed.intake_closed_at is not None
-
-        req = await intake_svc.get_request(session, tenant_id, rid)
-        assert req is not None
-        assert req.status == intake_svc.STATUS_VERIFYING
-        req_line = next(ln for ln in req.lines if ln.product_id == pid)
-        assert req_line.actual_qty in (None, 0)
-        assert (
-            await intake_svc.effective_actual_qty(
-                session,
-                rid,
-                req_line,
-                request_status=req.status,
-            )
-            == 1
-        )
+        reloaded = await box_svc.list_boxes(session, tenant_id, rid)
+        assert [b.box_number for b in reloaded] == [1, 2, 3]
 
 
 @pytest.mark.asyncio
-async def test_create_open_box_rejects_second_open_box(async_client: AsyncClient) -> None:
+async def test_box_two_scans_only_box_two(async_client: AsyncClient) -> None:
     suffix = str(int(time.time() * 1000) + 1)
     ah, tenant_id = await _register_admin(async_client, suffix)
-    rid, _, _ = await _submitted_request(async_client, ah, suffix, expected_qty=3)
+    rid, _pid, sku = await _submitted_request(async_client, ah, suffix, expected_qty=4)
 
     async with SessionLocal() as session:
-        await box_svc.create_open_box(session, tenant_id, rid)
-        try:
-            await box_svc.create_open_box(session, tenant_id, rid)
-            pytest.fail("expected open_box_exists")
-        except box_svc.InboundIntakeBoxError as exc:
-            assert exc.code == "open_box_exists"
-
-
-@pytest.mark.asyncio
-async def test_scan_without_open_box_rejected(async_client: AsyncClient) -> None:
-    suffix = str(int(time.time() * 1000) + 2)
-    ah, tenant_id = await _register_admin(async_client, suffix)
-    rid, _pid, sku = await _submitted_request(async_client, ah, suffix, expected_qty=3)
-
-    async with SessionLocal() as session:
-        box = await box_svc.create_open_box(session, tenant_id, rid)
-        await box_svc.close_box_intake(session, tenant_id, rid, box.id)
-
-        box2 = await box_svc.create_open_box(session, tenant_id, rid)
-        try:
-            await box_svc.scan_product_into_box(
+        boxes = [await box_svc.create_open_box(session, tenant_id, rid) for _ in range(3)]
+        box2 = boxes[1]
+        for _ in range(2):
+            line = await box_svc.scan_product_into_box(
                 session,
                 tenant_id,
                 rid,
-                box.id,
+                box2.id,
                 barcode=sku,
             )
-            pytest.fail("expected box_closed for closed box")
-        except box_svc.InboundIntakeBoxError as exc:
-            assert exc.code == "box_closed"
+        assert line.quantity == 2
 
-        line = await box_svc.scan_product_into_box(
+        async with SessionLocal() as verify_session:
+            loaded = await box_svc.list_boxes_with_lines(verify_session, tenant_id, rid)
+        by_number = {b.box_number: b for b in loaded}
+        assert by_number[1].lines == []
+        assert by_number[3].lines == []
+        assert len(by_number[2].lines) == 1
+        assert by_number[2].lines[0].quantity == 2
+
+
+@pytest.mark.asyncio
+async def test_loose_scan_stays_loose_and_completion_does_not_require_close(
+    async_client: AsyncClient,
+) -> None:
+    suffix = str(int(time.time() * 1000) + 2)
+    ah, tenant_id = await _register_admin(async_client, suffix)
+    rid, pid, sku = await _submitted_request(async_client, ah, suffix, expected_qty=1)
+
+    async with SessionLocal() as session:
+        await box_svc.create_open_box(session, tenant_id, rid)
+        await box_svc.create_open_box(session, tenant_id, rid)
+
+        loose = await intake_svc.scan_barcode_to_loose_intake(
             session,
             tenant_id,
             rid,
-            box2.id,
             barcode=sku,
         )
-        assert line.quantity == 1
+        assert loose.actual_qty == 1
+
+        req = await intake_svc.get_request(session, tenant_id, rid)
+        assert req is not None
+        line = next(ln for ln in req.lines if ln.product_id == pid)
+        assert line.actual_qty == 1
+
+        boxes = await box_svc.list_boxes_with_lines(session, tenant_id, rid)
+        assert all(not b.lines for b in boxes)
+
+        done = await intake_svc.complete_receiving(session, tenant_id, rid)
+        assert done.status == intake_svc.STATUS_SORTING
+        assert done.lines[0].actual_qty == 1

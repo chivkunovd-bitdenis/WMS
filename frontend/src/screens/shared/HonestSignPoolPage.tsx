@@ -90,11 +90,6 @@ type LedgerRow = {
 
 type TabKey = 'overview' | 'products' | 'codes' | 'ledger'
 
-type PoolThresholdDetail = {
-  low_stock_threshold: number | null
-  forecast_days_threshold: number | null
-}
-
 const STATUS_OPTIONS = ['', 'available', 'reserved', 'printed', 'applied', 'defective', 'void']
 
 const LEDGER_PREVIEW_LIMIT = 5
@@ -133,9 +128,6 @@ export function HonestSignPoolPage({
   const [historyCodeId, setHistoryCodeId] = useState<string | null>(null)
   const [history, setHistory] = useState<HistoryEvent[]>([])
   const [historyBusy, setHistoryBusy] = useState(false)
-  const [lowThreshold, setLowThreshold] = useState('')
-  const [forecastThreshold, setForecastThreshold] = useState('')
-  const [thresholdSaving, setThresholdSaving] = useState(false)
   const [exportBusy, setExportBusy] = useState(false)
 
   const authHeaders = useMemo(
@@ -147,8 +139,6 @@ export function HonestSignPoolPage({
 
   useEffect(() => {
     setDetail(null)
-    setLowThreshold('')
-    setForecastThreshold('')
     setError(null)
   }, [poolId])
 
@@ -176,12 +166,6 @@ export function HonestSignPoolPage({
         return
       }
       setDetail(body)
-      setLowThreshold(
-        body.low_stock_threshold != null ? String(body.low_stock_threshold) : '',
-      )
-      setForecastThreshold(
-        body.forecast_days_threshold != null ? String(body.forecast_days_threshold) : '',
-      )
     } finally {
       if (requestId === loadRequestId.current) {
         setBusy(false)
@@ -313,46 +297,6 @@ export function HonestSignPoolPage({
     }
   }
 
-  const saveThresholds = async () => {
-    if (!poolId) {
-      return
-    }
-    setThresholdSaving(true)
-    setError(null)
-    try {
-      const res = await fetch(apiUrl(`/operations/marking-codes/pools/${poolId}/threshold`), {
-        method: 'PUT',
-        headers: { ...authHeaders, 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          low_stock_threshold: lowThreshold.trim() ? Number(lowThreshold) : null,
-          forecast_days_threshold: forecastThreshold.trim() ? Number(forecastThreshold) : null,
-        }),
-      })
-      if (!res.ok) {
-        setError(await readApiErrorMessage(res))
-        return
-      }
-      const body = (await res.json()) as PoolThresholdDetail
-      setLowThreshold(
-        body.low_stock_threshold != null ? String(body.low_stock_threshold) : '',
-      )
-      setForecastThreshold(
-        body.forecast_days_threshold != null ? String(body.forecast_days_threshold) : '',
-      )
-      setDetail((prev) =>
-        prev
-          ? {
-              ...prev,
-              low_stock_threshold: body.low_stock_threshold,
-              forecast_days_threshold: body.forecast_days_threshold,
-            }
-          : prev,
-      )
-    } finally {
-      setThresholdSaving(false)
-    }
-  }
-
   const openHistory = async (codeId: string) => {
     setHistoryCodeId(codeId)
     setHistoryBusy(true)
@@ -439,47 +383,6 @@ export function HonestSignPoolPage({
               </Paper>
             ))}
           </Stack>
-          <Paper variant="outlined" sx={{ p: 2 }} data-testid={`${testIdPrefix}-thresholds`}>
-            <Typography variant="subtitle2" sx={{ mb: 1 }}>
-              Пороги остатка
-            </Typography>
-            <Stack
-              direction={{ xs: 'column', sm: 'row' }}
-              spacing={1.5}
-              sx={{ alignItems: { sm: 'flex-end' } }}
-            >
-              <TextField
-                size="small"
-                label="Мин. остаток"
-                type="number"
-                value={lowThreshold}
-                onChange={(e) => setLowThreshold(e.target.value)}
-                disabled={thresholdSaving || busy}
-                slotProps={{ htmlInput: { min: 0 } }}
-                data-testid={`${testIdPrefix}-threshold-low`}
-              />
-              <TextField
-                size="small"
-                label="Предупреждать за N дней до конца"
-                type="number"
-                value={forecastThreshold}
-                onChange={(e) => setForecastThreshold(e.target.value)}
-                disabled={thresholdSaving || busy}
-                slotProps={{ htmlInput: { min: 0 } }}
-                sx={{ minWidth: { sm: 280 } }}
-                data-testid={`${testIdPrefix}-threshold-forecast`}
-              />
-              <Button
-                variant="contained"
-                size="small"
-                disabled={thresholdSaving || busy}
-                onClick={() => void saveThresholds()}
-                data-testid={`${testIdPrefix}-threshold-save`}
-              >
-                Сохранить
-              </Button>
-            </Stack>
-          </Paper>
           <Typography variant="subtitle2">История загрузок</Typography>
           <TableContainer component={Paper} variant="outlined">
             <Table size="small">

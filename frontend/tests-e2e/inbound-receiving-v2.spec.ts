@@ -48,8 +48,8 @@ test('inbound receiving v2 — scan, manual edit, finish with discrepancy', asyn
   await expect(page.getByTestId('ff-inbound-status-chip')).toContainText('В сортировке');
 });
 
-// TC-NEW-IN-02 — короб через модалку «Добавить в короб».
-test('inbound receiving v2 — box modal scan and close', async ({ page }) => {
+// TC-NEW-IN-02 — несколько коробов: отдельные кнопки, отдельное наполнение, общий скан.
+test('inbound receiving v2 — multiple boxes stay independent', async ({ page }) => {
   const seed = await seedFfSellerInbound(page, `rcv-box-${Date.now()}`);
   await apiCreateSubmittedInbound(page.request, seed, {
     plannedBoxes: 0,
@@ -61,25 +61,43 @@ test('inbound receiving v2 — box modal scan and close', async ({ page }) => {
   await page.getByTestId('ff-inbound-queue-table').locator('tbody tr').first().click();
   await expect(page.getByTestId('ff-inbound-receiving-scan-panel')).toBeVisible();
 
-  await page.getByTestId('ff-inbound-add-to-box').click();
-  await expect(page.getByTestId('ff-inbound-box-add-dialog')).toBeVisible();
-
-  for (let i = 0; i < 2; i++) {
-    await page.getByTestId('ff-inbound-box-add-scan-input').fill(seed.sku);
+  for (let i = 0; i < 3; i++) {
     await Promise.all([
-      waitForPostOk(page, INBOUND_API, (u) => u.includes('/boxes/') && u.includes('/scan')),
-      page.getByTestId('ff-inbound-box-add-scan-submit').click(),
+      waitForPostOk(page, INBOUND_API, (u) => u.endsWith('/boxes')),
+      page.getByTestId('ff-inbound-add-to-box').click(),
     ]);
+    await expect(page.getByTestId('ff-inbound-box-add-dialog')).toBeVisible();
+    await page.getByTestId('ff-inbound-box-add-close').click();
+    await expect(page.getByTestId('ff-inbound-box-add-dialog')).toHaveCount(0);
   }
-  await expect(page.getByTestId('ff-inbound-box-add-qty').first()).toHaveText('2');
+  await expect(page.getByTestId('ff-inbound-box-open')).toHaveCount(3);
+  await expect(page.getByTestId('ff-inbound-box-open').nth(0)).toContainText('Пока нет товаров');
+  await expect(page.getByTestId('ff-inbound-box-open').nth(1)).toContainText('Пока нет товаров');
+  await expect(page.getByTestId('ff-inbound-box-open').nth(2)).toContainText('Пока нет товаров');
 
+  await page.getByTestId('ff-inbound-box-open').nth(1).getByRole('button', { name: 'Добавить товары' }).click();
+  await expect(page.getByTestId('ff-inbound-box-add-box-label')).toContainText('Короб № 2');
+  await expect(page.getByTestId('ff-inbound-box-add-line-row').first()).toBeVisible();
+  await expect(page.getByTestId('ff-inbound-box-add-dialog')).toContainText('Короб № 2');
+  await page.getByTestId('ff-inbound-box-add-scan-input').fill(seed.sku);
   await Promise.all([
-    waitForPostOk(page, INBOUND_API, (u) => u.includes('/close')),
-    page.getByTestId('ff-inbound-box-add-close-box').click(),
+    waitForPostOk(page, INBOUND_API, (u) => u.includes('/boxes/') && u.includes('/scan')),
+    page.getByTestId('ff-inbound-box-add-scan-submit').click(),
   ]);
+  await expect(page.getByTestId('ff-inbound-box-add-qty')).toHaveText('1');
+  await page.getByTestId('ff-inbound-box-add-close').click();
   await expect(page.getByTestId('ff-inbound-box-add-dialog')).toHaveCount(0);
-  await expect(page.getByTestId('ff-inbound-line-actual-display').first()).toHaveText('2');
-  await expect(page.getByTestId('ff-inbound-box-closed')).toBeVisible();
+  await expect(page.getByTestId('ff-inbound-box-open').nth(1)).toContainText(seed.sku);
+  await expect(page.getByTestId('ff-inbound-add-to-box')).toBeEnabled();
+
+  await page.getByTestId('ff-inbound-receiving-scan-input').fill(seed.sku);
+  await Promise.all([
+    waitForPostOk(page, INBOUND_API, (u) => u.includes('/receiving/scan')),
+    page.getByTestId('ff-inbound-receiving-scan-submit').click(),
+  ]);
+  await expect(page.getByTestId('ff-inbound-line-actual-display').first()).toHaveText('1');
+  await expect(page.getByTestId('ff-inbound-box-open').nth(1)).toContainText('1');
+  await expect(page.getByText(/закройте короб/i)).toHaveCount(0);
 
   await Promise.all([
     waitForPostOk(page, INBOUND_API, (u) => u.includes('/complete-receiving')),

@@ -177,7 +177,9 @@ test('FF packaging: defect button creates pending reprint request', async ({ pag
   const defectBody = (await (await defectWait).json()) as { status: string }
   expect(defectBody.status).toBe('pending')
 
-  await page.getByTestId('nav-ff-honest-sign-reprints').click()
+  await expect(page.getByTestId('nav-ff-honest-sign-reprints')).toHaveCount(0)
+
+  await page.goto('/app/ff/honest-sign/reprints')
   await expect(page.getByTestId('ff-honest-sign-reprints-page-table')).toBeVisible()
   const row = page.locator('[data-testid^="ff-honest-sign-reprints-page-row-"]').first()
   await expect(row).toBeVisible()
@@ -225,7 +227,7 @@ test('FF packaging: defect button creates pending reprint request', async ({ pag
   ])
   await expect(page).toHaveURL(/\/app\/ff\/packaging/)
   await expect(page.getByTestId('ff-packaging-task-panel')).toBeVisible()
-  await page.getByTestId('nav-ff-honest-sign-reprints').click()
+  await page.goto('/app/ff/honest-sign/reprints')
   await expect(page.getByTestId('ff-honest-sign-reprints-page-table')).toBeVisible()
 
   await Promise.all([
@@ -239,7 +241,7 @@ test('FF packaging: defect button creates pending reprint request', async ({ pag
     page.getByTestId(`ff-honest-sign-reprints-page-context-pool-${requestId}`).click(),
   ])
   await expect(page).toHaveURL(/\/app\/ff\/honest-sign\/pool\//)
-  await page.getByTestId('nav-ff-honest-sign-reprints').click()
+  await page.goto('/app/ff/honest-sign/reprints')
   await expect(page.getByTestId('ff-honest-sign-reprints-page-table')).toBeVisible()
 
   await Promise.all([

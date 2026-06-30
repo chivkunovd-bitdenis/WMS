@@ -31,6 +31,7 @@ from app.api.warehouses import router as warehouses_router
 from app.api.wb_mp_warehouses import router as wb_mp_warehouses_router
 from app.api.wildberries_integration import router as wildberries_integration_router
 from app.core.roles import FULFILLMENT_ADMIN
+from app.core.settings import settings
 from app.db.session import SessionLocal, engine
 from app.models import Base
 from app.models.tenant import Tenant
@@ -84,14 +85,7 @@ def create_app() -> FastAPI:
     app = FastAPI(title="WMS API", lifespan=lifespan)
     app.add_middleware(
         CORSMiddleware,
-        allow_origins=[
-            "http://localhost:5173",
-            "http://127.0.0.1:5173",
-            "http://localhost:15173",
-            "http://127.0.0.1:15173",
-            "http://localhost:15174",
-            "http://127.0.0.1:15174",
-        ],
+        allow_origins=settings.cors_allow_origins,
         allow_credentials=True,
         allow_methods=["*"],
         allow_headers=["*"],

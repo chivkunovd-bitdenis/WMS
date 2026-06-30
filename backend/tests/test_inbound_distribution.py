@@ -82,8 +82,14 @@ async def test_inbound_distribution_lines_validate_limits_and_lock(
     assert ver.status_code == 200, ver.text
     assert ver.json()["status"] == "sorting"
 
+    summary = await async_client.get(base, headers=ah)
+    assert summary.status_code == 200, summary.text
+    summary_row = next(r for r in summary.json() if r["id"] == rid)
+    assert summary_row["sorting_remaining_qty"] == 5
+
     got = await async_client.get(f"{base}/{rid}", headers=ah)
     assert got.status_code == 200, got.text
+    assert got.json()["sorting_remaining_qty"] == 5
     box_id = got.json()["boxes"][0]["id"]
 
     after_verify_bal = await async_client.get(
@@ -124,6 +130,7 @@ async def test_inbound_distribution_lines_validate_limits_and_lock(
     )
     assert partial.status_code == 200, partial.text
     assert partial.json()["lines"][0]["posted_qty"] == 2
+    assert partial.json()["sorting_remaining_qty"] == 3
     box_after = partial.json()["boxes"][0]
     assert box_after["remaining_qty"] == 3
 
@@ -136,6 +143,7 @@ async def test_inbound_distribution_lines_validate_limits_and_lock(
     done = rest
     assert done.json()["status"] == "done"
     assert done.json()["lines"][0]["posted_qty"] == 5
+    assert done.json()["sorting_remaining_qty"] == 0
 
     movements = await async_client.get(f"{base}/{rid}/movements", headers=ah)
     assert movements.status_code == 200, movements.text
@@ -340,4 +348,3 @@ async def test_distribution_reopen_after_stuck_lock(async_client: AsyncClient) -
     reopen = await async_client.post(f"{base}/{rid}/distribution-reopen", headers=ah)
     assert reopen.status_code == 200, reopen.text
     assert reopen.json()["distribution_completed_at"] is None
-

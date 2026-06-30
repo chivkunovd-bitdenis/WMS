@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from typing import Self
 
-from pydantic import AliasChoices, Field, model_validator
+from pydantic import AliasChoices, Field, field_validator, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -16,6 +16,14 @@ class Settings(BaseSettings):
     database_url: str = Field(
         default="postgresql+psycopg_async://postgres:postgres@localhost:5432/wms",
         description="Async SQLAlchemy URL (use postgresql+psycopg_async:// for PostgreSQL).",
+    )
+    cors_origins: str = Field(
+        default="",
+        validation_alias=AliasChoices("WMS_CORS_ORIGINS", "CORS_ORIGINS"),
+        description=(
+            "Comma-separated extra browser origins for staging/prod; "
+            "localhost origins stay enabled by default."
+        ),
     )
     jwt_secret_key: str = Field(
         default="change-me-in-production-use-long-random-secret",
@@ -68,6 +76,15 @@ class Settings(BaseSettings):
         ),
     )
 
+    @field_validator("database_url", mode="before")
+    @classmethod
+    def _normalize_database_url(cls, value: str) -> str:
+        if value.startswith("postgresql://"):
+            return value.replace("postgresql://", "postgresql+psycopg_async://", 1)
+        if value.startswith("postgres://"):
+            return value.replace("postgres://", "postgresql+psycopg_async://", 1)
+        return value
+
     @model_validator(mode="after")
     def _validate_prod_secrets(self) -> Self:
         if self.app_env == "production":
@@ -85,6 +102,19 @@ class Settings(BaseSettings):
                 "postgresql+psycopg_async://", "postgresql+psycopg://", 1
             )
         return self.database_url
+
+    @property
+    def cors_allow_origins(self) -> list[str]:
+        defaults = [
+            "http://localhost:5173",
+            "http://127.0.0.1:5173",
+            "http://localhost:15173",
+            "http://127.0.0.1:15173",
+            "http://localhost:15174",
+            "http://127.0.0.1:15174",
+        ]
+        extras = [origin.strip() for origin in self.cors_origins.split(",") if origin.strip()]
+        return list(dict.fromkeys([*defaults, *extras]))
 
 
 settings = Settings()

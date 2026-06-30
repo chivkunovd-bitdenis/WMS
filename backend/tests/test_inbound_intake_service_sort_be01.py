@@ -99,6 +99,52 @@ async def _mixed_sorting_request(
 
 
 @pytest.mark.asyncio
+async def test_complete_receiving_exposes_sorting_remaining_qty(
+    async_client: AsyncClient,
+) -> None:
+    tenant_id = await _tenant_id(async_client)
+
+    async with SessionLocal() as session:
+        wh = await create_warehouse(
+            session, tenant_id, name="W", code=f"w-{uuid.uuid4().hex[:6]}"
+        )
+        prod = await create_product(
+            session,
+            tenant_id,
+            name="P",
+            sku_code=f"SKU-{uuid.uuid4().hex[:6]}",
+            length_mm=10,
+            width_mm=10,
+            height_mm=10,
+        )
+        req = await svc.create_request(session, tenant_id, warehouse_id=wh.id)
+        request_id = req.id
+        product_id = prod.id
+
+    async with SessionLocal() as session:
+        line = await svc.add_line(
+            session,
+            tenant_id,
+            request_id,
+            product_id=product_id,
+            expected_qty=4,
+        )
+        await svc.submit_request(session, tenant_id, request_id)
+        await svc.begin_receiving(session, tenant_id, request_id)
+        await svc.set_line_actual_qty(
+            session, tenant_id, request_id, line.id, actual_qty=4
+        )
+        done = await svc.complete_receiving(session, tenant_id, request_id)
+        assert done.status == svc.STATUS_SORTING
+        assert svc.sorting_remaining_qty(done) == 4
+        assert done.lines[0].posted_qty == 0
+        assert done.lines[0].actual_qty == 4
+
+    # TODO(STAB-OUT-BE-01): if a future backend fix can remove phantom остаток
+    # after outbound consumption from the sorting buffer, cover that separately.
+
+
+@pytest.mark.asyncio
 async def test_mixed_distribution_lines_across_cells(async_client: AsyncClient) -> None:
     tenant_id = await _tenant_id(async_client)
     request_id, product_id, box_id, loc_a, loc_b = await _mixed_sorting_request(
