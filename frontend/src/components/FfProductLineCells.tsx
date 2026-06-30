@@ -38,6 +38,8 @@ type CellsProps = {
   lineTestIdPrefix?: string
   /** productId — печать через FfProductMarkingPrintProvider на странице. */
   productId?: string
+  qtyNeedPack?: number
+  printSource?: 'catalog' | 'packaging'
   requiresHonestSign?: boolean
   markingAvailable?: number
   /** Если задан — иконка печати вызывает callback (упаковка / отгрузка). */
@@ -51,6 +53,8 @@ export function FfProductLineCells({
   printTestId = 'ff-product-barcode-print',
   lineTestIdPrefix,
   productId,
+  qtyNeedPack,
+  printSource,
   requiresHonestSign,
   markingAvailable,
   onPrintClick,
@@ -127,6 +131,8 @@ export function FfProductLineCells({
               meta={meta}
               testId={printTestId}
               productId={productId}
+              qtyNeedPack={qtyNeedPack}
+              printSource={printSource}
               requiresHonestSign={requiresHonestSign}
               markingAvailable={markingAvailable}
             />

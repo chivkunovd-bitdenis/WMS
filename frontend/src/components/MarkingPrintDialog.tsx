@@ -91,7 +91,7 @@ export function MarkingPrintDialog({ open, reprint, ctx, busy, onBusyChange, onC
   const [reprintCodesLoading, setReprintCodesLoading] = useState(false)
 
   const requiresHonestSign = ctx?.requiresHonestSign ?? true
-  const isCatalogSource = ctx?.source === 'catalog' || !ctx?.lineId
+  const isCatalogSource = ctx?.source === 'catalog'
 
   const applyTapeCounts = (nextCz: number, nextWb: number) => {
     const cz = Math.max(0, Math.min(99, Math.floor(nextCz) || 0))
@@ -206,7 +206,8 @@ export function MarkingPrintDialog({ open, reprint, ctx, busy, onBusyChange, onC
       }),
     [ctx?.unitsInPack, ctx?.packagingInstructions],
   )
-  const totalWbLabels = resolveWbBarcodeLabelCount(wbBarcodeQty, packUnits)
+  const wbLabelMultiplier = isCatalogSource || ctx?.lineId ? wbBarcodeQty : wbBarcodeQty * Math.max(1, qtyNeed)
+  const totalWbLabels = resolveWbBarcodeLabelCount(wbLabelMultiplier, packUnits)
   const available = ctx?.markingAvailable ?? 0
   const shortage = requiresHonestSign && !reprint && available < qtyNeed ? qtyNeed - available : 0
   const canPrintCount = reprint
@@ -219,7 +220,7 @@ export function MarkingPrintDialog({ open, reprint, ctx, busy, onBusyChange, onC
         : available >= qtyNeed
           ? qtyNeed
           : 0
-      : wbBarcodeQty
+      : totalWbLabels
 
   const previewUnits = useMemo(() => buildTapePreviewUnits(layout, 3), [layout])
   const previewTapeCount = useMemo(
@@ -309,7 +310,7 @@ export function MarkingPrintDialog({ open, reprint, ctx, busy, onBusyChange, onC
       }
       return
     }
-    if (isCatalogSource && !reprint) {
+    if (!ctx.lineId && !reprint) {
       onBusyChange(true)
       setError(null)
       try {
@@ -424,7 +425,7 @@ export function MarkingPrintDialog({ open, reprint, ctx, busy, onBusyChange, onC
     (!reprint && qtyNeed < 1) ||
     (requiresHonestSign && !reprint && available < 1) ||
     (requiresHonestSign && !reprint && !allowPartial && shortage > 0) ||
-    (!requiresHonestSign && wbBarcodeQty < 1)
+    (!requiresHonestSign && totalWbLabels < 1)
 
   const dialogTitle = reprint
     ? 'Повторная печать'

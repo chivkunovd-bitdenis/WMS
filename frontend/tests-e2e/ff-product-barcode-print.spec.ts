@@ -108,8 +108,9 @@ test('ff sorting opens unified marking print dialog for product line', async ({ 
   await expect(dialog).toBeVisible();
   await expect(dialog).toContainText('Брюки коричневые');
   await expect(page.getByTestId('marking-print-wb-qty')).toBeVisible();
+  await expect(page.getByTestId('marking-print-qty')).toContainText('К упаковке: 2');
   await page.getByTestId('marking-print-wb-qty').locator('input').fill('3');
-  await expect(page.getByTestId('marking-print-will-print')).toContainText('К печати: 3 ШК ВБ');
+  await expect(page.getByTestId('marking-print-will-print')).toContainText('К печати: 6 ШК ВБ');
   await page.getByTestId('marking-print-confirm').click();
   await expect(dialog).toBeHidden();
 

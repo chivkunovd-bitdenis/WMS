@@ -706,6 +706,8 @@ export function FfInboundSortingPanel({
                     <FfProductLineCells
                       meta={displayMeta}
                       productId={product.product_id}
+                      qtyNeedPack={product.accepted}
+                      printSource="packaging"
                     />
                     <TableCell align="right" data-testid="ff-sorting-product-accepted">
                       {product.accepted}

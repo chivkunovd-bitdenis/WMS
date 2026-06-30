@@ -14,7 +14,10 @@ export type OpenFfProductPrintOpts = {
   productId: string
   meta: ProductLineDisplayMeta
   documentNumber?: string | null
+  /** База для печати (как qty_need_pack в упаковке). В каталоге не задаётся. */
   qtyNeedPack?: number
+  /** catalog — своё поле «кол-во товаров»; packaging — база = qtyNeedPack, ЧЗ/ШК = множители на ед. */
+  source?: 'catalog' | 'packaging'
   requiresHonestSign?: boolean
   markingAvailable?: number
   qtyMarkingPrinted?: number
@@ -69,12 +72,15 @@ export function useFfProductMarkingPrint(token: string) {
         }
       }
 
+      const source =
+        opts.source ?? (opts.qtyNeedPack != null && opts.qtyNeedPack > 0 ? 'packaging' : 'catalog')
+
       openPrint({
         token,
-        source: 'catalog',
+        source,
         productId: opts.productId,
         documentNumber: opts.documentNumber ?? null,
-        qtyNeedPack: opts.qtyNeedPack ?? 1,
+        qtyNeedPack: source === 'packaging' ? Math.max(1, opts.qtyNeedPack ?? 1) : 1,
         markingAvailable: markingAvailable ?? 0,
         qtyMarkingPrinted: qtyMarkingPrinted ?? 0,
         requiresHonestSign: requiresHonestSign ?? false,
