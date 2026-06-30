@@ -8,6 +8,9 @@ type Props = {
   meta: ProductLineDisplayMeta
   testId?: string
   productId?: string
+  /** Базовое кол-во товара (принято / к упаковке), как qty_need_pack в отгрузке. */
+  qtyNeedPack?: number
+  printSource?: 'catalog' | 'packaging'
   requiresHonestSign?: boolean
   markingAvailable?: number
   /** Явный callback (упаковка / ЧЗ-инвентарь с готовыми остатками). */
@@ -18,6 +21,8 @@ export function ProductBarcodePrintButton({
   meta,
   testId = 'ff-product-barcode-print',
   productId,
+  qtyNeedPack,
+  printSource,
   requiresHonestSign,
   markingAvailable,
   onMarkingPrint,
@@ -40,6 +45,8 @@ export function ProductBarcodePrintButton({
       .openCatalogProductPrint({
         productId,
         meta,
+        qtyNeedPack,
+        source: printSource,
         requiresHonestSign,
         markingAvailable,
       })

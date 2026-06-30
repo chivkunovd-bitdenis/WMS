@@ -94,6 +94,7 @@ test('ff verify posts to sorting zone; sorting queue and product columns', async
   const productCard = page.getByTestId('ff-sorting-product-card').first();
   await productCard.getByRole('button', { name: 'Печать ШК товара' }).click();
   await expect(page.getByTestId('marking-print-dialog')).toBeVisible();
+  await expect(page.getByTestId('marking-print-qty')).toContainText('К упаковке: 4');
   await expect(page.getByTestId('marking-print-wb-qty')).toBeVisible();
   await page.getByTestId('marking-print-dialog').getByRole('button', { name: 'Отмена' }).click();
   await expect(page.getByTestId('marking-print-dialog')).toBeHidden();
