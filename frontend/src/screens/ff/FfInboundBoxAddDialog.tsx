@@ -294,7 +294,7 @@ export function FfInboundBoxAddDialog({
                         showPrint={false}
                         nameExtra={
                           displayMeta.wb_size ? (
-                            <Typography variant="caption" color="text.secondary" display="block">
+                            <Typography variant="caption" color="text.secondary" sx={{ display: 'block' }}>
                               Размер: {displayMeta.wb_size}
                             </Typography>
                           ) : null

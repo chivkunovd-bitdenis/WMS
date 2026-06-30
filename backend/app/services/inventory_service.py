@@ -352,6 +352,27 @@ async def storage_on_hand_in_warehouse(
     return int(await session.scalar(stmt) or 0)
 
 
+async def sorting_on_hand_in_warehouse(
+    session: AsyncSession,
+    tenant_id: uuid.UUID,
+    warehouse_id: uuid.UUID,
+    product_id: uuid.UUID,
+) -> int:
+    """Остаток в зоне «Сортировка» (буфер до раскладки)."""
+    stmt = (
+        select(func.coalesce(func.sum(InventoryBalance.quantity), 0))
+        .join(StorageLocation, StorageLocation.id == InventoryBalance.storage_location_id)
+        .where(
+            InventoryBalance.tenant_id == tenant_id,
+            InventoryBalance.product_id == product_id,
+            StorageLocation.tenant_id == tenant_id,
+            StorageLocation.warehouse_id == warehouse_id,
+            StorageLocation.code == SORTING_LOCATION_CODE,
+        )
+    )
+    return int(await session.scalar(stmt) or 0)
+
+
 async def sync_outbound_line_reservation(
     session: AsyncSession,
     tenant_id: uuid.UUID,
