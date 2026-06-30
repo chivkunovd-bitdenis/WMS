@@ -4,8 +4,8 @@ import { waitForGetOk, waitForPostOk } from './api-waits';
 import { openFulfillmentRegistration } from './auth-flow';
 import { INBOUND_API, loginFfAdmin } from './inbound-boxes-helpers';
 
-// TC-NEW-PRINT-01 — этикетка 58×40: превью (штрихкод сверху, селлер, артикул, цвет, бренд, отзыв).
-test('ff inbound modal opens 58x40 label print dialog with preview', async ({ page }) => {
+// TC-NEW-PRINT-01 — единый диалог печати (MarkingPrintDialog) в сортировке после приёмки.
+test('ff sorting opens unified marking print dialog for product line', async ({ page }) => {
   const suffix = String(Date.now());
   const adminEmail = `ff-lbl-${suffix}@example.com`;
   const password = 'password123';
@@ -51,6 +51,10 @@ test('ff inbound modal opens 58x40 label print dialog with preview', async ({ pa
     data: JSON.stringify({ name: 'WH', code: `wh-lbl-${suffix}` }),
   });
   const warehouseId = String(((await whRes.json()) as { id: string }).id);
+  await page.request.post(`/api/warehouses/${warehouseId}/locations`, {
+    headers: h,
+    data: JSON.stringify({ code: 'STORE-1' }),
+  });
 
   const prRes = await page.request.post(`${e2eApi}/products`, {
     headers: h,
@@ -81,51 +85,36 @@ test('ff inbound modal opens 58x40 label print dialog with preview', async ({ pa
   });
   await page.request.post(`${INBOUND_API}/${rid}/submit`, { headers: h });
 
+  const doc = await page.request.get(`${INBOUND_API}/${rid}`, { headers: h });
+  const lineId = String(((await doc.json()) as { lines: { id: string }[] }).lines[0]!.id);
+  await page.request.patch(`${INBOUND_API}/${rid}/lines/${lineId}/actual`, {
+    headers: { ...h, 'Content-Type': 'application/json' },
+    data: JSON.stringify({ actual_qty: 2 }),
+  });
+  await page.request.post(`${INBOUND_API}/${rid}/complete-receiving`, { headers: h });
+
   await loginFfAdmin(page, adminEmail, password);
-  await page.getByTestId('nav-ff-reception').click();
+  await page.goto('/app/ff/sorting');
   await page.getByTestId('ff-inbound-queue-row').first().click();
-  await expect(page.getByTestId('ff-doc-dialog')).toBeVisible();
+  await expect(page.getByTestId('ff-sorting-panel')).toBeVisible();
 
-  const table = page.getByTestId('ff-inbound-lines-table');
-  await expect(table.getByRole('columnheader', { name: 'Фото' })).toBeVisible();
-  await expect(table.getByRole('columnheader', { name: 'ШК' })).toBeVisible();
+  const linesTable = page.getByTestId('ff-inbound-lines-table');
+  await expect(linesTable).toBeVisible();
+  await expect(linesTable.getByRole('button', { name: 'Печать ШК товара' })).toHaveCount(0);
 
-  await table.getByRole('button', { name: 'Печать ШК товара' }).first().click();
-  const dialog = page.getByTestId('ff-product-label-print-dialog');
+  const productCard = page.getByTestId('ff-sorting-product-card').first();
+  await productCard.getByRole('button', { name: 'Печать ШК товара' }).click();
+  const dialog = page.getByTestId('marking-print-dialog');
   await expect(dialog).toBeVisible();
-  await expect(dialog.getByText('Печать этикетки 58×40')).toBeVisible();
-  await expect(page.getByTestId('ff-product-label-preview')).toContainText('E2E-MOCK-BARCODE');
-  await expect(page.getByTestId('ff-product-label-preview')).toContainText(`Lbl Seller ${suffix}`);
-  await expect(page.getByTestId('ff-product-label-preview')).toContainText('Брюки коричневые');
-  await expect(page.getByTestId('ff-product-label-preview')).toContainText('Артикул:');
-  await expect(page.getByTestId('ff-product-label-preview')).toContainText('Цвет: коричневый');
-  await expect(page.getByTestId('ff-product-label-preview')).toContainText('Бренд: E2E-MOCK-BRAND');
-  await expect(page.getByTestId('ff-product-label-preview')).toContainText('Размер: L');
-  await expect(page.getByTestId('ff-product-label-preview')).toContainText(
-    'Состав: хлопок 95%, эластан 5%',
-  );
-  await expect(page.getByTestId('ff-product-label-include-size')).toBeChecked();
-  await expect(page.getByTestId('ff-product-label-include-composition')).toBeChecked();
+  await expect(dialog).toContainText('Брюки коричневые');
+  await expect(page.getByTestId('marking-print-wb-qty')).toBeVisible();
+  await page.getByTestId('marking-print-wb-qty').locator('input').fill('3');
+  await expect(page.getByTestId('marking-print-will-print')).toContainText('К печати: 3 ШК ВБ');
+  await page.getByTestId('marking-print-confirm').click();
+  await expect(dialog).toBeHidden();
 
-  await page.getByTestId('ff-product-label-include-composition').uncheck();
-  await expect(page.getByTestId('ff-product-label-preview')).not.toContainText('Состав:');
-  await expect(page.getByTestId('ff-product-label-preview')).toContainText('Размер: L');
-
-  await page.getByTestId('ff-product-label-include-size').uncheck();
-  await expect(page.getByTestId('ff-product-label-preview')).not.toContainText('Размер:');
-
-  await page.getByTestId('ff-product-label-include-size').check();
-  await page.getByTestId('ff-product-label-include-composition').check();
-  await expect(page.getByTestId('ff-product-label-preview')).toContainText('Размер: L');
-  await expect(page.getByTestId('ff-product-label-preview')).toContainText('Состав:');
-  await expect(page.getByTestId('ff-product-label-preview')).toContainText('Пожалуйста оставьте отзыв');
-  await expect(page.getByTestId('ff-product-line-barcode')).toContainText('E2E-MOCK-BARCODE');
-  await expect(page.getByTestId('ff-product-line-barcode')).toContainText('Размер: L');
-  await expect(page.getByTestId('ff-product-line-barcode')).toContainText('Состав:');
-  await expect(page.getByTestId('ff-product-label-preview')).not.toContainText('EAC');
-  await expect(page.getByTestId('ff-product-label-print')).toBeEnabled();
-
-  await page.getByTestId('ff-product-label-qty').fill('3');
-  await page.getByTestId('ff-product-label-print').click();
-  await expect(dialog).not.toBeVisible();
+  const barcodeCell = productCard.getByTestId('ff-product-line-barcode');
+  await expect(barcodeCell).toContainText('E2E-MOCK-BARCODE');
+  await expect(barcodeCell).toContainText('Размер: L');
+  await expect(barcodeCell).toContainText('Состав:');
 });

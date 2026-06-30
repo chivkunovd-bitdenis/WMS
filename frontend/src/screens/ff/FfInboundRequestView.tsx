@@ -1408,6 +1408,7 @@ export function FfInboundRequestView({
                     >
                       <FfProductLineCells
                         meta={displayMeta}
+                        showPrint={false}
                         printTestId={`ff-inbound-line-print-${ln.id}`}
                       />
                       <TableCell align="right" sx={{ minWidth: 120 }}>

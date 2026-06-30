@@ -36,7 +36,11 @@ type CellsProps = {
   printTestId?: string
   /** Префикс data-testid для фото/sku/названия в операционных таблицах. */
   lineTestIdPrefix?: string
-  /** Если задан — иконка печати вызывает callback вместо ProductBarcodePrintDialog. */
+  /** productId — печать через FfProductMarkingPrintProvider на странице. */
+  productId?: string
+  requiresHonestSign?: boolean
+  markingAvailable?: number
+  /** Если задан — иконка печати вызывает callback (упаковка / отгрузка). */
   onPrintClick?: () => void
   nameExtra?: ReactNode
 }
@@ -46,6 +50,9 @@ export function FfProductLineCells({
   showPrint = true,
   printTestId = 'ff-product-barcode-print',
   lineTestIdPrefix,
+  productId,
+  requiresHonestSign,
+  markingAvailable,
   onPrintClick,
   nameExtra,
 }: CellsProps) {
@@ -115,9 +122,15 @@ export function FfProductLineCells({
                 </IconButton>
               </span>
             </Tooltip>
-          ) : (
-            <ProductBarcodePrintButton meta={meta} testId={printTestId} />
-          )}
+          ) : productId ? (
+            <ProductBarcodePrintButton
+              meta={meta}
+              testId={printTestId}
+              productId={productId}
+              requiresHonestSign={requiresHonestSign}
+              markingAvailable={markingAvailable}
+            />
+          ) : null}
         </TableCell>
       ) : null}
     </>

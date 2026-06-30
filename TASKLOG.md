@@ -1,10 +1,16 @@
 # TASKLOG
 
+## TASK-092 — 2026-06-30 — Единая печать: MarkingPrintDialog везде, убрана нижняя иконка в приёмке
+
+- What changed: `useFfProductMarkingPrint` + `FfProductMarkingPrintProvider` — один диалог на страницу, Snackbar при ошибке marking-overview; `ProductBarcodePrintButton` без N копий диалога; в «Состав приёмки» иконка печати убрана; сортировка и каталог — тот же поток, что отгрузка.
+- What did NOT change: печать накладной; печать ШК ячейки; упаковка/отгрузка (`onPrintClick` + `lineId`); `ProductBarcodePrintDialog` файл остаётся (не монтируется в FF UI).
+- Verification: `npm run build`; e2e print pack (`ff-product-barcode-print`, `ff-reception-sorting`, `ff-marking-packaging`, `stab-cz-ui-print`) green.
+
 ## TASK-091 — 2026-06-30 — Сортировка: убрать «Упаковать», авто-строки короб/россыпь
 
 - What changed: `FfInboundSortingPanel` — удалена кнопка «Упаковать»; под товаром авто-строки: по одной на каждый короб приёмки + «Россыпь»; источник текстом (не Select); «+ ячейка» только для остатка россыпи; qty короба read-only.
 - What did NOT change: раздел «Упаковка»; prod docker.
-- Verification: `npm run build`; e2e `ff-reception-sorting`, `ff-sorting-product-centric` 3/3.
+- Verification: `npm run build`; e2e `ff-reception-sorting`, `ff-sorting-product-centric` 3/3; merged `92848c4` (#63); Railway staging web+WMS SUCCESS; smoke `/` + `/api/health` OK.
 
 ## TASK-090 — 2026-06-30 — IN-01: единая модель коробов приёмки + отгрузка, модалка 2×
 
