@@ -59,6 +59,13 @@ test('FF honest sign product-first: list, product card, shared basket pool', asy
   )
   await expect(productRow.getByTestId(`ff-honest-sign-product-photo-${productX.id}`)).toBeVisible()
   await expect(productRow.getByTestId(`ff-honest-sign-product-print-${productX.id}`)).toBeVisible()
+  await productRow.getByTestId(`ff-honest-sign-product-print-${productX.id}`).click()
+  await expect(page.getByTestId('marking-print-dialog')).toBeVisible()
+  await expect(page.getByTestId('marking-print-cz-qty')).toBeVisible()
+  await expect(page.getByTestId('marking-print-wb-qty')).toBeVisible()
+  await expect(page.getByTestId('marking-print-tape')).toBeVisible()
+  await page.getByTestId('marking-print-dialog').getByRole('button', { name: 'Отмена' }).click()
+  await expect(page.getByTestId('marking-print-dialog')).toBeHidden()
   await expect(productRow).toContainText('100')
 
   const basketChip = page.getByTestId(`ff-honest-sign-product-basket-${productX.id}-${sharedPoolId}`)

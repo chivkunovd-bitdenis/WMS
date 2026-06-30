@@ -31,6 +31,8 @@ import { useWbProductCatalog } from '../../hooks/useWbProductCatalog'
 import { PageHeader } from '../../ui/PageHeader'
 import { productDisplayMetaFromCatalog } from '../../types/wbProductCatalog'
 import { readApiErrorMessage } from '../../utils/readApiErrorMessage'
+import { displayMetaToProductLabel } from '../../utils/productBarcodePrint'
+import { useMarkingCodePrint } from '../../utils/useMarkingCodePrint'
 import { MarkingImportDialog } from './MarkingImportDialog'
 import { MarkingSellerPicker } from './MarkingSellerPicker'
 
@@ -190,6 +192,7 @@ export function HonestSignScreen({
     !sellerIdRequiredForImport || Boolean(effectiveSellerId),
     effectiveSellerId,
   )
+  const { openPrint, dialog: markingPrintDialog } = useMarkingCodePrint()
 
   const loadInventory = useCallback(async () => {
     inventoryLoadAbortRef.current?.abort()
@@ -677,6 +680,24 @@ export function HonestSignScreen({
                         <ProductBarcodePrintButton
                           meta={displayMeta}
                           testId={`${testIdPrefix}-product-print-${row.product_id}`}
+                          onMarkingPrint={() =>
+                            openPrint({
+                              token,
+                              source: 'catalog',
+                              productId: row.product_id,
+                              documentNumber: null,
+                              qtyNeedPack: 1,
+                              markingAvailable: row.personal_available,
+                              qtyMarkingPrinted: row.printed_count,
+                              requiresHonestSign: true,
+                              skuCode: displayMeta.sku_code,
+                              productName: displayMeta.product_name,
+                              productLabel: displayMetaToProductLabel(displayMeta),
+                              onPrinted: () => {
+                                void loadInventory()
+                              },
+                            })
+                          }
                         />
                         <ChevronRightOutlined fontSize="small" color="action" sx={{ mt: 0.75 }} />
                       </Stack>
@@ -710,6 +731,7 @@ export function HonestSignScreen({
         message={toastMessage ?? ''}
         data-testid={`${testIdPrefix}-import-toast`}
       />
+      {markingPrintDialog}
     </Stack>
   )
 }
