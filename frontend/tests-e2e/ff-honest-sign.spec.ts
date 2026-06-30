@@ -51,7 +51,14 @@ test('FF honest sign product-first: list, product card, shared basket pool', asy
 
   const productRow = page.getByTestId(`ff-honest-sign-product-row-${productX.id}`)
   await expect(productRow).toBeVisible()
-  await expect(productRow).toContainText(productX.sku_code)
+  await expect(productRow.getByTestId(`ff-honest-sign-product-sku-${productX.id}`)).toContainText(
+    productX.sku_code,
+  )
+  await expect(productRow.getByTestId(`ff-honest-sign-product-name-${productX.id}`)).toContainText(
+    'Product X',
+  )
+  await expect(productRow.getByTestId(`ff-honest-sign-product-photo-${productX.id}`)).toBeVisible()
+  await expect(productRow.getByTestId(`ff-honest-sign-product-print-${productX.id}`)).toBeVisible()
   await expect(productRow).toContainText('100')
 
   const basketChip = page.getByTestId(`ff-honest-sign-product-basket-${productX.id}-${sharedPoolId}`)

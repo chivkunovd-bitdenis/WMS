@@ -20,11 +20,13 @@
 | STAB-SORT-FE-01 | done | ff-reception-sorting + ff-sorting-product-centric 4/4 |
 | STAB-OUT-BE-01 | done | marketplace_unload pytest 30/30 (no code change needed) |
 
+| STAB-OUT-FE-01 | done | ff-mp-box-add-modal sorting buffer e2e |
+
 ## Runnable next
 
-- STAB-IN-FE-03 — модалка короба (фото, колонки)
-- STAB-OUT-FE-01 — UI отгрузки из буфера
 - STAB-CZ-FE-02 — список товаров ЧЗ
+- STAB-PRINT-FE-01 — конструктор печати
+- Railway staging smoke (см. docs/analysis/RAILWAY_STAGING_RU.md)
 
 ## Handoff refs
 
