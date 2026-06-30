@@ -462,9 +462,13 @@ export async function apiCreateSubmittedInbound(
   return rid;
 }
 
-/** FF modal: manual qty in open box, then close box. */
+/** FF modal: create box, open fill, manual qty, then close box. */
 export async function ffInboundBoxAddManualQty(page: Page, quantity: number): Promise<void> {
-  await page.getByTestId('ff-inbound-add-to-box').click();
+  await Promise.all([
+    waitForPostOk(page, INBOUND_API, (u) => u.endsWith('/boxes')),
+    page.getByTestId('ff-inbound-add-to-box').click(),
+  ]);
+  await page.getByTestId('ff-inbound-box-open').last().getByRole('button', { name: 'Наполнить' }).click();
   await expect(page.getByTestId('ff-inbound-box-add-dialog')).toBeVisible();
   await page.getByTestId('ff-inbound-box-add-manual-edit').first().click();
   const qtyInput = page.getByTestId('ff-inbound-box-add-manual-qty').first();

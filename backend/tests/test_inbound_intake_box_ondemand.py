@@ -136,6 +136,27 @@ async def test_box_two_scans_only_box_two(async_client: AsyncClient) -> None:
 
 
 @pytest.mark.asyncio
+async def test_delete_empty_box_on_demand(async_client: AsyncClient) -> None:
+    suffix = f"{int(time.time() * 1000)}-del"
+    ah, tenant_id = await _register_admin(async_client, suffix)
+    rid, _pid, _sku = await _submitted_request(async_client, ah, suffix, expected_qty=2)
+
+    async with SessionLocal() as session:
+        box = await box_svc.create_open_box(session, tenant_id, rid)
+        box_id = box.id
+
+    del_res = await async_client.delete(
+        f"/operations/inbound-intake-requests/{rid}/boxes/{box_id}",
+        headers=ah,
+    )
+    assert del_res.status_code == 204, del_res.text
+
+    async with SessionLocal() as session:
+        boxes = await box_svc.list_boxes(session, tenant_id, rid)
+    assert boxes == []
+
+
+@pytest.mark.asyncio
 async def test_loose_scan_stays_loose_and_completion_does_not_require_close(
     async_client: AsyncClient,
 ) -> None:

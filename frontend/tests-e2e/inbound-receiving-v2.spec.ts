@@ -66,8 +66,7 @@ test('inbound receiving v2 — multiple boxes stay independent', async ({ page }
       waitForPostOk(page, INBOUND_API, (u) => u.endsWith('/boxes')),
       page.getByTestId('ff-inbound-add-to-box').click(),
     ]);
-    await expect(page.getByTestId('ff-inbound-box-add-dialog')).toBeVisible();
-    await page.getByTestId('ff-inbound-box-add-close').click();
+    await expect(page.getByTestId('ff-inbound-box-open')).toHaveCount(i + 1);
     await expect(page.getByTestId('ff-inbound-box-add-dialog')).toHaveCount(0);
   }
   await expect(page.getByTestId('ff-inbound-box-open')).toHaveCount(3);
@@ -75,7 +74,7 @@ test('inbound receiving v2 — multiple boxes stay independent', async ({ page }
   await expect(page.getByTestId('ff-inbound-box-open').nth(1)).toContainText('Пока нет товаров');
   await expect(page.getByTestId('ff-inbound-box-open').nth(2)).toContainText('Пока нет товаров');
 
-  await page.getByTestId('ff-inbound-box-open').nth(1).getByRole('button', { name: 'Добавить товары' }).click();
+  await page.getByTestId('ff-inbound-box-open').nth(1).getByRole('button', { name: 'Наполнить' }).click();
   await expect(page.getByTestId('ff-inbound-box-add-box-label')).toContainText('Короб № 2');
   await expect(page.getByTestId(`ff-inbound-box-add-line-row-${seed.productId}`)).toBeVisible();
   await expect(page.getByTestId('ff-inbound-box-add-dialog')).toContainText('Короб № 2');
@@ -147,6 +146,7 @@ test('inbound receiving v2 — manual edit with box saves loose not total', asyn
   await expect(page.getByTestId('ff-inbound-receiving-scan-panel')).toBeVisible();
 
   await page.getByTestId('ff-inbound-add-to-box').click();
+  await page.getByTestId('ff-inbound-box-open').first().getByRole('button', { name: 'Наполнить' }).click();
   await expect(page.getByTestId('ff-inbound-box-add-dialog')).toBeVisible();
 
   for (let i = 0; i < 6; i++) {

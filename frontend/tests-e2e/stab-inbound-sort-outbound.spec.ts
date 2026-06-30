@@ -81,13 +81,11 @@ test('stab inbound sort outbound — receive, see sorting, ship from buffer with
       waitForPostOk(page, INBOUND_API, (u) => u.endsWith('/boxes')),
       page.getByTestId('ff-inbound-add-to-box').click(),
     ]);
-    await expect(page.getByTestId('ff-inbound-box-add-dialog')).toBeVisible();
-    await page.getByTestId('ff-inbound-box-add-close').click();
     await expect(page.getByTestId('ff-inbound-box-add-dialog')).toHaveCount(0);
   }
   await expect(page.getByTestId('ff-inbound-box-open')).toHaveCount(2);
 
-  await page.getByTestId('ff-inbound-box-open').nth(1).getByRole('button', { name: 'Добавить товары' }).click();
+  await page.getByTestId('ff-inbound-box-open').nth(1).getByRole('button', { name: 'Наполнить' }).click();
   await expect(page.getByTestId('ff-inbound-box-add-box-label')).toContainText('Короб № 2');
   for (let i = 0; i < BOX2_QTY; i++) {
     await page.getByTestId('ff-inbound-box-add-scan-input').fill(seed.sku);

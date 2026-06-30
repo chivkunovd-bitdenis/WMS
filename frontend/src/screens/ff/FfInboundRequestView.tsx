@@ -990,14 +990,34 @@ export function FfInboundRequestView({
     }
   }
 
-  const openBoxAddDialog = async (boxId?: string) => {
-    if (boxId) {
-      setBoxAddDialogBoxId(boxId)
-      return
-    }
-    const createdBoxId = await createInboundBox()
-    if (createdBoxId) {
-      setBoxAddDialogBoxId(createdBoxId)
+  const openBoxAddDialog = (boxId: string) => {
+    setBoxAddDialogBoxId(boxId)
+  }
+
+  const handleCreateBox = async () => {
+    await createInboundBox()
+  }
+
+  const deleteInboundBox = async (boxId: string) => {
+    setBusy(true)
+    setError(null)
+    try {
+      const res = await fetch(
+        apiUrl(`/operations/inbound-intake-requests/${requestId}/boxes/${boxId}`),
+        { method: 'DELETE', headers: authHeaders },
+      )
+      if (!res.ok) {
+        setError(scanErrorMessageRu(await readApiErrorMessage(res)))
+        return
+      }
+      if (boxAddDialogBoxId === boxId) {
+        setBoxAddDialogBoxId(null)
+      }
+      await loadDetail()
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Не удалось удалить короб.')
+    } finally {
+      setBusy(false)
     }
   }
 
@@ -1086,7 +1106,7 @@ export function FfInboundRequestView({
 
   const closedBoxes = useMemo(() => boxes.filter((b) => b.intake_closed_at != null), [boxes])
 
-  const openBoxes = useMemo(() => boxes.filter((b) => b.is_open), [boxes])
+  const fillableBoxes = useMemo(() => boxes.filter((b) => !b.intake_closed_at), [boxes])
 
   const actualEditable =
     isFulfillmentAdmin &&
@@ -1517,7 +1537,7 @@ export function FfInboundRequestView({
                 <Button
                   variant="outlined"
                   disabled={busy}
-                  onClick={() => void openBoxAddDialog()}
+                  onClick={() => void handleCreateBox()}
                   data-testid="ff-inbound-add-to-box"
                 >
                   Создать короб
@@ -1551,7 +1571,8 @@ export function FfInboundRequestView({
                     Короба приёмки
                   </Typography>
                   <Typography variant="body2" color="text.secondary">
-                    Открытые короба доступны для добавления товаров. Этикетки 58×40 (CODE128).
+                    Создайте короб — он появится в списке. Наполняйте по кнопке «Наполнить»; можно
+                    возвращаться и добавлять товары снова, пока короб не завершён.
                   </Typography>
                 </Box>
                 <Button
@@ -1563,9 +1584,9 @@ export function FfInboundRequestView({
                   Печать всех
                 </Button>
               </Stack>
-              {openBoxes.length > 0 ? (
+              {fillableBoxes.length > 0 ? (
                 <Stack spacing={1.5} sx={{ mb: closedBoxes.length > 0 ? 1.5 : 0 }}>
-                  {openBoxes.map((box) => (
+                  {fillableBoxes.map((box) => (
                     <Paper key={box.id} variant="outlined" sx={{ p: 1.5 }} data-testid="ff-inbound-box-open">
                       <Stack
                         direction={{ xs: 'column', sm: 'row' }}
@@ -1579,15 +1600,26 @@ export function FfInboundRequestView({
                           </Typography>
                         </Typography>
                         <Box sx={{ flexGrow: 1 }} />
-                        <Button
-                          size="small"
-                          variant="outlined"
-                          disabled={busy}
-                          onClick={() => void openBoxAddDialog(box.id)}
-                          data-testid={`ff-inbound-box-add-products-${box.id}`}
-                        >
-                          Добавить товары
-                        </Button>
+                        <Stack direction="row" spacing={0.5} sx={{ flexWrap: 'wrap' }}>
+                          <Button
+                            size="small"
+                            variant="contained"
+                            disabled={busy}
+                            onClick={() => openBoxAddDialog(box.id)}
+                            data-testid={`ff-inbound-box-fill-${box.id}`}
+                          >
+                            Наполнить
+                          </Button>
+                          <Button
+                            size="small"
+                            variant="outlined"
+                            disabled={busy || box.lines.some((ln) => ln.quantity > 0)}
+                            onClick={() => void deleteInboundBox(box.id)}
+                            data-testid={`ff-inbound-box-delete-${box.id}`}
+                          >
+                            Удалить
+                          </Button>
+                        </Stack>
                       </Stack>
                       {box.lines.length > 0 ? (
                         <Stack spacing={0.25}>
@@ -1607,7 +1639,7 @@ export function FfInboundRequestView({
                 </Stack>
               ) : (
                 <Typography variant="body2" color="text.secondary" sx={{ mb: 1.5 }}>
-                  Открытых коробов пока нет.
+                  Коробов пока нет — нажмите «Создать короб».
                 </Typography>
               )}
               {closedBoxes.length > 0 ? (

@@ -237,20 +237,26 @@ async def test_inbound_box_over_receive_allowed(async_client: AsyncClient) -> No
 
 
 @pytest.mark.asyncio
-async def test_inbound_box_line_qty_without_open_box(async_client: AsyncClient) -> None:
+async def test_inbound_box_line_qty_auto_opens_box(async_client: AsyncClient) -> None:
+    """PUT qty on a not-yet-opened box auto-opens it for fill (IN-01)."""
     suffix = str(int(time.time() * 1000) + 1)
     ah, rid, pid, _sku, boxes = await _submitted_inbound_with_boxes(
         async_client, suffix=suffix, expected_qty=3, box_count=1
     )
     base = f"/operations/inbound-intake-requests/{rid}"
     box_id = boxes[0]["id"]
+    assert boxes[0].get("intake_opened_at") in (None, "")
     put = await async_client.put(
         f"{base}/boxes/{box_id}/lines/{pid}",
         headers=ah,
         json={"quantity": 1},
     )
-    assert put.status_code == 409
-    assert put.json()["detail"] == "no_open_box"
+    assert put.status_code == 200, put.text
+    body = put.json()
+    assert body["is_open"] is True
+    got = await async_client.get(base, headers=ah)
+    reloaded = next(b for b in got.json()["boxes"] if b["id"] == box_id)
+    assert reloaded["lines"][0]["quantity"] == 1
 
 
 @pytest.mark.asyncio

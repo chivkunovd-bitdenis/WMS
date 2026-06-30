@@ -3,7 +3,6 @@ import CloseOutlined from '@mui/icons-material/CloseOutlined'
 import EditOutlined from '@mui/icons-material/EditOutlined'
 import {
   Alert,
-  Box,
   Button,
   Dialog,
   DialogActions,
@@ -20,9 +19,10 @@ import {
   Typography,
 } from '@mui/material'
 import { apiUrl } from '../../api'
-import { FfProductLineCells, FfProductTableHeadCells } from '../../components/FfProductLineCells'
+import { ProductPhotoThumb } from '../../components/ProductPhotoThumb'
 import {
   productDisplayMetaFromCatalog,
+  resolveProductPrimaryBarcode,
   type WbProductCatalogRow,
 } from '../../types/wbProductCatalog'
 import { readApiErrorMessage } from '../../utils/readApiErrorMessage'
@@ -200,14 +200,14 @@ export function FfInboundBoxAddDialog({
     <Dialog
       open={open}
       onClose={onClose}
-      maxWidth="md"
+      maxWidth="sm"
       fullWidth
       data-testid="ff-inbound-box-add-dialog"
       slotProps={{ paper: { sx: { maxHeight: 'calc(100vh - 48px)' } } }}
     >
       <DialogTitle component="div" sx={{ pr: 6 }} data-testid="ff-inbound-box-add-title">
         <Typography component="span" variant="h6" sx={{ display: 'block', fontWeight: 700 }}>
-          Добавить товары
+          Наполнить короб
         </Typography>
         <Typography
           variant="body2"
@@ -259,125 +259,143 @@ export function FfInboundBoxAddDialog({
                 onClick={() => void scanIntoBox()}
                 disabled={busy || !scanBarcode.trim()}
                 data-testid="ff-inbound-box-add-scan-submit"
+                sx={{ flexShrink: 0 }}
               >
                 Скан
               </Button>
             </Stack>
           ) : null}
 
-          <Box sx={{ overflowX: 'auto' }}>
-            <Table
-              size="small"
-              data-testid="ff-inbound-box-add-table"
-              sx={{ tableLayout: 'fixed', width: '100%' }}
-            >
-              <TableHead>
-                <TableRow>
-                  <FfProductTableHeadCells showPrint={false} />
-                  <TableCell align="right" sx={{ width: 90 }}>
-                    Заявлено
-                  </TableCell>
-                  <TableCell align="right" sx={{ width: 120 }}>
-                    В коробе
-                  </TableCell>
-                </TableRow>
-              </TableHead>
-              <TableBody>
-                {requestLines.map((ln) => {
-                  const inBox = qtyInBoxByProductId.get(ln.product_id) ?? 0
-                  const manualOpen = manualEditProductId === ln.product_id
-                  const displayMeta = productDisplayMetaFromCatalog(ln.product_id, ln, catalogById)
-                  return (
-                    <TableRow
-                      key={ln.id}
-                      data-testid={`ff-inbound-box-add-line-row-${ln.product_id}`}
-                    >
-                      <FfProductLineCells
-                        meta={displayMeta}
-                        showPrint={false}
-                        lineTestIdPrefix={`ff-inbound-box-add-product-${ln.product_id}`}
-                        nameExtra={
-                          displayMeta.wb_size ? (
-                            <Typography
-                              variant="caption"
-                              color="text.secondary"
-                              sx={{ display: 'block' }}
-                              data-testid={`ff-inbound-box-add-size-${ln.product_id}`}
-                            >
-                              Размер: {displayMeta.wb_size}
-                            </Typography>
-                          ) : null
-                        }
+          <Table size="small" data-testid="ff-inbound-box-add-table">
+            <TableHead>
+              <TableRow>
+                <TableCell sx={{ width: 52, px: 1 }}>Фото</TableCell>
+                <TableCell sx={{ minWidth: 0 }}>Товар</TableCell>
+                <TableCell align="right" sx={{ width: 76, whiteSpace: 'nowrap', px: 1 }}>
+                  Заявлено
+                </TableCell>
+                <TableCell align="right" sx={{ width: 96, whiteSpace: 'nowrap', px: 1 }}>
+                  В коробе
+                </TableCell>
+              </TableRow>
+            </TableHead>
+            <TableBody>
+              {requestLines.map((ln) => {
+                const inBox = qtyInBoxByProductId.get(ln.product_id) ?? 0
+                const manualOpen = manualEditProductId === ln.product_id
+                const displayMeta = productDisplayMetaFromCatalog(ln.product_id, ln, catalogById)
+                const barcode = resolveProductPrimaryBarcode(displayMeta)
+                return (
+                  <TableRow
+                    key={ln.id}
+                    data-testid={`ff-inbound-box-add-line-row-${ln.product_id}`}
+                  >
+                    <TableCell sx={{ px: 1, verticalAlign: 'top' }}>
+                      <ProductPhotoThumb
+                        src={displayMeta.wb_primary_image_url}
+                        alt={displayMeta.product_name}
+                        testId={`ff-inbound-box-add-product-${ln.product_id}-photo`}
                       />
-                      <TableCell align="right">{ln.expected_qty}</TableCell>
-                      <TableCell align="right">
-                        <Stack
-                          direction="row"
-                          spacing={0.5}
-                          sx={{ justifyContent: 'flex-end', alignItems: 'center' }}
+                    </TableCell>
+                    <TableCell sx={{ minWidth: 0, verticalAlign: 'top' }}>
+                      <Typography
+                        variant="body2"
+                        sx={{ fontWeight: 700, wordBreak: 'break-word' }}
+                        data-testid={`ff-inbound-box-add-product-${ln.product_id}-sku`}
+                      >
+                        {displayMeta.sku_code}
+                      </Typography>
+                      <Typography
+                        variant="body2"
+                        sx={{ wordBreak: 'break-word' }}
+                        data-testid={`ff-inbound-box-add-product-${ln.product_id}-name`}
+                      >
+                        {displayMeta.product_name}
+                      </Typography>
+                      {displayMeta.wb_size ? (
+                        <Typography
+                          variant="caption"
+                          color="text.secondary"
+                          sx={{ display: 'block' }}
+                          data-testid={`ff-inbound-box-add-size-${ln.product_id}`}
                         >
-                          {manualOpen && !boxClosed ? (
-                            <TextField
-                              type="number"
-                              size="small"
-                              value={
-                                manualDraftByProductId[ln.product_id] ?? String(inBox)
+                          Размер: {displayMeta.wb_size}
+                        </Typography>
+                      ) : null}
+                      {barcode ? (
+                        <Typography variant="caption" color="text.secondary" sx={{ display: 'block' }}>
+                          ШК: {barcode}
+                        </Typography>
+                      ) : null}
+                    </TableCell>
+                    <TableCell align="right" sx={{ px: 1, verticalAlign: 'top' }}>
+                      {ln.expected_qty}
+                    </TableCell>
+                    <TableCell align="right" sx={{ px: 1, verticalAlign: 'top' }}>
+                      <Stack
+                        direction="row"
+                        spacing={0.5}
+                        sx={{ justifyContent: 'flex-end', alignItems: 'center' }}
+                      >
+                        {manualOpen && !boxClosed ? (
+                          <TextField
+                            type="number"
+                            size="small"
+                            value={manualDraftByProductId[ln.product_id] ?? String(inBox)}
+                            onChange={(e) =>
+                              setManualDraftByProductId((prev) => ({
+                                ...prev,
+                                [ln.product_id]: e.target.value,
+                              }))
+                            }
+                            onKeyDown={(e) => {
+                              if (e.key === 'Enter') {
+                                e.preventDefault()
+                                void saveManualQty(ln.product_id)
                               }
-                              onChange={(e) =>
-                                setManualDraftByProductId((prev) => ({
-                                  ...prev,
-                                  [ln.product_id]: e.target.value,
-                                }))
+                            }}
+                            slotProps={{
+                              htmlInput: {
+                                min: 0,
+                                'data-testid': 'ff-inbound-box-add-manual-qty',
+                              },
+                            }}
+                            sx={{ width: 72 }}
+                            disabled={busy}
+                          />
+                        ) : (
+                          <Typography variant="body2" data-testid="ff-inbound-box-add-qty">
+                            {inBox}
+                          </Typography>
+                        )}
+                        {!boxClosed ? (
+                          <IconButton
+                            size="small"
+                            aria-label="Править количество"
+                            disabled={busy}
+                            onClick={() => {
+                              if (manualOpen) {
+                                void saveManualQty(ln.product_id)
+                                return
                               }
-                              onKeyDown={(e) => {
-                                if (e.key === 'Enter') {
-                                  e.preventDefault()
-                                  void saveManualQty(ln.product_id)
-                                }
-                              }}
-                              slotProps={{
-                                htmlInput: {
-                                  min: 0,
-                                  'data-testid': 'ff-inbound-box-add-manual-qty',
-                                },
-                              }}
-                              sx={{ width: 88 }}
-                              disabled={busy}
-                            />
-                          ) : (
-                            <Typography variant="body2" data-testid="ff-inbound-box-add-qty">
-                              {inBox}
-                            </Typography>
-                          )}
-                          {!boxClosed ? (
-                            <IconButton
-                              size="small"
-                              aria-label="Править количество"
-                              disabled={busy}
-                              onClick={() => {
-                                if (manualOpen) {
-                                  void saveManualQty(ln.product_id)
-                                  return
-                                }
-                                setManualEditProductId(ln.product_id)
-                                setManualDraftByProductId((prev) => ({
-                                  ...prev,
-                                  [ln.product_id]: String(inBox),
-                                }))
-                              }}
-                              data-testid="ff-inbound-box-add-manual-edit"
-                            >
-                              <EditOutlined fontSize="small" />
-                            </IconButton>
-                          ) : null}
-                        </Stack>
-                      </TableCell>
-                    </TableRow>
-                  )
-                })}
-              </TableBody>
-            </Table>
-          </Box>
+                              setManualEditProductId(ln.product_id)
+                              setManualDraftByProductId((prev) => ({
+                                ...prev,
+                                [ln.product_id]: String(inBox),
+                              }))
+                            }}
+                            data-testid="ff-inbound-box-add-manual-edit"
+                          >
+                            <EditOutlined fontSize="small" />
+                          </IconButton>
+                        ) : null}
+                      </Stack>
+                    </TableCell>
+                  </TableRow>
+                )
+              })}
+            </TableBody>
+          </Table>
         </Stack>
       </DialogContent>
       {!boxClosed ? (
