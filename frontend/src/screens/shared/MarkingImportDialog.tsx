@@ -582,7 +582,7 @@ export function MarkingImportDialog({
 
           {previewMeta && groups.length > 0 ? (
             <Typography variant="body2" color="text.secondary" data-testid={`${testIdPrefix}-import-preview-meta`}>
-              Неформат: {previewMeta.invalid_count} · дубликаты в файле: {previewMeta.duplicates_in_file}
+              Дубликаты в файле: {previewMeta.duplicates_in_file}
             </Typography>
           ) : null}
 
