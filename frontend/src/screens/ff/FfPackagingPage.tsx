@@ -166,7 +166,7 @@ export function FfPackagingTaskPanel({
         token,
         lineId: ln.id,
         productId: ln.product_id,
-        documentNumber: task.document_number,
+        documentNumber: formatHumanDocumentNumber(task),
         qtyNeedPack: ln.qty_need_pack,
         markingAvailable: ln.marking_available_count,
         qtyMarkingPrinted: ln.qty_marking_printed,
@@ -387,14 +387,14 @@ export function FfPackagingTaskPanel({
             </Typography>
           ) : null}
         </Stack>
-        {task.marketplace_unload_request_id ? (
+        {task.marketplace_unload_request_id && unloadLabel ? (
           <Link
             component={RouterLink}
             to={`/ff/mp-shipments?open_mp=${task.marketplace_unload_request_id}`}
             variant="body2"
             data-testid="ff-packaging-linked-unload"
           >
-            Отгрузка: {unloadLabel ?? task.marketplace_unload_request_id.slice(0, 8)}
+            Отгрузка: {unloadLabel}
           </Link>
         ) : unloadLabel ? (
           <Typography variant="body2" color="text.secondary" data-testid="ff-packaging-linked-unload">
@@ -1128,7 +1128,7 @@ export function FfPackagingPage({ token }: PageProps) {
                     onClick={() => setSelected(t)}
                     data-testid="ff-packaging-queue-row"
                   >
-                    <TableCell>{t.document_number ?? '—'}</TableCell>
+                    <TableCell>{formatHumanDocumentNumber(t) ?? '—'}</TableCell>
                     <TableCell>{statusLabel(t.status)}</TableCell>
                     <TableCell>{t.lines.length}</TableCell>
                     <TableCell>{t.marketplace_unload_request_id ? 'Да' : '—'}</TableCell>

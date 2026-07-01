@@ -13,23 +13,41 @@ function mpUnloadListRow(page: Page, sellerName: string) {
   return page.getByTestId('ff-docs-row').filter({ hasText: sellerName })
 }
 
+function visibleDocumentNumber(body: {
+  display_number?: string | null
+  document_number?: string | null
+}): string {
+  if (body.display_number?.trim()) {
+    return body.display_number.trim()
+  }
+  const counter = body.document_number?.match(/(\d+)\s*$/)?.[1]
+  if (counter) {
+    return `№${counter.padStart(6, '0')}`
+  }
+  return body.document_number ?? ''
+}
+
 async function openMpUnloadFromList(
   page: Page,
   unloadId: string,
   sellerName: string,
-): Promise<string> {
+): Promise<{ displayNumber: string; technicalNumber: string }> {
   const token = await page.evaluate(() => localStorage.getItem('wms_token_ff'))
   expect(token).toBeTruthy()
   const unloadRes = await page.request.get(`/api/operations/marketplace-unload-requests/${unloadId}`, {
     headers: { Authorization: `Bearer ${token}` },
   })
   expect(unloadRes.ok(), await unloadRes.text()).toBeTruthy()
-  const unloadBody = (await unloadRes.json()) as { document_number: string | null }
-  const unloadDocumentNumber = unloadBody.document_number ?? ''
-  expect(unloadDocumentNumber).toBeTruthy()
+  const unloadBody = (await unloadRes.json()) as {
+    document_number: string | null
+    display_number: string | null
+  }
+  const displayNumber = visibleDocumentNumber(unloadBody)
+  const technicalNumber = unloadBody.document_number ?? ''
+  expect(displayNumber).toBeTruthy()
 
   const row = mpUnloadListRow(page, sellerName).filter({
-    hasText: unloadDocumentNumber,
+    hasText: displayNumber,
   })
   await expect(row).toHaveCount(1)
   await Promise.all([
@@ -38,7 +56,7 @@ async function openMpUnloadFromList(
     row.click(),
   ])
 
-  return unloadDocumentNumber
+  return { displayNumber, technicalNumber }
 }
 
 async function expectMpTabSelected(page: Page, tabTestId: string): Promise<void> {
@@ -257,8 +275,8 @@ test('FF marketplace unload: tabs switch without losing document context', async
   await page.getByTestId('nav-ff-mp-shipments').click()
   // REV-FIX-011: page description must not mention legacy «подбор по ячейкам».
   await expect(page.getByTestId('ff-mp-shipments-page')).not.toContainText(/подбор по ячейкам/i)
-  const unloadDocumentNumber = await openMpUnloadFromList(page, mid, MP_SELLER_NAME_TABS)
-  const unloadDisplayNumber = formatDisplayDocumentNumber(unloadDocumentNumber)
+  const { displayNumber: unloadDisplayNumber, technicalNumber: unloadDocumentNumber } =
+    await openMpUnloadFromList(page, mid, MP_SELLER_NAME_TABS)
 
   await expect(page.getByTestId('ff-supplies-doc-dialog')).toBeVisible()
   await expect(page.getByTestId('ff-mp-unload-document-number')).toHaveText(

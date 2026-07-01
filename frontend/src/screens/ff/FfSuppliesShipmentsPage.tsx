@@ -45,6 +45,7 @@ import {
   type PackagingTask,
 } from './FfPackagingPage'
 import { FfMarketplaceUnloadBoxAddDialog } from './FfMarketplaceUnloadBoxAddDialog'
+import { formatHumanDocumentNumber } from './documentDisplay'
 import { formatDateTimeLocal } from '../../utils/formatDateTimeLocal'
 import { printMarketplaceUnloadWaybill } from '../../utils/printShipmentWaybill'
 import { printBarcodeLabel } from '../../utils/printBarcodeLabel'
@@ -189,32 +190,6 @@ function kindRu(kind: DocKind): string {
   if (kind === 'outbound') return 'Отгрузка'
   if (kind === 'marketplace_unload') return 'Отгрузка на МП'
   return 'Расхождение'
-}
-
-function formatDocumentDisplayNumber(documentNumber: string | null): string | null {
-  if (!documentNumber) {
-    return null
-  }
-  const counter = documentNumber.match(/(\d+)\s*$/)?.[1]
-  if (!counter) {
-    return null
-  }
-  return `№${counter.padStart(6, '0')}`
-}
-
-function resolveHumanDocumentNumber(source: {
-  document_number?: string | null
-  display_number?: string | null
-  public_number?: string | null
-  human_number?: string | null
-} | null | undefined): string | null {
-  const direct = [source?.display_number, source?.public_number, source?.human_number].find(
-    (value): value is string => typeof value === 'string' && value.trim().length > 0,
-  )
-  if (direct) {
-    return direct.trim()
-  }
-  return formatDocumentDisplayNumber(source?.document_number ?? null)
 }
 
 type ProductPick = { id: string; sku_code: string; name: string }
@@ -1015,11 +990,11 @@ export function FfSuppliesShipmentsPage({
     [mpVisibleBoxes],
   )
 
-  const mpBoxPanelSx = {
-    p: 1.5,
+  const mpBoxPanelSx = (hasLines: boolean) => ({
     borderRadius: 1,
-    bgcolor: 'background.paper',
-  }
+    overflow: 'hidden',
+    bgcolor: hasLines ? 'background.paper' : 'action.hover',
+  })
 
   const mpBoxHeaderSx = {
     display: 'flex',
@@ -1027,6 +1002,24 @@ export function FfSuppliesShipmentsPage({
     justifyContent: 'space-between',
     gap: 1,
     flexWrap: 'wrap',
+    px: 1.25,
+    py: 1,
+    bgcolor: 'action.hover',
+  }
+
+  const mpBoxBodySx = {
+    px: 1.25,
+    py: 1,
+    bgcolor: 'background.paper',
+  }
+
+  const mpBoxTableHeadCellSx = {
+    fontWeight: 600,
+    color: 'text.secondary',
+    bgcolor: 'transparent',
+    borderBottom: 1,
+    borderColor: 'divider',
+    py: 0.75,
   }
 
   const mpBoxActionsSx = {
@@ -1095,30 +1088,40 @@ export function FfSuppliesShipmentsPage({
     )
   }
 
-  const renderMpBoxCard = (box: MarketplaceUnloadBox, tableTestId?: string) => {
+  const renderMpBoxCard = (
+    box: MarketplaceUnloadBox,
+    boxOrdinal: number,
+    tableTestId?: string,
+  ) => {
     const totalQty = box.lines.reduce((sum, ln) => sum + ln.quantity, 0)
-    const boxLabel = box.internal_barcode?.trim() ?? box.id.slice(0, 8)
+    const boxBarcode = box.internal_barcode?.trim()
+    const boxLabel = `Короб ${boxOrdinal}`
     const hasLines = box.lines.length > 0
 
     return (
-      <Paper key={box.id} variant="outlined" sx={mpBoxPanelSx} data-testid={`ff-mp-box-row-${box.id}`}>
-        <Stack spacing={0.75}>
-          <Box sx={mpBoxHeaderSx}>
-            <Box sx={{ minWidth: 0, flex: 1 }}>
-              <Typography variant="subtitle2" sx={{ fontWeight: 700, lineHeight: 1.25 }}>
-                {boxLabel}
-              </Typography>
-              <Typography variant="body2" color="text.secondary" sx={{ minWidth: 0 }}>
-                {box.box_preset}
-                {totalQty > 0 ? ` · ${totalQty} шт` : ''}
-                {!hasLines ? ' · готов к наполнению' : ''}
-              </Typography>
-            </Box>
-            {renderBoxActions(box)}
+      <Paper
+        key={box.id}
+        variant="outlined"
+        sx={mpBoxPanelSx(hasLines)}
+        data-testid={`ff-mp-box-row-${box.id}`}
+      >
+        <Box sx={mpBoxHeaderSx} data-testid={`ff-mp-box-header-${box.id}`}>
+          <Box sx={{ minWidth: 0, flex: 1 }}>
+            <Typography variant="subtitle2" sx={{ fontWeight: 700, lineHeight: 1.25 }}>
+              {boxLabel}
+            </Typography>
+            <Typography variant="body2" color="text.secondary" sx={{ minWidth: 0 }}>
+              {box.box_preset}
+              {boxBarcode ? ` · ${boxBarcode}` : ''}
+              {totalQty > 0 ? ` · ${totalQty} шт` : ''}
+              {!hasLines ? ' · готов к наполнению' : ''}
+            </Typography>
           </Box>
+          {renderBoxActions(box)}
+        </Box>
 
-          {hasLines ? (
-            <Box sx={mpBoxTableWrapSx}>
+        {hasLines ? (
+          <Box sx={{ ...mpBoxBodySx, ...mpBoxTableWrapSx, mt: 0 }}>
               <Table
                 size="small"
                 sx={mpBoxTableSx}
@@ -1126,12 +1129,12 @@ export function FfSuppliesShipmentsPage({
               >
                 <TableHead>
                   <TableRow>
-                    <TableCell sx={{ width: '28%' }}>Артикул</TableCell>
-                    <TableCell>Товар</TableCell>
-                    <TableCell align="right" sx={{ width: 104 }}>
+                    <TableCell sx={{ ...mpBoxTableHeadCellSx, width: '28%' }}>Артикул</TableCell>
+                    <TableCell sx={mpBoxTableHeadCellSx}>Товар</TableCell>
+                    <TableCell align="right" sx={{ ...mpBoxTableHeadCellSx, width: 104 }}>
                       В коробе
                     </TableCell>
-                    <TableCell align="right" sx={{ width: 64 }} />
+                    <TableCell align="right" sx={{ ...mpBoxTableHeadCellSx, width: 64 }} />
                   </TableRow>
                 </TableHead>
                 <TableBody>
@@ -1161,12 +1164,17 @@ export function FfSuppliesShipmentsPage({
                   ))}
                 </TableBody>
               </Table>
-            </Box>
-          ) : null}
-        </Stack>
+          </Box>
+        ) : null}
       </Paper>
     )
   }
+
+  const mpBoxesOrdered = useMemo(() => {
+    const withLines = mpBoxesWithLines
+    const empty = mpVisibleBoxes.filter((box) => box.lines.length === 0)
+    return [...withLines, ...empty]
+  }, [mpBoxesWithLines, mpVisibleBoxes])
 
 
   const mpHasDiscrepancy = useMemo(() => {
@@ -1401,7 +1409,7 @@ export function FfSuppliesShipmentsPage({
       ? marketplaceUnloadSummaries.map((r) => ({
           kind: 'marketplace_unload' as const,
           id: r.id,
-          documentNumber: r.document_number ?? null,
+          documentNumber: formatHumanDocumentNumber(r),
           plannedDate: r.planned_shipment_date ?? null,
           createdAt: r.created_at,
           status: r.status,
@@ -1414,7 +1422,7 @@ export function FfSuppliesShipmentsPage({
           ...inboundSummaries.map((r) => ({
             kind: 'inbound' as const,
             id: r.id,
-            documentNumber: r.document_number ?? null,
+            documentNumber: formatHumanDocumentNumber(r),
             plannedDate: r.planned_delivery_date,
             createdAt: r.created_at ?? null,
             status: r.status,
@@ -1485,13 +1493,8 @@ export function FfSuppliesShipmentsPage({
         ? 'Акт расхождения'
         : ''
   const unloadDisplayNumber = useMemo(
-    () => resolveHumanDocumentNumber(unloadDetail),
-    [
-      unloadDetail?.document_number,
-      unloadDetail?.display_number,
-      unloadDetail?.public_number,
-      unloadDetail?.human_number,
-    ],
+    () => formatHumanDocumentNumber(unloadDetail),
+    [unloadDetail],
   )
 
   const mpDraft = docModal === 'marketplace_unload' && unloadDetail?.status === 'draft'
@@ -2363,7 +2366,6 @@ export function FfSuppliesShipmentsPage({
                   <Box data-testid="ff-mp-boxes">
               {(() => {
                 const allBoxes = mpVisibleBoxes
-                const workingBoxes = mpBoxesWithLines
                 return (
                   <Stack spacing={1.5}>
                     <Typography variant="subtitle2">Сборка в короба</Typography>
@@ -2414,42 +2416,15 @@ export function FfSuppliesShipmentsPage({
 
                           {allBoxes.length > 0 ? (
                             <Stack spacing={1.5}>
-                              {workingBoxes.map((b, idx) =>
+                              {mpBoxesOrdered.map((b, idx) =>
                                 renderMpBoxCard(
                                   b,
-                                  idx === 0 ? 'ff-mp-open-box-lines' : `ff-mp-box-lines-${b.id}`,
+                                  idx + 1,
+                                  idx === 0 && b.lines.length > 0
+                                    ? 'ff-mp-open-box-lines'
+                                    : `ff-mp-box-lines-${b.id}`,
                                 ),
                               )}
-                              {allBoxes
-                                .filter((b) => b.lines.length === 0)
-                                .map((b) => (
-                                  <Paper
-                                    key={b.id}
-                                    variant="outlined"
-                                    sx={{ p: 1.25, bgcolor: 'action.hover' }}
-                                    data-testid={`ff-mp-box-row-${b.id}`}
-                                  >
-                                    <Stack
-                                      direction="row"
-                                      spacing={1}
-                                      sx={{
-                                        alignItems: 'flex-start',
-                                        justifyContent: 'space-between',
-                                        flexWrap: 'wrap',
-                                      }}
-                                    >
-                                      <Box sx={{ minWidth: 0 }}>
-                                        <Typography variant="subtitle2" sx={{ fontWeight: 700 }}>
-                                          {b.internal_barcode?.trim() ?? b.id.slice(0, 8)}
-                                        </Typography>
-                                        <Typography variant="body2" color="text.secondary">
-                                          {b.box_preset} · готов к наполнению
-                                        </Typography>
-                                      </Box>
-                                      {renderBoxActions(b)}
-                                    </Stack>
-                                  </Paper>
-                                ))}
                             </Stack>
                           ) : null}
 
@@ -2582,7 +2557,7 @@ export function FfSuppliesShipmentsPage({
                     <FfPackagingTaskPanel
                       token={token}
                       task={packagingTask}
-                      unloadLabel={unloadDisplayNumber ?? docModalId?.slice(0, 8) ?? null}
+                      unloadLabel={unloadDisplayNumber}
                       onUpdated={(task) => {
                         setPackagingTask(task)
                         void loadDocDetail()
@@ -2866,8 +2841,15 @@ export function FfSuppliesShipmentsPage({
           requestId={docModalId}
           boxId={boxAddDialogBoxId}
           boxLabel={
-            boxById.get(boxAddDialogBoxId)?.internal_barcode ??
-            boxAddDialogBoxId.slice(0, 8)
+            (() => {
+              const idx = mpBoxesOrdered.findIndex((b) => b.id === boxAddDialogBoxId)
+              const ordinal = idx >= 0 ? idx + 1 : null
+              const barcode = boxById.get(boxAddDialogBoxId)?.internal_barcode?.trim()
+              if (ordinal != null) {
+                return barcode ? `Короб ${ordinal} · ${barcode}` : `Короб ${ordinal}`
+              }
+              return barcode ?? 'Короб'
+            })()
           }
           readOnly={mpBoxesReadOnly}
           token={token}

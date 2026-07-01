@@ -1619,11 +1619,24 @@ export function FfInboundRequestView({
                 {boxes.map((box) => {
                   const visibleLines = box.lines.filter((ln) => ln.quantity > 0)
                   return (
-                    <Paper key={box.id} variant="outlined" sx={{ p: 1.5 }} data-testid="ff-inbound-box-row">
+                    <Paper
+                      key={box.id}
+                      variant="outlined"
+                      sx={{ overflow: 'hidden', bgcolor: 'background.paper' }}
+                      data-testid="ff-inbound-box-row"
+                    >
                       <Stack
                         direction={{ xs: 'column', sm: 'row' }}
                         spacing={1}
-                        sx={{ alignItems: { sm: 'center' }, mb: 1 }}
+                        sx={{
+                          alignItems: { sm: 'center' },
+                          px: 1.25,
+                          py: 1,
+                          bgcolor: 'action.hover',
+                          borderBottom: 1,
+                          borderColor: 'divider',
+                        }}
+                        data-testid={`ff-inbound-box-header-${box.id}`}
                       >
                         <Typography variant="body2" sx={{ fontWeight: 700 }}>
                           Короб № {box.box_number}{' '}
@@ -1663,7 +1676,7 @@ export function FfInboundRequestView({
                         </Stack>
                       </Stack>
                       {visibleLines.length > 0 ? (
-                        <Stack spacing={0.25}>
+                        <Stack spacing={0.25} sx={{ px: 1.25, py: 1, bgcolor: 'background.paper' }}>
                           {visibleLines.map((ln) => (
                             <Typography key={ln.id} variant="body2" color="text.secondary">
                               {ln.sku_code} · {ln.product_name}: {ln.quantity}
@@ -1671,7 +1684,11 @@ export function FfInboundRequestView({
                           ))}
                         </Stack>
                       ) : (
-                        <Typography variant="body2" color="text.secondary">
+                        <Typography
+                          variant="body2"
+                          color="text.secondary"
+                          sx={{ px: 1.25, py: 1, bgcolor: 'background.paper' }}
+                        >
                           Пока нет товаров
                         </Typography>
                       )}
