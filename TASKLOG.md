@@ -4,7 +4,7 @@
 
 - What changed: backend `display_number` (`№000001`) отдельно от технического `document_number` для приёмки/отгрузки/упаковки + миграция/backfill; UI приёмки/сортировки/упаковки показывает процесс + человеческий номер; отгрузка МП — шапка «Отгрузка №…», один серый summary (План/Распределено/Осталось/Упаковано), убраны дубли итогов и кнопка «Упаковка» в footer.
 - What did NOT change: блок «Сборка в короба»; построчные колонки в таблице товаров; prod/VPS deploy.
-- Verification: backend targeted pytest 11/11; frontend build + unit; targeted e2e 14/14 (inbound, packaging, mp-tabs/full-flow/packaging-gate).
+- Verification: backend targeted pytest 11/11; frontend build + unit; targeted e2e 14/14; Railway staging `202547a` → web+api smoke OK.
 
 ## TASK-093 — 2026-06-30 — Фикс печати в сортировке: база = «Принято», множитель в конструкторе
 
