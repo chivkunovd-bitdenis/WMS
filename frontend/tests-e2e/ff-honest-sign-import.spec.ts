@@ -31,7 +31,7 @@ test('FF honest sign: import dialog uploads CSV into pool', async ({ page }) => 
   })
   const sellerId = String(((await sellerRes.json()) as { id: string }).id)
 
-  await page.request.post(`${e2eApi}/products`, {
+  const productRes = await page.request.post(`${e2eApi}/products`, {
     headers: auth,
     data: JSON.stringify({
       name: 'E2E Import Item',
@@ -42,6 +42,16 @@ test('FF honest sign: import dialog uploads CSV into pool', async ({ page }) => 
       seller_id: sellerId,
     }),
   })
+  expect(productRes.ok()).toBeTruthy()
+  const productId = String(((await productRes.json()) as { id: string }).id)
+  const patchRes = await page.request.patch(
+    `${e2eApi}/products/${productId}/packaging-instructions`,
+    {
+      headers: auth,
+      data: JSON.stringify({ requires_honest_sign: true }),
+    },
+  )
+  expect(patchRes.ok()).toBeTruthy()
 
   await page.getByTestId('nav-ff-honest-sign').click()
   await selectHonestSignSeller(page, sellerId)
@@ -71,7 +81,10 @@ test('FF honest sign: import dialog uploads CSV into pool', async ({ page }) => 
     .getByTestId(`ff-honest-sign-import-group-${gtin}`)
     .getByRole('textbox', { name: 'Название пула' })
     .fill('UI Import Pool')
-  await page.getByRole('checkbox', { name: `Привязать ${sku} к GTIN ${gtin}` }).check()
+  await page
+    .getByTestId(`ff-honest-sign-import-product-row-${productId}`)
+    .getByRole('checkbox')
+    .check()
 
   const importWait = page.waitForResponse(
     (r) =>

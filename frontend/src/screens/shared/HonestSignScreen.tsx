@@ -708,6 +708,7 @@ export function HonestSignScreen({
           open
           token={token}
           sellerId={effectiveSellerId}
+          catalogMode={sellerId ? 'seller' : 'ff'}
           testIdPrefix={testIdPrefix}
           onClose={closeImport}
           onImported={(message) => {
