@@ -885,18 +885,6 @@ export function FfSuppliesShipmentsPage({
     })
   }
 
-  const printAllMpBoxBarcodes = () => {
-    const boxes = unloadDetail?.boxes ?? []
-    const withBarcode = boxes.filter((b) => b.internal_barcode?.trim())
-    if (withBarcode.length === 0) {
-      setModalError('Нет коробов с штрихкодом для печати.')
-      return
-    }
-    for (const box of withBarcode) {
-      printBoxBarcode(box)
-    }
-  }
-
   const copyBox = async (boxId: string) => {
     if (!token || !authHeaders || docModal !== 'marketplace_unload' || !docModalId) {
       return
@@ -1093,7 +1081,6 @@ export function FfSuppliesShipmentsPage({
     boxOrdinal: number,
     tableTestId?: string,
   ) => {
-    const totalQty = box.lines.reduce((sum, ln) => sum + ln.quantity, 0)
     const boxBarcode = box.internal_barcode?.trim()
     const boxLabel = `Короб ${boxOrdinal}`
     const hasLines = box.lines.length > 0
@@ -1113,7 +1100,6 @@ export function FfSuppliesShipmentsPage({
             <Typography variant="body2" color="text.secondary" sx={{ minWidth: 0 }}>
               {box.box_preset}
               {boxBarcode ? ` · ${boxBarcode}` : ''}
-              {totalQty > 0 ? ` · ${totalQty} шт` : ''}
               {!hasLines ? ' · готов к наполнению' : ''}
             </Typography>
           </Box>
@@ -2301,8 +2287,7 @@ export function FfSuppliesShipmentsPage({
                       })()}
                     </TableBody>
                   </Table>
-                  {(unloadDetail.lines.length > 0 ||
-                    (mpExecutionPhase && (unloadDetail.boxes.length ?? 0) > 0)) ? (
+                  {unloadDetail.lines.length > 0 ? (
                     <Stack
                       direction="row"
                       spacing={1}
@@ -2310,24 +2295,12 @@ export function FfSuppliesShipmentsPage({
                       data-testid="ff-mp-print-actions"
                       sx={{ mt: 1, flexWrap: 'wrap' }}
                     >
-                      {(unloadDetail.boxes.length ?? 0) > 0 ? (
-                        <Button
-                          variant="outlined"
-                          size="small"
-                          disabled={modalBusy}
-                          data-testid="ff-mp-print-all-box-barcodes"
-                          onClick={() => printAllMpBoxBarcodes()}
-                        >
-                          Печать всех ШК коробов
-                        </Button>
-                      ) : null}
-                      {unloadDetail.lines.length > 0 ? (
-                        <Button
-                          variant="outlined"
-                          size="small"
-                          disabled={modalBusy}
-                          data-testid="ff-mp-print-waybill"
-                          onClick={() => {
+                      <Button
+                        variant="outlined"
+                        size="small"
+                        disabled={modalBusy}
+                        data-testid="ff-mp-print-waybill"
+                        onClick={() => {
                             const wbName =
                               wbMpWarehouses.find(
                                 (w) => w.wb_warehouse_id === unloadDetail.wb_mp_warehouse_id,
@@ -2360,7 +2333,6 @@ export function FfSuppliesShipmentsPage({
                         >
                           Печать накладной
                         </Button>
-                      ) : null}
                     </Stack>
                   ) : null}
                   <Box data-testid="ff-mp-boxes">
