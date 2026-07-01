@@ -4,6 +4,12 @@ import { waitForGetOk, waitForPostOk } from './api-waits';
 import { fulfillInboundViaBoxScans } from './inbound-boxes-helpers';
 import { openFulfillmentRegistration } from './auth-flow';
 
+function formatDisplayDocumentNumber(documentNumber: string): string {
+  const counter = documentNumber.match(/(\d+)\s*$/)?.[1];
+  expect(counter).toBeTruthy();
+  return `№${counter!.padStart(6, '0')}`;
+}
+
 // TC-NEW-PKG-01 — FF создаёт задание из сортировки и упаковывает через UI.
 test('FF packaging page: create from sorting and pack line', async ({ page }) => {
   test.setTimeout(120_000);
@@ -76,20 +82,24 @@ test('FF packaging page: create from sorting and pack line', async ({ page }) =>
   await page.getByRole('option', { name: 'WH' }).click();
   await expect(page.getByTestId('ff-packaging-create-row')).toBeVisible();
 
-  await Promise.all([
-    page.waitForResponse(
-      (r) =>
-        r.request().method() === 'POST' &&
-        r.url().includes('/operations/packaging-tasks') &&
-        r.status() >= 200 &&
-        r.status() < 300,
-    ),
-    page.getByTestId('ff-packaging-create-submit').click(),
-  ]);
+  const createResponsePromise = page.waitForResponse(
+    (r) =>
+      r.request().method() === 'POST' &&
+      r.url().includes('/operations/packaging-tasks') &&
+      r.status() >= 200 &&
+      r.status() < 300,
+  );
+  await page.getByTestId('ff-packaging-create-submit').click();
+  const createResponse = await createResponsePromise;
+  const createdTask = (await createResponse.json()) as { document_number: string | null };
+  const packagingDocumentNumber = createdTask.document_number ?? '';
+  expect(packagingDocumentNumber).toBeTruthy();
+  const packagingDisplayNumber = formatDisplayDocumentNumber(packagingDocumentNumber);
 
   // TC-NEW-DOCNUM-01 — human-readable packaging document number on create.
   await expect(page.getByTestId('ff-packaging-task-panel')).toBeVisible();
-  await expect(page.getByTestId('ff-packaging-document-number')).toContainText(/^УПАК-\d{2}-\d{2}-\d{2}-1$/);
+  await expect(page.getByTestId('ff-packaging-document-number')).toHaveText(packagingDisplayNumber);
+  await expect(page.getByTestId('ff-packaging-service-id')).toHaveText(`ID ${packagingDocumentNumber}`);
   await expect(page.getByTestId('ff-packaging-line')).toBeVisible();
 
   await Promise.all([

@@ -185,6 +185,17 @@ function kindRu(kind: DocKind): string {
   return 'Расхождение'
 }
 
+function formatDocumentDisplayNumber(documentNumber: string | null): string | null {
+  if (!documentNumber) {
+    return null
+  }
+  const counter = documentNumber.match(/(\d+)\s*$/)?.[1]
+  if (!counter) {
+    return null
+  }
+  return `№${counter.padStart(6, '0')}`
+}
+
 type ProductPick = { id: string; sku_code: string; name: string }
 type AvailableProductPick = ProductPick & { available: number }
 
@@ -967,14 +978,54 @@ export function FfSuppliesShipmentsPage({
   const mpBoxesReadOnly =
     docModal === 'marketplace_unload' && unloadDetail?.status === 'shipped'
 
+  const mpVisibleBoxes = useMemo(() => {
+    const boxes = unloadDetail?.boxes ?? []
+    return boxes.filter((box) => box.lines.length > 0 || Boolean(box.internal_barcode?.trim()))
+  }, [unloadDetail?.boxes])
+
+  const mpBoxesWithLines = useMemo(
+    () => mpVisibleBoxes.filter((box) => box.lines.length > 0),
+    [mpVisibleBoxes],
+  )
+
+  const mpBoxPanelSx = {
+    p: 1.5,
+    borderRadius: 1,
+    bgcolor: 'background.paper',
+  }
+
+  const mpBoxHeaderSx = {
+    display: 'flex',
+    alignItems: { xs: 'stretch', sm: 'flex-start' },
+    justifyContent: 'space-between',
+    gap: 1,
+    flexWrap: 'wrap',
+  }
+
+  const mpBoxActionsSx = {
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'flex-end',
+    gap: 0.5,
+    flexWrap: 'wrap' as const,
+    minWidth: 0,
+  }
+
+  const mpBoxTableWrapSx = {
+    mt: 1,
+    maxWidth: '100%',
+    overflowX: 'auto',
+  }
+
+  const mpBoxTableSx = {
+    tableLayout: 'fixed',
+    width: '100%',
+  }
+
   const renderBoxActions = (box: MarketplaceUnloadBox) => {
     const totalQty = box.lines.reduce((sum, ln) => sum + ln.quantity, 0)
     return (
-      <Stack direction="row" spacing={0.5} sx={{ alignItems: 'center', flexWrap: 'wrap' }}>
-        <Typography variant="body2" color="text.secondary" sx={{ flex: 1 }}>
-          {box.internal_barcode ?? box.id.slice(0, 8)} · {box.box_preset}
-          {totalQty > 0 ? ` · ${totalQty} шт` : ''}
-        </Typography>
+      <Stack direction="row" spacing={0.5} sx={mpBoxActionsSx}>
         <Button
           size="small"
           variant="outlined"
@@ -1014,6 +1065,79 @@ export function FfSuppliesShipmentsPage({
           <DeleteOutlineOutlined fontSize="small" />
         </IconButton>
       </Stack>
+    )
+  }
+
+  const renderMpBoxCard = (box: MarketplaceUnloadBox, tableTestId?: string) => {
+    const totalQty = box.lines.reduce((sum, ln) => sum + ln.quantity, 0)
+    const boxLabel = box.internal_barcode?.trim() ?? box.id.slice(0, 8)
+    const hasLines = box.lines.length > 0
+
+    return (
+      <Paper key={box.id} variant="outlined" sx={mpBoxPanelSx} data-testid={`ff-mp-box-row-${box.id}`}>
+        <Stack spacing={0.75}>
+          <Box sx={mpBoxHeaderSx}>
+            <Box sx={{ minWidth: 0, flex: 1 }}>
+              <Typography variant="subtitle2" sx={{ fontWeight: 700, lineHeight: 1.25 }}>
+                {boxLabel}
+              </Typography>
+              <Typography variant="body2" color="text.secondary" sx={{ minWidth: 0 }}>
+                {box.box_preset}
+                {totalQty > 0 ? ` · ${totalQty} шт` : ''}
+                {!hasLines ? ' · готов к наполнению' : ''}
+              </Typography>
+            </Box>
+            {renderBoxActions(box)}
+          </Box>
+
+          {hasLines ? (
+            <Box sx={mpBoxTableWrapSx}>
+              <Table
+                size="small"
+                sx={mpBoxTableSx}
+                data-testid={tableTestId ?? `ff-mp-box-lines-${box.id}`}
+              >
+                <TableHead>
+                  <TableRow>
+                    <TableCell sx={{ width: '28%' }}>Артикул</TableCell>
+                    <TableCell>Товар</TableCell>
+                    <TableCell align="right" sx={{ width: 104 }}>
+                      В коробе
+                    </TableCell>
+                    <TableCell align="right" sx={{ width: 64 }} />
+                  </TableRow>
+                </TableHead>
+                <TableBody>
+                  {box.lines.map((ln) => (
+                    <TableRow key={ln.id}>
+                      <TableCell sx={{ overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                        {ln.sku_code}
+                      </TableCell>
+                      <TableCell sx={{ overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                        {ln.product_name}
+                      </TableCell>
+                      <TableCell align="right">{ln.quantity}</TableCell>
+                      <TableCell align="right">
+                        <Tooltip title="Убрать из короба">
+                          <IconButton
+                            size="small"
+                            aria-label="Убрать из короба"
+                            data-testid={`ff-mp-box-line-remove-${ln.id}`}
+                            disabled={modalBusy}
+                            onClick={() => void removeBoxLine(box.id, ln.id)}
+                          >
+                            <DeleteOutlineOutlined fontSize="small" />
+                          </IconButton>
+                        </Tooltip>
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </Box>
+          ) : null}
+        </Stack>
+      </Paper>
     )
   }
 
@@ -1333,6 +1457,10 @@ export function FfSuppliesShipmentsPage({
       : docModal === 'discrepancy_act'
         ? 'Акт расхождения'
         : ''
+  const unloadDisplayNumber = useMemo(
+    () => formatDocumentDisplayNumber(unloadDetail?.document_number ?? null),
+    [unloadDetail?.document_number],
+  )
 
   const mpDraft = docModal === 'marketplace_unload' && unloadDetail?.status === 'draft'
   const mpSubmitted =
@@ -1790,15 +1918,33 @@ export function FfSuppliesShipmentsPage({
           ) : null}
           {unloadDetail ? (
             <>
-              <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
-                {unloadDetail.document_number ? (
-                  <>
-                    <strong data-testid="ff-mp-unload-document-number">
-                      {unloadDetail.document_number}
-                    </strong>
-                    {' · '}
-                  </>
+              <Stack
+                spacing={0.25}
+                sx={{ mb: 1 }}
+              >
+                <Typography variant="subtitle2" color="text.secondary" sx={{ fontWeight: 700 }}>
+                  Отгрузка
+                </Typography>
+                {unloadDisplayNumber ? (
+                  <Typography
+                    variant="h5"
+                    sx={{ fontWeight: 800, lineHeight: 1.1 }}
+                    data-testid="ff-mp-unload-document-number"
+                  >
+                    {unloadDisplayNumber}
+                  </Typography>
                 ) : null}
+                {unloadDetail.document_number ? (
+                  <Typography
+                    variant="caption"
+                    color="text.secondary"
+                    sx={{ fontFamily: 'monospace' }}
+                  >
+                    {unloadDetail.document_number}
+                  </Typography>
+                ) : null}
+              </Stack>
+              <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
                 {docModal === 'marketplace_unload' ? (
                   <>
                     Склад ФФ:{' '}
@@ -2215,19 +2361,27 @@ export function FfSuppliesShipmentsPage({
                   ) : null}
                   <Box data-testid="ff-mp-boxes">
               {(() => {
-                const allBoxes = unloadDetail.boxes
+                const allBoxes = mpVisibleBoxes
+                const workingBoxes = mpBoxesWithLines
                 return (
                   <Stack spacing={1.5}>
                     <Typography variant="subtitle2">Сборка в короба</Typography>
                     <Typography variant="body2" color="text.secondary">
-                      Создайте короба или привяжите готовый (WHB-…). Наполняйте по кнопке «Наполнить»;
-                      состав можно менять до отгрузки.
+                      Сканируйте WHB готового короба, чтобы привязать его к отгрузке. Новые короба
+                      создавайте только при необходимости.
                     </Typography>
 
                     {mpExecutionPhase ? (
                       <Paper variant="outlined" sx={{ p: 1.5 }}>
                         <Stack spacing={1.25}>
-                          <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1}>
+                          <Box
+                            sx={{
+                              display: 'grid',
+                              gap: 1,
+                              gridTemplateColumns: { xs: 'minmax(0, 1fr)', sm: 'minmax(0, 1fr) auto' },
+                              alignItems: 'start',
+                            }}
+                          >
                             <TextField
                               size="small"
                               label="Штрихкод готового короба (WHB-…)"
@@ -2243,76 +2397,66 @@ export function FfSuppliesShipmentsPage({
                               fullWidth
                               slotProps={{ htmlInput: { 'data-testid': 'ff-mp-pick-scan-input' } }}
                               data-testid="ff-mp-pick-scan-field"
+                              sx={{ minWidth: 0 }}
                             />
                             <Button
-                              variant="contained"
+                              variant="outlined"
+                              size="medium"
+                              sx={{ whiteSpace: 'nowrap' }}
                               onClick={() => void doCollectScan()}
                               disabled={modalBusy}
                               data-testid="ff-mp-pick-scan"
                             >
-                              Добавить короб
+                              Привязать
                             </Button>
-                          </Stack>
+                          </Box>
 
                           {allBoxes.length > 0 ? (
                             <Stack spacing={1.5}>
-                              {allBoxes.map((b, idx) => (
-                                <Box key={b.id} data-testid={`ff-mp-box-row-${b.id}`}>
-                                  {renderBoxActions(b)}
-                                  <Table
-                                    size="small"
-                                    sx={{ mt: 1 }}
-                                    data-testid={
-                                      idx === 0 ? 'ff-mp-open-box-lines' : `ff-mp-box-lines-${b.id}`
-                                    }
+                              {workingBoxes.map((b, idx) =>
+                                renderMpBoxCard(
+                                  b,
+                                  idx === 0 ? 'ff-mp-open-box-lines' : `ff-mp-box-lines-${b.id}`,
+                                ),
+                              )}
+                              {allBoxes
+                                .filter((b) => b.lines.length === 0)
+                                .map((b) => (
+                                  <Paper
+                                    key={b.id}
+                                    variant="outlined"
+                                    sx={{ p: 1.25, bgcolor: 'action.hover' }}
+                                    data-testid={`ff-mp-box-row-${b.id}`}
                                   >
-                                    <TableHead>
-                                      <TableRow>
-                                        <TableCell>Артикул</TableCell>
-                                        <TableCell>Товар</TableCell>
-                                        <TableCell align="right">В коробе</TableCell>
-                                        <TableCell align="right" />
-                                      </TableRow>
-                                    </TableHead>
-                                    <TableBody>
-                                      {b.lines.length === 0 ? (
-                                        <TableRow>
-                                          <TableCell colSpan={4}>
-                                            <Typography variant="body2" color="text.secondary">
-                                              Пока нет сканов
-                                            </Typography>
-                                          </TableCell>
-                                        </TableRow>
-                                      ) : (
-                                        b.lines.map((ln) => (
-                                          <TableRow key={ln.id}>
-                                            <TableCell>{ln.sku_code}</TableCell>
-                                            <TableCell>{ln.product_name}</TableCell>
-                                            <TableCell align="right">{ln.quantity}</TableCell>
-                                            <TableCell align="right">
-                                              <Tooltip title="Убрать из короба">
-                                                <IconButton
-                                                  size="small"
-                                                  aria-label="Убрать из короба"
-                                                  data-testid={`ff-mp-box-line-remove-${ln.id}`}
-                                                  disabled={modalBusy}
-                                                  onClick={() => void removeBoxLine(b.id, ln.id)}
-                                                >
-                                                  <DeleteOutlineOutlined fontSize="small" />
-                                                </IconButton>
-                                              </Tooltip>
-                                            </TableCell>
-                                          </TableRow>
-                                        ))
-                                      )}
-                                    </TableBody>
-                                  </Table>
-                                </Box>
-                              ))}
+                                    <Stack
+                                      direction="row"
+                                      spacing={1}
+                                      sx={{
+                                        alignItems: 'flex-start',
+                                        justifyContent: 'space-between',
+                                        flexWrap: 'wrap',
+                                      }}
+                                    >
+                                      <Box sx={{ minWidth: 0 }}>
+                                        <Typography variant="subtitle2" sx={{ fontWeight: 700 }}>
+                                          {b.internal_barcode?.trim() ?? b.id.slice(0, 8)}
+                                        </Typography>
+                                        <Typography variant="body2" color="text.secondary">
+                                          {b.box_preset} · готов к наполнению
+                                        </Typography>
+                                      </Box>
+                                      {renderBoxActions(b)}
+                                    </Stack>
+                                  </Paper>
+                                ))}
                             </Stack>
                           ) : null}
 
-                          <Stack direction="row" spacing={1} sx={{ alignItems: 'center', flexWrap: 'wrap' }}>
+                          <Stack
+                            direction="row"
+                            spacing={1}
+                            sx={{ alignItems: 'center', flexWrap: 'wrap', pt: 0.5 }}
+                          >
                             <TextField
                               size="small"
                               label="Кол-во коробов"
@@ -2341,7 +2485,8 @@ export function FfSuppliesShipmentsPage({
                               </Select>
                             </FormControl>
                             <Button
-                              variant="contained"
+                              variant="outlined"
+                              size="small"
                               onClick={() => void createBox()}
                               disabled={modalBusy}
                               data-testid="ff-mp-box-batch-create"
@@ -2436,9 +2581,7 @@ export function FfSuppliesShipmentsPage({
                     <FfPackagingTaskPanel
                       token={token}
                       task={packagingTask}
-                      unloadLabel={
-                        unloadDetail.document_number ?? docModalId?.slice(0, 8) ?? null
-                      }
+                      unloadLabel={unloadDisplayNumber ?? docModalId?.slice(0, 8) ?? null}
                       onUpdated={(task) => {
                         setPackagingTask(task)
                         void loadDocDetail()

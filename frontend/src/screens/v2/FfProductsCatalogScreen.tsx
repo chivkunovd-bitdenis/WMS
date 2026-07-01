@@ -408,7 +408,7 @@ export function FfProductsCatalogScreen({ token, authHeaders, sellers }: Props) 
                       </Typography>
                       <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5 }}>
                         Остаток появляется после завершения пересчёта на приёмке (зона «Сортировка»).
-                        После разкладки по ячейкам товар доступен к резерву.
+                        После раскладки по ячейкам товар доступен к резерву.
                       </Typography>
                     </>
                   )}

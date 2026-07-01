@@ -594,7 +594,7 @@ test('FF marketplace unload: box modal manual location and product scan', async 
   await expect(page.getByTestId('ff-mp-box-add-dialog')).toBeVisible()
 
   await page.getByTestId('ff-mp-box-add-location-select').click()
-  await page.getByRole('option', { name: 'MP018-LOC' }).click()
+  await page.getByRole('option', { name: /MP018-LOC/ }).click()
   await expect(page.getByTestId('ff-mp-box-add-active-location')).toContainText('MP018-LOC')
 
   await page.getByTestId('ff-mp-box-add-scan-input').fill(barcode)

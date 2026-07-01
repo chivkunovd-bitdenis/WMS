@@ -3,7 +3,7 @@ import { test, expect } from '@playwright/test';
 import { waitForGetOk, waitForPostOk } from './api-waits';
 import { openFulfillmentRegistration } from './auth-flow';
 
-// TC-S06-007 — остаток после verify (зона сортировки); разкладка → доступно в ячейках.
+// TC-S06-007 — остаток после verify (зона сортировки); раскладка → доступно в ячейках.
 test('ff verify posts to sorting zone; sorting queue and product columns', async ({ page }) => {
   const email = `e2e-sort-${Date.now()}@example.com`;
   const sku = `SKU-SORT-${Date.now()}`;

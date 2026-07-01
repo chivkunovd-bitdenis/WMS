@@ -531,7 +531,7 @@ export function FfInboundSortingPanel({
       )
       return true
     } catch (e) {
-      setError(e instanceof Error ? e.message : 'Не удалось сохранить разкладку.')
+      setError(e instanceof Error ? e.message : 'Не удалось сохранить раскладку.')
       return false
     }
   }
@@ -576,7 +576,7 @@ export function FfInboundSortingPanel({
       await onReload()
       setDistributionLoaded(false)
     } catch (e) {
-      setError(e instanceof Error ? e.message : 'Не удалось применить разкладку.')
+      setError(e instanceof Error ? e.message : 'Не удалось применить раскладку.')
     } finally {
       setBusy(false)
     }
@@ -593,7 +593,7 @@ export function FfInboundSortingPanel({
     }
     return (
       <Alert severity="info" data-testid="ff-sorting-no-products">
-        Нет принятого товара для разкладки. Завершите приёмку в разделе «Приёмка».
+        Нет принятого товара для раскладки. Завершите приёмку в разделе «Приёмка».
       </Alert>
     )
   }
@@ -603,7 +603,7 @@ export function FfInboundSortingPanel({
 
   return (
     <FfProductMarkingPrintProvider token={token}>
-    <Box data-testid="ff-sorting-panel">
+      <Box data-testid="ff-sorting-panel" sx={{ width: '100%', minWidth: 0 }}>
       {distributionLoadError ? (
         <Alert
           severity="error"
@@ -653,7 +653,7 @@ export function FfInboundSortingPanel({
               onClick={() => void applyDistribution()}
               data-testid="ff-sorting-apply"
             >
-              Применить разкладку
+              Применить раскладку
             </Button>
           </>
         ) : null}
@@ -685,6 +685,7 @@ export function FfInboundSortingPanel({
               variant="outlined"
               sx={{
                 p: 2,
+                minWidth: 0,
                 ...(done
                   ? { opacity: 0.85, bgcolor: (theme) => alpha(theme.palette.success.main, 0.06) }
                   : null),
@@ -692,38 +693,40 @@ export function FfInboundSortingPanel({
               data-testid="ff-sorting-product-card"
               data-product-id={product.product_id}
             >
-              <Table size="small" sx={{ mb: 1.5 }}>
-                <TableHead>
-                  <TableRow>
-                    <FfProductTableHeadCells />
-                    <TableCell align="right">Принято</TableCell>
-                    <TableCell align="right">Разложено</TableCell>
-                    <TableCell align="right">Осталось</TableCell>
-                  </TableRow>
-                </TableHead>
-                <TableBody>
-                  <TableRow data-testid="ff-sorting-product-summary">
-                    <FfProductLineCells
-                      meta={displayMeta}
-                      productId={product.product_id}
-                      qtyNeedPack={product.accepted}
-                      printSource="packaging"
-                    />
-                    <TableCell align="right" data-testid="ff-sorting-product-accepted">
-                      {product.accepted}
-                    </TableCell>
-                    <TableCell align="right" data-testid="ff-sorting-product-distributed">
-                      {draftSum}
-                    </TableCell>
-                    <TableCell align="right" data-testid="ff-sorting-product-remaining">
-                      {remaining}
-                    </TableCell>
-                  </TableRow>
-                </TableBody>
-              </Table>
+              <TableContainer sx={{ mb: 1.5, width: '100%', minWidth: 0 }}>
+                <Table size="small">
+                  <TableHead>
+                    <TableRow>
+                      <FfProductTableHeadCells />
+                      <TableCell align="right">Принято</TableCell>
+                      <TableCell align="right">Разложено</TableCell>
+                      <TableCell align="right">Осталось</TableCell>
+                    </TableRow>
+                  </TableHead>
+                  <TableBody>
+                    <TableRow data-testid="ff-sorting-product-summary">
+                      <FfProductLineCells
+                        meta={displayMeta}
+                        productId={product.product_id}
+                        qtyNeedPack={product.accepted}
+                        printSource="packaging"
+                      />
+                      <TableCell align="right" data-testid="ff-sorting-product-accepted">
+                        {product.accepted}
+                      </TableCell>
+                      <TableCell align="right" data-testid="ff-sorting-product-distributed">
+                        {draftSum}
+                      </TableCell>
+                      <TableCell align="right" data-testid="ff-sorting-product-remaining">
+                        {remaining}
+                      </TableCell>
+                    </TableRow>
+                  </TableBody>
+                </Table>
+              </TableContainer>
 
               {product.rows.length > 0 ? (
-                <TableContainer sx={{ mb: 1 }}>
+                <TableContainer sx={{ mb: 1, width: '100%', minWidth: 0 }}>
                   <Table size="small" data-testid="ff-sorting-cell-rows">
                     <TableHead>
                       <TableRow>

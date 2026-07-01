@@ -115,9 +115,8 @@ test('ff inbound distribution: partial, leftover without cell, complete -> reado
   ]);
   expect(completeRes.ok()).toBeTruthy();
 
-  // Частичная разкладка: 2 в ячейке, 3 ещё в зоне сортировки — поставка не закрыта.
+  // Частичная раскладка: 2 в ячейке, 3 ещё в зоне сортировки — поставка не закрыта.
   await expect(page.getByTestId('ff-inbound-status-chip')).toContainText('В сортировке');
   await expect(page.getByTestId('ff-inbound-distribution-no-cell')).toContainText('3');
   await expect(page.getByTestId('ff-inbound-distribution-add-row')).toBeVisible();
 });
-

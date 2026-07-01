@@ -1,5 +1,11 @@
 # TASKLOG
 
+## TASK-093 — 2026-06-30 — Фикс печати в сортировке: база = «Принято», множитель в конструкторе
+
+- What changed: сортировка передаёт `qtyNeedPack` (принято) и `source: packaging`; `MarkingPrintDialog` не считает сортировку «каталогом» с qty=1; ШК без ЧЗ: итог = база × множитель.
+- What did NOT change: упаковка/отгрузка с `lineId`; каталог (`source: catalog`).
+- Verification: e2e print pack green; merged `92789af` (#65); Railway web deploy + smoke OK.
+
 ## TASK-092 — 2026-06-30 — Единая печать: MarkingPrintDialog везде, убрана нижняя иконка в приёмке
 
 - What changed: `useFfProductMarkingPrint` + `FfProductMarkingPrintProvider` — один диалог на страницу, Snackbar при ошибке marking-overview; `ProductBarcodePrintButton` без N копий диалога; в «Состав приёмки» иконка печати убрана; сортировка и каталог — тот же поток, что отгрузка.

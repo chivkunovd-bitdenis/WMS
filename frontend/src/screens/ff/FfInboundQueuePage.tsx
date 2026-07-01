@@ -113,7 +113,7 @@ export function FfInboundQueuePage({ workspace, rows, onOpen }: Props) {
       {workspace === 'sorting' ? (
         <Stack sx={{ mt: 2 }}>
           <Typography variant="body2" color="text.secondary">
-            Ячейка «Сортировка» — буфер принятого товара до разкладки. Она отображается в каталоге склада
+            Ячейка «Сортировка» — буфер принятого товара до раскладки. Она отображается в каталоге склада
             отдельно от полок хранения.
           </Typography>
         </Stack>

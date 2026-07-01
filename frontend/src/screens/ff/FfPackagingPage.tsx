@@ -95,6 +95,17 @@ function statusLabel(status: string): string {
   return status
 }
 
+function formatPackagingDisplayNumber(documentNumber: string | null): string | null {
+  if (!documentNumber) {
+    return null
+  }
+  const counter = documentNumber.match(/(\d+)\s*$/)?.[1]
+  if (!counter) {
+    return null
+  }
+  return `№${counter.padStart(6, '0')}`
+}
+
 /** Mirrors backend assert_packaging_line_marking_done (qty_done vs qty_marking_printed). */
 function isLineMarkingIncomplete(ln: PackagingTaskLine): boolean {
   if (!ln.requires_honest_sign) {
@@ -363,19 +374,31 @@ export function FfPackagingTaskPanel({
     setLineMenuLine(null)
   }
 
+  const displayDocumentNumber = formatPackagingDisplayNumber(task.document_number)
+
   return (
     <Stack spacing={2} data-testid="ff-packaging-task-panel">
-      <Stack direction="row" spacing={1} sx={{ alignItems: 'center', flexWrap: 'wrap' }}>
+      <Stack direction="row" spacing={1} sx={{ alignItems: 'flex-start', flexWrap: 'wrap' }}>
         <Chip label={statusLabel(task.status)} size="small" data-testid="ff-packaging-task-status" />
-        {task.document_number ? (
-          <Typography
-            variant="subtitle2"
-            sx={{ fontWeight: 600 }}
-            data-testid="ff-packaging-document-number"
-          >
-            {task.document_number}
+        <Stack spacing={0.25} sx={{ minWidth: 0 }}>
+          <Typography variant="subtitle1" sx={{ fontWeight: 700, lineHeight: 1.2 }}>
+            Упаковка
           </Typography>
-        ) : null}
+          {displayDocumentNumber ? (
+            <Typography
+              variant="subtitle2"
+              sx={{ fontWeight: 700, lineHeight: 1.2 }}
+              data-testid="ff-packaging-document-number"
+            >
+              {displayDocumentNumber}
+            </Typography>
+          ) : null}
+          {task.document_number ? (
+            <Typography variant="caption" color="text.secondary" data-testid="ff-packaging-service-id">
+              ID {task.document_number}
+            </Typography>
+          ) : null}
+        </Stack>
         {task.marketplace_unload_request_id ? (
           <Link
             component={RouterLink}

@@ -140,6 +140,21 @@ export type WbCatalogRow = WbProductCatalogRow
 
 export type InboundRequestWorkspace = 'reception' | 'sorting' | 'full'
 
+function inboundWorkspaceTitle(workspace: InboundRequestWorkspace): string {
+  return workspace === 'sorting' ? 'Сортировка' : 'Приёмка'
+}
+
+function formatInboundDisplayNumber(documentNumber: string | null): string | null {
+  if (!documentNumber) {
+    return null
+  }
+  const counter = documentNumber.match(/(\d+)\s*$/)?.[1]
+  if (!counter) {
+    return null
+  }
+  return `№${counter.padStart(6, '0')}`
+}
+
 type Props = {
   token: string
   requestId: string
@@ -212,6 +227,12 @@ export function FfInboundRequestView({
       return sum + Math.max(0, accepted - ln.posted_qty)
     }, 0)
   }, [detail])
+
+  const processTitle = inboundWorkspaceTitle(workspace)
+  const displayDocumentNumber = useMemo(
+    () => formatInboundDisplayNumber(detail?.document_number ?? null),
+    [detail?.document_number],
+  )
 
   const loadDetail = useCallback(async (): Promise<InboundDetail> => {
     const seq = ++loadDetailSeq.current
@@ -1139,6 +1160,44 @@ export function FfInboundRequestView({
         <Paper variant="outlined" sx={{ p: 2, minHeight: '38vh' }}>
           <Stack spacing={2} sx={{ mb: 2 }}>
             <Stack
+              direction={{ xs: 'column', sm: 'row' }}
+              spacing={2}
+              useFlexGap
+              sx={{ alignItems: { xs: 'flex-start', sm: 'flex-end' }, justifyContent: 'space-between' }}
+            >
+              <Stack spacing={0.25} sx={{ minWidth: 0 }}>
+                <Typography variant="subtitle2" color="text.secondary" sx={{ fontWeight: 700 }}>
+                  {processTitle}
+                </Typography>
+                {displayDocumentNumber ? (
+                  <Typography
+                    variant="h5"
+                    sx={{ fontWeight: 800, lineHeight: 1.1 }}
+                    data-testid="ff-inbound-document-number"
+                  >
+                    {displayDocumentNumber}
+                  </Typography>
+                ) : null}
+                {detail.document_number ? (
+                  <Typography
+                    variant="caption"
+                    color="text.secondary"
+                    sx={{ fontFamily: 'monospace' }}
+                    data-testid="ff-inbound-document-technical-number"
+                  >
+                    {detail.document_number}
+                  </Typography>
+                ) : null}
+              </Stack>
+
+              {detail.planned_box_count != null ? (
+                <Typography variant="body2" color="text.secondary" data-testid="ff-inbound-planned-boxes">
+                  План коробов: <strong>{detail.planned_box_count}</strong>
+                </Typography>
+              ) : null}
+            </Stack>
+
+            <Stack
               direction="row"
               spacing={2}
               useFlexGap
@@ -1164,20 +1223,6 @@ export function FfInboundRequestView({
                 color={detail.status === 'draft' ? 'default' : 'primary'}
                 data-testid="ff-inbound-status-chip"
               />
-              {detail.document_number ? (
-                <Typography
-                  variant="subtitle2"
-                  sx={{ fontWeight: 600 }}
-                  data-testid="ff-inbound-document-number"
-                >
-                  {detail.document_number}
-                </Typography>
-              ) : null}
-              {detail.planned_box_count != null ? (
-                <Typography variant="body2" color="text.secondary" data-testid="ff-inbound-planned-boxes">
-                  План коробов: <strong>{detail.planned_box_count}</strong>
-                </Typography>
-              ) : null}
             </Stack>
 
             <Stack
@@ -1787,7 +1832,7 @@ export function FfInboundRequestView({
                               onClick={() => void completeDistribution()}
                               data-testid="ff-inbound-distribution-complete"
                             >
-                              {hasNoCellPending ? 'Применить разкладку' : 'Завершить распределение'}
+                              {hasNoCellPending ? 'Применить раскладку' : 'Завершить распределение'}
                             </Button>
                           </>
                         ) : canReopenDistribution ? (
