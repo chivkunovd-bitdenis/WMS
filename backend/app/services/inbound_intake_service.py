@@ -28,6 +28,7 @@ from app.services.catalog_service import (
 )
 from app.services.document_number_service import (
     DOC_TYPE_INBOUND,
+    assign_display_number_if_missing,
     assign_document_number_if_missing,
 )
 from app.services.seller_wb_catalog_service import list_seller_wb_catalog_rows
@@ -142,6 +143,9 @@ async def create_request(
     )
     session.add(req)
     await assign_document_number_if_missing(
+        session, tenant_id, DOC_TYPE_INBOUND, req
+    )
+    await assign_display_number_if_missing(
         session, tenant_id, DOC_TYPE_INBOUND, req
     )
     await session.commit()

@@ -40,6 +40,7 @@ import { productDisplayMetaFromCatalog } from '../../types/wbProductCatalog'
 import { readApiErrorMessage } from '../../utils/readApiErrorMessage'
 import { displayMetaToProductLabel } from '../../utils/productBarcodePrint'
 import { useMarkingCodePrint } from '../../utils/useMarkingCodePrint'
+import { formatHumanDocumentNumber } from './documentDisplay'
 
 export type PackagingTaskLine = {
   id: string
@@ -64,6 +65,9 @@ export type PackagingTaskLine = {
 export type PackagingTask = {
   id: string
   document_number: string | null
+  display_number?: string | null
+  public_number?: string | null
+  human_number?: string | null
   warehouse_id: string
   status: string
   marketplace_unload_request_id: string | null
@@ -93,17 +97,6 @@ function statusLabel(status: string): string {
   if (status === 'done') return 'Выполнено'
   if (status === 'cancelled') return 'Отменено'
   return status
-}
-
-function formatPackagingDisplayNumber(documentNumber: string | null): string | null {
-  if (!documentNumber) {
-    return null
-  }
-  const counter = documentNumber.match(/(\d+)\s*$/)?.[1]
-  if (!counter) {
-    return null
-  }
-  return `№${counter.padStart(6, '0')}`
 }
 
 /** Mirrors backend assert_packaging_line_marking_done (qty_done vs qty_marking_printed). */
@@ -374,7 +367,7 @@ export function FfPackagingTaskPanel({
     setLineMenuLine(null)
   }
 
-  const displayDocumentNumber = formatPackagingDisplayNumber(task.document_number)
+  const displayDocumentNumber = formatHumanDocumentNumber(task)
 
   return (
     <Stack spacing={2} data-testid="ff-packaging-task-panel">
@@ -391,11 +384,6 @@ export function FfPackagingTaskPanel({
               data-testid="ff-packaging-document-number"
             >
               {displayDocumentNumber}
-            </Typography>
-          ) : null}
-          {task.document_number ? (
-            <Typography variant="caption" color="text.secondary" data-testid="ff-packaging-service-id">
-              ID {task.document_number}
             </Typography>
           ) : null}
         </Stack>

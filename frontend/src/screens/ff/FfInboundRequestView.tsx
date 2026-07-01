@@ -55,6 +55,7 @@ import {
 import { suggestNextLocationCode } from '../../utils/suggestNextLocationCode'
 import { renderBarcodeDataUrl } from '../../utils/renderBarcodeDataUrl'
 import { resolveProductIdByBarcode } from '../../utils/resolveProductByBarcode'
+import { formatHumanDocumentNumber } from './documentDisplay'
 
 type LocationRow = { id: string; code: string; warehouse_id: string; barcode: string }
 type WarehouseRow = { id: string; name: string; code: string }
@@ -97,6 +98,9 @@ type InboundLine = {
 type InboundDetail = {
   id: string
   document_number: string | null
+  display_number?: string | null
+  public_number?: string | null
+  human_number?: string | null
   warehouse_id: string
   status: string
   planned_delivery_date: string | null
@@ -142,17 +146,6 @@ export type InboundRequestWorkspace = 'reception' | 'sorting' | 'full'
 
 function inboundWorkspaceTitle(workspace: InboundRequestWorkspace): string {
   return workspace === 'sorting' ? 'Сортировка' : 'Приёмка'
-}
-
-function formatInboundDisplayNumber(documentNumber: string | null): string | null {
-  if (!documentNumber) {
-    return null
-  }
-  const counter = documentNumber.match(/(\d+)\s*$/)?.[1]
-  if (!counter) {
-    return null
-  }
-  return `№${counter.padStart(6, '0')}`
 }
 
 type Props = {
@@ -230,8 +223,8 @@ export function FfInboundRequestView({
 
   const processTitle = inboundWorkspaceTitle(workspace)
   const displayDocumentNumber = useMemo(
-    () => formatInboundDisplayNumber(detail?.document_number ?? null),
-    [detail?.document_number],
+    () => formatHumanDocumentNumber(detail),
+    [detail],
   )
 
   const loadDetail = useCallback(async (): Promise<InboundDetail> => {
@@ -1176,16 +1169,6 @@ export function FfInboundRequestView({
                     data-testid="ff-inbound-document-number"
                   >
                     {displayDocumentNumber}
-                  </Typography>
-                ) : null}
-                {detail.document_number ? (
-                  <Typography
-                    variant="caption"
-                    color="text.secondary"
-                    sx={{ fontFamily: 'monospace' }}
-                    data-testid="ff-inbound-document-technical-number"
-                  >
-                    {detail.document_number}
                   </Typography>
                 ) : null}
               </Stack>

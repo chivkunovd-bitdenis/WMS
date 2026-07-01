@@ -10,6 +10,22 @@ function formatDisplayDocumentNumber(documentNumber: string): string {
   return `№${counter!.padStart(6, '0')}`;
 }
 
+function visiblePackagingNumber(task: {
+  display_number?: string | null;
+  public_number?: string | null;
+  human_number?: string | null;
+  document_number?: string | null;
+}): string | null {
+  const preferred = task.display_number ?? task.public_number ?? task.human_number;
+  if (preferred && preferred.trim()) {
+    return preferred.trim();
+  }
+  if (!task.document_number) {
+    return null;
+  }
+  return formatDisplayDocumentNumber(task.document_number);
+}
+
 // TC-NEW-PKG-01 — FF создаёт задание из сортировки и упаковывает через UI.
 test('FF packaging page: create from sorting and pack line', async ({ page }) => {
   test.setTimeout(120_000);
@@ -91,15 +107,19 @@ test('FF packaging page: create from sorting and pack line', async ({ page }) =>
   );
   await page.getByTestId('ff-packaging-create-submit').click();
   const createResponse = await createResponsePromise;
-  const createdTask = (await createResponse.json()) as { document_number: string | null };
-  const packagingDocumentNumber = createdTask.document_number ?? '';
-  expect(packagingDocumentNumber).toBeTruthy();
-  const packagingDisplayNumber = formatDisplayDocumentNumber(packagingDocumentNumber);
+  const createdTask = (await createResponse.json()) as {
+    document_number: string | null;
+    display_number?: string | null;
+    public_number?: string | null;
+    human_number?: string | null;
+  };
+  const packagingDisplayNumber = visiblePackagingNumber(createdTask);
+  expect(packagingDisplayNumber).toBeTruthy();
 
   // TC-NEW-DOCNUM-01 — human-readable packaging document number on create.
   await expect(page.getByTestId('ff-packaging-task-panel')).toBeVisible();
   await expect(page.getByTestId('ff-packaging-document-number')).toHaveText(packagingDisplayNumber);
-  await expect(page.getByTestId('ff-packaging-service-id')).toHaveText(`ID ${packagingDocumentNumber}`);
+  await expect(page.getByTestId('ff-packaging-service-id')).toHaveCount(0);
   await expect(page.getByTestId('ff-packaging-line')).toBeVisible();
 
   await Promise.all([

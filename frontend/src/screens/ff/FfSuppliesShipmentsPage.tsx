@@ -53,6 +53,9 @@ import { renderBarcodeDataUrl } from '../../utils/renderBarcodeDataUrl'
 export type FfMarketplaceUnloadSummary = {
   id: string
   document_number?: string | null
+  display_number?: string | null
+  public_number?: string | null
+  human_number?: string | null
   warehouse_id: string
   warehouse_name: string
   status: string
@@ -122,6 +125,9 @@ type LinkedPackagingTask = {
 type MarketplaceUnloadDetail = {
   id: string
   document_number: string | null
+  display_number: string | null
+  public_number: string | null
+  human_number: string | null
   warehouse_id: string
   warehouse_name: string
   status: string
@@ -194,6 +200,21 @@ function formatDocumentDisplayNumber(documentNumber: string | null): string | nu
     return null
   }
   return `№${counter.padStart(6, '0')}`
+}
+
+function resolveHumanDocumentNumber(source: {
+  document_number?: string | null
+  display_number?: string | null
+  public_number?: string | null
+  human_number?: string | null
+} | null | undefined): string | null {
+  const direct = [source?.display_number, source?.public_number, source?.human_number].find(
+    (value): value is string => typeof value === 'string' && value.trim().length > 0,
+  )
+  if (direct) {
+    return direct.trim()
+  }
+  return formatDocumentDisplayNumber(source?.document_number ?? null)
 }
 
 type ProductPick = { id: string; sku_code: string; name: string }
@@ -360,6 +381,9 @@ export function FfSuppliesShipmentsPage({
         const j = (await res.json()) as {
           id: string
           document_number?: string | null
+          display_number?: string | null
+          public_number?: string | null
+          human_number?: string | null
           warehouse_id: string
           warehouse_name: string
           status: string
@@ -411,6 +435,9 @@ export function FfSuppliesShipmentsPage({
         setUnloadDetail({
           id: j.id,
           document_number: j.document_number ?? null,
+          display_number: j.display_number ?? null,
+          public_number: j.public_number ?? null,
+          human_number: j.human_number ?? null,
           warehouse_id: j.warehouse_id,
           warehouse_name: j.warehouse_name,
           status: j.status,
@@ -1458,8 +1485,13 @@ export function FfSuppliesShipmentsPage({
         ? 'Акт расхождения'
         : ''
   const unloadDisplayNumber = useMemo(
-    () => formatDocumentDisplayNumber(unloadDetail?.document_number ?? null),
-    [unloadDetail?.document_number],
+    () => resolveHumanDocumentNumber(unloadDetail),
+    [
+      unloadDetail?.document_number,
+      unloadDetail?.display_number,
+      unloadDetail?.public_number,
+      unloadDetail?.human_number,
+    ],
   )
 
   const mpDraft = docModal === 'marketplace_unload' && unloadDetail?.status === 'draft'
@@ -1532,16 +1564,13 @@ export function FfSuppliesShipmentsPage({
     }
     const planned = unloadDetail.lines.reduce((sum, ln) => sum + ln.quantity, 0)
     const distributed = unloadDetail.lines.reduce((sum, ln) => sum + (ln.picked_qty ?? 0), 0)
-    const packagingTask = unloadDetail.linked_packaging_task
     return {
       planned,
       distributed,
       remaining: planned - distributed,
-      packagingLabel: !packagingTask
-        ? null
-        : packagingTask.status === 'done' || packagingTask.is_complete
-          ? 'выполнена'
-          : 'в работе',
+      packed: unloadDetail.linked_packaging_task
+        ? `${unloadDetail.linked_packaging_task.qty_done}/${unloadDetail.linked_packaging_task.qty_total}`
+        : null,
     }
   }, [unloadDetail, docModal])
 
@@ -1918,31 +1947,14 @@ export function FfSuppliesShipmentsPage({
           ) : null}
           {unloadDetail ? (
             <>
-              <Stack
-                spacing={0.25}
-                sx={{ mb: 1 }}
-              >
-                <Typography variant="subtitle2" color="text.secondary" sx={{ fontWeight: 700 }}>
-                  Отгрузка
+              <Stack spacing={0.25} sx={{ mb: 1 }}>
+                <Typography
+                  variant="h5"
+                  sx={{ fontWeight: 800, lineHeight: 1.15 }}
+                  data-testid="ff-mp-unload-document-number"
+                >
+                  Отгрузка{unloadDisplayNumber ? ` ${unloadDisplayNumber}` : ''}
                 </Typography>
-                {unloadDisplayNumber ? (
-                  <Typography
-                    variant="h5"
-                    sx={{ fontWeight: 800, lineHeight: 1.1 }}
-                    data-testid="ff-mp-unload-document-number"
-                  >
-                    {unloadDisplayNumber}
-                  </Typography>
-                ) : null}
-                {unloadDetail.document_number ? (
-                  <Typography
-                    variant="caption"
-                    color="text.secondary"
-                    sx={{ fontFamily: 'monospace' }}
-                  >
-                    {unloadDetail.document_number}
-                  </Typography>
-                ) : null}
               </Stack>
               <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
                 {docModal === 'marketplace_unload' ? (
@@ -2038,25 +2050,71 @@ export function FfSuppliesShipmentsPage({
               Состав изменён на складе после планирования селлером.
             </Alert>
           ) : null}
-          {docModal === 'marketplace_unload' &&
-          mpExecutionPhase &&
-          unloadDetail?.linked_packaging_task ? (
-            <Alert
-              severity={
-                unloadDetail.linked_packaging_task.is_complete ? 'success' : 'warning'
-              }
-              sx={{ mb: 2 }}
-              data-testid="ff-mp-packaging-progress"
+          {docModal === 'marketplace_unload' && mpCollectSummary ? (
+            <Paper
+              variant="outlined"
+              sx={{ mb: 2, p: 1.5, bgcolor: 'action.hover' }}
+              data-testid="ff-mp-shipment-summary"
             >
-              <Typography variant="body2">
-                Задание на упаковку:{' '}
-                {unloadDetail.linked_packaging_task.qty_done}/
-                {unloadDetail.linked_packaging_task.qty_total} шт
-                {unloadDetail.linked_packaging_task.is_complete
-                  ? ' · выполнено'
-                  : ' · в работе'}
-              </Typography>
-            </Alert>
+              <Box
+                sx={{
+                  display: 'grid',
+                  gap: 1,
+                  gridTemplateColumns: {
+                    xs: 'repeat(2, minmax(0, 1fr))',
+                    md: 'repeat(4, minmax(0, 1fr))',
+                  },
+                }}
+              >
+                <Box>
+                  <Typography variant="caption" color="text.secondary">
+                    План
+                  </Typography>
+                  <Typography variant="body2" sx={{ fontWeight: 700 }} data-testid="ff-mp-shipment-summary-planned">
+                    {mpCollectSummary.planned}
+                  </Typography>
+                </Box>
+                <Box>
+                  <Typography variant="caption" color="text.secondary">
+                    В коробах / распределено
+                  </Typography>
+                  <Typography
+                    variant="body2"
+                    sx={{ fontWeight: 700 }}
+                    data-testid="ff-mp-shipment-summary-distributed"
+                  >
+                    {mpCollectSummary.distributed}
+                  </Typography>
+                </Box>
+                <Box>
+                  <Typography variant="caption" color="text.secondary">
+                    Осталось
+                  </Typography>
+                  <Typography
+                    variant="body2"
+                    sx={{
+                      fontWeight: 700,
+                      color: mpCollectSummary.remaining !== 0 ? 'warning.main' : 'text.primary',
+                    }}
+                    data-testid="ff-mp-shipment-summary-remaining"
+                  >
+                    {mpCollectSummary.remaining}
+                  </Typography>
+                </Box>
+                <Box>
+                  <Typography variant="caption" color="text.secondary">
+                    Упаковано
+                  </Typography>
+                  <Typography
+                    variant="body2"
+                    sx={{ fontWeight: 700 }}
+                    data-testid="ff-mp-shipment-summary-packed"
+                  >
+                    {mpCollectSummary.packed ?? '—'}
+                  </Typography>
+                </Box>
+              </Box>
+            </Paper>
           ) : null}
           {docModal === 'marketplace_unload' && unloadDetail ? (
             <Box sx={{ mb: 2 }}>
@@ -2081,12 +2139,6 @@ export function FfSuppliesShipmentsPage({
                   {unloadDetail.seller_name ? (
                     <Typography variant="body2" color="text.secondary">
                       Селлер: <strong>{unloadDetail.seller_name}</strong>
-                    </Typography>
-                  ) : null}
-                  {/* REV-FIX-014 MVP: plan total on draft «Товары»; collect summary on «Товары» after confirm (MP-010/011). */}
-                  {mpCollectSummary && mpDraft ? (
-                    <Typography variant="body2" data-testid="ff-mp-plan-total">
-                      План: <strong>{mpCollectSummary.planned}</strong> шт
                     </Typography>
                   ) : null}
                   {mpLineDraft && mpDraft ? (
@@ -2305,57 +2357,6 @@ export function FfSuppliesShipmentsPage({
                         >
                           Печать накладной
                         </Button>
-                      ) : null}
-                    </Stack>
-                  ) : null}
-              {/* REV-FIX-014: «План и распределение» + ff-mp-collect-warning only after confirm (not on draft). */}
-                                {mpCollectSummary ? (
-                    <Stack spacing={1.5}>
-                      <Paper
-                        variant="outlined"
-                        sx={{ p: 1.5, bgcolor: 'action.hover' }}
-                        data-testid="ff-mp-collect-summary"
-                      >
-                        <Typography variant="subtitle2" sx={{ mb: 0.5 }}>
-                          План и распределение
-                        </Typography>
-                        <Typography variant="body2">
-                          План отгрузки:{' '}
-                          <strong data-testid="ff-mp-collect-summary-planned">
-                            {mpCollectSummary.planned}
-                          </strong>
-                          {' · '}
-                          Распределено по коробам:{' '}
-                          <strong data-testid="ff-mp-collect-summary-distributed">
-                            {mpCollectSummary.distributed}
-                          </strong>
-                          {' · '}
-                          Остаток:{' '}
-                          <strong
-                            data-testid="ff-mp-collect-summary-remaining"
-                            style={{
-                              color: mpCollectSummary.remaining !== 0 ? '#ed6c02' : undefined,
-                            }}
-                          >
-                            {mpCollectSummary.remaining}
-                          </strong>
-                          {mpCollectSummary.packagingLabel ? (
-                            <>
-                              {' · '}
-                              Упаковка:{' '}
-                              <strong data-testid="ff-mp-collect-summary-packaging">
-                                {mpCollectSummary.packagingLabel}
-                              </strong>
-                            </>
-                          ) : null}
-                        </Typography>
-                      </Paper>
-                      {mpHasDiscrepancy ? (
-                        <Alert severity="warning" data-testid="ff-mp-collect-warning">
-                          План и факт не совпадают: распределено {mpCollectSummary.distributed} из{' '}
-                          {mpCollectSummary.planned}. При нажатии «Завершить» потребуется
-                          подтверждение расхождения.
-                        </Alert>
                       ) : null}
                     </Stack>
                   ) : null}
@@ -2793,14 +2794,6 @@ export function FfSuppliesShipmentsPage({
             ) : null}
             {docModal === 'marketplace_unload' && unloadDetail && mpExecutionPhase ? (
               <>
-                <Button
-                  variant="outlined"
-                  disabled={modalBusy || !docModalId || !token}
-                  onClick={() => setMpUnloadTab('packaging')}
-                  data-testid="ff-mp-open-packaging"
-                >
-                  Упаковка
-                </Button>
                 <Button
                   variant="contained"
                   color="primary"

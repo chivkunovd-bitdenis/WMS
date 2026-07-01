@@ -27,6 +27,7 @@ test.describe('FF inbound box piece intake', () => {
     await openFfInboundDoc(page, seed, { skipLogin: true });
 
     await expect(page.getByTestId('ff-inbound-status-chip')).toContainText('Приёмка');
+    await expect(page.getByTestId('ff-inbound-document-technical-number')).toHaveCount(0);
 
     await ffInboundBoxAddManualQty(page, 3);
     await expect(page.getByTestId('ff-inbound-box-row').first()).toContainText(': 3');

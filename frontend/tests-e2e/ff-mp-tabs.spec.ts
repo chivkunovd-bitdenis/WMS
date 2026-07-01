@@ -261,7 +261,10 @@ test('FF marketplace unload: tabs switch without losing document context', async
   const unloadDisplayNumber = formatDisplayDocumentNumber(unloadDocumentNumber)
 
   await expect(page.getByTestId('ff-supplies-doc-dialog')).toBeVisible()
-  await expect(page.getByTestId('ff-mp-unload-document-number')).toHaveText(unloadDisplayNumber)
+  await expect(page.getByTestId('ff-mp-unload-document-number')).toHaveText(
+    `Отгрузка ${unloadDisplayNumber}`,
+  )
+  await expect(page.getByTestId('ff-supplies-doc-dialog')).not.toContainText(unloadDocumentNumber)
   await expect(page.getByTestId('ff-mp-tab-products')).toBeVisible()
   await expect(page.getByTestId('ff-mp-tab-boxes')).toHaveCount(0)
   await expect(page.getByTestId('ff-mp-tab-final')).toHaveCount(0)
@@ -269,11 +272,15 @@ test('FF marketplace unload: tabs switch without losing document context', async
   await expectMpTabSelected(page, 'ff-mp-tab-products')
   await expect(page.getByTestId('ff-mp-ship')).toBeDisabled()
 
-  await expect(page.getByTestId('ff-mp-collect-summary-planned')).toHaveText('2')
-  await expect(page.getByTestId('ff-mp-collect-summary-distributed')).toHaveText('0')
-  await expect(page.getByTestId('ff-mp-collect-summary-remaining')).toHaveText('2')
-  await expect(page.getByTestId('ff-mp-collect-warning')).toBeVisible()
-  await expect(page.getByTestId('ff-mp-collect-summary-packaging')).toBeVisible()
+  await expect(page.getByTestId('ff-mp-shipment-summary')).toBeVisible()
+  await expect(page.getByTestId('ff-mp-shipment-summary-planned')).toHaveText('2')
+  await expect(page.getByTestId('ff-mp-shipment-summary-distributed')).toHaveText('0')
+  await expect(page.getByTestId('ff-mp-shipment-summary-remaining')).toHaveText('2')
+  await expect(page.getByTestId('ff-mp-shipment-summary-remaining')).toHaveCSS(
+    'color',
+    'rgb(237, 108, 2)',
+  )
+  await expect(page.getByTestId('ff-mp-shipment-summary-packed')).toHaveText('2/2')
 
   await page.getByTestId('ff-mp-tab-packaging').click()
   await expect(page.getByTestId('ff-mp-tab-packaging-panel')).toBeVisible()
@@ -285,7 +292,9 @@ test('FF marketplace unload: tabs switch without losing document context', async
   await expect(page.getByTestId('ff-mp-boxes')).toBeVisible()
   await expectMpTabSelected(page, 'ff-mp-tab-products')
   await expect(page.getByTestId('ff-mp-ship')).toBeDisabled()
-  await expect(page.getByTestId('ff-mp-unload-document-number')).toHaveText(unloadDisplayNumber)
+  await expect(page.getByTestId('ff-mp-unload-document-number')).toHaveText(
+    `Отгрузка ${unloadDisplayNumber}`,
+  )
 })
 
 // TC-NEW-MP-011 / MP-012: на черновике нет плашки прогресса упаковки.
@@ -435,9 +444,9 @@ test('FF marketplace unload: no packaging progress banner on draft', async ({ pa
   await expect(page.getByTestId('ff-mp-doc-header-fields')).toBeVisible()
   await expect(page.getByTestId('ff-mp-planned-date')).toBeVisible()
   await expect(page.getByTestId('ff-mp-ff-warehouse-name')).toBeVisible()
-  // REV-FIX-013: plan total visible on draft «Товары» tab.
-  await expect(page.getByTestId('ff-mp-plan-total')).toContainText('2')
-  await expect(page.getByTestId('ff-mp-packaging-progress')).toHaveCount(0)
+  await expect(page.getByTestId('ff-mp-shipment-summary')).toBeVisible()
+  await expect(page.getByTestId('ff-mp-shipment-summary-planned')).toHaveText('2')
+  await expect(page.getByTestId('ff-mp-shipment-summary-packed')).toHaveText('—')
   await expect(page.getByTestId('ff-mp-tab-packaging')).toBeDisabled()
   await expect(page.getByTestId('ff-mp-tab-boxes')).toHaveCount(0)
   await expect(page.getByTestId('ff-mp-tab-final')).toHaveCount(0)
@@ -600,7 +609,7 @@ test('FF marketplace unload: main scan rejects product barcode', async ({ page }
   await page.getByTestId('ff-mp-pick-scan').click()
   await expect(page.getByTestId('ff-mp-modal-error')).toContainText('Добавить товары')
   await expect(page.getByTestId('ff-mp-attach-box-dialog')).toHaveCount(0)
-  await expect(page.getByTestId('ff-mp-collect-summary-distributed')).toHaveText('0')
+  await expect(page.getByTestId('ff-mp-shipment-summary-distributed')).toHaveText('0')
 })
 
 // TC-NEW-OUT-FE-02 — OUT-FE-02: confirmed unload product table — no early red rows; qty columns aligned.

@@ -27,6 +27,7 @@ from app.services import inventory_service
 from app.services.catalog_service import get_warehouse
 from app.services.document_number_service import (
     DOC_TYPE_UNLOAD,
+    assign_display_number_if_missing,
     assign_document_number_if_missing,
 )
 from app.services.wb_mp_warehouse_service import get_cached_mp_warehouse
@@ -117,6 +118,7 @@ async def create_request(
     )
     session.add(req)
     await assign_document_number_if_missing(session, tenant_id, DOC_TYPE_UNLOAD, req)
+    await assign_display_number_if_missing(session, tenant_id, DOC_TYPE_UNLOAD, req)
     await session.commit()
     await session.refresh(req)
     from app.services.notification_trigger_service import notify_ff_marketplace_unload_created
