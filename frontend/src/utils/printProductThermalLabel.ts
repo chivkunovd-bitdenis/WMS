@@ -1,3 +1,4 @@
+import { DEFAULT_LABEL_SIZE, type LabelSize } from './labelSize'
 import {
   escapeLabelHtml,
   PRODUCT_LABEL_REVIEW_FOOTER,
@@ -20,14 +21,21 @@ export type ProductThermalLabelData = {
   barcode: string
 }
 
-export const PRODUCT_THERMAL_LABEL_CSS = `
-  @page { size: 58mm 40mm; margin: 0; }
+/**
+ * CSS этикетки товара под выбранный физический размер.
+ * Лист (`@page`) и рамка `.label` задаются в мм по выбранному размеру;
+ * внутренние размеры штрихкода/шрифтов сохранены (проверенная читаемость сканером),
+ * на бо́льших этикетках просто появляется дополнительное поле.
+ */
+export function buildProductThermalLabelCss(size: LabelSize = DEFAULT_LABEL_SIZE): string {
+  return `
+  @page { size: ${size.widthMm}mm ${size.heightMm}mm; margin: 0; }
   * { box-sizing: border-box; }
   html, body { margin: 0; padding: 0; }
   body { font-family: Arial, Helvetica, sans-serif; color: #111; background: #fff; }
   .label {
-    width: 58mm;
-    height: 40mm;
+    width: ${size.widthMm}mm;
+    height: ${size.heightMm}mm;
     padding: 1.4mm 1.8mm 1mm;
     display: flex;
     flex-direction: column;
@@ -104,6 +112,10 @@ export const PRODUCT_THERMAL_LABEL_CSS = `
     line-height: 1.15;
   }
 `
+}
+
+/** Дефолтный (58×40) CSS — обратная совместимость для существующих импортов. */
+export const PRODUCT_THERMAL_LABEL_CSS = buildProductThermalLabelCss()
 
 export function buildProductLabelSectionHtml(
   data: ProductThermalLabelData,
@@ -144,6 +156,7 @@ export function buildProductThermalLabelDocument(
   quantity: number,
   barcodeDataUrl: string,
   printOptions?: ProductLabelPrintOptions,
+  labelSize: LabelSize = DEFAULT_LABEL_SIZE,
 ): string {
   const copies = Math.max(1, Math.min(999, Math.floor(quantity)))
   const labels = Array.from({ length: copies }, () =>
@@ -154,7 +167,7 @@ export function buildProductThermalLabelDocument(
   <head>
     <meta charset="utf-8" />
     <title>Этикетка товара</title>
-    <style>${PRODUCT_THERMAL_LABEL_CSS}</style>
+    <style>${buildProductThermalLabelCss(labelSize)}</style>
   </head>
   <body>${labels}</body>
 </html>`
@@ -164,13 +177,14 @@ export function printProductThermalLabels(
   data: ProductThermalLabelData,
   quantity: number,
   printOptions?: ProductLabelPrintOptions,
+  labelSize: LabelSize = DEFAULT_LABEL_SIZE,
 ): void {
   const barcode = data.barcode.trim()
   if (!barcode) {
     throw new Error('У товара нет штрихкода для печати.')
   }
   const barcodeDataUrl = renderBarcodeDataUrl(barcode, { variant: 'thermal58' })
-  const html = buildProductThermalLabelDocument(data, quantity, barcodeDataUrl, printOptions)
+  const html = buildProductThermalLabelDocument(data, quantity, barcodeDataUrl, printOptions, labelSize)
 
   const iframe = document.createElement('iframe')
   iframe.setAttribute('aria-hidden', 'true')

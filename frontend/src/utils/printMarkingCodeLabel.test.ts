@@ -55,4 +55,15 @@ describe('buildCzLabelHtml', () => {
     expect(doc).toContain('data-tape-block="label"')
     expect(doc).toContain('flex-direction: row')
   })
+
+  // TC-NEW-PRINT-SIZE-01 — выбранный размер этикетки реально попадает в @page/размер листа.
+  it('applies chosen label size to page and label box', () => {
+    const doc = buildMarkingTapeDocument(
+      [buildCzLabelHtml(SAMPLE_CIS, MATRIX_STUB)],
+      { id: '70x120', label: '70 × 120 мм', widthMm: 70, heightMm: 120 },
+    )
+    expect(doc).toContain('size: 70mm 120mm')
+    expect(doc).toContain('width: 70mm')
+    expect(doc).toContain('height: 120mm')
+  })
 })

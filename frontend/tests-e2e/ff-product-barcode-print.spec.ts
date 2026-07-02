@@ -113,10 +113,27 @@ test('ff sorting opens unified marking print dialog for product line', async ({ 
   await expect(dialog).toContainText('Брюки коричневые');
   await expect(page.getByTestId('marking-print-wb-qty')).toBeVisible();
   await expect(page.getByTestId('marking-print-qty')).toContainText('К упаковке: 2');
+
+  // TC-NEW-PRINT-SIZE-01 — выбор размера этикетки применяется к физическому листу печати.
+  const sizeSelect = page.getByTestId('marking-print-label-size');
+  await expect(sizeSelect).toBeVisible();
+  await expect(sizeSelect).toContainText('58 × 40');
+  await sizeSelect.click();
+  await page.getByTestId('marking-print-label-size-option-60x80').click();
+  await expect(sizeSelect).toContainText('60 × 80');
+
+  await page.evaluate(() => {
+    (window as unknown as { __WMS_CAPTURE_PRINT_HTML__?: boolean }).__WMS_CAPTURE_PRINT_HTML__ = true;
+  });
   await page.getByTestId('marking-print-wb-qty').locator('input').fill('3');
   await expect(page.getByTestId('marking-print-will-print')).toContainText('К печати: 6 ШК ВБ');
   await page.getByTestId('marking-print-confirm').click();
   await expect(dialog).toBeHidden();
+
+  const printedHtml = await page.evaluate(
+    () => (window as unknown as { __WMS_LAST_PRINT_HTML__?: string }).__WMS_LAST_PRINT_HTML__ ?? '',
+  );
+  expect(printedHtml).toContain('size: 60mm 80mm');
 
   const barcodeCell = productCard.getByTestId('ff-product-line-barcode');
   await expect(barcodeCell).toContainText('E2E-MOCK-BARCODE');

@@ -50,6 +50,11 @@ import { formatDateTimeLocal } from '../../utils/formatDateTimeLocal'
 import { printMarketplaceUnloadWaybill } from '../../utils/printShipmentWaybill'
 import { printBarcodeLabel } from '../../utils/printBarcodeLabel'
 import { renderBarcodeDataUrl } from '../../utils/renderBarcodeDataUrl'
+import {
+  printShipmentPackagingSheet,
+  type PackagingSheetItem,
+} from '../../utils/printShipmentPackagingSheet'
+import { resolveProductPrimaryBarcode } from '../../types/wbProductCatalog'
 
 export type FfMarketplaceUnloadSummary = {
   id: string
@@ -882,6 +887,36 @@ export function FfSuppliesShipmentsPage({
       title: 'Короб отгрузки',
       barcode,
       barcodeDataUrl: renderBarcodeDataUrl(barcode),
+    })
+  }
+
+  const printPackagingSheet = () => {
+    if (!unloadDetail || unloadDetail.lines.length === 0) {
+      setModalError('Нет товаров для печати.')
+      return
+    }
+    const items: PackagingSheetItem[] = unloadDetail.lines.map((ln) => {
+      const cat = catalogById.get(ln.product_id)
+      return {
+        product_name: ln.product_name,
+        vendor_code: cat?.wb_vendor_code ?? '',
+        sku_code: ln.sku_code,
+        barcode: cat ? resolveProductPrimaryBarcode(cat) || null : null,
+        wb_nm_id: cat?.wb_nm_id ?? null,
+        wb_size: cat?.wb_size ?? null,
+        wb_composition: cat?.wb_composition ?? null,
+        photo_url: cat?.wb_primary_image_url ?? null,
+        instructions: cat?.packaging_instructions ?? null,
+      }
+    })
+    printShipmentPackagingSheet({
+      documentNumber: unloadDisplayNumber ?? '—',
+      warehouseName: unloadDetail.warehouse_name,
+      sellerName: unloadDetail.seller_name,
+      createdAt: unloadDetail.created_at
+        ? formatDateTimeLocal(unloadDetail.created_at)
+        : null,
+      items,
     })
   }
 
@@ -2333,6 +2368,15 @@ export function FfSuppliesShipmentsPage({
                         >
                           Печать накладной
                         </Button>
+                      <Button
+                        variant="outlined"
+                        size="small"
+                        disabled={modalBusy}
+                        data-testid="ff-mp-print-tz"
+                        onClick={printPackagingSheet}
+                      >
+                        Печать ТЗ
+                      </Button>
                     </Stack>
                   ) : null}
                   <Box data-testid="ff-mp-boxes">

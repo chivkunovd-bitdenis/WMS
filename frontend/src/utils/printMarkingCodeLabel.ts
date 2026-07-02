@@ -1,4 +1,5 @@
 import { apiUrl } from '../api'
+import { DEFAULT_LABEL_SIZE, type LabelSize } from './labelSize'
 import { expandLayoutTape } from './markingPrintPresets'
 import { maskCisTail, parseGs1Cis } from './parseGs1Cis'
 import {
@@ -9,14 +10,15 @@ import { escapeLabelHtml } from './productLabelText'
 import type { PrintLayout } from './printTemplate'
 import { renderBarcodeDataUrl } from './renderBarcodeDataUrl'
 
-const TAPE_PAGE_CSS = `
-  @page { size: 58mm 40mm; margin: 0; }
+function buildTapePageCss(size: LabelSize = DEFAULT_LABEL_SIZE): string {
+  return `
+  @page { size: ${size.widthMm}mm ${size.heightMm}mm; margin: 0; }
   * { box-sizing: border-box; }
   html, body { margin: 0; padding: 0; }
   body { font-family: Arial, Helvetica, sans-serif; color: #111; background: #fff; }
   .label {
-    width: 58mm;
-    height: 40mm;
+    width: ${size.widthMm}mm;
+    height: ${size.heightMm}mm;
     overflow: hidden;
     page-break-after: always;
     break-after: page;
@@ -180,6 +182,7 @@ const TAPE_PAGE_CSS = `
     line-height: 1.15;
   }
 `
+}
 
 export { maskCisTail as maskCisCode }
 
@@ -256,16 +259,19 @@ export type MarkingTapeUnitInput = {
 
 export type PrintMarkingTapeOptions = {
   authToken?: string | null
+  labelSize?: LabelSize
 }
 
 export type PrintMarkingCodeLabelsOptions = {
   layout?: PrintLayout
   duplicateCopies?: number
   productLabel?: ProductThermalLabelData | null
+  labelSize?: LabelSize
 }
 
 export function buildMarkingTapeDocument(
   sections: string[],
+  labelSize: LabelSize = DEFAULT_LABEL_SIZE,
 ): string {
   const body = sections.join('')
   return `<!doctype html>
@@ -273,7 +279,7 @@ export function buildMarkingTapeDocument(
   <head>
     <meta charset="utf-8" />
     <title>Честный знак</title>
-    <style>${TAPE_PAGE_CSS}</style>
+    <style>${buildTapePageCss(labelSize)}</style>
   </head>
   <body>${body}</body>
 </html>`
@@ -392,7 +398,7 @@ export async function printMarkingCodeTape(
     sections.push(html.replace('data-testid="product-thermal-label"', 'data-testid="product-thermal-label" data-tape-block="label"'))
   }
 
-  const html = buildMarkingTapeDocument(sections)
+  const html = buildMarkingTapeDocument(sections, options?.labelSize ?? DEFAULT_LABEL_SIZE)
   await printHtmlInIframe(html)
 }
 
@@ -409,7 +415,9 @@ export async function printMarkingCodeLabels(
     cis,
     productLabel: options.productLabel ?? null,
   }))
-  await printMarkingCodeTape(units, layout, options.productLabel)
+  await printMarkingCodeTape(units, layout, options.productLabel, {
+    labelSize: options.labelSize ?? DEFAULT_LABEL_SIZE,
+  })
 }
 
 declare global {

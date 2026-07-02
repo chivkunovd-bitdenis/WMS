@@ -34,6 +34,8 @@ import { readApiErrorMessage } from '../utils/readApiErrorMessage'
 import { printMarkingCodeTape } from '../utils/printMarkingCodeLabel'
 import type { ProductThermalLabelData } from '../utils/printProductThermalLabel'
 import { resolvePackUnits, resolveWbBarcodeLabelCount } from '../utils/productBarcodePrint'
+import { resolveLabelSize, loadLabelSizeId, type LabelSize } from '../utils/labelSize'
+import { LabelSizeSelect } from './LabelSizeSelect'
 
 type PrintedCodeOption = {
   id: string
@@ -76,6 +78,7 @@ type Props = {
 
 export function MarkingPrintDialog({ open, reprint, ctx, busy, onBusyChange, onClose }: Props) {
   const [error, setError] = useState<string | null>(null)
+  const [labelSize, setLabelSize] = useState<LabelSize>(() => resolveLabelSize(loadLabelSizeId()))
   const [layout, setLayout] = useState<PrintLayout>(MARKING_PRINT_PRESETS[0].layout)
   const [allowPartial, setAllowPartial] = useState(false)
   const [czQty, setCzQty] = useState(2)
@@ -253,7 +256,7 @@ export function MarkingPrintDialog({ open, reprint, ctx, busy, onBusyChange, onC
       cis: `label-only-${index + 1}`,
       productLabel: ctx.productLabel ?? null,
     }))
-    await printMarkingCodeTape(units, NON_HONEST_SIGN_LABEL_LAYOUT, ctx.productLabel)
+    await printMarkingCodeTape(units, NON_HONEST_SIGN_LABEL_LAYOUT, ctx.productLabel, { labelSize })
     ctx.onPrinted()
     onClose()
   }
@@ -288,7 +291,7 @@ export function MarkingPrintDialog({ open, reprint, ctx, busy, onBusyChange, onC
       })),
       layout,
       ctx.productLabel,
-      { authToken: ctx.token },
+      { authToken: ctx.token, labelSize },
     )
     ctx.onPrinted()
     onClose()
@@ -386,7 +389,7 @@ export function MarkingPrintDialog({ open, reprint, ctx, busy, onBusyChange, onC
         }),
         data.layout ?? layout,
         ctx.productLabel,
-        { authToken: ctx.token },
+        { authToken: ctx.token, labelSize },
       )
       ctx.onPrinted()
       onClose()
@@ -467,6 +470,13 @@ export function MarkingPrintDialog({ open, reprint, ctx, busy, onBusyChange, onC
                 </Typography>
               </Box>
             ) : null}
+
+            <LabelSizeSelect
+              value={labelSize.id}
+              onChange={setLabelSize}
+              disabled={busy}
+              testId="marking-print-label-size"
+            />
 
             {shortage > 0 ? (
               <Alert severity="error" data-testid="marking-print-shortage-banner">
