@@ -3,7 +3,7 @@
 from app.models.background_job import BackgroundJob
 from app.models.base import Base
 from app.models.discrepancy_act import DiscrepancyAct, DiscrepancyActLine
-from app.models.document_sequence import DocumentSequence
+from app.models.document_sequence import DocumentDisplaySequence, DocumentSequence
 from app.models.ff_staff_permissions import FfStaffPermissions
 from app.models.inbound_intake import (
     InboundIntakeBox,
@@ -54,6 +54,7 @@ __all__ = [
     "Base",
     "DiscrepancyAct",
     "DiscrepancyActLine",
+    "DocumentDisplaySequence",
     "DocumentSequence",
     "FfStaffPermissions",
     "InboundIntakeBox",

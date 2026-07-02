@@ -7,6 +7,7 @@ from zoneinfo import ZoneInfo
 
 import pytest
 from httpx import AsyncClient
+from test_packaging_tasks import _inventory_at_location
 
 from app.db.session import SessionLocal
 from app.services.document_number_service import (
@@ -14,9 +15,12 @@ from app.services.document_number_service import (
     DOC_TYPE_PACKAGING,
     DOC_TYPE_UNLOAD,
     document_date_msk,
+    format_display_number,
     format_document_number,
+    next_display_number,
     next_document_number,
     peek_next_counter,
+    peek_next_display_counter,
 )
 from app.services.tokens import decode_access_token
 
@@ -70,6 +74,27 @@ async def test_next_document_number_independent_doc_types(async_client: AsyncCli
 
 
 @pytest.mark.asyncio
+async def test_next_display_number_independent_doc_types(async_client: AsyncClient) -> None:
+    tenant_id = await _tenant_id(async_client)
+    async with SessionLocal() as session:
+        pkg1 = await next_display_number(session, tenant_id, DOC_TYPE_PACKAGING)
+        inbound1 = await next_display_number(session, tenant_id, DOC_TYPE_INBOUND)
+        unload1 = await next_display_number(session, tenant_id, DOC_TYPE_UNLOAD)
+        pkg2 = await next_display_number(session, tenant_id, DOC_TYPE_PACKAGING)
+        await session.commit()
+
+    assert pkg1 == "№000001"
+    assert inbound1 == "№000001"
+    assert unload1 == "№000001"
+    assert pkg2 == "№000002"
+
+
+def test_format_display_number_padding() -> None:
+    assert format_display_number(1) == "№000001"
+    assert format_display_number(42) == "№000042"
+
+
+@pytest.mark.asyncio
 async def test_next_document_number_resets_next_day(async_client: AsyncClient) -> None:
     tenant_id = await _tenant_id(async_client)
     today = datetime(2026, 6, 26, 12, 0, tzinfo=MSK)
@@ -120,6 +145,13 @@ async def test_peek_next_counter_empty(async_client: AsyncClient) -> None:
 
 
 @pytest.mark.asyncio
+async def test_peek_next_display_counter_empty(async_client: AsyncClient) -> None:
+    tenant_id = await _tenant_id(async_client)
+    async with SessionLocal() as session:
+        assert await peek_next_display_counter(session, tenant_id, DOC_TYPE_PACKAGING) == 0
+
+
+@pytest.mark.asyncio
 async def test_inbound_and_unload_api_assign_document_number(async_client: AsyncClient) -> None:
     email = f"docnum-api-{uuid.uuid4().hex[:8]}@example.com"
     reg = await async_client.post(
@@ -155,6 +187,7 @@ async def test_inbound_and_unload_api_assign_document_number(async_client: Async
     inbound_body = inbound.json()
     assert inbound_body["document_number"].startswith("ПРИЕМ-")
     assert inbound_body["document_number"].endswith("-1")
+    assert inbound_body["display_number"] == "№000001"
 
     unload = await async_client.post(
         "/operations/marketplace-unload-requests",
@@ -165,3 +198,43 @@ async def test_inbound_and_unload_api_assign_document_number(async_client: Async
     unload_body = unload.json()
     assert unload_body["document_number"].startswith("ОТГР-")
     assert unload_body["document_number"].endswith("-1")
+    assert unload_body["display_number"] == "№000001"
+
+    product = await async_client.post(
+        "/products",
+        headers=h,
+        json={
+            "name": "DocNum Product",
+            "sku_code": f"docnum-p-{uuid.uuid4().hex[:8]}",
+            "length_mm": 1,
+            "width_mm": 1,
+            "height_mm": 1,
+        },
+    )
+    assert product.status_code in (200, 201), product.text
+    loc_id = await _inventory_at_location(
+        async_client,
+        h,
+        warehouse_id=wh_id,
+        product_id=product.json()["id"],
+        qty=1,
+        location_code="DN-01",
+    )
+    task = await async_client.post(
+        "/operations/packaging-tasks",
+        headers=h,
+        json={
+            "warehouse_id": wh_id,
+            "lines": [
+                {
+                    "product_id": product.json()["id"],
+                    "storage_location_id": loc_id,
+                    "quantity": 1,
+                }
+            ],
+        },
+    )
+    assert task.status_code == 201, task.text
+    task_body = task.json()
+    assert task_body["document_number"].startswith("УПАК-")
+    assert task_body["display_number"] == "№000001"

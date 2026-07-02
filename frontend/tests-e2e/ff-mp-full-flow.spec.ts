@@ -316,8 +316,8 @@ test('MP unload full flow: parallel boxes then packaging then ship', async ({ pa
   await addProductsToBoxViaModal(page, requestId, boxes[0].id, locBarcode, productId, QTY_PER_BOX)
   await addProductsToBoxViaModal(page, requestId, boxes[1].id, locBarcode, productId, QTY_PER_BOX)
 
-  await expect(page.getByTestId('ff-mp-collect-summary-distributed')).toHaveText(String(PLAN_QTY))
-  await expect(page.getByTestId('ff-mp-collect-summary-remaining')).toHaveText('0')
+  await expect(page.getByTestId('ff-mp-shipment-summary-distributed')).toHaveText(String(PLAN_QTY))
+  await expect(page.getByTestId('ff-mp-shipment-summary-remaining')).toHaveText('0')
   await expect(page.getByTestId('ff-mp-ship')).toBeDisabled()
 
   await page.getByTestId('ff-mp-tab-packaging').click()

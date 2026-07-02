@@ -67,6 +67,7 @@ class PackagingTaskLineOut(BaseModel):
 class PackagingTaskOut(BaseModel):
     id: str
     document_number: str | None = None
+    display_number: str | None = None
     warehouse_id: str
     status: str
     marketplace_unload_request_id: str | None
@@ -118,6 +119,7 @@ async def _task_out(
     return PackagingTaskOut(
         id=str(task.id),
         document_number=task.document_number,
+        display_number=task.display_number,
         warehouse_id=str(task.warehouse_id),
         status=task.status,
         marketplace_unload_request_id=(

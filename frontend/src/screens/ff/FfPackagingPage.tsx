@@ -40,6 +40,7 @@ import { productDisplayMetaFromCatalog } from '../../types/wbProductCatalog'
 import { readApiErrorMessage } from '../../utils/readApiErrorMessage'
 import { displayMetaToProductLabel } from '../../utils/productBarcodePrint'
 import { useMarkingCodePrint } from '../../utils/useMarkingCodePrint'
+import { formatHumanDocumentNumber } from './documentDisplay'
 
 export type PackagingTaskLine = {
   id: string
@@ -64,6 +65,9 @@ export type PackagingTaskLine = {
 export type PackagingTask = {
   id: string
   document_number: string | null
+  display_number?: string | null
+  public_number?: string | null
+  human_number?: string | null
   warehouse_id: string
   status: string
   marketplace_unload_request_id: string | null
@@ -162,7 +166,7 @@ export function FfPackagingTaskPanel({
         token,
         lineId: ln.id,
         productId: ln.product_id,
-        documentNumber: task.document_number,
+        documentNumber: formatHumanDocumentNumber(task),
         qtyNeedPack: ln.qty_need_pack,
         markingAvailable: ln.marking_available_count,
         qtyMarkingPrinted: ln.qty_marking_printed,
@@ -363,27 +367,34 @@ export function FfPackagingTaskPanel({
     setLineMenuLine(null)
   }
 
+  const displayDocumentNumber = formatHumanDocumentNumber(task)
+
   return (
     <Stack spacing={2} data-testid="ff-packaging-task-panel">
-      <Stack direction="row" spacing={1} sx={{ alignItems: 'center', flexWrap: 'wrap' }}>
+      <Stack direction="row" spacing={1} sx={{ alignItems: 'flex-start', flexWrap: 'wrap' }}>
         <Chip label={statusLabel(task.status)} size="small" data-testid="ff-packaging-task-status" />
-        {task.document_number ? (
-          <Typography
-            variant="subtitle2"
-            sx={{ fontWeight: 600 }}
-            data-testid="ff-packaging-document-number"
-          >
-            {task.document_number}
+        <Stack spacing={0.25} sx={{ minWidth: 0 }}>
+          <Typography variant="subtitle1" sx={{ fontWeight: 700, lineHeight: 1.2 }}>
+            Упаковка
           </Typography>
-        ) : null}
-        {task.marketplace_unload_request_id ? (
+          {displayDocumentNumber ? (
+            <Typography
+              variant="subtitle2"
+              sx={{ fontWeight: 700, lineHeight: 1.2 }}
+              data-testid="ff-packaging-document-number"
+            >
+              {displayDocumentNumber}
+            </Typography>
+          ) : null}
+        </Stack>
+        {task.marketplace_unload_request_id && unloadLabel ? (
           <Link
             component={RouterLink}
             to={`/ff/mp-shipments?open_mp=${task.marketplace_unload_request_id}`}
             variant="body2"
             data-testid="ff-packaging-linked-unload"
           >
-            Отгрузка: {unloadLabel ?? task.marketplace_unload_request_id.slice(0, 8)}
+            Отгрузка: {unloadLabel}
           </Link>
         ) : unloadLabel ? (
           <Typography variant="body2" color="text.secondary" data-testid="ff-packaging-linked-unload">
@@ -1117,7 +1128,7 @@ export function FfPackagingPage({ token }: PageProps) {
                     onClick={() => setSelected(t)}
                     data-testid="ff-packaging-queue-row"
                   >
-                    <TableCell>{t.document_number ?? '—'}</TableCell>
+                    <TableCell>{formatHumanDocumentNumber(t) ?? '—'}</TableCell>
                     <TableCell>{statusLabel(t.status)}</TableCell>
                     <TableCell>{t.lines.length}</TableCell>
                     <TableCell>{t.marketplace_unload_request_id ? 'Да' : '—'}</TableCell>

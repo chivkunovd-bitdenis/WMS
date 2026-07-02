@@ -205,7 +205,7 @@ export function SellerProductsStockScreen({
       </Typography>
       <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
         Каталог WB и остаток на фулфилменте. <strong>Остаток</strong> — всего на ФФ минус резерв;
-        отгрузку на МП можно планировать только по колонке «В ячейках» (после разкладки ФФ).
+        отгрузку на МП можно планировать только по колонке «В ячейках» (после раскладки ФФ).
       </Typography>
 
       {error ? (

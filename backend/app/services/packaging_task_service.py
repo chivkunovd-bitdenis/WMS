@@ -29,6 +29,7 @@ from app.services import sorting_location_service as sorting_loc_svc
 from app.services import staff_packaging_billing_service as billing_svc
 from app.services.document_number_service import (
     DOC_TYPE_PACKAGING,
+    assign_display_number_if_missing,
     assign_document_number_if_missing,
 )
 
@@ -231,6 +232,9 @@ async def create_manual_task(
     session.add(task)
     await session.flush()
     await assign_document_number_if_missing(
+        session, tenant_id, DOC_TYPE_PACKAGING, task
+    )
+    await assign_display_number_if_missing(
         session, tenant_id, DOC_TYPE_PACKAGING, task
     )
     for product_id, location_id, qty in lines:
@@ -477,6 +481,9 @@ async def ensure_task_for_unload(
     session.add(task)
     await session.flush()
     await assign_document_number_if_missing(
+        session, tenant_id, DOC_TYPE_PACKAGING, task
+    )
+    await assign_display_number_if_missing(
         session, tenant_id, DOC_TYPE_PACKAGING, task
     )
     await sync_lines_from_unload_plan(session, tenant_id, task)

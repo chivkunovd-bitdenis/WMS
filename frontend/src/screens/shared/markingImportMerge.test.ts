@@ -11,12 +11,39 @@ import {
   paginateProductSearchResults,
   PRODUCT_SEARCH_INITIAL_LIMIT,
   removeImportFileAt,
+  type ImportCatalogRow,
 } from './MarkingImportDialog'
 
 describe('filterProductsBySearch', () => {
-  const products = [
-    { id: '1', name: 'Alpha shirt', sku_code: 'SKU-ALPHA', seller_id: 's1' },
-    { id: '2', name: 'Beta pants', sku_code: 'SKU-BETA', seller_id: 's1' },
+  const products: ImportCatalogRow[] = [
+    {
+      id: '1',
+      name: 'Alpha shirt',
+      sku_code: 'SKU-ALPHA',
+      seller_id: 's1',
+      requires_honest_sign: true,
+      wb_nm_id: null,
+      wb_vendor_code: null,
+      wb_subject_name: null,
+      wb_primary_image_url: null,
+      wb_barcodes: [],
+      wb_primary_barcode: null,
+      wb_size: null,
+    },
+    {
+      id: '2',
+      name: 'Beta pants',
+      sku_code: 'SKU-BETA',
+      seller_id: 's1',
+      requires_honest_sign: true,
+      wb_nm_id: null,
+      wb_vendor_code: null,
+      wb_subject_name: null,
+      wb_primary_image_url: null,
+      wb_barcodes: [],
+      wb_primary_barcode: null,
+      wb_size: null,
+    },
   ]
 
   it('filters by sku or name independently per query string', () => {

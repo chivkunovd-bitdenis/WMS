@@ -145,7 +145,7 @@ test('FF marketplace unload: box create enabled before packaging done', async ({
 
   await expect(page.getByTestId('ff-supplies-doc-dialog')).toBeVisible()
   await expect(page.getByTestId('ff-mp-packaging-gate-alert')).toHaveCount(0)
-  await expect(page.getByTestId('ff-mp-packaging-progress')).toBeVisible()
+  await expect(page.getByTestId('ff-mp-shipment-summary')).toBeVisible()
   await expect(page.getByTestId('ff-mp-box-batch-create')).toBeEnabled()
 
   await expect(page.getByTestId('ff-mp-ship')).toBeDisabled()

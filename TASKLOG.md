@@ -1,5 +1,17 @@
 # TASKLOG
 
+## TASK-094 — 2026-07-01 — Документы FF: display-номера, шапки без техкодов, отгрузка summary
+
+- What changed: backend `display_number` (`№000001`) отдельно от технического `document_number` для приёмки/отгрузки/упаковки + миграция/backfill; UI приёмки/сортировки/упаковки показывает процесс + человеческий номер; отгрузка МП — шапка «Отгрузка №…», один серый summary (План/Распределено/Осталось/Упаковано), убраны дубли итогов и кнопка «Упаковка» в footer.
+- What did NOT change: блок «Сборка в короба»; построчные колонки в таблице товаров; prod/VPS deploy.
+- Verification: backend targeted pytest 11/11; frontend build + unit; targeted e2e 14/14; Railway staging `202547a` → web+api smoke OK.
+
+## TASK-093 — 2026-06-30 — Фикс печати в сортировке: база = «Принято», множитель в конструкторе
+
+- What changed: сортировка передаёт `qtyNeedPack` (принято) и `source: packaging`; `MarkingPrintDialog` не считает сортировку «каталогом» с qty=1; ШК без ЧЗ: итог = база × множитель.
+- What did NOT change: упаковка/отгрузка с `lineId`; каталог (`source: catalog`).
+- Verification: e2e print pack green; merged `92789af` (#65); Railway web deploy + smoke OK.
+
 ## TASK-092 — 2026-06-30 — Единая печать: MarkingPrintDialog везде, убрана нижняя иконка в приёмке
 
 - What changed: `useFfProductMarkingPrint` + `FfProductMarkingPrintProvider` — один диалог на страницу, Snackbar при ошибке marking-overview; `ProductBarcodePrintButton` без N копий диалога; в «Состав приёмки» иконка печати убрана; сортировка и каталог — тот же поток, что отгрузка.

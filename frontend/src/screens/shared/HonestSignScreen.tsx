@@ -651,15 +651,6 @@ export function HonestSignScreen({
                               Размер: {displayMeta.wb_size}
                             </Typography>
                           ) : null}
-                          {row.requires_honest_sign ? (
-                            <Chip
-                              size="small"
-                              color="primary"
-                              variant="outlined"
-                              label="ЧЗ"
-                              sx={{ alignSelf: 'flex-start', mt: 0.25 }}
-                            />
-                          ) : null}
                         </Box>
                       </Stack>
                     </TableCell>
@@ -717,6 +708,7 @@ export function HonestSignScreen({
           open
           token={token}
           sellerId={effectiveSellerId}
+          catalogMode={sellerId ? 'seller' : 'ff'}
           testIdPrefix={testIdPrefix}
           onClose={closeImport}
           onImported={(message) => {

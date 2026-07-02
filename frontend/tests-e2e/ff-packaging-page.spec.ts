@@ -4,6 +4,28 @@ import { waitForGetOk, waitForPostOk } from './api-waits';
 import { fulfillInboundViaBoxScans } from './inbound-boxes-helpers';
 import { openFulfillmentRegistration } from './auth-flow';
 
+function formatDisplayDocumentNumber(documentNumber: string): string {
+  const counter = documentNumber.match(/(\d+)\s*$/)?.[1];
+  expect(counter).toBeTruthy();
+  return `№${counter!.padStart(6, '0')}`;
+}
+
+function visiblePackagingNumber(task: {
+  display_number?: string | null;
+  public_number?: string | null;
+  human_number?: string | null;
+  document_number?: string | null;
+}): string | null {
+  const preferred = task.display_number ?? task.public_number ?? task.human_number;
+  if (preferred && preferred.trim()) {
+    return preferred.trim();
+  }
+  if (!task.document_number) {
+    return null;
+  }
+  return formatDisplayDocumentNumber(task.document_number);
+}
+
 // TC-NEW-PKG-01 — FF создаёт задание из сортировки и упаковывает через UI.
 test('FF packaging page: create from sorting and pack line', async ({ page }) => {
   test.setTimeout(120_000);
@@ -76,20 +98,28 @@ test('FF packaging page: create from sorting and pack line', async ({ page }) =>
   await page.getByRole('option', { name: 'WH' }).click();
   await expect(page.getByTestId('ff-packaging-create-row')).toBeVisible();
 
-  await Promise.all([
-    page.waitForResponse(
-      (r) =>
-        r.request().method() === 'POST' &&
-        r.url().includes('/operations/packaging-tasks') &&
-        r.status() >= 200 &&
-        r.status() < 300,
-    ),
-    page.getByTestId('ff-packaging-create-submit').click(),
-  ]);
+  const createResponsePromise = page.waitForResponse(
+    (r) =>
+      r.request().method() === 'POST' &&
+      r.url().includes('/operations/packaging-tasks') &&
+      r.status() >= 200 &&
+      r.status() < 300,
+  );
+  await page.getByTestId('ff-packaging-create-submit').click();
+  const createResponse = await createResponsePromise;
+  const createdTask = (await createResponse.json()) as {
+    document_number: string | null;
+    display_number?: string | null;
+    public_number?: string | null;
+    human_number?: string | null;
+  };
+  const packagingDisplayNumber = visiblePackagingNumber(createdTask);
+  expect(packagingDisplayNumber).toBeTruthy();
 
   // TC-NEW-DOCNUM-01 — human-readable packaging document number on create.
   await expect(page.getByTestId('ff-packaging-task-panel')).toBeVisible();
-  await expect(page.getByTestId('ff-packaging-document-number')).toContainText(/^УПАК-\d{2}-\d{2}-\d{2}-1$/);
+  await expect(page.getByTestId('ff-packaging-document-number')).toHaveText(packagingDisplayNumber);
+  await expect(page.getByTestId('ff-packaging-service-id')).toHaveCount(0);
   await expect(page.getByTestId('ff-packaging-line')).toBeVisible();
 
   await Promise.all([

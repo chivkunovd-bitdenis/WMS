@@ -211,12 +211,13 @@ test('FF marketplace unload: box add-products modal respects plan limit', async 
       page,
       `/api/operations/marketplace-unload-requests/${mid}/boxes/${secondBoxId}/manual-line`,
     ),
+    waitForGetOk(page, `/api/operations/marketplace-unload-requests/${mid}`),
     page.getByTestId(`ff-mp-box-add-manual-${productId}`).click(),
   ])
 
-  await expect(page.getByTestId(`ff-mp-box-lines-${secondBoxId}`)).toContainText('2')
   await page.getByTestId('ff-mp-box-add-close').click()
   await expect(page.getByTestId('ff-mp-box-add-dialog')).not.toBeVisible()
+  await expect(page.getByTestId(`ff-mp-box-row-${secondBoxId}`)).toContainText('2')
 })
 
 // TC-NEW-MP-022 — REV-FIX-009: два batch create по 1 коробу; оба с «Добавить товары».
@@ -594,7 +595,7 @@ test('FF marketplace unload: box modal manual location and product scan', async 
   await expect(page.getByTestId('ff-mp-box-add-dialog')).toBeVisible()
 
   await page.getByTestId('ff-mp-box-add-location-select').click()
-  await page.getByRole('option', { name: 'MP018-LOC' }).click()
+  await page.getByRole('option', { name: /MP018-LOC/ }).click()
   await expect(page.getByTestId('ff-mp-box-add-active-location')).toContainText('MP018-LOC')
 
   await page.getByTestId('ff-mp-box-add-scan-input').fill(barcode)

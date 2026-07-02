@@ -46,6 +46,8 @@ async function fillViaCalendar(
   const [yearStr, monthStr, dayStr] = isoDate.split('-');
   const monthHint = MONTH_RU[Number(monthStr) - 1] ?? '';
   const dayNum = String(Number(dayStr));
+  const targetMonth = Number(monthStr);
+  const targetYear = Number(yearStr);
 
   await root.getByRole('button', { name: 'Choose date' }).click();
   const calendar = page.locator('.MuiDateCalendar-root').last();
@@ -58,7 +60,14 @@ async function fillViaCalendar(
     if (header.includes(yearStr) && header.includes(monthHint)) {
       break;
     }
-    await calendar.getByRole('button', { name: 'Next month' }).click();
+    const currentYearMatch = header.match(/(19|20)\d{2}/)?.[0];
+    const currentMonthIndex = MONTH_RU.findIndex((hint) => header.includes(hint));
+    const currentYear = currentYearMatch ? Number(currentYearMatch) : targetYear;
+    const shouldGoNext =
+      currentYear < targetYear ||
+      (currentYear === targetYear && currentMonthIndex !== -1 && currentMonthIndex + 1 < targetMonth);
+    const navButtonName = shouldGoNext ? 'Next month' : 'Previous month';
+    await calendar.getByRole('button', { name: navButtonName }).click();
   }
 
   const monthGrid = calendar.getByRole('grid', {

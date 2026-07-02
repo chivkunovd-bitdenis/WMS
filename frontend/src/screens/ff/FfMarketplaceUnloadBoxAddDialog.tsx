@@ -43,6 +43,12 @@ type PickOptionLocation = {
   available: number
 }
 
+type LocationOption = {
+  id: string
+  code: string
+  available: number
+}
+
 type PickOptionProduct = {
   product_id: string
   sku_code: string
@@ -99,6 +105,18 @@ function addableQty(
   return Math.min(planRemaining, physical)
 }
 
+function locationAddableQty(row: PickOptionProduct, locationId: string): number {
+  const planRemaining = Math.max(0, row.planned_qty - row.picked_qty)
+  if (planRemaining < 1) {
+    return 0
+  }
+  const loc = row.locations.find((l) => l.storage_location_id === locationId)
+  if (!loc || loc.available < 1) {
+    return 0
+  }
+  return Math.min(planRemaining, loc.available)
+}
+
 function hasStorageCellBalances(locations: PickOptionLocation[]): boolean {
   return locations.some((l) => l.location_code !== SORTING_LOCATION_CODE)
 }
@@ -152,15 +170,29 @@ export function FfMarketplaceUnloadBoxAddDialog({
   const [pendingReadyBoxBarcode, setPendingReadyBoxBarcode] = useState<string | null>(null)
 
   const locationOptions = useMemo(() => {
-    const byId = new Map<string, string>()
+    const byId = new Map<string, LocationOption>()
     for (const row of pickOptions) {
+      const rowRemaining = Math.max(0, row.planned_qty - row.picked_qty)
+      if (rowRemaining < 1) {
+        continue
+      }
       for (const loc of row.locations) {
-        if (loc.available > 0) {
-          byId.set(loc.storage_location_id, storageLocationLabel(loc.location_code))
+        const addable = locationAddableQty(row, loc.storage_location_id)
+        if (addable > 0) {
+          const current = byId.get(loc.storage_location_id)
+          if (current) {
+            current.available += addable
+          } else {
+            byId.set(loc.storage_location_id, {
+              id: loc.storage_location_id,
+              code: storageLocationLabel(loc.location_code),
+              available: addable,
+            })
+          }
         }
       }
     }
-    return [...byId.entries()].map(([id, code]) => ({ id, code }))
+    return [...byId.values()].sort((a, b) => a.code.localeCompare(b.code))
   }, [pickOptions])
 
   const sortingBufferPickAllowed = useMemo(
@@ -452,14 +484,14 @@ export function FfMarketplaceUnloadBoxAddDialog({
                         label="Ячейка"
                         value={activeLocationId ?? ''}
                         onChange={(e) => selectLocation(String(e.target.value))}
-                        disabled={busy || initialLoading}
+                        disabled={busy || initialLoading || locationOptions.length === 0}
                       >
                         <MenuItem value="">
                           <em>Не выбрана</em>
                         </MenuItem>
                         {locationOptions.map((loc) => (
                           <MenuItem key={loc.id} value={loc.id}>
-                            {loc.code}
+                            {loc.code} · {loc.available} шт
                           </MenuItem>
                         ))}
                       </Select>
@@ -468,6 +500,10 @@ export function FfMarketplaceUnloadBoxAddDialog({
                       <Chip
                         size="small"
                         label={`Ячейка: ${activeLocationCode}`}
+                        onDelete={() => {
+                          setActiveLocationId(null)
+                          setActiveLocationCode(null)
+                        }}
                         data-testid="ff-mp-box-add-active-location"
                       />
                     ) : sortingBufferPickAllowed ? (
@@ -477,6 +513,10 @@ export function FfMarketplaceUnloadBoxAddDialog({
                         data-testid="ff-mp-box-add-sorting-buffer-hint"
                       >
                         Остаток в зоне сортировки — можно сканировать товар без выбора ячейки
+                      </Typography>
+                    ) : addressStorageEnabled && locationOptions.length === 0 ? (
+                      <Typography variant="caption" color="warning.main">
+                        Нет доступных ячеек для выбора
                       </Typography>
                     ) : (
                       <Typography variant="caption" color="warning.main">
@@ -592,7 +632,13 @@ export function FfMarketplaceUnloadBoxAddDialog({
                                     [row.product_id]: e.target.value,
                                   }))
                                 }
-                                slotProps={{ htmlInput: { min: 1, 'data-testid': `ff-mp-box-add-qty-${row.product_id}` } }}
+                                slotProps={{
+                                  htmlInput: {
+                                    min: 1,
+                                    max: available > 0 ? available : undefined,
+                                    'data-testid': `ff-mp-box-add-qty-${row.product_id}`,
+                                  },
+                                }}
                                 sx={{ width: 72 }}
                                 disabled={gateBlocked || busy}
                               />

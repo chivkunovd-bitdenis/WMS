@@ -137,6 +137,7 @@ class InboundIntakeLineOut(BaseModel):
 class InboundIntakeRequestSummaryOut(BaseModel):
     id: str
     document_number: str | None = None
+    display_number: str | None = None
     warehouse_id: str
     status: str
     line_count: int
@@ -154,6 +155,7 @@ class InboundIntakeRequestSummaryOut(BaseModel):
 class InboundIntakeRequestOut(BaseModel):
     id: str
     document_number: str | None = None
+    display_number: str | None = None
     warehouse_id: str
     status: str
     planned_delivery_date: str | None = None
@@ -326,6 +328,7 @@ def _request_out(
     return InboundIntakeRequestOut(
         id=str(r.id),
         document_number=r.document_number,
+        display_number=r.display_number,
         warehouse_id=str(r.warehouse_id),
         status=r.status,
         planned_delivery_date=r.planned_delivery_date.isoformat()
@@ -451,6 +454,7 @@ async def list_inbound_requests(
         InboundIntakeRequestSummaryOut(
             id=str(r.id),
             document_number=r.document_number,
+            display_number=r.display_number,
             warehouse_id=str(r.warehouse_id),
             status=r.status,
             line_count=len(r.lines),

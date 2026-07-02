@@ -24,13 +24,44 @@ import {
 import { alpha } from '@mui/material/styles'
 import CloudUploadOutlined from '@mui/icons-material/CloudUploadOutlined'
 import { apiUrl } from '../../api'
+import { FfProductLineCells, FfProductTableHeadCells } from '../../components/FfProductLineCells'
+import { catalogRowToDisplayMeta } from '../../types/wbProductCatalog'
 import { readApiErrorMessage } from '../../utils/readApiErrorMessage'
 
-type ProductOption = {
+export type ImportCatalogRow = {
   id: string
   name: string
   sku_code: string
   seller_id: string | null
+  seller_name?: string | null
+  requires_honest_sign: boolean
+  wb_nm_id: number | null
+  wb_vendor_code: string | null
+  wb_subject_name: string | null
+  wb_primary_image_url: string | null
+  wb_barcodes: string[]
+  wb_primary_barcode: string | null
+  wb_size: string | null
+  wb_color?: string | null
+  wb_brand?: string | null
+  wb_composition?: string | null
+}
+
+async function fetchImportCatalog(
+  token: string,
+  sellerId: string,
+  mode: 'ff' | 'seller',
+): Promise<ImportCatalogRow[]> {
+  const headers = { Authorization: `Bearer ${token}` }
+  const path =
+    mode === 'seller'
+      ? '/products/wb-catalog'
+      : `/products/linked-wb-catalog?seller_id=${encodeURIComponent(sellerId)}`
+  const res = await fetch(apiUrl(path), { headers })
+  if (!res.ok) {
+    throw new Error(await readApiErrorMessage(res))
+  }
+  return (await res.json()) as ImportCatalogRow[]
 }
 
 type PreviewGroup = {
@@ -73,18 +104,19 @@ type GroupDraft = PreviewGroup & {
 export const PRODUCT_SEARCH_INITIAL_LIMIT = 8
 
 export function filterProductsBySearch(
-  products: ProductOption[],
+  products: ImportCatalogRow[],
   search: string,
-): ProductOption[] {
+): ImportCatalogRow[] {
   const needle = search.trim().toLowerCase()
   if (!needle) {
     return products
   }
-  return products.filter(
-    (row) =>
-      row.sku_code.toLowerCase().includes(needle) ||
-      row.name.toLowerCase().includes(needle),
-  )
+  return products.filter((row) => {
+    const nm = row.wb_nm_id != null ? String(row.wb_nm_id) : ''
+    const barcodes = row.wb_barcodes.join(' ').toLowerCase()
+    const hay = `${row.sku_code} ${row.wb_vendor_code ?? ''} ${row.name} ${nm} ${barcodes}`.toLowerCase()
+    return hay.includes(needle)
+  })
 }
 
 export function paginateProductSearchResults<T>(
@@ -198,6 +230,7 @@ type Props = {
   open: boolean
   token: string
   sellerId: string
+  catalogMode?: 'ff' | 'seller'
   testIdPrefix: string
   poolContext?: PoolImportContext | null
   onClose: () => void
@@ -209,6 +242,7 @@ export function MarkingImportDialog({
   open,
   token,
   sellerId,
+  catalogMode = 'ff',
   testIdPrefix,
   poolContext = null,
   onClose,
@@ -221,7 +255,7 @@ export function MarkingImportDialog({
     invalid_count: number
     duplicates_in_file: number
   } | null>(null)
-  const [catalog, setCatalog] = useState<ProductOption[]>([])
+  const [catalog, setCatalog] = useState<ImportCatalogRow[]>([])
   const [parseBusy, setParseBusy] = useState(false)
   const [uploadBusy, setUploadBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -231,7 +265,10 @@ export function MarkingImportDialog({
   const previewAbortRef = useRef<AbortController | null>(null)
 
   const sellerProducts = useMemo(
-    () => catalog.filter((row) => row.seller_id === sellerId),
+    () =>
+      catalog.filter(
+        (row) => row.requires_honest_sign && (row.seller_id == null || row.seller_id === sellerId),
+      ),
     [catalog, sellerId],
   )
 
@@ -253,14 +290,14 @@ export function MarkingImportDialog({
       return
     }
     void (async () => {
-      const res = await fetch(apiUrl('/products'), {
-        headers: { Authorization: `Bearer ${token}` },
-      })
-      if (res.ok) {
-        setCatalog((await res.json()) as ProductOption[])
+      try {
+        const rows = await fetchImportCatalog(token, sellerId, catalogMode)
+        setCatalog(rows)
+      } catch (err) {
+        setError(err instanceof Error ? err.message : 'Не удалось загрузить каталог товаров.')
       }
     })()
-  }, [open, reset, token])
+  }, [catalogMode, open, reset, sellerId, token])
 
   const runPreview = async (picked: File[]) => {
     if (picked.length === 0) {
@@ -545,7 +582,7 @@ export function MarkingImportDialog({
 
           {previewMeta && groups.length > 0 ? (
             <Typography variant="body2" color="text.secondary" data-testid={`${testIdPrefix}-import-preview-meta`}>
-              Неформат: {previewMeta.invalid_count} · дубликаты в файле: {previewMeta.duplicates_in_file}
+              Дубликаты в файле: {previewMeta.duplicates_in_file}
             </Typography>
           ) : null}
 
@@ -593,18 +630,20 @@ export function MarkingImportDialog({
                     onChange={(e) => updateGroupProductSearch(g.gtin, e.target.value)}
                     data-testid={`${testIdPrefix}-import-product-search-${g.gtin}`}
                   />
-                  <TableContainer>
-                    <Table size="small">
+                  <TableContainer sx={{ overflowX: 'auto' }}>
+                    <Table size="small" data-testid={`${testIdPrefix}-import-products-table-${g.gtin}`}>
                       <TableHead>
                         <TableRow>
-                          <TableCell padding="checkbox" />
-                          <TableCell>Артикул</TableCell>
-                          <TableCell>Название</TableCell>
+                          <TableCell padding="checkbox" sx={{ width: 48 }} />
+                          <FfProductTableHeadCells showPrint={false} nameLabel="Наименование" />
                         </TableRow>
                       </TableHead>
                       <TableBody>
                         {visibleProducts.map((row) => (
-                          <TableRow key={`${g.gtin}-${row.id}`}>
+                          <TableRow
+                            key={`${g.gtin}-${row.id}`}
+                            data-testid={`${testIdPrefix}-import-product-row-${row.id}`}
+                          >
                             <TableCell padding="checkbox">
                               <Checkbox
                                 checked={g.productIds.has(row.id)}
@@ -616,8 +655,11 @@ export function MarkingImportDialog({
                                 }}
                               />
                             </TableCell>
-                            <TableCell>{row.sku_code}</TableCell>
-                            <TableCell>{row.name}</TableCell>
+                            <FfProductLineCells
+                              meta={catalogRowToDisplayMeta(row)}
+                              showPrint={false}
+                              lineTestIdPrefix={`${testIdPrefix}-import-product-${row.id}`}
+                            />
                           </TableRow>
                         ))}
                       </TableBody>

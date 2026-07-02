@@ -52,6 +52,14 @@ test('seller product card upload opens import and accepts pool GTIN file', async
   })
   expect(productRes.ok()).toBeTruthy()
   const productId = String(((await productRes.json()) as { id: string }).id)
+  const czPatch = await page.request.patch(
+    `${e2eApi}/products/${productId}/packaging-instructions`,
+    {
+      headers: auth,
+      data: JSON.stringify({ requires_honest_sign: true }),
+    },
+  )
+  expect(czPatch.ok()).toBeTruthy()
 
   await loginAsSeller(page, sellerEmail, password, { firstTime: false })
 

@@ -55,6 +55,7 @@ import {
 import { suggestNextLocationCode } from '../../utils/suggestNextLocationCode'
 import { renderBarcodeDataUrl } from '../../utils/renderBarcodeDataUrl'
 import { resolveProductIdByBarcode } from '../../utils/resolveProductByBarcode'
+import { formatHumanDocumentNumber } from './documentDisplay'
 
 type LocationRow = { id: string; code: string; warehouse_id: string; barcode: string }
 type WarehouseRow = { id: string; name: string; code: string }
@@ -97,6 +98,9 @@ type InboundLine = {
 type InboundDetail = {
   id: string
   document_number: string | null
+  display_number?: string | null
+  public_number?: string | null
+  human_number?: string | null
   warehouse_id: string
   status: string
   planned_delivery_date: string | null
@@ -139,6 +143,10 @@ type CellLocationHint = {
 export type WbCatalogRow = WbProductCatalogRow
 
 export type InboundRequestWorkspace = 'reception' | 'sorting' | 'full'
+
+function inboundWorkspaceTitle(workspace: InboundRequestWorkspace): string {
+  return workspace === 'sorting' ? 'Сортировка' : 'Приёмка'
+}
 
 type Props = {
   token: string
@@ -212,6 +220,12 @@ export function FfInboundRequestView({
       return sum + Math.max(0, accepted - ln.posted_qty)
     }, 0)
   }, [detail])
+
+  const processTitle = inboundWorkspaceTitle(workspace)
+  const displayDocumentNumber = useMemo(
+    () => formatHumanDocumentNumber(detail),
+    [detail],
+  )
 
   const loadDetail = useCallback(async (): Promise<InboundDetail> => {
     const seq = ++loadDetailSeq.current
@@ -1139,6 +1153,34 @@ export function FfInboundRequestView({
         <Paper variant="outlined" sx={{ p: 2, minHeight: '38vh' }}>
           <Stack spacing={2} sx={{ mb: 2 }}>
             <Stack
+              direction={{ xs: 'column', sm: 'row' }}
+              spacing={2}
+              useFlexGap
+              sx={{ alignItems: { xs: 'flex-start', sm: 'flex-end' }, justifyContent: 'space-between' }}
+            >
+              <Stack spacing={0.25} sx={{ minWidth: 0 }}>
+                <Typography variant="subtitle2" color="text.secondary" sx={{ fontWeight: 700 }}>
+                  {processTitle}
+                </Typography>
+                {displayDocumentNumber ? (
+                  <Typography
+                    variant="h5"
+                    sx={{ fontWeight: 800, lineHeight: 1.1 }}
+                    data-testid="ff-inbound-document-number"
+                  >
+                    {displayDocumentNumber}
+                  </Typography>
+                ) : null}
+              </Stack>
+
+              {detail.planned_box_count != null ? (
+                <Typography variant="body2" color="text.secondary" data-testid="ff-inbound-planned-boxes">
+                  План коробов: <strong>{detail.planned_box_count}</strong>
+                </Typography>
+              ) : null}
+            </Stack>
+
+            <Stack
               direction="row"
               spacing={2}
               useFlexGap
@@ -1164,20 +1206,6 @@ export function FfInboundRequestView({
                 color={detail.status === 'draft' ? 'default' : 'primary'}
                 data-testid="ff-inbound-status-chip"
               />
-              {detail.document_number ? (
-                <Typography
-                  variant="subtitle2"
-                  sx={{ fontWeight: 600 }}
-                  data-testid="ff-inbound-document-number"
-                >
-                  {detail.document_number}
-                </Typography>
-              ) : null}
-              {detail.planned_box_count != null ? (
-                <Typography variant="body2" color="text.secondary" data-testid="ff-inbound-planned-boxes">
-                  План коробов: <strong>{detail.planned_box_count}</strong>
-                </Typography>
-              ) : null}
             </Stack>
 
             <Stack
@@ -1591,11 +1619,24 @@ export function FfInboundRequestView({
                 {boxes.map((box) => {
                   const visibleLines = box.lines.filter((ln) => ln.quantity > 0)
                   return (
-                    <Paper key={box.id} variant="outlined" sx={{ p: 1.5 }} data-testid="ff-inbound-box-row">
+                    <Paper
+                      key={box.id}
+                      variant="outlined"
+                      sx={{ overflow: 'hidden', bgcolor: 'background.paper' }}
+                      data-testid="ff-inbound-box-row"
+                    >
                       <Stack
                         direction={{ xs: 'column', sm: 'row' }}
                         spacing={1}
-                        sx={{ alignItems: { sm: 'center' }, mb: 1 }}
+                        sx={{
+                          alignItems: { sm: 'center' },
+                          px: 1.25,
+                          py: 1,
+                          bgcolor: 'action.hover',
+                          borderBottom: 1,
+                          borderColor: 'divider',
+                        }}
+                        data-testid={`ff-inbound-box-header-${box.id}`}
                       >
                         <Typography variant="body2" sx={{ fontWeight: 700 }}>
                           Короб № {box.box_number}{' '}
@@ -1635,7 +1676,7 @@ export function FfInboundRequestView({
                         </Stack>
                       </Stack>
                       {visibleLines.length > 0 ? (
-                        <Stack spacing={0.25}>
+                        <Stack spacing={0.25} sx={{ px: 1.25, py: 1, bgcolor: 'background.paper' }}>
                           {visibleLines.map((ln) => (
                             <Typography key={ln.id} variant="body2" color="text.secondary">
                               {ln.sku_code} · {ln.product_name}: {ln.quantity}
@@ -1643,7 +1684,11 @@ export function FfInboundRequestView({
                           ))}
                         </Stack>
                       ) : (
-                        <Typography variant="body2" color="text.secondary">
+                        <Typography
+                          variant="body2"
+                          color="text.secondary"
+                          sx={{ px: 1.25, py: 1, bgcolor: 'background.paper' }}
+                        >
                           Пока нет товаров
                         </Typography>
                       )}
@@ -1787,7 +1832,7 @@ export function FfInboundRequestView({
                               onClick={() => void completeDistribution()}
                               data-testid="ff-inbound-distribution-complete"
                             >
-                              {hasNoCellPending ? 'Применить разкладку' : 'Завершить распределение'}
+                              {hasNoCellPending ? 'Применить раскладку' : 'Завершить распределение'}
                             </Button>
                           </>
                         ) : canReopenDistribution ? (

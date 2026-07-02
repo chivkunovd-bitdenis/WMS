@@ -13,23 +13,41 @@ function mpUnloadListRow(page: Page, sellerName: string) {
   return page.getByTestId('ff-docs-row').filter({ hasText: sellerName })
 }
 
+function visibleDocumentNumber(body: {
+  display_number?: string | null
+  document_number?: string | null
+}): string {
+  if (body.display_number?.trim()) {
+    return body.display_number.trim()
+  }
+  const counter = body.document_number?.match(/(\d+)\s*$/)?.[1]
+  if (counter) {
+    return `№${counter.padStart(6, '0')}`
+  }
+  return body.document_number ?? ''
+}
+
 async function openMpUnloadFromList(
   page: Page,
   unloadId: string,
   sellerName: string,
-): Promise<string> {
+): Promise<{ displayNumber: string; technicalNumber: string }> {
   const token = await page.evaluate(() => localStorage.getItem('wms_token_ff'))
   expect(token).toBeTruthy()
   const unloadRes = await page.request.get(`/api/operations/marketplace-unload-requests/${unloadId}`, {
     headers: { Authorization: `Bearer ${token}` },
   })
   expect(unloadRes.ok(), await unloadRes.text()).toBeTruthy()
-  const unloadBody = (await unloadRes.json()) as { document_number: string | null }
-  const unloadDocumentNumber = unloadBody.document_number ?? ''
-  expect(unloadDocumentNumber).toBeTruthy()
+  const unloadBody = (await unloadRes.json()) as {
+    document_number: string | null
+    display_number: string | null
+  }
+  const displayNumber = visibleDocumentNumber(unloadBody)
+  const technicalNumber = unloadBody.document_number ?? ''
+  expect(displayNumber).toBeTruthy()
 
   const row = mpUnloadListRow(page, sellerName).filter({
-    hasText: unloadDocumentNumber,
+    hasText: displayNumber,
   })
   await expect(row).toHaveCount(1)
   await Promise.all([
@@ -38,11 +56,17 @@ async function openMpUnloadFromList(
     row.click(),
   ])
 
-  return unloadDocumentNumber
+  return { displayNumber, technicalNumber }
 }
 
 async function expectMpTabSelected(page: Page, tabTestId: string): Promise<void> {
   await expect(page.getByTestId(tabTestId)).toHaveAttribute('aria-selected', 'true')
+}
+
+function formatDisplayDocumentNumber(documentNumber: string): string {
+  const counter = documentNumber.match(/(\d+)\s*$/)?.[1]
+  expect(counter).toBeTruthy()
+  return `№${counter!.padStart(6, '0')}`
 }
 
 async function postInboundLineToSorting(
@@ -251,10 +275,14 @@ test('FF marketplace unload: tabs switch without losing document context', async
   await page.getByTestId('nav-ff-mp-shipments').click()
   // REV-FIX-011: page description must not mention legacy «подбор по ячейкам».
   await expect(page.getByTestId('ff-mp-shipments-page')).not.toContainText(/подбор по ячейкам/i)
-  const unloadDocumentNumber = await openMpUnloadFromList(page, mid, MP_SELLER_NAME_TABS)
+  const { displayNumber: unloadDisplayNumber, technicalNumber: unloadDocumentNumber } =
+    await openMpUnloadFromList(page, mid, MP_SELLER_NAME_TABS)
 
   await expect(page.getByTestId('ff-supplies-doc-dialog')).toBeVisible()
-  await expect(page.getByTestId('ff-mp-unload-document-number')).toHaveText(unloadDocumentNumber)
+  await expect(page.getByTestId('ff-mp-unload-document-number')).toHaveText(
+    `Отгрузка ${unloadDisplayNumber}`,
+  )
+  await expect(page.getByTestId('ff-supplies-doc-dialog')).not.toContainText(unloadDocumentNumber)
   await expect(page.getByTestId('ff-mp-tab-products')).toBeVisible()
   await expect(page.getByTestId('ff-mp-tab-boxes')).toHaveCount(0)
   await expect(page.getByTestId('ff-mp-tab-final')).toHaveCount(0)
@@ -262,11 +290,15 @@ test('FF marketplace unload: tabs switch without losing document context', async
   await expectMpTabSelected(page, 'ff-mp-tab-products')
   await expect(page.getByTestId('ff-mp-ship')).toBeDisabled()
 
-  await expect(page.getByTestId('ff-mp-collect-summary-planned')).toHaveText('2')
-  await expect(page.getByTestId('ff-mp-collect-summary-distributed')).toHaveText('0')
-  await expect(page.getByTestId('ff-mp-collect-summary-remaining')).toHaveText('2')
-  await expect(page.getByTestId('ff-mp-collect-warning')).toBeVisible()
-  await expect(page.getByTestId('ff-mp-collect-summary-packaging')).toBeVisible()
+  await expect(page.getByTestId('ff-mp-shipment-summary')).toBeVisible()
+  await expect(page.getByTestId('ff-mp-shipment-summary-planned')).toHaveText('2')
+  await expect(page.getByTestId('ff-mp-shipment-summary-distributed')).toHaveText('0')
+  await expect(page.getByTestId('ff-mp-shipment-summary-remaining')).toHaveText('2')
+  await expect(page.getByTestId('ff-mp-shipment-summary-remaining')).toHaveCSS(
+    'color',
+    'rgb(237, 108, 2)',
+  )
+  await expect(page.getByTestId('ff-mp-shipment-summary-packed')).toHaveText('2/2')
 
   await page.getByTestId('ff-mp-tab-packaging').click()
   await expect(page.getByTestId('ff-mp-tab-packaging-panel')).toBeVisible()
@@ -278,7 +310,9 @@ test('FF marketplace unload: tabs switch without losing document context', async
   await expect(page.getByTestId('ff-mp-boxes')).toBeVisible()
   await expectMpTabSelected(page, 'ff-mp-tab-products')
   await expect(page.getByTestId('ff-mp-ship')).toBeDisabled()
-  await expect(page.getByTestId('ff-mp-unload-document-number')).toHaveText(unloadDocumentNumber)
+  await expect(page.getByTestId('ff-mp-unload-document-number')).toHaveText(
+    `Отгрузка ${unloadDisplayNumber}`,
+  )
 })
 
 // TC-NEW-MP-011 / MP-012: на черновике нет плашки прогресса упаковки.
@@ -428,9 +462,9 @@ test('FF marketplace unload: no packaging progress banner on draft', async ({ pa
   await expect(page.getByTestId('ff-mp-doc-header-fields')).toBeVisible()
   await expect(page.getByTestId('ff-mp-planned-date')).toBeVisible()
   await expect(page.getByTestId('ff-mp-ff-warehouse-name')).toBeVisible()
-  // REV-FIX-013: plan total visible on draft «Товары» tab.
-  await expect(page.getByTestId('ff-mp-plan-total')).toContainText('2')
-  await expect(page.getByTestId('ff-mp-packaging-progress')).toHaveCount(0)
+  await expect(page.getByTestId('ff-mp-shipment-summary')).toBeVisible()
+  await expect(page.getByTestId('ff-mp-shipment-summary-planned')).toHaveText('2')
+  await expect(page.getByTestId('ff-mp-shipment-summary-packed')).toHaveText('—')
   await expect(page.getByTestId('ff-mp-tab-packaging')).toBeDisabled()
   await expect(page.getByTestId('ff-mp-tab-boxes')).toHaveCount(0)
   await expect(page.getByTestId('ff-mp-tab-final')).toHaveCount(0)
@@ -593,7 +627,7 @@ test('FF marketplace unload: main scan rejects product barcode', async ({ page }
   await page.getByTestId('ff-mp-pick-scan').click()
   await expect(page.getByTestId('ff-mp-modal-error')).toContainText('Добавить товары')
   await expect(page.getByTestId('ff-mp-attach-box-dialog')).toHaveCount(0)
-  await expect(page.getByTestId('ff-mp-collect-summary-distributed')).toHaveText('0')
+  await expect(page.getByTestId('ff-mp-shipment-summary-distributed')).toHaveText('0')
 })
 
 // TC-NEW-OUT-FE-02 — OUT-FE-02: confirmed unload product table — no early red rows; qty columns aligned.
