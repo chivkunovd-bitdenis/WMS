@@ -24,6 +24,8 @@ import { printProductThermalLabels } from '../utils/printProductThermalLabel'
 import { resolvePackUnits, resolveWbBarcodeLabelCount } from '../utils/productBarcodePrint'
 import { resolveProductPrimaryBarcode, type ProductLineDisplayMeta } from '../types/wbProductCatalog'
 import { renderBarcodeDataUrl } from '../utils/renderBarcodeDataUrl'
+import { resolveLabelSize, loadLabelSizeId, type LabelSize } from '../utils/labelSize'
+import { LabelSizeSelect } from './LabelSizeSelect'
 
 type Props = {
   open: boolean
@@ -34,6 +36,7 @@ type Props = {
 export function ProductBarcodePrintDialog({ open, meta, onClose }: Props) {
   const [qty, setQty] = useState('1')
   const [error, setError] = useState<string | null>(null)
+  const [labelSize, setLabelSize] = useState<LabelSize>(() => resolveLabelSize(loadLabelSizeId()))
   const [printOptions, setPrintOptions] = useState<ProductLabelPrintOptions>(
     DEFAULT_PRODUCT_LABEL_PRINT_OPTIONS,
   )
@@ -114,6 +117,7 @@ export function ProductBarcodePrintDialog({ open, meta, onClose }: Props) {
         },
         labelsToPrint,
         printOptions,
+        labelSize,
       )
       onClose()
     } catch (e) {
@@ -129,17 +133,27 @@ export function ProductBarcodePrintDialog({ open, meta, onClose }: Props) {
       maxWidth="xs"
       data-testid="ff-product-label-print-dialog"
     >
-      <DialogTitle>Печать этикетки 58×40</DialogTitle>
+      <DialogTitle>
+        Печать этикетки {labelSize.widthMm}×{labelSize.heightMm}
+      </DialogTitle>
       <DialogContent>
         <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
           Этикетка WB: штрихкод, селлер, название, артикул, цвет, бренд и по выбору — размер и состав.
         </Typography>
 
+        <Box sx={{ display: 'flex', justifyContent: 'center', mb: 2 }}>
+          <LabelSizeSelect
+            value={labelSize.id}
+            onChange={setLabelSize}
+            testId="ff-product-label-size"
+          />
+        </Box>
+
         <Box
           data-testid="ff-product-label-preview"
           sx={{
             width: 232,
-            height: 160,
+            height: Math.round((232 * labelSize.heightMm) / labelSize.widthMm),
             border: '1px solid',
             borderColor: 'divider',
             borderRadius: 1,

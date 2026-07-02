@@ -13,6 +13,7 @@ export type WbProductCatalogRow = {
   wb_color: string | null
   wb_brand?: string | null
   wb_composition?: string | null
+  packaging_instructions?: string | null
 }
 
 export type ProductLineDisplayMeta = {
@@ -53,6 +54,7 @@ export function productDisplayMetaFromCatalog(
       wb_color: cat.wb_color,
       wb_brand: cat.wb_brand ?? null,
       wb_composition: cat.wb_composition ?? null,
+      packaging_instructions: cat.packaging_instructions ?? null,
     }
   }
   return {

@@ -608,6 +608,22 @@ Distinct from **operational outbound** (S08) and **seller supply/inbound** (S06)
 - **Then:** tape = layout × qty_to_pack × lpp (label blocks only per A-002).
 - **Negative:** no simple 58×40 product dialog on MP packaging lines.
 
+### TC-NEW-TZ-PRINT-01 Print packaging instructions sheet from MP unload
+
+- **Actor:** fulfillment admin.
+- **Given:** MP unload with products; at least one product has `packaging_instructions` filled.
+- **When:** on the **Products** tab clicks **«Печать ТЗ»** next to **«Печать накладной»**.
+- **Then:** an A4 portrait sheet is produced — one card per shipment product, photo/vendor code/barcode/WB article/size/composition on the left, packaging-instruction text on the right; cards do not split across pages (`page-break-inside: avoid`); order matches the products list.
+- **Negative / restriction:** product without ТЗ → «ТЗ не заполнено» placeholder; product without photo → «фото» placeholder; both still printed. No shipment lines → no print actions block (button absent) / toast «Нет товаров для печати». ТЗ is read-only here (edited only in the product card).
+
+### TC-NEW-PRINT-SIZE-01 Choose physical label size in print dialog
+
+- **Actor:** fulfillment admin.
+- **Given:** any label print constructor (`MarkingPrintDialog`) is open.
+- **When:** picks a size from **«Размер этикетки»** (58×40 default, 60×80, 60×40, 70×120) and prints.
+- **Then:** the printed page physical size equals the chosen size — `@page { size: <W>mm <H>mm }` and the `.label` box use the selected dimensions (e.g. 60×80 → `size: 60mm 80mm`); the last chosen size is remembered (localStorage) for the next print.
+- **Negative / restriction:** only the four listed sizes are selectable (no arbitrary sizes); barcode keeps its proven physical dimensions so it stays scanner-readable; larger labels add margin instead of stretching content.
+
 ### TC-NEW-MP-15 Seller reads WB MP warehouse catalog
 
 - **Actor:** fulfillment seller.
