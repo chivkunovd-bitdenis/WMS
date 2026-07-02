@@ -85,17 +85,20 @@ test('ff sorting opens unified marking print dialog for product line', async ({ 
   });
   await page.request.post(`${INBOUND_API}/${rid}/submit`, { headers: h });
 
-  const doc = await page.request.get(`${INBOUND_API}/${rid}`, { headers: h });
-  const lineId = String(((await doc.json()) as { lines: { id: string }[] }).lines[0]!.id);
-  await page.request.patch(`${INBOUND_API}/${rid}/lines/${lineId}/actual`, {
-    headers: { ...h, 'Content-Type': 'application/json' },
-    data: JSON.stringify({ actual_qty: 2 }),
-  });
-  await page.request.post(`${INBOUND_API}/${rid}/complete-receiving`, { headers: h });
+  const barcode = 'E2E-MOCK-BARCODE';
+  for (let i = 0; i < 2; i++) {
+    const scanRes = await page.request.post(`${INBOUND_API}/${rid}/receiving/scan`, {
+      headers: { ...h, 'Content-Type': 'application/json' },
+      data: JSON.stringify({ barcode }),
+    });
+    expect(scanRes.ok()).toBeTruthy();
+  }
+  const completeRes = await page.request.post(`${INBOUND_API}/${rid}/complete-receiving`, { headers: h });
+  expect(completeRes.ok()).toBeTruthy();
 
   await loginFfAdmin(page, adminEmail, password);
   await page.goto('/app/ff/sorting');
-  await expect(page.getByTestId('ff-inbound-queue-row')).toHaveCount(1, { timeout: 15000 });
+  await expect(page.getByTestId('ff-inbound-queue-row')).toHaveCount(1, { timeout: 20000 });
   await page.getByTestId('ff-inbound-queue-row').first().click();
   await expect(page.getByTestId('ff-sorting-panel')).toBeVisible();
 

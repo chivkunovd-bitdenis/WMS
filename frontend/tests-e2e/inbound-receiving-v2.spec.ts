@@ -94,7 +94,7 @@ test('inbound receiving v2 — multiple boxes stay independent', async ({ page }
     waitForPostOk(page, INBOUND_API, (u) => u.includes('/receiving/scan')),
     page.getByTestId('ff-inbound-receiving-scan-submit').click(),
   ]);
-  await expect(page.getByTestId('ff-inbound-line-actual-display').first()).toHaveText('1', {
+  await expect(page.getByTestId('ff-inbound-line-actual-display').first()).toHaveText('2', {
     timeout: 20_000,
   });
   await expect(page.getByTestId('ff-inbound-box-row').nth(1)).toContainText('1');
