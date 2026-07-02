@@ -95,6 +95,7 @@ test('ff sorting opens unified marking print dialog for product line', async ({ 
 
   await loginFfAdmin(page, adminEmail, password);
   await page.goto('/app/ff/sorting');
+  await expect(page.getByTestId('ff-inbound-queue-row')).toHaveCount(1, { timeout: 15000 });
   await page.getByTestId('ff-inbound-queue-row').first().click();
   await expect(page.getByTestId('ff-sorting-panel')).toBeVisible();
 
