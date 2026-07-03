@@ -9,8 +9,6 @@ export type PackagingSheetItem = {
   barcode: string | null
   /** Артикул WB (nmID). */
   wb_nm_id: number | null
-  wb_size: string | null
-  wb_composition: string | null
   photo_url: string | null
   /** Текст ТЗ на упаковку из карточки товара. */
   instructions: string | null
@@ -18,18 +16,8 @@ export type PackagingSheetItem = {
 
 export type ShipmentPackagingSheetData = {
   documentNumber: string
-  warehouseName: string
   sellerName: string | null
-  createdAt: string | null
   items: PackagingSheetItem[]
-}
-
-function metaLine(label: string, value: string | null | undefined): string {
-  const v = value?.toString().trim()
-  if (!v) {
-    return ''
-  }
-  return `<p class="pk-meta"><span class="pk-meta-label">${escapeLabelHtml(label)}</span> ${escapeLabelHtml(v)}</p>`
 }
 
 function itemCard(item: PackagingSheetItem, index: number): string {
@@ -40,6 +28,14 @@ function itemCard(item: PackagingSheetItem, index: number): string {
     : `<div class="pk-photo pk-photo-empty">фото</div>`
 
   const article = item.vendor_code.trim() || item.sku_code.trim()
+  const meta = [
+    article ? `Артикул продавца: ${article}` : '',
+    item.barcode?.trim() ? `ШК: ${item.barcode.trim()}` : '',
+    item.wb_nm_id != null ? `Артикул WB: ${item.wb_nm_id}` : '',
+  ]
+    .filter(Boolean)
+    .map((part) => `<span class="pk-meta-part">${escapeLabelHtml(part)}</span>`)
+    .join('')
   const instructions = item.instructions?.trim()
   const instructionsBlock = instructions
     ? `<div class="pk-tz-text">${escapeLabelHtml(instructions)}</div>`
@@ -48,18 +44,16 @@ function itemCard(item: PackagingSheetItem, index: number): string {
   return `<section class="pk-card" data-testid="tz-sheet-card" data-tz-index="${index}">
   <div class="pk-left">
     ${photoBlock}
-    <div class="pk-fields">
-      <p class="pk-name">${escapeLabelHtml(item.product_name)}</p>
-      ${metaLine('Артикул продавца:', article)}
-      ${metaLine('ШК:', item.barcode)}
-      ${metaLine('Артикул WB:', item.wb_nm_id != null ? String(item.wb_nm_id) : null)}
-      ${metaLine('Размер:', item.wb_size)}
-      ${metaLine('Состав:', item.wb_composition)}
-    </div>
   </div>
-  <div class="pk-right">
-    <h2 class="pk-tz-title">ТЗ на упаковку</h2>
-    ${instructionsBlock}
+  <div class="pk-main">
+    <div class="pk-product">
+      <p class="pk-name">${escapeLabelHtml(item.product_name)}</p>
+      ${meta ? `<p class="pk-meta">${meta}</p>` : ''}
+    </div>
+    <div class="pk-tz">
+      <p class="pk-tz-title">ТЗ на упаковку</p>
+      ${instructionsBlock}
+    </div>
   </div>
 </section>`
 }
@@ -77,33 +71,38 @@ export function buildShipmentPackagingSheetHtml(data: ShipmentPackagingSheetData
     <meta charset="utf-8" />
     <title>ТЗ на упаковку — ${escapeLabelHtml(data.documentNumber)}</title>
     <style>
-      @page { size: A4 portrait; margin: 12mm; }
+      @page { size: A4 portrait; margin: 4mm 10mm 6mm; }
       * { box-sizing: border-box; }
-      body { font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif; font-size: 12px; color: #111; margin: 0; }
-      h1 { font-size: 18px; margin: 0 0 8px; }
-      .pk-head { display: grid; grid-template-columns: 1fr 1fr; gap: 4px 24px; margin: 0 0 16px; }
-      .pk-head dt { font-weight: 600; margin: 0; }
-      .pk-head dd { margin: 0 0 4px; }
+      body {
+        font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif;
+        font-size: 12px;
+        color: #111;
+        margin: 0;
+        -webkit-print-color-adjust: exact;
+        print-color-adjust: exact;
+      }
+      h1 { font-size: 14px; margin: 0 0 1px; }
+      .pk-head { margin: 0 0 6px; font-size: 11px; color: #444; }
+      /* Одинаковые прямоугольные строки на всю ширину, высотой с фото товара. */
       .pk-card {
         display: flex;
-        gap: 12px;
-        border: 1px solid #ccc;
+        gap: 8px;
+        border: 1px solid #bbb;
         border-radius: 4px;
-        padding: 10px 12px;
-        margin: 0 0 12px;
+        padding: 6px;
+        margin: 0 0 8px;
         page-break-inside: avoid;
         break-inside: avoid;
       }
-      .pk-left { flex: 0 0 33%; max-width: 33%; }
-      .pk-right { flex: 1 1 auto; min-width: 0; }
+      .pk-left { flex: 0 0 40mm; }
+      .pk-main { flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; }
       .pk-photo {
-        width: 100%;
-        max-width: 45mm;
-        height: 45mm;
+        width: 40mm;
+        height: 40mm;
         object-fit: contain;
         border: 1px solid #eee;
         display: block;
-        margin: 0 0 6px;
+        margin: 0;
       }
       .pk-photo-empty {
         display: flex;
@@ -113,10 +112,25 @@ export function buildShipmentPackagingSheetHtml(data: ShipmentPackagingSheetData
         font-size: 11px;
         background: #f5f5f5;
       }
-      .pk-name { font-weight: 600; margin: 0 0 4px; word-break: break-word; }
-      .pk-meta { margin: 0 0 2px; word-break: break-word; }
-      .pk-meta-label { font-weight: 600; }
-      .pk-tz-title { font-size: 14px; margin: 0 0 6px; }
+      /* Серая плашка — данные товара; ниже — задание на упаковку. */
+      .pk-product {
+        background: #e8e8e8;
+        border: 1px solid #ccc;
+        border-radius: 3px;
+        padding: 4px 8px;
+      }
+      .pk-name { font-weight: 700; margin: 0; word-break: break-word; }
+      .pk-meta { margin: 2px 0 0; word-break: break-word; }
+      .pk-meta-part { margin-right: 12px; }
+      .pk-tz { margin-top: 5px; }
+      .pk-tz-title {
+        margin: 0 0 2px;
+        font-size: 10px;
+        font-weight: 600;
+        color: #555;
+        text-transform: uppercase;
+        letter-spacing: 0.04em;
+      }
       .pk-tz-text {
         white-space: pre-wrap;
         word-break: break-word;
@@ -124,19 +138,12 @@ export function buildShipmentPackagingSheetHtml(data: ShipmentPackagingSheetData
       }
       .pk-tz-empty { color: #999; font-style: italic; }
       .pk-empty { color: #555; }
-      .pk-foot { margin-top: 8px; font-size: 11px; color: #555; }
     </style>
   </head>
   <body>
     <h1>ТЗ на упаковку — Отгрузка ${escapeLabelHtml(data.documentNumber)}</h1>
-    <dl class="pk-head">
-      <dt>Склад ФФ</dt><dd>${escapeLabelHtml(data.warehouseName)}</dd>
-      <dt>Селлер</dt><dd>${escapeLabelHtml(data.sellerName ?? '—')}</dd>
-      <dt>Создано</dt><dd>${escapeLabelHtml(data.createdAt ?? '—')}</dd>
-      <dt>Товаров</dt><dd>${data.items.length}</dd>
-    </dl>
+    <p class="pk-head">Селлер: ${escapeLabelHtml(data.sellerName ?? '—')} · Товаров: ${data.items.length}</p>
     ${body}
-    <p class="pk-foot">Инструкции по упаковке для склада. Актуальная версия — в системе WMS.</p>
   </body>
 </html>`
 }
