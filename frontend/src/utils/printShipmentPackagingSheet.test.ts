@@ -12,8 +12,6 @@ function makeItem(overrides: Partial<PackagingSheetItem> = {}): PackagingSheetIt
     sku_code: 'SKU-1',
     barcode: '2000000000015',
     wb_nm_id: 123456,
-    wb_size: 'M',
-    wb_composition: 'хлопок 100%',
     photo_url: 'https://img/1.jpg',
     instructions: 'Сложить в пакет, наклеить стикер WB',
     ...overrides,
@@ -22,19 +20,19 @@ function makeItem(overrides: Partial<PackagingSheetItem> = {}): PackagingSheetIt
 
 const base: ShipmentPackagingSheetData = {
   documentNumber: '№000034',
-  warehouseName: 'Склад ФФ Москва',
   sellerName: 'ООО Ромашка',
-  createdAt: '02.07.2026 10:00',
   items: [makeItem()],
 }
 
 describe('buildShipmentPackagingSheetHtml', () => {
-  it('renders A4 portrait sheet with shipment header', () => {
+  it('renders A4 portrait sheet with compact header (no warehouse/created)', () => {
     const html = buildShipmentPackagingSheetHtml(base)
     expect(html).toContain('size: A4 portrait')
     expect(html).toContain('ТЗ на упаковку — Отгрузка №000034')
-    expect(html).toContain('Склад ФФ Москва')
     expect(html).toContain('ООО Ромашка')
+    expect(html).not.toContain('Склад ФФ')
+    expect(html).not.toContain('Создано')
+    expect(html).not.toContain('Актуальная версия')
   })
 
   it('renders one card per item with photo, article, barcode and ТЗ text', () => {
@@ -45,6 +43,21 @@ describe('buildShipmentPackagingSheetHtml', () => {
     expect(html).toContain('2000000000015')
     expect(html).toContain('123456')
     expect(html).toContain('https://img/1.jpg')
+  })
+
+  it('renders only name, articles and barcode — no size/composition/description', () => {
+    const html = buildShipmentPackagingSheetHtml(base)
+    expect(html).not.toContain('Размер:')
+    expect(html).not.toContain('Состав:')
+  })
+
+  it('renders product info as a highlighted block above the ТЗ block', () => {
+    const html = buildShipmentPackagingSheetHtml(base)
+    const productIdx = html.indexOf('class="pk-product"')
+    const tzIdx = html.indexOf('class="pk-tz"')
+    expect(productIdx).toBeGreaterThan(-1)
+    expect(tzIdx).toBeGreaterThan(productIdx)
+    expect(html).toContain('print-color-adjust: exact')
   })
 
   it('keeps a card from splitting across pages', () => {

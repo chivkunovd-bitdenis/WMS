@@ -1,9 +1,13 @@
 import { apiUrl } from '../api'
-import { DEFAULT_LABEL_SIZE, type LabelSize } from './labelSize'
+import { DEFAULT_LABEL_SIZE, loadLabelSizeId, resolveLabelSize, type LabelSize } from './labelSize'
 import { expandLayoutTape } from './markingPrintPresets'
 import { maskCisTail, parseGs1Cis } from './parseGs1Cis'
 import {
+  buildProductLabelContentCss,
   buildProductLabelSectionHtml,
+  labelMm,
+  labelPt,
+  labelScale,
   type ProductThermalLabelData,
 } from './printProductThermalLabel'
 import { escapeLabelHtml } from './productLabelText'
@@ -11,6 +15,13 @@ import type { PrintLayout } from './printTemplate'
 import { renderBarcodeDataUrl } from './renderBarcodeDataUrl'
 
 function buildTapePageCss(size: LabelSize = DEFAULT_LABEL_SIZE): string {
+  const k = labelScale(size)
+  // Вытянутая вертикально этикетка (60×80, 70×120): DataMatrix сверху, поля под ним —
+  // иначе матрица упирается в ширину и низ наклейки остаётся пустым.
+  const tall = size.heightMm / size.widthMm >= 1.2
+  const matrixSide = tall
+    ? Math.min(size.widthMm * 0.62, size.heightMm * 0.42)
+    : 24 * k.uniform
   return `
   @page { size: ${size.widthMm}mm ${size.heightMm}mm; margin: 0; }
   * { box-sizing: border-box; }
@@ -25,7 +36,7 @@ function buildTapePageCss(size: LabelSize = DEFAULT_LABEL_SIZE): string {
   }
   .label:last-child { page-break-after: auto; break-after: auto; }
   .label--cz {
-    padding: 1.5mm;
+    padding: ${labelMm(1.5 * k.uniform)};
     display: flex;
     flex-direction: row;
     align-items: stretch;
@@ -34,20 +45,20 @@ function buildTapePageCss(size: LabelSize = DEFAULT_LABEL_SIZE): string {
     width: 100%;
     height: 100%;
     display: flex;
-    flex-direction: row;
+    flex-direction: ${tall ? 'column' : 'row'};
     align-items: stretch;
-    gap: 1mm;
+    gap: ${labelMm(1 * k.uniform)};
   }
   .cz-matrix {
-    flex: 0 0 27mm;
+    flex: 0 0 ${tall ? 'auto' : labelMm(27 * k.uniform)};
     display: flex;
     align-items: center;
     justify-content: center;
     min-width: 0;
   }
   .cz-matrix img {
-    width: 24mm;
-    height: 24mm;
+    width: ${labelMm(matrixSide)};
+    height: ${labelMm(matrixSide)};
     object-fit: contain;
     display: block;
   }
@@ -57,46 +68,46 @@ function buildTapePageCss(size: LabelSize = DEFAULT_LABEL_SIZE): string {
     display: flex;
     flex-direction: column;
     justify-content: flex-start;
-    padding: 0.2mm 0 0;
+    padding: ${labelMm(0.2 * k.uniform)} 0 0;
   }
   .cz-brand {
     margin: 0;
-    font-size: 5.4pt;
+    font-size: ${labelPt(5.4 * k.font)};
     font-weight: 700;
     line-height: 1.05;
     letter-spacing: -0.02em;
     text-transform: uppercase;
   }
   .cz-mark {
-    margin: 0.4mm 0 0.6mm;
-    width: 5.5mm;
-    height: 5.5mm;
-    border: 0.35mm solid #111;
-    border-radius: 0.6mm;
+    margin: ${labelMm(0.4 * k.uniform)} 0 ${labelMm(0.6 * k.uniform)};
+    width: ${labelMm(5.5 * k.font)};
+    height: ${labelMm(5.5 * k.font)};
+    border: ${labelMm(0.35 * k.font)} solid #111;
+    border-radius: ${labelMm(0.6 * k.font)};
     display: flex;
     align-items: center;
     justify-content: center;
-    font-size: 5pt;
+    font-size: ${labelPt(5 * k.font)};
     font-weight: 700;
     line-height: 1;
   }
   .cz-field {
     margin: 0;
-    font-size: 5pt;
+    font-size: ${labelPt(5 * k.font)};
     line-height: 1.15;
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
   }
-  .cz-field + .cz-field { margin-top: 0.35mm; }
+  .cz-field + .cz-field { margin-top: ${labelMm(0.35 * k.uniform)}; }
   .cz-field-label {
     font-weight: 700;
-    margin-right: 0.5mm;
+    margin-right: ${labelMm(0.5 * k.uniform)};
   }
   .cz-code {
     margin: auto 0 0;
-    padding-top: 0.5mm;
-    font-size: 4.6pt;
+    padding-top: ${labelMm(0.5 * k.uniform)};
+    font-size: ${labelPt(4.6 * k.font)};
     line-height: 1.1;
     word-break: break-all;
   }
@@ -104,83 +115,17 @@ function buildTapePageCss(size: LabelSize = DEFAULT_LABEL_SIZE): string {
     padding: 0;
   }
   .cz-artifact-img {
-    width: 58mm;
-    height: 40mm;
+    width: ${size.widthMm}mm;
+    height: ${size.heightMm}mm;
     object-fit: contain;
     display: block;
   }
   .label:not(.label--cz) {
-    padding: 1.4mm 1.8mm 1mm;
+    padding: ${labelMm(1.4 * k.uniform)} ${labelMm(1.8 * k.uniform)} ${labelMm(1 * k.uniform)};
     display: flex;
     flex-direction: column;
   }
-  .barcode-wrap {
-    flex: 0 0 auto;
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    justify-content: flex-start;
-    margin-bottom: 0.8mm;
-  }
-  .barcode-wrap img {
-    width: 52mm;
-    max-width: 100%;
-    height: auto;
-    max-height: 14mm;
-    object-fit: contain;
-    display: block;
-  }
-  .digits {
-    margin: 0.3mm 0 0;
-    font-size: 8pt;
-    letter-spacing: 0.04em;
-    text-align: center;
-    font-family: Arial, Helvetica, sans-serif;
-    line-height: 1.1;
-  }
-  .body {
-    flex: 1 1 auto;
-    min-height: 0;
-    line-height: 1.2;
-    font-size: 6.8pt;
-    display: flex;
-    flex-direction: column;
-    gap: 0.15mm;
-  }
-  .seller {
-    margin: 0;
-    font-size: 6.8pt;
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
-  }
-  .name {
-    margin: 0;
-    font-size: 7pt;
-    font-weight: 400;
-    display: -webkit-box;
-    -webkit-line-clamp: 2;
-    -webkit-box-orient: vertical;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    word-break: break-word;
-  }
-  .meta { margin: 0; }
-  .meta-composition {
-    margin: 0;
-    display: -webkit-box;
-    -webkit-line-clamp: 2;
-    -webkit-box-orient: vertical;
-    overflow: hidden;
-    word-break: break-word;
-  }
-  .footer {
-    flex: 0 0 auto;
-    margin: 0.4mm 0 0;
-    font-size: 6.4pt;
-    text-align: left;
-    line-height: 1.15;
-  }
+  ${buildProductLabelContentCss(size)}
 `
 }
 
@@ -212,10 +157,12 @@ export async function fetchLabelArtifactDataUrl(
 export async function renderDataMatrixDataUrl(cis: string): Promise<string> {
   const bwipjs = await import('bwip-js')
   const canvas = document.createElement('canvas')
+  // scale 4 — запас разрешения: на крупных этикетках (60×80, 70×120) матрица
+  // растягивается до ~35–45 мм, при scale 2 модули замыливаются.
   bwipjs.toCanvas(canvas, {
     bcid: 'datamatrix',
     text: cis,
-    scale: 2,
+    scale: 4,
     height: 12,
     includetext: false,
   })
@@ -398,7 +345,9 @@ export async function printMarkingCodeTape(
     sections.push(html.replace('data-testid="product-thermal-label"', 'data-testid="product-thermal-label" data-tape-block="label"'))
   }
 
-  const html = buildMarkingTapeDocument(sections, options?.labelSize ?? DEFAULT_LABEL_SIZE)
+  // Без явного размера печатаем на последнем выбранном пользователем.
+  const labelSize = options?.labelSize ?? resolveLabelSize(loadLabelSizeId())
+  const html = buildMarkingTapeDocument(sections, labelSize)
   await printHtmlInIframe(html)
 }
 
@@ -416,7 +365,7 @@ export async function printMarkingCodeLabels(
     productLabel: options.productLabel ?? null,
   }))
   await printMarkingCodeTape(units, layout, options.productLabel, {
-    labelSize: options.labelSize ?? DEFAULT_LABEL_SIZE,
+    labelSize: options.labelSize,
   })
 }
 

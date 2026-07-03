@@ -903,19 +903,13 @@ export function FfSuppliesShipmentsPage({
         sku_code: ln.sku_code,
         barcode: cat ? resolveProductPrimaryBarcode(cat) || null : null,
         wb_nm_id: cat?.wb_nm_id ?? null,
-        wb_size: cat?.wb_size ?? null,
-        wb_composition: cat?.wb_composition ?? null,
         photo_url: cat?.wb_primary_image_url ?? null,
         instructions: cat?.packaging_instructions ?? null,
       }
     })
     printShipmentPackagingSheet({
       documentNumber: unloadDisplayNumber ?? '—',
-      warehouseName: unloadDetail.warehouse_name,
       sellerName: unloadDetail.seller_name,
-      createdAt: unloadDetail.created_at
-        ? formatDateTimeLocal(unloadDetail.created_at)
-        : null,
       items,
     })
   }
