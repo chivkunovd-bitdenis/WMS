@@ -4,13 +4,20 @@ import uuid
 from datetime import date
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, HTTPException, Response, status
+from fastapi import APIRouter, Depends, File, Form, HTTPException, Response, UploadFile, status
 from pydantic import BaseModel, Field
 from sqlalchemy import inspect as sa_inspect
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
+from app.api.box_import_api_shared import (
+    BoxImportApplyOut,
+    BoxImportPreviewOut,
+    http_from_box_import_error,
+    preview_result_out,
+    read_xlsx_upload,
+)
 from app.api.deps import (
     get_current_user,
     get_effective_seller_id,
@@ -30,6 +37,7 @@ from app.models.inventory_movement import InventoryMovement
 from app.models.product import Product
 from app.models.storage_location import StorageLocation
 from app.models.user import User
+from app.services import box_import_service as box_import_svc
 from app.services import inbound_intake_box_service as inbound_box_svc
 from app.services import inbound_intake_service as svc
 from app.services import inventory_service as inv_svc
@@ -620,6 +628,84 @@ async def create_inbound_box(
     except InboundIntakeBoxError as exc:
         raise _map_inbound_box_err(exc) from None
     return _box_out(box)
+
+
+@router.post(
+    "/{request_id}/import-boxes/preview",
+    response_model=BoxImportPreviewOut,
+)
+async def preview_inbound_box_import(
+    request_id: uuid.UUID,
+    user: Annotated[User, Depends(require_reception_access)],
+    session: Annotated[AsyncSession, Depends(get_db)],
+    file: Annotated[UploadFile, File(...)],
+) -> BoxImportPreviewOut:
+    req = await svc.get_request(session, user.tenant_id, request_id)
+    if req is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="request_not_found")
+    if req.seller_id is None:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+            detail="seller_missing",
+        )
+    filename, content = await read_xlsx_upload(file)
+    catalog = await box_import_svc.build_product_catalog(
+        session, user.tenant_id, req.seller_id
+    )
+    try:
+        result = box_import_svc.parse_box_import_xlsx(
+            content, filename=filename, catalog=catalog
+        )
+    except box_import_svc.BoxImportError as exc:
+        raise http_from_box_import_error(exc) from exc
+    return preview_result_out(result)
+
+
+@router.post(
+    "/{request_id}/import-boxes/apply",
+    response_model=BoxImportApplyOut,
+)
+async def apply_inbound_box_import(
+    request_id: uuid.UUID,
+    user: Annotated[User, Depends(require_reception_access)],
+    session: Annotated[AsyncSession, Depends(get_db)],
+    file: Annotated[UploadFile, File(...)],
+    ignore_errors: Annotated[bool, Form()] = False,
+) -> BoxImportApplyOut:
+    req = await svc.get_request(session, user.tenant_id, request_id)
+    if req is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="request_not_found")
+    if req.seller_id is None:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+            detail="seller_missing",
+        )
+    filename, content = await read_xlsx_upload(file)
+    catalog = await box_import_svc.build_product_catalog(
+        session, user.tenant_id, req.seller_id
+    )
+    try:
+        preview = box_import_svc.parse_box_import_xlsx(
+            content, filename=filename, catalog=catalog
+        )
+        boxes, _errors = await box_import_svc.apply_inbound_box_import(
+            session,
+            user.tenant_id,
+            request_id,
+            preview,
+            ignore_errors=ignore_errors,
+        )
+    except box_import_svc.BoxImportError as exc:
+        raise http_from_box_import_error(exc) from exc
+    except InboundIntakeBoxError as exc:
+        raise _map_inbound_box_err(exc) from None
+    out_preview = preview_result_out(preview)
+    return BoxImportApplyOut(
+        boxes_created=len(boxes),
+        box_ids=[str(box.id) for box in boxes],
+        summary=out_preview.summary,
+        errors=out_preview.errors,
+    )
 
 
 @router.post(

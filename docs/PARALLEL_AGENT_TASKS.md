@@ -189,3 +189,91 @@
 | backend api/marking_codes.py | LANE-BACKEND |
 
 > Пока CROSS-задача в работе — её два файла заняты, соответствующие дорожки ждут. Поэтому CROSS поставлены в конец (после основных задач их дорожек).
+
+---
+
+# COMPOSER backlog (2026-07-05)
+
+> Постановка: `docs/TASKS_FOR_COMPOSER_RU.md` (Задача 1 — импорт коробов xlsx; Задача 2 — ЧЗ печать из общих корзин + списание КМ).
+
+**integration_branch:** `feat/composer-tasks` (от `main`)
+
+## LANE-BOX-SVC — парсер xlsx + apply-логика
+
+> **files:** `backend/pyproject.toml`, `backend/app/services/box_import_service.py` [новый]
+
+| id | depends_on | title | do | gate |
+|----|-----------|-------|----|----|
+| BOX-SVC-01 | — | Парсер xlsx + резолв ШК | openpyxl в pyproject; сервис: parse preview (boxes/lines/errors/summary), barcode resolve по каталогу селлера, merge дубликатов (ШК,Адрес); apply-хелперы для inbound/MP | pytest: корректный файл, missing_column, unsupported_file_type, barcode_not_found |
+
+## LANE-BOX-IN-BE — API приёмки
+
+> **files:** `backend/app/api/inbound_intake.py`
+
+| id | depends_on | title | do | gate |
+|----|-----------|-------|----|----|
+| BOX-BE-IN | BOX-SVC-01 | import-boxes preview/apply (приёмка) | POST `.../import-boxes/preview` + `.../import-boxes/apply` (ignore_errors); apply создаёт короба, не трогает существующие | pytest apply inbound |
+
+## LANE-BOX-OUT-BE — API отгрузки МП
+
+> **files:** `backend/app/api/marketplace_unload_requests.py`
+
+| id | depends_on | title | do | gate |
+|----|-----------|-------|----|----|
+| BOX-BE-OUT | BOX-SVC-01 | import-boxes preview/apply (МП) | Аналогичные роуты; apply через create_marketplace_unload_box + manual-line; свериться с ручной сборкой короба | pytest apply MP |
+
+## LANE-BOX-IN-FE — UI приёмки
+
+> **files:** `frontend/src/screens/ff/FfInboundRequestView.tsx`, `frontend/src/components/BoxImportDialog.tsx` [новый]
+
+| id | depends_on | title | do | gate |
+|----|-----------|-------|----|----|
+| BOX-FE-IN | BOX-BE-IN | «Загрузить по накладной» (приёмка) | Кнопка + диалог (образец MarkingImportDialog): preview, ошибки, ignore_errors checkbox, apply | e2e: xlsx → короба; bad file → ошибка |
+
+## LANE-BOX-OUT-FE — UI отгрузки МП
+
+> **files:** `frontend/src/screens/ff/FfSuppliesShipmentsPage.tsx`
+
+| id | depends_on | title | do | gate |
+|----|-----------|-------|----|----|
+| BOX-FE-OUT | BOX-BE-OUT | «Загрузить по накладной» (МП) | Тот же диалог на странице отгрузки | e2e или unit на preview flow |
+
+## LANE-CZ-BE — списывающая печать по товару
+
+> **files:** `backend/app/services/marking_code_service.py`, `backend/app/api/marking_codes.py`
+
+| id | depends_on | title | do | gate |
+|----|-----------|-------|----|----|
+| CZ-BE-01 | — | POST print по product_id | `POST /operations/marking-codes/products/{id}/print` — по образцу print_codes_for_packaging_line: with_for_update, STATUS_PRINTED, EVENT_PRINTED; allow_partial/shortage контракт | pytest: списание, shared basket, allow_partial, parallel lock |
+
+## LANE-CZ-BE-AUDIT — deprecated роуты
+
+> **files:** `backend/app/api/marking_codes.py`
+
+| id | depends_on | title | do | gate |
+|----|-----------|-------|----|----|
+| CZ-BE-02 | CZ-BE-01 | Deprecate scan-print/print-all | 410 или deprecated; убедиться что списывают или недоступны из UI | pytest или grep UI |
+
+## LANE-CZ-FE-GATE — гейт общих корзин
+
+> **files:** `frontend/src/screens/shared/HonestSignScreen.tsx`, `frontend/src/utils/useFfProductMarkingPrint.tsx`
+
+| id | depends_on | title | do | gate |
+|----|-----------|-------|----|----|
+| CZ-FE-01 | — | markingAvailable += shared_baskets | personal_available + Σ shared_baskets[].available; тип overview | unit/e2e: кнопка не «не хватает N из N» при общей корзине |
+
+## LANE-CZ-FE-PRINT — каталожная печать списывает
+
+> **files:** `frontend/src/components/MarkingPrintDialog.tsx`
+
+| id | depends_on | title | do | gate |
+|----|-----------|-------|----|----|
+| CZ-FE-02 | CZ-BE-01, CZ-FE-01 | printCatalogTape → POST print | Заменить GET codes на POST print; обработка shortage как printLineTape; onPrinted после успеха | e2e: POST уходит, «Доступно» уменьшается |
+
+## LANE-CZ-TEST — регресс списания
+
+> **files:** `backend/tests/test_marking_catalog_print.py` [новый]
+
+| id | depends_on | title | do | gate |
+|----|-----------|-------|----|----|
+| CZ-TEST-01 | CZ-BE-01, CZ-FE-02 | Инвариант списания всех путей | Таблица из TASKS_FOR_COMPOSER 2C: каждый живой путь; reprint не меняет available | pytest green |

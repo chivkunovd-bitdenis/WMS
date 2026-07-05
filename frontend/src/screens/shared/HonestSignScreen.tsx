@@ -33,6 +33,7 @@ import { productDisplayMetaFromCatalog } from '../../types/wbProductCatalog'
 import { readApiErrorMessage } from '../../utils/readApiErrorMessage'
 import { displayMetaToProductLabel } from '../../utils/productBarcodePrint'
 import { useMarkingCodePrint } from '../../utils/useMarkingCodePrint'
+import { computeMarkingAvailableFromInventory } from '../../utils/useFfProductMarkingPrint'
 import { MarkingImportDialog } from './MarkingImportDialog'
 import { MarkingSellerPicker } from './MarkingSellerPicker'
 
@@ -680,7 +681,10 @@ export function HonestSignScreen({
                               productId: row.product_id,
                               documentNumber: null,
                               qtyNeedPack: 1,
-                              markingAvailable: row.personal_available,
+                              markingAvailable: computeMarkingAvailableFromInventory(
+                                row.personal_available,
+                                row.shared_baskets,
+                              ),
                               qtyMarkingPrinted: row.printed_count,
                               requiresHonestSign: true,
                               skuCode: displayMeta.sku_code,

@@ -1,5 +1,15 @@
 # TASKLOG
 
+## TASK-098 — 2026-07-05 — COMPOSER: импорт коробов xlsx + ЧЗ печать из общих корзин (wave 1–3)
+
+- What changed:
+  - Backend: `box_import_service` + preview/apply API на приёмке и отгрузке МП; `POST /operations/marking-codes/products/{id}/print` со списанием КМ (в т.ч. общие корзины); `scan-print` и `print-all` → **410 Gone**.
+  - Frontend: `BoxImportDialog` на приёмке (`FfInboundRequestView`) и отгрузке МП (`FfSuppliesShipmentsPage`); `MarkingPrintDialog.printCatalogTape` → списывающий POST; `markingAvailable` учитывает shared baskets.
+  - Tests: box import service + inbound API; catalog print write-off; write-off invariants (упаковка, каталог, reprint); deprecated endpoints openapi.
+- What did NOT change: mobile audit путей печати; prod deploy.
+- Verification: backend pytest (composer subset); frontend `npm run build`; e2e `ff-inbound-box-import` 2/2.
+- Commit: merge `feat/composer-tasks` → `origin/staging` (Railway auto-deploy).
+
 ## TASK-097 — 2026-07-05 — MP упаковка: убрать дубли шапки на вкладке «Упаковка»
 
 - What changed: на вкладке «Упаковка» в карточке отгрузки МП убраны кнопка «Продолжить упаковку» и шапка панели (chip «Черновик», «Упаковка», №, ссылка «Отгрузка»); таблица упаковки и действия без изменений; на странице `/ff/packaging` шапка задания сохранена.

@@ -73,30 +73,8 @@ async def test_scan_print_one_unit_per_scan(async_client: AsyncClient) -> None:
         headers=h,
         json={"packaging_task_id": task_id, "product_barcode": sku},
     )
-    assert first.status_code == 200, first.text
-    assert first.json()["quantity"] == 1
-    assert len(first.json()["codes"]) == 1
-
-    second = await async_client.post(
-        "/operations/marking-codes/scan-print",
-        headers=h,
-        json={"packaging_task_id": task_id, "product_barcode": sku},
-    )
-    assert second.status_code == 200, second.text
-    assert second.json()["quantity"] == 1
-
-    task_after = await async_client.get(f"/operations/packaging-tasks/{task_id}", headers=h)
-    assert task_after.json()["lines"][0]["qty_marking_printed"] == 2
-
-    third = await async_client.post(
-        "/operations/marking-codes/scan-print",
-        headers=h,
-        json={"packaging_task_id": task_id, "product_barcode": sku},
-    )
-    assert third.status_code == 422
-    assert third.json()["detail"] == "marking_complete"
-
-    assert first.json()["codes"][0] != second.json()["codes"][0]
+    assert first.status_code == 410, first.text
+    assert first.json()["detail"]["code"] == "endpoint_removed"
 
 
 @pytest.mark.asyncio

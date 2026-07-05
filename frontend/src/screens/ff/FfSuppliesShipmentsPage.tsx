@@ -46,6 +46,7 @@ import {
   type PackagingTask,
 } from './FfPackagingPage'
 import { FfMarketplaceUnloadBoxAddDialog } from './FfMarketplaceUnloadBoxAddDialog'
+import { BoxImportDialog } from '../../components/BoxImportDialog'
 import { formatHumanDocumentNumber } from './documentDisplay'
 import { formatDateTimeLocal } from '../../utils/formatDateTimeLocal'
 import { printMarketplaceUnloadWaybill } from '../../utils/printShipmentWaybill'
@@ -301,6 +302,7 @@ export function FfSuppliesShipmentsPage({
   const [boxMenuTargetId, setBoxMenuTargetId] = useState<string | null>(null)
   const [boxAddDialogBoxId, setBoxAddDialogBoxId] = useState<string | null>(null)
   const [boxAddSuccessMsg, setBoxAddSuccessMsg] = useState<string | null>(null)
+  const [boxImportOpen, setBoxImportOpen] = useState(false)
   const mpTabInitForRef = useRef<string | null>(null)
 
   const authHeaders = useMemo(
@@ -2509,6 +2511,15 @@ export function FfSuppliesShipmentsPage({
                             <Button
                               variant="outlined"
                               size="small"
+                              onClick={() => setBoxImportOpen(true)}
+                              disabled={modalBusy}
+                              data-testid="ff-mp-import-boxes"
+                            >
+                              Загрузить по накладной
+                            </Button>
+                            <Button
+                              variant="outlined"
+                              size="small"
                               onClick={() => void createBox()}
                               disabled={modalBusy}
                               data-testid="ff-mp-box-batch-create"
@@ -2895,6 +2906,22 @@ export function FfSuppliesShipmentsPage({
           onAddSuccess={(quantity) =>
             setBoxAddSuccessMsg(`Добавлено ${quantity} шт`)
           }
+        />
+      ) : null}
+      {boxImportOpen && docModalId && token ? (
+        <BoxImportDialog
+          open={boxImportOpen}
+          token={token}
+          requestId={docModalId}
+          importBasePath={`/operations/marketplace-unload-requests/${docModalId}/import-boxes`}
+          testIdPrefix="ff-mp-box-import"
+          mpBoxPreset={boxPreset}
+          onClose={() => setBoxImportOpen(false)}
+          onApplied={async (message) => {
+            setBoxAddSuccessMsg(message)
+            await loadDocDetail()
+            await onRefreshFfSupplyExtras()
+          }}
         />
       ) : null}
       <Snackbar

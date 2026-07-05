@@ -4,11 +4,18 @@ import uuid
 from datetime import date
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from pydantic import BaseModel, Field
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.api.box_import_api_shared import (
+    BoxImportApplyOut,
+    BoxImportPreviewOut,
+    http_from_box_import_error,
+    preview_result_out,
+    read_xlsx_upload,
+)
 from app.api.deps import (
     get_effective_seller_id,
     require_mp_shipments_access,
@@ -25,6 +32,7 @@ from app.models.marketplace_unload import (
 )
 from app.models.seller import Seller
 from app.models.user import User
+from app.services import box_import_service as box_import_svc
 from app.services import marketplace_unload_box_service as box_svc
 from app.services import marketplace_unload_pick_service as pick_svc
 from app.services import marketplace_unload_service as svc
@@ -1192,6 +1200,88 @@ async def ship_marketplace_unload(
         r,
         warehouse_name=r.warehouse.name,
         seller_name=r.seller.name if r.seller is not None else None,
+    )
+
+
+@router.post(
+    "/{request_id}/import-boxes/preview",
+    response_model=BoxImportPreviewOut,
+)
+async def preview_marketplace_box_import(
+    request_id: uuid.UUID,
+    user: Annotated[User, Depends(require_mp_shipments_access)],
+    session: Annotated[AsyncSession, Depends(get_db)],
+    file: Annotated[UploadFile, File(...)],
+) -> BoxImportPreviewOut:
+    _require_ff_execution(user)
+    r = await svc.get_request(session, user.tenant_id, request_id)
+    if r is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="not_found")
+    if r.seller_id is None:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+            detail="seller_missing",
+        )
+    filename, content = await read_xlsx_upload(file)
+    catalog = await box_import_svc.build_product_catalog(
+        session, user.tenant_id, r.seller_id
+    )
+    try:
+        result = box_import_svc.parse_box_import_xlsx(
+            content, filename=filename, catalog=catalog
+        )
+    except box_import_svc.BoxImportError as exc:
+        raise http_from_box_import_error(exc) from exc
+    return preview_result_out(result)
+
+
+@router.post(
+    "/{request_id}/import-boxes/apply",
+    response_model=BoxImportApplyOut,
+)
+async def apply_marketplace_box_import_route(
+    request_id: uuid.UUID,
+    user: Annotated[User, Depends(require_mp_shipments_access)],
+    session: Annotated[AsyncSession, Depends(get_db)],
+    file: Annotated[UploadFile, File(...)],
+    ignore_errors: Annotated[bool, Form()] = False,
+    box_preset: Annotated[str, Form()] = box_import_svc.DEFAULT_MP_BOX_PRESET,
+) -> BoxImportApplyOut:
+    _require_ff_execution(user)
+    r = await svc.get_request(session, user.tenant_id, request_id)
+    if r is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="not_found")
+    if r.seller_id is None:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+            detail="seller_missing",
+        )
+    filename, content = await read_xlsx_upload(file)
+    catalog = await box_import_svc.build_product_catalog(
+        session, user.tenant_id, r.seller_id
+    )
+    try:
+        preview = box_import_svc.parse_box_import_xlsx(
+            content, filename=filename, catalog=catalog
+        )
+        boxes, _errors = await box_import_svc.apply_marketplace_box_import(
+            session,
+            user.tenant_id,
+            request_id,
+            preview,
+            ignore_errors=ignore_errors,
+            box_preset=box_preset,
+        )
+    except box_import_svc.BoxImportError as exc:
+        raise http_from_box_import_error(exc) from exc
+    except MarketplaceUnloadBoxError as exc:
+        raise _map_box_err(exc) from None
+    out_preview = preview_result_out(preview)
+    return BoxImportApplyOut(
+        boxes_created=len(boxes),
+        box_ids=[str(box.id) for box in boxes],
+        summary=out_preview.summary,
+        errors=out_preview.errors,
     )
 
 
