@@ -282,10 +282,7 @@ function resolveProductLabel(
   }
 }
 
-/**
- * Строит HTML-секции ленты (по одной на этикетку) без запуска печати.
- * Нужно для печати пачками: секции можно резать на куски и печатать частями.
- */
+/** Строит HTML-секции ленты (по одной на этикетку) без запуска печати. */
 export async function buildMarkingTapeSections(
   units: MarkingTapeUnitInput[],
   layout: PrintLayout,
