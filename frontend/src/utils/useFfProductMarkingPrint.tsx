@@ -8,6 +8,29 @@ import { useMarkingCodePrint } from './useMarkingCodePrint'
 type MarkingOverviewResponse = {
   product: { requires_honest_sign: boolean }
   personal_pools: { available: number; printed: number }[]
+  shared_baskets: { available: number }[]
+}
+
+export function sumPersonalAvailable(pools: { available: number }[]): number {
+  return pools.reduce((sum, pool) => sum + (pool.available ?? 0), 0)
+}
+
+export function sumSharedBasketAvailable(baskets: { available: number }[]): number {
+  return baskets.reduce((sum, basket) => sum + (basket.available ?? 0), 0)
+}
+
+export function computeMarkingAvailable(
+  personalPools: { available: number }[],
+  sharedBaskets: { available: number }[],
+): number {
+  return sumPersonalAvailable(personalPools) + sumSharedBasketAvailable(sharedBaskets)
+}
+
+export function computeMarkingAvailableFromInventory(
+  personalAvailable: number,
+  sharedBaskets: { available: number }[],
+): number {
+  return personalAvailable + sumSharedBasketAvailable(sharedBaskets)
 }
 
 export type OpenFfProductPrintOpts = {
@@ -22,10 +45,6 @@ export type OpenFfProductPrintOpts = {
   markingAvailable?: number
   qtyMarkingPrinted?: number
   onPrinted?: () => void
-}
-
-function sumPersonalAvailable(pools: { available: number }[]): number {
-  return pools.reduce((sum, pool) => sum + (pool.available ?? 0), 0)
 }
 
 function sumPersonalPrinted(pools: { printed: number }[]): number {
@@ -65,7 +84,10 @@ export function useFfProductMarkingPrint(token: string) {
           requiresHonestSign = overview.product.requires_honest_sign
         }
         if (markingAvailable === undefined) {
-          markingAvailable = sumPersonalAvailable(overview.personal_pools)
+          markingAvailable = computeMarkingAvailable(
+            overview.personal_pools,
+            overview.shared_baskets ?? [],
+          )
         }
         if (qtyMarkingPrinted === undefined) {
           qtyMarkingPrinted = sumPersonalPrinted(overview.personal_pools)
