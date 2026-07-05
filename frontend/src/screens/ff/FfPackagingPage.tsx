@@ -87,6 +87,8 @@ type TaskPanelProps = {
   token: string
   task: PackagingTask
   unloadLabel?: string | null
+  /** Hide status chip + «Упаковка» + document numbers when embedded in MP unload modal. */
+  hideDocumentHeader?: boolean
   onClose?: () => void
   onUpdated: (task: PackagingTask) => void
 }
@@ -120,6 +122,7 @@ export function FfPackagingTaskPanel({
   token,
   task,
   unloadLabel,
+  hideDocumentHeader = false,
   onClose,
   onUpdated,
 }: TaskPanelProps) {
@@ -371,37 +374,39 @@ export function FfPackagingTaskPanel({
 
   return (
     <Stack spacing={2} data-testid="ff-packaging-task-panel">
-      <Stack direction="row" spacing={1} sx={{ alignItems: 'flex-start', flexWrap: 'wrap' }}>
-        <Chip label={statusLabel(task.status)} size="small" data-testid="ff-packaging-task-status" />
-        <Stack spacing={0.25} sx={{ minWidth: 0 }}>
-          <Typography variant="subtitle1" sx={{ fontWeight: 700, lineHeight: 1.2 }}>
-            Упаковка
-          </Typography>
-          {displayDocumentNumber ? (
-            <Typography
-              variant="subtitle2"
-              sx={{ fontWeight: 700, lineHeight: 1.2 }}
-              data-testid="ff-packaging-document-number"
+      {hideDocumentHeader ? null : (
+        <Stack direction="row" spacing={1} sx={{ alignItems: 'flex-start', flexWrap: 'wrap' }}>
+          <Chip label={statusLabel(task.status)} size="small" data-testid="ff-packaging-task-status" />
+          <Stack spacing={0.25} sx={{ minWidth: 0 }}>
+            <Typography variant="subtitle1" sx={{ fontWeight: 700, lineHeight: 1.2 }}>
+              Упаковка
+            </Typography>
+            {displayDocumentNumber ? (
+              <Typography
+                variant="subtitle2"
+                sx={{ fontWeight: 700, lineHeight: 1.2 }}
+                data-testid="ff-packaging-document-number"
+              >
+                {displayDocumentNumber}
+              </Typography>
+            ) : null}
+          </Stack>
+          {task.marketplace_unload_request_id && unloadLabel ? (
+            <Link
+              component={RouterLink}
+              to={`/ff/mp-shipments?open_mp=${task.marketplace_unload_request_id}`}
+              variant="body2"
+              data-testid="ff-packaging-linked-unload"
             >
-              {displayDocumentNumber}
+              Отгрузка: {unloadLabel}
+            </Link>
+          ) : unloadLabel ? (
+            <Typography variant="body2" color="text.secondary" data-testid="ff-packaging-linked-unload">
+              Отгрузка: {unloadLabel}
             </Typography>
           ) : null}
         </Stack>
-        {task.marketplace_unload_request_id && unloadLabel ? (
-          <Link
-            component={RouterLink}
-            to={`/ff/mp-shipments?open_mp=${task.marketplace_unload_request_id}`}
-            variant="body2"
-            data-testid="ff-packaging-linked-unload"
-          >
-            Отгрузка: {unloadLabel}
-          </Link>
-        ) : unloadLabel ? (
-          <Typography variant="body2" color="text.secondary" data-testid="ff-packaging-linked-unload">
-            Отгрузка: {unloadLabel}
-          </Typography>
-        ) : null}
-      </Stack>
+      )}
       {error ? (
         <Alert severity="error" data-testid="ff-packaging-error">
           {error}

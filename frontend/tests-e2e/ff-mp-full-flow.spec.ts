@@ -343,7 +343,7 @@ test('MP unload full flow: parallel boxes then packaging then ship', async ({ pa
     ),
     page.getByTestId('ff-packaging-complete').click(),
   ])
-  await expect(page.getByTestId('ff-packaging-task-status')).toContainText('Выполнено')
+  await expect(page.getByTestId('ff-mp-shipment-summary-packed')).toHaveText(`${PLAN_QTY}/${PLAN_QTY}`)
 
   await page.getByTestId('ff-mp-tab-products').click()
   await expect(page.getByTestId('ff-mp-ship')).toBeEnabled()

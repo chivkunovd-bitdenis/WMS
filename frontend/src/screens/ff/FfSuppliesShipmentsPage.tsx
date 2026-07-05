@@ -2585,25 +2585,11 @@ export function FfSuppliesShipmentsPage({
                       {packagingTaskError}
                     </Alert>
                   ) : null}
-                  {unloadDetail?.linked_packaging_task &&
-                  !unloadDetail.linked_packaging_task.is_complete ? (
-                    <Button
-                      size="small"
-                      variant="outlined"
-                      sx={{ mb: 2 }}
-                      onClick={() => {
-                        void loadPackagingTask()
-                      }}
-                      data-testid="ff-mp-packaging-continue"
-                    >
-                      Продолжить упаковку
-                    </Button>
-                  ) : null}
                   {packagingTask && token ? (
                     <FfPackagingTaskPanel
                       token={token}
                       task={packagingTask}
-                      unloadLabel={unloadDisplayNumber}
+                      hideDocumentHeader
                       onUpdated={(task) => {
                         setPackagingTask(task)
                         void loadDocDetail()
