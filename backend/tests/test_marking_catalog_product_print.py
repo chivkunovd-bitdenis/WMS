@@ -43,7 +43,9 @@ async def _auth_headers(async_client: AsyncClient) -> tuple[dict[str, str], uuid
     return headers, tenant_id, seller_id
 
 
-async def _count_available(session: AsyncSession, *, tenant_id: uuid.UUID, pool_id: uuid.UUID) -> int:
+async def _count_available(
+    session: AsyncSession, *, tenant_id: uuid.UUID, pool_id: uuid.UUID
+) -> int:
     stmt = select(func.count(MarkingCode.id)).where(
         MarkingCode.tenant_id == tenant_id,
         MarkingCode.pool_id == pool_id,
