@@ -10,8 +10,6 @@ import {
   DialogContent,
   DialogTitle,
   FormControlLabel,
-  Radio,
-  RadioGroup,
   Snackbar,
   Stack,
   TextField,
@@ -31,10 +29,15 @@ import {
 } from '../utils/markingPrintPresets'
 import { createPrintTemplate, resolvePrintTemplate, type PrintLayout } from '../utils/printTemplate'
 import { readApiErrorMessage } from '../utils/readApiErrorMessage'
-import { printMarkingCodeTape } from '../utils/printMarkingCodeLabel'
+import {
+  buildMarkingTapeSections,
+  printTapeSections,
+  type MarkingTapeUnitInput,
+} from '../utils/printMarkingCodeLabel'
 import type { ProductThermalLabelData } from '../utils/printProductThermalLabel'
 import { resolvePackUnits, resolveWbBarcodeLabelCount } from '../utils/productBarcodePrint'
 import { resolveLabelSize, loadLabelSizeId, type LabelSize } from '../utils/labelSize'
+import { useSeparateMarkingPrint } from '../utils/separateMarkingPrint'
 import { LabelSizeSelect } from './LabelSizeSelect'
 
 type PrintedCodeOption = {
@@ -46,6 +49,21 @@ type PrintedCodeOption = {
 /** Fixed layout for non-ЧЗ: one WB barcode label per unit, no constructor. */
 const NON_HONEST_SIGN_LABEL_LAYOUT: PrintLayout = {
   units: [{ block: 'label', copies: 1 }],
+}
+
+/**
+ * Печать пачками: большие ленты режутся на пачки по столько этикеток,
+ * чтобы обрыв ленты терял максимум одну пачку.
+ */
+const PRINT_CHUNK_SIZE = 20
+
+type ChunkPrintJob = {
+  sections: string[]
+  size: LabelSize
+  printedChunks: number
+  closeAfter: boolean
+  /** В раздельном режиме какой флаг «напечатано ✓» выставить по завершении. */
+  markDone: 'cz' | 'wb' | null
 }
 
 export type MarkingPrintContext = {
@@ -90,11 +108,26 @@ export function MarkingPrintDialog({ open, reprint, ctx, busy, onBusyChange, onC
   const [saveName, setSaveName] = useState('')
   const [toast, setToast] = useState<string | null>(null)
   const [reprintCodes, setReprintCodes] = useState<PrintedCodeOption[]>([])
-  const [selectedReprintCodeId, setSelectedReprintCodeId] = useState('')
+  const [selectedReprintCodeIds, setSelectedReprintCodeIds] = useState<string[]>([])
   const [reprintCodesLoading, setReprintCodesLoading] = useState(false)
+  const [chunkJob, setChunkJob] = useState<ChunkPrintJob | null>(null)
+  // Раздельная печать ЧЗ и ШК ВБ: свои размеры и свои кнопки на каждый тип этикетки.
+  const separateEnabled = useSeparateMarkingPrint()
+  const [czLabelSize, setCzLabelSize] = useState<LabelSize>(() =>
+    resolveLabelSize(loadLabelSizeId('cz')),
+  )
+  const [wbLabelSize, setWbLabelSize] = useState<LabelSize>(() =>
+    resolveLabelSize(loadLabelSizeId('label')),
+  )
+  const [sepCzQty, setSepCzQty] = useState(2)
+  const [sepWbQty, setSepWbQty] = useState(1)
+  const [sepCzDone, setSepCzDone] = useState(false)
+  const [sepWbDone, setSepWbDone] = useState(false)
 
   const requiresHonestSign = ctx?.requiresHonestSign ?? true
   const isCatalogSource = ctx?.source === 'catalog'
+  /** Раздельный режим: только для товаров с ЧЗ и не для перепечатки (там печатается один ЧЗ). */
+  const separateMode = separateEnabled && requiresHonestSign && !reprint
 
   const applyTapeCounts = (nextCz: number, nextWb: number) => {
     const cz = Math.max(0, Math.min(99, Math.floor(nextCz) || 0))
@@ -123,9 +156,16 @@ export function MarkingPrintDialog({ open, reprint, ctx, busy, onBusyChange, onC
     setWbBarcodeQty(1)
     setCatalogPrintQty(1)
     setReprintCodes([])
-    setSelectedReprintCodeId('')
+    setSelectedReprintCodeIds([])
     setReprintCodesLoading(false)
     setDragTapeIndex(null)
+    setChunkJob(null)
+    setSepCzQty(2)
+    setSepWbQty(1)
+    setSepCzDone(false)
+    setSepWbDone(false)
+    setCzLabelSize(resolveLabelSize(loadLabelSizeId('cz')))
+    setWbLabelSize(resolveLabelSize(loadLabelSizeId('label')))
     if (!requiresHonestSign) {
       setLayout(cloneLayout(NON_HONEST_SIGN_LABEL_LAYOUT))
       return
@@ -183,7 +223,8 @@ export function MarkingPrintDialog({ open, reprint, ctx, busy, onBusyChange, onC
           const data = (await res.json()) as { codes: PrintedCodeOption[] }
           const codes = data.codes ?? []
           setReprintCodes(codes)
-          setSelectedReprintCodeId(codes[0]?.id ?? '')
+          // Один код выбран по умолчанию — типовой случай «порвалась одна этикетка».
+          setSelectedReprintCodeIds(codes[0] ? [codes[0].id] : [])
         } catch (e) {
           setError(e instanceof Error ? e.message : 'Не удалось загрузить напечатанные КМ.')
           setReprintCodes([])
@@ -195,8 +236,8 @@ export function MarkingPrintDialog({ open, reprint, ctx, busy, onBusyChange, onC
   }, [open, ctx, requiresHonestSign, reprint])
 
   const qtyNeed = reprint
-    ? selectedReprintCodeId
-      ? 1
+    ? selectedReprintCodeIds.length > 0
+      ? selectedReprintCodeIds.length
       : (ctx?.qtyMarkingPrinted ?? 0)
     : isCatalogSource
       ? catalogPrintQty
@@ -214,9 +255,7 @@ export function MarkingPrintDialog({ open, reprint, ctx, busy, onBusyChange, onC
   const available = ctx?.markingAvailable ?? 0
   const shortage = requiresHonestSign && !reprint && available < qtyNeed ? qtyNeed - available : 0
   const canPrintCount = reprint
-    ? selectedReprintCodeId
-      ? 1
-      : 0
+    ? selectedReprintCodeIds.length
     : requiresHonestSign
       ? allowPartial
         ? Math.min(available, qtyNeed)
@@ -248,22 +287,79 @@ export function MarkingPrintDialog({ open, reprint, ctx, busy, onBusyChange, onC
     applyTapeOrder(next)
   }
 
-  const printLabelOnlyTape = async () => {
-    if (!ctx || wbBarcodeQty < 1 || totalWbLabels < 1) {
+  type TapePrintOptions = {
+    layout: PrintLayout
+    size: LabelSize
+    closeAfter: boolean
+    markDone?: 'cz' | 'wb' | null
+  }
+
+  const markSectionDone = (markDone: 'cz' | 'wb' | null) => {
+    if (markDone === 'cz') {
+      setSepCzDone(true)
+    }
+    if (markDone === 'wb') {
+      setSepWbDone(true)
+    }
+  }
+
+  /**
+   * Физическая печать готовой ленты: короткая — одним заданием,
+   * длинная — пачками через диалог прогресса (данные к этому моменту
+   * уже отправлены/списаны, дальше только физика печати).
+   */
+  const deliverTape = async (
+    tapeUnits: MarkingTapeUnitInput[],
+    printLayout: PrintLayout,
+    size: LabelSize,
+    closeAfter: boolean,
+    markDone: 'cz' | 'wb' | null,
+  ) => {
+    if (!ctx) {
       return
     }
-    const units = Array.from({ length: totalWbLabels }, (_, index) => ({
+    const sections = await buildMarkingTapeSections(tapeUnits, printLayout, ctx.productLabel, {
+      authToken: ctx.token,
+    })
+    if (sections.length <= PRINT_CHUNK_SIZE) {
+      await printTapeSections(sections, size)
+      markSectionDone(markDone)
+      ctx.onPrinted()
+      if (closeAfter) {
+        onClose()
+      }
+      return
+    }
+    // Данные уже на бэкенде — обновляем родителя сразу, физику печатаем пачками.
+    ctx.onPrinted()
+    setChunkJob({ sections, size, printedChunks: 0, closeAfter, markDone })
+  }
+
+  const printLabelOnlyTape = async (
+    count: number,
+    size: LabelSize,
+    closeAfter: boolean,
+    markDone: 'cz' | 'wb' | null = null,
+  ) => {
+    if (!ctx || count < 1) {
+      return false
+    }
+    const units = Array.from({ length: count }, (_, index) => ({
       cis: `label-only-${index + 1}`,
       productLabel: ctx.productLabel ?? null,
     }))
-    await printMarkingCodeTape(units, NON_HONEST_SIGN_LABEL_LAYOUT, ctx.productLabel, { labelSize })
-    ctx.onPrinted()
-    onClose()
+    await deliverTape(units, NON_HONEST_SIGN_LABEL_LAYOUT, size, closeAfter, markDone)
+    return true
   }
 
-  const printCatalogTape = async () => {
+  const printCatalogTape = async ({
+    layout: printLayout,
+    size,
+    closeAfter,
+    markDone = null,
+  }: TapePrintOptions) => {
     if (!ctx || canPrintCount < 1) {
-      return
+      return false
     }
     const res = await fetch(apiUrl(`/operations/marking-codes/products/${ctx.productId}/codes`), {
       headers: { Authorization: `Bearer ${ctx.token}` },
@@ -282,122 +378,221 @@ export function MarkingPrintDialog({ open, reprint, ctx, busy, onBusyChange, onC
       throw new Error(`Не хватает ${canPrintCount - available.length} КМ в пуле.`)
     }
     const picked = available.slice(0, canPrintCount)
-    await printMarkingCodeTape(
+    await deliverTape(
       picked.map((row) => ({
         cis: row.cis_code,
         codeId: row.id,
         hasLabelArtifact: row.has_label_artifact ?? false,
         productLabel: ctx.productLabel ?? null,
       })),
-      layout,
-      ctx.productLabel,
-      { authToken: ctx.token, labelSize },
+      printLayout,
+      size,
+      closeAfter,
+      markDone,
     )
-    ctx.onPrinted()
-    onClose()
+    return true
   }
+
+  const printLineTape = async ({
+    layout: printLayout,
+    size,
+    closeAfter,
+    markDone = null,
+  }: TapePrintOptions) => {
+    if (!ctx?.lineId) {
+      setError('Нет строки упаковки для печати КМ.')
+      return false
+    }
+    const res = await fetch(
+      apiUrl(`/operations/marking-codes/packaging-lines/${ctx.lineId}/print`),
+      {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${ctx.token}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          layout_json: printLayout,
+          allow_partial: allowPartial,
+          reprint,
+          ...(reprint && selectedReprintCodeIds.length > 0
+            ? { code_ids: selectedReprintCodeIds }
+            : {}),
+        }),
+      },
+    )
+    if (!res.ok) {
+      setError(await readApiErrorMessage(res))
+      return false
+    }
+    const data = (await res.json()) as {
+      codes: string[]
+      duplicate_copies: number
+      quantity: number
+      shortage: number | null
+      layout: PrintLayout
+      printed_codes?: {
+        id: string
+        cis_code: string
+        has_label_artifact: boolean
+      }[]
+    }
+    if (data.quantity < 1) {
+      setError(
+        data.shortage
+          ? `Не хватает ${data.shortage} КМ в пуле.`
+          : 'Нет доступных КМ для печати.',
+      )
+      return false
+    }
+    const printedByCis = new Map(
+      (data.printed_codes ?? []).map((row) => [row.cis_code, row]),
+    )
+    await deliverTape(
+      data.codes.map((cis) => {
+        const meta = printedByCis.get(cis)
+        return {
+          cis,
+          codeId: meta?.id,
+          hasLabelArtifact: meta?.has_label_artifact ?? false,
+          productLabel: ctx.productLabel ?? null,
+        }
+      }),
+      data.layout ?? printLayout,
+      size,
+      closeAfter,
+      markDone,
+    )
+    return true
+  }
+
+  // При раздельном режиме одиночные ветки используют свой скоуп размера:
+  // перепечатка ЧЗ — размер ЧЗ, печать без ЧЗ — размер ШК ВБ.
+  const nonCzPrintSize = separateEnabled ? wbLabelSize : labelSize
+  const reprintPrintSize = separateEnabled ? czLabelSize : labelSize
 
   const handlePrint = async () => {
     if (!ctx) {
       return
     }
-    if (!requiresHonestSign) {
-      onBusyChange(true)
-      setError(null)
-      try {
-        await printLabelOnlyTape()
-      } catch (e) {
-        setError(e instanceof Error ? e.message : 'Не удалось напечатать этикетки.')
-      } finally {
-        onBusyChange(false)
+    onBusyChange(true)
+    setError(null)
+    try {
+      if (!requiresHonestSign) {
+        if (wbBarcodeQty >= 1) {
+          await printLabelOnlyTape(totalWbLabels, nonCzPrintSize, true)
+        }
+      } else if (!ctx.lineId && !reprint) {
+        await printCatalogTape({ layout, size: labelSize, closeAfter: true })
+      } else {
+        await printLineTape({
+          layout,
+          size: reprint ? reprintPrintSize : labelSize,
+          closeAfter: true,
+        })
       }
-      return
+    } catch (e) {
+      setError(
+        e instanceof Error
+          ? e.message
+          : requiresHonestSign
+            ? 'Не удалось напечатать ЧЗ.'
+            : 'Не удалось напечатать этикетки.',
+      )
+    } finally {
+      onBusyChange(false)
     }
-    if (!ctx.lineId && !reprint) {
-      onBusyChange(true)
-      setError(null)
-      try {
-        await printCatalogTape()
-      } catch (e) {
-        setError(e instanceof Error ? e.message : 'Не удалось напечатать ЧЗ.')
-      } finally {
-        onBusyChange(false)
-      }
-      return
-    }
-    if (!ctx.lineId) {
-      setError('Нет строки упаковки для печати КМ.')
+  }
+
+  /** Раздельный режим: суммарные объёмы по секциям. */
+  const sepCzLayout: PrintLayout = {
+    units: [{ block: 'cz', copies: Math.max(1, sepCzQty) }],
+  }
+  const sepCzTotal = canPrintCount * Math.max(1, sepCzQty)
+  const sepWbTotal = resolveWbBarcodeLabelCount(
+    Math.max(0, sepWbQty) * Math.max(1, qtyNeed),
+    packUnits,
+  )
+
+  const handleSeparateCzPrint = async () => {
+    if (!ctx || canPrintCount < 1) {
       return
     }
     onBusyChange(true)
     setError(null)
     try {
-      const res = await fetch(
-        apiUrl(`/operations/marking-codes/packaging-lines/${ctx.lineId}/print`),
-        {
-          method: 'POST',
-          headers: {
-            Authorization: `Bearer ${ctx.token}`,
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify({
-            layout_json: layout,
-            allow_partial: allowPartial,
-            reprint,
-            ...(reprint && selectedReprintCodeId
-              ? { code_ids: [selectedReprintCodeId] }
-              : {}),
-          }),
-        },
-      )
-      if (!res.ok) {
-        setError(await readApiErrorMessage(res))
-        return
+      const opts: TapePrintOptions = {
+        layout: sepCzLayout,
+        size: czLabelSize,
+        closeAfter: false,
+        markDone: 'cz',
       }
-      const data = (await res.json()) as {
-        codes: string[]
-        duplicate_copies: number
-        quantity: number
-        shortage: number | null
-        layout: PrintLayout
-        printed_codes?: {
-          id: string
-          cis_code: string
-          has_label_artifact: boolean
-        }[]
+      if (ctx.lineId) {
+        await printLineTape(opts)
+      } else {
+        await printCatalogTape(opts)
       }
-      if (data.quantity < 1) {
-        setError(
-          data.shortage
-            ? `Не хватает ${data.shortage} КМ в пуле.`
-            : 'Нет доступных КМ для печати.',
-        )
-        return
-      }
-      const printedByCis = new Map(
-        (data.printed_codes ?? []).map((row) => [row.cis_code, row]),
-      )
-      await printMarkingCodeTape(
-        data.codes.map((cis) => {
-          const meta = printedByCis.get(cis)
-          return {
-            cis,
-            codeId: meta?.id,
-            hasLabelArtifact: meta?.has_label_artifact ?? false,
-            productLabel: ctx.productLabel ?? null,
-          }
-        }),
-        data.layout ?? layout,
-        ctx.productLabel,
-        { authToken: ctx.token, labelSize },
-      )
-      ctx.onPrinted()
-      onClose()
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Не удалось напечатать ЧЗ.')
     } finally {
       onBusyChange(false)
     }
+  }
+
+  const handleSeparateWbPrint = async () => {
+    if (!ctx || sepWbTotal < 1) {
+      return
+    }
+    onBusyChange(true)
+    setError(null)
+    try {
+      await printLabelOnlyTape(sepWbTotal, wbLabelSize, false, 'wb')
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Не удалось напечатать этикетки.')
+    } finally {
+      onBusyChange(false)
+    }
+  }
+
+  /** Печать пачками: обработчики диалога прогресса. */
+  const chunkTotal = chunkJob ? Math.ceil(chunkJob.sections.length / PRINT_CHUNK_SIZE) : 0
+
+  const printChunk = async (chunkIndex: number) => {
+    if (!chunkJob) {
+      return
+    }
+    onBusyChange(true)
+    setError(null)
+    try {
+      const slice = chunkJob.sections.slice(
+        chunkIndex * PRINT_CHUNK_SIZE,
+        (chunkIndex + 1) * PRINT_CHUNK_SIZE,
+      )
+      await printTapeSections(slice, chunkJob.size)
+      setChunkJob((prev) =>
+        prev ? { ...prev, printedChunks: Math.max(prev.printedChunks, chunkIndex + 1) } : prev,
+      )
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Не удалось напечатать пачку.')
+    } finally {
+      onBusyChange(false)
+    }
+  }
+
+  const finishChunkJob = () => {
+    if (!chunkJob) {
+      return
+    }
+    markSectionDone(chunkJob.markDone)
+    const { closeAfter } = chunkJob
+    setChunkJob(null)
+    if (closeAfter) {
+      onClose()
+    }
+  }
+
+  const abortChunkJob = () => {
+    setChunkJob(null)
   }
 
   const handleSaveTemplate = async () => {
@@ -424,7 +619,9 @@ export function MarkingPrintDialog({ open, reprint, ctx, busy, onBusyChange, onC
 
   const printDisabled =
     busy ||
-    (reprint && requiresHonestSign && (reprintCodesLoading || !selectedReprintCodeId)) ||
+    (reprint &&
+      requiresHonestSign &&
+      (reprintCodesLoading || selectedReprintCodeIds.length < 1)) ||
     (!reprint && qtyNeed < 1) ||
     (requiresHonestSign && !reprint && available < 1) ||
     (requiresHonestSign && !reprint && !allowPartial && shortage > 0) ||
@@ -462,7 +659,7 @@ export function MarkingPrintDialog({ open, reprint, ctx, busy, onBusyChange, onC
                 <Typography variant="body2" data-testid="marking-print-qty">
                   {requiresHonestSign
                     ? reprint
-                      ? `Выбрано для перепечатки: ${selectedReprintCodeId ? 1 : 0} из ${ctx.qtyMarkingPrinted}`
+                      ? `Выбрано для перепечатки: ${selectedReprintCodeIds.length} из ${ctx.qtyMarkingPrinted}`
                       : isCatalogSource
                         ? `К печати: ${catalogPrintQty} · Доступно в пуле: ${available}`
                         : `Нужно: ${qtyNeed} · Доступно в пуле: ${available}`
@@ -471,12 +668,32 @@ export function MarkingPrintDialog({ open, reprint, ctx, busy, onBusyChange, onC
               </Box>
             ) : null}
 
-            <LabelSizeSelect
-              value={labelSize.id}
-              onChange={setLabelSize}
-              disabled={busy}
-              testId="marking-print-label-size"
-            />
+            {separateMode ? null : separateEnabled && !requiresHonestSign ? (
+              <LabelSizeSelect
+                value={wbLabelSize.id}
+                onChange={setWbLabelSize}
+                disabled={busy}
+                scope="label"
+                label="Размер ШК ВБ"
+                testId="marking-print-label-size"
+              />
+            ) : separateEnabled && reprint ? (
+              <LabelSizeSelect
+                value={czLabelSize.id}
+                onChange={setCzLabelSize}
+                disabled={busy}
+                scope="cz"
+                label="Размер ЧЗ"
+                testId="marking-print-label-size"
+              />
+            ) : (
+              <LabelSizeSelect
+                value={labelSize.id}
+                onChange={setLabelSize}
+                disabled={busy}
+                testId="marking-print-label-size"
+              />
+            )}
 
             {shortage > 0 ? (
               <Alert severity="error" data-testid="marking-print-shortage-banner">
@@ -517,7 +734,122 @@ export function MarkingPrintDialog({ open, reprint, ctx, busy, onBusyChange, onC
               />
             ) : null}
 
-            {!reprint && requiresHonestSign ? (
+            {separateMode ? (
+              <>
+                {isCatalogSource ? (
+                  <TextField
+                    size="small"
+                    label="Количество товаров"
+                    type="number"
+                    value={catalogPrintQty}
+                    onChange={(e) =>
+                      setCatalogPrintQty(Math.max(1, Math.min(999, Number(e.target.value) || 1)))
+                    }
+                    disabled={busy || sepCzDone}
+                    slotProps={{ htmlInput: { min: 1, max: 999 } }}
+                    data-testid="marking-print-catalog-qty"
+                    sx={{ maxWidth: 220 }}
+                  />
+                ) : null}
+
+                <Box data-testid="marking-print-separate-cz">
+                  <Typography variant="subtitle2" sx={{ mb: 1 }}>
+                    Честный знак
+                  </Typography>
+                  <Stack direction="row" spacing={1.5} sx={{ flexWrap: 'wrap', alignItems: 'center' }}>
+                    <TextField
+                      size="small"
+                      label="ЧЗ на единицу"
+                      type="number"
+                      value={sepCzQty}
+                      onChange={(e) =>
+                        setSepCzQty(Math.max(1, Math.min(99, Number(e.target.value) || 1)))
+                      }
+                      disabled={busy || sepCzDone}
+                      slotProps={{ htmlInput: { min: 1, max: 99 } }}
+                      data-testid="marking-print-sep-cz-qty"
+                      sx={{ width: 140 }}
+                    />
+                    <LabelSizeSelect
+                      value={czLabelSize.id}
+                      onChange={setCzLabelSize}
+                      disabled={busy || sepCzDone}
+                      scope="cz"
+                      label="Размер ЧЗ"
+                      testId="marking-print-cz-label-size"
+                    />
+                    <Button
+                      variant="contained"
+                      disabled={busy || sepCzDone || canPrintCount < 1}
+                      onClick={() => void handleSeparateCzPrint()}
+                      data-testid="marking-print-sep-cz-print"
+                    >
+                      {sepCzDone ? 'ЧЗ напечатаны ✓' : 'Печать ЧЗ'}
+                    </Button>
+                  </Stack>
+                  {canPrintCount > 0 ? (
+                    <Typography
+                      variant="caption"
+                      color="text.secondary"
+                      sx={{ mt: 0.5, display: 'block' }}
+                      data-testid="marking-print-sep-cz-total"
+                    >
+                      К печати: {sepCzTotal} ЧЗ ({canPrintCount} ед. × {Math.max(1, sepCzQty)})
+                    </Typography>
+                  ) : null}
+                </Box>
+
+                <Box data-testid="marking-print-separate-wb">
+                  <Typography variant="subtitle2" sx={{ mb: 1 }}>
+                    ШК ВБ
+                  </Typography>
+                  <Stack direction="row" spacing={1.5} sx={{ flexWrap: 'wrap', alignItems: 'center' }}>
+                    <TextField
+                      size="small"
+                      label="ШК ВБ на единицу"
+                      type="number"
+                      value={sepWbQty}
+                      onChange={(e) =>
+                        setSepWbQty(Math.max(1, Math.min(99, Number(e.target.value) || 1)))
+                      }
+                      disabled={busy || sepWbDone}
+                      slotProps={{ htmlInput: { min: 1, max: 99 } }}
+                      data-testid="marking-print-sep-wb-qty"
+                      sx={{ width: 140 }}
+                    />
+                    <LabelSizeSelect
+                      value={wbLabelSize.id}
+                      onChange={setWbLabelSize}
+                      disabled={busy || sepWbDone}
+                      scope="label"
+                      label="Размер ШК ВБ"
+                      testId="marking-print-wb-label-size"
+                    />
+                    <Button
+                      variant="contained"
+                      disabled={busy || sepWbDone || sepWbTotal < 1}
+                      onClick={() => void handleSeparateWbPrint()}
+                      data-testid="marking-print-sep-wb-print"
+                    >
+                      {sepWbDone ? 'ШК напечатаны ✓' : 'Печать ШК ВБ'}
+                    </Button>
+                  </Stack>
+                  {sepWbTotal > 0 ? (
+                    <Typography
+                      variant="caption"
+                      color="text.secondary"
+                      sx={{ mt: 0.5, display: 'block' }}
+                      data-testid="marking-print-sep-wb-total"
+                    >
+                      К печати: {sepWbTotal} ШК ВБ
+                      {packUnits > 1 ? ` (× ${packUnits} шт в упаковке)` : ''}
+                    </Typography>
+                  ) : null}
+                </Box>
+              </>
+            ) : null}
+
+            {!reprint && requiresHonestSign && !separateMode ? (
               <>
                 {isCatalogSource ? (
                   <TextField
@@ -657,35 +989,58 @@ export function MarkingPrintDialog({ open, reprint, ctx, busy, onBusyChange, onC
                   Нет напечатанных КМ для перепечатки
                 </Alert>
               ) : (
-                <RadioGroup
-                  value={selectedReprintCodeId}
-                  onChange={(e) => setSelectedReprintCodeId(e.target.value)}
-                  data-testid="marking-reprint-pick-list"
-                >
+                <Box data-testid="marking-reprint-pick-list">
+                  <Stack direction="row" spacing={1} sx={{ mb: 0.5 }}>
+                    <Button
+                      size="small"
+                      disabled={busy || selectedReprintCodeIds.length === reprintCodes.length}
+                      onClick={() => setSelectedReprintCodeIds(reprintCodes.map((c) => c.id))}
+                      data-testid="marking-reprint-pick-all"
+                    >
+                      Выбрать все
+                    </Button>
+                    <Button
+                      size="small"
+                      disabled={busy || selectedReprintCodeIds.length < 1}
+                      onClick={() => setSelectedReprintCodeIds([])}
+                      data-testid="marking-reprint-pick-none"
+                    >
+                      Снять всё
+                    </Button>
+                  </Stack>
                   {reprintCodes.map((code) => (
                     <FormControlLabel
                       key={code.id}
-                      value={code.id}
+                      sx={{ display: 'flex' }}
                       control={
-                        <Radio
+                        <Checkbox
                           size="small"
+                          value={code.id}
+                          checked={selectedReprintCodeIds.includes(code.id)}
+                          onChange={(e) =>
+                            setSelectedReprintCodeIds((prev) =>
+                              e.target.checked
+                                ? [...prev, code.id]
+                                : prev.filter((id) => id !== code.id),
+                            )
+                          }
                           data-testid={`marking-reprint-pick-${code.id}`}
                         />
                       }
                       label={code.cis_masked}
                     />
                   ))}
-                </RadioGroup>
+                </Box>
               )
             ) : null}
 
-            {reprint && requiresHonestSign && selectedReprintCodeId ? (
+            {reprint && requiresHonestSign && selectedReprintCodeIds.length > 0 ? (
               <Typography variant="body2" data-testid="marking-print-will-print">
-                К перепечатке: 1 КМ
+                К перепечатке: {selectedReprintCodeIds.length} КМ
               </Typography>
             ) : null}
 
-            {!reprint && requiresHonestSign && canPrintCount > 0 ? (
+            {!reprint && requiresHonestSign && !separateMode && canPrintCount > 0 ? (
               <Typography variant="body2" data-testid="marking-print-will-print">
                 К печати: {canPrintCount} ед. · {totalTapeCount} блоков в ленте
               </Typography>
@@ -705,17 +1060,87 @@ export function MarkingPrintDialog({ open, reprint, ctx, busy, onBusyChange, onC
           </Stack>
         </DialogContent>
         <DialogActions>
-          <Button onClick={onClose} disabled={busy}>
-            Отмена
+          {separateMode ? (
+            <Button onClick={onClose} disabled={busy} data-testid="marking-print-separate-close">
+              Закрыть
+            </Button>
+          ) : (
+            <>
+              <Button onClick={onClose} disabled={busy}>
+                Отмена
+              </Button>
+              <Button
+                variant="contained"
+                disabled={printDisabled}
+                onClick={() => void handlePrint()}
+                data-testid="marking-print-confirm"
+              >
+                {reprint ? 'Перепечатать' : 'Печать'}
+              </Button>
+            </>
+          )}
+        </DialogActions>
+      </Dialog>
+      <Dialog
+        open={chunkJob !== null}
+        maxWidth="xs"
+        fullWidth
+        data-testid="marking-print-chunk-dialog"
+      >
+        <DialogTitle>Печать пачками</DialogTitle>
+        <DialogContent>
+          {chunkJob ? (
+            <Stack spacing={1.5} sx={{ pt: 0.5 }}>
+              <Typography variant="body2">
+                Этикеток: {chunkJob.sections.length} · пачек: {chunkTotal} (по {PRINT_CHUNK_SIZE})
+              </Typography>
+              <Typography variant="body2" data-testid="marking-print-chunk-progress">
+                Отправлено пачек: {chunkJob.printedChunks} из {chunkTotal}
+              </Typography>
+              <Typography variant="caption" color="text.secondary">
+                Если лента кончилась во время печати — заправьте новую и нажмите «Повторить
+                пачку», затем продолжайте.
+              </Typography>
+              {error ? (
+                <Alert severity="error" data-testid="marking-print-chunk-error">
+                  {error}
+                </Alert>
+              ) : null}
+            </Stack>
+          ) : null}
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={abortChunkJob} disabled={busy} data-testid="marking-print-chunk-abort">
+            Прервать
           </Button>
-          <Button
-            variant="contained"
-            disabled={printDisabled}
-            onClick={() => void handlePrint()}
-            data-testid="marking-print-confirm"
-          >
-            {reprint ? 'Перепечатать' : 'Печать'}
-          </Button>
+          {chunkJob && chunkJob.printedChunks > 0 && chunkJob.printedChunks <= chunkTotal ? (
+            <Button
+              disabled={busy}
+              onClick={() => void printChunk(chunkJob.printedChunks - 1)}
+              data-testid="marking-print-chunk-repeat"
+            >
+              Повторить пачку {chunkJob.printedChunks}
+            </Button>
+          ) : null}
+          {chunkJob && chunkJob.printedChunks < chunkTotal ? (
+            <Button
+              variant="contained"
+              disabled={busy}
+              onClick={() => void printChunk(chunkJob.printedChunks)}
+              data-testid="marking-print-chunk-next"
+            >
+              Печатать пачку {chunkJob.printedChunks + 1}
+            </Button>
+          ) : (
+            <Button
+              variant="contained"
+              disabled={busy}
+              onClick={finishChunkJob}
+              data-testid="marking-print-chunk-done"
+            >
+              Готово
+            </Button>
+          )}
         </DialogActions>
       </Dialog>
       <Snackbar

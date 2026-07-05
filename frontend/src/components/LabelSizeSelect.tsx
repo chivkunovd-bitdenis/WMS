@@ -5,6 +5,7 @@ import {
   saveLabelSizeId,
   type LabelSize,
   type LabelSizeId,
+  type LabelSizeScope,
 } from '../utils/labelSize'
 
 type Props = {
@@ -13,6 +14,9 @@ type Props = {
   disabled?: boolean
   /** Запоминать выбор в localStorage (последний размер между печатями). */
   persist?: boolean
+  /** Раздельное запоминание размера для ЧЗ и ШК ВБ при раздельной печати. */
+  scope?: LabelSizeScope
+  label?: string
   testId?: string
 }
 
@@ -22,19 +26,21 @@ export function LabelSizeSelect({
   onChange,
   disabled = false,
   persist = true,
+  scope = 'default',
+  label = 'Размер этикетки',
   testId = 'label-size-select',
 }: Props) {
   return (
     <TextField
       select
       size="small"
-      label="Размер этикетки"
+      label={label}
       value={value}
       disabled={disabled}
       onChange={(e) => {
         const nextId = e.target.value as LabelSizeId
         if (persist) {
-          saveLabelSizeId(nextId)
+          saveLabelSizeId(nextId, scope)
         }
         onChange(resolveLabelSize(nextId))
       }}

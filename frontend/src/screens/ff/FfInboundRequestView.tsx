@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useBarcodeScanner } from '../../hooks/useBarcodeScanner'
 import EditOutlined from '@mui/icons-material/EditOutlined'
 import PrintOutlined from '@mui/icons-material/PrintOutlined'
 import {
@@ -200,6 +201,28 @@ export function FfInboundRequestView({
     detail != null &&
     (detail.status === 'submitted' || isReceivingStatus(detail.status))
   const showInboundLinesTable = !sortingView || receptionClosed
+
+  // Глобальный скан: панель приёмки видна и диалог короба не открыт
+  useBarcodeScanner({
+    enabled: isFulfillmentAdmin && !sortingView && receivingActive && boxAddDialogBoxId == null,
+    onScan: (code) => {
+      setReceivingScan(code)
+      void scanToReceiving(code)
+    },
+  })
+
+  useBarcodeScanner({
+    enabled:
+      isFulfillmentAdmin &&
+      !sortingView &&
+      detail?.status === 'draft' &&
+      boxAddDialogBoxId == null &&
+      !pickerOpen,
+    onScan: (code) => {
+      setLineBarcodeScan(code)
+      void addLineByBarcode(code)
+    },
+  })
   const defaultPutawayBoxId = useMemo(() => {
     const withQty = (detail?.boxes ?? []).filter((b) =>
       b.lines.some((ln) => ln.quantity > 0),
@@ -791,9 +814,9 @@ export function FfInboundRequestView({
     }
   }
 
-  const addLineByBarcode = async () => {
+  const addLineByBarcode = async (rawInput?: string) => {
     if (!detail) return
-    const code = lineBarcodeScan.trim()
+    const code = (rawInput ?? lineBarcodeScan).trim()
     if (!code) return
     setBusy(true)
     setError(null)
@@ -960,8 +983,8 @@ export function FfInboundRequestView({
     }
   }
 
-  const scanToReceiving = async () => {
-    const code = receivingScan.trim()
+  const scanToReceiving = async (raw?: string) => {
+    const code = (raw ?? receivingScan).trim()
     if (!code) return
     setBusy(true)
     setError(null)

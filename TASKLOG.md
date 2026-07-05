@@ -1,12 +1,29 @@
 # TASKLOG
 
+## TASK-097 — 2026-07-05 — MP упаковка: убрать дубли шапки на вкладке «Упаковка»
+
+- What changed: на вкладке «Упаковка» в карточке отгрузки МП убраны кнопка «Продолжить упаковку» и шапка панели (chip «Черновик», «Упаковка», №, ссылка «Отгрузка»); таблица упаковки и действия без изменений; на странице `/ff/packaging` шапка задания сохранена.
+- What did NOT change: summary «План/Распределено/Осталось/Упаковано»; вкладка «Товары»; backend упаковки.
+- Verification: `npm run build`; e2e `ff-mp-full-flow`, `ff-mp-tabs` green.
+
+## TASK-096 — 2026-07-05 — Раздельная печать ЧЗ/ШК, пачки, мультивыбор перепечатки, wedge-сканер
+
+- What changed:
+  - Backend: флаг тенанта `separate_marking_print_enabled` (модель, миграция, `/auth/me`, `PATCH /tenant/settings`) + pytest.
+  - Frontend: галочка «Раздельная печать ЧЗ и ШК ВБ» в настройках FF; `MarkingPrintDialog` — две секции с отдельными размерами и кнопками; печать пачками по 20 этикеток (диалог прогресса); мультивыбор КМ при перепечатке (`code_ids[]`); scoped `labelSize` (`cz` / `label`).
+  - Wedge-сканер (`useBarcodeScanner`) на всех FF-формах со сканом: приёмка (общая + добавление строки), наполнение короба приёмки, наполнение короба отгрузки МП, отгрузка МП (добавление строки + привязка WHB-короба).
+  - E2e: `ff-separate-marking-print.spec.ts` (раздельный UI + chunk-диалог); обновлён `ff-marking-packaging.spec.ts` (мультивыбор перепечатки).
+- What did NOT change: legacy v2 `InboundScreen` (старый shell); mobile/Android WIP в `mobile/`; prod deploy.
+- Verification: backend `ruff`/`mypy` + pytest tenant_settings 9/9; frontend `npm run build`; vitest 75/75; e2e `ff-separate-marking-print` 2/2, `ff-marking-packaging` 3/3, `stab-cz-ui-print` + `ff-marking-print-constructor` green.
+- Commit: `3f8b043` → pushed `origin/staging` (Railway auto-deploy).
+
 ## TASK-095 — 2026-07-02 — Печать ТЗ в отгрузке + выбор размера этикетки в модалках печати
 
 - What changed:
   - Фича A: на экране отгрузки на МП (вкладка «Товары») кнопка «Печать ТЗ» рядом с «Печать накладной» → сводная A4-форма (`printShipmentPackagingSheet.ts`): по каждому товару отгрузки слева фото/артикулы/ШК/размер/состав, справа текст ТЗ из карточки; карточка не рвётся между страницами; нет ТЗ/фото → плейсхолдеры; нет товаров → тост «Нет товаров для печати». ТЗ берётся из уже отдаваемого backend поля `packaging_instructions` каталога (в тип `WbProductCatalogRow` добавлено поле, backend не менялся).
   - Фича B: единый выбор физического размера этикетки (`utils/labelSize.ts` + компонент `LabelSizeSelect`), размеры 58×40 (дефолт, как было зашито), 60×80, 60×40, 70×120; выбор запоминается в localStorage; размер реально задаёт `@page size` и рамку `.label` в `printMarkingCodeLabel.ts` и `printProductThermalLabel.ts`; подключён в `MarkingPrintDialog` (мониторируемый конструктор печати везде) и `ProductBarcodePrintDialog`.
 - What did NOT change: логика «Печать накладной»; редактирование текста ТЗ (только отображение); внутренняя вёрстка/размер штрихкода этикетки (сохранён проверенный размер для читаемости сканером — на больших этикетках добавляется поле); backend API.
-- Verification: `npm run build` green; vitest 45/45 (новые `labelSize.test.ts`, `printShipmentPackagingSheet.test.ts`, расширен `printMarkingCodeLabel.test.ts`); Playwright `ff-product-barcode-print` (проверка 60×80 → `size: 60mm 80mm`), `ff-mp-shipment-tz-print` (сводная форма с ТЗ) — green.
+- Verification: `npm run build` green; vitest 45/45 (новые `labelSize.test.ts`, `printShipmentPackagingSheet.test.ts`, расширен `printMarkingCodeLabel.test.ts`); Playwright `ff-product-barcode-print` (проверка 60×80 → `size: 60mm 80mm`), `ff-mp-shipment-tz-print` (сводная форма с ТЗ) — green; PR #68 CI green → squash merge `eb9561c`; prod Deploy Production run `28608396020` success; smoke `http://194.87.96.144:8088/` FF/seller 200, `/api/health` ok, bundle содержит «Печать ТЗ».
 
 ## TASK-094 — 2026-07-01 — Документы FF: display-номера, шапки без техкодов, отгрузка summary
 

@@ -90,6 +90,7 @@ class UserMeResponse(BaseModel):
     delegatable_shops: list[SellerShopOut] = Field(default_factory=list)
     permissions: StaffPermissionsOut | None = None
     address_storage_enabled: bool = True
+    separate_marking_print_enabled: bool = False
 
 
 class SwitchSellerBody(BaseModel):
@@ -336,6 +337,7 @@ async def me(
         delegatable_shops=delegatable_out,
         permissions=permissions,
         address_storage_enabled=tenant.address_storage_enabled,
+        separate_marking_print_enabled=tenant.separate_marking_print_enabled,
     )
 
 

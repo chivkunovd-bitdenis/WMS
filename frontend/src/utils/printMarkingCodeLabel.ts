@@ -282,12 +282,16 @@ function resolveProductLabel(
   }
 }
 
-export async function printMarkingCodeTape(
+/**
+ * Строит HTML-секции ленты (по одной на этикетку) без запуска печати.
+ * Нужно для печати пачками: секции можно резать на куски и печатать частями.
+ */
+export async function buildMarkingTapeSections(
   units: MarkingTapeUnitInput[],
   layout: PrintLayout,
   defaultProductLabel?: ProductThermalLabelData | null,
   options?: PrintMarkingTapeOptions,
-): Promise<void> {
+): Promise<string[]> {
   if (units.length === 0) {
     throw new Error('Нет КМ для печати.')
   }
@@ -345,10 +349,30 @@ export async function printMarkingCodeTape(
     sections.push(html.replace('data-testid="product-thermal-label"', 'data-testid="product-thermal-label" data-tape-block="label"'))
   }
 
+  return sections
+}
+
+/** Печатает готовые секции ленты одним заданием печати. */
+export async function printTapeSections(
+  sections: string[],
+  labelSize?: LabelSize,
+): Promise<void> {
+  if (sections.length === 0) {
+    throw new Error('Нет этикеток для печати.')
+  }
   // Без явного размера печатаем на последнем выбранном пользователем.
-  const labelSize = options?.labelSize ?? resolveLabelSize(loadLabelSizeId())
-  const html = buildMarkingTapeDocument(sections, labelSize)
-  await printHtmlInIframe(html)
+  const size = labelSize ?? resolveLabelSize(loadLabelSizeId())
+  await printHtmlInIframe(buildMarkingTapeDocument(sections, size))
+}
+
+export async function printMarkingCodeTape(
+  units: MarkingTapeUnitInput[],
+  layout: PrintLayout,
+  defaultProductLabel?: ProductThermalLabelData | null,
+  options?: PrintMarkingTapeOptions,
+): Promise<void> {
+  const sections = await buildMarkingTapeSections(units, layout, defaultProductLabel, options)
+  await printTapeSections(sections, options?.labelSize)
 }
 
 export async function printMarkingCodeLabels(

@@ -31,16 +31,33 @@ export function resolveLabelSize(id: LabelSizeId | null | undefined): LabelSize 
 
 const STORAGE_KEY = 'wms.print.labelSizeId'
 
+/**
+ * Скоуп запоминания размера: при раздельной печати ЧЗ и ШК ВБ
+ * у каждого типа этикетки свой последний выбранный размер.
+ */
+export type LabelSizeScope = 'default' | 'cz' | 'label'
+
+function storageKey(scope: LabelSizeScope): string {
+  return scope === 'default' ? STORAGE_KEY : `${STORAGE_KEY}.${scope}`
+}
+
 function isLabelSizeId(value: unknown): value is LabelSizeId {
   return typeof value === 'string' && LABEL_SIZES.some((size) => size.id === value)
 }
 
 /** Последний выбранный пользователем размер (или дефолт). Безопасно в тестах/SSR. */
-export function loadLabelSizeId(): LabelSizeId {
+export function loadLabelSizeId(scope: LabelSizeScope = 'default'): LabelSizeId {
   try {
-    const raw = window.localStorage.getItem(STORAGE_KEY)
+    const raw = window.localStorage.getItem(storageKey(scope))
     if (isLabelSizeId(raw)) {
       return raw
+    }
+    if (scope !== 'default') {
+      // Скоуп ещё не выбирали — наследуем общий размер, чтобы не сбрасывать на дефолт.
+      const legacy = window.localStorage.getItem(STORAGE_KEY)
+      if (isLabelSizeId(legacy)) {
+        return legacy
+      }
     }
   } catch {
     // localStorage недоступен — используем дефолт
@@ -48,9 +65,9 @@ export function loadLabelSizeId(): LabelSizeId {
   return DEFAULT_LABEL_SIZE_ID
 }
 
-export function saveLabelSizeId(id: LabelSizeId): void {
+export function saveLabelSizeId(id: LabelSizeId, scope: LabelSizeScope = 'default'): void {
   try {
-    window.localStorage.setItem(STORAGE_KEY, id)
+    window.localStorage.setItem(storageKey(scope), id)
   } catch {
     // localStorage недоступен — молча пропускаем запоминание
   }

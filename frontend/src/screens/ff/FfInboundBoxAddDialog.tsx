@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useBarcodeScanner } from '../../hooks/useBarcodeScanner'
 import CloseOutlined from '@mui/icons-material/CloseOutlined'
 import {
   Alert,
@@ -166,11 +167,11 @@ export function FfInboundBoxAddDialog({
     onClose()
   }
 
-  const scanIntoBox = async () => {
+  const scanIntoBox = async (rawInput?: string) => {
     if (readOnly) {
       return
     }
-    const raw = scanBarcode.trim()
+    const raw = (rawInput ?? scanBarcode).trim()
     if (!raw) {
       setError('Введите штрихкод.')
       return
@@ -198,6 +199,14 @@ export function FfInboundBoxAddDialog({
       setBusy(false)
     }
   }
+
+  useBarcodeScanner({
+    enabled: open && !readOnly,
+    onScan: (code) => {
+      setScanBarcode(code)
+      void scanIntoBox(code)
+    },
+  })
 
   return (
     <Dialog

@@ -23,6 +23,7 @@ import {
 import { apiUrl } from '../../api'
 import { readApiErrorMessage } from '../../utils/readApiErrorMessage'
 import { FF_PERMISSION_BLOCKS, type FfPermissions } from '../../utils/ffPermissions'
+import { setSeparateMarkingPrintEnabled } from '../../utils/separateMarkingPrint'
 
 type StaffPackagingBilling = {
   billing_month: string
@@ -46,6 +47,7 @@ type Props = {
   isFulfillmentAdmin: boolean
   addressStorageEnabled?: boolean
   onAddressStorageChange?: (enabled: boolean) => void
+  separateMarkingPrintEnabled?: boolean
 }
 
 function currentBillingMonth(): string {
@@ -69,6 +71,7 @@ export function FfSettingsScreen({
   isFulfillmentAdmin,
   addressStorageEnabled = true,
   onAddressStorageChange,
+  separateMarkingPrintEnabled = false,
 }: Props) {
   const [rows, setRows] = useState<StaffAccountRow[]>([])
   const [billingMonth, setBillingMonth] = useState(currentBillingMonth)
@@ -80,6 +83,8 @@ export function FfSettingsScreen({
     message: string
     testId: string
   } | null>(null)
+  const [separatePrint, setSeparatePrint] = useState(separateMarkingPrintEnabled)
+  const [separatePrintBusy, setSeparatePrintBusy] = useState(false)
   const [permBusyId, setPermBusyId] = useState<string | null>(null)
   const [rateBusyId, setRateBusyId] = useState<string | null>(null)
   const [rateDrafts, setRateDrafts] = useState<Record<string, string>>({})
@@ -116,6 +121,10 @@ export function FfSettingsScreen({
   useEffect(() => {
     setAddressStorage(addressStorageEnabled)
   }, [addressStorageEnabled])
+
+  useEffect(() => {
+    setSeparatePrint(separateMarkingPrintEnabled)
+  }, [separateMarkingPrintEnabled])
 
   useEffect(() => {
     if (!highlightRowId) {
@@ -283,6 +292,36 @@ export function FfSettingsScreen({
     }
   }
 
+  async function onSeparatePrintToggle(checked: boolean) {
+    if (!token || !isFulfillmentAdmin) {
+      return
+    }
+    const previous = separatePrint
+    setSeparatePrint(checked)
+    setSeparatePrintBusy(true)
+    setError(null)
+    try {
+      const res = await fetch(apiUrl('/tenant/settings'), {
+        method: 'PATCH',
+        headers: { ...authHeaders(token), 'Content-Type': 'application/json' },
+        body: JSON.stringify({ separate_marking_print_enabled: checked }),
+      })
+      if (!res.ok) {
+        setSeparatePrint(previous)
+        setError(await readApiErrorMessage(res))
+        return
+      }
+      const data = (await res.json()) as { separate_marking_print_enabled: boolean }
+      setSeparatePrint(data.separate_marking_print_enabled)
+      setSeparateMarkingPrintEnabled(data.separate_marking_print_enabled)
+    } catch (err) {
+      setSeparatePrint(previous)
+      setError(err instanceof Error ? err.message : 'Не удалось сохранить настройку печати.')
+    } finally {
+      setSeparatePrintBusy(false)
+    }
+  }
+
   return (
     <Box data-testid="ff-settings-screen">
       <Typography variant="h5" gutterBottom>
@@ -327,6 +366,26 @@ export function FfSettingsScreen({
             />
             {addressStorageBusy ? <CircularProgress size={20} /> : null}
           </Stack>
+
+          <Box sx={{ mt: 3, pt: 2, borderTop: '1px solid', borderColor: 'divider' }}>
+            <Typography variant="body2" color="text.secondary" sx={{ mb: 1.5 }}>
+              В модалках печати — отдельные кнопки для ЧЗ и ШК ВБ со своими размерами этикеток (для складов, где ЧЗ и ШК печатаются на разных лентах).
+            </Typography>
+            <Stack direction="row" spacing={1} sx={{ alignItems: 'center' }}>
+              <FormControlLabel
+                control={
+                  <Checkbox
+                    checked={separatePrint}
+                    disabled={separatePrintBusy}
+                    onChange={(e) => void onSeparatePrintToggle(e.target.checked)}
+                    data-testid="ff-settings-separate-marking-print"
+                  />
+                }
+                label="Раздельная печать ЧЗ и ШК ВБ"
+              />
+              {separatePrintBusy ? <CircularProgress size={20} /> : null}
+            </Stack>
+          </Box>
         </Paper>
       ) : null}
 

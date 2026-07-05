@@ -303,6 +303,8 @@ test('FF marketplace unload: tabs switch without losing document context', async
   await page.getByTestId('ff-mp-tab-packaging').click()
   await expect(page.getByTestId('ff-mp-tab-packaging-panel')).toBeVisible()
   await expectMpTabSelected(page, 'ff-mp-tab-packaging')
+  await expect(page.getByTestId('ff-mp-packaging-continue')).toHaveCount(0)
+  await expect(page.getByTestId('ff-packaging-task-status')).toHaveCount(0)
   await expect(page.getByTestId('ff-mp-boxes')).toHaveCount(0)
 
   await page.getByTestId('ff-mp-tab-products').click()
