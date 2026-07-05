@@ -8,13 +8,16 @@ import uuid
 from dataclasses import dataclass
 from typing import Any
 
-from openpyxl import load_workbook
+from openpyxl import load_workbook  # type: ignore[import-untyped]
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.inbound_intake import InboundIntakeBox
 from app.models.marketplace_unload import MarketplaceUnloadBox
 from app.services import inbound_intake_box_service as inbound_box_svc
 from app.services import marketplace_unload_box_service as mp_box_svc
+from app.services.seller_wb_catalog_service import list_seller_wb_catalog_rows
+
+DEFAULT_MP_BOX_PRESET = "60_40_40"
 
 REQUIRED_COLUMNS: dict[str, str] = {
     "штрих-код": "barcode",
@@ -153,9 +156,9 @@ def parse_box_import_xlsx(
 
     col_map: dict[str, int] = {}
     for idx, cell in enumerate(header_row):
-        key = _normalize_header(cell)
-        if key in REQUIRED_COLUMNS:
-            col_map[REQUIRED_COLUMNS[key]] = idx
+        header_key = _normalize_header(cell)
+        if header_key in REQUIRED_COLUMNS:
+            col_map[REQUIRED_COLUMNS[header_key]] = idx
 
     for required_key, field in REQUIRED_COLUMNS.items():
         if field not in col_map:
@@ -274,6 +277,24 @@ def parse_box_import_xlsx(
     )
 
 
+async def build_product_catalog(
+    session: AsyncSession,
+    tenant_id: uuid.UUID,
+    seller_id: uuid.UUID,
+) -> list[ProductCatalogRow]:
+    rows = await list_seller_wb_catalog_rows(session, tenant_id, seller_id)
+    return [
+        ProductCatalogRow(
+            product_id=row.product_id,
+            sku_code=row.sku_code,
+            product_name=row.name,
+            wb_primary_barcode=row.wb_primary_barcode,
+            wb_barcodes=row.wb_barcodes,
+        )
+        for row in rows
+    ]
+
+
 async def apply_inbound_box_import(
     session: AsyncSession,
     tenant_id: uuid.UUID,
@@ -318,20 +339,30 @@ async def apply_marketplace_box_import(
     preview: BoxImportPreviewResult,
     *,
     ignore_errors: bool = False,
+    box_preset: str = DEFAULT_MP_BOX_PRESET,
 ) -> tuple[list[MarketplaceUnloadBox], list[BoxImportRowError]]:
     if preview.errors and not ignore_errors:
         raise BoxImportError("row_errors")
 
     applied_errors = list(preview.errors)
-    created_boxes: list[MarketplaceUnloadBox] = []
-
+    boxes_to_fill: list[tuple[BoxImportBoxPreview, list[BoxImportLinePreview]]] = []
     for box_preview in preview.boxes:
         resolvable_lines = [ln for ln in box_preview.lines if ln.product_id is not None]
-        if not resolvable_lines:
-            continue
-        box = await mp_box_svc.create_open_box(session, tenant_id, request_id)
-        created_boxes.append(box)
-        for line in resolvable_lines:
+        if resolvable_lines:
+            boxes_to_fill.append((box_preview, resolvable_lines))
+
+    if not boxes_to_fill:
+        return [], applied_errors
+
+    created_boxes = await mp_box_svc.create_boxes_batch(
+        session,
+        tenant_id,
+        request_id,
+        count=len(boxes_to_fill),
+        box_preset=box_preset,
+    )
+    for (_preview_box, lines), box in zip(boxes_to_fill, created_boxes, strict=True):
+        for line in lines:
             assert line.product_id is not None
             await mp_box_svc.add_manual_qty_to_box(
                 session,
@@ -342,5 +373,4 @@ async def apply_marketplace_box_import(
                 quantity=line.quantity,
             )
 
-    await session.commit()
     return created_boxes, applied_errors

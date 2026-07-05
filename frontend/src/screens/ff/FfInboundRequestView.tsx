@@ -44,6 +44,7 @@ import { printInboundSupplyWaybill } from '../../utils/printShipmentWaybill'
 import { readApiErrorMessage } from '../../utils/readApiErrorMessage'
 import { FfInboundBoxAddDialog } from './FfInboundBoxAddDialog'
 import { FfInboundSortingPanel } from './FfInboundSortingPanel'
+import { BoxImportDialog } from '../../components/BoxImportDialog'
 import {
   effectiveActualQty,
   inboundStatusRu,
@@ -190,6 +191,8 @@ export function FfInboundRequestView({
   const [boxAddDialogBoxId, setBoxAddDialogBoxId] = useState<string | null>(null)
   const [finishConfirmOpen, setFinishConfirmOpen] = useState(false)
   const [scanToastError, setScanToastError] = useState<string | null>(null)
+  const [importSuccessMsg, setImportSuccessMsg] = useState<string | null>(null)
+  const [boxImportOpen, setBoxImportOpen] = useState(false)
   const [newLocationCode, setNewLocationCode] = useState('')
   const [requestWarehouse, setRequestWarehouse] = useState<WarehouseRow | null>(null)
   const loadDetailSeq = useRef(0)
@@ -1591,6 +1594,14 @@ export function FfInboundRequestView({
                 <Button
                   variant="outlined"
                   disabled={busy}
+                  onClick={() => setBoxImportOpen(true)}
+                  data-testid="ff-inbound-import-boxes"
+                >
+                  Загрузить по накладной
+                </Button>
+                <Button
+                  variant="contained"
+                  disabled={busy}
                   onClick={() => void handleCreateBox()}
                   data-testid="ff-inbound-add-to-box"
                 >
@@ -1629,6 +1640,14 @@ export function FfInboundRequestView({
                     возвращаться и менять состав, пока приёмка не завершена.
                   </Typography>
                 </Box>
+                <Button
+                  variant="outlined"
+                  disabled={busy}
+                  onClick={() => setBoxImportOpen(true)}
+                  data-testid="ff-inbound-boxes-import"
+                >
+                  Загрузить по накладной
+                </Button>
                 <Button
                   variant="outlined"
                   disabled={busy}
@@ -2126,6 +2145,38 @@ export function FfInboundRequestView({
           boxLines={boxAddDialogBox.lines}
           catalogById={catalogById}
           onUpdated={async () => {
+            await loadDetail()
+          }}
+        />
+      ) : null}
+
+      <Snackbar
+        open={importSuccessMsg !== null}
+        autoHideDuration={3500}
+        onClose={() => setImportSuccessMsg(null)}
+        anchorOrigin={{ vertical: 'bottom', horizontal: 'center' }}
+      >
+        <Alert
+          severity="success"
+          variant="filled"
+          onClose={() => setImportSuccessMsg(null)}
+          data-testid="ff-inbound-import-success-snackbar"
+          sx={{ width: '100%' }}
+        >
+          {importSuccessMsg}
+        </Alert>
+      </Snackbar>
+
+      {boxImportOpen ? (
+        <BoxImportDialog
+          open={boxImportOpen}
+          token={token}
+          requestId={requestId}
+          importBasePath={`/operations/inbound-intake-requests/${requestId}/import-boxes`}
+          testIdPrefix="ff-inbound-box-import"
+          onClose={() => setBoxImportOpen(false)}
+          onApplied={async (message) => {
+            setImportSuccessMsg(message)
             await loadDetail()
           }}
         />

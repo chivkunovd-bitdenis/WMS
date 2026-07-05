@@ -4,7 +4,7 @@ import json
 import os
 import uuid
 from datetime import datetime
-from typing import Annotated
+from typing import Annotated, NoReturn
 
 from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, UploadFile, status
 from fastapi.responses import Response
@@ -1349,8 +1349,22 @@ async def delete_print_template(
         raise _http_from_pt_error(exc) from exc
 
 
-# BACKEND-01 / T-A6 (ORD-44): scan-print, print-all, verify-pair — UI removed in PACK-01..03.
-# No frontend callers after CZ UX fixes; scheduled for removal (MASTER_BACKLOG_RU.md T-A6).
+# BACKEND-01 / T-A6 (ORD-44): scan-print, print-all — removed from UI; return 410 Gone.
+# verify-pair remains deprecated but callable until mobile audit completes.
+
+
+def _raise_marking_endpoint_gone(endpoint: str) -> NoReturn:
+    raise HTTPException(
+        status_code=status.HTTP_410_GONE,
+        detail={
+            "code": "endpoint_removed",
+            "message": (
+                f"{endpoint} removed from product UI; "
+                "use POST .../packaging-lines/{line_id}/print or "
+                "POST .../products/{product_id}/print"
+            ),
+        },
+    )
 
 
 @router.post(
@@ -1358,7 +1372,7 @@ async def delete_print_template(
     response_model=PrintMarkingCodesOut,
     deprecated=True,
     summary=(
-        "Deprecated (T-A6): scan-to-print removed from packaging UI; "
+        "Removed (T-A6): scan-to-print removed from packaging UI; "
         "use POST .../packaging-lines/{line_id}/print"
     ),
 )
@@ -1367,17 +1381,7 @@ async def scan_print_marking_codes(
     user: Annotated[User, Depends(require_packaging_access)],
     session: Annotated[AsyncSession, Depends(get_db)],
 ) -> PrintMarkingCodesOut:
-    try:
-        result = await mc_svc.scan_print_for_packaging_task(
-            session,
-            user.tenant_id,
-            body.packaging_task_id,
-            product_barcode=body.product_barcode,
-            acting_user_id=user.id,
-        )
-    except mc_svc.MarkingCodeServiceError as exc:
-        raise _http_from_mc_error(exc) from exc
-    return _print_marking_codes_out(result)
+    _raise_marking_endpoint_gone("scan-print")
 
 
 @router.post(
@@ -1521,7 +1525,7 @@ def _print_all_out(result: mc_svc.PrintAllMarkingCodesResult) -> PrintAllMarking
     response_model=PrintAllMarkingOut,
     deprecated=True,
     summary=(
-        "Deprecated (T-A6): bulk print-all removed from packaging UI; "
+        "Removed (T-A6): bulk print-all removed from packaging UI; "
         "use POST .../packaging-lines/{line_id}/print per line"
     ),
 )
@@ -1531,24 +1535,7 @@ async def print_all_marking_codes_for_task(
     user: Annotated[User, Depends(require_packaging_access)],
     session: Annotated[AsyncSession, Depends(get_db)],
 ) -> PrintAllMarkingOut:
-    layout_payload: dict[str, object] | None = None
-    if body.layout_json is not None:
-        layout_payload = _layout_in_to_dict(body.layout_json)
-    try:
-        result = await mc_svc.print_all_for_packaging_task(
-            session,
-            user.tenant_id,
-            task_id,
-            acting_user_id=user.id,
-            layout=layout_payload,
-            allow_partial=body.allow_partial,
-            dry_run=body.dry_run,
-        )
-    except mc_svc.MarkingCodeServiceError as exc:
-        raise _http_from_mc_error(exc) from exc
-    except pt_svc.PrintTemplateServiceError as exc:
-        raise _http_from_pt_error(exc) from exc
-    return _print_all_out(result)
+    _raise_marking_endpoint_gone("print-all")
 
 
 class MarkingReprintRequestOut(BaseModel):

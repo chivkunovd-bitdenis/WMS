@@ -6,7 +6,7 @@ import io
 import uuid
 
 import pytest
-from openpyxl import Workbook
+from openpyxl import Workbook  # type: ignore[import-untyped]
 
 from app.services.box_import_service import (
     BoxImportError,

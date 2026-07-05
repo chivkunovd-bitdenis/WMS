@@ -7,6 +7,7 @@ import uuid
 import pytest
 from httpx import AsyncClient
 from sqlalchemy import func, select
+from sqlalchemy.ext.asyncio import AsyncSession
 from test_marking_inventory_personal_shared import (
     _pool_with_codes,
     _product_in_session,
@@ -42,7 +43,7 @@ async def _auth_headers(async_client: AsyncClient) -> tuple[dict[str, str], uuid
     return headers, tenant_id, seller_id
 
 
-async def _count_available(session, *, tenant_id: uuid.UUID, pool_id: uuid.UUID) -> int:
+async def _count_available(session: AsyncSession, *, tenant_id: uuid.UUID, pool_id: uuid.UUID) -> int:
     stmt = select(func.count(MarkingCode.id)).where(
         MarkingCode.tenant_id == tenant_id,
         MarkingCode.pool_id == pool_id,

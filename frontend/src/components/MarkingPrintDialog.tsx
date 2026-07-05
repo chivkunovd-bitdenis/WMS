@@ -333,31 +333,59 @@ export function MarkingPrintDialog({ open, reprint, ctx, busy, onBusyChange, onC
     if (!ctx || canPrintCount < 1) {
       return false
     }
-    const res = await fetch(apiUrl(`/operations/marking-codes/products/${ctx.productId}/codes`), {
-      headers: { Authorization: `Bearer ${ctx.token}` },
-    })
+    const res = await fetch(
+      apiUrl(`/operations/marking-codes/products/${ctx.productId}/print`),
+      {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${ctx.token}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          quantity: canPrintCount,
+          layout_json: printLayout,
+          allow_partial: allowPartial,
+        }),
+      },
+    )
     if (!res.ok) {
-      throw new Error(await readApiErrorMessage(res))
+      setError(await readApiErrorMessage(res))
+      return false
     }
-    const rows = (await res.json()) as {
-      id: string
-      cis_code: string
-      status: string
-      has_label_artifact?: boolean
-    }[]
-    const available = rows.filter((r) => r.status === 'available')
-    if (available.length < canPrintCount) {
-      throw new Error(`Не хватает ${canPrintCount - available.length} КМ в пуле.`)
+    const data = (await res.json()) as {
+      codes: string[]
+      duplicate_copies: number
+      quantity: number
+      shortage: number | null
+      layout: PrintLayout
+      printed_codes?: {
+        id: string
+        cis_code: string
+        has_label_artifact: boolean
+      }[]
     }
-    const picked = available.slice(0, canPrintCount)
+    if (data.quantity < 1) {
+      setError(
+        data.shortage
+          ? `Не хватает ${data.shortage} КМ в пуле.`
+          : 'Нет доступных КМ для печати.',
+      )
+      return false
+    }
+    const printedByCis = new Map(
+      (data.printed_codes ?? []).map((row) => [row.cis_code, row]),
+    )
     await deliverTape(
-      picked.map((row) => ({
-        cis: row.cis_code,
-        codeId: row.id,
-        hasLabelArtifact: row.has_label_artifact ?? false,
-        productLabel: ctx.productLabel ?? null,
-      })),
-      printLayout,
+      data.codes.map((cis) => {
+        const meta = printedByCis.get(cis)
+        return {
+          cis,
+          codeId: meta?.id,
+          hasLabelArtifact: meta?.has_label_artifact ?? false,
+          productLabel: ctx.productLabel ?? null,
+        }
+      }),
+      data.layout ?? printLayout,
       size,
       closeAfter,
       markDone,
