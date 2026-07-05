@@ -1544,6 +1544,122 @@ async def print_codes_for_packaging_line(
     )
 
 
+CATALOG_PRINT_LINE_SENTINEL = uuid.UUID(int=0)
+
+
+async def print_codes_for_product(
+    session: AsyncSession,
+    tenant_id: uuid.UUID,
+    product_id: uuid.UUID,
+    *,
+    acting_user_id: uuid.UUID,
+    quantity: int,
+    layout: PrintLayout | dict[str, object] | None = None,
+    allow_partial: bool = False,
+    duplicate_copies: int | None = None,
+) -> PrintMarkingCodesResult:
+    if quantity < 1:
+        raise MarkingCodeServiceError("invalid_print_quantity")
+
+    print_layout = resolve_print_layout(layout, duplicate_copies=duplicate_copies)
+    event_copies = cz_copies_from_layout(print_layout)
+
+    product = await get_product(session, tenant_id, product_id)
+    if product is None:
+        raise MarkingCodeServiceError("product_not_found")
+    if not product.requires_honest_sign:
+        raise MarkingCodeServiceError("marking_not_required")
+    if product.seller_id is None:
+        raise MarkingCodeServiceError("product_seller_missing")
+
+    code_filter, filter_product = await _code_filter_for_product(
+        session,
+        tenant_id,
+        product.id,
+    )
+    if filter_product is None or code_filter is None:
+        raise MarkingCodeServiceError("product_not_found")
+
+    stmt = (
+        select(MarkingCode)
+        .where(
+            MarkingCode.tenant_id == tenant_id,
+            MarkingCode.seller_id == product.seller_id,
+            MarkingCode.status == STATUS_AVAILABLE,
+            code_filter,
+        )
+        .order_by(MarkingCode.created_at.asc())
+        .limit(quantity)
+        .with_for_update(skip_locked=True)
+    )
+    codes = list((await session.execute(stmt)).scalars().all())
+    available = len(codes)
+    shortage = max(0, quantity - available)
+
+    if shortage > 0 and not allow_partial:
+        await session.rollback()
+        return PrintMarkingCodesResult(
+            packaging_task_line_id=CATALOG_PRINT_LINE_SENTINEL,
+            quantity=0,
+            duplicate_copies=event_copies,
+            is_reprint=False,
+            codes=[],
+            layout=print_layout,
+            shortage=shortage,
+        )
+
+    print_quantity = available if shortage > 0 else quantity
+    if print_quantity < 1:
+        await session.rollback()
+        return PrintMarkingCodesResult(
+            packaging_task_line_id=CATALOG_PRINT_LINE_SENTINEL,
+            quantity=0,
+            duplicate_copies=event_copies,
+            is_reprint=False,
+            codes=[],
+            layout=print_layout,
+            shortage=shortage if shortage > 0 else quantity,
+        )
+
+    now = datetime.now(UTC)
+    for code in codes[:print_quantity]:
+        code.status = STATUS_RESERVED
+        code.reserved_by_user_id = acting_user_id
+        code.reserved_at = now
+    await session.flush()
+
+    for code in codes[:print_quantity]:
+        code.status = STATUS_PRINTED
+        code.product_id = product.id
+        code.printed_at = now
+        code.printed_by_user_id = acting_user_id
+        code.reserved_by_user_id = None
+        code.reserved_at = None
+        await record_event(
+            session,
+            code=code,
+            event_type=EVENT_PRINTED,
+            actor=acting_user_id,
+            document_number=None,
+            packaging_task=None,
+            copies=event_copies,
+        )
+
+    await session.commit()
+
+    printed_slice = codes[:print_quantity]
+    return PrintMarkingCodesResult(
+        packaging_task_line_id=CATALOG_PRINT_LINE_SENTINEL,
+        quantity=print_quantity,
+        duplicate_copies=event_copies,
+        is_reprint=False,
+        codes=[c.cis_code for c in printed_slice],
+        layout=print_layout,
+        shortage=shortage if shortage > 0 else None,
+        printed_codes=_printed_code_infos(printed_slice),
+    )
+
+
 async def _find_product_by_scan_barcode(
     session: AsyncSession,
     tenant_id: uuid.UUID,
