@@ -149,6 +149,13 @@ class PrintMarkingCodesIn(BaseModel):
     duplicate_copies: int | None = Field(default=None, ge=1, le=2)
 
 
+class PrintProductMarkingIn(BaseModel):
+    quantity: int = Field(ge=1)
+    layout_json: PrintLayoutOut | None = None
+    allow_partial: bool = False
+    duplicate_copies: int | None = Field(default=None, ge=1, le=2)
+
+
 class PrintMarkingCodesOut(BaseModel):
     packaging_task_line_id: str
     quantity: int
@@ -1136,6 +1143,53 @@ async def list_product_marking_codes(
         )
         for r in rows
     ]
+
+
+@router.post(
+    "/products/{product_id}/print",
+    response_model=PrintMarkingCodesOut,
+)
+async def print_product_marking_codes(
+    product_id: uuid.UUID,
+    body: PrintProductMarkingIn,
+    user: Annotated[User, Depends(get_current_user)],
+    session: Annotated[AsyncSession, Depends(get_db)],
+    effective_seller_id: Annotated[uuid.UUID | None, Depends(get_effective_seller_id)],
+) -> PrintMarkingCodesOut:
+    product = await get_product(session, user.tenant_id, product_id)
+    if product is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="product_not_found")
+    await _assert_product_marking_access(user, product, effective_seller_id)
+
+    layout_payload: dict[str, object] | None = None
+    if body.layout_json is not None:
+        layout_payload = _layout_in_to_dict(body.layout_json)
+    try:
+        result = await mc_svc.print_codes_for_product(
+            session,
+            user.tenant_id,
+            product_id,
+            acting_user_id=user.id,
+            quantity=body.quantity,
+            layout=layout_payload,
+            allow_partial=body.allow_partial,
+            duplicate_copies=body.duplicate_copies,
+        )
+    except mc_svc.MarkingCodeServiceError as exc:
+        raise _http_from_mc_error(exc) from exc
+    except pt_svc.PrintTemplateServiceError as exc:
+        raise _http_from_pt_error(exc) from exc
+    if result.quantity > 0 and layout_payload is not None:
+        try:
+            await pt_svc.save_user_last_print_layout(
+                session,
+                user.tenant_id,
+                user.id,
+                layout_payload,
+            )
+        except pt_svc.PrintTemplateServiceError as exc:
+            raise _http_from_pt_error(exc) from exc
+    return _print_marking_codes_out(result)
 
 
 @router.get("/codes/{code_id}/label-artifact")
