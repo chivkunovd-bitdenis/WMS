@@ -7,7 +7,8 @@
   - Frontend: `BoxImportDialog` на приёмке (`FfInboundRequestView`) и отгрузке МП (`FfSuppliesShipmentsPage`); `MarkingPrintDialog.printCatalogTape` → списывающий POST; `markingAvailable` учитывает shared baskets.
   - Tests: box import service + inbound API; catalog print write-off; write-off invariants (упаковка, каталог, reprint); deprecated endpoints openapi.
 - What did NOT change: e2e для импорта коробов (TODO); mobile audit путей печати; prod deploy; git commit (не запрошен).
-- Verification: backend pytest 18/18 (composer subset); frontend `npm run build` green.
+- Verification: backend pytest 18/18 (composer subset); frontend `npm run build` green; e2e `ff-inbound-box-import` 2/2.
+- Commit: `e9f8b71` → pushed `origin/staging` (Railway auto-deploy).
 
 ## TASK-097 — 2026-07-05 — MP упаковка: убрать дубли шапки на вкладке «Упаковка»
 
