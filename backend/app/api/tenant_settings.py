@@ -19,10 +19,12 @@ router = APIRouter(prefix="/tenant", tags=["tenant"])
 
 class TenantSettingsOut(BaseModel):
     address_storage_enabled: bool
+    separate_marking_print_enabled: bool
 
 
 class TenantSettingsPatch(BaseModel):
     address_storage_enabled: bool | None = None
+    separate_marking_print_enabled: bool | None = None
 
 
 @router.get("/settings", response_model=TenantSettingsOut)
@@ -46,7 +48,7 @@ async def patch_tenant_settings(
     user: Annotated[User, Depends(require_fulfillment_admin)],
     session: Annotated[AsyncSession, Depends(get_db)],
 ) -> TenantSettingsOut:
-    if body.address_storage_enabled is None:
+    if body.address_storage_enabled is None and body.separate_marking_print_enabled is None:
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
             detail="no_fields_to_update",
@@ -56,6 +58,7 @@ async def patch_tenant_settings(
             session,
             user.tenant_id,
             address_storage_enabled=body.address_storage_enabled,
+            separate_marking_print_enabled=body.separate_marking_print_enabled,
         )
     except LookupError:
         raise HTTPException(

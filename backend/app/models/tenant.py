@@ -36,6 +36,12 @@ class Tenant(Base):
         nullable=False,
         server_default="true",
     )
+    separate_marking_print_enabled: Mapped[bool] = mapped_column(
+        Boolean,
+        nullable=False,
+        server_default="false",
+        default=False,
+    )
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), nullable=False
     )

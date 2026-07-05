@@ -151,7 +151,7 @@ test('FF packaging: print honest sign codes for line quantity', async ({ page })
 })
 
 // TC-NEW-CROSS-01 — перепечатка одного выбранного КМ из строки упаковки.
-test('FF packaging: reprint single selected marking code', async ({ page }) => {
+test('FF packaging: reprint selected marking codes', async ({ page }) => {
   test.setTimeout(120_000)
   const email = `e2e-reprint1-${Date.now()}@example.com`
   const password = 'password123'
@@ -279,12 +279,18 @@ test('FF packaging: reprint single selected marking code', async ({ page }) => {
   await expect(page.getByTestId('marking-reprint-pick-list')).toBeVisible()
 
   const pickList = page.getByTestId('marking-reprint-pick-list')
-  const codeRadios = pickList.getByRole('radio')
-  await expect(codeRadios).toHaveCount(initialPrintBody.quantity)
-  const secondCodeId = await codeRadios.nth(1).inputValue()
-  expect(secondCodeId).toBeTruthy()
-  await codeRadios.nth(1).click()
+  const codeChecks = pickList.getByRole('checkbox')
+  await expect(codeChecks).toHaveCount(initialPrintBody.quantity)
+  // Первый КМ выбран по умолчанию (типовой случай «порвалась одна этикетка»).
+  await expect(codeChecks.nth(0)).toBeChecked()
   await expect(page.getByTestId('marking-print-will-print')).toContainText('К перепечатке: 1 КМ')
+  const firstCodeId = await codeChecks.nth(0).inputValue()
+  const secondCodeId = await codeChecks.nth(1).inputValue()
+  expect(firstCodeId).toBeTruthy()
+  expect(secondCodeId).toBeTruthy()
+  // Мультивыбор: добавляем второй КМ к перепечатке.
+  await codeChecks.nth(1).click()
+  await expect(page.getByTestId('marking-print-will-print')).toContainText('К перепечатке: 2 КМ')
 
   const reprintWait = page.waitForResponse(
     (r) =>
@@ -302,11 +308,11 @@ test('FF packaging: reprint single selected marking code', async ({ page }) => {
     code_ids?: string[]
   }
   expect(reprintPayload.reprint).toBe(true)
-  expect(reprintPayload.code_ids).toEqual([secondCodeId])
+  expect(reprintPayload.code_ids).toEqual([firstCodeId, secondCodeId])
 
   const reprintBody = (await (await reprintWait).json()) as { quantity: number; codes: string[] }
-  expect(reprintBody.quantity).toBe(1)
-  expect(reprintBody.codes).toHaveLength(1)
+  expect(reprintBody.quantity).toBe(2)
+  expect(reprintBody.codes).toHaveLength(2)
 })
 
 // TC-NEW-PKG-07 — нельзя завершить упаковку без напечатанных КМ по строкам ЧЗ.

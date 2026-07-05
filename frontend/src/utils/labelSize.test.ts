@@ -51,4 +51,32 @@ describe('labelSize', () => {
   it('falls back to default when nothing stored', () => {
     expect(loadLabelSizeId()).toBe('58x40')
   })
+
+  it('persists scoped label sizes separately (cz scope)', () => {
+    saveLabelSizeId('60x80', 'default')
+    saveLabelSizeId('70x120', 'cz')
+    expect(loadLabelSizeId('default')).toBe('60x80')
+    expect(loadLabelSizeId('cz')).toBe('70x120')
+  })
+
+  it('falls back to default scope when cz scope not set', () => {
+    saveLabelSizeId('60x40', 'default')
+    expect(loadLabelSizeId('cz')).toBe('60x40')
+  })
+
+  it('returns default size when neither scope nor default is set', () => {
+    expect(loadLabelSizeId('cz')).toBe('58x40')
+  })
+
+  it('persists scoped label sizes separately (label scope)', () => {
+    saveLabelSizeId('60x80', 'default')
+    saveLabelSizeId('60x40', 'label')
+    expect(loadLabelSizeId('default')).toBe('60x80')
+    expect(loadLabelSizeId('label')).toBe('60x40')
+  })
+
+  it('falls back to default scope when label scope not set', () => {
+    saveLabelSizeId('70x120', 'default')
+    expect(loadLabelSizeId('label')).toBe('70x120')
+  })
 })

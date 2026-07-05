@@ -50,6 +50,7 @@ import {
   ffRoleLabel,
   resolveFfPermissions,
 } from './utils/ffPermissions'
+import { setSeparateMarkingPrintEnabled } from './utils/separateMarkingPrint'
 
 type WarehouseRow = { id: string; name: string; code: string }
 type LocationRow = { id: string; code: string; warehouse_id: string; barcode: string }
@@ -638,6 +639,10 @@ export default function App() {
     refreshDiscrepancyActList,
     refreshGlobalMovements,
   ])
+
+  useEffect(() => {
+    setSeparateMarkingPrintEnabled(me?.separate_marking_print_enabled === true)
+  }, [me])
 
   useEffect(() => {
     if (!token || !selectedInboundId) {
@@ -2653,6 +2658,7 @@ export default function App() {
                   onAddressStorageChange={() => {
                     void reloadMe()
                   }}
+                  separateMarkingPrintEnabled={me.separate_marking_print_enabled === true}
                 />
               ) : (
                 <Navigate to={`${base}/dashboard`} replace />

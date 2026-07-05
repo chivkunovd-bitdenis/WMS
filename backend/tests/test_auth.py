@@ -28,6 +28,8 @@ async def test_register_login_me(async_client: AsyncClient) -> None:
     assert body["email"] == "admin@example.com"
     assert body["organization_name"] == "FF Test"
     assert body["role"] == "fulfillment_admin"
+    assert body["address_storage_enabled"] is True
+    assert body["separate_marking_print_enabled"] is False
 
     login = await async_client.post(
         "/auth/login",

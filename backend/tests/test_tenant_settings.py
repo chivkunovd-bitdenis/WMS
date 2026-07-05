@@ -35,6 +35,16 @@ async def test_me_includes_address_storage_enabled_default_true(
 
 
 @pytest.mark.asyncio
+async def test_me_includes_separate_marking_print_enabled_default_false(
+    async_client: AsyncClient,
+) -> None:
+    token = await _register_admin(async_client, "tenant-settings-me-sep")
+    me = await async_client.get("/auth/me", headers=_auth(token))
+    assert me.status_code == 200, me.text
+    assert me.json()["separate_marking_print_enabled"] is False
+
+
+@pytest.mark.asyncio
 async def test_tenant_settings_get_and_patch(async_client: AsyncClient) -> None:
     token = await _register_admin(async_client, "tenant-settings-patch")
     headers = _auth(token)
@@ -42,6 +52,7 @@ async def test_tenant_settings_get_and_patch(async_client: AsyncClient) -> None:
     get0 = await async_client.get("/tenant/settings", headers=headers)
     assert get0.status_code == 200, get0.text
     assert get0.json()["address_storage_enabled"] is True
+    assert get0.json()["separate_marking_print_enabled"] is False
 
     patch = await async_client.patch(
         "/tenant/settings",
@@ -50,12 +61,55 @@ async def test_tenant_settings_get_and_patch(async_client: AsyncClient) -> None:
     )
     assert patch.status_code == 200, patch.text
     assert patch.json()["address_storage_enabled"] is False
+    assert patch.json()["separate_marking_print_enabled"] is False
 
     me = await async_client.get("/auth/me", headers=headers)
     assert me.json()["address_storage_enabled"] is False
+    assert me.json()["separate_marking_print_enabled"] is False
 
     get1 = await async_client.get("/tenant/settings", headers=headers)
     assert get1.json()["address_storage_enabled"] is False
+    assert get1.json()["separate_marking_print_enabled"] is False
+
+
+@pytest.mark.asyncio
+async def test_tenant_settings_patch_separate_marking_print(
+    async_client: AsyncClient,
+) -> None:
+    token = await _register_admin(async_client, "tenant-settings-sep-mark")
+    headers = _auth(token)
+
+    get0 = await async_client.get("/tenant/settings", headers=headers)
+    assert get0.status_code == 200, get0.text
+    assert get0.json()["separate_marking_print_enabled"] is False
+
+    patch = await async_client.patch(
+        "/tenant/settings",
+        headers=headers,
+        json={"separate_marking_print_enabled": True},
+    )
+    assert patch.status_code == 200, patch.text
+    assert patch.json()["separate_marking_print_enabled"] is True
+    assert patch.json()["address_storage_enabled"] is True
+
+    get1 = await async_client.get("/tenant/settings", headers=headers)
+    assert get1.json()["separate_marking_print_enabled"] is True
+
+
+@pytest.mark.asyncio
+async def test_tenant_settings_patch_no_fields_returns_422(
+    async_client: AsyncClient,
+) -> None:
+    token = await _register_admin(async_client, "tenant-settings-no-fields")
+    headers = _auth(token)
+
+    patch = await async_client.patch(
+        "/tenant/settings",
+        headers=headers,
+        json={},
+    )
+    assert patch.status_code == 422
+    assert patch.json()["detail"] == "no_fields_to_update"
 
 
 @pytest.mark.asyncio

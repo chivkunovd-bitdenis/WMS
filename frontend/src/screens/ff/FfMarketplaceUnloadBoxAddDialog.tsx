@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useBarcodeScanner } from '../../hooks/useBarcodeScanner'
 import {
   Alert,
   Box,
@@ -401,11 +402,11 @@ export function FfMarketplaceUnloadBoxAddDialog({
     }
   }
 
-  const doScan = () => {
+  const doScan = (rawInput?: string) => {
     if (readOnly) {
       return
     }
-    const raw = scanBarcode.trim()
+    const raw = (rawInput ?? scanBarcode).trim()
     if (!raw) {
       setError('Введите штрихкод.')
       return
@@ -417,6 +418,14 @@ export function FfMarketplaceUnloadBoxAddDialog({
     }
     void runScan(raw, false)
   }
+
+  useBarcodeScanner({
+    enabled: open && !readOnly && !readyBoxConfirmOpen && !readyBoxOverPlanOpen,
+    onScan: (code) => {
+      setScanBarcode(code)
+      doScan(code)
+    },
+  })
 
   const confirmReadyBox = () => {
     setReadyBoxConfirmOpen(false)

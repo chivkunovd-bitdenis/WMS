@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type MouseEvent } from 'react'
 import { useSearchParams } from 'react-router-dom'
+import { useBarcodeScanner } from '../../hooks/useBarcodeScanner'
 import { DeleteOutlineOutlined, MoreVertOutlined } from '@mui/icons-material'
 import {
   Alert,
@@ -813,8 +814,8 @@ export function FfSuppliesShipmentsPage({
     }
   }
 
-  const requestAttachBoxScan = () => {
-    const raw = scanBarcode.trim()
+  const requestAttachBoxScan = (rawInput?: string) => {
+    const raw = (rawInput ?? scanBarcode).trim()
     if (!raw) {
       setModalError('Введите штрихкод готового короба (WHB-…).')
       return
@@ -1651,9 +1652,9 @@ export function FfSuppliesShipmentsPage({
     return true
   }
 
-  const addMpLineByBarcode = async () => {
+  const addMpLineByBarcode = async (rawInput?: string) => {
     if (!unloadDetail || !docModalId || docModal !== 'marketplace_unload' || !mpDraft) return
-    const code = mpLineBarcodeScan.trim()
+    const code = (rawInput ?? mpLineBarcodeScan).trim()
     if (!code) return
     setModalBusy(true)
     setModalError(null)
@@ -1694,6 +1695,41 @@ export function FfSuppliesShipmentsPage({
       setModalBusy(false)
     }
   }
+
+  useBarcodeScanner({
+    enabled:
+      docModal !== null &&
+      docModalId !== null &&
+      docModal === 'marketplace_unload' &&
+      mpUnloadTab === 'products' &&
+      mpLineDraft &&
+      mpDraft &&
+      boxAddDialogBoxId == null &&
+      !mpPickerOpen &&
+      !modalBusy,
+    onScan: (code) => {
+      setMpLineBarcodeScan(code)
+      void addMpLineByBarcode(code)
+    },
+  })
+
+  useBarcodeScanner({
+    enabled:
+      docModal !== null &&
+      docModalId !== null &&
+      docModal === 'marketplace_unload' &&
+      mpUnloadTab === 'products' &&
+      mpExecutionPhase &&
+      boxAddDialogBoxId == null &&
+      !mpPickerOpen &&
+      !modalBusy &&
+      !mpAttachConfirmOpen &&
+      !mpAttachOverPlanOpen,
+    onScan: (code) => {
+      setScanBarcode(code)
+      requestAttachBoxScan(code)
+    },
+  })
 
   const applyMpProductPicker = async (mpPickerQtyByProduct: Record<string, number>) => {
     if (!unloadDetail || !docModalId || docModal !== 'marketplace_unload' || !mpDraft) return

@@ -329,7 +329,7 @@ export function HonestSignLedgerPage({
         />
         <TextField
           size="small"
-          label="Маска КМ"
+          label="Поиск КМ"
           value={cisMask}
           onChange={(e) => {
             setOffset(0)
