@@ -51,21 +51,6 @@ const NON_HONEST_SIGN_LABEL_LAYOUT: PrintLayout = {
   units: [{ block: 'label', copies: 1 }],
 }
 
-/**
- * Печать пачками: большие ленты режутся на пачки по столько этикеток,
- * чтобы обрыв ленты терял максимум одну пачку.
- */
-const PRINT_CHUNK_SIZE = 20
-
-type ChunkPrintJob = {
-  sections: string[]
-  size: LabelSize
-  printedChunks: number
-  closeAfter: boolean
-  /** В раздельном режиме какой флаг «напечатано ✓» выставить по завершении. */
-  markDone: 'cz' | 'wb' | null
-}
-
 export type MarkingPrintContext = {
   token: string
   /** Пустой или отсутствует — печать из каталога/ЧЗ без строки упаковки (client-side). */
@@ -110,7 +95,6 @@ export function MarkingPrintDialog({ open, reprint, ctx, busy, onBusyChange, onC
   const [reprintCodes, setReprintCodes] = useState<PrintedCodeOption[]>([])
   const [selectedReprintCodeIds, setSelectedReprintCodeIds] = useState<string[]>([])
   const [reprintCodesLoading, setReprintCodesLoading] = useState(false)
-  const [chunkJob, setChunkJob] = useState<ChunkPrintJob | null>(null)
   // Раздельная печать ЧЗ и ШК ВБ: свои размеры и свои кнопки на каждый тип этикетки.
   const separateEnabled = useSeparateMarkingPrint()
   const [czLabelSize, setCzLabelSize] = useState<LabelSize>(() =>
@@ -159,7 +143,6 @@ export function MarkingPrintDialog({ open, reprint, ctx, busy, onBusyChange, onC
     setSelectedReprintCodeIds([])
     setReprintCodesLoading(false)
     setDragTapeIndex(null)
-    setChunkJob(null)
     setSepCzQty(2)
     setSepWbQty(1)
     setSepCzDone(false)
@@ -303,11 +286,6 @@ export function MarkingPrintDialog({ open, reprint, ctx, busy, onBusyChange, onC
     }
   }
 
-  /**
-   * Физическая печать готовой ленты: короткая — одним заданием,
-   * длинная — пачками через диалог прогресса (данные к этому моменту
-   * уже отправлены/списаны, дальше только физика печати).
-   */
   const deliverTape = async (
     tapeUnits: MarkingTapeUnitInput[],
     printLayout: PrintLayout,
@@ -321,18 +299,12 @@ export function MarkingPrintDialog({ open, reprint, ctx, busy, onBusyChange, onC
     const sections = await buildMarkingTapeSections(tapeUnits, printLayout, ctx.productLabel, {
       authToken: ctx.token,
     })
-    if (sections.length <= PRINT_CHUNK_SIZE) {
-      await printTapeSections(sections, size)
-      markSectionDone(markDone)
-      ctx.onPrinted()
-      if (closeAfter) {
-        onClose()
-      }
-      return
-    }
-    // Данные уже на бэкенде — обновляем родителя сразу, физику печатаем пачками.
+    await printTapeSections(sections, size)
+    markSectionDone(markDone)
     ctx.onPrinted()
-    setChunkJob({ sections, size, printedChunks: 0, closeAfter, markDone })
+    if (closeAfter) {
+      onClose()
+    }
   }
 
   const printLabelOnlyTape = async (
@@ -552,47 +524,6 @@ export function MarkingPrintDialog({ open, reprint, ctx, busy, onBusyChange, onC
     } finally {
       onBusyChange(false)
     }
-  }
-
-  /** Печать пачками: обработчики диалога прогресса. */
-  const chunkTotal = chunkJob ? Math.ceil(chunkJob.sections.length / PRINT_CHUNK_SIZE) : 0
-
-  const printChunk = async (chunkIndex: number) => {
-    if (!chunkJob) {
-      return
-    }
-    onBusyChange(true)
-    setError(null)
-    try {
-      const slice = chunkJob.sections.slice(
-        chunkIndex * PRINT_CHUNK_SIZE,
-        (chunkIndex + 1) * PRINT_CHUNK_SIZE,
-      )
-      await printTapeSections(slice, chunkJob.size)
-      setChunkJob((prev) =>
-        prev ? { ...prev, printedChunks: Math.max(prev.printedChunks, chunkIndex + 1) } : prev,
-      )
-    } catch (e) {
-      setError(e instanceof Error ? e.message : 'Не удалось напечатать пачку.')
-    } finally {
-      onBusyChange(false)
-    }
-  }
-
-  const finishChunkJob = () => {
-    if (!chunkJob) {
-      return
-    }
-    markSectionDone(chunkJob.markDone)
-    const { closeAfter } = chunkJob
-    setChunkJob(null)
-    if (closeAfter) {
-      onClose()
-    }
-  }
-
-  const abortChunkJob = () => {
-    setChunkJob(null)
   }
 
   const handleSaveTemplate = async () => {
@@ -1078,68 +1009,6 @@ export function MarkingPrintDialog({ open, reprint, ctx, busy, onBusyChange, onC
                 {reprint ? 'Перепечатать' : 'Печать'}
               </Button>
             </>
-          )}
-        </DialogActions>
-      </Dialog>
-      <Dialog
-        open={chunkJob !== null}
-        maxWidth="xs"
-        fullWidth
-        data-testid="marking-print-chunk-dialog"
-      >
-        <DialogTitle>Печать пачками</DialogTitle>
-        <DialogContent>
-          {chunkJob ? (
-            <Stack spacing={1.5} sx={{ pt: 0.5 }}>
-              <Typography variant="body2">
-                Этикеток: {chunkJob.sections.length} · пачек: {chunkTotal} (по {PRINT_CHUNK_SIZE})
-              </Typography>
-              <Typography variant="body2" data-testid="marking-print-chunk-progress">
-                Отправлено пачек: {chunkJob.printedChunks} из {chunkTotal}
-              </Typography>
-              <Typography variant="caption" color="text.secondary">
-                Если лента кончилась во время печати — заправьте новую и нажмите «Повторить
-                пачку», затем продолжайте.
-              </Typography>
-              {error ? (
-                <Alert severity="error" data-testid="marking-print-chunk-error">
-                  {error}
-                </Alert>
-              ) : null}
-            </Stack>
-          ) : null}
-        </DialogContent>
-        <DialogActions>
-          <Button onClick={abortChunkJob} disabled={busy} data-testid="marking-print-chunk-abort">
-            Прервать
-          </Button>
-          {chunkJob && chunkJob.printedChunks > 0 && chunkJob.printedChunks <= chunkTotal ? (
-            <Button
-              disabled={busy}
-              onClick={() => void printChunk(chunkJob.printedChunks - 1)}
-              data-testid="marking-print-chunk-repeat"
-            >
-              Повторить пачку {chunkJob.printedChunks}
-            </Button>
-          ) : null}
-          {chunkJob && chunkJob.printedChunks < chunkTotal ? (
-            <Button
-              variant="contained"
-              disabled={busy}
-              onClick={() => void printChunk(chunkJob.printedChunks)}
-              data-testid="marking-print-chunk-next"
-            >
-              Печатать пачку {chunkJob.printedChunks + 1}
-            </Button>
-          ) : (
-            <Button
-              variant="contained"
-              disabled={busy}
-              onClick={finishChunkJob}
-              data-testid="marking-print-chunk-done"
-            >
-              Готово
-            </Button>
           )}
         </DialogActions>
       </Dialog>
