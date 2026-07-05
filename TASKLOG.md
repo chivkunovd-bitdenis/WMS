@@ -9,6 +9,7 @@
   - E2e: `ff-separate-marking-print.spec.ts` (раздельный UI + chunk-диалог); обновлён `ff-marking-packaging.spec.ts` (мультивыбор перепечатки).
 - What did NOT change: legacy v2 `InboundScreen` (старый shell); mobile/Android WIP в `mobile/`; prod deploy.
 - Verification: backend `ruff`/`mypy` + pytest tenant_settings 9/9; frontend `npm run build`; vitest 75/75; e2e `ff-separate-marking-print` 2/2, `ff-marking-packaging` 3/3, `stab-cz-ui-print` + `ff-marking-print-constructor` green.
+- Commit: `3f8b043` → pushed `origin/staging` (Railway auto-deploy).
 
 ## TASK-095 — 2026-07-02 — Печать ТЗ в отгрузке + выбор размера этикетки в модалках печати
 
