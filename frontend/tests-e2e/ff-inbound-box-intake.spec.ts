@@ -63,7 +63,8 @@ test.describe('FF inbound box piece intake', () => {
     await page.getByTestId('ff-inbound-box-row').first().getByRole('button', { name: 'Наполнить' }).click();
     await expect(page.getByTestId('ff-inbound-box-add-dialog')).toBeVisible();
     const qtyInput = page.getByTestId('ff-inbound-box-add-manual-qty').first();
-    await qtyInput.fill('4');
+    await qtyInput.click();
+    await qtyInput.pressSequentially('4');
     await Promise.all([
       waitForPutOk(page, INBOUND_API, (u) => u.includes('/boxes/') && u.includes('/lines/')),
       qtyInput.blur(),

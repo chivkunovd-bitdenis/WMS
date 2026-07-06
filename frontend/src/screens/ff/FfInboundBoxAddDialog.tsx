@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useBarcodeScanner } from '../../hooks/useBarcodeScanner'
 import CloseOutlined from '@mui/icons-material/CloseOutlined'
 import {
@@ -87,6 +87,7 @@ export function FfInboundBoxAddDialog({
   const [error, setError] = useState<string | null>(null)
   const [scanBarcode, setScanBarcode] = useState('')
   const [draftQtyByProductId, setDraftQtyByProductId] = useState<Record<string, string>>({})
+  const draftQtyRef = useRef(draftQtyByProductId)
 
   const qtyInBoxByProductId = useMemo(() => {
     const m = new Map<string, number>()
@@ -110,12 +111,16 @@ export function FfInboundBoxAddDialog({
     setDraftQtyByProductId(next)
   }, [open, qtyInBoxByProductId, requestLines])
 
+  useEffect(() => {
+    draftQtyRef.current = draftQtyByProductId
+  }, [draftQtyByProductId])
+
   const saveQty = useCallback(
-    async (productId: string) => {
+    async (productId: string, rawOverride?: string) => {
       if (readOnly) {
         return
       }
-      const raw = draftQtyByProductId[productId] ?? '0'
+      const raw = rawOverride ?? draftQtyRef.current[productId] ?? '0'
       const qty = Math.floor(Number(raw))
       if (!Number.isFinite(qty) || qty < 0) {
         setError('Укажите целое количество ≥ 0.')
@@ -149,7 +154,7 @@ export function FfInboundBoxAddDialog({
         setBusy(false)
       }
     },
-    [authHeaders, boxId, draftQtyByProductId, onUpdated, qtyInBoxByProductId, readOnly, requestId],
+    [authHeaders, boxId, onUpdated, qtyInBoxByProductId, readOnly, requestId],
   )
 
   const flushPendingQty = useCallback(async () => {
@@ -363,11 +368,13 @@ export function FfInboundBoxAddDialog({
                                 [ln.product_id]: e.target.value,
                               }))
                             }
-                            onBlur={() => void saveQty(ln.product_id)}
+                            onBlur={(e) =>
+                              void saveQty(ln.product_id, (e.target as HTMLInputElement).value)
+                            }
                             onKeyDown={(e) => {
                               if (e.key === 'Enter') {
                                 e.preventDefault()
-                                void saveQty(ln.product_id)
+                                void saveQty(ln.product_id, (e.target as HTMLInputElement).value)
                               }
                             }}
                             slotProps={{

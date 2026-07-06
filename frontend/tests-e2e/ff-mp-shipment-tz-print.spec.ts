@@ -168,5 +168,8 @@ test('FF marketplace unload: Печать ТЗ builds packaging sheet with per-p
   expect(html).toContain('ТЗ на упаковку');
   expect(html).toContain('E2E: сложить в пакет и наклеить стикер WB');
   expect(html).toContain('Носки хлопок');
-  expect(html).toContain('size: A4 portrait');
+  expect(html).toContain('size: A4');
+  expect(html).not.toContain('size: A4 portrait');
+  expect(html).toContain('data-testid="tz-sheet-qty"');
+  expect(html).toContain('>2</span>');
 });

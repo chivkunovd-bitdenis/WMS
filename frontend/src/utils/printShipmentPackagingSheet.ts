@@ -12,6 +12,8 @@ export type PackagingSheetItem = {
   photo_url: string | null
   /** Текст ТЗ на упаковку из карточки товара. */
   instructions: string | null
+  /** Количество по строке отгрузки. */
+  quantity: number
 }
 
 export type ShipmentPackagingSheetData = {
@@ -55,10 +57,14 @@ function itemCard(item: PackagingSheetItem, index: number): string {
       ${instructionsBlock}
     </div>
   </div>
+  <div class="pk-qty-col" data-testid="tz-sheet-qty">
+    <span class="pk-qty-label">Кол-во</span>
+    <span class="pk-qty-value">${item.quantity}</span>
+  </div>
 </section>`
 }
 
-/** HTML сводной печатной формы «ТЗ на упаковку» для всей отгрузки (A4, книжная). */
+/** HTML сводной печатной формы «ТЗ на упаковку» для всей отгрузки (A4). */
 export function buildShipmentPackagingSheetHtml(data: ShipmentPackagingSheetData): string {
   const cards = data.items.map((item, i) => itemCard(item, i)).join('')
   const body =
@@ -71,7 +77,7 @@ export function buildShipmentPackagingSheetHtml(data: ShipmentPackagingSheetData
     <meta charset="utf-8" />
     <title>ТЗ на упаковку — ${escapeLabelHtml(data.documentNumber)}</title>
     <style>
-      @page { size: A4 portrait; margin: 4mm 10mm 6mm; }
+      @page { size: A4; margin: 4mm 10mm 6mm; }
       * { box-sizing: border-box; }
       body {
         font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif;
@@ -137,6 +143,29 @@ export function buildShipmentPackagingSheetHtml(data: ShipmentPackagingSheetData
         line-height: 1.4;
       }
       .pk-tz-empty { color: #999; font-style: italic; }
+      .pk-qty-col {
+        flex: 0 0 16mm;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: flex-start;
+        border-left: 1px solid #ddd;
+        padding-left: 6px;
+        margin-left: 4px;
+      }
+      .pk-qty-label {
+        font-size: 9px;
+        font-weight: 600;
+        color: #555;
+        text-transform: uppercase;
+        letter-spacing: 0.04em;
+      }
+      .pk-qty-value {
+        margin-top: 4px;
+        font-size: 16px;
+        font-weight: 700;
+        line-height: 1.2;
+      }
       .pk-empty { color: #555; }
     </style>
   </head>

@@ -1,5 +1,15 @@
 # TASKLOG
 
+## TASK-099 — 2026-07-06 — Приёмка: редактирование после завершения, фикс blur→0, печать ТЗ
+
+- What changed:
+  - Backend: `POST .../reopen-receiving` — вернуть заявку в приёмку, сторно остатка в сортировке, повторное завершение пересчитывает остатки.
+  - Frontend приёмка: sticky колонки «Заявлено»/«Принято», кнопка «Редактировать» после завершения; BUG-4 — сохранение факта по `event.target` при blur (строка + короб).
+  - Печать ТЗ из отгрузки МП: столбец «Кол-во»; `@page size: A4` без принудительного portrait (альбом из диалога печати).
+- What did NOT change: состав коробов после reopen; mobile/.
+- Verification: backend pytest `test_reopen_receiving_*`; frontend `npm run build`; vitest `printShipmentPackagingSheet`; e2e `inbound-receiving-v2`, `ff-inbound-box-intake`, `ff-mp-shipment-tz-print`.
+- Commit: pending → prod via PR `main`.
+
 ## TASK-098 — 2026-07-05 — COMPOSER: импорт коробов xlsx + ЧЗ печать из общих корзин (wave 1–3)
 
 - What changed:

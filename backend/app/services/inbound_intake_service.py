@@ -1226,6 +1226,61 @@ async def complete_distribution(
     return req
 
 
+async def reopen_receiving(
+    session: AsyncSession,
+    tenant_id: uuid.UUID,
+    request_id: uuid.UUID,
+) -> InboundIntakeRequest:
+    """Return request to receiving; reverse sorting-zone stock and clear distribution."""
+    req = await get_request(session, tenant_id, request_id)
+    if req is None:
+        raise InboundIntakeError("request_not_found")
+    if req.status != STATUS_SORTING:
+        raise InboundIntakeError("not_reopenable")
+    if any(ln.posted_qty > 0 for ln in req.lines):
+        raise InboundIntakeError("already_posted_partial")
+
+    sorting_loc = await sorting_loc_svc.get_or_create_sorting_location(
+        session, tenant_id, req.warehouse_id
+    )
+    for line in req.lines:
+        qty = _accepted_qty_for_line(line)
+        if qty < 1:
+            continue
+        try:
+            await inv_svc.reverse_inbound_receive(
+                session,
+                tenant_id=tenant_id,
+                product_id=line.product_id,
+                storage_location_id=sorting_loc.id,
+                quantity=qty,
+                inbound_intake_line_id=line.id,
+            )
+        except ValueError as exc:
+            if str(exc) == "insufficient stock":
+                raise InboundIntakeError("sorting_stock_unavailable") from exc
+            raise
+
+    await session.execute(
+        sa.delete(InboundIntakeDistributionLine).where(
+            InboundIntakeDistributionLine.request_id == request_id
+        )
+    )
+    req.distribution_completed_at = None
+    req.verified_at = None
+    req.status = STATUS_RECEIVING
+    for line in req.lines:
+        box_total = await _box_total_for_product(session, request_id, line.product_id)
+        accepted = _accepted_qty_for_line(line)
+        line.actual_qty = max(0, accepted - box_total)
+
+    await session.commit()
+    reloaded = await get_request(session, tenant_id, request_id)
+    if reloaded is None:
+        raise InboundIntakeError("request_not_found")
+    return reloaded
+
+
 async def reopen_distribution(
     session: AsyncSession,
     tenant_id: uuid.UUID,

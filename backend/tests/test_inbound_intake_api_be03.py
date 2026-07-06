@@ -318,3 +318,64 @@ async def test_complete_receiving_no_discrepancy(async_client: AsyncClient) -> N
     body = done.json()
     assert body["has_discrepancy"] is False
     assert body["status"] == "sorting"
+
+
+@pytest.mark.asyncio
+async def test_reopen_receiving_reverses_sorting_and_allows_recomplete(
+    async_client: AsyncClient,
+) -> None:
+    """TC-NEW-IN-BE-04: reopen-receiving → edit qty → complete again updates sorting stock."""
+    suffix = str(int(time.time() * 1000))
+    ah = await _admin_headers(async_client, suffix)
+    rid, pid, sku = await _submitted_request(async_client, ah, suffix, expected_qty=5)
+    base = f"/operations/inbound-intake-requests/{rid}"
+
+    for _ in range(3):
+        scan = await async_client.post(
+            f"{base}/receiving/scan",
+            headers=ah,
+            json={"barcode": sku},
+        )
+        assert scan.status_code == 200, scan.text
+
+    done = await async_client.post(f"{base}/complete-receiving", headers=ah)
+    assert done.status_code == 200, done.text
+    assert done.json()["status"] == "sorting"
+
+    bal_after_first = await async_client.get(
+        "/operations/inventory-balances/summary",
+        headers=ah,
+    )
+    assert bal_after_first.status_code == 200, bal_after_first.text
+    row_first = next(r for r in bal_after_first.json() if r["product_id"] == pid)
+    assert row_first["quantity_in_sorting"] == 3
+
+    reopen = await async_client.post(f"{base}/reopen-receiving", headers=ah)
+    assert reopen.status_code == 200, reopen.text
+    assert reopen.json()["status"] == "receiving"
+
+    bal_after_reopen = await async_client.get(
+        "/operations/inventory-balances/summary",
+        headers=ah,
+    )
+    row_reopen = next(r for r in bal_after_reopen.json() if r["product_id"] == pid)
+    assert row_reopen["quantity_in_sorting"] == 0
+
+    line_id = reopen.json()["lines"][0]["id"]
+    patch = await async_client.patch(
+        f"{base}/lines/{line_id}/actual",
+        headers=ah,
+        json={"actual_qty": 5},
+    )
+    assert patch.status_code == 200, patch.text
+
+    done2 = await async_client.post(f"{base}/complete-receiving", headers=ah)
+    assert done2.status_code == 200, done2.text
+    assert done2.json()["lines"][0]["actual_qty"] == 5
+
+    bal_final = await async_client.get(
+        "/operations/inventory-balances/summary",
+        headers=ah,
+    )
+    row_final = next(r for r in bal_final.json() if r["product_id"] == pid)
+    assert row_final["quantity_in_sorting"] == 5

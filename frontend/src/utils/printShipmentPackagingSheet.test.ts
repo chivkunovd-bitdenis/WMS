@@ -14,6 +14,7 @@ function makeItem(overrides: Partial<PackagingSheetItem> = {}): PackagingSheetIt
     wb_nm_id: 123456,
     photo_url: 'https://img/1.jpg',
     instructions: 'Сложить в пакет, наклеить стикер WB',
+    quantity: 3,
     ...overrides,
   }
 }
@@ -25,14 +26,22 @@ const base: ShipmentPackagingSheetData = {
 }
 
 describe('buildShipmentPackagingSheetHtml', () => {
-  it('renders A4 portrait sheet with compact header (no warehouse/created)', () => {
+  it('renders A4 sheet with compact header (no warehouse/created)', () => {
     const html = buildShipmentPackagingSheetHtml(base)
-    expect(html).toContain('size: A4 portrait')
+    expect(html).toContain('size: A4')
+    expect(html).not.toContain('size: A4 portrait')
     expect(html).toContain('ТЗ на упаковку — Отгрузка №000034')
     expect(html).toContain('ООО Ромашка')
     expect(html).not.toContain('Склад ФФ')
     expect(html).not.toContain('Создано')
     expect(html).not.toContain('Актуальная версия')
+  })
+
+  it('renders shipment line quantity in a dedicated column', () => {
+    const html = buildShipmentPackagingSheetHtml(base)
+    expect(html).toContain('data-testid="tz-sheet-qty"')
+    expect(html).toContain('>Кол-во</span>')
+    expect(html).toContain('>3</span>')
   })
 
   it('renders one card per item with photo, article, barcode and ТЗ text', () => {
