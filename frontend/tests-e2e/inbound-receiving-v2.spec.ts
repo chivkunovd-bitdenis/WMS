@@ -20,6 +20,14 @@ test('inbound receiving v2 — scan, manual edit, finish with discrepancy', asyn
   await page.getByTestId('nav-ff-reception').click();
   await page.getByTestId('ff-inbound-queue-table').locator('tbody tr').first().click();
   await expect(page.getByTestId('ff-inbound-doc-root')).toBeVisible();
+  const tableWidth = await page.getByTestId('ff-inbound-lines-table').evaluate((table) => {
+    const container = table.closest('.MuiTableContainer-root');
+    return {
+      table: table.getBoundingClientRect().width,
+      container: container?.getBoundingClientRect().width ?? 0,
+    };
+  });
+  expect(tableWidth.table).toBeGreaterThanOrEqual(tableWidth.container - 1);
 
   await expect(page.getByTestId('ff-inbound-line-actual-display').first()).toHaveText('0');
 
