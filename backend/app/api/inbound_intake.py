@@ -764,6 +764,43 @@ async def complete_inbound_receiving(
 
 
 @router.post(
+    "/{request_id}/reopen-receiving",
+    response_model=InboundIntakeRequestOut,
+)
+async def reopen_inbound_receiving(
+    request_id: uuid.UUID,
+    user: Annotated[User, Depends(require_reception_access)],
+    session: Annotated[AsyncSession, Depends(get_db)],
+) -> InboundIntakeRequestOut:
+    try:
+        r = await svc.reopen_receiving(session, user.tenant_id, request_id)
+    except InboundIntakeError as exc:
+        code = exc.code
+        if code == "request_not_found":
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=code,
+            ) from None
+        if code in (
+            "not_reopenable",
+            "already_posted_partial",
+            "sorting_stock_unavailable",
+        ):
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail=code,
+            ) from None
+        raise
+    r2 = await svc.get_request(session, user.tenant_id, r.id)
+    if r2 is None:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="request_missing",
+        )
+    return _request_out(r2)
+
+
+@router.post(
     "/{request_id}/boxes/{box_id}/mark-label-printed",
     response_model=InboundIntakeBoxOut,
 )

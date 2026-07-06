@@ -175,6 +175,7 @@ export function FfInboundRequestView({
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [actualDraftByLineId, setActualDraftByLineId] = useState<Record<string, string>>({})
+  const actualDraftRef = useRef(actualDraftByLineId)
 
   const [distOpen, setDistOpen] = useState(false)
   const [distBusy, setDistBusy] = useState(false)
@@ -436,6 +437,10 @@ export function FfInboundRequestView({
       return next
     })
   }, [detail, manualEditLineId])
+
+  useEffect(() => {
+    actualDraftRef.current = actualDraftByLineId
+  }, [actualDraftByLineId])
 
   useEffect(() => {
     if (!detail) {
@@ -1089,6 +1094,27 @@ export function FfInboundRequestView({
     }
   }
 
+  const reopenReceiving = async () => {
+    setBusy(true)
+    setError(null)
+    try {
+      const res = await fetch(
+        apiUrl(`/operations/inbound-intake-requests/${requestId}/reopen-receiving`),
+        { method: 'POST', headers: authHeaders },
+      )
+      if (!res.ok) {
+        setError(await readApiErrorMessage(res))
+        return
+      }
+      setDistOpen(false)
+      await loadDetail()
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Не удалось открыть приёмку для редактирования.')
+    } finally {
+      setBusy(false)
+    }
+  }
+
   const requestCompleteReceiving = () => {
     if (hasLineDiscrepancy) {
       setFinishConfirmOpen(true)
@@ -1122,8 +1148,8 @@ export function FfInboundRequestView({
     }
   }
 
-  const saveManualLineActual = async (lineId: string) => {
-    const raw = actualDraftByLineId[lineId]
+  const saveManualLineActual = async (lineId: string, rawOverride?: string) => {
+    const raw = rawOverride ?? actualDraftRef.current[lineId]
     const v = Number(raw)
     if (!Number.isFinite(v) || v < 0) {
       setError('Укажите целое количество ≥ 0.')
@@ -1135,6 +1161,11 @@ export function FfInboundRequestView({
       return
     }
     const boxes = detail?.boxes ?? []
+    const currentEffective = effectiveActualQty(line, boxes, detail?.status)
+    if (displayed === currentEffective) {
+      setManualEditLineId(null)
+      return
+    }
     const loose = looseQtyFromDisplayedTotal(displayed, line, boxes)
     await setLineActual(lineId, loose)
     setManualEditLineId(null)
@@ -1153,6 +1184,38 @@ export function FfInboundRequestView({
   const actualEditable =
     isFulfillmentAdmin &&
     receivingActive
+
+  const hasPostedPartial = useMemo(
+    () => (detail?.lines ?? []).some((ln) => (ln.posted_qty ?? 0) > 0),
+    [detail?.lines],
+  )
+
+  const canReopenReceiving =
+    isFulfillmentAdmin &&
+    !sortingView &&
+    detail != null &&
+    isSortingStatus(detail.status) &&
+    !hasPostedPartial
+
+  const inboundQtyStickyHeadSx = (right: number, width: number) => ({
+    position: 'sticky' as const,
+    right,
+    width,
+    minWidth: width,
+    zIndex: 3,
+    bgcolor: 'background.paper',
+    boxShadow: right > 0 ? '-3px 0 8px -4px rgba(0,0,0,0.12)' : '-1px 0 4px -2px rgba(0,0,0,0.08)',
+  })
+
+  const inboundQtyStickyBodySx = (right: number, width: number) => ({
+    position: 'sticky' as const,
+    right,
+    width,
+    minWidth: width,
+    zIndex: 2,
+    bgcolor: 'inherit',
+    boxShadow: right > 0 ? '-3px 0 8px -4px rgba(0,0,0,0.12)' : '-1px 0 4px -2px rgba(0,0,0,0.08)',
+  })
 
   if (busy && !detail) {
     return (
@@ -1323,6 +1386,18 @@ export function FfInboundRequestView({
                 </>
               ) : null}
 
+              {canReopenReceiving ? (
+                <Button
+                  variant="outlined"
+                  startIcon={<EditOutlined />}
+                  disabled={busy}
+                  onClick={() => void reopenReceiving()}
+                  data-testid="ff-inbound-reopen-receiving"
+                >
+                  Редактировать
+                </Button>
+              ) : null}
+
               {detail.lines.length > 0 ? (
                 <Button
                   variant="outlined"
@@ -1397,7 +1472,7 @@ export function FfInboundRequestView({
           ) : null}
 
           {showInboundLinesTable ? (
-          <TableContainer sx={{ width: '100%', overflowX: 'hidden' }}>
+          <TableContainer sx={{ width: '100%', overflowX: 'auto' }}>
             {sortingView && receptionClosed ? (
               <Typography variant="subtitle2" sx={{ fontWeight: 700, mb: 1 }}>
                 Состав приёмки
@@ -1407,8 +1482,9 @@ export function FfInboundRequestView({
               size="small"
               data-testid="ff-inbound-lines-table"
               sx={{
-                tableLayout: 'fixed',
-                width: '100%',
+                minWidth: 1080,
+                width: 'max-content',
+                maxWidth: '100%',
                 '& th': { py: 1.25 },
                 '& td': { py: 1.25 },
               }}
@@ -1416,10 +1492,10 @@ export function FfInboundRequestView({
               <TableHead>
                 <TableRow>
                   <FfProductTableHeadCells />
-                  <TableCell align="right" sx={{ width: 120 }}>
+                  <TableCell align="right" sx={inboundQtyStickyHeadSx(150, 120)}>
                     Заявлено
                   </TableCell>
-                  <TableCell align="right" sx={{ width: 150 }}>
+                  <TableCell align="right" sx={inboundQtyStickyHeadSx(0, 168)}>
                     Принято
                   </TableCell>
                 </TableRow>
@@ -1465,10 +1541,10 @@ export function FfInboundRequestView({
                         showPrint={false}
                         printTestId={`ff-inbound-line-print-${ln.id}`}
                       />
-                      <TableCell align="right" sx={{ minWidth: 120 }}>
+                      <TableCell align="right" sx={inboundQtyStickyBodySx(150, 120)}>
                         {ln.expected_qty}
                       </TableCell>
-                      <TableCell align="right" sx={{ minWidth: 150 }}>
+                      <TableCell align="right" sx={inboundQtyStickyBodySx(0, 168)}>
                         <Stack
                           direction="row"
                           spacing={0.5}
@@ -1492,8 +1568,20 @@ export function FfInboundRequestView({
                               onKeyDown={(e) => {
                                 if (e.key === 'Enter') {
                                   e.preventDefault()
-                                  void saveManualLineActual(ln.id)
+                                  void saveManualLineActual(
+                                    ln.id,
+                                    (e.target as HTMLInputElement).value,
+                                  )
                                 }
+                              }}
+                              onBlur={(e) => {
+                                if (manualEditLineId !== ln.id) {
+                                  return
+                                }
+                                void saveManualLineActual(
+                                  ln.id,
+                                  (e.target as HTMLInputElement).value,
+                                )
                               }}
                               slotProps={{
                                 htmlInput: {

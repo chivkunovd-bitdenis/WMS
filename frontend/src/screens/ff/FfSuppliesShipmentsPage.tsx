@@ -908,6 +908,7 @@ export function FfSuppliesShipmentsPage({
         wb_nm_id: cat?.wb_nm_id ?? null,
         photo_url: cat?.wb_primary_image_url ?? null,
         instructions: cat?.packaging_instructions ?? null,
+        quantity: ln.quantity,
       }
     })
     printShipmentPackagingSheet({

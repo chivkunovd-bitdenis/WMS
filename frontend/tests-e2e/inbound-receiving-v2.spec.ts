@@ -39,6 +39,17 @@ test('inbound receiving v2 — scan, manual edit, finish with discrepancy', asyn
   await expect(page.getByTestId('ff-inbound-line-actual-display').first()).toHaveText('2');
   await expect(page.getByTestId('ff-inbound-line-row-discrepancy')).toBeVisible();
 
+  await page.getByTestId('ff-inbound-line-manual-edit').first().click();
+  const actualField = page.getByTestId('ff-inbound-line-actual').first();
+  await actualField.click();
+  await actualField.fill('');
+  await actualField.pressSequentially('100');
+  await Promise.all([
+    waitForPatchOk(page, INBOUND_API, (u) => u.includes('/actual')),
+    actualField.blur(),
+  ]);
+  await expect(page.getByTestId('ff-inbound-line-actual-display').first()).toHaveText('100');
+
   await page.getByTestId('ff-inbound-verify-complete').click();
   await expect(page.getByTestId('ff-inbound-discrepancy-dialog')).toBeVisible();
   await Promise.all([

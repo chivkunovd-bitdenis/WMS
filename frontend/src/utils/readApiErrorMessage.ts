@@ -29,6 +29,8 @@ const API_DETAIL_MESSAGES_RU: Record<string, string> = {
   empty_file: 'В файле не найдено КМ.',
   not_reopenable: 'Нельзя открыть распределение заново на этом статусе заявки.',
   already_posted_partial: 'Часть товара уже оприходована — отмена фиксации недоступна.',
+  sorting_stock_unavailable:
+    'Нельзя отменить приёмку: в зоне сортировки уже нет нужного остатка (товар могли разложить или списать).',
 }
 
 export async function readApiErrorMessage(res: Response): Promise<string> {

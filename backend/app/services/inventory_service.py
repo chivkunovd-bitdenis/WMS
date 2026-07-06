@@ -607,6 +607,30 @@ async def apply_inbound_receive(
     )
 
 
+async def reverse_inbound_receive(
+    session: AsyncSession,
+    *,
+    tenant_id: uuid.UUID,
+    product_id: uuid.UUID,
+    storage_location_id: uuid.UUID,
+    quantity: int,
+    inbound_intake_line_id: uuid.UUID,
+) -> None:
+    """Сторно прихода по строке приёмки (отрицательный delta в зоне сортировки)."""
+    if quantity <= 0:
+        msg = "quantity must be positive"
+        raise ValueError(msg)
+    await record_movement_and_adjust_balance(
+        session,
+        tenant_id=tenant_id,
+        product_id=product_id,
+        storage_location_id=storage_location_id,
+        quantity_delta=-quantity,
+        movement_type=MOVEMENT_TYPE_INBOUND_INTAKE,
+        inbound_intake_line_id=inbound_intake_line_id,
+    )
+
+
 async def apply_putaway_from_sorting(
     session: AsyncSession,
     tenant_id: uuid.UUID,

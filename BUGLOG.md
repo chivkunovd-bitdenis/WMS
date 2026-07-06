@@ -1,5 +1,13 @@
 # BUGLOG
 
+## BUG-4 — 2026-07-06 — Факт приёмки сбрасывается в 0 при уходе с поля
+
+- Symptom: в приёмке оператор вводит «Принято» (например 100), уводит курсор с поля — значение становится 0.
+- Cause: при `onBlur` сохранение читало устаревший React state (`draftQtyByProductId` / `actualDraftByLineId`) из замыкания; последний ввод ещё не попадал в state, на сервер уходил 0.
+- Fix: передавать значение из `event.target` при blur/Enter; ref для фоновых flush; для колонки «Принято» — автосохранение по blur.
+- Verification: `npm run build`; e2e `inbound-receiving-v2.spec.ts`, `ff-inbound-box-intake.spec.ts` (pressSequentially + blur).
+- Commit: pending
+
 ## BUG-3 — 2026-06-24 — Дата отгрузки сбрасывается после выбора в календаре
 
 - Symptom: в заявке на отгрузку на МП пользователь выбирает дату в календаре, но поле сразу очищается.
