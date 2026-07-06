@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState, type FocusEvent, type KeyboardEvent } from 'react'
 import { useBarcodeScanner } from '../../hooks/useBarcodeScanner'
 import EditOutlined from '@mui/icons-material/EditOutlined'
 import PrintOutlined from '@mui/icons-material/PrintOutlined'
@@ -1149,7 +1149,10 @@ export function FfInboundRequestView({
   }
 
   const saveManualLineActual = async (lineId: string, rawOverride?: string) => {
-    const raw = rawOverride ?? actualDraftRef.current[lineId]
+    const raw =
+      rawOverride ??
+      actualDraftRef.current[lineId] ??
+      actualDraftByLineId[lineId]
     const v = Number(raw)
     if (!Number.isFinite(v) || v < 0) {
       setError('Укажите целое количество ≥ 0.')
@@ -1559,34 +1562,33 @@ export function FfInboundRequestView({
                                 String(effectiveActualQty(ln, boxes, detail.status))
                               }
                               disabled={busy}
-                              onChange={(e) =>
+                              onChange={(e) => {
+                                const nextVal = e.target.value
+                                actualDraftRef.current = {
+                                  ...actualDraftRef.current,
+                                  [ln.id]: nextVal,
+                                }
                                 setActualDraftByLineId((prev) => ({
                                   ...prev,
-                                  [ln.id]: e.target.value,
+                                  [ln.id]: nextVal,
                                 }))
-                              }
-                              onKeyDown={(e) => {
-                                if (e.key === 'Enter') {
-                                  e.preventDefault()
-                                  void saveManualLineActual(
-                                    ln.id,
-                                    (e.target as HTMLInputElement).value,
-                                  )
-                                }
-                              }}
-                              onBlur={(e) => {
-                                if (manualEditLineId !== ln.id) {
-                                  return
-                                }
-                                void saveManualLineActual(
-                                  ln.id,
-                                  (e.target as HTMLInputElement).value,
-                                )
                               }}
                               slotProps={{
                                 htmlInput: {
                                   min: 0,
                                   'data-testid': 'ff-inbound-line-actual',
+                                  onBlur: (e: FocusEvent<HTMLInputElement>) => {
+                                    if (manualEditLineId !== ln.id) {
+                                      return
+                                    }
+                                    void saveManualLineActual(ln.id, e.currentTarget.value)
+                                  },
+                                  onKeyDown: (e: KeyboardEvent<HTMLInputElement>) => {
+                                    if (e.key === 'Enter') {
+                                      e.preventDefault()
+                                      void saveManualLineActual(ln.id, e.currentTarget.value)
+                                    }
+                                  },
                                 },
                               }}
                               sx={{ width: 88 }}
@@ -1605,6 +1607,11 @@ export function FfInboundRequestView({
                               size="small"
                               aria-label="Править количество"
                               disabled={busy}
+                              onMouseDown={(e) => {
+                                if (manualOpen) {
+                                  e.preventDefault()
+                                }
+                              }}
                               onClick={() => {
                                 if (manualOpen) {
                                   void saveManualLineActual(ln.id)
