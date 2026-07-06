@@ -1486,8 +1486,8 @@ export function FfInboundRequestView({
               data-testid="ff-inbound-lines-table"
               sx={{
                 minWidth: 1080,
-                width: 'max-content',
-                maxWidth: '100%',
+                width: '100%',
+                tableLayout: 'fixed',
                 '& th': { py: 1.25 },
                 '& td': { py: 1.25 },
               }}
