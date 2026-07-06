@@ -20,14 +20,24 @@ test('inbound receiving v2 — scan, manual edit, finish with discrepancy', asyn
   await page.getByTestId('nav-ff-reception').click();
   await page.getByTestId('ff-inbound-queue-table').locator('tbody tr').first().click();
   await expect(page.getByTestId('ff-inbound-doc-root')).toBeVisible();
-  const tableWidth = await page.getByTestId('ff-inbound-lines-table').evaluate((table) => {
+  const tableLayout = await page.getByTestId('ff-inbound-lines-table').evaluate((table) => {
     const container = table.closest('.MuiTableContainer-root');
+    const headCells = Array.from(table.querySelectorAll('thead th'));
+    const firstBodyCells = Array.from(table.querySelectorAll('tbody tr:first-child td'));
+    const acceptedHead = headCells.find((cell) => cell.textContent?.trim() === 'Принято');
+    const acceptedBody = firstBodyCells[firstBodyCells.length - 1];
     return {
       table: table.getBoundingClientRect().width,
       container: container?.getBoundingClientRect().width ?? 0,
+      headerCells: headCells.length,
+      bodyCells: firstBodyCells.length,
+      acceptedHeadRight: acceptedHead?.getBoundingClientRect().right ?? 0,
+      acceptedBodyRight: acceptedBody?.getBoundingClientRect().right ?? 0,
     };
   });
-  expect(tableWidth.table).toBeGreaterThanOrEqual(tableWidth.container - 1);
+  expect(tableLayout.table).toBeGreaterThanOrEqual(tableLayout.container - 1);
+  expect(tableLayout.headerCells).toBe(tableLayout.bodyCells);
+  expect(Math.abs(tableLayout.acceptedHeadRight - tableLayout.acceptedBodyRight)).toBeLessThanOrEqual(1);
 
   await expect(page.getByTestId('ff-inbound-line-actual-display').first()).toHaveText('0');
 

@@ -1494,7 +1494,7 @@ export function FfInboundRequestView({
             >
               <TableHead>
                 <TableRow>
-                  <FfProductTableHeadCells />
+                  <FfProductTableHeadCells showPrint={false} />
                   <TableCell align="right" sx={inboundQtyStickyHeadSx(150, 120)}>
                     Заявлено
                   </TableCell>
