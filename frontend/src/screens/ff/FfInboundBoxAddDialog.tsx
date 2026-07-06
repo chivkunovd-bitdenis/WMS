@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState, type FocusEvent, type KeyboardEvent } from 'react'
 import { useBarcodeScanner } from '../../hooks/useBarcodeScanner'
 import CloseOutlined from '@mui/icons-material/CloseOutlined'
 import {
@@ -362,25 +362,29 @@ export function FfInboundBoxAddDialog({
                             type="number"
                             size="small"
                             value={draftQtyByProductId[ln.product_id] ?? '0'}
-                            onChange={(e) =>
+                            onChange={(e) => {
+                              const nextVal = e.target.value
+                              draftQtyRef.current = {
+                                ...draftQtyRef.current,
+                                [ln.product_id]: nextVal,
+                              }
                               setDraftQtyByProductId((prev) => ({
                                 ...prev,
-                                [ln.product_id]: e.target.value,
+                                [ln.product_id]: nextVal,
                               }))
-                            }
-                            onBlur={(e) =>
-                              void saveQty(ln.product_id, (e.target as HTMLInputElement).value)
-                            }
-                            onKeyDown={(e) => {
-                              if (e.key === 'Enter') {
-                                e.preventDefault()
-                                void saveQty(ln.product_id, (e.target as HTMLInputElement).value)
-                              }
                             }}
                             slotProps={{
                               htmlInput: {
                                 min: 0,
                                 'data-testid': 'ff-inbound-box-add-manual-qty',
+                                onBlur: (e: FocusEvent<HTMLInputElement>) =>
+                                  void saveQty(ln.product_id, e.currentTarget.value),
+                                onKeyDown: (e: KeyboardEvent<HTMLInputElement>) => {
+                                  if (e.key === 'Enter') {
+                                    e.preventDefault()
+                                    void saveQty(ln.product_id, e.currentTarget.value)
+                                  }
+                                },
                               },
                             }}
                             sx={{ width: 72 }}
