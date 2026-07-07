@@ -36,6 +36,7 @@ from app.models.marking_code import (
     MarkingCode,
     MarkingCodeEvent,
     MarkingCodeImport,
+    MarkingCodeImportFile,
     MarkingPool,
     MarkingPoolProduct,
     MarkingReprintRequest,
@@ -868,6 +869,54 @@ async def _try_insert_imported_code(
     return code
 
 
+def _persist_import_source_pdfs(
+    session: AsyncSession,
+    *,
+    tenant_id: uuid.UUID,
+    import_batch_id: uuid.UUID,
+    files: list[tuple[str, bytes]],
+) -> None:
+    import logging
+
+    from app.services.marking_import_storage_service import (
+        is_pdf_import_filename,
+        save_marking_import_source_pdf,
+    )
+
+    log = logging.getLogger(__name__)
+
+    for filename, content in files:
+        if not is_pdf_import_filename(filename):
+            continue
+        try:
+            stored = save_marking_import_source_pdf(
+                tenant_id=tenant_id,
+                import_batch_id=import_batch_id,
+                original_filename=filename,
+                content=content,
+            )
+        except Exception as exc:
+            log.warning(
+                "marking_import_source_pdf_storage_skipped import_batch_id=%s filename=%s",
+                import_batch_id,
+                filename,
+                exc_info=exc,
+            )
+            continue
+        session.add(
+            MarkingCodeImportFile(
+                id=stored.file_id,
+                tenant_id=tenant_id,
+                import_batch_id=import_batch_id,
+                original_filename=stored.original_filename,
+                storage_key=stored.storage_key,
+                content_type=stored.content_type,
+                size_bytes=stored.size_bytes,
+                sha256_hex=stored.sha256_hex,
+            )
+        )
+
+
 async def preview_marking_import(
     session: AsyncSession,
     tenant_id: uuid.UUID,
@@ -1053,6 +1102,13 @@ async def import_marking_codes(
         batch,
     )
     assert document_number is not None
+
+    _persist_import_source_pdfs(
+        session,
+        tenant_id=tenant_id,
+        import_batch_id=batch.id,
+        files=files,
+    )
 
     by_gtin, invalid_count, duplicate_count, label_pdf_by_cis = _group_cis_codes_from_rows(
         parsed_rows

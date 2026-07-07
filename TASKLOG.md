@@ -1,5 +1,20 @@
 # TASKLOG
 
+## TASK-101 — 2026-07-07 — Хранение оригинальных PDF при импорте ЧЗ
+
+- What changed:
+  - PDF-импорт: best-effort сохранение оригинала (ошибка storage **не блокирует** импорт КМ).
+  - Backends: S3 (`WMS_S3_*`) или local (`WMS_DATA_DIR`, только dev/tests).
+  - Prod compose: local storage off by default, S3 env из `.env`.
+  - Script `scripts/wipe_marking_data.py` — dry-run / wipe всех ЧЗ для чистого re-import.
+- What did NOT change: prod wipe (нужен ручной запуск); S3 bucket создаётся вручную.
+- Verification: `pytest tests/test_marking_pdf_label_artifact.py` 6/6.
+
+## REMINDER — ~2026-07-07 evening — Настроить бэкапы БД на проде
+
+- Owner action: включить автоматические pg_dump / snapshot Postgres (Railway/hosting panel).
+- Пока нет — риск потери данных при wipe/миграциях.
+
 ## TASK-100 — 2026-07-07 — ЧЗ: split-print refresh + клиентский PDF artifact
 
 - What changed:
@@ -10,6 +25,8 @@
 - What did NOT change: inbound receiving; mobile/; prod deploy.
 - Verification: backend pytest `test_marking_pdf_label_artifact.py` 4/4; frontend vitest + targeted playwright green.
 - Branch: `feat/cz-print-split-artifact` from `origin/main@5b4bd9c`.
+- Commit: `77170e5` (PR #79 merged to main).
+- Prod deploy: GitHub Actions `Deploy Production` run `28858488896` success, 2026-07-07.
 
 ## TASK-099 — 2026-07-06 — Приёмка: редактирование после завершения, фикс blur→0, печать ТЗ
 

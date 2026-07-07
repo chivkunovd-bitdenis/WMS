@@ -175,6 +175,42 @@ class MarkingCodeImport(Base):
         "MarkingCode",
         back_populates="import_batch",
     )
+    source_files: Mapped[list[MarkingCodeImportFile]] = relationship(
+        "MarkingCodeImportFile",
+        back_populates="import_batch",
+        cascade="all, delete-orphan",
+    )
+
+
+class MarkingCodeImportFile(Base):
+    __tablename__ = "marking_code_import_files"
+
+    id: Mapped[uuid.UUID] = mapped_column(
+        Uuid(as_uuid=True), primary_key=True, default=uuid.uuid4
+    )
+    tenant_id: Mapped[uuid.UUID] = mapped_column(
+        Uuid(as_uuid=True), ForeignKey("tenants.id", ondelete="CASCADE"), index=True
+    )
+    import_batch_id: Mapped[uuid.UUID] = mapped_column(
+        Uuid(as_uuid=True),
+        ForeignKey("marking_code_imports.id", ondelete="CASCADE"),
+        index=True,
+    )
+    original_filename: Mapped[str] = mapped_column(String(512), nullable=False)
+    storage_key: Mapped[str] = mapped_column(String(1024), nullable=False)
+    content_type: Mapped[str] = mapped_column(
+        String(128), nullable=False, default="application/pdf"
+    )
+    size_bytes: Mapped[int] = mapped_column(Integer, nullable=False)
+    sha256_hex: Mapped[str] = mapped_column(String(64), nullable=False)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
+    )
+
+    import_batch: Mapped[MarkingCodeImport] = relationship(
+        "MarkingCodeImport",
+        back_populates="source_files",
+    )
 
 
 class MarkingCode(Base):
