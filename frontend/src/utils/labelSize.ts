@@ -52,13 +52,6 @@ export function loadLabelSizeId(scope: LabelSizeScope = 'default'): LabelSizeId 
     if (isLabelSizeId(raw)) {
       return raw
     }
-    if (scope !== 'default') {
-      // Скоуп ещё не выбирали — наследуем общий размер, чтобы не сбрасывать на дефолт.
-      const legacy = window.localStorage.getItem(STORAGE_KEY)
-      if (isLabelSizeId(legacy)) {
-        return legacy
-      }
-    }
   } catch {
     // localStorage недоступен — используем дефолт
   }
@@ -71,4 +64,39 @@ export function saveLabelSizeId(id: LabelSizeId, scope: LabelSizeScope = 'defaul
   } catch {
     // localStorage недоступен — молча пропускаем запоминание
   }
+}
+
+export type LabelPrintOrientation = 'portrait' | 'landscape'
+
+const ORIENTATION_STORAGE_KEY = 'wms.print.labelOrientation.cz'
+
+export function loadLabelPrintOrientation(): LabelPrintOrientation {
+  try {
+    const raw = window.localStorage.getItem(ORIENTATION_STORAGE_KEY)
+    if (raw === 'landscape' || raw === 'portrait') {
+      return raw
+    }
+  } catch {
+    // localStorage недоступен
+  }
+  return 'portrait'
+}
+
+export function saveLabelPrintOrientation(orientation: LabelPrintOrientation): void {
+  try {
+    window.localStorage.setItem(ORIENTATION_STORAGE_KEY, orientation)
+  } catch {
+    // localStorage недоступен
+  }
+}
+
+/** Физический размер страницы печати с учётом ориентации. */
+export function resolvePrintPageSize(
+  size: LabelSize,
+  orientation: LabelPrintOrientation,
+): LabelSize {
+  if (orientation === 'portrait') {
+    return size
+  }
+  return { ...size, widthMm: size.heightMm, heightMm: size.widthMm }
 }

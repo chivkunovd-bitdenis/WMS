@@ -43,6 +43,17 @@ describe('buildCzLabelHtml', () => {
     expect(section).toContain('label--cz-artifact')
     expect(section).toContain('cz-label-artifact-img')
     expect(section).not.toContain('cz-label-info')
+    expect(section).not.toContain('cz-brand')
+    expect(section).not.toContain('cz-field--gtin')
+    expect(section).not.toContain('cz-field--serial')
+  })
+
+  it('artifact tape CSS scales image to full label box', () => {
+    const doc = buildMarkingTapeDocument([buildCzArtifactLabelHtml('data:image/png;base64,abc')])
+    expect(doc).toContain('.cz-artifact-img {')
+    expect(doc).toContain('width: 100%')
+    expect(doc).toContain('height: 100%')
+    expect(doc).toContain('cz-label-artifact-img')
   })
 
   it('builds mixed tape with cz and label blocks', () => {

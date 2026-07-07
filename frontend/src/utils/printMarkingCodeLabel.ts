@@ -113,10 +113,13 @@ function buildTapePageCss(size: LabelSize = DEFAULT_LABEL_SIZE): string {
   }
   .label--cz-artifact {
     padding: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
   }
   .cz-artifact-img {
-    width: ${size.widthMm}mm;
-    height: ${size.heightMm}mm;
+    width: 100%;
+    height: 100%;
     object-fit: contain;
     display: block;
   }

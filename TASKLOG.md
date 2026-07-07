@@ -1,5 +1,16 @@
 # TASKLOG
 
+## TASK-100 — 2026-07-07 — ЧЗ: split-print refresh + клиентский PDF artifact
+
+- What changed:
+  - Frontend: refresh `separate_marking_print_enabled` из `/auth/me` при открытии `MarkingPrintDialog`; inline reprint по клику «Печать ЧЗ» при уже напечатанных КМ; ориентация печати ЧЗ; artifact image на всю наклейку.
+  - Backend: `extract_label_artifacts_from_pdf` — crop отдельной этикетки на каждый CIS при PDF-импорте; валидация `is_printable_label_artifact`; endpoint `/label-artifact` не отдаёт multi-CIS страницу.
+  - Импорт КМ в БД без изменений: один CIS = одна запись `marking_codes` (видна в разделе ЧЗ), плюс `label_artifact_pdf` при успешном extract.
+  - Tests: `test_marking_pdf_label_artifact.py` (single/multi/CSV); e2e `ff-mp-packaging-print`, `ff-separate-marking-print`; unit `labelSize`, `printMarkingCodeLabel`.
+- What did NOT change: inbound receiving; mobile/; prod deploy.
+- Verification: backend pytest `test_marking_pdf_label_artifact.py` 4/4; frontend vitest + targeted playwright green.
+- Branch: `feat/cz-print-split-artifact` from `origin/main@5b4bd9c`.
+
 ## TASK-099 — 2026-07-06 — Приёмка: редактирование после завершения, фикс blur→0, печать ТЗ
 
 - What changed:
@@ -8,7 +19,7 @@
   - Печать ТЗ из отгрузки МП: столбец «Кол-во»; `@page size: A4` без принудительного portrait (альбом из диалога печати).
 - What did NOT change: состав коробов после reopen; mobile/.
 - Verification: backend pytest `test_reopen_receiving_*`; frontend `npm run build`; vitest `printShipmentPackagingSheet`; e2e `inbound-receiving-v2`, `ff-inbound-box-intake`, `ff-mp-shipment-tz-print`.
-- Commit: pending → prod via PR `main`.
+- Commit: `f62b590` (PR #73) → prod Deploy Production run `28783305890` success.
 
 ## TASK-098 — 2026-07-05 — COMPOSER: импорт коробов xlsx + ЧЗ печать из общих корзин (wave 1–3)
 

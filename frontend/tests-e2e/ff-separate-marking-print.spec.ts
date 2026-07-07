@@ -116,7 +116,24 @@ test('FF settings: separate marking print shows split print sections', async ({ 
   ])
   await expect(page.getByTestId('ff-packaging-task-panel')).toBeVisible()
 
-  await page.getByTestId('ff-packaging-print-marking').click()
+  const linePrintBtn = page.locator('[data-testid^="ff-packaging-line-print-"]').first()
+  await expect(linePrintBtn).toBeVisible()
+
+  await page.evaluate(() => {
+    localStorage.setItem('wms.print.labelSizeId', '70x120')
+    localStorage.removeItem('wms.print.labelSizeId.cz')
+    localStorage.removeItem('wms.print.labelSizeId.label')
+    ;(window as unknown as { __WMS_CAPTURE_PRINT_HTML__?: boolean }).__WMS_CAPTURE_PRINT_HTML__ = true
+  })
+  const separatePrintWait = page.waitForResponse(
+    (r) =>
+      r.request().method() === 'POST' &&
+      r.url().includes('/operations/marking-codes/packaging-lines/') &&
+      r.url().endsWith('/print') &&
+      r.status() >= 200 &&
+      r.status() < 300,
+  )
+  await linePrintBtn.click()
   await expect(page.getByTestId('marking-print-dialog')).toBeVisible()
   await expect(page.getByTestId('marking-print-separate-cz')).toBeVisible()
   await expect(page.getByTestId('marking-print-separate-wb')).toBeVisible()
@@ -124,6 +141,29 @@ test('FF settings: separate marking print shows split print sections', async ({ 
   await expect(page.getByTestId('marking-print-sep-wb-print')).toBeVisible()
   await expect(page.getByTestId('marking-print-confirm')).toHaveCount(0)
   await expect(page.getByTestId('marking-print-separate-close')).toBeVisible()
+  await expect(page.getByTestId('marking-print-cz-label-size')).toContainText('58 × 40')
+  await expect(page.getByTestId('marking-print-wb-label-size')).toContainText('58 × 40')
+
+  await Promise.all([separatePrintWait, page.getByTestId('marking-print-sep-cz-print').click()])
+  await expect(page.getByTestId('marking-print-sep-cz-print')).toContainText('ЧЗ напечатаны ✓')
+  await expect(page.getByTestId('marking-print-separate-wb')).toBeVisible()
+  const printedHtml = await page.evaluate(
+    () => (window as unknown as { __WMS_LAST_PRINT_HTML__?: string }).__WMS_LAST_PRINT_HTML__ ?? '',
+  )
+  expect(printedHtml).toContain('size: 58mm 40mm')
+
+  await page.getByTestId('marking-print-separate-close').click()
+  await expect(page.getByTestId('marking-print-dialog')).toBeHidden()
+  await expect(page.locator('[data-testid^="ff-packaging-line-menu-btn-"]').first()).toBeVisible()
+
+  await linePrintBtn.click()
+  await expect(page.getByTestId('marking-print-dialog')).toBeVisible()
+  await expect(page.getByTestId('marking-print-separate-wb')).toBeVisible()
+  await expect(page.getByTestId('marking-print-sep-cz-print')).toBeVisible()
+
+  await page.getByTestId('marking-print-sep-cz-print').click()
+  await expect(page.getByTestId('marking-print-reprint-notice')).toBeVisible()
+  await expect(page.getByTestId('marking-reprint-pick-list')).toBeVisible()
 })
 
 // TC-NEW-CHUNK-PRINT-01 — длинная лента открывает диалог «Печать пачками».
