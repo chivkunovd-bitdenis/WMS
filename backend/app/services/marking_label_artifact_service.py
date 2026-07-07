@@ -28,10 +28,47 @@ def pdf_bytes_to_png(pdf_bytes: bytes, dpi: int = 600) -> bytes:
             raise ValueError("empty_pdf")
         page = doc[0]
         scale = dpi / 72.0
-        pix = page.get_pixmap(matrix=fitz.Matrix(scale, scale), alpha=False)
+        matrix = fitz.Matrix(scale, scale)
+        clip = _content_clip_rect(page)
+        if clip is not None:
+            pix = page.get_pixmap(matrix=matrix, clip=clip, alpha=False)
+        else:
+            pix = page.get_pixmap(matrix=matrix, alpha=False)
         return cast(bytes, pix.tobytes("png"))
     finally:
         doc.close()
+
+
+def _content_clip_rect(page: object) -> object | None:
+    import fitz  # pymupdf
+
+    pg = cast(fitz.Page, page)
+    page_rect = pg.rect
+    clip = fitz.Rect(page_rect)
+    found = False
+    for block in pg.get_text("blocks"):
+        clip |= fitz.Rect(block[:4])
+        found = True
+    for drawing in pg.get_drawings():
+        rect = drawing.get("rect")
+        if rect is None:
+            continue
+        clip |= fitz.Rect(rect)
+        found = True
+    if not found:
+        return None
+    if clip.get_area() >= page_rect.get_area() * 0.98:
+        return None
+    pad = max(2.0, min(page_rect.width, page_rect.height) * 0.01)
+    return cast(
+        object,
+        fitz.Rect(
+            max(page_rect.x0, clip.x0 - pad),
+            max(page_rect.y0, clip.y0 - pad),
+            min(page_rect.x1, clip.x1 + pad),
+            min(page_rect.y1, clip.y1 + pad),
+        ),
+    )
 
 
 def crop_pdf_page_to_single_label_pdf(doc: object, page_index: int, rect: object) -> bytes:

@@ -51,8 +51,7 @@ describe('buildCzLabelHtml', () => {
   it('artifact tape CSS scales image to full label box', () => {
     const doc = buildMarkingTapeDocument([buildCzArtifactLabelHtml('data:image/png;base64,abc')])
     expect(doc).toContain('.cz-artifact-img {')
-    expect(doc).toContain('width: 100%')
-    expect(doc).toContain('height: 100%')
+    expect(doc).toContain('object-fit: fill')
     expect(doc).toContain('cz-label-artifact-img')
   })
 

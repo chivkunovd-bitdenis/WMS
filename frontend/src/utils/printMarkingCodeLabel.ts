@@ -113,15 +113,21 @@ function buildTapePageCss(size: LabelSize = DEFAULT_LABEL_SIZE): string {
   }
   .label--cz-artifact {
     padding: 0;
-    display: flex;
-    align-items: center;
-    justify-content: center;
+    display: block;
+    position: relative;
+    overflow: hidden;
   }
-  .cz-artifact-img {
+  .cz-artifact-img,
+  .cz-artifact-pdf {
+    position: absolute;
+    inset: 0;
     width: 100%;
     height: 100%;
-    object-fit: contain;
     display: block;
+    margin: 0;
+    padding: 0;
+    border: 0;
+    object-fit: fill;
   }
   .label:not(.label--cz) {
     padding: ${labelMm(1.4 * k.uniform)} ${labelMm(1.8 * k.uniform)} ${labelMm(1 * k.uniform)};
@@ -129,6 +135,20 @@ function buildTapePageCss(size: LabelSize = DEFAULT_LABEL_SIZE): string {
     flex-direction: column;
   }
   ${buildProductLabelContentCss(size)}
+  @media print {
+    html, body {
+      width: ${size.widthMm}mm;
+      height: ${size.heightMm}mm;
+      margin: 0 !important;
+      padding: 0 !important;
+      overflow: hidden;
+    }
+    .label {
+      width: ${size.widthMm}mm !important;
+      height: ${size.heightMm}mm !important;
+      margin: 0 !important;
+    }
+  }
 `
 }
 
@@ -146,15 +166,19 @@ async function blobToDataUrl(blob: Blob): Promise<string> {
 export async function fetchLabelArtifactDataUrl(
   codeId: string,
   authToken: string,
+  format: 'png' | 'pdf' = 'png',
 ): Promise<string> {
   const res = await fetch(
-    apiUrl(`/operations/marking-codes/codes/${codeId}/label-artifact?format=png`),
+    apiUrl(`/operations/marking-codes/codes/${codeId}/label-artifact?format=${format}`),
     { headers: { Authorization: `Bearer ${authToken}` } },
   )
   if (!res.ok) {
     throw new Error('Не удалось загрузить этикетку ЧЗ из файла селлера.')
   }
-  return blobToDataUrl(await res.blob())
+  const blob = await res.blob()
+  const mime = format === 'pdf' ? 'application/pdf' : 'image/png'
+  const typedBlob = blob.type ? blob : new Blob([blob], { type: mime })
+  return blobToDataUrl(typedBlob)
 }
 
 export async function renderDataMatrixDataUrl(cis: string): Promise<string> {
@@ -195,6 +219,12 @@ export function buildCzLabelHtml(cis: string, matrixDataUrl: string): string {
 }
 
 export function buildCzArtifactLabelHtml(imageDataUrl: string): string {
+  const isPdf = imageDataUrl.startsWith('data:application/pdf')
+  if (isPdf) {
+    return `<section class="label label--cz label--cz-artifact" data-testid="marking-thermal-label" data-tape-block="cz">
+  <embed class="cz-artifact-pdf" src="${imageDataUrl}" type="application/pdf" data-testid="cz-label-artifact-pdf" />
+</section>`
+  }
   return `<section class="label label--cz label--cz-artifact" data-testid="marking-thermal-label" data-tape-block="cz">
   <img class="cz-artifact-img" src="${imageDataUrl}" alt="ЧЗ" data-testid="cz-label-artifact-img" />
 </section>`
@@ -320,7 +350,10 @@ export async function buildMarkingTapeSections(
     ]
     await Promise.all(
       artifactCodeIds.map(async (codeId) => {
-        artifactByCodeId.set(codeId, await fetchLabelArtifactDataUrl(codeId, authToken))
+        artifactByCodeId.set(
+          codeId,
+          await fetchLabelArtifactDataUrl(codeId, authToken, 'pdf'),
+        )
       }),
     )
   }
@@ -365,7 +398,7 @@ export async function printTapeSections(
   }
   // Без явного размера печатаем на последнем выбранном пользователем.
   const size = labelSize ?? resolveLabelSize(loadLabelSizeId())
-  await printHtmlInIframe(buildMarkingTapeDocument(sections, size))
+  await printHtmlInIframe(buildMarkingTapeDocument(sections, size), size)
 }
 
 export async function printMarkingCodeTape(
@@ -403,7 +436,7 @@ declare global {
   }
 }
 
-async function printHtmlInIframe(html: string): Promise<void> {
+async function printHtmlInIframe(html: string, labelSize: LabelSize = DEFAULT_LABEL_SIZE): Promise<void> {
   if (typeof window !== 'undefined' && window.__WMS_CAPTURE_PRINT_HTML__) {
     window.__WMS_LAST_PRINT_HTML__ = html
   }
@@ -411,10 +444,10 @@ async function printHtmlInIframe(html: string): Promise<void> {
   const iframe = document.createElement('iframe')
   iframe.setAttribute('aria-hidden', 'true')
   iframe.style.position = 'fixed'
-  iframe.style.right = '0'
-  iframe.style.bottom = '0'
-  iframe.style.width = '0'
-  iframe.style.height = '0'
+  iframe.style.left = '-10000px'
+  iframe.style.top = '0'
+  iframe.style.width = `${labelSize.widthMm}mm`
+  iframe.style.height = `${labelSize.heightMm}mm`
   iframe.style.border = '0'
   document.body.appendChild(iframe)
 
