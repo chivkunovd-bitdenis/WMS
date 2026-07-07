@@ -11,7 +11,10 @@ git config --global --add safe.directory "$REPO_DIR"
 echo "==> git pull"
 git fetch origin
 git checkout main
-git pull --ff-only origin main
+if ! git pull --ff-only origin main; then
+  echo "WARN: pull blocked by local changes; resetting to origin/main"
+  git reset --hard origin/main
+fi
 
 COMPOSE=(docker compose -f docker-compose.prod.yml)
 if [[ -f docker-compose.wms-host-8088.yml ]]; then
