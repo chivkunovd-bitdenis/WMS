@@ -52,13 +52,6 @@ export function loadLabelSizeId(scope: LabelSizeScope = 'default'): LabelSizeId 
     if (isLabelSizeId(raw)) {
       return raw
     }
-    if (scope !== 'default') {
-      // Скоуп ещё не выбирали — наследуем общий размер, чтобы не сбрасывать на дефолт.
-      const legacy = window.localStorage.getItem(STORAGE_KEY)
-      if (isLabelSizeId(legacy)) {
-        return legacy
-      }
-    }
   } catch {
     // localStorage недоступен — используем дефолт
   }

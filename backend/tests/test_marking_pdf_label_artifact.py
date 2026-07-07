@@ -11,6 +11,7 @@ from test_packaging_tasks import _register_admin
 
 from app.db.session import SessionLocal
 from app.models.marking_code import MarkingCode
+from app.services.marking_code_service import is_printable_label_artifact
 
 
 def _build_label_pdf(cis: str, footer_text: str) -> bytes:
@@ -22,6 +23,22 @@ def _build_label_pdf(cis: str, footer_text: str) -> bytes:
     pdf_bytes = bytes(doc.tobytes())
     doc.close()
     return pdf_bytes
+
+
+def _build_two_label_pdf(cis_a: str, cis_b: str) -> bytes:
+    doc = fitz.open()
+    page = doc.new_page(width=360, height=240)
+    page.insert_text((12, 24), "Честный знак", fontsize=8)
+    page.insert_text((12, 42), cis_a, fontsize=6)
+    page.insert_text((190, 24), "Честный знак", fontsize=8)
+    page.insert_text((190, 42), cis_b, fontsize=6)
+    pdf_bytes = bytes(doc.tobytes())
+    doc.close()
+    return pdf_bytes
+
+
+def test_printable_label_artifact_rejects_invalid_pdf_bytes() -> None:
+    assert is_printable_label_artifact(b"not-a-pdf", "010460000000000121ABC") is False
 
 
 @pytest.mark.asyncio
@@ -99,3 +116,143 @@ async def test_pdf_import_stores_label_artifact_per_cis(async_client: AsyncClien
         ).scalar_one()
         assert code.label_artifact_pdf is not None
         assert code.label_artifact_pdf.startswith(b"%PDF")
+
+
+def _build_seller_style_label_pdf(cis: str) -> bytes:
+    """One CIS per page plus product description lines (seller PDF shape)."""
+    doc = fitz.open()
+    page = doc.new_page(width=170, height=113)
+    page.insert_text((12, 18), "Спортивные леггинсы", fontsize=7)
+    page.insert_text((12, 30), "тайтсы", fontsize=7)
+    page.insert_text((12, 42), "ЧЕРНЫЙ,АНТРАЦИТОВЫ", fontsize=7)
+    page.insert_text((12, 54), "Й цвет черный.белый.тд", fontsize=7)
+    page.insert_text((12, 66), "size L", fontsize=7)
+    page.insert_text((12, 90), cis, fontsize=6)
+    pdf_bytes = bytes(doc.tobytes())
+    doc.close()
+    return pdf_bytes
+
+
+@pytest.mark.asyncio
+async def test_pdf_import_stores_artifact_when_page_has_product_text_plus_one_cis(
+    async_client: AsyncClient,
+) -> None:
+    """Seller PDF: product description must not block single-label artifact."""
+    h = await _register_admin(async_client)
+    seller = await async_client.post(
+        "/sellers",
+        headers=h,
+        json={"name": "PDF Seller Style", "email": f"s-{uuid.uuid4().hex[:8]}@example.com"},
+    )
+    assert seller.status_code == 201
+    seller_id = seller.json()["id"]
+
+    sku = f"SKU-PDF-STYLE-{uuid.uuid4().hex[:6]}"
+    pr = await async_client.post(
+        "/products",
+        headers=h,
+        json={
+            "name": "PDF seller style product",
+            "sku_code": sku,
+            "length_mm": 10,
+            "width_mm": 10,
+            "height_mm": 10,
+            "seller_id": seller_id,
+        },
+    )
+    assert pr.status_code == 200
+    product_id = pr.json()["id"]
+
+    gtin14 = "02900446283341"
+    cis = f"01{gtin14}21{'bTkx0VXU<AVz1'}"
+    imp = await async_client.post(
+        "/operations/marking-codes/import",
+        headers=h,
+        data={
+            "seller_id": seller_id,
+            "pools_json": json.dumps(
+                [{"title": "PDF seller style pool", "product_ids": [product_id]}],
+            ),
+        },
+        files=[("files", ("labels.pdf", _build_seller_style_label_pdf(cis), "application/pdf"))],
+    )
+    assert imp.status_code == 200, imp.text
+    assert imp.json()["accepted_count"] == 1
+
+    codes = await async_client.get(
+        f"/operations/marking-codes/products/{product_id}/codes",
+        headers=h,
+    )
+    assert codes.status_code == 200
+    row = codes.json()[0]
+    assert row["has_label_artifact"] is True
+
+    artifact = await async_client.get(
+        f"/operations/marking-codes/codes/{row['id']}/label-artifact?format=png",
+        headers=h,
+    )
+    assert artifact.status_code == 200
+    assert len(artifact.content) > 100
+
+
+@pytest.mark.asyncio
+async def test_pdf_import_does_not_reuse_multi_label_page_as_artifact(
+    async_client: AsyncClient,
+) -> None:
+    h = await _register_admin(async_client)
+    seller = await async_client.post(
+        "/sellers",
+        headers=h,
+        json={"name": "PDF Multi Seller", "email": f"s-{uuid.uuid4().hex[:8]}@example.com"},
+    )
+    assert seller.status_code == 201
+    seller_id = seller.json()["id"]
+
+    sku = f"SKU-PDF-MULTI-{uuid.uuid4().hex[:6]}"
+    pr = await async_client.post(
+        "/products",
+        headers=h,
+        json={
+            "name": "PDF multi label product",
+            "sku_code": sku,
+            "length_mm": 10,
+            "width_mm": 10,
+            "height_mm": 10,
+            "seller_id": seller_id,
+        },
+    )
+    assert pr.status_code == 200
+    product_id = pr.json()["id"]
+
+    gtin14 = "04600000000002"
+    cis_a = f"01{gtin14}21{'E' * 20}0001"
+    cis_b = f"01{gtin14}21{'E' * 20}0002"
+    imp = await async_client.post(
+        "/operations/marking-codes/import",
+        headers=h,
+        data={
+            "seller_id": seller_id,
+            "pools_json": json.dumps(
+                [{"title": "PDF multi pool", "product_ids": [product_id]}],
+            ),
+        },
+        files=[("files", ("labels.pdf", _build_two_label_pdf(cis_a, cis_b), "application/pdf"))],
+    )
+    assert imp.status_code == 200, imp.text
+    assert imp.json()["accepted_count"] == 2
+
+    codes = await async_client.get(
+        f"/operations/marking-codes/products/{product_id}/codes",
+        headers=h,
+    )
+    assert codes.status_code == 200
+    rows = codes.json()
+    assert len(rows) == 2
+    assert {row["has_label_artifact"] for row in rows} == {False}
+
+    artifact = await async_client.get(
+        f"/operations/marking-codes/codes/{rows[0]['id']}/label-artifact?format=png",
+        headers=h,
+    )
+    assert artifact.status_code == 404
+    assert artifact.json()["detail"] == "label_artifact_missing"

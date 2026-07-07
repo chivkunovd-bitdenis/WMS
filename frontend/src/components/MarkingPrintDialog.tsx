@@ -37,7 +37,10 @@ import {
 import type { ProductThermalLabelData } from '../utils/printProductThermalLabel'
 import { resolvePackUnits, resolveWbBarcodeLabelCount } from '../utils/productBarcodePrint'
 import { resolveLabelSize, loadLabelSizeId, type LabelSize } from '../utils/labelSize'
-import { useSeparateMarkingPrint } from '../utils/separateMarkingPrint'
+import {
+  refreshSeparateMarkingPrintEnabled,
+  useSeparateMarkingPrint,
+} from '../utils/separateMarkingPrint'
 import { LabelSizeSelect } from './LabelSizeSelect'
 
 type PrintedCodeOption = {
@@ -110,9 +113,12 @@ export function MarkingPrintDialog({ open, reprint, ctx, busy, onBusyChange, onC
   const [reprintCodes, setReprintCodes] = useState<PrintedCodeOption[]>([])
   const [selectedReprintCodeIds, setSelectedReprintCodeIds] = useState<string[]>([])
   const [reprintCodesLoading, setReprintCodesLoading] = useState(false)
+  const [inlineReprint, setInlineReprint] = useState(false)
   const [chunkJob, setChunkJob] = useState<ChunkPrintJob | null>(null)
   // Раздельная печать ЧЗ и ШК ВБ: свои размеры и свои кнопки на каждый тип этикетки.
-  const separateEnabled = useSeparateMarkingPrint()
+  const separateEnabledFromStore = useSeparateMarkingPrint()
+  const [separateEnabledFromProfile, setSeparateEnabledFromProfile] = useState<boolean | null>(null)
+  const [separateSettingLoading, setSeparateSettingLoading] = useState(false)
   const [czLabelSize, setCzLabelSize] = useState<LabelSize>(() =>
     resolveLabelSize(loadLabelSizeId('cz')),
   )
@@ -126,8 +132,20 @@ export function MarkingPrintDialog({ open, reprint, ctx, busy, onBusyChange, onC
 
   const requiresHonestSign = ctx?.requiresHonestSign ?? true
   const isCatalogSource = ctx?.source === 'catalog'
+  const effectiveReprint = reprint || inlineReprint
+  const markingAlreadyPrinted = (ctx?.qtyMarkingPrinted ?? 0) > 0
+  const canOpenInlineReprint = Boolean(ctx?.lineId && markingAlreadyPrinted)
+  const separateEnabled = separateEnabledFromProfile ?? separateEnabledFromStore
   /** Раздельный режим: только для товаров с ЧЗ и не для перепечатки (там печатается один ЧЗ). */
-  const separateMode = separateEnabled && requiresHonestSign && !reprint
+  const separateMode = separateEnabled && requiresHonestSign && !effectiveReprint
+  const separateModeResolving =
+    open &&
+    Boolean(ctx?.token) &&
+    requiresHonestSign &&
+    !effectiveReprint &&
+    !separateEnabledFromStore &&
+    separateSettingLoading &&
+    separateEnabledFromProfile === null
 
   const applyTapeCounts = (nextCz: number, nextWb: number) => {
     const cz = Math.max(0, Math.min(99, Math.floor(nextCz) || 0))
@@ -145,6 +163,42 @@ export function MarkingPrintDialog({ open, reprint, ctx, busy, onBusyChange, onC
     setCzQty(nextTape.filter((b) => b === 'cz').length)
     setWbQty(nextTape.filter((b) => b === 'label').length)
   }
+
+  useEffect(() => {
+    if (open) {
+      setInlineReprint(false)
+    }
+  }, [open, ctx])
+
+  useEffect(() => {
+    if (!open || !ctx?.token || !requiresHonestSign || effectiveReprint) {
+      setSeparateEnabledFromProfile(null)
+      setSeparateSettingLoading(false)
+      return
+    }
+    let cancelled = false
+    setSeparateEnabledFromProfile(null)
+    setSeparateSettingLoading(!separateEnabledFromStore)
+    void refreshSeparateMarkingPrintEnabled(ctx.token)
+      .then((value) => {
+        if (!cancelled) {
+          setSeparateEnabledFromProfile(value)
+        }
+      })
+      .catch(() => {
+        if (!cancelled) {
+          setSeparateEnabledFromProfile(null)
+        }
+      })
+      .finally(() => {
+        if (!cancelled) {
+          setSeparateSettingLoading(false)
+        }
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [open, ctx?.token, requiresHonestSign, effectiveReprint, separateEnabledFromStore])
 
   useEffect(() => {
     if (!open || !ctx) {
@@ -207,7 +261,7 @@ export function MarkingPrintDialog({ open, reprint, ctx, busy, onBusyChange, onC
         setLayout(cloneLayout(defaultPreset.layout))
       }
     })()
-    if (reprint && ctx.lineId) {
+    if (effectiveReprint && ctx.lineId) {
       setReprintCodesLoading(true)
       void (async () => {
         try {
@@ -233,9 +287,9 @@ export function MarkingPrintDialog({ open, reprint, ctx, busy, onBusyChange, onC
         }
       })()
     }
-  }, [open, ctx, requiresHonestSign, reprint])
+  }, [open, ctx, requiresHonestSign, effectiveReprint])
 
-  const qtyNeed = reprint
+  const qtyNeed = effectiveReprint
     ? selectedReprintCodeIds.length > 0
       ? selectedReprintCodeIds.length
       : (ctx?.qtyMarkingPrinted ?? 0)
@@ -253,8 +307,8 @@ export function MarkingPrintDialog({ open, reprint, ctx, busy, onBusyChange, onC
   const wbLabelMultiplier = isCatalogSource || ctx?.lineId ? wbBarcodeQty : wbBarcodeQty * Math.max(1, qtyNeed)
   const totalWbLabels = resolveWbBarcodeLabelCount(wbLabelMultiplier, packUnits)
   const available = ctx?.markingAvailable ?? 0
-  const shortage = requiresHonestSign && !reprint && available < qtyNeed ? qtyNeed - available : 0
-  const canPrintCount = reprint
+  const shortage = requiresHonestSign && !effectiveReprint && available < qtyNeed ? qtyNeed - available : 0
+  const canPrintCount = effectiveReprint
     ? selectedReprintCodeIds.length
     : requiresHonestSign
       ? allowPartial
@@ -273,6 +327,12 @@ export function MarkingPrintDialog({ open, reprint, ctx, busy, onBusyChange, onC
     () => countTapeBlocksFromTape(tapeOrder, canPrintCount),
     [tapeOrder, canPrintCount],
   )
+  const forceReprintOnConfirm =
+    !separateEnabled &&
+    !effectiveReprint &&
+    requiresHonestSign &&
+    markingAlreadyPrinted &&
+    Boolean(ctx?.lineId)
 
   const reorderTape = (fromIndex: number, toIndex: number) => {
     if (fromIndex === toIndex) {
@@ -292,6 +352,7 @@ export function MarkingPrintDialog({ open, reprint, ctx, busy, onBusyChange, onC
     size: LabelSize
     closeAfter: boolean
     markDone?: 'cz' | 'wb' | null
+    forceReprint?: boolean
   }
 
   const markSectionDone = (markDone: 'cz' | 'wb' | null) => {
@@ -426,11 +487,13 @@ export function MarkingPrintDialog({ open, reprint, ctx, busy, onBusyChange, onC
     size,
     closeAfter,
     markDone = null,
+    forceReprint = false,
   }: TapePrintOptions) => {
     if (!ctx?.lineId) {
       setError('Нет строки упаковки для печати КМ.')
       return false
     }
+    const requestReprint = effectiveReprint || forceReprint
     const res = await fetch(
       apiUrl(`/operations/marking-codes/packaging-lines/${ctx.lineId}/print`),
       {
@@ -442,8 +505,8 @@ export function MarkingPrintDialog({ open, reprint, ctx, busy, onBusyChange, onC
         body: JSON.stringify({
           layout_json: printLayout,
           allow_partial: allowPartial,
-          reprint,
-          ...(reprint && selectedReprintCodeIds.length > 0
+          reprint: requestReprint,
+          ...(requestReprint && selectedReprintCodeIds.length > 0
             ? { code_ids: selectedReprintCodeIds }
             : {}),
         }),
@@ -499,10 +562,11 @@ export function MarkingPrintDialog({ open, reprint, ctx, busy, onBusyChange, onC
   const nonCzPrintSize = separateEnabled ? wbLabelSize : labelSize
   const reprintPrintSize = separateEnabled ? czLabelSize : labelSize
 
-  const handlePrint = async () => {
+  const handlePrint = async (opts?: { forceReprint?: boolean }) => {
     if (!ctx) {
       return
     }
+    const forceReprint = opts?.forceReprint ?? false
     onBusyChange(true)
     setError(null)
     try {
@@ -510,13 +574,14 @@ export function MarkingPrintDialog({ open, reprint, ctx, busy, onBusyChange, onC
         if (wbBarcodeQty >= 1) {
           await printLabelOnlyTape(totalWbLabels, nonCzPrintSize, true)
         }
-      } else if (!ctx.lineId && !reprint) {
+      } else if (!ctx.lineId && !effectiveReprint && !forceReprint) {
         await printCatalogTape({ layout, size: labelSize, closeAfter: true })
       } else {
         await printLineTape({
           layout,
-          size: reprint ? reprintPrintSize : labelSize,
+          size: effectiveReprint || forceReprint ? reprintPrintSize : labelSize,
           closeAfter: true,
+          forceReprint,
         })
       }
     } catch (e) {
@@ -543,7 +608,14 @@ export function MarkingPrintDialog({ open, reprint, ctx, busy, onBusyChange, onC
   )
 
   const handleSeparateCzPrint = async () => {
-    if (!ctx || canPrintCount < 1) {
+    if (!ctx) {
+      return
+    }
+    if (canOpenInlineReprint) {
+      setInlineReprint(true)
+      return
+    }
+    if (canPrintCount < 1) {
       return
     }
     onBusyChange(true)
@@ -647,15 +719,15 @@ export function MarkingPrintDialog({ open, reprint, ctx, busy, onBusyChange, onC
 
   const printDisabled =
     busy ||
-    (reprint &&
+    (effectiveReprint &&
       requiresHonestSign &&
       (reprintCodesLoading || selectedReprintCodeIds.length < 1)) ||
-    (!reprint && qtyNeed < 1) ||
-    (requiresHonestSign && !reprint && available < 1) ||
-    (requiresHonestSign && !reprint && !allowPartial && shortage > 0) ||
+    (!effectiveReprint && qtyNeed < 1) ||
+    (requiresHonestSign && !effectiveReprint && !forceReprintOnConfirm && available < 1) ||
+    (requiresHonestSign && !effectiveReprint && !forceReprintOnConfirm && !allowPartial && shortage > 0) ||
     (!requiresHonestSign && totalWbLabels < 1)
 
-  const dialogTitle = reprint
+  const dialogTitle = effectiveReprint
     ? 'Повторная печать'
     : requiresHonestSign
       ? 'Печать ЧЗ'
@@ -686,7 +758,7 @@ export function MarkingPrintDialog({ open, reprint, ctx, busy, onBusyChange, onC
                 </Typography>
                 <Typography variant="body2" data-testid="marking-print-qty">
                   {requiresHonestSign
-                    ? reprint
+                    ? effectiveReprint
                       ? `Выбрано для перепечатки: ${selectedReprintCodeIds.length} из ${ctx.qtyMarkingPrinted}`
                       : isCatalogSource
                         ? `К печати: ${catalogPrintQty} · Доступно в пуле: ${available}`
@@ -696,7 +768,7 @@ export function MarkingPrintDialog({ open, reprint, ctx, busy, onBusyChange, onC
               </Box>
             ) : null}
 
-            {separateMode ? null : separateEnabled && !requiresHonestSign ? (
+            {separateMode || separateModeResolving ? null : separateEnabled && !requiresHonestSign ? (
               <LabelSizeSelect
                 value={wbLabelSize.id}
                 onChange={setWbLabelSize}
@@ -705,7 +777,7 @@ export function MarkingPrintDialog({ open, reprint, ctx, busy, onBusyChange, onC
                 label="Размер ШК ВБ"
                 testId="marking-print-label-size"
               />
-            ) : separateEnabled && reprint ? (
+            ) : separateEnabled && effectiveReprint ? (
               <LabelSizeSelect
                 value={czLabelSize.id}
                 onChange={setCzLabelSize}
@@ -723,13 +795,35 @@ export function MarkingPrintDialog({ open, reprint, ctx, busy, onBusyChange, onC
               />
             )}
 
-            {shortage > 0 ? (
+            {separateModeResolving ? (
+              <Typography
+                variant="body2"
+                color="text.secondary"
+                data-testid="marking-print-separate-loading"
+              >
+                Проверяем настройку раздельной печати…
+              </Typography>
+            ) : null}
+
+            {shortage > 0 && !forceReprintOnConfirm ? (
               <Alert severity="error" data-testid="marking-print-shortage-banner">
                 Не хватает {shortage} из {qtyNeed} КМ
               </Alert>
             ) : null}
 
-            {!reprint && shortage > 0 ? (
+            {effectiveReprint && requiresHonestSign ? (
+              <Alert severity="warning" data-testid="marking-print-reprint-notice">
+                Повторная печать ЧЗ: выберите все или конкретные КМ, которые нужно напечатать ещё раз.
+              </Alert>
+            ) : null}
+
+            {!effectiveReprint && requiresHonestSign && markingAlreadyPrinted ? (
+              <Alert severity="warning" data-testid="marking-print-already-printed-warning">
+                ЧЗ по этой строке уже печатался ранее. Повторная печать выпустит те же КМ.
+              </Alert>
+            ) : null}
+
+            {!effectiveReprint && !forceReprintOnConfirm && shortage > 0 ? (
               <FormControlLabel
                 control={
                   <Checkbox
@@ -742,7 +836,7 @@ export function MarkingPrintDialog({ open, reprint, ctx, busy, onBusyChange, onC
               />
             ) : null}
 
-            {!reprint && !requiresHonestSign ? (
+            {!effectiveReprint && !requiresHonestSign ? (
               <TextField
                 size="small"
                 label="Количество ШК ВБ"
@@ -808,7 +902,7 @@ export function MarkingPrintDialog({ open, reprint, ctx, busy, onBusyChange, onC
                     />
                     <Button
                       variant="contained"
-                      disabled={busy || sepCzDone || canPrintCount < 1}
+                      disabled={busy || sepCzDone || (!canOpenInlineReprint && canPrintCount < 1)}
                       onClick={() => void handleSeparateCzPrint()}
                       data-testid="marking-print-sep-cz-print"
                     >
@@ -877,7 +971,7 @@ export function MarkingPrintDialog({ open, reprint, ctx, busy, onBusyChange, onC
               </>
             ) : null}
 
-            {!reprint && requiresHonestSign && !separateMode ? (
+            {!effectiveReprint && requiresHonestSign && !separateMode && !separateModeResolving ? (
               <>
                 {isCatalogSource ? (
                   <TextField
@@ -1007,7 +1101,7 @@ export function MarkingPrintDialog({ open, reprint, ctx, busy, onBusyChange, onC
               </>
             ) : null}
 
-            {reprint && requiresHonestSign ? (
+            {effectiveReprint && requiresHonestSign ? (
               reprintCodesLoading ? (
                 <Typography variant="body2" color="text.secondary">
                   Загрузка напечатанных КМ…
@@ -1062,19 +1156,19 @@ export function MarkingPrintDialog({ open, reprint, ctx, busy, onBusyChange, onC
               )
             ) : null}
 
-            {reprint && requiresHonestSign && selectedReprintCodeIds.length > 0 ? (
+            {effectiveReprint && requiresHonestSign && selectedReprintCodeIds.length > 0 ? (
               <Typography variant="body2" data-testid="marking-print-will-print">
                 К перепечатке: {selectedReprintCodeIds.length} КМ
               </Typography>
             ) : null}
 
-            {!reprint && requiresHonestSign && !separateMode && canPrintCount > 0 ? (
+            {!effectiveReprint && requiresHonestSign && !separateMode && canPrintCount > 0 ? (
               <Typography variant="body2" data-testid="marking-print-will-print">
                 К печати: {canPrintCount} ед. · {totalTapeCount} блоков в ленте
               </Typography>
             ) : null}
 
-            {!reprint && !requiresHonestSign && totalWbLabels > 0 ? (
+            {!effectiveReprint && !requiresHonestSign && totalWbLabels > 0 ? (
               <Typography variant="body2" data-testid="marking-print-will-print">
                 К печати: {totalWbLabels} ШК ВБ
               </Typography>
@@ -1088,7 +1182,11 @@ export function MarkingPrintDialog({ open, reprint, ctx, busy, onBusyChange, onC
           </Stack>
         </DialogContent>
         <DialogActions>
-          {separateMode ? (
+          {separateModeResolving ? (
+            <Button onClick={onClose} disabled={busy}>
+              Отмена
+            </Button>
+          ) : separateMode ? (
             <Button onClick={onClose} disabled={busy} data-testid="marking-print-separate-close">
               Закрыть
             </Button>
@@ -1100,10 +1198,10 @@ export function MarkingPrintDialog({ open, reprint, ctx, busy, onBusyChange, onC
               <Button
                 variant="contained"
                 disabled={printDisabled}
-                onClick={() => void handlePrint()}
+                onClick={() => void handlePrint({ forceReprint: forceReprintOnConfirm })}
                 data-testid="marking-print-confirm"
               >
-                {reprint ? 'Перепечатать' : 'Печать'}
+                {effectiveReprint ? 'Перепечатать' : 'Печать'}
               </Button>
             </>
           )}
