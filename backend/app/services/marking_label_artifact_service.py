@@ -137,7 +137,7 @@ def _frame_rect_for_cis(cis_bbox: object, frames: list[object]) -> object | None
     if not candidates:
         return None
     best = min(candidates, key=lambda rect: float(rect.get_area()))
-    return best
+    return cast(object | None, best)
 
 
 def _content_rect_for_page(page: object) -> object:
