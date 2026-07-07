@@ -249,7 +249,7 @@ def _printed_code_infos(codes: list[MarkingCode]) -> tuple[PrintedCodeInfo, ...]
         PrintedCodeInfo(
             id=code.id,
             cis_code=code.cis_code,
-            has_label_artifact=bool(code.label_artifact_pdf),
+            has_label_artifact=is_printable_label_artifact(code.label_artifact_pdf, code.cis_code),
         )
         for code in codes
     )
@@ -497,12 +497,14 @@ def _extract_cis_codes_from_text(text: str, seen: set[str]) -> list[str]:
         found.append(cis)
     if text.strip():
         for line in text.splitlines():
+            # Product titles on seller PDF pages are not CIS; only lines that match GS1 CIS shape.
+            if not _CIS_CANDIDATE_RE.search(line):
+                continue
             cis = normalize_cis(line)
             if cis is None or cis in seen:
                 continue
-            if len(cis) >= 20:
-                seen.add(cis)
-                found.append(cis)
+            seen.add(cis)
+            found.append(cis)
     return found
 
 
@@ -519,23 +521,51 @@ def _single_page_pdf_bytes(doc: object, page_index: int) -> bytes:
 
 
 def _parse_pdf_label_rows(content: bytes) -> list[dict[str, str | bytes]]:
+    from app.services.marking_label_artifact_service import extract_label_artifacts_from_pdf
+
     try:
-        import fitz  # pymupdf
-    except ImportError as exc:
+        artifacts = extract_label_artifacts_from_pdf(content)
+    except RuntimeError as exc:
         raise MarkingCodeServiceError("pdf_support_unavailable") from exc
     rows: list[dict[str, str | bytes]] = []
     seen: set[str] = set()
-    doc = fitz.open(stream=content, filetype="pdf")
+    for artifact in artifacts:
+        cis = normalize_cis(artifact.cis)
+        if cis is None or cis in seen:
+            continue
+        seen.add(cis)
+        rows.append(
+            {
+                "cis": cis,
+                "gtin": artifact.gtin,
+                "sku": "",
+                "label_pdf": artifact.label_pdf,
+            },
+        )
+    return rows
+
+
+def is_printable_label_artifact(pdf_bytes: bytes | None, cis_code: str | None = None) -> bool:
+    if not pdf_bytes:
+        return False
+    try:
+        import fitz  # pymupdf
+    except ImportError:
+        return False
+
+    expected = normalize_cis(cis_code or "") if cis_code else None
+    seen: set[str] = set()
+    doc = fitz.open(stream=pdf_bytes, filetype="pdf")
     try:
         for page_index in range(doc.page_count):
-            page_pdf = _single_page_pdf_bytes(doc, page_index)
-            text = doc[page_index].get_text("text")
-            for cis in _extract_cis_codes_from_text(text, seen):
-                gtin = extract_gtin_from_cis(cis) or ""
-                rows.append({"cis": cis, "gtin": gtin, "sku": "", "label_pdf": page_pdf})
+            _extract_cis_codes_from_text(doc[page_index].get_text("text"), seen)
+    except Exception:
+        return False
     finally:
         doc.close()
-    return rows
+    if expected is not None and expected not in seen:
+        return False
+    return len(seen) == 1
 
 
 def _parse_pdf_text_rows(content: bytes) -> list[dict[str, str]]:
@@ -1264,7 +1294,7 @@ async def list_product_codes(
             cis_code=code.cis_code,
             status=code.status,
             created_at=code.created_at,
-            has_label_artifact=bool(code.label_artifact_pdf),
+            has_label_artifact=is_printable_label_artifact(code.label_artifact_pdf, code.cis_code),
         )
         for code in codes
     ]

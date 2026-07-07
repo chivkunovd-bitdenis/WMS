@@ -157,13 +157,6 @@ export function FfPackagingTaskPanel({
   }
 
   const openLinePrint = (ln: PackagingTaskLine, opts?: { reprint?: boolean }) => {
-    const reprint =
-      opts?.reprint ??
-      Boolean(
-        ln.requires_honest_sign &&
-          ln.qty_marking_printed > 0 &&
-          ln.qty_marking_printed >= ln.qty_need_pack,
-      )
     openPrint(
       {
         token,
@@ -182,7 +175,7 @@ export function FfPackagingTaskPanel({
           void refreshTask()
         },
       },
-      { reprint },
+      { reprint: opts?.reprint },
     )
   }
 
@@ -433,7 +426,6 @@ export function FfPackagingTaskPanel({
               <FfProductTableHeadCells
                 nameLabel={isMpUnloadTask ? 'Наименование' : 'Наименование / ячейка'}
               />
-              <TableCell>Инструкция</TableCell>
               <TableCell align="right">Всего</TableCell>
               {!isMpUnloadTask ? (
                 <TableCell align="right">На полке упак.</TableCell>
@@ -479,11 +471,6 @@ export function FfPackagingTaskPanel({
                       : undefined
                   }
                 />
-                <TableCell sx={{ maxWidth: 220 }}>
-                  <Typography variant="caption" data-testid="ff-packaging-instructions">
-                    {ln.packaging_instructions?.trim() || '— ТЗ не заполнено —'}
-                  </Typography>
-                </TableCell>
                 <TableCell align="right">{ln.qty_total}</TableCell>
                 {!isMpUnloadTask ? (
                   <TableCell align="right">{ln.qty_suggested_packed}</TableCell>
