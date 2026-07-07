@@ -32,12 +32,15 @@ services:
     environment:
       DATABASE_URL: postgresql+psycopg_async://postgres:postgres@db:5432/wms
       CELERY_BROKER_URL: redis://redis:6379/0
+      WMS_DATA_DIR: /var/lib/wms/data
       # Test bootstrap: stable credentials for local docker environment.
       WMS_BOOTSTRAP_ADMIN: "1"
       WMS_BOOTSTRAP_ADMIN_EMAIL: "admin@test.example.com"
       WMS_BOOTSTRAP_ADMIN_PASSWORD: "password123"
       WMS_BOOTSTRAP_ORG_NAME: "WMS Test"
       WMS_BOOTSTRAP_ORG_SLUG: "wms-test"
+    volumes:
+      - wms_data:/var/lib/wms/data
     depends_on:
       db:
         condition: service_healthy
@@ -100,3 +103,6 @@ services:
       - "${WMS_SELLER_WEB_PORT:-15174}:80"
     volumes:
       - ./frontend/deploy/Caddyfile.seller.local:/etc/caddy/Caddyfile:ro
+
+volumes:
+  wms_data:

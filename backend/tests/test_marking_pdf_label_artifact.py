@@ -112,6 +112,142 @@ async def test_pdf_import_stores_label_artifact_per_cis(async_client: AsyncClien
         assert code.label_artifact_pdf is not None
         assert code.label_artifact_pdf.startswith(b"%PDF")
 
+    from app.models.marking_code import MarkingCodeImportFile
+    from app.services.marking_import_storage_service import read_marking_import_source_pdf
+
+    import_id = imp.json()["import_id"]
+    async with SessionLocal() as session:
+        source_file = (
+            await session.execute(
+                select(MarkingCodeImportFile).where(
+                    MarkingCodeImportFile.import_batch_id == uuid.UUID(import_id),
+                ),
+            )
+        ).scalar_one()
+        assert source_file.original_filename == "labels.pdf"
+        assert source_file.size_bytes == len(pdf_bytes)
+        stored_pdf = read_marking_import_source_pdf(source_file.storage_key)
+        assert stored_pdf == pdf_bytes
+
+
+@pytest.mark.asyncio
+async def test_pdf_import_succeeds_when_source_storage_disabled(
+    async_client: AsyncClient, monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(
+        "app.services.marking_import_storage_service.get_object_storage_backend",
+        lambda: None,
+    )
+
+    h = await _register_admin(async_client)
+    seller = await async_client.post(
+        "/sellers",
+        headers=h,
+        json={"name": "No storage seller", "email": f"s-{uuid.uuid4().hex[:8]}@example.com"},
+    )
+    assert seller.status_code == 201
+    seller_id = seller.json()["id"]
+
+    pr = await async_client.post(
+        "/products",
+        headers=h,
+        json={
+            "name": "No storage product",
+            "sku_code": f"SKU-NS-{uuid.uuid4().hex[:6]}",
+            "length_mm": 10,
+            "width_mm": 10,
+            "height_mm": 10,
+            "seller_id": seller_id,
+        },
+    )
+    assert pr.status_code == 200
+    product_id = pr.json()["id"]
+
+    gtin14 = "04600000000003"
+    cis = f"01{gtin14}21{'F' * 20}0001"
+    pdf_bytes = _build_label_pdf(cis, "storage disabled")
+    imp = await async_client.post(
+        "/operations/marking-codes/import",
+        headers=h,
+        data={
+            "seller_id": seller_id,
+            "pools_json": json.dumps(
+                [{"title": "No storage pool", "product_ids": [product_id]}],
+            ),
+        },
+        files=[("files", ("labels.pdf", pdf_bytes, "application/pdf"))],
+    )
+    assert imp.status_code == 200, imp.text
+    assert imp.json()["accepted_count"] == 1
+
+    from app.models.marking_code import MarkingCodeImportFile
+
+    import_id = imp.json()["import_id"]
+    async with SessionLocal() as session:
+        rows = (
+            await session.execute(
+                select(MarkingCodeImportFile).where(
+                    MarkingCodeImportFile.import_batch_id == uuid.UUID(import_id),
+                ),
+            )
+        ).scalars().all()
+        assert rows == []
+
+
+@pytest.mark.asyncio
+async def test_csv_import_does_not_store_source_pdf(async_client: AsyncClient) -> None:
+    h = await _register_admin(async_client)
+    seller = await async_client.post(
+        "/sellers",
+        headers=h,
+        json={"name": "CSV Seller", "email": f"s-{uuid.uuid4().hex[:8]}@example.com"},
+    )
+    assert seller.status_code == 201
+    seller_id = seller.json()["id"]
+
+    pr = await async_client.post(
+        "/products",
+        headers=h,
+        json={
+            "name": "CSV product",
+            "sku_code": f"SKU-CSV-{uuid.uuid4().hex[:6]}",
+            "length_mm": 10,
+            "width_mm": 10,
+            "height_mm": 10,
+            "seller_id": seller_id,
+        },
+    )
+    assert pr.status_code == 200
+    product_id = pr.json()["id"]
+
+    gtin14 = "04600000000002"
+    cis = f"01{gtin14}21{'E' * 20}0001"
+    imp = await async_client.post(
+        "/operations/marking-codes/import",
+        headers=h,
+        data={
+            "seller_id": seller_id,
+            "pools_json": json.dumps(
+                [{"title": "CSV pool", "product_ids": [product_id]}],
+            ),
+        },
+        files=[("files", ("codes.csv", f"cis\n{cis}".encode(), "text/csv"))],
+    )
+    assert imp.status_code == 200, imp.text
+
+    from app.models.marking_code import MarkingCodeImportFile
+
+    import_id = imp.json()["import_id"]
+    async with SessionLocal() as session:
+        rows = (
+            await session.execute(
+                select(MarkingCodeImportFile).where(
+                    MarkingCodeImportFile.import_batch_id == uuid.UUID(import_id),
+                ),
+            )
+        ).scalars().all()
+        assert rows == []
+
 
 def _build_seller_style_label_pdf(cis: str) -> bytes:
     """One CIS per page plus product description lines (seller PDF shape)."""

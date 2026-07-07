@@ -75,6 +75,47 @@ class Settings(BaseSettings):
             "(in addition to users.can_manage_seller_shops and built-in email markers)."
         ),
     )
+    wms_data_dir: str = Field(
+        default="var/wms-data",
+        validation_alias=AliasChoices("WMS_DATA_DIR", "wms_data_dir"),
+        description=(
+            "Local object storage root for dev/tests when S3 is not configured."
+        ),
+    )
+    wms_marking_import_local_storage_enabled: bool = Field(
+        default=True,
+        validation_alias=AliasChoices(
+            "WMS_MARKING_IMPORT_LOCAL_STORAGE",
+            "wms_marking_import_local_storage_enabled",
+        ),
+        description="Use local disk for marking import PDFs when WMS_S3_BUCKET is unset.",
+    )
+    wms_s3_bucket: str | None = Field(
+        default=None,
+        validation_alias=AliasChoices("WMS_S3_BUCKET", "AWS_S3_BUCKET"),
+    )
+    wms_s3_region: str = Field(
+        default="us-east-1",
+        validation_alias=AliasChoices("WMS_S3_REGION", "AWS_REGION", "AWS_DEFAULT_REGION"),
+    )
+    wms_s3_endpoint_url: str | None = Field(
+        default=None,
+        validation_alias=AliasChoices("WMS_S3_ENDPOINT_URL", "AWS_ENDPOINT_URL"),
+        description="Optional S3-compatible endpoint (Yandex Object Storage, MinIO, etc.).",
+    )
+    wms_s3_prefix: str = Field(
+        default="wms",
+        validation_alias=AliasChoices("WMS_S3_PREFIX"),
+        description="Key prefix inside the bucket for all WMS objects.",
+    )
+    wms_s3_access_key_id: str | None = Field(
+        default=None,
+        validation_alias=AliasChoices("WMS_S3_ACCESS_KEY_ID", "AWS_ACCESS_KEY_ID"),
+    )
+    wms_s3_secret_access_key: str | None = Field(
+        default=None,
+        validation_alias=AliasChoices("WMS_S3_SECRET_ACCESS_KEY", "AWS_SECRET_ACCESS_KEY"),
+    )
     @field_validator("database_url", mode="before")
     @classmethod
     def _normalize_database_url(cls, value: str) -> str:

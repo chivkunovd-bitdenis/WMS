@@ -31,6 +31,13 @@ services:
       CELERY_BROKER_URL: ${CELERY_BROKER_URL:-redis://redis:6379/0}
       JWT_SECRET_KEY: ${JWT_SECRET_KEY:?set in .env}
       WMS_SECRETS_FERNET_KEY: ${WMS_SECRETS_FERNET_KEY:?set in .env}
+      WMS_MARKING_IMPORT_LOCAL_STORAGE: ${WMS_MARKING_IMPORT_LOCAL_STORAGE:-false}
+      WMS_S3_BUCKET: ${WMS_S3_BUCKET:-}
+      WMS_S3_REGION: ${WMS_S3_REGION:-}
+      WMS_S3_ENDPOINT_URL: ${WMS_S3_ENDPOINT_URL:-}
+      WMS_S3_PREFIX: ${WMS_S3_PREFIX:-wms}
+      WMS_S3_ACCESS_KEY_ID: ${WMS_S3_ACCESS_KEY_ID:-}
+      WMS_S3_SECRET_ACCESS_KEY: ${WMS_S3_SECRET_ACCESS_KEY:-}
       # Optional: allow CORS for external dev tools; in prod behind same origin it can be empty.
       WMS_CORS_ORIGINS: ${WMS_CORS_ORIGINS:-}
     depends_on:
