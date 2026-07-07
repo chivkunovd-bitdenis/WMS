@@ -122,7 +122,7 @@ def _rect_contains(outer: object, inner: object) -> bool:
     )
 
 
-def _frame_rect_for_cis(cis_bbox: object, frames: list[object]) -> "fitz.Rect | None":
+def _frame_rect_for_cis(cis_bbox: object, frames: list[object]) -> object | None:
     import fitz  # pymupdf
 
     bbox = cast(fitz.Rect, cis_bbox)
