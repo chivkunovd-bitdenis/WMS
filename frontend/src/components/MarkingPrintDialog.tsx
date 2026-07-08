@@ -236,9 +236,6 @@ export function MarkingPrintDialog({ open, reprint, ctx, busy, onBusyChange, onC
     setSaveName('')
     setWbBarcodeQty(1)
     setCatalogPrintQty(1)
-    setReprintCodes([])
-    setSelectedReprintCodeIds([])
-    setReprintCodesLoading(false)
     setDragTapeIndex(null)
     setChunkJob(null)
     setSepCzQty(2)
@@ -289,33 +286,64 @@ export function MarkingPrintDialog({ open, reprint, ctx, busy, onBusyChange, onC
         setLayout(cloneLayout(defaultPreset.layout))
       }
     })()
-    if (effectiveReprint && ctx.lineId) {
-      setReprintCodesLoading(true)
-      void (async () => {
-        try {
-          const res = await fetch(
-            apiUrl(`/operations/marking-codes/packaging-task-lines/${ctx.lineId}/printed-codes`),
-            { headers: { Authorization: `Bearer ${ctx.token}` } },
-          )
-          if (!res.ok) {
-            setError(await readApiErrorMessage(res))
-            setReprintCodes([])
-            return
-          }
-          const data = (await res.json()) as { codes: PrintedCodeOption[] }
-          const codes = data.codes ?? []
-          setReprintCodes(codes)
-          // Один код выбран по умолчанию — типовой случай «порвалась одна этикетка».
-          setSelectedReprintCodeIds(codes[0] ? [codes[0].id] : [])
-        } catch (e) {
-          setError(e instanceof Error ? e.message : 'Не удалось загрузить напечатанные КМ.')
+  }, [open, ctx?.productId, ctx?.token, requiresHonestSign])
+
+  const reprintLineId = ctx?.lineId
+  const reprintToken = ctx?.token
+
+  useEffect(() => {
+    if (!open) {
+      setReprintCodes([])
+      setSelectedReprintCodeIds([])
+      setReprintCodesLoading(false)
+      return
+    }
+    if (!effectiveReprint || !reprintLineId || !reprintToken) {
+      setReprintCodes([])
+      setSelectedReprintCodeIds([])
+      setReprintCodesLoading(false)
+      return
+    }
+
+    const controller = new AbortController()
+    setReprintCodesLoading(true)
+    void (async () => {
+      try {
+        const res = await fetch(
+          apiUrl(`/operations/marking-codes/packaging-task-lines/${reprintLineId}/printed-codes`),
+          {
+            headers: { Authorization: `Bearer ${reprintToken}` },
+            signal: controller.signal,
+          },
+        )
+        if (!res.ok) {
+          setError(await readApiErrorMessage(res))
           setReprintCodes([])
-        } finally {
+          setSelectedReprintCodeIds([])
+          return
+        }
+        const data = (await res.json()) as { codes: PrintedCodeOption[] }
+        const codes = data.codes ?? []
+        setReprintCodes(codes)
+        setSelectedReprintCodeIds(codes[0] ? [codes[0].id] : [])
+      } catch (e) {
+        if (e instanceof DOMException && e.name === 'AbortError') {
+          return
+        }
+        setError(e instanceof Error ? e.message : 'Не удалось загрузить напечатанные КМ.')
+        setReprintCodes([])
+        setSelectedReprintCodeIds([])
+      } finally {
+        if (!controller.signal.aborted) {
           setReprintCodesLoading(false)
         }
-      })()
+      }
+    })()
+
+    return () => {
+      controller.abort()
     }
-  }, [open, ctx, requiresHonestSign, effectiveReprint])
+  }, [open, effectiveReprint, reprintLineId, reprintToken])
 
   const qtyNeed = effectiveReprint
     ? selectedReprintCodeIds.length > 0
