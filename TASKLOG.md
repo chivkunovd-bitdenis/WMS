@@ -1,5 +1,12 @@
 # TASKLOG
 
+## TASK-109 — 2026-07-08 — Убрана «печать пачками» для ленты (ЧЗ и ШК)
+
+- Проблема: HTML-fallback печати ленты (когда native PDF ЧЗ не собрался) резал секции по 20 штук и открывал отдельный диалог «Печать пачками» с кнопками «Печатать пачку N/Повторить/Готово» — лишний шаг, которого никто не просил ни для ЧЗ, ни для ШК.
+- What changed: `MarkingPrintDialog.deliverTape` — HTML fallback печатает все секции одним заданием (`printTapeSections`) независимо от длины; удалены `PRINT_CHUNK_SIZE`, `ChunkPrintJob`, `chunkJob`/`setChunkJob`, `printChunk`/`finishChunkJob`/`abortChunkJob` и весь диалог «Печать пачками»; удалён e2e-тест `TC-NEW-CHUNK-PRINT-01`, который проверял именно эту убранную механику.
+- What did NOT change: native PDF путь печати ЧЗ (`printCzArtifactTape`) — им и раньше печатали одним заданием; логика «Количество этикеток» + «Печатать 2 ШК» из TASK-108.
+- Verification: `npm run build` (tsc + vite) green; ручной grep подтвердил отсутствие остаточных ссылок на `chunkJob`/`PRINT_CHUNK_SIZE`/«Печать пачками» в `frontend/`.
+
 ## TASK-108 — 2026-07-08 — Печать: ручное кол-во этикеток + ТЗ альбом
 
 - Проблема: в диалоге печати ШК ВБ множитель зависел от кол-ва к упаковке; сводное ТЗ печаталось книжной ориентацией, ШК был в одной строке с артикулами.
@@ -8,6 +15,7 @@
   - `printShipmentPackagingSheet`: `@page size: A4 landscape`; ШК отдельной жирной строкой в шапке карточки.
   - Тесты: vitest `resolveManualWbLabelCount`, e2e double-checkbox и landscape TZ.
 - What did NOT change: печать ЧЗ, лента ЧЗ+ШК в одном задании, каталог `printProductBarcodeFromMeta` (pack_units там по-прежнему).
+- Deploy: PR #89 → `main` `3074cc6`; Deploy Production run `28937861849` success; smoke `http://194.87.96.144:8088` FF/seller/health HTTP 200.
 
 ## TASK-107 — 2026-07-08 — ШК на 70×120: одна наклейка, не две
 
