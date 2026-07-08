@@ -490,3 +490,77 @@ def test_pdf_bytes_to_png_trims_whitespace_margins() -> None:
         assert tight_pix.height > 50
     finally:
         tight.close()
+
+
+@pytest.mark.asyncio
+async def test_label_artifact_tape_merges_pdfs_in_order(async_client: AsyncClient) -> None:
+    h = await _register_admin(async_client)
+    seller = await async_client.post(
+        "/sellers",
+        headers=h,
+        json={"name": "Tape Seller", "email": f"s-{uuid.uuid4().hex[:8]}@example.com"},
+    )
+    assert seller.status_code == 201
+    seller_id = seller.json()["id"]
+
+    sku = f"SKU-TAPE-{uuid.uuid4().hex[:6]}"
+    pr = await async_client.post(
+        "/products",
+        headers=h,
+        json={
+            "name": "Tape product",
+            "sku_code": sku,
+            "length_mm": 10,
+            "width_mm": 10,
+            "height_mm": 10,
+            "seller_id": seller_id,
+        },
+    )
+    assert pr.status_code == 200
+    product_id = pr.json()["id"]
+
+    gtin14 = "04600000000001"
+    cis_a = f"01{gtin14}21{'E' * 20}0001"
+    cis_b = f"01{gtin14}21{'F' * 20}0002"
+    pdf_bytes = _build_two_label_pdf(cis_a, cis_b)
+    imp = await async_client.post(
+        "/operations/marking-codes/import",
+        headers=h,
+        data={
+            "seller_id": seller_id,
+            "pools_json": json.dumps([{"title": "Tape pool", "product_ids": [product_id]}]),
+        },
+        files=[("files", ("labels.pdf", pdf_bytes, "application/pdf"))],
+    )
+    assert imp.status_code == 200, imp.text
+    assert imp.json()["accepted_count"] == 2
+
+    codes = await async_client.get(
+        f"/operations/marking-codes/products/{product_id}/codes",
+        headers=h,
+    )
+    assert codes.status_code == 200
+    rows = codes.json()
+    assert len(rows) == 2
+    id_a = rows[0]["id"]
+    id_b = rows[1]["id"]
+
+    tape = await async_client.post(
+        "/operations/marking-codes/label-artifact-tape",
+        headers=h,
+        json={"code_ids": [id_a, id_a, id_b]},
+    )
+    assert tape.status_code == 200, tape.text
+    assert tape.headers["content-type"] == "application/pdf"
+    merged = fitz.open(stream=tape.content, filetype="pdf")
+    try:
+        assert merged.page_count == 3
+    finally:
+        merged.close()
+
+
+def test_merge_label_artifact_pdfs_empty_raises() -> None:
+    from app.services.marking_label_artifact_service import merge_label_artifact_pdfs
+
+    with pytest.raises(ValueError, match="empty_parts"):
+        merge_label_artifact_pdfs([])

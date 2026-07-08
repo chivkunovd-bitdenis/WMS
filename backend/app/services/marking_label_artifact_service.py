@@ -39,6 +39,25 @@ def pdf_bytes_to_png(pdf_bytes: bytes, dpi: int = 600) -> bytes:
         doc.close()
 
 
+def merge_label_artifact_pdfs(parts: list[bytes]) -> bytes:
+    """Склеивает одностраничные PDF-этикетки селлера в одну ленту для печати."""
+    if not parts:
+        raise ValueError("empty_parts")
+    import fitz  # pymupdf
+
+    out = fitz.open()
+    try:
+        for part in parts:
+            src = fitz.open(stream=part, filetype="pdf")
+            try:
+                out.insert_pdf(src)
+            finally:
+                src.close()
+        return cast(bytes, out.tobytes())
+    finally:
+        out.close()
+
+
 def _content_clip_rect(page: object) -> object | None:
     import fitz  # pymupdf
 

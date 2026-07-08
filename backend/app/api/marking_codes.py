@@ -445,6 +445,7 @@ def _http_from_mc_error(exc: mc_svc.MarkingCodeServiceError) -> HTTPException:
         "code_not_found",
         "task_not_found",
         "reprint_request_not_found",
+        "label_artifact_missing",
     )
     if code in not_found_codes:
         status_code = status.HTTP_404_NOT_FOUND
@@ -1217,6 +1218,27 @@ async def get_marking_code_label_artifact(
             detail="label_artifact_render_failed",
         ) from exc
     return Response(content=png_bytes, media_type="image/png")
+
+
+class LabelArtifactTapeIn(BaseModel):
+    code_ids: list[uuid.UUID] = Field(min_length=1, max_length=500)
+
+
+@router.post("/label-artifact-tape")
+async def post_label_artifact_tape_pdf(
+    body: LabelArtifactTapeIn,
+    user: Annotated[User, Depends(require_packaging_access)],
+    session: Annotated[AsyncSession, Depends(get_db)],
+) -> Response:
+    try:
+        pdf_bytes = await mc_svc.build_label_artifact_tape_pdf(
+            session,
+            user.tenant_id,
+            body.code_ids,
+        )
+    except mc_svc.MarkingCodeServiceError as exc:
+        raise _http_from_mc_error(exc) from exc
+    return Response(content=pdf_bytes, media_type="application/pdf")
 
 
 @router.get("/print-templates/resolve", response_model=PrintTemplateOut)
