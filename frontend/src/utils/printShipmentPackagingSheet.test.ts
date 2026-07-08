@@ -26,9 +26,10 @@ const base: ShipmentPackagingSheetData = {
 }
 
 describe('buildShipmentPackagingSheetHtml', () => {
-  it('renders A4 landscape sheet with compact header (no warehouse/created)', () => {
+  it('renders A4 sheet (orientation chosen in print dialog, not forced in CSS)', () => {
     const html = buildShipmentPackagingSheetHtml(base)
-    expect(html).toContain('size: A4 landscape')
+    expect(html).toContain('size: A4')
+    expect(html).not.toContain('size: A4 landscape')
     expect(html).toContain('ТЗ на упаковку — Отгрузка №000034')
     expect(html).toContain('ООО Ромашка')
     expect(html).not.toContain('Склад ФФ')

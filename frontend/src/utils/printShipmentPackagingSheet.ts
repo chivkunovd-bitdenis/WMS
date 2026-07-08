@@ -80,13 +80,16 @@ export function buildShipmentPackagingSheetHtml(data: ShipmentPackagingSheetData
     <meta charset="utf-8" />
     <title>ТЗ на упаковку — ${escapeLabelHtml(data.documentNumber)}</title>
     <style>
-      @page { size: A4 landscape; margin: 4mm 10mm 6mm; }
+      /* Ориентацию выбирает оператор в диалоге печати — не форсируем landscape в @page
+         (иначе при Portrait в диалоге карточки уезжают за область печати). */
+      @page { size: A4; margin: 4mm 10mm 6mm; }
       * { box-sizing: border-box; }
       body {
         font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif;
         font-size: 12px;
         color: #111;
         margin: 0;
+        width: 100%;
         -webkit-print-color-adjust: exact;
         print-color-adjust: exact;
       }
@@ -100,8 +103,11 @@ export function buildShipmentPackagingSheetHtml(data: ShipmentPackagingSheetData
         border-radius: 4px;
         padding: 6px;
         margin: 0 0 8px;
+        width: 100%;
+        max-width: 100%;
+        align-items: flex-start;
         page-break-inside: avoid;
-        break-inside: avoid;
+        break-inside: avoid-page;
       }
       .pk-left { flex: 0 0 40mm; }
       .pk-main { flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; }
