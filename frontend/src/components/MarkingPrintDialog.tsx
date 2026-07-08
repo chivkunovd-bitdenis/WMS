@@ -32,6 +32,7 @@ import {
 import { createPrintTemplate, resolvePrintTemplate, type PrintLayout } from '../utils/printTemplate'
 import { readApiErrorMessage } from '../utils/readApiErrorMessage'
 import {
+  beginPrintUserGesture,
   buildMarkingTapeSections,
   printCzArtifactTape,
   printTapeSections,
@@ -398,7 +399,13 @@ export function MarkingPrintDialog({ open, reprint, ctx, busy, onBusyChange, onC
     if (!ctx) {
       return
     }
-    const printedNative = await printCzArtifactTape(tapeUnits, printLayout, ctx.token)
+    let printedNative = false
+    try {
+      printedNative = await printCzArtifactTape(tapeUnits, printLayout, ctx.token)
+    } catch {
+      // Native PDF иногда не стартует (viewer/блокировка) — ниже HTML fallback.
+      printedNative = false
+    }
     if (printedNative) {
       markSectionDone(markDone)
       ctx.onPrinted()
@@ -595,6 +602,9 @@ export function MarkingPrintDialog({ open, reprint, ctx, busy, onBusyChange, onC
       return
     }
     const forceReprint = opts?.forceReprint ?? false
+    if (requiresHonestSign) {
+      beginPrintUserGesture()
+    }
     onBusyChange(true)
     setError(null)
     try {
@@ -646,6 +656,7 @@ export function MarkingPrintDialog({ open, reprint, ctx, busy, onBusyChange, onC
     if (canPrintCount < 1) {
       return
     }
+    beginPrintUserGesture()
     onBusyChange(true)
     setError(null)
     try {
