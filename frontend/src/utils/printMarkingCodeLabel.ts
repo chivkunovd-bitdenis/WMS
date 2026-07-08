@@ -397,6 +397,7 @@ export function resolveCzArtifactTapeCodeIds(
 export async function fetchCzArtifactTapePdf(
   codeIds: string[],
   authToken: string,
+  pageSize?: Pick<LabelSize, 'widthMm' | 'heightMm'>,
 ): Promise<Blob> {
   const res = await fetch(apiUrl('/operations/marking-codes/label-artifact-tape'), {
     method: 'POST',
@@ -404,7 +405,11 @@ export async function fetchCzArtifactTapePdf(
       Authorization: `Bearer ${authToken}`,
       'Content-Type': 'application/json',
     },
-    body: JSON.stringify({ code_ids: codeIds }),
+    body: JSON.stringify({
+      code_ids: codeIds,
+      page_width_mm: pageSize?.widthMm,
+      page_height_mm: pageSize?.heightMm,
+    }),
   })
   if (!res.ok) {
     throw new Error('Не удалось загрузить ленту ЧЗ из файлов селлера.')
@@ -577,12 +582,13 @@ export async function printCzArtifactTape(
   units: MarkingTapeUnitInput[],
   layout: PrintLayout,
   authToken: string,
+  pageSize?: LabelSize,
 ): Promise<boolean> {
   const codeIds = resolveCzArtifactTapeCodeIds(units, layout)
   if (!codeIds) {
     return false
   }
-  const pdf = await fetchCzArtifactTapePdf(codeIds, authToken)
+  const pdf = await fetchCzArtifactTapePdf(codeIds, authToken, pageSize)
   await printPdfBlob(pdf)
   return true
 }

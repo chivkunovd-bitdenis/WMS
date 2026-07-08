@@ -1222,6 +1222,8 @@ async def get_marking_code_label_artifact(
 
 class LabelArtifactTapeIn(BaseModel):
     code_ids: list[uuid.UUID] = Field(min_length=1, max_length=500)
+    page_width_mm: float | None = Field(default=None, gt=0, le=200)
+    page_height_mm: float | None = Field(default=None, gt=0, le=300)
 
 
 @router.post("/label-artifact-tape")
@@ -1235,6 +1237,8 @@ async def post_label_artifact_tape_pdf(
             session,
             user.tenant_id,
             body.code_ids,
+            page_width_mm=body.page_width_mm,
+            page_height_mm=body.page_height_mm,
         )
     except mc_svc.MarkingCodeServiceError as exc:
         raise _http_from_mc_error(exc) from exc

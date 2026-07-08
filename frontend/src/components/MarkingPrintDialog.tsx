@@ -401,7 +401,7 @@ export function MarkingPrintDialog({ open, reprint, ctx, busy, onBusyChange, onC
     }
     let printedNative = false
     try {
-      printedNative = await printCzArtifactTape(tapeUnits, printLayout, ctx.token)
+      printedNative = await printCzArtifactTape(tapeUnits, printLayout, ctx.token, size)
     } catch {
       // Native PDF иногда не стартует (viewer/блокировка) — ниже HTML fallback.
       printedNative = false

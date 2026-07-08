@@ -576,6 +576,8 @@ async def build_label_artifact_tape_pdf(
     session: AsyncSession,
     tenant_id: uuid.UUID,
     code_ids: list[uuid.UUID],
+    page_width_mm: float | None = None,
+    page_height_mm: float | None = None,
 ) -> bytes:
     """Склеивает PDF-артефакты селлера в порядке печати ленты ЧЗ."""
     if not code_ids:
@@ -583,7 +585,7 @@ async def build_label_artifact_tape_pdf(
     if len(code_ids) > _MAX_LABEL_ARTIFACT_TAPE:
         raise MarkingCodeServiceError("too_many_codes")
 
-    from app.services.marking_label_artifact_service import merge_label_artifact_pdfs
+    from app.services.marking_label_artifact_service import merge_label_artifact_pdfs_for_print
 
     parts: list[bytes] = []
     for code_id in code_ids:
@@ -594,7 +596,7 @@ async def build_label_artifact_tape_pdf(
         if not pdf_bytes or not is_printable_label_artifact(pdf_bytes, code.cis_code):
             raise MarkingCodeServiceError("label_artifact_missing")
         parts.append(pdf_bytes)
-    return merge_label_artifact_pdfs(parts)
+    return merge_label_artifact_pdfs_for_print(parts, page_width_mm, page_height_mm)
 
 
 def _parse_pdf_text_rows(content: bytes) -> list[dict[str, str]]:

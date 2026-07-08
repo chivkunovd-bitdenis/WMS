@@ -564,3 +564,21 @@ def test_merge_label_artifact_pdfs_empty_raises() -> None:
 
     with pytest.raises(ValueError, match="empty_parts"):
         merge_label_artifact_pdfs([])
+
+
+def test_fit_label_artifact_pdf_to_page_sets_tall_page_size() -> None:
+    from app.services.marking_label_artifact_service import fit_label_artifact_pdf_to_page
+
+    src = fitz.open()
+    src.new_page(width=170, height=113)
+    src_bytes = bytes(src.tobytes())
+    src.close()
+
+    fitted_bytes = fit_label_artifact_pdf_to_page(src_bytes, 60, 80)
+    fitted = fitz.open(stream=fitted_bytes, filetype="pdf")
+    try:
+        rect = fitted[0].rect
+        assert abs(rect.width - 60 * 72 / 25.4) < 1.5
+        assert abs(rect.height - 80 * 72 / 25.4) < 1.5
+    finally:
+        fitted.close()
