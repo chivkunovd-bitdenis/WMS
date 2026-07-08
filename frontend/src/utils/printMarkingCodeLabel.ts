@@ -118,13 +118,8 @@ function buildTapePageCss(size: LabelSize = DEFAULT_LABEL_SIZE): string {
     justify-content: center;
   }
   .cz-artifact-img {
-    ${tall
-      ? `width: ${size.heightMm}mm;
-    height: ${size.widthMm}mm;
-    transform: rotate(90deg);
-    transform-origin: center center;`
-      : `width: 100%;
-    height: 100%;`}
+    width: 100%;
+    height: 100%;
     object-fit: contain;
     display: block;
   }
@@ -148,6 +143,21 @@ async function blobToDataUrl(blob: Blob): Promise<string> {
   })
 }
 
+export async function fetchLabelArtifactPdfBlob(
+  codeId: string,
+  authToken: string,
+): Promise<Blob> {
+  const res = await fetch(
+    apiUrl(`/operations/marking-codes/codes/${codeId}/label-artifact?format=pdf`),
+    { headers: { Authorization: `Bearer ${authToken}` } },
+  )
+  if (!res.ok) {
+    throw new Error('Не удалось загрузить этикетку ЧЗ из файла селлера.')
+  }
+  return res.blob()
+}
+
+/** @deprecated HTML fallback only — основная печать артефакта через native PDF. */
 export async function fetchLabelArtifactDataUrl(
   codeId: string,
   authToken: string,
@@ -358,6 +368,111 @@ export async function buildMarkingTapeSections(
   }
 
   return sections
+}
+
+/**
+ * Если лента состоит только из блоков ЧЗ с PDF-артефактом селлера — возвращает
+ * code_id в порядке печати (с учётом duplicate copies). Иначе null → HTML fallback.
+ */
+export function resolveCzArtifactTapeCodeIds(
+  units: MarkingTapeUnitInput[],
+  layout: PrintLayout,
+): string[] | null {
+  const codes = units.map((unit) => unit.cis)
+  const tape = expandLayoutTape(codes, layout)
+  const codeIds: string[] = []
+  for (const item of tape) {
+    if (item.block !== 'cz') {
+      return null
+    }
+    const unit = units[item.unitIndex]
+    if (!unit.codeId || !unit.hasLabelArtifact) {
+      return null
+    }
+    codeIds.push(unit.codeId)
+  }
+  return codeIds.length > 0 ? codeIds : null
+}
+
+export async function fetchCzArtifactTapePdf(
+  codeIds: string[],
+  authToken: string,
+): Promise<Blob> {
+  const res = await fetch(apiUrl('/operations/marking-codes/label-artifact-tape'), {
+    method: 'POST',
+    headers: {
+      Authorization: `Bearer ${authToken}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({ code_ids: codeIds }),
+  })
+  if (!res.ok) {
+    throw new Error('Не удалось загрузить ленту ЧЗ из файлов селлера.')
+  }
+  return res.blob()
+}
+
+/** Печать PDF как обычный файл (встроенный viewer браузера → print). */
+export async function printPdfBlob(pdfBlob: Blob): Promise<void> {
+  const url = URL.createObjectURL(pdfBlob)
+  const iframe = document.createElement('iframe')
+  iframe.setAttribute('aria-hidden', 'true')
+  iframe.style.position = 'fixed'
+  iframe.style.right = '0'
+  iframe.style.bottom = '0'
+  iframe.style.width = '0'
+  iframe.style.height = '0'
+  iframe.style.border = '0'
+  iframe.src = url
+  document.body.appendChild(iframe)
+
+  const cleanup = () => {
+    URL.revokeObjectURL(url)
+    try {
+      document.body.removeChild(iframe)
+    } catch {
+      // ignore
+    }
+  }
+
+  iframe.onload = () => {
+    // PDF viewer в iframe нуждается во времени перед print().
+    setTimeout(() => {
+      const w = iframe.contentWindow
+      if (!w) {
+        cleanup()
+        return
+      }
+      try {
+        w.focus()
+      } catch {
+        // ignore
+      }
+      try {
+        w.print()
+      } finally {
+        setTimeout(cleanup, 1000)
+      }
+    }, 500)
+  }
+}
+
+/**
+ * Печать ленты ЧЗ нативным PDF селлера (без PNG/HTML). Возвращает true, если напечатано;
+ * false — нужен HTML fallback (смешанная лента или нет артефакта).
+ */
+export async function printCzArtifactTape(
+  units: MarkingTapeUnitInput[],
+  layout: PrintLayout,
+  authToken: string,
+): Promise<boolean> {
+  const codeIds = resolveCzArtifactTapeCodeIds(units, layout)
+  if (!codeIds) {
+    return false
+  }
+  const pdf = await fetchCzArtifactTapePdf(codeIds, authToken)
+  await printPdfBlob(pdf)
+  return true
 }
 
 /** Печатает готовые секции ленты одним заданием печати. */

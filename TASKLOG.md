@@ -1,5 +1,15 @@
 # TASKLOG
 
+## TASK-104 — 2026-07-08 — Native PDF печать ленты ЧЗ из артефактов селлера
+
+- Проблема: путь PNG→HTML→iframe давал «в точки» DataMatrix и неверную раскладку на высоких наклейках; нужна печать как «открыть PDF селлера и Print».
+- What changed:
+  - Backend: `merge_label_artifact_pdfs`, `build_label_artifact_tape_pdf`, `POST /operations/marking-codes/label-artifact-tape` — склеивает нарезанные PDF артефакты в порядке ленты (до 500 стр.).
+  - Frontend: `printCzArtifactTape` — если лента только ЧЗ и у всех единиц `hasLabelArtifact` → native PDF через `printPdfBlob`; иначе прежний HTML fallback (PNG/генерация). CSS `rotate(90deg)` убран из artifact HTML path.
+  - Tests: `test_label_artifact_tape_merges_pdfs_in_order`, `test_merge_label_artifact_pdfs_empty_raises`; vitest `resolveCzArtifactTapeCodeIds`.
+- What did NOT change: mixed ЧЗ+ШК лента; WB labels; import/narезка; fallback `buildCzLabelHtml` при отсутствии артефакта.
+- Verification: backend pytest 337/337, ruff+mypy ok; frontend vitest 11/11 в `printMarkingCodeLabel.test.ts`, `npm run build` ok.
+
 ## TASK-103 — 2026-07-08 — Печать ЧЗ строго из PDF селлера + поворот на высоких размерах
 
 - Проблема: ЧЗ-этикетка селлера физически альбомная 60×40. На высоких наклейках (60×80, 70×120) печаталась узкой полосой с большими пустыми полями. 60×40 печатался идеально, т.к. совпадает с размером PDF селлера.

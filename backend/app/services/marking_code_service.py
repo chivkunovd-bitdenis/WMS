@@ -569,6 +569,34 @@ def is_printable_label_artifact(pdf_bytes: bytes | None, cis_code: str | None = 
     return len(seen) == 1
 
 
+_MAX_LABEL_ARTIFACT_TAPE = 500
+
+
+async def build_label_artifact_tape_pdf(
+    session: AsyncSession,
+    tenant_id: uuid.UUID,
+    code_ids: list[uuid.UUID],
+) -> bytes:
+    """Склеивает PDF-артефакты селлера в порядке печати ленты ЧЗ."""
+    if not code_ids:
+        raise MarkingCodeServiceError("no_codes")
+    if len(code_ids) > _MAX_LABEL_ARTIFACT_TAPE:
+        raise MarkingCodeServiceError("too_many_codes")
+
+    from app.services.marking_label_artifact_service import merge_label_artifact_pdfs
+
+    parts: list[bytes] = []
+    for code_id in code_ids:
+        code = await session.get(MarkingCode, code_id)
+        if code is None or code.tenant_id != tenant_id:
+            raise MarkingCodeServiceError("code_not_found")
+        pdf_bytes = code.label_artifact_pdf
+        if not pdf_bytes or not is_printable_label_artifact(pdf_bytes, code.cis_code):
+            raise MarkingCodeServiceError("label_artifact_missing")
+        parts.append(pdf_bytes)
+    return merge_label_artifact_pdfs(parts)
+
+
 def _parse_pdf_text_rows(content: bytes) -> list[dict[str, str]]:
     return [
         {"cis": str(row["cis"]), "gtin": str(row["gtin"]), "sku": str(row.get("sku") or "")}

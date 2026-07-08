@@ -33,6 +33,7 @@ import { createPrintTemplate, resolvePrintTemplate, type PrintLayout } from '../
 import { readApiErrorMessage } from '../utils/readApiErrorMessage'
 import {
   buildMarkingTapeSections,
+  printCzArtifactTape,
   printTapeSections,
   type MarkingTapeUnitInput,
 } from '../utils/printMarkingCodeLabel'
@@ -395,6 +396,15 @@ export function MarkingPrintDialog({ open, reprint, ctx, busy, onBusyChange, onC
     markDone: 'cz' | 'wb' | null,
   ) => {
     if (!ctx) {
+      return
+    }
+    const printedNative = await printCzArtifactTape(tapeUnits, printLayout, ctx.token)
+    if (printedNative) {
+      markSectionDone(markDone)
+      ctx.onPrinted()
+      if (closeAfter) {
+        onClose()
+      }
       return
     }
     const sections = await buildMarkingTapeSections(tapeUnits, printLayout, ctx.productLabel, {

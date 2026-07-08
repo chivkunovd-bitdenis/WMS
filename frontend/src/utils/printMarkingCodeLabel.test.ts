@@ -1,7 +1,13 @@
 import { describe, expect, it } from 'vitest'
 
 import { formatGtinDisplay, maskCisTail, parseGs1Cis } from './parseGs1Cis'
-import { buildCzArtifactLabelHtml, buildCzLabelHtml, buildMarkingTapeDocument } from './printMarkingCodeLabel'
+import {
+  buildCzArtifactLabelHtml,
+  buildCzLabelHtml,
+  buildMarkingTapeDocument,
+  resolveCzArtifactTapeCodeIds,
+} from './printMarkingCodeLabel'
+import type { MarkingTapeUnitInput } from './printMarkingCodeLabel'
 
 const SAMPLE_CIS = `01${'04600000000001'}21${'A'.repeat(20)}0001`
 const MATRIX_STUB = 'data:image/png;base64,stub'
@@ -53,24 +59,40 @@ describe('buildCzLabelHtml', () => {
     expect(doc).toContain('.cz-artifact-img {')
     expect(doc).toContain('width: 100%')
     expect(doc).toContain('height: 100%')
+    expect(doc).toContain('object-fit: contain')
+    expect(doc).not.toContain('rotate(90deg)')
     expect(doc).toContain('cz-label-artifact-img')
   })
 
-  // TC-NEW-PRINT-SIZE-02 — эталон: артефакт селлера (альбомный) на высоких наклейках
-  // (60×80, 70×120) поворачивается на 90° и заполняет наклейку по высоте без искажений.
-  it('rotates seller artifact 90deg on tall label sizes', () => {
-    const tall = buildMarkingTapeDocument(
-      [buildCzArtifactLabelHtml('data:image/png;base64,abc')],
-      { id: '60x80', label: '60 × 80 мм', widthMm: 60, heightMm: 80 },
-    )
-    expect(tall).toContain('transform: rotate(90deg)')
-    expect(tall).toContain('object-fit: contain')
+  // TC-NEW-CZ-NATIVE-PDF-01 — лента только из PDF-артефактов → native PDF path.
+  it('resolves artifact code ids for cz-only tape with duplicates', () => {
+    const units: MarkingTapeUnitInput[] = [
+      { cis: 'A', codeId: 'id-a', hasLabelArtifact: true },
+      { cis: 'B', codeId: 'id-b', hasLabelArtifact: true },
+    ]
+    const ids = resolveCzArtifactTapeCodeIds(units, {
+      units: [{ block: 'cz', copies: 2 }],
+    })
+    expect(ids).toEqual(['id-a', 'id-a', 'id-b', 'id-b'])
   })
 
-  it('keeps seller artifact upright on base label size (58×40 / 60×40)', () => {
-    const wide = buildMarkingTapeDocument([buildCzArtifactLabelHtml('data:image/png;base64,abc')])
-    const artifactCss = wide.slice(wide.indexOf('.cz-artifact-img'))
-    expect(artifactCss.slice(0, 120)).not.toContain('rotate(90deg)')
+  it('returns null for mixed cz+label tape', () => {
+    const units: MarkingTapeUnitInput[] = [
+      { cis: 'A', codeId: 'id-a', hasLabelArtifact: true, productLabel: { barcode: '1', sku_code: 's', product_name: 'n' } },
+    ]
+    const ids = resolveCzArtifactTapeCodeIds(units, {
+      units: [
+        { block: 'cz', copies: 1 },
+        { block: 'label', copies: 1 },
+      ],
+    })
+    expect(ids).toBeNull()
+  })
+
+  it('returns null when cz block lacks artifact', () => {
+    const units: MarkingTapeUnitInput[] = [{ cis: 'A', codeId: 'id-a', hasLabelArtifact: false }]
+    const ids = resolveCzArtifactTapeCodeIds(units, { units: [{ block: 'cz', copies: 1 }] })
+    expect(ids).toBeNull()
   })
 
   it('builds mixed tape with cz and label blocks', () => {
