@@ -39,6 +39,7 @@ import {
   type MarkingTapeUnitInput,
 } from '../utils/printMarkingCodeLabel'
 import type { ProductThermalLabelData } from '../utils/printProductThermalLabel'
+import { printProductThermalLabels } from '../utils/printProductThermalLabel'
 import { resolveManualWbLabelCount } from '../utils/productBarcodePrint'
 import {
   loadLabelPrintOrientation,
@@ -469,11 +470,17 @@ export function MarkingPrintDialog({ open, reprint, ctx, busy, onBusyChange, onC
     if (!ctx || count < 1) {
       return false
     }
-    const units = Array.from({ length: count }, (_, index) => ({
-      cis: `label-only-${index + 1}`,
-      productLabel: ctx.productLabel ?? null,
-    }))
-    await deliverTape(units, NON_HONEST_SIGN_LABEL_LAYOUT, size, closeAfter, markDone)
+    const label: ProductThermalLabelData | null | undefined = ctx.productLabel
+    if (!label?.barcode?.trim()) {
+      setError('У товара нет штрихкода для печати.')
+      return false
+    }
+    printProductThermalLabels(label, count, undefined, size)
+    markSectionDone(markDone)
+    ctx.onPrinted()
+    if (closeAfter) {
+      onClose()
+    }
     return true
   }
 
