@@ -63,15 +63,11 @@ export function labelPt(value: number): string {
 export function buildProductLabelContentCss(size: LabelSize = DEFAULT_LABEL_SIZE): string {
   const k = labelScale(size)
   const nameLines = k.h >= 1.8 ? 3 : 2
-  // На вытянутых этикетках штрихкод растягиваем по высоте (бары это переносят),
-  // на базовых — естественная высота растра, как было до масштабирования.
-  const barcodeHeight =
-    k.h > 1
-      ? `height: ${labelMm(14 * k.h)};
-    object-fit: fill;`
-      : `height: auto;
-    max-height: ${labelMm(14 * k.h)};
-    object-fit: contain;`
+  // На вытянутых этикетках нельзя масштабировать ШК по k.h (120/40=3): получалось
+  // height≈42mm + текст > 120mm листа → принтер разъезжал на 2 наклейки.
+  // Равномерный uniform + contain: ШК чуть крупнее 58×40, остальное — текст внизу.
+  const barcodeWidthMm = 52 * k.uniform
+  const barcodeMaxHeightMm = 14 * k.uniform
   return `
   .barcode-wrap {
     flex: 0 0 auto;
@@ -82,9 +78,11 @@ export function buildProductLabelContentCss(size: LabelSize = DEFAULT_LABEL_SIZE
     margin-bottom: ${labelMm(0.8 * k.uniform)};
   }
   .barcode-wrap img {
-    width: ${labelMm(52 * k.w)};
+    width: ${labelMm(barcodeWidthMm)};
     max-width: 100%;
-    ${barcodeHeight}
+    height: auto;
+    max-height: ${labelMm(barcodeMaxHeightMm)};
+    object-fit: contain;
     display: block;
   }
   .digits {
