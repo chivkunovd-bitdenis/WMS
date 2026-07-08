@@ -1654,10 +1654,10 @@ async def test_marketplace_unload_pick_allocations_admin_only(
 async def test_marketplace_unload_packaging_one_row_per_product_across_cells(
     async_client: AsyncClient, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    """BUGFIX: picking one product from two storage cells must not split the
-    packaging task into two rows for that product. Packaging never tracks
-    cells — one product = one packaging row, regardless of how many cells
-    the pick came from."""
+    """TC-NEW-PKG-08: picking one product from two storage cells must not
+    split the packaging task into two rows for that product. Packaging
+    never tracks cells — one product = one packaging row, regardless of
+    how many cells the pick came from."""
     suffix = str(int(time.time() * 1000))
     reg = await async_client.post(
         "/auth/register",
