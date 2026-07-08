@@ -39,7 +39,7 @@ import {
   type MarkingTapeUnitInput,
 } from '../utils/printMarkingCodeLabel'
 import type { ProductThermalLabelData } from '../utils/printProductThermalLabel'
-import { resolvePackUnits, resolveWbBarcodeLabelCount } from '../utils/productBarcodePrint'
+import { resolveManualWbLabelCount } from '../utils/productBarcodePrint'
 import {
   loadLabelPrintOrientation,
   loadLabelSizeId,
@@ -120,6 +120,7 @@ export function MarkingPrintDialog({ open, reprint, ctx, busy, onBusyChange, onC
   const [dragTapeIndex, setDragTapeIndex] = useState<number | null>(null)
   const [catalogPrintQty, setCatalogPrintQty] = useState(1)
   const [wbBarcodeQty, setWbBarcodeQty] = useState(1)
+  const [printDoubleWbBarcode, setPrintDoubleWbBarcode] = useState(false)
   const [saveName, setSaveName] = useState('')
   const [toast, setToast] = useState<string | null>(null)
   const [reprintCodes, setReprintCodes] = useState<PrintedCodeOption[]>([])
@@ -235,6 +236,7 @@ export function MarkingPrintDialog({ open, reprint, ctx, busy, onBusyChange, onC
     setAllowPartial(false)
     setSaveName('')
     setWbBarcodeQty(1)
+    setPrintDoubleWbBarcode(false)
     setCatalogPrintQty(1)
     setDragTapeIndex(null)
     setChunkJob(null)
@@ -352,16 +354,7 @@ export function MarkingPrintDialog({ open, reprint, ctx, busy, onBusyChange, onC
     : isCatalogSource
       ? catalogPrintQty
       : (ctx?.qtyNeedPack ?? 0)
-  const packUnits = useMemo(
-    () =>
-      resolvePackUnits({
-        units_in_pack: ctx?.unitsInPack,
-        packaging_instructions: ctx?.packagingInstructions,
-      }),
-    [ctx?.unitsInPack, ctx?.packagingInstructions],
-  )
-  const wbLabelMultiplier = isCatalogSource || ctx?.lineId ? wbBarcodeQty : wbBarcodeQty * Math.max(1, qtyNeed)
-  const totalWbLabels = resolveWbBarcodeLabelCount(wbLabelMultiplier, packUnits)
+  const totalWbLabels = resolveManualWbLabelCount(wbBarcodeQty, printDoubleWbBarcode)
   const available = ctx?.markingAvailable ?? 0
   const shortage = requiresHonestSign && !effectiveReprint && available < qtyNeed ? qtyNeed - available : 0
   const canPrintCount = effectiveReprint
@@ -676,10 +669,7 @@ export function MarkingPrintDialog({ open, reprint, ctx, busy, onBusyChange, onC
     units: [{ block: 'cz', copies: Math.max(1, sepCzQty) }],
   }
   const sepCzTotal = canPrintCount * Math.max(1, sepCzQty)
-  const sepWbTotal = resolveWbBarcodeLabelCount(
-    Math.max(0, sepWbQty) * Math.max(1, qtyNeed),
-    packUnits,
-  )
+  const sepWbTotal = resolveManualWbLabelCount(sepWbQty, printDoubleWbBarcode)
 
   const handleSeparateCzPrint = async () => {
     if (!ctx) {
@@ -912,23 +902,30 @@ export function MarkingPrintDialog({ open, reprint, ctx, busy, onBusyChange, onC
             ) : null}
 
             {!effectiveReprint && !requiresHonestSign ? (
-              <TextField
-                size="small"
-                label="Количество ШК ВБ"
-                type="number"
-                value={wbBarcodeQty}
-                onChange={(e) =>
-                  setWbBarcodeQty(Math.max(1, Math.min(999, Number(e.target.value) || 1)))
-                }
-                helperText={
-                  packUnits > 1
-                    ? `× ${packUnits} шт в упаковке → ${totalWbLabels} ШК ВБ`
-                    : undefined
-                }
-                slotProps={{ htmlInput: { min: 1, max: 999 } }}
-                data-testid="marking-print-wb-qty"
-                sx={{ maxWidth: 280 }}
-              />
+              <>
+                <TextField
+                  size="small"
+                  label="Количество этикеток"
+                  type="number"
+                  value={wbBarcodeQty}
+                  onChange={(e) =>
+                    setWbBarcodeQty(Math.max(1, Math.min(999, Number(e.target.value) || 1)))
+                  }
+                  slotProps={{ htmlInput: { min: 1, max: 999 } }}
+                  data-testid="marking-print-wb-qty"
+                  sx={{ maxWidth: 280 }}
+                />
+                <FormControlLabel
+                  control={
+                    <Checkbox
+                      checked={printDoubleWbBarcode}
+                      onChange={(e) => setPrintDoubleWbBarcode(e.target.checked)}
+                      data-testid="marking-print-wb-double"
+                    />
+                  }
+                  label="Печатать 2 ШК"
+                />
+              </>
             ) : null}
 
             {separateMode ? (
@@ -1020,16 +1017,27 @@ export function MarkingPrintDialog({ open, reprint, ctx, busy, onBusyChange, onC
                   <Stack direction="row" spacing={1.5} sx={{ flexWrap: 'wrap', alignItems: 'center' }}>
                     <TextField
                       size="small"
-                      label="ШК ВБ на единицу"
+                      label="Количество этикеток"
                       type="number"
                       value={sepWbQty}
                       onChange={(e) =>
-                        setSepWbQty(Math.max(1, Math.min(99, Number(e.target.value) || 1)))
+                        setSepWbQty(Math.max(1, Math.min(999, Number(e.target.value) || 1)))
                       }
                       disabled={busy || sepWbDone}
-                      slotProps={{ htmlInput: { min: 1, max: 99 } }}
+                      slotProps={{ htmlInput: { min: 1, max: 999 } }}
                       data-testid="marking-print-sep-wb-qty"
-                      sx={{ width: 140 }}
+                      sx={{ width: 180 }}
+                    />
+                    <FormControlLabel
+                      control={
+                        <Checkbox
+                          checked={printDoubleWbBarcode}
+                          onChange={(e) => setPrintDoubleWbBarcode(e.target.checked)}
+                          disabled={busy || sepWbDone}
+                          data-testid="marking-print-sep-wb-double"
+                        />
+                      }
+                      label="Печатать 2 ШК"
                     />
                     <LabelSizeSelect
                       value={wbLabelSize.id}
@@ -1056,7 +1064,7 @@ export function MarkingPrintDialog({ open, reprint, ctx, busy, onBusyChange, onC
                       data-testid="marking-print-sep-wb-total"
                     >
                       К печати: {sepWbTotal} ШК ВБ
-                      {packUnits > 1 ? ` (× ${packUnits} шт в упаковке)` : ''}
+                      {printDoubleWbBarcode ? ' (× 2)' : ''}
                     </Typography>
                   ) : null}
                 </Box>

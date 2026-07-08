@@ -26,10 +26,9 @@ const base: ShipmentPackagingSheetData = {
 }
 
 describe('buildShipmentPackagingSheetHtml', () => {
-  it('renders A4 sheet with compact header (no warehouse/created)', () => {
+  it('renders A4 landscape sheet with compact header (no warehouse/created)', () => {
     const html = buildShipmentPackagingSheetHtml(base)
-    expect(html).toContain('size: A4')
-    expect(html).not.toContain('size: A4 portrait')
+    expect(html).toContain('size: A4 landscape')
     expect(html).toContain('ТЗ на упаковку — Отгрузка №000034')
     expect(html).toContain('ООО Ромашка')
     expect(html).not.toContain('Склад ФФ')
@@ -52,6 +51,13 @@ describe('buildShipmentPackagingSheetHtml', () => {
     expect(html).toContain('2000000000015')
     expect(html).toContain('123456')
     expect(html).toContain('https://img/1.jpg')
+  })
+
+  it('renders barcode on a separate bold line in the product header', () => {
+    const html = buildShipmentPackagingSheetHtml(base)
+    expect(html).toContain('class="pk-barcode"')
+    expect(html).toContain('ШК: 2000000000015')
+    expect(html).not.toMatch(/pk-meta[^>]*>[^<]*ШК:/)
   })
 
   it('renders only name, articles and barcode — no size/composition/description', () => {
