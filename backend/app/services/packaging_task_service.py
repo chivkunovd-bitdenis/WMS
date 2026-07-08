@@ -372,6 +372,13 @@ async def sync_lines_from_pick_allocations(
     tenant_id: uuid.UUID,
     task: PackagingTask,
 ) -> SyncPickResult:
+    """Rebuild packaging lines for an MP-unload task, one row per product.
+
+    Packaging never tracks storage cells, only product quantity. A pick
+    allocation can source one product from several cells, but on the
+    packaging task that must always collapse into a single row per
+    product with the summed quantity.
+    """
     pick_changed_with_progress = False
     loaded = await get_task(session, tenant_id, task.id)
     if loaded is None:
@@ -388,22 +395,45 @@ async def sync_lines_from_pick_allocations(
     if not allocs:
         return SyncPickResult(task=task, pick_changed_with_progress=False)
 
+    sorting_loc = await sorting_loc_svc.get_or_create_sorting_location(
+        session, tenant_id, task.warehouse_id
+    )
+    location_id = sorting_loc.id
+
+    qty_by_product: dict[uuid.UUID, int] = {}
+    for alloc in allocs:
+        qty_by_product[alloc.product_id] = (
+            qty_by_product.get(alloc.product_id, 0) + int(alloc.quantity)
+        )
+
     line_stmt = select(PackagingTaskLine).where(PackagingTaskLine.task_id == task.id)
     db_lines = list((await session.execute(line_stmt)).scalars().all())
-    existing = {
-        (ln.product_id, ln.storage_location_id): ln for ln in db_lines
-    }
-    seen: set[tuple[uuid.UUID, uuid.UUID]] = set()
-    for alloc in allocs:
-        key = (alloc.product_id, alloc.storage_location_id)
-        seen.add(key)
+
+    by_product: dict[uuid.UUID, list[PackagingTaskLine]] = {}
+    for ln in db_lines:
+        by_product.setdefault(ln.product_id, []).append(ln)
+
+    existing: dict[uuid.UUID, PackagingTaskLine] = {}
+    for product_id, group in by_product.items():
+        primary = group[0]
+        for dup in group[1:]:
+            # Legacy per-cell duplicates from before packaging stopped
+            # tracking storage cells: fold progress into one surviving row.
+            primary.qty_packed_in_task += dup.qty_packed_in_task
+            primary.qty_confirmed_packed += dup.qty_confirmed_packed
+            primary.qty_marking_printed += dup.qty_marking_printed
+            await session.delete(dup)
+        existing[product_id] = primary
+
+    seen: set[uuid.UUID] = set()
+    for product_id, qty in qty_by_product.items():
+        seen.add(product_id)
         _unpacked, packed = await _get_balance_split(
-            session, tenant_id, alloc.product_id, alloc.storage_location_id
+            session, tenant_id, product_id, location_id
         )
-        qty = int(alloc.quantity)
         suggested = min(packed, qty)
-        if key in existing:
-            ln = existing[key]
+        if product_id in existing:
+            ln = existing[product_id]
             has_progress = ln.qty_packed_in_task > 0 or ln.qty_confirmed_packed > 0
             if has_progress and (
                 ln.qty_total != qty or ln.qty_suggested_packed != suggested
@@ -412,37 +442,23 @@ async def sync_lines_from_pick_allocations(
             if (ln.qty_packed_in_task == 0 and ln.qty_confirmed_packed == 0) or has_progress:
                 ln.qty_total = qty
                 ln.qty_suggested_packed = suggested
+            ln.storage_location_id = location_id
         else:
             session.add(
                 PackagingTaskLine(
                     task_id=task.id,
-                    product_id=alloc.product_id,
-                    storage_location_id=alloc.storage_location_id,
+                    product_id=product_id,
+                    storage_location_id=location_id,
                     qty_total=qty,
                     qty_suggested_packed=suggested,
                 )
             )
-    for key, ln in existing.items():
-        if key not in seen:
+    for product_id, ln in existing.items():
+        if product_id not in seen:
             if ln.qty_packed_in_task > 0 or ln.qty_confirmed_packed > 0:
                 pick_changed_with_progress = True
             if ln.qty_packed_in_task == 0 and ln.qty_confirmed_packed == 0:
                 await session.delete(ln)
-
-    sorting_loc = await sorting_loc_svc.get_or_create_sorting_location(
-        session, tenant_id, task.warehouse_id
-    )
-    sorting_id = sorting_loc.id
-    picked_products = {alloc.product_id for alloc in allocs}
-    refreshed_lines = list((await session.execute(line_stmt)).scalars().all())
-    for ln in refreshed_lines:
-        if (
-            ln.storage_location_id == sorting_id
-            and ln.product_id in picked_products
-            and ln.qty_packed_in_task == 0
-            and ln.qty_confirmed_packed == 0
-        ):
-            await session.delete(ln)
 
     if pick_changed_with_progress:
         task.pick_resync_warning = True

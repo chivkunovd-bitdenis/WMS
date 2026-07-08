@@ -1651,6 +1651,141 @@ async def test_marketplace_unload_pick_allocations_admin_only(
 
 
 @pytest.mark.asyncio
+async def test_marketplace_unload_packaging_one_row_per_product_across_cells(
+    async_client: AsyncClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """BUGFIX: picking one product from two storage cells must not split the
+    packaging task into two rows for that product. Packaging never tracks
+    cells — one product = one packaging row, regardless of how many cells
+    the pick came from."""
+    suffix = str(int(time.time() * 1000))
+    reg = await async_client.post(
+        "/auth/register",
+        json={
+            "organization_name": "PkgOneRow Co",
+            "slug": f"pkg-onerow-{suffix}",
+            "admin_email": f"adm-onerow-{suffix}@example.com",
+            "password": "password123",
+        },
+    )
+    ah = {"Authorization": f"Bearer {reg.json()['access_token']}"}
+    wh = await async_client.post(
+        "/warehouses", headers=ah, json={"name": "W", "code": f"w-or-{suffix}"}
+    )
+    wid = wh.json()["id"]
+    sid, wb_wid = await _seller_wb_mp_warehouse(async_client, ah, monkeypatch)
+
+    pid_a = (
+        await async_client.post(
+            "/products",
+            headers=ah,
+            json={
+                "name": "PA",
+                "sku_code": f"S-or-a-{suffix}",
+                "length_mm": 1,
+                "width_mm": 1,
+                "height_mm": 1,
+                "seller_id": sid,
+            },
+        )
+    ).json()["id"]
+    pid_b = (
+        await async_client.post(
+            "/products",
+            headers=ah,
+            json={
+                "name": "PB",
+                "sku_code": f"S-or-b-{suffix}",
+                "length_mm": 1,
+                "width_mm": 1,
+                "height_mm": 1,
+                "seller_id": sid,
+            },
+        )
+    ).json()["id"]
+    await _patch_packaging_instructions(async_client, ah, pid_a)
+    await _patch_packaging_instructions(async_client, ah, pid_b)
+
+    # Product A stock is split across two cells; product B in a single cell.
+    loc1 = await _post_inventory(
+        async_client, ah, warehouse_id=wid, product_id=pid_a, qty=3, location_code="OR-L1"
+    )
+    loc2 = await _post_inventory(
+        async_client, ah, warehouse_id=wid, product_id=pid_a, qty=2, location_code="OR-L2"
+    )
+    loc_b = await _post_inventory(
+        async_client, ah, warehouse_id=wid, product_id=pid_b, qty=4, location_code="OR-L3"
+    )
+
+    mu = await async_client.post(
+        "/operations/marketplace-unload-requests",
+        headers=ah,
+        json={"warehouse_id": wid, "seller_id": sid, "wb_mp_warehouse_id": wb_wid},
+    )
+    mid = mu.json()["id"]
+    await async_client.post(
+        f"/operations/marketplace-unload-requests/{mid}/lines",
+        headers=ah,
+        json={"product_id": pid_a, "quantity": 5},
+    )
+    await async_client.post(
+        f"/operations/marketplace-unload-requests/{mid}/lines",
+        headers=ah,
+        json={"product_id": pid_b, "quantity": 4},
+    )
+    await _patch_mp_planned_date(async_client, ah, mid)
+    await async_client.post(f"/operations/marketplace-unload-requests/{mid}/submit", headers=ah)
+
+    # Two products confirmed for the shipment: this is the "2 товара" the
+    # owner sees on the shipment/products tab.
+    detail = await async_client.get(
+        f"/operations/marketplace-unload-requests/{mid}", headers=ah
+    )
+    assert len(detail.json()["lines"]) == 2
+
+    box = await async_client.post(
+        f"/operations/marketplace-unload-requests/{mid}/boxes",
+        headers=ah,
+        json={"box_preset": "60_40_40"},
+    )
+    assert box.status_code == 201, box.text
+
+    # Pick product A from both cells (3 + 2 = 5) plus product B from its cell.
+    alloc = await async_client.put(
+        f"/operations/marketplace-unload-requests/{mid}/pick-allocations",
+        headers=ah,
+        json={
+            "allocations": [
+                {"product_id": pid_a, "storage_location_id": loc1, "quantity": 3},
+                {"product_id": pid_a, "storage_location_id": loc2, "quantity": 2},
+                {"product_id": pid_b, "storage_location_id": loc_b, "quantity": 4},
+            ]
+        },
+    )
+    assert alloc.status_code == 200, alloc.text
+
+    # Opening the shipment (as the packaging tab does) triggers the sync
+    # from pick allocations into packaging task lines.
+    refreshed = await async_client.get(
+        f"/operations/marketplace-unload-requests/{mid}", headers=ah
+    )
+    assert refreshed.status_code == 200, refreshed.text
+
+    by_unload = await async_client.get(
+        f"/operations/packaging-tasks/by-unload/{mid}", headers=ah
+    )
+    assert by_unload.status_code == 200, by_unload.text
+    lines = by_unload.json()["lines"]
+    product_ids = [ln["product_id"] for ln in lines]
+    assert sorted(product_ids) == sorted([pid_a, pid_b]), (
+        "Packaging must show exactly one row per product even when a "
+        "product was picked from several storage cells"
+    )
+    line_a = next(ln for ln in lines if ln["product_id"] == pid_a)
+    assert line_a["qty_total"] == 5
+
+
+@pytest.mark.asyncio
 async def test_marketplace_unload_create_boxes_batch(
     async_client: AsyncClient, monkeypatch: pytest.MonkeyPatch
 ) -> None:
