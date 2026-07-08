@@ -397,6 +397,7 @@ export function resolveCzArtifactTapeCodeIds(
 export async function fetchCzArtifactTapePdf(
   codeIds: string[],
   authToken: string,
+  pageSize?: Pick<LabelSize, 'widthMm' | 'heightMm'>,
 ): Promise<Blob> {
   const res = await fetch(apiUrl('/operations/marking-codes/label-artifact-tape'), {
     method: 'POST',
@@ -404,7 +405,11 @@ export async function fetchCzArtifactTapePdf(
       Authorization: `Bearer ${authToken}`,
       'Content-Type': 'application/json',
     },
-    body: JSON.stringify({ code_ids: codeIds }),
+    body: JSON.stringify({
+      code_ids: codeIds,
+      page_width_mm: pageSize?.widthMm,
+      page_height_mm: pageSize?.heightMm,
+    }),
   })
   if (!res.ok) {
     throw new Error('Не удалось загрузить ленту ЧЗ из файлов селлера.')
@@ -412,35 +417,124 @@ export async function fetchCzArtifactTapePdf(
   return res.blob()
 }
 
+let printWindowFromUserGesture: Window | null = null
+
+/** Вызывать синхронно из обработчика клика «Печать», до любых await. */
+export function beginPrintUserGesture(): void {
+  if (typeof window === 'undefined') {
+    return
+  }
+  printWindowFromUserGesture = window.open('', '_blank')
+  if (printWindowFromUserGesture) {
+    printWindowFromUserGesture.document.title = 'Печать'
+    printWindowFromUserGesture.document.body.innerHTML =
+      '<p style="font-family:sans-serif;padding:16px">Загрузка PDF…</p>'
+  }
+}
+
+function takePrintWindowFromUserGesture(): Window | null {
+  const w = printWindowFromUserGesture
+  printWindowFromUserGesture = null
+  return w
+}
+
 /** Печать PDF как обычный файл (встроенный viewer браузера → print). */
 export async function printPdfBlob(pdfBlob: Blob): Promise<void> {
   const url = URL.createObjectURL(pdfBlob)
-  const iframe = document.createElement('iframe')
-  iframe.setAttribute('aria-hidden', 'true')
-  iframe.style.position = 'fixed'
-  iframe.style.right = '0'
-  iframe.style.bottom = '0'
-  iframe.style.width = '0'
-  iframe.style.height = '0'
-  iframe.style.border = '0'
-  iframe.src = url
-  document.body.appendChild(iframe)
+  const targetWindow = takePrintWindowFromUserGesture()
 
-  const cleanup = () => {
-    URL.revokeObjectURL(url)
-    try {
-      document.body.removeChild(iframe)
-    } catch {
-      // ignore
-    }
+  if (targetWindow && !targetWindow.closed) {
+    return new Promise<void>((resolve, reject) => {
+      let settled = false
+      const finish = (fn: () => void) => {
+        if (settled) {
+          return
+        }
+        settled = true
+        window.clearTimeout(timeoutId)
+        fn()
+      }
+
+      const timeoutId = window.setTimeout(() => {
+        finish(() => {
+          URL.revokeObjectURL(url)
+          reject(new Error('Не удалось открыть PDF для печати (таймаут).'))
+        })
+      }, 20000)
+
+      targetWindow.onload = () => {
+        try {
+          targetWindow.focus()
+        } catch {
+          // ignore
+        }
+        window.setTimeout(() => {
+          try {
+            targetWindow.print()
+          } catch {
+            finish(() => {
+              URL.revokeObjectURL(url)
+              reject(new Error('Не удалось запустить печать PDF.'))
+            })
+            return
+          }
+          finish(() => {
+            window.setTimeout(() => {
+              URL.revokeObjectURL(url)
+              resolve()
+            }, 500)
+          })
+        }, 300)
+      }
+
+      targetWindow.location.href = url
+    })
   }
 
-  iframe.onload = () => {
-    // PDF viewer в iframe нуждается во времени перед print().
-    setTimeout(() => {
+  return new Promise<void>((resolve, reject) => {
+    const iframe = document.createElement('iframe')
+    iframe.setAttribute('aria-hidden', 'true')
+    // PDF viewer в нулевом iframe часто не грузится — нужен реальный размер (за экраном).
+    iframe.style.position = 'fixed'
+    iframe.style.left = '-10000px'
+    iframe.style.top = '0'
+    iframe.style.width = '210mm'
+    iframe.style.height = '297mm'
+    iframe.style.border = '0'
+
+    let settled = false
+    const finish = (fn: () => void) => {
+      if (settled) {
+        return
+      }
+      settled = true
+      window.clearTimeout(timeoutId)
+      fn()
+    }
+
+    const cleanup = () => {
+      URL.revokeObjectURL(url)
+      try {
+        document.body.removeChild(iframe)
+      } catch {
+        // ignore
+      }
+    }
+
+    const timeoutId = window.setTimeout(() => {
+      finish(() => {
+        cleanup()
+        reject(new Error('Не удалось открыть PDF для печати (таймаут).'))
+      })
+    }, 20000)
+
+    const triggerPrint = () => {
       const w = iframe.contentWindow
       if (!w) {
-        cleanup()
+        finish(() => {
+          cleanup()
+          reject(new Error('Не удалось открыть PDF для печати.'))
+        })
         return
       }
       try {
@@ -448,13 +542,36 @@ export async function printPdfBlob(pdfBlob: Blob): Promise<void> {
       } catch {
         // ignore
       }
-      try {
-        w.print()
-      } finally {
-        setTimeout(cleanup, 1000)
-      }
-    }, 500)
-  }
+      window.setTimeout(() => {
+        try {
+          w.print()
+        } catch {
+          finish(() => {
+            cleanup()
+            reject(new Error('Не удалось запустить печать PDF.'))
+          })
+          return
+        }
+        finish(() => {
+          window.setTimeout(() => {
+            cleanup()
+            resolve()
+          }, 500)
+        })
+      }, 300)
+    }
+
+    iframe.onload = triggerPrint
+    iframe.onerror = () => {
+      finish(() => {
+        cleanup()
+        reject(new Error('Не удалось загрузить PDF для печати.'))
+      })
+    }
+
+    document.body.appendChild(iframe)
+    iframe.src = url
+  })
 }
 
 /**
@@ -465,12 +582,16 @@ export async function printCzArtifactTape(
   units: MarkingTapeUnitInput[],
   layout: PrintLayout,
   authToken: string,
+  pageSize: LabelSize,
 ): Promise<boolean> {
   const codeIds = resolveCzArtifactTapeCodeIds(units, layout)
   if (!codeIds) {
     return false
   }
-  const pdf = await fetchCzArtifactTapePdf(codeIds, authToken)
+  if (!pageSize.widthMm || !pageSize.heightMm) {
+    throw new Error('Не задан размер этикетки для печати ЧЗ.')
+  }
+  const pdf = await fetchCzArtifactTapePdf(codeIds, authToken, pageSize)
   await printPdfBlob(pdf)
   return true
 }

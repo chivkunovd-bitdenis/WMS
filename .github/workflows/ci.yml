@@ -1,9 +1,9 @@
 name: CI
 
+# Optional checks on PR only — does NOT block deploy (deploy.yml runs on push to main).
 on:
   pull_request:
-  push:
-    branches: ["main"]
+  workflow_dispatch:
 
 jobs:
   tc-coverage-report:

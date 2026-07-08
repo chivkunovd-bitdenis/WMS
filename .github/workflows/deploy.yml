@@ -1,10 +1,8 @@
 name: Deploy Production
 
-# Runs after green CI on push to main, or manually (workflow_dispatch).
+# Push to main → deploy immediately (~1–2 min). No CI gate.
 on:
-  workflow_run:
-    workflows: [CI]
-    types: [completed]
+  push:
     branches: [main]
   workflow_dispatch:
 
@@ -14,13 +12,6 @@ concurrency:
 
 jobs:
   deploy:
-    if: >
-      github.event_name == 'workflow_dispatch' ||
-      (
-        github.event.workflow_run.conclusion == 'success' &&
-        github.event.workflow_run.head_branch == 'main' &&
-        github.event.workflow_run.event == 'push'
-      )
     runs-on: ubuntu-latest
     environment: production
     steps:

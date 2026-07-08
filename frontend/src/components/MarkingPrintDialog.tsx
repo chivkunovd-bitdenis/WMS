@@ -32,6 +32,7 @@ import {
 import { createPrintTemplate, resolvePrintTemplate, type PrintLayout } from '../utils/printTemplate'
 import { readApiErrorMessage } from '../utils/readApiErrorMessage'
 import {
+  beginPrintUserGesture,
   buildMarkingTapeSections,
   printCzArtifactTape,
   printTapeSections,
@@ -163,6 +164,14 @@ export function MarkingPrintDialog({ open, reprint, ctx, busy, onBusyChange, onC
   const resolvedCzPrintSize = useMemo(
     () => resolvePrintPageSize(czLabelSize, czPrintOrientation),
     [czLabelSize, czPrintOrientation],
+  )
+  /** Физический размер страницы ЧЗ для native PDF (все режимы + ориентация). */
+  const czTapePrintSize = useMemo(
+    () =>
+      separateEnabled && requiresHonestSign
+        ? resolvedCzPrintSize
+        : resolvePrintPageSize(labelSize, czPrintOrientation),
+    [separateEnabled, requiresHonestSign, resolvedCzPrintSize, labelSize, czPrintOrientation],
   )
 
   const applyTapeCounts = (nextCz: number, nextWb: number) => {
@@ -398,7 +407,13 @@ export function MarkingPrintDialog({ open, reprint, ctx, busy, onBusyChange, onC
     if (!ctx) {
       return
     }
-    const printedNative = await printCzArtifactTape(tapeUnits, printLayout, ctx.token)
+    let printedNative = false
+    try {
+      printedNative = await printCzArtifactTape(tapeUnits, printLayout, ctx.token, size)
+    } catch {
+      // Native PDF иногда не стартует (viewer/блокировка) — ниже HTML fallback.
+      printedNative = false
+    }
     if (printedNative) {
       markSectionDone(markDone)
       ctx.onPrinted()
@@ -588,13 +603,16 @@ export function MarkingPrintDialog({ open, reprint, ctx, busy, onBusyChange, onC
   // При раздельном режиме одиночные ветки используют свой скоуп размера:
   // перепечатка ЧЗ — размер ЧЗ, печать без ЧЗ — размер ШК ВБ.
   const nonCzPrintSize = separateEnabled ? wbLabelSize : labelSize
-  const reprintPrintSize = separateEnabled ? resolvedCzPrintSize : labelSize
+  const reprintPrintSize = czTapePrintSize
 
   const handlePrint = async (opts?: { forceReprint?: boolean }) => {
     if (!ctx) {
       return
     }
     const forceReprint = opts?.forceReprint ?? false
+    if (requiresHonestSign) {
+      beginPrintUserGesture()
+    }
     onBusyChange(true)
     setError(null)
     try {
@@ -603,11 +621,11 @@ export function MarkingPrintDialog({ open, reprint, ctx, busy, onBusyChange, onC
           await printLabelOnlyTape(totalWbLabels, nonCzPrintSize, true)
         }
       } else if (!ctx.lineId && !effectiveReprint && !forceReprint) {
-        await printCatalogTape({ layout, size: labelSize, closeAfter: true })
+        await printCatalogTape({ layout, size: czTapePrintSize, closeAfter: true })
       } else {
         await printLineTape({
           layout,
-          size: effectiveReprint || forceReprint ? reprintPrintSize : labelSize,
+          size: effectiveReprint || forceReprint ? reprintPrintSize : czTapePrintSize,
           closeAfter: true,
           forceReprint,
         })
@@ -646,6 +664,7 @@ export function MarkingPrintDialog({ open, reprint, ctx, busy, onBusyChange, onC
     if (canPrintCount < 1) {
       return
     }
+    beginPrintUserGesture()
     onBusyChange(true)
     setError(null)
     try {

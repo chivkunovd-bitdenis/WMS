@@ -58,6 +58,72 @@ def merge_label_artifact_pdfs(parts: list[bytes]) -> bytes:
         out.close()
 
 
+def _mm_to_pt(mm: float) -> float:
+    return mm * 72.0 / 25.4
+
+
+def fit_label_artifact_pdf_to_page(
+    pdf_bytes: bytes,
+    page_width_mm: float,
+    page_height_mm: float,
+) -> bytes:
+    """Вписывает PDF селлера (обычно 60x40 альбом) на страницу выбранного размера наклейки."""
+    import fitz  # pymupdf
+
+    if page_width_mm <= 0 or page_height_mm <= 0:
+        raise ValueError("invalid_page_size")
+
+    src = fitz.open(stream=pdf_bytes, filetype="pdf")
+    try:
+        if src.page_count < 1:
+            raise ValueError("empty_pdf")
+        src_page = src[0]
+        src_rect = src_page.rect
+        page_w_pt = _mm_to_pt(page_width_mm)
+        page_h_pt = _mm_to_pt(page_height_mm)
+
+        src_landscape = src_rect.width > src_rect.height * 1.05
+        target_tall = page_height_mm / page_width_mm >= 1.2
+        rotate = 90 if target_tall and src_landscape else 0
+
+        if rotate in (90, 270):
+            content_w = src_rect.height
+            content_h = src_rect.width
+        else:
+            content_w = src_rect.width
+            content_h = src_rect.height
+
+        scale = min(page_w_pt / content_w, page_h_pt / content_h)
+        draw_w = content_w * scale
+        draw_h = content_h * scale
+        x0 = (page_w_pt - draw_w) / 2
+        y0 = (page_h_pt - draw_h) / 2
+        target = fitz.Rect(x0, y0, x0 + draw_w, y0 + draw_h)
+
+        out = fitz.open()
+        try:
+            page = out.new_page(width=page_w_pt, height=page_h_pt)
+            page.show_pdf_page(target, src, 0, rotate=rotate)
+            return cast(bytes, out.tobytes())
+        finally:
+            out.close()
+    finally:
+        src.close()
+
+
+def merge_label_artifact_pdfs_for_print(
+    parts: list[bytes],
+    page_width_mm: float | None = None,
+    page_height_mm: float | None = None,
+) -> bytes:
+    if page_width_mm is not None and page_height_mm is not None:
+        fitted = [
+            fit_label_artifact_pdf_to_page(part, page_width_mm, page_height_mm) for part in parts
+        ]
+        return merge_label_artifact_pdfs(fitted)
+    return merge_label_artifact_pdfs(parts)
+
+
 def _content_clip_rect(page: object) -> object | None:
     import fitz  # pymupdf
 
