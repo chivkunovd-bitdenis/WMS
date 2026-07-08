@@ -582,11 +582,14 @@ export async function printCzArtifactTape(
   units: MarkingTapeUnitInput[],
   layout: PrintLayout,
   authToken: string,
-  pageSize?: LabelSize,
+  pageSize: LabelSize,
 ): Promise<boolean> {
   const codeIds = resolveCzArtifactTapeCodeIds(units, layout)
   if (!codeIds) {
     return false
+  }
+  if (!pageSize.widthMm || !pageSize.heightMm) {
+    throw new Error('Не задан размер этикетки для печати ЧЗ.')
   }
   const pdf = await fetchCzArtifactTapePdf(codeIds, authToken, pageSize)
   await printPdfBlob(pdf)

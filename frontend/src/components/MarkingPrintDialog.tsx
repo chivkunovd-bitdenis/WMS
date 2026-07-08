@@ -165,6 +165,14 @@ export function MarkingPrintDialog({ open, reprint, ctx, busy, onBusyChange, onC
     () => resolvePrintPageSize(czLabelSize, czPrintOrientation),
     [czLabelSize, czPrintOrientation],
   )
+  /** Физический размер страницы ЧЗ для native PDF (все режимы + ориентация). */
+  const czTapePrintSize = useMemo(
+    () =>
+      separateEnabled && requiresHonestSign
+        ? resolvedCzPrintSize
+        : resolvePrintPageSize(labelSize, czPrintOrientation),
+    [separateEnabled, requiresHonestSign, resolvedCzPrintSize, labelSize, czPrintOrientation],
+  )
 
   const applyTapeCounts = (nextCz: number, nextWb: number) => {
     const cz = Math.max(0, Math.min(99, Math.floor(nextCz) || 0))
@@ -595,7 +603,7 @@ export function MarkingPrintDialog({ open, reprint, ctx, busy, onBusyChange, onC
   // При раздельном режиме одиночные ветки используют свой скоуп размера:
   // перепечатка ЧЗ — размер ЧЗ, печать без ЧЗ — размер ШК ВБ.
   const nonCzPrintSize = separateEnabled ? wbLabelSize : labelSize
-  const reprintPrintSize = separateEnabled ? resolvedCzPrintSize : labelSize
+  const reprintPrintSize = czTapePrintSize
 
   const handlePrint = async (opts?: { forceReprint?: boolean }) => {
     if (!ctx) {
@@ -613,11 +621,11 @@ export function MarkingPrintDialog({ open, reprint, ctx, busy, onBusyChange, onC
           await printLabelOnlyTape(totalWbLabels, nonCzPrintSize, true)
         }
       } else if (!ctx.lineId && !effectiveReprint && !forceReprint) {
-        await printCatalogTape({ layout, size: labelSize, closeAfter: true })
+        await printCatalogTape({ layout, size: czTapePrintSize, closeAfter: true })
       } else {
         await printLineTape({
           layout,
-          size: effectiveReprint || forceReprint ? reprintPrintSize : labelSize,
+          size: effectiveReprint || forceReprint ? reprintPrintSize : czTapePrintSize,
           closeAfter: true,
           forceReprint,
         })
