@@ -701,6 +701,14 @@ Distinct from **operational outbound** (S08) and **seller supply/inbound** (S06)
 - **Then:** `pick_resync_warning` true; qty_total recalculated; packed progress preserved.
 - **Negative:** pick unchanged → warning stays false.
 
+### TC-NEW-PKG-08 Packaging line count follows product count, not pick cell count
+
+- **Actor:** fulfillment admin.
+- **Given:** confirmed MP unload with 2 products; product A's stock is split across two storage cells.
+- **When:** product A is picked from **both** cells (partial quantity from each) and product B from its own cell; the shipment/packaging tab is opened.
+- **Then:** the packaging task has exactly **2** lines (one per product); product A's line `qty_total` equals the sum of quantities picked from both cells; no cell/location is exposed on the MP packaging line.
+- **Negative:** before this fix, picking one product from N cells produced N packaging lines for that single product — regression covered by `test_marketplace_unload_packaging_one_row_per_product_across_cells`.
+
 ---
 
 ## Cross-scenario matrix (acceptance checklist for role tests)
