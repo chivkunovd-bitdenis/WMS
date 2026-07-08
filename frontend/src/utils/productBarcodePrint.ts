@@ -37,6 +37,12 @@ export function resolveWbBarcodeLabelCount(qtyMultiplier: number, packUnits = 1)
   return qty * pack
 }
 
+/** Ручной ввод в диалоге печати: N этикеток, опционально ×2 по чекбоксу «Печатать 2 ШК». */
+export function resolveManualWbLabelCount(labelCount: number, doubleBarcode = false): number {
+  const count = clampPackUnits(labelCount)
+  return count * (doubleBarcode ? 2 : 1)
+}
+
 export function displayMetaToProductLabel(meta: ProductLineDisplayMeta): ProductThermalLabelData {
   const barcode = resolveProductPrimaryBarcode(meta) ?? meta.sku_code
   return {

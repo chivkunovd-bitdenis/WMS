@@ -227,6 +227,11 @@ test('MP packaging: print icon opens qty-only dialog for non-marked product', as
   await page.getByTestId('marking-print-wb-qty').locator('input').fill('6')
   await expect(page.getByTestId('marking-print-will-print')).toContainText('К печати: 6 ШК ВБ')
 
+  await page.getByTestId('marking-print-wb-double').click()
+  await expect(page.getByTestId('marking-print-will-print')).toContainText('К печати: 12 ШК ВБ')
+  await page.getByTestId('marking-print-wb-double').click()
+  await expect(page.getByTestId('marking-print-will-print')).toContainText('К печати: 6 ШК ВБ')
+
   await page.getByTestId('marking-print-confirm').click()
   await expect(page.getByTestId('marking-print-dialog')).toBeHidden()
 })
@@ -423,5 +428,5 @@ test('MP packaging: marked product uses separate CZ/WB print when FF setting is 
   await expect(page.getByTestId('marking-print-tape')).toHaveCount(0)
   await expect(page.getByTestId('marking-print-preview')).toHaveCount(0)
   await expect(page.getByTestId('marking-print-sep-cz-total')).toContainText('К печати: 4 ЧЗ')
-  await expect(page.getByTestId('marking-print-sep-wb-total')).toContainText('К печати: 2 ШК ВБ')
+  await expect(page.getByTestId('marking-print-sep-wb-total')).toContainText('К печати: 1 ШК ВБ')
 })

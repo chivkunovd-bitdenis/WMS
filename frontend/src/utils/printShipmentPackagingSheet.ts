@@ -30,14 +30,16 @@ function itemCard(item: PackagingSheetItem, index: number): string {
     : `<div class="pk-photo pk-photo-empty">фото</div>`
 
   const article = item.vendor_code.trim() || item.sku_code.trim()
-  const meta = [
+  const metaParts = [
     article ? `Артикул продавца: ${article}` : '',
-    item.barcode?.trim() ? `ШК: ${item.barcode.trim()}` : '',
     item.wb_nm_id != null ? `Артикул WB: ${item.wb_nm_id}` : '',
   ]
     .filter(Boolean)
     .map((part) => `<span class="pk-meta-part">${escapeLabelHtml(part)}</span>`)
     .join('')
+  const barcodeLine = item.barcode?.trim()
+    ? `<p class="pk-barcode">ШК: ${escapeLabelHtml(item.barcode.trim())}</p>`
+    : ''
   const instructions = item.instructions?.trim()
   const instructionsBlock = instructions
     ? `<div class="pk-tz-text">${escapeLabelHtml(instructions)}</div>`
@@ -50,7 +52,8 @@ function itemCard(item: PackagingSheetItem, index: number): string {
   <div class="pk-main">
     <div class="pk-product">
       <p class="pk-name">${escapeLabelHtml(item.product_name)}</p>
-      ${meta ? `<p class="pk-meta">${meta}</p>` : ''}
+      ${metaParts ? `<p class="pk-meta">${metaParts}</p>` : ''}
+      ${barcodeLine}
     </div>
     <div class="pk-tz">
       <p class="pk-tz-title">ТЗ на упаковку</p>
@@ -77,7 +80,7 @@ export function buildShipmentPackagingSheetHtml(data: ShipmentPackagingSheetData
     <meta charset="utf-8" />
     <title>ТЗ на упаковку — ${escapeLabelHtml(data.documentNumber)}</title>
     <style>
-      @page { size: A4; margin: 4mm 10mm 6mm; }
+      @page { size: A4 landscape; margin: 4mm 10mm 6mm; }
       * { box-sizing: border-box; }
       body {
         font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif;
@@ -128,6 +131,7 @@ export function buildShipmentPackagingSheetHtml(data: ShipmentPackagingSheetData
       .pk-name { font-weight: 700; margin: 0; word-break: break-word; }
       .pk-meta { margin: 2px 0 0; word-break: break-word; }
       .pk-meta-part { margin-right: 12px; }
+      .pk-barcode { margin: 2px 0 0; font-weight: 700; word-break: break-word; }
       .pk-tz { margin-top: 5px; }
       .pk-tz-title {
         margin: 0 0 2px;

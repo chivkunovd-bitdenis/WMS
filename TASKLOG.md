@@ -1,5 +1,20 @@
 # TASKLOG
 
+## TASK-108 — 2026-07-08 — Печать: ручное кол-во этикеток + ТЗ альбом
+
+- Проблема: в диалоге печати ШК ВБ множитель зависел от кол-ва к упаковке; сводное ТЗ печаталось книжной ориентацией, ШК был в одной строке с артикулами.
+- What changed:
+  - `MarkingPrintDialog`: поле «Количество этикеток» (ручной ввод, без × qty строки/упаковки); чекбокс «Печатать 2 ШК» (×2); то же в раздельном режиме ШК.
+  - `printShipmentPackagingSheet`: `@page size: A4 landscape`; ШК отдельной жирной строкой в шапке карточки.
+  - Тесты: vitest `resolveManualWbLabelCount`, e2e double-checkbox и landscape TZ.
+- What did NOT change: печать ЧЗ, лента ЧЗ+ШК в одном задании, каталог `printProductBarcodeFromMeta` (pack_units там по-прежнему).
+
+## TASK-107 — 2026-07-08 — ШК на 70×120: одна наклейка, не две
+
+- Проблема: на 70×120 (и 60×80) ШК масштабировался по `k.h` → высота ~42 мм, контент вылезал на 2-ю физическую этикетку.
+- What changed: `uniform` + `object-fit: contain`; тесты на все 4 размера (`printProductThermalLabel.test.ts`).
+- Deploy: PR #88 → `main` `45c783e`; prod SSH `prod-update.sh` + `compose down/up` (docker name conflict), FF/health HTTP 200.
+
 ## TASK-106 — 2026-07-08 — Приёмка: колонки таблицы + кнопка печати в строке
 
 - Проблема: в таблице приёмки «Заявлено/Принято» уехали вправо с пустотой посередине; иконка печати ШК/ЧЗ в строке пропала (`showPrint={false}` + sticky qty).
