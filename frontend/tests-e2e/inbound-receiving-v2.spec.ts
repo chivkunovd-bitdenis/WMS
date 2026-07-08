@@ -39,6 +39,9 @@ test('inbound receiving v2 — scan, manual edit, finish with discrepancy', asyn
   expect(tableLayout.headerCells).toBe(tableLayout.bodyCells);
   expect(Math.abs(tableLayout.acceptedHeadRight - tableLayout.acceptedBodyRight)).toBeLessThanOrEqual(1);
 
+  const linesTable = page.getByTestId('ff-inbound-lines-table');
+  await expect(linesTable.getByRole('button', { name: 'Печать ШК товара' }).first()).toBeVisible();
+
   await expect(page.getByTestId('ff-inbound-line-actual-display').first()).toHaveText('0');
 
   await page.getByTestId('ff-inbound-receiving-scan-input').fill(seed.sku);
