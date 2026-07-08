@@ -33,6 +33,7 @@ import {
 import { alpha } from '@mui/material/styles'
 import { apiUrl } from '../../api'
 import { FfProductLineCells, FfProductTableHeadCells } from '../../components/FfProductLineCells'
+import { FfProductMarkingPrintProvider } from '../../components/FfProductMarkingPrintProvider'
 import { WbProductPickerDialog } from '../../components/WbProductPickerDialog'
 import { WmsDateField } from '../../components/WmsDateField'
 import {
@@ -1200,26 +1201,6 @@ export function FfInboundRequestView({
     isSortingStatus(detail.status) &&
     !hasPostedPartial
 
-  const inboundQtyStickyHeadSx = (right: number, width: number) => ({
-    position: 'sticky' as const,
-    right,
-    width,
-    minWidth: width,
-    zIndex: 3,
-    bgcolor: 'background.paper',
-    boxShadow: right > 0 ? '-3px 0 8px -4px rgba(0,0,0,0.12)' : '-1px 0 4px -2px rgba(0,0,0,0.08)',
-  })
-
-  const inboundQtyStickyBodySx = (right: number, width: number) => ({
-    position: 'sticky' as const,
-    right,
-    width,
-    minWidth: width,
-    zIndex: 2,
-    bgcolor: 'inherit',
-    boxShadow: right > 0 ? '-3px 0 8px -4px rgba(0,0,0,0.12)' : '-1px 0 4px -2px rgba(0,0,0,0.08)',
-  })
-
   if (busy && !detail) {
     return (
       <Stack sx={{ py: 6, alignItems: 'center' }} data-testid="ff-inbound-doc-loading">
@@ -1232,6 +1213,7 @@ export function FfInboundRequestView({
   }
 
   return (
+    <FfProductMarkingPrintProvider token={token}>
     <Box data-testid="ff-inbound-doc-root">
       {error ? (
         <Alert severity="error" sx={{ mb: 2 }} data-testid="ff-inbound-doc-error">
@@ -1485,20 +1467,19 @@ export function FfInboundRequestView({
               size="small"
               data-testid="ff-inbound-lines-table"
               sx={{
-                minWidth: 1080,
-                width: '100%',
                 tableLayout: 'fixed',
+                width: '100%',
                 '& th': { py: 1.25 },
                 '& td': { py: 1.25 },
               }}
             >
               <TableHead>
                 <TableRow>
-                  <FfProductTableHeadCells showPrint={false} />
-                  <TableCell align="right" sx={inboundQtyStickyHeadSx(150, 120)}>
+                  <FfProductTableHeadCells />
+                  <TableCell align="right" sx={{ width: 120 }}>
                     Заявлено
                   </TableCell>
-                  <TableCell align="right" sx={inboundQtyStickyHeadSx(0, 168)}>
+                  <TableCell align="right" sx={{ width: 168 }}>
                     Принято
                   </TableCell>
                 </TableRow>
@@ -1541,13 +1522,14 @@ export function FfInboundRequestView({
                     >
                       <FfProductLineCells
                         meta={displayMeta}
-                        showPrint={false}
+                        productId={ln.product_id}
+                        printSource="catalog"
                         printTestId={`ff-inbound-line-print-${ln.id}`}
                       />
-                      <TableCell align="right" sx={inboundQtyStickyBodySx(150, 120)}>
+                      <TableCell align="right">
                         {ln.expected_qty}
                       </TableCell>
-                      <TableCell align="right" sx={inboundQtyStickyBodySx(0, 168)}>
+                      <TableCell align="right">
                         <Stack
                           direction="row"
                           spacing={0.5}
@@ -2322,5 +2304,6 @@ export function FfInboundRequestView({
         </DialogActions>
       </Dialog>
     </Box>
+    </FfProductMarkingPrintProvider>
   )
 }
