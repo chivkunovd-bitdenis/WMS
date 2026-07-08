@@ -9,6 +9,7 @@
   - Tests: `test_label_artifact_tape_merges_pdfs_in_order`, `test_merge_label_artifact_pdfs_empty_raises`; vitest `resolveCzArtifactTapeCodeIds`.
 - What did NOT change: mixed ЧЗ+ШК лента; WB labels; import/narезка; fallback `buildCzLabelHtml` при отсутствии артефакта.
 - Verification: backend pytest 337/337, ruff+mypy ok; frontend vitest 11/11 в `printMarkingCodeLabel.test.ts`, `npm run build` ok.
+- Commit: `d7dc69e` (PR #84).
 
 ## TASK-103 — 2026-07-08 — Печать ЧЗ строго из PDF селлера + поворот на высоких размерах
 
