@@ -1,5 +1,12 @@
 # TASKLOG
 
+## TASK-105 — 2026-07-08 — Hotfix: кнопка «Печать» молчит (native PDF)
+
+- Проблема: после PR #84 при печати ЧЗ диалог закрывался, окно печати не открывалось.
+- Root cause: `printPdfBlob` fire-and-forget + 0×0 iframe; user gesture терялся после async fetch.
+- What changed: Promise в `printPdfBlob`, off-screen iframe, `beginPrintUserGesture()` по клику, HTML fallback при сбое native PDF.
+- Commit: `eacb3ed` (PR pending).
+
 ## TASK-104 — 2026-07-08 — Native PDF печать ленты ЧЗ из артефактов селлера
 
 - Проблема: путь PNG→HTML→iframe давал «в точки» DataMatrix и неверную раскладку на высоких наклейках; нужна печать как «открыть PDF селлера и Print».
