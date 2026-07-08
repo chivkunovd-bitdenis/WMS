@@ -56,6 +56,23 @@ describe('buildCzLabelHtml', () => {
     expect(doc).toContain('cz-label-artifact-img')
   })
 
+  // TC-NEW-PRINT-SIZE-02 — эталон: артефакт селлера (альбомный) на высоких наклейках
+  // (60×80, 70×120) поворачивается на 90° и заполняет наклейку по высоте без искажений.
+  it('rotates seller artifact 90deg on tall label sizes', () => {
+    const tall = buildMarkingTapeDocument(
+      [buildCzArtifactLabelHtml('data:image/png;base64,abc')],
+      { id: '60x80', label: '60 × 80 мм', widthMm: 60, heightMm: 80 },
+    )
+    expect(tall).toContain('transform: rotate(90deg)')
+    expect(tall).toContain('object-fit: contain')
+  })
+
+  it('keeps seller artifact upright on base label size (58×40 / 60×40)', () => {
+    const wide = buildMarkingTapeDocument([buildCzArtifactLabelHtml('data:image/png;base64,abc')])
+    const artifactCss = wide.slice(wide.indexOf('.cz-artifact-img'))
+    expect(artifactCss.slice(0, 120)).not.toContain('rotate(90deg)')
+  })
+
   it('builds mixed tape with cz and label blocks', () => {
     const doc = buildMarkingTapeDocument([
       buildCzLabelHtml(SAMPLE_CIS, MATRIX_STUB),

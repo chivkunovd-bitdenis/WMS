@@ -1,5 +1,16 @@
 # TASKLOG
 
+## TASK-103 — 2026-07-08 — Печать ЧЗ строго из PDF селлера + поворот на высоких размерах
+
+- Проблема: ЧЗ-этикетка селлера физически альбомная 60×40. На высоких наклейках (60×80, 70×120) печаталась узкой полосой с большими пустыми полями. 60×40 печатался идеально, т.к. совпадает с размером PDF селлера.
+- What changed:
+  - Frontend `printMarkingCodeLabel.ts` (артефакт ЧЗ): на высоких размерах (высота/ширина ≥ 1.2 → 60×80, 70×120) картинка селлера поворачивается на 90° (`transform: rotate(90deg)`, бокс = высота×ширина, `object-fit: contain`) — заполняет наклейку по высоте без искажений. На 58×40 / 60×40 — как было (`width/height 100%`, `contain`).
+  - Backend `pdf_bytes_to_png`: перед рендером PNG артефакт обрезается по содержимому (`_content_clip_rect`) — убирает белые поля.
+- What did NOT change: ШК ВБ и «самодельная» ЧЗ (`buildCzLabelHtml`) — вернул ровно к прод-версии (#79), не трогал; размеры `labelSize.ts`; раздельная печать; нарезка артефактов (`extract_label_artifacts_from_pdf`); API.
+- ЧЗ формируем строго из PDF селлера (нарезанный `label_artifact_pdf`); генерация своими силами — только запасной путь при отсутствии артефакта.
+- Данные: уже нарезанные артефакты пере-обрабатывать НЕ нужно — раскладка применяется на печати, деплоя фронта достаточно. Пере-нарезка нужна только кодам без артефакта (CSV/многокодовая страница/старый импорт); прод-данные ЧЗ ранее очищены (TASK-101), после повторной загрузки все коды получат правильный артефакт.
+- Verification: реальный движок печати Chromium (`page.pdf` в мм) → `output/pdf/_verify/artifact-final-bordered.png` совпадает с эталоном; backend `pytest test_marking_pdf_label_artifact.py` 7/7, ruff+mypy ok; frontend `vitest` 85/85, `npm run build` ok.
+
 ## TASK-101 — 2026-07-07 — Хранение оригинальных PDF при импорте ЧЗ
 
 - What changed:
@@ -9,6 +20,9 @@
   - Script `scripts/wipe_marking_data.py` — dry-run / wipe всех ЧЗ для чистого re-import.
 - What did NOT change: prod wipe (нужен ручной запуск); S3 bucket создаётся вручную.
 - Verification: `pytest tests/test_marking_pdf_label_artifact.py` 6/6.
+- Commit: `1b19b77` (PR #80), deploy fix `PR #81`.
+- Prod deploy: GitHub Actions `Deploy Production` run `28866993394` success, 2026-07-07.
+- Prod wipe: `scripts/wipe_marking_data.py --apply --confirm WIPE-MARKING` on `194.87.96.144` — было 833 codes / 7 pools; после 0.
 
 ## REMINDER — ~2026-07-07 evening — Настроить бэкапы БД на проде
 

@@ -462,3 +462,31 @@ async def test_csv_import_has_no_label_artifact(async_client: AsyncClient) -> No
     )
     assert artifact.status_code == 404
     assert artifact.json()["detail"] == "label_artifact_missing"
+
+
+def test_pdf_bytes_to_png_trims_whitespace_margins() -> None:
+    from app.services.marking_label_artifact_service import pdf_bytes_to_png
+
+    doc = fitz.open()
+    page = doc.new_page(width=400, height=400)
+    page.insert_text((24, 36), "Честный знак", fontsize=10)
+    page.insert_text((24, 56), "01" + "0" * 14 + "21" + "A" * 20, fontsize=6)
+    loose_pdf = bytes(doc.tobytes())
+    doc.close()
+
+    loose = fitz.open(stream=pdf_bytes_to_png(loose_pdf, dpi=72), filetype="png")
+    try:
+        loose_pix = loose[0].get_pixmap()
+        assert loose_pix.width <= 300
+        assert loose_pix.height <= 300
+    finally:
+        loose.close()
+
+    tight_pdf = _build_label_pdf("01" + "0" * 14 + "21" + "B" * 20, "footer")
+    tight = fitz.open(stream=pdf_bytes_to_png(tight_pdf, dpi=150), filetype="png")
+    try:
+        tight_pix = tight[0].get_pixmap()
+        assert tight_pix.width > 50
+        assert tight_pix.height > 50
+    finally:
+        tight.close()
