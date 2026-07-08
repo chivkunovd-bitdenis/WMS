@@ -118,8 +118,13 @@ function buildTapePageCss(size: LabelSize = DEFAULT_LABEL_SIZE): string {
     justify-content: center;
   }
   .cz-artifact-img {
-    width: 100%;
-    height: 100%;
+    ${tall
+      ? `width: ${size.heightMm}mm;
+    height: ${size.widthMm}mm;
+    transform: rotate(90deg);
+    transform-origin: center center;`
+      : `width: 100%;
+    height: 100%;`}
     object-fit: contain;
     display: block;
   }
