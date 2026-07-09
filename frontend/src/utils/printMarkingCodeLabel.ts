@@ -363,7 +363,12 @@ export async function buildMarkingTapeSections(
       barcodeDataUrl = renderBarcodeDataUrl(barcode, { variant: 'thermal58' })
       barcodeBySku.set(barcode, barcodeDataUrl)
     }
-    const html = buildProductLabelSectionHtml(product, barcodeDataUrl)
+    const html = buildProductLabelSectionHtml(
+      product,
+      barcodeDataUrl,
+      undefined,
+      options?.labelSize ?? DEFAULT_LABEL_SIZE,
+    )
     sections.push(html.replace('data-testid="product-thermal-label"', 'data-testid="product-thermal-label" data-tape-block="label"'))
   }
 
