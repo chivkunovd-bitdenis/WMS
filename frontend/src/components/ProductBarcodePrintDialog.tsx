@@ -41,7 +41,6 @@ export function ProductBarcodePrintDialog({ open, meta, onClose }: Props) {
     DEFAULT_PRODUCT_LABEL_PRINT_OPTIONS,
   )
 
-  const hasSize = Boolean(meta?.wb_size?.trim())
   const hasComposition = Boolean(meta?.wb_composition?.trim())
 
   useEffect(() => {
@@ -49,11 +48,10 @@ export function ProductBarcodePrintDialog({ open, meta, onClose }: Props) {
       setQty('1')
       setError(null)
       setPrintOptions({
-        includeSize: Boolean(meta?.wb_size?.trim()),
         includeComposition: Boolean(meta?.wb_composition?.trim()),
       })
     }
-  }, [open, meta?.sku_code, meta?.wb_size, meta?.wb_composition])
+  }, [open, meta?.sku_code, meta?.wb_composition])
 
   const barcode = meta ? resolveProductPrimaryBarcode(meta) : ''
   const article = meta ? resolveProductLabelArticle(meta) : ''
@@ -138,7 +136,7 @@ export function ProductBarcodePrintDialog({ open, meta, onClose }: Props) {
       </DialogTitle>
       <DialogContent>
         <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
-          Этикетка WB: штрихкод, селлер, название, артикул, цвет, бренд и по выбору — размер и состав.
+          Этикетка WB: штрихкод, селлер, название, артикул, цвет, бренд и по выбору — состав.
         </Typography>
 
         <Box sx={{ display: 'flex', justifyContent: 'center', mb: 2 }}>
@@ -267,20 +265,6 @@ export function ProductBarcodePrintDialog({ open, meta, onClose }: Props) {
         </Box>
 
         <FormGroup row sx={{ justifyContent: 'center', gap: 1, mb: 2 }} data-testid="ff-product-label-fields">
-          <FormControlLabel
-            control={
-              <Checkbox
-                size="small"
-                checked={printOptions.includeSize}
-                disabled={!hasSize}
-                onChange={(_, checked) =>
-                  setPrintOptions((prev) => ({ ...prev, includeSize: checked }))
-                }
-                data-testid="ff-product-label-include-size"
-              />
-            }
-            label="Размер"
-          />
           <FormControlLabel
             control={
               <Checkbox

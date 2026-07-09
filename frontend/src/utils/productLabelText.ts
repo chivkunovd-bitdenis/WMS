@@ -58,16 +58,20 @@ export function productBarcodeColumnSubLines(meta: {
 
 /** Which optional WB fields to show on thermal label / print preview. */
 export type ProductLabelPrintOptions = {
-  includeSize: boolean
+  /** @deprecated Размер на термоэтикетке ШК больше не печатаем — место под цвет/бренд. */
+  includeSize?: boolean
   includeComposition: boolean
 }
 
 export const DEFAULT_PRODUCT_LABEL_PRINT_OPTIONS: ProductLabelPrintOptions = {
-  includeSize: true,
+  includeSize: false,
   includeComposition: true,
 }
 
-/** WB marketplace label lines below article (size, color, brand, composition). */
+/**
+ * WB marketplace label lines below article.
+ * Порядок: цвет → бренд → состав. Размер на этикетку не выводим (мешает цвету/бренду на 58×40).
+ */
 export function productLabelDetailLines(
   meta: {
     wb_size?: string | null
@@ -77,17 +81,13 @@ export function productLabelDetailLines(
   },
   options: Partial<ProductLabelPrintOptions> = {},
 ): string[] {
-  const includeSize = options.includeSize ?? DEFAULT_PRODUCT_LABEL_PRINT_OPTIONS.includeSize
   const includeComposition =
     options.includeComposition ?? DEFAULT_PRODUCT_LABEL_PRINT_OPTIONS.includeComposition
   const lines: string[] = []
-  const size = meta.wb_size?.trim()
   const color = meta.wb_color?.trim()
   const brand = meta.wb_brand?.trim()
   const composition = meta.wb_composition?.trim()
-  if (includeSize && size) {
-    lines.push(`Размер: ${size}`)
-  }
+  // Размер намеренно не печатаем на ШК ВБ — на узкой этикетке важнее цвет и бренд.
   if (color) {
     lines.push(`Цвет: ${color}`)
   }

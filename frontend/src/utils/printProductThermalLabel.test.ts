@@ -107,11 +107,14 @@ describe('printProductThermalLabel', () => {
     expect(kinds).not.toContain('footer')
   })
 
-  it('58×40 keeps seller line for ИП Горячкина sunglasses label', () => {
+  it('58×40 keeps color and brand for ИП Горячкина, drops size and footer', () => {
     const size = resolveLabelSize('58x40')
     const html = buildProductLabelSectionHtml(SUNGLASSES_LABEL, 'data:image/png;base64,xx', undefined, size)
     expect(html).toContain('ИП Горячкина Т И')
     expect(html).toContain('class="seller"')
+    expect(html).toContain('Цвет:')
+    expect(html).toContain('Бренд: Alte Vette')
+    expect(html).not.toContain('Размер:')
     expect(html).not.toContain('class="footer"')
     expect(html).not.toContain('-webkit-line-clamp')
   })
