@@ -38,6 +38,8 @@ import {
   catalogRowToDisplayMeta,
   resolveProductPrimaryBarcode,
 } from '../../types/wbProductCatalog'
+import { FfManualProductCreateDialog } from '../ff/FfManualProductCreateDialog'
+import { FfProductTzImportDialog } from '../ff/FfProductTzImportDialog'
 
 type SellerRow = { id: string; name: string }
 
@@ -59,6 +61,7 @@ type FfCatalogRow = {
   packaging_instructions: string | null
   requires_honest_sign: boolean
   has_packaging_instructions: boolean
+  is_manual?: boolean
 }
 
 type StockSummaryRow = {
@@ -84,7 +87,13 @@ type SortKey = 'name' | 'quantity'
 type SortDir = 'asc' | 'desc'
 
 function rowMatchesSearch(
-  row: { name: string; sku_code: string; wb_vendor_code: string | null },
+  row: {
+    name: string
+    sku_code: string
+    wb_vendor_code: string | null
+    wb_primary_barcode: string | null
+    wb_barcodes: string[]
+  },
   query: string,
 ): boolean {
   const needle = query.trim().toLowerCase()
@@ -92,7 +101,9 @@ function rowMatchesSearch(
   return (
     row.name.toLowerCase().includes(needle) ||
     row.sku_code.toLowerCase().includes(needle) ||
-    (row.wb_vendor_code?.toLowerCase().includes(needle) ?? false)
+    (row.wb_vendor_code?.toLowerCase().includes(needle) ?? false) ||
+    (row.wb_primary_barcode?.toLowerCase().includes(needle) ?? false) ||
+    row.wb_barcodes.some((b) => b.toLowerCase().includes(needle))
   )
 }
 
@@ -109,6 +120,9 @@ export function FfProductsCatalogScreen({ token, authHeaders, sellers }: Props) 
   const [editText, setEditText] = useState('')
   const [editRequiresHonestSign, setEditRequiresHonestSign] = useState(false)
   const [editBusy, setEditBusy] = useState(false)
+  const [createOpen, setCreateOpen] = useState(false)
+  const [importOpen, setImportOpen] = useState(false)
+  const [importNotice, setImportNotice] = useState<string | null>(null)
 
   const load = useCallback(async () => {
     setError(null)
@@ -247,9 +261,39 @@ export function FfProductsCatalogScreen({ token, authHeaders, sellers }: Props) 
           {error}
         </Alert>
       ) : null}
+      {importNotice ? (
+        <Alert
+          severity="success"
+          sx={{ mb: 2 }}
+          data-testid="ff-products-import-notice"
+          onClose={() => setImportNotice(null)}
+        >
+          {importNotice}
+        </Alert>
+      ) : null}
 
       <Paper variant="outlined" sx={{ p: 2, mb: 2 }} data-testid="ff-products-filters">
         <Stack spacing={2}>
+          <Stack
+            direction={{ xs: 'column', sm: 'row' }}
+            spacing={1}
+            sx={{ justifyContent: 'flex-end' }}
+          >
+            <Button
+              variant="outlined"
+              onClick={() => setImportOpen(true)}
+              data-testid="ff-products-import-tz"
+            >
+              Загрузить Excel
+            </Button>
+            <Button
+              variant="contained"
+              onClick={() => setCreateOpen(true)}
+              data-testid="ff-products-create"
+            >
+              Создать товар
+            </Button>
+          </Stack>
           <TextField
             fullWidth
             size="small"
@@ -353,7 +397,19 @@ export function FfProductsCatalogScreen({ token, authHeaders, sellers }: Props) 
                 </TableCell>
                 <TableCell>{p.wb_vendor_code ?? '—'}</TableCell>
                 <TableCell>{p.wb_nm_id ?? '—'}</TableCell>
-                <TableCell>{p.name}</TableCell>
+                <TableCell>
+                  <Stack direction="row" spacing={0.5} sx={{ alignItems: 'center', flexWrap: 'wrap' }}>
+                    <span>{p.name}</span>
+                    {p.is_manual ? (
+                      <Chip
+                        size="small"
+                        label="Вручную"
+                        variant="outlined"
+                        data-testid={`ff-product-manual-${p.id}`}
+                      />
+                    ) : null}
+                  </Stack>
+                </TableCell>
                 <TableCell>{p.seller_name ?? '—'}</TableCell>
                 <TableCell>
                   <Stack direction="row" spacing={0.5} sx={{ alignItems: 'center' }}>
@@ -418,6 +474,30 @@ export function FfProductsCatalogScreen({ token, authHeaders, sellers }: Props) 
           </TableBody>
         </Table>
       </TableContainer>
+
+      <FfManualProductCreateDialog
+        open={createOpen}
+        token={token}
+        authHeaders={authHeaders}
+        sellers={sellers}
+        defaultSellerId={selectedSellerId !== '__all__' ? selectedSellerId : null}
+        onClose={() => setCreateOpen(false)}
+        onCreated={async () => {
+          setImportNotice('Товар создан.')
+          await load()
+        }}
+      />
+      <FfProductTzImportDialog
+        open={importOpen}
+        token={token}
+        sellers={sellers}
+        defaultSellerId={selectedSellerId !== '__all__' ? selectedSellerId : null}
+        onClose={() => setImportOpen(false)}
+        onApplied={async (message) => {
+          setImportNotice(message)
+          await load()
+        }}
+      />
 
       <Dialog
         open={editProduct !== null}

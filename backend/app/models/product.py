@@ -55,9 +55,9 @@ class Product(Base):
     wb_chrt_id: Mapped[int | None] = mapped_column(BigInteger, nullable=True, index=True)
     wb_barcode: Mapped[str | None] = mapped_column(String(64), nullable=True, index=True)
     wb_size: Mapped[str | None] = mapped_column(String(64), nullable=True)
-    length_mm: Mapped[int] = mapped_column(Integer, nullable=False)
-    width_mm: Mapped[int] = mapped_column(Integer, nullable=False)
-    height_mm: Mapped[int] = mapped_column(Integer, nullable=False)
+    length_mm: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    width_mm: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    height_mm: Mapped[int | None] = mapped_column(Integer, nullable=True)
     packaging_instructions: Mapped[str | None] = mapped_column(Text, nullable=True)
     requires_honest_sign: Mapped[bool] = mapped_column(
         Boolean, nullable=False, default=False, server_default="false"

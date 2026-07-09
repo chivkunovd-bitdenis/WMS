@@ -295,8 +295,14 @@ async def create_location(
     raise CatalogError("barcode_collision")
 
 
-def volume_liters_from_mm(l_mm: int, w_mm: int, h_mm: int) -> float:
-    """Объём в литрах: габариты в мм → мм³ / 10⁶ = литры."""
+def volume_liters_from_mm(
+    l_mm: int | None, w_mm: int | None, h_mm: int | None
+) -> float | None:
+    """Объём в литрах: габариты в мм → мм³ / 10⁶ = литры. None если габариты не заданы."""
+    if l_mm is None or w_mm is None or h_mm is None:
+        return None
+    if min(l_mm, w_mm, h_mm) <= 0:
+        return None
     return float(l_mm * w_mm * h_mm) / 1_000_000.0
 
 
@@ -341,39 +347,83 @@ async def create_seller(
     return s
 
 
+DEFAULT_PRODUCT_DIM_MM = 10  # used by WB sync path only
+
+
+def _normalize_dimensions(
+    length_mm: int | None,
+    width_mm: int | None,
+    height_mm: int | None,
+) -> tuple[int | None, int | None, int | None]:
+    """All three set, or all None. Partial input is invalid."""
+    vals = (length_mm, width_mm, height_mm)
+    if all(v is None for v in vals):
+        return None, None, None
+    if any(v is None for v in vals):
+        raise CatalogError("invalid_dimensions")
+    assert length_mm is not None and width_mm is not None and height_mm is not None
+    if min(length_mm, width_mm, height_mm) <= 0:
+        raise CatalogError("invalid_dimensions")
+    return length_mm, width_mm, height_mm
+
+
 async def create_product(
     session: AsyncSession,
     tenant_id: uuid.UUID,
     *,
     name: str,
     sku_code: str,
-    length_mm: int,
-    width_mm: int,
-    height_mm: int,
+    length_mm: int | None = None,
+    width_mm: int | None = None,
+    height_mm: int | None = None,
     seller_id: uuid.UUID | None = None,
+    wb_barcode: str | None = None,
+    wb_size: str | None = None,
+    wb_vendor_code: str | None = None,
+    packaging_instructions: str | None = None,
+    requires_honest_sign: bool = False,
+    commit: bool = True,
 ) -> Product:
-    if min(length_mm, width_mm, height_mm) <= 0:
-        raise CatalogError("invalid_dimensions")
+    dim_l, dim_w, dim_h = _normalize_dimensions(length_mm, width_mm, height_mm)
     if seller_id is not None:
         sel = await session.get(Seller, seller_id)
         if sel is None or sel.tenant_id != tenant_id:
             raise CatalogError("seller_not_found")
+    barcode = (wb_barcode or "").strip() or None
+    size = (wb_size or "").strip() or None
+    vendor = (wb_vendor_code or "").strip() or None
+    tz = (packaging_instructions or "").strip() or None
     p = Product(
         tenant_id=tenant_id,
         seller_id=seller_id,
         name=name.strip(),
         sku_code=sku_code.strip(),
-        length_mm=length_mm,
-        width_mm=width_mm,
-        height_mm=height_mm,
+        length_mm=dim_l,
+        width_mm=dim_w,
+        height_mm=dim_h,
+        wb_barcode=barcode,
+        wb_size=size,
+        wb_vendor_code=vendor,
+        packaging_instructions=tz,
+        requires_honest_sign=requires_honest_sign,
     )
     session.add(p)
     try:
-        await session.commit()
+        if commit:
+            await session.commit()
+        else:
+            await session.flush()
     except IntegrityError as exc:
-        await session.rollback()
-        raise CatalogError("sku_taken") from exc
-    await session.refresh(p)
+        if commit:
+            await session.rollback()
+            err = str(getattr(exc, "orig", exc)).lower()
+            if "wb_barcode" in err or "uq_products_tenant_wb_barcode" in err:
+                raise CatalogError("barcode_taken") from exc
+            raise CatalogError("sku_taken") from exc
+        # Nested transaction (savepoint) must see IntegrityError to roll back.
+        raise
+    if commit:
+        await session.refresh(p)
     return p
 
 
@@ -395,6 +445,7 @@ async def update_packaging_instructions(
     *,
     packaging_instructions: str | None,
     requires_honest_sign: bool | None = None,
+    commit: bool = True,
 ) -> Product:
     p = await get_product(session, tenant_id, product_id)
     if p is None:
@@ -403,8 +454,11 @@ async def update_packaging_instructions(
     p.packaging_instructions = text if text else None
     if requires_honest_sign is not None:
         p.requires_honest_sign = requires_honest_sign
-    await session.commit()
-    await session.refresh(p, attribute_names=["seller"])
+    if commit:
+        await session.commit()
+        await session.refresh(p, attribute_names=["seller"])
+    else:
+        await session.flush()
     return p
 
 

@@ -58,10 +58,10 @@ type ProductRow = {
   id: string
   name: string
   sku_code: string
-  length_mm: number
-  width_mm: number
-  height_mm: number
-  volume_liters: number
+  length_mm: number | null
+  width_mm: number | null
+  height_mm: number | null
+  volume_liters: number | null
   seller_id: string | null
   seller_name: string | null
   wb_nm_id?: number | null
