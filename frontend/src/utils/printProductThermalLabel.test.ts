@@ -1,6 +1,37 @@
 import { describe, expect, it } from 'vitest'
-import { buildProductLabelContentCss, labelScale } from './printProductThermalLabel'
+import {
+  buildProductLabelContentCss,
+  buildProductLabelSectionHtml,
+  buildProductLabelTextLines,
+  labelScale,
+  trimProductLabelTextLinesFromBottom,
+  type ProductThermalLabelData,
+} from './printProductThermalLabel'
 import { LABEL_SIZES, resolveLabelSize } from './labelSize'
+
+const FULL_WB_LABEL: ProductThermalLabelData = {
+  product_name: 'Большой набор для лепки подарочный 45 предметов',
+  sku_code: 'Kids-Growth-(ПД)',
+  wb_vendor_code: 'Kids-Growth-(ПД)',
+  wb_size: '0',
+  wb_color: null,
+  wb_brand: null,
+  wb_composition: 'пластилин мягкий со стеком, пластилин воздушный',
+  seller_name: 'ИП Дорощ А.В.',
+  barcode: '2043540288635',
+}
+
+const SUNGLASSES_LABEL: ProductThermalLabelData = {
+  product_name: 'Очки солнцезащитные квадратные модные',
+  sku_code: 'ОчкиАVКоричневыйКВ',
+  wb_vendor_code: 'ОчкиАVКоричневыйКВ',
+  wb_size: '0',
+  wb_color: 'коричневый, шоколадный, шоколадный трюфель',
+  wb_brand: 'Alte Vette',
+  wb_composition: null,
+  seller_name: 'ИП Горячкина Т И',
+  barcode: '2052582795896',
+}
 
 describe('printProductThermalLabel', () => {
   it.each(LABEL_SIZES.map((s) => [s.id, s.heightMm] as const))(
@@ -34,5 +65,42 @@ describe('printProductThermalLabel', () => {
     const css = buildProductLabelContentCss(resolveLabelSize('58x40'))
     expect(css).toContain('width: 52mm')
     expect(css).toContain('max-height: 14mm')
+  })
+
+  it('text stack uses non-shrinking lines and clips overflow from bottom', () => {
+    const css = buildProductLabelContentCss(resolveLabelSize('58x40'))
+    expect(css).toContain('overflow: hidden')
+    expect(css).toContain('flex: 0 0 auto')
+    expect(css).not.toContain('gap: 0.15mm')
+  })
+
+  it('58×40 trims bottom lines when content does not fit', () => {
+    const size = resolveLabelSize('58x40')
+    const trimmed = trimProductLabelTextLinesFromBottom(
+      buildProductLabelTextLines(FULL_WB_LABEL, undefined, size),
+      size,
+    )
+    const kinds = trimmed.map((line) => line.kind)
+    expect(kinds).toContain('seller')
+    expect(kinds).toContain('name')
+    expect(kinds).toContain('article')
+    expect(kinds).not.toContain('footer')
+  })
+
+  it('58×40 keeps seller line for ИП Горячкина sunglasses label', () => {
+    const size = resolveLabelSize('58x40')
+    const html = buildProductLabelSectionHtml(SUNGLASSES_LABEL, 'data:image/png;base64,xx', undefined, size)
+    expect(html).toContain('ИП Горячкина Т И')
+    expect(html).toContain('class="seller"')
+    expect(html).not.toContain('class="footer"')
+  })
+
+  it('70×120 keeps footer when there is enough height', () => {
+    const size = resolveLabelSize('70x120')
+    const trimmed = trimProductLabelTextLinesFromBottom(
+      buildProductLabelTextLines(FULL_WB_LABEL, undefined, size),
+      size,
+    )
+    expect(trimmed.some((line) => line.kind === 'footer')).toBe(true)
   })
 })
