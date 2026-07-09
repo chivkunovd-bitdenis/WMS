@@ -186,18 +186,15 @@ export function buildProductLabelTextLines(
   return lines
 }
 
-function mandatoryProductLabelPrefix(lines: ProductLabelTextLine[]): ProductLabelTextLine[] {
-  const prefix: ProductLabelTextLine[] = []
-  for (const line of lines) {
-    prefix.push(line)
-    if (line.kind === 'article') {
-      break
-    }
+function isProtectedProductLabelLine(line: ProductLabelTextLine): boolean {
+  if (line.kind === 'seller' || line.kind === 'name' || line.kind === 'article') {
+    return true
   }
-  return prefix
+  // Цвет и бренд — то, что должно остаться на этикетке; режем футер/состав раньше.
+  return line.text.startsWith('Цвет:') || line.text.startsWith('Бренд:')
 }
 
-/** Убирает нижние строки, пока блок не влезает; название сжимается до 1 строки в конце. */
+/** Убирает нижние необязательные строки; цвет/бренд сохраняем, пока возможно. */
 export function trimProductLabelTextLinesFromBottom(
   lines: ProductLabelTextLine[],
   size: LabelSize,
@@ -206,14 +203,23 @@ export function trimProductLabelTextLinesFromBottom(
     return lines
   }
   const budget = estimateLabelTextAreaMm(size)
-  const minPrefix = mandatoryProductLabelPrefix(lines)
   let result = lines.map((line) => ({ ...line }))
 
-  while (result.length > minPrefix.length && productLabelTextStackHeightMm(result, size) > budget) {
-    result.pop()
+  const dropFromBottom = (): boolean => {
+    for (let i = result.length - 1; i >= 0; i -= 1) {
+      const line = result[i]
+      if (line && !isProtectedProductLabelLine(line)) {
+        result.splice(i, 1)
+        return true
+      }
+    }
+    return false
   }
 
   while (productLabelTextStackHeightMm(result, size) > budget) {
+    if (dropFromBottom()) {
+      continue
+    }
     const nameLine = result.find((line) => line.kind === 'name')
     if (nameLine && nameLine.visualLines > 1) {
       nameLine.visualLines -= 1
@@ -311,6 +317,7 @@ export function buildProductLabelContentCss(size: LabelSize = DEFAULT_LABEL_SIZE
   }
   .meta {
     line-height: ${TEXT_LINE_HEIGHT};
+    white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
   }
