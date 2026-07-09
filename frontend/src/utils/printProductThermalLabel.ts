@@ -291,12 +291,19 @@ export function buildProductLabelContentCss(size: LabelSize = DEFAULT_LABEL_SIZE
     display: flex;
     flex-direction: column;
     justify-content: flex-start;
-    gap: ${labelMm(TEXT_LINE_GAP_MM * textFont)};
   }
+  /*
+   * Межстрочный зазор — через margin-bottom, а не flex "gap": рендер термопринтера
+   * (и старые движки печати) часто игнорируют flex gap → строки слипаются и длинное
+   * название наезжает на «Артикул» (как на фото ИП Горячкина). margin работает везде.
+   */
   .body > p {
-    margin: 0;
+    margin: 0 0 ${labelMm(TEXT_LINE_GAP_MM * textFont)};
     flex: 0 0 auto;
     flex-shrink: 0;
+  }
+  .body > p:last-child {
+    margin-bottom: 0;
   }
   .seller {
     font-size: ${labelPt(6.8 * textFont)};

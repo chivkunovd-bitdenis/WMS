@@ -87,10 +87,13 @@ describe('printProductThermalLabel', () => {
     expect(tall).toBeLessThan(legacyTall)
   })
 
-  it('seller CSS reserves min-height and gap scales with text font', () => {
+  it('seller CSS reserves min-height and line spacing uses margin (not flex gap)', () => {
     const css = buildProductLabelContentCss(resolveLabelSize('70x120'))
     expect(css).toMatch(/\.seller \{[\s\S]*min-height:/)
-    expect(css).toMatch(/gap:\s*[0-9.]+mm/)
+    // Межстрочный зазор — margin-bottom на строках, а не flex gap: термопринтер
+    // игнорирует gap и строки слипаются (наезд названия на «Артикул»).
+    expect(css).toMatch(/\.body > p \{[\s\S]*margin:\s*0 0 [0-9.]+mm/)
+    expect(css).not.toMatch(/\.body \{[\s\S]*gap:/)
     expect(css).toMatch(/margin-top:\s*[0-9.]+mm/)
   })
 
