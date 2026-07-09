@@ -1,5 +1,12 @@
 # TASKLOG
 
+## TASK-112 — 2026-07-09 — Этикетка ШК: фикс сплющенной строки ИП (не trim)
+
+- Баг: на проде «ИП Горячкина Т И» визуально сплющена и почти касается названия (фото с красной рамкой). PR #94 (обрезка низа) баг не закрыл.
+- What changed: `printProductThermalLabel.ts` — `labelTextFontScale` (потолок роста шрифта), line-height 1.35, min-height seller, gap/margin от цифр, убран `-webkit-line-clamp`; превью диалога синхронизировано; BUGLOG BUG-5; скрипт proof `verify-seller-line-height.mts`.
+- What did NOT change: политика trim снизу остаётся как страховка на 58×40; native PDF ЧЗ.
+- Verification: unit 12 passed; Playwright metrics gap seller/name > 1.5px на всех размерах.
+
 ## TASK-111 — 2026-07-09 — Этикетка ШК ВБ: построчная обрезка снизу + фикс «слипания» ИП
 
 - Баг: на 58×40 / 60×40 строка ИП (напр. «ИП Горячкина Т И») визуально «слипалась» — буквы наезжали друг на друга, потому что нижние строки (название с `-webkit-line-clamp`) сжимались в flex вместо обрезки.

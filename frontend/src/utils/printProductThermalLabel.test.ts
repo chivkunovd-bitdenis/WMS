@@ -4,6 +4,7 @@ import {
   buildProductLabelSectionHtml,
   buildProductLabelTextLines,
   labelScale,
+  labelTextFontScale,
   trimProductLabelTextLinesFromBottom,
   type ProductThermalLabelData,
 } from './printProductThermalLabel'
@@ -71,7 +72,26 @@ describe('printProductThermalLabel', () => {
     const css = buildProductLabelContentCss(resolveLabelSize('58x40'))
     expect(css).toContain('overflow: hidden')
     expect(css).toContain('flex: 0 0 auto')
+    expect(css).toContain('flex-shrink: 0')
+    expect(css).toContain('min-height:')
+    expect(css).not.toContain('-webkit-line-clamp')
     expect(css).not.toContain('gap: 0.15mm')
+  })
+
+  it('caps text font growth on tall labels so seller line is not crushed', () => {
+    const tall = labelTextFontScale(resolveLabelSize('70x120'))
+    const short = labelTextFontScale(resolveLabelSize('58x40'))
+    const legacyTall = labelScale(resolveLabelSize('70x120')).font
+    expect(short).toBeCloseTo(1.12, 2)
+    expect(tall).toBeLessThanOrEqual(1.28)
+    expect(tall).toBeLessThan(legacyTall)
+  })
+
+  it('seller CSS reserves min-height and gap scales with text font', () => {
+    const css = buildProductLabelContentCss(resolveLabelSize('70x120'))
+    expect(css).toMatch(/\.seller \{[\s\S]*min-height:/)
+    expect(css).toMatch(/gap:\s*[0-9.]+mm/)
+    expect(css).toMatch(/margin-top:\s*[0-9.]+mm/)
   })
 
   it('58×40 trims bottom lines when content does not fit', () => {
@@ -93,6 +113,7 @@ describe('printProductThermalLabel', () => {
     expect(html).toContain('ИП Горячкина Т И')
     expect(html).toContain('class="seller"')
     expect(html).not.toContain('class="footer"')
+    expect(html).not.toContain('-webkit-line-clamp')
   })
 
   it('70×120 keeps footer when there is enough height', () => {
