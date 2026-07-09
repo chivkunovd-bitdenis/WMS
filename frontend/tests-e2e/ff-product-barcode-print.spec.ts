@@ -126,7 +126,7 @@ test('ff sorting opens unified marking print dialog for product line', async ({ 
     (window as unknown as { __WMS_CAPTURE_PRINT_HTML__?: boolean }).__WMS_CAPTURE_PRINT_HTML__ = true;
   });
   await page.getByTestId('marking-print-wb-qty').locator('input').fill('3');
-  await expect(page.getByTestId('marking-print-will-print')).toContainText('К печати: 6 ШК ВБ');
+  await expect(page.getByTestId('marking-print-will-print')).toContainText('К печати: 3 ШК ВБ');
   await page.getByTestId('marking-print-confirm').click();
   await expect(dialog).toBeHidden();
 
