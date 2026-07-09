@@ -56,16 +56,30 @@ export function labelPt(value: number): string {
   return `${Math.round(value * 10) / 10}pt`
 }
 
-const TEXT_LINE_HEIGHT = 1.25
-const FOOTER_LINE_HEIGHT = 1.15
-/** Зазор между текстовыми строками (мм на uniform=1). */
-const TEXT_LINE_GAP_UNIFORM = 0.5
+/** Межстрочный интервал текста — ниже 1.3 на термопечати ИП визуально «сплющивается». */
+const TEXT_LINE_HEIGHT = 1.35
+const FOOTER_LINE_HEIGHT = 1.2
+/**
+ * Базовый зазор между строками (мм при fontScale=1).
+ * Масштабируем по шрифту (не только uniform): на 60×80/70×120 шрифт рос быстрее зазора.
+ */
+const TEXT_LINE_GAP_MM = 0.85
+/** Отступ текстового блока от цифр ШК (мм при fontScale=1). */
+const BODY_TOP_GAP_MM = 0.55
 
 const PT_TO_MM = 25.4 / 72
 
-function ptToMm(size: LabelSize, fontPt: number): number {
+/**
+ * Масштаб текста: не даём площади этикетки раздувать шрифт так же агрессивно, как
+ * исторический `labelScale.font` (sqrt(w×h)) — иначе на высоких наклейках строки слипаются.
+ */
+export function labelTextFontScale(size: LabelSize): number {
   const k = labelScale(size)
-  return (fontPt * k.font * PT_TO_MM)
+  return Math.min(k.w * 1.12, k.uniform * 1.25, 1.28)
+}
+
+function ptToMm(size: LabelSize, fontPt: number): number {
+  return fontPt * labelTextFontScale(size) * PT_TO_MM
 }
 
 export type ProductLabelTextLineKind = 'seller' | 'name' | 'article' | 'meta' | 'footer'
@@ -84,9 +98,14 @@ export type ProductLabelTextLine = {
 /** Высота области под текст после штрихкода (мм), по расчёту вёрстки. */
 export function estimateLabelTextAreaMm(size: LabelSize): number {
   const k = labelScale(size)
+  const textFont = labelTextFontScale(size)
   const padding = (1.4 + 1) * k.uniform
   const barcodeBlock =
-    0.8 * k.uniform + 14 * k.uniform + 0.3 * k.uniform + ptToMm(size, 8) * 1.1
+    0.8 * k.uniform +
+    14 * k.uniform +
+    0.3 * k.uniform +
+    ptToMm(size, 8) * 1.2 +
+    BODY_TOP_GAP_MM * textFont
   return size.heightMm - padding - barcodeBlock
 }
 
@@ -95,7 +114,8 @@ function productLabelTextLineHeightMm(line: ProductLabelTextLine, size: LabelSiz
 }
 
 function productLabelTextStackHeightMm(lines: ProductLabelTextLine[], size: LabelSize): number {
-  const gap = TEXT_LINE_GAP_UNIFORM * labelScale(size).uniform
+  const font = labelTextFontScale(size)
+  const gap = TEXT_LINE_GAP_MM * font
   return lines.reduce(
     (sum, line, index) => sum + (index > 0 ? gap : 0) + productLabelTextLineHeightMm(line, size),
     0,
@@ -208,7 +228,9 @@ export function trimProductLabelTextLinesFromBottom(
 function renderProductLabelTextLine(line: ProductLabelTextLine): string {
   const title = line.title ? ` title="${line.title}"` : ''
   if (line.kind === 'name') {
-    return `<p class="${line.htmlClass}"${title} style="-webkit-line-clamp: ${line.visualLines}">${line.text}</p>`
+    // max-height вместо -webkit-line-clamp: clamp в print Chromium даёт наезд на строку ИП.
+    const maxHeightEm = (line.visualLines * line.lineHeight).toFixed(2)
+    return `<p class="${line.htmlClass}"${title} style="max-height: ${maxHeightEm}em">${line.text}</p>`
   }
   return `<p class="${line.htmlClass}"${title}>${line.text}</p>`
 }
@@ -219,12 +241,15 @@ function renderProductLabelTextLine(line: ProductLabelTextLine): string {
  */
 export function buildProductLabelContentCss(size: LabelSize = DEFAULT_LABEL_SIZE): string {
   const k = labelScale(size)
-  const nameLines = k.h >= 1.8 ? 3 : 2
+  const textFont = labelTextFontScale(size)
+  const nameLines = maxProductNameVisualLines(size)
   // На вытянутых этикетках нельзя масштабировать ШК по k.h (120/40=3): получалось
   // height≈42mm + текст > 120mm листа → принтер разъезжал на 2 наклейки.
   // Равномерный uniform + contain: ШК чуть крупнее 58×40, остальное — текст внизу.
   const barcodeWidthMm = 52 * k.uniform
   const barcodeMaxHeightMm = 14 * k.uniform
+  const sellerMinHeightMm = 6.8 * textFont * PT_TO_MM * TEXT_LINE_HEIGHT
+  const nameMaxHeightMm = 7 * textFont * PT_TO_MM * TEXT_LINE_HEIGHT * nameLines
   return `
   .barcode-wrap {
     flex: 0 0 auto;
@@ -244,40 +269,42 @@ export function buildProductLabelContentCss(size: LabelSize = DEFAULT_LABEL_SIZE
   }
   .digits {
     margin: ${labelMm(0.3 * k.uniform)} 0 0;
-    font-size: ${labelPt(8 * k.font)};
+    font-size: ${labelPt(8 * textFont)};
     letter-spacing: 0.04em;
     text-align: center;
     font-family: Arial, Helvetica, sans-serif;
-    line-height: 1.1;
+    line-height: 1.2;
   }
   .body {
     flex: 1 1 auto;
     min-height: 0;
     overflow: hidden;
+    margin-top: ${labelMm(BODY_TOP_GAP_MM * textFont)};
     line-height: ${TEXT_LINE_HEIGHT};
-    font-size: ${labelPt(6.8 * k.font)};
+    font-size: ${labelPt(6.8 * textFont)};
     display: flex;
     flex-direction: column;
-    gap: ${labelMm(TEXT_LINE_GAP_UNIFORM * k.uniform)};
+    justify-content: flex-start;
+    gap: ${labelMm(TEXT_LINE_GAP_MM * textFont)};
   }
   .body > p {
     margin: 0;
     flex: 0 0 auto;
+    flex-shrink: 0;
   }
   .seller {
-    font-size: ${labelPt(6.8 * k.font)};
+    font-size: ${labelPt(6.8 * textFont)};
     line-height: ${TEXT_LINE_HEIGHT};
+    min-height: ${labelMm(sellerMinHeightMm)};
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
   }
   .name {
-    font-size: ${labelPt(7 * k.font)};
+    font-size: ${labelPt(7 * textFont)};
     font-weight: 400;
     line-height: ${TEXT_LINE_HEIGHT};
-    display: -webkit-box;
-    -webkit-line-clamp: ${nameLines};
-    -webkit-box-orient: vertical;
+    max-height: ${labelMm(nameMaxHeightMm)};
     overflow: hidden;
     text-overflow: ellipsis;
     word-break: break-word;
@@ -291,7 +318,7 @@ export function buildProductLabelContentCss(size: LabelSize = DEFAULT_LABEL_SIZE
     white-space: nowrap;
   }
   .footer {
-    font-size: ${labelPt(6.4 * k.font)};
+    font-size: ${labelPt(6.4 * textFont)};
     text-align: left;
     line-height: ${FOOTER_LINE_HEIGHT};
   }

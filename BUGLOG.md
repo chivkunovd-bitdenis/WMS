@@ -1,5 +1,13 @@
 # BUGLOG
 
+## BUG-5 — 2026-07-09 — ИП на этикетке ШК ВБ визуально сплющена / слипается с названием
+
+- Symptom: на физической этикетке (фото с прода) строка «ИП Горячкина Т И» выглядит сжатой по вертикали и почти вплотную к названию товара; цифры ШК тоже близко к ИП. Остальные строки могут быть нормальнее.
+- Cause: (1) `labelScale.font = sqrt(w×h)` раздувал шрифт на 60×80/70×120 сильнее, чем зазор между строками; (2) `-webkit-line-clamp` на `.name` в Chromium print давал наезд на строку ИП; (3) предыдущий «фикс» PR #94 (trim снизу) не лечил межстрочный интервал — на высоких размерах trim не срабатывал, баг оставался.
+- Fix: отдельный `labelTextFontScale` с потолком; `line-height: 1.35`; `min-height` у `.seller`; зазор и отступ от цифр масштабируются с текстом; обрезка названия через `max-height`, не `-webkit-line-clamp`; превью в `ProductBarcodePrintDialog` выровнено.
+- Verification: vitest `printProductThermalLabel.test.ts` 12/12; Playwright metrics script `verify-seller-line-height.mts` — gap seller→name ≥ 3.5px на всех размерах; PNG в `output/pdf/_verify/seller-line-fix/`.
+- Commit: pending
+
 ## BUG-4 — 2026-07-06 — Факт приёмки сбрасывается в 0 при уходе с поля
 
 - Symptom: в приёмке оператор вводит «Принято» (например 100), уводит курсор с поля — значение становится 0.

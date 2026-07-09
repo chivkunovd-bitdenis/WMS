@@ -192,14 +192,28 @@ export function ProductBarcodePrintDialog({ open, meta, onClose }: Props) {
             </Typography>
           </Box>
 
-          <Box sx={{ flex: 1, minHeight: 0, fontSize: 9, lineHeight: 1.2, overflow: 'hidden' }}>
+          <Box
+            sx={{
+              flex: 1,
+              minHeight: 0,
+              fontSize: 9,
+              lineHeight: 1.35,
+              overflow: 'hidden',
+              display: 'flex',
+              flexDirection: 'column',
+              gap: '2px',
+              mt: '2px',
+            }}
+          >
             {sellerName ? (
               <Box
                 sx={{
+                  flex: '0 0 auto',
                   whiteSpace: 'nowrap',
                   overflow: 'hidden',
                   textOverflow: 'ellipsis',
-                  mb: '1px',
+                  lineHeight: 1.35,
+                  minHeight: '12px',
                 }}
                 title={sellerName}
               >
@@ -208,41 +222,46 @@ export function ProductBarcodePrintDialog({ open, meta, onClose }: Props) {
             ) : null}
             <Box
               sx={{
+                flex: '0 0 auto',
                 fontSize: 9.5,
-                display: '-webkit-box',
-                WebkitLineClamp: 2,
-                WebkitBoxOrient: 'vertical',
+                lineHeight: 1.35,
+                maxHeight: '26px',
                 overflow: 'hidden',
                 textOverflow: 'ellipsis',
                 wordBreak: 'break-word',
-                mb: '1px',
               }}
               title={name || meta?.product_name}
             >
               {name || '—'}
             </Box>
-            <Box>Артикул: {article || '—'}</Box>
+            <Box sx={{ flex: '0 0 auto', lineHeight: 1.35 }}>Артикул: {article || '—'}</Box>
             {detailLines.map((line) => (
               <Box
                 key={line}
-                sx={
-                  line.startsWith('Состав:')
+                sx={{
+                  flex: '0 0 auto',
+                  lineHeight: 1.35,
+                  ...(line.startsWith('Состав:')
                     ? {
-                        display: '-webkit-box',
-                        WebkitLineClamp: 2,
-                        WebkitBoxOrient: 'vertical',
+                        whiteSpace: 'nowrap',
                         overflow: 'hidden',
-                        wordBreak: 'break-word',
+                        textOverflow: 'ellipsis',
                       }
-                    : undefined
-                }
+                    : {
+                        overflow: 'hidden',
+                        textOverflow: 'ellipsis',
+                      }),
+                }}
               >
                 {line}
               </Box>
             ))}
           </Box>
 
-          <Typography variant="caption" sx={{ fontSize: 8.5, lineHeight: 1.15, mt: '2px' }}>
+          <Typography
+            variant="caption"
+            sx={{ flex: '0 0 auto', fontSize: 8.5, lineHeight: 1.2, mt: '2px' }}
+          >
             {PRODUCT_LABEL_REVIEW_FOOTER}
           </Typography>
         </Box>
