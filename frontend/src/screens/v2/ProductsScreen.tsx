@@ -12,10 +12,10 @@ type ProductRow = {
   id: string
   name: string
   sku_code: string
-  length_mm: number
-  width_mm: number
-  height_mm: number
-  volume_liters: number
+  length_mm: number | null
+  width_mm: number | null
+  height_mm: number | null
+  volume_liters: number | null
   seller_id: string | null
   seller_name: string | null
   wb_nm_id?: number | null
@@ -107,7 +107,9 @@ export function ProductsScreen({
                   <td data-testid="product-sku-cell">{p.sku_code}</td>
                   <td>{p.name}</td>
                   <td>
-                    <span data-testid="product-volume">{p.volume_liters.toFixed(1)} л</span>
+                    <span data-testid="product-volume">
+                      {p.volume_liters == null ? '—' : `${p.volume_liters.toFixed(1)} л`}
+                    </span>
                   </td>
                   <td>
                     {p.seller_name ? (
@@ -148,8 +150,15 @@ export function ProductsScreen({
                   </div>
                 </div>
                 <div className="ui-badge">
-                  {selected.length_mm}×{selected.width_mm}×{selected.height_mm} мм ·{' '}
-                  {selected.volume_liters.toFixed(2)} л
+                  {selected.length_mm == null ||
+                  selected.width_mm == null ||
+                  selected.height_mm == null
+                    ? 'Габариты не заданы'
+                    : `${selected.length_mm}×${selected.width_mm}×${selected.height_mm} мм · ${
+                        selected.volume_liters == null
+                          ? '—'
+                          : `${selected.volume_liters.toFixed(2)} л`
+                      }`}
                 </div>
               </div>
             ) : (

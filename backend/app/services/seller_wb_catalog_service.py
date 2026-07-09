@@ -212,6 +212,8 @@ class FfCatalogRow:
             "wb_composition": self.wb_composition,
             "packaging_instructions": self.packaging_instructions,
             "requires_honest_sign": self.requires_honest_sign,
+            # Manual/Excel until WB sync/link sets nmID on the same barcode.
+            "is_manual": self.wb_nm_id is None,
         }
 
 
