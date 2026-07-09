@@ -97,6 +97,25 @@ describe('printProductThermalLabel', () => {
     expect(css).toMatch(/margin-top:\s*[0-9.]+mm/)
   })
 
+  it('name has no max-height/overflow clamp (printer bled clamp over Артикул)', () => {
+    const css = buildProductLabelContentCss(resolveLabelSize('58x40'))
+    const nameBlock = css.slice(css.indexOf('.name {'), css.indexOf('.meta {'))
+    expect(nameBlock).not.toContain('max-height')
+    expect(nameBlock).not.toContain('overflow')
+    const html = buildProductLabelSectionHtml(SUNGLASSES_LABEL, 'data:image/png;base64,xx', undefined, resolveLabelSize('58x40'))
+    expect(html).not.toContain('max-height:')
+  })
+
+  it('over-long name is truncated by chars with ellipsis (fits the label lines)', () => {
+    const size = resolveLabelSize('58x40')
+    const longName = 'Очки '.repeat(60)
+    const lines = buildProductLabelTextLines({ ...SUNGLASSES_LABEL, product_name: longName }, undefined, size)
+    const nameLine = lines.find((l) => l.kind === 'name')
+    expect(nameLine).toBeDefined()
+    expect(nameLine!.text.endsWith('…')).toBe(true)
+    expect(nameLine!.text.length).toBeLessThan(longName.length)
+  })
+
   it('58×40 trims bottom lines when content does not fit', () => {
     const size = resolveLabelSize('58x40')
     const trimmed = trimProductLabelTextLinesFromBottom(

@@ -126,6 +126,32 @@ export function maxProductNameVisualLines(size: LabelSize): number {
   return labelScale(size).h >= 1.8 ? 3 : 2
 }
 
+/** Кегль названия (pt при fontScale=1) — держим в одном месте. */
+const NAME_FONT_PT = 7
+/** Приблизительная ширина символа относительно кегля (Arial/кириллица). */
+const NAME_CHAR_WIDTH_RATIO = 0.55
+
+/**
+ * Максимум символов названия под размер этикетки. Обрезаем ТЕКСТ заранее,
+ * а не через CSS max-height + overflow: на термопринтере обрезка «протекала»
+ * и вторая строка названия печаталась поверх «Артикула».
+ */
+export function maxProductNameChars(size: LabelSize): number {
+  const k = labelScale(size)
+  const usableWidthMm = size.widthMm - 2 * 1.8 * k.uniform
+  const charWidthMm = NAME_FONT_PT * labelTextFontScale(size) * NAME_CHAR_WIDTH_RATIO * PT_TO_MM
+  const perLine = Math.max(1, Math.floor(usableWidthMm / charWidthMm))
+  return perLine * maxProductNameVisualLines(size)
+}
+
+function truncateNameToLines(name: string, size: LabelSize): string {
+  const max = maxProductNameChars(size)
+  if (name.length <= max) {
+    return name
+  }
+  return `${name.slice(0, Math.max(1, max - 1)).trimEnd()}…`
+}
+
 /** Строки этикетки сверху вниз: ИП → название → артикул → детали → отзыв. */
 export function buildProductLabelTextLines(
   data: ProductThermalLabelData,
@@ -145,14 +171,15 @@ export function buildProductLabelTextLines(
       lineHeight: TEXT_LINE_HEIGHT,
     })
   }
-  const name = escapeLabelHtml(normalizeProductLabelName(data.product_name))
+  const rawName = normalizeProductLabelName(data.product_name)
+  const name = escapeLabelHtml(truncateNameToLines(rawName, labelSize))
   lines.push({
     kind: 'name',
     htmlClass: 'name',
     text: name,
-    title: name,
+    title: escapeLabelHtml(rawName),
     visualLines: maxProductNameVisualLines(labelSize),
-    fontPt: 7,
+    fontPt: NAME_FONT_PT,
     lineHeight: TEXT_LINE_HEIGHT,
   })
   const article = escapeLabelHtml(resolveProductLabelArticle(data))
@@ -233,11 +260,8 @@ export function trimProductLabelTextLinesFromBottom(
 
 function renderProductLabelTextLine(line: ProductLabelTextLine): string {
   const title = line.title ? ` title="${line.title}"` : ''
-  if (line.kind === 'name') {
-    // max-height вместо -webkit-line-clamp: clamp в print Chromium даёт наезд на строку ИП.
-    const maxHeightEm = (line.visualLines * line.lineHeight).toFixed(2)
-    return `<p class="${line.htmlClass}"${title} style="max-height: ${maxHeightEm}em">${line.text}</p>`
-  }
+  // Название обрезаем по символам заранее (см. truncateNameToLines), поэтому здесь
+  // без inline max-height: любой clamp на печати «протекал» и строки наезжали.
   return `<p class="${line.htmlClass}"${title}>${line.text}</p>`
 }
 
@@ -248,14 +272,12 @@ function renderProductLabelTextLine(line: ProductLabelTextLine): string {
 export function buildProductLabelContentCss(size: LabelSize = DEFAULT_LABEL_SIZE): string {
   const k = labelScale(size)
   const textFont = labelTextFontScale(size)
-  const nameLines = maxProductNameVisualLines(size)
   // На вытянутых этикетках нельзя масштабировать ШК по k.h (120/40=3): получалось
   // height≈42mm + текст > 120mm листа → принтер разъезжал на 2 наклейки.
   // Равномерный uniform + contain: ШК чуть крупнее 58×40, остальное — текст внизу.
   const barcodeWidthMm = 52 * k.uniform
   const barcodeMaxHeightMm = 14 * k.uniform
   const sellerMinHeightMm = 6.8 * textFont * PT_TO_MM * TEXT_LINE_HEIGHT
-  const nameMaxHeightMm = 7 * textFont * PT_TO_MM * TEXT_LINE_HEIGHT * nameLines
   return `
   .barcode-wrap {
     flex: 0 0 auto;
@@ -313,13 +335,15 @@ export function buildProductLabelContentCss(size: LabelSize = DEFAULT_LABEL_SIZE
     overflow: hidden;
     text-overflow: ellipsis;
   }
+  /*
+   * Без max-height/overflow: название уже обрезано по символам в JS, поэтому строк
+   * ровно столько, сколько влезает, и они идут обычным потоком — «Артикул» всегда
+   * ниже названия и не может напечататься поверх (баг на термопринтере).
+   */
   .name {
-    font-size: ${labelPt(7 * textFont)};
+    font-size: ${labelPt(NAME_FONT_PT * textFont)};
     font-weight: 400;
     line-height: ${TEXT_LINE_HEIGHT};
-    max-height: ${labelMm(nameMaxHeightMm)};
-    overflow: hidden;
-    text-overflow: ellipsis;
     word-break: break-word;
   }
   .meta {
