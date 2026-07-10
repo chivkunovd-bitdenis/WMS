@@ -3,7 +3,7 @@ from __future__ import annotations
 import re
 from collections.abc import Callable
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, cast
+from typing import TYPE_CHECKING, Any, cast
 
 if TYPE_CHECKING:
     import fitz
@@ -192,28 +192,62 @@ def _find_cis_boxes_on_page(page: object) -> list[tuple[str, object]]:
     found: list[tuple[str, fitz.Rect]] = []
     seen: set[str] = set()
     page_dict = pg.get_text("dict")
+    # Flatten lines across *all* text blocks in page order (not per-block):
+    # some seller labels print "(01) <gtin>" and "(21) <serial>" as two
+    # separate text objects (each becomes its own PyMuPDF block with one
+    # line), because the label generator places each AI on its own text run
+    # rather than wrapping a single paragraph.
+    lines: list[dict[str, Any]] = []
     for block in page_dict.get("blocks", []):
         if block.get("type") != 0:
             continue
-        for line in block.get("lines", []):
-            spans = line.get("spans", [])
-            line_text = "".join(str(span.get("text", "")) for span in spans)
-            if not cis_re.search(line_text):
+        lines.extend(block.get("lines", []))
+    line_texts = [
+        "".join(str(span.get("text", "")) for span in line.get("spans", []))
+        for line in lines
+    ]
+    for index, line in enumerate(lines):
+        spans = line.get("spans", [])
+        line_text = line_texts[index]
+        # Fall back to a joined window with the next line when the current
+        # line alone has no match — covers the split-AI case above. Only do
+        # this when the *next* line has no self-contained match of its own,
+        # otherwise an unrelated line preceding a normal single-line CIS
+        # (e.g. a "Честный знак" caption) would falsely "absorb" the next
+        # line's real match under a wrong, union-of-both bounding box.
+        next_line = lines[index + 1] if index + 1 < len(lines) else None
+        search_text = line_text
+        joined_with_next = False
+        if (
+            not cis_re.search(search_text)
+            and next_line is not None
+            and not cis_re.search(line_texts[index + 1])
+        ):
+            search_text = line_text + line_texts[index + 1]
+            joined_with_next = True
+        if not cis_re.search(search_text):
+            continue
+        for match in cis_re.finditer(search_text):
+            cis = normalize_cis(f"01{match.group('gtin')}21{match.group('serial')}")
+            if cis is None or cis in seen:
                 continue
-            for match in cis_re.finditer(line_text):
-                cis = normalize_cis(match.group(0))
-                if cis is None or cis in seen:
-                    continue
-                seen.add(cis)
-                line_bbox = fitz.Rect(line["bbox"])
-                span_rects = [fitz.Rect(span["bbox"]) for span in spans if span.get("bbox")]
-                if span_rects:
-                    content_rect = span_rects[0]
-                    for rect in span_rects[1:]:
-                        content_rect |= rect
-                    found.append((cis, content_rect | line_bbox))
-                else:
-                    found.append((cis, line_bbox))
+            seen.add(cis)
+            line_bbox = fitz.Rect(line["bbox"])
+            span_rects = [fitz.Rect(span["bbox"]) for span in spans if span.get("bbox")]
+            if joined_with_next and next_line is not None:
+                line_bbox |= fitz.Rect(next_line["bbox"])
+                span_rects += [
+                    fitz.Rect(span["bbox"])
+                    for span in next_line.get("spans", [])
+                    if span.get("bbox")
+                ]
+            if span_rects:
+                content_rect = span_rects[0]
+                for rect in span_rects[1:]:
+                    content_rect |= rect
+                found.append((cis, content_rect | line_bbox))
+            else:
+                found.append((cis, line_bbox))
     return found
 
 

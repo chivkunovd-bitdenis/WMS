@@ -68,9 +68,24 @@ _CIS_MIN_LEN = 15
 _CIS_MAX_LEN = 512
 _GTIN_RE = re.compile(r"(?<!\d)(\d{14})(?!\d)")
 _GS1_GTIN_AI01_RE = re.compile(r"(?:^|\x1d)01(\d{14})")
+# Human-readable seller labels often print the GS1 element string as
+# "(01) <gtin>" and "(21) <serial>" — with parens, a space after each AI
+# marker, and sometimes wrapped onto two separate lines on narrow labels
+# (see backend/tests/test_marking_pdf_label_artifact.py for real examples).
+# The raw scanned/encoded form has none of that formatting. `\s*` around each
+# optional marker tolerates spaces *and* newlines between the two halves, so
+# this matches both the raw and the human-readable print layouts.
 _CIS_CANDIDATE_RE = re.compile(
-    r"[\x1d(]?(?:01)?\d{14}[\x1d)]?(?:21)[\w!\"%&'()*+,\-./:;<=>?]{13,}"
+    r"[\x1d(]?\s*(?:01)?\)?\s*(?P<gtin>\d{14})\s*[\x1d(]?\s*21\)?\s*"
+    r"(?P<serial>[\w!\"%&'()*+,\-./:;<=>?]{13,})"
 )
+
+
+def _canonical_cis_from_match(match: re.Match[str]) -> str:
+    """Rebuilds the bare GS1 element string, stripping any AI(01)/AI(21)
+    print-formatting punctuation (parens/spaces) captured around the markers.
+    """
+    return f"01{match.group('gtin')}21{match.group('serial')}"
 
 
 class MarkingCodeServiceError(Exception):
@@ -491,7 +506,7 @@ def _parse_csv_rows(content: bytes) -> list[dict[str, str]]:
 def _extract_cis_codes_from_text(text: str, seen: set[str]) -> list[str]:
     found: list[str] = []
     for match in _CIS_CANDIDATE_RE.finditer(text):
-        cis = normalize_cis(match.group(0))
+        cis = normalize_cis(_canonical_cis_from_match(match))
         if cis is None or cis in seen:
             continue
         seen.add(cis)
