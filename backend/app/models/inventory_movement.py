@@ -15,6 +15,7 @@ MOVEMENT_TYPE_STOCK_TRANSFER_OUT = "stock_transfer_out"
 MOVEMENT_TYPE_STOCK_TRANSFER_IN = "stock_transfer_in"
 MOVEMENT_TYPE_OUTBOUND_SHIPMENT = "outbound_shipment"
 MOVEMENT_TYPE_MARKETPLACE_UNLOAD = "marketplace_unload"
+MOVEMENT_TYPE_PRODUCT_TZ_IMPORT = "product_tz_import"
 
 if TYPE_CHECKING:
     from app.models.inbound_intake import InboundIntakeLine

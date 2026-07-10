@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import {
   Alert,
   Box,
@@ -25,6 +25,7 @@ import {
 import CloudUploadOutlined from '@mui/icons-material/CloudUploadOutlined'
 import { apiUrl } from '../../api'
 import { readApiErrorMessage } from '../../utils/readApiErrorMessage'
+import { createLatestRequestSequence } from '../../utils/latestRequestSequence'
 
 type SellerRow = { id: string; name: string }
 
@@ -36,6 +37,7 @@ type PreviewRow = {
   name: string
   sku_code: string
   packaging_instructions: string | null
+  declared_quantity: number | null
   action: 'create' | 'update' | 'skip' | 'error'
   product_id: string | null
   error_code: string | null
@@ -52,6 +54,7 @@ type PreviewResponse = {
     update_count: number
     skip_count: number
     error_count: number
+    declared_total: number
   }
 }
 
@@ -60,6 +63,9 @@ type ApplyResponse = {
   updated_count: number
   skipped_count: number
   product_ids: string[]
+  added_quantity: number
+  movement_count: number
+  already_applied: boolean
 }
 
 type Props = {
@@ -99,10 +105,17 @@ export function FfProductTzImportDialog({
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [ignoreErrors, setIgnoreErrors] = useState(false)
+  const previewRequests = useRef(createLatestRequestSequence())
+  const applyRequests = useRef(createLatestRequestSequence())
 
   useEffect(() => {
+    previewRequests.current.invalidate()
+    applyRequests.current.invalidate()
     if (open) {
       setSellerId(defaultSellerId ?? '')
+      setFile(null)
+      setPreview(null)
+      setBusy(false)
       setError(null)
     }
   }, [open, defaultSellerId])
@@ -115,6 +128,8 @@ export function FfProductTzImportDialog({
   }, [ignoreErrors, preview])
 
   function reset() {
+    previewRequests.current.invalidate()
+    applyRequests.current.invalidate()
     setFile(null)
     setPreview(null)
     setError(null)
@@ -130,7 +145,9 @@ export function FfProductTzImportDialog({
   }
 
   async function runPreview(nextFile: File) {
-    if (!sellerId) {
+    const previewRequestId = previewRequests.current.next()
+    const previewSellerId = sellerId
+    if (!previewSellerId) {
       setError('Выберите селлера.')
       return
     }
@@ -139,52 +156,87 @@ export function FfProductTzImportDialog({
     setPreview(null)
     try {
       const fd = new FormData()
-      fd.append('seller_id', sellerId)
+      fd.append('seller_id', previewSellerId)
       fd.append('file', nextFile)
       const res = await fetch(apiUrl('/products/import-tz/preview'), {
         method: 'POST',
         headers: { Authorization: `Bearer ${token}` },
         body: fd,
       })
-      if (!res.ok) {
-        setError(await readImportError(res))
+      if (!previewRequests.current.isLatest(previewRequestId)) {
         return
       }
-      setPreview((await res.json()) as PreviewResponse)
+      if (!res.ok) {
+        const message = await readImportError(res)
+        if (previewRequests.current.isLatest(previewRequestId)) {
+          setError(message)
+        }
+        return
+      }
+      const nextPreview = (await res.json()) as PreviewResponse
+      if (previewRequests.current.isLatest(previewRequestId)) {
+        setPreview(nextPreview)
+      }
     } catch (e) {
-      setError(e instanceof Error ? e.message : 'Не удалось разобрать файл.')
+      if (previewRequests.current.isLatest(previewRequestId)) {
+        setError(e instanceof Error ? e.message : 'Не удалось разобрать файл.')
+      }
     } finally {
-      setBusy(false)
+      if (previewRequests.current.isLatest(previewRequestId)) {
+        setBusy(false)
+      }
     }
   }
 
   async function runApply() {
     if (!file || !sellerId || !canApply) return
+    const applyRequestId = applyRequests.current.next()
+    const applyFile = file
+    const applySellerId = sellerId
+    const applyIgnoreErrors = ignoreErrors
     setBusy(true)
     setError(null)
     try {
       const fd = new FormData()
-      fd.append('seller_id', sellerId)
-      fd.append('ignore_errors', ignoreErrors ? 'true' : 'false')
-      fd.append('file', file)
+      fd.append('seller_id', applySellerId)
+      fd.append('ignore_errors', applyIgnoreErrors ? 'true' : 'false')
+      fd.append('file', applyFile)
       const res = await fetch(apiUrl('/products/import-tz/apply'), {
         method: 'POST',
         headers: { Authorization: `Bearer ${token}` },
         body: fd,
       })
+      if (!applyRequests.current.isLatest(applyRequestId)) {
+        return
+      }
       if (!res.ok) {
-        setError(await readImportError(res))
+        const message = await readImportError(res)
+        if (applyRequests.current.isLatest(applyRequestId)) {
+          setError(message)
+        }
         return
       }
       const body = (await res.json()) as ApplyResponse
-      const msg = `Создано: ${body.created_count}, обновлено: ${body.updated_count}, пропущено: ${body.skipped_count}`
-      reset()
+      if (!applyRequests.current.isLatest(applyRequestId)) {
+        return
+      }
+      const msg = body.already_applied
+        ? 'Этот файл уже применён. Остатки повторно не добавлены.'
+        : `Создано: ${body.created_count}, обновлено: ${body.updated_count}, добавлено в сортировку: ${body.added_quantity}, движений: ${body.movement_count}, пропущено: ${body.skipped_count}`
       await onApplied(msg)
+      if (!applyRequests.current.isLatest(applyRequestId)) {
+        return
+      }
+      reset()
       onClose()
     } catch (e) {
-      setError(e instanceof Error ? e.message : 'Не удалось применить импорт.')
+      if (applyRequests.current.isLatest(applyRequestId)) {
+        setError(e instanceof Error ? e.message : 'Не удалось применить импорт.')
+      }
     } finally {
-      setBusy(false)
+      if (applyRequests.current.isLatest(applyRequestId)) {
+        setBusy(false)
+      }
     }
   }
 
@@ -204,9 +256,14 @@ export function FfProductTzImportDialog({
               labelId="ff-tz-import-seller-label"
               label="Селлер"
               value={sellerId}
+              disabled={busy}
               onChange={(e) => {
+                previewRequests.current.invalidate()
+                applyRequests.current.invalidate()
                 setSellerId(String(e.target.value))
+                setFile(null)
                 setPreview(null)
+                setBusy(false)
               }}
               data-testid="ff-tz-import-seller"
             >
@@ -230,10 +287,17 @@ export function FfProductTzImportDialog({
               type="file"
               accept=".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
               onChange={(e) => {
+                applyRequests.current.invalidate()
                 const f = e.target.files?.[0] ?? null
                 e.target.value = ''
                 setFile(f)
-                if (f) void runPreview(f)
+                if (f) {
+                  void runPreview(f)
+                } else {
+                  previewRequests.current.invalidate()
+                  setPreview(null)
+                  setBusy(false)
+                }
               }}
             />
           </Button>
@@ -247,7 +311,8 @@ export function FfProductTzImportDialog({
             <Box>
               <Typography variant="body2" sx={{ mb: 1 }} data-testid="ff-tz-import-summary">
                 Лист «{preview.sheet_name}»: создать {preview.summary.create_count}, обновить{' '}
-                {preview.summary.update_count}, ошибок {preview.summary.error_count}
+                {preview.summary.update_count}, заявлено {preview.summary.declared_total}, ошибок{' '}
+                {preview.summary.error_count}
               </Typography>
               {preview.summary.error_count > 0 ? (
                 <FormControlLabel
@@ -269,6 +334,7 @@ export function FfProductTzImportDialog({
                     <TableCell>Размер</TableCell>
                     <TableCell>ШК</TableCell>
                     <TableCell>SKU</TableCell>
+                    <TableCell align="right">Заявлено</TableCell>
                     <TableCell>Действие</TableCell>
                     <TableCell>ТЗ</TableCell>
                   </TableRow>
@@ -281,6 +347,7 @@ export function FfProductTzImportDialog({
                       <TableCell>{r.size ?? '—'}</TableCell>
                       <TableCell>{r.barcode ?? '—'}</TableCell>
                       <TableCell>{r.sku_code || '—'}</TableCell>
+                      <TableCell align="right">{r.declared_quantity ?? '—'}</TableCell>
                       <TableCell>
                         {r.action === 'error' ? r.error_message || r.error_code : r.action}
                       </TableCell>
@@ -304,7 +371,7 @@ export function FfProductTzImportDialog({
         </Stack>
       </DialogContent>
       <DialogActions>
-        <Button onClick={handleClose} disabled={busy}>
+        <Button onClick={handleClose} disabled={busy} data-testid="ff-tz-import-cancel">
           Отмена
         </Button>
         <Button

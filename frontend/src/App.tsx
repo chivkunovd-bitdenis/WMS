@@ -2492,7 +2492,12 @@ export default function App() {
             path="ff/products"
             element={
               token ? (
-                <FfProductsCatalogScreen token={token} authHeaders={authHeaders} sellers={sellers} />
+                <FfProductsCatalogScreen
+                  token={token}
+                  authHeaders={authHeaders}
+                  sellers={sellers}
+                  onSellersChanged={() => refreshSellers(token)}
+                />
               ) : (
                 <FfPlaceholderPage title="Каталог" hint="Нет токена." testId="ff-products-placeholder" />
               )

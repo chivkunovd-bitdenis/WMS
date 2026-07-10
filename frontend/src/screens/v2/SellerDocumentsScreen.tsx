@@ -232,6 +232,7 @@ export function SellerDocumentsScreen({
                 hover
                 data-testid="seller-documents-row"
                 data-doc-type={r.type}
+                data-doc-id={r.id}
                 sx={{
                   cursor: r.type === 'inbound' || r.type === 'mp_unload' ? 'pointer' : 'default',
                 }}

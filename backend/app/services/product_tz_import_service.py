@@ -3,6 +3,7 @@
 
 from __future__ import annotations
 
+import hashlib
 import io
 import re
 import uuid
@@ -15,13 +16,24 @@ from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.models.inventory_movement import MOVEMENT_TYPE_PRODUCT_TZ_IMPORT
 from app.models.product import Product
+from app.models.product_tz_import import ProductTzImport
 from app.models.seller import Seller
-from app.services.catalog_service import CatalogError, create_product, update_packaging_instructions
+from app.services import inventory_service
+from app.services.catalog_service import (
+    CatalogError,
+    create_product,
+    list_warehouses,
+    update_packaging_instructions,
+)
+from app.services.sorting_location_service import get_or_create_sorting_location
 from app.services.wb_card_enrichment import WbSizeVariant, sku_code_for_wb_variant
 
-TZ_SHEET_PREFIX = "ТЗ Шаблон"
 _BARCODE_RE = re.compile(r"^\d{8,32}$")
+_IMPORT_TYPE = "product_tz"
+_NO_WAREHOUSE_SCOPE = "none"
+_IDEMPOTENCY_CONSTRAINT = "uq_product_tz_import_scope_hash"
 
 HEADER_ALIASES: dict[str, str] = {
     "артикул продавца": "vendor_article",
@@ -30,6 +42,7 @@ HEADER_ALIASES: dict[str, str] = {
     "информация для этикетки": "label_barcode",
     "пожелания/инструкция по обработке, упаковке и фасовке": "tz",
     "пожелания/инструкция по обработке упаковке и фасовке": "tz",
+    "кол/во, заявленное клиентом": "declared_quantity",
 }
 
 _EXPAND_FIELDS = ("vendor_article", "size", "barcode", "label_barcode", "tz")
@@ -40,6 +53,23 @@ class ProductTzImportError(Exception):
         super().__init__(message or code)
         self.code = code
         self.message = message or code
+
+
+def _is_idempotency_conflict(exc: IntegrityError) -> bool:
+    diag = getattr(exc.orig, "diag", None)
+    if getattr(diag, "constraint_name", None) == _IDEMPOTENCY_CONSTRAINT:
+        return True
+    message = str(exc.orig).lower()
+    if _IDEMPOTENCY_CONSTRAINT in message:
+        return True
+    sqlite_columns = (
+        "product_tz_imports.tenant_id, "
+        "product_tz_imports.seller_id, "
+        "product_tz_imports.warehouse_scope, "
+        "product_tz_imports.import_type, "
+        "product_tz_imports.file_sha256"
+    )
+    return "unique constraint failed:" in message and sqlite_columns in message
 
 
 @dataclass(frozen=True)
@@ -59,6 +89,7 @@ class ProductTzRowPreview:
     name: str
     sku_code: str
     packaging_instructions: str | None
+    declared_quantity: int | None
     action: Literal["create", "update", "skip", "error"]
     product_id: uuid.UUID | None
     error_code: str | None
@@ -72,6 +103,7 @@ class ProductTzPreviewSummary:
     update_count: int
     skip_count: int
     error_count: int
+    declared_total: int
 
 
 @dataclass(frozen=True)
@@ -90,6 +122,10 @@ class ProductTzApplyResult:
     product_ids: tuple[uuid.UUID, ...]
     summary: ProductTzPreviewSummary
     errors: tuple[ProductTzRowError, ...]
+    added_quantity: int
+    movement_count: int
+    already_applied: bool
+    warehouse_id: uuid.UUID | None
 
 
 def _norm_header(value: object) -> str:
@@ -120,14 +156,27 @@ def _as_barcode(value: object) -> str | None:
     return None
 
 
-def _pick_tz_sheet(sheetnames: list[str]) -> str:
-    for name in sheetnames:
-        if name.strip().startswith(TZ_SHEET_PREFIX):
-            return name
-    raise ProductTzImportError(
-        "missing_sheet",
-        f"Не найден лист, имя которого начинается с «{TZ_SHEET_PREFIX}».",
-    )
+def _parse_declared_quantity(value: object) -> tuple[int | None, str | None]:
+    if value is None:
+        return 0, None
+    if isinstance(value, str):
+        if not value.strip():
+            return 0, None
+        return None, "Количество должно быть целым неотрицательным числом."
+    if isinstance(value, bool):
+        return None, "Количество не может быть логическим значением."
+    if isinstance(value, int):
+        if value >= 0:
+            return value, None
+        return None, "Количество не может быть отрицательным."
+    if isinstance(value, float):
+        if not value.is_integer():
+            return None, "Количество должно быть целым числом."
+        quantity = int(value)
+        if quantity >= 0:
+            return quantity, None
+        return None, "Количество не может быть отрицательным."
+    return None, "Количество должно быть целым неотрицательным числом."
 
 
 def _find_header_row(ws: Worksheet) -> tuple[int, dict[str, int]]:
@@ -141,6 +190,26 @@ def _find_header_row(ws: Worksheet) -> tuple[int, dict[str, int]]:
         if "vendor_article" in mapping and ("barcode" in mapping or "label_barcode" in mapping):
             return r, mapping
     raise ProductTzImportError(
+        "missing_column",
+        "В файле нет обязательных колонок: «Артикул продавца» и штрихкод/этикетка.",
+    )
+
+
+def _find_tz_sheet(wb: Any) -> tuple[str, int, dict[str, int]]:
+    """Pick the sheet that matches the TZ template structure.
+
+    Sheet name is irrelevant — every sheet in the workbook is scanned in order
+    and the first one whose header row contains the required columns wins.
+    """
+    last_error: ProductTzImportError | None = None
+    for name in wb.sheetnames:
+        try:
+            header_row, cols = _find_header_row(wb[name])
+        except ProductTzImportError as exc:
+            last_error = exc
+            continue
+        return name, header_row, cols
+    raise last_error or ProductTzImportError(
         "missing_column",
         "В файле нет обязательных колонок: «Артикул продавца» и штрихкод/этикетка.",
     )
@@ -208,9 +277,8 @@ def parse_product_tz_xlsx(content: bytes, *, filename: str) -> tuple[str, list[d
         ) from exc
 
     try:
-        sheet_name = _pick_tz_sheet(list(wb.sheetnames))
+        sheet_name, header_row, cols = _find_tz_sheet(wb)
         ws = wb[sheet_name]
-        header_row, cols = _find_header_row(ws)
         expanded: dict[str, dict[int, str]] = {}
         for field in _EXPAND_FIELDS:
             col = cols.get(field)
@@ -225,7 +293,10 @@ def parse_product_tz_xlsx(content: bytes, *, filename: str) -> tuple[str, list[d
             barcode_raw = expanded.get("barcode", {}).get(r)
             label_raw = expanded.get("label_barcode", {}).get(r)
             tz = expanded.get("tz", {}).get(r)
-            # Skip completely empty trailing rows.
+            quantity_col = cols.get("declared_quantity")
+            quantity_raw = ws.cell(r, quantity_col).value if quantity_col is not None else None
+            declared_quantity, quantity_error = _parse_declared_quantity(quantity_raw)
+            # Quantity-only cells are workbook totals, not product rows.
             if not any((vendor, size, barcode_raw, label_raw, tz)):
                 continue
             barcode = _resolve_barcode(barcode_raw=barcode_raw, label_raw=label_raw)
@@ -236,6 +307,8 @@ def parse_product_tz_xlsx(content: bytes, *, filename: str) -> tuple[str, list[d
                     "size": size,
                     "barcode": barcode,
                     "packaging_instructions": tz,
+                    "declared_quantity": declared_quantity,
+                    "declared_quantity_error": quantity_error,
                 }
             )
         if not rows:
@@ -298,6 +371,7 @@ def _error_preview(
     tz: str | None,
     code: str,
     msg: str,
+    declared_quantity: int | None = 0,
 ) -> ProductTzRowPreview:
     return ProductTzRowPreview(
         row=row_no,
@@ -307,6 +381,7 @@ def _error_preview(
         name=name,
         sku_code=sku,
         packaging_instructions=tz,
+        declared_quantity=declared_quantity,
         action="error",
         product_id=None,
         error_code=code,
@@ -339,7 +414,39 @@ async def build_product_tz_preview(
         barcode = raw["barcode"] if isinstance(raw["barcode"], str) else None
         raw_tz = raw["packaging_instructions"]
         tz = raw_tz if isinstance(raw_tz, str) else None
+        declared_quantity_raw = raw.get("declared_quantity")
+        declared_quantity = (
+            declared_quantity_raw if isinstance(declared_quantity_raw, int) else None
+        )
+        quantity_error_raw = raw.get("declared_quantity_error")
+        quantity_error = quantity_error_raw if isinstance(quantity_error_raw, str) else None
         name = _display_name(vendor or "Товар", size)
+
+        if quantity_error is not None:
+            error_count += 1
+            errors.append(
+                ProductTzRowError(
+                    row=row_no,
+                    barcode=barcode,
+                    code="invalid_declared_quantity",
+                    message=quantity_error,
+                )
+            )
+            previews.append(
+                _error_preview(
+                    row_no=row_no,
+                    vendor=vendor,
+                    size=size,
+                    barcode=barcode,
+                    name=name,
+                    sku="",
+                    tz=tz,
+                    code="invalid_declared_quantity",
+                    msg=quantity_error,
+                    declared_quantity=None,
+                )
+            )
+            continue
 
         if not vendor:
             error_count += 1
@@ -358,6 +465,7 @@ async def build_product_tz_preview(
                     tz=tz,
                     code="missing_vendor",
                     msg=msg,
+                    declared_quantity=declared_quantity,
                 )
             )
             continue
@@ -381,6 +489,7 @@ async def build_product_tz_preview(
                     tz=tz,
                     code="missing_barcode",
                     msg=msg,
+                    declared_quantity=declared_quantity,
                 )
             )
             continue
@@ -407,6 +516,7 @@ async def build_product_tz_preview(
                     tz=tz,
                     code="duplicate_barcode_in_file",
                     msg=msg,
+                    declared_quantity=declared_quantity,
                 )
             )
             continue
@@ -425,6 +535,7 @@ async def build_product_tz_preview(
                     name=existing.name,
                     sku_code=existing.sku_code,
                     packaging_instructions=tz,
+                    declared_quantity=declared_quantity,
                     action="update",
                     product_id=existing.id,
                     error_code=None,
@@ -456,6 +567,7 @@ async def build_product_tz_preview(
                     tz=tz,
                     code="barcode_taken_other_seller",
                     msg=msg,
+                    declared_quantity=declared_quantity,
                 )
             )
             continue
@@ -483,6 +595,7 @@ async def build_product_tz_preview(
                         tz=tz,
                         code="sku_taken",
                         msg=msg,
+                        declared_quantity=declared_quantity,
                     )
                 )
                 continue
@@ -498,6 +611,7 @@ async def build_product_tz_preview(
                 name=name,
                 sku_code=sku,
                 packaging_instructions=tz,
+                declared_quantity=declared_quantity,
                 action="create",
                 product_id=None,
                 error_code=None,
@@ -511,6 +625,9 @@ async def build_product_tz_preview(
         update_count=update_count,
         skip_count=skip_count,
         error_count=error_count,
+        declared_total=sum(
+            row.declared_quantity or 0 for row in previews if row.action != "error"
+        ),
     )
     return ProductTzPreviewResult(
         rows=tuple(previews),
@@ -542,9 +659,68 @@ async def apply_product_tz_import(
             f"В файле есть ошибки строк ({preview.summary.error_count}).",
         )
 
+    warehouse_id: uuid.UUID | None = None
+    sorting_location_id: uuid.UUID | None = None
+    if preview.summary.declared_total > 0:
+        warehouses = await list_warehouses(session, tenant_id)
+        if not warehouses:
+            raise ProductTzImportError(
+                "warehouse_required",
+                "Для добавления остатков создайте единственный склад ФФ.",
+            )
+        if len(warehouses) != 1:
+            raise ProductTzImportError(
+                "warehouse_ambiguous",
+                "Для добавления остатков у ФФ должен быть ровно один склад.",
+            )
+        warehouse_id = warehouses[0].id
+
+    file_sha256 = hashlib.sha256(content).hexdigest()
+    warehouse_scope = str(warehouse_id) if warehouse_id is not None else _NO_WAREHOUSE_SCOPE
+    import_record = ProductTzImport(
+        tenant_id=tenant_id,
+        seller_id=seller_id,
+        warehouse_id=warehouse_id,
+        warehouse_scope=warehouse_scope,
+        import_type=_IMPORT_TYPE,
+        file_sha256=file_sha256,
+        filename=filename[:512],
+        declared_total=preview.summary.declared_total,
+        movement_count=0,
+    )
+    try:
+        # First write starts the outer DB transaction before any per-row savepoints.
+        # This is required for real all-or-nothing rollback on SQLite as well as Postgres.
+        session.add(import_record)
+        await session.flush()
+    except IntegrityError as exc:
+        await session.rollback()
+        if not _is_idempotency_conflict(exc):
+            raise
+        return ProductTzApplyResult(
+            created_count=0,
+            updated_count=0,
+            skipped_count=preview.summary.total,
+            product_ids=(),
+            summary=preview.summary,
+            errors=preview.errors,
+            added_quantity=0,
+            movement_count=0,
+            already_applied=True,
+            warehouse_id=warehouse_id,
+        )
+
+    if warehouse_id is not None:
+        sorting_location = await get_or_create_sorting_location(
+            session, tenant_id, warehouse_id
+        )
+        sorting_location_id = sorting_location.id
+
     created = 0
     updated = 0
     skipped = 0
+    added_quantity = 0
+    movement_count = 0
     product_ids: list[uuid.UUID] = []
 
     try:
@@ -575,6 +751,18 @@ async def apply_product_tz_import(
                         await session.flush()
                     product_ids.append(existing.id)
                     updated += 1
+                    if (row.declared_quantity or 0) > 0:
+                        assert sorting_location_id is not None
+                        await inventory_service.record_movement_and_adjust_balance(
+                            session,
+                            tenant_id=tenant_id,
+                            product_id=existing.id,
+                            storage_location_id=sorting_location_id,
+                            quantity_delta=row.declared_quantity or 0,
+                            movement_type=MOVEMENT_TYPE_PRODUCT_TZ_IMPORT,
+                        )
+                        added_quantity += row.declared_quantity or 0
+                        movement_count += 1
                 continue
             if row.action == "create":
                 if not row.barcode:
@@ -599,6 +787,18 @@ async def apply_product_tz_import(
                         )
                         product_ids.append(p.id)
                         created += 1
+                        if (row.declared_quantity or 0) > 0:
+                            assert sorting_location_id is not None
+                            await inventory_service.record_movement_and_adjust_balance(
+                                session,
+                                tenant_id=tenant_id,
+                                product_id=p.id,
+                                storage_location_id=sorting_location_id,
+                                quantity_delta=row.declared_quantity or 0,
+                                movement_type=MOVEMENT_TYPE_PRODUCT_TZ_IMPORT,
+                            )
+                            added_quantity += row.declared_quantity or 0
+                            movement_count += 1
                 except IntegrityError as exc:
                     err = str(getattr(exc, "orig", exc)).lower()
                     code = (
@@ -620,6 +820,7 @@ async def apply_product_tz_import(
                         skipped += 1
                         continue
                     raise ProductTzImportError(exc.code, str(exc)) from exc
+        import_record.movement_count = movement_count
         await session.commit()
     except Exception:
         await session.rollback()
@@ -632,4 +833,8 @@ async def apply_product_tz_import(
         product_ids=tuple(product_ids),
         summary=preview.summary,
         errors=preview.errors,
+        added_quantity=added_quantity,
+        movement_count=movement_count,
+        already_applied=False,
+        warehouse_id=warehouse_id,
     )

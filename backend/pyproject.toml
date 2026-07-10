@@ -93,4 +93,7 @@ ignore_missing_imports = true
 testpaths = ["tests"]
 asyncio_mode = "auto"
 pythonpath = ["."]
+markers = [
+    "postgresql_concurrency: overlap tests to rerun against isolated PostgreSQL via WMS_TEST_DATABASE_URL",
+]
 

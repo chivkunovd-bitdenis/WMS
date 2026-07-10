@@ -30,6 +30,7 @@ backend/tests/wms_pytest.sqlite
 backend/tests/wms_pytest_data/
 backend/var/wms-data/
 backend/dev.db
+backend/dev-local.db
 backend/alembic_autogen.db
 
 # IDE

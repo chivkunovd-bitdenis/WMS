@@ -1,5 +1,23 @@
 # BUGLOG
 
+## BUG-7 — 2026-07-10 — MP-подбор завышал доступность в статусе collecting
+
+- Symptom: readonly MP availability мог вернуть товар как доступный, хотя количество уже было зарезервировано другой отгрузкой на МП в статусе `collecting`.
+- Cause: endpoint использовал агрегат `inventory_service.MP_UNLOAD_RESERVE_STATUSES`, где отсутствовал `collecting`, вместо канонического `marketplace_unload_service.RESERVE_STATUSES`.
+- Root cause category: `contract`.
+- Fix: общий контракт `marketplace_unload_status.RESERVE_STATUSES` используется и MP-сервисом, и inventory summary; endpoint и серверная проверка строки используют общие batch-функции резервов, а `exclude_request_id` исключает только текущую заявку.
+- Prevention: regression test создаёт текущий `collecting`-резерв и второй `confirmed`-резерв; доступность равна 4 без исключения и 7 при исключении только текущей заявки.
+- Commit: pending.
+
+## BUG-6 — 2026-07-10 — Параллельные приходы могли потерять увеличение остатка
+
+- Symptom: два разных импорта, одновременно добавляющие количество одного товара в одну ячейку, могли оба прочитать старый баланс и сохранить только одно увеличение.
+- Cause: положительный остаток менялся через ORM read-modify-write без блокировки строки или атомарного SQL.
+- Root cause category: `race`.
+- Fix: все изменения корзин выполняются атомарно на одной DB-строке: приход — `INSERT ... ON CONFLICT DO UPDATE`, упаковка и списание — условные `UPDATE ... RETURNING`. PostgreSQL сериализует конфликтующие row mutations; SQLite использует совместимые SQL paths.
+- Prevention: два barrier-теста реально запускают import + package и import + deduct параллельно, проверяя движения, обе корзины и инвариант. Они помечены `postgresql_concurrency` и могут быть перезапущены через изолированный `WMS_TEST_DATABASE_URL`; SQLite marker run 2/2 green. UI stale-response paths используют sequence guard согласно существующему `ui-engineering-checklist`.
+- Commit: pending.
+
 ## BUG-5 — 2026-07-09 — ИП на этикетке ШК ВБ визуально сплющена / слипается с названием
 
 - Symptom: на физической этикетке (фото с прода) строка «ИП Горячкина Т И» выглядит сжатой по вертикали и почти вплотную к названию товара; цифры ШК тоже близко к ИП. Остальные строки могут быть нормальнее.

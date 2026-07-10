@@ -4,7 +4,7 @@ import uuid
 from datetime import date
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile, status
+from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, UploadFile, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from pydantic import BaseModel, Field
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -157,6 +157,13 @@ class MarketplaceUnloadLineOut(BaseModel):
     quantity: int
     picked_qty: int = 0
     has_discrepancy: bool = False
+
+
+class MarketplaceUnloadAvailableProductOut(BaseModel):
+    product_id: str
+    sku_code: str
+    product_name: str
+    available: int
 
 
 class MarketplaceUnloadRequestSummaryOut(BaseModel):
@@ -504,6 +511,8 @@ def _map_mu_err(exc: MarketplaceUnloadError) -> HTTPException:
             status_code=status.HTTP_404_NOT_FOUND,
             detail="product_not_found",
         )
+    if exc.code in {"warehouse_not_found", "seller_not_found"}:
+        return HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=exc.code)
     if exc.code == "duplicate_line":
         return HTTPException(status_code=status.HTTP_409_CONFLICT, detail="duplicate_line")
     if exc.code == "wb_mp_warehouse_unknown":
@@ -656,6 +665,52 @@ async def list_marketplace_unloads(
             seller_name=r.seller.name if r.seller is not None else None,
         )
         for r in rows
+    ]
+
+
+@router.get(
+    "/available-products",
+    response_model=list[MarketplaceUnloadAvailableProductOut],
+)
+async def list_marketplace_unload_available_products(
+    user: Annotated[User, Depends(require_mp_shipments_access)],
+    session: Annotated[AsyncSession, Depends(get_db)],
+    effective_seller_id: Annotated[uuid.UUID | None, Depends(get_effective_seller_id)],
+    warehouse_id: Annotated[uuid.UUID, Query()],
+    seller_id: Annotated[uuid.UUID | None, Query()] = None,
+    exclude_request_id: Annotated[uuid.UUID | None, Query()] = None,
+) -> list[MarketplaceUnloadAvailableProductOut]:
+    if user.role == FULFILLMENT_SELLER:
+        if effective_seller_id is None:
+            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="forbidden")
+        if seller_id is not None and seller_id != effective_seller_id:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="not_found")
+        scoped_seller_id = effective_seller_id
+    else:
+        if seller_id is None:
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+                detail="seller_id_required",
+            )
+        scoped_seller_id = seller_id
+    try:
+        rows = await svc.list_available_products(
+            session,
+            user.tenant_id,
+            warehouse_id=warehouse_id,
+            seller_id=scoped_seller_id,
+            exclude_request_id=exclude_request_id,
+        )
+    except MarketplaceUnloadError as exc:
+        raise _map_mu_err(exc) from None
+    return [
+        MarketplaceUnloadAvailableProductOut(
+            product_id=str(row.product_id),
+            sku_code=row.sku_code,
+            product_name=row.product_name,
+            available=row.available,
+        )
+        for row in rows
     ]
 
 

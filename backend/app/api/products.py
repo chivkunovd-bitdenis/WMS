@@ -132,6 +132,7 @@ class ProductTzRowPreviewOut(BaseModel):
     name: str
     sku_code: str
     packaging_instructions: str | None = None
+    declared_quantity: int | None = None
     action: Literal["create", "update", "skip", "error"]
     product_id: str | None = None
     error_code: str | None = None
@@ -151,6 +152,7 @@ class ProductTzPreviewSummaryOut(BaseModel):
     update_count: int
     skip_count: int
     error_count: int
+    declared_total: int
 
 
 class ProductTzImportPreviewOut(BaseModel):
@@ -167,6 +169,10 @@ class ProductTzImportApplyOut(BaseModel):
     product_ids: list[str]
     summary: ProductTzPreviewSummaryOut
     errors: list[ProductTzRowErrorOut] = Field(default_factory=list)
+    added_quantity: int
+    movement_count: int
+    already_applied: bool
+    warehouse_id: str | None = None
 
 
 class PackagingInstructionsPatch(BaseModel):
@@ -204,8 +210,9 @@ def _http_from_tz_import_error(exc: ProductTzImportError) -> HTTPException:
         "unsupported_file_type",
         "empty_file",
         "missing_column",
-        "missing_sheet",
         "row_errors",
+        "warehouse_required",
+        "warehouse_ambiguous",
     }:
         return HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
@@ -357,6 +364,7 @@ def _tz_preview_out(result: object) -> ProductTzImportPreviewOut:
                 name=row.name,
                 sku_code=row.sku_code,
                 packaging_instructions=row.packaging_instructions,
+                declared_quantity=row.declared_quantity,
                 action=row.action,
                 product_id=str(row.product_id) if row.product_id else None,
                 error_code=row.error_code,
@@ -379,6 +387,7 @@ def _tz_preview_out(result: object) -> ProductTzImportPreviewOut:
             update_count=result.summary.update_count,
             skip_count=result.summary.skip_count,
             error_count=result.summary.error_count,
+            declared_total=result.summary.declared_total,
         ),
     )
 
@@ -435,6 +444,7 @@ async def post_product_tz_import_apply(
             update_count=result.summary.update_count,
             skip_count=result.summary.skip_count,
             error_count=result.summary.error_count,
+            declared_total=result.summary.declared_total,
         ),
         errors=[
             ProductTzRowErrorOut(
@@ -445,6 +455,10 @@ async def post_product_tz_import_apply(
             )
             for err in result.errors
         ],
+        added_quantity=result.added_quantity,
+        movement_count=result.movement_count,
+        already_applied=result.already_applied,
+        warehouse_id=str(result.warehouse_id) if result.warehouse_id else None,
     )
 
 

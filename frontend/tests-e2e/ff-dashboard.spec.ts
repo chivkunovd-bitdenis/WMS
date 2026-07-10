@@ -1,10 +1,10 @@
 import { test, expect } from '@playwright/test';
 
 import { waitForGetOk, waitForPostOk } from './api-waits';
-import { setWmsDateField } from './wms-date-field-helpers';
 import { openFulfillmentRegistration } from './auth-flow';
 
 // TC-S15-003 — FF дашборд: недельный календарь; отгрузка ФФ→МП из раздела «Отгрузки на МП».
+// TC-NEW-MP-AVAIL-02 — товар только в «Сортировке» виден FF в подборе MP.
 // Given: админ ФФ, склад и товар в API; When: создаёт отгрузку на МП и открывает строку; Then: диалог документа виден (negative: без склада — ошибка вместо успеха).
 test('fulfillment admin sees week calendar and supplies-shipments page', async ({ page }) => {
   const email = `e2e-ff-dash-${Date.now()}@example.com`;
@@ -119,17 +119,6 @@ test('fulfillment admin sees week calendar and supplies-shipments page', async (
     data: JSON.stringify({ packaging_instructions: 'E2E: пакет + стикер WB' }),
   });
   const whId = String(((await whRes.json()) as { id: string }).id);
-  const locRes = await page.request.post(`${e2eApi}/warehouses/${whId}/locations`, {
-    headers: {
-      Authorization: `Bearer ${token}`,
-      'Content-Type': 'application/json',
-    },
-    data: JSON.stringify({ code: 'MP-PICK' }),
-  });
-  if (!locRes.ok()) {
-    throw new Error(`location create failed: ${locRes.status()} ${await locRes.text()}`);
-  }
-  const locId = String(((await locRes.json()) as { id: string }).id);
   const baseIn = `${e2eApi}/operations/inbound-intake-requests`;
   const inbound = await page.request.post(baseIn, {
     headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
@@ -141,7 +130,7 @@ test('fulfillment admin sees week calendar and supplies-shipments page', async (
   const inboundId = String(((await inbound.json()) as { id: string }).id);
   const inboundLine = await page.request.post(`${baseIn}/${inboundId}/lines`, {
     headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
-    data: JSON.stringify({ product_id: productId, expected_qty: 5, storage_location_id: locId }),
+    data: JSON.stringify({ product_id: productId, expected_qty: 5 }),
   });
   if (!inboundLine.ok()) {
     throw new Error(`inbound line failed: ${inboundLine.status()} ${await inboundLine.text()}`);
@@ -163,7 +152,6 @@ test('fulfillment admin sees week calendar and supplies-shipments page', async (
     [5],
   );
   await page.request.post(`${baseIn}/${inboundId}/verify`, { headers: { Authorization: `Bearer ${token}` } });
-  await page.request.post(`${baseIn}/${inboundId}/post`, { headers: { Authorization: `Bearer ${token}` } });
 
   await page.reload();
   await expect(page.getByTestId('dashboard')).toBeVisible();
@@ -188,14 +176,22 @@ test('fulfillment admin sees week calendar and supplies-shipments page', async (
   await expect(page.getByTestId('ff-mp-add-products')).toBeVisible();
   await expect(page.getByTestId('ff-supplies-line-product')).not.toBeVisible();
 
-  await page.getByTestId('ff-mp-line-barcode-scan').fill(barcode);
+  await page.getByTestId('ff-mp-add-products').click();
+  await expect(page.getByTestId('ff-mp-picker')).toBeVisible();
+  await page.getByTestId('ff-mp-picker-search').fill(productJson.sku_code);
+  const sortingPickerRow = page
+    .getByTestId('ff-mp-picker-row')
+    .filter({ hasText: productJson.sku_code });
+  await expect(sortingPickerRow).toBeVisible();
+  await expect(sortingPickerRow).toContainText('5');
+  await page.getByTestId('ff-mp-picker-qty').first().fill('5');
   await Promise.all([
     waitForPostOk(
       page,
       '/api/operations/marketplace-unload-requests',
       (u) => u.includes('/lines') && !u.includes('/submit'),
     ),
-    page.getByTestId('ff-mp-line-barcode-add').click(),
+    page.getByTestId('ff-mp-picker-apply').click(),
   ]);
   await expect(page.getByTestId('ff-supplies-doc-lines')).toContainText('E2E FF product');
 
@@ -222,7 +218,13 @@ test('fulfillment admin sees week calendar and supplies-shipments page', async (
         r.status() >= 200 &&
         r.status() < 300,
     ),
-    setWmsDateField(page, 'ff-mp-planned-date', '2026-06-15'),
+    (async () => {
+      const dateField = page.getByTestId('ff-mp-planned-date');
+      await dateField.getByRole('spinbutton', { name: 'Day' }).fill('15');
+      await dateField.getByRole('spinbutton', { name: 'Month' }).fill('06');
+      await dateField.getByRole('spinbutton', { name: 'Year' }).fill('2026');
+      await dateField.getByRole('spinbutton', { name: 'Year' }).blur();
+    })(),
   ]);
   await Promise.all([
     waitForPostOk(page, '/api/operations/marketplace-unload-requests', (u) => u.includes('/confirm')),
