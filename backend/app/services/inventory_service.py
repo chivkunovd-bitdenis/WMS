@@ -4,8 +4,11 @@ import uuid
 from datetime import UTC, datetime
 from typing import Literal
 
-from sqlalchemy import and_, case, delete, func, or_, select
+from sqlalchemy import and_, case, delete, func, or_, select, update
+from sqlalchemy.dialects.postgresql import insert as postgresql_insert
+from sqlalchemy.dialects.sqlite import insert as sqlite_insert
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.sql.dml import Insert
 
 from app.models.inbound_intake import InboundIntakeLine, InboundIntakeRequest
 from app.models.inventory_balance import InventoryBalance
@@ -23,31 +26,61 @@ from app.models.marketplace_unload_reservation import MarketplaceUnloadReservati
 from app.models.outbound_shipment import OutboundShipmentLine, OutboundShipmentRequest
 from app.models.product import Product
 from app.models.storage_location import StorageLocation
+from app.services.marketplace_unload_status import RESERVE_STATUSES
 from app.services.sorting_location_service import SORTING_LOCATION_CODE
 
 OUTBOUND_RESERVE_STATUSES = ("draft", "submitted")
-MP_UNLOAD_RESERVE_STATUSES = ("submitted", "confirmed")
 RESERVATION_ERROR = "insufficient_available"
 DeductPrefer = Literal["packed", "unpacked"]
 
 
-def _sync_balance_quantity(bal: InventoryBalance) -> None:
-    bal.quantity = int(bal.quantity_unpacked) + int(bal.quantity_packed)
-
-
-def _deduct_from_buckets(bal: InventoryBalance, qty: int, *, prefer: DeductPrefer) -> None:
-    if prefer == "unpacked":
-        from_unpacked = min(int(bal.quantity_unpacked), qty)
-        from_packed = qty - from_unpacked
-    else:
-        from_packed = min(int(bal.quantity_packed), qty)
-        from_unpacked = qty - from_packed
-    if from_unpacked > int(bal.quantity_unpacked) or from_packed > int(bal.quantity_packed):
-        msg = "insufficient stock"
-        raise ValueError(msg)
-    bal.quantity_unpacked = int(bal.quantity_unpacked) - from_unpacked
-    bal.quantity_packed = int(bal.quantity_packed) - from_packed
-    _sync_balance_quantity(bal)
+def _build_positive_balance_upsert(
+    *,
+    dialect_name: str,
+    tenant_id: uuid.UUID,
+    product_id: uuid.UUID,
+    storage_location_id: uuid.UUID,
+    quantity_delta: int,
+) -> Insert:
+    values = {
+        "id": uuid.uuid4(),
+        "tenant_id": tenant_id,
+        "product_id": product_id,
+        "storage_location_id": storage_location_id,
+        "quantity": quantity_delta,
+        "quantity_unpacked": quantity_delta,
+        "quantity_packed": 0,
+        "updated_at": datetime.now(UTC),
+    }
+    update_values = {
+        "quantity_unpacked": InventoryBalance.quantity_unpacked + quantity_delta,
+        "quantity": (
+            InventoryBalance.quantity_unpacked
+            + InventoryBalance.quantity_packed
+            + quantity_delta
+        ),
+        "updated_at": datetime.now(UTC),
+    }
+    if dialect_name == "postgresql":
+        stmt = postgresql_insert(InventoryBalance).values(**values)
+        return stmt.on_conflict_do_update(
+            index_elements=[
+                InventoryBalance.storage_location_id,
+                InventoryBalance.product_id,
+            ],
+            set_=update_values,
+        )
+    elif dialect_name == "sqlite":
+        sqlite_stmt = sqlite_insert(InventoryBalance).values(**values)
+        return sqlite_stmt.on_conflict_do_update(
+            index_elements=[
+                InventoryBalance.storage_location_id,
+                InventoryBalance.product_id,
+            ],
+            set_=update_values,
+        )
+    msg = f"unsupported inventory balance dialect: {dialect_name}"
+    raise RuntimeError(msg)
 
 
 async def _physical_on_hand(
@@ -191,7 +224,7 @@ async def reserved_totals_by_product(
         .where(
             MarketplaceUnloadReservation.tenant_id == tenant_id,
             MarketplaceUnloadReservation.product_id.in_(product_ids),
-            MarketplaceUnloadRequest.status.in_(MP_UNLOAD_RESERVE_STATUSES),
+            MarketplaceUnloadRequest.status.in_(RESERVE_STATUSES),
         )
         .group_by(MarketplaceUnloadReservation.product_id)
     )
@@ -516,35 +549,53 @@ async def record_movement_and_adjust_balance(
     )
     session.add(movement)
 
-    stmt = select(InventoryBalance).where(
-        InventoryBalance.tenant_id == tenant_id,
-        InventoryBalance.product_id == product_id,
-        InventoryBalance.storage_location_id == storage_location_id,
-    )
-    res = await session.execute(stmt)
-    bal = res.scalar_one_or_none()
-    if bal is None:
-        if quantity_delta < 0:
-            msg = "insufficient stock"
-            raise ValueError(msg)
-        bal = InventoryBalance(
-            tenant_id=tenant_id,
-            product_id=product_id,
-            storage_location_id=storage_location_id,
-            quantity=0,
-            quantity_unpacked=0,
-            quantity_packed=0,
+    if quantity_delta >= 0:
+        bind = session.get_bind()
+        await session.execute(
+            _build_positive_balance_upsert(
+                dialect_name=bind.dialect.name,
+                tenant_id=tenant_id,
+                product_id=product_id,
+                storage_location_id=storage_location_id,
+                quantity_delta=quantity_delta,
+            )
         )
-        session.add(bal)
-    if quantity_delta > 0:
-        bal.quantity_unpacked = int(bal.quantity_unpacked) + quantity_delta
-        _sync_balance_quantity(bal)
+        return
+
+    quantity_to_deduct = -quantity_delta
+    unpacked = InventoryBalance.quantity_unpacked
+    packed = InventoryBalance.quantity_packed
+    preferred = unpacked if deduct_prefer == "unpacked" else packed
+    deducted_from_preferred = case(
+        (preferred >= quantity_to_deduct, quantity_to_deduct),
+        else_=preferred,
+    )
+    if deduct_prefer == "unpacked":
+        next_unpacked = unpacked - deducted_from_preferred
+        next_packed = packed - (quantity_to_deduct - deducted_from_preferred)
     else:
-        _deduct_from_buckets(bal, -quantity_delta, prefer=deduct_prefer)
-    if bal.quantity < 0:
+        next_packed = packed - deducted_from_preferred
+        next_unpacked = unpacked - (quantity_to_deduct - deducted_from_preferred)
+    updated_balance_id = await session.scalar(
+        update(InventoryBalance)
+        .where(
+            InventoryBalance.tenant_id == tenant_id,
+            InventoryBalance.product_id == product_id,
+            InventoryBalance.storage_location_id == storage_location_id,
+            unpacked + packed >= quantity_to_deduct,
+        )
+        .values(
+            quantity_unpacked=next_unpacked,
+            quantity_packed=next_packed,
+            quantity=unpacked + packed - quantity_to_deduct,
+            updated_at=datetime.now(UTC),
+        )
+        .returning(InventoryBalance.id)
+        .execution_options(synchronize_session=False)
+    )
+    if updated_balance_id is None:
         msg = "insufficient stock"
         raise ValueError(msg)
-    bal.updated_at = datetime.now(UTC)
 
 
 async def apply_packaging_convert(
@@ -567,19 +618,28 @@ async def apply_packaging_convert(
     if prod is None or prod.tenant_id != tenant_id:
         msg = "product not found"
         raise ValueError(msg)
-    stmt = select(InventoryBalance).where(
-        InventoryBalance.tenant_id == tenant_id,
-        InventoryBalance.product_id == product_id,
-        InventoryBalance.storage_location_id == storage_location_id,
+    unpacked = InventoryBalance.quantity_unpacked
+    packed = InventoryBalance.quantity_packed
+    updated_balance_id = await session.scalar(
+        update(InventoryBalance)
+        .where(
+            InventoryBalance.tenant_id == tenant_id,
+            InventoryBalance.product_id == product_id,
+            InventoryBalance.storage_location_id == storage_location_id,
+            unpacked >= quantity,
+        )
+        .values(
+            quantity_unpacked=unpacked - quantity,
+            quantity_packed=packed + quantity,
+            quantity=unpacked + packed,
+            updated_at=datetime.now(UTC),
+        )
+        .returning(InventoryBalance.id)
+        .execution_options(synchronize_session=False)
     )
-    bal = (await session.execute(stmt)).scalar_one_or_none()
-    if bal is None or int(bal.quantity_unpacked) < quantity:
+    if updated_balance_id is None:
         msg = "insufficient_unpacked"
         raise ValueError(msg)
-    bal.quantity_unpacked = int(bal.quantity_unpacked) - quantity
-    bal.quantity_packed = int(bal.quantity_packed) + quantity
-    _sync_balance_quantity(bal)
-    bal.updated_at = datetime.now(UTC)
 
 
 async def apply_inbound_receive(

@@ -14,7 +14,10 @@ os.environ.setdefault(
 )
 _TEST_DB_PATH = Path(__file__).resolve().parent / "wms_pytest.sqlite"
 _TEST_DATA_DIR = Path(__file__).resolve().parent / "wms_pytest_data"
-os.environ["DATABASE_URL"] = f"sqlite+aiosqlite:///{_TEST_DB_PATH}"
+os.environ["DATABASE_URL"] = os.environ.get(
+    "WMS_TEST_DATABASE_URL",
+    f"sqlite+aiosqlite:///{_TEST_DB_PATH}",
+)
 os.environ["WMS_DATA_DIR"] = str(_TEST_DATA_DIR)
 
 from app.db.session import SessionLocal, engine, get_db

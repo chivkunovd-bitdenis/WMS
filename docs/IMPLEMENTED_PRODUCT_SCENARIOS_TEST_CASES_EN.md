@@ -164,6 +164,22 @@ This document expands **[IMPLEMENTED_PRODUCT_SCENARIOS_EN.md](./IMPLEMENTED_PROD
 - **Steps:** open product listing as seller.
 - **Expected:** only products **owned by / scoped to** that seller (or per “unscoped product rules in UI”); no other tenant seller’s catalog.
 
+### TC-NEW-PRODUCT-TZ-01 Import declared quantities from FF product TZ Excel
+
+- **Actor:** fulfillment admin.
+- **Given:** a seller and exactly one FF warehouse; an `.xlsx` TZ workbook whose first structurally matching sheet contains optional **«Кол/во, заявленное клиентом»** values.
+- **When:** admin selects the seller, uploads the file, reviews the preview, and applies it.
+- **Then:** preview shows declared quantity per row and the declared total; existing seller products are updated without duplication, new products are created, and positive quantities appear in the warehouse sorting zone through stock movements.
+- **Negative / restrictions:** blank or zero quantity is allowed; negative, fractional, boolean, or text quantity is a row error. If errors are not explicitly ignored, no products, movements, or balances from the file are applied. A positive total with zero or multiple FF warehouses is rejected clearly and atomically.
+
+### TC-NEW-PRODUCT-TZ-02 Reapplying the same TZ file does not duplicate stock
+
+- **Actor:** fulfillment admin.
+- **Given:** the same uploaded bytes have already been successfully applied for the same tenant, seller, warehouse scope, and import type.
+- **When:** admin applies that identical file again.
+- **Then:** UI reports that the file was already applied; added quantity and movement count are zero; product and stock totals stay unchanged.
+- **Negative / restrictions:** the duplicate guard is tenant/seller/warehouse scoped; a file applied in one scope must not expose or suppress another tenant’s data.
+
 ---
 
 ## S06 — Inbound intake (receiving)
@@ -546,6 +562,22 @@ Distinct from **operational outbound** (S08) and **seller supply/inbound** (S06)
 - **When:** opens **Create shipment to MP** / existing MP unload row.
 - **Then:** table shows SKU, name, **available** FC stock, qty input; actions **Save**, **Plan**, **Unplan** only — **no** box list, barcode scan, **Start picking**, **Shipped** (`ff-mp-*` assembly controls absent).
 - **Negative:** seller cannot confirm or ship from this screen.
+
+### TC-NEW-MP-AVAIL-01 Seller MP picker includes sorting-only stock
+
+- **Actor:** fulfillment seller.
+- **Given:** the seller owns a product whose only stock is in the selected FF warehouse sorting zone; some quantity may be reserved by operational outbound or other active MP unloads.
+- **When:** seller creates or opens an MP unload and opens **Add products**.
+- **Then:** the product is visible with availability equal to storage plus sorting minus outbound reserves minus other MP reserves; seller can add no more than that amount.
+- **Negative / restrictions:** products of another seller or tenant are never returned; the ordinary inventory summary availability remains storage-only and is not redefined by this picker rule.
+
+### TC-NEW-MP-AVAIL-02 FF MP picker includes sorting-only stock
+
+- **Actor:** fulfillment admin.
+- **Given:** an MP unload for a selected seller and warehouse; the seller product has stock only in sorting.
+- **When:** admin opens the unload and opens **Add products**.
+- **Then:** the product is visible with the same MP availability formula as backend line validation; the current request’s own reserve is excluded when editing that request.
+- **Negative / restrictions:** seller and tenant scope are mandatory; internal outbound behavior and the global inventory summary formula do not change.
 
 ### TC-NEW-MP-06 Plan reserves stock and lists as scheduled
 

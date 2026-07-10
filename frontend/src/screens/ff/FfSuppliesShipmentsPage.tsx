@@ -57,6 +57,7 @@ import {
   type PackagingSheetItem,
 } from '../../utils/printShipmentPackagingSheet'
 import { resolveProductPrimaryBarcode } from '../../types/wbProductCatalog'
+import { createLatestRequestSequence } from '../../utils/latestRequestSequence'
 
 export type FfMarketplaceUnloadSummary = {
   id: string
@@ -304,6 +305,7 @@ export function FfSuppliesShipmentsPage({
   const [boxAddSuccessMsg, setBoxAddSuccessMsg] = useState<string | null>(null)
   const [boxImportOpen, setBoxImportOpen] = useState(false)
   const mpTabInitForRef = useRef<string | null>(null)
+  const docDetailRequests = useRef(createLatestRequestSequence())
 
   const authHeaders = useMemo(
     () => (token ? { Authorization: `Bearer ${token}` } : null),
@@ -343,6 +345,7 @@ export function FfSuppliesShipmentsPage({
   }, [token, authHeaders])
 
   const loadDocDetail = useCallback(async () => {
+    const docDetailRequestId = docDetailRequests.current.next()
     if (!token || !authHeaders || !docModal || !docModalId) {
       setUnloadDetail(null)
       setDivergeDetail(null)
@@ -356,9 +359,15 @@ export function FfSuppliesShipmentsPage({
         const res = await fetch(apiUrl(`/operations/marketplace-unload-requests/${docModalId}`), {
           headers: authHeaders,
         })
+        if (!docDetailRequests.current.isLatest(docDetailRequestId)) {
+          return
+        }
         if (!res.ok) {
-          setModalError(await readApiErrorMessage(res))
-          setUnloadDetail(null)
+          const message = await readApiErrorMessage(res)
+          if (docDetailRequests.current.isLatest(docDetailRequestId)) {
+            setModalError(message)
+            setUnloadDetail(null)
+          }
           return
         }
         const j = (await res.json()) as {
@@ -415,6 +424,9 @@ export function FfSuppliesShipmentsPage({
             is_complete: boolean
           } | null
         }
+        if (!docDetailRequests.current.isLatest(docDetailRequestId)) {
+          return
+        }
         setUnloadDetail({
           id: j.id,
           document_number: j.document_number ?? null,
@@ -469,10 +481,16 @@ export function FfSuppliesShipmentsPage({
         if (j.seller_id) {
           stockParams.set('seller_id', j.seller_id)
         }
+        stockParams.set('exclude_request_id', j.id)
         const stockRes = await fetch(
-          apiUrl(`/operations/inventory-balances/summary?${stockParams.toString()}`),
+          apiUrl(
+            `/operations/marketplace-unload-requests/available-products?${stockParams.toString()}`,
+          ),
           { headers: authHeaders },
         )
+        if (!docDetailRequests.current.isLatest(docDetailRequestId)) {
+          return
+        }
         if (stockRes.ok) {
           const stockRows = (await stockRes.json()) as {
             product_id: string
@@ -480,6 +498,9 @@ export function FfSuppliesShipmentsPage({
             product_name: string
             available: number
           }[]
+          if (!docDetailRequests.current.isLatest(docDetailRequestId)) {
+            return
+          }
           setWarehouseAvailableProductPicklist(
             stockRows
               .filter((row) => row.available > 0)
@@ -499,9 +520,15 @@ export function FfSuppliesShipmentsPage({
         const res = await fetch(apiUrl(`/operations/discrepancy-acts/${docModalId}`), {
           headers: authHeaders,
         })
+        if (!docDetailRequests.current.isLatest(docDetailRequestId)) {
+          return
+        }
         if (!res.ok) {
-          setModalError(await readApiErrorMessage(res))
-          setDivergeDetail(null)
+          const message = await readApiErrorMessage(res)
+          if (docDetailRequests.current.isLatest(docDetailRequestId)) {
+            setModalError(message)
+            setDivergeDetail(null)
+          }
           return
         }
         const j = (await res.json()) as {
@@ -516,6 +543,9 @@ export function FfSuppliesShipmentsPage({
             quantity: number
             inbound_intake_line_id?: string | null
           }[]
+        }
+        if (!docDetailRequests.current.isLatest(docDetailRequestId)) {
+          return
         }
         setDivergeDetail({
           id: j.id,
@@ -533,11 +563,15 @@ export function FfSuppliesShipmentsPage({
         setUnloadDetail(null)
       }
     } catch (e) {
-      setModalError(e instanceof Error ? e.message : 'Не удалось загрузить документ.')
-      setUnloadDetail(null)
-      setDivergeDetail(null)
+      if (docDetailRequests.current.isLatest(docDetailRequestId)) {
+        setModalError(e instanceof Error ? e.message : 'Не удалось загрузить документ.')
+        setUnloadDetail(null)
+        setDivergeDetail(null)
+      }
     } finally {
-      setModalBusy(false)
+      if (docDetailRequests.current.isLatest(docDetailRequestId)) {
+        setModalBusy(false)
+      }
     }
   }, [token, authHeaders, docModal, docModalId])
 
@@ -615,6 +649,7 @@ export function FfSuppliesShipmentsPage({
   }, [token, authHeaders, docModal, divergeDetail?.inbound_intake_request_id])
 
   const closeDocModal = () => {
+    docDetailRequests.current.invalidate()
     setDocModal(null)
     setDocModalId(null)
     setUnloadDetail(null)

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import uuid
+from dataclasses import dataclass
 from datetime import date
 from typing import TYPE_CHECKING
 
@@ -9,6 +10,7 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
+from app.models.inventory_balance import InventoryBalance
 from app.models.inventory_reservation import InventoryReservation
 from app.models.marketplace_unload import (
     MarketplaceUnloadBox,
@@ -30,30 +32,59 @@ from app.services.document_number_service import (
     assign_display_number_if_missing,
     assign_document_number_if_missing,
 )
+from app.services.marketplace_unload_status import (
+    CANCELLABLE_STATUSES as CANCELLABLE_STATUSES,
+)
+from app.services.marketplace_unload_status import (
+    EXECUTION_STATUSES as EXECUTION_STATUSES,
+)
+from app.services.marketplace_unload_status import (
+    FF_LINE_EDITABLE_STATUSES as FF_LINE_EDITABLE_STATUSES,
+)
+from app.services.marketplace_unload_status import (
+    PACKAGING_SYNC_STATUSES as PACKAGING_SYNC_STATUSES,
+)
+from app.services.marketplace_unload_status import (
+    RESERVE_STATUSES as RESERVE_STATUSES,
+)
+from app.services.marketplace_unload_status import (
+    SELLER_EDITABLE_STATUSES as SELLER_EDITABLE_STATUSES,
+)
+from app.services.marketplace_unload_status import (
+    STATUS_CANCELLED as STATUS_CANCELLED,
+)
+from app.services.marketplace_unload_status import (
+    STATUS_COLLECTING as STATUS_COLLECTING,
+)
+from app.services.marketplace_unload_status import (
+    STATUS_CONFIRMED as STATUS_CONFIRMED,
+)
+from app.services.marketplace_unload_status import (
+    STATUS_DRAFT as STATUS_DRAFT,
+)
+from app.services.marketplace_unload_status import (
+    STATUS_SHIPPED as STATUS_SHIPPED,
+)
+from app.services.marketplace_unload_status import (
+    STATUS_SUBMITTED as STATUS_SUBMITTED,
+)
 from app.services.wb_mp_warehouse_service import get_cached_mp_warehouse
 
 if TYPE_CHECKING:
     from app.services.marketplace_unload_box_service import BoxScanResult
 
-STATUS_DRAFT = "draft"
-STATUS_SUBMITTED = "submitted"
-STATUS_CONFIRMED = "confirmed"
-STATUS_COLLECTING = "collecting"
-STATUS_SHIPPED = "shipped"
-STATUS_CANCELLED = "cancelled"
-
-EXECUTION_STATUSES = (STATUS_CONFIRMED, STATUS_COLLECTING)
-PACKAGING_SYNC_STATUSES = EXECUTION_STATUSES
-RESERVE_STATUSES = (STATUS_SUBMITTED, STATUS_CONFIRMED, STATUS_COLLECTING)
-CANCELLABLE_STATUSES = (STATUS_SUBMITTED, STATUS_CONFIRMED, STATUS_COLLECTING)
-SELLER_EDITABLE_STATUSES = (STATUS_DRAFT,)
-FF_LINE_EDITABLE_STATUSES = (STATUS_DRAFT, STATUS_CONFIRMED)
-
-
 class MarketplaceUnloadError(Exception):
     def __init__(self, code: str) -> None:
         self.code = code
         super().__init__(code)
+
+
+@dataclass(frozen=True)
+class MarketplaceUnloadAvailableProduct:
+    product_id: uuid.UUID
+    sku_code: str
+    product_name: str
+    available: int
 
 
 def assert_request_visible(
@@ -255,16 +286,68 @@ async def list_requests(
     return list(res.scalars().unique().all())
 
 
-async def _mp_reserved_qty_for_product(
+async def _outbound_reserved_by_product(
     session: AsyncSession,
     tenant_id: uuid.UUID,
     warehouse_id: uuid.UUID,
-    product_id: uuid.UUID,
+    product_ids: list[uuid.UUID],
+) -> dict[uuid.UUID, int]:
+    if not product_ids:
+        return {}
+    stmt = (
+        select(
+            InventoryReservation.product_id,
+            func.coalesce(func.sum(InventoryReservation.quantity), 0),
+        )
+        .join(
+            OutboundShipmentLine,
+            OutboundShipmentLine.id == InventoryReservation.outbound_shipment_line_id,
+        )
+        .join(
+            OutboundShipmentRequest,
+            OutboundShipmentRequest.id == OutboundShipmentLine.request_id,
+        )
+        .outerjoin(
+            StorageLocation,
+            StorageLocation.id == InventoryReservation.storage_location_id,
+        )
+        .where(
+            InventoryReservation.tenant_id == tenant_id,
+            InventoryReservation.product_id.in_(product_ids),
+            OutboundShipmentRequest.status.in_(inventory_service.OUTBOUND_RESERVE_STATUSES),
+            or_(
+                and_(
+                    InventoryReservation.storage_location_id.isnot(None),
+                    StorageLocation.tenant_id == tenant_id,
+                    StorageLocation.warehouse_id == warehouse_id,
+                ),
+                and_(
+                    InventoryReservation.storage_location_id.is_(None),
+                    InventoryReservation.warehouse_id == warehouse_id,
+                ),
+            ),
+        )
+        .group_by(InventoryReservation.product_id)
+    )
+    result = await session.execute(stmt)
+    return {product_id: int(quantity or 0) for product_id, quantity in result.all()}
+
+
+async def _mp_reserved_by_product(
+    session: AsyncSession,
+    tenant_id: uuid.UUID,
+    warehouse_id: uuid.UUID,
+    product_ids: list[uuid.UUID],
     *,
     exclude_request_id: uuid.UUID | None = None,
-) -> int:
+) -> dict[uuid.UUID, int]:
+    if not product_ids:
+        return {}
     stmt = (
-        select(func.coalesce(func.sum(MarketplaceUnloadReservation.quantity), 0))
+        select(
+            MarketplaceUnloadReservation.product_id,
+            func.coalesce(func.sum(MarketplaceUnloadReservation.quantity), 0),
+        )
         .join(
             MarketplaceUnloadLine,
             MarketplaceUnloadLine.id
@@ -277,13 +360,33 @@ async def _mp_reserved_qty_for_product(
         .where(
             MarketplaceUnloadReservation.tenant_id == tenant_id,
             MarketplaceUnloadReservation.warehouse_id == warehouse_id,
-            MarketplaceUnloadReservation.product_id == product_id,
+            MarketplaceUnloadReservation.product_id.in_(product_ids),
             MarketplaceUnloadRequest.status.in_(RESERVE_STATUSES),
         )
+        .group_by(MarketplaceUnloadReservation.product_id)
     )
     if exclude_request_id is not None:
         stmt = stmt.where(MarketplaceUnloadRequest.id != exclude_request_id)
-    return int(await session.scalar(stmt) or 0)
+    result = await session.execute(stmt)
+    return {product_id: int(quantity or 0) for product_id, quantity in result.all()}
+
+
+async def _mp_reserved_qty_for_product(
+    session: AsyncSession,
+    tenant_id: uuid.UUID,
+    warehouse_id: uuid.UUID,
+    product_id: uuid.UUID,
+    *,
+    exclude_request_id: uuid.UUID | None = None,
+) -> int:
+    reserved = await _mp_reserved_by_product(
+        session,
+        tenant_id,
+        warehouse_id,
+        [product_id],
+        exclude_request_id=exclude_request_id,
+    )
+    return int(reserved.get(product_id, 0))
 
 
 async def _available_product_qty_in_warehouse(
@@ -300,38 +403,11 @@ async def _available_product_qty_in_warehouse(
     sorting_on_hand = await inventory_service.sorting_on_hand_in_warehouse(
         session, tenant_id, warehouse_id, product_id
     )
-    reserved_outbound_stmt = (
-        select(func.coalesce(func.sum(InventoryReservation.quantity), 0))
-        .join(
-            OutboundShipmentLine,
-            OutboundShipmentLine.id == InventoryReservation.outbound_shipment_line_id,
+    reserved_outbound = (
+        await _outbound_reserved_by_product(
+            session, tenant_id, warehouse_id, [product_id]
         )
-        .join(
-            OutboundShipmentRequest,
-            OutboundShipmentRequest.id == OutboundShipmentLine.request_id,
-        )
-        .outerjoin(
-            StorageLocation,
-            StorageLocation.id == InventoryReservation.storage_location_id,
-        )
-        .where(
-            InventoryReservation.tenant_id == tenant_id,
-            InventoryReservation.product_id == product_id,
-            OutboundShipmentRequest.status.in_(("draft", "submitted")),
-            or_(
-                and_(
-                    InventoryReservation.storage_location_id.isnot(None),
-                    StorageLocation.tenant_id == tenant_id,
-                    StorageLocation.warehouse_id == warehouse_id,
-                ),
-                and_(
-                    InventoryReservation.storage_location_id.is_(None),
-                    InventoryReservation.warehouse_id == warehouse_id,
-                ),
-            ),
-        )
-    )
-    reserved_outbound = int(await session.scalar(reserved_outbound_stmt) or 0)
+    ).get(product_id, 0)
     reserved_mp = await _mp_reserved_qty_for_product(
         session,
         tenant_id,
@@ -340,6 +416,77 @@ async def _available_product_qty_in_warehouse(
         exclude_request_id=exclude_request_id,
     )
     return on_hand + sorting_on_hand - reserved_outbound - reserved_mp
+
+
+async def list_available_products(
+    session: AsyncSession,
+    tenant_id: uuid.UUID,
+    *,
+    warehouse_id: uuid.UUID,
+    seller_id: uuid.UUID,
+    exclude_request_id: uuid.UUID | None = None,
+) -> list[MarketplaceUnloadAvailableProduct]:
+    """Readonly MP availability: storage + sorting - outbound - other MP reserves."""
+    warehouse = await get_warehouse(session, tenant_id, warehouse_id)
+    if warehouse is None:
+        raise MarketplaceUnloadError("warehouse_not_found")
+    seller = await session.get(Seller, seller_id)
+    if seller is None or seller.tenant_id != tenant_id:
+        raise MarketplaceUnloadError("seller_not_found")
+    if exclude_request_id is not None:
+        request = await get_request(session, tenant_id, exclude_request_id)
+        if (
+            request is None
+            or request.warehouse_id != warehouse_id
+            or request.seller_id != seller_id
+        ):
+            raise MarketplaceUnloadError("not_found")
+
+    stock_stmt = (
+        select(
+            Product.id,
+            Product.sku_code,
+            Product.name,
+            func.coalesce(func.sum(InventoryBalance.quantity), 0),
+        )
+        .join(InventoryBalance, InventoryBalance.product_id == Product.id)
+        .join(StorageLocation, StorageLocation.id == InventoryBalance.storage_location_id)
+        .where(
+            Product.tenant_id == tenant_id,
+            Product.seller_id == seller_id,
+            InventoryBalance.tenant_id == tenant_id,
+            StorageLocation.tenant_id == tenant_id,
+            StorageLocation.warehouse_id == warehouse_id,
+        )
+        .group_by(Product.id, Product.sku_code, Product.name)
+        .order_by(Product.sku_code)
+    )
+    stock_rows = (await session.execute(stock_stmt)).all()
+    product_ids = [product_id for product_id, *_ in stock_rows]
+    outbound_reserved = await _outbound_reserved_by_product(
+        session, tenant_id, warehouse_id, product_ids
+    )
+    mp_reserved = await _mp_reserved_by_product(
+        session,
+        tenant_id,
+        warehouse_id,
+        product_ids,
+        exclude_request_id=exclude_request_id,
+    )
+    return [
+        MarketplaceUnloadAvailableProduct(
+            product_id=product_id,
+            sku_code=sku_code,
+            product_name=product_name,
+            available=max(
+                0,
+                quantity_total
+                - outbound_reserved.get(product_id, 0)
+                - mp_reserved.get(product_id, 0),
+            ),
+        )
+        for product_id, sku_code, product_name, quantity_total in stock_rows
+    ]
 
 
 async def _release_reservations(session: AsyncSession, request_id: uuid.UUID) -> None:

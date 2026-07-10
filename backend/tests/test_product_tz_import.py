@@ -72,17 +72,50 @@ def test_parse_product_tz_xlsx_expands_merged_tz_and_vendor() -> None:
     assert rows[0]["size"] == "46"
 
 
-def test_parse_product_tz_xlsx_missing_sheet() -> None:
+def test_parse_product_tz_xlsx_sheet_name_is_irrelevant() -> None:
+    """Sheet name must not matter — only the column structure does."""
+    content = _tz_xlsx_bytes(
+        rows=[["ART-any", None, 46, None, "2031111111199", None]],
+        sheet_name="Лист1",
+        merge_tz=None,
+        merge_vendor=None,
+        tz_text="",
+    )
+    sheet, rows = parse_product_tz_xlsx(content, filename="tz.xlsx")
+    assert sheet == "Лист1"
+    assert len(rows) == 1
+    assert rows[0]["vendor_article"] == "ART-any"
+
+
+def test_parse_product_tz_xlsx_picks_matching_sheet_among_others() -> None:
+    """Workbook has an unrelated sheet plus the real template — the real one wins."""
+    wb = Workbook()
+    ws1 = wb.active
+    assert ws1 is not None
+    ws1.title = "Инструкция"
+    ws1.append(["Не колонки шаблона", "Просто текст"])
+    ws2 = wb.create_sheet("Данные")
+    ws2.append(["Артикул продавца", "Фото", "Размер", "Штрихкод", "Информация для этикетки", "ТЗ"])
+    ws2.append(["ART-x", None, 46, "2031111111188", None, None])
+    buf = io.BytesIO()
+    wb.save(buf)
+    sheet, rows = parse_product_tz_xlsx(buf.getvalue(), filename="x.xlsx")
+    assert sheet == "Данные"
+    assert len(rows) == 1
+    assert rows[0]["barcode"] == "2031111111188"
+
+
+def test_parse_product_tz_xlsx_missing_column_in_every_sheet() -> None:
     wb = Workbook()
     ws = wb.active
     assert ws is not None
-    ws.title = "Другой лист"
-    ws.append(["Артикул продавца", "Штрихкод"])
+    ws.title = "Любой лист"
+    ws.append(["Что-то другое", "Ещё что-то"])
     buf = io.BytesIO()
     wb.save(buf)
     with pytest.raises(ProductTzImportError) as exc:
         parse_product_tz_xlsx(buf.getvalue(), filename="x.xlsx")
-    assert exc.value.code == "missing_sheet"
+    assert exc.value.code == "missing_column"
 
 
 @pytest.mark.asyncio

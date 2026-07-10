@@ -36,6 +36,7 @@ from app.models.outbound_shipment import OutboundShipmentLine, OutboundShipmentR
 from app.models.packaging_task import PackagingTask, PackagingTaskLine
 from app.models.print_template import PrintTemplate
 from app.models.product import Product
+from app.models.product_tz_import import ProductTzImport
 from app.models.seller import Seller
 from app.models.seller_marking_credentials import SellerMarkingCredentials
 from app.models.seller_shop_delegation import SellerShopDelegation
@@ -85,6 +86,7 @@ __all__ = [
     "PackagingTaskLine",
     "PrintTemplate",
     "Product",
+    "ProductTzImport",
     "Seller",
     "SellerMarkingCredentials",
     "SellerShopDelegation",

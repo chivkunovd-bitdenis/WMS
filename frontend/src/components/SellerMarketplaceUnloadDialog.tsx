@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import {
   Alert,
   Button,
@@ -29,6 +29,7 @@ import {
 } from './SellerWbProductPickerDialog'
 import { WmsDateField } from './WmsDateField'
 import { readApiErrorMessage } from '../utils/readApiErrorMessage'
+import { createLatestRequestSequence } from '../utils/latestRequestSequence'
 
 type StockRow = {
   product_id: string
@@ -97,6 +98,10 @@ export function SellerMarketplaceUnloadDialog({
   const [pickerOpen, setPickerOpen] = useState(false)
   const [wbWarehouses, setWbWarehouses] = useState<WbWarehouse[]>([])
   const [plannedDate, setPlannedDate] = useState<string | null>(null)
+  const detailRequests = useRef(createLatestRequestSequence())
+  const stockRequests = useRef(createLatestRequestSequence())
+  const activeRequestId = useRef<string | null>(null)
+  activeRequestId.current = open ? requestId : null
 
   const isDraft = detail?.status === 'draft'
   const isSubmitted = detail?.status === 'submitted'
@@ -126,6 +131,13 @@ export function SellerMarketplaceUnloadDialog({
   )
 
   const loadDetail = useCallback(async () => {
+    if (activeRequestId.current !== requestId) {
+      return
+    }
+    const detailRequestId = detailRequests.current.next()
+    const isCurrentDetail = () =>
+      detailRequests.current.isLatest(detailRequestId) &&
+      activeRequestId.current === requestId
     if (!token || !requestId) {
       setDetail(null)
       return
@@ -136,43 +148,73 @@ export function SellerMarketplaceUnloadDialog({
       const res = await fetch(apiUrl(`/operations/marketplace-unload-requests/${requestId}`), {
         headers: authHeaders(token),
       })
+      if (!isCurrentDetail()) {
+        return
+      }
       if (!res.ok) {
-        setModalError(await readApiErrorMessage(res))
-        setDetail(null)
+        const message = await readApiErrorMessage(res)
+        if (isCurrentDetail()) {
+          setModalError(message)
+          setDetail(null)
+        }
         return
       }
       const j = (await res.json()) as UnloadDetail
+      if (!isCurrentDetail()) {
+        return
+      }
       setDetail(j)
       setPlannedDate(j.planned_shipment_date ?? null)
     } catch (e) {
-      setModalError(e instanceof Error ? e.message : 'Не удалось загрузить заявку.')
+      if (isCurrentDetail()) {
+        setModalError(e instanceof Error ? e.message : 'Не удалось загрузить заявку.')
+      }
     } finally {
-      setModalBusy(false)
+      if (isCurrentDetail()) {
+        setModalBusy(false)
+      }
     }
   }, [authHeaders, requestId, token])
 
   const loadStock = useCallback(async () => {
+    if (activeRequestId.current !== requestId) {
+      return
+    }
+    const stockRequestId = stockRequests.current.next()
+    const isCurrentStock = () =>
+      stockRequests.current.isLatest(stockRequestId) &&
+      activeRequestId.current === requestId
     if (!token || !warehouseId) {
       setStockRows([])
       return
     }
     try {
+      const params = new URLSearchParams({ warehouse_id: warehouseId })
+      if (requestId) {
+        params.set('exclude_request_id', requestId)
+      }
       const res = await fetch(
-        apiUrl(
-          `/operations/inventory-balances/summary?warehouse_id=${encodeURIComponent(warehouseId)}`,
-        ),
+        apiUrl(`/operations/marketplace-unload-requests/available-products?${params.toString()}`),
         { headers: authHeaders(token) },
       )
+      if (!isCurrentStock()) {
+        return
+      }
       if (!res.ok) {
         setStockRows([])
         return
       }
       const rows = (await res.json()) as StockRow[]
+      if (!isCurrentStock()) {
+        return
+      }
       setStockRows(rows)
     } catch {
-      setStockRows([])
+      if (isCurrentStock()) {
+        setStockRows([])
+      }
     }
-  }, [authHeaders, token, warehouseId])
+  }, [authHeaders, requestId, token, warehouseId])
 
   const loadWbWarehouses = useCallback(async () => {
     if (!token) {
@@ -196,6 +238,8 @@ export function SellerMarketplaceUnloadDialog({
 
   useEffect(() => {
     if (!open) {
+      detailRequests.current.invalidate()
+      stockRequests.current.invalidate()
       return
     }
     void loadDetail()

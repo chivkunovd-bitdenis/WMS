@@ -40,6 +40,7 @@ import {
 } from '../../types/wbProductCatalog'
 import { FfManualProductCreateDialog } from '../ff/FfManualProductCreateDialog'
 import { FfProductTzImportDialog } from '../ff/FfProductTzImportDialog'
+import { FfSellerCreateDialog } from '../ff/FfSellerCreateDialog'
 
 type SellerRow = { id: string; name: string }
 
@@ -81,6 +82,7 @@ type Props = {
   token: string
   authHeaders: (t: string) => Record<string, string>
   sellers: SellerRow[]
+  onSellersChanged?: () => void | Promise<void>
 }
 
 type SortKey = 'name' | 'quantity'
@@ -107,7 +109,7 @@ function rowMatchesSearch(
   )
 }
 
-export function FfProductsCatalogScreen({ token, authHeaders, sellers }: Props) {
+export function FfProductsCatalogScreen({ token, authHeaders, sellers, onSellersChanged }: Props) {
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [selectedSellerId, setSelectedSellerId] = useState<string>('__all__')
@@ -122,6 +124,7 @@ export function FfProductsCatalogScreen({ token, authHeaders, sellers }: Props) 
   const [editBusy, setEditBusy] = useState(false)
   const [createOpen, setCreateOpen] = useState(false)
   const [importOpen, setImportOpen] = useState(false)
+  const [sellerCreateOpen, setSellerCreateOpen] = useState(false)
   const [importNotice, setImportNotice] = useState<string | null>(null)
 
   const load = useCallback(async () => {
@@ -279,6 +282,13 @@ export function FfProductsCatalogScreen({ token, authHeaders, sellers }: Props) 
             spacing={1}
             sx={{ justifyContent: 'flex-end' }}
           >
+            <Button
+              variant="outlined"
+              onClick={() => setSellerCreateOpen(true)}
+              data-testid="ff-products-create-seller"
+            >
+              Создать селлера
+            </Button>
             <Button
               variant="outlined"
               onClick={() => setImportOpen(true)}
@@ -496,6 +506,17 @@ export function FfProductsCatalogScreen({ token, authHeaders, sellers }: Props) 
         onApplied={async (message) => {
           setImportNotice(message)
           await load()
+        }}
+      />
+      <FfSellerCreateDialog
+        open={sellerCreateOpen}
+        token={token}
+        authHeaders={authHeaders}
+        onClose={() => setSellerCreateOpen(false)}
+        onCreated={async (created) => {
+          await onSellersChanged?.()
+          setSelectedSellerId(created.id)
+          setImportNotice(`Селлер «${created.name}» создан и доступен для создания товаров.`)
         }}
       />
 
