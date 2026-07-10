@@ -326,6 +326,107 @@ async def test_pdf_import_stores_artifact_when_page_has_product_text_plus_one_ci
     assert len(artifact.content) > 100
 
 
+def _build_two_line_ai_wrapped_label_pdf(gtin14: str, serial: str) -> bytes:
+    """Real seller label shape: '(01) <gtin>' and '(21) <serial>' printed on
+    two separate lines (label too narrow for the full code on one line),
+    surrounded by unrelated product-description text — see the
+    Chin-56005_*.pdf example from the bugreport."""
+    doc = fitz.open()
+    page = doc.new_page(width=164, height=234)
+    page.insert_text((12, 18), "Наименование товара: Женская", fontsize=7)
+    page.insert_text((12, 30), "куртка / Women's jacket.", fontsize=7)
+    page.insert_text((12, 42), "Торговая марка: FADIN", fontsize=7)
+    page.insert_text((12, 54), "Размер: 46 Цвет: бежевый", fontsize=7)
+    page.insert_text((12, 90), f"(01) {gtin14}", fontsize=6)
+    page.insert_text((12, 102), f"(21) {serial}", fontsize=6)
+    page.insert_text((12, 120), "Состав: внешний слой 100% полиэстер,", fontsize=7)
+    page.insert_text((12, 132), "наполнитель 100% био-пух", fontsize=7)
+    pdf_bytes = bytes(doc.tobytes())
+    doc.close()
+    return pdf_bytes
+
+
+@pytest.mark.asyncio
+async def test_pdf_import_parses_cis_wrapped_in_parens_across_two_lines(
+    async_client: AsyncClient,
+) -> None:
+    """Bugfix regression: seller PDFs that print '(01) <gtin>' and
+    '(21) <serial>' on two separate, parenthesized lines used to yield
+    'чз не найдены' (no valid codes found) because the parser only accepted
+    a bare, single-line 'AI01<gtin>AI21<serial>' shape."""
+    h = await _register_admin(async_client)
+    seller = await async_client.post(
+        "/sellers",
+        headers=h,
+        json={"name": "PDF Wrapped Seller", "email": f"s-{uuid.uuid4().hex[:8]}@example.com"},
+    )
+    assert seller.status_code == 201
+    seller_id = seller.json()["id"]
+
+    sku = f"SKU-PDF-WRAP-{uuid.uuid4().hex[:6]}"
+    pr = await async_client.post(
+        "/products",
+        headers=h,
+        json={
+            "name": "PDF wrapped-cis product",
+            "sku_code": sku,
+            "length_mm": 10,
+            "width_mm": 10,
+            "height_mm": 10,
+            "seller_id": seller_id,
+        },
+    )
+    assert pr.status_code == 200
+    product_id = pr.json()["id"]
+
+    gtin14 = "04630321688296"
+    serial = "5E'qvbnH(hTbG"
+    pdf_bytes = _build_two_line_ai_wrapped_label_pdf(gtin14, serial)
+
+    filename = "Chin-56005_beige_46_TGHU6649210_1pcs.pdf"
+    preview = await async_client.post(
+        "/operations/marking-codes/import/preview",
+        headers=h,
+        data={"seller_id": seller_id},
+        files=[("files", (filename, pdf_bytes, "application/pdf"))],
+    )
+    assert preview.status_code == 200, preview.text
+    preview_body = preview.json()
+    assert preview_body["total_codes"] == 1
+    assert preview_body["invalid_count"] == 0
+    assert preview_body["groups"][0]["gtin"] == gtin14
+
+    imp = await async_client.post(
+        "/operations/marking-codes/import",
+        headers=h,
+        data={
+            "seller_id": seller_id,
+            "pools_json": json.dumps(
+                [{"title": "Wrapped pool", "product_ids": [product_id]}],
+            ),
+        },
+        files=[("files", (filename, pdf_bytes, "application/pdf"))],
+    )
+    assert imp.status_code == 200, imp.text
+    assert imp.json()["accepted_count"] == 1
+
+    codes = await async_client.get(
+        f"/operations/marking-codes/products/{product_id}/codes",
+        headers=h,
+    )
+    assert codes.status_code == 200
+    row = codes.json()[0]
+    assert row["cis_code"].endswith(serial)
+    assert row["has_label_artifact"] is True
+
+    artifact = await async_client.get(
+        f"/operations/marking-codes/codes/{row['id']}/label-artifact?format=png",
+        headers=h,
+    )
+    assert artifact.status_code == 200
+    assert len(artifact.content) > 100
+
+
 @pytest.mark.asyncio
 async def test_pdf_import_does_not_reuse_multi_label_page_as_artifact(
     async_client: AsyncClient,
