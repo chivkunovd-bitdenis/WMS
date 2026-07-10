@@ -65,7 +65,7 @@ describe('printProductThermalLabel', () => {
   it('58×40 baseline matches historical barcode box', () => {
     const css = buildProductLabelContentCss(resolveLabelSize('58x40'))
     expect(css).toContain('width: 52mm')
-    expect(css).toContain('max-height: 14mm')
+    expect(css).toContain('max-height: 12mm')
   })
 
   it('text stack uses non-shrinking lines and clips overflow from bottom', () => {
@@ -116,37 +116,53 @@ describe('printProductThermalLabel', () => {
     expect(nameLine!.text.length).toBeLessThan(longName.length)
   })
 
-  it('58×40 trims bottom lines when content does not fit', () => {
+  it('58×40 compact labels keep all body lines (overflow clips, footer always prints)', () => {
     const size = resolveLabelSize('58x40')
     const trimmed = trimProductLabelTextLinesFromBottom(
       buildProductLabelTextLines(FULL_WB_LABEL, undefined, size),
       size,
     )
-    const kinds = trimmed.map((line) => line.kind)
-    expect(kinds).toContain('seller')
-    expect(kinds).toContain('name')
-    expect(kinds).toContain('article')
-    expect(kinds).not.toContain('footer')
+    expect(trimmed.some((line) => line.text.startsWith('Состав:'))).toBe(true)
   })
 
-  it('58×40 keeps color and brand for ИП Горячкина, drops size and footer', () => {
+  it('58×40 always prints footer outside body; keeps color, brand for ИП Горячкина', () => {
     const size = resolveLabelSize('58x40')
     const html = buildProductLabelSectionHtml(SUNGLASSES_LABEL, 'data:image/png;base64,xx', undefined, size)
     expect(html).toContain('ИП Горячкина Т И')
     expect(html).toContain('class="seller"')
     expect(html).toContain('Цвет:')
     expect(html).toContain('Бренд: Alte Vette')
-    expect(html).not.toContain('Размер:')
-    expect(html).not.toContain('class="footer"')
+    expect(html).toContain('class="footer"')
+    expect(html).toContain('Пожалуйста оставьте отзыв')
+    expect(html).toMatch(/<\/div>\s*<p class="footer">/)
     expect(html).not.toContain('-webkit-line-clamp')
   })
 
-  it('70×120 keeps footer when there is enough height', () => {
+  it('58×40 Gerus-style label keeps size, color, composition and footer', () => {
+    const gerus: ProductThermalLabelData = {
+      product_name: 'Костюм летний льняной с брюками алладинами тренд 2026 S',
+      sku_code: 'KA2K',
+      wb_vendor_code: 'KA2K',
+      wb_size: 'S',
+      wb_color: 'коричневый',
+      wb_brand: null,
+      wb_composition: 'Лён - 55%, Вискоза - 45%',
+      seller_name: 'ИП Герус Д.В.',
+      barcode: '2052124100089',
+    }
+    const html = buildProductLabelSectionHtml(gerus, 'data:image/png;base64,xx', undefined, resolveLabelSize('58x40'))
+    expect(html).toContain('Размер: S')
+    expect(html).toContain('Цвет: коричневый')
+    expect(html).toContain('Состав:')
+    expect(html).toContain('class="footer"')
+  })
+
+  it('70×120 keeps composition when there is enough height', () => {
     const size = resolveLabelSize('70x120')
     const trimmed = trimProductLabelTextLinesFromBottom(
       buildProductLabelTextLines(FULL_WB_LABEL, undefined, size),
       size,
     )
-    expect(trimmed.some((line) => line.kind === 'footer')).toBe(true)
+    expect(trimmed.some((line) => line.text.startsWith('Состав:'))).toBe(true)
   })
 })

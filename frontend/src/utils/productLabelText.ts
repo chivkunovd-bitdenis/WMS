@@ -30,6 +30,15 @@ export function resolveProductLabelArticle(meta: {
   return meta.sku_code.trim()
 }
 
+/** Truncate long WB color for narrow thermal label (ellipsis in CSS is not enough for trim budget). */
+export function truncateProductLabelColor(text: string, maxLen = 32): string {
+  const trimmed = text.trim().replace(/\s+/g, ' ')
+  if (trimmed.length <= maxLen) {
+    return trimmed
+  }
+  return `${trimmed.slice(0, Math.max(1, maxLen - 1))}…`
+}
+
 /** Truncate long WB composition for narrow ШК column / thermal label. */
 export function truncateProductLabelComposition(text: string, maxLen = 48): string {
   const trimmed = text.trim().replace(/\s+/g, ' ')
@@ -58,19 +67,18 @@ export function productBarcodeColumnSubLines(meta: {
 
 /** Which optional WB fields to show on thermal label / print preview. */
 export type ProductLabelPrintOptions = {
-  /** @deprecated Размер на термоэтикетке ШК больше не печатаем — место под цвет/бренд. */
   includeSize?: boolean
   includeComposition: boolean
 }
 
 export const DEFAULT_PRODUCT_LABEL_PRINT_OPTIONS: ProductLabelPrintOptions = {
-  includeSize: false,
+  includeSize: true,
   includeComposition: true,
 }
 
 /**
  * WB marketplace label lines below article.
- * Порядок: цвет → бренд → состав. Размер на этикетку не выводим (мешает цвету/бренду на 58×40).
+ * Порядок как на эталонных этикетках: размер → цвет → бренд → состав.
  */
 export function productLabelDetailLines(
   meta: {
@@ -81,15 +89,19 @@ export function productLabelDetailLines(
   },
   options: Partial<ProductLabelPrintOptions> = {},
 ): string[] {
+  const includeSize = options.includeSize ?? DEFAULT_PRODUCT_LABEL_PRINT_OPTIONS.includeSize
   const includeComposition =
     options.includeComposition ?? DEFAULT_PRODUCT_LABEL_PRINT_OPTIONS.includeComposition
   const lines: string[] = []
+  const size = meta.wb_size?.trim()
   const color = meta.wb_color?.trim()
   const brand = meta.wb_brand?.trim()
   const composition = meta.wb_composition?.trim()
-  // Размер намеренно не печатаем на ШК ВБ — на узкой этикетке важнее цвет и бренд.
+  if (includeSize && size && size !== '0') {
+    lines.push(`Размер: ${size}`)
+  }
   if (color) {
-    lines.push(`Цвет: ${color}`)
+    lines.push(`Цвет: ${truncateProductLabelColor(color)}`)
   }
   if (brand) {
     lines.push(`Бренд: ${brand}`)

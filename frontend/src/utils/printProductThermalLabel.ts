@@ -64,8 +64,25 @@ const FOOTER_LINE_HEIGHT = 1.2
  * Масштабируем по шрифту (не только uniform): на 60×80/70×120 шрифт рос быстрее зазора.
  */
 const TEXT_LINE_GAP_MM = 0.85
+/** На 58×40 исторически был плотный интервал (~0.15mm), иначе 8 строк не влезают. */
+const TEXT_LINE_GAP_COMPACT_MM = 0.18
 /** Отступ текстового блока от цифр ШК (мм при fontScale=1). */
 const BODY_TOP_GAP_MM = 0.55
+const BODY_TOP_GAP_COMPACT_MM = 0.35
+
+function isCompactLabel(size: LabelSize): boolean {
+  return labelScale(size).h <= 1.01
+}
+
+function textLineGapMm(size: LabelSize): number {
+  const font = labelTextFontScale(size)
+  return (isCompactLabel(size) ? TEXT_LINE_GAP_COMPACT_MM : TEXT_LINE_GAP_MM) * font
+}
+
+function bodyTopGapMm(size: LabelSize): number {
+  const font = labelTextFontScale(size)
+  return (isCompactLabel(size) ? BODY_TOP_GAP_COMPACT_MM : BODY_TOP_GAP_MM) * font
+}
 
 const PT_TO_MM = 25.4 / 72
 
@@ -89,24 +106,25 @@ export type ProductLabelTextLine = {
   htmlClass: string
   text: string
   title?: string
+  /** Исходный текст без HTML-экранирования (для повторной обрезки в trim). */
+  plainText?: string
   /** Сколько визуальных строк занимает блок (название — до 2–3). */
   visualLines: number
   fontPt: number
   lineHeight: number
 }
 
-/** Высота области под текст после штрихкода (мм), по расчёту вёрстки. */
+/** Высота области под текст внутри .body (мм), без футера «оставьте отзыв». */
 export function estimateLabelTextAreaMm(size: LabelSize): number {
   const k = labelScale(size)
-  const textFont = labelTextFontScale(size)
   const padding = (1.4 + 1) * k.uniform
   const barcodeBlock =
     0.8 * k.uniform +
     14 * k.uniform +
     0.3 * k.uniform +
     ptToMm(size, 8) * 1.2 +
-    BODY_TOP_GAP_MM * textFont
-  return size.heightMm - padding - barcodeBlock
+    bodyTopGapMm(size)
+  return size.heightMm - padding - barcodeBlock - footerReservedHeightMm(size)
 }
 
 function productLabelTextLineHeightMm(line: ProductLabelTextLine, size: LabelSize): number {
@@ -114,8 +132,7 @@ function productLabelTextLineHeightMm(line: ProductLabelTextLine, size: LabelSiz
 }
 
 function productLabelTextStackHeightMm(lines: ProductLabelTextLine[], size: LabelSize): number {
-  const font = labelTextFontScale(size)
-  const gap = TEXT_LINE_GAP_MM * font
+  const gap = textLineGapMm(size)
   return lines.reduce(
     (sum, line, index) => sum + (index > 0 ? gap : 0) + productLabelTextLineHeightMm(line, size),
     0,
@@ -136,20 +153,58 @@ const NAME_CHAR_WIDTH_RATIO = 0.55
  * а не через CSS max-height + overflow: на термопринтере обрезка «протекала»
  * и вторая строка названия печаталась поверх «Артикула».
  */
-export function maxProductNameChars(size: LabelSize): number {
+export function maxProductNameChars(size: LabelSize, targetLines?: number): number {
   const k = labelScale(size)
   const usableWidthMm = size.widthMm - 2 * 1.8 * k.uniform
   const charWidthMm = NAME_FONT_PT * labelTextFontScale(size) * NAME_CHAR_WIDTH_RATIO * PT_TO_MM
   const perLine = Math.max(1, Math.floor(usableWidthMm / charWidthMm))
-  return perLine * maxProductNameVisualLines(size)
+  const lines = targetLines ?? maxProductNameVisualLines(size)
+  return perLine * lines
 }
 
-function truncateNameToLines(name: string, size: LabelSize): string {
-  const max = maxProductNameChars(size)
+function truncateNameToLines(name: string, size: LabelSize, targetLines?: number): string {
+  const max = maxProductNameChars(size, targetLines)
   if (name.length <= max) {
     return name
   }
   return `${name.slice(0, Math.max(1, max - 1)).trimEnd()}…`
+}
+
+/** Сколько строк название реально займёт после переноса (для бюджета высоты). */
+export function actualNameVisualLines(name: string, size: LabelSize): number {
+  const k = labelScale(size)
+  const usableWidthMm = size.widthMm - 2 * 1.8 * k.uniform
+  const charWidthMm = NAME_FONT_PT * labelTextFontScale(size) * NAME_CHAR_WIDTH_RATIO * PT_TO_MM
+  const perLine = Math.max(1, Math.floor(usableWidthMm / charWidthMm))
+  const lines = Math.max(1, Math.ceil(name.length / perLine))
+  return Math.min(maxProductNameVisualLines(size), lines)
+}
+
+const FOOTER_FONT_PT = 6.4
+
+function footerReservedHeightMm(size: LabelSize): number {
+  const k = labelScale(size)
+  return (
+    ptToMm(size, FOOTER_FONT_PT) * FOOTER_LINE_HEIGHT +
+    0.35 * k.uniform +
+    textLineGapMm(size)
+  )
+}
+
+function resolveNameLineBudget(
+  data: ProductThermalLabelData,
+  size: LabelSize,
+  printOptions?: ProductLabelPrintOptions,
+): number {
+  const maxLines = maxProductNameVisualLines(size)
+  if (!isCompactLabel(size)) {
+    return maxLines
+  }
+  const detailLines = productLabelDetailLines(data, printOptions).length
+  if (detailLines >= 2 && data.wb_brand?.trim()) {
+    return 1
+  }
+  return maxLines
 }
 
 /** Строки этикетки сверху вниз: ИП → название → артикул → детали → отзыв. */
@@ -172,13 +227,16 @@ export function buildProductLabelTextLines(
     })
   }
   const rawName = normalizeProductLabelName(data.product_name)
-  const name = escapeLabelHtml(truncateNameToLines(rawName, labelSize))
+  const nameLineBudget = resolveNameLineBudget(data, labelSize, printOptions)
+  const truncatedName = truncateNameToLines(rawName, labelSize, nameLineBudget)
+  const name = escapeLabelHtml(truncatedName)
   lines.push({
     kind: 'name',
     htmlClass: 'name',
     text: name,
     title: escapeLabelHtml(rawName),
-    visualLines: maxProductNameVisualLines(labelSize),
+    plainText: truncatedName,
+    visualLines: actualNameVisualLines(truncatedName, labelSize),
     fontPt: NAME_FONT_PT,
     lineHeight: TEXT_LINE_HEIGHT,
   })
@@ -202,14 +260,6 @@ export function buildProductLabelTextLines(
       lineHeight: TEXT_LINE_HEIGHT,
     })
   }
-  lines.push({
-    kind: 'footer',
-    htmlClass: 'footer',
-    text: escapeLabelHtml(PRODUCT_LABEL_REVIEW_FOOTER),
-    visualLines: 1,
-    fontPt: 6.4,
-    lineHeight: FOOTER_LINE_HEIGHT,
-  })
   return lines
 }
 
@@ -217,15 +267,18 @@ function isProtectedProductLabelLine(line: ProductLabelTextLine): boolean {
   if (line.kind === 'seller' || line.kind === 'name' || line.kind === 'article') {
     return true
   }
-  // Цвет и бренд — то, что должно остаться на этикетке; режем футер/состав раньше.
+  // Цвет и бренд — приоритет на этикетке; состав режем раньше.
   return line.text.startsWith('Цвет:') || line.text.startsWith('Бренд:')
 }
 
-/** Убирает нижние необязательные строки; цвет/бренд сохраняем, пока возможно. */
+/** На 58×40 не выкидываем строки из HTML — как раньше: тело с overflow:hidden, футер снаружи. */
 export function trimProductLabelTextLinesFromBottom(
   lines: ProductLabelTextLine[],
   size: LabelSize,
 ): ProductLabelTextLine[] {
+  if (isCompactLabel(size)) {
+    return lines.map((line) => ({ ...line }))
+  }
   if (lines.length === 0) {
     return lines
   }
@@ -248,8 +301,11 @@ export function trimProductLabelTextLinesFromBottom(
       continue
     }
     const nameLine = result.find((line) => line.kind === 'name')
-    if (nameLine && nameLine.visualLines > 1) {
+    if (nameLine && nameLine.visualLines > 1 && nameLine.plainText) {
       nameLine.visualLines -= 1
+      const shorter = truncateNameToLines(nameLine.plainText, size, nameLine.visualLines)
+      nameLine.plainText = shorter
+      nameLine.text = escapeLabelHtml(shorter)
       continue
     }
     break
@@ -275,9 +331,10 @@ export function buildProductLabelContentCss(size: LabelSize = DEFAULT_LABEL_SIZE
   // На вытянутых этикетках нельзя масштабировать ШК по k.h (120/40=3): получалось
   // height≈42mm + текст > 120mm листа → принтер разъезжал на 2 наклейки.
   // Равномерный uniform + contain: ШК чуть крупнее 58×40, остальное — текст внизу.
+  const compact = isCompactLabel(size)
   const barcodeWidthMm = 52 * k.uniform
-  const barcodeMaxHeightMm = 14 * k.uniform
-  const sellerMinHeightMm = 6.8 * textFont * PT_TO_MM * TEXT_LINE_HEIGHT
+  const barcodeMaxHeightMm = (compact ? 12 : 14) * k.uniform
+  const sellerMinHeightMm = compact ? 0 : 6.8 * textFont * PT_TO_MM * TEXT_LINE_HEIGHT
   return `
   .barcode-wrap {
     flex: 0 0 auto;
@@ -285,7 +342,7 @@ export function buildProductLabelContentCss(size: LabelSize = DEFAULT_LABEL_SIZE
     flex-direction: column;
     align-items: center;
     justify-content: flex-start;
-    margin-bottom: ${labelMm(0.8 * k.uniform)};
+    margin-bottom: ${labelMm((compact ? 0.45 : 0.8) * k.uniform)};
   }
   .barcode-wrap img {
     width: ${labelMm(barcodeWidthMm)};
@@ -307,7 +364,7 @@ export function buildProductLabelContentCss(size: LabelSize = DEFAULT_LABEL_SIZE
     flex: 1 1 auto;
     min-height: 0;
     overflow: hidden;
-    margin-top: ${labelMm(BODY_TOP_GAP_MM * textFont)};
+    margin-top: ${labelMm(bodyTopGapMm(size))};
     line-height: ${TEXT_LINE_HEIGHT};
     font-size: ${labelPt(6.8 * textFont)};
     display: flex;
@@ -320,7 +377,7 @@ export function buildProductLabelContentCss(size: LabelSize = DEFAULT_LABEL_SIZE
    * название наезжает на «Артикул» (как на фото ИП Горячкина). margin работает везде.
    */
   .body > p {
-    margin: 0 0 ${labelMm(TEXT_LINE_GAP_MM * textFont)};
+    margin: 0 0 ${labelMm(textLineGapMm(size))};
     flex: 0 0 auto;
     flex-shrink: 0;
   }
@@ -330,7 +387,7 @@ export function buildProductLabelContentCss(size: LabelSize = DEFAULT_LABEL_SIZE
   .seller {
     font-size: ${labelPt(6.8 * textFont)};
     line-height: ${TEXT_LINE_HEIGHT};
-    min-height: ${labelMm(sellerMinHeightMm)};
+    ${compact ? '' : `min-height: ${labelMm(sellerMinHeightMm)};`}
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
@@ -356,7 +413,9 @@ export function buildProductLabelContentCss(size: LabelSize = DEFAULT_LABEL_SIZE
     white-space: nowrap;
   }
   .footer {
-    font-size: ${labelPt(6.4 * textFont)};
+    flex: 0 0 auto;
+    margin: ${labelMm(0.35 * k.uniform)} 0 0;
+    font-size: ${labelPt(FOOTER_FONT_PT * textFont)};
     text-align: left;
     line-height: ${FOOTER_LINE_HEIGHT};
   }
@@ -370,6 +429,9 @@ export function buildProductLabelContentCss(size: LabelSize = DEFAULT_LABEL_SIZE
  */
 export function buildProductThermalLabelCss(size: LabelSize = DEFAULT_LABEL_SIZE): string {
   const k = labelScale(size)
+  const compact = isCompactLabel(size)
+  const labelPaddingTop = compact ? 1.2 * k.uniform : 1.4 * k.uniform
+  const labelPaddingBottom = compact ? 0.8 * k.uniform : 1 * k.uniform
   return `
   @page { size: ${size.widthMm}mm ${size.heightMm}mm; margin: 0; }
   * { box-sizing: border-box; }
@@ -378,7 +440,7 @@ export function buildProductThermalLabelCss(size: LabelSize = DEFAULT_LABEL_SIZE
   .label {
     width: ${size.widthMm}mm;
     height: ${size.heightMm}mm;
-    padding: ${labelMm(1.4 * k.uniform)} ${labelMm(1.8 * k.uniform)} ${labelMm(1 * k.uniform)};
+    padding: ${labelMm(labelPaddingTop)} ${labelMm(1.8 * k.uniform)} ${labelMm(labelPaddingBottom)};
     display: flex;
     flex-direction: column;
     overflow: hidden;
@@ -405,6 +467,7 @@ export function buildProductLabelSectionHtml(
     labelSize,
   )
   const bodyHtml = textLines.map(renderProductLabelTextLine).join('')
+  const footerHtml = `<p class="footer">${escapeLabelHtml(PRODUCT_LABEL_REVIEW_FOOTER)}</p>`
   return `<section class="label" data-testid="product-thermal-label">
   <div class="barcode-wrap">
     <img id="barcode" src="${barcodeDataUrl}" alt="barcode" />
@@ -413,6 +476,7 @@ export function buildProductLabelSectionHtml(
   <div class="body">
     ${bodyHtml}
   </div>
+  ${footerHtml}
 </section>`
 }
 
