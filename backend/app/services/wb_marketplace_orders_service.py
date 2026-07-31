@@ -7,7 +7,7 @@ from datetime import UTC, datetime, timedelta
 from typing import Any
 
 import httpx
-from sqlalchemy import func, select
+from sqlalchemy import and_, func, or_, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -62,6 +62,13 @@ NO_RESERVE_WB_STATUSES = CANCEL_LIKE_WB_STATUSES | {DEFECT_WB_STATUS}
 TERMINAL_FBS_STATUSES = frozenset(
     {FBS_ORDER_STATUS_CANCELLED, FBS_ORDER_STATUS_DONE, FBS_ORDER_STATUS_DEFECT}
 )
+
+STATUSES_EXCLUDED_FROM_WB_SYNC = TERMINAL_FBS_STATUSES | frozenset(
+    {FBS_ORDER_STATUS_SORTED}
+)
+
+SYNC_STATUS_BATCH_SIZE = 500
+MAX_SYNC_STATUS_BATCHES = 20
 
 
 class WbMarketplaceOrdersError(Exception):
@@ -284,6 +291,37 @@ async def _order_has_reservation(
     return res.scalar_one_or_none() is not None
 
 
+async def _lock_product_for_fbs_reserve(
+    session: AsyncSession,
+    tenant_id: uuid.UUID,
+    product_id: uuid.UUID,
+) -> None:
+    stmt = (
+        select(Product.id)
+        .where(Product.id == product_id, Product.tenant_id == tenant_id)
+        .with_for_update()
+    )
+    await session.execute(stmt)
+
+
+async def _lock_fbs_reservations_for_product(
+    session: AsyncSession,
+    tenant_id: uuid.UUID,
+    warehouse_id: uuid.UUID,
+    product_id: uuid.UUID,
+) -> None:
+    stmt = (
+        select(FbsOrderReservation.id)
+        .where(
+            FbsOrderReservation.tenant_id == tenant_id,
+            FbsOrderReservation.warehouse_id == warehouse_id,
+            FbsOrderReservation.product_id == product_id,
+        )
+        .with_for_update()
+    )
+    await session.execute(stmt)
+
+
 async def _try_reserve_order(
     session: AsyncSession,
     order: FbsOrder,
@@ -297,6 +335,10 @@ async def _try_reserve_order(
         return
     if await _order_has_reservation(session, order.id):
         return
+    await _lock_product_for_fbs_reserve(session, order.tenant_id, order.product_id)
+    await _lock_fbs_reservations_for_product(
+        session, order.tenant_id, order.warehouse_id, order.product_id
+    )
     available = await available_qty_for_fbs_reserve(
         session,
         order.tenant_id,
@@ -307,16 +349,21 @@ async def _try_reserve_order(
     if available < 1:
         order.reserve_status = RESERVE_STATUS_NO_STOCK
         return
-    session.add(
-        FbsOrderReservation(
-            tenant_id=order.tenant_id,
-            fbs_order_id=order.id,
-            product_id=order.product_id,
-            warehouse_id=order.warehouse_id,
-            quantity=1,
-        )
-    )
-    order.reserve_status = RESERVE_STATUS_RESERVED
+    try:
+        async with session.begin_nested():
+            session.add(
+                FbsOrderReservation(
+                    tenant_id=order.tenant_id,
+                    fbs_order_id=order.id,
+                    product_id=order.product_id,
+                    warehouse_id=order.warehouse_id,
+                    quantity=1,
+                )
+            )
+            order.reserve_status = RESERVE_STATUS_RESERVED
+            await session.flush()
+    except IntegrityError:
+        order.reserve_status = RESERVE_STATUS_NO_STOCK
 
 
 async def _release_reservation(session: AsyncSession, order: FbsOrder) -> None:
@@ -367,7 +414,11 @@ async def _apply_wb_row_to_existing(
         if product is not None:
             existing.product_id = product.id
             existing.mapping_status = MAPPING_STATUS_MAPPED
-    await _try_reserve_order(session, existing)
+    try:
+        async with session.begin_nested():
+            await _try_reserve_order(session, existing)
+    except IntegrityError:
+        pass
 
 
 async def upsert_order_from_wb_row(
@@ -452,7 +503,12 @@ async def _apply_wb_status_to_order(
     normalized = wb_status.strip().lower()
     order.wb_status = normalized
     if _is_cancel_like_wb_status(normalized):
+        from app.services.fbs_packaging_integration_service import (
+            detach_cancelled_order_from_supply,
+        )
+
         order.status = FBS_ORDER_STATUS_CANCELLED
+        await detach_cancelled_order_from_supply(session, order.tenant_id, order)
         await _release_reservation(session, order)
         return
     if normalized == "sold":
@@ -479,45 +535,66 @@ async def sync_order_statuses(
     http_client: httpx.AsyncClient,
     api_token: str,
 ) -> int:
-    stmt = (
-        select(FbsOrder)
-        .where(
+    updated = 0
+    last_created_at: datetime | None = None
+    last_id: uuid.UUID | None = None
+    for _batch in range(MAX_SYNC_STATUS_BATCHES):
+        filters = [
             FbsOrder.tenant_id == tenant_id,
             FbsOrder.seller_id == seller_id,
-            FbsOrder.status.not_in(tuple(TERMINAL_FBS_STATUSES)),
+            FbsOrder.status.not_in(tuple(STATUSES_EXCLUDED_FROM_WB_SYNC)),
+        ]
+        if last_created_at is not None and last_id is not None:
+            filters.append(
+                or_(
+                    FbsOrder.created_at_wb > last_created_at,
+                    and_(
+                        FbsOrder.created_at_wb == last_created_at,
+                        FbsOrder.id > last_id,
+                    ),
+                )
+            )
+        stmt = (
+            select(FbsOrder)
+            .where(*filters)
+            .order_by(FbsOrder.created_at_wb.asc(), FbsOrder.id.asc())
+            .limit(SYNC_STATUS_BATCH_SIZE)
         )
-        .order_by(FbsOrder.created_at_wb.desc())
-        .limit(500)
-    )
-    res = await session.execute(stmt)
-    orders = list(res.scalars().all())
-    if not orders:
-        return 0
-    wb_ids = [o.wb_order_id for o in orders]
-    try:
-        status_rows = await fetch_marketplace_orders_status(
-            http_client, api_token=api_token, order_ids=wb_ids
-        )
-    except WildberriesClientError as exc:
-        suffix = f"_{exc.status_code}" if exc.status_code else ""
-        raise WbMarketplaceOrdersError(f"wb_{exc.code}{suffix}") from exc
+        res = await session.execute(stmt)
+        orders = list(res.scalars().all())
+        if not orders:
+            break
 
-    by_id: dict[int, dict[str, Any]] = {}
-    for row in status_rows:
-        oid = row.get("id")
-        if oid is not None:
-            by_id[int(oid)] = row
+        wb_ids = [o.wb_order_id for o in orders]
+        try:
+            status_rows = await fetch_marketplace_orders_status(
+                http_client, api_token=api_token, order_ids=wb_ids
+            )
+        except WildberriesClientError as exc:
+            suffix = f"_{exc.status_code}" if exc.status_code else ""
+            raise WbMarketplaceOrdersError(f"wb_{exc.code}{suffix}") from exc
 
-    updated = 0
-    for order in orders:
-        status_row = by_id.get(order.wb_order_id)
-        if status_row is None:
-            continue
-        wb_status = _wb_status_from_row(status_row)
-        if wb_status is None:
-            continue
-        await _apply_wb_status_to_order(session, order, wb_status)
-        updated += 1
+        by_id: dict[int, dict[str, Any]] = {}
+        for row in status_rows:
+            oid = row.get("id")
+            if oid is not None:
+                by_id[int(oid)] = row
+
+        for order in orders:
+            status_row = by_id.get(order.wb_order_id)
+            if status_row is None:
+                continue
+            wb_status = _wb_status_from_row(status_row)
+            if wb_status is None:
+                continue
+            await _apply_wb_status_to_order(session, order, wb_status)
+            updated += 1
+
+        last_row = orders[-1]
+        last_created_at = last_row.created_at_wb
+        last_id = last_row.id
+        if len(orders) < SYNC_STATUS_BATCH_SIZE:
+            break
     return updated
 
 

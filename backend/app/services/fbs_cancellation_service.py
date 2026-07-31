@@ -114,6 +114,11 @@ async def cancel_order(
 
     order.status = FBS_ORDER_STATUS_CANCELLED
     order.wb_status = "cancelled"
+    from app.services.fbs_packaging_integration_service import (
+        detach_cancelled_order_from_supply,
+    )
+
+    await detach_cancelled_order_from_supply(session, tenant_id, order)
     await _release_reservation(session, order)
     await session.flush()
     return order

@@ -11,7 +11,10 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from app.models.fbs_order import (
+    CHECK_STATUS_NO_CHECK,
+    CHECK_STATUS_OK,
     FBS_ORDER_STATUS_ASSEMBLING,
+    FBS_ORDER_STATUS_CANCELLED,
     FBS_ORDER_STATUS_IN_SUPPLY,
     FBS_ORDER_STATUS_PACKED,
     MARKING_KIND_SGTIN,
@@ -31,7 +34,7 @@ from app.services.document_number_service import (
     assign_display_number_if_missing,
     assign_document_number_if_missing,
 )
-from app.services.packaging_task_service import get_task, is_task_complete
+from app.services.packaging_task_service import get_task, is_task_complete, qty_done
 
 logger = logging.getLogger(__name__)
 
@@ -74,16 +77,100 @@ async def _load_supply(
     return result.scalar_one_or_none()
 
 
+def _order_marking_blocks_promotion(order: FbsOrder) -> bool:
+    if order.status == FBS_ORDER_STATUS_CANCELLED:
+        return False
+    product = order.product
+    if product is None or not product.requires_honest_sign:
+        return False
+    sgtin_markings = [m for m in order.markings if m.kind == MARKING_KIND_SGTIN]
+    if not sgtin_markings:
+        return True
+    return not any(
+        m.check_status in (CHECK_STATUS_OK, CHECK_STATUS_NO_CHECK) for m in sgtin_markings
+    )
+
+
 def _supply_requires_marking(supply: FbsSupply) -> bool:
-    for order in supply.orders:
-        product = order.product
-        if (
-            product is not None
-            and product.requires_honest_sign
-            and not any(marking.kind == MARKING_KIND_SGTIN for marking in order.markings)
-        ):
-            return True
-    return False
+    return any(_order_marking_blocks_promotion(order) for order in supply.orders)
+
+
+async def _decrement_packaging_line_for_product(
+    session: AsyncSession,
+    tenant_id: uuid.UUID,
+    supply: FbsSupply,
+    product_id: uuid.UUID,
+) -> None:
+    if supply.packaging_task_id is None:
+        return
+    task = await get_task(session, tenant_id, supply.packaging_task_id)
+    if task is None:
+        return
+    for line in list(task.lines):
+        if line.product_id != product_id:
+            continue
+        new_total = int(line.qty_total) - 1
+        if new_total <= 0:
+            if qty_done(line) <= 0:
+                await session.delete(line)
+            else:
+                line.qty_total = qty_done(line)
+        else:
+            line.qty_total = new_total
+        break
+
+
+async def detach_cancelled_order_from_supply(
+    session: AsyncSession,
+    tenant_id: uuid.UUID,
+    order: FbsOrder,
+) -> FbsSupply | None:
+    """Remove cancelled order from FBS supply and fix packaging task totals."""
+    if order.supply_id is None:
+        return None
+
+    supply = await _load_supply(
+        session,
+        tenant_id,
+        order.supply_id,
+        with_orders=True,
+        for_update=True,
+    )
+    if supply is None:
+        order.supply_id = None
+        order.trbx_id = None
+        return None
+
+    if order.product_id is not None:
+        await _decrement_packaging_line_for_product(
+            session, tenant_id, supply, order.product_id
+        )
+
+    order.supply_id = None
+    order.trbx_id = None
+    await session.flush()
+
+    active_orders = sum(
+        1
+        for row in supply.orders
+        if row.id != order.id and row.status != FBS_ORDER_STATUS_CANCELLED
+    )
+    if active_orders == 0:
+        supply.status = FBS_SUPPLY_STATUS_DRAFT
+        await session.flush()
+        return supply
+
+    if supply.status == FBS_SUPPLY_STATUS_PACKED:
+        supply.status = FBS_SUPPLY_STATUS_ASSEMBLING
+        for row in supply.orders:
+            if row.id != order.id and row.status == FBS_ORDER_STATUS_PACKED:
+                row.status = FBS_ORDER_STATUS_ASSEMBLING
+        await session.flush()
+        return supply
+
+    if supply.status == FBS_SUPPLY_STATUS_ASSEMBLING:
+        return await try_promote_fbs_supply_if_ready(session, tenant_id, supply.id)
+    return supply
 
 
 async def create_packaging_task_for_supply(

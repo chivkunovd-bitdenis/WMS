@@ -1,10 +1,18 @@
 # TASKLOG
 
+## TASK-129 — 2026-07-31 — FBS review fixes (PR #103 adversarial findings)
+
+- What changed: **fbs-review-fixes** — `detach_cancelled_order_from_supply` при отмене (ручной/WB sync): снятие с отгрузки, пересчёт `PackagingTaskLine.qty_total`, promote или draft; PACKED ждёт `check_status=ok` для ЧЗ; синк маркировки в status-autopoll + promote после `markings/sync`; резерв с `FOR UPDATE` на product/reservations + `IntegrityError` guard; статус-синк пагинируется (до 20×500) и исключает `sorted` из очереди; тесты TC-NEW-FBS-FIX-001..004.
+- What did NOT change: находка #5 (WB до commit), BackgroundJob history, мёртвый код deliver_supply; commit.
+- Verification: `pytest tests/test_fbs_review_fixes.py … test_fbs_marking.py -q` → **34 passed**; adversarial review APPROVE после keyset pagination.
+
 ## TASK-128 — 2026-07-31 — FBS autopoll + packaging integration
 
 - What changed: **fbs-autopoll** — сервис `fbs_autopoll_service` (опрос всех селлеров с marketplace-токеном через `sync_seller_orders` / `sync_seller_order_statuses`, ошибки одного селлера не прерывают цикл); Celery Beat задачи `wms.fbs_orders_autopoll` и `wms.fbs_order_statuses_autopoll` (интервалы `fbs_poll_interval_sec` / `fbs_statuses_sync_interval_sec`, default 180/600); тесты TC-NEW-FBS-AUTOPOLL-001..005. **fbs-packaging-integration** — `packaging_task_id` на `FbsSupply` + миграция `20260731_0067`; сервис `fbs_packaging_integration_service` (создание PackagingTask при `assembling`, bind-box для ПВЗ, sync supply→`packed` после complete packaging); API `PUT /operations/fbs-supplies/{id}/status`, `POST …/trbx/bind-box`; hook в `packaging_task_service.complete_task`; статус `packed` на отгрузке; тесты TC-NEW-FBS-PACKINT-001..005.
 - What did NOT change: фронт, вебхуки WB, ручная кнопка «Синхронизировать», commit.
 - Verification: `cd backend && ruff check . && pytest tests/test_fbs_autopoll.py tests/test_fbs_packaging_integration.py -q` → 12 passed; full `pytest -q` green.
+- Commit: `fb7a9e1` on `feat/fbs-autopoll-packaging-integration`.
+- Follow-up: adversarial review fixes (supply_not_editable after assembling, packed only via packaging/marking sync, CI ruff RUF036).
 
 ## TASK-127 — 2026-07-31 — FBS cancellations: seller cancel + status sync
 

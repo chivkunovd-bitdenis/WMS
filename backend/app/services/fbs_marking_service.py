@@ -323,4 +323,14 @@ async def sync_order_marking_statuses(
             marking.check_status = wb_status
 
     await session.flush()
+
+    if order.supply_id is not None:
+        from app.services.fbs_packaging_integration_service import (
+            sync_fbs_supply_after_order_marking_update,
+        )
+
+        await sync_fbs_supply_after_order_marking_update(
+            session, tenant_id, order_id
+        )
+
     return markings

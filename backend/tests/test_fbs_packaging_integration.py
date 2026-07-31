@@ -596,6 +596,27 @@ async def test_fbs_supply_promoted_after_marking_when_honest_sign_required(
     )
     assert mark.status_code == 200, mark.text
 
+    async def fake_meta(
+        client: object,
+        *,
+        api_token: str,
+        order_id: int,
+        marketplace_api_base: str | None = None,
+    ) -> dict[str, object]:
+        return {
+            "sgtins": [{"value": "01CIS-PACKINT-TEST", "checkStatus": "ok"}],
+        }
+
+    monkeypatch.setattr(
+        "app.services.fbs_marking_service.fetch_marketplace_order_meta",
+        fake_meta,
+    )
+    sync = await async_client.post(
+        f"/operations/fbs-orders/{order_id}/markings/sync",
+        headers=headers,
+    )
+    assert sync.status_code == 200, sync.text
+
     supply_done = await async_client.get(
         f"/operations/fbs-supplies/{supply_id}",
         headers=headers,

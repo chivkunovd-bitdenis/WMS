@@ -11,6 +11,8 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.db.session import SessionLocal
+from app.models.fbs_order import FbsOrder
+from app.models.fbs_supply import FBS_SUPPLY_STATUS_ASSEMBLING, FbsSupply
 from app.models.seller import Seller
 from app.models.seller_wildberries_credentials import SellerWildberriesCredentials
 from app.services.fbs_cancellation_service import FbsCancellationError, sync_seller_order_statuses
@@ -71,17 +73,60 @@ async def poll_fbs_orders_for_seller(
     }
 
 
+MARKING_SYNC_BATCH_SIZE = 100
+
+
+async def sync_marking_statuses_for_assembling_supplies(
+    session: AsyncSession,
+    target: SellerPollTarget,
+    http_client: httpx.AsyncClient,
+) -> int:
+    from app.services.fbs_marking_service import (
+        FbsMarkingError,
+        sync_order_marking_statuses,
+    )
+
+    stmt = (
+        select(FbsOrder.id)
+        .join(FbsSupply, FbsOrder.supply_id == FbsSupply.id)
+        .where(
+            FbsOrder.tenant_id == target.tenant_id,
+            FbsOrder.seller_id == target.seller_id,
+            FbsSupply.status == FBS_SUPPLY_STATUS_ASSEMBLING,
+        )
+        .order_by(FbsOrder.created_at_wb.asc(), FbsOrder.id.asc())
+        .limit(MARKING_SYNC_BATCH_SIZE)
+    )
+    order_ids = [row[0] for row in (await session.execute(stmt)).all()]
+    synced = 0
+    for order_id in order_ids:
+        try:
+            await sync_order_marking_statuses(
+                session, target.tenant_id, order_id, http_client
+            )
+            synced += 1
+        except FbsMarkingError as exc:
+            logger.warning(
+                "fbs autopoll marking sync skipped order %s: %s",
+                order_id,
+                exc.code,
+            )
+    return synced
+
+
 async def sync_fbs_order_statuses_for_seller(
     session: AsyncSession,
     target: SellerPollTarget,
     http_client: httpx.AsyncClient,
 ) -> int:
-    return await sync_seller_order_statuses(
+    updated = await sync_seller_order_statuses(
         session,
         target.tenant_id,
         target.seller_id,
         http_client,
     )
+    await sync_marking_statuses_for_assembling_supplies(session, target, http_client)
+    return updated
 
 
 async def poll_fbs_orders_all_sellers() -> FbsAutopollCycleResult:
