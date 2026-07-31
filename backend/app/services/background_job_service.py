@@ -25,6 +25,7 @@ JOB_STATUS_FAILED = "failed"
 JOB_TYPE_MOVEMENTS_DIGEST = "movements_digest"
 JOB_TYPE_WILDBERRIES_CARDS_SYNC = "wildberries_cards_sync"
 JOB_TYPE_WILDBERRIES_SUPPLIES_SYNC = "wildberries_supplies_sync"
+JOB_TYPE_WILDBERRIES_MARKETPLACE_ORDERS_SYNC = "wildberries_marketplace_orders_sync"
 
 
 async def create_pending_job(
@@ -188,6 +189,79 @@ async def run_wildberries_supplies_sync_job(job_id: uuid.UUID) -> None:
             job.error_message = exc.code
         except Exception as exc:
             logger.exception("wildberries supplies sync job failed: %s", exc)
+            job.status = JOB_STATUS_FAILED
+            job.result_json = None
+            job.error_message = str(exc)
+        job.finished_at = datetime.now(UTC)
+        await session.commit()
+
+
+async def run_wildberries_marketplace_orders_sync_job(job_id: uuid.UUID) -> None:
+    """WB Marketplace FBS orders sync per seller (supplies token as marketplace token)."""
+    from app.services.wb_marketplace_orders_service import (
+        WbMarketplaceOrdersError,
+        sync_seller_orders,
+    )
+
+    async with SessionLocal() as session:
+        job = await session.get(BackgroundJob, job_id)
+        if job is None:
+            logger.warning("background job missing: %s", job_id)
+            return
+        payload = job.payload_json or {}
+        sid_raw = payload.get("seller_id")
+        if not sid_raw or not isinstance(sid_raw, str):
+            job.status = JOB_STATUS_FAILED
+            job.started_at = datetime.now(UTC)
+            job.finished_at = datetime.now(UTC)
+            job.error_message = "missing_job_seller_id"
+            await session.commit()
+            return
+        try:
+            seller_uuid = uuid.UUID(sid_raw)
+        except ValueError:
+            job.status = JOB_STATUS_FAILED
+            job.started_at = datetime.now(UTC)
+            job.finished_at = datetime.now(UTC)
+            job.error_message = "invalid_job_seller_id"
+            await session.commit()
+            return
+
+        warehouse_uuid: uuid.UUID | None = None
+        wh_raw = payload.get("warehouse_id")
+        if isinstance(wh_raw, str) and wh_raw.strip():
+            try:
+                warehouse_uuid = uuid.UUID(wh_raw)
+            except ValueError:
+                job.status = JOB_STATUS_FAILED
+                job.started_at = datetime.now(UTC)
+                job.finished_at = datetime.now(UTC)
+                job.error_message = "invalid_job_warehouse_id"
+                await session.commit()
+                return
+
+        job.status = JOB_STATUS_RUNNING
+        job.started_at = datetime.now(UTC)
+        await session.commit()
+        try:
+            async with httpx.AsyncClient() as http_client:
+                result = await sync_seller_orders(
+                    session,
+                    job.tenant_id,
+                    seller_uuid,
+                    http_client,
+                    warehouse_id=warehouse_uuid,
+                )
+            job.status = JOB_STATUS_DONE
+            job.result_json = result
+            job.error_message = None
+        except WbMarketplaceOrdersError as exc:
+            logger.warning("wildberries marketplace orders sync failed: %s", exc.code)
+            job.status = JOB_STATUS_FAILED
+            job.result_json = None
+            job.error_message = exc.code
+        except Exception as exc:
+            logger.exception("wildberries marketplace orders sync failed: %s", exc)
             job.status = JOB_STATUS_FAILED
             job.result_json = None
             job.error_message = str(exc)

@@ -9,6 +9,7 @@ from app.celery_app import celery_app
 from app.services.background_job_service import (
     run_movements_digest_job,
     run_wildberries_cards_sync_job,
+    run_wildberries_marketplace_orders_sync_job,
     run_wildberries_supplies_sync_job,
 )
 
@@ -28,6 +29,11 @@ def run_wildberries_supplies_sync_task(job_id: str) -> None:
     asyncio.run(run_wildberries_supplies_sync_job(uuid.UUID(job_id)))
 
 
+@celery_app.task(name="wms.wildberries_marketplace_orders_sync")
+def run_wildberries_marketplace_orders_sync_task(job_id: str) -> None:
+    asyncio.run(run_wildberries_marketplace_orders_sync_job(uuid.UUID(job_id)))
+
+
 @celery_app.task(name="wms.wb_mp_warehouses_daily_sync")
 def run_wb_mp_warehouses_daily_sync_task() -> None:
     from app.services.wb_mp_warehouse_service import run_daily_wb_mp_warehouses_sync_all_tenants
@@ -40,3 +46,17 @@ def run_marking_low_stock_task() -> None:
     from app.services.marking_low_stock_service import run_marking_low_stock_all_tenants
 
     asyncio.run(run_marking_low_stock_all_tenants())
+
+
+@celery_app.task(name="wms.fbs_orders_autopoll")
+def run_fbs_orders_autopoll_task() -> None:
+    from app.services.fbs_autopoll_service import poll_fbs_orders_all_sellers
+
+    asyncio.run(poll_fbs_orders_all_sellers())
+
+
+@celery_app.task(name="wms.fbs_order_statuses_autopoll")
+def run_fbs_order_statuses_autopoll_task() -> None:
+    from app.services.fbs_autopoll_service import sync_fbs_order_statuses_all_sellers
+
+    asyncio.run(sync_fbs_order_statuses_all_sellers())

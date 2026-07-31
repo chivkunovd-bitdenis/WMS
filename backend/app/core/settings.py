@@ -44,6 +44,10 @@ class Settings(BaseSettings):
         default="https://supplies-api.wildberries.ru",
         description="WB Supplies API host (override in tests/mocks).",
     )
+    wildberries_marketplace_api_base: str = Field(
+        default="https://marketplace-api.wildberries.ru",
+        description="WB Marketplace API host (FBS orders; override in tests/mocks).",
+    )
     wms_secrets_fernet_key: str | None = Field(
         default=None,
         description="Optional Fernet key (urlsafe base64) for integration tokens. "
@@ -61,6 +65,32 @@ class Settings(BaseSettings):
         default=False,
         description=(
             "Playwright/e2e: stub WB GET /warehouses JSON without calling the network."
+        ),
+    )
+    e2e_mock_wb_marketplace_orders: bool = Field(
+        default=False,
+        description=(
+            "Playwright/e2e: stub WB Marketplace orders API without calling the network."
+        ),
+    )
+    e2e_mock_wb_marketplace_supplies: bool = Field(
+        default=False,
+        description=(
+            "Playwright/e2e: stub WB Marketplace supplies/stickers API without network."
+        ),
+    )
+    e2e_mock_wb_marketplace_warehouses: bool = Field(
+        default=False,
+        description=(
+            "Playwright/e2e: stub WB Marketplace seller warehouses/offices "
+            "without calling the network."
+        ),
+    )
+    e2e_mock_wb_marketplace_marking: bool = Field(
+        default=False,
+        description=(
+            "Playwright/e2e: stub WB Marketplace order meta (marking) API "
+            "without calling the network."
         ),
     )
     shop_manager_emails: str = Field(
@@ -115,6 +145,26 @@ class Settings(BaseSettings):
     wms_s3_secret_access_key: str | None = Field(
         default=None,
         validation_alias=AliasChoices("WMS_S3_SECRET_ACCESS_KEY", "AWS_SECRET_ACCESS_KEY"),
+    )
+    fbs_poll_interval_sec: int = Field(
+        default=180,
+        ge=60,
+        le=3600,
+        validation_alias=AliasChoices(
+            "CONF_FBS_POLL_INTERVAL_SEC",
+            "FBS_POLL_INTERVAL_SEC",
+        ),
+        description="Celery Beat interval for polling new FBS orders (seconds).",
+    )
+    fbs_statuses_sync_interval_sec: int = Field(
+        default=600,
+        ge=120,
+        le=7200,
+        validation_alias=AliasChoices(
+            "CONF_FBS_STATUSES_SYNC_INTERVAL_SEC",
+            "FBS_STATUSES_SYNC_INTERVAL_SEC",
+        ),
+        description="Celery Beat interval for syncing active FBS order statuses (seconds).",
     )
     @field_validator("database_url", mode="before")
     @classmethod

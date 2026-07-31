@@ -713,6 +713,11 @@ async def complete_task(
     else:
         task.completed_at = datetime.now(UTC)
         task.completed_by_user_id = None
+    from app.services.fbs_packaging_integration_service import (
+        sync_fbs_supply_on_packaging_done,
+    )
+
+    await sync_fbs_supply_on_packaging_done(session, tenant_id, task.id)
     await session.commit()
     loaded = await get_task(session, tenant_id, task_id)
     assert loaded is not None

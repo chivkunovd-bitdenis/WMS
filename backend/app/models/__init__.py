@@ -4,6 +4,9 @@ from app.models.background_job import BackgroundJob
 from app.models.base import Base
 from app.models.discrepancy_act import DiscrepancyAct, DiscrepancyActLine
 from app.models.document_sequence import DocumentDisplaySequence, DocumentSequence
+from app.models.fbs_order import FbsOrder, FbsOrderMarking, FbsOrderReservation
+from app.models.fbs_supply import FbsSupply
+from app.models.fbs_trbx import FbsTrbx
 from app.models.ff_staff_permissions import FfStaffPermissions
 from app.models.inbound_intake import (
     InboundIntakeBox,
@@ -58,6 +61,11 @@ __all__ = [
     "DiscrepancyActLine",
     "DocumentDisplaySequence",
     "DocumentSequence",
+    "FbsOrder",
+    "FbsOrderMarking",
+    "FbsOrderReservation",
+    "FbsSupply",
+    "FbsTrbx",
     "FfStaffPermissions",
     "InboundIntakeBox",
     "InboundIntakeBoxLine",

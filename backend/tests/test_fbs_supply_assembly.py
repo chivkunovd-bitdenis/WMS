@@ -1,0 +1,757 @@
+from __future__ import annotations
+
+import asyncio
+import os
+import time
+import uuid
+from pathlib import Path
+from typing import Any
+
+import pytest
+from httpx import AsyncClient
+from sqlalchemy import func, select
+
+from app.core.settings import settings
+from app.db.session import SessionLocal
+from app.models.fbs_order import FBS_ORDER_STATUS_IN_SUPPLY, FBS_ORDER_STATUS_NEW, FbsOrder
+from app.models.fbs_supply import FBS_SUPPLY_STATUS_DRAFT, FbsSupply
+from app.models.product import Product
+from app.services.wb_marketplace_orders_service import upsert_order_from_wb_row
+from app.services.wildberries_client import WildberriesClientError
+
+
+async def _register_ff_admin(async_client: AsyncClient) -> tuple[dict[str, str], str]:
+    suffix = str(time.time_ns())
+    reg = await async_client.post(
+        "/auth/register",
+        json={
+            "organization_name": f"FBS supply {suffix}",
+            "slug": f"fbs-supply-{suffix}",
+            "admin_email": f"fbs-supply-{suffix}@example.com",
+            "password": "password123",
+        },
+    )
+    assert reg.status_code == 200, reg.text
+    headers = {"Authorization": f"Bearer {reg.json()['access_token']}"}
+    return headers, suffix
+
+
+async def _setup_seller_with_token(
+    async_client: AsyncClient,
+    headers: dict[str, str],
+    suffix: str,
+) -> tuple[str, str]:
+    seller = await async_client.post(
+        "/sellers", headers=headers, json={"name": f"Seller {suffix}"}
+    )
+    assert seller.status_code in (200, 201), seller.text
+    seller_id = seller.json()["id"]
+    tok = await async_client.patch(
+        f"/integrations/wildberries/sellers/{seller_id}/tokens",
+        headers=headers,
+        json={"marketplace_api_token": "wb-marketplace-token"},
+    )
+    assert tok.status_code == 200, tok.text
+    warehouse = await async_client.post(
+        "/warehouses",
+        headers=headers,
+        json={"name": "WH", "code": f"wh-{suffix[-8:]}"},
+    )
+    assert warehouse.status_code in (200, 201), warehouse.text
+    return seller_id, warehouse.json()["id"]
+
+
+def _wb_order_row(
+    *,
+    order_id: int,
+    article: str = "ART-001",
+    barcode: str = "FBS-BARCODE-001",
+) -> dict[str, Any]:
+    return {
+        "id": order_id,
+        "rid": f"rid-{order_id}",
+        "createdAt": "2026-07-01T12:00:00+03:00",
+        "nmId": 900001,
+        "chrtId": 555,
+        "article": article,
+        "skus": [barcode],
+        "price": 199900,
+        "cargoType": 1,
+        "officeId": 42,
+        "isLegal": False,
+    }
+
+
+async def _create_order(
+    tenant_id: uuid.UUID,
+    seller_id: uuid.UUID,
+    warehouse_id: uuid.UUID,
+    *,
+    order_id: int,
+    article: str = "ART-001",
+    barcode: str | None = None,
+    product: Product | None = None,
+) -> uuid.UUID:
+    row = _wb_order_row(
+        order_id=order_id,
+        article=article,
+        barcode=barcode or f"BAR-{order_id}",
+    )
+    async with SessionLocal() as session:
+        order, _ = await upsert_order_from_wb_row(
+            session,
+            tenant_id,
+            seller_id,
+            warehouse_id,
+            row,
+        )
+        if product is not None:
+            order.product_id = product.id
+        await session.commit()
+        return order.id
+
+
+async def _create_supply(
+    async_client: AsyncClient,
+    headers: dict[str, str],
+    seller_id: str,
+    warehouse_id: str,
+    *,
+    name: str = "Supply A",
+) -> dict[str, Any]:
+    resp = await async_client.post(
+        "/operations/fbs-supplies",
+        headers=headers,
+        json={
+            "seller_id": seller_id,
+            "warehouse_id": warehouse_id,
+            "name": name,
+            "delivery_type": "warehouse_sc",
+        },
+    )
+    assert resp.status_code == 201, resp.text
+    return resp.json()
+
+
+@pytest.fixture
+def enable_wb_marketplace_supplies_mock(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(settings, "e2e_mock_wb_marketplace_supplies", True)
+
+
+# TC-NEW-FBS-SUPPLY-001 — create supply draft + wb_supply_id; WB error → no orphan row
+@pytest.mark.asyncio
+async def test_fbs_supply_create_ok(
+    async_client: AsyncClient,
+    enable_wb_marketplace_supplies_mock: None,
+) -> None:
+    headers, suffix = await _register_ff_admin(async_client)
+    seller_id, warehouse_id = await _setup_seller_with_token(async_client, headers, suffix)
+
+    body = await _create_supply(async_client, headers, seller_id, warehouse_id)
+    assert body["status"] == FBS_SUPPLY_STATUS_DRAFT
+    assert body["wb_supply_id"] == "WB-GI-MOCK-1"
+    assert body["name"] == "Supply A"
+    assert body["delivery_type"] == "warehouse_sc"
+
+
+@pytest.mark.asyncio
+async def test_fbs_supply_create_wb_error_no_db_row(
+    async_client: AsyncClient,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    headers, suffix = await _register_ff_admin(async_client)
+    seller_id, warehouse_id = await _setup_seller_with_token(async_client, headers, suffix)
+
+    async def fail_create(
+        client: object, *, api_token: str, name: str, marketplace_api_base: str | None = None
+    ) -> dict[str, Any]:
+        raise WildberriesClientError("upstream_error", status_code=502)
+
+    monkeypatch.setattr(
+        "app.services.fbs_supply_service.create_marketplace_supply",
+        fail_create,
+    )
+
+    resp = await async_client.post(
+        "/operations/fbs-supplies",
+        headers=headers,
+        json={
+            "seller_id": seller_id,
+            "warehouse_id": warehouse_id,
+            "name": "Fail supply",
+            "delivery_type": "warehouse_sc",
+        },
+    )
+    assert resp.status_code == 502
+    assert resp.json()["detail"] == "wb_upstream_error_502"
+
+    async with SessionLocal() as session:
+        count = await session.scalar(select(func.count()).select_from(FbsSupply))
+        assert count == 0
+
+
+# TC-NEW-FBS-SUPPLY-002 — add order → in_supply; already in other supply → error
+@pytest.mark.asyncio
+async def test_fbs_supply_add_order_ok(
+    async_client: AsyncClient,
+    enable_wb_marketplace_supplies_mock: None,
+) -> None:
+    headers, suffix = await _register_ff_admin(async_client)
+    seller_id, warehouse_id = await _setup_seller_with_token(async_client, headers, suffix)
+    seller_uuid = uuid.UUID(seller_id)
+    warehouse_uuid = uuid.UUID(warehouse_id)
+
+    from app.models.seller import Seller
+
+    async with SessionLocal() as session:
+        seller_obj = await session.get(Seller, seller_uuid)
+        assert seller_obj is not None
+        tenant_id = seller_obj.tenant_id
+
+    order_id = await _create_order(
+        tenant_id, seller_uuid, warehouse_uuid, order_id=810001
+    )
+    supply = await _create_supply(async_client, headers, seller_id, warehouse_id)
+
+    add = await async_client.post(
+        f"/operations/fbs-supplies/{supply['id']}/orders",
+        headers=headers,
+        json={"order_id": str(order_id)},
+    )
+    assert add.status_code == 200, add.text
+    body = add.json()
+    assert len(body["orders"]) == 1
+    assert body["orders"][0]["status"] == FBS_ORDER_STATUS_IN_SUPPLY
+    assert body["orders"][0]["supply_id"] == supply["id"]
+
+
+@pytest.mark.asyncio
+async def test_fbs_supply_add_order_already_in_other_supply(
+    async_client: AsyncClient,
+    enable_wb_marketplace_supplies_mock: None,
+) -> None:
+    headers, suffix = await _register_ff_admin(async_client)
+    seller_id, warehouse_id = await _setup_seller_with_token(async_client, headers, suffix)
+    seller_uuid = uuid.UUID(seller_id)
+    warehouse_uuid = uuid.UUID(warehouse_id)
+
+    from app.models.seller import Seller
+
+    async with SessionLocal() as session:
+        seller_obj = await session.get(Seller, seller_uuid)
+        assert seller_obj is not None
+        tenant_id = seller_obj.tenant_id
+
+    order_id = await _create_order(
+        tenant_id, seller_uuid, warehouse_uuid, order_id=810002
+    )
+    supply_a = await _create_supply(async_client, headers, seller_id, warehouse_id, name="A")
+    supply_b = await _create_supply(async_client, headers, seller_id, warehouse_id, name="B")
+
+    first = await async_client.post(
+        f"/operations/fbs-supplies/{supply_a['id']}/orders",
+        headers=headers,
+        json={"order_id": str(order_id)},
+    )
+    assert first.status_code == 200, first.text
+
+    second = await async_client.post(
+        f"/operations/fbs-supplies/{supply_b['id']}/orders",
+        headers=headers,
+        json={"order_id": str(order_id)},
+    )
+    assert second.status_code == 409
+    assert second.json()["detail"] == "order_already_in_supply"
+
+
+@pytest.mark.asyncio
+@pytest.mark.postgresql_concurrency
+async def test_fbs_supply_add_order_concurrent_race(
+    async_client: AsyncClient,
+    enable_wb_marketplace_supplies_mock: None,
+) -> None:
+    """Two parallel adds of the same order to different supplies — exactly one wins."""
+    if "sqlite" in os.environ.get("DATABASE_URL", "").lower():
+        pytest.skip("row-level FOR UPDATE locking requires PostgreSQL")
+
+    headers, suffix = await _register_ff_admin(async_client)
+    seller_id, warehouse_id = await _setup_seller_with_token(async_client, headers, suffix)
+    seller_uuid = uuid.UUID(seller_id)
+    warehouse_uuid = uuid.UUID(warehouse_id)
+
+    from app.models.seller import Seller
+
+    async with SessionLocal() as session:
+        seller_obj = await session.get(Seller, seller_uuid)
+        assert seller_obj is not None
+        tenant_id = seller_obj.tenant_id
+
+    order_id = await _create_order(
+        tenant_id, seller_uuid, warehouse_uuid, order_id=810099
+    )
+    supply_a = await _create_supply(async_client, headers, seller_id, warehouse_id, name="Race A")
+    supply_b = await _create_supply(async_client, headers, seller_id, warehouse_id, name="Race B")
+
+    resp_a, resp_b = await asyncio.gather(
+        async_client.post(
+            f"/operations/fbs-supplies/{supply_a['id']}/orders",
+            headers=headers,
+            json={"order_id": str(order_id)},
+        ),
+        async_client.post(
+            f"/operations/fbs-supplies/{supply_b['id']}/orders",
+            headers=headers,
+            json={"order_id": str(order_id)},
+        ),
+    )
+
+    statuses = sorted([resp_a.status_code, resp_b.status_code])
+    assert statuses == [200, 409], (
+        resp_a.status_code,
+        resp_a.text,
+        resp_b.status_code,
+        resp_b.text,
+    )
+    bodies = [resp_a, resp_b]
+    winner = next(r for r in bodies if r.status_code == 200)
+    loser = next(r for r in bodies if r.status_code == 409)
+    assert winner.json()["orders"][0]["status"] == FBS_ORDER_STATUS_IN_SUPPLY
+    assert loser.json()["detail"] in {"order_already_in_supply", "order_bad_status"}
+
+    async with SessionLocal() as session:
+        order = await session.get(FbsOrder, order_id)
+        assert order is not None
+        assert order.status == FBS_ORDER_STATUS_IN_SUPPLY
+        assert order.supply_id is not None
+
+
+@pytest.mark.asyncio
+async def test_fbs_supply_add_order_warehouse_mismatch(
+    async_client: AsyncClient,
+    enable_wb_marketplace_supplies_mock: None,
+) -> None:
+    headers, suffix = await _register_ff_admin(async_client)
+    seller_id, warehouse_id = await _setup_seller_with_token(async_client, headers, suffix)
+    seller_uuid = uuid.UUID(seller_id)
+    warehouse_uuid = uuid.UUID(warehouse_id)
+
+    other_wh = await async_client.post(
+        "/warehouses",
+        headers=headers,
+        json={"name": "Other WH", "code": f"wh-other-{suffix[-6:]}"},
+    )
+    assert other_wh.status_code in (200, 201), other_wh.text
+    other_warehouse_uuid = uuid.UUID(other_wh.json()["id"])
+
+    from app.models.seller import Seller
+
+    async with SessionLocal() as session:
+        seller_obj = await session.get(Seller, seller_uuid)
+        assert seller_obj is not None
+        tenant_id = seller_obj.tenant_id
+
+    order_id = await _create_order(
+        tenant_id, seller_uuid, warehouse_uuid, order_id=810100
+    )
+    supply = await _create_supply(
+        async_client, headers, seller_id, str(other_warehouse_uuid), name="Wrong WH"
+    )
+
+    resp = await async_client.post(
+        f"/operations/fbs-supplies/{supply['id']}/orders",
+        headers=headers,
+        json={"order_id": str(order_id)},
+    )
+    assert resp.status_code == 409
+    assert resp.json()["detail"] == "order_warehouse_mismatch"
+
+    async with SessionLocal() as session:
+        order = await session.get(FbsOrder, order_id)
+        assert order is not None
+        assert order.status == FBS_ORDER_STATUS_NEW
+        assert order.supply_id is None
+
+
+@pytest.mark.asyncio
+async def test_fbs_supply_add_order_wb_error_leaves_order_new(
+    async_client: AsyncClient,
+    enable_wb_marketplace_supplies_mock: None,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    headers, suffix = await _register_ff_admin(async_client)
+    seller_id, warehouse_id = await _setup_seller_with_token(async_client, headers, suffix)
+    seller_uuid = uuid.UUID(seller_id)
+    warehouse_uuid = uuid.UUID(warehouse_id)
+
+    from app.models.seller import Seller
+
+    async with SessionLocal() as session:
+        seller_obj = await session.get(Seller, seller_uuid)
+        assert seller_obj is not None
+        tenant_id = seller_obj.tenant_id
+
+    order_id = await _create_order(
+        tenant_id, seller_uuid, warehouse_uuid, order_id=810101
+    )
+    supply = await _create_supply(async_client, headers, seller_id, warehouse_id)
+
+    async def fail_add(
+        client: object,
+        *,
+        api_token: str,
+        supply_id: str,
+        order_id: int,
+        marketplace_api_base: str | None = None,
+    ) -> None:
+        raise WildberriesClientError("upstream_error", status_code=502)
+
+    monkeypatch.setattr(
+        "app.services.fbs_supply_service.add_order_to_marketplace_supply",
+        fail_add,
+    )
+
+    resp = await async_client.post(
+        f"/operations/fbs-supplies/{supply['id']}/orders",
+        headers=headers,
+        json={"order_id": str(order_id)},
+    )
+    assert resp.status_code == 502
+    assert resp.json()["detail"] == "wb_upstream_error_502"
+
+    async with SessionLocal() as session:
+        order = await session.get(FbsOrder, order_id)
+        assert order is not None
+        assert order.status == FBS_ORDER_STATUS_NEW
+        assert order.supply_id is None
+
+
+# TC-NEW-FBS-SUPPLY-003 — picking list grouping + empty supply
+@pytest.mark.asyncio
+async def test_fbs_supply_picking_list_grouping(
+    async_client: AsyncClient,
+    enable_wb_marketplace_supplies_mock: None,
+) -> None:
+    headers, suffix = await _register_ff_admin(async_client)
+    seller_id, warehouse_id = await _setup_seller_with_token(async_client, headers, suffix)
+    seller_uuid = uuid.UUID(seller_id)
+    warehouse_uuid = uuid.UUID(warehouse_id)
+
+    product_a = await async_client.post(
+        "/products",
+        headers=headers,
+        json={
+            "name": "Leggings",
+            "sku_code": f"LEG-{suffix}",
+            "seller_id": seller_id,
+            "wb_barcode": "BAR-A",
+            "wb_size": "M",
+        },
+    )
+    assert product_a.status_code in (200, 201)
+    product_b = await async_client.post(
+        "/products",
+        headers=headers,
+        json={
+            "name": "Top",
+            "sku_code": f"TOP-{suffix}",
+            "seller_id": seller_id,
+            "wb_barcode": "BAR-B",
+            "wb_size": "L",
+        },
+    )
+    assert product_b.status_code in (200, 201)
+
+    from app.models.seller import Seller
+
+    async with SessionLocal() as session:
+        seller_obj = await session.get(Seller, seller_uuid)
+        assert seller_obj is not None
+        tenant_id = seller_obj.tenant_id
+        prod_a = await session.get(Product, uuid.UUID(product_a.json()["id"]))
+        prod_b = await session.get(Product, uuid.UUID(product_b.json()["id"]))
+        assert prod_a is not None and prod_b is not None
+
+    order_ids = [
+        await _create_order(
+            tenant_id,
+            seller_uuid,
+            warehouse_uuid,
+            order_id=820001,
+            article="ART-A",
+            barcode="BAR-A",
+            product=prod_a,
+        ),
+        await _create_order(
+            tenant_id,
+            seller_uuid,
+            warehouse_uuid,
+            order_id=820002,
+            article="ART-A",
+            barcode="BAR-A",
+            product=prod_a,
+        ),
+        await _create_order(
+            tenant_id,
+            seller_uuid,
+            warehouse_uuid,
+            order_id=820003,
+            article="ART-B",
+            barcode="BAR-B",
+            product=prod_b,
+        ),
+        await _create_order(
+            tenant_id,
+            seller_uuid,
+            warehouse_uuid,
+            order_id=820004,
+            article="ART-C",
+            barcode="BAR-C",
+        ),
+        await _create_order(
+            tenant_id,
+            seller_uuid,
+            warehouse_uuid,
+            order_id=820005,
+            article="ART-D",
+            barcode="BAR-D",
+        ),
+    ]
+
+    supply = await _create_supply(async_client, headers, seller_id, warehouse_id)
+    for oid in order_ids:
+        add = await async_client.post(
+            f"/operations/fbs-supplies/{supply['id']}/orders",
+            headers=headers,
+            json={"order_id": str(oid)},
+        )
+        assert add.status_code == 200, add.text
+
+    picking = await async_client.get(
+        f"/operations/fbs-supplies/{supply['id']}/picking-list",
+        headers=headers,
+    )
+    assert picking.status_code == 200, picking.text
+    items = picking.json()["items"]
+    assert len(items) == 4
+    leggings = next(i for i in items if i["product_name"] == "Leggings")
+    assert leggings["quantity"] == 2
+    assert leggings["article"] == "ART-A"
+    assert leggings["size"] == "M"
+
+    empty_supply = await _create_supply(
+        async_client, headers, seller_id, warehouse_id, name="Empty"
+    )
+    empty = await async_client.get(
+        f"/operations/fbs-supplies/{empty_supply['id']}/picking-list",
+        headers=headers,
+    )
+    assert empty.status_code == 200
+    assert empty.json()["items"] == []
+
+
+# TC-NEW-FBS-SUPPLY-004 — stickers cached; WB error surfaced
+@pytest.mark.asyncio
+async def test_fbs_supply_stickers_cached(
+    async_client: AsyncClient,
+    enable_wb_marketplace_supplies_mock: None,
+) -> None:
+    headers, suffix = await _register_ff_admin(async_client)
+    seller_id, warehouse_id = await _setup_seller_with_token(async_client, headers, suffix)
+    seller_uuid = uuid.UUID(seller_id)
+    warehouse_uuid = uuid.UUID(warehouse_id)
+
+    from app.models.seller import Seller
+
+    async with SessionLocal() as session:
+        seller_obj = await session.get(Seller, seller_uuid)
+        assert seller_obj is not None
+        tenant_id = seller_obj.tenant_id
+
+    order_ids = [
+        await _create_order(tenant_id, seller_uuid, warehouse_uuid, order_id=830001),
+        await _create_order(tenant_id, seller_uuid, warehouse_uuid, order_id=830002),
+        await _create_order(tenant_id, seller_uuid, warehouse_uuid, order_id=830003),
+    ]
+    supply = await _create_supply(async_client, headers, seller_id, warehouse_id)
+    for oid in order_ids:
+        add = await async_client.post(
+            f"/operations/fbs-supplies/{supply['id']}/orders",
+            headers=headers,
+            json={"order_id": str(oid)},
+        )
+        assert add.status_code == 200, add.text
+
+    stickers = await async_client.post(
+        f"/operations/fbs-supplies/{supply['id']}/stickers",
+        headers=headers,
+        json={"force": False},
+    )
+    assert stickers.status_code == 200, stickers.text
+    body = stickers.json()["stickers"]
+    assert len(body) == 3
+    for row in body:
+        assert row["sticker_code"] == f"MOCK-{row['wb_order_id']}"
+        assert row["sticker_file"] is not None
+        assert row["sticker_file"].startswith("fbs-stickers/")
+        sticker_path = Path(settings.wms_data_dir) / row["sticker_file"]
+        assert sticker_path.is_file()
+
+    async with SessionLocal() as session:
+        for oid in order_ids:
+            order = await session.get(FbsOrder, oid)
+            assert order is not None
+            assert order.sticker_file is not None
+            assert order.sticker_code is not None
+
+
+@pytest.mark.asyncio
+async def test_fbs_supply_stickers_wb_error(
+    async_client: AsyncClient,
+    enable_wb_marketplace_supplies_mock: None,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    headers, suffix = await _register_ff_admin(async_client)
+    seller_id, warehouse_id = await _setup_seller_with_token(async_client, headers, suffix)
+    seller_uuid = uuid.UUID(seller_id)
+    warehouse_uuid = uuid.UUID(warehouse_id)
+
+    from app.models.seller import Seller
+
+    async with SessionLocal() as session:
+        seller_obj = await session.get(Seller, seller_uuid)
+        assert seller_obj is not None
+        tenant_id = seller_obj.tenant_id
+
+    order_id = await _create_order(tenant_id, seller_uuid, warehouse_uuid, order_id=840001)
+    supply = await _create_supply(async_client, headers, seller_id, warehouse_id)
+    add = await async_client.post(
+        f"/operations/fbs-supplies/{supply['id']}/orders",
+        headers=headers,
+        json={"order_id": str(order_id)},
+    )
+    assert add.status_code == 200, add.text
+
+    async def fail_stickers(
+        client: object,
+        *,
+        api_token: str,
+        order_ids: list[int],
+        marketplace_api_base: str | None = None,
+        width: int = 58,
+        height: int = 40,
+    ) -> list[dict[str, Any]]:
+        raise WildberriesClientError("upstream_error", status_code=503)
+
+    monkeypatch.setattr(
+        "app.services.fbs_supply_service.fetch_marketplace_order_stickers",
+        fail_stickers,
+    )
+
+    resp = await async_client.post(
+        f"/operations/fbs-supplies/{supply['id']}/stickers",
+        headers=headers,
+        json={"force": True},
+    )
+    assert resp.status_code == 502
+    assert resp.json()["detail"] == "wb_upstream_error_503"
+
+
+@pytest.mark.asyncio
+async def test_fbs_supply_stickers_incomplete(
+    async_client: AsyncClient,
+    enable_wb_marketplace_supplies_mock: None,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    headers, suffix = await _register_ff_admin(async_client)
+    seller_id, warehouse_id = await _setup_seller_with_token(async_client, headers, suffix)
+    seller_uuid = uuid.UUID(seller_id)
+    warehouse_uuid = uuid.UUID(warehouse_id)
+
+    from app.models.seller import Seller
+
+    async with SessionLocal() as session:
+        seller_obj = await session.get(Seller, seller_uuid)
+        assert seller_obj is not None
+        tenant_id = seller_obj.tenant_id
+
+    order_ids = [
+        await _create_order(tenant_id, seller_uuid, warehouse_uuid, order_id=840010),
+        await _create_order(tenant_id, seller_uuid, warehouse_uuid, order_id=840011),
+    ]
+    supply = await _create_supply(async_client, headers, seller_id, warehouse_id)
+    for oid in order_ids:
+        add = await async_client.post(
+            f"/operations/fbs-supplies/{supply['id']}/orders",
+            headers=headers,
+            json={"order_id": str(oid)},
+        )
+        assert add.status_code == 200, add.text
+
+    async def partial_stickers(
+        client: object,
+        *,
+        api_token: str,
+        order_ids: list[int],
+        marketplace_api_base: str | None = None,
+        width: int = 58,
+        height: int = 40,
+    ) -> list[dict[str, Any]]:
+        tiny_png = (
+            "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg=="
+        )
+        return [
+            {
+                "orderId": order_ids[0],
+                "barcode": f"MOCK-{order_ids[0]}",
+                "file": tiny_png,
+            }
+        ]
+
+    monkeypatch.setattr(
+        "app.services.fbs_supply_service.fetch_marketplace_order_stickers",
+        partial_stickers,
+    )
+
+    resp = await async_client.post(
+        f"/operations/fbs-supplies/{supply['id']}/stickers",
+        headers=headers,
+        json={"force": True},
+    )
+    assert resp.status_code == 502
+    assert resp.json()["detail"] == "wb_stickers_incomplete"
+
+
+@pytest.mark.asyncio
+async def test_fbs_supply_add_order_bad_status(
+    async_client: AsyncClient,
+    enable_wb_marketplace_supplies_mock: None,
+) -> None:
+    headers, suffix = await _register_ff_admin(async_client)
+    seller_id, warehouse_id = await _setup_seller_with_token(async_client, headers, suffix)
+    seller_uuid = uuid.UUID(seller_id)
+    warehouse_uuid = uuid.UUID(warehouse_id)
+
+    from app.models.seller import Seller
+
+    async with SessionLocal() as session:
+        seller_obj = await session.get(Seller, seller_uuid)
+        assert seller_obj is not None
+        tenant_id = seller_obj.tenant_id
+
+    order_id = await _create_order(tenant_id, seller_uuid, warehouse_uuid, order_id=850001)
+    supply = await _create_supply(async_client, headers, seller_id, warehouse_id)
+
+    first = await async_client.post(
+        f"/operations/fbs-supplies/{supply['id']}/orders",
+        headers=headers,
+        json={"order_id": str(order_id)},
+    )
+    assert first.status_code == 200
+
+    again = await async_client.post(
+        f"/operations/fbs-supplies/{supply['id']}/orders",
+        headers=headers,
+        json={"order_id": str(order_id)},
+    )
+    assert again.status_code == 409
+    assert again.json()["detail"] == "order_bad_status"

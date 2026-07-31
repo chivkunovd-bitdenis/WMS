@@ -1,5 +1,71 @@
 # TASKLOG
 
+## TASK-128 — 2026-07-31 — FBS autopoll + packaging integration
+
+- What changed: **fbs-autopoll** — сервис `fbs_autopoll_service` (опрос всех селлеров с marketplace-токеном через `sync_seller_orders` / `sync_seller_order_statuses`, ошибки одного селлера не прерывают цикл); Celery Beat задачи `wms.fbs_orders_autopoll` и `wms.fbs_order_statuses_autopoll` (интервалы `fbs_poll_interval_sec` / `fbs_statuses_sync_interval_sec`, default 180/600); тесты TC-NEW-FBS-AUTOPOLL-001..005. **fbs-packaging-integration** — `packaging_task_id` на `FbsSupply` + миграция `20260731_0067`; сервис `fbs_packaging_integration_service` (создание PackagingTask при `assembling`, bind-box для ПВЗ, sync supply→`packed` после complete packaging); API `PUT /operations/fbs-supplies/{id}/status`, `POST …/trbx/bind-box`; hook в `packaging_task_service.complete_task`; статус `packed` на отгрузке; тесты TC-NEW-FBS-PACKINT-001..005.
+- What did NOT change: фронт, вебхуки WB, ручная кнопка «Синхронизировать», commit.
+- Verification: `cd backend && ruff check . && pytest tests/test_fbs_autopoll.py tests/test_fbs_packaging_integration.py -q` → 12 passed; full `pytest -q` green.
+
+## TASK-127 — 2026-07-31 — FBS cancellations: seller cancel + status sync
+
+- What changed: WB client `cancel_marketplace_order` (PATCH `/api/v3/orders/{id}/cancel`, mock via `e2e_mock_wb_marketplace_orders`); сервис `fbs_cancellation_service` (`cancel_order` с FOR UPDATE, penalty_band log, idempotent cancel, release `FbsOrderReservation`); расширен `sync_order_statuses` (cancel→cancelled+release, sold→done, sorted→sorted, defect→defect, waiting→wb_status only); константы `FBS_ORDER_STATUS_SORTED`, `FBS_ORDER_STATUS_DEFECT`; API `PATCH /operations/fbs-orders/{id}/cancel`, `POST /operations/fbs-orders/sync-statuses`; тесты TC-NEW-FBS-CANCEL-001..004.
+- What did NOT change: фронт, returns warehouse/disposal module, fee billing, background job interval (reuse existing sync job path), commit.
+- Verification: `cd backend && ruff check app/services/fbs_cancellation_service.py app/services/wb_marketplace_orders_service.py app/api/fbs_orders.py app/services/wildberries_client.py tests/test_fbs_cancellations.py && mypy app/services/fbs_cancellation_service.py && pytest tests/test_fbs_cancellations.py tests/test_fbs_orders_intake.py -q` → 15 passed.
+
+## TASK-126 — 2026-07-30 — FBS shipment PVZ: trbx create/bind/stickers + deliver gate
+
+- What changed: модель `FbsTrbx` + миграция `20260730_0066` (таблица `fbs_trbxes`, FK `fbs_orders.trbx_id`); WB client `POST/PATCH trbx`, `POST trbx/stickers` (mock через `e2e_mock_wb_marketplace_supplies`); сервис `fbs_shipment_pvz_service` (create_trbxes, bind_orders_to_trbx с валидацией габаритов/веса/объёма/мин. 2 заказа, fetch_trbx_stickers с кэшем `fbs-trbx-stickers/`); API `POST /operations/fbs-supplies/{id}/trbx|trbx/stickers|trbx/{tid}/orders`; `deliver_supply` — поддержка `pvz` с `trbx_required`; тесты TC-NEW-FBS-SHIPPVZ-001..004 + deliver pvz.
+- What did NOT change: фронт, `packaging_box_id` deep link (deferred), commit.
+- Verification: `cd backend && ruff check app/models/fbs_trbx.py app/services/fbs_shipment_pvz_service.py app/services/fbs_shipment_service.py app/api/fbs_supplies.py tests/test_fbs_shipment_pvz.py && mypy app/models/fbs_trbx.py app/services/fbs_shipment_pvz_service.py && pytest tests/test_fbs_shipment_pvz.py tests/test_fbs_shipment_warehouse_sc.py -q` → 12 passed.
+
+## TASK-125 — 2026-07-30 — FBS shipment BLOCK C1: locked orders + barcode path
+
+- What changed: `deliver_supply` — отдельный `SELECT FbsOrder … FOR UPDATE` с eager-load `product`/`markings`; валидация cancelled/ready/marking на заблокированных строках; повторная проверка cancelled+ready после WB deliver; `_resolve_barcode_path` (корень `wms_data_dir/fbs-supply-barcodes`) для read/save; API `invalid_barcode_path` → 400; тесты TC-NEW-FBS-SHIPWH-005 (pvz → wrong_delivery_type), TC-NEW-FBS-SHIPWH-006 (cancelled order → supply_has_cancelled_orders).
+- What did NOT change: фронт, commit, PG concurrency test (SQLite-only suite).
+- Verification: `cd backend && ruff check app/services/fbs_shipment_service.py app/api/fbs_supplies.py tests/test_fbs_shipment_warehouse_sc.py && mypy app/services/fbs_shipment_service.py && pytest tests/test_fbs_shipment_warehouse_sc.py -q` → 6 passed.
+
+## TASK-124 — 2026-07-30 — FBS shipment warehouse/SC (fbs-shipment-warehouse-sc)
+
+- What changed: WB client `PATCH /api/v3/supplies/{id}/deliver` и `GET /api/v3/supplies/{id}/barcode` (mock через `e2e_mock_wb_marketplace_supplies`); сервис `fbs_shipment_service` (`deliver_supply`, `get_supply_barcode` с кэшем `fbs-supply-barcodes/{supply_id}.png`); API `POST/GET /operations/fbs-supplies/{id}/deliver|barcode`; preconditions: `warehouse_sc`, заказы ready, sgtin если `requires_honest_sign`; тесты TC-NEW-FBS-SHIPWH-001..004.
+- What did NOT change: фронт, checklist endpoint, PVZ/trbx, commit.
+- Verification: `cd backend && ruff check app/services/fbs_shipment_service.py app/api/fbs_supplies.py app/services/wildberries_client.py tests/test_fbs_shipment_warehouse_sc.py && mypy app/services/fbs_shipment_service.py && pytest tests/test_fbs_shipment_warehouse_sc.py tests/test_fbs_supply_assembly.py tests/test_fbs_marking.py -q` → 20 passed, 1 skipped.
+
+## TASK-123 — 2026-07-30 — FBS order marking (fbs-marking)
+
+- What changed: статусы заказа для freeze/write на `FbsOrder`; unique `(order_id, kind, value)` + миграция `20260730_0065`; WB client `PUT/GET /api/v3/orders/{id}/meta` с телом `{"sgtins":[value]}` (и plural для uin/imei/gtin); mock `e2e_mock_wb_marketplace_marking`; сервис `fbs_marking_service` (upsert, list, sync check_status); API `GET/PUT/POST …/operations/fbs-orders/{id}/markings`; связь sgtin→`marking_code` по `cis_code` (lookup only, без создания); тесты TC-NEW-FBS-MARK-001..004.
+- What did NOT change: фронт, физическая печать КИЗ, background job batch sync (есть POST sync), создание MarkingCode, deliver gate UI.
+- Verification: `cd backend && ruff check app/services/fbs_marking_service.py app/api/fbs_marking.py app/services/wildberries_client.py tests/test_fbs_marking.py && mypy app/services/fbs_marking_service.py app/api/fbs_marking.py && pytest tests/test_fbs_marking.py tests/test_fbs_orders_intake.py tests/test_fbs_supply_assembly.py -q` → 24 passed, 1 skipped.
+
+## TASK-122 — 2026-07-30 — FBS supply assembly: adversarial BLOCK fixes
+
+- What changed: `add_order_to_supply` — `SELECT … FOR UPDATE` на `FbsOrder` до валидации и WB PATCH; проверка `order.warehouse_id == supply.warehouse_id` → `order_warehouse_mismatch`; `fetch_and_cache_stickers` — `wb_stickers_incomplete` при пропуске заказа в ответе WB; API 409 для `order_warehouse_mismatch`; тесты: concurrent race (`postgresql_concurrency`, skip на SQLite), warehouse mismatch, WB fail leaves order `new`, stickers incomplete.
+- What did NOT change: фронт, packaging_task, deliver/trbx.
+- Verification: `cd backend && ruff check app/services/fbs_supply_service.py app/api/fbs_supplies.py tests/test_fbs_supply_assembly.py && mypy app/services/fbs_supply_service.py && pytest tests/test_fbs_supply_assembly.py -q` → 11 passed, 1 skipped.
+
+## TASK-121 — 2026-07-30 — FBS supply assembly (fbs-supply-assembly)
+
+- What changed: модель `FbsSupply` + миграция `20260730_0064`; FK `fbs_orders.supply_id` → `fbs_supplies`; поля `sticker_code`/`sticker_file` на заказе; WB client (`POST /api/v3/supplies`, `PATCH …/orders/{oid}`, `POST /api/v3/orders/stickers`); сервис `fbs_supply_service` (create, add order, picking-list, cache stickers); API `/operations/fbs-supplies` (create, get, add order, picking-list, stickers); mock `e2e_mock_wb_marketplace_supplies`.
+- What did NOT change: `packaging_task` интеграция (deferred), фронт, deliver/trbx/marking, переходы supply in_delivery/done.
+- Verification: `cd backend && ruff check app/models/fbs_supply.py app/services/fbs_supply_service.py app/api/fbs_supplies.py app/services/wildberries_client.py tests/test_fbs_supply_assembly.py && mypy … && pytest tests/test_fbs_supply_assembly.py tests/test_fbs_orders_intake.py tests/test_fbs_seller_warehouse.py -q` → 21 passed.
+
+## TASK-120 — 2026-07-30 — FBS seller warehouse token (fbs-seller-warehouse-token)
+
+- What changed: поле `marketplace_token_encrypted` в `seller_wildberries_credentials` + миграция `20260730_0063`; PATCH/GET tokens API с `marketplace_api_token` / `has_marketplace_token`; WB client `GET /api/v3/warehouses` и `/api/v3/offices`; сервис `fbs_seller_warehouse_service` + API `GET /operations/fbs-sellers/{seller_id}/warehouses|offices`; intake предпочитает `marketplace_token`, fallback на `supplies_token`.
+- What did NOT change: фронт, POST create warehouse, кэш, stocks.
+- Verification: `cd backend && ruff check … && mypy … && pytest tests/test_fbs_seller_warehouse.py tests/test_fbs_orders_intake.py -q`.
+
+## TASK-119 — 2026-07-30 — FBS intake: adversarial-reviewer blockers
+
+- What changed: `warehouse_id` валидируется через `get_warehouse` (tenant-scoped) в API и сервисе → `warehouse_not_found`; терминальные/cancelled заказы не ре-резервируются в `_try_reserve_order`; insert upsert ловит `IntegrityError` через savepoint и переходит на update-path; синк дополнительно пагинирует `GET /api/v3/orders` (до 10 страниц); расширены cancel-статусы WB (`cancel`, `canceled_by_*`, `supplierStatus`); при снятии резерва `reserve_status=released`; тесты N2/N3 + warehouse cross-tenant + no re-reserve.
+- What did NOT change: фронт, advisory-lock против oversell на гонке резерва, разбиение файла >400 строк.
+- Verification: `cd backend && ruff check … && mypy … && pytest tests/test_fbs_orders_intake.py -q` → 8 passed.
+
+## TASK-118 — 2026-07-30 — FBS orders intake (fbs-orders-intake)
+
+- What changed: backend vertical slice — модели `fbs_orders` / `fbs_order_markings` / `fbs_order_reservations`, миграция `20260730_0062`, WB Marketplace API client (`orders/new`, `orders`, `orders/status`), сервис `wb_marketplace_orders_service` (upsert, маппинг barcode→nmId, резерв qty=1, deadline +120h, синк статусов + снятие резерва при cancel), фоновый job `wildberries_marketplace_orders_sync`, API `POST /operations/fbs-orders/sync` + `GET /operations/fbs-orders`; available для MP unload теперь учитывает FBS-резервы.
+- What did NOT change: фронт, supply/trbx, маркировка в WB, отдельный marketplace_token (пока `supplies_token`).
+- Verification: `cd backend && ruff check app tests/test_fbs_orders_intake.py && mypy app && pytest tests/test_fbs_orders_intake.py -q` → 4 passed, mypy/ruff clean.
+
 ## TASK-117 — 2026-07-10 — Фикс: PDF-этикетки ЧЗ с кодом в скобках/на двух строках не распознавались
 
 - Почему: продавец загрузил PDF-этикетки маркировки (`Chin-56005_*_100pcs.pdf`), система отвечала «чз не найдены», хотя код на этикетке был. Разбор показал: реальные этикетки печатают `(01) <gtin>` и `(21) <серийный номер>` в скобках, с пробелом, причём как два отдельных текстовых объекта PDF (разные PyMuPDF-блоки) — старый парсер понимал только «сырой» вид кода (без скобок, слитно, в одну строку), поэтому не находил совпадений ни на одной из 100 страниц файла.
