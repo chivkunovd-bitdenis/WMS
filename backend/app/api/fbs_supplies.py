@@ -255,6 +255,7 @@ def _raise_from_service(exc: supply_svc.FbsSupplyError) -> None:
         "order_bad_status",
         "order_warehouse_mismatch",
         "invalid_delivery_type",
+        "supply_not_editable",
     }:
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=exc.code)
     if exc.code.startswith("wb_"):

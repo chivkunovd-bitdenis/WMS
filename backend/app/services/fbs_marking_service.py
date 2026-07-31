@@ -278,6 +278,16 @@ async def upsert_order_marking(
         row.marking_code_id = code.id if code is not None else None
 
     await session.flush()
+
+    if order.supply_id is not None:
+        from app.services.fbs_packaging_integration_service import (
+            sync_fbs_supply_after_order_marking_update,
+        )
+
+        await sync_fbs_supply_after_order_marking_update(
+            session, tenant_id, order_id
+        )
+
     return row
 
 

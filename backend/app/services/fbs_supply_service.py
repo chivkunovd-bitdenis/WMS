@@ -197,6 +197,8 @@ async def add_order_to_supply(
     supply = await _get_supply(session, tenant_id, supply_id, with_orders=True)
     if supply is None:
         raise FbsSupplyError("supply_not_found")
+    if supply.status != FBS_SUPPLY_STATUS_DRAFT:
+        raise FbsSupplyError("supply_not_editable")
 
     order_stmt = (
         select(FbsOrder)

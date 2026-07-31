@@ -37,7 +37,7 @@ logger = logging.getLogger(__name__)
 
 _VALID_SUPPLY_STATUS_TRANSITIONS: dict[str, frozenset[str]] = {
     FBS_SUPPLY_STATUS_DRAFT: frozenset({FBS_SUPPLY_STATUS_ASSEMBLING}),
-    FBS_SUPPLY_STATUS_ASSEMBLING: frozenset({FBS_SUPPLY_STATUS_PACKED}),
+    FBS_SUPPLY_STATUS_ASSEMBLING: frozenset(),
     FBS_SUPPLY_STATUS_PACKED: frozenset(),
 }
 
@@ -186,20 +186,25 @@ async def update_supply_status(
     return supply
 
 
-async def sync_fbs_supply_on_packaging_done(
+async def try_promote_fbs_supply_if_ready(
     session: AsyncSession,
     tenant_id: uuid.UUID,
-    packaging_task_id: uuid.UUID,
+    supply_id: uuid.UUID,
 ) -> FbsSupply | None:
-    supply = await _load_supply_by_packaging_task(
-        session, tenant_id, packaging_task_id, with_orders=True
+    supply = await _load_supply(
+        session,
+        tenant_id,
+        supply_id,
+        with_orders=True,
+        for_update=True,
     )
     if supply is None or supply.status != FBS_SUPPLY_STATUS_ASSEMBLING:
         return supply
 
-    task = await get_task(session, tenant_id, packaging_task_id)
-    if task is None or not is_task_complete(task):
-        return supply
+    if supply.packaging_task_id is not None:
+        task = await get_task(session, tenant_id, supply.packaging_task_id)
+        if task is None or not is_task_complete(task):
+            return supply
 
     if _supply_requires_marking(supply):
         return supply
@@ -210,6 +215,30 @@ async def sync_fbs_supply_on_packaging_done(
             order.status = FBS_ORDER_STATUS_PACKED
     await session.flush()
     return supply
+
+
+async def sync_fbs_supply_on_packaging_done(
+    session: AsyncSession,
+    tenant_id: uuid.UUID,
+    packaging_task_id: uuid.UUID,
+) -> FbsSupply | None:
+    supply = await _load_supply_by_packaging_task(
+        session, tenant_id, packaging_task_id, with_orders=True
+    )
+    if supply is None:
+        return None
+    return await try_promote_fbs_supply_if_ready(session, tenant_id, supply.id)
+
+
+async def sync_fbs_supply_after_order_marking_update(
+    session: AsyncSession,
+    tenant_id: uuid.UUID,
+    order_id: uuid.UUID,
+) -> FbsSupply | None:
+    order = await session.get(FbsOrder, order_id)
+    if order is None or order.tenant_id != tenant_id or order.supply_id is None:
+        return None
+    return await try_promote_fbs_supply_if_ready(session, tenant_id, order.supply_id)
 
 
 async def _load_supply_by_packaging_task(

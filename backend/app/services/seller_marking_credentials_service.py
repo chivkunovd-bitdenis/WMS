@@ -30,7 +30,7 @@ class _SkipSentinel:
 
 SKIP: _SkipSentinel = _SkipSentinel()
 
-SecretPatchValue = str | None | _SkipSentinel
+SecretPatchValue = str | _SkipSentinel | None
 
 
 @dataclass(frozen=True)
@@ -135,13 +135,13 @@ async def patch_seller_credentials(
     cz_token: SecretPatchValue = SKIP,
     suz_oms_token: SecretPatchValue = SKIP,
     mp_api_key: SecretPatchValue = SKIP,
-    marketplace: str | None | _SkipSentinel = SKIP,
-    mchd_id: str | None | _SkipSentinel = SKIP,
-    mchd_valid_until: date | None | _SkipSentinel = SKIP,
+    marketplace: str | _SkipSentinel | None = SKIP,
+    mchd_id: str | _SkipSentinel | None = SKIP,
+    mchd_valid_until: date | _SkipSentinel | None = SKIP,
     signing_method: str | _SkipSentinel = SKIP,
     edo_route: str | _SkipSentinel = SKIP,
     auto_introduce: bool | _SkipSentinel = SKIP,
-    auto_emit_limit: int | None | _SkipSentinel = SKIP,
+    auto_emit_limit: int | _SkipSentinel | None = SKIP,
 ) -> SellerMarkingCredentials | None:
     seller = await _seller_in_tenant(session, tenant_id, seller_id)
     if seller is None:

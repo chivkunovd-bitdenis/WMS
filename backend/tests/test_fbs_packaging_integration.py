@@ -10,7 +10,7 @@ from sqlalchemy import select
 
 from app.core.settings import settings
 from app.db.session import SessionLocal
-from app.models.fbs_order import FBS_ORDER_STATUS_IN_SUPPLY, FbsOrder
+from app.models.fbs_order import FBS_ORDER_STATUS_IN_SUPPLY, FBS_ORDER_STATUS_NEW, FbsOrder
 from app.models.fbs_supply import (
     FBS_SUPPLY_STATUS_ASSEMBLING,
     FBS_SUPPLY_STATUS_PACKED,
@@ -401,3 +401,203 @@ async def test_fbs_packaging_task_skips_unmapped_product(
         supply = await session.get(FbsSupply, uuid.UUID(supply_id))
         assert supply is not None
         assert supply.packaging_task_id == task.id
+
+
+# TC-NEW-FBS-PACKINT-006 — нельзя добавить заказ после assembling
+@pytest.mark.asyncio
+async def test_fbs_supply_add_order_rejected_after_assembling(
+    async_client: AsyncClient,
+    enable_wb_marketplace_supplies_mock: None,
+) -> None:
+    headers, suffix = await _register_ff_admin(async_client)
+    seller_id, warehouse_id = await _setup_seller_with_token(async_client, headers, suffix)
+    token_payload = await async_client.get("/auth/me", headers=headers)
+    tenant_id = uuid.UUID(token_payload.json()["tenant_id"])
+    supply_id, order_ids = await _create_supply_with_orders(
+        async_client,
+        headers,
+        seller_id,
+        warehouse_id,
+        tenant_id,
+    )
+
+    status_resp = await async_client.put(
+        f"/operations/fbs-supplies/{supply_id}/status",
+        headers=headers,
+        json={"status": "assembling"},
+    )
+    assert status_resp.status_code == 200, status_resp.text
+
+    extra_order_id = order_ids[0]
+    async with SessionLocal() as session:
+        extra = await session.get(FbsOrder, extra_order_id)
+        assert extra is not None
+        extra.supply_id = None
+        extra.status = FBS_ORDER_STATUS_NEW
+        await session.commit()
+
+    add_resp = await async_client.post(
+        f"/operations/fbs-supplies/{supply_id}/orders",
+        headers=headers,
+        json={"order_id": str(extra_order_id)},
+    )
+    assert add_resp.status_code == 409
+    assert add_resp.json()["detail"] == "supply_not_editable"
+
+
+@pytest.mark.asyncio
+async def test_fbs_supply_manual_packed_status_rejected(
+    async_client: AsyncClient,
+    enable_wb_marketplace_supplies_mock: None,
+) -> None:
+    headers, suffix = await _register_ff_admin(async_client)
+    seller_id, warehouse_id = await _setup_seller_with_token(async_client, headers, suffix)
+    token_payload = await async_client.get("/auth/me", headers=headers)
+    tenant_id = uuid.UUID(token_payload.json()["tenant_id"])
+    supply_id, _ = await _create_supply_with_orders(
+        async_client,
+        headers,
+        seller_id,
+        warehouse_id,
+        tenant_id,
+    )
+
+    await async_client.put(
+        f"/operations/fbs-supplies/{supply_id}/status",
+        headers=headers,
+        json={"status": "assembling"},
+    )
+    packed = await async_client.put(
+        f"/operations/fbs-supplies/{supply_id}/status",
+        headers=headers,
+        json={"status": "packed"},
+    )
+    assert packed.status_code == 400
+    assert packed.json()["detail"] == "invalid_status_transition"
+
+
+# TC-NEW-FBS-PACKINT-003 (marking branch) — после SGTIN отгрузка → packed
+@pytest.mark.asyncio
+async def test_fbs_supply_promoted_after_marking_when_honest_sign_required(
+    async_client: AsyncClient,
+    enable_wb_marketplace_supplies_mock: None,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    async def fake_put_meta(*_args: object, **_kwargs: object) -> None:
+        return None
+
+    async def noop_marking_assert(*_args: object, **_kwargs: object) -> None:
+        return None
+
+    monkeypatch.setattr(
+        "app.services.packaging_task_service._assert_marking_done_for_task",
+        noop_marking_assert,
+    )
+    monkeypatch.setattr(
+        "app.services.fbs_marking_service.put_marketplace_order_meta",
+        fake_put_meta,
+    )
+
+    headers, suffix = await _register_ff_admin(async_client)
+    seller_id, warehouse_id = await _setup_seller_with_token(async_client, headers, suffix)
+    token_payload = await async_client.get("/auth/me", headers=headers)
+    tenant_id = uuid.UUID(token_payload.json()["tenant_id"])
+
+    product = await async_client.post(
+        "/products",
+        headers=headers,
+        json={
+            "name": "Honest sign product",
+            "sku_code": f"cz-{suffix}",
+            "seller_id": seller_id,
+            "wb_barcode": f"CZ-BAR-{suffix}",
+            "requires_honest_sign": True,
+        },
+    )
+    assert product.status_code in (200, 201), product.text
+    product_id = product.json()["id"]
+
+    supply_resp = await async_client.post(
+        "/operations/fbs-supplies",
+        headers=headers,
+        json={
+            "seller_id": seller_id,
+            "warehouse_id": warehouse_id,
+            "name": "CZ supply",
+            "delivery_type": "warehouse_sc",
+        },
+    )
+    assert supply_resp.status_code == 201, supply_resp.text
+    supply_id = supply_resp.json()["id"]
+
+    async with SessionLocal() as session:
+        order, _ = await upsert_order_from_wb_row(
+            session,
+            tenant_id,
+            uuid.UUID(seller_id),
+            uuid.UUID(warehouse_id),
+            _wb_order_row(order_id=920001, article="CZ-ART"),
+        )
+        order.product_id = uuid.UUID(product_id)
+        order.supply_id = uuid.UUID(supply_id)
+        order.status = FBS_ORDER_STATUS_IN_SUPPLY
+        sorting = await get_or_create_sorting_location(
+            session, tenant_id, uuid.UUID(warehouse_id)
+        )
+        await inventory_service.record_movement_and_adjust_balance(
+            session,
+            tenant_id=tenant_id,
+            product_id=uuid.UUID(product_id),
+            storage_location_id=sorting.id,
+            quantity_delta=1,
+            movement_type="inbound_intake",
+        )
+        await session.commit()
+        order_id = order.id
+
+    status_resp = await async_client.put(
+        f"/operations/fbs-supplies/{supply_id}/status",
+        headers=headers,
+        json={"status": "assembling"},
+    )
+    assert status_resp.status_code == 200, status_resp.text
+    task_id = status_resp.json()["packaging_task_id"]
+
+    task = await async_client.get(
+        f"/operations/packaging-tasks/{task_id}",
+        headers=headers,
+    )
+    assert task.status_code == 200, task.text
+    line = task.json()["lines"][0]
+    pack = await async_client.post(
+        f"/operations/packaging-tasks/{task_id}/lines/{line['id']}/pack",
+        headers=headers,
+        json={"quantity": line["qty_total"]},
+    )
+    assert pack.status_code == 200, pack.text
+
+    complete = await async_client.post(
+        f"/operations/packaging-tasks/{task_id}/complete",
+        headers=headers,
+        json={"acknowledge_all_packed": True},
+    )
+    assert complete.status_code == 200, complete.text
+
+    supply_mid = await async_client.get(
+        f"/operations/fbs-supplies/{supply_id}",
+        headers=headers,
+    )
+    assert supply_mid.json()["status"] == FBS_SUPPLY_STATUS_ASSEMBLING
+
+    mark = await async_client.put(
+        f"/operations/fbs-orders/{order_id}/markings/sgtin",
+        headers=headers,
+        json={"value": "01CIS-PACKINT-TEST"},
+    )
+    assert mark.status_code == 200, mark.text
+
+    supply_done = await async_client.get(
+        f"/operations/fbs-supplies/{supply_id}",
+        headers=headers,
+    )
+    assert supply_done.json()["status"] == FBS_SUPPLY_STATUS_PACKED
