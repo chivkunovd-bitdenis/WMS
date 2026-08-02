@@ -28,13 +28,13 @@ from app.models.fbs_supply import (
 )
 from app.models.fbs_trbx import FbsTrbx
 from app.models.packaging_task import STATUS_DRAFT, PackagingTask, PackagingTaskLine
+from app.services import inventory_service as inv_svc
 from app.services import sorting_location_service as sorting_loc_svc
 from app.services.document_number_service import (
     DOC_TYPE_PACKAGING,
     assign_display_number_if_missing,
     assign_document_number_if_missing,
 )
-from app.services import inventory_service as inv_svc
 from app.services.packaging_task_service import get_task, is_task_complete, qty_done
 
 logger = logging.getLogger(__name__)

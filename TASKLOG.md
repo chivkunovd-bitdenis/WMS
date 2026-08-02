@@ -1,5 +1,11 @@
 # TASKLOG
 
+## TASK-135 — 2026-08-02 — STOCKFIX-090 green gates for stock-sync re-review
+
+- What changed: ruff 36→0 (import sort, line length, SIM105, E402 per-file for emulator integration test); mypy dual-module `fbs_seed_helpers` fixed via `explicit_package_bases`; `test_fbs_review_fixes` inventory seed for STOCKFIX-035 promote write-off; `CURSOR_HANDOFF.md` updated with gate outputs + PR Test coverage block.
+- What did NOT change: product logic (STOCKFIX-010…080); `05-review.md` verdict (Codex only).
+- Verification: `ruff check .` green; STOCKFIX production mypy 11 files green; focused pytest **137+2** passed; emulator **49** passed; `npm run build` + `ff-fbs-stock-sync.spec.ts` **1 passed**.
+
 ## TASK-134 — 2026-08-02 — STOCKFIX-080 FF UI FBS warehouse stock sync
 
 - What changed: API helpers in `fbsApi.ts` (warehouse-bindings CRUD, stocks/sync, sync-status); экран `FfFbsStockSyncScreen` + поднавигация `FfFbsSectionNav` (Заказы / Остатки WB); маршрут `/app/ff/fbs/stock-sync`; Playwright e2e `ff-fbs-stock-sync.spec.ts` TC-NEW-FBS-STOCK-UI-001 без `page.route` на binding/sync API.

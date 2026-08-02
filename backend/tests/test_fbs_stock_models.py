@@ -9,7 +9,7 @@ from __future__ import annotations
 
 import uuid
 from collections.abc import AsyncIterator
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 
 import pytest
 import pytest_asyncio
@@ -147,7 +147,7 @@ async def test_fbs_order_wb_warehouse_separate_from_office(
 ) -> None:
     """TC-NEW-FBS-STOCK-003: warehouseId and officeId are stored independently."""
     tenant, seller, wh_a, _wh_b = await _seed_tenant_seller_warehouses(db_session)
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     order = FbsOrder(
         tenant_id=tenant.id,
         seller_id=seller.id,
@@ -174,7 +174,7 @@ async def test_fbs_order_wb_warehouse_separate_from_office(
 async def test_fbs_order_unmapped_warehouse_nullable(db_session: AsyncSession) -> None:
     """TC-NEW-FBS-STOCK-004: unknown WB warehouse → warehouse_id null, explicit status."""
     tenant, seller, _wh_a, _wh_b = await _seed_tenant_seller_warehouses(db_session)
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     order = FbsOrder(
         tenant_id=tenant.id,
         seller_id=seller.id,
@@ -271,7 +271,7 @@ async def test_stock_sync_item_status_and_amounts(db_session: AsyncSession) -> N
 async def test_binding_lease_and_sync_metadata(db_session: AsyncSession) -> None:
     """Binding stores lease and last sync diagnostics for orchestration service."""
     tenant, seller, wh_a, _wh_b = await _seed_tenant_seller_warehouses(db_session)
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     binding = FbsWarehouseBinding(
         tenant_id=tenant.id,
         seller_id=seller.id,
@@ -289,4 +289,4 @@ async def test_binding_lease_and_sync_metadata(db_session: AsyncSession) -> None
     assert binding.lease_until is not None
     assert binding.last_sync_status == "confirmed"
     assert binding.last_sync_at is not None
-    assert binding.last_sync_at.replace(tzinfo=timezone.utc) == now
+    assert binding.last_sync_at.replace(tzinfo=UTC) == now

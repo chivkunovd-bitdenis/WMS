@@ -21,6 +21,10 @@ import pytest
 import pytest_asyncio
 from httpx import ASGITransport, AsyncClient
 from sqlalchemy import func, select
+from wb_emulator.db import reset_db_runtime
+from wb_emulator.main import create_app as create_emulator_app
+from wb_emulator.services.orders_store import DEFAULT_EMULATOR_WAREHOUSE_ID
+from wb_emulator.settings import get_settings as get_emulator_settings
 
 from app.core.settings import settings
 from app.db.session import SessionLocal
@@ -38,10 +42,6 @@ from app.services import inventory_service
 from app.services.fbs_autopoll_service import sync_seller_stocks
 from app.services.sorting_location_service import get_or_create_sorting_location
 from app.services.wb_marketplace_orders_service import sync_seller_orders
-from wb_emulator.db import reset_db_runtime
-from wb_emulator.main import create_app as create_emulator_app
-from wb_emulator.services.orders_store import DEFAULT_EMULATOR_WAREHOUSE_ID
-from wb_emulator.settings import get_settings as get_emulator_settings
 
 EMU_BASE = "http://emu"
 EMU_TOKEN = "cycle-test-token"
@@ -210,7 +210,7 @@ async def test_wms_emulator_fbs_stock_full_cycle(
     async_client: AsyncClient,
     emulator_stack: httpx.AsyncClient,
 ) -> None:
-    """Publish 1 → purchase consumes stock → intake reserves 1 → publish 0; FBO on other WH ignored."""
+    """Publish 1 → purchase → intake reserves 1 → publish 0; FBO on other WH ignored."""
     emu_client = emulator_stack
     headers, suffix = await _register_ff_admin(async_client)
     seller_id, fbs_wh_id = await _setup_seller_with_token(async_client, headers, suffix)
@@ -257,9 +257,7 @@ async def test_wms_emulator_fbs_stock_full_cycle(
         row.wb_barcode = WB_BARCODE
         await session.commit()
 
-        sorting = await get_or_create_sorting_location(
-            session, tenant_id, uuid.UUID(fbs_wh_id)
-        )
+        await get_or_create_sorting_location(session, tenant_id, uuid.UUID(fbs_wh_id))
         await inventory_service.record_movement_and_adjust_balance(
             session,
             tenant_id=tenant_id,

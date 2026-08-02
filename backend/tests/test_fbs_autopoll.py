@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import contextlib
 import time
 import uuid
 from typing import Any
@@ -31,7 +32,9 @@ from app.services.wb_marketplace_orders_service import (
 from tests.fbs_seed_helpers import DEFAULT_WB_WAREHOUSE_ID, seed_fbs_warehouse_binding
 
 
-def _wb_order_row(*, order_id: int, wb_warehouse_id: int = DEFAULT_WB_WAREHOUSE_ID) -> dict[str, Any]:
+def _wb_order_row(
+    *, order_id: int, wb_warehouse_id: int = DEFAULT_WB_WAREHOUSE_ID
+) -> dict[str, Any]:
     return {
         "id": order_id,
         "rid": f"rid-{order_id}",
@@ -520,10 +523,8 @@ async def test_fbs_autopoll_intake_error_skips_stock_sync(
 
     target = SellerPollTarget(tenant_id=tenant_id, seller_id=seller_id)
     async with SessionLocal() as session, httpx.AsyncClient() as client:
-        try:
+        with contextlib.suppress(WbMarketplaceOrdersError):
             await poll_fbs_orders_for_seller(session, target, client)
-        except WbMarketplaceOrdersError:
-            pass
 
     assert stock_calls == []
 
