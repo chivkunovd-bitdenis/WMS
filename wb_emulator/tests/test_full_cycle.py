@@ -18,6 +18,8 @@ ADMIN = {"X-Admin-Token": "admin-secret"}
 AUTH_A = {"Authorization": "token-a"}
 AUTH_B = {"Authorization": "token-b"}
 PNG_MAGIC = b"\x89PNG\r\n\x1a\n"
+KIZ_OK = "010460000000000021N4N57TEST0001"
+KIZ_ERR = "010460000000000021ERR-BAD-KIZ"
 
 
 @pytest.fixture()
@@ -55,6 +57,7 @@ def test_full_happy_path_admin_to_deliver(client: TestClient) -> None:
     supply = client.post("/api/v3/supplies", headers=AUTH_A, json={"name": "FBS cycle"})
     assert supply.status_code == 200
     supply_id = str(supply.json()["id"])
+    assert supply_id.startswith("WB-GI-")
 
     oid = order_ids[0]
     add = client.patch(f"/api/v3/supplies/{supply_id}/orders/{oid}", headers=AUTH_A)
@@ -66,27 +69,30 @@ def test_full_happy_path_admin_to_deliver(client: TestClient) -> None:
         json={"orders": [oid]},
     )
     assert stickers.status_code == 200
-    sticker_rows = stickers.json()
-    if isinstance(sticker_rows, dict):
-        sticker_rows = sticker_rows["stickers"]
+    sticker_rows = stickers.json()["stickers"]
     assert len(sticker_rows) == 1
-    png = base64.b64decode(sticker_rows[0]["file"])
+    assert sticker_rows[0]["orderId"] == oid
+    png = base64.b64decode(sticker_rows[0]["file"], validate=True)
     assert png.startswith(PNG_MAGIC)
+    assert len(png) > 100
 
     put_meta = client.put(
         f"/api/v3/orders/{oid}/meta/sgtin",
         headers=AUTH_A,
-        json={"sgtins": ["OK1234567890"]},
+        json={"sgtins": [KIZ_OK]},
     )
-    assert put_meta.status_code < 400
+    assert put_meta.status_code == 200
     meta = client.get(f"/api/v3/orders/{oid}/meta", headers=AUTH_A)
     assert meta.status_code == 200
-    body = meta.json()
-    sgtins = body.get("sgtins") or []
-    assert sgtins and sgtins[0].get("checkStatus") == "ok"
+    assert meta.json()["sgtins"] == [{"value": KIZ_OK, "checkStatus": "ok"}]
 
     deliver = client.patch(f"/api/v3/supplies/{supply_id}/deliver", headers=AUTH_A)
     assert deliver.status_code == 204
+
+    supply_view = client.get(f"/api/v3/supplies/{supply_id}", headers=AUTH_A)
+    assert supply_view.status_code == 200
+    assert supply_view.json()["done"] is True
+    assert oid in supply_view.json()["orders"]
 
 
 def test_kiz_err_sets_check_status_error(client: TestClient) -> None:
@@ -97,22 +103,26 @@ def test_kiz_err_sets_check_status_error(client: TestClient) -> None:
     put_meta = client.put(
         f"/api/v3/orders/{oid}/meta/sgtin",
         headers=AUTH_A,
-        json={"sgtins": ["010460000000000021ERR-BAD-KIZ"]},
+        json={"sgtins": [KIZ_ERR]},
     )
-    assert put_meta.status_code < 400
+    assert put_meta.status_code == 200
     meta = client.get(f"/api/v3/orders/{oid}/meta", headers=AUTH_A)
     assert meta.status_code == 200
-    body = meta.json()
-    sgtins = body.get("sgtins") or []
-    assert sgtins, body
-    entry = sgtins[0] if isinstance(sgtins[0], dict) else {}
-    assert entry.get("checkStatus") == "error"
+    assert meta.json()["sgtins"] == [{"value": KIZ_ERR, "checkStatus": "error"}]
 
 
 def test_unknown_token_returns_401(client: TestClient) -> None:
     """TC-NEW-FBS-EMU-001 negative: unknown Authorization → 401."""
-    response = client.get("/api/v3/orders/new", headers={"Authorization": "unknown-token"})
-    assert response.status_code == 401
+    assert client.get("/api/v3/orders/new").status_code == 401
+    assert client.get("/api/v3/orders/new", headers={"Authorization": "unknown-token"}).status_code == 401
+    assert (
+        client.post(
+            "/api/v3/supplies",
+            headers={"Authorization": "unknown-token"},
+            json={"name": "x"},
+        ).status_code
+        == 401
+    )
 
 
 def test_warehouses_and_offices_contract(client: TestClient) -> None:
@@ -134,7 +144,7 @@ def test_warehouses_and_offices_contract(client: TestClient) -> None:
 
 
 def test_multi_seller_isolation(client: TestClient) -> None:
-    """TC-NEW-FBS-EMU-003: each seller token sees only own orders."""
+    """TC-NEW-FBS-EMU-003: each seller token sees only own orders; foreign supply → 404."""
     a = client.post("/__admin/orders?seller=seller_a&count=2", headers=ADMIN)
     b = client.post("/__admin/orders?seller=seller_b&count=1", headers=ADMIN)
     assert a.status_code == 200 and b.status_code == 200
@@ -147,3 +157,7 @@ def test_multi_seller_isolation(client: TestClient) -> None:
     assert ids_b <= new_b
     assert ids_a.isdisjoint(new_b)
     assert ids_b.isdisjoint(new_a)
+
+    supply_a = client.post("/api/v3/supplies", headers=AUTH_A, json={"name": "A only"}).json()["id"]
+    foreign = client.get(f"/api/v3/supplies/{supply_a}", headers=AUTH_B)
+    assert foreign.status_code == 404
