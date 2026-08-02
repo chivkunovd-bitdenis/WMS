@@ -7,7 +7,7 @@ from datetime import UTC, datetime, timedelta
 from typing import Any
 
 import httpx
-from sqlalchemy import and_, func, or_, select
+from sqlalchemy import and_, or_, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -28,8 +28,8 @@ from app.models.fbs_order import (
     FbsOrderReservation,
 )
 from app.models.product import Product
-from app.services import inventory_service
 from app.services.catalog_service import get_warehouse, list_warehouses
+from app.services.fbs_stock_availability_service import fbs_available_qty_for_product
 from app.services.wildberries_client import (
     WildberriesClientError,
     fetch_marketplace_orders_new,
@@ -139,52 +139,6 @@ def _cargo_type_label(row: dict[str, Any]) -> str | None:
     return None
 
 
-async def fbs_reserved_qty_for_product(
-    session: AsyncSession,
-    tenant_id: uuid.UUID,
-    warehouse_id: uuid.UUID,
-    product_id: uuid.UUID,
-    *,
-    exclude_order_id: uuid.UUID | None = None,
-) -> int:
-    stmt = (
-        select(func.coalesce(func.sum(FbsOrderReservation.quantity), 0))
-        .where(
-            FbsOrderReservation.tenant_id == tenant_id,
-            FbsOrderReservation.warehouse_id == warehouse_id,
-            FbsOrderReservation.product_id == product_id,
-        )
-    )
-    if exclude_order_id is not None:
-        stmt = stmt.where(FbsOrderReservation.fbs_order_id != exclude_order_id)
-    res = await session.execute(stmt)
-    return int(res.scalar_one())
-
-
-async def fbs_reserved_by_product(
-    session: AsyncSession,
-    tenant_id: uuid.UUID,
-    warehouse_id: uuid.UUID,
-    product_ids: list[uuid.UUID],
-) -> dict[uuid.UUID, int]:
-    if not product_ids:
-        return {}
-    stmt = (
-        select(
-            FbsOrderReservation.product_id,
-            func.coalesce(func.sum(FbsOrderReservation.quantity), 0),
-        )
-        .where(
-            FbsOrderReservation.tenant_id == tenant_id,
-            FbsOrderReservation.warehouse_id == warehouse_id,
-            FbsOrderReservation.product_id.in_(product_ids),
-        )
-        .group_by(FbsOrderReservation.product_id)
-    )
-    res = await session.execute(stmt)
-    return {pid: int(qty) for pid, qty in res.all()}
-
-
 async def available_qty_for_fbs_reserve(
     session: AsyncSession,
     tenant_id: uuid.UUID,
@@ -193,34 +147,14 @@ async def available_qty_for_fbs_reserve(
     *,
     exclude_order_id: uuid.UUID | None = None,
 ) -> int:
-    """on_hand + sorting - outbound - mp unload reserves - fbs reserves."""
-    from app.services.marketplace_unload_service import (
-        _mp_reserved_qty_for_product,
-        _outbound_reserved_by_product,
-    )
-
-    on_hand = await inventory_service.storage_on_hand_in_warehouse(
-        session, tenant_id, warehouse_id, product_id
-    )
-    sorting_on_hand = await inventory_service.sorting_on_hand_in_warehouse(
-        session, tenant_id, warehouse_id, product_id
-    )
-    reserved_outbound = (
-        await _outbound_reserved_by_product(
-            session, tenant_id, warehouse_id, [product_id]
-        )
-    ).get(product_id, 0)
-    reserved_mp = await _mp_reserved_qty_for_product(
-        session, tenant_id, warehouse_id, product_id
-    )
-    reserved_fbs = await fbs_reserved_qty_for_product(
+    """max(0, storage + sorting - outbound - FBS); FBO/MP unload not subtracted."""
+    return await fbs_available_qty_for_product(
         session,
         tenant_id,
         warehouse_id,
         product_id,
-        exclude_order_id=exclude_order_id,
+        exclude_fbs_order_id=exclude_order_id,
     )
-    return on_hand + sorting_on_hand - reserved_outbound - reserved_mp - reserved_fbs
 
 
 async def _resolve_warehouse_id(
