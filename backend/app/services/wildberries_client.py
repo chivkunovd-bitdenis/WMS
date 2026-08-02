@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import base64
 import binascii
+from dataclasses import dataclass
 from typing import Any, cast
 
 import httpx
@@ -22,6 +23,8 @@ MARKETPLACE_SELLER_OFFICES_PATH = "/api/v3/offices"
 MARKETPLACE_SUPPLIES_PATH = "/api/v3/supplies"
 MARKETPLACE_ORDER_STICKERS_PATH = "/api/v3/orders/stickers"
 MARKETPLACE_ORDER_META_PATH = "/api/v3/orders/{order_id}/meta"
+MARKETPLACE_STOCKS_PATH = "/api/v3/stocks/{warehouse_id}"
+MAX_MARKETPLACE_STOCKS_BATCH = 1000
 
 # WB Marketplace meta PUT bodies use plural array keys per kind (see dev.wildberries.ru).
 _META_PUT_BODY_KEYS: dict[str, str] = {
@@ -57,6 +60,167 @@ class WildberriesClientError(Exception):
         self.code = code
         self.status_code = status_code
         super().__init__(code)
+
+
+@dataclass(frozen=True, slots=True)
+class MarketplaceStockAmount:
+    chrt_id: int
+    amount: int
+
+
+def _validate_marketplace_stocks_batch(
+    items: list[MarketplaceStockAmount],
+    *,
+    max_batch: int = MAX_MARKETPLACE_STOCKS_BATCH,
+) -> None:
+    if not items or len(items) > max_batch:
+        raise WildberriesClientError("invalid_request")
+    seen: set[int] = set()
+    for item in items:
+        if item.chrt_id <= 0:
+            raise WildberriesClientError("invalid_request")
+        if item.amount < 0:
+            raise WildberriesClientError("invalid_request")
+        if item.chrt_id in seen:
+            raise WildberriesClientError("invalid_request")
+        seen.add(item.chrt_id)
+
+
+def _validate_marketplace_chrt_ids_batch(
+    chrt_ids: list[int],
+    *,
+    max_batch: int = MAX_MARKETPLACE_STOCKS_BATCH,
+) -> None:
+    if not chrt_ids or len(chrt_ids) > max_batch:
+        raise WildberriesClientError("invalid_request")
+    seen: set[int] = set()
+    for chrt_id in chrt_ids:
+        if chrt_id <= 0:
+            raise WildberriesClientError("invalid_request")
+        if chrt_id in seen:
+            raise WildberriesClientError("invalid_request")
+        seen.add(chrt_id)
+
+
+def split_marketplace_stocks_batches(
+    items: list[MarketplaceStockAmount],
+    *,
+    max_batch: int = MAX_MARKETPLACE_STOCKS_BATCH,
+) -> list[list[MarketplaceStockAmount]]:
+    """Split stocks into WB API batches (≤ max_batch items each, no overlap)."""
+    if not items:
+        return []
+    batches: list[list[MarketplaceStockAmount]] = []
+    for start in range(0, len(items), max_batch):
+        batch = items[start : start + max_batch]
+        _validate_marketplace_stocks_batch(batch, max_batch=max_batch)
+        batches.append(batch)
+    return batches
+
+
+def _parse_marketplace_stocks_response(data: Any) -> list[MarketplaceStockAmount]:
+    if not isinstance(data, dict):
+        raise WildberriesClientError("invalid_response")
+    stocks_raw = data.get("stocks")
+    if not isinstance(stocks_raw, list):
+        raise WildberriesClientError("invalid_response")
+    parsed: list[MarketplaceStockAmount] = []
+    seen: set[int] = set()
+    for entry in stocks_raw:
+        if not isinstance(entry, dict):
+            raise WildberriesClientError("invalid_response")
+        chrt_raw = entry.get("chrtId")
+        amount_raw = entry.get("amount")
+        if not isinstance(chrt_raw, int) or isinstance(chrt_raw, bool):
+            raise WildberriesClientError("invalid_response")
+        if not isinstance(amount_raw, int) or isinstance(amount_raw, bool):
+            raise WildberriesClientError("invalid_response")
+        if chrt_raw <= 0 or amount_raw < 0:
+            raise WildberriesClientError("invalid_response")
+        if chrt_raw in seen:
+            raise WildberriesClientError("invalid_response")
+        seen.add(chrt_raw)
+        parsed.append(MarketplaceStockAmount(chrt_id=chrt_raw, amount=amount_raw))
+    return parsed
+
+
+def _marketplace_stocks_url(
+    *,
+    warehouse_id: int,
+    marketplace_api_base: str | None,
+) -> str:
+    base = (marketplace_api_base or settings.wildberries_marketplace_api_base).rstrip("/")
+    return f"{base}{MARKETPLACE_STOCKS_PATH.format(warehouse_id=warehouse_id)}"
+
+
+async def put_marketplace_stocks(
+    client: httpx.AsyncClient,
+    *,
+    api_token: str,
+    warehouse_id: int,
+    stocks: list[MarketplaceStockAmount],
+    marketplace_api_base: str | None = None,
+) -> None:
+    """PUT /api/v3/stocks/{warehouseId} — absolute stock amounts by chrtId."""
+    _validate_marketplace_stocks_batch(stocks)
+    url = _marketplace_stocks_url(
+        warehouse_id=warehouse_id,
+        marketplace_api_base=marketplace_api_base,
+    )
+    headers = {
+        "Authorization": api_token,
+        "Content-Type": "application/json",
+    }
+    payload = {
+        "stocks": [
+            {"chrtId": item.chrt_id, "amount": item.amount}
+            for item in stocks
+        ],
+    }
+    try:
+        response = await client.put(url, headers=headers, json=payload, timeout=60.0)
+    except httpx.HTTPError as exc:
+        raise WildberriesClientError("transport_error") from exc
+    if response.status_code >= 400:
+        raise WildberriesClientError(
+            "upstream_error",
+            status_code=response.status_code,
+        )
+
+
+async def fetch_marketplace_stocks(
+    client: httpx.AsyncClient,
+    *,
+    api_token: str,
+    warehouse_id: int,
+    chrt_ids: list[int],
+    marketplace_api_base: str | None = None,
+) -> list[MarketplaceStockAmount]:
+    """POST /api/v3/stocks/{warehouseId} — read stock amounts by chrtId."""
+    _validate_marketplace_chrt_ids_batch(chrt_ids)
+    url = _marketplace_stocks_url(
+        warehouse_id=warehouse_id,
+        marketplace_api_base=marketplace_api_base,
+    )
+    headers = {
+        "Authorization": api_token,
+        "Content-Type": "application/json",
+    }
+    payload = {"chrtIds": chrt_ids}
+    try:
+        response = await client.post(url, headers=headers, json=payload, timeout=60.0)
+    except httpx.HTTPError as exc:
+        raise WildberriesClientError("transport_error") from exc
+    if response.status_code >= 400:
+        raise WildberriesClientError(
+            "upstream_error",
+            status_code=response.status_code,
+        )
+    try:
+        data = response.json()
+    except ValueError as exc:
+        raise WildberriesClientError("invalid_response") from exc
+    return _parse_marketplace_stocks_response(data)
 
 
 async def fetch_cards_list(
