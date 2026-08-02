@@ -45,6 +45,7 @@ import { FfInboundRequestView, type InboundRequestWorkspace } from './screens/ff
 import { FfInboundQueuePage } from './screens/ff/FfInboundQueuePage'
 import { FfProductsCatalogScreen } from './screens/v2/FfProductsCatalogScreen'
 import { FfFbsOrdersScreen } from './screens/v2/FfFbsOrdersScreen'
+import { FfFbsStockSyncScreen } from './screens/v2/FfFbsStockSyncScreen'
 import { FfSettingsScreen } from './screens/ff/FfSettingsScreen'
 import {
   canAccessFfBlock,
@@ -2512,6 +2513,21 @@ export default function App() {
                 <FfFbsOrdersScreen token={token} authHeaders={authHeaders} sellers={sellers} />
               ) : (
                 <FfPlaceholderPage title="FBS" hint="Нет токена." testId="ff-fbs-placeholder" />
+              )
+            }
+          />
+
+          <Route
+            path="ff/fbs/stock-sync"
+            element={
+              token ? (
+                <FfFbsStockSyncScreen token={token} authHeaders={authHeaders} sellers={sellers} />
+              ) : (
+                <FfPlaceholderPage
+                  title="FBS — остатки"
+                  hint="Нет токена."
+                  testId="ff-fbs-stock-placeholder"
+                />
               )
             }
           />

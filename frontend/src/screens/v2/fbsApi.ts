@@ -297,3 +297,134 @@ export async function putFbsOrderMarking(
   })
   return jsonOrThrow<FbsOrderMarking>(res)
 }
+
+// ── Привязки складов WB ↔ WMS + синхронизация остатков ───────────────────────
+// backend/app/api/fbs_sellers.py — /operations/fbs-sellers/{seller_id}/...
+
+export type FbsWarehouseBinding = {
+  id: string
+  wb_warehouse_id: number
+  wms_warehouse_id: string
+  is_active: boolean
+  stock_sync_enabled: boolean
+  last_sync_status: string | null
+  last_sync_at: string | null
+  last_error_code: string | null
+}
+
+export type FbsStockSyncResult = {
+  bindings_processed: number
+  products_targeted: number
+  products_confirmed: number
+  products_zeroed: number
+  conflicts: number
+  errors: number
+  binding_errors: number
+}
+
+export type FbsStockSyncJob = {
+  id: string
+  status: string
+}
+
+export type FbsStockSyncStatusItem = {
+  chrt_id: number
+  product_id: string | null
+  target: number | null
+  confirmed: number | null
+  status: string
+  error: string | null
+  timestamp: string
+}
+
+export type FbsStockSyncStatus = {
+  wb_warehouse_id: number
+  binding_last_sync_at: string | null
+  binding_last_sync_status: string | null
+  binding_last_error_code: string | null
+  items: FbsStockSyncStatusItem[]
+}
+
+export const STOCK_SYNC_STATUS_LABEL: Record<string, string> = {
+  pending: 'Ожидание',
+  confirmed: 'Подтверждено',
+  error: 'Ошибка',
+  conflict: 'Конфликт',
+}
+
+function sellerBase(sellerId: string): string {
+  return `/operations/fbs-sellers/${sellerId}`
+}
+
+export async function fetchFbsWarehouseBindings(
+  token: string,
+  ah: (t: string) => Record<string, string>,
+  sellerId: string,
+): Promise<FbsWarehouseBinding[]> {
+  const res = await fetch(apiUrl(`${sellerBase(sellerId)}/warehouse-bindings`), {
+    headers: { ...ah(token) },
+  })
+  return jsonOrThrow<FbsWarehouseBinding[]>(res)
+}
+
+export async function upsertFbsWarehouseBinding(
+  token: string,
+  ah: (t: string) => Record<string, string>,
+  sellerId: string,
+  wbWarehouseId: number,
+  body: { wms_warehouse_id: string; stock_sync_enabled: boolean },
+): Promise<FbsWarehouseBinding> {
+  const res = await fetch(
+    apiUrl(`${sellerBase(sellerId)}/warehouse-bindings/${wbWarehouseId}`),
+    {
+      method: 'PUT',
+      headers: { ...ah(token), 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    },
+  )
+  return jsonOrThrow<FbsWarehouseBinding>(res)
+}
+
+export async function disableFbsWarehouseBinding(
+  token: string,
+  ah: (t: string) => Record<string, string>,
+  sellerId: string,
+  wbWarehouseId: number,
+): Promise<FbsWarehouseBinding> {
+  const res = await fetch(
+    apiUrl(`${sellerBase(sellerId)}/warehouse-bindings/${wbWarehouseId}`),
+    { method: 'DELETE', headers: { ...ah(token) } },
+  )
+  return jsonOrThrow<FbsWarehouseBinding>(res)
+}
+
+export async function triggerFbsStockSync(
+  token: string,
+  ah: (t: string) => Record<string, string>,
+  sellerId: string,
+  wbWarehouseId?: number | null,
+): Promise<FbsStockSyncResult | FbsStockSyncJob> {
+  const res = await fetch(apiUrl(`${sellerBase(sellerId)}/stocks/sync`), {
+    method: 'POST',
+    headers: { ...ah(token), 'Content-Type': 'application/json' },
+    body: JSON.stringify(
+      wbWarehouseId != null ? { wb_warehouse_id: wbWarehouseId } : {},
+    ),
+  })
+  if (!res.ok) throw new Error(await readApiErrorMessage(res))
+  return (await res.json()) as FbsStockSyncResult | FbsStockSyncJob
+}
+
+export async function fetchFbsStockSyncStatus(
+  token: string,
+  ah: (t: string) => Record<string, string>,
+  sellerId: string,
+  wbWarehouseId: number,
+): Promise<FbsStockSyncStatus> {
+  const qs = new URLSearchParams({ wb_warehouse_id: String(wbWarehouseId) })
+  const res = await fetch(
+    apiUrl(`${sellerBase(sellerId)}/stocks/sync-status?${qs.toString()}`),
+    { headers: { ...ah(token) } },
+  )
+  return jsonOrThrow<FbsStockSyncStatus>(res)
+}

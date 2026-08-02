@@ -36,6 +36,7 @@ import {
   type FbsOrderRow,
   type FbsOrdersTab,
 } from './fbsApi'
+import { FfFbsSectionNav } from './FfFbsSectionNav'
 import { FfFbsSupplyDrawer } from './FfFbsSupplyDrawer'
 import {
   CargoTypeChip,
@@ -184,9 +185,11 @@ export function FfFbsOrdersScreen({ token, authHeaders, sellers }: Props) {
       <Typography variant="h5" gutterBottom>
         FBS
       </Typography>
-      <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+      <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
         Заказы по модели «Маркетплейс»: сборка, отгрузка и передача в доставку.
       </Typography>
+
+      <FfFbsSectionNav />
 
       <Tabs
         value={tab}
