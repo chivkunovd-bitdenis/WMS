@@ -1,5 +1,11 @@
 # TASKLOG
 
+## TASK-134 — 2026-08-02 — STOCKFIX-080 FF UI FBS warehouse stock sync
+
+- What changed: API helpers in `fbsApi.ts` (warehouse-bindings CRUD, stocks/sync, sync-status); экран `FfFbsStockSyncScreen` + поднавигация `FfFbsSectionNav` (Заказы / Остатки WB); маршрут `/app/ff/fbs/stock-sync`; Playwright e2e `ff-fbs-stock-sync.spec.ts` TC-NEW-FBS-STOCK-UI-001 без `page.route` на binding/sync API.
+- What did NOT change: backend API; автосинхронизация после intake.
+- Verification: `npm run build` green; `npx playwright test tests-e2e/ff-fbs-stock-sync.spec.ts` → **1 passed**.
+
 ## TASK-133 — 2026-08-02 — STOCKFIX-055 binding last_error_code
 
 - What changed: `sync_binding_stocks` sets `binding.last_error_code` from the first real publish error (`wb_upstream_error_*`, `wb_transport_error`, `readback_mismatch`) instead of always `readback_mismatch`; `_publish_batches` returns `first_error_code`; tests for 401/409/429/transport binding assertions.
