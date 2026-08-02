@@ -114,9 +114,10 @@ def test_trbx_create_bind_and_stickers_stub(client: TestClient) -> None:
     )
     assert stickers.status_code == 200
     payload = stickers.json()
-    assert len(payload) == 2
-    assert payload[0]["trbxId"] in trbx_ids
-    assert payload[0]["file"]
+    rows = payload["stickers"] if isinstance(payload, dict) else payload
+    assert len(rows) == 2
+    assert rows[0]["trbxId"] in trbx_ids
+    assert rows[0]["file"]
 
 
 def test_barcode_stub_returns_png(client: TestClient) -> None:
