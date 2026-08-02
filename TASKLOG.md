@@ -1,5 +1,11 @@
 # TASKLOG
 
+## TASK-133 — 2026-08-02 — STOCKFIX-055 binding last_error_code
+
+- What changed: `sync_binding_stocks` sets `binding.last_error_code` from the first real publish error (`wb_upstream_error_*`, `wb_transport_error`, `readback_mismatch`) instead of always `readback_mismatch`; `_publish_batches` returns `first_error_code`; tests for 401/409/429/transport binding assertions.
+- What did NOT change: item-level `last_error_code` logic; lease/sync busy paths.
+- Verification: `python3 -m pytest tests/test_fbs_stock_sync.py -q` → **15 passed**.
+
 ## TASK-132 — 2026-08-02 — STOCKFIX-070 FBS warehouse remap conflict
 
 - What changed: fail-closed on WB `warehouseId` remap when order has active FBS reserve on another WMS warehouse — `reserve_status=warehouse_remap_conflict`, old `wb_warehouse_id` preserved; tests `test_fbs_order_reservation_conflict_keeps_warehouse`, `test_fbs_order_wb_warehouse_remap_conflict_on_resync`.
