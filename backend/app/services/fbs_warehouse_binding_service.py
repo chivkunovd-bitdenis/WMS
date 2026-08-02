@@ -191,6 +191,10 @@ async def disable_binding(
     wb_warehouse_id: int,
 ) -> FbsWarehouseBinding:
     row = await get_binding(session, tenant_id, seller_id, wb_warehouse_id)
+    if await _has_active_fbs_reservations(
+        session, tenant_id, seller_id, row.wms_warehouse_id
+    ):
+        raise FbsWarehouseBindingError("active_fbs_reservations")
     row.is_active = False
     await session.commit()
     await session.refresh(row)

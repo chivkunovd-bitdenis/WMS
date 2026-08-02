@@ -6,6 +6,7 @@ TC-NEW-FBS-STOCK-014: admin binding API validates tenant/seller/warehouse.
 N1: cross-tenant isolation → 404 without leaking existence.
 N2: duplicate WMS warehouse for same seller → 409.
 N3: WMS warehouse change blocked when active FBS reservations exist.
+N4: disable binding blocked when active FBS reservations exist.
 """
 
 from __future__ import annotations
@@ -310,6 +311,78 @@ async def test_fbs_warehouse_binding_blocked_by_active_reservations_409(
     )
     assert toggle_ok.status_code == 200
     assert toggle_ok.json()["stock_sync_enabled"] is False
+
+
+# N4 — cannot disable binding while active FBS reservations exist
+@pytest.mark.asyncio
+async def test_fbs_warehouse_binding_disable_blocked_by_active_reservations_409(
+    async_client: AsyncClient,
+) -> None:
+    headers, suffix = await _register_ff_admin(async_client)
+    seller_id = await _create_seller(async_client, headers, suffix)
+    wh_a = await _create_warehouse(async_client, headers, suffix, "a")
+
+    created = await async_client.put(
+        _bindings_url(seller_id, 501001),
+        headers=headers,
+        json={"wms_warehouse_id": wh_a, "stock_sync_enabled": True},
+    )
+    assert created.status_code == 200
+
+    async with SessionLocal() as session:
+        seller = await session.get(Seller, uuid.UUID(seller_id))
+        assert seller is not None
+        tenant_id = seller.tenant_id
+        product = Product(
+            id=uuid.uuid4(),
+            tenant_id=tenant_id,
+            seller_id=seller.id,
+            name="Disable bind product",
+            sku_code=f"DIS-{suffix}",
+            wb_barcode="DIS-BAR",
+        )
+        now = datetime.now(UTC)
+        order = FbsOrder(
+            tenant_id=tenant_id,
+            seller_id=seller.id,
+            warehouse_id=uuid.UUID(wh_a),
+            product_id=product.id,
+            wb_order_id=990002,
+            status=FBS_ORDER_STATUS_NEW,
+            created_at_wb=now,
+            deadline_at=now + timedelta(hours=24),
+            mapping_status=MAPPING_STATUS_MAPPED,
+            reserve_status=RESERVE_STATUS_RESERVED,
+        )
+        session.add_all([product, order])
+        await session.flush()
+        session.add(
+            FbsOrderReservation(
+                tenant_id=tenant_id,
+                fbs_order_id=order.id,
+                product_id=product.id,
+                warehouse_id=uuid.UUID(wh_a),
+                quantity=1,
+            )
+        )
+        await session.commit()
+
+    blocked = await async_client.delete(
+        _bindings_url(seller_id, 501001),
+        headers=headers,
+    )
+    assert blocked.status_code == 409
+    assert blocked.json()["detail"] == "active_fbs_reservations"
+
+    async with SessionLocal() as session:
+        row = await session.scalar(
+            select(FbsWarehouseBinding).where(
+                FbsWarehouseBinding.seller_id == uuid.UUID(seller_id),
+                FbsWarehouseBinding.wb_warehouse_id == 501001,
+            )
+        )
+        assert row is not None
+        assert row.is_active is True
 
 
 # TC-NEW-FBS-STOCK-014 — invalid WB warehouse id rejected
