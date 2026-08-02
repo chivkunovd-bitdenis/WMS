@@ -1,9 +1,48 @@
 # CURSOR_HANDOFF — fbs-stock-sync (STOCKFIX-090 gates)
 
-> **Status:** STOCKFIX-090 complete — review condition #7 (ruff/mypy/pytest/e2e) closed for re-review.  
+> **Status:** GATE-FIX #1 applied — `qrcode`/`pypng`/`python-barcode` in backend `[dev]` extras; emulator integration pytest collects and runs green.  
 > **Integration branch:** `feat/fbs-stock-sync`  
 > **Task branch:** `task/STOCKFIX-090`  
 > **Base HEAD (pre-commit):** `4ab915c199578700218a17e68a644f71c38fe1ca`
+
+---
+
+## GATE-FIX #1 — verifier NOT_READY (qrcode collect + mypy alarm)
+
+**Root cause:** `tests/test_fbs_stock_emulator_integration.py` imports `wb_emulator` → `stickers.py` → `qrcode` (+ transitive `pypng`, `python-barcode`). CI installs `pip install -e ".[dev]"` but `[dev]` lacked emulator sticker deps → `ModuleNotFoundError: qrcode` at pytest collection.
+
+**Fix (committed):** add to `backend/pyproject.toml` `[project.optional-dependencies].dev`:
+- `qrcode[pil]>=7.4`
+- `pypng>=0.20220615` (qrcode imports `png` at module load)
+- `python-barcode>=0.15`
+
+CI path unchanged: `pip install -e ".[dev]"` in `.github/workflows/ci.yml` now pulls these automatically.
+
+**Local note:** shared `backend/.venv` had zombie `pip`/`mypy`/`pytest` processes from prior installs; proof re-run in clean venv (`python3.14 -m venv /tmp/stockfix090-proof-venv && pip install -e ".[dev]"`).
+
+### Gate results (GATE-FIX #1, fresh venv proof)
+
+```bash
+pkill -f 'WMS /backend/.venv/bin/mypy' || true
+cd backend  # worktree STOCKFIX-090
+# proof venv: /tmp/stockfix090-proof-venv (pip install -e ".[dev]")
+
+ruff check .
+# All checks passed!
+
+mypy --pretty app/services/fbs_stock_sync_service.py ... tests/fbs_seed_helpers.py
+# Success: no issues found in 11 source files
+
+pytest tests/test_fbs_stock_emulator_integration.py --collect-only -q
+# 2 tests collected in 0.10s
+
+pytest tests/test_fbs_stock_emulator_integration.py -q --tb=line
+# 2 passed in 1.72s
+
+# focused STOCKFIX suite (+ emulator integration):
+pytest tests/test_fbs_stock_*.py tests/test_fbs_warehouse_binding.py ... tests/test_fbs_stock_emulator_integration.py -q
+# 139 passed, 1 skipped in 89.24s
+```
 
 ---
 
@@ -97,9 +136,9 @@ No separate `packaging deliver` e2e spec exists in `frontend/tests-e2e/` (only `
 
 ---
 
-## Files changed in STOCKFIX-090
+## Files changed in STOCKFIX-090 (+ GATE-FIX #1)
 
-- `backend/pyproject.toml` — mypy `explicit_package_bases`; ruff E402 ignore for emulator integration test
+- `backend/pyproject.toml` — mypy `explicit_package_bases`; ruff E402 ignore for emulator integration test; **GATE-FIX #1:** `qrcode[pil]`, `pypng`, `python-barcode` in `[dev]`
 - `backend/app/models/__init__.py` — ruff import/`__all__` sort
 - `backend/app/tasks/background_jobs.py` — ruff import sort
 - `backend/app/services/fbs_packaging_integration_service.py` — ruff import sort

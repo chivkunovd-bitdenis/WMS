@@ -38,6 +38,10 @@ dev = [
   "pytest-asyncio>=0.23",
   "types-requests>=2.32.0.20240622",
   "aiosqlite>=0.20",
+  # wb_emulator sticker/barcode deps for tests/test_fbs_stock_emulator_integration.py
+  "qrcode[pil]>=7.4",
+  "pypng>=0.20220615",
+  "python-barcode>=0.15",
 ]
 
 [tool.ruff]
