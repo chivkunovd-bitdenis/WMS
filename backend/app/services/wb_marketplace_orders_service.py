@@ -45,6 +45,8 @@ from app.services.wildberries_credentials_service import (
 FBS_DEADLINE_HOURS = 120
 MAX_ORDERS_PAGES = 10
 
+RESERVE_STATUS_WAREHOUSE_REMAP_CONFLICT = "warehouse_remap_conflict"
+
 CANCEL_LIKE_WB_STATUSES = frozenset(
     {
         "cancel",
@@ -200,6 +202,25 @@ async def _get_reservation_warehouse_id(
     return res.scalar_one_or_none()
 
 
+async def _detect_warehouse_remap_conflict(
+    session: AsyncSession,
+    tenant_id: uuid.UUID,
+    seller_id: uuid.UUID,
+    order: FbsOrder,
+    new_wb_warehouse_id: int,
+) -> bool:
+    """True when WB warehouse changed but an active reserve pins another WMS warehouse."""
+    if new_wb_warehouse_id == order.wb_warehouse_id:
+        return False
+    reservation_wh = await _get_reservation_warehouse_id(session, order.id)
+    if reservation_wh is None:
+        return False
+    resolved = await _resolve_wms_warehouse_from_binding(
+        session, tenant_id, seller_id, new_wb_warehouse_id
+    )
+    return resolved != reservation_wh
+
+
 async def _assign_wms_warehouse_from_binding(
     session: AsyncSession,
     tenant_id: uuid.UUID,
@@ -225,6 +246,7 @@ async def _assign_wms_warehouse_from_binding(
 
     reservation_wh = await _get_reservation_warehouse_id(session, order.id)
     if reservation_wh is not None and reservation_wh != resolved:
+        order.reserve_status = RESERVE_STATUS_WAREHOUSE_REMAP_CONFLICT
         return
     order.warehouse_id = resolved
 
@@ -399,7 +421,12 @@ async def _apply_wb_row_to_existing(
         existing.wb_office_id = office_id
     wb_wh_id = _wb_warehouse_id_from_row(row)
     if wb_wh_id is not None:
-        existing.wb_warehouse_id = wb_wh_id
+        if await _detect_warehouse_remap_conflict(
+            session, tenant_id, seller_id, existing, wb_wh_id
+        ):
+            existing.reserve_status = RESERVE_STATUS_WAREHOUSE_REMAP_CONFLICT
+        else:
+            existing.wb_warehouse_id = wb_wh_id
     await _assign_wms_warehouse_from_binding(
         session, tenant_id, seller_id, existing, existing.wb_warehouse_id
     )

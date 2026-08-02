@@ -29,12 +29,12 @@ from app.services import inventory_service
 from app.services.sorting_location_service import get_or_create_sorting_location
 from app.services.wb_marketplace_orders_service import (
     FBS_DEADLINE_HOURS,
+    RESERVE_STATUS_WAREHOUSE_REMAP_CONFLICT,
     WbMarketplaceOrdersError,
     sync_seller_orders,
     upsert_order_from_wb_row,
 )
 from app.services.wildberries_client import WildberriesClientError
-
 
 WB_WAREHOUSE_A = 501001
 WB_WAREHOUSE_B = 501002
@@ -1050,7 +1050,6 @@ async def test_fbs_order_reservation_conflict_keeps_warehouse(
 
         order2 = await session.get(FbsOrder, order_id)
         assert order2 is not None
-        order2.wb_warehouse_id = WB_WAREHOUSE_B
         from app.services.wb_marketplace_orders_service import (
             _assign_wms_warehouse_from_binding,
         )
@@ -1062,8 +1061,99 @@ async def test_fbs_order_reservation_conflict_keeps_warehouse(
         await session.refresh(order2)
 
         assert order2.warehouse_id == warehouse_a_uuid
+        assert order2.reserve_status == RESERVE_STATUS_WAREHOUSE_REMAP_CONFLICT
         res_stmt = select(FbsOrderReservation).where(
             FbsOrderReservation.fbs_order_id == order_id
+        )
+        res = await session.execute(res_stmt)
+        reservation = res.scalar_one_or_none()
+        assert reservation is not None
+        assert reservation.warehouse_id == warehouse_a_uuid
+
+
+# TC-NEW-FBS-STOCK-012 — WB warehouse remap with active reserve is observable
+@pytest.mark.asyncio
+async def test_fbs_order_wb_warehouse_remap_conflict_on_resync(
+    async_client: AsyncClient,
+) -> None:
+    headers, suffix = await _register_ff_admin(async_client)
+    seller_id, warehouse_a = await _setup_seller_with_token(async_client, headers, suffix)
+    warehouse_b = await async_client.post(
+        "/warehouses",
+        headers=headers,
+        json={"name": "WH remap", "code": f"wh-r-{suffix[-8:]}"},
+    )
+    assert warehouse_b.status_code in (200, 201), warehouse_b.text
+    warehouse_b_id = warehouse_b.json()["id"]
+
+    product = await async_client.post(
+        "/products",
+        headers=headers,
+        json={
+            "name": "Remap product",
+            "sku_code": f"RMP-{suffix}",
+            "seller_id": seller_id,
+            "wb_barcode": "FBS-REMAP-001",
+        },
+    )
+    assert product.status_code in (200, 201), product.text
+    product_id = uuid.UUID(product.json()["id"])
+    seller_uuid = uuid.UUID(seller_id)
+    warehouse_a_uuid = uuid.UUID(warehouse_a)
+    warehouse_b_uuid = uuid.UUID(warehouse_b_id)
+
+    async with SessionLocal() as session:
+        prod = await session.get(Product, product_id)
+        assert prod is not None
+        tenant_id = prod.tenant_id
+        sorting = await get_or_create_sorting_location(
+            session, tenant_id, warehouse_a_uuid
+        )
+        await inventory_service.record_movement_and_adjust_balance(
+            session,
+            tenant_id=tenant_id,
+            product_id=product_id,
+            storage_location_id=sorting.id,
+            quantity_delta=1,
+            movement_type="inbound_intake",
+        )
+        await _seed_binding(
+            session, tenant_id, seller_uuid, WB_WAREHOUSE_A, warehouse_a_uuid
+        )
+        await _seed_binding(
+            session, tenant_id, seller_uuid, WB_WAREHOUSE_B, warehouse_b_uuid
+        )
+        order, _ = await upsert_order_from_wb_row(
+            session,
+            tenant_id,
+            seller_uuid,
+            _wb_order_row(
+                order_id=801201,
+                barcode="FBS-REMAP-001",
+                warehouse_id=WB_WAREHOUSE_A,
+            ),
+        )
+        assert order.reserve_status == RESERVE_STATUS_RESERVED
+        await session.commit()
+
+        order, _ = await upsert_order_from_wb_row(
+            session,
+            tenant_id,
+            seller_uuid,
+            _wb_order_row(
+                order_id=801201,
+                barcode="FBS-REMAP-001",
+                warehouse_id=WB_WAREHOUSE_B,
+            ),
+        )
+        await session.commit()
+        await session.refresh(order)
+
+        assert order.wb_warehouse_id == WB_WAREHOUSE_A
+        assert order.warehouse_id == warehouse_a_uuid
+        assert order.reserve_status == RESERVE_STATUS_WAREHOUSE_REMAP_CONFLICT
+        res_stmt = select(FbsOrderReservation).where(
+            FbsOrderReservation.fbs_order_id == order.id
         )
         res = await session.execute(res_stmt)
         reservation = res.scalar_one_or_none()
