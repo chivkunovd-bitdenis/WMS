@@ -11,6 +11,7 @@ from httpx import AsyncClient
 from app.core.settings import settings
 from app.db.session import SessionLocal
 from app.models.fbs_order import (
+    FBS_ORDER_STATUS_ASSEMBLING,
     FBS_ORDER_STATUS_CANCELLED,
     FBS_ORDER_STATUS_IN_DELIVERY,
     FBS_ORDER_STATUS_IN_SUPPLY,
@@ -21,6 +22,7 @@ from app.models.fbs_order import (
 from app.models.fbs_supply import (
     FBS_SUPPLY_STATUS_ASSEMBLING,
     FBS_SUPPLY_STATUS_IN_DELIVERY,
+    FBS_SUPPLY_STATUS_PACKED,
     FbsSupply,
 )
 from app.models.product import Product
@@ -150,7 +152,7 @@ async def _prepare_supply_with_orders(
     *,
     wb_order_ids: list[int],
     order_status: str = FBS_ORDER_STATUS_PACKED,
-    supply_status: str = FBS_SUPPLY_STATUS_ASSEMBLING,
+    supply_status: str = FBS_SUPPLY_STATUS_PACKED,
     products: list[Product | None] | None = None,
     supply_name: str,
     delivery_type: str = "warehouse_sc",
@@ -263,6 +265,54 @@ async def test_fbs_shipment_deliver_ok_and_orders_not_ready(
     )
     assert bad.status_code == 400
     assert bad.json()["detail"] == "orders_not_ready"
+
+
+# TC-NEW-FBS-SHIPWH-001b — deliver blocked until packaging complete
+@pytest.mark.asyncio
+async def test_fbs_shipment_deliver_requires_packaging(
+    async_client: AsyncClient,
+    enable_wb_marketplace_supplies_mock: None,
+) -> None:
+    headers, suffix = await _register_ff_admin(async_client)
+    seller_id, warehouse_id, tenant_id = await _setup_seller_with_token(
+        async_client, headers, suffix
+    )
+
+    in_supply, _ = await _prepare_supply_with_orders(
+        async_client,
+        headers,
+        seller_id,
+        warehouse_id,
+        tenant_id,
+        wb_order_ids=[950010],
+        order_status=FBS_ORDER_STATUS_IN_SUPPLY,
+        supply_status=FBS_SUPPLY_STATUS_ASSEMBLING,
+        supply_name="Deliver blocked in_supply",
+    )
+    blocked = await async_client.post(
+        f"/operations/fbs-supplies/{in_supply['id']}/deliver",
+        headers=headers,
+    )
+    assert blocked.status_code == 400
+    assert blocked.json()["detail"] == "packaging_required"
+
+    assembling, _ = await _prepare_supply_with_orders(
+        async_client,
+        headers,
+        seller_id,
+        warehouse_id,
+        tenant_id,
+        wb_order_ids=[950011],
+        order_status=FBS_ORDER_STATUS_ASSEMBLING,
+        supply_status=FBS_SUPPLY_STATUS_ASSEMBLING,
+        supply_name="Deliver blocked assembling",
+    )
+    blocked_assembling = await async_client.post(
+        f"/operations/fbs-supplies/{assembling['id']}/deliver",
+        headers=headers,
+    )
+    assert blocked_assembling.status_code == 400
+    assert blocked_assembling.json()["detail"] == "packaging_required"
 
 
 # TC-NEW-FBS-SHIPWH-002 — barcode PNG cached
@@ -440,7 +490,7 @@ async def test_fbs_shipment_deliver_wb_error_no_status_change(
     async with SessionLocal() as session:
         supply_row = await session.get(FbsSupply, uuid.UUID(supply["id"]))
         assert supply_row is not None
-        assert supply_row.status == FBS_SUPPLY_STATUS_ASSEMBLING
+        assert supply_row.status == FBS_SUPPLY_STATUS_PACKED
         assert supply_row.delivered_at is None
         order = await session.get(FbsOrder, order_ids[0])
         assert order is not None
@@ -515,7 +565,7 @@ async def test_fbs_shipment_deliver_cancelled_order_in_supply(
     async with SessionLocal() as session:
         supply_row = await session.get(FbsSupply, uuid.UUID(supply["id"]))
         assert supply_row is not None
-        assert supply_row.status == FBS_SUPPLY_STATUS_ASSEMBLING
+        assert supply_row.status == FBS_SUPPLY_STATUS_PACKED
         assert supply_row.delivered_at is None
         for local_order_id in order_ids:
             order = await session.get(FbsOrder, local_order_id)

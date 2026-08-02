@@ -177,6 +177,11 @@ export async function deliverFbsSupply(
   return jsonOrThrow<FbsSupply>(res)
 }
 
+/** Delivery is allowed only after packaging task completed (supply.status === packed). */
+export function canDeliverFbsSupply(supply: FbsSupply): boolean {
+  return supply.status === 'packed'
+}
+
 // Лист подбора (Экран 3). GET /operations/fbs-supplies/{id}/picking-list → { items }.
 export type FbsPickingItem = {
   article: string

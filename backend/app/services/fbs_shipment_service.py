@@ -26,6 +26,7 @@ from app.models.fbs_supply import (
     FBS_DELIVERY_TYPE_WAREHOUSE_SC,
     FBS_SUPPLY_STATUS_DONE,
     FBS_SUPPLY_STATUS_IN_DELIVERY,
+    FBS_SUPPLY_STATUS_PACKED,
     FbsSupply,
 )
 from app.services.wildberries_client import (
@@ -38,12 +39,9 @@ from app.services.wildberries_credentials_service import (
     get_decrypted_marketplace_token,
 )
 
-_DELIVER_READY_ORDER_STATUSES = frozenset(
-    {
-        FBS_ORDER_STATUS_IN_SUPPLY,
-        FBS_ORDER_STATUS_ASSEMBLING,
-        FBS_ORDER_STATUS_PACKED,
-    }
+_DELIVER_READY_ORDER_STATUSES = frozenset({FBS_ORDER_STATUS_PACKED})
+_PACKAGING_PENDING_ORDER_STATUSES = frozenset(
+    {FBS_ORDER_STATUS_IN_SUPPLY, FBS_ORDER_STATUS_ASSEMBLING}
 )
 _DELIVER_ALLOWED_DELIVERY_TYPES = frozenset(
     {FBS_DELIVERY_TYPE_WAREHOUSE_SC, FBS_DELIVERY_TYPE_PVZ}
@@ -146,6 +144,8 @@ def _validate_orders_deliverable(orders: list[FbsOrder]) -> None:
     if any(order.status == FBS_ORDER_STATUS_CANCELLED for order in orders):
         raise FbsShipmentError("supply_has_cancelled_orders")
     for order in orders:
+        if order.status in _PACKAGING_PENDING_ORDER_STATUSES:
+            raise FbsShipmentError("packaging_required")
         if order.status not in _DELIVER_READY_ORDER_STATUSES:
             raise FbsShipmentError("orders_not_ready")
         product = order.product
@@ -185,6 +185,8 @@ async def deliver_supply(
         raise FbsShipmentError("wrong_delivery_type")
     if supply.status in _DELIVER_BLOCKED_SUPPLY_STATUSES:
         raise FbsShipmentError("supply_bad_status")
+    if supply.status != FBS_SUPPLY_STATUS_PACKED:
+        raise FbsShipmentError("packaging_required")
 
     orders = await _load_locked_supply_orders(session, tenant_id, supply.id)
     _validate_orders_deliverable(orders)

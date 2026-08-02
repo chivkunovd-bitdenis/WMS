@@ -36,6 +36,7 @@ import {
   generateFbsSupplyStickers,
   getFbsOrderMarkings,
   getFbsSupply,
+  canDeliverFbsSupply,
   MARKING_KIND_LABEL,
   putFbsOrderMarking,
   type FbsMarkingKind,
@@ -365,7 +366,7 @@ export function FfFbsSupplyDrawer({ token, authHeaders, supplyId, open, onClose,
     }
   }, [token, authHeaders, supplyId, onChanged])
 
-  const canDeliver = supply && (supply.status === 'assembling' || supply.status === 'draft')
+  const canDeliver = supply ? canDeliverFbsSupply(supply) : false
 
   return (
     <Drawer
