@@ -19,6 +19,7 @@ import pytest
 from httpx import AsyncClient
 from sqlalchemy import select
 
+from app.core.settings import settings
 from app.db.session import SessionLocal
 from app.models.fbs_order import (
     FBS_ORDER_STATUS_NEW,
@@ -479,6 +480,47 @@ async def test_fbs_manual_stock_sync_inline_200(
     assert body["bindings_processed"] == 1
     assert body["products_targeted"] == 2
     assert body["products_confirmed"] == 2
+
+
+# TC-NEW-FBS-STOCK-020 — Celery broker: enqueue job, 202 + job body (not 500)
+@pytest.mark.asyncio
+async def test_fbs_manual_stock_sync_celery_202(
+    async_client: AsyncClient,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    headers, suffix = await _register_ff_admin(async_client)
+    seller_id = await _create_seller(async_client, headers, suffix)
+    wh_a = await _create_warehouse(async_client, headers, suffix, "celery")
+
+    created = await async_client.put(
+        _bindings_url(seller_id, 501001),
+        headers=headers,
+        json={"wms_warehouse_id": wh_a, "stock_sync_enabled": True},
+    )
+    assert created.status_code == 200
+
+    enqueued_job_ids: list[str] = []
+
+    def _fake_enqueue(job_id: uuid.UUID) -> None:
+        enqueued_job_ids.append(str(job_id))
+
+    monkeypatch.setattr(
+        "app.api.fbs_sellers._enqueue_fbs_stock_sync_job",
+        _fake_enqueue,
+    )
+    monkeypatch.setattr(settings, "celery_broker_url", "redis://test-broker/0")
+
+    resp = await async_client.post(
+        _stock_sync_url(seller_id),
+        headers=headers,
+        json={},
+    )
+    assert resp.status_code == 202, resp.text
+    body = resp.json()
+    assert "id" in body
+    assert body["status"] == "pending"
+    uuid.UUID(body["id"])
+    assert enqueued_job_ids == [body["id"]]
 
 
 # TC-NEW-FBS-STOCK-014 — sync status read returns per-chrt target/confirmed/status

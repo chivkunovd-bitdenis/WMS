@@ -117,6 +117,12 @@ def _raise_from_stock_sync(exc: FbsStockSyncError) -> None:
     raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=exc.code)
 
 
+def _enqueue_fbs_stock_sync_job(job_id: uuid.UUID) -> None:
+    from app.tasks.background_jobs import run_fbs_stock_sync_task
+
+    run_fbs_stock_sync_task.delay(str(job_id))
+
+
 class FbsStockSyncBody(BaseModel):
     wb_warehouse_id: int | None = None
 
@@ -248,7 +254,7 @@ async def disable_fbs_warehouse_binding(
 
 @router.post(
     "/{seller_id}/stocks/sync",
-    response_model=FbsStockSyncResultOut,
+    response_model=FbsStockSyncResultOut | FbsStockSyncJobOut,
     status_code=status.HTTP_200_OK,
     responses={status.HTTP_202_ACCEPTED: {"model": FbsStockSyncJobOut}},
 )
@@ -281,9 +287,7 @@ async def start_fbs_stock_sync(
             job_type=JOB_TYPE_FBS_STOCK_SYNC,
             payload_json=payload,
         )
-        from app.tasks.background_jobs import run_fbs_stock_sync_task
-
-        run_fbs_stock_sync_task.delay(str(job.id))
+        _enqueue_fbs_stock_sync_job(job.id)
         response.status_code = status.HTTP_202_ACCEPTED
         return FbsStockSyncJobOut(id=str(job.id), status=job.status)
 
