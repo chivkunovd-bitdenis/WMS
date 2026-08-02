@@ -9,6 +9,7 @@ TC-NEW-FBS-STOCK-012: WB errors without token leakage; 429 single retry.
 
 from __future__ import annotations
 
+import asyncio
 import json
 import uuid
 from collections.abc import AsyncIterator
@@ -40,6 +41,7 @@ from app.services.fbs_stock_sync_service import (
     ERROR_READBACK_MISMATCH,
     ERROR_SYNC_BUSY,
     NoopStockSyncRateLimiter,
+    _try_acquire_lease,
     sync_binding_stocks,
 )
 from app.services.integration_fernet import encrypt_secret
@@ -641,3 +643,31 @@ async def test_partial_batch_failure_leaves_confirmed_batch(
         )
     ).scalars().all()
     assert len(error_rows) == 1
+
+
+@pytest.mark.asyncio
+async def test_try_acquire_lease_atomic_under_concurrency(
+    db_session: AsyncSession,
+) -> None:
+    """STOCKFIX-050: two parallel workers — only one acquires lease."""
+    ctx = await _seed_binding(db_session)
+    binding_id = ctx.binding.id
+    barrier = asyncio.Barrier(2)
+    results: list[bool] = []
+
+    async def attempt_acquire() -> None:
+        async with SessionLocal() as session:
+            binding = await session.get(FbsWarehouseBinding, binding_id)
+            assert binding is not None
+            await barrier.wait()
+            acquired = await _try_acquire_lease(session, binding)
+            results.append(acquired)
+
+    await asyncio.gather(attempt_acquire(), attempt_acquire())
+
+    assert sorted(results) == [False, True]
+
+    async with SessionLocal() as session:
+        binding = await session.get(FbsWarehouseBinding, binding_id)
+        assert binding is not None
+        assert binding.lease_until is not None
