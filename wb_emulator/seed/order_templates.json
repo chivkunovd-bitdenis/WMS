@@ -7,7 +7,8 @@
       "skus": ["2000000000011"],
       "price": 125000,
       "cargoType": 1,
-      "officeId": 12345,
+      "warehouseId": 501001,
+      "officeId": 601001,
       "isLegal": false,
       "options": { "isB2B": false }
     },
@@ -18,7 +19,8 @@
       "skus": ["2000000000022"],
       "price": 89000,
       "cargoType": 1,
-      "officeId": 12345,
+      "warehouseId": 501001,
+      "officeId": 601001,
       "isLegal": false,
       "options": { "isB2B": false }
     }

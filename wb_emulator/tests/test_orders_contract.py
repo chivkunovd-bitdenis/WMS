@@ -44,6 +44,11 @@ def _with_session(fn: Callable[[Session], None]) -> None:
 
 
 def test_get_orders_new_returns_mock_shape(client: TestClient) -> None:
+    def seed(session: Session) -> None:
+        orders_store.seed_default_order(session, SELLER_KEY)
+
+    _with_session(seed)
+
     response = client.get("/api/v3/orders/new", headers=AUTH_HEADERS)
     assert response.status_code == 200
     body = response.json()
@@ -59,7 +64,9 @@ def test_get_orders_new_returns_mock_shape(client: TestClient) -> None:
     assert order["skus"] == ["E2E-MOCK-BARCODE"]
     assert order["price"] == 150000
     assert order["cargoType"] == 1
-    assert order["officeId"] == 12345
+    assert order["warehouseId"] == orders_store.DEFAULT_EMULATOR_WAREHOUSE_ID
+    assert order["officeId"] == orders_store.DEFAULT_EMULATOR_OFFICE_ID
+    assert order["warehouseId"] != order["officeId"]
     assert order["isLegal"] is False
     assert order["options"] == {"isB2B": False}
 
@@ -116,6 +123,11 @@ def test_post_orders_status(client: TestClient) -> None:
 
 
 def test_patch_cancel_order_is_success_no_body(client: TestClient) -> None:
+    def seed(session: Session) -> None:
+        orders_store.seed_default_order(session, SELLER_KEY)
+
+    _with_session(seed)
+
     seeded = client.get("/api/v3/orders/new", headers=AUTH_HEADERS)
     assert seeded.status_code == 200
     assert len(seeded.json()["orders"]) == 1
