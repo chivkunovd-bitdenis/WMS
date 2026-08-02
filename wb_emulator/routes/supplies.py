@@ -5,7 +5,6 @@ from __future__ import annotations
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, Response
-from fastapi.responses import Response as RawResponse
 from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 
@@ -25,10 +24,6 @@ class CreateTrbxBody(BaseModel):
 
 class BindTrbxOrdersBody(BaseModel):
     orderIds: list[int] = Field(min_length=1)
-
-
-class TrbxStickersBody(BaseModel):
-    trbxIds: list[str] = Field(min_length=1)
 
 
 def _seller_key(request: Request) -> str:
@@ -150,36 +145,4 @@ def bind_orders_to_trbx(
     return Response(status_code=204)
 
 
-@router.get("/{supply_id}/barcode")
-def get_supply_barcode(
-    supply_id: str,
-    request: Request,
-    session: DbSession,
-    type: str = Query(default="png"),
-) -> RawResponse:
-    """Stub hook for EMU-040 — returns tiny PNG."""
-    seller_key = _seller_key(request)
-    try:
-        store.get_supply(session, seller_key=seller_key, supply_id=supply_id)
-    except store.SuppliesStoreError as exc:
-        raise _map_store_error(exc) from exc
-    _ = type
-    return RawResponse(content=store.stub_supply_barcode_bytes(), media_type="image/png")
-
-
-@router.post("/{supply_id}/trbx/stickers")
-def get_trbx_stickers(
-    supply_id: str,
-    body: TrbxStickersBody,
-    request: Request,
-    session: DbSession,
-    type: str = Query(default="png"),
-) -> list[dict[str, str]]:
-    """Stub hook for EMU-040 — returns base64 PNG per trbx."""
-    seller_key = _seller_key(request)
-    try:
-        store.get_supply(session, seller_key=seller_key, supply_id=supply_id)
-    except store.SuppliesStoreError as exc:
-        raise _map_store_error(exc) from exc
-    _ = type
-    return store.stub_trbx_stickers(body.trbxIds)
+# barcode + trbx/stickers: real PNG handlers live in media_meta (EMU-040)
