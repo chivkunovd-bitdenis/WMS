@@ -14,6 +14,7 @@ from app.models.fbs_order import FbsOrderReservation
 from app.models.inbound_intake import InboundIntakeLine, InboundIntakeRequest
 from app.models.inventory_balance import InventoryBalance
 from app.models.inventory_movement import (
+    MOVEMENT_TYPE_FBS_SHIPMENT,
     MOVEMENT_TYPE_INBOUND_INTAKE,
     MOVEMENT_TYPE_MARKETPLACE_UNLOAD,
     MOVEMENT_TYPE_OUTBOUND_SHIPMENT,
@@ -902,6 +903,35 @@ async def _lock_inventory_balance(
         .with_for_update()
     )
     return (await session.execute(stmt)).scalar_one_or_none()
+
+
+async def apply_fbs_supply_write_off(
+    session: AsyncSession,
+    *,
+    tenant_id: uuid.UUID,
+    product_id: uuid.UUID,
+    storage_location_id: uuid.UUID,
+    quantity: int,
+) -> None:
+    """Списание упакованного FBS-товара при завершении упаковки поставки."""
+    if quantity < 1:
+        msg = "quantity must be positive"
+        raise ValueError(msg)
+    bal = await _lock_inventory_balance(
+        session, tenant_id, product_id, storage_location_id
+    )
+    if bal is None or int(bal.quantity) < quantity:
+        msg = "insufficient stock"
+        raise ValueError(msg)
+    await record_movement_and_adjust_balance(
+        session,
+        tenant_id=tenant_id,
+        product_id=product_id,
+        storage_location_id=storage_location_id,
+        quantity_delta=-quantity,
+        movement_type=MOVEMENT_TYPE_FBS_SHIPMENT,
+        deduct_prefer="packed",
+    )
 
 
 async def apply_marketplace_unload_pick(
