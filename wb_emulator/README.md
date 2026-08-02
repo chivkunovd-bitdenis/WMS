@@ -56,6 +56,20 @@ curl -s -o /dev/null -w "%{http_code}\n" -H "Authorization: dev-token" http://12
 
 ## Docker
 
+### Full WMS stack with emulator
+
+From repository root (overlay on `docker-compose.yml`):
+
+```bash
+cp wb_emulator/.env.example wb_emulator/.env   # optional; edit token map
+docker compose -f docker-compose.yml -f docker-compose.emulator.yml up -d --build
+```
+
+`api`, `celery_worker`, and `celery_beat` receive `WILDBERRIES_MARKETPLACE_API_BASE=http://wb-emulator:8000`.
+Optional seed JSON: place files under `wb_emulator/seed/` (mounted read-only at `/seed`).
+
+### Emulator image only
+
 Build from repository root:
 
 ```bash

@@ -1,0 +1,62 @@
+# Overlay: WB Marketplace API emulator for local FBS integration testing.
+# Usage: docker compose -f docker-compose.yml -f docker-compose.emulator.yml up -d --build
+#
+# WMS api/celery_* call http://wb-emulator:8000 via WILDBERRIES_MARKETPLACE_API_BASE.
+# Prod stack (docker-compose.prod.yml) is unchanged — no emulator references there.
+
+services:
+  wb-emulator:
+    build:
+      context: .
+      dockerfile: wb_emulator/Dockerfile
+    ports:
+      - "${WB_EMULATOR_PORT:-18081}:8000"
+    env_file:
+      - path: wb_emulator/.env
+        required: false
+    environment:
+      WB_EMULATOR_DB_PATH: /data/wb_emulator.sqlite
+    volumes:
+      - wb_emulator_data:/data
+      - type: bind
+        source: ./wb_emulator/seed
+        target: /seed
+        read_only: true
+        bind:
+          create_host_path: true
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "python",
+          "-c",
+          "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health')",
+        ]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+      start_period: 5s
+
+  api:
+    environment:
+      WILDBERRIES_MARKETPLACE_API_BASE: http://wb-emulator:8000
+    depends_on:
+      wb-emulator:
+        condition: service_healthy
+
+  celery_worker:
+    environment:
+      WILDBERRIES_MARKETPLACE_API_BASE: http://wb-emulator:8000
+    depends_on:
+      wb-emulator:
+        condition: service_healthy
+
+  celery_beat:
+    environment:
+      WILDBERRIES_MARKETPLACE_API_BASE: http://wb-emulator:8000
+    depends_on:
+      wb-emulator:
+        condition: service_healthy
+
+volumes:
+  wb_emulator_data:
