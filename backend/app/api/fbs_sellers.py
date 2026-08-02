@@ -248,7 +248,7 @@ async def disable_fbs_warehouse_binding(
 
 @router.post(
     "/{seller_id}/stocks/sync",
-    response_model=FbsStockSyncResultOut,
+    response_model=FbsStockSyncResultOut | FbsStockSyncJobOut,
     status_code=status.HTTP_200_OK,
     responses={status.HTTP_202_ACCEPTED: {"model": FbsStockSyncJobOut}},
 )
