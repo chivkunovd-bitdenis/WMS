@@ -43,7 +43,7 @@ def get_orders_new(request: Request, db: Session = Depends(get_db)) -> dict[str,
     return {"orders": [order_to_api(order) for order in orders]}
 
 
-@admin_router.get("/orders")
+@admin_router.post("/orders")
 def admin_create_orders(
     seller: str = Query(min_length=1),
     count: int = Query(default=1, ge=1, le=100),

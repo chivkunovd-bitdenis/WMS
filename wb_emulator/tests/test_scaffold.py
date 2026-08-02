@@ -49,8 +49,9 @@ def test_unknown_token_on_api_v3_returns_401(client: TestClient) -> None:
 
 def test_known_token_passes_auth_middleware(client: TestClient) -> None:
     response = client.get("/api/v3/orders/new", headers={"Authorization": "env-token"})
-    # Route not implemented in EMU-010; auth must pass (404, not 401).
-    assert response.status_code == 404
+    assert response.status_code != 401
+    assert response.status_code == 200
+    assert "orders" in response.json()
 
 
 def test_sqlite_file_created_on_startup(client: TestClient) -> None:

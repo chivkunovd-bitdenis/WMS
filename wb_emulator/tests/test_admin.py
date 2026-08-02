@@ -37,11 +37,11 @@ def client(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> TestClient:
 
 def test_admin_requires_token(client: TestClient) -> None:
     assert client.get("/__admin/state").status_code == 401
-    assert client.get("/__admin/orders?seller=seller_env&count=1").status_code == 401
+    assert client.post("/__admin/orders?seller=seller_env&count=1").status_code == 401
 
 
 def test_admin_create_orders_appear_in_orders_new(client: TestClient) -> None:
-    created = client.get(
+    created = client.post(
         f"/__admin/orders?seller={SELLER_KEY}&count=2",
         headers=ADMIN_HEADERS,
     )
@@ -60,7 +60,7 @@ def test_admin_create_orders_appear_in_orders_new(client: TestClient) -> None:
 
 
 def test_wb_event_sorted_removes_from_new(client: TestClient) -> None:
-    created = client.get(
+    created = client.post(
         f"/__admin/orders?seller={SELLER_KEY}&count=1",
         headers=ADMIN_HEADERS,
     )
@@ -81,7 +81,7 @@ def test_wb_event_sorted_removes_from_new(client: TestClient) -> None:
 
 
 def test_wb_event_sold_removes_from_new(client: TestClient) -> None:
-    created = client.get(
+    created = client.post(
         f"/__admin/orders?seller={SELLER_KEY}&count=1",
         headers=ADMIN_HEADERS,
     )
@@ -100,7 +100,7 @@ def test_wb_event_sold_removes_from_new(client: TestClient) -> None:
 
 
 def test_wb_event_canceled_by_client_removes_from_new(client: TestClient) -> None:
-    created = client.get(
+    created = client.post(
         f"/__admin/orders?seller={SELLER_KEY}&count=1",
         headers=ADMIN_HEADERS,
     )
@@ -119,7 +119,7 @@ def test_wb_event_canceled_by_client_removes_from_new(client: TestClient) -> Non
 
 
 def test_admin_state_reflects_orders(client: TestClient) -> None:
-    client.get(f"/__admin/orders?seller={SELLER_KEY}&count=1", headers=ADMIN_HEADERS)
+    client.post(f"/__admin/orders?seller={SELLER_KEY}&count=1", headers=ADMIN_HEADERS)
     state = client.get(f"/__admin/state?seller={SELLER_KEY}", headers=ADMIN_HEADERS)
     assert state.status_code == 200
     body = state.json()
@@ -129,7 +129,7 @@ def test_admin_state_reflects_orders(client: TestClient) -> None:
 
 
 def test_wb_event_invalid_event_returns_400(client: TestClient) -> None:
-    created = client.get(
+    created = client.post(
         f"/__admin/orders?seller={SELLER_KEY}&count=1",
         headers=ADMIN_HEADERS,
     )
