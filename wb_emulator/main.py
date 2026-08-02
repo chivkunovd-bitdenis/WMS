@@ -9,9 +9,9 @@ from fastapi import APIRouter, FastAPI
 
 from wb_emulator.auth import AuthMiddleware
 from wb_emulator.db import init_db
+from wb_emulator.routes.orders import router as orders_router
 
-# Routers for later lanes (EMU-020+); mounted empty in EMU-010 scaffold.
-orders_router = APIRouter(tags=["orders"])
+# Routers for later lanes (EMU-020+).
 supplies_router = APIRouter(tags=["supplies"])
 media_meta_router = APIRouter(tags=["media-meta"])
 warehouses_router = APIRouter(tags=["warehouses"])
