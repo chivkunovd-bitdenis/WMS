@@ -1,4 +1,4 @@
-"""Down_revision: 20260730_0066_fbs_trbx"""
+"""Down_revision: 20260730_0066"""
 
 from __future__ import annotations
 
@@ -7,8 +7,8 @@ from collections.abc import Sequence
 import sqlalchemy as sa
 from alembic import op
 
-revision: str = "20260731_0067_fbs_packaging_integration"
-down_revision: str | Sequence[str] | None = "20260730_0066_fbs_trbx"
+revision: str = "20260731_0067"
+down_revision: str | Sequence[str] | None = "20260730_0066"
 branch_labels: str | Sequence[str] | None = None
 depends_on: str | Sequence[str] | None = None
 
