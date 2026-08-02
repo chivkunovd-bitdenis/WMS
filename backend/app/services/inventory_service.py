@@ -10,6 +10,7 @@ from sqlalchemy.dialects.sqlite import insert as sqlite_insert
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.sql.dml import Insert
 
+from app.models.fbs_order import FbsOrderReservation
 from app.models.inbound_intake import InboundIntakeLine, InboundIntakeRequest
 from app.models.inventory_balance import InventoryBalance
 from app.models.inventory_movement import (
@@ -233,8 +234,28 @@ async def reserved_totals_by_product(
     mp_res = await session.execute(mp_stmt)
     mp_map = {pid: int(s or 0) for pid, s in mp_res.all()}
 
+    fbs_map: dict[uuid.UUID, int] = {}
+    if warehouse_id is not None:
+        fbs_stmt = (
+            select(
+                FbsOrderReservation.product_id,
+                func.coalesce(func.sum(FbsOrderReservation.quantity), 0),
+            )
+            .where(
+                FbsOrderReservation.tenant_id == tenant_id,
+                FbsOrderReservation.warehouse_id == warehouse_id,
+                FbsOrderReservation.product_id.in_(product_ids),
+            )
+            .group_by(FbsOrderReservation.product_id)
+        )
+        fbs_res = await session.execute(fbs_stmt)
+        fbs_map = {pid: int(s or 0) for pid, s in fbs_res.all()}
+
     return {
-        pid: int(outbound_map.get(pid, 0)) + int(mp_map.get(pid, 0)) for pid in product_ids
+        pid: int(outbound_map.get(pid, 0))
+        + int(mp_map.get(pid, 0))
+        + int(fbs_map.get(pid, 0))
+        for pid in product_ids
     }
 
 

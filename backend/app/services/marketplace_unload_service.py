@@ -415,7 +415,7 @@ async def _available_product_qty_in_warehouse(
         product_id,
         exclude_request_id=exclude_request_id,
     )
-    from app.services.wb_marketplace_orders_service import fbs_reserved_qty_for_product
+    from app.services.fbs_stock_availability_service import fbs_reserved_qty_for_product
 
     reserved_fbs = await fbs_reserved_qty_for_product(
         session, tenant_id, warehouse_id, product_id
@@ -478,7 +478,7 @@ async def list_available_products(
         product_ids,
         exclude_request_id=exclude_request_id,
     )
-    from app.services.wb_marketplace_orders_service import fbs_reserved_by_product
+    from app.services.fbs_stock_availability_service import fbs_reserved_by_product
 
     fbs_reserved = await fbs_reserved_by_product(
         session, tenant_id, warehouse_id, product_ids
