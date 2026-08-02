@@ -1,0 +1,113 @@
+"""Media, stickers, and order marking meta routes (EMU-040)."""
+
+from __future__ import annotations
+
+from typing import Any
+
+from fastapi import APIRouter, HTTPException, Query, Request
+from fastapi.responses import Response
+from pydantic import BaseModel, Field
+
+from wb_emulator.services.marking_meta import (
+    META_KINDS,
+    get_meta,
+    parse_put_values,
+    upsert_meta,
+)
+from wb_emulator.services.stickers import (
+    build_order_stickers,
+    build_trbx_stickers,
+    generate_qr_png_bytes,
+)
+
+router = APIRouter(tags=["media-meta"])
+
+
+class OrderStickersRequest(BaseModel):
+    orders: list[int] = Field(default_factory=list)
+
+
+class TrbxStickersRequest(BaseModel):
+    trbxIds: list[str] = Field(default_factory=list)
+
+
+def _seller_key(request: Request) -> str:
+    seller = getattr(request.state, "seller_key", None)
+    if not isinstance(seller, str) or not seller:
+        raise HTTPException(status_code=401, detail="Unauthorized")
+    return seller
+
+
+@router.post("/orders/stickers")
+def post_order_stickers(
+    request: Request,
+    body: OrderStickersRequest,
+    type: str = Query(default="png"),
+    width: int = Query(default=58, ge=1),
+    height: int = Query(default=40, ge=1),
+) -> dict[str, list[dict[str, Any]]]:
+    """POST /api/v3/orders/stickers — batch Code128 PNG stickers."""
+    _seller_key(request)
+    if type.lower() != "png":
+        raise HTTPException(status_code=400, detail="unsupported sticker type")
+    stickers = build_order_stickers(body.orders, width_mm=width, height_mm=height)
+    return {"stickers": stickers}
+
+
+@router.get("/supplies/{supply_id}/barcode")
+def get_supply_barcode(
+    request: Request,
+    supply_id: str,
+    type: str = Query(default="png"),
+) -> Response:
+    """GET /api/v3/supplies/{supply_id}/barcode — supply QR PNG."""
+    _seller_key(request)
+    if type.lower() != "png":
+        raise HTTPException(status_code=400, detail="unsupported barcode type")
+    png_bytes = generate_qr_png_bytes(f"SUPPLY:{supply_id}")
+    return Response(content=png_bytes, media_type="image/png")
+
+
+@router.post("/supplies/{supply_id}/trbx/stickers")
+def post_trbx_stickers(
+    request: Request,
+    supply_id: str,
+    body: TrbxStickersRequest,
+    type: str = Query(default="png"),
+) -> dict[str, list[dict[str, Any]]]:
+    """POST /api/v3/supplies/{supply_id}/trbx/stickers — batch trbx QR stickers."""
+    _seller_key(request)
+    if type.lower() != "png":
+        raise HTTPException(status_code=400, detail="unsupported sticker type")
+    _ = supply_id
+    stickers = build_trbx_stickers(body.trbxIds)
+    return {"stickers": stickers}
+
+
+@router.get("/orders/{order_id}/meta")
+def get_order_meta(request: Request, order_id: int) -> dict[str, Any]:
+    """GET /api/v3/orders/{order_id}/meta — marking identifiers and check statuses."""
+    seller_key = _seller_key(request)
+    return get_meta(seller_key, order_id)
+
+
+@router.put("/orders/{order_id}/meta/{kind}")
+def put_order_meta(
+    request: Request,
+    order_id: int,
+    kind: str,
+    body: dict[str, Any],
+) -> dict[str, str]:
+    """PUT /api/v3/orders/{order_id}/meta/{kind} — attach KIZ/UIN/IMEI/GTIN."""
+    seller_key = _seller_key(request)
+    if kind not in META_KINDS:
+        raise HTTPException(status_code=400, detail="invalid_meta_kind")
+    try:
+        values = parse_put_values(kind, body)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    if not values:
+        raise HTTPException(status_code=400, detail="empty_meta_value")
+    for value in values:
+        upsert_meta(seller_key, order_id, kind, value)
+    return {"status": "ok"}
