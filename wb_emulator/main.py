@@ -9,10 +9,12 @@ from fastapi import APIRouter, FastAPI
 
 from wb_emulator.auth import AuthMiddleware
 from wb_emulator.db import init_db
+from wb_emulator.routes import supplies as supplies_routes
+from wb_emulator.services import supplies_store  # noqa: F401 — register ORM tables
 
-# Routers for later lanes (EMU-020+); mounted empty in EMU-010 scaffold.
+# Routers for later lanes (EMU-020+); supplies wired in EMU-030.
 orders_router = APIRouter(tags=["orders"])
-supplies_router = APIRouter(tags=["supplies"])
+supplies_router = supplies_routes.router
 media_meta_router = APIRouter(tags=["media-meta"])
 warehouses_router = APIRouter(tags=["warehouses"])
 admin_router = APIRouter(prefix="/__admin", tags=["admin"])
