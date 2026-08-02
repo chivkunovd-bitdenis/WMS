@@ -10,7 +10,7 @@ from datetime import UTC, datetime, timedelta
 from typing import Protocol
 
 import httpx
-from sqlalchemy import select
+from sqlalchemy import or_, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.settings import settings
@@ -133,9 +133,23 @@ async def _try_acquire_lease(
     binding: FbsWarehouseBinding,
 ) -> bool:
     now = _utcnow()
-    if binding.lease_until is not None and binding.lease_until > now:
+    new_lease_until = now + SYNC_LEASE_DURATION
+    stmt = (
+        update(FbsWarehouseBinding)
+        .where(
+            FbsWarehouseBinding.id == binding.id,
+            or_(
+                FbsWarehouseBinding.lease_until.is_(None),
+                FbsWarehouseBinding.lease_until <= now,
+            ),
+        )
+        .values(lease_until=new_lease_until)
+        .returning(FbsWarehouseBinding.id)
+    )
+    result = await session.execute(stmt)
+    if result.first() is None:
         return False
-    binding.lease_until = now + SYNC_LEASE_DURATION
+    binding.lease_until = new_lease_until
     await session.commit()
     return True
 
