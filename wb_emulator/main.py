@@ -9,13 +9,12 @@ from fastapi import APIRouter, FastAPI
 
 from wb_emulator.auth import AuthMiddleware
 from wb_emulator.db import init_db
+from wb_emulator.routes.admin import admin_router, orders_read_router
 
-# Routers for later lanes (EMU-020+); mounted empty in EMU-010 scaffold.
-orders_router = APIRouter(tags=["orders"])
+# Routers for later lanes (EMU-030+).
 supplies_router = APIRouter(tags=["supplies"])
 media_meta_router = APIRouter(tags=["media-meta"])
 warehouses_router = APIRouter(tags=["warehouses"])
-admin_router = APIRouter(prefix="/__admin", tags=["admin"])
 
 
 @asynccontextmanager
@@ -32,7 +31,7 @@ def create_app() -> FastAPI:
     )
     app.add_middleware(AuthMiddleware)
 
-    app.include_router(orders_router, prefix="/api/v3/orders")
+    app.include_router(orders_read_router, prefix="/api/v3/orders")
     app.include_router(supplies_router, prefix="/api/v3/supplies")
     app.include_router(media_meta_router, prefix="/api/v3")
     app.include_router(warehouses_router, prefix="/api/v3")
