@@ -1,5 +1,12 @@
 # TASKLOG
 
+## TASK-131 — 2026-08-02 — STOCK-050 FBS warehouse binding API
+
+- What changed: **STOCK-050** — `fbs_warehouse_binding_service` (list/get/upsert/disable); API `GET/PUT/DELETE /operations/fbs-sellers/{seller_id}/warehouse-bindings[/{wb_warehouse_id}]`; fulfillment admin + tenant isolation; 409 `wms_warehouse_already_bound` / `active_fbs_reservations`; soft-disable via `is_active=false`; tests TC-NEW-FBS-STOCK-003/004/014 + N1–N3.
+- What did NOT change: live WB warehouse fetch on binding save; stock sync publish (STOCK-070+).
+- Verification: Docker `pytest tests/test_fbs_warehouse_binding.py -q` → **7 passed**; ruff + mypy green on changed files.
+- Commit: `04209bc` on `task/STOCK-050`.
+
 ## TASK-130 — 2026-08-02 — fbs-wb-emulator (EMU-000…080)
 
 - What changed: standalone `wb_emulator/` (FastAPI + SQLite + auth); orders/supplies/stickers/meta/admin; `docker-compose.emulator.yml` overlay; `GET /warehouses` + `/offices`; full-cycle pytest; task artifacts `tasks/fbs-wb-emulator/*`. EMU-050: admin create = **POST** `/__admin/orders`, один `orders_store`.

@@ -1,0 +1,343 @@
+"""API tests for FBS warehouse bindings (STOCK-050).
+
+TC-NEW-FBS-STOCK-003: binding CRUD maps WB warehouses to WMS warehouses.
+TC-NEW-FBS-STOCK-004: unmapped path is separate; bindings are explicit.
+TC-NEW-FBS-STOCK-014: admin binding API validates tenant/seller/warehouse.
+N1: cross-tenant isolation → 404 without leaking existence.
+N2: duplicate WMS warehouse for same seller → 409.
+N3: WMS warehouse change blocked when active FBS reservations exist.
+"""
+
+from __future__ import annotations
+
+import time
+import uuid
+from datetime import UTC, datetime, timedelta
+
+import pytest
+from httpx import AsyncClient
+from sqlalchemy import select
+
+from app.db.session import SessionLocal
+from app.models.fbs_order import (
+    FBS_ORDER_STATUS_NEW,
+    MAPPING_STATUS_MAPPED,
+    RESERVE_STATUS_RESERVED,
+    FbsOrder,
+    FbsOrderReservation,
+)
+from app.models.fbs_warehouse_binding import FbsWarehouseBinding
+from app.models.product import Product
+from app.models.seller import Seller
+
+
+async def _register_ff_admin(async_client: AsyncClient) -> tuple[dict[str, str], str]:
+    suffix = str(time.time_ns())
+    reg = await async_client.post(
+        "/auth/register",
+        json={
+            "organization_name": f"FBS bind {suffix}",
+            "slug": f"fbs-bind-{suffix}",
+            "admin_email": f"fbs-bind-{suffix}@example.com",
+            "password": "password123",
+        },
+    )
+    assert reg.status_code == 200, reg.text
+    headers = {"Authorization": f"Bearer {reg.json()['access_token']}"}
+    return headers, suffix
+
+
+async def _create_seller(async_client: AsyncClient, headers: dict[str, str], suffix: str) -> str:
+    seller = await async_client.post(
+        "/sellers", headers=headers, json={"name": f"Seller {suffix}"}
+    )
+    assert seller.status_code in (200, 201), seller.text
+    return seller.json()["id"]
+
+
+async def _create_warehouse(
+    async_client: AsyncClient, headers: dict[str, str], suffix: str, code_suffix: str
+) -> str:
+    wh = await async_client.post(
+        "/warehouses",
+        headers=headers,
+        json={"name": f"WH {code_suffix}", "code": f"wh-{suffix}-{code_suffix}"},
+    )
+    assert wh.status_code in (200, 201), wh.text
+    return wh.json()["id"]
+
+
+def _bindings_url(seller_id: str, wb_warehouse_id: int | None = None) -> str:
+    base = f"/operations/fbs-sellers/{seller_id}/warehouse-bindings"
+    if wb_warehouse_id is None:
+        return base
+    return f"{base}/{wb_warehouse_id}"
+
+
+# TC-NEW-FBS-STOCK-014 — create binding, list, toggle sync, soft-disable
+@pytest.mark.asyncio
+async def test_fbs_warehouse_binding_crud_happy_path(async_client: AsyncClient) -> None:
+    headers, suffix = await _register_ff_admin(async_client)
+    seller_id = await _create_seller(async_client, headers, suffix)
+    wh_a = await _create_warehouse(async_client, headers, suffix, "a")
+    wh_b = await _create_warehouse(async_client, headers, suffix, "b")
+
+    empty = await async_client.get(_bindings_url(seller_id), headers=headers)
+    assert empty.status_code == 200
+    assert empty.json() == []
+
+    created = await async_client.put(
+        _bindings_url(seller_id, 501001),
+        headers=headers,
+        json={"wms_warehouse_id": wh_a, "stock_sync_enabled": True},
+    )
+    assert created.status_code == 200, created.text
+    body = created.json()
+    assert body["wb_warehouse_id"] == 501001
+    assert body["wms_warehouse_id"] == wh_a
+    assert body["is_active"] is True
+    assert body["stock_sync_enabled"] is True
+
+    listed = await async_client.get(_bindings_url(seller_id), headers=headers)
+    assert listed.status_code == 200
+    assert len(listed.json()) == 1
+
+    toggled = await async_client.put(
+        _bindings_url(seller_id, 501001),
+        headers=headers,
+        json={"wms_warehouse_id": wh_a, "stock_sync_enabled": False},
+    )
+    assert toggled.status_code == 200
+    assert toggled.json()["stock_sync_enabled"] is False
+
+    moved = await async_client.put(
+        _bindings_url(seller_id, 501001),
+        headers=headers,
+        json={"wms_warehouse_id": wh_b, "stock_sync_enabled": True},
+    )
+    assert moved.status_code == 200
+    assert moved.json()["wms_warehouse_id"] == wh_b
+
+    disabled = await async_client.delete(
+        _bindings_url(seller_id, 501001),
+        headers=headers,
+    )
+    assert disabled.status_code == 200
+    assert disabled.json()["is_active"] is False
+
+    async with SessionLocal() as session:
+        row = await session.scalar(
+            select(FbsWarehouseBinding).where(
+                FbsWarehouseBinding.seller_id == uuid.UUID(seller_id),
+                FbsWarehouseBinding.wb_warehouse_id == 501001,
+            )
+        )
+        assert row is not None
+        assert row.is_active is False
+
+
+# TC-NEW-FBS-STOCK-003 — two WB warehouses map to two distinct WMS warehouses
+@pytest.mark.asyncio
+async def test_fbs_warehouse_binding_two_wb_two_wms(async_client: AsyncClient) -> None:
+    headers, suffix = await _register_ff_admin(async_client)
+    seller_id = await _create_seller(async_client, headers, suffix)
+    wh_a = await _create_warehouse(async_client, headers, suffix, "a")
+    wh_b = await _create_warehouse(async_client, headers, suffix, "b")
+
+    r1 = await async_client.put(
+        _bindings_url(seller_id, 501001),
+        headers=headers,
+        json={"wms_warehouse_id": wh_a, "stock_sync_enabled": True},
+    )
+    assert r1.status_code == 200
+
+    r2 = await async_client.put(
+        _bindings_url(seller_id, 501002),
+        headers=headers,
+        json={"wms_warehouse_id": wh_b, "stock_sync_enabled": True},
+    )
+    assert r2.status_code == 200
+
+    listed = await async_client.get(_bindings_url(seller_id), headers=headers)
+    by_wb = {row["wb_warehouse_id"]: row for row in listed.json()}
+    assert by_wb[501001]["wms_warehouse_id"] == wh_a
+    assert by_wb[501002]["wms_warehouse_id"] == wh_b
+
+
+# N1 — cross-tenant seller and warehouse do not leak
+@pytest.mark.asyncio
+async def test_fbs_warehouse_binding_cross_tenant_404(async_client: AsyncClient) -> None:
+    headers_a, suffix_a = await _register_ff_admin(async_client)
+    seller_a = await _create_seller(async_client, headers_a, suffix_a)
+    wh_a = await _create_warehouse(async_client, headers_a, suffix_a, "a")
+
+    headers_b, suffix_b = await _register_ff_admin(async_client)
+    wh_b = await _create_warehouse(async_client, headers_b, suffix_b, "b")
+
+    cross_list = await async_client.get(_bindings_url(seller_a), headers=headers_b)
+    assert cross_list.status_code == 404
+    assert cross_list.json()["detail"] == "seller_not_found"
+
+    cross_put = await async_client.put(
+        _bindings_url(seller_a, 501001),
+        headers=headers_b,
+        json={"wms_warehouse_id": wh_b, "stock_sync_enabled": True},
+    )
+    assert cross_put.status_code == 404
+    assert cross_put.json()["detail"] == "seller_not_found"
+
+    foreign_wh = await async_client.put(
+        _bindings_url(seller_a, 501001),
+        headers=headers_a,
+        json={"wms_warehouse_id": wh_b, "stock_sync_enabled": True},
+    )
+    assert foreign_wh.status_code == 404
+    assert foreign_wh.json()["detail"] == "warehouse_not_found"
+
+    ok = await async_client.put(
+        _bindings_url(seller_a, 501001),
+        headers=headers_a,
+        json={"wms_warehouse_id": wh_a, "stock_sync_enabled": True},
+    )
+    assert ok.status_code == 200
+
+
+# N2 — one WMS warehouse cannot bind to two WB warehouses for same seller
+@pytest.mark.asyncio
+async def test_fbs_warehouse_binding_wms_conflict_409(async_client: AsyncClient) -> None:
+    headers, suffix = await _register_ff_admin(async_client)
+    seller_id = await _create_seller(async_client, headers, suffix)
+    wh_a = await _create_warehouse(async_client, headers, suffix, "a")
+
+    first = await async_client.put(
+        _bindings_url(seller_id, 501001),
+        headers=headers,
+        json={"wms_warehouse_id": wh_a, "stock_sync_enabled": True},
+    )
+    assert first.status_code == 200
+
+    conflict = await async_client.put(
+        _bindings_url(seller_id, 501002),
+        headers=headers,
+        json={"wms_warehouse_id": wh_a, "stock_sync_enabled": True},
+    )
+    assert conflict.status_code == 409
+    assert conflict.json()["detail"] == "wms_warehouse_already_bound"
+
+
+# N3 — cannot change WMS warehouse while active FBS reservations exist
+@pytest.mark.asyncio
+async def test_fbs_warehouse_binding_blocked_by_active_reservations_409(
+    async_client: AsyncClient,
+) -> None:
+    headers, suffix = await _register_ff_admin(async_client)
+    seller_id = await _create_seller(async_client, headers, suffix)
+    wh_a = await _create_warehouse(async_client, headers, suffix, "a")
+    wh_b = await _create_warehouse(async_client, headers, suffix, "b")
+
+    created = await async_client.put(
+        _bindings_url(seller_id, 501001),
+        headers=headers,
+        json={"wms_warehouse_id": wh_a, "stock_sync_enabled": True},
+    )
+    assert created.status_code == 200
+
+    async with SessionLocal() as session:
+        seller = await session.get(Seller, uuid.UUID(seller_id))
+        assert seller is not None
+        tenant_id = seller.tenant_id
+        product = Product(
+            id=uuid.uuid4(),
+            tenant_id=tenant_id,
+            seller_id=seller.id,
+            name="Bind product",
+            sku_code=f"BIND-{suffix}",
+            wb_barcode="BIND-BAR",
+        )
+        now = datetime.now(UTC)
+        order = FbsOrder(
+            tenant_id=tenant_id,
+            seller_id=seller.id,
+            warehouse_id=uuid.UUID(wh_a),
+            product_id=product.id,
+            wb_order_id=990001,
+            status=FBS_ORDER_STATUS_NEW,
+            created_at_wb=now,
+            deadline_at=now + timedelta(hours=24),
+            mapping_status=MAPPING_STATUS_MAPPED,
+            reserve_status=RESERVE_STATUS_RESERVED,
+        )
+        session.add_all([product, order])
+        await session.flush()
+        session.add(
+            FbsOrderReservation(
+                tenant_id=tenant_id,
+                fbs_order_id=order.id,
+                product_id=product.id,
+                warehouse_id=uuid.UUID(wh_a),
+                quantity=1,
+            )
+        )
+        await session.commit()
+
+    blocked = await async_client.put(
+        _bindings_url(seller_id, 501001),
+        headers=headers,
+        json={"wms_warehouse_id": wh_b, "stock_sync_enabled": True},
+    )
+    assert blocked.status_code == 409
+    assert blocked.json()["detail"] == "active_fbs_reservations"
+
+    toggle_ok = await async_client.put(
+        _bindings_url(seller_id, 501001),
+        headers=headers,
+        json={"wms_warehouse_id": wh_a, "stock_sync_enabled": False},
+    )
+    assert toggle_ok.status_code == 200
+    assert toggle_ok.json()["stock_sync_enabled"] is False
+
+
+# TC-NEW-FBS-STOCK-014 — invalid WB warehouse id rejected
+@pytest.mark.asyncio
+async def test_fbs_warehouse_binding_invalid_wb_id_400(async_client: AsyncClient) -> None:
+    headers, suffix = await _register_ff_admin(async_client)
+    seller_id = await _create_seller(async_client, headers, suffix)
+    wh_a = await _create_warehouse(async_client, headers, suffix, "a")
+
+    bad = await async_client.put(
+        _bindings_url(seller_id, 0),
+        headers=headers,
+        json={"wms_warehouse_id": wh_a, "stock_sync_enabled": True},
+    )
+    assert bad.status_code == 422
+
+
+# TC-NEW-FBS-STOCK-004 — disable keeps row for audit; re-upsert reactivates
+@pytest.mark.asyncio
+async def test_fbs_warehouse_binding_reactivate_after_disable(async_client: AsyncClient) -> None:
+    headers, suffix = await _register_ff_admin(async_client)
+    seller_id = await _create_seller(async_client, headers, suffix)
+    wh_a = await _create_warehouse(async_client, headers, suffix, "a")
+
+    created = await async_client.put(
+        _bindings_url(seller_id, 501001),
+        headers=headers,
+        json={"wms_warehouse_id": wh_a, "stock_sync_enabled": True},
+    )
+    binding_id = created.json()["id"]
+
+    disabled = await async_client.delete(
+        _bindings_url(seller_id, 501001),
+        headers=headers,
+    )
+    assert disabled.status_code == 200
+    assert disabled.json()["is_active"] is False
+
+    reactivated = await async_client.put(
+        _bindings_url(seller_id, 501001),
+        headers=headers,
+        json={"wms_warehouse_id": wh_a, "stock_sync_enabled": True},
+    )
+    assert reactivated.status_code == 200
+    assert reactivated.json()["id"] == binding_id
+    assert reactivated.json()["is_active"] is True
