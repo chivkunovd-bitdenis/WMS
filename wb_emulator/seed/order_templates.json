@@ -1,0 +1,26 @@
+{
+  "templates": [
+    {
+      "nmId": 123456789,
+      "chrtId": 111001,
+      "article": "EMU-SEED-A",
+      "skus": ["2000000000011"],
+      "price": 125000,
+      "cargoType": 1,
+      "officeId": 12345,
+      "isLegal": false,
+      "options": { "isB2B": false }
+    },
+    {
+      "nmId": 987654321,
+      "chrtId": 222002,
+      "article": "EMU-SEED-B",
+      "skus": ["2000000000022"],
+      "price": 89000,
+      "cargoType": 1,
+      "officeId": 12345,
+      "isLegal": false,
+      "options": { "isB2B": false }
+    }
+  ]
+}

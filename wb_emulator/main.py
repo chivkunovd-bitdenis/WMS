@@ -9,6 +9,7 @@ from fastapi import APIRouter, FastAPI
 
 from wb_emulator.auth import AuthMiddleware
 from wb_emulator.db import init_db
+from wb_emulator.routes.admin import admin_router
 from wb_emulator.routes.orders import router as orders_router
 from wb_emulator.routes import supplies as supplies_routes
 from wb_emulator.routes.media_meta import router as media_meta_router
@@ -16,7 +17,6 @@ from wb_emulator.services import supplies_store  # noqa: F401 — register ORM t
 
 supplies_router = supplies_routes.router
 warehouses_router = APIRouter(tags=["warehouses"])
-admin_router = APIRouter(prefix="/__admin", tags=["admin"])
 
 
 @asynccontextmanager
@@ -35,7 +35,6 @@ def create_app() -> FastAPI:
 
     app.include_router(orders_router, prefix="/api/v3/orders")
     app.include_router(supplies_router, prefix="/api/v3/supplies")
-    # media_meta: orders/stickers, meta, supply barcode/trbx stickers (real PNG)
     app.include_router(media_meta_router, prefix="/api/v3")
     app.include_router(warehouses_router, prefix="/api/v3")
     app.include_router(admin_router)

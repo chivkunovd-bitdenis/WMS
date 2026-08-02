@@ -3,12 +3,22 @@
 from __future__ import annotations
 
 import json
+from datetime import UTC, datetime
+from pathlib import Path
 from typing import Any
 
-from sqlalchemy import Boolean, Integer, String, select
+from sqlalchemy import Boolean, Integer, String, func, select
 from sqlalchemy.orm import Mapped, Session, mapped_column
 
 from wb_emulator.models import Base
+
+_TEMPLATES_PATH = Path(__file__).resolve().parent.parent / "seed" / "order_templates.json"
+
+WB_EVENT_MAP: dict[str, tuple[str, str, bool]] = {
+    "sorted": ("confirm", "sorted", False),
+    "sold": ("complete", "sold", False),
+    "canceled_by_client": ("cancel", "canceled_by_client", True),
+}
 
 DEFAULT_MOCK_ORDER: dict[str, Any] = {
     "id": 990001,
@@ -213,3 +223,91 @@ def cancel_order(session: Session, seller_key: str, order_id: int) -> None:
     row.supplier_status = "cancel"
     row.wb_status = "canceled"
     session.commit()
+
+
+def load_order_templates() -> list[dict[str, Any]]:
+    raw = json.loads(_TEMPLATES_PATH.read_text(encoding="utf-8"))
+    templates = raw.get("templates", [])
+    if not isinstance(templates, list):
+        raise ValueError("order_templates.json: templates must be a list")
+    return templates
+
+
+def _next_wb_order_ids(session: Session, count: int) -> list[int]:
+    ensure_orders_table(session)
+    max_id = session.scalar(select(func.max(EmulatorOrder.wb_order_id))) or 500000
+    return [int(max_id) + offset + 1 for offset in range(count)]
+
+
+def create_orders_for_seller(session: Session, seller_key: str, count: int) -> list[EmulatorOrder]:
+    if count < 1:
+        raise ValueError("count must be >= 1")
+    templates = load_order_templates()
+    if not templates:
+        raise ValueError("no order templates configured")
+
+    created: list[EmulatorOrder] = []
+    now = datetime.now(UTC).strftime("%Y-%m-%dT%H:%M:%S+00:00")
+    for wb_order_id in _next_wb_order_ids(session, count):
+        template = templates[len(created) % len(templates)]
+        payload: dict[str, Any] = {
+            "id": wb_order_id,
+            "rid": f"emu-rid-{wb_order_id}",
+            "createdAt": now,
+            "nmId": template["nmId"],
+            "chrtId": template["chrtId"],
+            "article": template["article"],
+            "skus": list(template["skus"]),
+            "price": template["price"],
+            "cargoType": template["cargoType"],
+            "officeId": template["officeId"],
+            "isLegal": template.get("isLegal", False),
+            "options": dict(template.get("options", {})),
+            "supplierStatus": "new",
+            "wbStatus": "waiting",
+            "cancelled": False,
+        }
+        created.append(upsert_order(session, seller_key, payload))
+    return created
+
+
+def apply_wb_event(session: Session, seller_key: str, order_id: int, event: str) -> EmulatorOrder | None:
+    if event not in WB_EVENT_MAP:
+        raise ValueError(f"unsupported wb-event: {event}")
+    ensure_orders_table(session)
+    row = session.scalar(
+        select(EmulatorOrder).where(
+            EmulatorOrder.seller_key == seller_key,
+            EmulatorOrder.wb_order_id == order_id,
+        )
+    )
+    if row is None:
+        return None
+    supplier_status, wb_status, cancelled = WB_EVENT_MAP[event]
+    row.supplier_status = supplier_status
+    row.wb_status = wb_status
+    row.cancelled = cancelled
+    session.commit()
+    session.refresh(row)
+    return row
+
+
+def get_admin_state(session: Session, seller_key: str | None = None) -> dict[str, Any]:
+    ensure_orders_table(session)
+    stmt = select(EmulatorOrder)
+    if seller_key is not None:
+        stmt = stmt.where(EmulatorOrder.seller_key == seller_key)
+    rows = list(session.scalars(stmt).all())
+
+    by_supplier: dict[str, int] = {}
+    by_wb: dict[str, int] = {}
+    for row in rows:
+        by_supplier[row.supplier_status] = by_supplier.get(row.supplier_status, 0) + 1
+        by_wb[row.wb_status] = by_wb.get(row.wb_status, 0) + 1
+
+    return {
+        "seller": seller_key,
+        "orders_total": len(rows),
+        "by_supplier_status": by_supplier,
+        "by_wb_status": by_wb,
+    }
