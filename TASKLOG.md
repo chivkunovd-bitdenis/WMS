@@ -1,5 +1,12 @@
 # TASKLOG
 
+## TASK-132 — 2026-08-02 — STOCKFIX-070 FBS warehouse remap conflict
+
+- What changed: fail-closed on WB `warehouseId` remap when order has active FBS reserve on another WMS warehouse — `reserve_status=warehouse_remap_conflict`, old `wb_warehouse_id` preserved; tests `test_fbs_order_reservation_conflict_keeps_warehouse`, `test_fbs_order_wb_warehouse_remap_conflict_on_resync`.
+- What did NOT change: binding disable guard (STOCKFIX-060); stock sync UI (STOCKFIX-080).
+- Verification: `pytest tests/test_fbs_orders_intake.py::test_fbs_order_reservation_conflict_keeps_warehouse tests/test_fbs_orders_intake.py::test_fbs_order_wb_warehouse_remap_conflict_on_resync -q` → **2 passed**.
+- Commit: `930c1d0` on `task/STOCKFIX-070`.
+
 ## TASK-131 — 2026-08-02 — STOCK-050 FBS warehouse binding API
 
 - What changed: **STOCK-050** — `fbs_warehouse_binding_service` (list/get/upsert/disable); API `GET/PUT/DELETE /operations/fbs-sellers/{seller_id}/warehouse-bindings[/{wb_warehouse_id}]`; fulfillment admin + tenant isolation; 409 `wms_warehouse_already_bound` / `active_fbs_reservations`; soft-disable via `is_active=false`; tests TC-NEW-FBS-STOCK-003/004/014 + N1–N3.
