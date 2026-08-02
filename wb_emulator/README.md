@@ -51,7 +51,7 @@ curl -s -o /dev/null -w "%{http_code}\n" http://127.0.0.1:8099/api/v3/orders/new
 # 401
 
 curl -s -o /dev/null -w "%{http_code}\n" -H "Authorization: dev-token" http://127.0.0.1:8099/api/v3/orders/new
-# 404 (auth ok, route not implemented yet)
+# 200 (auth ok, orders list)
 ```
 
 ## Docker
