@@ -234,6 +234,43 @@ async def test_fbs_supply_add_order_ok(
 
 
 @pytest.mark.asyncio
+async def test_fbs_supply_deliver_blocked_from_in_supply(
+    async_client: AsyncClient,
+    enable_wb_marketplace_supplies_mock: None,
+) -> None:
+    headers, suffix = await _register_ff_admin(async_client)
+    seller_id, warehouse_id = await _setup_seller_with_token(async_client, headers, suffix)
+    seller_uuid = uuid.UUID(seller_id)
+    warehouse_uuid = uuid.UUID(warehouse_id)
+
+    from app.models.seller import Seller
+
+    async with SessionLocal() as session:
+        seller_obj = await session.get(Seller, seller_uuid)
+        assert seller_obj is not None
+        tenant_id = seller_obj.tenant_id
+
+    order_id = await _create_order(
+        tenant_id, seller_uuid, warehouse_uuid, order_id=810003
+    )
+    supply = await _create_supply(async_client, headers, seller_id, warehouse_id)
+
+    add = await async_client.post(
+        f"/operations/fbs-supplies/{supply['id']}/orders",
+        headers=headers,
+        json={"order_id": str(order_id)},
+    )
+    assert add.status_code == 200, add.text
+
+    deliver = await async_client.post(
+        f"/operations/fbs-supplies/{supply['id']}/deliver",
+        headers=headers,
+    )
+    assert deliver.status_code == 400
+    assert deliver.json()["detail"] == "packaging_required"
+
+
+@pytest.mark.asyncio
 async def test_fbs_supply_add_order_already_in_other_supply(
     async_client: AsyncClient,
     enable_wb_marketplace_supplies_mock: None,

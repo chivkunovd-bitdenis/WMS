@@ -10,9 +10,15 @@ from sqlalchemy import select
 
 from app.core.settings import settings
 from app.db.session import SessionLocal
-from app.models.fbs_order import FBS_ORDER_STATUS_IN_SUPPLY, FBS_ORDER_STATUS_NEW, FbsOrder
+from app.models.fbs_order import (
+    FBS_ORDER_STATUS_IN_DELIVERY,
+    FBS_ORDER_STATUS_IN_SUPPLY,
+    FBS_ORDER_STATUS_NEW,
+    FbsOrder,
+)
 from app.models.fbs_supply import (
     FBS_SUPPLY_STATUS_ASSEMBLING,
+    FBS_SUPPLY_STATUS_IN_DELIVERY,
     FBS_SUPPLY_STATUS_PACKED,
     FbsSupply,
 )
@@ -335,6 +341,42 @@ async def test_fbs_supply_packed_after_packaging_complete(
     )
     assert supply.status_code == 200, supply.text
     assert supply.json()["status"] == FBS_SUPPLY_STATUS_PACKED
+
+    deliver = await async_client.post(
+        f"/operations/fbs-supplies/{supply_id}/deliver",
+        headers=headers,
+    )
+    assert deliver.status_code == 200, deliver.text
+    body = deliver.json()
+    assert body["status"] == FBS_SUPPLY_STATUS_IN_DELIVERY
+    for order in body["orders"]:
+        assert order["status"] == FBS_ORDER_STATUS_IN_DELIVERY
+
+
+# TC-NEW-FBS-PACKINT-003b — deliver blocked before packaging
+@pytest.mark.asyncio
+async def test_fbs_supply_deliver_blocked_before_packaging(
+    async_client: AsyncClient,
+    enable_wb_marketplace_supplies_mock: None,
+) -> None:
+    headers, suffix = await _register_ff_admin(async_client)
+    seller_id, warehouse_id = await _setup_seller_with_token(async_client, headers, suffix)
+    token_payload = await async_client.get("/auth/me", headers=headers)
+    tenant_id = uuid.UUID(token_payload.json()["tenant_id"])
+    supply_id, _ = await _create_supply_with_orders(
+        async_client,
+        headers,
+        seller_id,
+        warehouse_id,
+        tenant_id,
+    )
+
+    blocked = await async_client.post(
+        f"/operations/fbs-supplies/{supply_id}/deliver",
+        headers=headers,
+    )
+    assert blocked.status_code == 400
+    assert blocked.json()["detail"] == "packaging_required"
 
 
 # TC-NEW-FBS-PACKINT-004

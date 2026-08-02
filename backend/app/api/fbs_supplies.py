@@ -228,6 +228,7 @@ def _raise_from_shipment_service(exc: shipment_svc.FbsShipmentError) -> None:
         "supply_empty",
         "supply_has_cancelled_orders",
         "orders_not_ready",
+        "packaging_required",
         "marking_required",
         "invalid_barcode_path",
         "trbx_required",
