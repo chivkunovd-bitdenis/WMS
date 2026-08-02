@@ -12,10 +12,13 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.db.session import SessionLocal
 from app.models.fbs_order import FbsOrder
+from app.models.fbs_stock_sync_item import FbsStockSyncItem
 from app.models.fbs_supply import FBS_SUPPLY_STATUS_ASSEMBLING, FbsSupply
+from app.models.fbs_warehouse_binding import FbsWarehouseBinding
 from app.models.seller import Seller
 from app.models.seller_wildberries_credentials import SellerWildberriesCredentials
 from app.services.fbs_cancellation_service import FbsCancellationError, sync_seller_order_statuses
+from app.services.fbs_stock_sync_service import FbsStockSyncError, sync_binding_stocks
 from app.services.wb_marketplace_orders_service import (
     WbMarketplaceOrdersError,
     sync_seller_orders,
@@ -37,6 +40,19 @@ class FbsAutopollCycleResult:
     orders_created: int
     statuses_updated: int
     seller_errors: int
+    stocks_bindings_processed: int = 0
+    stock_errors: int = 0
+
+
+@dataclass
+class SellerStockSyncResult:
+    bindings_processed: int = 0
+    products_targeted: int = 0
+    products_confirmed: int = 0
+    products_zeroed: int = 0
+    conflicts: int = 0
+    errors: int = 0
+    binding_errors: int = 0
 
 
 async def list_sellers_with_marketplace_token(
@@ -55,6 +71,110 @@ async def list_sellers_with_marketplace_token(
     return [SellerPollTarget(tenant_id=row[0], seller_id=row[1]) for row in rows]
 
 
+async def list_active_stock_sync_bindings(
+    session: AsyncSession,
+    tenant_id: uuid.UUID,
+    seller_id: uuid.UUID,
+    *,
+    wb_warehouse_id: int | None = None,
+) -> list[FbsWarehouseBinding]:
+    stmt = (
+        select(FbsWarehouseBinding)
+        .where(
+            FbsWarehouseBinding.tenant_id == tenant_id,
+            FbsWarehouseBinding.seller_id == seller_id,
+            FbsWarehouseBinding.is_active.is_(True),
+            FbsWarehouseBinding.stock_sync_enabled.is_(True),
+        )
+        .order_by(FbsWarehouseBinding.wb_warehouse_id.asc())
+    )
+    if wb_warehouse_id is not None:
+        stmt = stmt.where(FbsWarehouseBinding.wb_warehouse_id == wb_warehouse_id)
+    return list((await session.execute(stmt)).scalars().all())
+
+
+async def sync_seller_stocks(
+    session: AsyncSession,
+    tenant_id: uuid.UUID,
+    seller_id: uuid.UUID,
+    http_client: httpx.AsyncClient,
+    *,
+    wb_warehouse_id: int | None = None,
+) -> SellerStockSyncResult:
+    """Run stock reconciliation for all active+enabled bindings of one seller."""
+    bindings = await list_active_stock_sync_bindings(
+        session,
+        tenant_id,
+        seller_id,
+        wb_warehouse_id=wb_warehouse_id,
+    )
+    result = SellerStockSyncResult()
+    for binding in bindings:
+        try:
+            binding_result = await sync_binding_stocks(
+                session,
+                tenant_id,
+                seller_id,
+                binding,
+                http_client,
+            )
+            if binding_result.skipped_busy:
+                logger.warning(
+                    "fbs stock sync skipped busy binding %s seller %s wb_warehouse %s",
+                    binding.id,
+                    seller_id,
+                    binding.wb_warehouse_id,
+                )
+                continue
+            result.bindings_processed += binding_result.bindings_processed
+            result.products_targeted += binding_result.products_targeted
+            result.products_confirmed += binding_result.products_confirmed
+            result.products_zeroed += binding_result.products_zeroed
+            result.conflicts += binding_result.conflicts
+            result.errors += binding_result.errors
+            if binding_result.errors or binding_result.error_code:
+                result.binding_errors += 1
+        except FbsStockSyncError as exc:
+            result.binding_errors += 1
+            logger.warning(
+                "fbs stock sync binding failed seller %s wb_warehouse %s: %s",
+                seller_id,
+                binding.wb_warehouse_id,
+                exc.code,
+            )
+        except Exception:
+            result.binding_errors += 1
+            logger.exception(
+                "fbs stock sync binding failed seller %s wb_warehouse %s",
+                seller_id,
+                binding.wb_warehouse_id,
+            )
+    return result
+
+
+async def get_binding_stock_sync_status(
+    session: AsyncSession,
+    tenant_id: uuid.UUID,
+    seller_id: uuid.UUID,
+    wb_warehouse_id: int,
+) -> tuple[FbsWarehouseBinding, list[FbsStockSyncItem]]:
+    stmt = select(FbsWarehouseBinding).where(
+        FbsWarehouseBinding.tenant_id == tenant_id,
+        FbsWarehouseBinding.seller_id == seller_id,
+        FbsWarehouseBinding.wb_warehouse_id == wb_warehouse_id,
+    )
+    binding = (await session.execute(stmt)).scalar_one_or_none()
+    if binding is None:
+        raise FbsStockSyncError("binding_not_found")
+    items_stmt = (
+        select(FbsStockSyncItem)
+        .where(FbsStockSyncItem.binding_id == binding.id)
+        .order_by(FbsStockSyncItem.chrt_id.asc())
+    )
+    items = list((await session.execute(items_stmt)).scalars().all())
+    return binding, items
+
+
 async def poll_fbs_orders_for_seller(
     session: AsyncSession,
     target: SellerPollTarget,
@@ -66,10 +186,18 @@ async def poll_fbs_orders_for_seller(
         target.seller_id,
         http_client,
     )
+    stock_result = await sync_seller_stocks(
+        session,
+        target.tenant_id,
+        target.seller_id,
+        http_client,
+    )
     return {
         "orders_upserted": int(result.get("orders_upserted", 0)),
         "orders_created": int(result.get("orders_created", 0)),
         "statuses_updated": int(result.get("statuses_updated", 0)),
+        "stocks_bindings_processed": stock_result.bindings_processed,
+        "stock_errors": stock_result.errors + stock_result.binding_errors,
     }
 
 
@@ -138,6 +266,8 @@ async def poll_fbs_orders_all_sellers() -> FbsAutopollCycleResult:
     orders_created = 0
     statuses_updated = 0
     seller_errors = 0
+    stocks_bindings_processed = 0
+    stock_errors = 0
 
     logger.info("fbs autopoll orders: starting cycle for %s sellers", len(targets))
 
@@ -168,13 +298,18 @@ async def poll_fbs_orders_all_sellers() -> FbsAutopollCycleResult:
             orders_upserted += stats["orders_upserted"]
             orders_created += stats["orders_created"]
             statuses_updated += stats["statuses_updated"]
+            stocks_bindings_processed += stats["stocks_bindings_processed"]
+            stock_errors += stats["stock_errors"]
 
     logger.info(
-        "fbs autopoll orders done: sellers=%s upserted=%s created=%s statuses=%s errors=%s",
+        "fbs autopoll orders done: sellers=%s upserted=%s created=%s statuses=%s "
+        "stocks_bindings=%s stock_errors=%s errors=%s",
         sellers_polled,
         orders_upserted,
         orders_created,
         statuses_updated,
+        stocks_bindings_processed,
+        stock_errors,
         seller_errors,
     )
     return FbsAutopollCycleResult(
@@ -183,6 +318,8 @@ async def poll_fbs_orders_all_sellers() -> FbsAutopollCycleResult:
         orders_created=orders_created,
         statuses_updated=statuses_updated,
         seller_errors=seller_errors,
+        stocks_bindings_processed=stocks_bindings_processed,
+        stock_errors=stock_errors,
     )
 
 
