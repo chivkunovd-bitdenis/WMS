@@ -7,12 +7,16 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
-from sqlalchemy import Boolean, Integer, String, func, select
+from sqlalchemy import Boolean, Integer, String, func, select, text, update
 from sqlalchemy.orm import Mapped, Session, mapped_column
 
 from wb_emulator.models import Base
+from wb_emulator.services.stocks_store import StockRow
 
 _TEMPLATES_PATH = Path(__file__).resolve().parent.parent / "seed" / "order_templates.json"
+
+DEFAULT_EMULATOR_WAREHOUSE_ID = 501001
+DEFAULT_EMULATOR_OFFICE_ID = 601001
 
 WB_EVENT_MAP: dict[str, tuple[str, str, bool]] = {
     "sorted": ("confirm", "sorted", False),
@@ -30,7 +34,8 @@ DEFAULT_MOCK_ORDER: dict[str, Any] = {
     "skus": ["E2E-MOCK-BARCODE"],
     "price": 150000,
     "cargoType": 1,
-    "officeId": 12345,
+    "warehouseId": DEFAULT_EMULATOR_WAREHOUSE_ID,
+    "officeId": DEFAULT_EMULATOR_OFFICE_ID,
     "isLegal": False,
     "options": {"isB2B": False},
 }
@@ -52,6 +57,7 @@ class EmulatorOrder(Base):
     skus_json: Mapped[str] = mapped_column(String(1024), nullable=False)
     price: Mapped[int] = mapped_column(Integer, nullable=False)
     cargo_type: Mapped[int] = mapped_column(Integer, nullable=False)
+    warehouse_id: Mapped[int] = mapped_column(Integer, nullable=False)
     office_id: Mapped[int] = mapped_column(Integer, nullable=False)
     is_legal: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
     is_b2b: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
@@ -80,6 +86,7 @@ def order_to_api(order: EmulatorOrder) -> dict[str, Any]:
         "skus": json.loads(order.skus_json),
         "price": order.price,
         "cargoType": order.cargo_type,
+        "warehouseId": order.warehouse_id,
         "officeId": order.office_id,
         "isLegal": order.is_legal,
         "options": {"isB2B": order.is_b2b},
@@ -95,6 +102,32 @@ def status_row(order_id: int, *, supplier_status: str = "new", wb_status: str = 
     return {"id": order_id, "supplierStatus": supplier_status, "wbStatus": wb_status}
 
 
+def _order_fields_from_payload(payload: dict[str, Any]) -> dict[str, Any]:
+    skus = payload.get("skus") or []
+    options = payload.get("options") or {}
+    warehouse_id = int(payload.get("warehouseId", DEFAULT_EMULATOR_WAREHOUSE_ID))
+    office_id = int(payload.get("officeId", DEFAULT_EMULATOR_OFFICE_ID))
+    return {
+        "rid": str(payload["rid"]),
+        "created_at": str(payload["createdAt"]),
+        "nm_id": int(payload["nmId"]),
+        "chrt_id": int(payload["chrtId"]),
+        "article": str(payload["article"]),
+        "skus_json": json.dumps(skus),
+        "price": int(payload["price"]),
+        "cargo_type": int(payload["cargoType"]),
+        "warehouse_id": warehouse_id,
+        "office_id": office_id,
+        "is_legal": bool(payload.get("isLegal", False)),
+        "is_b2b": bool(options.get("isB2B", False)),
+        "can_pvz": payload.get("canPvz"),
+        "is_pvz": payload.get("isPvz"),
+        "supplier_status": str(payload.get("supplierStatus", "new")),
+        "wb_status": str(payload.get("wbStatus", "waiting")),
+        "cancelled": bool(payload.get("cancelled", False)),
+    }
+
+
 def upsert_order(session: Session, seller_key: str, payload: dict[str, Any]) -> EmulatorOrder:
     """Insert or update an order for a seller (tests and admin seeding)."""
     ensure_orders_table(session)
@@ -105,26 +138,7 @@ def upsert_order(session: Session, seller_key: str, payload: dict[str, Any]) -> 
             EmulatorOrder.wb_order_id == wb_order_id,
         )
     )
-    skus = payload.get("skus") or []
-    options = payload.get("options") or {}
-    fields = {
-        "rid": str(payload["rid"]),
-        "created_at": str(payload["createdAt"]),
-        "nm_id": int(payload["nmId"]),
-        "chrt_id": int(payload["chrtId"]),
-        "article": str(payload["article"]),
-        "skus_json": json.dumps(skus),
-        "price": int(payload["price"]),
-        "cargo_type": int(payload["cargoType"]),
-        "office_id": int(payload["officeId"]),
-        "is_legal": bool(payload.get("isLegal", False)),
-        "is_b2b": bool(options.get("isB2B", False)),
-        "can_pvz": payload.get("canPvz"),
-        "is_pvz": payload.get("isPvz"),
-        "supplier_status": str(payload.get("supplierStatus", "new")),
-        "wb_status": str(payload.get("wbStatus", "waiting")),
-        "cancelled": bool(payload.get("cancelled", False)),
-    }
+    fields = _order_fields_from_payload(payload)
     if existing is not None:
         for key, value in fields.items():
             setattr(existing, key, value)
@@ -155,7 +169,6 @@ def seed_default_order(session: Session, seller_key: str) -> EmulatorOrder:
 
 def list_new_orders(session: Session, seller_key: str) -> list[EmulatorOrder]:
     ensure_orders_table(session)
-    seed_default_order(session, seller_key)
     stmt = (
         select(EmulatorOrder)
         .where(
@@ -233,42 +246,126 @@ def load_order_templates() -> list[dict[str, Any]]:
     return templates
 
 
-def _next_wb_order_ids(session: Session, count: int) -> list[int]:
+
+def _template_pool(templates: list[dict[str, Any]], chrt_id: int | None) -> list[dict[str, Any]]:
+    if chrt_id is None:
+        return templates
+    matching = [template for template in templates if int(template["chrtId"]) == chrt_id]
+    if not matching:
+        raise ValueError(f"no order template for chrtId={chrt_id}")
+    return matching
+
+
+def _build_order_payload(
+    template: dict[str, Any],
+    *,
+    wb_order_id: int,
+    warehouse_id: int,
+    now: str,
+) -> dict[str, Any]:
+    office_id = int(template.get("officeId", DEFAULT_EMULATOR_OFFICE_ID))
+    return {
+        "id": wb_order_id,
+        "rid": f"emu-rid-{wb_order_id}",
+        "createdAt": now,
+        "nmId": template["nmId"],
+        "chrtId": template["chrtId"],
+        "article": template["article"],
+        "skus": list(template["skus"]),
+        "price": template["price"],
+        "cargoType": template["cargoType"],
+        "warehouseId": warehouse_id,
+        "officeId": office_id,
+        "isLegal": template.get("isLegal", False),
+        "options": dict(template.get("options", {})),
+        "supplierStatus": "new",
+        "wbStatus": "waiting",
+        "cancelled": False,
+    }
+
+
+def _try_purchase_one(
+    session: Session,
+    seller_key: str,
+    warehouse_id: int,
+    template: dict[str, Any],
+    now: str,
+) -> EmulatorOrder | None:
+    """Atomically decrement stock by 1 and create one order, or return None if no stock."""
     ensure_orders_table(session)
-    max_id = session.scalar(select(func.max(EmulatorOrder.wb_order_id))) or 500000
-    return [int(max_id) + offset + 1 for offset in range(count)]
+    chrt_id = int(template["chrtId"])
+
+    session.execute(text("BEGIN IMMEDIATE"))
+    try:
+        decremented = session.execute(
+            update(StockRow)
+            .where(
+                StockRow.seller_key == seller_key,
+                StockRow.warehouse_id == warehouse_id,
+                StockRow.chrt_id == chrt_id,
+                StockRow.amount > 0,
+            )
+            .values(amount=StockRow.amount - 1)
+        )
+        if decremented.rowcount != 1:
+            session.rollback()
+            return None
+
+        wb_order_id = int(session.scalar(select(func.max(EmulatorOrder.wb_order_id))) or 500000) + 1
+        payload = _build_order_payload(template, wb_order_id=wb_order_id, warehouse_id=warehouse_id, now=now)
+        fields = _order_fields_from_payload(payload)
+        order = EmulatorOrder(seller_key=seller_key, wb_order_id=wb_order_id, **fields)
+        session.add(order)
+        session.commit()
+        session.refresh(order)
+        return order
+    except Exception:
+        session.rollback()
+        raise
 
 
-def create_orders_for_seller(session: Session, seller_key: str, count: int) -> list[EmulatorOrder]:
+class PurchaseResult:
+    """Result of stock-constrained admin purchase."""
+
+    __slots__ = ("orders", "created", "rejected_no_stock")
+
+    def __init__(self, orders: list[EmulatorOrder], *, created: int, rejected_no_stock: int) -> None:
+        self.orders = orders
+        self.created = created
+        self.rejected_no_stock = rejected_no_stock
+
+
+def create_orders_for_seller(
+    session: Session,
+    seller_key: str,
+    count: int,
+    *,
+    warehouse_id: int | None = None,
+    chrt_id: int | None = None,
+) -> PurchaseResult:
     if count < 1:
         raise ValueError("count must be >= 1")
+
     templates = load_order_templates()
     if not templates:
         raise ValueError("no order templates configured")
 
+    resolved_warehouse_id = warehouse_id if warehouse_id is not None else DEFAULT_EMULATOR_WAREHOUSE_ID
+    pool = _template_pool(templates, chrt_id)
+
     created: list[EmulatorOrder] = []
+    rejected_no_stock = 0
     now = datetime.now(UTC).strftime("%Y-%m-%dT%H:%M:%S+00:00")
-    for wb_order_id in _next_wb_order_ids(session, count):
-        template = templates[len(created) % len(templates)]
-        payload: dict[str, Any] = {
-            "id": wb_order_id,
-            "rid": f"emu-rid-{wb_order_id}",
-            "createdAt": now,
-            "nmId": template["nmId"],
-            "chrtId": template["chrtId"],
-            "article": template["article"],
-            "skus": list(template["skus"]),
-            "price": template["price"],
-            "cargoType": template["cargoType"],
-            "officeId": template["officeId"],
-            "isLegal": template.get("isLegal", False),
-            "options": dict(template.get("options", {})),
-            "supplierStatus": "new",
-            "wbStatus": "waiting",
-            "cancelled": False,
-        }
-        created.append(upsert_order(session, seller_key, payload))
-    return created
+
+    for index in range(count):
+        template = pool[index % len(pool)]
+        order = _try_purchase_one(session, seller_key, resolved_warehouse_id, template, now)
+        if order is None:
+            rejected_no_stock += 1
+        else:
+            created.append(order)
+
+    return PurchaseResult(created, created=len(created), rejected_no_stock=rejected_no_stock)
 
 
 def apply_wb_event(session: Session, seller_key: str, order_id: int, event: str) -> EmulatorOrder | None:

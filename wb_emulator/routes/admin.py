@@ -38,11 +38,26 @@ class WbEventBody(BaseModel):
 def admin_create_orders(
     seller: str = Query(min_length=1),
     count: int = Query(default=1, ge=1, le=100),
+    warehouse_id: int | None = Query(default=None, ge=1),
+    chrt_id: int | None = Query(default=None, ge=1),
     db: Session = Depends(get_db),
     _: None = Depends(require_admin_token),
-) -> dict[str, list[dict[str, object]]]:
-    created = create_orders_for_seller(db, seller, count)
-    return {"orders": [order_to_api(order) for order in created]}
+) -> dict[str, object]:
+    try:
+        result = create_orders_for_seller(
+            db,
+            seller,
+            count,
+            warehouse_id=warehouse_id,
+            chrt_id=chrt_id,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    return {
+        "orders": [order_to_api(order) for order in result.orders],
+        "created": result.created,
+        "rejected_no_stock": result.rejected_no_stock,
+    }
 
 
 @admin_router.post("/orders/{order_id}/wb-event")
