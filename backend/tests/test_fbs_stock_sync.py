@@ -260,6 +260,9 @@ async def test_sync_marks_error_on_readback_mismatch(db_session: AsyncSession) -
     assert item.status == STOCK_SYNC_STATUS_ERROR
     assert item.last_error_code == ERROR_READBACK_MISMATCH
 
+    await db_session.refresh(ctx.binding)
+    assert ctx.binding.last_error_code == ERROR_READBACK_MISMATCH
+
 
 # TC-NEW-FBS-STOCK-010 — zero stale published chrt
 @pytest.mark.asyncio
@@ -433,6 +436,84 @@ async def test_sync_upstream_error_marks_batch_error(
     ).scalar_one()
     assert item.status == STOCK_SYNC_STATUS_ERROR
     assert item.last_error_code == f"wb_upstream_error_{status_code}"
+
+    await db_session.refresh(ctx.binding)
+    assert ctx.binding.last_error_code == f"wb_upstream_error_{status_code}"
+
+
+@pytest.mark.asyncio
+async def test_sync_429_after_retry_marks_binding_upstream_error(
+    db_session: AsyncSession,
+) -> None:
+    """STOCKFIX-055: exhausted 429 retry surfaces wb_upstream_error_429 on binding."""
+    ctx = await _seed_binding(db_session)
+    product = _product(
+        tenant_id=ctx.tenant.id,
+        seller_id=ctx.seller.id,
+        chrt_id=205,
+        sku_suffix="429-fail",
+    )
+    db_session.add(product)
+    await db_session.commit()
+
+    transport = _MockStocksTransport(put_status_sequence=[429, 429])
+    async with _client(transport) as http_client:
+        result = await sync_binding_stocks(
+            db_session,
+            ctx.tenant.id,
+            ctx.seller.id,
+            ctx.binding,
+            http_client,
+            rate_limiter=NoopStockSyncRateLimiter(),
+            marketplace_api_base="https://wb-mock.test",
+        )
+
+    assert result.products_confirmed == 0
+    assert result.errors == 1
+    await db_session.refresh(ctx.binding)
+    assert ctx.binding.last_error_code == "wb_upstream_error_429"
+    assert ctx.binding.last_error_code != ERROR_READBACK_MISMATCH
+
+
+@pytest.mark.asyncio
+async def test_sync_transport_error_marks_binding_not_readback_mismatch(
+    db_session: AsyncSession,
+) -> None:
+    """STOCKFIX-055: transport failure surfaces wb_transport_error on binding."""
+    ctx = await _seed_binding(db_session)
+    product = _product(
+        tenant_id=ctx.tenant.id,
+        seller_id=ctx.seller.id,
+        chrt_id=206,
+        sku_suffix="transport",
+    )
+    db_session.add(product)
+    await db_session.commit()
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        if request.method == "PUT":
+            raise httpx.ConnectError("connection refused")
+        raise AssertionError(f"unexpected method {request.method}")
+
+    transport = httpx.MockTransport(handler)
+    async with httpx.AsyncClient(
+        transport=transport, base_url="https://wb-mock.test"
+    ) as http_client:
+        result = await sync_binding_stocks(
+            db_session,
+            ctx.tenant.id,
+            ctx.seller.id,
+            ctx.binding,
+            http_client,
+            rate_limiter=NoopStockSyncRateLimiter(),
+            marketplace_api_base="https://wb-mock.test",
+        )
+
+    assert result.products_confirmed == 0
+    assert result.errors == 1
+    await db_session.refresh(ctx.binding)
+    assert ctx.binding.last_error_code == "wb_transport_error"
+    assert ctx.binding.last_error_code != ERROR_READBACK_MISMATCH
 
 
 @pytest.mark.asyncio
@@ -643,6 +724,9 @@ async def test_partial_batch_failure_leaves_confirmed_batch(
         )
     ).scalars().all()
     assert len(error_rows) == 1
+
+    await db_session.refresh(ctx.binding)
+    assert ctx.binding.last_error_code == "wb_upstream_error_409"
 
 
 @pytest.mark.asyncio

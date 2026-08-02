@@ -401,10 +401,10 @@ async def _publish_batches(
     api_token: str,
     rate_limiter: StockSyncRateLimiter,
     marketplace_api_base: str | None,
-) -> tuple[int, int]:
-    """Returns (confirmed_count, error_count)."""
+) -> tuple[int, int, str | None]:
+    """Returns (confirmed_count, error_count, first_error_code)."""
     if not targets:
-        return 0, 0
+        return 0, 0, None
 
     amounts = [
         MarketplaceStockAmount(chrt_id=t.chrt_id, amount=t.amount) for t in targets
@@ -412,6 +412,7 @@ async def _publish_batches(
     batches = split_marketplace_stocks_batches(amounts)
     confirmed = 0
     errors = 0
+    first_error_code: str | None = None
 
     for batch_index, batch in enumerate(batches):
         if batch_index > 0:
@@ -426,6 +427,8 @@ async def _publish_batches(
             marketplace_api_base=marketplace_api_base,
         )
         if put_error is not None:
+            if first_error_code is None:
+                first_error_code = put_error
             for entry in batch:
                 item = sync_items[entry.chrt_id]
                 item.status = STOCK_SYNC_STATUS_ERROR
@@ -447,6 +450,8 @@ async def _publish_batches(
             )
         except WildberriesClientError as exc:
             err = _wb_error_code(exc)
+            if first_error_code is None:
+                first_error_code = err
             for entry in batch:
                 item = sync_items[entry.chrt_id]
                 item.status = STOCK_SYNC_STATUS_ERROR
@@ -456,6 +461,8 @@ async def _publish_batches(
             continue
 
         if not _compare_readback(batch, readback):
+            if first_error_code is None:
+                first_error_code = ERROR_READBACK_MISMATCH
             for entry in batch:
                 item = sync_items[entry.chrt_id]
                 item.status = STOCK_SYNC_STATUS_ERROR
@@ -473,7 +480,7 @@ async def _publish_batches(
             confirmed += 1
         await session.commit()
 
-    return confirmed, errors
+    return confirmed, errors, first_error_code
 
 
 async def sync_binding_stocks(
@@ -551,7 +558,7 @@ async def sync_binding_stocks(
             session, binding.id, publish_targets, existing_items
         )
 
-        confirmed, errors = await _publish_batches(
+        confirmed, errors, publish_error_code = await _publish_batches(
             session,
             binding=binding,
             targets=publish_targets,
@@ -567,7 +574,7 @@ async def sync_binding_stocks(
 
         if errors > 0:
             binding.last_sync_status = STOCK_SYNC_STATUS_ERROR
-            binding.last_error_code = ERROR_READBACK_MISMATCH
+            binding.last_error_code = publish_error_code
         elif result.conflicts > 0:
             binding.last_sync_status = STOCK_SYNC_STATUS_CONFLICT
             binding.last_error_code = ERROR_DUPLICATE_CHRT
