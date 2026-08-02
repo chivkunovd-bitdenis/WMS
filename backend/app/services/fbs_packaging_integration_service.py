@@ -34,6 +34,7 @@ from app.services.document_number_service import (
     assign_display_number_if_missing,
     assign_document_number_if_missing,
 )
+from app.services import inventory_service as inv_svc
 from app.services.packaging_task_service import get_task, is_task_complete, qty_done
 
 logger = logging.getLogger(__name__)
@@ -288,6 +289,7 @@ async def try_promote_fbs_supply_if_ready(
     if supply is None or supply.status != FBS_SUPPLY_STATUS_ASSEMBLING:
         return supply
 
+    task = None
     if supply.packaging_task_id is not None:
         task = await get_task(session, tenant_id, supply.packaging_task_id)
         if task is None or not is_task_complete(task):
@@ -295,6 +297,19 @@ async def try_promote_fbs_supply_if_ready(
 
     if _supply_requires_marking(supply):
         return supply
+
+    if task is not None:
+        for line in task.lines:
+            qty = qty_done(line)
+            if qty < 1:
+                continue
+            await inv_svc.apply_fbs_supply_write_off(
+                session,
+                tenant_id=tenant_id,
+                product_id=line.product_id,
+                storage_location_id=line.storage_location_id,
+                quantity=qty,
+            )
 
     supply.status = FBS_SUPPLY_STATUS_PACKED
     for order in supply.orders:

@@ -424,3 +424,83 @@ async def test_fbs_availability_batch_query_count_bounded(
         event.remove(sync_engine, "before_cursor_execute", _count_query)
 
     assert query_count <= 6, f"expected <=6 queries, got {query_count}"
+
+
+# TC-NEW-FBS-STOCK-035 — STOCKFIX-035: sold must not republish unit to WB
+@pytest.mark.asyncio
+async def test_sold_release_does_not_resurrect_available_after_fbs_write_off(
+    async_client: AsyncClient,
+) -> None:
+    """physical=5, reserve=1 → publish 4; write-off 1 + sold release → still 4, not 5."""
+    _headers, seller_id, warehouse_id, product_id, storage_loc_id = (
+        await _setup_tenant_product(async_client)
+    )
+
+    async with SessionLocal() as session:
+        product = await session.get(Product, product_id)
+        assert product is not None
+        tenant_id = product.tenant_id
+
+        await inventory_service.record_movement_and_adjust_balance(
+            session,
+            tenant_id=tenant_id,
+            product_id=product_id,
+            storage_location_id=storage_loc_id,
+            quantity_delta=5,
+            movement_type="inbound_intake",
+        )
+
+        order = FbsOrder(
+            tenant_id=tenant_id,
+            seller_id=seller_id,
+            warehouse_id=warehouse_id,
+            product_id=product_id,
+            wb_order_id=900_035,
+            created_at_wb=product.created_at,
+            deadline_at=product.created_at,
+            mapping_status="mapped",
+            reserve_status="reserved",
+        )
+        session.add(order)
+        await session.flush()
+        session.add(
+            FbsOrderReservation(
+                tenant_id=tenant_id,
+                fbs_order_id=order.id,
+                product_id=product_id,
+                warehouse_id=warehouse_id,
+                quantity=1,
+            )
+        )
+        await session.commit()
+
+        available_with_reserve = await fbs_available_qty_for_product(
+            session, tenant_id, warehouse_id, product_id
+        )
+        assert available_with_reserve == 4
+
+        await inventory_service.apply_packaging_convert(
+            session,
+            tenant_id=tenant_id,
+            product_id=product_id,
+            storage_location_id=storage_loc_id,
+            quantity=1,
+        )
+        await inventory_service.apply_fbs_supply_write_off(
+            session,
+            tenant_id=tenant_id,
+            product_id=product_id,
+            storage_location_id=storage_loc_id,
+            quantity=1,
+        )
+
+        from app.services.wb_marketplace_orders_service import _release_reservation
+
+        await _release_reservation(session, order)
+        await session.commit()
+
+        available_after_sold = await fbs_available_qty_for_product(
+            session, tenant_id, warehouse_id, product_id
+        )
+        assert available_after_sold == 4
+        assert available_after_sold != 5

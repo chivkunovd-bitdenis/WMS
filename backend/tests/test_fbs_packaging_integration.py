@@ -6,7 +6,7 @@ from typing import Any
 
 import pytest
 from httpx import AsyncClient
-from sqlalchemy import select
+from sqlalchemy import func, select
 
 from app.core.settings import settings
 from app.db.session import SessionLocal
@@ -15,6 +15,7 @@ from app.models.fbs_order import (
     FBS_ORDER_STATUS_IN_SUPPLY,
     FBS_ORDER_STATUS_NEW,
     FbsOrder,
+    FbsOrderReservation,
 )
 from app.models.fbs_supply import (
     FBS_SUPPLY_STATUS_ASSEMBLING,
@@ -23,11 +24,16 @@ from app.models.fbs_supply import (
     FbsSupply,
 )
 from app.models.fbs_trbx import FbsTrbx
+from app.models.inventory_movement import MOVEMENT_TYPE_FBS_SHIPMENT, InventoryMovement
 from app.models.packaging_task import PackagingTask, PackagingTaskLine
 from app.services import inventory_service
 from app.services.fbs_packaging_integration_service import create_packaging_task_for_supply
+from app.services.fbs_stock_availability_service import fbs_available_qty_for_product
 from app.services.sorting_location_service import get_or_create_sorting_location
-from app.services.wb_marketplace_orders_service import upsert_order_from_wb_row
+from app.services.wb_marketplace_orders_service import (
+    _release_reservation,
+    upsert_order_from_wb_row,
+)
 from tests.fbs_seed_helpers import DEFAULT_WB_WAREHOUSE_ID, seed_fbs_warehouse_binding
 
 
@@ -678,3 +684,139 @@ async def test_fbs_supply_promoted_after_marking_when_honest_sign_required(
         headers=headers,
     )
     assert supply_done.json()["status"] == FBS_SUPPLY_STATUS_PACKED
+
+
+# TC-NEW-FBS-STOCK-035 — STOCKFIX-035: promote write-off via shelf-confirm path
+@pytest.mark.asyncio
+async def test_fbs_promote_write_off_shelf_confirm_sold_does_not_resurrect_available(
+    async_client: AsyncClient,
+    enable_wb_marketplace_supplies_mock: None,
+) -> None:
+    """Shelf confirm only (qty_confirmed_packed) → fbs_shipment write-off → sold → avail 4 not 5."""
+    headers, suffix = await _register_ff_admin(async_client)
+    seller_id, warehouse_id = await _setup_seller_with_token(async_client, headers, suffix)
+    token_payload = await async_client.get("/auth/me", headers=headers)
+    tenant_id = uuid.UUID(token_payload.json()["tenant_id"])
+
+    supply_resp = await async_client.post(
+        "/operations/fbs-supplies",
+        headers=headers,
+        json={
+            "seller_id": seller_id,
+            "warehouse_id": warehouse_id,
+            "name": "Write-off supply",
+            "delivery_type": "warehouse_sc",
+        },
+    )
+    assert supply_resp.status_code == 201, supply_resp.text
+    supply_id = supply_resp.json()["id"]
+    product_id = uuid.UUID(
+        await _create_product(async_client, headers, seller_id, sku="sold-035", name="Sold 035")
+    )
+
+    order_id: uuid.UUID
+    async with SessionLocal() as session:
+        await seed_fbs_warehouse_binding(
+            session,
+            tenant_id=tenant_id,
+            seller_id=uuid.UUID(seller_id),
+            wms_warehouse_id=uuid.UUID(warehouse_id),
+        )
+        order, _ = await upsert_order_from_wb_row(
+            session,
+            tenant_id,
+            uuid.UUID(seller_id),
+            _wb_order_row(order_id=920035, article="SOLD-035"),
+        )
+        order.product_id = product_id
+        order.supply_id = uuid.UUID(supply_id)
+        order.warehouse_id = uuid.UUID(warehouse_id)
+        order.status = FBS_ORDER_STATUS_IN_SUPPLY
+        order.reserve_status = "reserved"
+        session.add(
+            FbsOrderReservation(
+                tenant_id=tenant_id,
+                fbs_order_id=order.id,
+                product_id=product_id,
+                warehouse_id=uuid.UUID(warehouse_id),
+                quantity=1,
+            )
+        )
+        sorting = await get_or_create_sorting_location(
+            session, tenant_id, uuid.UUID(warehouse_id)
+        )
+        await inventory_service.record_movement_and_adjust_balance(
+            session,
+            tenant_id=tenant_id,
+            product_id=product_id,
+            storage_location_id=sorting.id,
+            quantity_delta=5,
+            movement_type="inbound_intake",
+        )
+        await inventory_service.apply_packaging_convert(
+            session,
+            tenant_id=tenant_id,
+            product_id=product_id,
+            storage_location_id=sorting.id,
+            quantity=5,
+        )
+        await session.commit()
+        order_id = order.id
+
+    status_resp = await async_client.put(
+        f"/operations/fbs-supplies/{supply_id}/status",
+        headers=headers,
+        json={"status": "assembling"},
+    )
+    assert status_resp.status_code == 200, status_resp.text
+    task_id = status_resp.json()["packaging_task_id"]
+
+    task = await async_client.get(
+        f"/operations/packaging-tasks/{task_id}",
+        headers=headers,
+    )
+    assert task.status_code == 200, task.text
+    line = task.json()["lines"][0]
+    confirm = await async_client.post(
+        f"/operations/packaging-tasks/{task_id}/lines/{line['id']}/confirm-packed",
+        headers=headers,
+        json={"quantity": line["qty_total"]},
+    )
+    assert confirm.status_code == 200, confirm.text
+    assert confirm.json()["lines"][0]["qty_confirmed_packed"] == line["qty_total"]
+    assert confirm.json()["lines"][0]["qty_packed_in_task"] == 0
+
+    complete = await async_client.post(
+        f"/operations/packaging-tasks/{task_id}/complete",
+        headers=headers,
+        json={"acknowledge_all_packed": True},
+    )
+    assert complete.status_code == 200, complete.text
+
+    supply = await async_client.get(
+        f"/operations/fbs-supplies/{supply_id}",
+        headers=headers,
+    )
+    assert supply.status_code == 200, supply.text
+    assert supply.json()["status"] == FBS_SUPPLY_STATUS_PACKED
+
+    async with SessionLocal() as session:
+        write_off_qty = await session.scalar(
+            select(func.coalesce(func.sum(InventoryMovement.quantity_delta), 0)).where(
+                InventoryMovement.tenant_id == tenant_id,
+                InventoryMovement.product_id == product_id,
+                InventoryMovement.movement_type == MOVEMENT_TYPE_FBS_SHIPMENT,
+            )
+        )
+        assert int(write_off_qty) == -1
+
+        order = await session.get(FbsOrder, order_id)
+        assert order is not None
+        await _release_reservation(session, order)
+        await session.commit()
+
+        available_after_sold = await fbs_available_qty_for_product(
+            session, tenant_id, uuid.UUID(warehouse_id), product_id
+        )
+        assert available_after_sold == 4
+        assert available_after_sold != 5
