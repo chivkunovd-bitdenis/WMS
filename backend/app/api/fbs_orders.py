@@ -50,7 +50,7 @@ class FbsOrderSyncOut(BaseModel):
 class FbsOrderOut(BaseModel):
     id: str
     seller_id: str
-    warehouse_id: str
+    warehouse_id: str | None
     product_id: str | None
     wb_order_id: int
     wb_rid: str | None
@@ -62,6 +62,7 @@ class FbsOrderOut(BaseModel):
     is_legal: bool
     cargo_type: str | None
     wb_office_id: int | None
+    wb_warehouse_id: int | None
     can_pvz: bool
     supply_id: str | None
     trbx_id: str | None
@@ -79,7 +80,7 @@ def _order_out(order: FbsOrder) -> FbsOrderOut:
     return FbsOrderOut(
         id=str(order.id),
         seller_id=str(order.seller_id),
-        warehouse_id=str(order.warehouse_id),
+        warehouse_id=str(order.warehouse_id) if order.warehouse_id is not None else None,
         product_id=str(order.product_id) if order.product_id is not None else None,
         wb_order_id=order.wb_order_id,
         wb_rid=order.wb_rid,
@@ -91,6 +92,7 @@ def _order_out(order: FbsOrder) -> FbsOrderOut:
         is_legal=order.is_legal,
         cargo_type=order.cargo_type,
         wb_office_id=order.wb_office_id,
+        wb_warehouse_id=order.wb_warehouse_id,
         can_pvz=order.can_pvz,
         supply_id=str(order.supply_id) if order.supply_id is not None else None,
         trbx_id=str(order.trbx_id) if order.trbx_id is not None else None,
@@ -122,18 +124,7 @@ async def start_fbs_orders_sync(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="seller_not_found",
         )
-    if body.warehouse_id is not None:
-        from app.services.catalog_service import get_warehouse
-
-        wh = await get_warehouse(session, user.tenant_id, body.warehouse_id)
-        if wh is None:
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail="warehouse_not_found",
-            )
     payload: dict[str, Any] = {"seller_id": str(body.seller_id)}
-    if body.warehouse_id is not None:
-        payload["warehouse_id"] = str(body.warehouse_id)
     job = await job_svc.create_pending_job(
         session,
         user.tenant_id,

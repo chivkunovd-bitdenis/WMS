@@ -254,6 +254,7 @@ def _raise_from_service(exc: supply_svc.FbsSupplyError) -> None:
         "order_already_in_supply",
         "order_bad_status",
         "order_warehouse_mismatch",
+        "order_warehouse_unmapped",
         "invalid_delivery_type",
         "supply_not_editable",
     }:

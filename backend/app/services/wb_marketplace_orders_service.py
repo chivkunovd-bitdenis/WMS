@@ -24,11 +24,12 @@ from app.models.fbs_order import (
     RESERVE_STATUS_RELEASED,
     RESERVE_STATUS_RESERVED,
     RESERVE_STATUS_SKIPPED_NO_PRODUCT,
+    RESERVE_STATUS_WAREHOUSE_UNMAPPED,
     FbsOrder,
     FbsOrderReservation,
 )
+from app.models.fbs_warehouse_binding import FbsWarehouseBinding
 from app.models.product import Product
-from app.services.catalog_service import get_warehouse, list_warehouses
 from app.services.fbs_stock_availability_service import fbs_available_qty_for_product
 from app.services.wildberries_client import (
     WildberriesClientError,
@@ -157,20 +158,75 @@ async def available_qty_for_fbs_reserve(
     )
 
 
-async def _resolve_warehouse_id(
+def _wb_office_id_from_row(row: dict[str, Any]) -> int | None:
+    office = row.get("officeId")
+    if office is None:
+        return None
+    return int(office)
+
+
+def _wb_warehouse_id_from_row(row: dict[str, Any]) -> int | None:
+    wh = row.get("warehouseId")
+    if wh is None:
+        return None
+    return int(wh)
+
+
+async def _resolve_wms_warehouse_from_binding(
     session: AsyncSession,
     tenant_id: uuid.UUID,
-    warehouse_id: uuid.UUID | None,
-) -> uuid.UUID:
-    if warehouse_id is not None:
-        wh = await get_warehouse(session, tenant_id, warehouse_id)
-        if wh is None:
-            raise WbMarketplaceOrdersError("warehouse_not_found")
-        return wh.id
-    warehouses = await list_warehouses(session, tenant_id)
-    if not warehouses:
-        raise WbMarketplaceOrdersError("no_warehouse")
-    return warehouses[0].id
+    seller_id: uuid.UUID,
+    wb_warehouse_id: int | None,
+) -> uuid.UUID | None:
+    if wb_warehouse_id is None:
+        return None
+    stmt = select(FbsWarehouseBinding.wms_warehouse_id).where(
+        FbsWarehouseBinding.tenant_id == tenant_id,
+        FbsWarehouseBinding.seller_id == seller_id,
+        FbsWarehouseBinding.wb_warehouse_id == wb_warehouse_id,
+        FbsWarehouseBinding.is_active.is_(True),
+    )
+    res = await session.execute(stmt)
+    return res.scalar_one_or_none()
+
+
+async def _get_reservation_warehouse_id(
+    session: AsyncSession, order_id: uuid.UUID
+) -> uuid.UUID | None:
+    stmt = select(FbsOrderReservation.warehouse_id).where(
+        FbsOrderReservation.fbs_order_id == order_id
+    )
+    res = await session.execute(stmt)
+    return res.scalar_one_or_none()
+
+
+async def _assign_wms_warehouse_from_binding(
+    session: AsyncSession,
+    tenant_id: uuid.UUID,
+    seller_id: uuid.UUID,
+    order: FbsOrder,
+    wb_warehouse_id: int | None,
+) -> None:
+    """Map WB warehouse to local WMS warehouse via active seller binding."""
+    resolved = await _resolve_wms_warehouse_from_binding(
+        session, tenant_id, seller_id, wb_warehouse_id
+    )
+    if resolved is None:
+        if order.warehouse_id is None:
+            order.reserve_status = RESERVE_STATUS_WAREHOUSE_UNMAPPED
+        return
+
+    if order.warehouse_id is None:
+        order.warehouse_id = resolved
+        return
+
+    if order.warehouse_id == resolved:
+        return
+
+    reservation_wh = await _get_reservation_warehouse_id(session, order.id)
+    if reservation_wh is not None and reservation_wh != resolved:
+        return
+    order.warehouse_id = resolved
 
 
 async def _map_product(
@@ -267,6 +323,9 @@ async def _try_reserve_order(
     if order.product_id is None:
         order.reserve_status = RESERVE_STATUS_SKIPPED_NO_PRODUCT
         return
+    if order.warehouse_id is None:
+        order.reserve_status = RESERVE_STATUS_WAREHOUSE_UNMAPPED
+        return
     if await _order_has_reservation(session, order.id):
         return
     await _lock_product_for_fbs_reserve(session, order.tenant_id, order.product_id)
@@ -335,8 +394,15 @@ async def _apply_wb_row_to_existing(
     existing.price = int(row["price"]) if row.get("price") is not None else existing.price
     existing.is_legal = _is_legal_order(row)
     existing.cargo_type = _cargo_type_label(row)
-    office = row.get("officeId") or row.get("warehouseId")
-    existing.wb_office_id = int(office) if office is not None else existing.wb_office_id
+    office_id = _wb_office_id_from_row(row)
+    if office_id is not None:
+        existing.wb_office_id = office_id
+    wb_wh_id = _wb_warehouse_id_from_row(row)
+    if wb_wh_id is not None:
+        existing.wb_warehouse_id = wb_wh_id
+    await _assign_wms_warehouse_from_binding(
+        session, tenant_id, seller_id, existing, existing.wb_warehouse_id
+    )
     if existing.product_id is None:
         product = await _map_product(
             session,
@@ -359,7 +425,6 @@ async def upsert_order_from_wb_row(
     session: AsyncSession,
     tenant_id: uuid.UUID,
     seller_id: uuid.UUID,
-    warehouse_id: uuid.UUID,
     row: dict[str, Any],
 ) -> tuple[FbsOrder, bool]:
     """Returns (order, created)."""
@@ -386,17 +451,21 @@ async def upsert_order_from_wb_row(
         wb_nm_id=wb_nm_id_int,
     )
     mapping_status = MAPPING_STATUS_MAPPED if product is not None else MAPPING_STATUS_MISSING
-    reserve_status = (
-        RESERVE_STATUS_SKIPPED_NO_PRODUCT
-        if product is None
-        else RESERVE_STATUS_NO_STOCK
+    wb_warehouse_id = _wb_warehouse_id_from_row(row)
+    wms_warehouse_id = await _resolve_wms_warehouse_from_binding(
+        session, tenant_id, seller_id, wb_warehouse_id
     )
+    if product is None:
+        reserve_status = RESERVE_STATUS_SKIPPED_NO_PRODUCT
+    elif wms_warehouse_id is None:
+        reserve_status = RESERVE_STATUS_WAREHOUSE_UNMAPPED
+    else:
+        reserve_status = RESERVE_STATUS_NO_STOCK
 
-    office_raw = row.get("officeId") or row.get("warehouseId")
     order = FbsOrder(
         tenant_id=tenant_id,
         seller_id=seller_id,
-        warehouse_id=warehouse_id,
+        warehouse_id=wms_warehouse_id,
         product_id=product.id if product is not None else None,
         wb_order_id=wb_order_id,
         wb_rid=row.get("rid") if isinstance(row.get("rid"), str) else None,
@@ -407,7 +476,8 @@ async def upsert_order_from_wb_row(
         price=int(row["price"]) if row.get("price") is not None else None,
         is_legal=_is_legal_order(row),
         cargo_type=_cargo_type_label(row),
-        wb_office_id=int(office_raw) if office_raw is not None else None,
+        wb_office_id=_wb_office_id_from_row(row),
+        wb_warehouse_id=wb_warehouse_id,
         can_pvz=bool(row.get("canPvz") or row.get("isPvz")),
         status=FBS_ORDER_STATUS_NEW,
         created_at_wb=created_at_wb,
@@ -455,6 +525,7 @@ async def _apply_wb_status_to_order(
         return
     if normalized == DEFECT_WB_STATUS:
         order.status = FBS_ORDER_STATUS_DEFECT
+        await _release_reservation(session, order)
         return
     if normalized == "waiting":
         if order.status != FBS_ORDER_STATUS_IN_DELIVERY:
@@ -558,9 +629,8 @@ async def sync_seller_orders(
     *,
     warehouse_id: uuid.UUID | None = None,
 ) -> dict[str, Any]:
+    _ = warehouse_id  # ignored: WMS warehouse resolved per order via WB binding
     api_token = await _resolve_marketplace_api_token(session, tenant_id, seller_id)
-
-    wh_id = await _resolve_warehouse_id(session, tenant_id, warehouse_id)
 
     try:
         new_rows = await fetch_marketplace_orders_new(
@@ -576,7 +646,7 @@ async def sync_seller_orders(
 
     for row in new_rows:
         _order, was_created = await upsert_order_from_wb_row(
-            session, tenant_id, seller_id, wh_id, row
+            session, tenant_id, seller_id, row
         )
         upserted += 1
         orders_received += 1
@@ -599,7 +669,7 @@ async def sync_seller_orders(
             break
         for row in page_rows:
             _order, was_created = await upsert_order_from_wb_row(
-                session, tenant_id, seller_id, wh_id, row
+                session, tenant_id, seller_id, row
             )
             upserted += 1
             orders_received += 1
@@ -615,7 +685,6 @@ async def sync_seller_orders(
 
     return {
         "seller_id": str(seller_id),
-        "warehouse_id": str(wh_id),
         "orders_received": orders_received,
         "orders_upserted": upserted,
         "orders_created": created,

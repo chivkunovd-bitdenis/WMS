@@ -213,6 +213,8 @@ async def add_order_to_supply(
     order = order_result.scalar_one_or_none()
     if order is None:
         raise FbsSupplyError("order_not_found")
+    if order.warehouse_id is None:
+        raise FbsSupplyError("order_warehouse_unmapped")
     if order.warehouse_id != supply.warehouse_id:
         raise FbsSupplyError("order_warehouse_mismatch")
     if order.supply_id is not None and order.supply_id != supply_id:
