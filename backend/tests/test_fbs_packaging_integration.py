@@ -22,6 +22,7 @@ from app.services import inventory_service
 from app.services.fbs_packaging_integration_service import create_packaging_task_for_supply
 from app.services.sorting_location_service import get_or_create_sorting_location
 from app.services.wb_marketplace_orders_service import upsert_order_from_wb_row
+from tests.fbs_seed_helpers import DEFAULT_WB_WAREHOUSE_ID, seed_fbs_warehouse_binding
 
 
 async def _register_ff_admin(async_client: AsyncClient) -> tuple[dict[str, str], str]:
@@ -65,7 +66,9 @@ async def _setup_seller_with_token(
     return seller_id, warehouse.json()["id"]
 
 
-def _wb_order_row(*, order_id: int, article: str = "ART-A") -> dict[str, Any]:
+def _wb_order_row(
+    *, order_id: int, article: str = "ART-A", wb_warehouse_id: int = DEFAULT_WB_WAREHOUSE_ID
+) -> dict[str, Any]:
     return {
         "id": order_id,
         "rid": f"rid-{order_id}",
@@ -78,6 +81,7 @@ def _wb_order_row(*, order_id: int, article: str = "ART-A") -> dict[str, Any]:
         "cargoType": 1,
         "officeId": 42,
         "isLegal": False,
+        "warehouseId": wb_warehouse_id,
     }
 
 
@@ -134,6 +138,12 @@ async def _create_supply_with_orders(
 
     order_ids: list[uuid.UUID] = []
     async with SessionLocal() as session:
+        await seed_fbs_warehouse_binding(
+            session,
+            tenant_id=tenant_id,
+            seller_id=uuid.UUID(seller_id),
+            wms_warehouse_id=uuid.UUID(warehouse_id),
+        )
         for _idx, (order_no, product_id, article) in enumerate(
             [
                 (910001, uuid.UUID(product_a), "ART-A"),
@@ -146,7 +156,6 @@ async def _create_supply_with_orders(
                 session,
                 tenant_id,
                 uuid.UUID(seller_id),
-                uuid.UUID(warehouse_id),
                 _wb_order_row(order_id=order_no, article=article),
             )
             order.product_id = product_id
@@ -531,11 +540,16 @@ async def test_fbs_supply_promoted_after_marking_when_honest_sign_required(
     supply_id = supply_resp.json()["id"]
 
     async with SessionLocal() as session:
+        await seed_fbs_warehouse_binding(
+            session,
+            tenant_id=tenant_id,
+            seller_id=uuid.UUID(seller_id),
+            wms_warehouse_id=uuid.UUID(warehouse_id),
+        )
         order, _ = await upsert_order_from_wb_row(
             session,
             tenant_id,
             uuid.UUID(seller_id),
-            uuid.UUID(warehouse_id),
             _wb_order_row(order_id=920001, article="CZ-ART"),
         )
         order.product_id = uuid.UUID(product_id)

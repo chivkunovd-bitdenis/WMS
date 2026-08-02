@@ -10,6 +10,7 @@ import pytest
 from httpx import AsyncClient
 from sqlalchemy import func, select
 
+from app.core.settings import settings
 from app.db.session import SessionLocal
 from app.models.fbs_order import (
     FBS_ORDER_STATUS_NEW,
@@ -18,9 +19,11 @@ from app.models.fbs_order import (
     RESERVE_STATUS_NO_STOCK,
     RESERVE_STATUS_RELEASED,
     RESERVE_STATUS_RESERVED,
+    RESERVE_STATUS_WAREHOUSE_UNMAPPED,
     FbsOrder,
     FbsOrderReservation,
 )
+from app.models.fbs_warehouse_binding import FbsWarehouseBinding
 from app.models.product import Product
 from app.services import inventory_service
 from app.services.sorting_location_service import get_or_create_sorting_location
@@ -33,14 +36,21 @@ from app.services.wb_marketplace_orders_service import (
 from app.services.wildberries_client import WildberriesClientError
 
 
+WB_WAREHOUSE_A = 501001
+WB_WAREHOUSE_B = 501002
+UNKNOWN_WB_WAREHOUSE = 777888
+
+
 def _wb_order_row(
     *,
     order_id: int = 700001,
     barcode: str = "FBS-BARCODE-001",
     nm_id: int = 900001,
     created_at: str = "2026-07-01T12:00:00+03:00",
+    office_id: int = 42,
+    warehouse_id: int = WB_WAREHOUSE_A,
 ) -> dict[str, Any]:
-    return {
+    row: dict[str, Any] = {
         "id": order_id,
         "rid": f"rid-{order_id}",
         "createdAt": created_at,
@@ -50,9 +60,12 @@ def _wb_order_row(
         "skus": [barcode],
         "price": 199900,
         "cargoType": 1,
-        "officeId": 42,
+        "officeId": office_id,
         "isLegal": False,
     }
+    if warehouse_id is not None:
+        row["warehouseId"] = warehouse_id
+    return row
 
 
 async def _register_ff_admin(async_client: AsyncClient) -> tuple[dict[str, str], str]:
@@ -84,7 +97,10 @@ async def _setup_seller_with_token(
     tok = await async_client.patch(
         f"/integrations/wildberries/sellers/{seller_id}/tokens",
         headers=headers,
-        json={"supplies_api_token": "wb-marketplace-token"},
+        json={
+            "supplies_api_token": "wb-marketplace-token",
+            "marketplace_api_token": "wb-marketplace-token",
+        },
     )
     assert tok.status_code == 200, tok.text
     warehouse = await async_client.post(
@@ -94,6 +110,41 @@ async def _setup_seller_with_token(
     )
     assert warehouse.status_code in (200, 201), warehouse.text
     return seller_id, warehouse.json()["id"]
+
+
+async def _create_binding(
+    async_client: AsyncClient,
+    headers: dict[str, str],
+    seller_id: str,
+    wb_warehouse_id: int,
+    wms_warehouse_id: str,
+) -> None:
+    resp = await async_client.put(
+        f"/operations/fbs-sellers/{seller_id}/warehouse-bindings/{wb_warehouse_id}",
+        headers=headers,
+        json={"wms_warehouse_id": wms_warehouse_id, "stock_sync_enabled": True},
+    )
+    assert resp.status_code == 200, resp.text
+
+
+async def _seed_binding(
+    session: Any,
+    tenant_id: uuid.UUID,
+    seller_id: uuid.UUID,
+    wb_warehouse_id: int,
+    wms_warehouse_id: uuid.UUID,
+) -> None:
+    session.add(
+        FbsWarehouseBinding(
+            tenant_id=tenant_id,
+            seller_id=seller_id,
+            wb_warehouse_id=wb_warehouse_id,
+            wms_warehouse_id=wms_warehouse_id,
+            stock_sync_enabled=True,
+            is_active=True,
+        )
+    )
+    await session.flush()
 
 
 def _patch_wb_order_fetches(
@@ -164,6 +215,17 @@ async def _wait_for_job(
     raise AssertionError("sync job did not finish")
 
 
+@pytest.fixture(autouse=True)
+def _disable_wb_mp_background_sync(monkeypatch: pytest.MonkeyPatch) -> None:
+    async def noop(*_args: object, **_kwargs: object) -> None:
+        return None
+
+    monkeypatch.setattr(
+        "app.services.wb_mp_warehouse_service.run_wb_mp_warehouses_sync_task",
+        noop,
+    )
+
+
 # TC-NEW-FBS-INTAKE-001
 @pytest.mark.asyncio
 async def test_fbs_order_upsert_idempotent_and_deadline(
@@ -172,6 +234,7 @@ async def test_fbs_order_upsert_idempotent_and_deadline(
 ) -> None:
     headers, suffix = await _register_ff_admin(async_client)
     seller_id, warehouse_id = await _setup_seller_with_token(async_client, headers, suffix)
+    await _create_binding(async_client, headers, seller_id, WB_WAREHOUSE_A, warehouse_id)
     row = _wb_order_row(order_id=800001)
 
     _patch_wb_order_fetches(monkeypatch, new_rows=[row])
@@ -217,6 +280,7 @@ async def test_fbs_order_product_mapping_success_and_missing(
 ) -> None:
     headers, suffix = await _register_ff_admin(async_client)
     seller_id, warehouse_id = await _setup_seller_with_token(async_client, headers, suffix)
+    await _create_binding(async_client, headers, seller_id, WB_WAREHOUSE_A, warehouse_id)
 
     product = await async_client.post(
         "/products",
@@ -263,6 +327,7 @@ async def test_fbs_order_reserve_and_no_stock(
 ) -> None:
     headers, suffix = await _register_ff_admin(async_client)
     seller_id, warehouse_id = await _setup_seller_with_token(async_client, headers, suffix)
+    await _create_binding(async_client, headers, seller_id, WB_WAREHOUSE_A, warehouse_id)
 
     product = await async_client.post(
         "/products",
@@ -329,6 +394,7 @@ async def test_fbs_order_status_sync_releases_reserve_on_cancel(
 ) -> None:
     headers, suffix = await _register_ff_admin(async_client)
     seller_id, warehouse_id = await _setup_seller_with_token(async_client, headers, suffix)
+    await _create_binding(async_client, headers, seller_id, WB_WAREHOUSE_A, warehouse_id)
 
     product = await async_client.post(
         "/products",
@@ -364,7 +430,6 @@ async def test_fbs_order_status_sync_releases_reserve_on_cancel(
             session,
             tenant_id,
             seller_uuid,
-            warehouse_uuid,
             _wb_order_row(order_id=800301, barcode="FBS-CANCEL-001"),
         )
         await session.commit()
@@ -488,6 +553,7 @@ async def test_fbs_cancelled_order_not_re_reserved_on_upsert(
 ) -> None:
     headers, suffix = await _register_ff_admin(async_client)
     seller_id, warehouse_id = await _setup_seller_with_token(async_client, headers, suffix)
+    await _create_binding(async_client, headers, seller_id, WB_WAREHOUSE_A, warehouse_id)
 
     product = await async_client.post(
         "/products",
@@ -523,7 +589,6 @@ async def test_fbs_cancelled_order_not_re_reserved_on_upsert(
             session,
             tenant_id,
             seller_uuid,
-            warehouse_uuid,
             _wb_order_row(order_id=800401, barcode="FBS-TERMINAL-001"),
         )
         await session.commit()
@@ -562,7 +627,6 @@ async def test_fbs_cancelled_order_not_re_reserved_on_upsert(
             session,
             tenant_id,
             seller_uuid,
-            warehouse_uuid,
             _wb_order_row(order_id=800401, barcode="FBS-TERMINAL-001"),
         )
         await session.commit()
@@ -576,27 +640,432 @@ async def test_fbs_cancelled_order_not_re_reserved_on_upsert(
 
 
 @pytest.mark.asyncio
-async def test_fbs_sync_rejects_warehouse_from_other_tenant(
+async def test_fbs_sync_ignores_body_warehouse_id(
     async_client: AsyncClient,
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    headers_a, suffix_a = await _register_ff_admin(async_client)
-    seller_id, _warehouse_a = await _setup_seller_with_token(
-        async_client, headers_a, suffix_a
-    )
-
-    headers_b, suffix_b = await _register_ff_admin(async_client)
+    """Manual /sync body warehouse_id must not bypass WB warehouse binding."""
+    headers, suffix = await _register_ff_admin(async_client)
+    seller_id, warehouse_a = await _setup_seller_with_token(async_client, headers, suffix)
     warehouse_b = await async_client.post(
         "/warehouses",
-        headers=headers_b,
-        json={"name": "Other WH", "code": f"wh-b-{suffix_b[-8:]}"},
+        headers=headers,
+        json={"name": "WH B", "code": f"wh-b-{suffix[-8:]}"},
     )
     assert warehouse_b.status_code in (200, 201), warehouse_b.text
-    other_wh_id = warehouse_b.json()["id"]
+    warehouse_b_id = warehouse_b.json()["id"]
+    await _create_binding(async_client, headers, seller_id, WB_WAREHOUSE_A, warehouse_a)
 
-    sync = await async_client.post(
-        "/operations/fbs-orders/sync",
-        headers=headers_a,
-        json={"seller_id": seller_id, "warehouse_id": other_wh_id},
+    product = await async_client.post(
+        "/products",
+        headers=headers,
+        json={
+            "name": "Bind product",
+            "sku_code": f"BIND-{suffix}",
+            "seller_id": seller_id,
+            "wb_barcode": "FBS-BIND-001",
+        },
     )
-    assert sync.status_code == 404
-    assert sync.json()["detail"] == "warehouse_not_found"
+    assert product.status_code in (200, 201), product.text
+
+    _patch_wb_order_fetches(
+        monkeypatch,
+        new_rows=[_wb_order_row(order_id=800501, barcode="FBS-BIND-001")],
+    )
+
+    start = await async_client.post(
+        "/operations/fbs-orders/sync",
+        headers=headers,
+        json={"seller_id": seller_id, "warehouse_id": warehouse_b_id},
+    )
+    assert start.status_code == 202, start.text
+    body = await _wait_for_job(async_client, headers, start.json()["id"])
+    assert body["status"] == "done", body
+
+    listed = await async_client.get("/operations/fbs-orders", headers=headers)
+    order = listed.json()[0]
+    assert order["warehouse_id"] == warehouse_a
+    assert order["wb_warehouse_id"] == WB_WAREHOUSE_A
+    assert order["wb_office_id"] == 42
+
+
+# TC-NEW-FBS-STOCK-003 — two WB warehouses map to two WMS warehouses
+@pytest.mark.asyncio
+async def test_fbs_orders_bind_to_correct_wms_warehouse(
+    async_client: AsyncClient,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    headers, suffix = await _register_ff_admin(async_client)
+    seller_id, warehouse_a = await _setup_seller_with_token(async_client, headers, suffix)
+    warehouse_b = await async_client.post(
+        "/warehouses",
+        headers=headers,
+        json={"name": "WH B", "code": f"wh-b2-{suffix[-8:]}"},
+    )
+    assert warehouse_b.status_code in (200, 201), warehouse_b.text
+    warehouse_b_id = warehouse_b.json()["id"]
+    await _create_binding(async_client, headers, seller_id, WB_WAREHOUSE_A, warehouse_a)
+    await _create_binding(async_client, headers, seller_id, WB_WAREHOUSE_B, warehouse_b_id)
+
+    rows = [
+        _wb_order_row(order_id=800601, warehouse_id=WB_WAREHOUSE_A),
+        _wb_order_row(order_id=800602, warehouse_id=WB_WAREHOUSE_B, office_id=99),
+    ]
+    _patch_wb_order_fetches(monkeypatch, new_rows=rows)
+
+    start = await async_client.post(
+        "/operations/fbs-orders/sync",
+        headers=headers,
+        json={"seller_id": seller_id},
+    )
+    assert start.status_code == 202
+    body = await _wait_for_job(async_client, headers, start.json()["id"])
+    assert body["status"] == "done"
+
+    listed = await async_client.get("/operations/fbs-orders", headers=headers)
+    by_wb = {o["wb_order_id"]: o for o in listed.json()}
+    assert by_wb[800601]["warehouse_id"] == warehouse_a
+    assert by_wb[800601]["wb_warehouse_id"] == WB_WAREHOUSE_A
+    assert by_wb[800601]["wb_office_id"] == 42
+    assert by_wb[800602]["warehouse_id"] == warehouse_b_id
+    assert by_wb[800602]["wb_warehouse_id"] == WB_WAREHOUSE_B
+    assert by_wb[800602]["wb_office_id"] == 99
+
+
+# TC-NEW-FBS-STOCK-004 — unknown WB warehouse stays unmapped, no reserve
+@pytest.mark.asyncio
+async def test_fbs_order_unknown_wb_warehouse_unmapped(
+    async_client: AsyncClient,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    headers, suffix = await _register_ff_admin(async_client)
+    seller_id, warehouse_id = await _setup_seller_with_token(async_client, headers, suffix)
+    await _create_binding(async_client, headers, seller_id, WB_WAREHOUSE_A, warehouse_id)
+
+    product = await async_client.post(
+        "/products",
+        headers=headers,
+        json={
+            "name": "Unmapped product",
+            "sku_code": f"UNM-{suffix}",
+            "seller_id": seller_id,
+            "wb_barcode": "FBS-UNMAPPED-001",
+        },
+    )
+    assert product.status_code in (200, 201), product.text
+
+    _patch_wb_order_fetches(
+        monkeypatch,
+        new_rows=[
+            _wb_order_row(
+                order_id=800701,
+                barcode="FBS-UNMAPPED-001",
+                warehouse_id=UNKNOWN_WB_WAREHOUSE,
+            )
+        ],
+    )
+
+    start = await async_client.post(
+        "/operations/fbs-orders/sync",
+        headers=headers,
+        json={"seller_id": seller_id},
+    )
+    assert start.status_code == 202
+    body = await _wait_for_job(async_client, headers, start.json()["id"])
+    assert body["status"] == "done"
+
+    listed = await async_client.get("/operations/fbs-orders", headers=headers)
+    order = listed.json()[0]
+    assert order["warehouse_id"] is None
+    assert order["wb_warehouse_id"] == UNKNOWN_WB_WAREHOUSE
+    assert order["mapping_status"] == MAPPING_STATUS_MAPPED
+    assert order["reserve_status"] == RESERVE_STATUS_WAREHOUSE_UNMAPPED
+
+    async with SessionLocal() as session:
+        count_stmt = select(func.count()).select_from(FbsOrderReservation)
+        res = await session.execute(count_stmt)
+        assert int(res.scalar_one()) == 0
+
+
+# TC-NEW-FBS-STOCK-004 — unmapped order blocked from supply
+@pytest.mark.asyncio
+async def test_fbs_unmapped_order_rejected_from_supply(
+    async_client: AsyncClient,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(settings, "e2e_mock_wb_marketplace_supplies", True)
+    headers, suffix = await _register_ff_admin(async_client)
+    seller_id, warehouse_id = await _setup_seller_with_token(async_client, headers, suffix)
+    await _create_binding(async_client, headers, seller_id, WB_WAREHOUSE_A, warehouse_id)
+
+    _patch_wb_order_fetches(
+        monkeypatch,
+        new_rows=[
+            _wb_order_row(order_id=800801, warehouse_id=UNKNOWN_WB_WAREHOUSE),
+        ],
+    )
+    start = await async_client.post(
+        "/operations/fbs-orders/sync",
+        headers=headers,
+        json={"seller_id": seller_id},
+    )
+    assert start.status_code == 202
+    await _wait_for_job(async_client, headers, start.json()["id"])
+
+    listed = await async_client.get("/operations/fbs-orders", headers=headers)
+    order_id = listed.json()[0]["id"]
+
+    supply = await async_client.post(
+        "/operations/fbs-supplies",
+        headers=headers,
+        json={
+            "seller_id": seller_id,
+            "warehouse_id": warehouse_id,
+            "name": "Supply",
+            "delivery_type": "warehouse_sc",
+        },
+    )
+    assert supply.status_code in (200, 201), supply.text
+    supply_id = supply.json()["id"]
+
+    add = await async_client.post(
+        f"/operations/fbs-supplies/{supply_id}/orders",
+        headers=headers,
+        json={"order_id": order_id},
+    )
+    assert add.status_code == 409
+    assert add.json()["detail"] == "order_warehouse_unmapped"
+
+
+# Binding later → re-sync assigns warehouse and reserves
+@pytest.mark.asyncio
+async def test_fbs_binding_later_assigns_warehouse_and_reserves(
+    async_client: AsyncClient,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    headers, suffix = await _register_ff_admin(async_client)
+    seller_id, warehouse_id = await _setup_seller_with_token(async_client, headers, suffix)
+
+    product = await async_client.post(
+        "/products",
+        headers=headers,
+        json={
+            "name": "Late bind product",
+            "sku_code": f"LATE-{suffix}",
+            "seller_id": seller_id,
+            "wb_barcode": "FBS-LATE-001",
+        },
+    )
+    assert product.status_code in (200, 201), product.text
+    product_id = uuid.UUID(product.json()["id"])
+    warehouse_uuid = uuid.UUID(warehouse_id)
+
+    async with SessionLocal() as session:
+        prod = await session.get(Product, product_id)
+        assert prod is not None
+        sorting = await get_or_create_sorting_location(
+            session, prod.tenant_id, warehouse_uuid
+        )
+        await inventory_service.record_movement_and_adjust_balance(
+            session,
+            tenant_id=prod.tenant_id,
+            product_id=product_id,
+            storage_location_id=sorting.id,
+            quantity_delta=1,
+            movement_type="inbound_intake",
+        )
+        await session.commit()
+
+    _patch_wb_order_fetches(
+        monkeypatch,
+        new_rows=[_wb_order_row(order_id=800901, barcode="FBS-LATE-001")],
+    )
+    start = await async_client.post(
+        "/operations/fbs-orders/sync",
+        headers=headers,
+        json={"seller_id": seller_id},
+    )
+    assert start.status_code == 202
+    await _wait_for_job(async_client, headers, start.json()["id"])
+
+    listed = await async_client.get("/operations/fbs-orders", headers=headers)
+    assert listed.json()[0]["reserve_status"] == RESERVE_STATUS_WAREHOUSE_UNMAPPED
+
+    await _create_binding(async_client, headers, seller_id, WB_WAREHOUSE_A, warehouse_id)
+
+    start2 = await async_client.post(
+        "/operations/fbs-orders/sync",
+        headers=headers,
+        json={"seller_id": seller_id},
+    )
+    assert start2.status_code == 202
+    await _wait_for_job(async_client, headers, start2.json()["id"])
+
+    listed2 = await async_client.get("/operations/fbs-orders", headers=headers)
+    order = listed2.json()[0]
+    assert order["warehouse_id"] == warehouse_id
+    assert order["reserve_status"] == RESERVE_STATUS_RESERVED
+
+
+# TC-NEW-FBS-STOCK-008 — defect releases reservation like cancel/sold
+@pytest.mark.asyncio
+async def test_fbs_order_status_sync_releases_reserve_on_defect(
+    async_client: AsyncClient,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    headers, suffix = await _register_ff_admin(async_client)
+    seller_id, warehouse_id = await _setup_seller_with_token(async_client, headers, suffix)
+    await _create_binding(async_client, headers, seller_id, WB_WAREHOUSE_A, warehouse_id)
+
+    product = await async_client.post(
+        "/products",
+        headers=headers,
+        json={
+            "name": "Defect product",
+            "sku_code": f"DEF-{suffix}",
+            "seller_id": seller_id,
+            "wb_barcode": "FBS-DEFECT-001",
+        },
+    )
+    assert product.status_code in (200, 201)
+    product_id = uuid.UUID(product.json()["id"])
+    warehouse_uuid = uuid.UUID(warehouse_id)
+    seller_uuid = uuid.UUID(seller_id)
+
+    async with SessionLocal() as session:
+        prod = await session.get(Product, product_id)
+        assert prod is not None
+        tenant_id = prod.tenant_id
+        sorting = await get_or_create_sorting_location(
+            session, tenant_id, warehouse_uuid
+        )
+        await inventory_service.record_movement_and_adjust_balance(
+            session,
+            tenant_id=tenant_id,
+            product_id=product_id,
+            storage_location_id=sorting.id,
+            quantity_delta=1,
+            movement_type="inbound_intake",
+        )
+        order, _created = await upsert_order_from_wb_row(
+            session,
+            tenant_id,
+            seller_uuid,
+            _wb_order_row(order_id=801001, barcode="FBS-DEFECT-001"),
+        )
+        await session.commit()
+        order_id = order.id
+        assert order.reserve_status == RESERVE_STATUS_RESERVED
+
+    _patch_wb_order_fetches(
+        monkeypatch,
+        new_rows=[],
+        status_rows=[{"id": 801001, "wbStatus": "defect"}],
+    )
+
+    async with SessionLocal() as session:
+        import httpx
+
+        async with httpx.AsyncClient() as http_client:
+            await sync_seller_orders(session, tenant_id, seller_uuid, http_client)
+
+    async with SessionLocal() as session:
+        order = await session.get(FbsOrder, order_id)
+        assert order is not None
+        assert order.status == "defect"
+        assert order.reserve_status == RESERVE_STATUS_RELEASED
+        res_stmt = select(func.count()).select_from(FbsOrderReservation).where(
+            FbsOrderReservation.fbs_order_id == order_id
+        )
+        res = await session.execute(res_stmt)
+        assert int(res.scalar_one()) == 0
+
+
+# Reservation on other warehouse → binding change does not silently move
+@pytest.mark.asyncio
+async def test_fbs_order_reservation_conflict_keeps_warehouse(
+    async_client: AsyncClient,
+) -> None:
+    headers, suffix = await _register_ff_admin(async_client)
+    seller_id, warehouse_a = await _setup_seller_with_token(async_client, headers, suffix)
+    warehouse_b = await async_client.post(
+        "/warehouses",
+        headers=headers,
+        json={"name": "WH conflict", "code": f"wh-c-{suffix[-8:]}"},
+    )
+    assert warehouse_b.status_code in (200, 201), warehouse_b.text
+    warehouse_b_id = warehouse_b.json()["id"]
+
+    product = await async_client.post(
+        "/products",
+        headers=headers,
+        json={
+            "name": "Conflict product",
+            "sku_code": f"CNF-{suffix}",
+            "seller_id": seller_id,
+            "wb_barcode": "FBS-CONFLICT-001",
+        },
+    )
+    assert product.status_code in (200, 201), product.text
+    product_id = uuid.UUID(product.json()["id"])
+    seller_uuid = uuid.UUID(seller_id)
+    warehouse_a_uuid = uuid.UUID(warehouse_a)
+    warehouse_b_uuid = uuid.UUID(warehouse_b_id)
+
+    async with SessionLocal() as session:
+        prod = await session.get(Product, product_id)
+        assert prod is not None
+        tenant_id = prod.tenant_id
+        sorting = await get_or_create_sorting_location(
+            session, tenant_id, warehouse_a_uuid
+        )
+        await inventory_service.record_movement_and_adjust_balance(
+            session,
+            tenant_id=tenant_id,
+            product_id=product_id,
+            storage_location_id=sorting.id,
+            quantity_delta=1,
+            movement_type="inbound_intake",
+        )
+        await _seed_binding(
+            session, tenant_id, seller_uuid, WB_WAREHOUSE_A, warehouse_a_uuid
+        )
+        await _seed_binding(
+            session, tenant_id, seller_uuid, WB_WAREHOUSE_B, warehouse_b_uuid
+        )
+        order, _ = await upsert_order_from_wb_row(
+            session,
+            tenant_id,
+            seller_uuid,
+            _wb_order_row(
+                order_id=801101,
+                barcode="FBS-CONFLICT-001",
+                warehouse_id=WB_WAREHOUSE_A,
+            ),
+        )
+        assert order.warehouse_id == warehouse_a_uuid
+        assert order.reserve_status == RESERVE_STATUS_RESERVED
+        await session.commit()
+        order_id = order.id
+
+        order2 = await session.get(FbsOrder, order_id)
+        assert order2 is not None
+        order2.wb_warehouse_id = WB_WAREHOUSE_B
+        from app.services.wb_marketplace_orders_service import (
+            _assign_wms_warehouse_from_binding,
+        )
+
+        await _assign_wms_warehouse_from_binding(
+            session, tenant_id, seller_uuid, order2, WB_WAREHOUSE_B
+        )
+        await session.commit()
+        await session.refresh(order2)
+
+        assert order2.warehouse_id == warehouse_a_uuid
+        res_stmt = select(FbsOrderReservation).where(
+            FbsOrderReservation.fbs_order_id == order_id
+        )
+        res = await session.execute(res_stmt)
+        reservation = res.scalar_one_or_none()
+        assert reservation is not None
+        assert reservation.warehouse_id == warehouse_a_uuid

@@ -26,6 +26,7 @@ from app.models.fbs_supply import (
 from app.models.product import Product
 from app.services.wb_marketplace_orders_service import upsert_order_from_wb_row
 from app.services.wildberries_client import WildberriesClientError
+from tests.fbs_seed_helpers import DEFAULT_WB_WAREHOUSE_ID, seed_fbs_warehouse_binding
 
 
 async def _register_ff_admin(async_client: AsyncClient) -> tuple[dict[str, str], str]:
@@ -72,7 +73,7 @@ async def _setup_seller_with_token(
     return seller_id, warehouse.json()["id"], tenant_id
 
 
-def _wb_order_row(*, order_id: int) -> dict[str, Any]:
+def _wb_order_row(*, order_id: int, wb_warehouse_id: int = DEFAULT_WB_WAREHOUSE_ID) -> dict[str, Any]:
     return {
         "id": order_id,
         "rid": f"rid-{order_id}",
@@ -85,6 +86,7 @@ def _wb_order_row(*, order_id: int) -> dict[str, Any]:
         "cargoType": 1,
         "officeId": 42,
         "isLegal": False,
+        "warehouseId": wb_warehouse_id,
     }
 
 
@@ -97,11 +99,16 @@ async def _create_order(
     product: Product | None = None,
 ) -> uuid.UUID:
     async with SessionLocal() as session:
+        await seed_fbs_warehouse_binding(
+            session,
+            tenant_id=tenant_id,
+            seller_id=seller_id,
+            wms_warehouse_id=warehouse_id,
+        )
         order, _ = await upsert_order_from_wb_row(
             session,
             tenant_id,
             seller_id,
-            warehouse_id,
             _wb_order_row(order_id=order_id),
         )
         order.status = FBS_ORDER_STATUS_NEW
