@@ -36,6 +36,7 @@ RESERVE_STATUS_RESERVED = "reserved"
 RESERVE_STATUS_NO_STOCK = "no_stock"
 RESERVE_STATUS_RELEASED = "released"
 RESERVE_STATUS_SKIPPED_NO_PRODUCT = "skipped_no_product"
+RESERVE_STATUS_WAREHOUSE_UNMAPPED = "warehouse_unmapped"
 
 FBS_ORDER_STATUS_NEW = "new"
 FBS_ORDER_STATUS_IN_SUPPLY = "in_supply"
@@ -102,8 +103,11 @@ class FbsOrder(Base):
     seller_id: Mapped[uuid.UUID] = mapped_column(
         Uuid(as_uuid=True), ForeignKey("sellers.id", ondelete="CASCADE"), index=True
     )
-    warehouse_id: Mapped[uuid.UUID] = mapped_column(
-        Uuid(as_uuid=True), ForeignKey("warehouses.id", ondelete="CASCADE"), index=True
+    warehouse_id: Mapped[uuid.UUID | None] = mapped_column(
+        Uuid(as_uuid=True),
+        ForeignKey("warehouses.id", ondelete="CASCADE"),
+        nullable=True,
+        index=True,
     )
     product_id: Mapped[uuid.UUID | None] = mapped_column(
         Uuid(as_uuid=True),
@@ -123,6 +127,7 @@ class FbsOrder(Base):
     )
     cargo_type: Mapped[str | None] = mapped_column(String(16), nullable=True)
     wb_office_id: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    wb_warehouse_id: Mapped[int | None] = mapped_column(BigInteger, nullable=True, index=True)
     can_pvz: Mapped[bool] = mapped_column(
         Boolean, nullable=False, default=False, server_default="false"
     )
@@ -160,7 +165,7 @@ class FbsOrder(Base):
 
     tenant: Mapped[Tenant] = relationship("Tenant")
     seller: Mapped[Seller] = relationship("Seller")
-    warehouse: Mapped[Warehouse] = relationship("Warehouse")
+    warehouse: Mapped[Warehouse | None] = relationship("Warehouse")
     product: Mapped[Product | None] = relationship("Product")
     supply: Mapped[FbsSupply | None] = relationship("FbsSupply", back_populates="orders")
     trbx: Mapped[FbsTrbx | None] = relationship("FbsTrbx", back_populates="orders")

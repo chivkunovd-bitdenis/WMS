@@ -5,7 +5,9 @@ from app.models.base import Base
 from app.models.discrepancy_act import DiscrepancyAct, DiscrepancyActLine
 from app.models.document_sequence import DocumentDisplaySequence, DocumentSequence
 from app.models.fbs_order import FbsOrder, FbsOrderMarking, FbsOrderReservation
+from app.models.fbs_stock_sync_item import FbsStockSyncItem
 from app.models.fbs_supply import FbsSupply
+from app.models.fbs_warehouse_binding import FbsWarehouseBinding
 from app.models.fbs_trbx import FbsTrbx
 from app.models.ff_staff_permissions import FfStaffPermissions
 from app.models.inbound_intake import (
@@ -64,7 +66,9 @@ __all__ = [
     "FbsOrder",
     "FbsOrderMarking",
     "FbsOrderReservation",
+    "FbsStockSyncItem",
     "FbsSupply",
+    "FbsWarehouseBinding",
     "FbsTrbx",
     "FfStaffPermissions",
     "InboundIntakeBox",
