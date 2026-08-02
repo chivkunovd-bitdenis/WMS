@@ -31,6 +31,7 @@ router = APIRouter(
 
 class FbsOrderSyncBody(BaseModel):
     seller_id: uuid.UUID
+    # Ignored: WMS warehouse is resolved from WB warehouse bindings on each order row.
     warehouse_id: uuid.UUID | None = None
 
 

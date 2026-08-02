@@ -25,9 +25,10 @@ from app.services.fbs_autopoll_service import (
 from app.services.integration_fernet import encrypt_secret
 from app.services.wb_marketplace_orders_service import upsert_order_from_wb_row
 from app.services.wildberries_client import WildberriesClientError
+from tests.fbs_seed_helpers import DEFAULT_WB_WAREHOUSE_ID, seed_fbs_warehouse_binding
 
 
-def _wb_order_row(*, order_id: int) -> dict[str, Any]:
+def _wb_order_row(*, order_id: int, wb_warehouse_id: int = DEFAULT_WB_WAREHOUSE_ID) -> dict[str, Any]:
     return {
         "id": order_id,
         "rid": f"rid-{order_id}",
@@ -40,6 +41,7 @@ def _wb_order_row(*, order_id: int) -> dict[str, Any]:
         "cargoType": 1,
         "officeId": 42,
         "isLegal": False,
+        "warehouseId": wb_warehouse_id,
     }
 
 
@@ -342,11 +344,16 @@ async def test_fbs_autopoll_status_sync_updates_sorted(
                 code=f"wh-{time.time_ns()}",
             )
         )
+        await seed_fbs_warehouse_binding(
+            session,
+            tenant_id=tenant_id,
+            seller_id=seller_id,
+            wms_warehouse_id=warehouse_id,
+        )
         order, _ = await upsert_order_from_wb_row(
             session,
             tenant_id,
             seller_id,
-            warehouse_id,
             _wb_order_row(order_id=880001),
         )
         order.status = FBS_ORDER_STATUS_IN_DELIVERY

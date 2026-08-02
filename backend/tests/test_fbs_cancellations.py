@@ -32,6 +32,7 @@ from app.services.wb_marketplace_orders_service import (
     upsert_order_from_wb_row,
 )
 from app.services.wildberries_client import WildberriesClientError
+from tests.fbs_seed_helpers import DEFAULT_WB_WAREHOUSE_ID, seed_fbs_warehouse_binding
 
 
 def _wb_order_row(
@@ -40,6 +41,7 @@ def _wb_order_row(
     barcode: str = "FBS-BARCODE-001",
     nm_id: int = 900001,
     created_at: str = "2026-07-01T12:00:00+03:00",
+    wb_warehouse_id: int = DEFAULT_WB_WAREHOUSE_ID,
 ) -> dict[str, Any]:
     return {
         "id": order_id,
@@ -53,6 +55,7 @@ def _wb_order_row(
         "cargoType": 1,
         "officeId": 42,
         "isLegal": False,
+        "warehouseId": wb_warehouse_id,
     }
 
 
@@ -141,11 +144,16 @@ async def _seed_reserved_order(
             barcode=barcode,
             created_at=created_at or datetime.now(tz=UTC).isoformat(),
         )
+        await seed_fbs_warehouse_binding(
+            session,
+            tenant_id=tenant_id,
+            seller_id=seller_uuid,
+            wms_warehouse_id=warehouse_uuid,
+        )
         order, _created = await upsert_order_from_wb_row(
             session,
             tenant_id,
             seller_uuid,
-            warehouse_uuid,
             row,
         )
         order.status = order_status
@@ -409,7 +417,12 @@ async def test_sync_defect_sets_status_defect(
         assert order is not None
         assert order.wb_status == "defect"
         assert order.status == FBS_ORDER_STATUS_DEFECT
-        assert order.reserve_status == RESERVE_STATUS_RESERVED
+        assert order.reserve_status == RESERVE_STATUS_RELEASED
+        res_stmt = select(func.count()).select_from(FbsOrderReservation).where(
+            FbsOrderReservation.fbs_order_id == order_id
+        )
+        res = await session.execute(res_stmt)
+        assert int(res.scalar_one()) == 0
 
 
 @pytest.mark.asyncio

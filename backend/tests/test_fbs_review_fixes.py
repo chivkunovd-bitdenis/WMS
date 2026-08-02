@@ -47,6 +47,7 @@ from app.services.wb_marketplace_orders_service import (
     sync_order_statuses,
     upsert_order_from_wb_row,
 )
+from tests.fbs_seed_helpers import DEFAULT_WB_WAREHOUSE_ID, seed_fbs_warehouse_binding
 
 
 async def _register_ff_admin(async_client: AsyncClient) -> tuple[dict[str, str], str]:
@@ -92,7 +93,12 @@ async def _setup_seller_with_token(
     return seller_id, warehouse.json()["id"], tenant_id
 
 
-def _wb_order_row(*, order_id: int, created_at: datetime) -> dict[str, Any]:
+def _wb_order_row(
+    *,
+    order_id: int,
+    created_at: datetime,
+    wb_warehouse_id: int = DEFAULT_WB_WAREHOUSE_ID,
+) -> dict[str, Any]:
     return {
         "id": order_id,
         "rid": f"rid-{order_id}",
@@ -105,6 +111,7 @@ def _wb_order_row(*, order_id: int, created_at: datetime) -> dict[str, Any]:
         "cargoType": 1,
         "officeId": 42,
         "isLegal": False,
+        "warehouseId": wb_warehouse_id,
     }
 
 
@@ -159,6 +166,12 @@ async def test_cancel_in_assembling_detaches_and_adjusts_packaging(
             quantity_delta=10,
             movement_type="inbound_intake",
         )
+        await seed_fbs_warehouse_binding(
+            session,
+            tenant_id=tenant_id,
+            seller_id=seller_uuid,
+            wms_warehouse_id=warehouse_uuid,
+        )
         orders: list[FbsOrder] = []
         base = datetime(2026, 7, 1, 12, 0, tzinfo=UTC)
         for idx, wb_id in enumerate((920001, 920002), start=0):
@@ -166,7 +179,6 @@ async def test_cancel_in_assembling_detaches_and_adjusts_packaging(
                 session,
                 tenant_id,
                 seller_uuid,
-                warehouse_uuid,
                 _wb_order_row(order_id=wb_id, created_at=base + timedelta(hours=idx)),
             )
             order.product_id = product.id
@@ -278,11 +290,16 @@ async def test_cancel_last_order_in_assembling_reverts_supply_to_draft(
         )
         session.add(product)
         await session.flush()
+        await seed_fbs_warehouse_binding(
+            session,
+            tenant_id=tenant_id,
+            seller_id=seller_uuid,
+            wms_warehouse_id=warehouse_uuid,
+        )
         order, _ = await upsert_order_from_wb_row(
             session,
             tenant_id,
             seller_uuid,
-            warehouse_uuid,
             _wb_order_row(order_id=920101, created_at=datetime.now(tz=UTC)),
         )
         order.product_id = product.id
@@ -354,13 +371,18 @@ async def test_concurrent_reserve_only_one_succeeds(
             quantity_delta=1,
             movement_type="inbound_intake",
         )
+        await seed_fbs_warehouse_binding(
+            session,
+            tenant_id=tenant_id,
+            seller_id=seller_uuid,
+            wms_warehouse_id=warehouse_uuid,
+        )
         orders: list[uuid.UUID] = []
         for idx in range(2):
             order, _ = await upsert_order_from_wb_row(
                 session,
                 tenant_id,
                 seller_uuid,
-                warehouse_uuid,
                 _wb_order_row(
                     order_id=wb_base + idx,
                     created_at=datetime(2026, 7, 2, idx, 0, tzinfo=UTC),
@@ -409,13 +431,18 @@ async def test_sync_order_statuses_paginates_past_500(
     total_orders = 501
 
     async with SessionLocal() as session:
+        await seed_fbs_warehouse_binding(
+            session,
+            tenant_id=tenant_id,
+            seller_id=seller_uuid,
+            wms_warehouse_id=warehouse_uuid,
+        )
         base = datetime(2026, 6, 1, 0, 0, tzinfo=UTC)
         for idx in range(total_orders):
             order, _ = await upsert_order_from_wb_row(
                 session,
                 tenant_id,
                 seller_uuid,
-                warehouse_uuid,
                 _wb_order_row(
                     order_id=940000 + idx + 1,
                     created_at=base + timedelta(minutes=idx),
@@ -678,11 +705,16 @@ async def test_sync_order_statuses_skips_sorted(
     async with SessionLocal() as session:
         from app.models.fbs_order import FBS_ORDER_STATUS_SORTED
 
+        await seed_fbs_warehouse_binding(
+            session,
+            tenant_id=tenant_id,
+            seller_id=seller_uuid,
+            wms_warehouse_id=warehouse_uuid,
+        )
         order, _ = await upsert_order_from_wb_row(
             session,
             tenant_id,
             seller_uuid,
-            warehouse_uuid,
             _wb_order_row(order_id=960001, created_at=datetime.now(tz=UTC)),
         )
         order.status = FBS_ORDER_STATUS_SORTED
