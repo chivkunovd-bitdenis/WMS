@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import logging
 import uuid
 from dataclasses import dataclass, field
@@ -12,6 +13,7 @@ import httpx
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.settings import settings
 from app.models.fbs_stock_sync_item import (
     STOCK_SYNC_STATUS_CONFIRMED,
     STOCK_SYNC_STATUS_CONFLICT,
@@ -24,10 +26,10 @@ from app.models.product import Product
 from app.models.seller import Seller
 from app.services.fbs_stock_availability_service import fbs_available_qty_by_product
 from app.services.wildberries_client import (
+    MARKETPLACE_STOCKS_PATH,
     MarketplaceStockAmount,
     WildberriesClientError,
     fetch_marketplace_stocks,
-    put_marketplace_stocks,
     split_marketplace_stocks_batches,
 )
 from app.services.wildberries_credentials_service import (
@@ -55,8 +57,18 @@ class StockSyncRateLimiter(Protocol):
 
 
 class NoopStockSyncRateLimiter:
+    """Explicit test-only limiter; production uses AsyncStockSyncRateLimiter."""
+
     async def wait(self, seconds: float = 0.0) -> None:
         return
+
+
+class AsyncStockSyncRateLimiter:
+    """Production async pacing between Wildberries stock API calls."""
+
+    async def wait(self, seconds: float = 0.0) -> None:
+        if seconds > 0:
+            await asyncio.sleep(seconds)
 
 
 class FbsStockSyncError(Exception):
@@ -252,6 +264,79 @@ def _wb_error_code(exc: WildberriesClientError) -> str:
     return f"wb_{exc.code}{suffix}"
 
 
+def _marketplace_stocks_url(
+    *,
+    warehouse_id: int,
+    marketplace_api_base: str | None,
+) -> str:
+    base = (marketplace_api_base or settings.wildberries_marketplace_api_base).rstrip("/")
+    return f"{base}{MARKETPLACE_STOCKS_PATH.format(warehouse_id=warehouse_id)}"
+
+
+def _parse_retry_after_seconds(header_value: str | None) -> float:
+    if header_value is None or header_value.strip() == "":
+        return DEFAULT_RATE_INTERVAL_SECONDS
+    try:
+        parsed = float(header_value)
+    except ValueError:
+        return MAX_429_RETRY_AFTER_SECONDS
+    return min(max(parsed, 0.0), MAX_429_RETRY_AFTER_SECONDS)
+
+
+@dataclass(frozen=True, slots=True)
+class _PutBatchOutcome:
+    error_code: str | None
+    status_code: int | None
+    retry_after_seconds: float | None
+
+
+async def _put_stocks_batch(
+    http_client: httpx.AsyncClient,
+    *,
+    api_token: str,
+    warehouse_id: int,
+    batch: list[MarketplaceStockAmount],
+    marketplace_api_base: str | None,
+) -> _PutBatchOutcome:
+    url = _marketplace_stocks_url(
+        warehouse_id=warehouse_id,
+        marketplace_api_base=marketplace_api_base,
+    )
+    headers = {
+        "Authorization": api_token,
+        "Content-Type": "application/json",
+    }
+    payload = {
+        "stocks": [
+            {"chrtId": item.chrt_id, "amount": item.amount}
+            for item in batch
+        ],
+    }
+    try:
+        response = await http_client.put(url, headers=headers, json=payload, timeout=60.0)
+    except httpx.HTTPError:
+        return _PutBatchOutcome(
+            error_code=_wb_error_code(WildberriesClientError("transport_error")),
+            status_code=None,
+            retry_after_seconds=None,
+        )
+    if response.status_code >= 400:
+        retry_after: float | None = None
+        if response.status_code == 429:
+            retry_after = _parse_retry_after_seconds(response.headers.get("Retry-After"))
+        return _PutBatchOutcome(
+            error_code=_wb_error_code(
+                WildberriesClientError(
+                    "upstream_error",
+                    status_code=response.status_code,
+                )
+            ),
+            status_code=response.status_code,
+            retry_after_seconds=retry_after,
+        )
+    return _PutBatchOutcome(error_code=None, status_code=None, retry_after_seconds=None)
+
+
 async def _put_batch_with_retry(
     http_client: httpx.AsyncClient,
     *,
@@ -264,23 +349,21 @@ async def _put_batch_with_retry(
     """PUT one batch; on 429 retry once after rate limiter wait. Returns error code or None."""
     retried_429 = False
     while True:
-        try:
-            await put_marketplace_stocks(
-                http_client,
-                api_token=api_token,
-                warehouse_id=warehouse_id,
-                stocks=batch,
-                marketplace_api_base=marketplace_api_base,
-            )
+        outcome = await _put_stocks_batch(
+            http_client,
+            api_token=api_token,
+            warehouse_id=warehouse_id,
+            batch=batch,
+            marketplace_api_base=marketplace_api_base,
+        )
+        if outcome.error_code is None:
             return None
-        except WildberriesClientError as exc:
-            if exc.status_code == 429 and not retried_429:
-                retried_429 = True
-                await rate_limiter.wait(MAX_429_RETRY_AFTER_SECONDS)
-                continue
-            if exc.status_code == 409:
-                return _wb_error_code(exc)
-            return _wb_error_code(exc)
+        if outcome.status_code == 429 and not retried_429:
+            retried_429 = True
+            wait_seconds = outcome.retry_after_seconds or DEFAULT_RATE_INTERVAL_SECONDS
+            await rate_limiter.wait(wait_seconds)
+            continue
+        return outcome.error_code
 
 
 def _compare_readback(
@@ -390,7 +473,7 @@ async def sync_binding_stocks(
     marketplace_api_base: str | None = None,
 ) -> FbsStockSyncResult:
     """Publish absolute FBS stock amounts for one seller WB warehouse binding."""
-    limiter = rate_limiter or NoopStockSyncRateLimiter()
+    limiter = rate_limiter or AsyncStockSyncRateLimiter()
 
     if binding.tenant_id != tenant_id or binding.seller_id != seller_id:
         raise FbsStockSyncError(ERROR_BINDING_MISMATCH)

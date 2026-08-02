@@ -35,6 +35,7 @@ from app.models.seller_wildberries_credentials import SellerWildberriesCredentia
 from app.models.tenant import Tenant
 from app.models.warehouse import Warehouse
 from app.services.fbs_stock_sync_service import (
+    DEFAULT_RATE_INTERVAL_SECONDS,
     ERROR_DUPLICATE_CHRT,
     ERROR_READBACK_MISMATCH,
     ERROR_SYNC_BUSY,
@@ -460,7 +461,90 @@ async def test_sync_429_retries_once_then_succeeds(db_session: AsyncSession) -> 
 
     assert result.products_confirmed == 1
     assert transport.put_attempts == 2
-    assert len(limiter.waits) >= 1
+    assert 1.0 in limiter.waits
+
+
+@pytest.mark.asyncio
+async def test_default_rate_limiter_paces_wb_calls(
+    db_session: AsyncSession,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Production path uses AsyncStockSyncRateLimiter (~200ms between WB calls)."""
+    sleeps: list[float] = []
+
+    async def fake_sleep(seconds: float) -> None:
+        sleeps.append(seconds)
+
+    monkeypatch.setattr(
+        "app.services.fbs_stock_sync_service.asyncio.sleep",
+        fake_sleep,
+    )
+
+    ctx = await _seed_binding(db_session)
+    product = _product(
+        tenant_id=ctx.tenant.id,
+        seller_id=ctx.seller.id,
+        chrt_id=303,
+        sku_suffix="pace",
+    )
+    db_session.add(product)
+    await db_session.commit()
+
+    transport = _MockStocksTransport()
+    async with _client(transport) as http_client:
+        result = await sync_binding_stocks(
+            db_session,
+            ctx.tenant.id,
+            ctx.seller.id,
+            ctx.binding,
+            http_client,
+            marketplace_api_base="https://wb-mock.test",
+        )
+
+    assert result.products_confirmed == 1
+    assert DEFAULT_RATE_INTERVAL_SECONDS in sleeps
+
+
+@pytest.mark.asyncio
+async def test_sync_429_honors_retry_after_on_production_limiter(
+    db_session: AsyncSession,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """429 Retry-After header is passed to the default limiter wait."""
+    sleeps: list[float] = []
+
+    async def fake_sleep(seconds: float) -> None:
+        sleeps.append(seconds)
+
+    monkeypatch.setattr(
+        "app.services.fbs_stock_sync_service.asyncio.sleep",
+        fake_sleep,
+    )
+
+    ctx = await _seed_binding(db_session)
+    product = _product(
+        tenant_id=ctx.tenant.id,
+        seller_id=ctx.seller.id,
+        chrt_id=204,
+        sku_suffix="retry-after",
+    )
+    db_session.add(product)
+    await db_session.commit()
+
+    transport = _MockStocksTransport(put_status_sequence=[429])
+    async with _client(transport) as http_client:
+        result = await sync_binding_stocks(
+            db_session,
+            ctx.tenant.id,
+            ctx.seller.id,
+            ctx.binding,
+            http_client,
+            marketplace_api_base="https://wb-mock.test",
+        )
+
+    assert result.products_confirmed == 1
+    assert transport.put_attempts == 2
+    assert 1.0 in sleeps
 
 
 @pytest.mark.asyncio
