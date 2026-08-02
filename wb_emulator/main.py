@@ -5,7 +5,7 @@ from __future__ import annotations
 from contextlib import asynccontextmanager
 from collections.abc import AsyncIterator
 
-from fastapi import APIRouter, FastAPI
+from fastapi import FastAPI
 
 from wb_emulator.auth import AuthMiddleware
 from wb_emulator.db import init_db
@@ -13,10 +13,10 @@ from wb_emulator.routes.admin import admin_router
 from wb_emulator.routes.orders import router as orders_router
 from wb_emulator.routes import supplies as supplies_routes
 from wb_emulator.routes.media_meta import router as media_meta_router
+from wb_emulator.routes.warehouses import router as warehouses_router
 from wb_emulator.services import supplies_store  # noqa: F401 — register ORM tables
 
 supplies_router = supplies_routes.router
-warehouses_router = APIRouter(tags=["warehouses"])
 
 
 @asynccontextmanager
