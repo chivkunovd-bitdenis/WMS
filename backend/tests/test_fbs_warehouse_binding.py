@@ -13,7 +13,6 @@ from __future__ import annotations
 import time
 import uuid
 from datetime import UTC, datetime, timedelta
-from unittest.mock import Mock
 
 import pytest
 from httpx import AsyncClient
@@ -427,12 +426,16 @@ async def test_fbs_manual_stock_sync_celery_202(
     )
     assert created.status_code == 200
 
+    enqueued_job_ids: list[str] = []
+
+    def _fake_enqueue(job_id: uuid.UUID) -> None:
+        enqueued_job_ids.append(str(job_id))
+
+    monkeypatch.setattr(
+        "app.api.fbs_sellers._enqueue_fbs_stock_sync_job",
+        _fake_enqueue,
+    )
     monkeypatch.setattr(settings, "celery_broker_url", "redis://test-broker/0")
-
-    import app.tasks.background_jobs as bg_jobs
-
-    fake_task = Mock()
-    monkeypatch.setattr(bg_jobs.run_fbs_stock_sync_task, "delay", fake_task.delay)
 
     resp = await async_client.post(
         _stock_sync_url(seller_id),
@@ -444,7 +447,7 @@ async def test_fbs_manual_stock_sync_celery_202(
     assert "id" in body
     assert body["status"] == "pending"
     uuid.UUID(body["id"])
-    fake_task.delay.assert_called_once_with(body["id"])
+    assert enqueued_job_ids == [body["id"]]
 
 
 # TC-NEW-FBS-STOCK-014 — sync status read returns per-chrt target/confirmed/status
