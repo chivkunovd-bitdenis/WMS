@@ -86,3 +86,19 @@ docker run --rm -p 8099:8000 \
 export PYTHONPATH=.
 pytest wb_emulator/tests -q
 ```
+
+### WMS ↔ emulator FBS stock cycle (STOCK-100)
+
+End-to-end proof that WMS stock sync and order intake talk to this service over HTTP
+(`PUT/POST /api/v3/stocks/{warehouseId}`, `GET /api/v3/orders/new`, admin purchase).
+
+From repository root:
+
+```bash
+cd backend && pytest tests/test_fbs_stock_emulator_integration.py -q
+```
+
+Cycle covered: WMS publish amount 1 → emulator readback 1 → admin purchase (1 created, 1 rejected) →
+emulator amount 0 → WMS order intake + reserve 1 → next sync confirmed 0. FBO reserve on another
+WMS warehouse does not change FBS publish. Uses in-process `httpx.ASGITransport` (real HTTP stack,
+no MockTransport on both sides). Prod compose guard: `docker-compose.prod.yml` has no `wb-emulator`.
