@@ -5,16 +5,25 @@ from datetime import datetime
 from typing import Annotated, Any
 
 import httpx
-from fastapi import APIRouter, Depends, HTTPException, Path, status
+from fastapi import APIRouter, Depends, HTTPException, Path, Query, Response, status
 from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.deps import require_fulfillment_admin
+from app.core.settings import settings
 from app.db.session import get_db
 from app.models.fbs_warehouse_binding import FbsWarehouseBinding
+from app.models.seller import Seller
 from app.models.user import User
+from app.services import background_job_service as job_svc
 from app.services import fbs_seller_warehouse_service as wh_svc
 from app.services import fbs_warehouse_binding_service as binding_svc
+from app.services.background_job_service import JOB_TYPE_FBS_STOCK_SYNC
+from app.services.fbs_autopoll_service import (
+    get_binding_stock_sync_status,
+    sync_seller_stocks,
+)
+from app.services.fbs_stock_sync_service import FbsStockSyncError
 
 router = APIRouter(prefix="/operations/fbs-sellers", tags=["operations"])
 
@@ -100,6 +109,49 @@ def _raise_from_binding_service(exc: binding_svc.FbsWarehouseBindingError) -> No
     if exc.code in {"wms_warehouse_already_bound", "active_fbs_reservations"}:
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=exc.code)
     raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=exc.code)
+
+
+def _raise_from_stock_sync(exc: FbsStockSyncError) -> None:
+    if exc.code == "binding_not_found":
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=exc.code)
+    raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=exc.code)
+
+
+class FbsStockSyncBody(BaseModel):
+    wb_warehouse_id: int | None = None
+
+
+class FbsStockSyncJobOut(BaseModel):
+    id: str
+    status: str
+
+
+class FbsStockSyncResultOut(BaseModel):
+    bindings_processed: int
+    products_targeted: int
+    products_confirmed: int
+    products_zeroed: int
+    conflicts: int
+    errors: int
+    binding_errors: int
+
+
+class FbsStockSyncStatusItemOut(BaseModel):
+    chrt_id: int
+    product_id: str | None
+    target: int | None
+    confirmed: int | None
+    status: str
+    error: str | None
+    timestamp: datetime
+
+
+class FbsStockSyncStatusOut(BaseModel):
+    wb_warehouse_id: int
+    binding_last_sync_at: datetime | None
+    binding_last_sync_status: str | None
+    binding_last_error_code: str | None
+    items: list[FbsStockSyncStatusItemOut]
 
 
 @router.get("/{seller_id}/warehouses", response_model=list[FbsSellerWarehouseOut])
@@ -192,3 +244,108 @@ async def disable_fbs_warehouse_binding(
     except binding_svc.FbsWarehouseBindingError as exc:
         _raise_from_binding_service(exc)
     return _binding_out(row)
+
+
+@router.post(
+    "/{seller_id}/stocks/sync",
+    response_model=FbsStockSyncResultOut,
+    status_code=status.HTTP_200_OK,
+    responses={status.HTTP_202_ACCEPTED: {"model": FbsStockSyncJobOut}},
+)
+async def start_fbs_stock_sync(
+    seller_id: uuid.UUID,
+    body: FbsStockSyncBody,
+    response: Response,
+    user: Annotated[User, Depends(require_fulfillment_admin)],
+    session: Annotated[AsyncSession, Depends(get_db)],
+) -> FbsStockSyncResultOut | FbsStockSyncJobOut:
+    seller = await session.get(Seller, seller_id)
+    if seller is None or seller.tenant_id != user.tenant_id:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="seller_not_found",
+        )
+    if body.wb_warehouse_id is not None and body.wb_warehouse_id <= 0:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="invalid_wb_warehouse_id",
+        )
+
+    if settings.celery_broker_url:
+        payload: dict[str, Any] = {"seller_id": str(seller_id)}
+        if body.wb_warehouse_id is not None:
+            payload["wb_warehouse_id"] = body.wb_warehouse_id
+        job = await job_svc.create_pending_job(
+            session,
+            user.tenant_id,
+            job_type=JOB_TYPE_FBS_STOCK_SYNC,
+            payload_json=payload,
+        )
+        from app.tasks.background_jobs import run_fbs_stock_sync_task
+
+        run_fbs_stock_sync_task.delay(str(job.id))
+        response.status_code = status.HTTP_202_ACCEPTED
+        return FbsStockSyncJobOut(id=str(job.id), status=job.status)
+
+    async with httpx.AsyncClient() as http_client:
+        result = await sync_seller_stocks(
+            session,
+            user.tenant_id,
+            seller_id,
+            http_client,
+            wb_warehouse_id=body.wb_warehouse_id,
+        )
+    return FbsStockSyncResultOut(
+        bindings_processed=result.bindings_processed,
+        products_targeted=result.products_targeted,
+        products_confirmed=result.products_confirmed,
+        products_zeroed=result.products_zeroed,
+        conflicts=result.conflicts,
+        errors=result.errors,
+        binding_errors=result.binding_errors,
+    )
+
+
+@router.get(
+    "/{seller_id}/stocks/sync-status",
+    response_model=FbsStockSyncStatusOut,
+)
+async def get_fbs_stock_sync_status(
+    seller_id: uuid.UUID,
+    wb_warehouse_id: Annotated[int, Query(gt=0)],
+    user: Annotated[User, Depends(require_fulfillment_admin)],
+    session: Annotated[AsyncSession, Depends(get_db)],
+) -> FbsStockSyncStatusOut:
+    seller = await session.get(Seller, seller_id)
+    if seller is None or seller.tenant_id != user.tenant_id:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="seller_not_found",
+        )
+    try:
+        binding, items = await get_binding_stock_sync_status(
+            session,
+            user.tenant_id,
+            seller_id,
+            wb_warehouse_id,
+        )
+    except FbsStockSyncError as exc:
+        _raise_from_stock_sync(exc)
+    return FbsStockSyncStatusOut(
+        wb_warehouse_id=binding.wb_warehouse_id,
+        binding_last_sync_at=binding.last_sync_at,
+        binding_last_sync_status=binding.last_sync_status,
+        binding_last_error_code=binding.last_error_code,
+        items=[
+            FbsStockSyncStatusItemOut(
+                chrt_id=item.chrt_id,
+                product_id=str(item.product_id) if item.product_id is not None else None,
+                target=item.last_target_amount,
+                confirmed=item.last_confirmed_amount,
+                status=item.status,
+                error=item.last_error_code,
+                timestamp=item.updated_at,
+            )
+            for item in items
+        ],
+    )

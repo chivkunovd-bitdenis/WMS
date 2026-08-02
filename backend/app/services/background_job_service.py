@@ -26,6 +26,7 @@ JOB_TYPE_MOVEMENTS_DIGEST = "movements_digest"
 JOB_TYPE_WILDBERRIES_CARDS_SYNC = "wildberries_cards_sync"
 JOB_TYPE_WILDBERRIES_SUPPLIES_SYNC = "wildberries_supplies_sync"
 JOB_TYPE_WILDBERRIES_MARKETPLACE_ORDERS_SYNC = "wildberries_marketplace_orders_sync"
+JOB_TYPE_FBS_STOCK_SYNC = "fbs_stock_sync"
 
 
 async def create_pending_job(
@@ -262,6 +263,73 @@ async def run_wildberries_marketplace_orders_sync_job(job_id: uuid.UUID) -> None
             job.error_message = exc.code
         except Exception as exc:
             logger.exception("wildberries marketplace orders sync failed: %s", exc)
+            job.status = JOB_STATUS_FAILED
+            job.result_json = None
+            job.error_message = str(exc)
+        job.finished_at = datetime.now(UTC)
+        await session.commit()
+
+
+async def run_fbs_stock_sync_job(job_id: uuid.UUID) -> None:
+    """FBS stock reconciliation for one seller (optional single WB warehouse binding)."""
+    from app.services.fbs_autopoll_service import sync_seller_stocks
+
+    async with SessionLocal() as session:
+        job = await session.get(BackgroundJob, job_id)
+        if job is None:
+            logger.warning("background job missing: %s", job_id)
+            return
+        payload = job.payload_json or {}
+        sid_raw = payload.get("seller_id")
+        if not sid_raw or not isinstance(sid_raw, str):
+            job.status = JOB_STATUS_FAILED
+            job.started_at = datetime.now(UTC)
+            job.finished_at = datetime.now(UTC)
+            job.error_message = "missing_job_seller_id"
+            await session.commit()
+            return
+        try:
+            seller_uuid = uuid.UUID(sid_raw)
+        except ValueError:
+            job.status = JOB_STATUS_FAILED
+            job.started_at = datetime.now(UTC)
+            job.finished_at = datetime.now(UTC)
+            job.error_message = "invalid_job_seller_id"
+            await session.commit()
+            return
+
+        wb_warehouse_id: int | None = None
+        wb_raw = payload.get("wb_warehouse_id")
+        if isinstance(wb_raw, int):
+            wb_warehouse_id = wb_raw
+        elif isinstance(wb_raw, str) and wb_raw.strip().isdigit():
+            wb_warehouse_id = int(wb_raw)
+
+        job.status = JOB_STATUS_RUNNING
+        job.started_at = datetime.now(UTC)
+        await session.commit()
+        try:
+            async with httpx.AsyncClient() as http_client:
+                result = await sync_seller_stocks(
+                    session,
+                    job.tenant_id,
+                    seller_uuid,
+                    http_client,
+                    wb_warehouse_id=wb_warehouse_id,
+                )
+            job.status = JOB_STATUS_DONE
+            job.result_json = {
+                "bindings_processed": result.bindings_processed,
+                "products_targeted": result.products_targeted,
+                "products_confirmed": result.products_confirmed,
+                "products_zeroed": result.products_zeroed,
+                "conflicts": result.conflicts,
+                "errors": result.errors,
+                "binding_errors": result.binding_errors,
+            }
+            job.error_message = None
+        except Exception as exc:
+            logger.exception("fbs stock sync job failed: %s", exc)
             job.status = JOB_STATUS_FAILED
             job.result_json = None
             job.error_message = str(exc)

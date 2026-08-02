@@ -26,6 +26,10 @@ from app.models.fbs_order import (
     FbsOrder,
     FbsOrderReservation,
 )
+from app.models.fbs_stock_sync_item import (
+    STOCK_SYNC_STATUS_CONFIRMED,
+    FbsStockSyncItem,
+)
 from app.models.fbs_warehouse_binding import FbsWarehouseBinding
 from app.models.product import Product
 from app.models.seller import Seller
@@ -72,6 +76,17 @@ def _bindings_url(seller_id: str, wb_warehouse_id: int | None = None) -> str:
     if wb_warehouse_id is None:
         return base
     return f"{base}/{wb_warehouse_id}"
+
+
+def _stock_sync_url(seller_id: str) -> str:
+    return f"/operations/fbs-sellers/{seller_id}/stocks/sync"
+
+
+def _stock_sync_status_url(seller_id: str, wb_warehouse_id: int) -> str:
+    return (
+        f"/operations/fbs-sellers/{seller_id}/stocks/sync-status"
+        f"?wb_warehouse_id={wb_warehouse_id}"
+    )
 
 
 # TC-NEW-FBS-STOCK-014 — create binding, list, toggle sync, soft-disable
@@ -341,3 +356,137 @@ async def test_fbs_warehouse_binding_reactivate_after_disable(async_client: Asyn
     assert reactivated.status_code == 200
     assert reactivated.json()["id"] == binding_id
     assert reactivated.json()["is_active"] is True
+
+
+# TC-NEW-FBS-STOCK-014 — manual stock sync returns inline result without Celery broker
+@pytest.mark.asyncio
+async def test_fbs_manual_stock_sync_inline_200(
+    async_client: AsyncClient,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    headers, suffix = await _register_ff_admin(async_client)
+    seller_id = await _create_seller(async_client, headers, suffix)
+    wh_a = await _create_warehouse(async_client, headers, suffix, "sync")
+
+    created = await async_client.put(
+        _bindings_url(seller_id, 501001),
+        headers=headers,
+        json={"wms_warehouse_id": wh_a, "stock_sync_enabled": True},
+    )
+    assert created.status_code == 200
+
+    async def fake_sync(
+        session: object,
+        tenant_id: uuid.UUID,
+        sid: uuid.UUID,
+        http_client: object,
+        *,
+        wb_warehouse_id: int | None = None,
+    ) -> object:
+        from app.services.fbs_autopoll_service import SellerStockSyncResult
+
+        return SellerStockSyncResult(
+            bindings_processed=1,
+            products_targeted=2,
+            products_confirmed=2,
+        )
+
+    monkeypatch.setattr(
+        "app.api.fbs_sellers.sync_seller_stocks",
+        fake_sync,
+    )
+
+    resp = await async_client.post(
+        _stock_sync_url(seller_id),
+        headers=headers,
+        json={},
+    )
+    assert resp.status_code == 200, resp.text
+    body = resp.json()
+    assert body["bindings_processed"] == 1
+    assert body["products_targeted"] == 2
+    assert body["products_confirmed"] == 2
+
+
+# TC-NEW-FBS-STOCK-014 — sync status read returns per-chrt target/confirmed/status
+@pytest.mark.asyncio
+async def test_fbs_stock_sync_status_read(async_client: AsyncClient) -> None:
+    headers, suffix = await _register_ff_admin(async_client)
+    seller_id = await _create_seller(async_client, headers, suffix)
+    wh_a = await _create_warehouse(async_client, headers, suffix, "status")
+
+    created = await async_client.put(
+        _bindings_url(seller_id, 501001),
+        headers=headers,
+        json={"wms_warehouse_id": wh_a, "stock_sync_enabled": True},
+    )
+    assert created.status_code == 200
+    binding_id = created.json()["id"]
+
+    async with SessionLocal() as session:
+        binding = await session.get(FbsWarehouseBinding, uuid.UUID(binding_id))
+        assert binding is not None
+        product = Product(
+            id=uuid.uuid4(),
+            tenant_id=binding.tenant_id,
+            seller_id=binding.seller_id,
+            name="Sync product",
+            sku_code=f"SYNC-{suffix}",
+            wb_barcode="SYNC-BAR",
+            wb_chrt_id=777001,
+        )
+        session.add(product)
+        await session.flush()
+        session.add(
+            FbsStockSyncItem(
+                binding_id=binding.id,
+                product_id=product.id,
+                chrt_id=777001,
+                last_target_amount=5,
+                last_confirmed_amount=5,
+                status=STOCK_SYNC_STATUS_CONFIRMED,
+            )
+        )
+        binding.last_sync_status = STOCK_SYNC_STATUS_CONFIRMED
+        binding.last_sync_at = datetime.now(UTC)
+        await session.commit()
+
+    resp = await async_client.get(
+        _stock_sync_status_url(seller_id, 501001),
+        headers=headers,
+    )
+    assert resp.status_code == 200, resp.text
+    body = resp.json()
+    assert body["wb_warehouse_id"] == 501001
+    assert body["binding_last_sync_status"] == STOCK_SYNC_STATUS_CONFIRMED
+    assert len(body["items"]) == 1
+    item = body["items"][0]
+    assert item["chrt_id"] == 777001
+    assert item["target"] == 5
+    assert item["confirmed"] == 5
+    assert item["status"] == STOCK_SYNC_STATUS_CONFIRMED
+    assert item["error"] is None
+    assert item["timestamp"] is not None
+
+
+# TC-NEW-FBS-STOCK-014 — cross-tenant stock sync endpoints return 404
+@pytest.mark.asyncio
+async def test_fbs_stock_sync_cross_tenant_404(async_client: AsyncClient) -> None:
+    headers_a, suffix_a = await _register_ff_admin(async_client)
+    seller_a = await _create_seller(async_client, headers_a, suffix_a)
+    headers_b, _ = await _register_ff_admin(async_client)
+
+    cross_sync = await async_client.post(
+        _stock_sync_url(seller_a),
+        headers=headers_b,
+        json={},
+    )
+    assert cross_sync.status_code == 404
+    assert cross_sync.json()["detail"] == "seller_not_found"
+
+    cross_status = await async_client.get(
+        _stock_sync_status_url(seller_a, 501001),
+        headers=headers_b,
+    )
+    assert cross_status.status_code == 404
+    assert cross_status.json()["detail"] == "seller_not_found"

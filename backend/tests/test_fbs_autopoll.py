@@ -21,10 +21,13 @@ from app.services.fbs_autopoll_service import (
     poll_fbs_orders_for_seller,
     sync_fbs_order_statuses_all_sellers,
     sync_fbs_order_statuses_for_seller,
+    sync_seller_stocks,
 )
 from app.services.integration_fernet import encrypt_secret
-from app.services.wb_marketplace_orders_service import upsert_order_from_wb_row
-from app.services.wildberries_client import WildberriesClientError
+from app.services.wb_marketplace_orders_service import (
+    WbMarketplaceOrdersError,
+    upsert_order_from_wb_row,
+)
 from tests.fbs_seed_helpers import DEFAULT_WB_WAREHOUSE_ID, seed_fbs_warehouse_binding
 
 
@@ -244,7 +247,7 @@ async def test_fbs_autopoll_continues_after_seller_error(
         warehouse_id: uuid.UUID | None = None,
     ) -> dict[str, int]:
         if sid == failing:
-            raise WildberriesClientError("upstream", status_code=500)
+            raise WbMarketplaceOrdersError("wb_upstream_500")
         return {"orders_upserted": 2, "orders_created": 2, "statuses_updated": 0}
 
     monkeypatch.setattr(
@@ -427,3 +430,235 @@ async def test_fbs_statuses_autopoll_all_sellers(
     result = await sync_fbs_order_statuses_all_sellers()
     assert result.sellers_polled == 1
     assert result.statuses_updated == 3
+
+
+# TC-NEW-FBS-STOCK-013 — successful intake triggers stock sync for seller bindings
+@pytest.mark.asyncio
+async def test_fbs_autopoll_intake_success_calls_stock_sync(
+    async_client: AsyncClient,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    tenant_id = uuid.uuid4()
+    seller_id = await _seed_seller_with_marketplace_token(tenant_id, token_suffix="stock-ok")
+    stock_calls: list[uuid.UUID] = []
+
+    async def fake_orders(
+        session: object,
+        tid: uuid.UUID,
+        sid: uuid.UUID,
+        http_client: object,
+        *,
+        warehouse_id: uuid.UUID | None = None,
+    ) -> dict[str, int]:
+        return {
+            "orders_upserted": 1,
+            "orders_created": 1,
+            "statuses_updated": 0,
+        }
+
+    async def fake_stocks(
+        session: object,
+        tid: uuid.UUID,
+        sid: uuid.UUID,
+        http_client: object,
+        *,
+        wb_warehouse_id: int | None = None,
+    ) -> object:
+        stock_calls.append(sid)
+        from app.services.fbs_autopoll_service import SellerStockSyncResult
+
+        return SellerStockSyncResult(bindings_processed=1)
+
+    monkeypatch.setattr(
+        "app.services.fbs_autopoll_service.sync_seller_orders",
+        fake_orders,
+    )
+    monkeypatch.setattr(
+        "app.services.fbs_autopoll_service.sync_seller_stocks",
+        fake_stocks,
+    )
+
+    target = SellerPollTarget(tenant_id=tenant_id, seller_id=seller_id)
+    async with SessionLocal() as session, httpx.AsyncClient() as client:
+        stats = await poll_fbs_orders_for_seller(session, target, client)
+
+    assert stock_calls == [seller_id]
+    assert stats["stocks_bindings_processed"] == 1
+
+
+# TC-NEW-FBS-STOCK-013 — intake failure must not run stock sync for that seller
+@pytest.mark.asyncio
+async def test_fbs_autopoll_intake_error_skips_stock_sync(
+    async_client: AsyncClient,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    tenant_id = uuid.uuid4()
+    seller_id = await _seed_seller_with_marketplace_token(tenant_id, token_suffix="stock-skip")
+    stock_calls: list[uuid.UUID] = []
+
+    async def fake_stocks(
+        session: object,
+        tid: uuid.UUID,
+        sid: uuid.UUID,
+        http_client: object,
+        *,
+        wb_warehouse_id: int | None = None,
+    ) -> object:
+        stock_calls.append(sid)
+        from app.services.fbs_autopoll_service import SellerStockSyncResult
+
+        return SellerStockSyncResult()
+
+    monkeypatch.setattr(
+        "app.services.fbs_autopoll_service.sync_seller_stocks",
+        fake_stocks,
+    )
+    _patch_wb_order_fetches(
+        monkeypatch,
+        new_raises=WbMarketplaceOrdersError("wb_upstream_500"),
+    )
+
+    target = SellerPollTarget(tenant_id=tenant_id, seller_id=seller_id)
+    async with SessionLocal() as session, httpx.AsyncClient() as client:
+        try:
+            await poll_fbs_orders_for_seller(session, target, client)
+        except WbMarketplaceOrdersError:
+            pass
+
+    assert stock_calls == []
+
+
+# TC-NEW-FBS-STOCK-013 — one seller intake error does not block stock sync for another
+@pytest.mark.asyncio
+async def test_fbs_autopoll_seller_error_does_not_block_other_stock_sync(
+    async_client: AsyncClient,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    tenant_id = uuid.uuid4()
+    seller_ids = [
+        await _seed_seller_with_marketplace_token(tenant_id, token_suffix=f"sa{i}")
+        for i in range(2)
+    ]
+    failing = seller_ids[0]
+    stock_calls: list[uuid.UUID] = []
+
+    async def fake_orders(
+        session: object,
+        tid: uuid.UUID,
+        sid: uuid.UUID,
+        http_client: object,
+        *,
+        warehouse_id: uuid.UUID | None = None,
+    ) -> dict[str, int]:
+        if sid == failing:
+            raise WbMarketplaceOrdersError("wb_upstream_500")
+        return {"orders_upserted": 1, "orders_created": 1, "statuses_updated": 0}
+
+    async def fake_stocks(
+        session: object,
+        tid: uuid.UUID,
+        sid: uuid.UUID,
+        http_client: object,
+        *,
+        wb_warehouse_id: int | None = None,
+    ) -> object:
+        stock_calls.append(sid)
+        from app.services.fbs_autopoll_service import SellerStockSyncResult
+
+        return SellerStockSyncResult(bindings_processed=1)
+
+    monkeypatch.setattr(
+        "app.services.fbs_autopoll_service.sync_seller_orders",
+        fake_orders,
+    )
+    monkeypatch.setattr(
+        "app.services.fbs_autopoll_service.sync_seller_stocks",
+        fake_stocks,
+    )
+
+    result = await poll_fbs_orders_all_sellers()
+    assert result.sellers_polled == 1
+    assert result.seller_errors == 1
+    assert stock_calls == [seller_ids[1]]
+    assert result.stocks_bindings_processed == 1
+
+
+# TC-NEW-FBS-STOCK-013 — binding error is logged but other bindings continue
+@pytest.mark.asyncio
+async def test_sync_seller_stocks_continues_after_binding_error(
+    async_client: AsyncClient,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    tenant_id = uuid.uuid4()
+    warehouse_a = uuid.uuid4()
+    warehouse_b = uuid.uuid4()
+    seller_id = await _seed_seller_with_marketplace_token(tenant_id, token_suffix="bind-err")
+
+    async with SessionLocal() as session:
+        from app.models.warehouse import Warehouse
+
+        session.add(
+            Warehouse(
+                id=warehouse_a,
+                tenant_id=tenant_id,
+                name="WH A",
+                code=f"wh-a-{time.time_ns()}",
+            )
+        )
+        session.add(
+            Warehouse(
+                id=warehouse_b,
+                tenant_id=tenant_id,
+                name="WH B",
+                code=f"wh-b-{time.time_ns()}",
+            )
+        )
+        await seed_fbs_warehouse_binding(
+            session,
+            tenant_id=tenant_id,
+            seller_id=seller_id,
+            wms_warehouse_id=warehouse_a,
+            wb_warehouse_id=501001,
+        )
+        await seed_fbs_warehouse_binding(
+            session,
+            tenant_id=tenant_id,
+            seller_id=seller_id,
+            wms_warehouse_id=warehouse_b,
+            wb_warehouse_id=501002,
+        )
+        await session.commit()
+
+    calls: list[int] = []
+
+    async def fake_binding_sync(
+        session: object,
+        tid: uuid.UUID,
+        sid: uuid.UUID,
+        binding: object,
+        http_client: object,
+        *,
+        rate_limiter: object | None = None,
+        marketplace_api_base: str | None = None,
+    ) -> object:
+        wb_id = binding.wb_warehouse_id
+        calls.append(wb_id)
+        if wb_id == 501001:
+            from app.services.fbs_stock_sync_service import FbsStockSyncError
+
+            raise FbsStockSyncError("binding_mismatch")
+        from app.services.fbs_stock_sync_service import FbsStockSyncResult
+
+        return FbsStockSyncResult(bindings_processed=1)
+
+    monkeypatch.setattr(
+        "app.services.fbs_autopoll_service.sync_binding_stocks",
+        fake_binding_sync,
+    )
+
+    async with SessionLocal() as session, httpx.AsyncClient() as client:
+        result = await sync_seller_stocks(session, tenant_id, seller_id, client)
+
+    assert calls == [501001, 501002]
+    assert result.bindings_processed == 1
+    assert result.binding_errors == 1
