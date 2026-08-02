@@ -1,5 +1,12 @@
 # TASKLOG
 
+## TASK-130 — 2026-08-02 — fbs-wb-emulator (EMU-000…080)
+
+- What changed: standalone `wb_emulator/` (FastAPI + SQLite + auth); orders/supplies/stickers/meta/admin; `docker-compose.emulator.yml` overlay; `GET /warehouses` + `/offices`; full-cycle pytest; task artifacts `tasks/fbs-wb-emulator/*`. EMU-050: admin create = **POST** `/__admin/orders`, один `orders_store`.
+- What did NOT change: `backend/app/**` ради эмулятора; `docker-compose.prod.yml`; UI smoke через живой WMS.
+- Verification: `PYTHONPATH=. python3 -m pytest wb_emulator/tests/ -q` → **37 passed**.
+- Commit: `7ebc453` on `feat/fbs-wb-emulator`.
+
 ## TASK-129 — 2026-07-31 — FBS review fixes (PR #103 adversarial findings)
 
 - What changed: **fbs-review-fixes** — `detach_cancelled_order_from_supply` при отмене (ручной/WB sync): снятие с отгрузки, пересчёт `PackagingTaskLine.qty_total`, promote или draft; PACKED ждёт `check_status=ok` для ЧЗ; синк маркировки в status-autopoll + promote после `markings/sync`; резерв с `FOR UPDATE` на product/reservations + `IntegrityError` guard; статус-синк пагинируется (до 20×500) и исключает `sorted` из очереди; тесты TC-NEW-FBS-FIX-001..004.
