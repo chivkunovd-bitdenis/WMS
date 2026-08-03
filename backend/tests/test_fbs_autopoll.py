@@ -7,11 +7,13 @@ from typing import Any
 
 import httpx
 import pytest
+from fbs_seed_helpers import DEFAULT_WB_WAREHOUSE_ID, seed_fbs_warehouse_binding
 from httpx import AsyncClient
 from sqlalchemy import func, select
 
 from app.db.session import SessionLocal
 from app.models.fbs_order import FBS_ORDER_STATUS_IN_DELIVERY, FBS_ORDER_STATUS_NEW, FbsOrder
+from app.models.fbs_warehouse_binding import FbsWarehouseBinding
 from app.models.seller import Seller
 from app.models.seller_wildberries_credentials import SellerWildberriesCredentials
 from app.models.tenant import Tenant
@@ -29,7 +31,6 @@ from app.services.wb_marketplace_orders_service import (
     WbMarketplaceOrdersError,
     upsert_order_from_wb_row,
 )
-from tests.fbs_seed_helpers import DEFAULT_WB_WAREHOUSE_ID, seed_fbs_warehouse_binding
 
 
 def _wb_order_row(
@@ -636,7 +637,7 @@ async def test_sync_seller_stocks_continues_after_binding_error(
         session: object,
         tid: uuid.UUID,
         sid: uuid.UUID,
-        binding: object,
+        binding: FbsWarehouseBinding,
         http_client: object,
         *,
         rate_limiter: object | None = None,

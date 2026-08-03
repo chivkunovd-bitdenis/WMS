@@ -2,9 +2,10 @@ from __future__ import annotations
 
 import time
 import uuid
-from typing import Any
+from typing import Any, cast
 
 import pytest
+from fbs_seed_helpers import DEFAULT_WB_WAREHOUSE_ID, seed_fbs_warehouse_binding
 from httpx import AsyncClient
 from sqlalchemy import func, select
 
@@ -26,6 +27,9 @@ from app.models.fbs_supply import (
 from app.models.fbs_trbx import FbsTrbx
 from app.models.inventory_movement import MOVEMENT_TYPE_FBS_SHIPMENT, InventoryMovement
 from app.models.packaging_task import PackagingTask, PackagingTaskLine
+from app.models.tenant import Tenant
+from app.models.warehouse import Warehouse
+from app.models.warehouse_box import WarehouseBox
 from app.services import inventory_service
 from app.services.fbs_packaging_integration_service import create_packaging_task_for_supply
 from app.services.fbs_stock_availability_service import fbs_available_qty_for_product
@@ -34,7 +38,6 @@ from app.services.wb_marketplace_orders_service import (
     _release_reservation,
     upsert_order_from_wb_row,
 )
-from tests.fbs_seed_helpers import DEFAULT_WB_WAREHOUSE_ID, seed_fbs_warehouse_binding
 
 
 async def _register_ff_admin(async_client: AsyncClient) -> tuple[dict[str, str], str]:
@@ -116,7 +119,7 @@ async def _create_product(
         },
     )
     assert product.status_code in (200, 201), product.text
-    return product.json()["id"]
+    return cast(str, product.json()["id"])
 
 
 async def _create_supply_with_orders(
@@ -256,7 +259,63 @@ async def test_fbs_bind_packaging_box_to_trbx(
     )
     assert trbx_resp.status_code == 201, trbx_resp.text
     trbx_id = trbx_resp.json()["trbxes"][0]["id"]
-    box_id = str(uuid.uuid4())
+
+    assembling = await async_client.put(
+        f"/operations/fbs-supplies/{supply_id}/status",
+        headers=headers,
+        json={"status": FBS_SUPPLY_STATUS_ASSEMBLING},
+    )
+    assert assembling.status_code == 200, assembling.text
+    async with SessionLocal() as session:
+        box = WarehouseBox(
+            tenant_id=tenant_id,
+            warehouse_id=uuid.UUID(warehouse_id),
+            internal_barcode=f"FBS-PVZ-{uuid.uuid4().hex}",
+        )
+        session.add(box)
+        await session.flush()
+        box_id = str(box.id)
+        await session.commit()
+
+    invalid = await async_client.post(
+        f"/operations/fbs-supplies/{supply_id}/trbx/bind-box",
+        headers=headers,
+        json={"trbx_id": trbx_id, "packaging_box_id": str(uuid.uuid4())},
+    )
+    assert invalid.status_code == 404
+    assert invalid.json()["detail"] == "packaging_box_not_found"
+
+    async with SessionLocal() as session:
+        other_tenant = Tenant(
+            name=f"Other tenant {uuid.uuid4().hex}",
+            slug=f"other-{uuid.uuid4().hex}",
+        )
+        session.add(other_tenant)
+        await session.flush()
+        other_warehouse = Warehouse(
+            tenant_id=other_tenant.id,
+            name="Other warehouse",
+            code=f"other-{uuid.uuid4().hex}",
+        )
+        session.add(other_warehouse)
+        await session.flush()
+        other_box = WarehouseBox(
+            tenant_id=other_tenant.id,
+            warehouse_id=other_warehouse.id,
+            internal_barcode=f"FBS-PVZ-OTHER-{uuid.uuid4().hex}",
+        )
+        session.add(other_box)
+        await session.flush()
+        other_box_id = str(other_box.id)
+        await session.commit()
+
+    cross_tenant = await async_client.post(
+        f"/operations/fbs-supplies/{supply_id}/trbx/bind-box",
+        headers=headers,
+        json={"trbx_id": trbx_id, "packaging_box_id": other_box_id},
+    )
+    assert cross_tenant.status_code == 404
+    assert cross_tenant.json()["detail"] == "packaging_box_not_found"
 
     bind = await async_client.post(
         f"/operations/fbs-supplies/{supply_id}/trbx/bind-box",
@@ -808,11 +867,11 @@ async def test_fbs_promote_write_off_shelf_confirm_sold_does_not_resurrect_avail
                 InventoryMovement.movement_type == MOVEMENT_TYPE_FBS_SHIPMENT,
             )
         )
-        assert int(write_off_qty) == -1
+        assert int(write_off_qty or 0) == -1
 
-        order = await session.get(FbsOrder, order_id)
-        assert order is not None
-        await _release_reservation(session, order)
+        loaded_order = await session.get(FbsOrder, order_id)
+        assert loaded_order is not None
+        await _release_reservation(session, loaded_order)
         await session.commit()
 
         available_after_sold = await fbs_available_qty_for_product(

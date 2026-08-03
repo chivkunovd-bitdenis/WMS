@@ -16,13 +16,20 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from app.core.settings import settings
-from app.models.fbs_order import FBS_ORDER_STATUS_IN_SUPPLY, FBS_ORDER_STATUS_NEW, FbsOrder
+from app.models.fbs_order import (
+    FBS_ORDER_STATUS_CANCELLED,
+    FBS_ORDER_STATUS_IN_SUPPLY,
+    FBS_ORDER_STATUS_NEW,
+    FbsOrder,
+)
+from app.models.fbs_shipment_reversal_ledger import FbsShipmentReversalLedger
 from app.models.fbs_supply import (
     FBS_DELIVERY_TYPE_PVZ,
     FBS_DELIVERY_TYPE_WAREHOUSE_SC,
     FBS_SUPPLY_STATUS_DRAFT,
     FbsSupply,
 )
+from app.services import inventory_service as inv_svc
 from app.services.catalog_service import get_warehouse
 from app.services.wildberries_client import (
     WildberriesClientError,
@@ -42,6 +49,54 @@ class FbsSupplyError(Exception):
     def __init__(self, code: str) -> None:
         self.code = code
         super().__init__(code)
+
+
+async def apply_fbs_supply_write_offs(
+    session: AsyncSession,
+    *,
+    tenant_id: uuid.UUID,
+    orders: list[FbsOrder],
+    task_lines: list[Any],
+) -> None:
+    """Write off each packed order once and record its reversible physical unit."""
+    location_by_product = {line.product_id: line.storage_location_id for line in task_lines}
+    order_ids = [order.id for order in orders if order.product_id is not None]
+    if not order_ids:
+        return
+    existing_result = await session.execute(
+        select(FbsShipmentReversalLedger).where(
+            FbsShipmentReversalLedger.tenant_id == tenant_id,
+            FbsShipmentReversalLedger.fbs_order_id.in_(order_ids),
+        )
+    )
+    existing = {row.fbs_order_id for row in existing_result.scalars()}
+    for order in orders:
+        if (
+            order.status == FBS_ORDER_STATUS_CANCELLED
+            or order.product_id is None
+            or order.id in existing
+        ):
+            continue
+        storage_location_id = location_by_product.get(order.product_id)
+        if storage_location_id is None:
+            raise ValueError("missing_fbs_packaging_location")
+        ledger = FbsShipmentReversalLedger(
+            tenant_id=tenant_id,
+            fbs_order_id=order.id,
+            product_id=order.product_id,
+            storage_location_id=storage_location_id,
+            quantity=1,
+        )
+        session.add(ledger)
+        await session.flush()
+        existing.add(order.id)
+        await inv_svc.apply_fbs_supply_write_off(
+            session,
+            tenant_id=tenant_id,
+            product_id=order.product_id,
+            storage_location_id=storage_location_id,
+            quantity=1,
+        )
 
 
 @dataclass(frozen=True)

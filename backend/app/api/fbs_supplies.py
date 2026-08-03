@@ -43,6 +43,7 @@ class FbsSupplyOrderOut(BaseModel):
     wb_order_id: int
     status: str
     supply_id: str | None
+    trbx_id: str | None
     sticker_code: str | None
     sticker_file: str | None
 
@@ -141,6 +142,7 @@ def _order_out(order: FbsOrder) -> FbsSupplyOrderOut:
         wb_order_id=int(order.wb_order_id),
         status=order.status,
         supply_id=str(order.supply_id) if order.supply_id is not None else None,
+        trbx_id=str(order.trbx_id) if order.trbx_id is not None else None,
         sticker_code=order.sticker_code,
         sticker_file=order.sticker_file,
     )
@@ -194,6 +196,7 @@ def _raise_from_pvz_service(exc: pvz_svc.FbsShipmentPvzError) -> None:
         "supply_not_found",
         "seller_not_found",
         "trbx_not_found",
+        "packaging_box_not_found",
     }:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=exc.code)
     if exc.code == "missing_marketplace_token":
@@ -210,6 +213,8 @@ def _raise_from_pvz_service(exc: pvz_svc.FbsShipmentPvzError) -> None:
         "invalid_sticker_path",
     }:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=exc.code)
+    if exc.code in {"supply_trbx_locked", "packaging_task_not_found"}:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=exc.code)
     if exc.code.startswith("wb_"):
         raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail=exc.code)
     raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=exc.code)
@@ -526,15 +531,15 @@ async def bind_fbs_packaging_box_to_trbx(
     session: Annotated[AsyncSession, Depends(get_db)],
 ) -> FbsTrbxOut:
     try:
-        trbx = await pack_int_svc.bind_packaging_box_to_trbx(
+        trbx = await pvz_svc.bind_packaging_box_to_trbx(
             session,
             user.tenant_id,
             supply_id,
             body.trbx_id,
             body.packaging_box_id,
         )
-    except pack_int_svc.FbsPackagingIntegrationError as exc:
-        _raise_from_packaging_integration(exc)
+    except pvz_svc.FbsShipmentPvzError as exc:
+        _raise_from_pvz_service(exc)
     await session.commit()
     return _trbx_out(
         pvz_svc.TrbxMeta(

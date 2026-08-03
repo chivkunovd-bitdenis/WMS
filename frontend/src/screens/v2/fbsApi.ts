@@ -71,6 +71,7 @@ export type FbsSupplyOrder = {
   wb_order_id: number
   status: string
   supply_id: string | null
+  trbx_id: string | null
   sticker_code: string | null
   sticker_file: string | null // base64 PNG
 }
@@ -248,6 +249,27 @@ export async function fetchFbsTrbxStickers(
   })
   const data = await jsonOrThrow<{ trbxes: FbsTrbx[] }>(res)
   return data.trbxes
+}
+
+export async function bindFbsTrbxOrders(
+  token: string,
+  ah: (t: string) => Record<string, string>,
+  supplyId: string,
+  trbxId: string,
+  body: {
+    order_ids: string[]
+    length_mm: number
+    width_mm: number
+    height_mm: number
+    weight_g: number
+  },
+): Promise<FbsTrbx> {
+  const res = await fetch(apiUrl(`/operations/fbs-supplies/${supplyId}/trbx/${trbxId}/orders`), {
+    method: 'POST',
+    headers: { ...ah(token), 'Content-Type': 'application/json' },
+    body: JSON.stringify(body),
+  })
+  return jsonOrThrow<FbsTrbx>(res)
 }
 
 // ── Идентификаторы заказа (КИЗ/УИН/IMEI/GTIN) ────────────────────────────────

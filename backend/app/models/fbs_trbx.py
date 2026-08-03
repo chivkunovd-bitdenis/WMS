@@ -12,6 +12,7 @@ from app.models.base import Base
 if TYPE_CHECKING:
     from app.models.fbs_order import FbsOrder
     from app.models.fbs_supply import FbsSupply
+    from app.models.warehouse_box import WarehouseBox
 
 
 class FbsTrbx(Base):
@@ -28,7 +29,10 @@ class FbsTrbx(Base):
     )
     wb_trbx_id: Mapped[str] = mapped_column(String(64), nullable=False, index=True)
     packaging_box_id: Mapped[uuid.UUID | None] = mapped_column(
-        Uuid(as_uuid=True), nullable=True
+        Uuid(as_uuid=True),
+        ForeignKey("warehouse_boxes.id", ondelete="SET NULL"),
+        nullable=True,
+        index=True,
     )
     length_mm: Mapped[int | None] = mapped_column(Integer, nullable=True)
     width_mm: Mapped[int | None] = mapped_column(Integer, nullable=True)
@@ -41,3 +45,4 @@ class FbsTrbx(Base):
 
     supply: Mapped[FbsSupply] = relationship("FbsSupply", back_populates="trbxes")
     orders: Mapped[list[FbsOrder]] = relationship("FbsOrder", back_populates="trbx")
+    packaging_box: Mapped[WarehouseBox | None] = relationship("WarehouseBox")

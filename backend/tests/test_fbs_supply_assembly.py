@@ -5,9 +5,10 @@ import os
 import time
 import uuid
 from pathlib import Path
-from typing import Any
+from typing import Any, cast
 
 import pytest
+from fbs_seed_helpers import DEFAULT_WB_WAREHOUSE_ID, seed_fbs_warehouse_binding
 from httpx import AsyncClient
 from sqlalchemy import func, select
 
@@ -18,7 +19,6 @@ from app.models.fbs_supply import FBS_SUPPLY_STATUS_DRAFT, FbsSupply
 from app.models.product import Product
 from app.services.wb_marketplace_orders_service import upsert_order_from_wb_row
 from app.services.wildberries_client import WildberriesClientError
-from tests.fbs_seed_helpers import DEFAULT_WB_WAREHOUSE_ID, seed_fbs_warehouse_binding
 
 
 async def _register_ff_admin(async_client: AsyncClient) -> tuple[dict[str, str], str]:
@@ -138,7 +138,7 @@ async def _create_supply(
         },
     )
     assert resp.status_code == 201, resp.text
-    return resp.json()
+    return cast(dict[str, Any], resp.json())
 
 
 @pytest.fixture

@@ -28,13 +28,13 @@ from app.models.fbs_supply import (
 )
 from app.models.fbs_trbx import FbsTrbx
 from app.models.packaging_task import STATUS_DRAFT, PackagingTask, PackagingTaskLine
-from app.services import inventory_service as inv_svc
 from app.services import sorting_location_service as sorting_loc_svc
 from app.services.document_number_service import (
     DOC_TYPE_PACKAGING,
     assign_display_number_if_missing,
     assign_document_number_if_missing,
 )
+from app.services.fbs_supply_service import apply_fbs_supply_write_offs
 from app.services.packaging_task_service import get_task, is_task_complete, qty_done
 
 logger = logging.getLogger(__name__)
@@ -299,17 +299,12 @@ async def try_promote_fbs_supply_if_ready(
         return supply
 
     if task is not None:
-        for line in task.lines:
-            qty = qty_done(line)
-            if qty < 1:
-                continue
-            await inv_svc.apply_fbs_supply_write_off(
-                session,
-                tenant_id=tenant_id,
-                product_id=line.product_id,
-                storage_location_id=line.storage_location_id,
-                quantity=qty,
-            )
+        await apply_fbs_supply_write_offs(
+            session,
+            tenant_id=tenant_id,
+            orders=supply.orders,
+            task_lines=task.lines,
+        )
 
     supply.status = FBS_SUPPLY_STATUS_PACKED
     for order in supply.orders:

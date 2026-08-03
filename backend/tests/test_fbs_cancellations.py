@@ -1,16 +1,19 @@
 from __future__ import annotations
 
+import asyncio
 import time
 import uuid
 from datetime import UTC, datetime, timedelta
+from types import SimpleNamespace
 from typing import Any
 
 import httpx
 import pytest
+from fbs_seed_helpers import DEFAULT_WB_WAREHOUSE_ID, seed_fbs_warehouse_binding
 from httpx import AsyncClient
 from sqlalchemy import func, select
 
-from app.db.session import SessionLocal
+from app.db.session import SessionLocal, engine
 from app.models.fbs_order import (
     FBS_ORDER_STATUS_CANCELLED,
     FBS_ORDER_STATUS_DEFECT,
@@ -22,16 +25,22 @@ from app.models.fbs_order import (
     FbsOrder,
     FbsOrderReservation,
 )
+from app.models.fbs_shipment_reversal_ledger import FbsShipmentReversalLedger
+from app.models.inventory_balance import InventoryBalance
+from app.models.inventory_movement import InventoryMovement
 from app.models.product import Product
 from app.services import inventory_service
-from app.services.fbs_cancellation_service import penalty_band_for_order
+from app.services.fbs_cancellation_service import (
+    penalty_band_for_order,
+    reverse_fbs_shipment_if_needed,
+)
+from app.services.fbs_supply_service import apply_fbs_supply_write_offs
 from app.services.sorting_location_service import get_or_create_sorting_location
 from app.services.wb_marketplace_orders_service import (
     sync_order_statuses,
     upsert_order_from_wb_row,
 )
 from app.services.wildberries_client import WildberriesClientError
-from tests.fbs_seed_helpers import DEFAULT_WB_WAREHOUSE_ID, seed_fbs_warehouse_binding
 
 
 def _wb_order_row(
@@ -457,3 +466,147 @@ async def test_cancel_wb_error_surfaces_502(
     )
     assert resp.status_code == 502
     assert resp.json()["detail"] == "wb_upstream_error_409"
+
+
+# TC-NEW-FBS-CANCEL-005: two promoted units write off twice; one cancellation reverses once.
+@pytest.mark.asyncio
+async def test_packed_writeoff_and_reversal_are_idempotent(
+    async_client: AsyncClient,
+) -> None:
+    headers, suffix = await _register_ff_admin(async_client)
+    seller_id, warehouse_id = await _setup_seller_with_token(async_client, headers, suffix)
+    tenant_id, order_a_id, product_a_id = await _seed_reserved_order(
+        seller_id=seller_id, warehouse_id=warehouse_id, wb_order_id=810701, barcode="REV-A"
+    )
+    _tenant_id, order_b_id, product_b_id = await _seed_reserved_order(
+        seller_id=seller_id, warehouse_id=warehouse_id, wb_order_id=810702, barcode="REV-B"
+    )
+
+    async with SessionLocal() as session:
+        orders = [
+            await session.get(FbsOrder, order_a_id),
+            await session.get(FbsOrder, order_b_id),
+        ]
+        assert all(order is not None for order in orders)
+        typed_orders = [order for order in orders if order is not None]
+        for order in typed_orders:
+            order.status = "assembling"
+        locations = await session.execute(
+            select(InventoryBalance.storage_location_id, InventoryBalance.product_id).where(
+                InventoryBalance.product_id.in_([product_a_id, product_b_id])
+            )
+        )
+        location_by_product = {
+            product_id: location_id for location_id, product_id in locations.all()
+        }
+        await apply_fbs_supply_write_offs(
+            session,
+            tenant_id=tenant_id,
+            orders=typed_orders,
+            task_lines=[
+                SimpleNamespace(
+                    product_id=product_a_id,
+                    storage_location_id=location_by_product[product_a_id],
+                ),
+                SimpleNamespace(
+                    product_id=product_b_id,
+                    storage_location_id=location_by_product[product_b_id],
+                ),
+            ],
+        )
+        await apply_fbs_supply_write_offs(
+            session,
+            tenant_id=tenant_id,
+            orders=typed_orders,
+            task_lines=[
+                SimpleNamespace(
+                    product_id=product_a_id,
+                    storage_location_id=location_by_product[product_a_id],
+                ),
+                SimpleNamespace(
+                    product_id=product_b_id,
+                    storage_location_id=location_by_product[product_b_id],
+                ),
+            ],
+        )
+        await session.commit()
+
+    async with SessionLocal() as session:
+        ledgers = await session.execute(select(FbsShipmentReversalLedger))
+        assert len(list(ledgers.scalars())) == 2
+        order_a = await session.get(FbsOrder, order_a_id)
+        assert order_a is not None
+        assert await reverse_fbs_shipment_if_needed(session, order_a) is True
+        assert await reverse_fbs_shipment_if_needed(session, order_a) is False
+        order_b = await session.get(FbsOrder, order_b_id)
+        assert order_b is not None
+        assert await reverse_fbs_shipment_if_needed(session, order_b) is True
+        assert await reverse_fbs_shipment_if_needed(session, order_b) is False
+        await session.commit()
+
+    async with SessionLocal() as session:
+        movements = await session.execute(
+            select(InventoryMovement).where(
+                InventoryMovement.movement_type.in_(
+                    {"fbs_shipment", "fbs_shipment_reversal"}
+                )
+            )
+        )
+        assert sum(int(row.quantity_delta) for row in movements.scalars()) == 0
+        reversed_ledgers = await session.execute(
+            select(FbsShipmentReversalLedger).where(
+                FbsShipmentReversalLedger.reversed_at.is_not(None)
+            )
+        )
+        assert all(row.reversal_movement_id is not None for row in reversed_ledgers.scalars())
+
+
+@pytest.mark.postgresql_concurrency
+@pytest.mark.asyncio
+async def test_postgres_two_sessions_reverse_one_packed_unit(
+    async_client: AsyncClient,
+) -> None:
+    """PostgreSQL row-lock contract: concurrent cancellation reverses one ledger row once."""
+    if engine.dialect.name != "postgresql":
+        pytest.skip("requires WMS_TEST_DATABASE_URL PostgreSQL integration database")
+
+    headers, suffix = await _register_ff_admin(async_client)
+    seller_id, warehouse_id = await _setup_seller_with_token(async_client, headers, suffix)
+    tenant_id, order_id, product_id = await _seed_reserved_order(
+        seller_id=seller_id,
+        warehouse_id=warehouse_id,
+        wb_order_id=810703,
+        barcode="REV-PG",
+    )
+    async with SessionLocal() as session:
+        order = await session.get(FbsOrder, order_id)
+        balance = (
+            await session.execute(
+                select(InventoryBalance).where(InventoryBalance.product_id == product_id)
+            )
+        ).scalar_one()
+        assert order is not None
+        order.status = "assembling"
+        await apply_fbs_supply_write_offs(
+            session,
+            tenant_id=tenant_id,
+            orders=[order],
+            task_lines=[
+                SimpleNamespace(
+                    product_id=product_id,
+                    storage_location_id=balance.storage_location_id,
+                )
+            ],
+        )
+        await session.commit()
+
+    async def reverse_in_new_session() -> bool:
+        async with SessionLocal() as session:
+            locked_order = await session.get(FbsOrder, order_id)
+            assert locked_order is not None
+            changed = await reverse_fbs_shipment_if_needed(session, locked_order)
+            await session.commit()
+            return changed
+
+    results = await asyncio.gather(reverse_in_new_session(), reverse_in_new_session())
+    assert sorted(results) == [False, True]

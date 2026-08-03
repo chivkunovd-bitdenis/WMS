@@ -187,7 +187,7 @@ async def _resolve_wms_warehouse_from_binding(
         FbsWarehouseBinding.seller_id == seller_id,
         FbsWarehouseBinding.wb_warehouse_id == wb_warehouse_id,
         FbsWarehouseBinding.is_active.is_(True),
-    )
+    ).with_for_update()
     res = await session.execute(stmt)
     return res.scalar_one_or_none()
 
@@ -534,11 +534,13 @@ async def _apply_wb_status_to_order(
     normalized = wb_status.strip().lower()
     order.wb_status = normalized
     if _is_cancel_like_wb_status(normalized):
+        from app.services.fbs_cancellation_service import reverse_fbs_shipment_if_needed
         from app.services.fbs_packaging_integration_service import (
             detach_cancelled_order_from_supply,
         )
 
         order.status = FBS_ORDER_STATUS_CANCELLED
+        await reverse_fbs_shipment_if_needed(session, order)
         await detach_cancelled_order_from_supply(session, order.tenant_id, order)
         await _release_reservation(session, order)
         return
@@ -591,6 +593,7 @@ async def sync_order_statuses(
             .where(*filters)
             .order_by(FbsOrder.created_at_wb.asc(), FbsOrder.id.asc())
             .limit(SYNC_STATUS_BATCH_SIZE)
+            .with_for_update()
         )
         res = await session.execute(stmt)
         orders = list(res.scalars().all())

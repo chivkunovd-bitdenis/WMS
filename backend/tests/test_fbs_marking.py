@@ -5,6 +5,7 @@ import uuid
 from typing import Any
 
 import pytest
+from fbs_seed_helpers import DEFAULT_WB_WAREHOUSE_ID, seed_fbs_warehouse_binding
 from httpx import AsyncClient
 from sqlalchemy import select
 
@@ -23,7 +24,6 @@ from app.services.wildberries_client import (
     WildberriesClientError,
     reset_mock_marketplace_order_meta,
 )
-from tests.fbs_seed_helpers import DEFAULT_WB_WAREHOUSE_ID, seed_fbs_warehouse_binding
 
 
 async def _register_ff_admin(async_client: AsyncClient) -> tuple[dict[str, str], str]:

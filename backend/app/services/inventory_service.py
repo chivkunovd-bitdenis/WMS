@@ -542,7 +542,7 @@ async def record_movement_and_adjust_balance(
     transfer_group_id: uuid.UUID | None = None,
     marketplace_unload_request_id: uuid.UUID | None = None,
     deduct_prefer: DeductPrefer = "unpacked",
-) -> None:
+) -> InventoryMovement:
     """Запись в журнал и изменение остатка (delta может быть отрицательным)."""
     if quantity_delta == 0:
         msg = "quantity_delta must be non-zero"
@@ -582,7 +582,7 @@ async def record_movement_and_adjust_balance(
                 quantity_delta=quantity_delta,
             )
         )
-        return
+        return movement
 
     quantity_to_deduct = -quantity_delta
     unpacked = InventoryBalance.quantity_unpacked
@@ -618,6 +618,7 @@ async def record_movement_and_adjust_balance(
     if updated_balance_id is None:
         msg = "insufficient stock"
         raise ValueError(msg)
+    return movement
 
 
 async def apply_packaging_convert(

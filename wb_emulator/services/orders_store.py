@@ -71,7 +71,9 @@ class EmulatorOrder(Base):
 def ensure_orders_table(session: Session) -> None:
     """Create emulator_orders table if missing (EMU-020 lane; no models.py change)."""
     bind = session.get_bind()
-    EmulatorOrder.__table__.create(bind=bind, checkfirst=True)
+    from typing import cast
+
+    cast(Any, EmulatorOrder.__table__).create(bind=bind, checkfirst=True)
 
 
 def order_to_api(order: EmulatorOrder) -> dict[str, Any]:
@@ -307,7 +309,7 @@ def _try_purchase_one(
             )
             .values(amount=StockRow.amount - 1)
         )
-        if decremented.rowcount != 1:
+        if getattr(decremented, "rowcount", None) != 1:
             session.rollback()
             return None
 

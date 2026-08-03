@@ -16,8 +16,15 @@ from sqlalchemy.orm import selectinload
 
 from app.core.settings import settings
 from app.models.fbs_order import FbsOrder
-from app.models.fbs_supply import FBS_DELIVERY_TYPE_PVZ, FbsSupply
+from app.models.fbs_supply import (
+    FBS_DELIVERY_TYPE_PVZ,
+    FBS_SUPPLY_STATUS_DONE,
+    FBS_SUPPLY_STATUS_IN_DELIVERY,
+    FbsSupply,
+)
 from app.models.fbs_trbx import FbsTrbx
+from app.models.packaging_task import PackagingTask
+from app.models.warehouse_box import WarehouseBox
 from app.services.wildberries_client import (
     WildberriesClientError,
     add_orders_to_marketplace_trbx,
@@ -33,6 +40,9 @@ MAX_TRBX_SIDE_MM = 600
 MAX_TRBX_WEIGHT_G = 5000
 MIN_TRBX_ORDERS = 2
 MAX_SUPPLY_TRBX_VOLUME_MM3 = 1_000_000_000
+_TRBX_MUTATION_BLOCKED_SUPPLY_STATUSES = frozenset(
+    {FBS_SUPPLY_STATUS_IN_DELIVERY, FBS_SUPPLY_STATUS_DONE}
+)
 
 
 class FbsShipmentPvzError(Exception):
@@ -89,6 +99,11 @@ async def _get_supply(
 def _require_pvz_supply(supply: FbsSupply) -> None:
     if supply.delivery_type != FBS_DELIVERY_TYPE_PVZ:
         raise FbsShipmentPvzError("wrong_delivery_type")
+
+
+def _require_trbx_mutable(supply: FbsSupply) -> None:
+    if supply.status in _TRBX_MUTATION_BLOCKED_SUPPLY_STATUSES:
+        raise FbsShipmentPvzError("supply_trbx_locked")
 
 
 def _trbx_volume_mm3(trbx: FbsTrbx) -> int | None:
@@ -205,6 +220,7 @@ async def create_trbxes(
     if supply is None:
         raise FbsShipmentPvzError("supply_not_found")
     _require_pvz_supply(supply)
+    _require_trbx_mutable(supply)
 
     dims_provided = (
         length_mm is not None
@@ -265,16 +281,18 @@ async def bind_orders_to_trbx(
     weight_g: int,
     http_client: httpx.AsyncClient,
 ) -> FbsTrbx:
-    if len(order_ids) < MIN_TRBX_ORDERS:
-        raise FbsShipmentPvzError("trbx_min_orders")
-
-    _validate_trbx_dims_weight(length_mm, width_mm, height_mm, weight_g)
-    new_volume = _dims_volume_mm3(length_mm, width_mm, height_mm)
-
+    unique_order_ids = list(dict.fromkeys(order_ids))
     supply = await _get_supply(session, tenant_id, supply_id, with_trbxes=True)
     if supply is None:
         raise FbsShipmentPvzError("supply_not_found")
     _require_pvz_supply(supply)
+    _require_trbx_mutable(supply)
+
+    if len(unique_order_ids) < MIN_TRBX_ORDERS:
+        raise FbsShipmentPvzError("trbx_min_orders")
+
+    _validate_trbx_dims_weight(length_mm, width_mm, height_mm, weight_g)
+    new_volume = _dims_volume_mm3(length_mm, width_mm, height_mm)
 
     trbx = next((row for row in supply.trbxes if row.id == trbx_id), None)
     if trbx is None:
@@ -282,7 +300,6 @@ async def bind_orders_to_trbx(
 
     _validate_supply_volume(supply.trbxes, current_trbx_id=trbx_id, new_volume_mm3=new_volume)
 
-    unique_order_ids = list(dict.fromkeys(order_ids))
     stmt = (
         select(FbsOrder)
         .where(
@@ -321,6 +338,49 @@ async def bind_orders_to_trbx(
     for order in orders:
         order.trbx_id = trbx.id
 
+    await session.flush()
+    return trbx
+
+
+async def bind_packaging_box_to_trbx(
+    session: AsyncSession,
+    tenant_id: uuid.UUID,
+    supply_id: uuid.UUID,
+    trbx_id: uuid.UUID,
+    packaging_box_id: uuid.UUID,
+) -> FbsTrbx:
+    """Bind an existing warehouse box owned by the PVZ supply's task."""
+    supply = await _get_supply(session, tenant_id, supply_id, with_trbxes=True)
+    if supply is None:
+        raise FbsShipmentPvzError("supply_not_found")
+    _require_pvz_supply(supply)
+    _require_trbx_mutable(supply)
+
+    trbx = next((row for row in supply.trbxes if row.id == trbx_id), None)
+    if trbx is None:
+        raise FbsShipmentPvzError("trbx_not_found")
+
+    if supply.packaging_task_id is None:
+        raise FbsShipmentPvzError("packaging_task_not_found")
+    task_stmt = select(PackagingTask).where(
+        PackagingTask.id == supply.packaging_task_id,
+        PackagingTask.tenant_id == tenant_id,
+        PackagingTask.warehouse_id == supply.warehouse_id,
+    )
+    task = (await session.execute(task_stmt)).scalar_one_or_none()
+    if task is None:
+        raise FbsShipmentPvzError("packaging_task_not_found")
+
+    box_stmt = select(WarehouseBox).where(
+        WarehouseBox.id == packaging_box_id,
+        WarehouseBox.tenant_id == tenant_id,
+        WarehouseBox.warehouse_id == supply.warehouse_id,
+    )
+    box = (await session.execute(box_stmt)).scalar_one_or_none()
+    if box is None:
+        raise FbsShipmentPvzError("packaging_box_not_found")
+
+    trbx.packaging_box_id = box.id
     await session.flush()
     return trbx
 

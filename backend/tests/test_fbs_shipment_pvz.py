@@ -6,18 +6,21 @@ from typing import Any
 
 import pytest
 from httpx import AsyncClient
+from test_fbs_shipment_warehouse_sc import (
+    _create_supply,
+    _prepare_supply_with_orders,
+    _register_ff_admin,
+    _setup_seller_with_token,
+)
 
 from app.core.settings import settings
 from app.db.session import SessionLocal
 from app.models.fbs_order import FBS_ORDER_STATUS_IN_DELIVERY, FbsOrder
 from app.models.fbs_supply import FBS_SUPPLY_STATUS_IN_DELIVERY, FbsSupply
 from app.models.fbs_trbx import FbsTrbx
-from app.services.wildberries_client import WildberriesClientError
-from tests.test_fbs_shipment_warehouse_sc import (
-    _create_supply,
-    _prepare_supply_with_orders,
-    _register_ff_admin,
-    _setup_seller_with_token,
+from app.services.wildberries_client import (
+    WildberriesClientError,
+    fetch_marketplace_trbx_stickers,
 )
 
 
@@ -140,6 +143,12 @@ async def test_fbs_pvz_bind_orders_ok_and_overweight(
     assert bind.status_code == 200, bind.text
     assert bind.json()["weight_g"] == 4000
 
+    supply_detail = await async_client.get(
+        f"/operations/fbs-supplies/{supply['id']}", headers=headers
+    )
+    assert supply_detail.status_code == 200, supply_detail.text
+    assert {row["trbx_id"] for row in supply_detail.json()["orders"]} == {trbx_id}
+
     async with SessionLocal() as session:
         for local_order_id in order_ids:
             order = await session.get(FbsOrder, local_order_id)
@@ -159,6 +168,48 @@ async def test_fbs_pvz_bind_orders_ok_and_overweight(
     )
     assert overweight.status_code == 400
     assert overweight.json()["detail"] == "trbx_overweight"
+
+
+# TC-NEW-FBS-SHIPPVZ-005 — duplicate order IDs are deduplicated before the 2-order minimum
+@pytest.mark.asyncio
+async def test_fbs_pvz_bind_orders_duplicate_ids_still_requires_two_distinct_orders(
+    async_client: AsyncClient,
+    enable_wb_marketplace_supplies_mock: None,
+) -> None:
+    headers, suffix = await _register_ff_admin(async_client)
+    seller_id, warehouse_id, tenant_id = await _setup_seller_with_token(
+        async_client, headers, suffix
+    )
+    supply, order_ids = await _prepare_pvz_supply(
+        async_client,
+        headers,
+        seller_id,
+        warehouse_id,
+        tenant_id,
+        wb_order_ids=[961101, 961102],
+        supply_name="PVZ duplicate IDs",
+    )
+    create = await async_client.post(
+        f"/operations/fbs-supplies/{supply['id']}/trbx",
+        headers=headers,
+        json={"count": 1},
+    )
+    assert create.status_code == 201, create.text
+    trbx_id = create.json()["trbxes"][0]["id"]
+
+    duplicate = await async_client.post(
+        f"/operations/fbs-supplies/{supply['id']}/trbx/{trbx_id}/orders",
+        headers=headers,
+        json={
+            "order_ids": [str(order_ids[0]), str(order_ids[0])],
+            "length_mm": 400,
+            "width_mm": 300,
+            "height_mm": 200,
+            "weight_g": 2000,
+        },
+    )
+    assert duplicate.status_code == 400
+    assert duplicate.json()["detail"] == "trbx_min_orders"
 
 
 # TC-NEW-FBS-SHIPPVZ-003 — dims 61cm -> 400; 60x40x40 cm OK
@@ -262,7 +313,7 @@ async def test_fbs_pvz_trbx_stickers_cached_and_wb_error(
     fetch_calls = 0
     import app.services.fbs_shipment_pvz_service as pvz_mod
 
-    original_fetch = pvz_mod.fetch_marketplace_trbx_stickers
+    original_fetch = fetch_marketplace_trbx_stickers
 
     async def wrapped_fetch(*args: object, **kwargs: object) -> list[dict[str, object]]:
         nonlocal fetch_calls
@@ -385,6 +436,28 @@ async def test_fbs_pvz_deliver_requires_trbx_and_ok_with_trbx(
         supply_row = await session.get(FbsSupply, uuid.UUID(supply["id"]))
         assert supply_row is not None
         assert supply_row.status == FBS_SUPPLY_STATUS_IN_DELIVERY
+
+    create_after_delivery = await async_client.post(
+        f"/operations/fbs-supplies/{supply['id']}/trbx",
+        headers=headers,
+        json={"count": 1},
+    )
+    assert create_after_delivery.status_code == 409
+    assert create_after_delivery.json()["detail"] == "supply_trbx_locked"
+
+    bind_after_delivery = await async_client.post(
+        f"/operations/fbs-supplies/{supply['id']}/trbx/{trbx_id}/orders",
+        headers=headers,
+        json={
+            "order_ids": [str(order_ids[0]), str(order_ids[1])],
+            "length_mm": 500,
+            "width_mm": 300,
+            "height_mm": 200,
+            "weight_g": 2000,
+        },
+    )
+    assert bind_after_delivery.status_code == 409
+    assert bind_after_delivery.json()["detail"] == "supply_trbx_locked"
 
 
 @pytest.mark.asyncio

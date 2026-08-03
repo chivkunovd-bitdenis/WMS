@@ -18,6 +18,9 @@ from app.models.fbs_order import (
     FBS_ORDER_STATUS_SORTED,
     FbsOrder,
 )
+from app.models.fbs_shipment_reversal_ledger import FbsShipmentReversalLedger
+from app.models.inventory_movement import MOVEMENT_TYPE_FBS_SHIPMENT
+from app.services import inventory_service as inv_svc
 from app.services.wb_marketplace_orders_service import (
     WbMarketplaceOrdersError,
     _release_reservation,
@@ -45,6 +48,37 @@ class FbsCancellationError(Exception):
     def __init__(self, code: str) -> None:
         self.code = code
         super().__init__(code)
+
+
+async def reverse_fbs_shipment_if_needed(
+    session: AsyncSession,
+    order: FbsOrder,
+) -> bool:
+    """Reverse one packed physical unit exactly once; caller owns the order lock."""
+    stmt = (
+        select(FbsShipmentReversalLedger)
+        .where(
+            FbsShipmentReversalLedger.tenant_id == order.tenant_id,
+            FbsShipmentReversalLedger.fbs_order_id == order.id,
+        )
+        .with_for_update()
+    )
+    ledger = (await session.execute(stmt)).scalar_one_or_none()
+    if ledger is None or ledger.reversed_at is not None:
+        return False
+    reversal_movement = await inv_svc.record_movement_and_adjust_balance(
+        session,
+        tenant_id=order.tenant_id,
+        product_id=ledger.product_id,
+        storage_location_id=ledger.storage_location_id,
+        quantity_delta=int(ledger.quantity),
+        movement_type=MOVEMENT_TYPE_FBS_SHIPMENT,
+    )
+    ledger.reversed_at = datetime.now(UTC)
+    await session.flush()
+    ledger.reversal_movement_id = reversal_movement.id
+    await session.flush()
+    return True
 
 
 def penalty_band_for_order(created_at_wb: datetime) -> str:
@@ -114,6 +148,7 @@ async def cancel_order(
 
     order.status = FBS_ORDER_STATUS_CANCELLED
     order.wb_status = "cancelled"
+    await reverse_fbs_shipment_if_needed(session, order)
     from app.services.fbs_packaging_integration_service import (
         detach_cancelled_order_from_supply,
     )
@@ -135,8 +170,10 @@ async def sync_seller_order_statuses(
     except WbMarketplaceOrdersError as exc:
         raise FbsCancellationError(exc.code) from exc
     try:
-        return await sync_order_statuses(
+        updated = await sync_order_statuses(
             session, tenant_id, seller_id, http_client, api_token
         )
+        await session.flush()
+        return updated
     except WbMarketplaceOrdersError as exc:
         raise FbsCancellationError(exc.code) from exc

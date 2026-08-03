@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import time
-from typing import Any
+from typing import Any, cast
 
 import pytest
 from httpx import AsyncClient
@@ -30,7 +30,7 @@ async def _create_seller(async_client: AsyncClient, headers: dict[str, str], suf
         "/sellers", headers=headers, json={"name": f"Seller {suffix}"}
     )
     assert seller.status_code in (200, 201), seller.text
-    return seller.json()["id"]
+    return cast(str, seller.json()["id"])
 
 
 async def _patch_marketplace_token(

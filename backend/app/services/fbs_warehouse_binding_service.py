@@ -34,12 +34,16 @@ async def _get_binding_row(
     tenant_id: uuid.UUID,
     seller_id: uuid.UUID,
     wb_warehouse_id: int,
+    *,
+    for_update: bool = False,
 ) -> FbsWarehouseBinding | None:
     stmt = select(FbsWarehouseBinding).where(
         FbsWarehouseBinding.tenant_id == tenant_id,
         FbsWarehouseBinding.seller_id == seller_id,
         FbsWarehouseBinding.wb_warehouse_id == wb_warehouse_id,
     )
+    if for_update:
+        stmt = stmt.with_for_update()
     res = await session.execute(stmt)
     return res.scalar_one_or_none()
 
@@ -59,6 +63,7 @@ async def _has_active_fbs_reservations(
             FbsOrder.seller_id == seller_id,
         )
         .limit(1)
+        .with_for_update()
     )
     res = await session.execute(stmt)
     return res.scalar_one_or_none() is not None
@@ -137,7 +142,9 @@ async def upsert_binding(
     if await get_warehouse(session, tenant_id, wms_warehouse_id) is None:
         raise FbsWarehouseBindingError("warehouse_not_found")
 
-    existing = await _get_binding_row(session, tenant_id, seller_id, wb_warehouse_id)
+    existing = await _get_binding_row(
+        session, tenant_id, seller_id, wb_warehouse_id, for_update=True
+    )
     if existing is not None:
         old_wms = existing.wms_warehouse_id
         if old_wms != wms_warehouse_id:
@@ -190,7 +197,13 @@ async def disable_binding(
     seller_id: uuid.UUID,
     wb_warehouse_id: int,
 ) -> FbsWarehouseBinding:
-    row = await get_binding(session, tenant_id, seller_id, wb_warehouse_id)
+    if await _seller_in_tenant(session, tenant_id, seller_id) is None:
+        raise FbsWarehouseBindingError("seller_not_found")
+    row = await _get_binding_row(
+        session, tenant_id, seller_id, wb_warehouse_id, for_update=True
+    )
+    if row is None:
+        raise FbsWarehouseBindingError("binding_not_found")
     if await _has_active_fbs_reservations(
         session, tenant_id, seller_id, row.wms_warehouse_id
     ):

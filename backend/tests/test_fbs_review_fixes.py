@@ -9,6 +9,7 @@ from typing import Any
 
 import httpx
 import pytest
+from fbs_seed_helpers import DEFAULT_WB_WAREHOUSE_ID, seed_fbs_warehouse_binding
 from httpx import AsyncClient
 from sqlalchemy import select
 
@@ -47,7 +48,6 @@ from app.services.wb_marketplace_orders_service import (
     sync_order_statuses,
     upsert_order_from_wb_row,
 )
-from tests.fbs_seed_helpers import DEFAULT_WB_WAREHOUSE_ID, seed_fbs_warehouse_binding
 
 
 async def _register_ff_admin(async_client: AsyncClient) -> tuple[dict[str, str], str]:
