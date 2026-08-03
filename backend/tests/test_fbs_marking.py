@@ -70,7 +70,9 @@ async def _setup_seller_with_token(
     return seller_id, warehouse.json()["id"], tenant_id
 
 
-def _wb_order_row(*, order_id: int, wb_warehouse_id: int = DEFAULT_WB_WAREHOUSE_ID) -> dict[str, Any]:
+def _wb_order_row(
+    *, order_id: int, wb_warehouse_id: int = DEFAULT_WB_WAREHOUSE_ID
+) -> dict[str, Any]:
     return {
         "id": order_id,
         "rid": f"rid-{order_id}",

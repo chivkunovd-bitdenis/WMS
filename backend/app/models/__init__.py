@@ -7,8 +7,8 @@ from app.models.document_sequence import DocumentDisplaySequence, DocumentSequen
 from app.models.fbs_order import FbsOrder, FbsOrderMarking, FbsOrderReservation
 from app.models.fbs_stock_sync_item import FbsStockSyncItem
 from app.models.fbs_supply import FbsSupply
-from app.models.fbs_warehouse_binding import FbsWarehouseBinding
 from app.models.fbs_trbx import FbsTrbx
+from app.models.fbs_warehouse_binding import FbsWarehouseBinding
 from app.models.ff_staff_permissions import FfStaffPermissions
 from app.models.inbound_intake import (
     InboundIntakeBox,
@@ -68,8 +68,8 @@ __all__ = [
     "FbsOrderReservation",
     "FbsStockSyncItem",
     "FbsSupply",
-    "FbsWarehouseBinding",
     "FbsTrbx",
+    "FbsWarehouseBinding",
     "FfStaffPermissions",
     "InboundIntakeBox",
     "InboundIntakeBoxLine",

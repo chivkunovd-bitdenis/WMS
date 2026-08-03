@@ -536,6 +536,14 @@ async def test_promote_packed_requires_marking_ok(
             )
         )
         sorting = await get_or_create_sorting_location(session, tenant_id, warehouse_uuid)
+        await inventory_service.record_movement_and_adjust_balance(
+            session,
+            tenant_id=tenant_id,
+            product_id=product.id,
+            storage_location_id=sorting.id,
+            quantity_delta=1,
+            movement_type="inbound_intake",
+        )
         session.add(
             PackagingTaskLine(
                 task_id=task_id,

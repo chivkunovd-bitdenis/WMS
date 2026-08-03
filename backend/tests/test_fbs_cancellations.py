@@ -19,7 +19,6 @@ from app.models.fbs_order import (
     FBS_ORDER_STATUS_NEW,
     FBS_ORDER_STATUS_SORTED,
     RESERVE_STATUS_RELEASED,
-    RESERVE_STATUS_RESERVED,
     FbsOrder,
     FbsOrderReservation,
 )
