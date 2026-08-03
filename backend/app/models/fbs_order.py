@@ -9,6 +9,7 @@ from sqlalchemy import (
     Boolean,
     DateTime,
     ForeignKey,
+    Index,
     Integer,
     String,
     Text,
@@ -190,6 +191,11 @@ class FbsOrderMarking(Base):
             "kind",
             "value",
             name="uq_fbs_order_markings_order_kind_value",
+        ),
+        Index(
+            "uq_fbs_order_markings_marking_code_id",
+            "marking_code_id",
+            unique=True,
         ),
     )
 

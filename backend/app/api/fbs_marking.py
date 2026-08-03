@@ -45,17 +45,42 @@ def _marking_out(row: FbsOrderMarking) -> FbsOrderMarkingOut:
 
 
 def _raise_from_service(exc: marking_svc.FbsMarkingError) -> None:
-    if exc.code in {"order_not_found", "seller_not_found"}:
+    if exc.code in {"order_not_found", "seller_not_found", "supply_not_found"}:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=exc.code)
     if exc.code == "missing_marketplace_token":
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=exc.code)
     if exc.code in {"invalid_kind", "empty_value"}:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=exc.code)
-    if exc.code == "order_marking_frozen":
+    if exc.code in {"order_marking_frozen", "marking_code_already_assigned"}:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=exc.code)
+    if exc.code in {"packaging_task_not_found", "marking_codes_not_printed"}:
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=exc.code)
     if exc.code.startswith("wb_"):
         raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail=exc.code)
     raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=exc.code)
+
+
+@router.post(
+    "/supplies/{supply_id}/markings/assign-printed",
+    response_model=list[FbsOrderMarkingOut],
+)
+async def assign_printed_fbs_supply_markings(
+    supply_id: uuid.UUID,
+    user: Annotated[User, Depends(require_fulfillment_admin)],
+    session: Annotated[AsyncSession, Depends(get_db)],
+) -> list[FbsOrderMarkingOut]:
+    async with httpx.AsyncClient() as http_client:
+        try:
+            rows = await marking_svc.assign_printed_supply_markings(
+                session,
+                user.tenant_id,
+                supply_id,
+                http_client,
+            )
+        except marking_svc.FbsMarkingError as exc:
+            _raise_from_service(exc)
+    await session.commit()
+    return [_marking_out(row) for row in rows]
 
 
 @router.get("/{order_id}/markings", response_model=list[FbsOrderMarkingOut])

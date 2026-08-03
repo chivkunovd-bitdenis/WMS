@@ -283,6 +283,57 @@ async def test_fbs_marking_links_existing_marking_code(
     assert missing.json()["marking_code_id"] is None
 
 
+@pytest.mark.asyncio
+async def test_fbs_marking_rejects_marking_code_already_linked_to_another_order(
+    async_client: AsyncClient,
+    enable_wb_marketplace_marking_mock: None,
+) -> None:
+    headers, suffix = await _register_ff_admin(async_client)
+    seller_id, warehouse_id, tenant_id = await _setup_seller_with_token(
+        async_client, headers, suffix
+    )
+    cis = "01CIS-ONE-ORDER-ONLY"
+    async with SessionLocal() as session:
+        session.add(
+            MarkingCode(
+                tenant_id=tenant_id,
+                seller_id=uuid.UUID(seller_id),
+                cis_code=cis,
+                status=STATUS_AVAILABLE,
+            )
+        )
+        await session.commit()
+
+    first_order_id = await _create_order(
+        tenant_id,
+        uuid.UUID(seller_id),
+        uuid.UUID(warehouse_id),
+        order_id=930010,
+        status=FBS_ORDER_STATUS_PACKED,
+    )
+    second_order_id = await _create_order(
+        tenant_id,
+        uuid.UUID(seller_id),
+        uuid.UUID(warehouse_id),
+        order_id=930011,
+        status=FBS_ORDER_STATUS_PACKED,
+    )
+    first = await async_client.put(
+        f"/operations/fbs-orders/{first_order_id}/markings/sgtin",
+        headers=headers,
+        json={"value": cis},
+    )
+    assert first.status_code == 200, first.text
+
+    duplicate = await async_client.put(
+        f"/operations/fbs-orders/{second_order_id}/markings/sgtin",
+        headers=headers,
+        json={"value": cis},
+    )
+    assert duplicate.status_code == 409, duplicate.text
+    assert duplicate.json()["detail"] == "marking_code_already_assigned"
+
+
 # TC-NEW-FBS-MARK-004 — GET list all kinds; empty → []
 @pytest.mark.asyncio
 async def test_fbs_marking_get_list_all_kinds(

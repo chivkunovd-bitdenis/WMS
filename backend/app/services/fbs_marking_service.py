@@ -6,7 +6,8 @@ import uuid
 from typing import Any
 
 import httpx
-from sqlalchemy import select
+from sqlalchemy import exists, select
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.fbs_order import (
@@ -19,7 +20,10 @@ from app.models.fbs_order import (
     FbsOrder,
     FbsOrderMarking,
 )
-from app.models.marking_code import MarkingCode
+from app.models.fbs_supply import FbsSupply
+from app.models.marking_code import STATUS_PRINTED, MarkingCode
+from app.models.packaging_task import PackagingTaskLine
+from app.models.product import Product
 from app.services.wildberries_client import (
     WildberriesClientError,
     fetch_marketplace_order_meta,
@@ -188,12 +192,15 @@ async def _lookup_marking_code(
     tenant_id: uuid.UUID,
     seller_id: uuid.UUID,
     cis_code: str,
+    for_update: bool = False,
 ) -> MarkingCode | None:
     stmt = select(MarkingCode).where(
         MarkingCode.tenant_id == tenant_id,
         MarkingCode.cis_code == cis_code,
         MarkingCode.seller_id == seller_id,
     )
+    if for_update:
+        stmt = stmt.with_for_update()
     result = await session.execute(stmt)
     return result.scalar_one_or_none()
 
@@ -238,6 +245,27 @@ async def upsert_order_marking(
     if order.status not in FBS_ORDER_MARKING_WRITE_STATUSES:
         raise FbsMarkingError("order_marking_frozen")
 
+    code: MarkingCode | None = None
+    if kind_norm == MARKING_KIND_SGTIN:
+        code = await _lookup_marking_code(
+            session,
+            tenant_id=tenant_id,
+            seller_id=order.seller_id,
+            cis_code=value_norm,
+            for_update=True,
+        )
+        if code is not None:
+            linked_elsewhere = (
+                await session.execute(
+                    select(FbsOrderMarking.id).where(
+                        FbsOrderMarking.marking_code_id == code.id,
+                        FbsOrderMarking.order_id != order_id,
+                    )
+                )
+            ).first()
+            if linked_elsewhere is not None:
+                raise FbsMarkingError("marking_code_already_assigned")
+
     token = await _require_marketplace_token(session, tenant_id, order.seller_id)
     try:
         await put_marketplace_order_meta(
@@ -256,28 +284,27 @@ async def upsert_order_marking(
         FbsOrderMarking.value == value_norm,
     )
     result = await session.execute(stmt)
-    row = result.scalar_one_or_none()
-    if row is None:
-        row = FbsOrderMarking(
-            order_id=order_id,
-            kind=kind_norm,
-            value=value_norm,
-            check_status=CHECK_STATUS_NEW,
-        )
-        session.add(row)
-    else:
-        row.check_status = CHECK_STATUS_NEW
-
-    if kind_norm == MARKING_KIND_SGTIN:
-        code = await _lookup_marking_code(
-            session,
-            tenant_id=tenant_id,
-            seller_id=order.seller_id,
-            cis_code=value_norm,
-        )
-        row.marking_code_id = code.id if code is not None else None
-
-    await session.flush()
+    existing_row = result.scalar_one_or_none()
+    try:
+        # Keep both the new row and its code relation inside the savepoint.
+        # The unique conflict is on ``marking_code_id``, not merely row creation.
+        async with session.begin_nested():
+            if existing_row is None:
+                row = FbsOrderMarking(
+                    order_id=order_id,
+                    kind=kind_norm,
+                    value=value_norm,
+                    check_status=CHECK_STATUS_NEW,
+                )
+                session.add(row)
+            else:
+                row = existing_row
+                row.check_status = CHECK_STATUS_NEW
+            if kind_norm == MARKING_KIND_SGTIN:
+                row.marking_code_id = code.id if code is not None else None
+            await session.flush()
+    except IntegrityError as exc:
+        raise FbsMarkingError("marking_code_already_assigned") from exc
 
     if order.supply_id is not None:
         from app.services.fbs_packaging_integration_service import (
@@ -334,3 +361,134 @@ async def sync_order_marking_statuses(
         )
 
     return markings
+
+
+async def assign_printed_supply_markings(
+    session: AsyncSession,
+    tenant_id: uuid.UUID,
+    supply_id: uuid.UUID,
+    http_client: httpx.AsyncClient,
+) -> list[FbsOrderMarking]:
+    """Assign already printed CZ codes one-to-one to FBS orders and push them to WB."""
+    supply = (
+        await session.execute(
+            select(FbsSupply).where(
+                FbsSupply.id == supply_id,
+                FbsSupply.tenant_id == tenant_id,
+            )
+        )
+    ).scalar_one_or_none()
+    if supply is None:
+        raise FbsMarkingError("supply_not_found")
+    if supply.packaging_task_id is None:
+        raise FbsMarkingError("packaging_task_not_found")
+
+    orders = list(
+        (
+            await session.execute(
+                select(FbsOrder)
+                .join(Product, Product.id == FbsOrder.product_id)
+                .where(
+                    FbsOrder.tenant_id == tenant_id,
+                    FbsOrder.supply_id == supply_id,
+                    Product.requires_honest_sign.is_(True),
+                )
+                .order_by(FbsOrder.created_at.asc(), FbsOrder.id.asc())
+                .with_for_update()
+            )
+        )
+        .scalars()
+        .all()
+    )
+    required_orders: dict[uuid.UUID, list[FbsOrder]] = {}
+    for order in orders:
+        if order.product_id is None:
+            continue
+        existing = (
+            await session.execute(
+                select(FbsOrderMarking.id).where(
+                    FbsOrderMarking.order_id == order.id,
+                    FbsOrderMarking.kind == MARKING_KIND_SGTIN,
+                )
+            )
+        ).first()
+        if existing is None:
+            required_orders.setdefault(order.product_id, []).append(order)
+
+    if not required_orders:
+        return []
+
+    line_rows = (
+        await session.execute(
+            select(PackagingTaskLine.id, PackagingTaskLine.product_id).where(
+                PackagingTaskLine.task_id == supply.packaging_task_id,
+                PackagingTaskLine.product_id.in_(required_orders),
+            )
+        )
+    ).all()
+    lines_by_product: dict[uuid.UUID, list[uuid.UUID]] = {}
+    for line_id, product_id in line_rows:
+        lines_by_product.setdefault(product_id, []).append(line_id)
+
+    token = await _require_marketplace_token(session, tenant_id, supply.seller_id)
+    assigned: list[FbsOrderMarking] = []
+    for product_id, product_orders in required_orders.items():
+        line_ids = lines_by_product.get(product_id, [])
+        if not line_ids:
+            raise FbsMarkingError("marking_codes_not_printed")
+        already_linked = exists(
+            select(FbsOrderMarking.id).where(
+                FbsOrderMarking.marking_code_id == MarkingCode.id
+            )
+        )
+        codes = list(
+            (
+                await session.execute(
+                    select(MarkingCode)
+                    .where(
+                        MarkingCode.tenant_id == tenant_id,
+                        MarkingCode.seller_id == supply.seller_id,
+                        MarkingCode.product_id == product_id,
+                        MarkingCode.packaging_task_line_id.in_(line_ids),
+                        MarkingCode.status == STATUS_PRINTED,
+                        ~already_linked,
+                    )
+                    .order_by(MarkingCode.printed_at.asc(), MarkingCode.id.asc())
+                    .limit(len(product_orders))
+                    .with_for_update(skip_locked=True)
+                )
+            )
+            .scalars()
+            .all()
+        )
+        if len(codes) < len(product_orders):
+            raise FbsMarkingError("marking_codes_not_printed")
+
+        for order, code in zip(product_orders, codes, strict=True):
+            try:
+                await put_marketplace_order_meta(
+                    http_client,
+                    api_token=token,
+                    order_id=int(order.wb_order_id),
+                    kind=MARKING_KIND_SGTIN,
+                    value=code.cis_code,
+                )
+            except WildberriesClientError as exc:
+                raise FbsMarkingError(_wb_error_code(exc)) from exc
+            row = FbsOrderMarking(
+                order_id=order.id,
+                kind=MARKING_KIND_SGTIN,
+                value=code.cis_code,
+                check_status=CHECK_STATUS_NEW,
+                marking_code_id=code.id,
+            )
+            session.add(row)
+            assigned.append(row)
+
+    await session.flush()
+    # WB validates SGTIN asynchronously.  Poll immediately after all PUTs so
+    # a synchronous/mock validation result can promote the FBS supply in the
+    # same operator action; a still-pending result remains ``new/checking``.
+    for order_id in {row.order_id for row in assigned}:
+        await sync_order_marking_statuses(session, tenant_id, order_id, http_client)
+    return assigned

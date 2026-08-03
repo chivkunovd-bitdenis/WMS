@@ -29,6 +29,7 @@ from app.models.fbs_supply import (
     FBS_SUPPLY_STATUS_PACKED,
     FbsSupply,
 )
+from app.models.fbs_trbx import FbsTrbx
 from app.services.wildberries_client import (
     WildberriesClientError,
     deliver_marketplace_supply,
@@ -194,6 +195,18 @@ async def deliver_supply(
         order.trbx_id is None for order in orders
     ):
         raise FbsShipmentError("trbx_required")
+    if supply.delivery_type == FBS_DELIVERY_TYPE_PVZ:
+        trbxes = list(
+            (
+                await session.execute(
+                    select(FbsTrbx)
+                    .where(FbsTrbx.supply_id == supply.id)
+                    .with_for_update()
+                )
+            ).scalars()
+        )
+        if any(trbx.packaging_box_id is None for trbx in trbxes):
+            raise FbsShipmentError("packaging_box_required")
 
     token = await _require_marketplace_token(session, tenant_id, supply.seller_id)
     try:

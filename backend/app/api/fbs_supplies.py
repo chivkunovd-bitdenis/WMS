@@ -112,6 +112,7 @@ class FbsTrbxOut(BaseModel):
     id: str
     wb_trbx_id: str
     packaging_box_id: str | None
+    packaging_box_barcode: str | None = None
     length_mm: int | None
     width_mm: int | None
     height_mm: int | None
@@ -126,6 +127,10 @@ class FbsSupplyStatusBody(BaseModel):
 class FbsTrbxBindBoxBody(BaseModel):
     trbx_id: uuid.UUID
     packaging_box_id: uuid.UUID
+
+
+class FbsTrbxCreateOrBindBoxBody(BaseModel):
+    barcode: str | None = Field(default=None, max_length=64)
 
 
 class FbsTrbxListOut(BaseModel):
@@ -183,6 +188,7 @@ def _trbx_out(trbx: pvz_svc.TrbxMeta) -> FbsTrbxOut:
         packaging_box_id=(
             str(trbx.packaging_box_id) if trbx.packaging_box_id is not None else None
         ),
+        packaging_box_barcode=trbx.packaging_box_barcode,
         length_mm=trbx.length_mm,
         width_mm=trbx.width_mm,
         height_mm=trbx.height_mm,
@@ -213,7 +219,11 @@ def _raise_from_pvz_service(exc: pvz_svc.FbsShipmentPvzError) -> None:
         "invalid_sticker_path",
     }:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=exc.code)
-    if exc.code in {"supply_trbx_locked", "packaging_task_not_found"}:
+    if exc.code in {
+        "supply_trbx_locked",
+        "packaging_task_not_found",
+        "packaging_box_already_bound",
+    }:
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=exc.code)
     if exc.code.startswith("wb_"):
         raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail=exc.code)
@@ -237,6 +247,7 @@ def _raise_from_shipment_service(exc: shipment_svc.FbsShipmentError) -> None:
         "marking_required",
         "invalid_barcode_path",
         "trbx_required",
+        "packaging_box_required",
     }:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=exc.code)
     if exc.code == "supply_bad_status":
@@ -430,6 +441,7 @@ async def create_fbs_supply_trbx(
                 id=trbx.id,
                 wb_trbx_id=trbx.wb_trbx_id,
                 packaging_box_id=trbx.packaging_box_id,
+                packaging_box_barcode=None,
                 length_mm=trbx.length_mm,
                 width_mm=trbx.width_mm,
                 height_mm=trbx.height_mm,
@@ -493,6 +505,7 @@ async def bind_orders_to_fbs_trbx(
             id=trbx.id,
             wb_trbx_id=trbx.wb_trbx_id,
             packaging_box_id=trbx.packaging_box_id,
+            packaging_box_barcode=None,
             length_mm=trbx.length_mm,
             width_mm=trbx.width_mm,
             height_mm=trbx.height_mm,
@@ -546,6 +559,7 @@ async def bind_fbs_packaging_box_to_trbx(
             id=trbx.id,
             wb_trbx_id=trbx.wb_trbx_id,
             packaging_box_id=trbx.packaging_box_id,
+            packaging_box_barcode=None,
             length_mm=trbx.length_mm,
             width_mm=trbx.width_mm,
             height_mm=trbx.height_mm,
@@ -553,6 +567,28 @@ async def bind_fbs_packaging_box_to_trbx(
             sticker_file=trbx.sticker_file,
         )
     )
+
+
+@router.post("/{supply_id}/trbx/{trbx_id}/box", response_model=FbsTrbxOut)
+async def create_or_bind_fbs_packaging_box(
+    supply_id: uuid.UUID,
+    trbx_id: uuid.UUID,
+    body: FbsTrbxCreateOrBindBoxBody,
+    user: Annotated[User, Depends(require_fulfillment_admin)],
+    session: Annotated[AsyncSession, Depends(get_db)],
+) -> FbsTrbxOut:
+    try:
+        trbx = await pvz_svc.create_or_bind_packaging_box_to_trbx(
+            session,
+            user.tenant_id,
+            supply_id,
+            trbx_id,
+            barcode=body.barcode,
+        )
+    except pvz_svc.FbsShipmentPvzError as exc:
+        _raise_from_pvz_service(exc)
+    await session.commit()
+    return _trbx_out(pvz_svc._trbx_meta(trbx))
 
 
 @router.post("/{supply_id}/deliver", response_model=FbsSupplyOut)

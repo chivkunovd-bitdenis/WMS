@@ -18,6 +18,7 @@ from app.db.session import SessionLocal
 from app.models.fbs_order import FBS_ORDER_STATUS_IN_DELIVERY, FbsOrder
 from app.models.fbs_supply import FBS_SUPPLY_STATUS_IN_DELIVERY, FbsSupply
 from app.models.fbs_trbx import FbsTrbx
+from app.models.warehouse_box import WarehouseBox
 from app.services.wildberries_client import (
     WildberriesClientError,
     fetch_marketplace_trbx_stickers,
@@ -421,6 +422,26 @@ async def test_fbs_pvz_deliver_requires_trbx_and_ok_with_trbx(
         },
     )
     assert bind.status_code == 200, bind.text
+
+    no_physical_box = await async_client.post(
+        f"/operations/fbs-supplies/{supply['id']}/deliver",
+        headers=headers,
+    )
+    assert no_physical_box.status_code == 400
+    assert no_physical_box.json()["detail"] == "packaging_box_required"
+
+    async with SessionLocal() as session:
+        box = WarehouseBox(
+            tenant_id=tenant_id,
+            warehouse_id=uuid.UUID(warehouse_id),
+            internal_barcode=f"WHB-PVZ-{uuid.uuid4().hex}",
+        )
+        session.add(box)
+        trbx = await session.get(FbsTrbx, uuid.UUID(trbx_id))
+        assert trbx is not None
+        await session.flush()
+        trbx.packaging_box_id = box.id
+        await session.commit()
 
     deliver = await async_client.post(
         f"/operations/fbs-supplies/{supply['id']}/deliver",

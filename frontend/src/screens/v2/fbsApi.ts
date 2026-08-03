@@ -89,6 +89,7 @@ export type FbsSupply = {
   barcode_file: string | null // base64 PNG QR поставки
   document_number: string | null
   display_number: string | null
+  packaging_task_id: string | null
   created_at_wb: string | null
   delivered_at: string | null
   created_at: string
@@ -178,6 +179,19 @@ export async function deliverFbsSupply(
   return jsonOrThrow<FbsSupply>(res)
 }
 
+export async function startFbsSupplyAssembly(
+  token: string,
+  ah: (t: string) => Record<string, string>,
+  id: string,
+): Promise<FbsSupply> {
+  const res = await fetch(apiUrl(`/operations/fbs-supplies/${id}/status`), {
+    method: 'PUT',
+    headers: { ...ah(token), 'Content-Type': 'application/json' },
+    body: JSON.stringify({ status: 'assembling' }),
+  })
+  return jsonOrThrow<FbsSupply>(res)
+}
+
 /** Delivery is allowed only after packaging task completed (supply.status === packed). */
 export function canDeliverFbsSupply(supply: FbsSupply): boolean {
   return supply.status === 'packed'
@@ -216,11 +230,27 @@ export type FbsTrbx = {
   id: string
   wb_trbx_id: string
   packaging_box_id: string | null
+  packaging_box_barcode?: string | null
   length_mm: number | null
   width_mm: number | null
   height_mm: number | null
   weight_g: number | null
   sticker_file: string | null // base64 PNG
+}
+
+export async function createOrBindFbsPackagingBox(
+  token: string,
+  ah: (t: string) => Record<string, string>,
+  supplyId: string,
+  trbxId: string,
+  barcode?: string,
+): Promise<FbsTrbx> {
+  const res = await fetch(apiUrl(`/operations/fbs-supplies/${supplyId}/trbx/${trbxId}/box`), {
+    method: 'POST',
+    headers: { ...ah(token), 'Content-Type': 'application/json' },
+    body: JSON.stringify({ barcode: barcode?.trim() || null }),
+  })
+  return jsonOrThrow<FbsTrbx>(res)
 }
 
 export async function createFbsTrbx(
@@ -292,6 +322,18 @@ export type FbsOrderMarking = {
   value: string
   check_status: string // new | checking | ok | error | no_check
   marking_code_id: string | null
+}
+
+export async function assignFbsSupplyMarkings(
+  token: string,
+  ah: (t: string) => Record<string, string>,
+  supplyId: string,
+): Promise<FbsOrderMarking[]> {
+  const res = await fetch(apiUrl(`/operations/fbs-orders/supplies/${supplyId}/markings/assign-printed`), {
+    method: 'POST',
+    headers: { ...ah(token) },
+  })
+  return jsonOrThrow<FbsOrderMarking[]>(res)
 }
 
 export async function getFbsOrderMarkings(

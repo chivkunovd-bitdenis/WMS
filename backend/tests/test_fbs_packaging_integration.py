@@ -16,6 +16,7 @@ from app.models.fbs_order import (
     FBS_ORDER_STATUS_IN_SUPPLY,
     FBS_ORDER_STATUS_NEW,
     FbsOrder,
+    FbsOrderMarking,
     FbsOrderReservation,
 )
 from app.models.fbs_supply import (
@@ -26,7 +27,9 @@ from app.models.fbs_supply import (
 )
 from app.models.fbs_trbx import FbsTrbx
 from app.models.inventory_movement import MOVEMENT_TYPE_FBS_SHIPMENT, InventoryMovement
+from app.models.marking_code import STATUS_PRINTED, MarkingCode
 from app.models.packaging_task import PackagingTask, PackagingTaskLine
+from app.models.product import Product
 from app.models.tenant import Tenant
 from app.models.warehouse import Warehouse
 from app.models.warehouse_box import WarehouseBox
@@ -38,6 +41,7 @@ from app.services.wb_marketplace_orders_service import (
     _release_reservation,
     upsert_order_from_wb_row,
 )
+from app.services.wildberries_client import reset_mock_marketplace_order_meta
 
 
 async def _register_ff_admin(async_client: AsyncClient) -> tuple[dict[str, str], str]:
@@ -329,6 +333,192 @@ async def test_fbs_bind_packaging_box_to_trbx(
         trbx = await session.get(FbsTrbx, uuid.UUID(trbx_id))
         assert trbx is not None
         assert str(trbx.packaging_box_id) == box_id
+
+
+@pytest.mark.asyncio
+async def test_fbs_pvz_create_or_scan_box_binds_once(
+    async_client: AsyncClient,
+    enable_wb_marketplace_supplies_mock: None,
+) -> None:
+    headers, suffix = await _register_ff_admin(async_client)
+    seller_id, warehouse_id = await _setup_seller_with_token(async_client, headers, suffix)
+    tenant_id = uuid.UUID((await async_client.get("/auth/me", headers=headers)).json()["tenant_id"])
+    supply_id, _ = await _create_supply_with_orders(
+        async_client, headers, seller_id, warehouse_id, tenant_id, delivery_type="pvz"
+    )
+    trbx_resp = await async_client.post(
+        f"/operations/fbs-supplies/{supply_id}/trbx",
+        headers=headers,
+        json={"count": 2},
+    )
+    assert trbx_resp.status_code == 201, trbx_resp.text
+    first_trbx, second_trbx = trbx_resp.json()["trbxes"]
+    assembling = await async_client.put(
+        f"/operations/fbs-supplies/{supply_id}/status",
+        headers=headers,
+        json={"status": FBS_SUPPLY_STATUS_ASSEMBLING},
+    )
+    assert assembling.status_code == 200, assembling.text
+
+    created = await async_client.post(
+        f"/operations/fbs-supplies/{supply_id}/trbx/{first_trbx['id']}/box",
+        headers=headers,
+        json={},
+    )
+    assert created.status_code == 200, created.text
+    barcode = created.json()["packaging_box_barcode"]
+    assert isinstance(barcode, str) and barcode.startswith("WHB-")
+    assert created.json()["packaging_box_id"] is not None
+
+    duplicate = await async_client.post(
+        f"/operations/fbs-supplies/{supply_id}/trbx/{second_trbx['id']}/box",
+        headers=headers,
+        json={"barcode": barcode},
+    )
+    assert duplicate.status_code == 409, duplicate.text
+    assert duplicate.json()["detail"] == "packaging_box_already_bound"
+
+
+@pytest.mark.asyncio
+async def test_fbs_assigns_printed_codes_from_its_packaging_task_only_once(
+    async_client: AsyncClient,
+    enable_wb_marketplace_supplies_mock: None,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(settings, "e2e_mock_wb_marketplace_marking", True)
+    reset_mock_marketplace_order_meta()
+    headers, suffix = await _register_ff_admin(async_client)
+    seller_id, warehouse_id = await _setup_seller_with_token(async_client, headers, suffix)
+    tenant_id = uuid.UUID((await async_client.get("/auth/me", headers=headers)).json()["tenant_id"])
+    supply_id, _ = await _create_supply_with_orders(
+        async_client, headers, seller_id, warehouse_id, tenant_id
+    )
+    async with SessionLocal() as session:
+        orders = list(
+            (
+                await session.execute(
+                    select(FbsOrder).where(FbsOrder.supply_id == uuid.UUID(supply_id))
+                )
+            ).scalars()
+        )
+        product_id = orders[0].product_id
+        assert product_id is not None
+        product = await session.get(Product, product_id)
+        assert product is not None
+        product.requires_honest_sign = True
+        sorting = await get_or_create_sorting_location(
+            session, tenant_id, uuid.UUID(warehouse_id)
+        )
+        for current_product_id in {order.product_id for order in orders}:
+            assert current_product_id is not None
+            await inventory_service.record_movement_and_adjust_balance(
+                session,
+                tenant_id=tenant_id,
+                product_id=current_product_id,
+                storage_location_id=sorting.id,
+                quantity_delta=5,
+                movement_type="inbound_intake",
+            )
+        await session.commit()
+    assembling = await async_client.put(
+        f"/operations/fbs-supplies/{supply_id}/status",
+        headers=headers,
+        json={"status": FBS_SUPPLY_STATUS_ASSEMBLING},
+    )
+    assert assembling.status_code == 200, assembling.text
+
+    async with SessionLocal() as session:
+        supply = await session.get(FbsSupply, uuid.UUID(supply_id))
+        assert supply is not None and supply.packaging_task_id is not None
+        lines = list(
+            (
+                await session.execute(
+                    select(PackagingTaskLine).where(
+                        PackagingTaskLine.task_id == supply.packaging_task_id
+                    )
+                )
+            ).scalars()
+        )
+        line = next(current for current in lines if current.product_id == product_id)
+        for current in lines:
+            current.qty_packed_in_task = current.qty_total
+        for value in ("01FBS-PRINTED-1", "01FBS-PRINTED-2"):
+            session.add(
+                MarkingCode(
+                    tenant_id=tenant_id,
+                    seller_id=uuid.UUID(seller_id),
+                    product_id=product_id,
+                    packaging_task_line_id=line.id,
+                    cis_code=value,
+                    status=STATUS_PRINTED,
+                )
+            )
+        await session.commit()
+
+    async def wb_meta_ok(
+        client: object,
+        *,
+        api_token: str,
+        order_id: int,
+        marketplace_api_base: str | None = None,
+    ) -> dict[str, Any]:
+        return {
+            "sgtins": [
+                {"value": "01FBS-PRINTED-1", "checkStatus": "ok"},
+                {"value": "01FBS-PRINTED-2", "checkStatus": "ok"},
+            ]
+        }
+
+    monkeypatch.setattr(
+        "app.services.fbs_marking_service.fetch_marketplace_order_meta", wb_meta_ok
+    )
+
+    assigned = await async_client.post(
+        f"/operations/fbs-orders/supplies/{supply_id}/markings/assign-printed",
+        headers=headers,
+    )
+    assert assigned.status_code == 200, assigned.text
+    assert len(assigned.json()) == 2
+    assert {row["value"] for row in assigned.json()} == {
+        "01FBS-PRINTED-1",
+        "01FBS-PRINTED-2",
+    }
+    assert {row["check_status"] for row in assigned.json()} == {"ok"}
+
+    repeated = await async_client.post(
+        f"/operations/fbs-orders/supplies/{supply_id}/markings/assign-printed",
+        headers=headers,
+    )
+    assert repeated.status_code == 200, repeated.text
+    assert repeated.json() == []
+
+    async with SessionLocal() as session:
+        code_statuses = list(
+            (
+                await session.execute(
+                    select(MarkingCode.status).where(
+                        MarkingCode.cis_code.in_(("01FBS-PRINTED-1", "01FBS-PRINTED-2"))
+                    )
+                )
+            ).scalars()
+        )
+        links = list(
+            (
+                await session.execute(
+                    select(FbsOrderMarking).where(
+                        FbsOrderMarking.value.in_(("01FBS-PRINTED-1", "01FBS-PRINTED-2"))
+                    )
+                )
+            ).scalars()
+        )
+    assert set(code_statuses) == {STATUS_PRINTED}
+    assert len({row.marking_code_id for row in links}) == 2
+
+    promoted = await async_client.get(
+        f"/operations/fbs-supplies/{supply_id}", headers=headers
+    )
+    assert promoted.status_code == 200, promoted.text
+    assert promoted.json()["status"] == FBS_SUPPLY_STATUS_PACKED
 
 
 # TC-NEW-FBS-PACKINT-003

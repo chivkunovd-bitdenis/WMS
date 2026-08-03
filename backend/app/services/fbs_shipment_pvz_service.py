@@ -11,6 +11,7 @@ from typing import Any
 
 import httpx
 from sqlalchemy import select
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
@@ -25,6 +26,7 @@ from app.models.fbs_supply import (
 from app.models.fbs_trbx import FbsTrbx
 from app.models.packaging_task import PackagingTask
 from app.models.warehouse_box import WarehouseBox
+from app.services import warehouse_box_service as warehouse_box_svc
 from app.services.wildberries_client import (
     WildberriesClientError,
     add_orders_to_marketplace_trbx,
@@ -56,6 +58,7 @@ class TrbxMeta:
     id: uuid.UUID
     wb_trbx_id: str
     packaging_box_id: uuid.UUID | None
+    packaging_box_barcode: str | None
     length_mm: int | None
     width_mm: int | None
     height_mm: int | None
@@ -91,7 +94,9 @@ async def _get_supply(
         FbsSupply.tenant_id == tenant_id,
     )
     if with_trbxes:
-        stmt = stmt.options(selectinload(FbsSupply.trbxes))
+        stmt = stmt.options(
+            selectinload(FbsSupply.trbxes).selectinload(FbsTrbx.packaging_box)
+        )
     result = await session.execute(stmt)
     return result.scalar_one_or_none()
 
@@ -193,6 +198,9 @@ def _trbx_meta(trbx: FbsTrbx) -> TrbxMeta:
         id=trbx.id,
         wb_trbx_id=trbx.wb_trbx_id,
         packaging_box_id=trbx.packaging_box_id,
+        packaging_box_barcode=(
+            trbx.packaging_box.internal_barcode if trbx.packaging_box is not None else None
+        ),
         length_mm=trbx.length_mm,
         width_mm=trbx.width_mm,
         height_mm=trbx.height_mm,
@@ -380,8 +388,63 @@ async def bind_packaging_box_to_trbx(
     if box is None:
         raise FbsShipmentPvzError("packaging_box_not_found")
 
+    already_bound = (
+        await session.execute(
+            select(FbsTrbx.id).where(
+                FbsTrbx.packaging_box_id == box.id,
+                FbsTrbx.id != trbx.id,
+            )
+        )
+    ).first()
+    if already_bound is not None:
+        raise FbsShipmentPvzError("packaging_box_already_bound")
+
     trbx.packaging_box_id = box.id
     await session.flush()
+    return trbx
+
+
+async def create_or_bind_packaging_box_to_trbx(
+    session: AsyncSession,
+    tenant_id: uuid.UUID,
+    supply_id: uuid.UUID,
+    trbx_id: uuid.UUID,
+    *,
+    barcode: str | None = None,
+) -> FbsTrbx:
+    """Create a physical WMS box, or resolve a scanned one, and bind it to a WB trbx."""
+    supply = await _get_supply(session, tenant_id, supply_id, with_trbxes=True)
+    if supply is None:
+        raise FbsShipmentPvzError("supply_not_found")
+    _require_pvz_supply(supply)
+    _require_trbx_mutable(supply)
+    if supply.packaging_task_id is None:
+        raise FbsShipmentPvzError("packaging_task_not_found")
+
+    raw = (barcode or "").strip()
+    if raw:
+        box = await warehouse_box_svc.get_by_barcode(session, tenant_id, raw)
+        if box is None or box.warehouse_id != supply.warehouse_id:
+            raise FbsShipmentPvzError("packaging_box_not_found")
+    else:
+        box = await warehouse_box_svc.create_warehouse_box(
+            session,
+            tenant_id,
+            warehouse_id=supply.warehouse_id,
+        )
+
+    try:
+        async with session.begin_nested():
+            trbx = await bind_packaging_box_to_trbx(
+                session,
+                tenant_id,
+                supply_id,
+                trbx_id,
+                box.id,
+            )
+    except IntegrityError as exc:
+        raise FbsShipmentPvzError("packaging_box_already_bound") from exc
+    trbx.packaging_box = box
     return trbx
 
 
