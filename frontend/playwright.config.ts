@@ -16,6 +16,9 @@ const e2eWebPort = Number(process.env.E2E_WEB_PORT ?? 5174);
 
 export default defineConfig({
   testDir: './tests-e2e',
+  // Requires a separately started Docker WMS + WB emulator stack; it belongs
+  // exclusively to playwright.live-fbs.config.ts, never to regular CI e2e.
+  testIgnore: 'ff-fbs-live.spec.ts',
   timeout: 60_000,
   expect: { timeout: 10_000 },
   retries: process.env.CI ? 2 : 0,
