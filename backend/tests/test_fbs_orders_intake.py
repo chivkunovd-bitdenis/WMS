@@ -4,7 +4,7 @@ import asyncio
 import time
 import uuid
 from datetime import datetime, timedelta
-from typing import Any, cast
+from typing import Any
 
 import pytest
 from httpx import AsyncClient
@@ -211,7 +211,7 @@ async def _wait_for_job(
         assert job.status_code == 200
         body = job.json()
         if body["status"] in ("done", "failed"):
-            return cast(dict[str, Any], body)
+            return body
     raise AssertionError("sync job did not finish")
 
 
@@ -468,11 +468,11 @@ async def test_fbs_order_status_sync_releases_reserve_on_cancel(
         assert result["statuses_updated"] == 1
 
     async with SessionLocal() as session:
-        loaded_order = await session.get(FbsOrder, order_id)
-        assert loaded_order is not None
-        assert loaded_order.wb_status == "canceled"
-        assert loaded_order.status == "cancelled"
-        assert loaded_order.reserve_status == RESERVE_STATUS_RELEASED
+        order = await session.get(FbsOrder, order_id)
+        assert order is not None
+        assert order.wb_status == "canceled"
+        assert order.status == "cancelled"
+        assert order.reserve_status == RESERVE_STATUS_RELEASED
         res_stmt = select(func.count()).select_from(FbsOrderReservation).where(
             FbsOrderReservation.fbs_order_id == order_id
         )
@@ -614,9 +614,9 @@ async def test_fbs_cancelled_order_not_re_reserved_on_upsert(
             )
 
     async with SessionLocal() as session:
-        loaded_order = await session.get(FbsOrder, order_id)
-        assert loaded_order is not None
-        assert loaded_order.status == "cancelled"
+        order = await session.get(FbsOrder, order_id)
+        assert order is not None
+        assert order.status == "cancelled"
         res_stmt = select(func.count()).select_from(FbsOrderReservation).where(
             FbsOrderReservation.fbs_order_id == order_id
         )
@@ -970,10 +970,10 @@ async def test_fbs_order_status_sync_releases_reserve_on_defect(
             await sync_seller_orders(session, tenant_id, seller_uuid, http_client)
 
     async with SessionLocal() as session:
-        loaded_order = await session.get(FbsOrder, order_id)
-        assert loaded_order is not None
-        assert loaded_order.status == "defect"
-        assert loaded_order.reserve_status == RESERVE_STATUS_RELEASED
+        order = await session.get(FbsOrder, order_id)
+        assert order is not None
+        assert order.status == "defect"
+        assert order.reserve_status == RESERVE_STATUS_RELEASED
         res_stmt = select(func.count()).select_from(FbsOrderReservation).where(
             FbsOrderReservation.fbs_order_id == order_id
         )

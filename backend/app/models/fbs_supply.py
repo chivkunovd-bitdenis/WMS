@@ -11,6 +11,7 @@ from app.models.base import Base
 
 if TYPE_CHECKING:
     from app.models.fbs_order import FbsOrder
+    from app.models.fbs_print_asset import FbsPrintAsset
     from app.models.fbs_trbx import FbsTrbx
     from app.models.seller import Seller
     from app.models.tenant import Tenant
@@ -55,6 +56,27 @@ class FbsSupply(Base):
     barcode_file: Mapped[str | None] = mapped_column(String(512), nullable=True)
     document_number: Mapped[str | None] = mapped_column(String(64), nullable=True)
     display_number: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    planned_destination_office_id: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    planned_destination_name: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    planned_destination_zone: Mapped[str | None] = mapped_column(String(128), nullable=True)
+    last_wb_sync_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    barcode_asset_id: Mapped[uuid.UUID | None] = mapped_column(
+        Uuid(as_uuid=True),
+        # The database FK is created in migration 0069 under this name.  Keep
+        # it deferred in SQLAlchemy metadata: print assets point back to
+        # supplies, so PostgreSQL needs an ALTER TABLE step when dropping the
+        # test schema.
+        ForeignKey(
+            "fbs_print_assets.id",
+            name="fk_fbs_supplies_barcode_asset_id",
+            ondelete="SET NULL",
+            use_alter=True,
+        ),
+        nullable=True,
+        index=True,
+    )
     packaging_task_id: Mapped[uuid.UUID | None] = mapped_column(
         Uuid(as_uuid=True),
         ForeignKey("packaging_tasks.id", ondelete="SET NULL"),
@@ -88,4 +110,13 @@ class FbsSupply(Base):
         "FbsTrbx",
         back_populates="supply",
         cascade="all, delete-orphan",
+    )
+    barcode_asset: Mapped[FbsPrintAsset | None] = relationship(
+        "FbsPrintAsset",
+        foreign_keys=[barcode_asset_id],
+    )
+    print_assets: Mapped[list[FbsPrintAsset]] = relationship(
+        "FbsPrintAsset",
+        back_populates="supply",
+        foreign_keys="FbsPrintAsset.fbs_supply_id",
     )

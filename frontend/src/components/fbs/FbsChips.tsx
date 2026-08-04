@@ -1,5 +1,44 @@
+import { useMemo, useSyncExternalStore } from 'react'
 import { Chip, Tooltip } from '@mui/material'
 import type { ChipProps } from '@mui/material'
+
+// Настенные часы как внешний источник: React подписывается на них штатно, без setState
+// внутри эффекта и без вызова Date.now() в теле рендера. Снимок округляем до шага тика,
+// иначе useSyncExternalStore будет считать значение изменившимся на каждом рендере.
+const CLOCK_TICK_MS = 30_000
+const readClock = () => Math.floor(Date.now() / CLOCK_TICK_MS) * CLOCK_TICK_MS
+
+// eslint-disable-next-line react-refresh/only-export-components -- pure clock arithmetic is covered by FbsChips.test.ts.
+export function resolveDeadlineNow(
+  serverNow: string | null | undefined,
+  clientNow: number,
+  clientAnchor: number,
+) {
+  const serverMs = serverNow ? Date.parse(serverNow) : Number.NaN
+  return Number.isFinite(serverMs) ? serverMs + (clientNow - clientAnchor) : clientNow
+}
+
+function createDeadlineClock(serverNow: string | null | undefined) {
+  let clientAnchor: number | null = null
+  const serverMs = serverNow ? Date.parse(serverNow) : Number.NaN
+
+  const getSnapshot = () => {
+    const clientNow = readClock()
+    if (clientAnchor === null) return clientNow
+    return Number.isFinite(serverMs) ? serverMs + (clientNow - clientAnchor) : clientNow
+  }
+
+  return {
+    subscribe(onStoreChange: () => void) {
+      clientAnchor = readClock()
+      onStoreChange()
+      const timer = window.setInterval(onStoreChange, CLOCK_TICK_MS)
+      return () => window.clearInterval(timer)
+    },
+    getSnapshot,
+    getServerSnapshot: () => (Number.isFinite(serverMs) ? serverMs : 0),
+  }
+}
 
 // Переиспользуемые визуальные примитивы модуля FBS (DESIGN.md §6).
 // Спокойная палитра статусов: цвет несёт смысл, а не украшает.
@@ -51,16 +90,24 @@ export function FbsStatusChip({ status }: { status: string }) {
 export function DeadlinePill({
   deadlineAt,
   cancelled,
+  serverNow,
 }: {
   deadlineAt: string | null
   cancelled?: boolean
+  serverNow?: string | null
 }) {
+  // Серверное время — базовая отметка, а клиентские часы измеряют только прошедшее после
+  // получения этой отметки время. Поэтому clock-skew оператора не меняет старт дедлайна,
+  // но плашка продолжает обновляться между ответами worklist.
+  const clock = useMemo(() => createDeadlineClock(serverNow), [serverNow])
+  const now = useSyncExternalStore(clock.subscribe, clock.getSnapshot, clock.getServerSnapshot)
+
   if (cancelled || !deadlineAt) {
     return (
       <Chip size="small" variant="outlined" color="default" label="—" data-testid="fbs-deadline-pill" />
     )
   }
-  const msLeft = new Date(deadlineAt).getTime() - Date.now()
+  const msLeft = new Date(deadlineAt).getTime() - now
   const hoursLeft = Math.floor(msLeft / 3_600_000)
   let color: ChipProps['color'] = 'success'
   let label = `${hoursLeft} ч`

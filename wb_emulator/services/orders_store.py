@@ -63,17 +63,37 @@ class EmulatorOrder(Base):
     is_b2b: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
     can_pvz: Mapped[bool | None] = mapped_column(Boolean, nullable=True)
     is_pvz: Mapped[bool | None] = mapped_column(Boolean, nullable=True)
+    required_meta_json: Mapped[str | None] = mapped_column(String(512), nullable=True)
+    optional_meta_json: Mapped[str | None] = mapped_column(String(512), nullable=True)
     supplier_status: Mapped[str] = mapped_column(String(64), nullable=False, default="new")
     wb_status: Mapped[str] = mapped_column(String(64), nullable=False, default="waiting")
     cancelled: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
 
 
+def _ensure_orders_columns(session: Session) -> None:
+    """Add meta columns on existing SQLite tables (idempotent)."""
+    bind = session.get_bind()
+    if bind.dialect.name != "sqlite":
+        return
+    existing = {
+        row[1]
+        for row in session.execute(text("PRAGMA table_info(emulator_orders)")).fetchall()
+    }
+    if not existing:
+        return
+    if "required_meta_json" not in existing:
+        session.execute(text("ALTER TABLE emulator_orders ADD COLUMN required_meta_json VARCHAR(512)"))
+        session.commit()
+    if "optional_meta_json" not in existing:
+        session.execute(text("ALTER TABLE emulator_orders ADD COLUMN optional_meta_json VARCHAR(512)"))
+        session.commit()
+
+
 def ensure_orders_table(session: Session) -> None:
     """Create emulator_orders table if missing (EMU-020 lane; no models.py change)."""
     bind = session.get_bind()
-    from typing import cast
-
-    cast(Any, EmulatorOrder.__table__).create(bind=bind, checkfirst=True)
+    EmulatorOrder.__table__.create(bind=bind, checkfirst=True)
+    _ensure_orders_columns(session)
 
 
 def order_to_api(order: EmulatorOrder) -> dict[str, Any]:
@@ -97,6 +117,10 @@ def order_to_api(order: EmulatorOrder) -> dict[str, Any]:
         payload["canPvz"] = order.can_pvz
     if order.is_pvz is not None:
         payload["isPvz"] = order.is_pvz
+    if order.required_meta_json:
+        payload["requiredMeta"] = json.loads(order.required_meta_json)
+    if order.optional_meta_json:
+        payload["optionalMeta"] = json.loads(order.optional_meta_json)
     return payload
 
 
@@ -127,7 +151,17 @@ def _order_fields_from_payload(payload: dict[str, Any]) -> dict[str, Any]:
         "supplier_status": str(payload.get("supplierStatus", "new")),
         "wb_status": str(payload.get("wbStatus", "waiting")),
         "cancelled": bool(payload.get("cancelled", False)),
+        "required_meta_json": _meta_json_from_payload(payload, "requiredMeta", "required_meta"),
+        "optional_meta_json": _meta_json_from_payload(payload, "optionalMeta", "optional_meta"),
     }
+
+
+def _meta_json_from_payload(payload: dict[str, Any], *keys: str) -> str | None:
+    for key in keys:
+        raw = payload.get(key)
+        if isinstance(raw, list) and raw:
+            return json.dumps(raw)
+    return None
 
 
 def upsert_order(session: Session, seller_key: str, payload: dict[str, Any]) -> EmulatorOrder:
@@ -153,6 +187,16 @@ def upsert_order(session: Session, seller_key: str, payload: dict[str, Any]) -> 
     session.commit()
     session.refresh(order)
     return order
+
+
+def get_order(session: Session, seller_key: str, wb_order_id: int) -> EmulatorOrder | None:
+    ensure_orders_table(session)
+    return session.scalar(
+        select(EmulatorOrder).where(
+            EmulatorOrder.seller_key == seller_key,
+            EmulatorOrder.wb_order_id == wb_order_id,
+        )
+    )
 
 
 def seed_default_order(session: Session, seller_key: str) -> EmulatorOrder:
@@ -202,10 +246,17 @@ def list_orders_page(
     return rows, None
 
 
-def get_statuses(session: Session, seller_key: str, order_ids: list[int]) -> list[dict[str, Any]]:
+def get_statuses(
+    session: Session,
+    seller_key: str,
+    order_ids: list[int],
+    *,
+    omit_ids: set[int] | None = None,
+) -> list[dict[str, Any]]:
     ensure_orders_table(session)
     if not order_ids:
         return []
+    skip = omit_ids or set()
     rows = session.scalars(
         select(EmulatorOrder).where(
             EmulatorOrder.seller_key == seller_key,
@@ -215,6 +266,8 @@ def get_statuses(session: Session, seller_key: str, order_ids: list[int]) -> lis
     by_id = {row.wb_order_id: row for row in rows}
     result: list[dict[str, Any]] = []
     for order_id in order_ids:
+        if order_id in skip:
+            continue
         row = by_id.get(order_id)
         if row is None:
             result.append(status_row(order_id))
@@ -266,10 +319,10 @@ def _build_order_payload(
     now: str,
 ) -> dict[str, Any]:
     office_id = int(template.get("officeId", DEFAULT_EMULATOR_OFFICE_ID))
-    return {
+    payload: dict[str, Any] = {
         "id": wb_order_id,
         "rid": f"emu-rid-{wb_order_id}",
-        "createdAt": now,
+        "createdAt": str(template.get("createdAt", now)),
         "nmId": template["nmId"],
         "chrtId": template["chrtId"],
         "article": template["article"],
@@ -280,10 +333,66 @@ def _build_order_payload(
         "officeId": office_id,
         "isLegal": template.get("isLegal", False),
         "options": dict(template.get("options", {})),
-        "supplierStatus": "new",
-        "wbStatus": "waiting",
-        "cancelled": False,
+        "supplierStatus": str(template.get("supplierStatus", "new")),
+        "wbStatus": str(template.get("wbStatus", "waiting")),
+        "cancelled": bool(template.get("cancelled", False)),
     }
+    if "canPvz" in template:
+        payload["canPvz"] = bool(template["canPvz"])
+    if "isPvz" in template:
+        payload["isPvz"] = bool(template["isPvz"])
+    if template.get("requiredMeta"):
+        payload["requiredMeta"] = list(template["requiredMeta"])
+    if template.get("optionalMeta"):
+        payload["optionalMeta"] = list(template["optionalMeta"])
+    return payload
+
+
+def template_to_seed_payload(template: dict[str, Any], *, now: str | None = None) -> dict[str, Any]:
+    """Build upsert payload from a seed template (fixed seedOrderId)."""
+    from datetime import timedelta
+
+    created_at = template.get("createdAt")
+    if created_at is None and template.get("nearDeadline"):
+        deadline_now = datetime.now(UTC) - timedelta(minutes=15)
+        created_at = deadline_now.strftime("%Y-%m-%dT%H:%M:%S+00:00")
+    resolved_now = created_at or now or datetime.now(UTC).strftime("%Y-%m-%dT%H:%M:%S+00:00")
+    warehouse_id = int(template.get("warehouseId", DEFAULT_EMULATOR_WAREHOUSE_ID))
+    return _build_order_payload(
+        template,
+        wb_order_id=int(template["seedOrderId"]),
+        warehouse_id=warehouse_id,
+        now=resolved_now,
+    )
+
+
+def seed_orders_from_templates(
+    session: Session,
+    *,
+    seller_keys: list[str] | None = None,
+) -> dict[str, int]:
+    """Upsert fixed seed orders per seller from order_templates.json (idempotent)."""
+    templates = load_order_templates()
+    allowed = set(seller_keys) if seller_keys is not None else None
+    counts: dict[str, int] = {}
+    for template in templates:
+        seller = str(template.get("seller", "")).strip()
+        if not seller:
+            continue
+        if allowed is not None and seller not in allowed:
+            continue
+        payload = template_to_seed_payload(template)
+        upsert_order(session, seller, payload)
+        counts[seller] = counts.get(seller, 0) + 1
+    return counts
+
+
+def count_seeded_orders(session: Session, seller_key: str | None = None) -> int:
+    ensure_orders_table(session)
+    stmt = select(func.count()).select_from(EmulatorOrder)
+    if seller_key is not None:
+        stmt = stmt.where(EmulatorOrder.seller_key == seller_key)
+    return int(session.scalar(stmt) or 0)
 
 
 def _try_purchase_one(
@@ -329,7 +438,7 @@ def _try_purchase_one(
 class PurchaseResult:
     """Result of stock-constrained admin purchase."""
 
-    __slots__ = ("orders", "created", "rejected_no_stock")
+    __slots__ = ("created", "orders", "rejected_no_stock")
 
     def __init__(self, orders: list[EmulatorOrder], *, created: int, rejected_no_stock: int) -> None:
         self.orders = orders
@@ -352,8 +461,16 @@ def create_orders_for_seller(
     if not templates:
         raise ValueError("no order templates configured")
 
+    seller_templates = [
+        template
+        for template in templates
+        if not template.get("seller") or str(template.get("seller", "")).strip() == seller_key
+    ]
+    if not seller_templates:
+        seller_templates = templates
+
     resolved_warehouse_id = warehouse_id if warehouse_id is not None else DEFAULT_EMULATOR_WAREHOUSE_ID
-    pool = _template_pool(templates, chrt_id)
+    pool = _template_pool(seller_templates, chrt_id)
 
     created: list[EmulatorOrder] = []
     rejected_no_stock = 0

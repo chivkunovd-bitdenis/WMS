@@ -8,6 +8,7 @@ from sqlalchemy.orm import Session
 
 from wb_emulator.db import get_db
 from wb_emulator.services import orders_store
+from wb_emulator.services.fault_injection import get_faults
 
 router = APIRouter()
 
@@ -45,7 +46,13 @@ def post_orders_status(
     db: Session = Depends(get_db),
 ) -> dict[str, list[dict[str, object]]]:
     seller_key: str = request.state.seller_key
-    rows = orders_store.get_statuses(db, seller_key, body.orders)
+    faults = get_faults(seller_key)
+    rows = orders_store.get_statuses(
+        db,
+        seller_key,
+        body.orders,
+        omit_ids=faults.partial_status_ids,
+    )
     return {"orders": rows}
 
 

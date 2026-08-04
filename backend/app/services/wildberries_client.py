@@ -10,6 +10,17 @@ from typing import Any, cast
 import httpx
 
 from app.core.settings import settings
+from app.services.wildberries_errors import WildberriesClientError as WildberriesClientError
+from app.services.wildberries_fbs_client import (
+    MarketplaceSupplyDetails,
+    add_orders_to_marketplace_supply_batch,
+    deliver_marketplace_supply_typed,
+    fetch_marketplace_order_stickers_typed,
+    fetch_marketplace_orders_status_typed,
+)
+from app.services.wildberries_fbs_client import (
+    fetch_marketplace_supply_details as fetch_marketplace_supply_details_typed,
+)
 
 CARDS_LIST_PATH = "/content/v2/get/cards/list"
 SUPPLIES_LIST_PATH = "/api/v1/supplies"
@@ -53,13 +64,6 @@ def _meta_plural_key(kind: str) -> str:
 def build_marketplace_order_meta_put_body(kind: str, value: str) -> dict[str, list[str]]:
     """Build JSON body for PUT /api/v3/orders/{id}/meta/{kind}."""
     return {_meta_plural_key(kind): [value]}
-
-
-class WildberriesClientError(Exception):
-    def __init__(self, code: str, *, status_code: int | None = None) -> None:
-        self.code = code
-        self.status_code = status_code
-        super().__init__(code)
 
 
 @dataclass(frozen=True, slots=True)
@@ -484,33 +488,14 @@ async def fetch_marketplace_orders_status(
     marketplace_api_base: str | None = None,
 ) -> list[dict[str, Any]]:
     """POST /api/v3/orders/status — batch status lookup."""
-    if settings.e2e_mock_wb_marketplace_orders:
+    if settings.e2e_mock_wb_marketplace_orders or _marketplace_supplies_mock_enabled():
         return [{"id": oid, "supplierStatus": "new", "wbStatus": "waiting"} for oid in order_ids]
-    if not order_ids:
-        return []
-    base = (marketplace_api_base or settings.wildberries_marketplace_api_base).rstrip("/")
-    url = f"{base}{MARKETPLACE_ORDERS_STATUS_PATH}"
-    headers = {
-        "Authorization": api_token,
-        "Content-Type": "application/json",
-    }
-    payload = {"orders": order_ids}
-    try:
-        response = await client.post(url, headers=headers, json=payload, timeout=60.0)
-    except httpx.HTTPError as exc:
-        raise WildberriesClientError("transport_error") from exc
-    if response.status_code >= 400:
-        raise WildberriesClientError(
-            "upstream_error",
-            status_code=response.status_code,
-        )
-    data = response.json()
-    if isinstance(data, list):
-        return cast(list[dict[str, Any]], data)
-    orders = data.get("orders") if isinstance(data, dict) else None
-    if isinstance(orders, list):
-        return cast(list[dict[str, Any]], orders)
-    return []
+    return await fetch_marketplace_orders_status_typed(
+        client,
+        api_token=api_token,
+        order_ids=order_ids,
+        marketplace_api_base=marketplace_api_base,
+    )
 
 
 def _marketplace_seller_warehouses_mock() -> list[dict[str, Any]]:
@@ -599,7 +584,9 @@ def _marketplace_supplies_mock_enabled() -> bool:
 
 
 def _marketplace_supply_create_mock(name: str) -> dict[str, Any]:
-    return {"id": "WB-GI-MOCK-1", "name": name}
+    global _mock_supply_counter
+    _mock_supply_counter += 1
+    return {"id": f"WB-GI-MOCK-{_mock_supply_counter}", "name": name}
 
 
 _TINY_PNG_BASE64 = (
@@ -651,7 +638,12 @@ async def create_marketplace_supply(
             "upstream_error",
             status_code=response.status_code,
         )
-    data = response.json()
+    if response.status_code == 204 or not response.content:
+        raise WildberriesClientError("invalid_response")
+    try:
+        data = response.json()
+    except ValueError as exc:
+        raise WildberriesClientError("invalid_response") from exc
     if not isinstance(data, dict):
         raise WildberriesClientError("invalid_response")
     return cast(dict[str, Any], data)
@@ -665,7 +657,7 @@ async def add_order_to_marketplace_supply(
     order_id: int,
     marketplace_api_base: str | None = None,
 ) -> None:
-    """PATCH /api/v3/supplies/{supply_id}/orders/{order_id}."""
+    """PATCH /api/v3/supplies/{supply_id}/orders/{order_id} (legacy single-order path)."""
     if _marketplace_supplies_mock_enabled():
         return
     base = (marketplace_api_base or settings.wildberries_marketplace_api_base).rstrip("/")
@@ -682,6 +674,26 @@ async def add_order_to_marketplace_supply(
         )
 
 
+async def add_orders_to_marketplace_supply(
+    client: httpx.AsyncClient,
+    *,
+    api_token: str,
+    supply_id: str,
+    order_ids: list[int],
+    marketplace_api_base: str | None = None,
+) -> None:
+    """PATCH /api/marketplace/v3/supplies/{supply_id}/orders — batch ≤100."""
+    if _marketplace_supplies_mock_enabled():
+        return
+    await add_orders_to_marketplace_supply_batch(
+        client,
+        api_token=api_token,
+        supply_id=supply_id,
+        order_ids=order_ids,
+        marketplace_api_base=marketplace_api_base,
+    )
+
+
 async def fetch_marketplace_order_stickers(
     client: httpx.AsyncClient,
     *,
@@ -696,32 +708,14 @@ async def fetch_marketplace_order_stickers(
         return []
     if _marketplace_supplies_mock_enabled():
         return _marketplace_order_stickers_mock(order_ids)
-    base = (marketplace_api_base or settings.wildberries_marketplace_api_base).rstrip("/")
-    url = f"{base}{MARKETPLACE_ORDER_STICKERS_PATH}"
-    headers = {
-        "Authorization": api_token,
-        "Content-Type": "application/json",
-    }
-    params: dict[str, str | int] = {"type": "png", "width": width, "height": height}
-    payload = {"orders": order_ids}
-    try:
-        response = await client.post(
-            url, headers=headers, params=params, json=payload, timeout=60.0
-        )
-    except httpx.HTTPError as exc:
-        raise WildberriesClientError("transport_error") from exc
-    if response.status_code >= 400:
-        raise WildberriesClientError(
-            "upstream_error",
-            status_code=response.status_code,
-        )
-    data = response.json()
-    if isinstance(data, list):
-        return cast(list[dict[str, Any]], data)
-    stickers = data.get("stickers") if isinstance(data, dict) else None
-    if isinstance(stickers, list):
-        return cast(list[dict[str, Any]], stickers)
-    return []
+    return await fetch_marketplace_order_stickers_typed(
+        client,
+        api_token=api_token,
+        order_ids=order_ids,
+        marketplace_api_base=marketplace_api_base,
+        width=width,
+        height=height,
+    )
 
 
 async def deliver_marketplace_supply(
@@ -733,19 +727,36 @@ async def deliver_marketplace_supply(
 ) -> None:
     """PATCH /api/v3/supplies/{supply_id}/deliver — hand supply to WB delivery."""
     if _marketplace_supplies_mock_enabled():
+        _mock_delivered_supplies.add(supply_id)
         return
-    base = (marketplace_api_base or settings.wildberries_marketplace_api_base).rstrip("/")
-    url = f"{base}{MARKETPLACE_SUPPLIES_PATH}/{supply_id}/deliver"
-    headers = {"Authorization": api_token}
-    try:
-        response = await client.patch(url, headers=headers, timeout=60.0)
-    except httpx.HTTPError as exc:
-        raise WildberriesClientError("transport_error") from exc
-    if response.status_code >= 400:
-        raise WildberriesClientError(
-            "upstream_error",
-            status_code=response.status_code,
+    await deliver_marketplace_supply_typed(
+        client,
+        api_token=api_token,
+        supply_id=supply_id,
+        marketplace_api_base=marketplace_api_base,
+    )
+
+
+async def fetch_marketplace_supply_details(
+    client: httpx.AsyncClient,
+    *,
+    api_token: str,
+    supply_id: str,
+    marketplace_api_base: str | None = None,
+) -> MarketplaceSupplyDetails:
+    """GET /api/v3/supplies/{supply_id} — supply details for deliver reconcile."""
+    if _marketplace_supplies_mock_enabled():
+        return MarketplaceSupplyDetails(
+            supply_id=supply_id,
+            name=None,
+            done=supply_id in _mock_delivered_supplies,
         )
+    return await fetch_marketplace_supply_details_typed(
+        client,
+        api_token=api_token,
+        supply_id=supply_id,
+        marketplace_api_base=marketplace_api_base,
+    )
 
 
 def _decode_barcode_payload(raw: Any) -> bytes | None:
@@ -843,6 +854,10 @@ async def put_marketplace_order_meta(
     except httpx.HTTPError as exc:
         raise WildberriesClientError("transport_error") from exc
     if response.status_code >= 400:
+        if response.status_code == 409:
+            from app.services.wildberries_fbs_client import parse_business_error
+
+            raise parse_business_error(response)
         raise WildberriesClientError(
             "upstream_error",
             status_code=response.status_code,
@@ -878,12 +893,19 @@ async def fetch_marketplace_order_meta(
 
 
 _mock_trbx_counter = 0
+_mock_trbx_by_supply: dict[str, list[str]] = {}
+_mock_supply_counter = 0
+_mock_delivered_supplies: set[str] = set()
 
 
 def _next_mock_trbx_id() -> str:
     global _mock_trbx_counter
     _mock_trbx_counter += 1
     return f"MOCK-TRBX-{_mock_trbx_counter}"
+
+
+def _mock_trbx_list_for_supply(supply_id: str) -> list[str]:
+    return list(_mock_trbx_by_supply.get(supply_id, []))
 
 
 def _parse_trbx_ids_from_response(data: Any) -> list[str]:
@@ -903,13 +925,14 @@ def _parse_trbx_ids_from_response(data: Any) -> list[str]:
             val = data.get(key)
             if val is not None:
                 parsed = _parse_trbx_ids_from_response(val)
-                if parsed:
-                    return parsed
+                return parsed
     raise WildberriesClientError("invalid_response")
 
 
-def _marketplace_trbx_create_mock(amount: int) -> list[str]:
-    return [_next_mock_trbx_id() for _ in range(amount)]
+def _marketplace_trbx_create_mock(amount: int, *, supply_id: str) -> list[str]:
+    ids = [_next_mock_trbx_id() for _ in range(amount)]
+    _mock_trbx_by_supply.setdefault(supply_id, []).extend(ids)
+    return ids
 
 
 def _marketplace_trbx_stickers_mock(trbx_ids: list[str]) -> list[dict[str, Any]]:
@@ -930,7 +953,7 @@ async def create_marketplace_supply_trbx(
 ) -> list[str]:
     """POST /api/v3/supplies/{supply_id}/trbx — create cargo places."""
     if _marketplace_supplies_mock_enabled():
-        return _marketplace_trbx_create_mock(amount)
+        return _marketplace_trbx_create_mock(amount, supply_id=supply_id)
     base = (marketplace_api_base or settings.wildberries_marketplace_api_base).rstrip("/")
     url = f"{base}{MARKETPLACE_SUPPLIES_PATH}/{supply_id}/trbx"
     headers = {
@@ -1024,3 +1047,29 @@ async def fetch_marketplace_trbx_stickers(
     if isinstance(stickers, list):
         return cast(list[dict[str, Any]], stickers)
     return []
+
+
+async def fetch_marketplace_supply_trbx_list(
+    client: httpx.AsyncClient,
+    *,
+    api_token: str,
+    supply_id: str,
+    marketplace_api_base: str | None = None,
+) -> list[str]:
+    """GET /api/v3/supplies/{supply_id}/trbx — current cargo place IDs."""
+    if _marketplace_supplies_mock_enabled():
+        return _mock_trbx_list_for_supply(supply_id)
+    base = (marketplace_api_base or settings.wildberries_marketplace_api_base).rstrip("/")
+    url = f"{base}{MARKETPLACE_SUPPLIES_PATH}/{supply_id}/trbx"
+    headers = {"Authorization": api_token}
+    try:
+        response = await client.get(url, headers=headers, timeout=60.0)
+    except httpx.HTTPError as exc:
+        raise WildberriesClientError("transport_error") from exc
+    if response.status_code >= 400:
+        raise WildberriesClientError(
+            "upstream_error",
+            status_code=response.status_code,
+        )
+    data = response.json()
+    return _parse_trbx_ids_from_response(data)

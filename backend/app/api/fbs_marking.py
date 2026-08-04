@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import uuid
-from typing import Annotated
+from typing import Annotated, Any
 
 import httpx
 from fastapi import APIRouter, Depends, HTTPException, status
@@ -9,6 +9,7 @@ from pydantic import BaseModel, Field
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.deps import require_fulfillment_admin
+from app.api.fbs_errors import envelope_from_exc
 from app.db.session import get_db
 from app.models.fbs_order import FbsOrderMarking
 from app.models.user import User
@@ -24,6 +25,12 @@ class FbsMarkingValueBody(BaseModel):
     value: str = Field(min_length=1, max_length=512)
 
 
+class FbsMetadataScanBody(BaseModel):
+    kind: str = Field(min_length=1, max_length=16)
+    raw_value: str = Field(min_length=1, max_length=512)
+    idempotency_key: str = Field(min_length=1, max_length=128)
+
+
 class FbsOrderMarkingOut(BaseModel):
     id: str
     order_id: str
@@ -31,6 +38,16 @@ class FbsOrderMarkingOut(BaseModel):
     value: str
     check_status: str
     marking_code_id: str | None
+    meta_status: str
+    reason: str | None = None
+
+
+class FbsOrderMetadataOut(BaseModel):
+    required: list[str]
+    optional: list[str]
+    states: list[dict[str, Any]]
+    delivery_allowed: bool
+    last_checked_at: str | None
 
 
 def _marking_out(row: FbsOrderMarking) -> FbsOrderMarkingOut:
@@ -41,46 +58,84 @@ def _marking_out(row: FbsOrderMarking) -> FbsOrderMarkingOut:
         value=row.value,
         check_status=row.check_status,
         marking_code_id=str(row.marking_code_id) if row.marking_code_id else None,
+        meta_status=row.meta_status,
+        reason=row.reason,
     )
 
 
+def _metadata_out(payload: dict[str, Any]) -> FbsOrderMetadataOut:
+    return FbsOrderMetadataOut(**payload)
+
+
 def _raise_from_service(exc: marking_svc.FbsMarkingError) -> None:
-    if exc.code in {"order_not_found", "seller_not_found", "supply_not_found"}:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=exc.code)
+    detail = envelope_from_exc(exc)
+    if exc.code in {"order_not_found", "seller_not_found"}:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=detail)
     if exc.code == "missing_marketplace_token":
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=exc.code)
-    if exc.code in {"invalid_kind", "empty_value"}:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=exc.code)
-    if exc.code in {"order_marking_frozen", "marking_code_already_assigned"}:
-        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=exc.code)
-    if exc.code in {"packaging_task_not_found", "marking_codes_not_printed"}:
-        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=exc.code)
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=detail)
+    if exc.code in {
+        "invalid_kind",
+        "empty_value",
+        "kind_not_required",
+    }:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=detail)
+    if exc.code in {
+        "order_marking_frozen",
+        "duplicate_kiz",
+        "cross_seller_code",
+        "code_product_mismatch",
+        "kind_already_assigned",
+        "marking_code_already_assigned",
+        "meta_validation_fail",
+    }:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=detail)
     if exc.code.startswith("wb_"):
-        raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail=exc.code)
-    raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=exc.code)
+        raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail=detail)
+    raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=detail)
 
 
-@router.post(
-    "/supplies/{supply_id}/markings/assign-printed",
-    response_model=list[FbsOrderMarkingOut],
-)
-async def assign_printed_fbs_supply_markings(
-    supply_id: uuid.UUID,
+@router.get("/{order_id}/metadata", response_model=FbsOrderMetadataOut)
+async def get_fbs_order_metadata(
+    order_id: uuid.UUID,
     user: Annotated[User, Depends(require_fulfillment_admin)],
     session: Annotated[AsyncSession, Depends(get_db)],
-) -> list[FbsOrderMarkingOut]:
+) -> FbsOrderMetadataOut:
     async with httpx.AsyncClient() as http_client:
         try:
-            rows = await marking_svc.assign_printed_supply_markings(
+            payload = await marking_svc.get_order_metadata(
                 session,
                 user.tenant_id,
-                supply_id,
+                order_id,
                 http_client,
             )
         except marking_svc.FbsMarkingError as exc:
             _raise_from_service(exc)
     await session.commit()
-    return [_marking_out(row) for row in rows]
+    return _metadata_out(payload)
+
+
+@router.post("/{order_id}/metadata/scan", response_model=FbsOrderMetadataOut)
+async def scan_fbs_order_metadata(
+    order_id: uuid.UUID,
+    body: FbsMetadataScanBody,
+    user: Annotated[User, Depends(require_fulfillment_admin)],
+    session: Annotated[AsyncSession, Depends(get_db)],
+) -> FbsOrderMetadataOut:
+    async with httpx.AsyncClient() as http_client:
+        try:
+            payload = await marking_svc.scan_order_metadata(
+                session,
+                user.tenant_id,
+                order_id,
+                body.kind,
+                body.raw_value,
+                http_client,
+                idempotency_key=body.idempotency_key,
+            )
+        except marking_svc.FbsMarkingError as exc:
+            _raise_from_service(exc)
+    await session.commit()
+    return _metadata_out(payload)
 
 
 @router.get("/{order_id}/markings", response_model=list[FbsOrderMarkingOut])

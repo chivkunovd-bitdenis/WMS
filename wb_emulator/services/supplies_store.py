@@ -46,7 +46,7 @@ class TrbxRow(Base):
         String(64), ForeignKey("emu_supplies.id", ondelete="CASCADE"), nullable=False, index=True
     )
     seller_key: Mapped[str] = mapped_column(String(128), nullable=False, index=True)
-    orders: Mapped[list["TrbxOrderRow"]] = relationship(
+    orders: Mapped[list[TrbxOrderRow]] = relationship(
         back_populates="trbx", cascade="all, delete-orphan"
     )
 

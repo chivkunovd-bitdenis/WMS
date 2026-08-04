@@ -8,6 +8,7 @@ from fastapi import APIRouter, HTTPException, Query, Request
 from fastapi.responses import Response
 from pydantic import BaseModel, Field
 
+from wb_emulator.services.fault_injection import get_faults, maybe_delay
 from wb_emulator.services.marking_meta import (
     META_KINDS,
     get_meta,
@@ -39,7 +40,7 @@ def _seller_key(request: Request) -> str:
 
 
 @router.post("/orders/stickers")
-def post_order_stickers(
+async def post_order_stickers(
     request: Request,
     body: OrderStickersRequest,
     type: str = Query(default="png"),
@@ -47,21 +48,26 @@ def post_order_stickers(
     height: int = Query(default=40, ge=1),
 ) -> dict[str, list[dict[str, Any]]]:
     """POST /api/v3/orders/stickers — batch Code128 PNG stickers."""
-    _seller_key(request)
+    seller_key = _seller_key(request)
+    await maybe_delay(seller_key)
     if type.lower() != "png":
         raise HTTPException(status_code=400, detail="unsupported sticker type")
-    stickers = build_order_stickers(body.orders, width_mm=width, height_mm=height)
+    order_ids = list(body.orders)
+    if get_faults(seller_key).incomplete_stickers and len(order_ids) > 1:
+        order_ids = order_ids[:1]
+    stickers = build_order_stickers(order_ids, width_mm=width, height_mm=height)
     return {"stickers": stickers}
 
 
 @router.get("/supplies/{supply_id}/barcode")
-def get_supply_barcode(
+async def get_supply_barcode(
     request: Request,
     supply_id: str,
     type: str = Query(default="png"),
 ) -> Response:
     """GET /api/v3/supplies/{supply_id}/barcode — supply QR PNG."""
-    _seller_key(request)
+    seller_key = _seller_key(request)
+    await maybe_delay(seller_key, qr=True)
     if type.lower() != "png":
         raise HTTPException(status_code=400, detail="unsupported barcode type")
     png_bytes = generate_qr_png_bytes(f"SUPPLY:{supply_id}")
@@ -100,6 +106,11 @@ def put_order_meta(
 ) -> dict[str, str]:
     """PUT /api/v3/orders/{order_id}/meta/{kind} — attach KIZ/UIN/IMEI/GTIN."""
     seller_key = _seller_key(request)
+    if get_faults(seller_key).meta_validation_fail:
+        raise HTTPException(
+            status_code=409,
+            detail={"code": "MetaValidationFail", "message": "emulator_fault: meta rejected"},
+        )
     if kind not in META_KINDS:
         raise HTTPException(status_code=400, detail="invalid_meta_kind")
     try:

@@ -1,5 +1,7 @@
 # TASK — fbs-frontend: экраны FBS в портале ФФ
 
+> **⚠️ DEPRECATED (FBSFLOW-130):** список заказов и ранние экраны — см. `tasks/fbs-operator-flow/FRONTEND_TASKS.md` (worklist, workspace, без localStorage-статусов). Этот файл — исторический контекст до operator-flow contract.
+
 > **СТАТУС (30.07.2026):** Экран 1 «Список заказов FBS» — **СДЕЛАН Claude** и выровнен под реальный backend
 > (`FfFbsOrdersScreen.tsx`, `fbsApi.ts`, `components/fbs/FbsChips.tsx`, маршрут `ff/fbs`, пункт сайдбара,
 > e2e `ff-fbs-orders.spec.ts`, `tsc` зелёный). Экран 2 → задача `../fbs-frontend-supply-detail/`,

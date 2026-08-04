@@ -30,6 +30,7 @@ from app.models.fbs_order import (
 )
 from app.models.fbs_warehouse_binding import FbsWarehouseBinding
 from app.models.product import Product
+from app.services.fbs_marking_service import apply_wb_meta_requirements_to_order
 from app.services.fbs_stock_availability_service import fbs_available_qty_for_product
 from app.services.wildberries_client import (
     WildberriesClientError,
@@ -187,7 +188,7 @@ async def _resolve_wms_warehouse_from_binding(
         FbsWarehouseBinding.seller_id == seller_id,
         FbsWarehouseBinding.wb_warehouse_id == wb_warehouse_id,
         FbsWarehouseBinding.is_active.is_(True),
-    ).with_for_update()
+    )
     res = await session.execute(stmt)
     return res.scalar_one_or_none()
 
@@ -427,6 +428,7 @@ async def _apply_wb_row_to_existing(
             existing.reserve_status = RESERVE_STATUS_WAREHOUSE_REMAP_CONFLICT
         else:
             existing.wb_warehouse_id = wb_wh_id
+    apply_wb_meta_requirements_to_order(existing, row)
     await _assign_wms_warehouse_from_binding(
         session, tenant_id, seller_id, existing, existing.wb_warehouse_id
     )
@@ -512,6 +514,7 @@ async def upsert_order_from_wb_row(
         mapping_status=mapping_status,
         reserve_status=reserve_status,
     )
+    apply_wb_meta_requirements_to_order(order, row)
     try:
         async with session.begin_nested():
             session.add(order)

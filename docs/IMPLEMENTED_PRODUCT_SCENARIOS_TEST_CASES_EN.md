@@ -674,6 +674,206 @@ Distinct from **operational outbound** (S08) and **seller supply/inbound** (S06)
 
 ---
 
+## S17 — FBS operator flow (WB Marketplace, fulfillment admin)
+
+Full-cycle FBS: worklist → compatible selection → atomic WB supply → server-side pick → existing `PackagingTask` → marking → print assets → PVZ cargo places or warehouse/SC deliver → post-delivery tracking. Distinct from seller MP unload (S16) and operational outbound (S08). Canonical task IDs: `tasks/fbs-operator-flow/TEST_CASES.md` TC-01…24 → **TC-S17-001…024** below. Wire contract: `tasks/fbs-operator-flow/BACKEND_CONTRACT.md`; errors: `ERROR_CATALOG_RU.md`; OpenAPI: `OPENAPI_NOTES.md`.
+
+### TC-S17-001 Three sellers on one WMS warehouse
+
+- **Actor:** fulfillment admin.
+- **Given:** three sellers with marketplace tokens; shared physical WMS warehouse; isolated orders/stock/KIZ per seller.
+- **When:** operator creates supplies from each seller's order selection.
+- **Then:** three separate WB supplies; no cross-seller data in worklist or workspace.
+- **Negative:** orders, stock, or KIZ of another seller are not visible or selectable.
+
+### TC-S17-002 Incompatible WB warehouses in selection
+
+- **Actor:** fulfillment admin.
+- **Given:** selected orders map to different WB warehouses.
+- **When:** preflight runs before create.
+- **Then:** incompatible rows shown with `different_wb_warehouse`; create is not offered as success path.
+- **Negative:** create API must not be called from UI when preflight `compatible=false`.
+
+### TC-S17-003 B2C and B2B mixed selection
+
+- **Actor:** fulfillment admin.
+- **Given:** orders with mixed buyer types (individual vs legal).
+- **When:** preflight / selection validation.
+- **Then:** set marked incompatible; no partial supply.
+- **Negative:** no silent drop of one buyer type.
+
+### TC-S17-004 Different cargo types
+
+- **Actor:** fulfillment admin.
+- **Given:** orders with different `cargo_type`.
+- **When:** operator selects mixed set.
+- **Then:** incompatible; first selected order must not silently define supply for invalid remainder.
+- **Negative:** partial create rejected.
+
+### TC-S17-005 PVZ blocked for can_pvz=false order
+
+- **Actor:** fulfillment admin.
+- **Given:** order with `can_pvz=false`; planned route PVZ.
+- **When:** preflight with `planned_delivery_type=pvz`.
+- **Then:** row shows `pvz_not_allowed`; warehouse/sc remains valid alternative.
+- **Negative:** PVZ create blocked for that order.
+
+### TC-S17-006 Atomic supply create from orders
+
+- **Actor:** fulfillment admin.
+- **Given:** compatible order set; idempotency key generated client-side.
+- **When:** single `from-orders` call.
+- **Then:** WB supply created and order composition confirmed in workspace; same key retries return same supply.
+- **Negative:** WB timeout → `wb_pending_confirmation`, not local success or duplicate supply.
+
+### TC-S17-007 Scan picking location then product
+
+- **Actor:** fulfillment admin.
+- **Given:** supply with unpacked stock in named cells.
+- **When:** scan location barcode → scan product barcode.
+- **Then:** earliest eligible order for SKU picked; one unit moved to sorting; workspace progress updates.
+- **Negative:** wrong location/product → exact error (`wrong_location` / `wrong_product`).
+
+### TC-S17-008 Multi-operator picking progress
+
+- **Actor:** two fulfillment admins (or two browser contexts).
+- **Given:** same supply; stock=1 for contested SKU.
+- **When:** both scan concurrently; both poll/refresh workspace.
+- **Then:** identical progress after refresh; only one scan succeeds.
+- **Negative:** second scan gets business error, not silent double-pick.
+
+### TC-S17-009 Undo picking before pack
+
+- **Actor:** fulfillment admin.
+- **Given:** picked order not yet packed.
+- **When:** undo pick for that order.
+- **Then:** unit returned to source cell; pick progress decremented.
+- **Negative:** after pack → undo blocked (`pick_already_packed`).
+
+### TC-S17-010 Packaging via existing PackagingTask
+
+- **Actor:** fulfillment admin.
+- **Given:** picked FBS order linked to supply packaging task.
+- **When:** pack one unit through packaging UI/API.
+- **Then:** inventory sorting unpacked→packed; order shows packed in workspace.
+- **Negative:** local FBS checkbox cannot mark packed without packaging evidence.
+
+### TC-S17-011 Same SKU two orders two packs
+
+- **Actor:** fulfillment admin.
+- **Given:** two orders same SKU, both picked.
+- **When:** two separate pack operations (auto-assign by deadline or explicit order).
+- **Then:** each fulfills exact WB order.
+- **Negative:** third pack for same orders rejected.
+
+### TC-S17-012 KIZ from manufacturer (scanner GS)
+
+- **Actor:** fulfillment admin.
+- **Given:** order requires `sgtin`; scanner sends raw GS separators.
+- **When:** metadata scan then WB sync.
+- **Then:** code bound to order; WB accepts; GS roundtrip preserved.
+- **Negative:** stripped GS → visible rejection.
+
+### TC-S17-013 KIZ from seller pool
+
+- **Actor:** fulfillment admin.
+- **Given:** seller marking pool with codes for product.
+- **When:** scan/assign from pool → print → apply → WB check.
+- **Then:** only seller+product code reserved and sent.
+- **Negative:** duplicate or cross-seller code rejected.
+
+### TC-S17-014 Metadata delivery gate
+
+- **Actor:** fulfillment admin.
+- **Given:** required metadata missing or WB-rejected.
+- **When:** delivery preflight / deliver attempt.
+- **Then:** blocked with explicit marking blockers.
+- **Negative:** local product honest-sign flag cannot override WB `requiredMeta`; WB allowed intermediate states do not self-block incorrectly.
+
+### TC-S17-015 Single order sticker print
+
+- **Actor:** fulfillment admin.
+- **Given:** order sticker asset ready (PNG 58×40).
+- **When:** print one sticker via print-assets + content URL.
+- **Then:** real PNG preview/print; non-empty dimensions.
+- **Negative:** missing asset → not shown as ready; no empty print page.
+
+### TC-S17-016 Batch stickers with partial missing
+
+- **Actor:** fulfillment admin.
+- **Given:** supply with mix of ready/missing stickers.
+- **When:** batch print all; then retry missing only.
+- **Then:** counts `requested/ready/missing/failed`; retry affects only missing.
+- **Negative:** one missing must not fail entire batch silently or print blank page.
+
+### TC-S17-017 PVZ cargo places by count
+
+- **Actor:** fulfillment admin.
+- **Given:** PVZ supply; packed orders.
+- **When:** create N cargo places (no order mapping).
+- **Then:** N WB trbx reconciled; each has printable QR via print-assets.
+- **Negative:** order→trbx binding not required for deliver.
+
+### TC-S17-018 PVZ dimension blockers
+
+- **Actor:** fulfillment admin.
+- **Given:** PVZ route; box dimensions/weight entered or missing.
+- **When:** cargo preflight/create.
+- **Then:** side>60, sum>140, weight>5kg, volume>1m³ → explicit blockers.
+- **Negative:** missing dimensions require audited manual confirmation, not fabricated zero.
+
+### TC-S17-019 Delivery checklist fresh sync
+
+- **Actor:** fulfillment admin.
+- **Given:** supply ready except one blocker toggled by fresh WB sync.
+- **When:** delivery preflight.
+- **Then:** all common + route-specific blockers listed with version token.
+- **Negative:** stale preflight version rejected on deliver (`stale_preflight`).
+
+### TC-S17-020 PVZ deliver with timeout recovery
+
+- **Actor:** fulfillment admin.
+- **Given:** trbx created; cargo QR ready; valid preflight.
+- **When:** deliver; simulate WB timeout then retry with same idempotency.
+- **Then:** at most one WB close; local `in_delivery` only after confirmed success/reconcile.
+- **Negative:** timeout must not show local success.
+
+### TC-S17-021 Warehouse/SC deliver and supply QR
+
+- **Actor:** fulfillment admin.
+- **Given:** warehouse/sc route; no trbx required.
+- **When:** deliver succeeds.
+- **Then:** supply QR available via print-assets; trbx never shown as required blocker.
+- **Negative:** PVZ-only cargo rules not applied.
+
+### TC-S17-022 Partial acceptance after delivery
+
+- **Actor:** fulfillment admin.
+- **Given:** supply in delivery; WB returns mixed accepted/rejected orders.
+- **When:** tracking sync / workspace refresh.
+- **Then:** exact accepted/rejected order IDs, reasons, remaining deadline; not flattened generic success.
+- **Negative:** repeated sync idempotent.
+
+### TC-S17-023 Full compose stack (API gate)
+
+- **Actor:** automation / admin via API.
+- **Given:** fresh PostgreSQL, migrations, queue, WB emulator with 3 sellers.
+- **When:** API full flows PVZ + warehouse/sc including negatives.
+- **Then:** non-browser TC-S17-001…022 green through backend integration tests.
+- **Negative / restriction:** emulator does not prove current live WB contract.
+
+### TC-S17-024 Live WB smoke (manual)
+
+- **Actor:** authorized operator with sandbox/test cabinet secrets.
+- **Given:** explicit env secrets and approval.
+- **When:** representative create/meta/sticker/trbx/deliver calls against live WB.
+- **Then:** request shapes match `wildberries_fbs_client` contract dated in tests.
+- **Negative:** not run in default CI; failure blocks production rollout claim only.
+
+**Frontend browser paths (Codex, post-backend handoff):** worklist enrichment + live deadline; selection blockers + atomic create; full-screen workspace stages; persistent picking; embedded PackagingTask; marking row states; sticker preview; PVZ cargo + QR; warehouse/SC supply QR; WB timeout/409 never shows local success.
+
+---
+
 ## Packaging (E7 — fulfillment)
 
 ### TC-NEW-PKG-01 FF creates packaging task from sorting zone and packs via UI

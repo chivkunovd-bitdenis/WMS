@@ -1,15 +1,15 @@
 """Add the PVZ trbx packaging-box foreign key.
 
-Revision ID: 20260803_0069
-Revises: 20260802_0068
+Revision ID: 20260804_0070
+Revises: 20260803_0069
 """
 
 from __future__ import annotations
 
 from alembic import op
 
-revision = "20260803_0069"
-down_revision = "20260802_0068"
+revision = "20260804_0070"
+down_revision = "20260803_0069"
 branch_labels = None
 depends_on = None
 

@@ -1,5 +1,7 @@
 # TASK — fbs-frontend-supply-detail: Экран 2 «Карточка отгрузки» FBS
 
+> **⚠️ DEPRECATED (FBSFLOW-130):** wire-contract устарел. Реализовать по `tasks/fbs-operator-flow/FRONTEND_TASKS.md` + `BACKEND_CONTRACT.md` (workspace, print-assets, cargo-places, delivery-preflight). Не использовать `sticker_file` в ответах как base64/path; не `POST …/stickers` как основной путь печати.
+
 - **Эпик:** FBS — см. `../fbs-marketplace-orders/SPEC.md` и `DESIGN.md`. Гейт 1 эпика ✅, под-задача наследует.
 - **Тип / размер:** feature / L
 - **Зависит от:** `fbs-frontend` (Экран 1 готов), backend API из `fbs_supplies.py`, `fbs_orders.py`, `fbs_marking.py`
@@ -75,16 +77,16 @@
 **Пути эндпоинтов и типы (из backend):**
 - `GET /operations/fbs-supplies/{id}` → `FbsSupplyOut` (id, seller_id, warehouse_id, wb_supply_id, name, status, delivery_type, cargo_type, barcode_file, created_at, orders)
 - `POST /operations/fbs-supplies/{id}/orders` (FbsSupplyAddOrderBody: order_id) → ?
-- `POST /operations/fbs-supplies/{id}/stickers` (FbsSupplyStickersBody: force) → `FbsStickersOut` (stickers: [{order_id, wb_order_id, sticker_code, sticker_file}])
+- `POST /operations/fbs-supplies/{id}/print-assets` → `FbsPrintBatchOut` (assets with `preview_url` / `download_url`; binary via `GET /operations/fbs-print-assets/{id}/content`)
 - `GET /operations/fbs-supplies/{id}/barcode` (type=png) → PNG blob
 - `POST /operations/fbs-supplies/{id}/deliver` → `FbsSupplyOut` (updated, status=in_delivery)
-- `GET /operations/fbs-supplies/{id}/trbx` → `FbsTrbxListOut` (trbxes: [{id, wb_trbx_id, packaging_box_id, sticker_file}])
+- `GET /operations/fbs-supplies/{id}/trbx` → `FbsTrbxListOut` (trbxes: [{id, wb_trbx_id, packaging_box_id, print_asset_id}])
 - `POST /operations/fbs-supplies` (FbsSupplyCreateBody) → `FbsSupplyOut`
 
 ## Критерии приёмки (DoD)
 
 - [ ] Компонент `FbsSupplyDetailScreen` загружает отгрузку и показывает шапку + stepper + таблицу
-- [ ] Кнопка печати стикеров: `POST /stickers` → генерирует PDF из base64-файлов (FbsStickersOut)
+- [ ] Кнопка печати стикеров: `POST /print-assets` → preview URLs → PDF без пустых страниц
 - [ ] Кнопка печати QR: `GET /barcode` → открывает PNG в новой вкладке
 - [ ] Кнопка «Передать в доставку»: показывает ConfirmDialog, `POST /deliver` обновляет статус
 - [ ] Таблица заказов показывает состав отгрузки, чекбоксы функциональны
@@ -98,12 +100,12 @@
 | TC-ID | Title | Applies (Y/N) | Notes |
 |-------|-------|---------------|-------|
 | TC-NEW-FBS-SUPPLYUI-001 | Загрузка и отображение карточки отгрузки | Y | Given: отгрузка id=s1, статус assembling, 3 заказа / When: открыть экран / Then: заголовок показывает имя, stepper на «Сборка», таблица с 3 строками, loading исчезает |
-| TC-NEW-FBS-SUPPLYUI-002 | Печать стикеров заказов | Y | Given: отгрузка с 2 заказами, у каждого sticker_file (base64 PNG) / When: клик на «Печать стикеры» / Then: POST /stickers вызывается, открывается PDF-окно с двумя стикерами, user может распечатать |
+| TC-NEW-FBS-SUPPLYUI-002 | Печать стикеров заказов | Y | Given: отгрузка с 2 заказами, print-assets ready / When: клик «Печать стикеры» / Then: POST /print-assets, preview_url открывается, PDF с двумя стикерами |
 | TC-NEW-FBS-SUPPLYUI-003 | Печать QR отгрузки | Y | Given: отгрузка, barcode_file заполнен / When: клик на кнопку QR → «Печать QR» / Then: GET /barcode вызывается, PNG открывается в новой вкладке, user видит QR-код |
 | TC-NEW-FBS-SUPPLYUI-004 | Передача в доставку с подтверждением | Y | Given: отгрузка в assembling / When: клик «Передать в доставку» / Then: ConfirmDialog появляется, user кликает «Да» / Then: POST /deliver вызывается, статус переходит в delivery, stepper переместился, диалог закрыт |
 | TC-NEW-FBS-SUPPLYUI-005 | Отмена передачи через ConfirmDialog | Y | Given: диалог открыт (передача в доставку) / When: user кликает «Отмена» / Then: POST не вызывается, диалог закрыт, статус остался прежним |
 | TC-NEW-FBS-SUPPLYUI-006 | Bulk-действие: создать отгрузку из выделенных заказов | Y | Given: на Экране 1 выделено 5 заказов (статус new) / When: клик «Создать отгрузку», в модале выбран тип доставки + warehouse / Then: POST /supplies (order_ids=[...], delivery_type, warehouse_id), отгрузка создана, navigate в её карточку |
-| TC-NEW-FBS-SUPPLYUI-007 | ПВЗ-отгрузка: таблица грузомест | Y | Given: ПВЗ отгрузка, 2 грузоместа с wb_trbx_id и sticker_file / When: открыть детали / Then: раздел «Грузоместа» показывает 2 строки с QR кодами, иконка скопировать ID |
+| TC-NEW-FBS-SUPPLYUI-007 | ПВЗ-отгрузка: таблица грузомест | Y | Given: ПВЗ отгрузка, 2 trbx с wb_trbx_id и print_asset ready / When: открыть детали / Then: раздел «Грузоместа» — 2 строки с QR, иконка копировать ID |
 | TC-NEW-FBS-SUPPLYUI-008 | Ошибка загрузки: показать карточку ошибки | Y | Given: fetch /supplies/{id} возвращает 404 / When: открыть экран / Then: показана карточка ошибки с текстом, кнопка «Повтор» (retry) функциональна |
 
 ## Где тесты

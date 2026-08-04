@@ -4,12 +4,13 @@ from __future__ import annotations
 
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, HTTPException, Query, Request, Response
+from fastapi import APIRouter, Depends, HTTPException, Request, Response
 from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 
 from wb_emulator.db import get_db
 from wb_emulator.services import supplies_store as store
+from wb_emulator.services.fault_injection import get_faults
 
 router = APIRouter()
 
@@ -83,6 +84,8 @@ def add_order_to_supply(
     session: DbSession,
 ) -> Response:
     seller_key = _seller_key(request)
+    if get_faults(seller_key).supply_conflict_409:
+        raise HTTPException(status_code=409, detail="emulator_fault: supply_conflict")
     try:
         store.add_order_to_supply(
             session, seller_key=seller_key, supply_id=supply_id, order_id=order_id
@@ -121,6 +124,21 @@ def create_trbxes(
     except store.SuppliesStoreError as exc:
         raise _map_store_error(exc) from exc
     return {"trbxIds": ids}
+
+
+@router.get("/{supply_id}/trbx")
+def list_trbxes(
+    supply_id: str,
+    request: Request,
+    session: DbSession,
+) -> dict[str, list[str]]:
+    """GET /api/v3/supplies/{supplyId}/trbx — list cargo place ids."""
+    seller_key = _seller_key(request)
+    try:
+        view = store.get_supply(session, seller_key=seller_key, supply_id=supply_id)
+    except store.SuppliesStoreError as exc:
+        raise _map_store_error(exc) from exc
+    return {"trbxIds": list(view.trbx_ids)}
 
 
 @router.patch("/{supply_id}/trbx/{trbx_id}", status_code=204, response_class=Response)

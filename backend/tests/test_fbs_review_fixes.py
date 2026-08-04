@@ -4,50 +4,61 @@ from __future__ import annotations
 
 import time
 import uuid
+from collections import Counter
 from datetime import UTC, datetime, timedelta
 from typing import Any
 
 import httpx
 import pytest
-from fbs_seed_helpers import DEFAULT_WB_WAREHOUSE_ID, seed_fbs_warehouse_binding
 from httpx import AsyncClient
 from sqlalchemy import select
+from sqlalchemy.orm import selectinload
 
 from app.core.settings import settings
 from app.db.session import SessionLocal
 from app.models.fbs_order import (
     CHECK_STATUS_NEW,
-    CHECK_STATUS_OK,
     FBS_ORDER_STATUS_ASSEMBLING,
     FBS_ORDER_STATUS_CANCELLED,
     FBS_ORDER_STATUS_IN_SUPPLY,
     FBS_ORDER_STATUS_NEW,
     FBS_ORDER_STATUS_PACKED,
     MAPPING_STATUS_MAPPED,
+    META_STATUS_ACCEPTED,
+    PACK_STATUS_PACKED,
+    PICK_STATUS_PICKED,
     RESERVE_STATUS_NO_STOCK,
     FbsOrder,
     FbsOrderMarking,
     FbsOrderReservation,
 )
+from app.models.fbs_order_pick import FbsOrderPick
+from app.models.fbs_packaging_fulfillment import FbsPackagingFulfillment
+from app.models.fbs_shipment_reversal_ledger import FbsShipmentReversalLedger
 from app.models.fbs_supply import (
     FBS_SUPPLY_STATUS_ASSEMBLING,
     FBS_SUPPLY_STATUS_DRAFT,
     FBS_SUPPLY_STATUS_PACKED,
     FbsSupply,
 )
-from app.models.packaging_task import PackagingTaskLine
+from app.models.inventory_movement import MOVEMENT_TYPE_FBS_SHIPMENT, InventoryMovement
+from app.models.packaging_task import PackagingTask, PackagingTaskLine
 from app.models.product import Product
+from app.models.storage_location import StorageLocation
 from app.services import inventory_service
 from app.services.fbs_packaging_integration_service import (
+    _write_off_active_orders_once,
     detach_cancelled_order_from_supply,
     try_promote_fbs_supply_if_ready,
 )
 from app.services.sorting_location_service import get_or_create_sorting_location
 from app.services.wb_marketplace_orders_service import (
+    _apply_wb_status_to_order,
     _try_reserve_order,
     sync_order_statuses,
     upsert_order_from_wb_row,
 )
+from tests.fbs_seed_helpers import DEFAULT_WB_WAREHOUSE_ID, seed_fbs_warehouse_binding
 
 
 async def _register_ff_admin(async_client: AsyncClient) -> tuple[dict[str, str], str]:
@@ -229,6 +240,32 @@ async def test_cancel_in_assembling_detaches_and_adjusts_packaging(
         ).scalar_one()
         assert line.qty_total == 1
 
+        remaining_order = (
+            await session.execute(
+                select(FbsOrder).where(
+                    FbsOrder.supply_id == supply_id,
+                    FbsOrder.status != FBS_ORDER_STATUS_CANCELLED,
+                )
+            )
+        ).scalar_one()
+        sorting = await get_or_create_sorting_location(session, tenant_id, warehouse_uuid)
+        now = datetime.now(tz=UTC)
+        session.add(
+            FbsOrderPick(
+                tenant_id=tenant_id,
+                fbs_order_id=remaining_order.id,
+                fbs_supply_id=supply_id,
+                source_storage_location_id=sorting.id,
+                sorting_storage_location_id=sorting.id,
+                product_id=remaining_order.product_id,
+                picked_at=now,
+                scan_idempotency_key=f"pick-{remaining_order.id}",
+            )
+        )
+        remaining_order.pick_status = PICK_STATUS_PICKED
+        remaining_order.picked_at = now
+        await session.commit()
+
         task = await async_client.get(
             f"/operations/packaging-tasks/{task_id}",
             headers=headers,
@@ -238,13 +275,13 @@ async def test_cancel_in_assembling_detaches_and_adjusts_packaging(
         pack = await async_client.post(
             f"/operations/packaging-tasks/{task_id}/lines/{pack_line['id']}/pack",
             headers=headers,
-            json={"quantity": pack_line["qty_total"]},
+            json={"quantity": 1, "idempotency_key": "fix-cancel-pack"},
         )
         assert pack.status_code == 200, pack.text
         complete = await async_client.post(
             f"/operations/packaging-tasks/{task_id}/complete",
             headers=headers,
-            json={"acknowledge_all_packed": True},
+            json={"acknowledge_all_packed": False},
         )
         assert complete.status_code == 200, complete.text
 
@@ -499,7 +536,7 @@ async def test_sync_order_statuses_paginates_past_500(
         assert tail.wb_status == "waiting"
 
 
-# TC-NEW-FBS-FIX-004 — PACKED waits for marking check_status ok
+# TC-NEW-FBS-FIX-004 — PACKED waits for accepted required WB metadata
 @pytest.mark.asyncio
 async def test_promote_packed_requires_marking_ok(
     async_client: AsyncClient,
@@ -513,6 +550,7 @@ async def test_promote_packed_requires_marking_ok(
     supply_id = uuid.uuid4()
     order_id = uuid.uuid4()
     task_id = uuid.uuid4()
+    line_id = uuid.uuid4()
 
     async with SessionLocal() as session:
         from app.models.packaging_task import PackagingTask, PackagingTaskLine
@@ -546,11 +584,13 @@ async def test_promote_packed_requires_marking_ok(
         )
         session.add(
             PackagingTaskLine(
+                id=line_id,
                 task_id=task_id,
                 product_id=product.id,
                 storage_location_id=sorting.id,
                 qty_total=1,
-                qty_confirmed_packed=1,
+                qty_confirmed_packed=0,
+                qty_packed_in_task=1,
             )
         )
         session.add(
@@ -576,10 +616,12 @@ async def test_promote_packed_requires_marking_ok(
                 wb_order_id=950001,
                 status=FBS_ORDER_STATUS_ASSEMBLING,
                 supply_id=supply_id,
+                pack_status=PACK_STATUS_PACKED,
                 created_at_wb=datetime.now(tz=UTC),
                 deadline_at=datetime.now(tz=UTC) + timedelta(hours=120),
                 mapping_status=MAPPING_STATUS_MAPPED,
                 reserve_status=RESERVE_STATUS_NO_STOCK,
+                required_meta_json=["sgtin"],
             )
         )
         session.add(
@@ -588,6 +630,16 @@ async def test_promote_packed_requires_marking_ok(
                 kind="sgtin",
                 value="010460000000000021N4N57RTCBUZTQ",
                 check_status=CHECK_STATUS_NEW,
+            )
+        )
+        session.add(
+            FbsPackagingFulfillment(
+                tenant_id=tenant_id,
+                fbs_order_id=order_id,
+                packaging_task_id=task_id,
+                packaging_task_line_id=line_id,
+                fulfilled_at=datetime.now(tz=UTC),
+                pack_idempotency_key="review-fix-pack",
             )
         )
         await session.flush()
@@ -601,7 +653,7 @@ async def test_promote_packed_requires_marking_ok(
                 select(FbsOrderMarking).where(FbsOrderMarking.order_id == order_id)
             )
         ).scalar_one()
-        marking.check_status = CHECK_STATUS_OK
+        marking.meta_status = META_STATUS_ACCEPTED
         await session.flush()
 
         promoted = await try_promote_fbs_supply_if_ready(session, tenant_id, supply_id)
@@ -754,3 +806,146 @@ async def test_sync_order_statuses_skips_sorted(
 
     assert updated == 0
     assert seen == []
+
+
+# TC-NEW-FBS-REVERSAL-001 — shipment and reversal stay on the fulfilled line.
+@pytest.mark.asyncio
+async def test_fbs_shipment_uses_each_order_fulfillment_location(
+    async_client: AsyncClient,
+) -> None:
+    headers, suffix = await _register_ff_admin(async_client)
+    seller_id, warehouse_id, tenant_id = await _setup_seller_with_token(
+        async_client, headers, suffix
+    )
+    seller_uuid = uuid.UUID(seller_id)
+    warehouse_uuid = uuid.UUID(warehouse_id)
+
+    async with SessionLocal() as session:
+        product = Product(
+            tenant_id=tenant_id,
+            seller_id=seller_uuid,
+            name="Two-cell FBS product",
+            sku_code=f"2CELL-{suffix[-8:]}",
+            wb_barcode=f"2CELL-BAR-{suffix[-8:]}",
+        )
+        task = PackagingTask(
+            tenant_id=tenant_id,
+            warehouse_id=warehouse_uuid,
+            status="done",
+        )
+        locations = [
+            StorageLocation(
+                tenant_id=tenant_id,
+                warehouse_id=warehouse_uuid,
+                code=f"L{index}-{suffix[-6:]}",
+                barcode=f"L{index}-{suffix}",
+            )
+            for index in (1, 2)
+        ]
+        session.add_all([product, task, *locations])
+        await session.flush()
+        supply = FbsSupply(
+            tenant_id=tenant_id,
+            seller_id=seller_uuid,
+            warehouse_id=warehouse_uuid,
+            wb_supply_id=f"two-cell-{suffix[-8:]}",
+            name="Two-cell supply",
+            status=FBS_SUPPLY_STATUS_ASSEMBLING,
+            delivery_type="warehouse_sc",
+            packaging_task_id=task.id,
+        )
+        session.add(supply)
+        await session.flush()
+
+        orders: list[FbsOrder] = []
+        for index, location in enumerate(locations, start=1):
+            line = PackagingTaskLine(
+                task=task,
+                product_id=product.id,
+                storage_location_id=location.id,
+                qty_total=1,
+                qty_packed_in_task=1,
+            )
+            order = FbsOrder(
+                tenant_id=tenant_id,
+                seller_id=seller_uuid,
+                warehouse_id=warehouse_uuid,
+                product_id=product.id,
+                wb_order_id=980000 + index,
+                status=FBS_ORDER_STATUS_ASSEMBLING,
+                supply=supply,
+                pack_status=PACK_STATUS_PACKED,
+                created_at_wb=datetime.now(tz=UTC),
+                deadline_at=datetime.now(tz=UTC) + timedelta(hours=24),
+                mapping_status=MAPPING_STATUS_MAPPED,
+                reserve_status=RESERVE_STATUS_NO_STOCK,
+            )
+            session.add_all([line, order])
+            await session.flush()
+            session.add(
+                FbsPackagingFulfillment(
+                    tenant_id=tenant_id,
+                    fbs_order_id=order.id,
+                    packaging_task_id=task.id,
+                    packaging_task_line_id=line.id,
+                    fulfilled_at=datetime.now(tz=UTC),
+                    pack_idempotency_key=f"two-cell-{index}",
+                )
+            )
+            await inventory_service.record_movement_and_adjust_balance(
+                session,
+                tenant_id=tenant_id,
+                product_id=product.id,
+                storage_location_id=location.id,
+                quantity_delta=1,
+                movement_type="inbound_intake",
+            )
+            orders.append(order)
+        await session.flush()
+
+        supply = (
+            await session.execute(
+                select(FbsSupply)
+                .where(FbsSupply.id == supply.id)
+                .options(selectinload(FbsSupply.orders))
+            )
+        ).scalar_one()
+        await _write_off_active_orders_once(session, tenant_id, supply, task)
+        ledgers = list(
+            (
+                await session.execute(
+                    select(FbsShipmentReversalLedger).where(
+                        FbsShipmentReversalLedger.fbs_order_id.in_([order.id for order in orders])
+                    )
+                )
+            ).scalars()
+        )
+        assert {ledger.fbs_order_id: ledger.storage_location_id for ledger in ledgers} == {
+            order.id: location.id for order, location in zip(orders, locations, strict=True)
+        }
+
+        await _apply_wb_status_to_order(session, orders[0], "canceled")
+        await _apply_wb_status_to_order(session, orders[0], "canceled")
+        await session.flush()
+        movements = list(
+            (
+                await session.execute(
+                    select(InventoryMovement).where(
+                        InventoryMovement.tenant_id == tenant_id,
+                        InventoryMovement.product_id == product.id,
+                        InventoryMovement.movement_type == MOVEMENT_TYPE_FBS_SHIPMENT
+                    )
+                )
+            ).scalars()
+        )
+        movement_locations = Counter(
+            (movement.storage_location_id, movement.quantity_delta)
+            for movement in movements
+        )
+        assert movement_locations == Counter(
+            {
+                (locations[0].id, -1): 1,
+                (locations[1].id, -1): 1,
+                (locations[0].id, 1): 1,
+            }
+        )

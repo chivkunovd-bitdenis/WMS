@@ -71,7 +71,10 @@ def _seed_orders_stock(client: TestClient, headers: dict[str, str], count: int) 
 def test_full_happy_path_admin_to_deliver(client: TestClient) -> None:
     """TC-NEW-FBS-EMU-001/002 happy: seed → new → supply → stickers → KIZ ok → deliver."""
     _seed_orders_stock(client, AUTH_A, 2)
-    created = client.post("/__admin/orders?seller=seller_a&count=2", headers=ADMIN)
+    created = client.post(
+        "/__admin/orders?seller=seller_a&count=2&chrt_id=111001",
+        headers=ADMIN,
+    )
     assert created.status_code == 200
     order_ids = [row["id"] for row in created.json()["orders"]]
     assert len(order_ids) == 2

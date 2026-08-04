@@ -1,37 +1,48 @@
-"""FBS PVZ shipment — cargo places (trbx), order binding, stickers."""
+# ruff: noqa: RUF001
+"""FBS PVZ shipment — cargo places (count-only trbx), QR print assets."""
 
 from __future__ import annotations
 
-import base64
-import binascii
 import uuid
 from dataclasses import dataclass
-from pathlib import Path
+from datetime import UTC, datetime
 from typing import Any
 
 import httpx
-from sqlalchemy import select
-from sqlalchemy.exc import IntegrityError
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
-from app.core.settings import settings
-from app.models.fbs_order import FbsOrder
-from app.models.fbs_supply import (
-    FBS_DELIVERY_TYPE_PVZ,
-    FBS_SUPPLY_STATUS_DONE,
-    FBS_SUPPLY_STATUS_IN_DELIVERY,
-    FbsSupply,
+from app.models.fbs_print_asset import (
+    PRINT_ASSET_KIND_CARGO_PLACE_QR,
+    PRINT_ASSET_STATUS_READY,
+    FbsPrintAsset,
 )
+from app.models.fbs_supply import FBS_DELIVERY_TYPE_PVZ, FbsSupply
 from app.models.fbs_trbx import FbsTrbx
-from app.models.packaging_task import PackagingTask
-from app.models.warehouse_box import WarehouseBox
-from app.services import warehouse_box_service as warehouse_box_svc
+from app.models.fbs_wb_operation import (
+    WB_OPERATION_STATE_CONFIRMED,
+    WB_OPERATION_STATE_FAILED,
+    WB_OPERATION_STATE_PENDING,
+    WB_OPERATION_STATE_PENDING_CONFIRMATION,
+)
+from app.services.fbs_print_asset_service import (
+    FbsPrintAssetError,
+    ensure_cargo_place_qr_assets,
+    map_print_asset,
+)
+from app.services.fbs_supply_reconcile_service import (
+    create_pending_cargo_operation,
+    get_cargo_operation_by_idempotency,
+    mark_cargo_operation_confirmed,
+    mark_operation_failed,
+    mark_operation_pending_confirmation,
+    request_hash_for_cargo_places,
+)
 from app.services.wildberries_client import (
     WildberriesClientError,
-    add_orders_to_marketplace_trbx,
     create_marketplace_supply_trbx,
-    fetch_marketplace_trbx_stickers,
+    fetch_marketplace_supply_trbx_list,
 )
 from app.services.wildberries_credentials_service import (
     _seller_in_tenant,
@@ -39,12 +50,10 @@ from app.services.wildberries_credentials_service import (
 )
 
 MAX_TRBX_SIDE_MM = 600
+MAX_TRBX_SIDES_SUM_MM = 1400
 MAX_TRBX_WEIGHT_G = 5000
-MIN_TRBX_ORDERS = 2
 MAX_SUPPLY_TRBX_VOLUME_MM3 = 1_000_000_000
-_TRBX_MUTATION_BLOCKED_SUPPLY_STATUSES = frozenset(
-    {FBS_SUPPLY_STATUS_IN_DELIVERY, FBS_SUPPLY_STATUS_DONE}
-)
+MEASUREMENTS_CONFIRMATION_SOURCE_OPERATOR = "operator_manual_missing_dims"
 
 
 class FbsShipmentPvzError(Exception):
@@ -54,11 +63,21 @@ class FbsShipmentPvzError(Exception):
 
 
 @dataclass(frozen=True)
+class CargoPlaceDraft:
+    client_id: str
+    length_mm: int | None
+    width_mm: int | None
+    height_mm: int | None
+    weight_g: int | None
+    measurements_confirmed: bool = False
+    packaging_box_id: uuid.UUID | None = None
+
+
+@dataclass(frozen=True)
 class TrbxMeta:
     id: uuid.UUID
     wb_trbx_id: str
     packaging_box_id: uuid.UUID | None
-    packaging_box_barcode: str | None
     length_mm: int | None
     width_mm: int | None
     height_mm: int | None
@@ -69,6 +88,17 @@ class TrbxMeta:
 def _wb_error_code(exc: WildberriesClientError) -> str:
     suffix = f"_{exc.status_code}" if exc.status_code else ""
     return f"wb_{exc.code}{suffix}"
+
+
+def _draft_to_dict(draft: CargoPlaceDraft) -> dict[str, Any]:
+    return {
+        "client_id": draft.client_id,
+        "length_mm": draft.length_mm,
+        "width_mm": draft.width_mm,
+        "height_mm": draft.height_mm,
+        "weight_g": draft.weight_g,
+        "measurements_confirmed": draft.measurements_confirmed,
+    }
 
 
 async def _require_marketplace_token(
@@ -88,15 +118,16 @@ async def _get_supply(
     supply_id: uuid.UUID,
     *,
     with_trbxes: bool = False,
+    with_orders: bool = False,
 ) -> FbsSupply | None:
     stmt = select(FbsSupply).where(
         FbsSupply.id == supply_id,
         FbsSupply.tenant_id == tenant_id,
     )
     if with_trbxes:
-        stmt = stmt.options(
-            selectinload(FbsSupply.trbxes).selectinload(FbsTrbx.packaging_box)
-        )
+        stmt = stmt.options(selectinload(FbsSupply.trbxes))
+    if with_orders:
+        stmt = stmt.options(selectinload(FbsSupply.orders))
     result = await session.execute(stmt)
     return result.scalar_one_or_none()
 
@@ -106,107 +137,552 @@ def _require_pvz_supply(supply: FbsSupply) -> None:
         raise FbsShipmentPvzError("wrong_delivery_type")
 
 
-def _require_trbx_mutable(supply: FbsSupply) -> None:
-    if supply.status in _TRBX_MUTATION_BLOCKED_SUPPLY_STATUSES:
-        raise FbsShipmentPvzError("supply_trbx_locked")
+def _box_dims_complete(draft: CargoPlaceDraft) -> bool:
+    return (
+        draft.length_mm is not None
+        and draft.width_mm is not None
+        and draft.height_mm is not None
+        and draft.weight_g is not None
+    )
 
 
-def _trbx_volume_mm3(trbx: FbsTrbx) -> int | None:
-    if trbx.length_mm is None or trbx.width_mm is None or trbx.height_mm is None:
+def _measurements_confirmation_audit(
+    boxes: list[CargoPlaceDraft],
+    *,
+    actor_user_id: uuid.UUID,
+    confirmation_source: str,
+    confirmed_at: datetime,
+) -> dict[str, Any] | None:
+    """Audit for explicit confirmation when box dims/weight are missing."""
+    confirmed_client_ids = [
+        draft.client_id
+        for draft in boxes
+        if draft.measurements_confirmed and not _box_dims_complete(draft)
+    ]
+    if not confirmed_client_ids:
         return None
-    return trbx.length_mm * trbx.width_mm * trbx.height_mm
+    return {
+        "actor_user_id": str(actor_user_id),
+        "confirmed_at": confirmed_at.isoformat(),
+        "source": confirmation_source,
+        "confirmed_client_ids": confirmed_client_ids,
+    }
 
 
-def _dims_volume_mm3(length_mm: int, width_mm: int, height_mm: int) -> int:
-    return length_mm * width_mm * height_mm
-
-
-def _validate_trbx_dims_weight(
-    length_mm: int,
-    width_mm: int,
-    height_mm: int,
-    weight_g: int,
-) -> None:
+def _validate_box_dims(length_mm: int, width_mm: int, height_mm: int, weight_g: int) -> None:
     if max(length_mm, width_mm, height_mm) > MAX_TRBX_SIDE_MM:
         raise FbsShipmentPvzError("trbx_oversized")
+    if length_mm + width_mm + height_mm > MAX_TRBX_SIDES_SUM_MM:
+        raise FbsShipmentPvzError("trbx_sides_sum_exceeded")
     if weight_g > MAX_TRBX_WEIGHT_G:
         raise FbsShipmentPvzError("trbx_overweight")
 
 
-def _validate_supply_volume(
-    trbxes: list[FbsTrbx],
-    *,
-    current_trbx_id: uuid.UUID,
-    new_volume_mm3: int,
-) -> None:
-    total = new_volume_mm3
-    for trbx in trbxes:
-        if trbx.id == current_trbx_id:
+def _box_volume_mm3(draft: CargoPlaceDraft) -> int | None:
+    if not _box_dims_complete(draft):
+        return None
+    assert draft.length_mm is not None
+    assert draft.width_mm is not None
+    assert draft.height_mm is not None
+    return draft.length_mm * draft.width_mm * draft.height_mm
+
+
+def _validate_count_limit(count: int, orders_count: int) -> None:
+    if count < 1:
+        raise FbsShipmentPvzError("invalid_trbx_count")
+    if count > orders_count + 1:
+        raise FbsShipmentPvzError("trbx_count_exceeded")
+
+
+def _preflight_issues_for_boxes(boxes: list[CargoPlaceDraft]) -> list[dict[str, str | None]]:
+    issues: list[dict[str, str | None]] = []
+    total_volume = 0
+    has_volume = True
+    for draft in boxes:
+        if not _box_dims_complete(draft):
+            if not draft.measurements_confirmed:
+                issues.append(
+                    {
+                        "client_id": draft.client_id,
+                        "code": "measurements_confirmation_required",
+                        "message": "Укажите размеры и вес или подтвердите отсутствие данных.",
+                    }
+                )
             continue
-        volume = _trbx_volume_mm3(trbx)
-        if volume is not None:
-            total += volume
-    if total > MAX_SUPPLY_TRBX_VOLUME_MM3:
-        raise FbsShipmentPvzError("trbx_volume_exceeded")
+        assert draft.length_mm is not None
+        assert draft.width_mm is not None
+        assert draft.height_mm is not None
+        assert draft.weight_g is not None
+        try:
+            _validate_box_dims(
+                draft.length_mm,
+                draft.width_mm,
+                draft.height_mm,
+                draft.weight_g,
+            )
+        except FbsShipmentPvzError as exc:
+            issues.append(
+                {
+                    "client_id": draft.client_id,
+                    "code": exc.code,
+                    "message": _issue_message(exc.code),
+                }
+            )
+        volume = _box_volume_mm3(draft)
+        if volume is None:
+            has_volume = False
+        else:
+            total_volume += volume
+    if has_volume and total_volume > MAX_SUPPLY_TRBX_VOLUME_MM3:
+        issues.append(
+            {
+                "client_id": None,
+                "code": "trbx_volume_exceeded",
+                "message": _issue_message("trbx_volume_exceeded"),
+            }
+        )
+    return issues
 
 
-def _sticker_relative_path(trbx_id: uuid.UUID) -> str:
-    return f"fbs-trbx-stickers/{trbx_id}.png"
+def _issue_message(code: str) -> str:
+    messages = {
+        "trbx_oversized": "Сторона коробки превышает 60 см.",
+        "trbx_sides_sum_exceeded": "Сумма сторон коробки превышает 140 см.",
+        "trbx_overweight": "Вес коробки превышает 5 кг.",
+        "trbx_volume_exceeded": "Суммарный объём грузомест превышает 1 м³.",
+        "measurements_confirmation_required": "Нужны размеры или явное подтверждение.",
+    }
+    return messages.get(code, code)
 
 
-def _sticker_storage_root() -> Path:
-    return (Path(settings.wms_data_dir) / "fbs-trbx-stickers").resolve()
+def _normalize_boxes(count: int, boxes: list[CargoPlaceDraft]) -> list[CargoPlaceDraft]:
+    if count < 1:
+        raise FbsShipmentPvzError("invalid_trbx_count")
+    if boxes and len(boxes) != count:
+        raise FbsShipmentPvzError("boxes_count_mismatch")
+    if boxes:
+        return boxes
+    return [
+        CargoPlaceDraft(
+            client_id=f"box-{idx + 1}",
+            length_mm=None,
+            width_mm=None,
+            height_mm=None,
+            weight_g=None,
+            measurements_confirmed=False,
+        )
+        for idx in range(count)
+    ]
 
 
-def _resolve_sticker_path(rel: str) -> Path:
-    root = _sticker_storage_root()
-    target = (Path(settings.wms_data_dir) / rel).resolve()
-    if root not in target.parents and target != root:
-        raise FbsShipmentPvzError("invalid_sticker_path")
-    return target
-
-
-def _decode_sticker_payload(raw: object) -> bytes | None:
-    if raw is None:
-        return None
-    if isinstance(raw, bytes):
-        return raw
-    if not isinstance(raw, str) or not raw.strip():
-        return None
-    payload = raw.strip()
-    if payload.startswith("data:"):
-        comma = payload.find(",")
-        if comma == -1:
-            return None
-        payload = payload[comma + 1 :]
-    try:
-        return base64.b64decode(payload, validate=True)
-    except (binascii.Error, ValueError):
-        return None
-
-
-def _save_sticker_png(trbx_id: uuid.UUID, png_bytes: bytes) -> str:
-    rel = _sticker_relative_path(trbx_id)
-    target = _resolve_sticker_path(rel)
-    target.parent.mkdir(parents=True, exist_ok=True)
-    target.write_bytes(png_bytes)
-    return rel
-
-
-def _trbx_meta(trbx: FbsTrbx) -> TrbxMeta:
-    return TrbxMeta(
-        id=trbx.id,
-        wb_trbx_id=trbx.wb_trbx_id,
-        packaging_box_id=trbx.packaging_box_id,
-        packaging_box_barcode=(
-            trbx.packaging_box.internal_barcode if trbx.packaging_box is not None else None
-        ),
-        length_mm=trbx.length_mm,
-        width_mm=trbx.width_mm,
-        height_mm=trbx.height_mm,
-        weight_g=trbx.weight_g,
-        sticker_file=trbx.sticker_file,
+async def preflight_supply_cargo_places(
+    session: AsyncSession,
+    tenant_id: uuid.UUID,
+    supply_id: uuid.UUID,
+    count: int,
+    boxes: list[CargoPlaceDraft],
+) -> dict[str, Any]:
+    effective_boxes = _normalize_boxes(count, boxes)
+    return await preflight_cargo_places(
+        session,
+        tenant_id,
+        supply_id,
+        effective_boxes,
     )
+
+
+async def preflight_cargo_places(
+    session: AsyncSession,
+    tenant_id: uuid.UUID,
+    supply_id: uuid.UUID,
+    boxes: list[CargoPlaceDraft],
+) -> dict[str, Any]:
+    supply = await _get_supply(session, tenant_id, supply_id, with_orders=True)
+    if supply is None:
+        raise FbsShipmentPvzError("supply_not_found")
+    _require_pvz_supply(supply)
+
+    count = len(boxes)
+    _validate_count_limit(count, len(supply.orders))
+
+    issues = _preflight_issues_for_boxes(boxes)
+    total_volume: int | None = None
+    if boxes and all(_box_volume_mm3(box) is not None for box in boxes):
+        total_volume = sum(vol for vol in (_box_volume_mm3(box) for box in boxes) if vol)
+
+    return {
+        "compatible": not issues,
+        "limits": {
+            "max_side_mm": MAX_TRBX_SIDE_MM,
+            "max_sides_sum_mm": MAX_TRBX_SIDES_SUM_MM,
+            "max_weight_g": MAX_TRBX_WEIGHT_G,
+            "max_total_volume_m3": MAX_SUPPLY_TRBX_VOLUME_MM3 / 1_000_000_000,
+        },
+        "summary": {
+            "boxes_count": count,
+            "orders_count": len(supply.orders),
+            "total_volume_m3": (
+                total_volume / 1_000_000_000 if total_volume is not None else None
+            ),
+        },
+        "issues": issues,
+    }
+
+
+async def _reconcile_trbxes_from_wb(
+    session: AsyncSession,
+    supply: FbsSupply,
+    wb_trbx_ids: list[str],
+    boxes: list[CargoPlaceDraft],
+) -> list[FbsTrbx]:
+    by_wb_id = {trbx.wb_trbx_id: trbx for trbx in supply.trbxes}
+    result: list[FbsTrbx] = []
+    for idx, wb_trbx_id in enumerate(wb_trbx_ids):
+        trbx = by_wb_id.get(wb_trbx_id)
+        draft = boxes[idx] if idx < len(boxes) else None
+        if trbx is None:
+            trbx = FbsTrbx(
+                supply_id=supply.id,
+                wb_trbx_id=wb_trbx_id,
+                length_mm=draft.length_mm if draft else None,
+                width_mm=draft.width_mm if draft else None,
+                height_mm=draft.height_mm if draft else None,
+                weight_g=draft.weight_g if draft else None,
+                packaging_box_id=draft.packaging_box_id if draft else None,
+            )
+            session.add(trbx)
+            supply.trbxes.append(trbx)
+        if draft is not None:
+            trbx.length_mm = draft.length_mm
+            trbx.width_mm = draft.width_mm
+            trbx.height_mm = draft.height_mm
+            trbx.weight_g = draft.weight_g
+            trbx.packaging_box_id = draft.packaging_box_id
+        result.append(trbx)
+    await session.flush()
+    return result
+
+
+async def _load_qr_assets(
+    session: AsyncSession,
+    tenant_id: uuid.UUID,
+    trbx_ids: list[uuid.UUID],
+) -> dict[uuid.UUID, FbsPrintAsset]:
+    if not trbx_ids:
+        return {}
+    stmt = select(FbsPrintAsset).where(
+        FbsPrintAsset.tenant_id == tenant_id,
+        FbsPrintAsset.fbs_trbx_id.in_(trbx_ids),
+        FbsPrintAsset.kind == PRINT_ASSET_KIND_CARGO_PLACE_QR,
+        FbsPrintAsset.status == PRINT_ASSET_STATUS_READY,
+    )
+    res = await session.execute(stmt)
+    return {asset.fbs_trbx_id: asset for asset in res.scalars().all() if asset.fbs_trbx_id}
+
+
+def _map_cargo_place(trbx: FbsTrbx, qr_asset: FbsPrintAsset | None) -> dict[str, Any]:
+    return {
+        "id": str(trbx.id),
+        "wb_trbx_id": trbx.wb_trbx_id,
+        "length_mm": trbx.length_mm,
+        "width_mm": trbx.width_mm,
+        "height_mm": trbx.height_mm,
+        "weight_g": trbx.weight_g,
+        "qr_asset": map_print_asset(qr_asset) if qr_asset is not None else None,
+        "applied_at": trbx.qr_applied_at.isoformat() if trbx.qr_applied_at else None,
+    }
+
+
+def _wrap_print_asset_error(exc: FbsPrintAssetError) -> FbsShipmentPvzError:
+    return FbsShipmentPvzError(exc.code)
+
+
+async def _ensure_cargo_qrs(
+    session: AsyncSession,
+    tenant_id: uuid.UUID,
+    supply: FbsSupply,
+    http_client: httpx.AsyncClient,
+    *,
+    trbxes: list[FbsTrbx] | None = None,
+) -> None:
+    try:
+        await ensure_cargo_place_qr_assets(
+            session,
+            tenant_id,
+            supply,
+            http_client,
+            trbxes=trbxes,
+        )
+    except FbsPrintAssetError as exc:
+        raise _wrap_print_asset_error(exc) from exc
+
+
+async def list_cargo_places(
+    session: AsyncSession,
+    tenant_id: uuid.UUID,
+    supply_id: uuid.UUID,
+    http_client: httpx.AsyncClient,
+) -> list[dict[str, Any]]:
+    supply = await _get_supply(session, tenant_id, supply_id, with_trbxes=True)
+    if supply is None:
+        raise FbsShipmentPvzError("supply_not_found")
+    _require_pvz_supply(supply)
+
+    token = await _require_marketplace_token(session, tenant_id, supply.seller_id)
+    try:
+        wb_ids = await fetch_marketplace_supply_trbx_list(
+            http_client,
+            api_token=token,
+            supply_id=supply.wb_supply_id,
+        )
+    except WildberriesClientError as exc:
+        raise FbsShipmentPvzError(_wb_error_code(exc)) from exc
+
+    if wb_ids:
+        await _reconcile_trbxes_from_wb(session, supply, wb_ids, boxes=[])
+
+    await _ensure_cargo_qrs(session, tenant_id, supply, http_client)
+    qr_by_trbx = await _load_qr_assets(session, tenant_id, [t.id for t in supply.trbxes])
+    return [_map_cargo_place(trbx, qr_by_trbx.get(trbx.id)) for trbx in supply.trbxes]
+
+
+async def create_cargo_places(
+    session: AsyncSession,
+    tenant_id: uuid.UUID,
+    supply_id: uuid.UUID,
+    count: int,
+    boxes: list[CargoPlaceDraft],
+    idempotency_key: str,
+    http_client: httpx.AsyncClient,
+    *,
+    actor_user_id: uuid.UUID | None = None,
+    confirmation_source: str = MEASUREMENTS_CONFIRMATION_SOURCE_OPERATOR,
+) -> list[dict[str, Any]]:
+    if not idempotency_key.strip():
+        raise FbsShipmentPvzError("missing_idempotency_key")
+
+    supply = await _get_supply(
+        session,
+        tenant_id,
+        supply_id,
+        with_trbxes=True,
+        with_orders=True,
+    )
+    if supply is None:
+        raise FbsShipmentPvzError("supply_not_found")
+    _require_pvz_supply(supply)
+
+    effective_boxes = _normalize_boxes(count, boxes)
+    if len(effective_boxes) != count:
+        raise FbsShipmentPvzError("invalid_trbx_count")
+
+    _validate_count_limit(count, len(supply.orders))
+    preflight = await preflight_cargo_places(
+        session,
+        tenant_id,
+        supply_id,
+        effective_boxes,
+    )
+    if not preflight["compatible"]:
+        raise FbsShipmentPvzError("cargo_places_preflight_failed")
+
+    boxes_payload = [_draft_to_dict(box) for box in effective_boxes]
+    confirmed_at = datetime.now(UTC)
+    if any(
+        draft.measurements_confirmed and not _box_dims_complete(draft)
+        for draft in effective_boxes
+    ):
+        if actor_user_id is None:
+            raise FbsShipmentPvzError("cargo_places_preflight_failed")
+        measurements_audit = _measurements_confirmation_audit(
+            effective_boxes,
+            actor_user_id=actor_user_id,
+            confirmation_source=confirmation_source,
+            confirmed_at=confirmed_at,
+        )
+    else:
+        measurements_audit = None
+
+    req_hash = request_hash_for_cargo_places(
+        supply_id=supply.id,
+        count=count,
+        boxes=boxes_payload,
+    )
+
+    existing_op = await get_cargo_operation_by_idempotency(
+        session,
+        supply.seller_id,
+        idempotency_key,
+    )
+    if existing_op is not None:
+        if existing_op.request_hash != req_hash:
+            raise FbsShipmentPvzError("idempotency_key_reused")
+        if existing_op.state == WB_OPERATION_STATE_CONFIRMED:
+            return await list_cargo_places(session, tenant_id, supply_id, http_client)
+
+        # A timeout after the WB mutation is deliberately never retried blindly.
+        # First compare WB's current list with the snapshot persisted before the
+        # mutation; only an exact, attributable delta can be finalized safely.
+        if existing_op.state == WB_OPERATION_STATE_PENDING_CONFIRMATION:
+            return await _reconcile_pending_cargo_operation(
+                session,
+                tenant_id,
+                supply,
+                existing_op,
+                effective_boxes,
+                http_client,
+            )
+        if existing_op.state == WB_OPERATION_STATE_PENDING:
+            raise FbsShipmentPvzError("wb_pending_confirmation")
+        if existing_op.state == WB_OPERATION_STATE_FAILED:
+            raise FbsShipmentPvzError(existing_op.error_code or "wb_operation_failed")
+
+    token = await _require_marketplace_token(session, tenant_id, supply.seller_id)
+    operation = existing_op
+    if operation is None:
+        # This read is not part of the mutation.  Its snapshot lets a retry
+        # distinguish cargo places created by this request from older places.
+        try:
+            wb_trbx_ids_before = await fetch_marketplace_supply_trbx_list(
+                http_client,
+                api_token=token,
+                supply_id=supply.wb_supply_id,
+            )
+        except WildberriesClientError as exc:
+            raise FbsShipmentPvzError(_wb_error_code(exc)) from exc
+        request_summary: dict[str, Any] = {
+            "supply_id": str(supply.id),
+            "count": count,
+            "boxes": boxes_payload,
+            "wb_trbx_ids_before": wb_trbx_ids_before,
+        }
+        if measurements_audit is not None:
+            request_summary["measurements_confirmation_audit"] = measurements_audit
+        operation = await create_pending_cargo_operation(
+            session,
+            tenant_id=tenant_id,
+            seller_id=supply.seller_id,
+            idempotency_key=idempotency_key,
+            request_hash=req_hash,
+            request_summary=request_summary,
+            local_supply_id=supply.id,
+        )
+
+    try:
+        wb_ids_created = await create_marketplace_supply_trbx(
+            http_client,
+            api_token=token,
+            supply_id=supply.wb_supply_id,
+            amount=count,
+        )
+    except WildberriesClientError as exc:
+        if exc.code == "transport_error":
+            await mark_operation_pending_confirmation(
+                session,
+                operation,
+                wb_supply_id=supply.wb_supply_id,
+                local_supply_id=supply.id,
+                error_code="wb_timeout",
+            )
+            # The API route intentionally raises after this service call.  A
+            # durable checkpoint is therefore required before the HTTP rollback.
+            await session.commit()
+            raise FbsShipmentPvzError("wb_timeout") from exc
+        await mark_operation_failed(
+            session,
+            operation,
+            error_code=_wb_error_code(exc),
+            local_supply_id=supply.id,
+        )
+        await session.commit()
+        raise FbsShipmentPvzError(_wb_error_code(exc)) from exc
+
+    return await _finalize_cargo_operation(
+        session,
+        tenant_id,
+        supply,
+        operation,
+        wb_ids_created,
+        effective_boxes,
+        http_client,
+    )
+
+
+async def _finalize_cargo_operation(
+    session: AsyncSession,
+    tenant_id: uuid.UUID,
+    supply: FbsSupply,
+    operation: Any,
+    wb_trbx_ids: list[str],
+    boxes: list[CargoPlaceDraft],
+    http_client: httpx.AsyncClient,
+) -> list[dict[str, Any]]:
+    """Persist the WB create result before the optional QR projection."""
+    trbxes = await _reconcile_trbxes_from_wb(session, supply, wb_trbx_ids, boxes)
+    await mark_cargo_operation_confirmed(
+        session,
+        operation,
+        wb_supply_id=supply.wb_supply_id,
+        local_supply_id=supply.id,
+        response_summary={"wb_trbx_ids": wb_trbx_ids},
+    )
+    # QR retrieval is a recoverable local projection.  It must not undo a
+    # confirmed WB create if its own HTTP request fails.
+    await session.commit()
+    await _ensure_cargo_qrs(
+        session,
+        tenant_id,
+        supply,
+        http_client,
+        trbxes=trbxes,
+    )
+    qr_by_trbx = await _load_qr_assets(session, tenant_id, [t.id for t in trbxes])
+    return [_map_cargo_place(trbx, qr_by_trbx.get(trbx.id)) for trbx in trbxes]
+
+
+async def _reconcile_pending_cargo_operation(
+    session: AsyncSession,
+    tenant_id: uuid.UUID,
+    supply: FbsSupply,
+    operation: Any,
+    boxes: list[CargoPlaceDraft],
+    http_client: httpx.AsyncClient,
+) -> list[dict[str, Any]]:
+    summary = operation.request_summary_json or {}
+    before_raw = summary.get("wb_trbx_ids_before")
+    expected_count = summary.get("count")
+    if not isinstance(before_raw, list) or not isinstance(expected_count, int):
+        raise FbsShipmentPvzError("wb_pending_confirmation")
+
+    token = await _require_marketplace_token(session, tenant_id, supply.seller_id)
+    try:
+        current_ids = await fetch_marketplace_supply_trbx_list(
+            http_client,
+            api_token=token,
+            supply_id=supply.wb_supply_id,
+        )
+    except WildberriesClientError as exc:
+        # The outcome remains unknown: preserve the journal and never send a
+        # second create merely because reconciliation could not be read.
+        raise FbsShipmentPvzError(
+            "wb_timeout" if exc.code == "transport_error" else _wb_error_code(exc)
+        ) from exc
+
+    created_ids = [wb_id for wb_id in current_ids if wb_id not in set(before_raw)]
+    if len(created_ids) != expected_count:
+        raise FbsShipmentPvzError("wb_pending_confirmation")
+    return await _finalize_cargo_operation(
+        session,
+        tenant_id,
+        supply,
+        operation,
+        created_ids,
+        boxes,
+        http_client,
+    )
+
+
+# Legacy helpers kept for deprecated /trbx routes.
 
 
 async def create_trbxes(
@@ -220,232 +696,50 @@ async def create_trbxes(
     width_mm: int | None = None,
     height_mm: int | None = None,
     weight_g: int | None = None,
+    actor_user_id: uuid.UUID | None = None,
 ) -> list[FbsTrbx]:
-    if count < 1:
-        raise FbsShipmentPvzError("invalid_trbx_count")
-
-    supply = await _get_supply(session, tenant_id, supply_id, with_trbxes=True)
-    if supply is None:
-        raise FbsShipmentPvzError("supply_not_found")
-    _require_pvz_supply(supply)
-    _require_trbx_mutable(supply)
-
-    dims_provided = (
-        length_mm is not None
-        and width_mm is not None
-        and height_mm is not None
-        and weight_g is not None
-    )
-    if dims_provided:
-        assert length_mm is not None
-        assert width_mm is not None
-        assert height_mm is not None
-        assert weight_g is not None
-        _validate_trbx_dims_weight(length_mm, width_mm, height_mm, weight_g)
-        new_volume = _dims_volume_mm3(length_mm, width_mm, height_mm) * count
-        existing_volume = sum(
-            vol for trbx in supply.trbxes if (vol := _trbx_volume_mm3(trbx)) is not None
-        )
-        if existing_volume + new_volume > MAX_SUPPLY_TRBX_VOLUME_MM3:
-            raise FbsShipmentPvzError("trbx_volume_exceeded")
-
-    token = await _require_marketplace_token(session, tenant_id, supply.seller_id)
-    try:
-        wb_ids = await create_marketplace_supply_trbx(
-            http_client,
-            api_token=token,
-            supply_id=supply.wb_supply_id,
-            amount=count,
-        )
-    except WildberriesClientError as exc:
-        raise FbsShipmentPvzError(_wb_error_code(exc)) from exc
-
-    created: list[FbsTrbx] = []
-    for wb_trbx_id in wb_ids:
-        trbx = FbsTrbx(
-            supply_id=supply.id,
-            wb_trbx_id=wb_trbx_id,
+    boxes = [
+        CargoPlaceDraft(
+            client_id=f"legacy-{idx}",
             length_mm=length_mm,
             width_mm=width_mm,
             height_mm=height_mm,
             weight_g=weight_g,
+            measurements_confirmed=(
+                length_mm is None and width_mm is None and height_mm is None and weight_g is None
+            ),
         )
-        session.add(trbx)
-        created.append(trbx)
-
-    await session.flush()
-    return created
-
-
-async def bind_orders_to_trbx(
-    session: AsyncSession,
-    tenant_id: uuid.UUID,
-    supply_id: uuid.UUID,
-    trbx_id: uuid.UUID,
-    order_ids: list[uuid.UUID],
-    length_mm: int,
-    width_mm: int,
-    height_mm: int,
-    weight_g: int,
-    http_client: httpx.AsyncClient,
-) -> FbsTrbx:
-    unique_order_ids = list(dict.fromkeys(order_ids))
-    supply = await _get_supply(session, tenant_id, supply_id, with_trbxes=True)
-    if supply is None:
-        raise FbsShipmentPvzError("supply_not_found")
-    _require_pvz_supply(supply)
-    _require_trbx_mutable(supply)
-
-    if len(unique_order_ids) < MIN_TRBX_ORDERS:
-        raise FbsShipmentPvzError("trbx_min_orders")
-
-    _validate_trbx_dims_weight(length_mm, width_mm, height_mm, weight_g)
-    new_volume = _dims_volume_mm3(length_mm, width_mm, height_mm)
-
-    trbx = next((row for row in supply.trbxes if row.id == trbx_id), None)
-    if trbx is None:
-        raise FbsShipmentPvzError("trbx_not_found")
-
-    _validate_supply_volume(supply.trbxes, current_trbx_id=trbx_id, new_volume_mm3=new_volume)
-
-    stmt = (
-        select(FbsOrder)
-        .where(
-            FbsOrder.id.in_(unique_order_ids),
-            FbsOrder.tenant_id == tenant_id,
-            FbsOrder.supply_id == supply_id,
-        )
-        .with_for_update()
+        for idx in range(count)
+    ]
+    key = f"legacy-trbx-{supply_id}-{count}-{uuid.uuid4()}"
+    places = await create_cargo_places(
+        session,
+        tenant_id,
+        supply_id,
+        count,
+        boxes,
+        key,
+        http_client,
+        actor_user_id=actor_user_id,
+        confirmation_source="legacy_trbx_compatibility",
     )
-    result = await session.execute(stmt)
-    orders = list(result.scalars().all())
-    if len(orders) != len(unique_order_ids):
-        raise FbsShipmentPvzError("order_not_in_supply")
-
-    for order in orders:
-        if order.trbx_id is not None and order.trbx_id != trbx_id:
-            raise FbsShipmentPvzError("order_already_in_trbx")
-
-    wb_order_ids = [int(order.wb_order_id) for order in orders]
-    token = await _require_marketplace_token(session, tenant_id, supply.seller_id)
-    try:
-        await add_orders_to_marketplace_trbx(
-            http_client,
-            api_token=token,
-            supply_id=supply.wb_supply_id,
-            trbx_id=trbx.wb_trbx_id,
-            order_ids=wb_order_ids,
-        )
-    except WildberriesClientError as exc:
-        raise FbsShipmentPvzError(_wb_error_code(exc)) from exc
-
-    trbx.length_mm = length_mm
-    trbx.width_mm = width_mm
-    trbx.height_mm = height_mm
-    trbx.weight_g = weight_g
-    for order in orders:
-        order.trbx_id = trbx.id
-
-    await session.flush()
-    return trbx
-
-
-async def bind_packaging_box_to_trbx(
-    session: AsyncSession,
-    tenant_id: uuid.UUID,
-    supply_id: uuid.UUID,
-    trbx_id: uuid.UUID,
-    packaging_box_id: uuid.UUID,
-) -> FbsTrbx:
-    """Bind an existing warehouse box owned by the PVZ supply's task."""
     supply = await _get_supply(session, tenant_id, supply_id, with_trbxes=True)
-    if supply is None:
-        raise FbsShipmentPvzError("supply_not_found")
-    _require_pvz_supply(supply)
-    _require_trbx_mutable(supply)
+    assert supply is not None
+    by_id = {str(t.id): t for t in supply.trbxes}
+    return [by_id[p["id"]] for p in places if p["id"] in by_id]
 
-    trbx = next((row for row in supply.trbxes if row.id == trbx_id), None)
-    if trbx is None:
-        raise FbsShipmentPvzError("trbx_not_found")
 
-    if supply.packaging_task_id is None:
-        raise FbsShipmentPvzError("packaging_task_not_found")
-    task_stmt = select(PackagingTask).where(
-        PackagingTask.id == supply.packaging_task_id,
-        PackagingTask.tenant_id == tenant_id,
-        PackagingTask.warehouse_id == supply.warehouse_id,
+def _trbx_meta(trbx: FbsTrbx) -> TrbxMeta:
+    return TrbxMeta(
+        id=trbx.id,
+        wb_trbx_id=trbx.wb_trbx_id,
+        packaging_box_id=trbx.packaging_box_id,
+        length_mm=trbx.length_mm,
+        width_mm=trbx.width_mm,
+        height_mm=trbx.height_mm,
+        weight_g=trbx.weight_g,
+        sticker_file=trbx.sticker_file,
     )
-    task = (await session.execute(task_stmt)).scalar_one_or_none()
-    if task is None:
-        raise FbsShipmentPvzError("packaging_task_not_found")
-
-    box_stmt = select(WarehouseBox).where(
-        WarehouseBox.id == packaging_box_id,
-        WarehouseBox.tenant_id == tenant_id,
-        WarehouseBox.warehouse_id == supply.warehouse_id,
-    )
-    box = (await session.execute(box_stmt)).scalar_one_or_none()
-    if box is None:
-        raise FbsShipmentPvzError("packaging_box_not_found")
-
-    already_bound = (
-        await session.execute(
-            select(FbsTrbx.id).where(
-                FbsTrbx.packaging_box_id == box.id,
-                FbsTrbx.id != trbx.id,
-            )
-        )
-    ).first()
-    if already_bound is not None:
-        raise FbsShipmentPvzError("packaging_box_already_bound")
-
-    trbx.packaging_box_id = box.id
-    await session.flush()
-    return trbx
-
-
-async def create_or_bind_packaging_box_to_trbx(
-    session: AsyncSession,
-    tenant_id: uuid.UUID,
-    supply_id: uuid.UUID,
-    trbx_id: uuid.UUID,
-    *,
-    barcode: str | None = None,
-) -> FbsTrbx:
-    """Create a physical WMS box, or resolve a scanned one, and bind it to a WB trbx."""
-    supply = await _get_supply(session, tenant_id, supply_id, with_trbxes=True)
-    if supply is None:
-        raise FbsShipmentPvzError("supply_not_found")
-    _require_pvz_supply(supply)
-    _require_trbx_mutable(supply)
-    if supply.packaging_task_id is None:
-        raise FbsShipmentPvzError("packaging_task_not_found")
-
-    raw = (barcode or "").strip()
-    if raw:
-        box = await warehouse_box_svc.get_by_barcode(session, tenant_id, raw)
-        if box is None or box.warehouse_id != supply.warehouse_id:
-            raise FbsShipmentPvzError("packaging_box_not_found")
-    else:
-        box = await warehouse_box_svc.create_warehouse_box(
-            session,
-            tenant_id,
-            warehouse_id=supply.warehouse_id,
-        )
-
-    try:
-        async with session.begin_nested():
-            trbx = await bind_packaging_box_to_trbx(
-                session,
-                tenant_id,
-                supply_id,
-                trbx_id,
-                box.id,
-            )
-    except IntegrityError as exc:
-        raise FbsShipmentPvzError("packaging_box_already_bound") from exc
-    trbx.packaging_box = box
-    return trbx
 
 
 async def fetch_trbx_stickers(
@@ -456,54 +750,30 @@ async def fetch_trbx_stickers(
     *,
     type: str = "png",
 ) -> list[TrbxMeta]:
+    _ = type
     supply = await _get_supply(session, tenant_id, supply_id, with_trbxes=True)
     if supply is None:
         raise FbsShipmentPvzError("supply_not_found")
     _require_pvz_supply(supply)
-    if not supply.trbxes:
-        return []
-
-    uncached: list[FbsTrbx] = []
-    for trbx in supply.trbxes:
-        if trbx.sticker_file:
-            cached = _resolve_sticker_path(trbx.sticker_file)
-            if cached.is_file():
-                continue
-        uncached.append(trbx)
-
-    if uncached:
-        token = await _require_marketplace_token(session, tenant_id, supply.seller_id)
-        try:
-            stickers = await fetch_marketplace_trbx_stickers(
-                http_client,
-                api_token=token,
-                supply_id=supply.wb_supply_id,
-                trbx_ids=[trbx.wb_trbx_id for trbx in uncached],
-                type=type,
-            )
-        except WildberriesClientError as exc:
-            raise FbsShipmentPvzError(_wb_error_code(exc)) from exc
-
-        by_wb_id: dict[str, dict[str, Any]] = {}
-        for row in stickers:
-            for key in ("trbxId", "trbx_id", "id"):
-                wb_id = row.get(key)
-                if wb_id is not None:
-                    by_wb_id[str(wb_id)] = row
-                    break
-
-        for trbx in uncached:
-            sticker_row = by_wb_id.get(trbx.wb_trbx_id)
-            if sticker_row is None:
-                raise FbsShipmentPvzError("wb_invalid_response")
-            png_bytes: bytes | None = None
-            for key in ("file", "barcode", "image"):
-                png_bytes = _decode_sticker_payload(sticker_row.get(key))
-                if png_bytes is not None:
-                    break
-            if png_bytes is None:
-                raise FbsShipmentPvzError("wb_invalid_response")
-            trbx.sticker_file = _save_sticker_png(trbx.id, png_bytes)
-
+    await _ensure_cargo_qrs(session, tenant_id, supply, http_client)
     await session.flush()
     return [_trbx_meta(trbx) for trbx in supply.trbxes]
+
+
+async def supply_has_ready_cargo_place_qrs(
+    session: AsyncSession,
+    tenant_id: uuid.UUID,
+    supply: FbsSupply,
+) -> bool:
+    if not supply.trbxes:
+        return False
+    trbx_ids = [trbx.id for trbx in supply.trbxes]
+    stmt = select(func.count()).select_from(FbsPrintAsset).where(
+        FbsPrintAsset.tenant_id == tenant_id,
+        FbsPrintAsset.fbs_trbx_id.in_(trbx_ids),
+        FbsPrintAsset.kind == PRINT_ASSET_KIND_CARGO_PLACE_QR,
+        FbsPrintAsset.status == PRINT_ASSET_STATUS_READY,
+    )
+    result = await session.execute(stmt)
+    ready_count = int(result.scalar_one())
+    return ready_count == len(trbx_ids)

@@ -1,5 +1,10 @@
 # SPEC — модуль FBS (Wildberries «Маркетплейс») для WMS
 
+> **⚠️ DEPRECATED (FBSFLOW-130, 2026-08-03):** ранний тех-спек до `tasks/fbs-operator-flow/`.  
+> **Актуально:** `tasks/fbs-operator-flow/BACKEND_CONTRACT.md`, `FRONTEND_TASKS.md`, `ERROR_CATALOG.md`, `OPENAPI.md`.  
+> **Не использовать в новом frontend:** `sticker_file`/`barcode_file` как API-поля; обязательный bind order→trbx; add-one-order вместо batch `from-orders`.  
+> Исторический текст ниже сохранён для трассировки решений.
+
 > Тех-спек по стадии 1–2. Источники: `wb-docs/_CONSOLIDATED_FBS_SPEC.md` (процесс WB), `api-feasibility.md`
 > (что умеет API). Принцип: **повторяем WB один-в-один**, отличаемся только там, где диктует наша специфика
 > (мультиселлер + свой модуль упаковки). Точные имена эндпоинтов v3 — сверить с `dev.wildberries.ru`

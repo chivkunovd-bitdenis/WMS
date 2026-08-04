@@ -1,0 +1,113 @@
+{
+  "supply": {
+    "id": "c9c90d62-a274-4c96-b634-2198801fb9e9",
+    "wb_supply_id": "WB-GI-2854F56466FE",
+    "name": "Handoff PVZ",
+    "status": "draft",
+    "delivery_type": "pvz",
+    "seller": {
+      "id": "672fa302-b799-4b38-8fe5-234cec94442c",
+      "name": "Emu seller_a"
+    },
+    "wb_warehouse": {
+      "id": 501001,
+      "name": null
+    },
+    "wms_warehouse": {
+      "id": "e77168e2-474d-4d58-86aa-cd5019dde13f",
+      "name": "Operator FBS WH"
+    },
+    "planned_destination": null,
+    "nearest_deadline_at": "2026-08-08T16:48:18",
+    "packaging_task_id": null,
+    "barcode_asset": null
+  },
+  "stage": "composition",
+  "progress": {
+    "picked": 0,
+    "packed": 0,
+    "metadata_ready": 1,
+    "stickers_ready": 0,
+    "total": 1
+  },
+  "blockers": [],
+  "orders": [
+    {
+      "id": "b0d676bc-e418-4b99-b050-e4292df1d88c",
+      "wb_order_id": 510005,
+      "status": "in_supply",
+      "wb_status": "waiting",
+      "seller": {
+        "id": "672fa302-b799-4b38-8fe5-234cec94442c",
+        "name": "Emu seller_a"
+      },
+      "wb_warehouse": {
+        "id": 501001,
+        "name": "Склад WB неизвестен"
+      },
+      "wms_warehouse": {
+        "id": "e77168e2-474d-4d58-86aa-cd5019dde13f",
+        "name": "Operator FBS WH"
+      },
+      "product": {
+        "id": "379ee9c8-383a-46e0-ab69-9aa3fe14adb3",
+        "name": "EMU-CAN-PVZ-TRUE",
+        "image_url": null,
+        "seller_article": "seller_a-111005",
+        "wb_article": 123456793,
+        "barcode": "2000000000015",
+        "size": null
+      },
+      "inventory": {
+        "available_unpacked": 50,
+        "locations": [
+          {
+            "id": "d82b9036-feb7-4545-b7ae-d8f97f937b78",
+            "code": "OP-878000",
+            "available_unpacked": 50
+          }
+        ]
+      },
+      "buyer_type": "individual",
+      "cargo_type": "mgt",
+      "can_pvz": true,
+      "metadata": {
+        "required": [],
+        "optional": [],
+        "states": [],
+        "delivery_allowed": false,
+        "last_checked_at": null
+      },
+      "sticker": {
+        "status": "not_requested",
+        "asset_url": null,
+        "applied_at": null
+      },
+      "pick": {
+        "status": "pending",
+        "location_code": null,
+        "picked_at": null
+      },
+      "pack": {
+        "status": "pending",
+        "packed_at": null
+      },
+      "created_at_wb": "2026-08-03T16:48:18",
+      "deadline_at": "2026-08-08T16:48:18",
+      "supply_id": "c9c90d62-a274-4c96-b634-2198801fb9e9",
+      "selection_blockers": [
+        {
+          "code": "already_in_supply",
+          "message": "Заказ уже в поставке."
+        }
+      ]
+    }
+  ],
+  "cargo_places": [],
+  "delivery_preflight": null,
+  "last_wb_sync_at": null,
+  "tracking_summary": null,
+  "partial_rejection": null,
+  "wb_sync_stale": false,
+  "server_now": "2026-08-03T16:48:20.527341+00:00"
+}

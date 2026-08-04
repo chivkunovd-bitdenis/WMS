@@ -87,6 +87,18 @@ export PYTHONPATH=.
 pytest wb_emulator/tests -q
 ```
 
+### Operator seed (FBSFLOW-120 / TC-23)
+
+Three sellers (`token-a`/`token-b`/`token-c` → `seller_a`/`seller_b`/`seller_c`), 15 scenario orders in `seed/order_templates.json` (requiredMeta, PVZ, B2B, cargo types, cancelled, near-deadline).
+
+```bash
+export PYTHONPATH=.
+export WB_EMULATOR_TOKEN_MAP='{"token-a":"seller_a","token-b":"seller_b","token-c":"seller_c"}'
+python -m wb_emulator.seed.load_seed --db-path /tmp/wb_emulator.sqlite
+# or POST /__admin/seed with X-Admin-Token
+pytest wb_emulator/tests/test_emulator_operator_seed.py -q
+```
+
 ### WMS ↔ emulator FBS stock cycle (STOCK-100)
 
 End-to-end proof that WMS stock sync and order intake talk to this service over HTTP

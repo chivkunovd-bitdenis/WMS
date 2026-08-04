@@ -1,18 +1,21 @@
-# Session handoff — fbs-wb-emulator
+# SESSION HANDOFF — FBS operator flow queue
 
-- parallel_workers: 3
-- subagent_model: composer-2.5
-- backlog: docs/PARALLEL_AGENT_TASKS_FBS_EMU.md
-- integration_branch: feat/fbs-wb-emulator
-- phase: queue complete (EMU-000…080)
+**Updated:** 2026-08-03 18:55 MSK  
+**Integration:** `feat/fbs-stock-sync` (integrating 110)
 
-## Closed
-- EMU-000 … EMU-080 (all)
+## Progress: 12/15 (110 pending merge)
 
-## EMU-050 note
-- Create must be POST `/__admin/orders` (not GET).
-- Single orders store: `wb_emulator/services/orders_store.py` (no seed duplicate).
+| Done | ID |
+|------|-----|
+| ✓ | 000–100, 070, 090 |
+| … | **110** commit `72ec4f3` — integrate in progress |
+| ○ | 120, 130, 140 |
 
-## Follow-up (optional, not in queue)
-- Smoke: полный цикл через UI WMS на compose+emulator overlay.
-- Seed templates с реальными баркодами каталога стенда → mapping=mapped.
+## Pool next
+
+After 110 merge: launch **120** (emulator) + **130** (contract) in parallel → **140**
+
+## Notes
+
+- Stash/commit TASKLOG+SESSION_HANDOFF before `queue-integrate.sh`
+- Autopilot armed; conversation `8a98600f-5daa-4b01-8411-26add431b0dc`

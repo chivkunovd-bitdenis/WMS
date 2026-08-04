@@ -19,6 +19,7 @@ from app.models.seller import Seller
 from app.models.seller_wildberries_credentials import SellerWildberriesCredentials
 from app.services.fbs_cancellation_service import FbsCancellationError, sync_seller_order_statuses
 from app.services.fbs_stock_sync_service import FbsStockSyncError, sync_binding_stocks
+from app.services.fbs_tracking_service import FbsTrackingError, sync_in_delivery_supplies
 from app.services.wb_marketplace_orders_service import (
     WbMarketplaceOrdersError,
     sync_seller_orders,
@@ -254,6 +255,19 @@ async def sync_fbs_order_statuses_for_seller(
         http_client,
     )
     await sync_marking_statuses_for_assembling_supplies(session, target, http_client)
+    try:
+        await sync_in_delivery_supplies(
+            session,
+            target.tenant_id,
+            target.seller_id,
+            http_client,
+        )
+    except FbsTrackingError as exc:
+        logger.warning(
+            "fbs autopoll tracking sync skipped seller %s: %s",
+            target.seller_id,
+            exc.code,
+        )
     return updated
 
 

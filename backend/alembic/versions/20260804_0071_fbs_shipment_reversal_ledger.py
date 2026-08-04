@@ -1,15 +1,15 @@
 """FBS shipment reversal ledger.
 
-Revision ID: 20260803_0070
-Revises: 20260803_0069
+Revision ID: 20260804_0071
+Revises: 20260804_0070
 """
 
 from alembic import op
 import sqlalchemy as sa
 
 
-revision = "20260803_0070"
-down_revision = "20260803_0069"
+revision = "20260804_0071"
+down_revision = "20260804_0070"
 branch_labels = None
 depends_on = None
 

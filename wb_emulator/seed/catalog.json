@@ -1,0 +1,45 @@
+{
+  "sharedWarehouseId": 501001,
+  "sellers": [
+    {
+      "seller_key": "seller_a",
+      "token_env": "token-a",
+      "products": [
+        {"chrtId": 111001, "nmId": 123456789, "article": "EMU-VIT-A", "skus": ["2000000000011"], "price": 125000},
+        {"chrtId": 111002, "nmId": 123456790, "article": "EMU-VIT-MFG", "skus": ["2000000000012"], "price": 99000},
+        {"chrtId": 111003, "nmId": 123456791, "article": "EMU-VIT-POOL", "skus": ["2000000000013"], "price": 87000}
+      ],
+      "stocks": [
+        {"chrtId": 111001, "amount": 50},
+        {"chrtId": 111002, "amount": 30},
+        {"chrtId": 111003, "amount": 20}
+      ]
+    },
+    {
+      "seller_key": "seller_b",
+      "token_env": "token-b",
+      "products": [
+        {"chrtId": 211001, "nmId": 223456789, "article": "EMU-MAR-B2B", "skus": ["2000000000021"], "price": 450000},
+        {"chrtId": 211002, "nmId": 223456790, "article": "EMU-MAR-SC", "skus": ["2000000000022"], "price": 76000}
+      ],
+      "stocks": [
+        {"chrtId": 211001, "amount": 40},
+        {"chrtId": 211002, "amount": 35}
+      ]
+    },
+    {
+      "seller_key": "seller_c",
+      "token_env": "token-c",
+      "products": [
+        {"chrtId": 311001, "nmId": 323456789, "article": "EMU-ALX-KGT", "skus": ["2000000000031"], "price": 156000},
+        {"chrtId": 311002, "nmId": 323456790, "article": "EMU-ALX-SGT", "skus": ["2000000000032"], "price": 210000},
+        {"chrtId": 311003, "nmId": 323456791, "article": "EMU-ALX-IMEI", "skus": ["2000000000033"], "price": 54000}
+      ],
+      "stocks": [
+        {"chrtId": 311001, "amount": 25},
+        {"chrtId": 311002, "amount": 15},
+        {"chrtId": 311003, "amount": 45}
+      ]
+    }
+  ]
+}

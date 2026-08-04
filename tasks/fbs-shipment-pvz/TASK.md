@@ -1,5 +1,7 @@
 # TASK — fbs-shipment-pvz: отгрузка в ПВЗ с грузоместами
 
+> **⚠️ DEPRECATED (FBSFLOW-130):** `sticker_file` на trbx и bind order→trbx заменены на count-only `cargo-places` + print-assets. См. `tasks/fbs-operator-flow/BACKEND_CONTRACT.md` §11.
+
 - **Эпик:** FBS — см. `../fbs-marketplace-orders/SPEC.md`. Гейт 1 эпика ✅ (арх-курс утверждён), под-задача наследует.
 - **Тип / размер:** feature / M
 - **Зависит от:** fbs-orders-intake, fbs-supply-assembly, fbs-marking, fbs-shipment-warehouse-sc

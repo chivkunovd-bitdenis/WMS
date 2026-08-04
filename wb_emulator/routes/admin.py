@@ -12,11 +12,14 @@ from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 
 from wb_emulator.db import get_db
+from wb_emulator.services.fault_injection import faults_snapshot, set_faults
 from wb_emulator.services.orders_store import (
     apply_wb_event,
+    count_seeded_orders,
     create_orders_for_seller,
     get_admin_state,
     order_to_api,
+    seed_orders_from_templates,
 )
 
 admin_router = APIRouter(prefix="/__admin", tags=["admin"])
@@ -32,6 +35,52 @@ def require_admin_token(x_admin_token: str | None = Header(default=None, alias="
 
 class WbEventBody(BaseModel):
     event: str = Field(description="sorted | sold | canceled_by_client")
+
+
+class FaultBody(BaseModel):
+    timeout_ms: int | None = Field(default=None, ge=0)
+    supply_conflict_409: bool | None = None
+    meta_validation_fail: bool | None = None
+    incomplete_stickers: bool | None = None
+    delayed_qr_ms: int | None = Field(default=None, ge=0)
+    partial_status_ids: list[int] | None = None
+
+
+@admin_router.post("/seed")
+def admin_seed(
+    db: Session = Depends(get_db),
+    _: None = Depends(require_admin_token),
+) -> dict[str, object]:
+    """Load operator seed orders from order_templates.json (idempotent upsert)."""
+    before = count_seeded_orders(db)
+    counts = seed_orders_from_templates(db)
+    after = count_seeded_orders(db)
+    return {
+        "sellers": len(counts),
+        "orders_by_seller": counts,
+        "orders_created": max(after - before, 0),
+        "orders_skipped": before if after == before and before > 0 else 0,
+        "orders_total": after,
+    }
+
+
+@admin_router.post("/faults")
+def admin_set_faults(
+    body: FaultBody,
+    seller: str = Query(min_length=1),
+    _: None = Depends(require_admin_token),
+) -> dict[str, object]:
+    payload = body.model_dump(exclude_none=True)
+    set_faults(seller, payload)
+    return faults_snapshot(seller)
+
+
+@admin_router.get("/faults")
+def admin_get_faults(
+    seller: str | None = Query(default=None),
+    _: None = Depends(require_admin_token),
+) -> dict[str, object]:
+    return faults_snapshot(seller)
 
 
 @admin_router.post("/orders")

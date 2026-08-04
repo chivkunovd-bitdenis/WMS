@@ -1,0 +1,19 @@
+{
+  "orders": [
+    {"id": 710001, "seller_key": "seller_a", "chrtId": 111001, "scenario": "normal_b2c", "createdHoursAgo": 12},
+    {"id": 710002, "seller_key": "seller_a", "chrtId": 111001, "scenario": "required_kiz", "requiredMeta": ["sgtin"], "createdHoursAgo": 18},
+    {"id": 710003, "seller_key": "seller_a", "chrtId": 111002, "scenario": "manufacturer_kiz", "requiredMeta": ["sgtin"], "createdHoursAgo": 24},
+    {"id": 710004, "seller_key": "seller_a", "chrtId": 111003, "scenario": "pool_kiz", "requiredMeta": ["sgtin"], "createdHoursAgo": 36},
+    {"id": 710005, "seller_key": "seller_a", "chrtId": 111001, "scenario": "pvz_can_pvz_true", "canPvz": true, "isPvz": true, "officeId": 601002, "createdHoursAgo": 6},
+    {"id": 710006, "seller_key": "seller_b", "chrtId": 211001, "scenario": "b2b_is_legal", "isLegal": true, "createdHoursAgo": 48},
+    {"id": 710007, "seller_key": "seller_b", "chrtId": 211001, "scenario": "b2b_options_flag", "options": {"isB2B": true}, "createdHoursAgo": 52},
+    {"id": 710008, "seller_key": "seller_b", "chrtId": 211002, "scenario": "warehouse_sc_no_pvz", "canPvz": false, "officeId": 601001, "createdHoursAgo": 20},
+    {"id": 710009, "seller_key": "seller_b", "chrtId": 211002, "scenario": "pvz_second_office", "canPvz": true, "isPvz": true, "officeId": 601003, "createdHoursAgo": 14},
+    {"id": 710010, "seller_key": "seller_b", "chrtId": 211001, "scenario": "near_deadline", "requiredMeta": ["sgtin"], "createdHoursAgo": 119},
+    {"id": 710011, "seller_key": "seller_c", "chrtId": 311001, "scenario": "cancelled", "supplierStatus": "cancel", "wbStatus": "canceled", "cancelled": true, "createdHoursAgo": 72},
+    {"id": 710012, "seller_key": "seller_c", "chrtId": 311001, "scenario": "cargo_kgt", "cargoType": 2, "createdHoursAgo": 30},
+    {"id": 710013, "seller_key": "seller_c", "chrtId": 311002, "scenario": "cargo_sgt", "cargoType": 3, "createdHoursAgo": 28},
+    {"id": 710014, "seller_key": "seller_c", "chrtId": 311003, "scenario": "optional_imei", "optionalMeta": ["imei"], "createdHoursAgo": 16},
+    {"id": 710015, "seller_key": "seller_c", "chrtId": 311003, "scenario": "required_and_optional_meta", "requiredMeta": ["sgtin"], "optionalMeta": ["imei"], "createdHoursAgo": 10}
+  ]
+}

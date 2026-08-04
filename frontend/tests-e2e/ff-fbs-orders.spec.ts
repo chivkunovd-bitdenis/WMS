@@ -3,42 +3,47 @@ import { expect, test } from '@playwright/test'
 import { waitForGetOk, waitForPostOk } from './api-waits'
 import { openFulfillmentRegistration } from './auth-flow'
 
-// Экран FBS ходит в реальный backend-эндпоинт GET /operations/fbs-orders (реализован задачей
-// fbs-orders-intake). Эндпоинт отдаёт список заказов без серверной фильтрации по вкладкам —
-// группировку по статусам делает клиент. В тесте мокаем этот GET через page.route и проверяем
-// ВИДИМЫЙ результат (вкладки, строки, пустое состояние, фильтр по селлеру).
+// Это контрактный browser-test: он мокаeт только FBS worklist, а не выдаёт себя за real-stack.
+// Реальный браузерный путь с PostgreSQL, backend и WB emulator — отдельный release gate.
 
-type FbsOrderFixture = Record<string, unknown>
+type FbsWorklistFixture = Record<string, unknown>
 
-function order(id: string, over: Partial<FbsOrderFixture> = {}): FbsOrderFixture {
+function order(id: string, over: Partial<FbsWorklistFixture> = {}): FbsWorklistFixture {
   return {
     id,
-    seller_id: 's-1',
-    warehouse_id: 'w-1',
-    product_id: `p-${id}`,
+    seller: { id: 's-1', name: 'Селлер Один' },
+    wb_warehouse: { id: 501001, name: 'WB Подольск' },
+    wms_warehouse: { id: 'w-1', name: 'Основной склад' },
     wb_order_id: Number(id.replace(/\D/g, '') || '1'),
-    wb_rid: `rid-${id}`,
-    wb_nm_id: 1000 + Number(id.replace(/\D/g, '') || '1'),
-    wb_chrt_id: null,
-    wb_article: `ART-${id}`,
-    wb_barcode: `200000${id}`,
-    price: 1990,
-    is_legal: false,
+    product: {
+      id: `p-${id}`,
+      name: `Товар ${id}`,
+      image_url: null,
+      seller_article: `ART-${id}`,
+      wb_article: 1000 + Number(id.replace(/\D/g, '') || '1'),
+      barcode: `200000${id}`,
+      size: null,
+    },
+    inventory: { available_unpacked: 3, locations: [{ id: 'loc-1', code: 'A-01', available_unpacked: 3 }] },
+    buyer_type: 'individual',
     cargo_type: 'mgt',
-    wb_office_id: 1,
     can_pvz: true,
-    supply_id: null,
-    trbx_id: null,
+    metadata: { required: [], optional: [], states: [], delivery_allowed: true, last_checked_at: null },
+    sticker: { status: 'not_requested', asset_url: null, applied_at: null },
+    pick: { status: 'pending', location_code: null, picked_at: null },
+    pack: { status: 'pending', packed_at: null },
     status: 'new',
     wb_status: 'waiting',
     created_at_wb: new Date().toISOString(),
     deadline_at: new Date(Date.now() + 100 * 3600 * 1000).toISOString(),
-    mapping_status: 'mapped',
-    reserve_status: 'reserved',
-    created_at: new Date().toISOString(),
-    updated_at: new Date().toISOString(),
+    supply_id: null,
+    selection_blockers: [],
     ...over,
   }
+}
+
+function worklist(items: FbsWorklistFixture[]) {
+  return { items, next_cursor: null, server_now: new Date().toISOString() }
 }
 
 async function registerFf(page: import('@playwright/test').Page, tag: string) {
@@ -57,62 +62,67 @@ async function registerFf(page: import('@playwright/test').Page, tag: string) {
   await expect(page.getByTestId('dashboard')).toBeVisible()
 }
 
-// TC-NEW-FBS-FE-001 — список заказов FBS и вкладки статусов (группировка на клиенте).
-// Given: оператор ФФ, есть новые заказы; When: открывает FBS и переключает вкладки;
-// Then: во «Новых» видит заказы, в пустой вкладке — заглушку empty, а не пустую таблицу.
+// TC-FBS-FE-001 — worklist приходит в canonical envelope и фильтруется серверным status_group.
 test('fbs orders: list, tabs and empty state', async ({ page }) => {
   await registerFf(page, 'list')
 
-  await page.route('**/operations/fbs-orders**', async (route) => {
+  await page.route('**/operations/fbs-orders/worklist**', async (route) => {
     if (route.request().method() !== 'GET') return route.fallback()
-    const body = [order('1'), order('2')] // оба со статусом new
+    const statusGroup = new URL(route.request().url()).searchParams.get('status_group')
+    const body = statusGroup === 'new' ? worklist([order('1'), order('2')]) : worklist([])
     await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(body) })
   })
 
-  await page.goto('/app/ff/fbs')
+  await page.getByTestId('nav-ff-fbs').click()
   await expect(page.getByTestId('fbs-orders-screen')).toBeVisible()
-  await expect(page.getByTestId('fbs-orders-tab-new')).toBeVisible()
+  await expect(page.getByTestId('fbs-order-1')).toBeVisible()
+  await expect(page.getByTestId('fbs-order-2')).toBeVisible()
 
-  // «Новые» — две строки.
-  await expect(page.getByTestId('fbs-order-row')).toHaveCount(2)
-
-  // «В доставке» — среди заказов таких статусов нет → дружелюбная заглушка, не пустая таблица.
-  await page.getByTestId('fbs-orders-tab-delivery').click()
-  await expect(page.getByTestId('fbs-orders-empty')).toBeVisible()
-  await expect(page.getByTestId('fbs-order-row')).toHaveCount(0)
+  await page.getByRole('tab', { name: 'В доставке' }).click()
+  await expect(page.getByText('Заказов в этой группе нет')).toBeVisible()
 })
 
-// TC-NEW-FBS-FE-002 — фильтр по селлеру (мультиселлер).
-// Given: заказы нескольких селлеров; When: оператор выбирает селлера в фильтре;
-// Then: запрос уходит с seller_id и в списке остаются заказы только этого селлера.
+// TC-FBS-FE-002 — seller_id передаётся в canonical worklist и меняет строки ответа.
 test('fbs orders: filter by seller', async ({ page }) => {
   await registerFf(page, 'seller')
 
-  // Сидим двух селлеров через реальный API — они попадут в фильтр (после перезагрузки экрана).
-  const token = (await page.evaluate(() => localStorage.getItem('wms_token_ff'))) ?? ''
-  const h = { Authorization: `Bearer ${token}` }
-  const s1 = (await (
-    await page.request.post('/api/sellers', { headers: h, data: { name: 'Селлер Один' } })
-  ).json()) as { id: string }
-  await page.request.post('/api/sellers', { headers: h, data: { name: 'Селлер Два' } })
+  // Создаём селлеров через штатный UI: SellersScreen после каждого POST обновляет общий список
+  // в App, поэтому FBS-фильтр получает актуальные options без жёсткой перезагрузки страницы.
+  await page.getByTestId('nav-sellers').click()
+  await page.getByTestId('seller-name').fill('Селлер Один')
+  await page.getByTestId('seller-email').fill(`seller-one-${Date.now()}@example.com`)
+  const [sellerOneResponse] = await Promise.all([
+    waitForPostOk(page, '/api/sellers/with-account'),
+    page.getByTestId('seller-submit').click(),
+  ])
+  const s1 = (await sellerOneResponse.json()) as { seller_id: string }
 
-  await page.route('**/operations/fbs-orders**', async (route) => {
+  await page.getByTestId('seller-name').fill('Селлер Два')
+  await page.getByTestId('seller-email').fill(`seller-two-${Date.now()}@example.com`)
+  await Promise.all([
+    waitForPostOk(page, '/api/sellers/with-account'),
+    page.getByTestId('seller-submit').click(),
+  ])
+
+  await page.route('**/operations/fbs-orders/worklist**', async (route) => {
     if (route.request().method() !== 'GET') return route.fallback()
     const url = new URL(route.request().url())
     const sellerId = url.searchParams.get('seller_id')
-    const rows =
-      sellerId === s1.id
-        ? [order('1', { seller_id: s1.id })]
-        : [order('1', { seller_id: s1.id }), order('2', { seller_id: 's-2' })]
-    await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(rows) })
+    const items =
+      sellerId === s1.seller_id
+        ? [order('1', { seller: { id: s1.seller_id, name: 'Селлер Один' } })]
+        : [order('1', { seller: { id: s1.seller_id, name: 'Селлер Один' } }), order('2', { seller: { id: 's-2', name: 'Селлер Два' } })]
+    await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(worklist(items)) })
   })
 
-  await page.goto('/app/ff/fbs')
+  await page.getByTestId('nav-ff-fbs').click()
   await expect(page.getByTestId('fbs-orders-screen')).toBeVisible()
-  await expect(page.getByTestId('fbs-order-row')).toHaveCount(2)
+  await expect(page.getByTestId('fbs-order-1')).toBeVisible()
+  await expect(page.getByTestId('fbs-order-2')).toBeVisible()
 
   // Выбираем первого селлера — список сужается до одного заказа.
-  await page.getByTestId('fbs-seller-filter').click()
+  await page.getByLabel('Селлер').click()
   await page.getByRole('option', { name: 'Селлер Один' }).click()
-  await expect(page.getByTestId('fbs-order-row')).toHaveCount(1)
+  await expect(page.getByTestId('fbs-order-1')).toBeVisible()
+  await expect(page.getByTestId('fbs-order-2')).toHaveCount(0)
 })

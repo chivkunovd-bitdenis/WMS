@@ -9,9 +9,8 @@ import json
 import sys
 import time
 import uuid
-from collections.abc import AsyncGenerator
 from pathlib import Path
-from typing import Any, cast
+from typing import Any
 
 _REPO_ROOT = Path(__file__).resolve().parents[2]
 if str(_REPO_ROOT) not in sys.path:
@@ -58,7 +57,7 @@ REPO_ROOT = _REPO_ROOT
 @pytest_asyncio.fixture
 async def emulator_stack(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-) -> AsyncGenerator[httpx.AsyncClient, None]:
+) -> httpx.AsyncClient:
     """In-process WB emulator + WMS settings pointed at ASGI transport base URL."""
     db_path = tmp_path / "emu.sqlite"
     monkeypatch.setenv("WB_EMULATOR_DB_PATH", str(db_path))
@@ -88,7 +87,7 @@ async def emulator_stack(
     )
 
     class _EmuAsyncClient(httpx.AsyncClient):
-        def __init__(self, *args: Any, **kwargs: Any) -> None:
+        def __init__(self, *args: object, **kwargs: object) -> None:
             if "transport" not in kwargs:
                 kwargs["transport"] = transport
                 kwargs.setdefault("base_url", EMU_BASE)
@@ -192,7 +191,7 @@ async def _admin_purchase(
         headers={"X-Admin-Token": EMU_ADMIN_TOKEN},
     )
     assert response.status_code == 200, response.text
-    return cast(dict[str, Any], response.json())
+    return response.json()
 
 
 # TC-NEW-FBS-STOCK-018
@@ -336,7 +335,7 @@ async def test_wms_emulator_fbs_stock_full_cycle(
                 FbsOrderReservation.fbs_order_id == order.id
             )
         )
-        assert int(reserve_qty or 0) == 1
+        assert int(reserve_qty) == 1
 
         stock_result2 = await sync_seller_stocks(
             session, tenant_id, seller_uuid, emu_client, wb_warehouse_id=WB_WAREHOUSE_ID

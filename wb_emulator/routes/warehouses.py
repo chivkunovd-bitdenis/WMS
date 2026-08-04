@@ -29,6 +29,24 @@ _DEFAULT_OFFICES: list[dict[str, Any]] = [
         "longitude": 37.62,
         "latitude": 55.75,
     },
+    {
+        "id": 601002,
+        "officeId": 601002,
+        "name": "Emulator PVZ North",
+        "city": "Moscow",
+        "address": "PVZ North Address",
+        "longitude": 37.55,
+        "latitude": 55.80,
+    },
+    {
+        "id": 601003,
+        "officeId": 601003,
+        "name": "Emulator PVZ South",
+        "city": "Moscow",
+        "address": "PVZ South Address",
+        "longitude": 37.70,
+        "latitude": 55.70,
+    },
 ]
 
 

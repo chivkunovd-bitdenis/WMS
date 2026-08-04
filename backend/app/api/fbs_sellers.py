@@ -10,6 +10,7 @@ from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.deps import require_fulfillment_admin
+from app.api.fbs_errors import envelope_from_exc, raise_fbs_http
 from app.core.settings import settings
 from app.db.session import get_db
 from app.models.fbs_warehouse_binding import FbsWarehouseBinding
@@ -98,23 +99,25 @@ def _binding_out(row: FbsWarehouseBinding) -> FbsWarehouseBindingOut:
 
 
 def _raise_from_binding_service(exc: binding_svc.FbsWarehouseBindingError) -> None:
+    detail = envelope_from_exc(exc)
     if exc.code in {
         "seller_not_found",
         "warehouse_not_found",
         "binding_not_found",
     }:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=exc.code)
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=detail)
     if exc.code == "invalid_wb_warehouse_id":
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=exc.code)
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=detail)
     if exc.code in {"wms_warehouse_already_bound", "active_fbs_reservations"}:
-        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=exc.code)
-    raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=exc.code)
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=detail)
+    raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=detail)
 
 
 def _raise_from_stock_sync(exc: FbsStockSyncError) -> None:
+    detail = envelope_from_exc(exc)
     if exc.code == "binding_not_found":
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=exc.code)
-    raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=exc.code)
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=detail)
+    raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=detail)
 
 
 def _enqueue_fbs_stock_sync_job(job_id: uuid.UUID) -> None:
@@ -267,15 +270,9 @@ async def start_fbs_stock_sync(
 ) -> FbsStockSyncResultOut | FbsStockSyncJobOut:
     seller = await session.get(Seller, seller_id)
     if seller is None or seller.tenant_id != user.tenant_id:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="seller_not_found",
-        )
+        raise_fbs_http(status.HTTP_404_NOT_FOUND, "seller_not_found")
     if body.wb_warehouse_id is not None and body.wb_warehouse_id <= 0:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="invalid_wb_warehouse_id",
-        )
+        raise_fbs_http(status.HTTP_400_BAD_REQUEST, "invalid_wb_warehouse_id")
 
     if settings.celery_broker_url:
         payload: dict[str, Any] = {"seller_id": str(seller_id)}
@@ -322,10 +319,7 @@ async def get_fbs_stock_sync_status(
 ) -> FbsStockSyncStatusOut:
     seller = await session.get(Seller, seller_id)
     if seller is None or seller.tenant_id != user.tenant_id:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="seller_not_found",
-        )
+        raise_fbs_http(status.HTTP_404_NOT_FOUND, "seller_not_found")
     try:
         binding, items = await get_binding_stock_sync_status(
             session,

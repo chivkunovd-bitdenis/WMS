@@ -5,10 +5,9 @@ import os
 import time
 import uuid
 from pathlib import Path
-from typing import Any, cast
+from typing import Any
 
 import pytest
-from fbs_seed_helpers import DEFAULT_WB_WAREHOUSE_ID, seed_fbs_warehouse_binding
 from httpx import AsyncClient
 from sqlalchemy import func, select
 
@@ -19,6 +18,8 @@ from app.models.fbs_supply import FBS_SUPPLY_STATUS_DRAFT, FbsSupply
 from app.models.product import Product
 from app.services.wb_marketplace_orders_service import upsert_order_from_wb_row
 from app.services.wildberries_client import WildberriesClientError
+from tests.fbs_seed_helpers import DEFAULT_WB_WAREHOUSE_ID, seed_fbs_warehouse_binding
+from tests.test_fbs_shipment_warehouse_sc import _deliver_with_preflight
 
 
 async def _register_ff_admin(async_client: AsyncClient) -> tuple[dict[str, str], str]:
@@ -138,7 +139,7 @@ async def _create_supply(
         },
     )
     assert resp.status_code == 201, resp.text
-    return cast(dict[str, Any], resp.json())
+    return resp.json()
 
 
 @pytest.fixture
@@ -262,12 +263,9 @@ async def test_fbs_supply_deliver_blocked_from_in_supply(
     )
     assert add.status_code == 200, add.text
 
-    deliver = await async_client.post(
-        f"/operations/fbs-supplies/{supply['id']}/deliver",
-        headers=headers,
-    )
+    deliver = await _deliver_with_preflight(async_client, headers, supply["id"])
     assert deliver.status_code == 400
-    assert deliver.json()["detail"] == "packaging_required"
+    assert deliver.json()["detail"]["code"] == "packaging_required"
 
 
 @pytest.mark.asyncio
@@ -637,7 +635,7 @@ async def test_fbs_supply_stickers_cached(
     for row in body:
         assert row["sticker_code"] == f"MOCK-{row['wb_order_id']}"
         assert row["sticker_file"] is not None
-        assert row["sticker_file"].startswith("fbs-stickers/")
+        assert row["sticker_file"].startswith("fbs-print-assets/order-stickers/")
         sticker_path = Path(settings.wms_data_dir) / row["sticker_file"]
         assert sticker_path.is_file()
 
@@ -698,7 +696,7 @@ async def test_fbs_supply_stickers_wb_error(
         json={"force": True},
     )
     assert resp.status_code == 502
-    assert resp.json()["detail"] == "wb_upstream_error_503"
+    assert resp.json()["detail"]["code"] == "wb_upstream_error_503"
 
 
 @pytest.mark.asyncio
@@ -763,7 +761,7 @@ async def test_fbs_supply_stickers_incomplete(
         json={"force": True},
     )
     assert resp.status_code == 502
-    assert resp.json()["detail"] == "wb_stickers_incomplete"
+    assert resp.json()["detail"]["code"] == "wb_stickers_incomplete"
 
 
 @pytest.mark.asyncio

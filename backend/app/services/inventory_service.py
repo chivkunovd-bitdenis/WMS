@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import uuid
 from datetime import UTC, datetime
-from typing import Literal
+from typing import Literal, cast
 
 from sqlalchemy import and_, case, delete, func, or_, select, update
 from sqlalchemy.dialects.postgresql import insert as postgresql_insert
@@ -913,7 +913,7 @@ async def apply_fbs_supply_write_off(
     product_id: uuid.UUID,
     storage_location_id: uuid.UUID,
     quantity: int,
-) -> None:
+) -> InventoryMovement:
     """Списание упакованного FBS-товара при завершении упаковки поставки."""
     if quantity < 1:
         msg = "quantity must be positive"
@@ -924,7 +924,7 @@ async def apply_fbs_supply_write_off(
     if bal is None or int(bal.quantity) < quantity:
         msg = "insufficient stock"
         raise ValueError(msg)
-    await record_movement_and_adjust_balance(
+    return await record_movement_and_adjust_balance(
         session,
         tenant_id=tenant_id,
         product_id=product_id,
@@ -1072,8 +1072,11 @@ async def transfer_on_hand_between_locations(
     to_storage_location_id: uuid.UUID,
     product_id: uuid.UUID,
     quantity: int,
-) -> None:
-    """Перемещение фактического on_hand между ячейками (DEC-019 migration)."""
+) -> uuid.UUID:
+    """Перемещение фактического on_hand между ячейками (DEC-019 migration).
+
+    Returns transfer_group_id for audit linkage.
+    """
     if quantity < 1:
         msg = "quantity must be positive"
         raise ValueError(msg)
@@ -1121,6 +1124,25 @@ async def transfer_on_hand_between_locations(
         movement_type=MOVEMENT_TYPE_STOCK_TRANSFER_IN,
         transfer_group_id=group_id,
     )
+    return group_id
+
+
+async def transfer_out_movement_id(
+    session: AsyncSession,
+    tenant_id: uuid.UUID,
+    transfer_group_id: uuid.UUID,
+) -> uuid.UUID | None:
+    """Inventory movement id for the outbound leg of a stock transfer."""
+    stmt = (
+        select(InventoryMovement.id)
+        .where(
+            InventoryMovement.tenant_id == tenant_id,
+            InventoryMovement.transfer_group_id == transfer_group_id,
+            InventoryMovement.movement_type == MOVEMENT_TYPE_STOCK_TRANSFER_OUT,
+        )
+        .limit(1)
+    )
+    return cast(uuid.UUID | None, await session.scalar(stmt))
 
 
 async def migrate_all_address_balances_to_sorting(

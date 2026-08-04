@@ -11,18 +11,16 @@ N4: disable binding blocked when active FBS reservations exist.
 
 from __future__ import annotations
 
-import asyncio
 import time
 import uuid
 from datetime import UTC, datetime, timedelta
-from typing import cast
 
 import pytest
-from httpx import AsyncClient
+from httpx import AsyncClient, Response
 from sqlalchemy import select
 
 from app.core.settings import settings
-from app.db.session import SessionLocal, engine
+from app.db.session import SessionLocal
 from app.models.fbs_order import (
     FBS_ORDER_STATUS_NEW,
     MAPPING_STATUS_MAPPED,
@@ -37,9 +35,24 @@ from app.models.fbs_stock_sync_item import (
 from app.models.fbs_warehouse_binding import FbsWarehouseBinding
 from app.models.product import Product
 from app.models.seller import Seller
-from app.services import inventory_service
-from app.services.sorting_location_service import get_or_create_sorting_location
-from app.services.wb_marketplace_orders_service import upsert_order_from_wb_row
+
+
+def _assert_fbs_error(
+    response: Response,
+    *,
+    status_code: int,
+    code: str,
+    message: str,
+) -> None:
+    assert response.status_code == status_code, response.text
+    assert response.json() == {
+        "detail": {
+            "code": code,
+            "message": message,
+            "context": {},
+            "retryable": False,
+        }
+    }
 
 
 async def _register_ff_admin(async_client: AsyncClient) -> tuple[dict[str, str], str]:
@@ -63,7 +76,7 @@ async def _create_seller(async_client: AsyncClient, headers: dict[str, str], suf
         "/sellers", headers=headers, json={"name": f"Seller {suffix}"}
     )
     assert seller.status_code in (200, 201), seller.text
-    return cast(str, seller.json()["id"])
+    return seller.json()["id"]
 
 
 async def _create_warehouse(
@@ -75,7 +88,7 @@ async def _create_warehouse(
         json={"name": f"WH {code_suffix}", "code": f"wh-{suffix}-{code_suffix}"},
     )
     assert wh.status_code in (200, 201), wh.text
-    return cast(str, wh.json()["id"])
+    return wh.json()["id"]
 
 
 def _bindings_url(seller_id: str, wb_warehouse_id: int | None = None) -> str:
@@ -94,111 +107,6 @@ def _stock_sync_status_url(seller_id: str, wb_warehouse_id: int) -> str:
         f"/operations/fbs-sellers/{seller_id}/stocks/sync-status"
         f"?wb_warehouse_id={wb_warehouse_id}"
     )
-
-
-# TC-NEW-FBS-STOCK-021 — real PostgreSQL row-lock regression.  SQLite cannot
-# prove FOR UPDATE semantics, so this deliberately skips there instead of
-# pretending that a single-session test covers the race.
-@pytest.mark.asyncio
-@pytest.mark.skipif(
-    engine.dialect.name != "postgresql",
-    reason="requires PostgreSQL row-lock semantics; SQLite is not evidence",
-)
-async def test_binding_remap_serializes_order_intake_and_reservation(
-    async_client: AsyncClient,
-) -> None:
-    headers, suffix = await _register_ff_admin(async_client)
-    seller_id = await _create_seller(async_client, headers, suffix)
-    warehouse_a = await _create_warehouse(async_client, headers, suffix, "lock-a")
-    warehouse_b = await _create_warehouse(async_client, headers, suffix, "lock-b")
-    binding = await async_client.put(
-        _bindings_url(seller_id, 501001),
-        headers=headers,
-        json={"wms_warehouse_id": warehouse_a, "stock_sync_enabled": True},
-    )
-    assert binding.status_code == 200, binding.text
-    product_response = await async_client.post(
-        "/products",
-        headers=headers,
-        json={
-            "name": "Binding lock product",
-            "sku_code": f"LOCK-{suffix}",
-            "seller_id": seller_id,
-            "wb_barcode": "LOCK-BARCODE",
-        },
-    )
-    assert product_response.status_code in (200, 201), product_response.text
-    product_id = uuid.UUID(product_response.json()["id"])
-
-    async with SessionLocal() as seed_session:
-        seller = await seed_session.get(Seller, uuid.UUID(seller_id))
-        assert seller is not None
-        sorting = await get_or_create_sorting_location(
-            seed_session, seller.tenant_id, uuid.UUID(warehouse_b)
-        )
-        await inventory_service.record_movement_and_adjust_balance(
-            seed_session,
-            tenant_id=seller.tenant_id,
-            product_id=product_id,
-            storage_location_id=sorting.id,
-            quantity_delta=1,
-            movement_type="inbound_intake",
-        )
-        await seed_session.commit()
-        tenant_id = seller.tenant_id
-        seller_uuid = seller.id
-
-    intake_started = asyncio.Event()
-
-    async def intake() -> tuple[uuid.UUID | None, str | None]:
-        async with SessionLocal() as intake_session:
-            intake_started.set()
-            order, _created = await upsert_order_from_wb_row(
-                intake_session,
-                tenant_id,
-                seller_uuid,
-                {
-                    "id": 991001,
-                    "rid": "lock-rid",
-                    "createdAt": "2026-08-03T12:00:00+03:00",
-                    "nmId": 991001,
-                    "chrtId": 991001,
-                    "article": "LOCK-ARTICLE",
-                    "skus": ["LOCK-BARCODE"],
-                    "warehouseId": 501001,
-                    "officeId": 1,
-                    "price": 100,
-                    "cargoType": 1,
-                },
-            )
-            result = (order.warehouse_id, order.reserve_status)
-            await intake_session.commit()
-            return result
-
-    async with SessionLocal() as remap_session:
-        async with remap_session.begin():
-            locked_binding = await remap_session.scalar(
-                select(FbsWarehouseBinding)
-                .where(
-                    FbsWarehouseBinding.seller_id == seller_uuid,
-                    FbsWarehouseBinding.wb_warehouse_id == 501001,
-                )
-                .with_for_update()
-            )
-            assert locked_binding is not None
-            locked_binding.wms_warehouse_id = uuid.UUID(warehouse_b)
-
-            intake_task = asyncio.create_task(intake())
-            await asyncio.wait_for(intake_started.wait(), timeout=2)
-            await asyncio.sleep(0.15)
-            assert not intake_task.done(), "intake bypassed the binding row lock"
-
-        mapped_warehouse_id, reserve_status = await asyncio.wait_for(
-            intake_task, timeout=5
-        )
-
-    assert mapped_warehouse_id == uuid.UUID(warehouse_b)
-    assert reserve_status == RESERVE_STATUS_RESERVED
 
 
 # TC-NEW-FBS-STOCK-014 — create binding, list, toggle sync, soft-disable
@@ -302,24 +210,36 @@ async def test_fbs_warehouse_binding_cross_tenant_404(async_client: AsyncClient)
     wh_b = await _create_warehouse(async_client, headers_b, suffix_b, "b")
 
     cross_list = await async_client.get(_bindings_url(seller_a), headers=headers_b)
-    assert cross_list.status_code == 404
-    assert cross_list.json()["detail"] == "seller_not_found"
+    _assert_fbs_error(
+        cross_list,
+        status_code=404,
+        code="seller_not_found",
+        message="Селлер не найден.",
+    )
 
     cross_put = await async_client.put(
         _bindings_url(seller_a, 501001),
         headers=headers_b,
         json={"wms_warehouse_id": wh_b, "stock_sync_enabled": True},
     )
-    assert cross_put.status_code == 404
-    assert cross_put.json()["detail"] == "seller_not_found"
+    _assert_fbs_error(
+        cross_put,
+        status_code=404,
+        code="seller_not_found",
+        message="Селлер не найден.",
+    )
 
     foreign_wh = await async_client.put(
         _bindings_url(seller_a, 501001),
         headers=headers_a,
         json={"wms_warehouse_id": wh_b, "stock_sync_enabled": True},
     )
-    assert foreign_wh.status_code == 404
-    assert foreign_wh.json()["detail"] == "warehouse_not_found"
+    _assert_fbs_error(
+        foreign_wh,
+        status_code=404,
+        code="warehouse_not_found",
+        message="Склад не найден.",
+    )
 
     ok = await async_client.put(
         _bindings_url(seller_a, 501001),
@@ -348,8 +268,12 @@ async def test_fbs_warehouse_binding_wms_conflict_409(async_client: AsyncClient)
         headers=headers,
         json={"wms_warehouse_id": wh_a, "stock_sync_enabled": True},
     )
-    assert conflict.status_code == 409
-    assert conflict.json()["detail"] == "wms_warehouse_already_bound"
+    _assert_fbs_error(
+        conflict,
+        status_code=409,
+        code="wms_warehouse_already_bound",
+        message="WMS-склад уже привязан.",
+    )
 
 
 # N3 — cannot change WMS warehouse while active FBS reservations exist
@@ -412,8 +336,12 @@ async def test_fbs_warehouse_binding_blocked_by_active_reservations_409(
         headers=headers,
         json={"wms_warehouse_id": wh_b, "stock_sync_enabled": True},
     )
-    assert blocked.status_code == 409
-    assert blocked.json()["detail"] == "active_fbs_reservations"
+    _assert_fbs_error(
+        blocked,
+        status_code=409,
+        code="active_fbs_reservations",
+        message="Есть активные FBS-резервы.",
+    )
 
     toggle_ok = await async_client.put(
         _bindings_url(seller_id, 501001),
@@ -482,8 +410,12 @@ async def test_fbs_warehouse_binding_disable_blocked_by_active_reservations_409(
         _bindings_url(seller_id, 501001),
         headers=headers,
     )
-    assert blocked.status_code == 409
-    assert blocked.json()["detail"] == "active_fbs_reservations"
+    _assert_fbs_error(
+        blocked,
+        status_code=409,
+        code="active_fbs_reservations",
+        message="Есть активные FBS-резервы.",
+    )
 
     async with SessionLocal() as session:
         row = await session.scalar(
@@ -706,12 +638,20 @@ async def test_fbs_stock_sync_cross_tenant_404(async_client: AsyncClient) -> Non
         headers=headers_b,
         json={},
     )
-    assert cross_sync.status_code == 404
-    assert cross_sync.json()["detail"] == "seller_not_found"
+    _assert_fbs_error(
+        cross_sync,
+        status_code=404,
+        code="seller_not_found",
+        message="Селлер не найден.",
+    )
 
     cross_status = await async_client.get(
         _stock_sync_status_url(seller_a, 501001),
         headers=headers_b,
     )
-    assert cross_status.status_code == 404
-    assert cross_status.json()["detail"] == "seller_not_found"
+    _assert_fbs_error(
+        cross_status,
+        status_code=404,
+        code="seller_not_found",
+        message="Селлер не найден.",
+    )

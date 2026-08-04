@@ -1,5 +1,7 @@
 # TASK — fbs-frontend-pick-list: Экран 3 «Лист подбора» FBS
 
+> **⛔ DEPRECATED (03.08.2026):** Заменено operator-flow workspace (`../fbs-operator-flow/FRONTEND_TASKS.md`). Подбор — server-side scan (`POST …/pick/scan-location`, `scan-product`, `undo`); локальные чекбоксы «Собрал/Упаковал» не являются контрактом. Печать стикеров — **`POST …/print-assets`**, не legacy `/stickers`.
+
 - **Эпик:** FBS — см. `../fbs-marketplace-orders/SPEC.md` и `DESIGN.md`. Гейт 1 эпика ✅, под-задача наследует.
 - **Тип / размер:** feature / M
 - **Зависит от:** `fbs-frontend-supply-detail` (Экран 2 готов), backend API из `fbs_supplies.py`, `fbs_marking.py`
@@ -25,7 +27,7 @@
 - Группировка в фронте по article (collapsible groups)
 - Фильтры: локальное состояние (фронт) или из query-params
 - Отметки «Собрал/Упаковал»: локальное состояние (если backend не имеет персист-эндпоинта); пометить как ограничение в TC
-- Печать: POST `/operations/fbs-supplies/{id}/stickers` (или по одному заказу) → FbsStickersOut
+- Печать: POST `/operations/fbs-supplies/{id}/print-assets` → batch + `GET /operations/fbs-print-assets/{id}/content`
 - Маркировка: PUT `/operations/fbs-orders/{order_id}/markings/{kind}` (FbsMarkingValueBody) → FbsOrderMarkingOut
 - Список маркировок по заказу: GET `/operations/fbs-orders/{order_id}/markings`
 

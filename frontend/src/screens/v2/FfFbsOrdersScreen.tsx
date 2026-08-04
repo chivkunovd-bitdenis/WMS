@@ -8,9 +8,7 @@ import {
   Chip,
   CircularProgress,
   Dialog,
-  DialogActions,
   DialogContent,
-  DialogTitle,
   FormControl,
   InputLabel,
   MenuItem,
@@ -28,334 +26,380 @@ import {
   TextField,
   Typography,
 } from '@mui/material'
-import {
-  addOrderToFbsSupply,
-  createFbsSupply,
-  fetchFbsOrders,
-  TAB_STATUSES,
-  type FbsOrderRow,
-  type FbsOrdersTab,
-} from './fbsApi'
-import { FfFbsSectionNav } from './FfFbsSectionNav'
-import { FfFbsSupplyDrawer } from './FfFbsSupplyDrawer'
+import Inventory2OutlinedIcon from '@mui/icons-material/Inventory2Outlined'
+import RefreshOutlinedIcon from '@mui/icons-material/RefreshOutlined'
+import SearchOutlinedIcon from '@mui/icons-material/SearchOutlined'
 import {
   CargoTypeChip,
   DeadlinePill,
   FbsStatusChip,
   SellerBadge,
 } from '../../components/fbs/FbsChips'
+import { FbsSupplyCreateDialog } from './FbsSupplyCreateDialog'
+import { FfFbsSectionNav } from './FfFbsSectionNav'
+import { FfFbsSupplyWorkspace } from './FfFbsSupplyWorkspace'
+import { fetchFbsWorklist, type FbsWorklistOrder, type FbsWorkspace } from './fbsApi'
 
 type SellerRow = { id: string; name: string }
 
 type Props = {
   token: string
-  authHeaders: (t: string) => Record<string, string>
+  authHeaders: (token: string) => Record<string, string>
   sellers: SellerRow[]
 }
 
-const TABS: { key: FbsOrdersTab; label: string }[] = [
+const TABS = [
   { key: 'new', label: 'Новые' },
-  { key: 'assembly', label: 'На сборке' },
+  { key: 'active', label: 'В работе' },
   { key: 'delivery', label: 'В доставке' },
   { key: 'done', label: 'Завершённые' },
-]
+  { key: 'cancelled', label: 'Отменённые' },
+] as const
 
-const priceFmt = new Intl.NumberFormat('ru-RU', { maximumFractionDigits: 0 })
-
-function formatWbDate(value: string | null): string {
-  if (!value) return '—'
-  const d = new Date(value)
-  if (Number.isNaN(d.getTime())) return '—'
-  return d.toLocaleDateString('ru-RU')
+function MissingText({ children }: { children: string }) {
+  return (
+    <Typography variant="caption" color="error.main" sx={{ fontWeight: 650 }}>
+      {children}
+    </Typography>
+  )
 }
 
-function rowMatchesSearch(row: FbsOrderRow, query: string): boolean {
-  const needle = query.trim().toLowerCase()
-  if (!needle) return true
+function MetadataState({ order }: { order: FbsWorklistOrder }) {
+  if (order.metadata.required.length === 0) {
+    return <Chip size="small" variant="outlined" color="success" label="Не требуется" />
+  }
+  const rejected = order.metadata.states.some((state) =>
+    ['rejected', 'replacement_required'].includes(state.status),
+  )
+  const missing = order.metadata.states.filter((state) => state.status === 'missing').length
   return (
-    String(row.wb_order_id).includes(needle) ||
-    (row.wb_article?.toLowerCase().includes(needle) ?? false) ||
-    (row.wb_barcode?.toLowerCase().includes(needle) ?? false)
+    <Chip
+      size="small"
+      variant="outlined"
+      color={rejected ? 'error' : missing ? 'warning' : 'success'}
+      label={rejected ? 'Отклонено WB' : missing ? `Не хватает: ${missing}` : 'Готово'}
+    />
   )
 }
 
 export function FfFbsOrdersScreen({ token, authHeaders, sellers }: Props) {
-  const [tab, setTab] = useState<FbsOrdersTab>('new')
-  const [selectedSellerId, setSelectedSellerId] = useState<string>('__all__')
+  const [statusGroup, setStatusGroup] = useState<(typeof TABS)[number]['key']>('new')
+  const [sellerId, setSellerId] = useState('__all__')
   const [search, setSearch] = useState('')
-  const [orders, setOrders] = useState<FbsOrderRow[]>([])
+  const [appliedSearch, setAppliedSearch] = useState('')
+  const [orders, setOrders] = useState<FbsWorklistOrder[]>([])
+  const [serverNow, setServerNow] = useState<string | null>(null)
+  const [selected, setSelected] = useState<Set<string>>(new Set())
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
-
-  // Выделение заказов (вкладка «Новые») для создания отгрузки.
-  const [selected, setSelected] = useState<Set<string>>(new Set())
   const [createOpen, setCreateOpen] = useState(false)
-  const [createName, setCreateName] = useState('')
-  const [createDelivery, setCreateDelivery] = useState('warehouse_sc')
-  const [creating, setCreating] = useState(false)
-
-  // Карточка отгрузки (Экран 2).
-  const [drawerSupplyId, setDrawerSupplyId] = useState<string | null>(null)
-  const [drawerOpen, setDrawerOpen] = useState(false)
-
-  const sellerNameById = useMemo(() => {
-    const m = new Map<string, string>()
-    for (const s of sellers) m.set(s.id, s.name)
-    return m
-  }, [sellers])
+  const [workspaceOpen, setWorkspaceOpen] = useState(false)
+  const [workspaceId, setWorkspaceId] = useState<string | null>(null)
+  const [workspaceSeed, setWorkspaceSeed] = useState<FbsWorkspace | null>(null)
+  const [previewUrl, setPreviewUrl] = useState<string | null>(null)
 
   const load = useCallback(async () => {
-    setError(null)
     setBusy(true)
+    setError(null)
     try {
-      const rows = await fetchFbsOrders(token, authHeaders, {
-        sellerId: selectedSellerId !== '__all__' ? selectedSellerId : null,
+      const page = await fetchFbsWorklist(token, authHeaders, {
+        seller_id: sellerId === '__all__' ? null : sellerId,
+        status_group: statusGroup,
+        search: appliedSearch || null,
+        limit: 200,
       })
-      setOrders(rows)
-    } catch (e) {
-      setError(e instanceof Error ? e.message : 'Не удалось загрузить заказы FBS')
+      setOrders(page.items)
+      setServerNow(page.server_now)
+      setSelected((current) => {
+        const visible = new Set(page.items.map((order) => order.id))
+        return new Set([...current].filter((id) => visible.has(id)))
+      })
+    } catch (cause) {
       setOrders([])
+      setError(cause instanceof Error ? cause.message : 'Не удалось загрузить заказы FBS.')
     } finally {
       setBusy(false)
     }
-  }, [token, authHeaders, selectedSellerId])
+  }, [token, authHeaders, sellerId, statusGroup, appliedSearch])
 
   useEffect(() => {
     void load()
   }, [load])
 
-  const visibleOrders = useMemo(() => {
-    const allowed = new Set(TAB_STATUSES[tab])
-    return orders.filter((row) => allowed.has(row.status) && rowMatchesSearch(row, search))
-  }, [orders, tab, search])
+  const selectedOrders = useMemo(
+    () => orders.filter((order) => selected.has(order.id)),
+    [orders, selected],
+  )
+  const selectedOrderIds = useMemo(() => [...selected], [selected])
+  const selectionBlockers = useMemo(
+    () => selectedOrders.flatMap((order) => order.selection_blockers.map((blocker) => ({ order, blocker }))),
+    [selectedOrders],
+  )
+  const selectableIds = useMemo(
+    () => orders.filter((order) => order.selection_blockers.length === 0).map((order) => order.id),
+    [orders],
+  )
 
-  const showCheckboxes = tab === 'new'
-
-  const toggle = useCallback((id: string) => {
-    setSelected((prev) => {
-      const next = new Set(prev)
+  const toggle = (id: string) => {
+    setSelected((current) => {
+      const next = new Set(current)
       if (next.has(id)) next.delete(id)
       else next.add(id)
       return next
     })
-  }, [])
+  }
 
-  const openSupply = useCallback((id: string) => {
-    setDrawerSupplyId(id)
-    setDrawerOpen(true)
-  }, [])
-
-  const handleCreateSupply = useCallback(async () => {
-    const rows = orders.filter((o) => selected.has(o.id))
-    if (rows.length === 0) return
-    const sellerId = rows[0].seller_id
-    const warehouseId = rows[0].warehouse_id
-    if (rows.some((r) => r.seller_id !== sellerId || r.warehouse_id !== warehouseId)) {
-      setError('В одну отгрузку можно объединить только заказы одного селлера и одного склада.')
-      return
-    }
-    setCreating(true)
+  const openWorkspace = (supplyId: string, seed?: FbsWorkspace) => {
+    setWorkspaceId(supplyId)
+    setWorkspaceSeed(seed ?? null)
+    setWorkspaceOpen(true)
     setError(null)
-    try {
-      const supply = await createFbsSupply(token, authHeaders, {
-        seller_id: sellerId,
-        warehouse_id: warehouseId,
-        name: createName.trim() || `Отгрузка ${new Date().toLocaleDateString('ru-RU')}`,
-        delivery_type: createDelivery,
-        cargo_type: rows[0].cargo_type,
-        wb_office_id: rows[0].wb_office_id,
-      })
-      for (const r of rows) {
-        await addOrderToFbsSupply(token, authHeaders, supply.id, r.id)
-      }
-      setCreateOpen(false)
-      setCreateName('')
-      setSelected(new Set())
-      openSupply(supply.id)
-      await load()
-    } catch (e) {
-      setError(e instanceof Error ? e.message : 'Не удалось создать отгрузку')
-    } finally {
-      setCreating(false)
-    }
-  }, [orders, selected, token, authHeaders, createName, createDelivery, openSupply, load])
+  }
 
   return (
-    <Box data-testid="fbs-orders-screen">
-      <Typography variant="h5" gutterBottom>
-        FBS
-      </Typography>
-      <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
-        Заказы по модели «Маркетплейс»: сборка, отгрузка и передача в доставку.
-      </Typography>
+    <Box data-testid="fbs-orders-screen" sx={{ pb: selected.size ? 12 : 3 }}>
+      <Stack
+        direction={{ xs: 'column', sm: 'row' }}
+        sx={{ justifyContent: 'space-between', gap: 2, mb: 1.5 }}
+      >
+        <Box>
+          <Stack direction="row" spacing={1.25} sx={{ alignItems: 'center' }}>
+            <Inventory2OutlinedIcon color="primary" />
+            <Typography variant="h5">Заказы FBS</Typography>
+          </Stack>
+          <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5 }}>
+            Соберите совместимые заказы в поставку и проведите её до подтверждённой передачи WB.
+          </Typography>
+        </Box>
+        <Button
+          variant="outlined"
+          startIcon={<RefreshOutlinedIcon />}
+          onClick={() => void load()}
+          disabled={busy}
+        >
+          Обновить данные
+        </Button>
+      </Stack>
 
       <FfFbsSectionNav />
 
-      <Tabs
-        value={tab}
-        onChange={(_, v) => {
-          setTab(v as FbsOrdersTab)
-          setSelected(new Set())
-        }}
-        sx={{ mb: 2, borderBottom: 1, borderColor: 'divider' }}
-      >
-        {TABS.map((t) => (
-          <Tab key={t.key} value={t.key} label={t.label} data-testid={`fbs-orders-tab-${t.key}`} />
-        ))}
-      </Tabs>
+      <Paper variant="outlined" sx={{ overflow: 'hidden', mt: 2 }}>
+        <Tabs
+          value={statusGroup}
+          onChange={(_, value) => {
+            setStatusGroup(value)
+            setSelected(new Set())
+          }}
+          variant="scrollable"
+          scrollButtons="auto"
+          sx={{ px: 1.5, borderBottom: 1, borderColor: 'divider' }}
+        >
+          {TABS.map((tab) => (
+            <Tab key={tab.key} value={tab.key} label={tab.label} />
+          ))}
+        </Tabs>
 
-      {error ? (
-        <Alert severity="error" sx={{ mb: 2 }} data-testid="fbs-orders-error" onClose={() => setError(null)}>
-          {error}
-        </Alert>
-      ) : null}
-
-      <Paper variant="outlined" sx={{ p: 2, mb: 2 }} data-testid="fbs-orders-filters">
-        <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2} sx={{ alignItems: { sm: 'center' } }}>
-          <FormControl size="small" sx={{ minWidth: 240 }}>
-            <InputLabel id="fbs-seller-filter-label">Селлер</InputLabel>
+        <Stack
+          direction={{ xs: 'column', md: 'row' }}
+          spacing={1.5}
+          sx={{ p: 2, bgcolor: 'rgba(255,255,255,.75)' }}
+        >
+          <FormControl sx={{ minWidth: 230 }}>
+            <InputLabel id="fbs-worklist-seller-label">Селлер</InputLabel>
             <Select
-              labelId="fbs-seller-filter-label"
+              labelId="fbs-worklist-seller-label"
               label="Селлер"
-              value={selectedSellerId}
-              onChange={(e) => setSelectedSellerId(String(e.target.value))}
-              data-testid="fbs-seller-filter"
+              value={sellerId}
+              onChange={(event) => setSellerId(String(event.target.value))}
             >
-              <MenuItem value="__all__">Все</MenuItem>
-              {sellers.map((s) => (
-                <MenuItem key={s.id} value={s.id}>
-                  {s.name}
+              <MenuItem value="__all__">Все селлеры</MenuItem>
+              {sellers.map((seller) => (
+                <MenuItem key={seller.id} value={seller.id}>
+                  {seller.name}
                 </MenuItem>
               ))}
             </Select>
           </FormControl>
           <TextField
-            size="small"
-            label="Поиск"
-            placeholder="Номер задания, артикул, штрихкод"
+            fullWidth
+            label="Заказ, артикул или штрихкод"
             value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            sx={{ minWidth: 280, flexGrow: 1 }}
-            slotProps={{ htmlInput: { 'data-testid': 'fbs-orders-search' } }}
+            onChange={(event) => setSearch(event.target.value)}
+            onKeyDown={(event) => {
+              if (event.key === 'Enter') setAppliedSearch(search.trim())
+            }}
           />
-          {busy ? <CircularProgress size={18} data-testid="fbs-orders-loading" /> : null}
           <Button
-            size="small"
-            variant="text"
-            onClick={() => void load()}
-            disabled={busy}
-            data-testid="fbs-orders-refresh"
-            sx={{ ml: { sm: 'auto' } }}
+            variant="contained"
+            startIcon={<SearchOutlinedIcon />}
+            onClick={() => setAppliedSearch(search.trim())}
+            sx={{ minWidth: 130 }}
           >
-            Обновить
+            Найти
           </Button>
         </Stack>
       </Paper>
 
-      <TableContainer
-        component={Paper}
-        variant="outlined"
-        data-testid="fbs-orders-list"
-        sx={{ maxHeight: 'calc(100vh - 300px)' }}
-      >
-        <Table stickyHeader size="small" data-testid="fbs-orders-table">
+      {error ? (
+        <Alert severity="error" sx={{ mt: 2 }} onClose={() => setError(null)}>
+          {error}
+        </Alert>
+      ) : null}
+
+      <TableContainer component={Paper} variant="outlined" sx={{ mt: 2, maxHeight: 'calc(100vh - 330px)' }}>
+        <Table stickyHeader size="small" data-testid="fbs-worklist-table">
           <TableHead>
             <TableRow>
-              {showCheckboxes ? <TableCell padding="checkbox" /> : null}
-              <TableCell>Задание</TableCell>
-              <TableCell>Товар</TableCell>
-              <TableCell align="right" width={110}>
-                Цена
+              <TableCell padding="checkbox">
+                {statusGroup === 'new' ? (
+                  <Checkbox
+                    checked={selectableIds.length > 0 && selectableIds.every((id) => selected.has(id))}
+                    indeterminate={selected.size > 0 && !selectableIds.every((id) => selected.has(id))}
+                    onChange={(_, checked) => setSelected(new Set(checked ? selectableIds : []))}
+                  />
+                ) : null}
               </TableCell>
-              <TableCell width={180}>Селлер</TableCell>
-              <TableCell width={90}>Тип</TableCell>
-              <TableCell width={150}>Статус</TableCell>
+              <TableCell sx={{ minWidth: 310 }}>Товар и заказ</TableCell>
+              <TableCell sx={{ minWidth: 190 }}>Селлер и склады</TableCell>
+              <TableCell sx={{ minWidth: 180 }}>Остаток</TableCell>
+              <TableCell sx={{ minWidth: 170 }}>Маршрут и данные</TableCell>
+              <TableCell sx={{ minWidth: 145 }}>Срок</TableCell>
+              <TableCell sx={{ minWidth: 130 }}>Статус</TableCell>
             </TableRow>
           </TableHead>
           <TableBody>
-            {visibleOrders.map((row) => (
-              <TableRow
-                key={row.id}
-                hover
-                selected={selected.has(row.id)}
-                onClick={() => (row.supply_id ? openSupply(row.supply_id) : showCheckboxes ? toggle(row.id) : undefined)}
-                sx={{ cursor: 'pointer' }}
-                data-testid="fbs-order-row"
-                data-status={row.status}
-                data-seller-id={row.seller_id}
-              >
-                {showCheckboxes ? (
-                  <TableCell padding="checkbox" onClick={(e) => e.stopPropagation()}>
-                    <Checkbox
-                      checked={selected.has(row.id)}
-                      onChange={() => toggle(row.id)}
-                      data-testid="fbs-order-checkbox"
-                    />
+            {orders.map((order) => {
+              const blocked = order.selection_blockers.length > 0
+              return (
+                <TableRow
+                  key={order.id}
+                  hover
+                  selected={selected.has(order.id)}
+                  sx={{ verticalAlign: 'top' }}
+                  data-testid={`fbs-order-${order.id}`}
+                >
+                  <TableCell padding="checkbox">
+                    {statusGroup === 'new' ? (
+                      <Checkbox
+                        checked={selected.has(order.id)}
+                        disabled={blocked}
+                        onChange={() => toggle(order.id)}
+                      />
+                    ) : null}
                   </TableCell>
-                ) : null}
-                <TableCell>
-                  <Stack spacing={0.5}>
-                    <Typography variant="body2">№ {row.wb_order_id}</Typography>
-                    <Stack direction="row" spacing={1} sx={{ alignItems: 'center' }}>
-                      <Typography variant="caption" color="text.secondary">
-                        {formatWbDate(row.created_at_wb)}
-                      </Typography>
-                      <DeadlinePill deadlineAt={row.deadline_at} cancelled={row.status === 'cancelled'} />
-                      {row.is_legal ? <Chip size="small" variant="outlined" label="Юрлицо" /> : null}
-                    </Stack>
-                  </Stack>
-                </TableCell>
-                <TableCell>
-                  <Stack direction="row" spacing={1} sx={{ alignItems: 'center' }}>
-                    <Avatar variant="rounded" sx={{ width: 36, height: 36 }}>
-                      {(row.wb_article ?? row.wb_barcode ?? '#')[0]}
-                    </Avatar>
-                    <Stack spacing={0.25}>
-                      <Typography variant="body2" sx={{ lineHeight: 1.2 }}>
-                        {row.wb_article ?? row.wb_barcode ?? '—'}
-                      </Typography>
-                      <Stack direction="row" spacing={0.5} sx={{ alignItems: 'center' }}>
-                        <Typography variant="caption" color="text.secondary">
-                          {row.wb_barcode ?? (row.wb_nm_id ? `nm ${row.wb_nm_id}` : '—')}
+                  <TableCell>
+                    <Stack direction="row" spacing={1.25}>
+                      <Avatar
+                        variant="rounded"
+                        src={order.product.image_url ?? undefined}
+                        onClick={() => order.product.image_url && setPreviewUrl(order.product.image_url)}
+                        sx={{ width: 62, height: 72, cursor: order.product.image_url ? 'zoom-in' : 'default' }}
+                      >
+                        <Inventory2OutlinedIcon />
+                      </Avatar>
+                      <Box sx={{ minWidth: 0 }}>
+                        <Typography variant="subtitle2" sx={{ lineHeight: 1.25 }}>
+                          {order.product.id ? order.product.name : 'Товар не сопоставлен'}
                         </Typography>
-                        {row.mapping_status === 'missing' ? (
-                          <Chip
-                            size="small"
-                            variant="outlined"
-                            color="warning"
-                            label="не сопоставлен"
-                            data-testid="fbs-order-unmapped"
-                          />
+                        <Typography variant="body2" color="text.secondary">
+                          Заказ WB №{order.wb_order_id}
+                        </Typography>
+                        <Typography variant="caption" color="text.secondary" sx={{ display: 'block' }}>
+                          Артикул продавца: {order.product.seller_article ?? 'не указан'}
+                        </Typography>
+                        <Typography variant="caption" color="text.secondary" sx={{ display: 'block' }}>
+                          Артикул WB: {order.product.wb_article ?? 'не указан'} · ШК:{' '}
+                          {order.product.barcode ?? 'не указан'}
+                        </Typography>
+                        {order.product.size ? (
+                          <Chip size="small" label={`Размер ${order.product.size}`} sx={{ mt: 0.5 }} />
                         ) : null}
-                      </Stack>
+                        {blocked ? (
+                          <Stack sx={{ mt: 0.75 }} spacing={0.25}>
+                            {order.selection_blockers.map((blocker) => (
+                              <MissingText key={blocker.code}>{blocker.message}</MissingText>
+                            ))}
+                          </Stack>
+                        ) : null}
+                      </Box>
                     </Stack>
-                  </Stack>
-                </TableCell>
-                <TableCell align="right">
-                  <Typography variant="body2" sx={{ fontVariantNumeric: 'tabular-nums' }}>
-                    {row.price == null ? '—' : `${priceFmt.format(row.price)} ₽`}
-                  </Typography>
-                </TableCell>
-                <TableCell>
-                  <Stack direction="row" spacing={0.5} sx={{ alignItems: 'center', flexWrap: 'wrap' }}>
-                    <SellerBadge name={sellerNameById.get(row.seller_id) ?? null} />
-                    {row.can_pvz ? <Chip size="small" variant="outlined" color="info" label="ПВЗ" /> : null}
-                  </Stack>
-                </TableCell>
-                <TableCell>
-                  <CargoTypeChip cargoType={row.cargo_type ?? '—'} />
-                </TableCell>
-                <TableCell>
-                  <FbsStatusChip status={row.status} />
-                </TableCell>
-              </TableRow>
-            ))}
-            {!busy && visibleOrders.length === 0 ? (
-              <TableRow>
-                <TableCell colSpan={showCheckboxes ? 7 : 6}>
-                  <Box sx={{ py: 4, textAlign: 'center' }} data-testid="fbs-orders-empty">
+                  </TableCell>
+                  <TableCell>
+                    <SellerBadge name={order.seller.name} />
+                    <Typography variant="body2" sx={{ mt: 0.75 }}>
+                      WB: {order.wb_warehouse.name ?? `ID ${order.wb_warehouse.id}`}
+                    </Typography>
                     <Typography variant="body2" color="text.secondary">
-                      {search.trim() ? 'Ничего не найдено по запросу.' : 'Заказов в этой вкладке нет.'}
+                      WMS: {order.wms_warehouse.name}
+                    </Typography>
+                  </TableCell>
+                  <TableCell>
+                    <Typography
+                      variant="body2"
+                      color={order.inventory.available_unpacked > 0 ? 'success.main' : 'error.main'}
+                      sx={{ fontWeight: 750 }}
+                    >
+                      Доступно: {order.inventory.available_unpacked}
+                    </Typography>
+                    {order.inventory.locations.length ? (
+                      order.inventory.locations.map((location) => (
+                        <Typography key={location.id} variant="caption" color="text.secondary" sx={{ display: 'block' }}>
+                          {location.code}: {location.available_unpacked}
+                        </Typography>
+                      ))
+                    ) : (
+                      <MissingText>Ячейка не назначена</MissingText>
+                    )}
+                    {order.inventory.available_unpacked <= 0 ? (
+                      <MissingText>Остаток отсутствует</MissingText>
+                    ) : null}
+                  </TableCell>
+                  <TableCell>
+                    <Stack direction="row" spacing={0.5} sx={{ flexWrap: 'wrap' }} useFlexGap>
+                      <CargoTypeChip cargoType={order.cargo_type} />
+                      <Chip
+                        size="small"
+                        variant="outlined"
+                        color={order.can_pvz ? 'success' : 'default'}
+                        label={order.can_pvz ? 'Можно в ПВЗ' : 'Только склад/СЦ'}
+                      />
+                      <Chip
+                        size="small"
+                        variant="outlined"
+                        label={order.buyer_type === 'legal' ? 'Юрлицо' : 'Физлицо'}
+                      />
+                    </Stack>
+                    <Box sx={{ mt: 1 }}>
+                      <MetadataState order={order} />
+                    </Box>
+                  </TableCell>
+                  <TableCell>
+                    <DeadlinePill deadlineAt={order.deadline_at} serverNow={serverNow} />
+                    <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 0.5 }}>
+                      Создан {new Date(order.created_at_wb).toLocaleString('ru-RU')}
+                    </Typography>
+                  </TableCell>
+                  <TableCell>
+                    <FbsStatusChip status={order.status} />
+                    {order.supply_id ? (
+                      <Button size="small" sx={{ mt: 0.75 }} onClick={() => openWorkspace(order.supply_id!)}>
+                        Открыть поставку
+                      </Button>
+                    ) : null}
+                  </TableCell>
+                </TableRow>
+              )
+            })}
+            {!busy && orders.length === 0 ? (
+              <TableRow>
+                <TableCell colSpan={7}>
+                  <Box sx={{ py: 8, textAlign: 'center' }}>
+                    <Inventory2OutlinedIcon sx={{ fontSize: 42, color: 'text.disabled' }} />
+                    <Typography variant="subtitle1" sx={{ mt: 1 }}>
+                      Заказов в этой группе нет
+                    </Typography>
+                    <Typography variant="body2" color="text.secondary">
+                      Измените фильтры или обновите синхронизацию с WB.
                     </Typography>
                   </Box>
                 </TableCell>
@@ -363,88 +407,84 @@ export function FfFbsOrdersScreen({ token, authHeaders, sellers }: Props) {
             ) : null}
           </TableBody>
         </Table>
+        {busy ? (
+          <Stack direction="row" spacing={1} sx={{ alignItems: 'center', justifyContent: 'center', py: 2 }}>
+            <CircularProgress size={20} />
+            <Typography variant="body2">Обновляем рабочий список…</Typography>
+          </Stack>
+        ) : null}
       </TableContainer>
 
-      {showCheckboxes && selected.size > 0 ? (
+      {selected.size ? (
         <Paper
-          variant="outlined"
+          elevation={8}
           sx={{
-            position: 'sticky',
-            bottom: 8,
-            mt: 2,
-            p: 1.5,
-            display: 'flex',
-            alignItems: 'center',
-            gap: 2,
+            position: 'fixed',
+            left: { xs: 12, md: 280 },
+            right: 20,
+            bottom: 18,
+            zIndex: 1200,
+            px: 2.5,
+            py: 1.5,
+            border: 1,
+            borderColor: selectionBlockers.length ? 'error.light' : 'primary.light',
           }}
-          data-testid="fbs-orders-action-bar"
+          data-testid="fbs-selection-bar"
         >
-          <Typography variant="body2">Выбрано заказов: {selected.size}</Typography>
-          <Button variant="text" size="small" onClick={() => setSelected(new Set())}>
-            Сбросить
-          </Button>
-          <Button
-            variant="contained"
-            sx={{ ml: 'auto' }}
-            onClick={() => setCreateOpen(true)}
-            data-testid="fbs-create-supply"
-          >
-            Создать отгрузку
-          </Button>
+          <Stack direction={{ xs: 'column', md: 'row' }} spacing={2} sx={{ alignItems: { md: 'center' } }}>
+            <Box sx={{ flex: 1 }}>
+              <Typography variant="subtitle2">Выбрано заказов: {selected.size}</Typography>
+              <Typography variant="caption" color={selectionBlockers.length ? 'error.main' : 'text.secondary'}>
+                {selectionBlockers.length
+                  ? selectionBlockers[0].blocker.message
+                  : 'Следующий шаг — серверная проверка состава и маршрута.'}
+              </Typography>
+            </Box>
+            <Button onClick={() => setSelected(new Set())}>Снять выбор</Button>
+            <Button
+              variant="contained"
+              size="large"
+              disabled={selectionBlockers.length > 0}
+              onClick={() => setCreateOpen(true)}
+            >
+              Сформировать поставку
+            </Button>
+          </Stack>
         </Paper>
       ) : null}
 
-      <Dialog open={createOpen} onClose={() => setCreateOpen(false)} fullWidth maxWidth="xs" data-testid="fbs-create-supply-dialog">
-        <DialogTitle>Новая отгрузка FBS</DialogTitle>
-        <DialogContent>
-          <Stack spacing={2} sx={{ mt: 1 }}>
-            <Typography variant="body2" color="text.secondary">
-              Заказов в отгрузке: {selected.size}. В одной отгрузке — заказы одного селлера и склада.
-            </Typography>
-            <TextField
-              label="Название"
-              size="small"
-              value={createName}
-              onChange={(e) => setCreateName(e.target.value)}
-              placeholder="Отгрузка (по умолчанию — с датой)"
-              fullWidth
-            />
-            <FormControl size="small" fullWidth>
-              <InputLabel id="fbs-create-delivery-label">Куда</InputLabel>
-              <Select
-                labelId="fbs-create-delivery-label"
-                label="Куда"
-                value={createDelivery}
-                onChange={(e) => setCreateDelivery(String(e.target.value))}
-                data-testid="fbs-create-delivery"
-              >
-                <MenuItem value="warehouse_sc">Склад / СЦ</MenuItem>
-                <MenuItem value="pvz">ПВЗ</MenuItem>
-              </Select>
-            </FormControl>
-          </Stack>
-        </DialogContent>
-        <DialogActions>
-          <Button onClick={() => setCreateOpen(false)}>Отмена</Button>
-          <Button
-            variant="contained"
-            onClick={() => void handleCreateSupply()}
-            disabled={creating}
-            data-testid="fbs-create-supply-submit"
-          >
-            {creating ? '…' : 'Создать'}
-          </Button>
-        </DialogActions>
-      </Dialog>
-
-      <FfFbsSupplyDrawer
+      <FbsSupplyCreateDialog
         token={token}
         authHeaders={authHeaders}
-        supplyId={drawerSupplyId}
-        open={drawerOpen}
-        onClose={() => setDrawerOpen(false)}
-        onChanged={() => void load()}
+        orderIds={selectedOrderIds}
+        open={createOpen}
+        onClose={() => setCreateOpen(false)}
+        onCreated={(workspace) => {
+          setCreateOpen(false)
+          setSelected(new Set())
+          openWorkspace(workspace.supply.id, workspace)
+          void load()
+        }}
       />
+
+      <FfFbsSupplyWorkspace
+        token={token}
+        authHeaders={authHeaders}
+        supplyId={workspaceId}
+        initialWorkspace={workspaceSeed}
+        open={workspaceOpen}
+        onClose={() => {
+          setWorkspaceOpen(false)
+          setWorkspaceSeed(null)
+          void load()
+        }}
+      />
+
+      <Dialog open={Boolean(previewUrl)} onClose={() => setPreviewUrl(null)} maxWidth="md">
+        <DialogContent sx={{ p: 1 }}>
+          {previewUrl ? <Box component="img" src={previewUrl} alt="Фото товара" sx={{ maxWidth: '80vw', maxHeight: '80vh' }} /> : null}
+        </DialogContent>
+      </Dialog>
     </Box>
   )
 }

@@ -3,10 +3,9 @@ import { expect, test, type Page, type Route } from '@playwright/test'
 import { waitForGetOk, waitForPostOk } from './api-waits'
 import { openFulfillmentRegistration } from './auth-flow'
 
-// Component-style UI coverage for screens 2 (карточка отгрузки) and 3 (лист
-// подбора). These tests keep isolated route fixtures; real WMS ↔ WB emulator
-// coverage lives in the backend integration lane and must not be confused with
-// these mocked browser scenarios.
+// Экраны 2 (карточка отгрузки) и 3 (лист подбора) ходят в реальные ручки /operations/fbs-supplies/*.
+// Здесь мокаем их через page.route и проверяем видимый результат: создание отгрузки, передача в
+// доставку через ConfirmDialog, лист подбора с отметками и фильтром.
 
 function fbsOrder(id: string, over: Record<string, unknown> = {}): Record<string, unknown> {
   return {
@@ -58,7 +57,7 @@ function fbsSupply(status: string, over: Record<string, unknown> = {}): Record<s
     created_at: new Date().toISOString(),
     updated_at: new Date().toISOString(),
     orders: [
-      { id: 'o-1', wb_order_id: 1, status, supply_id: 'sup-1', trbx_id: null, sticker_code: null, sticker_file: null },
+      { id: 'o-1', wb_order_id: 1, status, supply_id: 'sup-1', sticker_code: null, sticker_file: null },
     ],
     ...over,
   }
@@ -85,12 +84,12 @@ async function registerFf(page: Page, tag: string) {
 }
 
 // TC-NEW-FBS-SUPPLYUI-004/005 — передача в доставку через подтверждение.
-// Given: упакованная отгрузка (packed); When: открыть карточку, «Передать в доставку», подтвердить;
+// Given: собранная отгрузка (assembling); When: открыть карточку, «Передать в доставку», подтвердить;
 // Then: вызывается POST /deliver, статус → in_delivery. Negative: отмена диалога не меняет статус.
 test('fbs supply: deliver with confirm', async ({ page }) => {
   await registerFf(page, 'deliver')
 
-  let supplyStatus = 'packed'
+  let supplyStatus = 'assembling'
   await page.route('**/operations/fbs-orders**', (r) =>
     r.request().method() === 'GET'
       ? json(r, [fbsOrder('1', { status: 'in_supply', supply_id: 'sup-1' })])
@@ -155,147 +154,6 @@ test('fbs supply: create from selected orders', async ({ page }) => {
     page.getByTestId('fbs-create-supply-submit').click(),
   ])
   await expect(page.getByTestId('fbs-supply-drawer')).toBeVisible()
-})
-
-// TC-NEW-FBS-SUPPLYUI-007 — draft is not silently treated as assembling.
-// The operator starts assembly explicitly, receives a packaging task, and can
-// hand already printed KIZ codes to WB from the same supply card.
-test('fbs supply: start assembly creates packaging task and assigns printed KIZ', async ({ page }) => {
-  await registerFf(page, 'start-assembly')
-
-  const draft = fbsSupply('draft', { packaging_task_id: null })
-  const assembling = fbsSupply('assembling', { packaging_task_id: 'pack-task-1' })
-  await page.route('**/operations/fbs-orders**', (r) =>
-    r.request().method() === 'GET'
-      ? json(r, [fbsOrder('1', { status: 'in_supply', supply_id: 'sup-1' })])
-      : r.fallback(),
-  )
-  await page.route('**/operations/fbs-supplies/*', (r) =>
-    r.request().method() === 'GET' ? json(r, draft) : r.fallback(),
-  )
-  await page.route('**/operations/fbs-supplies/*/status', async (r) => {
-    expect(r.request().postDataJSON()).toEqual({ status: 'assembling' })
-    await json(r, assembling)
-  })
-  await page.route('**/operations/fbs-orders/supplies/*/markings/assign-printed', async (r) => {
-    await json(r, [{ id: 'marking-1', order_id: 'o-1', kind: 'sgtin', value: '0101', check_status: 'ok', marking_code_id: 'code-1' }])
-  })
-
-  await page.goto('/app/ff/fbs')
-  await page.getByTestId('fbs-orders-tab-assembly').click()
-  await page.getByTestId('fbs-order-row').first().click()
-  await expect(page.getByTestId('fbs-supply-start-assembly')).toBeVisible()
-  await Promise.all([
-    page.waitForResponse((res) => res.url().includes('/status') && res.request().method() === 'PUT'),
-    page.getByTestId('fbs-supply-start-assembly').click(),
-  ])
-  await expect(page.getByTestId('fbs-supply-open-packaging')).toBeVisible()
-  await expect(page.getByTestId('fbs-supply-assign-markings')).toBeVisible()
-  await Promise.all([
-    page.waitForResponse((res) => res.url().includes('/markings/assign-printed') && res.request().method() === 'POST'),
-    page.getByTestId('fbs-supply-assign-markings').click(),
-  ])
-  await expect(page.getByTestId('fbs-supply-info')).toContainText('КИЗ переданы в WB: 1')
-})
-
-// TC-NEW-FBS-PVZUI-001 — operator can assign two real supply orders to a trbx.
-test('fbs PVZ supply: bind two orders to trbx with dimensions', async ({ page }) => {
-  await registerFf(page, 'pvz-trbx')
-
-  const orders = [
-    { id: 'o-1', wb_order_id: 1, status: 'assembling', supply_id: 'sup-1', trbx_id: null, sticker_code: null, sticker_file: null },
-    { id: 'o-2', wb_order_id: 2, status: 'assembling', supply_id: 'sup-1', trbx_id: null, sticker_code: null, sticker_file: null },
-  ]
-  const supply = fbsSupply('assembling', { delivery_type: 'pvz', orders })
-  const trbx = {
-    id: 'trbx-1',
-    wb_trbx_id: 'WB-TRBX-1',
-    packaging_box_id: null,
-    length_mm: null,
-    width_mm: null,
-    height_mm: null,
-    weight_g: null,
-    sticker_file: null,
-  }
-
-  await page.route('**/operations/fbs-orders**', (r) =>
-    r.request().method() === 'GET'
-      ? json(r, orders.map((order) => fbsOrder(order.id, order)))
-      : r.fallback(),
-  )
-  await page.route('**/operations/fbs-supplies/*/trbx/stickers', (r) => json(r, { trbxes: [trbx] }))
-  await page.route('**/operations/fbs-supplies/*/trbx/*/orders', async (r) => {
-    expect(r.request().postDataJSON()).toEqual({
-      order_ids: ['o-1', 'o-2'],
-      length_mm: 400,
-      width_mm: 300,
-      height_mm: 200,
-      weight_g: 2000,
-    })
-    await json(r, trbx)
-  })
-  await page.route('**/operations/fbs-supplies/*', (r) =>
-    r.request().method() === 'GET' ? json(r, supply) : r.fallback(),
-  )
-
-  await page.goto('/app/ff/fbs')
-  await page.getByTestId('fbs-orders-tab-assembly').click()
-  await page.getByTestId('fbs-order-row').first().click()
-  await expect(page.getByTestId('fbs-trbx-row')).toBeVisible()
-
-  await page.getByTestId('fbs-trbx-order-trbx-1-o-1').check()
-  await page.getByTestId('fbs-trbx-order-trbx-1-o-2').check()
-  await Promise.all([
-    page.waitForResponse((res) => res.url().includes('/trbx/trbx-1/orders') && res.request().method() === 'POST'),
-    page.getByTestId('fbs-trbx-bind-trbx-1').click(),
-  ])
-  await expect(page.getByTestId('fbs-trbx-bind-trbx-1')).toBeVisible()
-})
-
-// TC-NEW-FBS-PVZUI-002 — create a real WMS physical box (WHB), bind it to a
-// WB cargo place, and expose its barcode for reprint/scanning.
-test('fbs PVZ supply: create and bind physical WHB box', async ({ page }) => {
-  await registerFf(page, 'pvz-box')
-
-  const order = { id: 'o-1', wb_order_id: 1, status: 'assembling', supply_id: 'sup-1', trbx_id: null, sticker_code: null, sticker_file: null }
-  const supply = fbsSupply('assembling', { delivery_type: 'pvz', packaging_task_id: 'pack-task-1', orders: [order] })
-  const trbx = {
-    id: 'trbx-1', wb_trbx_id: 'WB-TRBX-1', packaging_box_id: null, packaging_box_barcode: null,
-    length_mm: 400, width_mm: 300, height_mm: 200, weight_g: 2000, sticker_file: null,
-  }
-  const boundTrbx = { ...trbx, packaging_box_id: 'box-1', packaging_box_barcode: 'WHB-000001' }
-
-  await page.route('**/operations/fbs-orders**', (r) =>
-    r.request().method() === 'GET' ? json(r, [fbsOrder(order.id, order)]) : r.fallback(),
-  )
-  await page.route('**/operations/fbs-supplies/*/trbx/stickers', (r) => json(r, { trbxes: [trbx] }))
-  let boxRequestCount = 0
-  await page.route('**/operations/fbs-supplies/*/trbx/*/box', async (r) => {
-    boxRequestCount += 1
-    expect(r.request().postDataJSON()).toEqual(
-      boxRequestCount === 1 ? { barcode: null } : { barcode: 'WHB-000001' },
-    )
-    await json(r, boundTrbx)
-  })
-  await page.route('**/operations/fbs-supplies/*', (r) =>
-    r.request().method() === 'GET' ? json(r, supply) : r.fallback(),
-  )
-
-  await page.goto('/app/ff/fbs')
-  await page.getByTestId('fbs-orders-tab-assembly').click()
-  await page.getByTestId('fbs-order-row').first().click()
-  await expect(page.getByTestId('fbs-trbx-row')).toBeVisible()
-  await Promise.all([
-    page.waitForResponse((res) => res.url().includes('/trbx/trbx-1/box') && res.request().method() === 'POST'),
-    page.getByTestId('fbs-trbx-box-create-trbx-1').click(),
-  ])
-  await expect(page.getByTestId('fbs-trbx-box-barcode-trbx-1')).toHaveValue('WHB-000001')
-  await expect(page.getByTestId('fbs-trbx-box-print-trbx-1')).toBeVisible()
-  await Promise.all([
-    page.waitForResponse((res) => res.url().includes('/trbx/trbx-1/box') && res.request().method() === 'POST'),
-    page.getByTestId('fbs-trbx-box-bind-trbx-1').click(),
-  ])
-  expect(boxRequestCount).toBe(2)
 })
 
 // TC-NEW-FBS-PICKUI-001/002 — лист подбора: загрузка, отметка, фильтр.

@@ -9,6 +9,7 @@ from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.deps import get_effective_seller_id, require_fulfillment_admin
+from app.api.fbs_errors import raise_fbs_http
 from app.core.settings import settings
 from app.db.session import get_db
 from app.models.fbs_order import FbsOrder
@@ -21,6 +22,7 @@ from app.services.fbs_cancellation_service import (
     cancel_order,
     sync_seller_order_statuses,
 )
+from app.services.fbs_worklist_service import fetch_worklist_page
 from app.services.wb_marketplace_orders_service import list_orders
 
 router = APIRouter(
@@ -46,6 +48,102 @@ class FbsOrderSyncStatusesOut(BaseModel):
 class FbsOrderSyncOut(BaseModel):
     id: str
     status: str
+
+
+class FbsWorklistSellerOut(BaseModel):
+    id: str
+    name: str
+
+
+class FbsWorklistWarehouseOut(BaseModel):
+    id: int | str
+    name: str | None
+
+
+class FbsWorklistProductOut(BaseModel):
+    id: str | None
+    name: str
+    image_url: str | None
+    seller_article: str | None
+    wb_article: int | None
+    barcode: str | None
+    size: str | None
+
+
+class FbsWorklistInventoryLocationOut(BaseModel):
+    id: str
+    code: str
+    available_unpacked: int
+
+
+class FbsWorklistInventoryOut(BaseModel):
+    available_unpacked: int
+    locations: list[FbsWorklistInventoryLocationOut]
+
+
+class FbsWorklistMetadataStateOut(BaseModel):
+    kind: str
+    status: str
+    reason: str | None
+
+
+class FbsWorklistMetadataOut(BaseModel):
+    required: list[str]
+    optional: list[str]
+    states: list[FbsWorklistMetadataStateOut]
+    delivery_allowed: bool
+    last_checked_at: str | None
+
+
+class FbsWorklistStickerOut(BaseModel):
+    status: str
+    asset_url: str | None
+    applied_at: str | None
+
+
+class FbsWorklistPickOut(BaseModel):
+    status: str
+    location_code: str | None
+    picked_at: str | None
+
+
+class FbsWorklistPackOut(BaseModel):
+    status: str
+    packed_at: str | None
+
+
+class FbsWorklistBlockerOut(BaseModel):
+    code: str
+    message: str
+
+
+class FbsWorklistOrderOut(BaseModel):
+    id: str
+    wb_order_id: int
+    status: str
+    wb_status: str | None
+    seller: FbsWorklistSellerOut
+    wb_warehouse: FbsWorklistWarehouseOut
+    wms_warehouse: FbsWorklistWarehouseOut
+    product: FbsWorklistProductOut
+    inventory: FbsWorklistInventoryOut
+    buyer_type: str
+    cargo_type: str
+    can_pvz: bool
+    metadata: FbsWorklistMetadataOut
+    sticker: FbsWorklistStickerOut
+    pick: FbsWorklistPickOut
+    pack: FbsWorklistPackOut
+    created_at_wb: str
+    deadline_at: str
+    supply_id: str | None
+    selection_blockers: list[FbsWorklistBlockerOut]
+
+
+class FbsWorklistPageOut(BaseModel):
+    items: list[FbsWorklistOrderOut]
+    next_cursor: str | None
+    server_now: str
 
 
 class FbsOrderOut(BaseModel):
@@ -143,6 +241,46 @@ async def start_fbs_orders_sync(
     return FbsOrderSyncOut(id=str(job.id), status=job.status)
 
 
+@router.get("/worklist", response_model=FbsWorklistPageOut)
+async def get_fbs_orders_worklist(
+    user: Annotated[User, Depends(require_fulfillment_admin)],
+    session: Annotated[AsyncSession, Depends(get_db)],
+    effective_seller_id: Annotated[uuid.UUID | None, Depends(get_effective_seller_id)],
+    seller_id: Annotated[uuid.UUID | None, Query()] = None,
+    status_group: Annotated[str | None, Query()] = None,
+    search: Annotated[str | None, Query()] = None,
+    limit: Annotated[int, Query(ge=1, le=500)] = 100,
+    cursor: Annotated[str | None, Query()] = None,
+) -> FbsWorklistPageOut:
+    filter_seller = seller_id if seller_id is not None else effective_seller_id
+    if filter_seller is not None:
+        seller = await session.get(Seller, filter_seller)
+        if seller is None or seller.tenant_id != user.tenant_id:
+            raise_fbs_http(status.HTTP_404_NOT_FOUND, "seller_not_found")
+    try:
+        page = await fetch_worklist_page(
+            session,
+            user.tenant_id,
+            seller_id=filter_seller,
+            status_group=status_group,
+            search=search,
+            limit=limit,
+            cursor=cursor,
+        )
+    except ValueError as exc:
+        code = str(exc)
+        if code in {"invalid_cursor", "invalid_status_group"}:
+            raise_fbs_http(status.HTTP_400_BAD_REQUEST, code)
+        raise
+    return FbsWorklistPageOut.model_validate(
+        {
+            "items": page.items,
+            "next_cursor": page.next_cursor,
+            "server_now": page.server_now,
+        }
+    )
+
+
 @router.get("", response_model=list[FbsOrderOut])
 async def get_fbs_orders(
     user: Annotated[User, Depends(require_fulfillment_admin)],
@@ -172,14 +310,14 @@ async def get_fbs_orders(
 
 def _raise_cancellation_http(exc: FbsCancellationError) -> None:
     if exc.code == "order_not_found":
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=exc.code)
+        raise_fbs_http(status.HTTP_404_NOT_FOUND, exc.code)
     if exc.code == "order_not_cancellable":
-        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=exc.code)
+        raise_fbs_http(status.HTTP_409_CONFLICT, exc.code)
     if exc.code in ("seller_not_found", "missing_marketplace_token"):
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=exc.code)
+        raise_fbs_http(status.HTTP_400_BAD_REQUEST, exc.code)
     if exc.code.startswith("wb_"):
-        raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail=exc.code)
-    raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=exc.code)
+        raise_fbs_http(status.HTTP_502_BAD_GATEWAY, exc.code)
+    raise_fbs_http(status.HTTP_500_INTERNAL_SERVER_ERROR, exc.code)
 
 
 @router.patch("/{order_id}/cancel", response_model=FbsOrderOut)
@@ -206,10 +344,7 @@ async def sync_fbs_order_statuses(
 ) -> FbsOrderSyncStatusesOut:
     seller = await session.get(Seller, body.seller_id)
     if seller is None or seller.tenant_id != user.tenant_id:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="seller_not_found",
-        )
+        raise_fbs_http(status.HTTP_404_NOT_FOUND, "seller_not_found")
     async with httpx.AsyncClient() as http_client:
         try:
             updated = await sync_seller_order_statuses(

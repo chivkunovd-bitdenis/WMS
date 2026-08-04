@@ -26,7 +26,14 @@
 
 ### Принцип
 
-- **Только импорт (read/sync в нашу систему)**. Создание поставок и карточек **в WB через наш продукт в MVP не делаем** (нет исходящих «create» в сторону WB).
+- **Только импорт (read/sync в нашу систему)** для **FBW** (карточки, FBW-поставки) и прочих read-only интеграций. Создание **FBW**-поставок и карточек **в WB через наш продукт в MVP не делаем** (нет исходящих «create» в сторону WB для FBW).
+
+### Исключение: FBS operator flow (осознанное, FBSFLOW-130)
+
+- **FBS (Wildberries «Маркетплейс»)** — полный операторский цикл **с исходящими вызовами WB**: создание поставки, batch-добавление заказов, metadata/КИЗ, стикеры, грузоместа ПВЗ, передача в доставку, post-delivery sync.
+- Контракт, ошибки и тест-кейсы: `tasks/fbs-operator-flow/` (`BACKEND_CONTRACT.md`, `ERROR_CATALOG_RU.md`, `OPENAPI_NOTES.md`, `TEST_CASES.md` → `docs/IMPLEMENTED_PRODUCT_SCENARIOS_TEST_CASES_EN.md` §S17).
+- Эмулятор WB в CI **не заменяет** live smoke (`TC-S17-024`); секреты — только env / manual job.
+- Старые задачи `tasks/fbs-frontend-*` и `tasks/fbs-marketplace-orders/SPEC.md` описывают **ранний** контракт (`sticker_file`, bind order→trbx) и **deprecated** для нового frontend.
 
 ### Методы API (ориентир документации WB)
 

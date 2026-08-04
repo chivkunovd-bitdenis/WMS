@@ -1,13 +1,12 @@
-"""FBS supply assembly — create WB supply, add orders, picking list, stickers."""
+# ruff: noqa: RUF001
+"""FBS supply assembly — preflight, atomic from-orders, legacy add, stickers."""
 
 from __future__ import annotations
 
-import base64
-import binascii
 import uuid
 from collections import defaultdict
 from dataclasses import dataclass
-from pathlib import Path
+from datetime import UTC, datetime
 from typing import Any
 
 import httpx
@@ -15,25 +14,48 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
-from app.core.settings import settings
 from app.models.fbs_order import (
-    FBS_ORDER_STATUS_CANCELLED,
+    FBS_ORDER_STATUS_ASSEMBLING,
     FBS_ORDER_STATUS_IN_SUPPLY,
     FBS_ORDER_STATUS_NEW,
     FbsOrder,
 )
-from app.models.fbs_shipment_reversal_ledger import FbsShipmentReversalLedger
 from app.models.fbs_supply import (
     FBS_DELIVERY_TYPE_PVZ,
     FBS_DELIVERY_TYPE_WAREHOUSE_SC,
+    FBS_SUPPLY_STATUS_ASSEMBLING,
     FBS_SUPPLY_STATUS_DRAFT,
     FbsSupply,
 )
-from app.services import inventory_service as inv_svc
+from app.models.fbs_wb_operation import (
+    WB_OPERATION_STATE_CONFIRMED,
+    WB_OPERATION_STATE_FAILED,
+    WB_OPERATION_STATE_PENDING_CONFIRMATION,
+)
 from app.services.catalog_service import get_warehouse
+from app.services.fbs_packaging_integration_service import create_packaging_task_for_supply
+from app.services.fbs_print_asset_storage import decode_png_payload
+from app.services.fbs_supply_reconcile_service import (
+    create_pending_operation,
+    get_operation_by_idempotency,
+    mark_operation_confirmed,
+    mark_operation_failed,
+    mark_operation_pending_confirmation,
+    reconcile_supply_orders,
+    request_hash_for_from_orders,
+)
+from app.services.fbs_supply_validator_service import (
+    FbsSupplyValidationError,
+    SupplyPreflightResult,
+    load_orders_for_validation,
+    preflight_to_dict,
+    validate_supply_composition,
+)
+from app.services.fbs_workspace_service import get_supply_workspace
 from app.services.wildberries_client import (
     WildberriesClientError,
     add_order_to_marketplace_supply,
+    add_orders_to_marketplace_supply,
     create_marketplace_supply,
     fetch_marketplace_order_stickers,
 )
@@ -41,62 +63,27 @@ from app.services.wildberries_credentials_service import (
     _seller_in_tenant,
     get_decrypted_marketplace_token,
 )
+from app.services.wildberries_fbs_client import split_marketplace_order_id_batches
 
 _VALID_DELIVERY_TYPES = {FBS_DELIVERY_TYPE_WAREHOUSE_SC, FBS_DELIVERY_TYPE_PVZ}
 
 
 class FbsSupplyError(Exception):
-    def __init__(self, code: str) -> None:
+    def __init__(
+        self,
+        code: str,
+        *,
+        message: str | None = None,
+        context: dict[str, Any] | None = None,
+        retryable: bool = False,
+        http_status: int | None = None,
+    ) -> None:
         self.code = code
+        self.message = message or code
+        self.context = context or {}
+        self.retryable = retryable
+        self.http_status = http_status
         super().__init__(code)
-
-
-async def apply_fbs_supply_write_offs(
-    session: AsyncSession,
-    *,
-    tenant_id: uuid.UUID,
-    orders: list[FbsOrder],
-    task_lines: list[Any],
-) -> None:
-    """Write off each packed order once and record its reversible physical unit."""
-    location_by_product = {line.product_id: line.storage_location_id for line in task_lines}
-    order_ids = [order.id for order in orders if order.product_id is not None]
-    if not order_ids:
-        return
-    existing_result = await session.execute(
-        select(FbsShipmentReversalLedger).where(
-            FbsShipmentReversalLedger.tenant_id == tenant_id,
-            FbsShipmentReversalLedger.fbs_order_id.in_(order_ids),
-        )
-    )
-    existing = {row.fbs_order_id for row in existing_result.scalars()}
-    for order in orders:
-        if (
-            order.status == FBS_ORDER_STATUS_CANCELLED
-            or order.product_id is None
-            or order.id in existing
-        ):
-            continue
-        storage_location_id = location_by_product.get(order.product_id)
-        if storage_location_id is None:
-            raise ValueError("missing_fbs_packaging_location")
-        ledger = FbsShipmentReversalLedger(
-            tenant_id=tenant_id,
-            fbs_order_id=order.id,
-            product_id=order.product_id,
-            storage_location_id=storage_location_id,
-            quantity=1,
-        )
-        session.add(ledger)
-        await session.flush()
-        existing.add(order.id)
-        await inv_svc.apply_fbs_supply_write_off(
-            session,
-            tenant_id=tenant_id,
-            product_id=order.product_id,
-            storage_location_id=storage_location_id,
-            quantity=1,
-        )
 
 
 @dataclass(frozen=True)
@@ -114,6 +101,16 @@ class StickerMeta:
     wb_order_id: int
     sticker_code: str | None
     sticker_file: str | None
+    asset_id: uuid.UUID | None = None
+
+
+async def _order_has_ready_sticker_asset(
+    session: AsyncSession, tenant_id: uuid.UUID, order: FbsOrder
+) -> bool:
+    from app.services.fbs_print_asset_service import _asset_file_ready, _find_order_sticker_asset
+
+    asset = await _find_order_sticker_asset(session, tenant_id, order.id)
+    return asset is not None and _asset_file_ready(asset)
 
 
 def _wb_error_code(exc: WildberriesClientError) -> str:
@@ -151,35 +148,388 @@ async def _get_supply(
     return result.scalar_one_or_none()
 
 
-def _sticker_relative_path(order_id: uuid.UUID) -> str:
-    return f"fbs-stickers/{order_id}.png"
+def _issue_context(validation: SupplyPreflightResult) -> dict[str, Any]:
+    reasons = sorted({issue.code for issue in validation.issues})
+    order_ids = sorted({str(issue.order_id) for issue in validation.issues})
+    return {"order_ids": order_ids, "reasons": reasons}
 
 
-def _save_sticker_png(order_id: uuid.UUID, png_bytes: bytes) -> str:
-    rel = _sticker_relative_path(order_id)
-    root = Path(settings.wms_data_dir)
-    target = (root / rel).resolve()
-    root_resolved = root.resolve()
-    if root_resolved not in target.parents and target != root_resolved:
-        raise FbsSupplyError("invalid_sticker_path")
-    target.parent.mkdir(parents=True, exist_ok=True)
-    target.write_bytes(png_bytes)
-    return rel
-
-
-def _decode_sticker_file(raw: Any) -> bytes | None:
-    if not isinstance(raw, str) or not raw.strip():
-        return None
-    payload = raw.strip()
-    if payload.startswith("data:"):
-        comma = payload.find(",")
-        if comma == -1:
-            return None
-        payload = payload[comma + 1 :]
+async def preflight_supply_composition(
+    session: AsyncSession,
+    tenant_id: uuid.UUID,
+    order_ids: list[uuid.UUID],
+    *,
+    planned_delivery_type: str,
+) -> dict[str, Any]:
     try:
-        return base64.b64decode(payload, validate=True)
-    except (binascii.Error, ValueError):
-        return None
+        result = await validate_supply_composition(
+            session,
+            tenant_id,
+            order_ids,
+            planned_delivery_type=planned_delivery_type,
+        )
+    except FbsSupplyValidationError as exc:
+        raise FbsSupplyError(exc.code) from exc
+    return preflight_to_dict(result)
+
+
+async def _bind_orders_to_supply(
+    session: AsyncSession,
+    supply: FbsSupply,
+    orders: list[FbsOrder],
+) -> None:
+    for order in orders:
+        order.supply_id = supply.id
+        order.status = FBS_ORDER_STATUS_IN_SUPPLY
+    if orders:
+        supply.cargo_type = orders[0].cargo_type
+    await session.flush()
+
+
+async def _execute_wb_batch_add(
+    http_client: httpx.AsyncClient,
+    *,
+    api_token: str,
+    wb_supply_id: str,
+    wb_order_ids: list[int],
+) -> None:
+    for batch in split_marketplace_order_id_batches(wb_order_ids):
+        await add_orders_to_marketplace_supply(
+            http_client,
+            api_token=api_token,
+            supply_id=wb_supply_id,
+            order_ids=batch,
+        )
+
+
+async def create_supply_from_orders(
+    session: AsyncSession,
+    tenant_id: uuid.UUID,
+    *,
+    name: str,
+    order_ids: list[uuid.UUID],
+    planned_delivery_type: str,
+    planned_destination: dict[str, Any] | None,
+    idempotency_key: str,
+    http_client: httpx.AsyncClient,
+) -> dict[str, Any]:
+    if not idempotency_key.strip():
+        raise FbsSupplyError("missing_idempotency_key", http_status=400)
+    if not order_ids:
+        raise FbsSupplyError("empty_order_set", http_status=400)
+
+    request_hash = request_hash_for_from_orders(
+        name=name,
+        order_ids=order_ids,
+        planned_delivery_type=planned_delivery_type,
+    )
+
+    try:
+        stub_orders = await load_orders_for_validation(
+            session, tenant_id, order_ids, for_update=False
+        )
+    except FbsSupplyValidationError as exc:
+        raise FbsSupplyError(exc.code) from exc
+
+    seller_id = stub_orders[0].seller_id
+    existing_op = await get_operation_by_idempotency(session, seller_id, idempotency_key)
+    if existing_op is not None:
+        if existing_op.request_hash and existing_op.request_hash != request_hash:
+            raise FbsSupplyError(
+                "idempotency_key_reused",
+                message="Ключ идемпотентности уже использован с другими параметрами.",
+                retryable=False,
+                http_status=409,
+            )
+        return await _resume_from_orders_operation(
+            session,
+            tenant_id,
+            existing_op,
+            orders=list(stub_orders),
+            http_client=http_client,
+        )
+
+    try:
+        preview = await validate_supply_composition(
+            session,
+            tenant_id,
+            order_ids,
+            planned_delivery_type=planned_delivery_type,
+        )
+    except FbsSupplyValidationError as exc:
+        raise FbsSupplyError(exc.code) from exc
+    if not preview.compatible:
+        raise FbsSupplyError(
+            "order_incompatible",
+            message="Заказ нельзя добавить в выбранную поставку.",
+            context=_issue_context(preview),
+            retryable=False,
+            http_status=409,
+        )
+
+    locked = await validate_supply_composition(
+        session,
+        tenant_id,
+        order_ids,
+        planned_delivery_type=planned_delivery_type,
+        for_update=True,
+    )
+    if not locked.compatible:
+        raise FbsSupplyError(
+            "order_incompatible",
+            message="Заказ нельзя добавить в выбранную поставку.",
+            context=_issue_context(locked),
+            retryable=False,
+            http_status=409,
+        )
+
+    orders = list(locked.orders)
+    summary = locked.summary
+    assert summary is not None
+    token = await _require_marketplace_token(session, tenant_id, seller_id)
+    operation = await create_pending_operation(
+        session,
+        tenant_id=tenant_id,
+        seller_id=seller_id,
+        idempotency_key=idempotency_key,
+        request_hash=request_hash,
+        request_summary={
+            "name": name,
+            "order_ids": [str(oid) for oid in order_ids],
+            "planned_delivery_type": planned_delivery_type,
+        },
+    )
+
+    try:
+        wb_row = await create_marketplace_supply(http_client, api_token=token, name=name)
+    except WildberriesClientError as exc:
+        await mark_operation_failed(
+            session,
+            operation,
+            error_code=_wb_error_code(exc),
+        )
+        raise FbsSupplyError(
+            _wb_error_code(exc),
+            retryable=exc.code == "transport_error",
+            http_status=504 if exc.code == "transport_error" else 502,
+        ) from exc
+
+    wb_supply_id_raw = wb_row.get("id")
+    if wb_supply_id_raw is None:
+        await mark_operation_failed(session, operation, error_code="wb_invalid_response")
+        raise FbsSupplyError("wb_invalid_response", http_status=502)
+    wb_supply_id = str(wb_supply_id_raw)
+
+    wb_office_id = None
+    dest_name = None
+    dest_zone = None
+    if planned_destination:
+        office_raw = planned_destination.get("office_id")
+        wb_office_id = int(office_raw) if office_raw is not None else None
+        name_raw = planned_destination.get("name")
+        dest_name = name_raw if isinstance(name_raw, str) else None
+        zone_raw = planned_destination.get("zone")
+        dest_zone = zone_raw if isinstance(zone_raw, str) else None
+
+    supply = FbsSupply(
+        tenant_id=tenant_id,
+        seller_id=seller_id,
+        warehouse_id=summary.wms_warehouse_id,
+        wb_supply_id=wb_supply_id,
+        name=name,
+        status=FBS_SUPPLY_STATUS_DRAFT,
+        delivery_type=planned_delivery_type,
+        cargo_type=summary.cargo_type,
+        wb_office_id=wb_office_id,
+        planned_destination_office_id=wb_office_id,
+        planned_destination_name=dest_name,
+        planned_destination_zone=dest_zone,
+    )
+    session.add(supply)
+    await session.flush()
+
+    wb_order_ids = [int(order.wb_order_id) for order in orders]
+    try:
+        await _execute_wb_batch_add(
+            http_client,
+            api_token=token,
+            wb_supply_id=wb_supply_id,
+            wb_order_ids=wb_order_ids,
+        )
+    except WildberriesClientError as exc:
+        if exc.code == "transport_error":
+            await mark_operation_pending_confirmation(
+                session,
+                operation,
+                wb_supply_id=wb_supply_id,
+                local_supply_id=supply.id,
+                error_code="wb_timeout",
+                error_context={"wb_supply_id": wb_supply_id},
+            )
+            raise FbsSupplyError(
+                "wb_timeout",
+                message="WB не подтвердил состав поставки — повторите операцию.",
+                context={"wb_supply_id": wb_supply_id, "operation_state": "pending_confirmation"},
+                retryable=True,
+                http_status=504,
+            ) from exc
+        await mark_operation_failed(
+            session,
+            operation,
+            error_code=_wb_error_code(exc),
+            wb_supply_id=wb_supply_id,
+            local_supply_id=supply.id,
+        )
+        raise FbsSupplyError(
+            _wb_error_code(exc),
+            retryable=False,
+            http_status=502,
+        ) from exc
+
+    state, _confirmed = await reconcile_supply_orders(
+        http_client,
+        api_token=token,
+        wb_supply_id=wb_supply_id,
+        expected_wb_order_ids=set(wb_order_ids),
+    )
+    if state != WB_OPERATION_STATE_CONFIRMED:
+        await mark_operation_pending_confirmation(
+            session,
+            operation,
+            wb_supply_id=wb_supply_id,
+            local_supply_id=supply.id,
+        )
+        raise FbsSupplyError(
+            "wb_pending_confirmation",
+            message="WB не подтвердил состав поставки — повторите операцию.",
+            context={"wb_supply_id": wb_supply_id, "supply_id": str(supply.id)},
+            retryable=True,
+            http_status=504,
+        )
+
+    await _bind_orders_to_supply(session, supply, orders)
+    await mark_operation_confirmed(
+        session,
+        operation,
+        wb_supply_id=wb_supply_id,
+        local_supply_id=supply.id,
+        response_summary={"wb_order_ids": wb_order_ids},
+    )
+    return await get_supply_workspace(session, tenant_id, supply.id)
+
+
+async def _resume_from_orders_operation(
+    session: AsyncSession,
+    tenant_id: uuid.UUID,
+    operation: Any,
+    *,
+    orders: list[FbsOrder],
+    http_client: httpx.AsyncClient,
+) -> dict[str, Any]:
+    if operation.state == WB_OPERATION_STATE_FAILED:
+        raise FbsSupplyError(
+            operation.error_code or "operation_failed",
+            message="Предыдущая попытка создания поставки завершилась ошибкой.",
+            context=dict(operation.error_context_json or {}),
+            retryable=False,
+            http_status=502,
+        )
+    if operation.local_entity_id is None or operation.wb_object_id is None:
+        raise FbsSupplyError(
+            "operation_incomplete",
+            message="Операция создания поставки не завершена.",
+            retryable=True,
+            http_status=504,
+        )
+    supply = await _get_supply(session, tenant_id, operation.local_entity_id, with_orders=True)
+    if supply is None:
+        raise FbsSupplyError("supply_not_found")
+    token = await _require_marketplace_token(session, tenant_id, operation.seller_id)
+    wb_order_ids = [int(order.wb_order_id) for order in orders]
+    if operation.state == WB_OPERATION_STATE_PENDING_CONFIRMATION:
+        state, _confirmed = await reconcile_supply_orders(
+            http_client,
+            api_token=token,
+            wb_supply_id=operation.wb_object_id,
+            expected_wb_order_ids=set(wb_order_ids),
+        )
+        if state != WB_OPERATION_STATE_CONFIRMED:
+            try:
+                await _execute_wb_batch_add(
+                    http_client,
+                    api_token=token,
+                    wb_supply_id=operation.wb_object_id,
+                    wb_order_ids=wb_order_ids,
+                )
+            except WildberriesClientError as exc:
+                if exc.code == "transport_error":
+                    raise FbsSupplyError(
+                        "wb_timeout",
+                        message="WB не подтвердил состав поставки — повторите операцию.",
+                        context={"wb_supply_id": operation.wb_object_id},
+                        retryable=True,
+                        http_status=504,
+                    ) from exc
+                raise FbsSupplyError(
+                    _wb_error_code(exc),
+                    http_status=502,
+                ) from exc
+            state, _confirmed = await reconcile_supply_orders(
+                http_client,
+                api_token=token,
+                wb_supply_id=operation.wb_object_id,
+                expected_wb_order_ids=set(wb_order_ids),
+            )
+        if state != WB_OPERATION_STATE_CONFIRMED:
+            raise FbsSupplyError(
+                "wb_pending_confirmation",
+                message="WB не подтвердил состав поставки — повторите операцию.",
+                context={"wb_supply_id": operation.wb_object_id},
+                retryable=True,
+                http_status=504,
+            )
+        await _bind_orders_to_supply(session, supply, orders)
+        await mark_operation_confirmed(
+            session,
+            operation,
+            wb_supply_id=operation.wb_object_id,
+            local_supply_id=supply.id,
+        )
+        return await get_supply_workspace(session, tenant_id, supply.id)
+
+    if operation.state == WB_OPERATION_STATE_CONFIRMED:
+        bound = {int(o.wb_order_id) for o in supply.orders}
+        missing = [o for o in orders if int(o.wb_order_id) not in bound]
+        if missing:
+            await _bind_orders_to_supply(session, supply, missing)
+        return await get_supply_workspace(session, tenant_id, supply.id)
+
+    raise FbsSupplyError(
+        "operation_in_progress",
+        message="Операция создания поставки ещё выполняется.",
+        retryable=True,
+        http_status=503,
+    )
+
+
+async def start_supply_work(
+    session: AsyncSession,
+    tenant_id: uuid.UUID,
+    supply_id: uuid.UUID,
+) -> dict[str, Any]:
+    supply = await _get_supply(session, tenant_id, supply_id, with_orders=True)
+    if supply is None:
+        raise FbsSupplyError("supply_not_found")
+    if not supply.orders:
+        raise FbsSupplyError("supply_empty", http_status=400)
+    await create_packaging_task_for_supply(session, tenant_id, supply_id)
+    if supply.status == FBS_SUPPLY_STATUS_DRAFT:
+        supply.status = FBS_SUPPLY_STATUS_ASSEMBLING
+        for order in supply.orders:
+            if order.status == FBS_ORDER_STATUS_IN_SUPPLY:
+                order.status = FBS_ORDER_STATUS_ASSEMBLING
+        await session.flush()
+    return await get_supply_workspace(session, tenant_id, supply_id)
 
 
 async def create_supply(
@@ -341,11 +691,16 @@ async def fetch_and_cache_stickers(
     if not supply.orders:
         return []
 
-    orders_to_fetch = [
-        order
-        for order in supply.orders
-        if force or not order.sticker_file
-    ]
+    orders_to_fetch = []
+    for order in supply.orders:
+        if force:
+            orders_to_fetch.append(order)
+            continue
+        if order.sticker_file:
+            continue
+        if await _order_has_ready_sticker_asset(session, tenant_id, order):
+            continue
+        orders_to_fetch.append(order)
     if orders_to_fetch:
         token = await _require_marketplace_token(session, tenant_id, supply.seller_id)
         order_ids = [int(order.wb_order_id) for order in orders_to_fetch]
@@ -364,17 +719,28 @@ async def fetch_and_cache_stickers(
             if oid_raw is not None:
                 by_wb_id[int(oid_raw)] = row
 
+        fetched_at = datetime.now(tz=UTC)
         for order in orders_to_fetch:
             sticker_row = by_wb_id.get(int(order.wb_order_id))
             if sticker_row is None:
                 raise FbsSupplyError("wb_stickers_incomplete")
             barcode = sticker_row.get("barcode")
-            if isinstance(barcode, str):
-                order.sticker_code = barcode
-            file_raw = sticker_row.get("file")
-            png_bytes = _decode_sticker_file(file_raw)
-            if png_bytes is not None:
-                order.sticker_file = _save_sticker_png(order.id, png_bytes)
+            sticker_code = barcode if isinstance(barcode, str) else None
+            png_bytes = decode_png_payload(sticker_row.get("file"))
+            if png_bytes is None:
+                raise FbsSupplyError("wb_stickers_incomplete")
+            from app.services.fbs_print_asset_service import upsert_order_sticker_asset_from_bytes
+
+            await upsert_order_sticker_asset_from_bytes(
+                session,
+                tenant_id=tenant_id,
+                seller_id=supply.seller_id,
+                supply_id=supply.id,
+                order=order,
+                png_bytes=png_bytes,
+                sticker_code=sticker_code,
+                fetched_at=fetched_at,
+            )
 
         still_missing = [
             order
@@ -385,12 +751,18 @@ async def fetch_and_cache_stickers(
             raise FbsSupplyError("wb_stickers_incomplete")
 
     await session.flush()
-    return [
-        StickerMeta(
-            order_id=order.id,
-            wb_order_id=int(order.wb_order_id),
-            sticker_code=order.sticker_code,
-            sticker_file=order.sticker_file,
+    from app.services.fbs_print_asset_service import _find_order_sticker_asset
+
+    metas: list[StickerMeta] = []
+    for order in supply.orders:
+        asset = await _find_order_sticker_asset(session, tenant_id, order.id)
+        metas.append(
+            StickerMeta(
+                order_id=order.id,
+                wb_order_id=int(order.wb_order_id),
+                sticker_code=order.sticker_code,
+                sticker_file=order.sticker_file,
+                asset_id=asset.id if asset is not None else None,
+            )
         )
-        for order in supply.orders
-    ]
+    return metas

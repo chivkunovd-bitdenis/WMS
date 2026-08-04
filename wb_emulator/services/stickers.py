@@ -6,9 +6,9 @@ import base64
 import io
 from typing import Any
 
-import qrcode  # type: ignore[import-untyped]
-from barcode import Code128  # type: ignore[import-untyped]
-from barcode.writer import ImageWriter  # type: ignore[import-untyped]
+import qrcode
+from barcode import Code128
+from barcode.writer import ImageWriter
 from PIL import Image
 
 PNG_MAGIC = b"\x89PNG\r\n\x1a\n"

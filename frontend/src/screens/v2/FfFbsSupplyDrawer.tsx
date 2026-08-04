@@ -1,10 +1,8 @@
 import { useCallback, useEffect, useState } from 'react'
-import { Link as RouterLink } from 'react-router-dom'
 import {
   Alert,
   Box,
   Button,
-  Checkbox,
   Chip,
   CircularProgress,
   Dialog,
@@ -15,7 +13,6 @@ import {
   Divider,
   Drawer,
   FormControl,
-  FormControlLabel,
   IconButton,
   InputLabel,
   MenuItem,
@@ -34,9 +31,6 @@ import {
 } from '@mui/material'
 import {
   createFbsTrbx,
-  createOrBindFbsPackagingBox,
-  assignFbsSupplyMarkings,
-  bindFbsTrbxOrders,
   deliverFbsSupply,
   fetchFbsTrbxStickers,
   generateFbsSupplyStickers,
@@ -45,7 +39,6 @@ import {
   canDeliverFbsSupply,
   MARKING_KIND_LABEL,
   putFbsOrderMarking,
-  startFbsSupplyAssembly,
   type FbsMarkingKind,
   type FbsOrderMarking,
   type FbsSupply,
@@ -54,8 +47,6 @@ import {
 } from './fbsApi'
 import { FbsStatusChip, MarkingCheckStatusChip } from '../../components/fbs/FbsChips'
 import { FfFbsPickList } from './FfFbsPickList'
-import { printBarcodeLabel } from '../../utils/printBarcodeLabel'
-import { renderBarcodeDataUrl } from '../../utils/renderBarcodeDataUrl'
 
 const MARKING_KINDS: FbsMarkingKind[] = ['sgtin', 'uin', 'imei', 'gtin']
 
@@ -250,15 +241,11 @@ export function FfFbsSupplyDrawer({ token, authHeaders, supplyId, open, onClose,
   const [supply, setSupply] = useState<FbsSupply | null>(null)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
-  const [info, setInfo] = useState<string | null>(null)
   const [confirmDeliver, setConfirmDeliver] = useState(false)
   const [pickOpen, setPickOpen] = useState(false)
   const [trbxList, setTrbxList] = useState<FbsTrbx[]>([])
   const [trbxCount, setTrbxCount] = useState('1')
   const [trbxBusy, setTrbxBusy] = useState(false)
-  const [trbxSelections, setTrbxSelections] = useState<Record<string, string[]>>({})
-  const [trbxDims, setTrbxDims] = useState<Record<string, { length_mm: string; width_mm: string; height_mm: string; weight_g: string }>>({})
-  const [trbxBoxBarcodes, setTrbxBoxBarcodes] = useState<Record<string, string>>({})
   const [markingsOrder, setMarkingsOrder] = useState<FbsSupplyOrder | null>(null)
 
   const load = useCallback(async () => {
@@ -266,13 +253,7 @@ export function FfFbsSupplyDrawer({ token, authHeaders, supplyId, open, onClose,
     setError(null)
     setBusy(true)
     try {
-      const loaded = await getFbsSupply(token, authHeaders, supplyId)
-      setSupply(loaded)
-      const assigned: Record<string, string[]> = {}
-      for (const order of loaded.orders ?? []) {
-        if (order.trbx_id) assigned[order.trbx_id] = [...(assigned[order.trbx_id] ?? []), order.id]
-      }
-      setTrbxSelections(assigned)
+      setSupply(await getFbsSupply(token, authHeaders, supplyId))
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Не удалось загрузить отгрузку')
       setSupply(null)
@@ -290,27 +271,7 @@ export function FfFbsSupplyDrawer({ token, authHeaders, supplyId, open, onClose,
   const loadTrbx = useCallback(async () => {
     if (!supplyId) return
     try {
-      const loaded = await fetchFbsTrbxStickers(token, authHeaders, supplyId)
-      setTrbxList(loaded)
-      setTrbxBoxBarcodes((prev) => {
-        const next = { ...prev }
-        for (const trbx of loaded) {
-          if (trbx.packaging_box_barcode) next[trbx.id] = trbx.packaging_box_barcode
-        }
-        return next
-      })
-      setTrbxDims((prev) => {
-        const next = { ...prev }
-        for (const trbx of loaded) {
-          next[trbx.id] = {
-            length_mm: String(trbx.length_mm ?? 400),
-            width_mm: String(trbx.width_mm ?? 300),
-            height_mm: String(trbx.height_mm ?? 200),
-            weight_g: String(trbx.weight_g ?? 2000),
-          }
-        }
-        return next
-      })
+      setTrbxList(await fetchFbsTrbxStickers(token, authHeaders, supplyId))
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Не удалось загрузить грузоместа')
     }
@@ -318,11 +279,7 @@ export function FfFbsSupplyDrawer({ token, authHeaders, supplyId, open, onClose,
 
   useEffect(() => {
     if (open && supplyId && supply?.delivery_type === 'pvz') void loadTrbx()
-    if (!open) {
-      setTrbxList([])
-      setTrbxSelections({})
-      setTrbxDims({})
-    }
+    if (!open) setTrbxList([])
   }, [open, supplyId, supply?.delivery_type, loadTrbx])
 
   const createTrbx = useCallback(async () => {
@@ -337,50 +294,12 @@ export function FfFbsSupplyDrawer({ token, authHeaders, supplyId, open, onClose,
     try {
       const created = await createFbsTrbx(token, authHeaders, supplyId, count)
       setTrbxList((prev) => [...prev, ...created])
-      setTrbxDims((prev) => {
-        const next = { ...prev }
-        for (const trbx of created) {
-          next[trbx.id] = { length_mm: '400', width_mm: '300', height_mm: '200', weight_g: '2000' }
-        }
-        return next
-      })
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Не удалось создать грузоместа')
     } finally {
       setTrbxBusy(false)
     }
   }, [token, authHeaders, supplyId, trbxCount])
-
-  const bindTrbx = useCallback(async (trbx: FbsTrbx) => {
-    if (!supplyId) return
-    const orderIds = trbxSelections[trbx.id] ?? []
-    const dims = trbxDims[trbx.id]
-    if (orderIds.length < 2) {
-      setError('В грузоместе должно быть минимум два разных заказа.')
-      return
-    }
-    if (!dims) return
-    const values = {
-      length_mm: Number(dims.length_mm),
-      width_mm: Number(dims.width_mm),
-      height_mm: Number(dims.height_mm),
-      weight_g: Number(dims.weight_g),
-    }
-    if (Object.values(values).some((value) => !Number.isInteger(value) || value < 1)) {
-      setError('Заполните длину, ширину, высоту и вес положительными целыми числами.')
-      return
-    }
-    setTrbxBusy(true)
-    setError(null)
-    try {
-      await bindFbsTrbxOrders(token, authHeaders, supplyId, trbx.id, { order_ids: orderIds, ...values })
-      await Promise.all([load(), loadTrbx()])
-    } catch (e) {
-      setError(e instanceof Error ? e.message : 'Не удалось распределить заказы по грузоместу')
-    } finally {
-      setTrbxBusy(false)
-    }
-  }, [token, authHeaders, supplyId, trbxSelections, trbxDims, load, loadTrbx])
 
   const printTrbxQr = useCallback(
     async (trbx: FbsTrbx) => {
@@ -432,76 +351,6 @@ export function FfFbsSupplyDrawer({ token, authHeaders, supplyId, open, onClose,
     }
   }, [token, authHeaders, supplyId, load])
 
-  const startAssembly = useCallback(async () => {
-    if (!supplyId) return
-    setBusy(true)
-    setError(null)
-    setInfo(null)
-    try {
-      const updated = await startFbsSupplyAssembly(token, authHeaders, supplyId)
-      setSupply(updated)
-      setInfo('Сборка начата. Задание на упаковку создано.')
-      onChanged?.()
-    } catch (e) {
-      setError(e instanceof Error ? e.message : 'Не удалось начать сборку')
-    } finally {
-      setBusy(false)
-    }
-  }, [token, authHeaders, supplyId, onChanged])
-
-  const assignPrintedMarkings = useCallback(async () => {
-    if (!supplyId) return
-    setBusy(true)
-    setError(null)
-    setInfo(null)
-    try {
-      const rows = await assignFbsSupplyMarkings(token, authHeaders, supplyId)
-      setInfo(rows.length > 0 ? `КИЗ переданы в WB: ${rows.length}.` : 'Все напечатанные КИЗ уже назначены.')
-      await load()
-    } catch (e) {
-      setError(e instanceof Error ? e.message : 'Не удалось назначить напечатанные КИЗ')
-    } finally {
-      setBusy(false)
-    }
-  }, [token, authHeaders, supplyId, load])
-
-  const createOrBindBox = useCallback(async (trbx: FbsTrbx, createNew: boolean) => {
-    if (!supplyId) return
-    const barcode = (trbxBoxBarcodes[trbx.id] ?? '').trim()
-    if (!createNew && !barcode) {
-      setError('Отсканируйте штрихкод физического короба WHB-.')
-      return
-    }
-    setTrbxBusy(true)
-    setError(null)
-    setInfo(null)
-    try {
-      const updated = await createOrBindFbsPackagingBox(
-        token,
-        authHeaders,
-        supplyId,
-        trbx.id,
-        createNew ? undefined : barcode,
-      )
-      setTrbxList((prev) => prev.map((item) => item.id === trbx.id ? updated : item))
-      if (updated.packaging_box_barcode) {
-        setTrbxBoxBarcodes((prev) => ({ ...prev, [trbx.id]: updated.packaging_box_barcode! }))
-        if (createNew) {
-          printBarcodeLabel({
-            title: 'Короб FBS',
-            barcode: updated.packaging_box_barcode,
-            barcodeDataUrl: renderBarcodeDataUrl(updated.packaging_box_barcode),
-          })
-        }
-      }
-      setInfo(createNew ? 'Физический короб создан, привязан и отправлен на печать.' : 'Физический короб привязан.')
-    } catch (e) {
-      setError(e instanceof Error ? e.message : 'Не удалось привязать физический короб')
-    } finally {
-      setTrbxBusy(false)
-    }
-  }, [token, authHeaders, supplyId, trbxBoxBarcodes])
-
   const doDeliver = useCallback(async () => {
     if (!supplyId) return
     setBusy(true)
@@ -538,12 +387,6 @@ export function FfFbsSupplyDrawer({ token, authHeaders, supplyId, open, onClose,
           <Button color="inherit" size="small" onClick={() => void load()}>Повтор</Button>
         }>
           {error}
-        </Alert>
-      ) : null}
-
-      {info ? (
-        <Alert severity="success" sx={{ mb: 2 }} onClose={() => setInfo(null)} data-testid="fbs-supply-info">
-          {info}
         </Alert>
       ) : null}
 
@@ -657,122 +500,16 @@ export function FfFbsSupplyDrawer({ token, authHeaders, supplyId, open, onClose,
                 <TableBody>
                   {trbxList.map((t) => (
                     <TableRow key={t.id} data-testid="fbs-trbx-row">
-                      <TableCell colSpan={2}>
-                        <Stack spacing={1}>
-                          <Stack direction="row" spacing={1} sx={{ alignItems: 'center', flexWrap: 'wrap' }}>
-                            <Typography variant="body2" sx={{ fontWeight: 600, minWidth: 140 }}>
-                              {t.wb_trbx_id}
-                            </Typography>
-                            {(['length_mm', 'width_mm', 'height_mm', 'weight_g'] as const).map((field) => (
-                              <TextField
-                                key={field}
-                                size="small"
-                                type="number"
-                                label={field === 'length_mm' ? 'Длина, мм' : field === 'width_mm' ? 'Ширина, мм' : field === 'height_mm' ? 'Высота, мм' : 'Вес, г'}
-                                value={trbxDims[t.id]?.[field] ?? ''}
-                                onChange={(e) => setTrbxDims((prev) => ({
-                                  ...prev,
-                                  [t.id]: { ...(prev[t.id] ?? { length_mm: '', width_mm: '', height_mm: '', weight_g: '' }), [field]: e.target.value },
-                                }))}
-                                sx={{ width: 112 }}
-                                slotProps={{ htmlInput: { 'data-testid': `fbs-trbx-${field}-${t.id}` } }}
-                              />
-                            ))}
-                            <Button
-                              size="small"
-                              variant="outlined"
-                              onClick={() => void printTrbxQr(t)}
-                              disabled={trbxBusy}
-                              data-testid="fbs-trbx-print"
-                            >
-                              Печать QR
-                            </Button>
-                          </Stack>
-                          <Typography variant="caption" color="text.secondary">
-                            Заказы в этом грузоместе (минимум 2)
-                          </Typography>
-                          <Stack direction="row" spacing={1} sx={{ flexWrap: 'wrap' }}>
-                            {(supply.orders ?? []).map((order) => {
-                              const selected = (trbxSelections[t.id] ?? []).includes(order.id)
-                              const alreadyAssigned = order.trbx_id !== null && order.trbx_id !== t.id
-                              return (
-                                <FormControlLabel
-                                  key={order.id}
-                                  control={<Checkbox
-                                    size="small"
-                                    checked={selected}
-                                    disabled={alreadyAssigned || trbxBusy}
-                                    onChange={(e) => setTrbxSelections((prev) => {
-                                      const current = prev[t.id] ?? []
-                                      const next = e.target.checked ? [...current, order.id] : current.filter((id) => id !== order.id)
-                                      return { ...prev, [t.id]: next }
-                                    })}
-                                    data-testid={`fbs-trbx-order-${t.id}-${order.id}`}
-                                  />}
-                                  label={`№ ${order.wb_order_id}${alreadyAssigned ? ' (распределён)' : ''}`}
-                                />
-                              )
-                            })}
-                          </Stack>
-                          <Button
-                            variant="contained"
-                            size="small"
-                            onClick={() => void bindTrbx(t)}
-                            disabled={trbxBusy || (trbxSelections[t.id] ?? []).length < 2}
-                            data-testid={`fbs-trbx-bind-${t.id}`}
-                            sx={{ alignSelf: 'flex-start' }}
-                          >
-                            Распределить заказы
-                          </Button>
-                          <Divider />
-                          <Typography variant="caption" color="text.secondary">
-                            Физический короб WMS
-                          </Typography>
-                          <Stack direction="row" spacing={1} sx={{ alignItems: 'center', flexWrap: 'wrap' }}>
-                            <TextField
-                              size="small"
-                              label="Штрихкод WHB-"
-                              value={trbxBoxBarcodes[t.id] ?? ''}
-                              onChange={(e) => setTrbxBoxBarcodes((prev) => ({ ...prev, [t.id]: e.target.value }))}
-                              sx={{ minWidth: 220 }}
-                              slotProps={{ htmlInput: { 'data-testid': `fbs-trbx-box-barcode-${t.id}` } }}
-                            />
-                            <Button
-                              size="small"
-                              variant="outlined"
-                              disabled={trbxBusy || !supply.packaging_task_id}
-                              onClick={() => void createOrBindBox(t, false)}
-                              data-testid={`fbs-trbx-box-bind-${t.id}`}
-                            >
-                              Привязать скан
-                            </Button>
-                            <Button
-                              size="small"
-                              variant="outlined"
-                              disabled={trbxBusy || !supply.packaging_task_id}
-                              onClick={() => void createOrBindBox(t, true)}
-                              data-testid={`fbs-trbx-box-create-${t.id}`}
-                            >
-                              Создать и печатать
-                            </Button>
-                            {t.packaging_box_id && (trbxBoxBarcodes[t.id] ?? '').trim() ? (
-                              <Button
-                                size="small"
-                                onClick={() => {
-                                  const barcode = trbxBoxBarcodes[t.id].trim()
-                                  printBarcodeLabel({
-                                    title: 'Короб FBS',
-                                    barcode,
-                                    barcodeDataUrl: renderBarcodeDataUrl(barcode),
-                                  })
-                                }}
-                                data-testid={`fbs-trbx-box-print-${t.id}`}
-                              >
-                                Печать ШК короба
-                              </Button>
-                            ) : null}
-                          </Stack>
-                        </Stack>
+                      <TableCell>{t.wb_trbx_id}</TableCell>
+                      <TableCell align="right">
+                        <Button
+                          size="small"
+                          onClick={() => void printTrbxQr(t)}
+                          disabled={trbxBusy}
+                          data-testid="fbs-trbx-print"
+                        >
+                          Печать QR
+                        </Button>
                       </TableCell>
                     </TableRow>
                   ))}
@@ -791,37 +528,6 @@ export function FfFbsSupplyDrawer({ token, authHeaders, supplyId, open, onClose,
           ) : null}
 
           <Stack direction="row" spacing={1} sx={{ mt: 2, flexWrap: 'wrap' }}>
-            {supply.status === 'draft' ? (
-              <Button
-                variant="contained"
-                onClick={() => void startAssembly()}
-                disabled={busy || (supply.orders?.length ?? 0) === 0}
-                data-testid="fbs-supply-start-assembly"
-              >
-                Начать сборку
-              </Button>
-            ) : null}
-            {supply.packaging_task_id ? (
-              <Button
-                component={RouterLink}
-                to="/app/ff/packaging"
-                state={{ taskId: supply.packaging_task_id }}
-                variant="outlined"
-                data-testid="fbs-supply-open-packaging"
-              >
-                Открыть упаковку
-              </Button>
-            ) : null}
-            {supply.packaging_task_id ? (
-              <Button
-                variant="outlined"
-                onClick={() => void assignPrintedMarkings()}
-                disabled={busy}
-                data-testid="fbs-supply-assign-markings"
-              >
-                Передать напечатанные КИЗ в WB
-              </Button>
-            ) : null}
             <Button
               variant="outlined"
               onClick={() => setPickOpen(true)}

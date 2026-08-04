@@ -2,9 +2,10 @@ from __future__ import annotations
 
 import uuid
 from datetime import datetime
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 from sqlalchemy import (
+    JSON,
     BigInteger,
     Boolean,
     DateTime,
@@ -22,6 +23,9 @@ from sqlalchemy.orm import Mapped, mapped_column, relationship
 from app.models.base import Base
 
 if TYPE_CHECKING:
+    from app.models.fbs_order_pick import FbsOrderPick
+    from app.models.fbs_packaging_fulfillment import FbsPackagingFulfillment
+    from app.models.fbs_print_asset import FbsPrintAsset
     from app.models.fbs_supply import FbsSupply
     from app.models.fbs_trbx import FbsTrbx
     from app.models.marking_code import MarkingCode
@@ -88,11 +92,75 @@ FBS_MARKING_CHECK_STATUSES = frozenset(
     }
 )
 
+PICK_STATUS_PENDING = "pending"
+PICK_STATUS_PICKED = "picked"
+PICK_STATUS_RETURNED = "returned"
+FBS_PICK_STATUSES = frozenset(
+    {PICK_STATUS_PENDING, PICK_STATUS_PICKED, PICK_STATUS_RETURNED}
+)
+
+PACK_STATUS_PENDING = "pending"
+PACK_STATUS_PACKED = "packed"
+FBS_PACK_STATUSES = frozenset({PACK_STATUS_PENDING, PACK_STATUS_PACKED})
+
+STICKER_STATUS_NOT_REQUESTED = "not_requested"
+STICKER_STATUS_REQUESTING = "requesting"
+STICKER_STATUS_READY = "ready"
+STICKER_STATUS_PRINT_OPENED = "print_opened"
+STICKER_STATUS_APPLIED = "applied"
+STICKER_STATUS_ERROR = "error"
+FBS_STICKER_STATUSES = frozenset(
+    {
+        STICKER_STATUS_NOT_REQUESTED,
+        STICKER_STATUS_REQUESTING,
+        STICKER_STATUS_READY,
+        STICKER_STATUS_PRINT_OPENED,
+        STICKER_STATUS_APPLIED,
+        STICKER_STATUS_ERROR,
+    }
+)
+
+META_STATUS_MISSING = "missing"
+META_STATUS_ASSIGNED = "assigned"
+META_STATUS_SENDING = "sending"
+META_STATUS_PENDING = "pending"
+META_STATUS_ACCEPTED = "accepted"
+META_STATUS_ALLOWED_WITHOUT_CHECK = "allowed_without_check"
+META_STATUS_REJECTED = "rejected"
+META_STATUS_REPLACEMENT_REQUIRED = "replacement_required"
+META_STATUS_UNKNOWN = "unknown"
+FBS_META_STATUSES = frozenset(
+    {
+        META_STATUS_MISSING,
+        META_STATUS_ASSIGNED,
+        META_STATUS_SENDING,
+        META_STATUS_PENDING,
+        META_STATUS_ACCEPTED,
+        META_STATUS_ALLOWED_WITHOUT_CHECK,
+        META_STATUS_REJECTED,
+        META_STATUS_REPLACEMENT_REQUIRED,
+        META_STATUS_UNKNOWN,
+    }
+)
+
 
 class FbsOrder(Base):
     __tablename__ = "fbs_orders"
     __table_args__ = (
         UniqueConstraint("seller_id", "wb_order_id", name="uq_fbs_orders_seller_wb_order"),
+        Index(
+            "ix_fbs_orders_tenant_seller_status_deadline",
+            "tenant_id",
+            "seller_id",
+            "status",
+            "deadline_at",
+        ),
+        Index(
+            "ix_fbs_orders_tenant_seller_supply",
+            "tenant_id",
+            "seller_id",
+            "supply_id",
+        ),
     )
 
     id: Mapped[uuid.UUID] = mapped_column(
@@ -154,6 +222,43 @@ class FbsOrder(Base):
     deadline_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
     mapping_status: Mapped[str] = mapped_column(String(32), nullable=False)
     reserve_status: Mapped[str] = mapped_column(String(32), nullable=False)
+    pick_status: Mapped[str] = mapped_column(
+        String(32),
+        nullable=False,
+        default=PICK_STATUS_PENDING,
+        server_default=PICK_STATUS_PENDING,
+    )
+    picked_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    pack_status: Mapped[str] = mapped_column(
+        String(32),
+        nullable=False,
+        default=PACK_STATUS_PENDING,
+        server_default=PACK_STATUS_PENDING,
+    )
+    packed_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    sticker_status: Mapped[str] = mapped_column(
+        String(32),
+        nullable=False,
+        default=STICKER_STATUS_NOT_REQUESTED,
+        server_default=STICKER_STATUS_NOT_REQUESTED,
+    )
+    sticker_applied_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    required_meta_json: Mapped[list[Any] | None] = mapped_column(JSON, nullable=True)
+    optional_meta_json: Mapped[list[Any] | None] = mapped_column(JSON, nullable=True)
+    meta_details_json: Mapped[dict[str, Any] | None] = mapped_column(JSON, nullable=True)
+    metadata_delivery_allowed: Mapped[bool | None] = mapped_column(Boolean, nullable=True)
+    metadata_last_checked_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    last_wb_sync_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), nullable=False
     )
@@ -179,6 +284,21 @@ class FbsOrder(Base):
         "FbsOrderReservation",
         back_populates="order",
         uselist=False,
+        cascade="all, delete-orphan",
+    )
+    picks: Mapped[list[FbsOrderPick]] = relationship(
+        "FbsOrderPick",
+        back_populates="order",
+        cascade="all, delete-orphan",
+    )
+    packaging_fulfillments: Mapped[list[FbsPackagingFulfillment]] = relationship(
+        "FbsPackagingFulfillment",
+        back_populates="order",
+        cascade="all, delete-orphan",
+    )
+    print_assets: Mapped[list[FbsPrintAsset]] = relationship(
+        "FbsPrintAsset",
+        back_populates="order",
         cascade="all, delete-orphan",
     )
 
@@ -219,6 +339,14 @@ class FbsOrderMarking(Base):
         nullable=True,
         index=True,
     )
+    meta_status: Mapped[str] = mapped_column(
+        String(32),
+        nullable=False,
+        default=META_STATUS_MISSING,
+        server_default=META_STATUS_MISSING,
+    )
+    reason: Mapped[str | None] = mapped_column(Text, nullable=True)
+    meta_details_json: Mapped[dict[str, Any] | None] = mapped_column(JSON, nullable=True)
 
     order: Mapped[FbsOrder] = relationship("FbsOrder", back_populates="markings")
     marking_code: Mapped[MarkingCode | None] = relationship("MarkingCode")

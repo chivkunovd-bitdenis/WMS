@@ -57,11 +57,12 @@ select = ["E", "F", "I", "B", "UP", "SIM", "RUF"]
 "tests/conftest.py" = ["E402"]
 # Repo root on sys.path before wb_emulator imports (STOCK-100 integration test).
 "tests/test_fbs_stock_emulator_integration.py" = ["E402"]
+"tests/test_fbs_operator_flow_handoff.py" = ["E402"]
 
 [tool.mypy]
 python_version = "3.11"
 explicit_package_bases = true
-mypy_path = ["tests", ".."]
+exclude = ["^tests/"]
 strict = true
 warn_return_any = true
 warn_unused_ignores = true
@@ -95,10 +96,6 @@ ignore_missing_imports = true
 
 [[tool.mypy.overrides]]
 module = "botocore.*"
-ignore_missing_imports = true
-
-[[tool.mypy.overrides]]
-module = "test_fbs_stock_emulator_integration"
 ignore_missing_imports = true
 
 [tool.pytest.ini_options]

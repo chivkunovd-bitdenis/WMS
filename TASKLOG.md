@@ -1,5 +1,80 @@
 # TASKLOG
 
+## TASK-149 — 2026-08-03 — FBSFLOW-140 backend full-flow gate and frontend handoff
+
+- What changed: `backend/tests/test_fbs_operator_flow_handoff.py` — TC-01/23 smoke, warehouse/sc + PVZ full API flows via in-process emulator, 409/timeout negatives, TC-01..23 coverage map; `tasks/fbs-operator-flow/HANDOFF.md`; `wb_emulator/routes/marketplace_supplies.py` + GET trbx list + auth for `/api/marketplace/v3/*`; JSON fixtures under `tasks/fbs-operator-flow/fixtures/handoff/`.
+- What did NOT change: frontend; live WB smoke (TC-24); deploy/merge to main.
+- Verification: `pytest tests/test_fbs_operator_flow_handoff.py tests/test_fbs_shipment_pvz.py tests/test_fbs_shipment_warehouse_sc.py -q --tb=line` → **23 passed** (~3 min); commits `30686b0`, `e6d9ddc`.
+
+## TASK-148 — 2026-08-03 — FBSFLOW-130 FBS operator OpenAPI and test catalog
+
+- What changed: `tasks/fbs-operator-flow/ERROR_CATALOG_RU.md` (stable codes + retryable); `OPENAPI_NOTES.md`; exported `openapi/fbs-operations.openapi.json` (42 paths); §S17 TC-S17-001..024 in `IMPLEMENTED_PRODUCT_SCENARIOS_TEST_CASES_EN.md`; MVP FBS import-only exception; deprecated banners on legacy `fbs-frontend-*` (no `sticker_file` as API field).
+- What did NOT change: backend business logic; frontend.
+- Verification: grep `sticker_file` in `tasks/fbs-frontend*` → 0; `pytest tests/test_fbs_openapi_contract.py` green; `export_fbs_openapi.py` → 42 paths.
+
+## TASK-147 — 2026-08-03 — FBSFLOW-120 WB emulator seed and printable assets
+
+- What changed: `order_templates.json` — 15 scenario orders for 3 sellers (`token-a/b/c`); `tokens.json`; `load_seed.py` CLI + `POST /__admin/seed`; `requiredMeta`/`optionalMeta` on orders API; fault injection (env 409/timeout + per-seller `/__admin/faults`); `wms_setup.py`; TC-23 in `test_emulator_operator_seed.py`.
+- What did NOT change: WMS FBS services; frontend; prod compose.
+- Verification: `ruff check wb_emulator/` green; `pytest wb_emulator/tests/` **60 passed**; adversarial APPROVE; commits `87249b3`..`2ae45e5`.
+
+## TASK-146 — 2026-08-03 — FBSFLOW-110 post-delivery tracking
+
+- What changed: `fbs_tracking_service.py` — sync in-delivery supplies, tracking_summary/partial_rejection in workspace, `POST …/sync-tracking`, autopoll hook; TC-22 (4 pytest).
+- What did NOT change: frontend; emulator (→ FBSFLOW-120).
+- Verification: ruff green; adversarial APPROVE WITH WARNINGS; commit `72ec4f3`.
+
+## TASK-145 — 2026-08-03 — FBSFLOW-100 delivery preflight and safe deliver
+
+- What changed: delivery-preflight + version token; idempotent deliver with operation journal; timeout → pending_confirmation retry; stale preflight 409; TC-19/20/21 (16 pytest).
+- What did NOT change: frontend; tracking (→ FBSFLOW-110).
+- Verification: ruff green; integrated @ `5dfe3c4`.
+
+## TASK-144 — 2026-08-03 — FBSFLOW-070 WB metadata and KIZ marking
+
+- What changed: `fbs_marking_service.py` + API — requiredMeta/optionalMeta, GS scanner, pool KIZ, meta gates; TC-12..14 (9 pytest).
+- Verification: integrated @ `d1765e4`.
+
+## TASK-143 — 2026-08-03 — FBSFLOW-090 PVZ cargo places
+
+- What changed: cargo-places API, count-only create, trbx journal, bind-orders 410; TC-17/18 (6 pytest).
+- Verification: integrated @ `1b91d5c`.
+
+## TASK-141 — 2026-08-03 — FBSFLOW-060 packaging fulfillments per order
+
+- What changed: `fbs_packaging_integration_service` links each `PackagingTask` pack unit to one picked `FbsOrder` via `FbsPackagingFulfillment`; auto-assign by deadline or explicit `order_id`; inventory `unpacked→packed` on pack; supply promote requires per-order fulfillment; pack API returns `fulfilled_order`; TC-10/11 tests.
+- What did NOT change: frontend; undo/repack audit flow.
+- Verification: ruff green; `pytest -k "fbs and pack"` **19 passed**; commit `c81f916`.
+
+## TASK-140 — 2026-08-03 — FBSFLOW-080 FBS print assets binary API
+
+- What changed: `fbs_print_asset_service.py` + storage; binary endpoints; batch stickers ≤100; `test_fbs_print_assets.py` TC-15,16 (7 passed).
+- What did NOT change: frontend; PVZ cargo (→ FBSFLOW-090).
+- Verification: ruff green; `pytest -k "fbs or print"` **195 passed**; commit `37ec82f`.
+
+## TASK-139 — 2026-08-03 — FBSFLOW-050 server-side FBS pick scans
+
+- What changed: `fbs_picking_service.py` — scan location/product, sorting transfer, idempotency/undo; pick endpoints; tests TC-07..09 (8 passed).
+- What did NOT change: frontend.
+- Verification: integrated @ `69af5b9`.
+
+## TASK-138 — 2026-08-03 — FBSFLOW-040 preflight + atomic from-orders
+
+- What changed: validator + reconcile + from-orders/start-work; `test_fbs_supply_from_orders.py` (10 passed).
+- Verification: integrated @ `b0e65db`.
+
+## TASK-137 — 2026-08-03 — FBSFLOW-020 typed WB FBS client
+
+- What changed: `wildberries_fbs_client.py` — batch add orders (PATCH `/api/marketplace/v3/supplies/{id}/orders` ≤100), supply details/order-ids, meta batch POST, meta DELETE, trbx list/delete, chunk splitters, 204-safe void calls, typed `WildberriesBusinessError` + `MetaValidationFailItem` on 409; `wildberries_errors.py`; contract tests (13 MockTransport cases).
+- What did NOT change: FBS services/API (→ FBSFLOW-040+); WB emulator batch PATCH (→ FBSFLOW-120).
+- Verification: ruff green; pytest **13 passed**; integrated @ merge commit.
+
+## TASK-136 — 2026-08-03 — FBSFLOW-000/010 operator flow baseline + models
+
+- What changed: `tasks/fbs-operator-flow/` in git (baseline, contracts, prep); migration `20260803_0069` — pick records, print assets, WB operations journal, packaging fulfillments; extended FbsOrder/Supply/Trbx status columns; model + migration tests.
+- What did NOT change: frontend; no deploy.
+- Verification: `test_fbs_operator_flow_models.py` 2 passed 2 skipped (sqlite); ruff green; integrated @ `8e00573`.
+
 ## TASK-135 — 2026-08-02 — STOCKFIX-090 green gates for stock-sync re-review
 
 - What changed: ruff 36→0 (import sort, line length, SIM105, E402 per-file for emulator integration test); mypy dual-module `fbs_seed_helpers` fixed via `explicit_package_bases`; `test_fbs_review_fixes` inventory seed for STOCKFIX-035 promote write-off; `CURSOR_HANDOFF.md` updated with gate outputs + PR Test coverage block.
