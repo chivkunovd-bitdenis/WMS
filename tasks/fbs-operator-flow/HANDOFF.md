@@ -4,6 +4,7 @@
 **Updated:** 2026-08-04
 **Integration reference for frontend:** start from the current `HEAD` of `feat/fbs-stock-sync`; do not use a sibling task commit as a base.
 **Reconciled backend merge:** `5b6aee0` (`76a4314` + remote PR head `e9d712c`)
+**GitHub release snapshot:** `fce6fba` (fast-forward squash of the reviewed tree)
 **Audience:** frontend implementer (Codex), QA without live Wildberries cabinet
 
 ## Scope
