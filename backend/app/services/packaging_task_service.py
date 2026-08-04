@@ -46,6 +46,13 @@ PackagingTaskError = Literal[
     "unload_not_confirmed",
     "no_lines",
     "linked_unload",
+    "order_not_picked",
+    "order_already_packed",
+    "order_not_in_supply",
+    "order_product_mismatch",
+    "no_eligible_order",
+    "supply_not_found",
+    "fbs_acknowledge_not_allowed",
 ]
 
 
@@ -74,6 +81,12 @@ def task_progress(task: PackagingTask) -> PackagingTaskProgress:
         qty_total=total,
         is_complete=is_task_complete(task),
     )
+
+
+@dataclass(frozen=True)
+class PackProgressResult:
+    task: PackagingTask
+    fulfilled_order: object | None = None
 
 
 @dataclass(frozen=True)
@@ -574,7 +587,9 @@ async def record_pack_progress(
     qty: int,
     *,
     acting_user_id: uuid.UUID | None = None,
-) -> PackagingTask:
+    order_id: uuid.UUID | None = None,
+    idempotency_key: str | None = None,
+) -> PackProgressResult:
     if qty < 1:
         raise PackagingTaskServiceError("invalid_qty")
     task = await get_task(session, tenant_id, task_id)
@@ -589,6 +604,39 @@ async def record_pack_progress(
     remaining = need - int(line.qty_packed_in_task)
     if qty > remaining:
         raise PackagingTaskServiceError("invalid_qty")
+
+    from app.services.fbs_packaging_integration_service import (
+        FbsPackagingIntegrationError,
+        get_supply_for_packaging_task,
+        record_fbs_pack_progress,
+    )
+
+    fbs_supply = await get_supply_for_packaging_task(session, tenant_id, task_id)
+    if fbs_supply is not None:
+        try:
+            pack_result = await record_fbs_pack_progress(
+                session,
+                tenant_id,
+                task,
+                line,
+                qty,
+                order_id=order_id,
+                acting_user_id=acting_user_id,
+                idempotency_key=idempotency_key,
+            )
+        except FbsPackagingIntegrationError as exc:
+            raise PackagingTaskServiceError(exc.code) from exc
+        _touch_task(task)
+        if acting_user_id is not None:
+            await billing_svc.finalize_task_billing(
+                session, task, completed_by_user_id=acting_user_id
+            )
+        await session.commit()
+        loaded = await get_task(session, tenant_id, task_id)
+        assert loaded is not None
+        fulfilled_order = pack_result.units[-1].order if pack_result.units else None
+        return PackProgressResult(task=loaded, fulfilled_order=fulfilled_order)
+
     if _is_mp_unload_task(task):
         line.qty_packed_in_task = int(line.qty_packed_in_task) + qty
     else:
@@ -613,7 +661,7 @@ async def record_pack_progress(
     await session.commit()
     loaded = await get_task(session, tenant_id, task_id)
     assert loaded is not None
-    return loaded
+    return PackProgressResult(task=loaded)
 
 
 async def _apply_acknowledge_all_packed(
@@ -695,6 +743,14 @@ async def complete_task(
     if not task.lines:
         raise PackagingTaskServiceError("no_lines")
 
+    from app.services.fbs_packaging_integration_service import (
+        get_supply_for_packaging_task,
+    )
+
+    fbs_supply = await get_supply_for_packaging_task(session, tenant_id, task_id)
+    if acknowledge_all_packed and fbs_supply is not None:
+        raise PackagingTaskServiceError("fbs_acknowledge_not_allowed")
+
     if acknowledge_all_packed:
         await _apply_acknowledge_all_packed(session, tenant_id, task)
         _touch_task(task)
@@ -713,6 +769,11 @@ async def complete_task(
     else:
         task.completed_at = datetime.now(UTC)
         task.completed_by_user_id = None
+    from app.services.fbs_packaging_integration_service import (
+        sync_fbs_supply_on_packaging_done,
+    )
+
+    await sync_fbs_supply_on_packaging_done(session, tenant_id, task.id)
     await session.commit()
     loaded = await get_task(session, tenant_id, task_id)
     assert loaded is not None

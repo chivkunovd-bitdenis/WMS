@@ -415,7 +415,12 @@ async def _available_product_qty_in_warehouse(
         product_id,
         exclude_request_id=exclude_request_id,
     )
-    return on_hand + sorting_on_hand - reserved_outbound - reserved_mp
+    from app.services.fbs_stock_availability_service import fbs_reserved_qty_for_product
+
+    reserved_fbs = await fbs_reserved_qty_for_product(
+        session, tenant_id, warehouse_id, product_id
+    )
+    return on_hand + sorting_on_hand - reserved_outbound - reserved_mp - reserved_fbs
 
 
 async def list_available_products(
@@ -473,6 +478,11 @@ async def list_available_products(
         product_ids,
         exclude_request_id=exclude_request_id,
     )
+    from app.services.fbs_stock_availability_service import fbs_reserved_by_product
+
+    fbs_reserved = await fbs_reserved_by_product(
+        session, tenant_id, warehouse_id, product_ids
+    )
     return [
         MarketplaceUnloadAvailableProduct(
             product_id=product_id,
@@ -482,7 +492,8 @@ async def list_available_products(
                 0,
                 quantity_total
                 - outbound_reserved.get(product_id, 0)
-                - mp_reserved.get(product_id, 0),
+                - mp_reserved.get(product_id, 0)
+                - fbs_reserved.get(product_id, 0),
             ),
         )
         for product_id, sku_code, product_name, quantity_total in stock_rows

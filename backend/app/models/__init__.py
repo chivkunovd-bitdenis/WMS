@@ -4,6 +4,16 @@ from app.models.background_job import BackgroundJob
 from app.models.base import Base
 from app.models.discrepancy_act import DiscrepancyAct, DiscrepancyActLine
 from app.models.document_sequence import DocumentDisplaySequence, DocumentSequence
+from app.models.fbs_order import FbsOrder, FbsOrderMarking, FbsOrderReservation
+from app.models.fbs_order_pick import FbsOrderPick, FbsOrderPickEvent
+from app.models.fbs_packaging_fulfillment import FbsPackagingFulfillment
+from app.models.fbs_print_asset import FbsPrintAsset
+from app.models.fbs_shipment_reversal_ledger import FbsShipmentReversalLedger
+from app.models.fbs_stock_sync_item import FbsStockSyncItem
+from app.models.fbs_supply import FbsSupply
+from app.models.fbs_trbx import FbsTrbx
+from app.models.fbs_warehouse_binding import FbsWarehouseBinding
+from app.models.fbs_wb_operation import FbsWbOperation
 from app.models.ff_staff_permissions import FfStaffPermissions
 from app.models.inbound_intake import (
     InboundIntakeBox,
@@ -58,6 +68,19 @@ __all__ = [
     "DiscrepancyActLine",
     "DocumentDisplaySequence",
     "DocumentSequence",
+    "FbsOrder",
+    "FbsOrderMarking",
+    "FbsOrderPick",
+    "FbsOrderPickEvent",
+    "FbsOrderReservation",
+    "FbsPackagingFulfillment",
+    "FbsPrintAsset",
+    "FbsShipmentReversalLedger",
+    "FbsStockSyncItem",
+    "FbsSupply",
+    "FbsTrbx",
+    "FbsWarehouseBinding",
+    "FbsWbOperation",
     "FfStaffPermissions",
     "InboundIntakeBox",
     "InboundIntakeBoxLine",

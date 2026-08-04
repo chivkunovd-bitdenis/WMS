@@ -1,0 +1,29 @@
+{
+  "id": "6d9cdce7-63bf-4db1-8eda-e55bb8c63d51",
+  "seller_id": "f0d80fbf-9f30-4ad0-85aa-16f02fa0eaa6",
+  "warehouse_id": "58a1a034-6c0f-42b0-853c-16313ee6206b",
+  "wb_supply_id": "WB-GI-814356CB9EFA",
+  "name": "Handoff WH/SC",
+  "status": "in_delivery",
+  "delivery_type": "warehouse_sc",
+  "cargo_type": "mgt",
+  "wb_office_id": null,
+  "barcode_file": "fbs-supply-barcodes/6d9cdce7-63bf-4db1-8eda-e55bb8c63d51.png",
+  "document_number": null,
+  "display_number": null,
+  "packaging_task_id": "8efa0f65-6c81-46b1-ae94-97af30fc9098",
+  "created_at_wb": null,
+  "delivered_at": "2026-08-03T16:48:14.992912",
+  "created_at": "2026-08-03T16:48:14",
+  "updated_at": "2026-08-03T16:48:15",
+  "orders": [
+    {
+      "id": "760dbb21-c5a0-45e7-8013-929aa1de950c",
+      "wb_order_id": 510001,
+      "status": "in_delivery",
+      "supply_id": "6d9cdce7-63bf-4db1-8eda-e55bb8c63d51",
+      "sticker_code": null,
+      "sticker_file": null
+    }
+  ]
+}

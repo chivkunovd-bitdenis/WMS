@@ -77,6 +77,17 @@ export type PackagingTask = {
   lines: PackagingTaskLine[]
 }
 
+type PackProgress = {
+  packaging_task: PackagingTask
+  fulfilled_order: {
+    id: string
+    wb_order_id: number
+    pack_status: string
+    marking_status: string | null
+    sticker_status: string
+  } | null
+}
+
 type PrintedMarkingCode = {
   id: string
   cis_masked: string
@@ -213,7 +224,8 @@ export function FfPackagingTaskPanel({
         setError(await readApiErrorMessage(res))
         return
       }
-      onUpdated((await res.json()) as PackagingTask)
+      const progress = (await res.json()) as PackProgress
+      onUpdated(progress.packaging_task)
     } finally {
       setBusy(false)
     }

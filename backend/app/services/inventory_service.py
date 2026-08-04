@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import uuid
 from datetime import UTC, datetime
-from typing import Literal
+from typing import Literal, cast
 
 from sqlalchemy import and_, case, delete, func, or_, select, update
 from sqlalchemy.dialects.postgresql import insert as postgresql_insert
@@ -10,9 +10,11 @@ from sqlalchemy.dialects.sqlite import insert as sqlite_insert
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.sql.dml import Insert
 
+from app.models.fbs_order import FbsOrderReservation
 from app.models.inbound_intake import InboundIntakeLine, InboundIntakeRequest
 from app.models.inventory_balance import InventoryBalance
 from app.models.inventory_movement import (
+    MOVEMENT_TYPE_FBS_SHIPMENT,
     MOVEMENT_TYPE_INBOUND_INTAKE,
     MOVEMENT_TYPE_MARKETPLACE_UNLOAD,
     MOVEMENT_TYPE_OUTBOUND_SHIPMENT,
@@ -233,8 +235,28 @@ async def reserved_totals_by_product(
     mp_res = await session.execute(mp_stmt)
     mp_map = {pid: int(s or 0) for pid, s in mp_res.all()}
 
+    fbs_map: dict[uuid.UUID, int] = {}
+    if warehouse_id is not None:
+        fbs_stmt = (
+            select(
+                FbsOrderReservation.product_id,
+                func.coalesce(func.sum(FbsOrderReservation.quantity), 0),
+            )
+            .where(
+                FbsOrderReservation.tenant_id == tenant_id,
+                FbsOrderReservation.warehouse_id == warehouse_id,
+                FbsOrderReservation.product_id.in_(product_ids),
+            )
+            .group_by(FbsOrderReservation.product_id)
+        )
+        fbs_res = await session.execute(fbs_stmt)
+        fbs_map = {pid: int(s or 0) for pid, s in fbs_res.all()}
+
     return {
-        pid: int(outbound_map.get(pid, 0)) + int(mp_map.get(pid, 0)) for pid in product_ids
+        pid: int(outbound_map.get(pid, 0))
+        + int(mp_map.get(pid, 0))
+        + int(fbs_map.get(pid, 0))
+        for pid in product_ids
     }
 
 
@@ -520,7 +542,7 @@ async def record_movement_and_adjust_balance(
     transfer_group_id: uuid.UUID | None = None,
     marketplace_unload_request_id: uuid.UUID | None = None,
     deduct_prefer: DeductPrefer = "unpacked",
-) -> None:
+) -> InventoryMovement:
     """Запись в журнал и изменение остатка (delta может быть отрицательным)."""
     if quantity_delta == 0:
         msg = "quantity_delta must be non-zero"
@@ -560,7 +582,7 @@ async def record_movement_and_adjust_balance(
                 quantity_delta=quantity_delta,
             )
         )
-        return
+        return movement
 
     quantity_to_deduct = -quantity_delta
     unpacked = InventoryBalance.quantity_unpacked
@@ -596,6 +618,7 @@ async def record_movement_and_adjust_balance(
     if updated_balance_id is None:
         msg = "insufficient stock"
         raise ValueError(msg)
+    return movement
 
 
 async def apply_packaging_convert(
@@ -883,6 +906,35 @@ async def _lock_inventory_balance(
     return (await session.execute(stmt)).scalar_one_or_none()
 
 
+async def apply_fbs_supply_write_off(
+    session: AsyncSession,
+    *,
+    tenant_id: uuid.UUID,
+    product_id: uuid.UUID,
+    storage_location_id: uuid.UUID,
+    quantity: int,
+) -> InventoryMovement:
+    """Списание упакованного FBS-товара при завершении упаковки поставки."""
+    if quantity < 1:
+        msg = "quantity must be positive"
+        raise ValueError(msg)
+    bal = await _lock_inventory_balance(
+        session, tenant_id, product_id, storage_location_id
+    )
+    if bal is None or int(bal.quantity) < quantity:
+        msg = "insufficient stock"
+        raise ValueError(msg)
+    return await record_movement_and_adjust_balance(
+        session,
+        tenant_id=tenant_id,
+        product_id=product_id,
+        storage_location_id=storage_location_id,
+        quantity_delta=-quantity,
+        movement_type=MOVEMENT_TYPE_FBS_SHIPMENT,
+        deduct_prefer="packed",
+    )
+
+
 async def apply_marketplace_unload_pick(
     session: AsyncSession,
     *,
@@ -1020,8 +1072,11 @@ async def transfer_on_hand_between_locations(
     to_storage_location_id: uuid.UUID,
     product_id: uuid.UUID,
     quantity: int,
-) -> None:
-    """Перемещение фактического on_hand между ячейками (DEC-019 migration)."""
+) -> uuid.UUID:
+    """Перемещение фактического on_hand между ячейками (DEC-019 migration).
+
+    Returns transfer_group_id for audit linkage.
+    """
     if quantity < 1:
         msg = "quantity must be positive"
         raise ValueError(msg)
@@ -1069,6 +1124,25 @@ async def transfer_on_hand_between_locations(
         movement_type=MOVEMENT_TYPE_STOCK_TRANSFER_IN,
         transfer_group_id=group_id,
     )
+    return group_id
+
+
+async def transfer_out_movement_id(
+    session: AsyncSession,
+    tenant_id: uuid.UUID,
+    transfer_group_id: uuid.UUID,
+) -> uuid.UUID | None:
+    """Inventory movement id for the outbound leg of a stock transfer."""
+    stmt = (
+        select(InventoryMovement.id)
+        .where(
+            InventoryMovement.tenant_id == tenant_id,
+            InventoryMovement.transfer_group_id == transfer_group_id,
+            InventoryMovement.movement_type == MOVEMENT_TYPE_STOCK_TRANSFER_OUT,
+        )
+        .limit(1)
+    )
+    return cast(uuid.UUID | None, await session.scalar(stmt))
 
 
 async def migrate_all_address_balances_to_sorting(

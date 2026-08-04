@@ -9,7 +9,6 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.storage_location import StorageLocation
-from app.services.catalog_service import get_warehouse
 
 # Код в БД; в UI показываем SORTING_LOCATION_LABEL.
 SORTING_LOCATION_CODE = "__SORTING__"
@@ -39,6 +38,8 @@ async def get_or_create_sorting_location(
     tenant_id: uuid.UUID,
     warehouse_id: uuid.UUID,
 ) -> StorageLocation:
+    from app.services.catalog_service import get_warehouse
+
     wh = await get_warehouse(session, tenant_id, warehouse_id)
     if wh is None:
         msg = "warehouse not found"

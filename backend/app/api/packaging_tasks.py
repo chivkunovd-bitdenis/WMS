@@ -38,10 +38,25 @@ class ConfirmPackedIn(BaseModel):
 
 class PackProgressIn(BaseModel):
     quantity: int = Field(ge=1, le=1_000_000_000)
+    order_id: uuid.UUID | None = None
+    idempotency_key: str | None = Field(default=None, max_length=128)
 
 
 class CompletePackagingIn(BaseModel):
     acknowledge_all_packed: bool = False
+
+
+class FulfilledOrderOut(BaseModel):
+    id: str
+    wb_order_id: int
+    pack_status: str
+    marking_status: str | None = None
+    sticker_status: str
+
+
+class PackProgressOut(BaseModel):
+    packaging_task: PackagingTaskOut
+    fulfilled_order: FulfilledOrderOut | None = None
 
 
 class PackagingTaskLineOut(BaseModel):
@@ -141,7 +156,32 @@ def _http_from_pkg_error(exc: pkg_svc.PackagingTaskServiceError) -> HTTPExceptio
     status_code = status.HTTP_422_UNPROCESSABLE_CONTENT
     if code == "not_found":
         status_code = status.HTTP_404_NOT_FOUND
+    elif code in {
+        "order_not_picked",
+        "order_already_packed",
+        "order_not_in_supply",
+        "order_product_mismatch",
+        "no_eligible_order",
+        "fbs_acknowledge_not_allowed",
+    }:
+        status_code = status.HTTP_409_CONFLICT
     return HTTPException(status_code=status_code, detail=code)
+
+
+def _fulfilled_order_out(order: object) -> FulfilledOrderOut:
+    from app.models.fbs_order import FbsOrder
+
+    assert isinstance(order, FbsOrder)
+    marking_status: str | None = None
+    if order.markings:
+        marking_status = order.markings[0].meta_status
+    return FulfilledOrderOut(
+        id=str(order.id),
+        wb_order_id=int(order.wb_order_id),
+        pack_status=order.pack_status,
+        marking_status=marking_status,
+        sticker_status=order.sticker_status,
+    )
 
 
 @router.get("", response_model=list[PackagingTaskOut])
@@ -252,26 +292,39 @@ async def confirm_packed_from_shelf(
     return await _task_out(session, user.tenant_id, task)
 
 
-@router.post("/{task_id}/lines/{line_id}/pack", response_model=PackagingTaskOut)
+@router.post("/{task_id}/lines/{line_id}/pack", response_model=PackProgressOut)
 async def record_pack_progress(
     task_id: uuid.UUID,
     line_id: uuid.UUID,
     body: PackProgressIn,
     user: Annotated[User, Depends(require_packaging_access)],
     session: Annotated[AsyncSession, Depends(get_db)],
-) -> PackagingTaskOut:
+) -> PackProgressOut:
     try:
-        task = await pkg_svc.record_pack_progress(
+        result = await pkg_svc.record_pack_progress(
             session,
             user.tenant_id,
             task_id,
             line_id,
             body.quantity,
             acting_user_id=user.id,
+            order_id=body.order_id,
+            idempotency_key=body.idempotency_key,
         )
     except pkg_svc.PackagingTaskServiceError as exc:
         raise _http_from_pkg_error(exc) from exc
-    return await _task_out(session, user.tenant_id, task)
+    fulfilled_order: FulfilledOrderOut | None = None
+    if result.fulfilled_order is not None:
+        from app.models.fbs_order import FbsOrder
+
+        order = result.fulfilled_order
+        if isinstance(order, FbsOrder):
+            await session.refresh(order, attribute_names=["markings"])
+            fulfilled_order = _fulfilled_order_out(order)
+    return PackProgressOut(
+        packaging_task=await _task_out(session, user.tenant_id, result.task),
+        fulfilled_order=fulfilled_order,
+    )
 
 
 @router.post("/{task_id}/complete", response_model=PackagingTaskOut)

@@ -38,16 +38,17 @@ async def _seller_in_tenant(
 
 async def get_public_token_status(
     session: AsyncSession, tenant_id: uuid.UUID, seller_id: uuid.UUID
-) -> tuple[bool, bool, datetime | None] | None:
-    """(has_content, has_supplies, updated_at) or None if seller not in tenant."""
+) -> tuple[bool, bool, bool, datetime | None] | None:
+    """(has_content, has_supplies, has_marketplace, updated_at) or None if seller not in tenant."""
     if await _seller_in_tenant(session, tenant_id, seller_id) is None:
         return None
     row = await session.get(SellerWildberriesCredentials, seller_id)
     if row is None:
-        return False, False, None
+        return False, False, False, None
     return (
         bool(row.content_token_encrypted),
         bool(row.supplies_token_encrypted),
+        bool(row.marketplace_token_encrypted),
         row.updated_at,
     )
 
@@ -59,9 +60,10 @@ async def patch_seller_tokens(
     *,
     content_api_token: TokenPatchValue,
     supplies_api_token: TokenPatchValue,
+    marketplace_api_token: TokenPatchValue = SKIP,
 ) -> SellerWildberriesCredentials | None:
     """
-    content_api_token / supplies_api_token:
+    content_api_token / supplies_api_token / marketplace_api_token:
     - ``SKIP``: do not change field
     - ``None``: clear stored token
     - non-empty ``str``: replace with encrypted value
@@ -69,7 +71,11 @@ async def patch_seller_tokens(
     if await _seller_in_tenant(session, tenant_id, seller_id) is None:
         return None
 
-    if content_api_token is SKIP and supplies_api_token is SKIP:
+    if (
+        content_api_token is SKIP
+        and supplies_api_token is SKIP
+        and marketplace_api_token is SKIP
+    ):
         raise WildberriesCredentialsError("empty_patch")
 
     row = await session.get(SellerWildberriesCredentials, seller_id)
@@ -99,6 +105,16 @@ async def patch_seller_tokens(
                 raise WildberriesCredentialsError("token_empty")
             row.supplies_token_encrypted = encrypt_secret(stripped)
 
+    if marketplace_api_token is not SKIP:
+        if marketplace_api_token is None:
+            row.marketplace_token_encrypted = None
+        else:
+            assert isinstance(marketplace_api_token, str)
+            stripped = marketplace_api_token.strip()
+            if not stripped:
+                raise WildberriesCredentialsError("token_empty")
+            row.marketplace_token_encrypted = encrypt_secret(stripped)
+
     row.updated_at = now
     await session.commit()
     await session.refresh(row)
@@ -121,3 +137,15 @@ async def get_decrypted_tokens_for_seller(
     if row.supplies_token_encrypted:
         supplies = decrypt_secret(row.supplies_token_encrypted)
     return content, supplies
+
+
+async def get_decrypted_marketplace_token(
+    session: AsyncSession, tenant_id: uuid.UUID, seller_id: uuid.UUID
+) -> str | None:
+    """Returns decrypted marketplace API token, or None if seller missing / token unset."""
+    if await _seller_in_tenant(session, tenant_id, seller_id) is None:
+        return None
+    row = await session.get(SellerWildberriesCredentials, seller_id)
+    if row is None or not row.marketplace_token_encrypted:
+        return None
+    return decrypt_secret(row.marketplace_token_encrypted)

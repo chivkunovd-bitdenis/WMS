@@ -1,0 +1,26 @@
+{
+  "cargo_places": [
+    {
+      "id": "f87ef389-3ce5-47d6-96dc-8297ada7dd33",
+      "wb_trbx_id": "TRBX-8DE1071772",
+      "length_mm": 400,
+      "width_mm": 300,
+      "height_mm": 200,
+      "weight_g": 2000,
+      "qr_asset": {
+        "id": "78f1df61-5692-4800-b156-aa16a006c437",
+        "kind": "cargo_place_qr",
+        "status": "ready",
+        "content_type": "image/png",
+        "width_mm": 58,
+        "height_mm": 40,
+        "preview_url": "/operations/fbs-print-assets/78f1df61-5692-4800-b156-aa16a006c437/content",
+        "download_url": "/operations/fbs-print-assets/78f1df61-5692-4800-b156-aa16a006c437/content",
+        "checksum": "sha256:9bf66fba5bdcb6378a1f5e60291162eb684c2ea503598dae4c974e451dfe23d1",
+        "applied_at": null,
+        "error": null
+      },
+      "applied_at": null
+    }
+  ]
+}

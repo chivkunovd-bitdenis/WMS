@@ -10,6 +10,7 @@ from sqlalchemy.orm import Mapped, mapped_column, relationship
 from app.models.base import Base
 
 if TYPE_CHECKING:
+    from app.models.fbs_packaging_fulfillment import FbsPackagingFulfillment
     from app.models.inbound_intake import InboundIntakeRequest
     from app.models.marketplace_unload import MarketplaceUnloadLine, MarketplaceUnloadRequest
     from app.models.marking_code import MarkingCode
@@ -97,6 +98,11 @@ class PackagingTask(Base):
         back_populates="task",
         cascade="all, delete-orphan",
     )
+    fbs_fulfillments: Mapped[list[FbsPackagingFulfillment]] = relationship(
+        "FbsPackagingFulfillment",
+        back_populates="packaging_task",
+        cascade="all, delete-orphan",
+    )
 
 
 class PackagingTaskLine(Base):
@@ -145,4 +151,9 @@ class PackagingTaskLine(Base):
     marking_codes: Mapped[list[MarkingCode]] = relationship(
         "MarkingCode",
         back_populates="packaging_task_line",
+    )
+    fbs_fulfillments: Mapped[list[FbsPackagingFulfillment]] = relationship(
+        "FbsPackagingFulfillment",
+        back_populates="packaging_task_line",
+        cascade="all, delete-orphan",
     )

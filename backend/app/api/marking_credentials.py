@@ -90,7 +90,7 @@ def _parse_secret_field(raw: dict[str, Any], field: str) -> SecretPatchValue:
     return value
 
 
-def _parse_optional_str(raw: dict[str, Any], field: str) -> str | None | _SkipSentinel:
+def _parse_optional_str(raw: dict[str, Any], field: str) -> str | _SkipSentinel | None:
     if field not in raw:
         return SKIP
     value = raw[field]
@@ -104,7 +104,7 @@ def _parse_optional_str(raw: dict[str, Any], field: str) -> str | None | _SkipSe
     return value
 
 
-def _parse_optional_date(raw: dict[str, Any], field: str) -> date | None | _SkipSentinel:
+def _parse_optional_date(raw: dict[str, Any], field: str) -> date | _SkipSentinel | None:
     if field not in raw:
         return SKIP
     value = raw[field]
@@ -166,7 +166,7 @@ def _parse_credentials_patch(raw: object) -> dict[str, Any]:
             )
         auto_introduce = value
 
-    auto_emit_limit: int | None | _SkipSentinel = SKIP
+    auto_emit_limit: int | _SkipSentinel | None = SKIP
     if "auto_emit_limit" in body:
         value = body["auto_emit_limit"]
         if value is None:

@@ -1,0 +1,165 @@
+{
+  "items": [
+    {
+      "id": "1bdc3cc5-a804-4a18-b830-e2269b8822d1",
+      "wb_order_id": 510002,
+      "status": "new",
+      "wb_status": "waiting",
+      "seller": {
+        "id": "18b09a78-0438-4d88-954c-3d3c70427dcd",
+        "name": "Emu seller_a"
+      },
+      "wb_warehouse": {
+        "id": 501001,
+        "name": "Склад WB неизвестен"
+      },
+      "wms_warehouse": {
+        "id": "1433e058-fca4-431d-8f24-38a724c3e64a",
+        "name": "Operator FBS WH"
+      },
+      "product": {
+        "id": "407e4706-0eb9-49c6-8350-373d661fb3eb",
+        "name": "EMU-KIZ-REQUIRED",
+        "image_url": null,
+        "seller_article": "seller_a-111002",
+        "wb_article": 123456790,
+        "barcode": "2000000000012",
+        "size": null
+      },
+      "inventory": {
+        "available_unpacked": 50,
+        "locations": [
+          {
+            "id": "d50dccba-6b01-40fb-9230-f0f9be98e5ee",
+            "code": "OP-600000",
+            "available_unpacked": 50
+          }
+        ]
+      },
+      "buyer_type": "individual",
+      "cargo_type": "mgt",
+      "can_pvz": false,
+      "metadata": {
+        "required": [
+          "sgtin"
+        ],
+        "optional": [],
+        "states": [
+          {
+            "kind": "sgtin",
+            "status": "missing",
+            "reason": null
+          }
+        ],
+        "delivery_allowed": false,
+        "last_checked_at": null
+      },
+      "sticker": {
+        "status": "not_requested",
+        "asset_url": null,
+        "applied_at": null
+      },
+      "pick": {
+        "status": "pending",
+        "location_code": null,
+        "picked_at": null
+      },
+      "pack": {
+        "status": "pending",
+        "packed_at": null
+      },
+      "created_at_wb": "2026-08-03T16:33:33",
+      "deadline_at": "2026-08-08T16:33:33",
+      "supply_id": null,
+      "selection_blockers": []
+    },
+    {
+      "id": "3cbdba70-6246-4b91-939c-dca6eb5fb8f0",
+      "wb_order_id": 510005,
+      "status": "new",
+      "wb_status": "waiting",
+      "seller": {
+        "id": "18b09a78-0438-4d88-954c-3d3c70427dcd",
+        "name": "Emu seller_a"
+      },
+      "wb_warehouse": {
+        "id": 501001,
+        "name": "Склад WB неизвестен"
+      },
+      "wms_warehouse": {
+        "id": "1433e058-fca4-431d-8f24-38a724c3e64a",
+        "name": "Operator FBS WH"
+      },
+      "product": {
+        "id": "135b4468-d0ac-49dc-b334-0c5f047a69ae",
+        "name": "EMU-CAN-PVZ-TRUE",
+        "image_url": null,
+        "seller_article": "seller_a-111005",
+        "wb_article": 123456793,
+        "barcode": "2000000000015",
+        "size": null
+      },
+      "inventory": {
+        "available_unpacked": 50,
+        "locations": [
+          {
+            "id": "d50dccba-6b01-40fb-9230-f0f9be98e5ee",
+            "code": "OP-600000",
+            "available_unpacked": 50
+          }
+        ]
+      },
+      "buyer_type": "individual",
+      "cargo_type": "mgt",
+      "can_pvz": true,
+      "metadata": {
+        "required": [],
+        "optional": [],
+        "states": [],
+        "delivery_allowed": false,
+        "last_checked_at": null
+      },
+      "sticker": {
+        "status": "not_requested",
+        "asset_url": null,
+        "applied_at": null
+      },
+      "pick": {
+        "status": "pending",
+        "location_code": null,
+        "picked_at": null
+      },
+      "pack": {
+        "status": "pending",
+        "packed_at": null
+      },
+      "created_at_wb": "2026-08-03T16:33:33",
+      "deadline_at": "2026-08-08T16:33:33",
+      "supply_id": null,
+      "selection_blockers": []
+    }
+  ],
+  "intake": {
+    "seller_a": {
+      "seller_id": "18b09a78-0438-4d88-954c-3d3c70427dcd",
+      "orders_received": 10,
+      "orders_upserted": 10,
+      "orders_created": 5,
+      "statuses_updated": 5
+    },
+    "seller_b": {
+      "seller_id": "7df7905f-f209-4a46-9672-2d3c838959c0",
+      "orders_received": 8,
+      "orders_upserted": 8,
+      "orders_created": 4,
+      "statuses_updated": 4
+    },
+    "seller_c": {
+      "seller_id": "163406d8-6b85-410d-9df1-25611ae46c3b",
+      "orders_received": 9,
+      "orders_upserted": 9,
+      "orders_created": 5,
+      "statuses_updated": 5
+    }
+  }
+}

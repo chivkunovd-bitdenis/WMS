@@ -61,9 +61,17 @@ export async function readApiErrorMessage(res: Response): Promise<string> {
       // FastAPI/Pydantic часто возвращают много строк — ограничим длину.
       return parts.join('; ').slice(0, 240)
     }
+    if (d && typeof d === 'object') {
+      const structured = d as { message?: unknown; code?: unknown }
+      if (typeof structured.message === 'string' && structured.message.trim()) {
+        return structured.message
+      }
+      if (typeof structured.code === 'string' && structured.code.trim()) {
+        return API_DETAIL_MESSAGES_RU[structured.code] ?? structured.code
+      }
+    }
     return text.slice(0, 200)
   } catch {
     return `Ошибка ${res.status}`
   }
 }
-

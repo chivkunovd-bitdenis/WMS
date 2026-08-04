@@ -48,12 +48,14 @@ class WildberriesSellerTokensOut(BaseModel):
     seller_id: str
     has_content_token: bool
     has_supplies_token: bool
+    has_marketplace_token: bool
     updated_at: datetime | None
 
 
 class WildberriesSelfTokensOut(BaseModel):
     has_content_token: bool
     has_supplies_token: bool
+    has_marketplace_token: bool
     updated_at: datetime | None
 
 
@@ -110,13 +112,15 @@ class WildberriesSelfSyncOut(BaseModel):
     products_skipped: int
 
 
-def _parse_token_merge_patch(raw: object) -> tuple[TokenPatchValue, TokenPatchValue]:
+def _parse_token_merge_patch(
+    raw: object,
+) -> tuple[TokenPatchValue, TokenPatchValue, TokenPatchValue]:
     if not isinstance(raw, dict):
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
             detail="expected_object",
         )
-    allowed = {"content_api_token", "supplies_api_token"}
+    allowed = {"content_api_token", "supplies_api_token", "marketplace_api_token"}
     if set(raw) - allowed:
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
@@ -129,6 +133,7 @@ def _parse_token_merge_patch(raw: object) -> tuple[TokenPatchValue, TokenPatchVa
         )
     content: TokenPatchValue = SKIP
     supplies: TokenPatchValue = SKIP
+    marketplace: TokenPatchValue = SKIP
     if "content_api_token" in raw:
         val = raw["content_api_token"]
         if val is not None and not isinstance(val, str):
@@ -145,12 +150,20 @@ def _parse_token_merge_patch(raw: object) -> tuple[TokenPatchValue, TokenPatchVa
                 detail="invalid_type:supplies_api_token",
             )
         supplies = val
-    if content is SKIP and supplies is SKIP:
+    if "marketplace_api_token" in raw:
+        val = raw["marketplace_api_token"]
+        if val is not None and not isinstance(val, str):
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+                detail="invalid_type:marketplace_api_token",
+            )
+        marketplace = val
+    if content is SKIP and supplies is SKIP and marketplace is SKIP:
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
             detail="empty_patch",
         )
-    return content, supplies
+    return content, supplies, marketplace
 
 
 @router.get("/status", response_model=WildberriesStatusOut)
@@ -287,11 +300,12 @@ async def get_seller_wildberries_tokens(
     st = await get_public_token_status(session, user.tenant_id, seller_id)
     if st is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="seller_not_found")
-    has_c, has_s, upd = st
+    has_c, has_s, has_m, upd = st
     return WildberriesSellerTokensOut(
         seller_id=str(seller_id),
         has_content_token=has_c,
         has_supplies_token=has_s,
+        has_marketplace_token=has_m,
         updated_at=upd,
     )
 
@@ -307,10 +321,11 @@ async def get_self_wildberries_tokens(
     st = await get_public_token_status(session, user.tenant_id, effective_seller_id)
     if st is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="seller_not_found")
-    has_c, has_s, upd = st
+    has_c, has_s, has_m, upd = st
     return WildberriesSelfTokensOut(
         has_content_token=has_c,
         has_supplies_token=has_s,
+        has_marketplace_token=has_m,
         updated_at=upd,
     )
 
@@ -331,7 +346,7 @@ async def patch_seller_wildberries_tokens(
             status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
             detail="invalid_json",
         ) from exc
-    content, supplies = _parse_token_merge_patch(raw)
+    content, supplies, marketplace = _parse_token_merge_patch(raw)
     try:
         row = await patch_seller_tokens(
             session,
@@ -339,6 +354,7 @@ async def patch_seller_wildberries_tokens(
             seller_id,
             content_api_token=content,
             supplies_api_token=supplies,
+            marketplace_api_token=marketplace,
         )
     except WildberriesCredentialsError as exc:
         if exc.code in ("empty_patch", "token_empty", "invalid_token_type"):
@@ -351,7 +367,7 @@ async def patch_seller_wildberries_tokens(
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="seller_not_found")
     st = await get_public_token_status(session, user.tenant_id, seller_id)
     assert st is not None
-    has_c, has_s, upd = st
+    has_c, has_s, has_m, upd = st
     if (
         supplies is not SKIP
         and isinstance(supplies, str)
@@ -365,6 +381,7 @@ async def patch_seller_wildberries_tokens(
         seller_id=str(seller_id),
         has_content_token=has_c,
         has_supplies_token=has_s,
+        has_marketplace_token=has_m,
         updated_at=upd,
     )
 
