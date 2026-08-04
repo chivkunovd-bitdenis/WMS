@@ -164,7 +164,7 @@ async def test_tc17_pvz_cargo_places_create_qr_and_deliver_without_bind(
     deliver = await _deliver_with_preflight(async_client, headers, supply["id"])
     assert deliver.status_code == 200, deliver.text
     deliver_body = deliver.json()
-    assert deliver_body["status"] == FBS_SUPPLY_STATUS_IN_DELIVERY
+    assert deliver_body["supply"]["status"] == FBS_SUPPLY_STATUS_IN_DELIVERY
     for order in deliver_body["orders"]:
         assert order["status"] == FBS_ORDER_STATUS_IN_DELIVERY
 
@@ -749,7 +749,7 @@ async def test_fbs_pvz_deliver_requires_cargo_places_and_qr(
     deliver = await _deliver_with_preflight(async_client, headers, supply["id"])
     assert deliver.status_code == 200, deliver.text
     body = deliver.json()
-    assert body["status"] == FBS_SUPPLY_STATUS_IN_DELIVERY
+    assert body["supply"]["status"] == FBS_SUPPLY_STATUS_IN_DELIVERY
     for order in body["orders"]:
         assert order["status"] == FBS_ORDER_STATUS_IN_DELIVERY
 

@@ -182,7 +182,7 @@ async def test_packaging_task_manual_convert(async_client: AsyncClient) -> None:
         json={"quantity": 4},
     )
     assert pack.status_code == 200, pack.text
-    assert pack.json()["lines"][0]["qty_packed_in_task"] == 4
+    assert pack.json()["packaging_task"]["lines"][0]["qty_packed_in_task"] == 4
 
     bal = await async_client.get(
         "/operations/inventory-balances",
@@ -859,5 +859,5 @@ async def test_mp_unload_pack_counter_without_inventory(
         json={"quantity": 2},
     )
     assert pack.status_code == 200, pack.text
-    assert pack.json()["lines"][0]["qty_packed_in_task"] == 2
-    assert pack.json()["lines"][0]["qty_done"] == 2
+    assert pack.json()["packaging_task"]["lines"][0]["qty_packed_in_task"] == 2
+    assert pack.json()["packaging_task"]["lines"][0]["qty_done"] == 2

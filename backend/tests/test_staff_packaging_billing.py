@@ -169,7 +169,7 @@ async def test_staff_packaging_billing_counts_only_packed_in_task(
         json={"quantity": 4},
     )
     assert pack_partial.status_code == 200, pack_partial.text
-    assert pack_partial.json()["status"] != STATUS_DONE
+    assert pack_partial.json()["packaging_task"]["status"] != STATUS_DONE
 
     listed_open = await async_client.get("/auth/staff-accounts", headers=admin_h)
     assert listed_open.status_code == 200, listed_open.text
@@ -182,7 +182,7 @@ async def test_staff_packaging_billing_counts_only_packed_in_task(
         json={"quantity": 6},
     )
     assert pack.status_code == 200, pack.text
-    assert pack.json()["status"] == "in_progress"
+    assert pack.json()["packaging_task"]["status"] == "in_progress"
 
     listed_before_complete = await async_client.get("/auth/staff-accounts", headers=admin_h)
     assert listed_before_complete.status_code == 200, listed_before_complete.text

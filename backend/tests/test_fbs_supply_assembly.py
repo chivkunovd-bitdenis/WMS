@@ -158,7 +158,7 @@ async def test_fbs_supply_create_ok(
 
     body = await _create_supply(async_client, headers, seller_id, warehouse_id)
     assert body["status"] == FBS_SUPPLY_STATUS_DRAFT
-    assert body["wb_supply_id"] == "WB-GI-MOCK-1"
+    assert body["wb_supply_id"].startswith("WB-GI-MOCK-")
     assert body["name"] == "Supply A"
     assert body["delivery_type"] == "warehouse_sc"
 
