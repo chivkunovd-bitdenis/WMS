@@ -62,7 +62,7 @@ async function registerFf(page: import('@playwright/test').Page, tag: string) {
   await expect(page.getByTestId('dashboard')).toBeVisible()
 }
 
-// TC-FBS-FE-001 — worklist приходит в canonical envelope и фильтруется серверным status_group.
+// TC-S17-001 / TC-S17-006 — canonical worklist and selection-to-supply browser contract.
 test('fbs orders: list, tabs and empty state', async ({ page }) => {
   await registerFf(page, 'list')
 
