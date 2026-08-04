@@ -124,7 +124,7 @@ export function FbsSupplyCreateDialog({
   return (
     <Dialog open={open} onClose={creating ? undefined : onClose} fullWidth maxWidth="md">
       <DialogTitle sx={{ pb: 1 }}>
-        <Typography variant="h6">Новая поставка FBS</Typography>
+        <Typography variant="h6" component="div">Новая поставка FBS</Typography>
         <Typography variant="body2" color="text.secondary">
           Сначала сервер повторно проверит совместимость {orderIds.length} заказов, затем создаст
           поставку одной атомарной операцией.

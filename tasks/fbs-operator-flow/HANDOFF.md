@@ -29,6 +29,10 @@ This handoff does **not** claim live WB API compatibility — only emulator + py
   WB-metadata promotion regression — **1 passed**.
 - Focused PostgreSQL union gate (marking reuse, valid box, foreign-tenant box,
   status-sync reversal) — **4 passed**.
+- Frontend TypeScript/Vite production build — PASS; Vitest — **110 passed**.
+- Focused Playwright release regressions — **6 passed**: canonical atomic create,
+  server-owned pick and preflight/deliver workspace flows, plus marking/packaging
+  completion after the `PackProgressOut` response envelope.
 - Alembic: fresh database upgrade to sole head `20260804_0072`, and
   `0072 -> 0069 -> 0072` round-trip — PASS.
 - Intentional duplicate preflight: migration stopped at `0071`, reported one
@@ -36,8 +40,8 @@ This handoff does **not** claim live WB API compatibility — only emulator + py
   and created neither unique index — PASS.
 
 Not claimed here: live WB TC-24. It still requires an explicitly selected test
-cabinet and credentials. GitHub CI is re-run only after this local merge is
-pushed to PR #104; the old green result belongs to the old remote head.
+cabinet and credentials. For GitHub CI, count only the checks attached to the
+current PR #104 HEAD; results from an earlier branch SHA are not release proof.
 
 ## Production migration gate: 20260804_0072
 

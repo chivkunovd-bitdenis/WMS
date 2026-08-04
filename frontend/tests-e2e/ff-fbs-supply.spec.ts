@@ -3,64 +3,97 @@ import { expect, test, type Page, type Route } from '@playwright/test'
 import { waitForGetOk, waitForPostOk } from './api-waits'
 import { openFulfillmentRegistration } from './auth-flow'
 
-// Экраны 2 (карточка отгрузки) и 3 (лист подбора) ходят в реальные ручки /operations/fbs-supplies/*.
-// Здесь мокаем их через page.route и проверяем видимый результат: создание отгрузки, передача в
-// доставку через ConfirmDialog, лист подбора с отметками и фильтром.
+type JsonObject = Record<string, unknown>
 
-function fbsOrder(id: string, over: Record<string, unknown> = {}): Record<string, unknown> {
+function order(id: string, over: JsonObject = {}): JsonObject {
   return {
     id,
-    seller_id: 's-1',
-    warehouse_id: 'w-1',
-    product_id: `p-${id}`,
     wb_order_id: Number(id.replace(/\D/g, '') || '1'),
-    wb_rid: `rid-${id}`,
-    wb_nm_id: 1000,
-    wb_chrt_id: null,
-    wb_article: `ART-${id}`,
-    wb_barcode: `200000${id}`,
-    price: 1990,
-    is_legal: false,
-    cargo_type: 'mgt',
-    wb_office_id: 1,
-    can_pvz: true,
-    supply_id: null,
-    trbx_id: null,
     status: 'new',
     wb_status: 'waiting',
+    seller: { id: 's-1', name: 'Селлер Один' },
+    wb_warehouse: { id: 501001, name: 'WB Подольск' },
+    wms_warehouse: { id: 'w-1', name: 'Основной склад' },
+    product: {
+      id: `p-${id}`,
+      name: `Товар ${id}`,
+      image_url: null,
+      seller_article: `ART-${id}`,
+      wb_article: 1000 + Number(id.replace(/\D/g, '') || '1'),
+      barcode: `200000${id}`,
+      size: null,
+    },
+    inventory: {
+      available_unpacked: 3,
+      locations: [{ id: 'loc-1', code: 'A-01', available_unpacked: 3 }],
+    },
+    buyer_type: 'individual',
+    cargo_type: 'mgt',
+    can_pvz: true,
+    metadata: {
+      required: [],
+      optional: [],
+      states: [],
+      delivery_allowed: true,
+      last_checked_at: null,
+    },
+    sticker: { status: 'applied', asset_url: null, applied_at: new Date().toISOString() },
+    pick: { status: 'pending', location_code: null, picked_at: null },
+    pack: { status: 'pending', packed_at: null },
     created_at_wb: new Date().toISOString(),
     deadline_at: new Date(Date.now() + 100 * 3600 * 1000).toISOString(),
-    mapping_status: 'mapped',
-    reserve_status: 'reserved',
-    created_at: new Date().toISOString(),
-    updated_at: new Date().toISOString(),
+    supply_id: null,
+    selection_blockers: [],
     ...over,
   }
 }
 
-function fbsSupply(status: string, over: Record<string, unknown> = {}): Record<string, unknown> {
+function workspace({
+  stage = 'composition',
+  status = 'draft',
+  orders = [order('1', { supply_id: 'sup-1' })],
+}: {
+  stage?: string
+  status?: string
+  orders?: JsonObject[]
+} = {}): JsonObject {
   return {
-    id: 'sup-1',
-    seller_id: 's-1',
-    warehouse_id: 'w-1',
-    wb_supply_id: 'WB-GI-1',
-    name: 'Тестовая отгрузка',
-    status,
-    delivery_type: 'warehouse_sc',
-    cargo_type: 'mgt',
-    wb_office_id: 1,
-    barcode_file: null,
-    document_number: null,
-    display_number: null,
-    created_at_wb: null,
-    delivered_at: null,
-    created_at: new Date().toISOString(),
-    updated_at: new Date().toISOString(),
-    orders: [
-      { id: 'o-1', wb_order_id: 1, status, supply_id: 'sup-1', sticker_code: null, sticker_file: null },
-    ],
-    ...over,
+    supply: {
+      id: 'sup-1',
+      wb_supply_id: 'WB-GI-MOCK-1',
+      name: 'Тестовая поставка',
+      status,
+      delivery_type: 'warehouse_sc',
+      seller: { id: 's-1', name: 'Селлер Один' },
+      wb_warehouse: { id: 501001, name: 'WB Подольск' },
+      wms_warehouse: { id: 'w-1', name: 'Основной склад' },
+      planned_destination: null,
+      nearest_deadline_at: new Date(Date.now() + 100 * 3600 * 1000).toISOString(),
+      packaging_task_id: null,
+      barcode_asset: null,
+    },
+    stage,
+    progress: {
+      picked: orders.filter((item) => (item.pick as JsonObject).status === 'picked').length,
+      packed: orders.filter((item) => (item.pack as JsonObject).status === 'packed').length,
+      metadata_ready: orders.length,
+      stickers_ready: orders.length,
+      total: orders.length,
+    },
+    blockers: [],
+    orders,
+    cargo_places: [],
+    delivery_preflight: null,
+    last_wb_sync_at: null,
+    server_now: new Date().toISOString(),
+    tracking_summary: null,
+    partial_rejection: null,
+    wb_sync_stale: false,
   }
+}
+
+function worklist(items: JsonObject[]): JsonObject {
+  return { items, next_cursor: null, server_now: new Date().toISOString() }
 }
 
 async function json(route: Route, body: unknown, status = 200) {
@@ -83,114 +116,138 @@ async function registerFf(page: Page, tag: string) {
   await expect(page.getByTestId('dashboard')).toBeVisible()
 }
 
-// TC-NEW-FBS-SUPPLYUI-004/005 — передача в доставку через подтверждение.
-// Given: собранная отгрузка (assembling); When: открыть карточку, «Передать в доставку», подтвердить;
-// Then: вызывается POST /deliver, статус → in_delivery. Negative: отмена диалога не меняет статус.
-test('fbs supply: deliver with confirm', async ({ page }) => {
+async function mockWorklist(page: Page, items: JsonObject[]) {
+  await page.route('**/operations/fbs-orders/worklist**', (route) =>
+    route.request().method() === 'GET' ? json(route, worklist(items)) : route.fallback(),
+  )
+}
+
+// TC-S17-019 / TC-S17-021 — fresh preflight and idempotent warehouse/SC delivery.
+test('fbs workspace: preflight and deliver', async ({ page }) => {
   await registerFf(page, 'deliver')
-
-  let supplyStatus = 'assembling'
-  await page.route('**/operations/fbs-orders**', (r) =>
-    r.request().method() === 'GET'
-      ? json(r, [fbsOrder('1', { status: 'in_supply', supply_id: 'sup-1' })])
-      : r.fallback(),
-  )
-  await page.route('**/operations/fbs-supplies/*/deliver', async (r) => {
-    supplyStatus = 'in_delivery'
-    await json(r, fbsSupply('in_delivery'))
+  const suppliedOrder = order('1', {
+    status: 'packed',
+    supply_id: 'sup-1',
+    pick: { status: 'picked', location_code: 'A-01', picked_at: new Date().toISOString() },
+    pack: { status: 'packed', packed_at: new Date().toISOString() },
   })
-  await page.route('**/operations/fbs-supplies/*', (r) =>
-    r.request().method() === 'GET' ? json(r, fbsSupply(supplyStatus)) : r.fallback(),
+  await mockWorklist(page, [suppliedOrder])
+
+  let currentWorkspace = workspace({ stage: 'delivery', status: 'packed', orders: [suppliedOrder] })
+  let deliverBody: JsonObject | null = null
+  await page.route('**/operations/fbs-supplies/sup-1/workspace', (route) =>
+    json(route, currentWorkspace),
   )
-
-  await page.goto('/app/ff/fbs')
-  await page.getByTestId('fbs-orders-tab-assembly').click()
-  await page.getByTestId('fbs-order-row').first().click()
-  await expect(page.getByTestId('fbs-supply-drawer')).toBeVisible()
-  await expect(page.getByTestId('fbs-supply-stepper')).toBeVisible()
-
-  // Negative: открыть диалог и отменить — статус не меняется, кнопка deliver ещё активна.
-  await page.getByTestId('fbs-supply-deliver').click()
-  await page.getByTestId('fbs-supply-deliver-cancel').click()
-  await expect(page.getByTestId('fbs-supply-deliver')).toBeEnabled()
-
-  // Подтвердить передачу → статус переходит в доставку.
-  await page.getByTestId('fbs-supply-deliver').click()
-  await Promise.all([
-    page.waitForResponse((res) => res.url().includes('/deliver') && res.request().method() === 'POST'),
-    page.getByTestId('fbs-supply-deliver-confirm').click(),
-  ])
-  await expect(page.locator('[data-testid="fbs-supply-drawer"] [data-status="in_delivery"]').first()).toBeVisible()
-})
-
-// TC-NEW-FBS-SUPPLYUI-006 — создание отгрузки из выделенных заказов.
-// Given: на вкладке «Новые» выделены 2 заказа одного селлера; When: «Создать отгрузку» → подтвердить;
-// Then: POST /fbs-supplies + POST /{id}/orders, открывается карточка отгрузки.
-test('fbs supply: create from selected orders', async ({ page }) => {
-  await registerFf(page, 'create')
-
-  await page.route('**/operations/fbs-orders**', (r) =>
-    r.request().method() === 'GET' ? json(r, [fbsOrder('1'), fbsOrder('2')]) : r.fallback(),
-  )
-  await page.route('**/operations/fbs-supplies', (r) =>
-    r.request().method() === 'POST' ? json(r, fbsSupply('draft', { orders: [] }), 201) : r.fallback(),
-  )
-  await page.route('**/operations/fbs-supplies/*/orders', (r) =>
-    r.request().method() === 'POST' ? json(r, fbsSupply('assembling')) : r.fallback(),
-  )
-  await page.route('**/operations/fbs-supplies/*', (r) =>
-    r.request().method() === 'GET' ? json(r, fbsSupply('assembling')) : r.fallback(),
-  )
-
-  await page.goto('/app/ff/fbs')
-  await page.getByTestId('fbs-order-checkbox').first().click()
-  await page.getByTestId('fbs-order-checkbox').nth(1).click()
-  await expect(page.getByTestId('fbs-orders-action-bar')).toBeVisible()
-  await page.getByTestId('fbs-create-supply').click()
-  await Promise.all([
-    page.waitForResponse(
-      (res) => res.url().endsWith('/operations/fbs-supplies') && res.request().method() === 'POST',
-    ),
-    page.getByTestId('fbs-create-supply-submit').click(),
-  ])
-  await expect(page.getByTestId('fbs-supply-drawer')).toBeVisible()
-})
-
-// TC-NEW-FBS-PICKUI-001/002 — лист подбора: загрузка, отметка, фильтр.
-// Given: отгрузка на сборке; When: открыть лист подбора, отметить «Собрал», включить «Не собраны»;
-// Then: позиции видны, счётчик растёт, собранная позиция скрывается фильтром.
-test('fbs pick list: load, collect and filter', async ({ page }) => {
-  await registerFf(page, 'pick')
-
-  await page.route('**/operations/fbs-orders**', (r) =>
-    r.request().method() === 'GET'
-      ? json(r, [fbsOrder('1', { status: 'in_supply', supply_id: 'sup-1' })])
-      : r.fallback(),
-  )
-  await page.route('**/operations/fbs-supplies/*/picking-list', (r) =>
-    json(r, {
-      items: [
-        { article: 'ART-1', sku_code: 'SKU1', size: 'M', product_name: 'Товар 1', quantity: 2 },
-        { article: 'ART-2', sku_code: 'SKU2', size: null, product_name: 'Товар 2', quantity: 1 },
-      ],
+  await page.route('**/operations/fbs-supplies/sup-1/delivery-preflight', (route) =>
+    json(route, {
+      can_deliver: true,
+      version: 'preflight-v1',
+      checked_at: new Date().toISOString(),
+      checks: [{ code: 'ready', message: 'Поставка готова', ok: true, order_id: null }],
     }),
   )
-  await page.route('**/operations/fbs-supplies/*', (r) =>
-    r.request().method() === 'GET' ? json(r, fbsSupply('assembling')) : r.fallback(),
+  await page.route('**/operations/fbs-supplies/sup-1/deliver', async (route) => {
+    deliverBody = route.request().postDataJSON() as JsonObject
+    currentWorkspace = workspace({ stage: 'tracking', status: 'in_delivery', orders: [suppliedOrder] })
+    await json(route, currentWorkspace)
+  })
+
+  await page.getByTestId('nav-ff-fbs').click()
+  await expect(page.getByTestId('fbs-order-1')).toBeVisible()
+  await page.getByTestId('fbs-order-1').getByRole('button', { name: 'Открыть поставку' }).click()
+  await expect(page.getByTestId('fbs-workspace')).toBeVisible()
+  await page.getByRole('tab', { name: 'Передача и статусы' }).click()
+  await page.getByRole('button', { name: 'Проверить готовность' }).click()
+  await expect(page.getByText('Поставка готова')).toBeVisible()
+  await page.getByRole('button', { name: 'Передать в доставку' }).click()
+
+  await expect(page.getByText('WB подтвердил передачу поставки в доставку.')).toBeVisible()
+  expect(deliverBody?.confirmed_preflight_version).toBe('preflight-v1')
+  expect(deliverBody?.idempotency_key).toEqual(expect.any(String))
+})
+
+// TC-S17-006 — compatible selection creates one atomic supply and opens its workspace.
+test('fbs orders: create supply from selected orders', async ({ page }) => {
+  await registerFf(page, 'create')
+  const selectedOrders = [order('1'), order('2')]
+  await mockWorklist(page, selectedOrders)
+  let createBody: JsonObject | null = null
+
+  await page.route('**/operations/fbs-supplies/preflight', (route) =>
+    json(route, {
+      compatible: true,
+      summary: {
+        seller: { id: 's-1', name: 'Селлер Один' },
+        wb_warehouse: { id: 501001, name: 'WB Подольск' },
+        wms_warehouse: { id: 'w-1', name: 'Основной склад' },
+        buyer_type: 'individual',
+        cargo_type: 'mgt',
+        orders_count: 2,
+        required_marking_count: 0,
+        pvz_allowed_count: 2,
+        pvz_blocked_count: 0,
+        nearest_deadline_at: new Date(Date.now() + 100 * 3600 * 1000).toISOString(),
+      },
+      issues: [],
+    }),
+  )
+  await page.route('**/operations/fbs-supplies/from-orders', async (route) => {
+    createBody = route.request().postDataJSON() as JsonObject
+    await json(route, workspace({ orders: selectedOrders.map((item) => ({ ...item, supply_id: 'sup-1' })) }), 201)
+  })
+
+  await page.getByTestId('nav-ff-fbs').click()
+  await page.getByTestId('fbs-order-1').getByRole('checkbox').click()
+  await page.getByTestId('fbs-order-2').getByRole('checkbox').click()
+  await expect(page.getByTestId('fbs-selection-bar')).toBeVisible()
+  await page.getByRole('button', { name: 'Сформировать поставку' }).click()
+  await expect(page.getByText('Состав совместим')).toBeVisible()
+  await expect(page.getByTestId('fbs-create-submit')).toBeEnabled()
+  await page.getByTestId('fbs-create-submit').click()
+
+  await expect(page.getByTestId('fbs-workspace')).toBeVisible()
+  expect(createBody?.order_ids).toEqual(['1', '2'])
+  expect(createBody?.idempotency_key).toEqual(expect.any(String))
+})
+
+// TC-S17-007 — location then product scan updates server-owned picking progress.
+test('fbs workspace: scan location then product', async ({ page }) => {
+  await registerFf(page, 'pick')
+  const pendingOrder = order('1', { status: 'in_supply', supply_id: 'sup-1' })
+  await mockWorklist(page, [pendingOrder])
+  await page.route('**/operations/fbs-supplies/sup-1/workspace', (route) =>
+    json(route, workspace({ stage: 'picking', status: 'assembling', orders: [pendingOrder] })),
+  )
+  await page.route('**/operations/fbs-supplies/sup-1/pick/scan-location', (route) =>
+    json(route, {
+      id: 'loc-1',
+      code: 'A-01',
+      warehouse_id: 'w-1',
+      warehouse_name: 'Основной склад',
+      expected_products: [],
+    }),
+  )
+  await page.route('**/operations/fbs-supplies/sup-1/pick/scan-product', (route) =>
+    json(route, workspace({
+      stage: 'picking',
+      status: 'assembling',
+      orders: [order('1', {
+        status: 'in_supply',
+        supply_id: 'sup-1',
+        pick: { status: 'picked', location_code: 'A-01', picked_at: new Date().toISOString() },
+      })],
+    })),
   )
 
-  await page.goto('/app/ff/fbs')
-  await page.getByTestId('fbs-orders-tab-assembly').click()
-  await page.getByTestId('fbs-order-row').first().click()
-  await page.getByTestId('fbs-supply-open-pick-list').click()
+  await page.getByTestId('nav-ff-fbs').click()
+  await page.getByTestId('fbs-order-1').getByRole('button', { name: 'Открыть поставку' }).click()
+  await expect(page.getByTestId('fbs-workspace')).toBeVisible()
+  await page.getByLabel('Штрихкод ячейки').fill('CELL-A-01')
+  await page.getByRole('button', { name: 'Подтвердить ячейку' }).click()
+  await expect(page.getByText(/Ячейка A-01 подтверждена/)).toBeVisible()
+  await page.getByLabel('Штрихкод товара').fill('2000001')
+  await page.getByRole('button', { name: 'Подобрать товар' }).click()
 
-  await expect(page.getByTestId('fbs-pick-list')).toBeVisible()
-  await expect(page.getByTestId('fbs-pick-row')).toHaveCount(2)
-
-  // Отметить первую позицию «Собрал».
-  await page.getByTestId('fbs-pick-row').first().getByTestId('fbs-pick-collected').click()
-
-  // Фильтр «Не собраны» — собранная позиция скрывается, остаётся одна.
-  await page.getByTestId('fbs-pick-filter-not_collected').click()
-  await expect(page.getByTestId('fbs-pick-row')).toHaveCount(1)
+  await expect(page.getByText('Товар подобран. Прогресс синхронизирован для всех операторов.')).toBeVisible()
+  await expect(page.getByText('Товары в подборе: 1/1')).toBeVisible()
 })
