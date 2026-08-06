@@ -419,6 +419,7 @@ export function FfFbsSupplyWorkspace({
       setBoxProductSearch('')
       setBoxProductQty({})
       setExpandedBoxIds((current) => new Set(current).add(boxAssignTarget))
+      setStage('boxes')
     }
   }
 
@@ -465,10 +466,14 @@ export function FfFbsSupplyWorkspace({
 
   const retryBoxQr = async (boxId: string) => {
     if (!workspace) return
-    await run(
+    const next = await run(
       () => retryFbsPackingBoxQr(token, authHeaders, workspace.supply.id, boxId),
       '',
     )
+    if (!next) return
+    setStage('boxes')
+    const box = next.boxes.find((item) => item.id === boxId)
+    if (box?.qr_asset?.preview_url) openAssetPreview([box.qr_asset])
   }
 
   const checkDelivery = async () => {
