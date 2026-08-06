@@ -744,27 +744,38 @@ export function FfFbsSupplyWorkspace({
         remainingOrders -= Math.min(location.available, remainingOrders)
       }
       const validLocationIds = new Set(sortedLocations.map((location) => location.id))
-      const selectedLocationIds = (manualPickLocationRows[productId] ?? autoLocationIds).filter((locationId, index, list) =>
+      const configuredLocationIds = manualPickLocationRows[productId]
+      const manualDistribution = Boolean(configuredLocationIds)
+      const selectedLocationIds = (configuredLocationIds ?? autoLocationIds).filter((locationId, index, list) =>
         validLocationIds.has(locationId) && list.indexOf(locationId) === index,
       )
       if (selectedLocationIds.length === 0) selectedLocationIds.push(sortedLocations[0].id)
       let orderIndex = 0
       return selectedLocationIds.flatMap((locationId, rowIndex) => {
         const location = sortedLocations.find((item) => item.id === locationId) ?? sortedLocations[0]
-        const count = Math.min(location.available, orders.length - orderIndex)
+        const remainingForRows = orders.length - orderIndex
+        if (remainingForRows <= 0) return []
+        const laterRows = selectedLocationIds.length - rowIndex - 1
+        const maxForThisRow = manualDistribution
+          ? Math.max(1, remainingForRows - laterRows)
+          : remainingForRows
+        const count = Math.min(location.available, maxForThisRow)
         if (count <= 0) return []
         const orderIds = orders.slice(orderIndex, orderIndex + count).map((order) => order.id)
         orderIndex += count
         const selectedByOtherRows = new Set(selectedLocationIds.filter((_, index) => index !== rowIndex))
         const locationOptions = sortedLocations.filter((item) => item.id === location.id || !selectedByOtherRows.has(item.id))
         const nextLocation = sortedLocations.find((item) => !selectedLocationIds.includes(item.id))
+        const canAddLocationRow =
+          rowIndex === selectedLocationIds.length - 1 &&
+          selectedLocationIds.length < Math.min(orders.length, sortedLocations.length)
         return [{
           productId,
           rowIndex,
           selectedLocationIds,
           location,
           locationOptions,
-          nextLocationId: orderIndex < orders.length ? nextLocation?.id ?? null : null,
+          nextLocationId: canAddLocationRow ? nextLocation?.id ?? null : null,
           orderIds,
           product: orders[0].product,
           identifiers: [orders[0].product.seller_article, orders[0].product.barcode].filter(Boolean).join(' · '),
