@@ -1318,7 +1318,7 @@ export function FfFbsSupplyWorkspace({
                             {workspace.supply.delivery_type === 'pvz' ? (
                               <Button
                                 size="small"
-                                disabled={!stageIsCurrent || busy}
+                                disabled={busy}
                                 onClick={() => box.qr_asset?.preview_url ? openAssetPreview([box.qr_asset]) : void retryBoxQr(box.id)}
                               >
                                 QR
