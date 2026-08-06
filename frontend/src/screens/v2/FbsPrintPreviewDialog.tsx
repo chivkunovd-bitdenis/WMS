@@ -155,8 +155,8 @@ export function FbsPrintPreviewDialog({
                 <Typography variant="subtitle2">{assetLabel(asset)}</Typography>
                 <Box component="img" src={objectUrl} alt={assetLabel(asset)} sx={{ width: '100%', aspectRatio: '58 / 40', objectFit: 'contain', bgcolor: '#fff', my: 1.5 }} />
                 <Stack direction="row" spacing={1}>
-                  {previews.length > 1 ? <Button startIcon={<PrintOutlinedIcon />} onClick={() => print([{ asset, objectUrl }])}>Печать только этого</Button> : null}
-                  <Button disabled={Boolean(asset.applied_at) || applyingId === asset.id} onClick={() => void apply(asset)}>
+                  {previews.length > 1 ? <Button startIcon={<PrintOutlinedIcon />} onClick={() => print([{ asset, objectUrl }])} data-testid={`fbs-preview-print-${asset.id}`}>Печать только этого</Button> : null}
+                  <Button disabled={Boolean(asset.applied_at) || applyingId === asset.id} onClick={() => void apply(asset)} data-testid={`fbs-preview-apply-${asset.id}`}>
                     {asset.applied_at ? 'Уже нанесён' : 'Подтвердить нанесение'}
                   </Button>
                 </Stack>
@@ -167,7 +167,7 @@ export function FbsPrintPreviewDialog({
       </DialogContent>
       <DialogActions>
         <Button onClick={onClose} disabled={loading || Boolean(applyingId)}>Закрыть</Button>
-        <Button variant="contained" startIcon={<PrintOutlinedIcon />} disabled={previews.length === 0 || loading} onClick={() => print(previews)}>
+        <Button variant="contained" startIcon={<PrintOutlinedIcon />} disabled={previews.length === 0 || loading} onClick={() => print(previews)} data-testid="fbs-preview-print-all">
           {previews.length === 1 ? 'Печать' : 'Печать всех готовых'}
         </Button>
       </DialogActions>

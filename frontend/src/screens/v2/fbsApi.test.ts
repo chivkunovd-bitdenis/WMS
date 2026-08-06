@@ -2,6 +2,8 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import {
   assignFbsPackingBoxOrders,
+  clearFbsPackingBox,
+  closeFbsPackingBox,
   confirmFbsManualPick,
   createFbsPackingBoxes,
   createFbsSupplyFromOrders,
@@ -16,6 +18,8 @@ import {
   fetchFbsWorklist,
   finishFbsSupplyLocally,
   resolveFbsPickLocation,
+  reopenFbsPackingBox,
+  retryFbsPackingBoxQr,
   retryFbsSupplyQr,
   scanFbsOrderMetadata,
   scanFbsPickLocation,
@@ -460,14 +464,29 @@ describe('FBS API client', () => {
     await createFbsPackingBoxes('token', authHeaders, 'supply-1', { count: 2, idempotency_key: 'boxes-1' })
     await assignFbsPackingBoxOrders('token', authHeaders, 'supply-1', 'box-1', { order_ids: ['order-1'], idempotency_key: 'assign-1' })
     await unassignFbsPackingBoxOrders('token', authHeaders, 'supply-1', 'box-1', { order_ids: ['order-1'], idempotency_key: 'unassign-1' })
+    await closeFbsPackingBox('token', authHeaders, 'supply-1', 'box-1', 'close-1')
+    await reopenFbsPackingBox('token', authHeaders, 'supply-1', 'box-1', 'reopen-1')
+    await clearFbsPackingBox('token', authHeaders, 'supply-1', 'box-1', 'clear-1')
+    await retryFbsPackingBoxQr('token', authHeaders, 'supply-1', 'box-1', 'qr-1')
     await deleteFbsPackingBox('token', authHeaders, 'supply-1', 'box-1', 'delete-1')
     expect(fetchMock.mock.calls.map((call) => [call[0], call[1]?.method ?? 'GET'])).toEqual([
       ['/api/operations/fbs-supplies/supply-1/packing-boxes', 'GET'],
       ['/api/operations/fbs-supplies/supply-1/packing-boxes', 'POST'],
       ['/api/operations/fbs-supplies/supply-1/packing-boxes/box-1/orders', 'PUT'],
       ['/api/operations/fbs-supplies/supply-1/packing-boxes/box-1/orders', 'DELETE'],
+      ['/api/operations/fbs-supplies/supply-1/packing-boxes/box-1/close', 'POST'],
+      ['/api/operations/fbs-supplies/supply-1/packing-boxes/box-1/reopen', 'POST'],
+      ['/api/operations/fbs-supplies/supply-1/packing-boxes/box-1/clear', 'POST'],
+      ['/api/operations/fbs-supplies/supply-1/packing-boxes/box-1/retry-qr', 'POST'],
       ['/api/operations/fbs-supplies/supply-1/packing-boxes/box-1', 'DELETE'],
     ])
+    const mutationKeys = ['close-1', 'reopen-1', 'clear-1', 'qr-1', 'delete-1']
+    for (const [offset, idempotencyKey] of mutationKeys.entries()) {
+      expect(fetchMock.mock.calls[4 + offset]?.[1]).toEqual(expect.objectContaining({
+        body: JSON.stringify({ idempotency_key: idempotencyKey }),
+        signal: expect.any(AbortSignal),
+      }))
+    }
   })
 
   it('finishes local operator work separately from electronic WB delivery', async () => {

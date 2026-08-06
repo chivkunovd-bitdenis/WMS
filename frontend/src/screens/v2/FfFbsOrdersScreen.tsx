@@ -83,8 +83,11 @@ export function FfFbsOrdersScreen({ token, authHeaders, sellers, isAdmin = false
   const [workspaceId, setWorkspaceId] = useState<string | null>(null)
   const [workspaceSeed, setWorkspaceSeed] = useState<FbsWorkspace | null>(null)
   const worklistRequestGuard = useRef(createLatestRequestGuard()).current
+  const pollInFlightRef = useRef(false)
 
   const load = useCallback(async (silent = false) => {
+    if (silent && pollInFlightRef.current) return
+    if (silent) pollInFlightRef.current = true
     const requestGeneration = worklistRequestGuard.begin()
     if (!silent) {
       setBusy(true)
@@ -106,9 +109,9 @@ export function FfFbsOrdersScreen({ token, authHeaders, sellers, isAdmin = false
       })
     } catch (cause) {
       if (!worklistRequestGuard.isCurrent(requestGeneration)) return
-      setOrders([])
       if (!silent) setError(cause instanceof Error ? cause.message : 'Не удалось загрузить заказы FBS.')
     } finally {
+      if (silent) pollInFlightRef.current = false
       if (!silent && worklistRequestGuard.isCurrent(requestGeneration)) setBusy(false)
     }
   }, [token, authHeaders, sellerId, statusGroup, appliedSearch, worklistRequestGuard])
@@ -340,8 +343,9 @@ export function FfFbsOrdersScreen({ token, authHeaders, sellers, isAdmin = false
                     <Chip
                       size="small"
                       variant="outlined"
-                      color={order.can_pvz ? 'success' : 'default'}
-                      label={order.can_pvz ? 'Можно в ПВЗ' : 'Только склад / СЦ'}
+                      color="default"
+                      label={order.can_pvz ? 'ПВЗ' : 'Склад / СЦ'}
+                      data-testid={`fbs-route-${order.id}`}
                     />
                     {order.buyer_type === 'legal' ? (
                       <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 0.5 }}>

@@ -1,6 +1,6 @@
-import { useCallback, useEffect, useState, type MouseEvent } from 'react'
+import { useCallback, useEffect, useRef, useState, type MouseEvent, type ReactNode } from 'react'
 import { Link as RouterLink, useLocation } from 'react-router-dom'
-import { MoreVertOutlined } from '@mui/icons-material'
+import { MoreVertOutlined, PrintOutlined } from '@mui/icons-material'
 import {
   Alert,
   Badge,
@@ -42,6 +42,7 @@ import { readApiErrorMessage } from '../../utils/readApiErrorMessage'
 import { displayMetaToProductLabel } from '../../utils/productBarcodePrint'
 import { useMarkingCodePrint } from '../../utils/useMarkingCodePrint'
 import { formatHumanDocumentNumber } from './documentDisplay'
+import { createFbsIdempotencyKey, fetchWithTimeout } from '../v2/fbsApi'
 
 export type PackagingTaskLine = {
   id: string
@@ -103,6 +104,12 @@ type TaskPanelProps = {
   hideDocumentHeader?: boolean
   /** Compact operator cards for narrow embedded workspaces such as FBS. */
   compactLayout?: boolean
+  /** Keep the standard table but collapse duplicate quantity columns for operator workspaces. */
+  simplifiedQuantities?: boolean
+  /** Expose the standard product print action even when Honest Sign is not required. */
+  alwaysShowPrintAction?: boolean
+  /** Add workflow-specific actions to the existing product row without creating a second table. */
+  renderLineActions?: (line: PackagingTaskLine) => ReactNode
   onClose?: () => void
   onUpdated: (task: PackagingTask) => void
 }
@@ -138,11 +145,16 @@ export function FfPackagingTaskPanel({
   unloadLabel,
   hideDocumentHeader = false,
   compactLayout = false,
+  simplifiedQuantities = false,
+  alwaysShowPrintAction = false,
+  renderLineActions,
   onClose,
   onUpdated,
 }: TaskPanelProps) {
   const { catalogById } = useWbProductCatalog(token)
   const [busy, setBusy] = useState(false)
+  const [pendingActions, setPendingActions] = useState<Set<string>>(() => new Set())
+  const pendingActionsRef = useRef<Set<string>>(new Set())
   const [error, setError] = useState<string | null>(null)
   const [ackAllPacked, setAckAllPacked] = useState(false)
   const [defectDialogOpen, setDefectDialogOpen] = useState(false)
@@ -164,10 +176,28 @@ export function FfPackagingTaskPanel({
   const productLabelForLine = (ln: PackagingTaskLine) =>
     displayMetaToProductLabel(productDisplayMetaFromCatalog(ln.product_id, ln, catalogById))
 
+  const setActionPending = (actionKey: string, pending: boolean) => {
+    const next = new Set(pendingActionsRef.current)
+    if (pending) next.add(actionKey)
+    else next.delete(actionKey)
+    pendingActionsRef.current = next
+    setPendingActions(next)
+  }
+
   const refreshTask = async () => {
-    const res = await fetch(apiUrl(`/operations/packaging-tasks/${task.id}`), { headers: authHeaders })
+    const res = await fetchWithTimeout(apiUrl(`/operations/packaging-tasks/${task.id}`), {
+      headers: authHeaders,
+    })
     if (res.ok) {
       onUpdated((await res.json()) as PackagingTask)
+    }
+  }
+
+  const reconcileTaskAfterUnknownResult = async () => {
+    try {
+      await refreshTask()
+    } catch {
+      // Keep the original operation error visible; the next screen reload still uses server state.
     }
   }
 
@@ -194,34 +224,53 @@ export function FfPackagingTaskPanel({
     )
   }
 
-  const confirmPacked = async (lineId: string) => {
-    setBusy(true)
+  const confirmPacked = async (line: PackagingTaskLine) => {
+    const actionKey = `confirm-packed:${line.id}`
+    if (pendingActionsRef.current.has(actionKey)) return
+    setActionPending(actionKey, true)
     setError(null)
     try {
-      const res = await fetch(
-        apiUrl(`/operations/packaging-tasks/${task.id}/lines/${lineId}/confirm-packed`),
-        { method: 'POST', headers: authHeaders, body: JSON.stringify({}) },
+      const res = await fetchWithTimeout(
+        apiUrl(`/operations/packaging-tasks/${task.id}/lines/${line.id}/confirm-packed`),
+        {
+          method: 'POST',
+          headers: authHeaders,
+          body: JSON.stringify({ quantity: line.qty_suggested_packed }),
+        },
       )
       if (!res.ok) {
         setError(await readApiErrorMessage(res))
         return
       }
       onUpdated((await res.json()) as PackagingTask)
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : 'Не удалось подтвердить упаковку с полки.')
+      await reconcileTaskAfterUnknownResult()
     } finally {
-      setBusy(false)
+      setActionPending(actionKey, false)
     }
   }
 
   const packQty = async (lineId: string, qty: number) => {
-    setBusy(true)
+    const actionKey = `pack:${lineId}`
+    if (pendingActionsRef.current.has(actionKey)) return
+    const storageKey = `wms:fbs:pack:${task.id}:${lineId}:${qty}`
+    let idempotencyKey = createFbsIdempotencyKey()
+    try {
+      idempotencyKey = window.sessionStorage.getItem(storageKey) ?? idempotencyKey
+      window.sessionStorage.setItem(storageKey, idempotencyKey)
+    } catch {
+      // Hardened browsers may disable storage; server remaining-quantity validation still applies.
+    }
+    setActionPending(actionKey, true)
     setError(null)
     try {
-      const res = await fetch(
+      const res = await fetchWithTimeout(
         apiUrl(`/operations/packaging-tasks/${task.id}/lines/${lineId}/pack`),
         {
           method: 'POST',
           headers: authHeaders,
-          body: JSON.stringify({ quantity: qty }),
+          body: JSON.stringify({ quantity: qty, idempotency_key: idempotencyKey }),
         },
       )
       if (!res.ok) {
@@ -229,9 +278,17 @@ export function FfPackagingTaskPanel({
         return
       }
       const progress = (await res.json()) as PackProgress
+      try {
+        window.sessionStorage.removeItem(storageKey)
+      } catch {
+        // Storage may be unavailable; the confirmed server state is still authoritative.
+      }
       onUpdated(progress.packaging_task)
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : 'Не удалось упаковать товар.')
+      await reconcileTaskAfterUnknownResult()
     } finally {
-      setBusy(false)
+      setActionPending(actionKey, false)
     }
   }
 
@@ -252,10 +309,12 @@ export function FfPackagingTaskPanel({
   }
 
   const openDefectDialog = async (lineId: string) => {
-    setBusy(true)
+    const actionKey = `defect-codes:${lineId}`
+    if (pendingActionsRef.current.has(actionKey)) return
+    setActionPending(actionKey, true)
     setError(null)
     try {
-      const codesRes = await fetch(
+      const codesRes = await fetchWithTimeout(
         apiUrl(`/operations/marking-codes/packaging-task-lines/${lineId}/printed-codes`),
         { headers: authHeaders },
       )
@@ -274,8 +333,10 @@ export function FfPackagingTaskPanel({
       setDefectReason('')
       setDefectDialogError(null)
       setDefectDialogOpen(true)
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : 'Не удалось загрузить напечатанные КМ.')
     } finally {
-      setBusy(false)
+      setActionPending(actionKey, false)
     }
   }
 
@@ -284,10 +345,12 @@ export function FfPackagingTaskPanel({
       return
     }
     setDefectDialogBusy(true)
+    const actionKey = `defect-submit:${defectSelectedCodeId}`
+    setActionPending(actionKey, true)
     setDefectDialogError(null)
     try {
       const reasonTrimmed = defectReason.trim()
-      const defectRes = await fetch(
+      const defectRes = await fetchWithTimeout(
         apiUrl(`/operations/marking-codes/codes/${defectSelectedCodeId}/defect`),
         {
           method: 'POST',
@@ -304,7 +367,13 @@ export function FfPackagingTaskPanel({
       }
       await refreshTask()
       resetDefectDialog()
+    } catch (cause) {
+      setDefectDialogError(
+        cause instanceof Error ? cause.message : 'Не удалось подтвердить брак КМ.',
+      )
+      await reconcileTaskAfterUnknownResult()
     } finally {
+      setActionPending(actionKey, false)
       setDefectDialogBusy(false)
     }
   }
@@ -342,10 +411,12 @@ export function FfPackagingTaskPanel({
       setError(MARKING_NOT_DONE_MESSAGE)
       return
     }
-    setBusy(true)
+    const actionKey = 'complete'
+    if (pendingActionsRef.current.has(actionKey)) return
+    setActionPending(actionKey, true)
     setError(null)
     try {
-      const res = await fetch(apiUrl(`/operations/packaging-tasks/${task.id}/complete`), {
+      const res = await fetchWithTimeout(apiUrl(`/operations/packaging-tasks/${task.id}/complete`), {
         method: 'POST',
         headers: authHeaders,
         body: JSON.stringify({ acknowledge_all_packed: ackAllPacked }),
@@ -355,8 +426,11 @@ export function FfPackagingTaskPanel({
         return
       }
       onUpdated((await res.json()) as PackagingTask)
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : 'Не удалось завершить упаковку.')
+      await reconcileTaskAfterUnknownResult()
     } finally {
-      setBusy(false)
+      setActionPending(actionKey, false)
     }
   }
 
@@ -566,9 +640,9 @@ export function FfPackagingTaskPanel({
                       <Button
                         size="small"
                         disabled={
-                          busy || !taskEditable || ln.qty_suggested_packed < 1
+                          busy || pendingActions.has(`confirm-packed:${ln.id}`) || !taskEditable || ln.qty_suggested_packed < 1
                         }
-                        onClick={() => void confirmPacked(ln.id)}
+                        onClick={() => void confirmPacked(ln)}
                         data-testid="ff-packaging-confirm-shelf"
                       >
                         Подтвердить с полки
@@ -578,7 +652,7 @@ export function FfPackagingTaskPanel({
                       <Button
                         size="small"
                         variant="contained"
-                        disabled={busy || !taskEditable}
+                        disabled={busy || pendingActions.has(`pack:${ln.id}`) || !taskEditable}
                         onClick={() =>
                           void packQty(
                             ln.id,
@@ -590,6 +664,7 @@ export function FfPackagingTaskPanel({
                         Упаковать
                       </Button>
                     ) : null}
+                    {renderLineActions?.(ln)}
                   </Stack>
                 </Stack>
               </Stack>
@@ -598,27 +673,42 @@ export function FfPackagingTaskPanel({
         })}
       </Stack>
     ) : (
-      <TableContainer component={Paper} variant="outlined" sx={{ width: '100%', overflowX: 'hidden' }}>
+      <TableContainer component={Paper} variant="outlined" sx={{ width: '100%', overflowX: 'auto' }}>
         <Table
           size="small"
           sx={{
             tableLayout: 'fixed',
             width: '100%',
+            minWidth: simplifiedQuantities ? 1040 : 1450,
             '& th': { py: 1.25 },
             '& td': { py: 1.25 },
           }}
         >
           <TableHead>
             <TableRow>
-              <FfProductTableHeadCells
-                nameLabel={isMpUnloadTask ? 'Наименование' : 'Наименование / ячейка'}
-              />
-              <TableCell align="right">Всего</TableCell>
-              {!isMpUnloadTask ? (
-                <TableCell align="right">На полке упак.</TableCell>
-              ) : null}
-              <TableCell align="right">Упаковать</TableCell>
-              <TableCell align="right">Готово</TableCell>
+              {simplifiedQuantities ? (
+                <>
+                  <TableCell sx={{ width: 64 }}>Фото</TableCell>
+                  <TableCell>Товар и идентификаторы</TableCell>
+                  <TableCell align="center" sx={{ width: 72 }}>Печать</TableCell>
+                </>
+              ) : (
+                <FfProductTableHeadCells
+                  nameLabel={isMpUnloadTask ? 'Наименование' : 'Наименование / ячейка'}
+                />
+              )}
+              {simplifiedQuantities ? (
+                <TableCell align="right">Количество</TableCell>
+              ) : (
+                <>
+                  <TableCell align="right">Всего</TableCell>
+                  {!isMpUnloadTask ? (
+                    <TableCell align="right">На полке упак.</TableCell>
+                  ) : null}
+                  <TableCell align="right">Упаковать</TableCell>
+                  <TableCell align="right">Готово</TableCell>
+                </>
+              )}
               <TableCell align="right">ЧЗ</TableCell>
               <TableCell align="right">Действия</TableCell>
             </TableRow>
@@ -626,6 +716,7 @@ export function FfPackagingTaskPanel({
           <TableBody>
             {task.lines.map((ln) => {
               const displayMeta = productDisplayMetaFromCatalog(ln.product_id, ln, catalogById)
+              const primaryBarcode = resolveProductPrimaryBarcode(displayMeta) || ln.sku_code
               const markingProgressIncomplete = isLineMarkingProgressIncomplete(ln)
               return (
               <TableRow
@@ -644,26 +735,47 @@ export function FfPackagingTaskPanel({
                     : undefined
                 }
               >
-                <FfProductLineCells
-                  meta={{
-                    ...displayMeta,
-                    product_name: isMpUnloadTask
-                      ? displayMeta.product_name
-                      : `${displayMeta.product_name} · ${ln.storage_location_code}`,
-                  }}
-                  printTestId={`ff-packaging-line-print-${ln.id}`}
-                  onPrintClick={
-                    ln.requires_honest_sign || isMpUnloadTask
-                      ? () => openLinePrint(ln)
-                      : undefined
-                  }
-                />
-                <TableCell align="right">{ln.qty_total}</TableCell>
-                {!isMpUnloadTask ? (
-                  <TableCell align="right">{ln.qty_suggested_packed}</TableCell>
-                ) : null}
-                <TableCell align="right">{ln.qty_need_pack}</TableCell>
-                <TableCell align="right">{ln.qty_done}</TableCell>
+                {simplifiedQuantities ? (
+                  <>
+                    <TableCell><ProductPhotoThumb src={displayMeta.wb_primary_image_url} alt={displayMeta.product_name} size={48} previewSize={300} /></TableCell>
+                    <TableCell><Typography variant="body2" sx={{ fontWeight: 700 }}>{displayMeta.product_name}</Typography><Typography variant="caption" color="text.secondary" sx={{ display: 'block' }}>Артикул: {displayMeta.sku_code} · ШК: {primaryBarcode}</Typography><Typography variant="caption" color="text.secondary" sx={{ display: 'block' }}>Артикул продавца: {displayMeta.wb_vendor_code ?? '—'} · WB: {displayMeta.wb_nm_id ?? '—'} · Ячейка: {ln.storage_location_code}</Typography></TableCell>
+                    <TableCell align="center">{alwaysShowPrintAction || ln.requires_honest_sign || isMpUnloadTask ? <IconButton size="small" aria-label={`Печать товара ${displayMeta.product_name}`} onClick={() => openLinePrint(ln)} data-testid={`ff-packaging-line-print-${ln.id}`}><PrintOutlined fontSize="small" /></IconButton> : null}</TableCell>
+                  </>
+                ) : (
+                  <FfProductLineCells
+                    meta={{
+                      ...displayMeta,
+                      product_name: isMpUnloadTask
+                        ? displayMeta.product_name
+                        : `${displayMeta.product_name} · ${ln.storage_location_code}`,
+                    }}
+                    printTestId={`ff-packaging-line-print-${ln.id}`}
+                    onPrintClick={
+                      alwaysShowPrintAction || ln.requires_honest_sign || isMpUnloadTask
+                        ? () => openLinePrint(ln)
+                        : undefined
+                    }
+                  />
+                )}
+                {simplifiedQuantities ? (
+                  <TableCell align="right">
+                    <Typography variant="body2" sx={{ fontWeight: 700 }}>
+                      {ln.qty_need_pack}
+                    </Typography>
+                    <Typography variant="caption" color="text.secondary">
+                      упаковано {ln.qty_done}
+                    </Typography>
+                  </TableCell>
+                ) : (
+                  <>
+                    <TableCell align="right">{ln.qty_total}</TableCell>
+                    {!isMpUnloadTask ? (
+                      <TableCell align="right">{ln.qty_suggested_packed}</TableCell>
+                    ) : null}
+                    <TableCell align="right">{ln.qty_need_pack}</TableCell>
+                    <TableCell align="right">{ln.qty_done}</TableCell>
+                  </>
+                )}
                 <TableCell align="right">
                   {ln.requires_honest_sign ? (
                     <Stack spacing={0.25} sx={{ alignItems: 'flex-end' }}>
@@ -712,8 +824,8 @@ export function FfPackagingTaskPanel({
                     {!isMpUnloadTask && ln.qty_confirmed_packed < ln.qty_suggested_packed ? (
                       <Button
                         size="small"
-                        disabled={busy || !taskEditable || ln.qty_suggested_packed < 1}
-                        onClick={() => void confirmPacked(ln.id)}
+                        disabled={busy || pendingActions.has(`confirm-packed:${ln.id}`) || !taskEditable || ln.qty_suggested_packed < 1}
+                        onClick={() => void confirmPacked(ln)}
                         data-testid="ff-packaging-confirm-shelf"
                       >
                         Подтвердить с полки
@@ -723,13 +835,14 @@ export function FfPackagingTaskPanel({
                       <Button
                         size="small"
                         variant="contained"
-                        disabled={busy || !taskEditable}
+                        disabled={busy || pendingActions.has(`pack:${ln.id}`) || !taskEditable}
                         onClick={() => void packQty(ln.id, ln.qty_need_pack - ln.qty_packed_in_task)}
                         data-testid="ff-packaging-pack-btn"
                       >
                         Упаковать
                       </Button>
                     ) : null}
+                    {renderLineActions?.(ln)}
                   </Stack>
                 </TableCell>
               </TableRow>
@@ -757,7 +870,7 @@ export function FfPackagingTaskPanel({
                 ))}
               </Alert>
             ) : null}
-            {!compactLayout ? (
+            {!compactLayout && !simplifiedQuantities ? (
               <FormControlLabel
                 control={
                   <Checkbox
@@ -775,8 +888,9 @@ export function FfPackagingTaskPanel({
               color="success"
               disabled={
                 busy ||
+                pendingActions.size > 0 ||
                 hasIncompleteMarking ||
-                (compactLayout && hasIncompletePacking)
+                ((compactLayout || simplifiedQuantities) && hasIncompletePacking)
               }
               onClick={() => void completeTask()}
               data-testid="ff-packaging-complete"
@@ -1239,13 +1353,18 @@ export function FfPackagingPage({ token }: PageProps) {
   }, [token])
 
   useEffect(() => {
-    void load()
+    void (async () => {
+      await load()
+    })()
   }, [load])
 
   useEffect(() => {
     const state = location.state as { taskId?: string } | null
-    if (state?.taskId) {
-      void loadTaskById(state.taskId)
+    const taskId = state?.taskId
+    if (taskId) {
+      void (async () => {
+        await loadTaskById(taskId)
+      })()
     }
   }, [location.state, loadTaskById])
 
@@ -1358,7 +1477,7 @@ export function FfPackagingTaskDialog({
 
   useEffect(() => {
     if (!open) {
-      setTask(null)
+      void Promise.resolve().then(() => setTask(null))
       return
     }
     void (async () => {

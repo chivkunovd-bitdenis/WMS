@@ -382,12 +382,14 @@ export type FbsPackingBoxOrder = {
   wb_order_id: number
   product_id: string | null
   product_name: string
+  image_url: string | null
+  quantity: number
 }
 
 export type FbsPackingBox = {
   id: string
   box_number: number
-  status: 'open'
+  status: 'open' | 'closed'
   internal_barcode: string
   wb_trbx_id: string | null
   qr_asset: FbsPrintAsset | null
@@ -768,6 +770,68 @@ export async function unassignFbsPackingBoxOrders(
       body: JSON.stringify(body),
     }, options),
   )
+}
+
+async function mutateFbsPackingBox(
+  token: string,
+  ah: AuthHeaders,
+  supplyId: string,
+  boxId: string,
+  action: 'close' | 'reopen' | 'clear' | 'retry-qr',
+  idempotency_key: string,
+  options: FbsRequestOptions = {},
+): Promise<FbsWorkspace> {
+  return jsonOrThrow<FbsWorkspace>(
+    await fetchWithTimeout(apiUrl(`/operations/fbs-supplies/${supplyId}/packing-boxes/${boxId}/${action}`), {
+      method: 'POST',
+      headers: jsonHeaders(token, ah),
+      body: JSON.stringify({ idempotency_key }),
+    }, options),
+  )
+}
+
+export function closeFbsPackingBox(
+  token: string,
+  ah: AuthHeaders,
+  supplyId: string,
+  boxId: string,
+  idempotency_key: string,
+  options: FbsRequestOptions = {},
+): Promise<FbsWorkspace> {
+  return mutateFbsPackingBox(token, ah, supplyId, boxId, 'close', idempotency_key, options)
+}
+
+export function reopenFbsPackingBox(
+  token: string,
+  ah: AuthHeaders,
+  supplyId: string,
+  boxId: string,
+  idempotency_key: string,
+  options: FbsRequestOptions = {},
+): Promise<FbsWorkspace> {
+  return mutateFbsPackingBox(token, ah, supplyId, boxId, 'reopen', idempotency_key, options)
+}
+
+export function clearFbsPackingBox(
+  token: string,
+  ah: AuthHeaders,
+  supplyId: string,
+  boxId: string,
+  idempotency_key: string,
+  options: FbsRequestOptions = {},
+): Promise<FbsWorkspace> {
+  return mutateFbsPackingBox(token, ah, supplyId, boxId, 'clear', idempotency_key, options)
+}
+
+export function retryFbsPackingBoxQr(
+  token: string,
+  ah: AuthHeaders,
+  supplyId: string,
+  boxId: string,
+  idempotency_key: string,
+  options: FbsRequestOptions = {},
+): Promise<FbsWorkspace> {
+  return mutateFbsPackingBox(token, ah, supplyId, boxId, 'retry-qr', idempotency_key, options)
 }
 
 export async function deleteFbsPackingBox(

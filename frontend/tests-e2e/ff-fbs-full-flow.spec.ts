@@ -59,10 +59,11 @@ type Workspace = {
   packing_boxes: Array<{
     id: string;
     box_number: number;
+    status: "open" | "closed";
     internal_barcode: string;
     wb_trbx_id: string | null;
     items_count: number;
-    orders: Array<{ id: string; wb_order_id: number; product_name: string }>;
+    orders: Array<{ id: string; wb_order_id: number; product_name: string; image_url: string | null; quantity: number }>;
     qr_asset: { id: string; preview_url: string | null; applied_at: string | null } | null;
   }>;
   unassigned_order_ids: string[];
@@ -239,49 +240,60 @@ async function createSupply(page: Page, route: RouteName): Promise<Workspace> {
 async function pickAndPack(page: Page, route: RouteName, testInfo: TestInfo) {
   const orders = seed.orders[route];
   let scannerCalls = 0;
+  let manualCalls = 0;
   const watchScanner = (request: { url(): string }) => {
     if (request.url().includes("/pick/scan-")) scannerCalls += 1;
+    if (request.url().includes("/pick/confirm-product")) manualCalls += 1;
   };
   page.on("request", watchScanner);
   await page.getByRole("button", { name: "Начать работу с поставкой" }).click();
   await expect(page.getByRole("tab")).toHaveCount(4);
   await expect(page.getByRole("tab", { name: "Стикеры WB" })).toHaveCount(0);
   await expect(page.getByRole("tab", { name: "Подготовка к сдаче" })).toHaveCount(0);
-  for (const [index, order] of orders.entries()) {
-    const row = page.getByTestId(`fbs-manual-pick-${order.wms_order_id}`);
-    await row.getByLabel(`Ячейка для заказа WB №${order.wb_order_id}`).click();
-    await page.getByRole("option", { name: new RegExp(seed.location_code) }).click();
-    const [pickResponse] = await Promise.all([
-      page.waitForResponse(
-        (item) =>
-          item.url().includes("/pick/confirm-product") && item.status() === 200,
-      ),
-      row.getByRole("button", { name: "Снять с ячейки" }).click(),
-    ]);
-    const pickedWorkspace = (await pickResponse.json()) as {
-      progress: { picked: number; total: number };
-    };
-    expect(pickedWorkspace.progress).toEqual(
-      expect.objectContaining({ picked: index + 1, total: orders.length }),
+  const requiredByBarcode = new Map<string, number>();
+  for (const order of orders) {
+    requiredByBarcode.set(
+      order.barcode,
+      (requiredByBarcode.get(order.barcode) ?? 0) + 1,
     );
+  }
+  let pickedTotal = 0;
+  for (const [barcode, quantity] of requiredByBarcode) {
+    const row = page
+      .getByTestId("fbs-manual-picking")
+      .getByRole("row")
+      .filter({ hasText: barcode });
+    await expect(row).toContainText(`К снятию: ${quantity} шт.`);
+    const callsBeforePick = manualCalls;
+    await row
+      .getByRole("button", { name: `Снять ${quantity} шт. с ячейки` })
+      .click();
+    await expect(row).toHaveCount(0);
+    await expect
+      .poll(() => manualCalls - callsBeforePick)
+      .toBe(quantity);
+    pickedTotal += quantity;
   }
   page.off("request", watchScanner);
   expect(scannerCalls).toBe(0);
+  expect(pickedTotal).toBe(orders.length);
+  expect(manualCalls).toBe(orders.length);
   await shot(page, testInfo, `${route}-02-picked`);
 
   await page.getByRole("tab", { name: "Упаковка и маркировка" }).click();
-  const compact = page.getByTestId("ff-packaging-lines-compact");
-  await expect(compact).toBeVisible();
-  const name = page.getByTestId("ff-packaging-compact-product-name").first();
-  const box = await name.boundingBox();
-  expect(box?.width ?? 0).toBeGreaterThan(180);
-  expect(box?.height ?? 999).toBeLessThan(100);
-  expect(
-    await compact.evaluate((node) => node.scrollWidth <= node.clientWidth + 1),
-  ).toBeTruthy();
+  await expect(page.getByTestId("ff-packaging-lines-compact")).toHaveCount(0);
+  const packaging = page.getByTestId("ff-packaging-task-panel");
+  await expect(packaging.getByRole("columnheader", { name: "Товар и идентификаторы" })).toBeVisible();
+  await expect(packaging.getByRole("columnheader", { name: "Количество" })).toBeVisible();
+  await expect(page.getByTestId("fbs-order-marking")).toHaveCount(0);
   await expect(page.getByTestId("ff-packaging-complete")).toBeDisabled();
   await shot(page, testInfo, `${route}-03-packaging-layout`);
-  await page.getByTestId("ff-packaging-pack-btn").click();
+  const packButtons = page.getByTestId("ff-packaging-pack-btn");
+  while ((await packButtons.count()) > 0) {
+    const before = await packButtons.count();
+    await packButtons.first().click();
+    await expect(packButtons).toHaveCount(before - 1);
+  }
   await expect(page.getByTestId("ff-packaging-complete")).toBeEnabled();
   await expect(page.getByTestId("ff-packaging-ack-all-packed")).toHaveCount(0);
   const [completeResponse] = await Promise.all([
@@ -318,11 +330,34 @@ async function pickAndPack(page: Page, route: RouteName, testInfo: TestInfo) {
   await page.getByRole("option", { name: "Короб 2" }).click();
   await putFirst();
   await expect(boxesPanel.getByText("Все упакованные товары распределены по коробам.")).toBeVisible();
-  await page
-    .getByRole("button", { name: "Получить и распечатать стикеры" })
-    .click();
-  await confirmCurrentPreview(page);
+  const stickerButtons = page.locator('[data-testid^="fbs-order-sticker-print-"]');
+  const stickerCount = await stickerButtons.count();
+  for (let index = 0; index < stickerCount; index += 1) {
+    await stickerButtons.nth(index).click();
+    await confirmCurrentPreview(page);
+  }
   await shot(page, testInfo, `${route}-05-order-sticker-applied`);
+
+  const closeButtons = page.locator('[data-testid^="fbs-box-close-"]');
+  while ((await closeButtons.count()) > 0) {
+    const before = await closeButtons.count();
+    await Promise.all([
+      page.waitForResponse((item) => item.url().includes("/packing-boxes/") && item.url().endsWith("/close") && item.status() === 200),
+      closeButtons.first().click(),
+    ]);
+    await expect(closeButtons).toHaveCount(before - 1);
+  }
+  await expect(page.getByRole("tab", { name: "Упаковка и маркировка" })).toHaveAttribute("aria-selected", "true");
+  if (route === "pvz") {
+    await expect(boxesPanel.getByText(/^WB ID:/)).toHaveCount(2);
+  } else {
+    await expect(
+      boxesPanel.getByText("Не требуется", { exact: true }),
+    ).toHaveCount(2);
+  }
+  await expect(page.getByTestId("fbs-go-delivery")).toBeVisible();
+  await page.getByTestId("fbs-go-delivery").click();
+  await expect(page.getByRole("tab", { name: "Сдача в WB", exact: true })).toHaveAttribute("aria-selected", "true");
 }
 
 async function finishRoute(
@@ -351,10 +386,10 @@ async function finishRoute(
       deliverBody = item.postDataJSON() as typeof deliverBody;
     }
   });
-  await page.getByRole("tab", { name: "Сдача в WB", exact: true }).click();
   await page.getByTestId("fbs-delivery-prepare").click();
+  await page.getByTestId("fbs-delivery-confirm-open").click();
   const deliveryDialog = page.getByRole("dialog", {
-    name: "Зафиксировать состав поставки?",
+    name: "Передать поставку в WB?",
   });
   await expect(deliveryDialog).toBeVisible();
   expect(deliverBody).toBeNull();
@@ -367,7 +402,7 @@ async function finishRoute(
             `/api/operations/fbs-supplies/${supply.supply.id}/deliver`,
           ) && item.status() === 200,
     ),
-    deliveryDialog.getByRole("button", { name: "Зафиксировать в WB" }).click(),
+    deliveryDialog.getByRole("button", { name: "Передать в WB" }).click(),
   ]);
   await expect(page.getByText("Статусы WB", { exact: true })).toHaveCount(0);
   await expect(

@@ -146,10 +146,10 @@ export function SellerBadge({ name }: { name: string | null }) {
 }
 
 const STICKER_STATUS_META: Record<string, { label: string; color: ChipProps['color'] }> = {
-  not_requested: { label: 'Не получен', color: 'default' },
-  requesting: { label: 'Получаем', color: 'info' },
-  ready: { label: 'Готов к печати', color: 'primary' },
-  print_opened: { label: 'Открыт для печати', color: 'primary' },
+  not_requested: { label: 'Не напечатан', color: 'default' },
+  requesting: { label: 'Готовим к печати', color: 'info' },
+  ready: { label: 'Не напечатан', color: 'default' },
+  print_opened: { label: 'Напечатан', color: 'primary' },
   applied: { label: 'Нанесён', color: 'success' },
   error: { label: 'Ошибка', color: 'error' },
 }
