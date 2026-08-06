@@ -3,7 +3,6 @@ import {
   Alert,
   Box,
   Button,
-  Checkbox,
   Chip,
   CircularProgress,
   Dialog,
@@ -45,6 +44,7 @@ import {
   confirmFbsPrintApplied,
   confirmFbsManualPick,
   assignFbsPackingBoxOrders,
+  clearFbsPackingBox,
   createFbsPackingBoxes,
   createFbsIdempotencyKey,
   deleteFbsPackingBox,
@@ -171,9 +171,11 @@ export function FfFbsSupplyWorkspace({
   const [printPreviewOpen, setPrintPreviewOpen] = useState(false)
   const [packagingTask, setPackagingTask] = useState<PackagingTask | null>(null)
   const [boxCount, setBoxCount] = useState('1')
-  const [boxDeleteTarget, setBoxDeleteTarget] = useState<string | null>(null)
   const [boxAssignTarget, setBoxAssignTarget] = useState<string | null>(null)
-  const [selectedBoxOrderIds, setSelectedBoxOrderIds] = useState<string[]>([])
+  const [boxProductSearch, setBoxProductSearch] = useState('')
+  const [boxProductQty, setBoxProductQty] = useState<Record<string, string>>({})
+  const [boxMenu, setBoxMenu] = useState<{ boxId: string; anchorEl: HTMLElement } | null>(null)
+  const [expandedBoxIds, setExpandedBoxIds] = useState<Set<string>>(() => new Set())
   const [deliveryPreflight, setDeliveryPreflight] = useState<FbsDeliveryPreflight | null>(null)
   const [deliveryKey, setDeliveryKey] = useState(createFbsIdempotencyKey)
   const [deliveryConfirmOpen, setDeliveryConfirmOpen] = useState(false)
@@ -212,9 +214,11 @@ export function FfFbsSupplyWorkspace({
     setPrintBatch(null)
     setPickLocation(null)
     setBoxCount('1')
-    setBoxDeleteTarget(null)
     setBoxAssignTarget(null)
-    setSelectedBoxOrderIds([])
+    setBoxProductSearch('')
+    setBoxProductQty({})
+    setBoxMenu(null)
+    setExpandedBoxIds(new Set())
     setDeliveryConfirmOpen(false)
     setDeliverySubmitted(false)
     setUndoOrderId(null)
@@ -398,41 +402,63 @@ export function FfFbsSupplyWorkspace({
     const key = persistentOperationKey(workspace.supply.id, 'box-create', String(count))
     const next = await run(
       () => createFbsPackingBoxes(token, authHeaders, workspace.supply.id, { count, idempotency_key: key }),
-      `${count === 1 ? 'Короб создан.' : `Создано коробов: ${count}.`}`,
+      '',
     )
     if (next) clearPersistentOperationKey(workspace.supply.id, 'box-create', String(count))
   }
 
   const assignBoxOrders = async () => {
-    if (!workspace || !boxAssignTarget || selectedBoxOrderIds.length === 0) return
+    if (!workspace || !boxAssignTarget || boxAssignSelectedOrderIds.length === 0) return
     const next = await run(
-      () => assignFbsPackingBoxOrders(token, authHeaders, workspace.supply.id, boxAssignTarget, selectedBoxOrderIds),
-      'Товары распределены по коробу.',
+      () => assignFbsPackingBoxOrders(token, authHeaders, workspace.supply.id, boxAssignTarget, boxAssignSelectedOrderIds),
+      '',
     )
     if (next) {
       setBoxAssignTarget(null)
-      setSelectedBoxOrderIds([])
+      setBoxProductSearch('')
+      setBoxProductQty({})
+      setExpandedBoxIds((current) => new Set(current).add(boxAssignTarget))
     }
   }
 
-  const removeBoxOrder = async (boxId: string, orderId: string) => {
-    if (!workspace) return
+  const removeBoxOrders = async (boxId: string, orderIds: string[]) => {
+    if (!workspace || orderIds.length === 0) return
     await run(
-      () => removeFbsPackingBoxOrder(token, authHeaders, workspace.supply.id, boxId, orderId),
-      'Товар возвращён в список для распределения.',
+      async () => {
+        let next = workspace
+        for (const orderId of orderIds) {
+          next = await removeFbsPackingBoxOrder(token, authHeaders, workspace.supply.id, boxId, orderId)
+        }
+        return next
+      },
+      '',
     )
   }
 
-  const deleteBox = async () => {
-    if (!workspace || !boxDeleteTarget) return
-    const key = persistentOperationKey(workspace.supply.id, 'box-delete', boxDeleteTarget)
+  const clearBox = async (boxId: string) => {
+    if (!workspace) return
+    setBoxMenu(null)
+    await run(
+      () => clearFbsPackingBox(token, authHeaders, workspace.supply.id, boxId),
+      '',
+    )
+  }
+
+  const deleteBox = async (boxId: string) => {
+    if (!workspace) return
+    setBoxMenu(null)
+    const key = persistentOperationKey(workspace.supply.id, 'box-delete', boxId)
     const next = await run(
-      () => deleteFbsPackingBox(token, authHeaders, workspace.supply.id, boxDeleteTarget, key),
-      'Пустой короб удалён.',
+      () => deleteFbsPackingBox(token, authHeaders, workspace.supply.id, boxId, key),
+      '',
     )
     if (next) {
-      clearPersistentOperationKey(workspace.supply.id, 'box-delete', boxDeleteTarget)
-      setBoxDeleteTarget(null)
+      clearPersistentOperationKey(workspace.supply.id, 'box-delete', boxId)
+      setExpandedBoxIds((current) => {
+        const nextIds = new Set(current)
+        nextIds.delete(boxId)
+        return nextIds
+      })
     }
   }
 
@@ -440,7 +466,7 @@ export function FfFbsSupplyWorkspace({
     if (!workspace) return
     await run(
       () => retryFbsPackingBoxQr(token, authHeaders, workspace.supply.id, boxId),
-      'QR короба обновлён.',
+      '',
     )
   }
 
@@ -783,6 +809,62 @@ export function FfFbsSupplyWorkspace({
   const boxAssignName = workspace?.boxes.find((box) => box.id === boxAssignTarget)?.box_number
   const reprintOrder = workspace?.orders.find((order) => order.id === reprintMenu?.orderId) ?? null
   const reprintLine = reprintOrder?.product.id ? packLineByProduct.get(reprintOrder.product.id) : undefined
+  const boxMenuBox = workspace?.boxes.find((box) => box.id === boxMenu?.boxId) ?? null
+  const boxMenuAssignedCount = boxMenuBox?.assigned_order_ids.length ?? 0
+  const boxRouteLabel = workspace?.supply.delivery_type === 'pvz' ? 'ПВЗ' : 'Склад / СЦ'
+  const boxDistributedCount = assignedBoxOrderIds.size
+  const boxTotalCount = workspace?.progress.total ?? 0
+  const boxRemainingCount = Math.max(0, boxTotalCount - boxDistributedCount)
+  const boxAssignRows = useMemo(() => {
+    const grouped = new Map<string, {
+      key: string
+      name: string
+      imageUrl: string | null
+      identifiers: string
+      orders: Array<FbsWorkspace['orders'][number]>
+    }>()
+    for (const order of availableForBox) {
+      const key = order.product.id ?? order.id
+      const identifiers = [order.product.seller_article, order.product.barcode].filter(Boolean).join(' · ')
+      const current = grouped.get(key) ?? {
+        key,
+        name: order.product.name,
+        imageUrl: order.product.image_url,
+        identifiers,
+        orders: [],
+      }
+      current.orders.push(order)
+      grouped.set(key, current)
+    }
+    const query = boxProductSearch.trim().toLocaleLowerCase('ru')
+    return [...grouped.values()]
+      .map((row) => ({
+        ...row,
+        orders: [...row.orders].sort((a, b) => a.wb_order_id - b.wb_order_id),
+      }))
+      .filter((row) => {
+        if (!query) return true
+        return `${row.name} ${row.identifiers}`.toLocaleLowerCase('ru').includes(query)
+      })
+      .sort((a, b) => a.name.localeCompare(b.name, 'ru'))
+  }, [availableForBox, boxProductSearch])
+  const boxAssignSelectedOrderIds = boxAssignRows.flatMap((row) => {
+    const qty = Math.min(row.orders.length, Math.max(0, Number(boxProductQty[row.key]) || 0))
+    return row.orders.slice(0, qty).map((order) => order.id)
+  })
+
+  useEffect(() => {
+    if (!workspace || stage !== 'boxes') return
+    setExpandedBoxIds((current) => {
+      const validIds = new Set(workspace.boxes.map((box) => box.id))
+      const next = new Set([...current].filter((id) => validIds.has(id)))
+      if (next.size === 0) {
+        const first = workspace.boxes.find((box) => box.assigned_order_ids.length > 0) ?? workspace.boxes[0]
+        if (first) next.add(first.id)
+      }
+      return next
+    })
+  }, [workspace, stage])
 
   return (
     <Dialog
@@ -1048,17 +1130,114 @@ export function FfFbsSupplyWorkspace({
               <Paper variant="outlined" sx={{ overflow: 'hidden' }} data-testid="fbs-boxes">
                 <Box sx={{ px: 2.5, py: 2, borderBottom: 1, borderColor: 'divider' }}>
                   <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1.5} sx={{ justifyContent: 'space-between', alignItems: { sm: 'center' } }}>
-                    <Box><Typography variant="h6">Упаковка в короба</Typography><Typography variant="body2" color="text.secondary">Создайте короб и добавьте в него только уже упакованные товары.</Typography></Box>
-                    <Stack direction="row" spacing={1}><TextField label="Коробов" value={boxCount} size="small" type="number" disabled={!stageIsCurrent} onChange={(e) => setBoxCount(e.target.value)} slotProps={{ htmlInput: { min: 1, max: 100 } }} sx={{ width: 104 }} /><Button variant="contained" disabled={!stageIsCurrent || !Number(boxCount)} onClick={() => void createBoxes()}>Добавить короб</Button></Stack>
+                    <Box>
+                      <Typography variant="h6">Короба · {boxRouteLabel}</Typography>
+                      <Typography variant="body2" color="text.secondary">
+                        Распределено {boxDistributedCount} из {boxTotalCount} шт · осталось {boxRemainingCount}
+                      </Typography>
+                    </Box>
+                    <Stack direction="row" spacing={1}><TextField label="Коробов" value={boxCount} size="small" type="number" disabled={!stageIsCurrent} onChange={(e) => setBoxCount(e.target.value)} slotProps={{ htmlInput: { min: 1, max: 100 } }} sx={{ width: 104 }} /><Button variant="contained" disabled={!stageIsCurrent || !Number(boxCount)} onClick={() => void createBoxes()}>Добавить короба</Button></Stack>
                   </Stack>
                 </Box>
-                {workspace.boxes.length === 0 ? <Typography color="text.secondary" sx={{ p: 3 }}>Коробов пока нет.</Typography> : <Stack divider={<Divider flexItem />}>
+                <Stack divider={<Divider flexItem />}>
                   {workspace.boxes.map((box) => {
                     const assigned = workspace.orders.filter((order) => box.assigned_order_ids.includes(order.id))
-                    return <Box key={box.id} sx={{ p: 2.5 }}><Stack direction={{ xs: 'column', md: 'row' }} spacing={1.5} sx={{ justifyContent: 'space-between', alignItems: { md: 'center' } }}><Box><Typography sx={{ fontWeight: 750 }}>Короб {box.box_number} · {assigned.length} шт</Typography></Box><Stack direction="row" spacing={1} useFlexGap sx={{ flexWrap: 'wrap' }}><Button size="small" variant="contained" disabled={!stageIsCurrent} onClick={() => { setBoxAssignTarget(box.id); setSelectedBoxOrderIds([]) }}>Добавить товар</Button>{workspace.supply.delivery_type === 'pvz' ? (box.qr_asset?.preview_url ? <Button size="small" onClick={() => openAssetPreview([box.qr_asset!])}>Печать QR</Button> : <Button size="small" disabled={!stageIsCurrent} onClick={() => void retryBoxQr(box.id)}>Получить QR</Button>) : null}<IconButton size="small" color="error" disabled={busy || assigned.length > 0} onClick={() => setBoxDeleteTarget(box.id)} aria-label={`Удалить короб ${box.box_number}`}><DeleteOutlinedIcon fontSize="small" /></IconButton></Stack></Stack>
-                    {assigned.length ? <Stack spacing={1} sx={{ mt: 1.5, pl: { md: 2 } }}>{assigned.map((order) => <Stack key={order.id} direction="row" spacing={1.25} sx={{ alignItems: 'center', p: 1, bgcolor: 'action.hover', borderRadius: 1.5 }}><ProductPhotoThumb src={order.product.image_url} alt={order.product.name} size={36} /><Box sx={{ flex: 1, minWidth: 0 }}><Typography variant="body2" sx={{ fontWeight: 700 }}>{order.product.name}</Typography><Typography variant="caption" color="text.secondary">Заказ WB №{order.wb_order_id} · 1 шт.</Typography></Box><Button size="small" disabled={!stageIsCurrent} onClick={() => void removeBoxOrder(box.id, order.id)}>Убрать</Button></Stack>)}</Stack> : <Typography variant="body2" color="text.secondary" sx={{ mt: 1.5 }}>Добавьте товары в этот короб.</Typography>}</Box>
+                    const expanded = expandedBoxIds.has(box.id)
+                    const grouped = new Map<string, {
+                      key: string
+                      name: string
+                      imageUrl: string | null
+                      orderIds: string[]
+                    }>()
+                    for (const order of assigned) {
+                      const key = order.product.id ?? order.id
+                      const current = grouped.get(key) ?? {
+                        key,
+                        name: order.product.name,
+                        imageUrl: order.product.image_url,
+                        orderIds: [],
+                      }
+                      current.orderIds.push(order.id)
+                      grouped.set(key, current)
+                    }
+                    return (
+                      <Box key={box.id}>
+                        <Stack direction="row" spacing={1.5} sx={{ alignItems: 'center', px: 2, py: 1.25 }}>
+                          <Box
+                            component="span"
+                            sx={{ color: 'text.secondary', cursor: 'pointer', width: 18, textAlign: 'center' }}
+                            onClick={() => setExpandedBoxIds((current) => {
+                              const next = new Set(current)
+                              if (next.has(box.id)) next.delete(box.id)
+                              else next.add(box.id)
+                              return next
+                            })}
+                          >
+                            {expanded ? '▾' : '▸'}
+                          </Box>
+                          <Box sx={{ flex: 1, minWidth: 0 }}>
+                            <Typography variant="body2" sx={{ fontWeight: 500 }}>
+                              Короб {box.box_number} <Box component="span" sx={{ color: 'text.secondary' }}>· {assigned.length} шт</Box>
+                            </Typography>
+                          </Box>
+                          <Stack direction="row" spacing={1} sx={{ alignItems: 'center' }}>
+                            {workspace.supply.delivery_type === 'pvz' ? (
+                              <Button
+                                size="small"
+                                disabled={!stageIsCurrent || busy}
+                                onClick={() => box.qr_asset?.preview_url ? openAssetPreview([box.qr_asset]) : void retryBoxQr(box.id)}
+                              >
+                                QR
+                              </Button>
+                            ) : null}
+                            <Button
+                              size="small"
+                              disabled={!stageIsCurrent || busy}
+                              onClick={() => {
+                                setBoxAssignTarget(box.id)
+                                setBoxProductSearch('')
+                                setBoxProductQty({})
+                              }}
+                            >
+                              Добавить товары
+                            </Button>
+                            <IconButton
+                              size="small"
+                              disabled={busy}
+                              onClick={(event: MouseEvent<HTMLElement>) => setBoxMenu({ boxId: box.id, anchorEl: event.currentTarget })}
+                              aria-label={`Действия короба ${box.box_number}`}
+                            >
+                              <MoreVertOutlinedIcon fontSize="small" />
+                            </IconButton>
+                          </Stack>
+                        </Stack>
+                        {expanded && grouped.size > 0 ? (
+                          <Box sx={{ px: 2, pb: 1.25, pl: { md: 5 } }}>
+                            <Stack spacing={1}>
+                              {[...grouped.values()].map((row) => (
+                                <Stack key={row.key} direction="row" spacing={1.25} sx={{ alignItems: 'center' }}>
+                                  <ProductPhotoThumb src={row.imageUrl} alt={row.name} size={36} />
+                                  <Box sx={{ flex: 1, minWidth: 0 }}>
+                                    <Typography variant="body2">{row.name}</Typography>
+                                  </Box>
+                                  <Typography variant="body2" color="text.secondary">{row.orderIds.length} шт</Typography>
+                                  <IconButton
+                                    size="small"
+                                    disabled={!stageIsCurrent || busy}
+                                    onClick={() => void removeBoxOrders(box.id, row.orderIds)}
+                                    aria-label={`Убрать ${row.name} из короба ${box.box_number}`}
+                                  >
+                                    <DeleteOutlinedIcon fontSize="small" />
+                                  </IconButton>
+                                </Stack>
+                              ))}
+                            </Stack>
+                          </Box>
+                        ) : null}
+                      </Box>
+                    )
                   })}
-                </Stack>}
+                </Stack>
               </Paper>
             </Stack>
           ) : null}
@@ -1155,24 +1334,60 @@ export function FfFbsSupplyWorkspace({
       <Dialog open={Boolean(boxAssignTarget)} onClose={busy ? undefined : () => setBoxAssignTarget(null)} maxWidth="md" fullWidth>
         <DialogTitle>Добавить товары в короб {boxAssignName}</DialogTitle>
         <DialogContent dividers>
-          {availableForBox.length === 0 ? <Alert severity="info">Все упакованные товары уже распределены по коробам.</Alert> : <Stack spacing={1}>{availableForBox.map((order) => <Stack key={order.id} direction="row" spacing={1.25} sx={{ alignItems: 'center', p: 1, borderRadius: 1.5, bgcolor: selectedBoxOrderIds.includes(order.id) ? 'primary.50' : 'action.hover' }}><Checkbox checked={selectedBoxOrderIds.includes(order.id)} onChange={(_, checked) => setSelectedBoxOrderIds((current) => checked ? [...current, order.id] : current.filter((id) => id !== order.id))} /><ProductPhotoThumb src={order.product.image_url} alt={order.product.name} size={44} /><Box sx={{ flex: 1 }}><Typography variant="body2" sx={{ fontWeight: 700 }}>{order.product.name}</Typography><Typography variant="caption" color="text.secondary">Заказ WB №{order.wb_order_id} · 1 шт.</Typography></Box></Stack>)}</Stack>}
-        </DialogContent>
-        <DialogActions><Button onClick={() => setBoxAssignTarget(null)}>Отмена</Button><Button variant="contained" disabled={busy || selectedBoxOrderIds.length === 0} onClick={() => void assignBoxOrders()}>Добавить {selectedBoxOrderIds.length || ''} {selectedBoxOrderIds.length === 1 ? 'товар' : 'товара'}</Button></DialogActions>
-      </Dialog>
-      <Dialog open={Boolean(boxDeleteTarget)} onClose={busy ? undefined : () => setBoxDeleteTarget(null)} maxWidth="xs" fullWidth>
-        <DialogTitle>Удалить пустой короб?</DialogTitle>
-        <DialogContent>
-          <Stack spacing={1.5}>
-            <Typography>Удалить можно только короб без товаров. Если товар уже добавлен, сначала уберите его из короба.</Typography>
+          <Stack spacing={1.5} sx={{ pt: 1 }}>
+            <TextField
+              autoFocus
+              fullWidth
+              size="small"
+              label="Поиск по товару"
+              value={boxProductSearch}
+              onChange={(event) => setBoxProductSearch(event.target.value)}
+              disabled={busy}
+            />
+            <Stack spacing={1}>
+              {boxAssignRows.map((row) => {
+                const value = boxProductQty[row.key] ?? ''
+                return (
+                  <Stack key={row.key} direction="row" spacing={1.25} sx={{ alignItems: 'center' }}>
+                    <ProductPhotoThumb src={row.imageUrl} alt={row.name} size={44} />
+                    <Box sx={{ flex: 1, minWidth: 0 }}>
+                      <Typography variant="body2" sx={{ fontWeight: 700 }}>{row.name}</Typography>
+                      <Typography variant="caption" color="text.secondary">{row.identifiers}</Typography>
+                    </Box>
+                    <TextField
+                      size="small"
+                      type="number"
+                      value={value}
+                      disabled={busy}
+                      onChange={(event) => {
+                        const next = Math.min(row.orders.length, Math.max(0, Number(event.target.value) || 0))
+                        setBoxProductQty((current) => ({ ...current, [row.key]: next > 0 ? String(next) : '' }))
+                      }}
+                      slotProps={{ htmlInput: { min: 0, max: row.orders.length } }}
+                      sx={{ width: 96 }}
+                    />
+                  </Stack>
+                )
+              })}
+            </Stack>
           </Stack>
         </DialogContent>
         <DialogActions>
-          <Button onClick={() => setBoxDeleteTarget(null)} disabled={busy}>Не удалять</Button>
-          <Button color="error" variant="contained" onClick={() => void deleteBox()} disabled={busy} data-testid="fbs-box-delete-confirm">
-            Удалить короб
-          </Button>
+          <Button variant="contained" disabled={busy || boxAssignSelectedOrderIds.length === 0} onClick={() => void assignBoxOrders()}>Добавить</Button>
         </DialogActions>
       </Dialog>
+      <Menu
+        anchorEl={boxMenu?.anchorEl ?? null}
+        open={Boolean(boxMenu)}
+        onClose={() => setBoxMenu(null)}
+      >
+        <MenuItem disabled={!boxMenuBox || boxMenuAssignedCount === 0} onClick={() => { if (boxMenuBox) void clearBox(boxMenuBox.id) }}>
+          Очистить
+        </MenuItem>
+        <MenuItem disabled={!boxMenuBox || boxMenuAssignedCount > 0} onClick={() => { if (boxMenuBox) void deleteBox(boxMenuBox.id) }}>
+          Удалить
+        </MenuItem>
+      </Menu>
       <Dialog open={deliveryConfirmOpen} onClose={() => setDeliveryConfirmOpen(false)} maxWidth="sm" fullWidth>
         <DialogTitle>Подтвердить передачу в WB?</DialogTitle>
         <DialogContent>{workspace ? <Stack spacing={1}><Typography>Поставка: {workspace.supply.name}</Typography><Typography>Селлер: {workspace.supply.seller.name}</Typography><Typography>Маршрут: {workspace.supply.delivery_type === 'pvz' ? 'ПВЗ' : 'Склад / СЦ'}</Typography><Typography>Заказов: {workspace.orders.length} · коробов: {workspace.boxes.length}</Typography><Alert severity="warning">Это отправит подтверждение передачи в WB.</Alert></Stack> : null}</DialogContent>

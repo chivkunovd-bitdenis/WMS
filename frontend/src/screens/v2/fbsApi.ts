@@ -670,6 +670,19 @@ export async function deleteFbsPackingBox(
   )
 }
 
+export async function clearFbsPackingBox(
+  token: string,
+  ah: AuthHeaders,
+  supplyId: string,
+  boxId: string,
+): Promise<FbsWorkspace> {
+  return jsonOrThrow<FbsWorkspace>(
+    await fetch(apiUrl(`/operations/fbs-supplies/${supplyId}/boxes/${boxId}/clear`), {
+      method: 'POST', headers: { ...ah(token) },
+    }),
+  )
+}
+
 export async function retryFbsPackingBoxQr(
   token: string,
   ah: AuthHeaders,
