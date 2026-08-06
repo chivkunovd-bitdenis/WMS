@@ -184,6 +184,8 @@ export type FbsWorklistOrder = {
     wb_article: number | null
     barcode: string | null
     size: string | null
+    packaging_instructions?: string | null
+    has_packaging_instructions?: boolean
   }
   inventory: {
     available_unpacked: number
@@ -289,6 +291,34 @@ export type FbsPrintBatch = {
   order_errors: Array<{ order_id: string; wb_order_id: number; code: string; message: string }>
 }
 
+export type FbsOrderPrintTapeRequest = {
+  order_ids: string[]
+  layout_json: { units: Array<{ block: 'cz' | 'label'; copies: number }> } | null
+  allow_partial: boolean
+  include_order_qr: boolean
+  reprint: boolean
+}
+
+export type FbsOrderPrintTapeOrder = {
+  order_id: string
+  wb_order_id: number
+  requires_honest_sign: boolean
+  qr_asset: FbsPrintAsset | null
+  codes: string[]
+  printed_codes: Array<{ id: string; cis_code: string; has_label_artifact: boolean }>
+  shortage: number | null
+}
+
+export type FbsOrderPrintTape = {
+  orders: FbsOrderPrintTapeOrder[]
+  requested: number
+  ready: number
+  missing: number
+  failed: number
+  order_errors: Array<{ order_id: string; wb_order_id: number; code: string; message: string }>
+  shortage: number
+}
+
 export type FbsCargoPlace = {
   id: string
   wb_trbx_id: string
@@ -392,6 +422,7 @@ export type FbsWorkspace = {
   orders: FbsWorklistOrder[]
   cargo_places: FbsCargoPlace[]
   boxes: FbsPackingBox[]
+  marking_pool?: { required: number; available: number; shortage: number; orders_without_code: string[] }
   delivery_preflight: FbsDeliveryPreflight | null
   last_wb_sync_at: string | null
   server_now: string
@@ -687,6 +718,21 @@ export async function fetchFbsPrintBatch(
 ): Promise<FbsPrintBatch> {
   return jsonOrThrow<FbsPrintBatch>(
     await fetch(apiUrl(`/operations/fbs-supplies/${supplyId}/print-assets`), {
+      method: 'POST',
+      headers: jsonHeaders(token, ah),
+      body: JSON.stringify(body),
+    }),
+  )
+}
+
+export async function printFbsOrderTape(
+  token: string,
+  ah: AuthHeaders,
+  supplyId: string,
+  body: FbsOrderPrintTapeRequest,
+): Promise<FbsOrderPrintTape> {
+  return jsonOrThrow<FbsOrderPrintTape>(
+    await fetch(apiUrl(`/operations/fbs-supplies/${supplyId}/order-print-tape`), {
       method: 'POST',
       headers: jsonHeaders(token, ah),
       body: JSON.stringify(body),

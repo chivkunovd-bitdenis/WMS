@@ -115,6 +115,7 @@ FBS_ERROR_MESSAGES_RU: dict[str, str] = {
     "active_fbs_reservations": "Есть активные FBS-резервы.",
     "packaging_box_already_bound": "Короб уже привязан к другому грузоместу.",
     "packaging_box_not_found": "Короб не найден в складе этой поставки.",
+    "supply_already_delivered": "Поставка уже передана в WB, изменение коробов запрещено.",
     "missing_fbs_packaging_location": "Для упакованного заказа не найдена исходная ячейка.",
     "ambiguous_fbs_packaging_fulfillment": (
         "Для заказа найдено несколько активных подтверждений упаковки."

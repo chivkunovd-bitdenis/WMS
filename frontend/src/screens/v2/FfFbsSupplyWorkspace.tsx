@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState, type MouseEvent } from 'react'
 import {
   Alert,
   Box,
@@ -13,6 +13,8 @@ import {
   Divider,
   IconButton,
   LinearProgress,
+  Menu,
+  MenuItem,
   Paper,
   Stack,
   Tab,
@@ -23,22 +25,22 @@ import {
   TableHead,
   TableRow,
   TextField,
-  Tooltip,
   Typography,
 } from '@mui/material'
 import CloseIcon from '@mui/icons-material/Close'
 import DeleteOutlinedIcon from '@mui/icons-material/DeleteOutlined'
 import LocalShippingOutlinedIcon from '@mui/icons-material/LocalShippingOutlined'
+import MoreVertOutlinedIcon from '@mui/icons-material/MoreVertOutlined'
 import PrintOutlinedIcon from '@mui/icons-material/PrintOutlined'
-import QrCode2OutlinedIcon from '@mui/icons-material/QrCode2Outlined'
 import RefreshOutlinedIcon from '@mui/icons-material/RefreshOutlined'
 import { apiUrl } from '../../api'
 import { ProductPhotoThumb } from '../../components/ProductPhotoThumb'
-import { FfPackagingTaskPanel, type PackagingTask, type PackagingTaskLine } from '../ff/FfPackagingPage'
+import { type PackagingTask, type PackagingTaskLine } from '../ff/FfPackagingPage'
 import { useMarkingCodePrint } from '../../utils/useMarkingCodePrint'
 import { readApiErrorMessage } from '../../utils/readApiErrorMessage'
+import type { ProductThermalLabelData } from '../../utils/printProductThermalLabel'
 import { FbsPrintPreviewDialog } from './FbsPrintPreviewDialog'
-import { buildFbsPickingListPrintHtml, metadataKindLabel, normalizeMetadataKind, ordersWord } from './fbsUx'
+import { buildFbsPickingListPrintHtml, ordersWord } from './fbsUx'
 import {
   confirmFbsPrintApplied,
   confirmFbsManualPick,
@@ -51,22 +53,21 @@ import {
   fetchFbsPrintBatch,
   fetchFbsWorkspace,
   preflightFbsDelivery,
+  printFbsOrderTape,
   removeFbsPackingBoxOrder,
   retryFbsPackingBoxQr,
   retryFbsSupplyQr,
-  scanFbsOrderMetadata,
   scanFbsPickLocation,
   scanFbsPickProduct,
   selectFbsManualPickLocation,
   startFbsSupplyWork,
   undoFbsPick,
   type FbsDeliveryPreflight,
+  type FbsOrderPrintTapeRequest,
   type FbsPickLocation,
   type FbsPrintBatch,
   type FbsWorkspace,
 } from './fbsApi'
-import { printBarcodeLabel } from '../../utils/printBarcodeLabel'
-import { renderBarcodeDataUrl } from '../../utils/renderBarcodeDataUrl'
 
 type Props = {
   token: string
@@ -118,13 +119,23 @@ function visualStage(stage: FbsWorkspace['stage']): StageKey {
   return stage === 'tracking' ? 'delivery' : stage
 }
 
-const MARKING_ACCEPTED_STATUSES = ['accepted', 'assigned', 'allowed_without_check', 'ok']
+const MARKING_ACCEPTED_STATUSES = ['accepted', 'assigned', 'pending', 'allowed_without_check', 'ok']
 const STICKER_PRINTED_STATUSES = ['print_opened', 'applied']
 
 function isOrderMarkingReady(order: FbsWorkspace['orders'][number]) {
   if (order.metadata.required.length === 0) return true
   const accepted = order.metadata.states.filter((state) => MARKING_ACCEPTED_STATUSES.includes(state.status))
   return accepted.length >= order.metadata.required.length
+}
+
+function productLabelFromOrder(order: FbsWorkspace['orders'][number]): ProductThermalLabelData {
+  return {
+    product_name: order.product.name,
+    sku_code: order.product.seller_article ?? `WB-${order.wb_order_id}`,
+    wb_vendor_code: order.product.seller_article,
+    wb_size: order.product.size,
+    barcode: order.product.barcode ?? '',
+  }
 }
 
 function Metric({ label, value }: { label: string; value: string }) {
@@ -156,10 +167,6 @@ export function FfFbsSupplyWorkspace({
   const [locationBarcode, setLocationBarcode] = useState('')
   const [productBarcode, setProductBarcode] = useState('')
   const [pickLocation, setPickLocation] = useState<FbsPickLocation | null>(null)
-  const [metadataOrderId, setMetadataOrderId] = useState('')
-  const [metadataKind, setMetadataKind] = useState('sgtin')
-  const [metadataValue, setMetadataValue] = useState('')
-  const [metadataDialogOpen, setMetadataDialogOpen] = useState(false)
   const [printBatch, setPrintBatch] = useState<FbsPrintBatch | null>(null)
   const [printPreviewOpen, setPrintPreviewOpen] = useState(false)
   const [packagingTask, setPackagingTask] = useState<PackagingTask | null>(null)
@@ -174,6 +181,7 @@ export function FfFbsSupplyWorkspace({
   const [undoOrderId, setUndoOrderId] = useState<string | null>(null)
   const [retryAction, setRetryAction] = useState<(() => void) | null>(null)
   const [tzLine, setTzLine] = useState<PackagingTaskLine | null>(null)
+  const [reprintMenu, setReprintMenu] = useState<{ orderId: string; anchorEl: HTMLElement } | null>(null)
   const { openPrint, dialog: markingPrintDialog } = useMarkingCodePrint()
 
   const load = useCallback(
@@ -203,9 +211,6 @@ export function FfFbsSupplyWorkspace({
     setDeliveryPreflight(null)
     setPrintBatch(null)
     setPickLocation(null)
-    setMetadataOrderId('')
-    setMetadataValue('')
-    setMetadataDialogOpen(false)
     setBoxCount('1')
     setBoxDeleteTarget(null)
     setBoxAssignTarget(null)
@@ -213,15 +218,10 @@ export function FfFbsSupplyWorkspace({
     setDeliveryConfirmOpen(false)
     setDeliverySubmitted(false)
     setUndoOrderId(null)
+    setTzLine(null)
+    setReprintMenu(null)
     if (!initialWorkspace) void load()
   }, [open, supplyId, initialWorkspace, load])
-
-  useEffect(() => {
-    const requiredOrder = workspace?.orders.find((order) => order.metadata.required.length > 0)
-    if (!requiredOrder || metadataOrderId) return
-    setMetadataOrderId(requiredOrder.id)
-    setMetadataKind(normalizeMetadataKind(requiredOrder.metadata.required[0]))
-  }, [workspace, metadataOrderId])
 
   useEffect(() => {
     setNotice(null)
@@ -335,27 +335,6 @@ export function FfFbsSupplyWorkspace({
       setNotice(`Снято из ячейки: ${orderIds.length} шт.`)
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : 'Не удалось подтвердить подбор из ячейки.')
-    } finally {
-      setBusy(false)
-    }
-  }
-
-  const scanMetadata = async () => {
-    if (!workspace || !metadataOrderId || metadataValue.length === 0) return
-    setBusy(true)
-    setError(null)
-    try {
-      await scanFbsOrderMetadata(token, authHeaders, metadataOrderId, {
-        kind: metadataKind,
-        raw_value: metadataValue,
-        idempotency_key: createFbsIdempotencyKey(),
-      })
-      setMetadataValue('')
-      await load(true)
-      setMetadataDialogOpen(false)
-      setNotice('Идентификатор передан на серверную проверку WB.')
-    } catch (cause) {
-      setError(cause instanceof Error ? cause.message : 'Идентификатор не сохранён.')
     } finally {
       setBusy(false)
     }
@@ -510,21 +489,108 @@ export function FfFbsSupplyWorkspace({
     await load(true)
   }, [workspace?.supply.packaging_task_id, token, authHeaders, load])
 
-  /** Печать ЧЗ и ШК конкретного заказа через стандартный конструктор системы. */
-  const openOrderMarkingPrint = (line: PackagingTaskLine, reprint = false) => {
+  const requiresOrderHonestSign = (order: FbsWorkspace['orders'][number]) => {
+    const line = order.product.id ? packLineByProduct.get(order.product.id) : undefined
+    return Boolean(line?.requires_honest_sign || order.metadata.required.includes('sgtin'))
+  }
+
+  const markingAvailableForOrders = (orders: Array<FbsWorkspace['orders'][number]>) => {
+    const seen = new Set<string>()
+    let total = 0
+    for (const order of orders) {
+      if (!requiresOrderHonestSign(order) || !order.product.id || seen.has(order.product.id)) continue
+      seen.add(order.product.id)
+      total += packLineByProduct.get(order.product.id)?.marking_available_count ?? 0
+    }
+    return total
+  }
+
+  const openBulkOrderMarkingPrint = (orders: Array<FbsWorkspace['orders'][number]>, reprint = false) => {
+    if (!workspace || orders.length === 0) return
+    const firstOrder = orders[0]
+    const firstLine = firstOrder?.product.id ? packLineByProduct.get(firstOrder.product.id) : undefined
+    if (!firstOrder || !firstOrder.product.id) return
+    const anyHonestSign = orders.some(requiresOrderHonestSign)
+    const tapeOrders = orders.map((order) => ({
+      orderId: order.id,
+      wbOrderId: order.wb_order_id,
+      requiresHonestSign: requiresOrderHonestSign(order),
+      productLabel: productLabelFromOrder(order),
+    }))
+    openPrint(
+      {
+        token,
+        productId: firstOrder.product.id,
+        documentNumber: workspace.supply.name,
+        qtyNeedPack: anyHonestSign ? tapeOrders.filter((order) => order.requiresHonestSign).length : tapeOrders.length,
+        markingAvailable: markingAvailableForOrders(orders),
+        qtyMarkingPrinted: orders.filter(orderPrintDone).length,
+        requiresHonestSign: anyHonestSign,
+        skuCode: firstLine?.sku_code ?? firstOrder.product.seller_article ?? `WB-${firstOrder.wb_order_id}`,
+        productName: workspace.supply.name,
+        productLabel: productLabelFromOrder(firstOrder),
+        fbsTape: {
+          orders: tapeOrders,
+          includeOrderQr: true,
+          print: ({ layout, allowPartial, reprint: printReprint }) => {
+            const body: FbsOrderPrintTapeRequest = {
+              order_ids: orders.map((order) => order.id),
+              layout_json: layout,
+              allow_partial: allowPartial,
+              include_order_qr: true,
+              reprint: printReprint,
+            }
+            return printFbsOrderTape(token, authHeaders, workspace.supply.id, body)
+          },
+          confirmQrApplied: async (asset) => {
+            await confirmFbsPrintApplied(token, authHeaders, asset.id, createFbsIdempotencyKey())
+          },
+        },
+        onPrinted: () => { void refreshPackagingTask() },
+      },
+      { reprint },
+    )
+  }
+
+  /** Печать ЧЗ и ШК заказа через стандартный конструктор системы. */
+  const openOrderMarkingPrint = (order: FbsWorkspace['orders'][number], line: PackagingTaskLine, reprint = false) => {
+    if (!workspace) return
     openPrint(
       {
         token,
         lineId: line.id,
         productId: line.product_id,
         documentNumber: workspace?.supply.name ?? null,
-        qtyNeedPack: 1,
-        markingAvailable: line.marking_available_count,
-        qtyMarkingPrinted: line.qty_marking_printed,
-        requiresHonestSign: line.requires_honest_sign,
+        qtyNeedPack: requiresOrderHonestSign(order) ? 1 : 0,
+        markingAvailable: requiresOrderHonestSign(order) ? line.marking_available_count : 0,
+        qtyMarkingPrinted: orderPrintDone(order) ? 1 : 0,
+        requiresHonestSign: requiresOrderHonestSign(order),
         skuCode: line.sku_code,
         productName: line.product_name,
         packagingInstructions: line.packaging_instructions,
+        productLabel: productLabelFromOrder(order),
+        fbsTape: {
+          orders: [{
+            orderId: order.id,
+            wbOrderId: order.wb_order_id,
+            requiresHonestSign: requiresOrderHonestSign(order),
+            productLabel: productLabelFromOrder(order),
+          }],
+          includeOrderQr: false,
+          print: ({ layout, allowPartial, reprint: printReprint }) => {
+            const body: FbsOrderPrintTapeRequest = {
+              order_ids: [order.id],
+              layout_json: layout,
+              allow_partial: allowPartial,
+              include_order_qr: false,
+              reprint: printReprint,
+            }
+            return printFbsOrderTape(token, authHeaders, workspace.supply.id, body)
+          },
+          confirmQrApplied: async (asset) => {
+            await confirmFbsPrintApplied(token, authHeaders, asset.id, createFbsIdempotencyKey())
+          },
+        },
         onPrinted: () => { void refreshPackagingTask() },
       },
       { reprint },
@@ -692,6 +758,8 @@ export function FfFbsSupplyWorkspace({
   )
 
   const printedOrdersCount = packingOrders.filter(orderPrintDone).length
+  const unprintedPackingOrders = packingOrders.filter((order) => !orderPrintDone(order))
+  const markingShortOrderIds = new Set(workspace?.marking_pool?.orders_without_code ?? [])
 
   const stageBlockers = useMemo(() => {
     if (stage === 'packing') {
@@ -708,12 +776,13 @@ export function FfFbsSupplyWorkspace({
     || workspace?.stage === 'tracking'
     || ['in_delivery', 'done'].includes(workspace?.supply.status ?? '')
   const packagingEditable = !deliveryConfirmed
-  const metadataOrder = workspace?.orders.find((order) => order.id === metadataOrderId)
   const assignedBoxOrderIds = new Set(workspace?.boxes.flatMap((box) => box.assigned_order_ids) ?? [])
   const availableForBox = (workspace?.orders ?? []).filter(
     (order) => order.pack.status === 'packed' && !assignedBoxOrderIds.has(order.id),
   )
   const boxAssignName = workspace?.boxes.find((box) => box.id === boxAssignTarget)?.box_number
+  const reprintOrder = workspace?.orders.find((order) => order.id === reprintMenu?.orderId) ?? null
+  const reprintLine = reprintOrder?.product.id ? packLineByProduct.get(reprintOrder.product.id) : undefined
 
   return (
     <Dialog
@@ -885,66 +954,92 @@ export function FfFbsSupplyWorkspace({
             <Stack spacing={2}>
               {!packagingEditable ? <Alert severity="success">Поставка уже передана в WB. Упаковка доступна только для просмотра.</Alert> : null}
               {packagingTask ? (
-                <Paper variant="outlined" sx={{ p: 2 }}>
-                  <Box sx={{ mb: 2 }}>
-                    <Typography variant="h6">Упаковка и маркировка</Typography>
-                    <Typography variant="body2" color="text.secondary">В одной строке доступны обычная печать товара, обязательная маркировка и отдельный стикер заказа WB.</Typography>
+                <Paper variant="outlined" sx={{ overflow: 'hidden' }}>
+                  <Box sx={{ px: 2, py: 1.75, borderBottom: 1, borderColor: 'divider' }}>
+                    <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1.5} sx={{ justifyContent: 'space-between', alignItems: { sm: 'center' } }}>
+                      <Box>
+                        <Typography variant="h6">Упаковка и маркировка</Typography>
+                        <Typography variant="body2" color="text.secondary">
+                          Напечатано {printedOrdersCount} из {packingOrders.length} · упаковано {workspace.progress.packed} из {workspace.progress.total}
+                        </Typography>
+                      </Box>
+                      <Stack direction="row" spacing={1}>
+                        <Button disabled={!packagingEditable || busy || unprintedPackingOrders.length === 0} onClick={() => openBulkOrderMarkingPrint(unprintedPackingOrders)}>
+                          Печать всего
+                        </Button>
+                        <Button variant="contained" disabled={!packagingEditable || busy} onClick={() => void packEverything()}>
+                          Всё упаковано
+                        </Button>
+                      </Stack>
+                    </Stack>
                   </Box>
-                  <FfPackagingTaskPanel
-                    token={token}
-                    task={packagingTask}
-                    unloadLabel={workspace.supply.name}
-                    hideDocumentHeader
-                    simplifiedQuantities
-                    alwaysShowPrintAction
-                    renderLineActions={(line) => {
-                      const lineOrders = workspace.orders.filter((order) => order.product.id === line.product_id)
-                      if (lineOrders.length === 0) return null
-                      const orderIds = lineOrders.map((order) => order.id)
-                      const printedCount = lineOrders.filter((order) => STICKER_PRINTED_STATUSES.includes(order.sticker.status)).length
-                      const stickerFailed = lineOrders.some((order) => order.sticker.status === 'error')
-                      const pendingMetadataOrder = lineOrders.find((order) => !isOrderMarkingReady(order))
-                      const stickerTitle = stickerFailed
-                        ? 'Стикер заказа WB: ошибка получения, можно повторить'
-                        : printedCount === lineOrders.length
-                          ? `Стикеры заказов WB напечатаны: ${printedCount} из ${lineOrders.length}`
-                          : `Печать стикеров заказов WB: ${printedCount} из ${lineOrders.length}`
+                  {workspace.marking_pool && workspace.marking_pool.shortage > 0 ? (
+                    <Box sx={{ px: 2, py: 1.25, bgcolor: '#fdf4e7', borderBottom: 1, borderColor: 'divider' }}>
+                      <Typography variant="body2" sx={{ color: '#854f0b' }}>
+                        Не хватает Честных знаков: нужно {workspace.marking_pool.required}, в пуле {workspace.marking_pool.available}
+                      </Typography>
+                    </Box>
+                  ) : null}
+                  <Stack divider={<Divider flexItem />}>
+                    {packingOrders.map((order) => {
+                      const line = order.product.id ? packLineByProduct.get(order.product.id) : undefined
+                      const printed = orderPrintDone(order)
+                      const mutedColor = printed ? 'text.secondary' : 'text.primary'
+                      const ids = [
+                        order.product.seller_article,
+                        order.product.barcode,
+                        `заказ ${order.wb_order_id}`,
+                      ].filter(Boolean).join(' · ')
                       return (
                         <Stack
+                          key={order.id}
                           direction="row"
-                          spacing={0.5}
-                          sx={{ alignItems: 'center', justifyContent: 'flex-end' }}
-                          data-testid={`fbs-line-actions-${line.id}`}
+                          spacing={1.5}
+                          sx={{
+                            alignItems: 'center',
+                            px: 2,
+                            py: 1.25,
+                            bgcolor: printed ? 'action.hover' : 'background.paper',
+                          }}
                         >
-                          <Tooltip title={stickerTitle}>
-                            <span>
-                              <IconButton
-                                size="small"
-                                color={stickerFailed ? 'error' : printedCount === lineOrders.length ? 'success' : 'default'}
-                                disabled={!packagingEditable || busy}
-                                aria-label={stickerTitle}
-                                onClick={() => void requestPrintBatch(orderIds)}
-                                data-testid={`fbs-order-sticker-print-${lineOrders[0].id}`}
-                              >
-                                <QrCode2OutlinedIcon fontSize="small" />
-                              </IconButton>
-                            </span>
-                          </Tooltip>
+                          <ProductPhotoThumb src={order.product.image_url} alt={order.product.name} size={40} previewSize={280} />
+                          <Box sx={{ flex: 1, minWidth: 0 }}>
+                            <Typography variant="body2" sx={{ fontWeight: 700, color: mutedColor }}>
+                              {order.product.name}
+                            </Typography>
+                            <Typography variant="caption" sx={{ display: 'block', color: printed ? 'text.secondary' : 'text.secondary' }}>
+                              {ids}
+                              {markingShortOrderIds.has(order.id) ? <Box component="span" sx={{ color: '#854f0b' }}> · ЧЗ не хватило</Box> : null}
+                            </Typography>
+                          </Box>
+                          {printed ? <Typography sx={{ color: 'success.main', fontWeight: 700 }}>✓</Typography> : null}
+                          <Stack direction="row" spacing={0.5} sx={{ alignItems: 'center' }}>
+                            <Button size="small" variant="outlined" disabled={!line} onClick={() => line && setTzLine(line)}>
+                              ТЗ
+                            </Button>
+                            <Button size="small" variant="outlined" disabled={!packagingEditable || busy} onClick={() => void requestPrintBatch([order.id])}>
+                              QR
+                            </Button>
+                            <IconButton size="small" disabled={!packagingEditable || busy || !line} onClick={() => line && openOrderMarkingPrint(order, line)} aria-label="Печать ЧЗ и ШК">
+                              <PrintOutlinedIcon fontSize="small" />
+                            </IconButton>
+                            <IconButton
+                              size="small"
+                              disabled={!packagingEditable || busy || !line}
+                              onClick={(event: MouseEvent<HTMLElement>) => setReprintMenu({ orderId: order.id, anchorEl: event.currentTarget })}
+                              aria-label="Перепечатка"
+                            >
+                              <MoreVertOutlinedIcon fontSize="small" />
+                            </IconButton>
+                          </Stack>
                         </Stack>
                       )
-                    }}
-                    onUpdated={(nextTask) => {
-                      setPackagingTask(nextTask)
-                      if (nextTask.status === 'done') {
-                        void load()
-                      }
-                    }}
-                  />
+                    })}
+                  </Stack>
                 </Paper>
               ) : (
                 <Alert severity="info">{workspace.supply.packaging_task_id ? 'Загружаем существующее задание упаковки…' : 'Сначала начните работу с поставкой — сервер создаст единственное задание упаковки.'}</Alert>
               )}
-              {printBatch ? <Paper variant="outlined" sx={{ p: 2 }}><Typography variant="body2">Готово: {printBatch.ready}{printBatch.missing ? ` · Не получено: ${printBatch.missing}` : ''}{printBatch.failed ? ` · Ошибок: ${printBatch.failed}` : ''}</Typography><Button variant="outlined" disabled={printBatch.ready === 0} sx={{ mt: 1 }} onClick={() => setPrintPreviewOpen(true)}>Открыть предпросмотр и печать</Button>{printBatch.missing ? <Button variant="text" disabled={!packagingEditable || busy} sx={{ mt: 1, ml: 1 }} onClick={() => void requestPrintBatch(undefined, true)}>Получить недостающие</Button> : null}{printBatch.order_errors.map((item) => <Alert key={item.order_id} severity="error" sx={{ mt: 1 }}>Заказ WB №{item.wb_order_id}: {item.message}</Alert>)}</Paper> : null}
             </Stack>
           ) : null}
 
@@ -960,7 +1055,7 @@ export function FfFbsSupplyWorkspace({
                 {workspace.boxes.length === 0 ? <Typography color="text.secondary" sx={{ p: 3 }}>Коробов пока нет.</Typography> : <Stack divider={<Divider flexItem />}>
                   {workspace.boxes.map((box) => {
                     const assigned = workspace.orders.filter((order) => box.assigned_order_ids.includes(order.id))
-                    return <Box key={box.id} sx={{ p: 2.5 }}><Stack direction={{ xs: 'column', md: 'row' }} spacing={1.5} sx={{ justifyContent: 'space-between', alignItems: { md: 'center' } }}><Box><Typography sx={{ fontWeight: 750 }}>Короб {box.box_number}</Typography><Typography variant="caption" color="text.secondary">ШК: {box.barcode} · {assigned.length} {ordersWord(assigned.length)}</Typography></Box><Stack direction="row" spacing={1} useFlexGap sx={{ flexWrap: 'wrap' }}><Button size="small" onClick={() => printBarcodeLabel({ title: `Короб FBS ${box.box_number}`, barcode: box.barcode, barcodeDataUrl: renderBarcodeDataUrl(box.barcode) })}>Печать ШК</Button><Button size="small" variant="contained" disabled={!stageIsCurrent} onClick={() => { setBoxAssignTarget(box.id); setSelectedBoxOrderIds([]) }}>Добавить товар</Button>{workspace.supply.delivery_type === 'pvz' ? (box.qr_asset?.preview_url ? <Button size="small" onClick={() => openAssetPreview([box.qr_asset!])}>Печать QR</Button> : <Button size="small" disabled={!stageIsCurrent} onClick={() => void retryBoxQr(box.id)}>Получить QR</Button>) : null}<IconButton size="small" color="error" disabled={busy || assigned.length > 0} onClick={() => setBoxDeleteTarget(box.id)} aria-label={`Удалить короб ${box.box_number}`}><DeleteOutlinedIcon fontSize="small" /></IconButton></Stack></Stack>
+                    return <Box key={box.id} sx={{ p: 2.5 }}><Stack direction={{ xs: 'column', md: 'row' }} spacing={1.5} sx={{ justifyContent: 'space-between', alignItems: { md: 'center' } }}><Box><Typography sx={{ fontWeight: 750 }}>Короб {box.box_number} · {assigned.length} шт</Typography></Box><Stack direction="row" spacing={1} useFlexGap sx={{ flexWrap: 'wrap' }}><Button size="small" variant="contained" disabled={!stageIsCurrent} onClick={() => { setBoxAssignTarget(box.id); setSelectedBoxOrderIds([]) }}>Добавить товар</Button>{workspace.supply.delivery_type === 'pvz' ? (box.qr_asset?.preview_url ? <Button size="small" onClick={() => openAssetPreview([box.qr_asset!])}>Печать QR</Button> : <Button size="small" disabled={!stageIsCurrent} onClick={() => void retryBoxQr(box.id)}>Получить QR</Button>) : null}<IconButton size="small" color="error" disabled={busy || assigned.length > 0} onClick={() => setBoxDeleteTarget(box.id)} aria-label={`Удалить короб ${box.box_number}`}><DeleteOutlinedIcon fontSize="small" /></IconButton></Stack></Stack>
                     {assigned.length ? <Stack spacing={1} sx={{ mt: 1.5, pl: { md: 2 } }}>{assigned.map((order) => <Stack key={order.id} direction="row" spacing={1.25} sx={{ alignItems: 'center', p: 1, bgcolor: 'action.hover', borderRadius: 1.5 }}><ProductPhotoThumb src={order.product.image_url} alt={order.product.name} size={36} /><Box sx={{ flex: 1, minWidth: 0 }}><Typography variant="body2" sx={{ fontWeight: 700 }}>{order.product.name}</Typography><Typography variant="caption" color="text.secondary">Заказ WB №{order.wb_order_id} · 1 шт.</Typography></Box><Button size="small" disabled={!stageIsCurrent} onClick={() => void removeBoxOrder(box.id, order.id)}>Убрать</Button></Stack>)}</Stack> : <Typography variant="body2" color="text.secondary" sx={{ mt: 1.5 }}>Добавьте товары в этот короб.</Typography>}</Box>
                   })}
                 </Stack>}
@@ -1028,38 +1123,29 @@ export function FfFbsSupplyWorkspace({
         onClose={() => setPrintPreviewOpen(false)}
         onApplied={(asset) => confirmPrintApplied(asset.id)}
       />
-      <Dialog open={metadataDialogOpen} onClose={busy ? undefined : () => setMetadataDialogOpen(false)} maxWidth="sm" fullWidth data-testid="fbs-marking-dialog">
-        <DialogTitle>Маркировка заказа WB{metadataOrder ? ` №${metadataOrder.wb_order_id}` : ''}</DialogTitle>
-        <DialogContent>
-          <Stack spacing={2} sx={{ pt: 1 }}>
-            {metadataOrder ? (
-              <Stack direction="row" spacing={1.25} sx={{ alignItems: 'center' }}>
-                <ProductPhotoThumb src={metadataOrder.product.image_url} alt={metadataOrder.product.name} size={48} previewSize={280} />
-                <Box>
-                  <Typography variant="body2" sx={{ fontWeight: 700 }}>{metadataOrder.product.name}</Typography>
-                  <Typography variant="caption" color="text.secondary">Введите обязательный {metadataKindLabel(metadataKind)} для проверки.</Typography>
-                </Box>
-              </Stack>
-            ) : null}
-            <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1.5} sx={{ alignItems: { sm: 'center' } }}>
-              <Chip label={metadataKindLabel(metadataKind)} />
-              <TextField
-                autoFocus
-                fullWidth
-                label={`Сканированный ${metadataKindLabel(metadataKind)}`}
-                value={metadataValue}
-                onChange={(event) => setMetadataValue(event.target.value)}
-                disabled={busy}
-                onKeyDown={(event) => { if (event.key === 'Enter' && metadataValue.length > 0) void scanMetadata() }}
-                slotProps={{ htmlInput: { 'data-testid': metadataOrderId ? `fbs-metadata-input-${metadataOrderId}` : 'fbs-metadata-input' } }}
-              />
-            </Stack>
-          </Stack>
+      {markingPrintDialog}
+      <Menu
+        anchorEl={reprintMenu?.anchorEl ?? null}
+        open={Boolean(reprintMenu)}
+        onClose={() => setReprintMenu(null)}
+      >
+        <MenuItem
+          disabled={!reprintOrder || !reprintLine}
+          onClick={() => {
+            if (reprintOrder && reprintLine) openOrderMarkingPrint(reprintOrder, reprintLine, true)
+            setReprintMenu(null)
+          }}
+        >
+          Перепечатка
+        </MenuItem>
+      </Menu>
+      <Dialog open={Boolean(tzLine)} onClose={() => setTzLine(null)} maxWidth="sm" fullWidth>
+        <DialogTitle>ТЗ на упаковку</DialogTitle>
+        <DialogContent dividers>
+          <Typography variant="body2" sx={{ whiteSpace: 'pre-wrap' }}>
+            {tzLine?.packaging_instructions ?? ''}
+          </Typography>
         </DialogContent>
-        <DialogActions>
-          <Button onClick={() => setMetadataDialogOpen(false)} disabled={busy}>Отмена</Button>
-          <Button variant="contained" onClick={() => void scanMetadata()} disabled={busy || !metadataOrderId || metadataValue.length === 0} data-testid={metadataOrderId ? `fbs-metadata-submit-${metadataOrderId}` : 'fbs-metadata-submit'}>Проверить</Button>
-        </DialogActions>
       </Dialog>
       <Dialog open={Boolean(undoOrderId)} onClose={() => setUndoOrderId(null)} maxWidth="xs" fullWidth>
         <DialogTitle>Отменить подбор?</DialogTitle>

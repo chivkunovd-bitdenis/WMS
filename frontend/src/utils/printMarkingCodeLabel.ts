@@ -123,7 +123,19 @@ function buildTapePageCss(size: LabelSize = DEFAULT_LABEL_SIZE): string {
     object-fit: contain;
     display: block;
   }
-  .label:not(.label--cz) {
+  .label--wb-qr {
+    padding: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+  .wb-qr-img {
+    width: 100%;
+    height: 100%;
+    object-fit: contain;
+    display: block;
+  }
+  .label:not(.label--cz):not(.label--wb-qr) {
     padding: ${labelMm(1.4 * k.uniform)} ${labelMm(1.8 * k.uniform)} ${labelMm(1 * k.uniform)};
     display: flex;
     flex-direction: column;
@@ -212,6 +224,12 @@ export function buildCzLabelHtml(cis: string, matrixDataUrl: string): string {
 export function buildCzArtifactLabelHtml(imageDataUrl: string): string {
   return `<section class="label label--cz label--cz-artifact" data-testid="marking-thermal-label" data-tape-block="cz">
   <img class="cz-artifact-img" src="${imageDataUrl}" alt="ЧЗ" data-testid="cz-label-artifact-img" />
+</section>`
+}
+
+export function buildWbOrderQrLabelHtml(imageDataUrl: string): string {
+  return `<section class="label label--wb-qr" data-testid="fbs-order-qr-label" data-tape-block="wb_qr">
+  <img class="wb-qr-img" src="${imageDataUrl}" alt="QR WB заказа" data-testid="fbs-order-qr-img" />
 </section>`
 }
 

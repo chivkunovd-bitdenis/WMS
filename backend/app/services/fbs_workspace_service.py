@@ -13,6 +13,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from app.models.fbs_order import (
+    MARKING_KIND_SGTIN,
     META_STATUS_ACCEPTED,
     META_STATUS_ALLOWED_WITHOUT_CHECK,
     PACK_STATUS_PACKED,
@@ -46,6 +47,7 @@ from app.services.fbs_tracking_service import (
     is_tracking_sync_stale,
 )
 from app.services.fbs_worklist_service import build_worklist_items, print_asset_content_url
+from app.services.marking_code_service import count_available_for_products_batch
 
 
 class FbsWorkspaceError(Exception):
@@ -78,6 +80,7 @@ async def get_supply_workspace(
     )
     cargo_places = await _build_cargo_places(session, tenant_id, supply)
     boxes = await _build_boxes(session, tenant_id, supply_id)
+    marking_pool = await _build_marking_pool(session, tenant_id, orders)
     progress = _compute_progress(orders)
     unassigned_packed_order_ids = _unassigned_packed_order_ids(orders, boxes)
     stage = _compute_stage(
@@ -143,6 +146,7 @@ async def get_supply_workspace(
         "orders": worklist_items,
         "cargo_places": cargo_places,
         "boxes": boxes,
+        "marking_pool": marking_pool,
         "delivery_preflight": None,
         "last_wb_sync_at": (
             supply.last_wb_sync_at.isoformat() if supply.last_wb_sync_at else None
@@ -429,6 +433,52 @@ async def _build_boxes(
         if trbx_id:
             box["qr_asset"] = _map_print_asset(assets.get(uuid.UUID(str(trbx_id))))
     return boxes
+
+
+def _order_needs_marking_code(order: FbsOrder) -> bool:
+    return MARKING_KIND_SGTIN in (order.required_meta_json or [])
+
+
+async def _build_marking_pool(
+    session: AsyncSession,
+    tenant_id: uuid.UUID,
+    orders: list[FbsOrder],
+) -> dict[str, Any]:
+    """Честный знак deficit for the whole supply, reusing the pool count logic
+    from marking_code_service (no ad-hoc query on MarkingCode here).
+    """
+    needing_orders = [order for order in orders if _order_needs_marking_code(order)]
+    if not needing_orders:
+        return {"required": 0, "available": 0, "shortage": 0, "orders_without_code": []}
+
+    product_ids = {order.product_id for order in needing_orders if order.product_id is not None}
+    available_by_product = await count_available_for_products_batch(
+        session, tenant_id, product_ids
+    )
+    total_available = sum(available_by_product.get(pid, 0) for pid in product_ids)
+
+    # Deterministic allocation: give the earliest-deadline orders first crack at
+    # the available pool per product, so the leftover tail is what's reported
+    # as short a code — mirrors how an operator would work through the supply.
+    ordered_needing = sorted(needing_orders, key=lambda o: (o.deadline_at, o.wb_order_id))
+    remaining_by_product = dict(available_by_product)
+    orders_without_code: list[str] = []
+    for order in ordered_needing:
+        pid = order.product_id
+        budget = remaining_by_product.get(pid, 0) if pid is not None else 0
+        if pid is not None and budget > 0:
+            remaining_by_product[pid] = budget - 1
+        else:
+            orders_without_code.append(str(order.id))
+
+    required = len(needing_orders)
+    shortage = max(0, required - total_available)
+    return {
+        "required": required,
+        "available": total_available,
+        "shortage": shortage,
+        "orders_without_code": orders_without_code,
+    }
 
 
 def _map_cargo_place(trbx: FbsTrbx, qr_asset: FbsPrintAsset | None) -> dict[str, Any]:

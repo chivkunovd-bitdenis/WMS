@@ -10,12 +10,13 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.deps import require_fbs_operator_access
 from app.api.fbs_errors import envelope_from_exc, raise_fbs_http
-from app.api.fbs_orders import FbsWorklistOrderOut
+from app.api.fbs_orders import FbsWorklistOrderOut, FbsWorklistProductOut
 from app.db.session import get_db
 from app.models.fbs_order import FbsOrder
 from app.models.fbs_supply import FbsSupply
 from app.models.user import User
 from app.services import fbs_packaging_integration_service as pack_int_svc
+from app.services import fbs_order_tape_print_service as order_tape_svc
 from app.services import fbs_packing_box_service as packing_box_svc
 from app.services import fbs_picking_service as picking_svc
 from app.services import fbs_shipment_pvz_service as pvz_svc
@@ -181,6 +182,40 @@ class FbsPrintBatchOut(BaseModel):
     failed: int
     assets: list[FbsPrintAssetOut]
     order_errors: list[FbsPrintOrderErrorOut]
+
+
+class FbsOrderTapePrintBody(BaseModel):
+    order_ids: list[uuid.UUID] = Field(min_length=1, max_length=500)
+    layout_json: dict[str, object] | None = None
+    allow_partial: bool = False
+    include_order_qr: bool = True
+    reprint: bool = False
+
+
+class FbsOrderTapePrintedCodeOut(BaseModel):
+    id: str
+    cis_code: str
+    has_label_artifact: bool
+
+
+class FbsOrderTapeOrderOut(BaseModel):
+    order_id: str
+    wb_order_id: int
+    requires_honest_sign: bool
+    qr_asset: FbsPrintAssetOut | None
+    codes: list[str]
+    printed_codes: list[FbsOrderTapePrintedCodeOut]
+    shortage: int | None
+
+
+class FbsOrderTapePrintOut(BaseModel):
+    orders: list[FbsOrderTapeOrderOut]
+    requested: int
+    ready: int
+    missing: int
+    failed: int
+    order_errors: list[FbsPrintOrderErrorOut]
+    shortage: int
 
 
 class FbsTrbxCreateBody(BaseModel):
@@ -364,14 +399,31 @@ class FbsSupplyDeliverBody(BaseModel):
     confirmed_preflight_version: str = Field(min_length=1, max_length=128)
 
 
+class FbsWorkspaceProductOut(FbsWorklistProductOut):
+    packaging_instructions: str | None
+    has_packaging_instructions: bool
+
+
+class FbsWorkspaceOrderOut(FbsWorklistOrderOut):
+    product: FbsWorkspaceProductOut
+
+
+class FbsWorkspaceMarkingPoolOut(BaseModel):
+    required: int
+    available: int
+    shortage: int
+    orders_without_code: list[str]
+
+
 class FbsWorkspaceOut(BaseModel):
     supply: FbsWorkspaceSupplyOut
     stage: str
     progress: FbsWorkspaceProgressOut
     blockers: list[FbsWorkspaceBlockerOut]
-    orders: list[FbsWorklistOrderOut]
+    orders: list[FbsWorkspaceOrderOut]
     cargo_places: list[FbsCargoPlaceOut]
     boxes: list[FbsPackingBoxOut]
+    marking_pool: FbsWorkspaceMarkingPoolOut
     delivery_preflight: dict[str, object] | None
     last_wb_sync_at: str | None
     tracking_summary: dict[str, object] | None = None
@@ -520,6 +572,16 @@ def _raise_from_print_asset_service(exc: FbsPrintAssetError) -> None:
     raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=detail)
 
 
+def _raise_from_order_tape_service(exc: order_tape_svc.FbsOrderTapePrintError) -> None:
+    if exc.code in {"supply_not_found", "order_not_in_supply"}:
+        raise_fbs_http(status.HTTP_404_NOT_FOUND, exc.code)
+    if exc.code in {"empty_order_set", "invalid_layout_json", "invalid_layout_block", "invalid_layout_copies"}:
+        raise_fbs_http(status.HTTP_422_UNPROCESSABLE_ENTITY, exc.code)
+    if exc.code.startswith("wb_"):
+        raise_fbs_http(status.HTTP_502_BAD_GATEWAY, exc.code)
+    raise_fbs_http(status.HTTP_500_INTERNAL_SERVER_ERROR, exc.code)
+
+
 def _raise_from_pvz_service(exc: pvz_svc.FbsShipmentPvzError) -> None:
     if exc.http_status is not None:
         raise_fbs_http(exc.http_status, exc.code)
@@ -586,6 +648,8 @@ def _raise_from_packing_box_service(exc: packing_box_svc.FbsPackingBoxError) -> 
         raise_fbs_http(
             status.HTTP_409_CONFLICT, exc.code, retryable=exc.code == "box_cargo_place_unresolved"
         )
+    if exc.code == "supply_already_delivered":
+        raise_fbs_http(status.HTTP_409_CONFLICT, exc.code, retryable=False)
     _raise_from_pvz_service(pvz_svc.FbsShipmentPvzError(exc.code))
 
 
@@ -1067,6 +1131,25 @@ async def delete_fbs_packing_box(
 
 
 @router.post(
+    "/{supply_id}/boxes/{box_id}/clear",
+    response_model=FbsWorkspaceOut,
+    summary="Unassign every order from a physical FBS box",
+)
+async def clear_fbs_packing_box(
+    supply_id: uuid.UUID,
+    box_id: uuid.UUID,
+    user: Annotated[User, Depends(require_fbs_operator_access)],
+    session: Annotated[AsyncSession, Depends(get_db)],
+) -> FbsWorkspaceOut:
+    try:
+        await packing_box_svc.clear_box(session, user.tenant_id, supply_id, box_id)
+    except packing_box_svc.FbsPackingBoxError as exc:
+        _raise_from_packing_box_service(exc)
+    await session.commit()
+    return await _workspace_after_packing_box_action(session, user.tenant_id, supply_id)
+
+
+@router.post(
     "/{supply_id}/boxes/{box_id}/retry-qr",
     response_model=FbsWorkspaceOut,
     summary="Retry a PVZ box QR without creating a cargo place",
@@ -1238,6 +1321,71 @@ async def fetch_fbs_supply_print_assets(
             )
             for err in batch.order_errors
         ],
+    )
+
+
+@router.post("/{supply_id}/order-print-tape", response_model=FbsOrderTapePrintOut)
+async def print_fbs_supply_order_tape(
+    supply_id: uuid.UUID,
+    body: FbsOrderTapePrintBody,
+    user: Annotated[User, Depends(require_fbs_operator_access)],
+    session: Annotated[AsyncSession, Depends(get_db)],
+) -> FbsOrderTapePrintOut:
+    async with httpx.AsyncClient() as http_client:
+        try:
+            result = await order_tape_svc.print_fbs_order_tape(
+                session,
+                user.tenant_id,
+                supply_id,
+                order_ids=body.order_ids,
+                layout=body.layout_json,
+                allow_partial=body.allow_partial,
+                include_order_qr=body.include_order_qr,
+                reprint=body.reprint,
+                actor_user_id=user.id,
+                http_client=http_client,
+            )
+        except order_tape_svc.FbsOrderTapePrintError as exc:
+            _raise_from_order_tape_service(exc)
+    await session.commit()
+    assets_by_id = {
+        asset.id: FbsPrintAssetOut(**map_print_asset(asset))
+        for asset in (result.print_batch.assets if result.print_batch else [])
+    }
+    return FbsOrderTapePrintOut(
+        orders=[
+            FbsOrderTapeOrderOut(
+                order_id=str(order.order_id),
+                wb_order_id=order.wb_order_id,
+                requires_honest_sign=order.requires_honest_sign,
+                qr_asset=assets_by_id.get(order.qr_asset_id) if order.qr_asset_id else None,
+                codes=order.codes,
+                printed_codes=[
+                    FbsOrderTapePrintedCodeOut(
+                        id=str(code.id),
+                        cis_code=code.cis_code,
+                        has_label_artifact=code.has_label_artifact,
+                    )
+                    for code in order.printed_codes
+                ],
+                shortage=order.shortage,
+            )
+            for order in result.orders
+        ],
+        requested=result.print_batch.requested if result.print_batch else len(body.order_ids),
+        ready=result.print_batch.ready if result.print_batch else len(result.orders),
+        missing=result.print_batch.missing if result.print_batch else 0,
+        failed=result.print_batch.failed if result.print_batch else 0,
+        order_errors=[
+            FbsPrintOrderErrorOut(
+                order_id=str(err.order_id),
+                wb_order_id=err.wb_order_id,
+                code=err.code,
+                message=err.message,
+            )
+            for err in result.order_errors
+        ],
+        shortage=result.shortage,
     )
 
 

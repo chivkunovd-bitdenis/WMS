@@ -6,7 +6,7 @@ import uuid
 from dataclasses import dataclass
 
 import httpx
-from sqlalchemy import func, select
+from sqlalchemy import delete, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
@@ -197,6 +197,31 @@ async def remove_order(
     if item is None:
         raise FbsPackingBoxError("box_assignment_not_found")
     await session.delete(item)
+
+
+async def clear_box(
+    session: AsyncSession,
+    tenant_id: uuid.UUID,
+    supply_id: uuid.UUID,
+    box_id: uuid.UUID,
+) -> None:
+    """Unassign every order currently in the box, returning them to unassigned.
+
+    Idempotent on an already-empty box.  Forbidden once the supply has been
+    handed to WB — box membership must not change after that point.
+    """
+    supply = await _get_supply(session, tenant_id, supply_id)
+    if supply.status in {FBS_SUPPLY_STATUS_IN_DELIVERY, FBS_SUPPLY_STATUS_DONE}:
+        raise FbsPackingBoxError("supply_already_delivered")
+    box = await _get_box(session, tenant_id, supply_id, box_id)
+    await session.execute(
+        delete(FbsPackingBoxItem).where(
+            FbsPackingBoxItem.tenant_id == tenant_id,
+            FbsPackingBoxItem.box_id == box.id,
+        )
+    )
+    await session.flush()
+    session.expire(box, ["items"])
 
 
 async def delete_box(
