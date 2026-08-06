@@ -24,6 +24,8 @@ from app.models.fbs_supply import (
 )
 from app.models.fbs_trbx import FbsTrbx
 from app.services import fbs_packing_box_service as packing_box_svc
+from app.services.fbs_print_asset_service import CARGO_QR_FETCH_ERROR_MESSAGE
+from app.services.wildberries_client import WildberriesClientError
 from tests.test_fbs_picking import (
     _create_product,
     _create_seller_and_warehouse,
@@ -675,3 +677,254 @@ async def test_packing_box_lifecycle_rejected_after_confirmed_delivery(
         )
         assert response.status_code == 409, response.text
         assert response.json()["detail"]["code"] == "supply_not_editable"
+
+    assign = await async_client.put(
+        f"{base}/orders",
+        headers=headers,
+        json={
+            "order_ids": [str(uuid.uuid4())],
+            "idempotency_key": str(uuid.uuid4()),
+        },
+    )
+    assert assign.status_code == 409, assign.text
+    assert assign.json()["detail"]["code"] == "supply_not_editable"
+
+    unassign = await async_client.request(
+        "DELETE",
+        f"{base}/orders",
+        headers=headers,
+        json={
+            "order_ids": [str(uuid.uuid4())],
+            "idempotency_key": str(uuid.uuid4()),
+        },
+    )
+    assert unassign.status_code == 409, unassign.text
+    assert unassign.json()["detail"]["code"] == "supply_not_editable"
+
+    retry_qr = await async_client.post(
+        f"{base}/retry-qr",
+        headers=headers,
+        json={"idempotency_key": str(uuid.uuid4())},
+    )
+    assert retry_qr.status_code == 409, retry_qr.text
+    assert retry_qr.json()["detail"]["code"] == "supply_not_editable"
+
+
+@pytest.fixture
+def enable_wb_marketplace_supplies_mock(monkeypatch: pytest.MonkeyPatch) -> None:
+    from app.core.settings import settings
+
+    monkeypatch.setattr(settings, "e2e_mock_wb_marketplace_supplies", True)
+
+
+@pytest.mark.asyncio
+async def test_pvz_packing_box_qr_failure_persists_and_retry_fetches_existing_trbx_only(
+    async_client: AsyncClient,
+    enable_wb_marketplace_supplies_mock: None,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    import app.services.fbs_print_asset_service as print_mod
+    import app.services.fbs_shipment_pvz_service as pvz_mod
+
+    headers, suffix, tenant_id = await _register_ff_admin(async_client)
+    seller_id, warehouse_id, location_id = await _create_seller_and_warehouse(
+        async_client, headers, suffix
+    )
+    tok = await async_client.patch(
+        f"/integrations/wildberries/sellers/{seller_id}/tokens",
+        headers=headers,
+        json={"marketplace_api_token": "wb-marketplace-token"},
+    )
+    assert tok.status_code == 200, tok.text
+    barcode = f"BAR-QR-RETRY-{suffix[-8:]}"
+    product_id = await _create_product(
+        async_client, headers, seller_id, sku=f"SKU-QR-{suffix}", barcode=barcode
+    )
+    supply_id, order_ids, _ = await _seed_pick_supply(
+        async_client,
+        headers,
+        tenant_id,
+        seller_id,
+        warehouse_id,
+        location_id,
+        product_id,
+        stock_qty=1,
+        order_specs=[(1, timedelta(hours=12))],
+        barcode=barcode,
+    )
+    async with SessionLocal() as session:
+        supply = await session.get(FbsSupply, supply_id)
+        assert supply is not None
+        supply.delivery_type = "pvz"
+        supply.status = FBS_SUPPLY_STATUS_ASSEMBLING
+        order = await session.get(FbsOrder, order_ids[0])
+        assert order is not None
+        order.pack_status = PACK_STATUS_PACKED
+        await session.commit()
+
+    create_marketplace_calls = 0
+    create_cargo_calls = 0
+    sticker_calls = 0
+    requested_trbx_ids: list[list[str]] = []
+    real_create_trbx = pvz_mod.create_marketplace_supply_trbx
+    real_create_cargo = pvz_mod.create_cargo_places
+    real_fetch = print_mod.fetch_marketplace_trbx_stickers
+
+    async def counted_create_trbx(*args: object, **kwargs: object) -> list[str]:
+        nonlocal create_marketplace_calls
+        create_marketplace_calls += 1
+        return await real_create_trbx(*args, **kwargs)  # type: ignore[arg-type]
+
+    async def counted_create_cargo(*args: object, **kwargs: object) -> list[dict[str, object]]:
+        nonlocal create_cargo_calls
+        create_cargo_calls += 1
+        return await real_create_cargo(*args, **kwargs)  # type: ignore[arg-type]
+
+    async def fail_then_succeed_fetch(
+        client: object,
+        *,
+        api_token: str,
+        supply_id: str,
+        trbx_ids: list[str],
+        type: str = "png",
+        marketplace_api_base: str | None = None,
+    ) -> list[dict[str, object]]:
+        nonlocal sticker_calls
+        sticker_calls += 1
+        requested_trbx_ids.append(list(trbx_ids))
+        if sticker_calls == 1:
+            raise WildberriesClientError("transport_error", status_code=504)
+        return await real_fetch(
+            client,  # type: ignore[arg-type]
+            api_token=api_token,
+            supply_id=supply_id,
+            trbx_ids=trbx_ids,
+            type=type,
+            marketplace_api_base=marketplace_api_base,
+        )
+
+    monkeypatch.setattr(pvz_mod, "create_marketplace_supply_trbx", counted_create_trbx)
+    monkeypatch.setattr(pvz_mod, "create_cargo_places", counted_create_cargo)
+    monkeypatch.setattr(print_mod, "fetch_marketplace_trbx_stickers", fail_then_succeed_fetch)
+
+    create_key = str(uuid.uuid4())
+    created = await async_client.post(
+        f"/operations/fbs-supplies/{supply_id}/packing-boxes",
+        headers=headers,
+        json={"count": 1, "idempotency_key": create_key},
+    )
+    assert created.status_code == 201, created.text
+    box = created.json()["packing_boxes"][0]
+    assert box["wb_trbx_id"] is not None
+    qr_asset = box["qr_asset"]
+    assert qr_asset is not None
+    assert qr_asset["status"] == "error"
+    assert qr_asset["error"]["message"] == CARGO_QR_FETCH_ERROR_MESSAGE
+    assert create_marketplace_calls == 1
+    assert create_cargo_calls == 1
+    assert sticker_calls == 1
+
+    async with SessionLocal() as session:
+        trbxes = list(
+            (await session.execute(select(FbsTrbx).where(FbsTrbx.supply_id == supply_id))).scalars()
+        )
+        assert len(trbxes) == 1
+
+    reloaded = await async_client.get(
+        f"/operations/fbs-supplies/{supply_id}/workspace",
+        headers=headers,
+    )
+    assert reloaded.status_code == 200, reloaded.text
+    reloaded_box = reloaded.json()["packing_boxes"][0]
+    assert reloaded_box["id"] == box["id"]
+    assert reloaded_box["wb_trbx_id"] == box["wb_trbx_id"]
+    assert reloaded_box["qr_asset"]["status"] == "error"
+    assert reloaded_box["qr_asset"]["id"] == qr_asset["id"]
+
+    retry_key = str(uuid.uuid4())
+    retry = await async_client.post(
+        f"/operations/fbs-supplies/{supply_id}/packing-boxes/{box['id']}/retry-qr",
+        headers=headers,
+        json={"idempotency_key": retry_key},
+    )
+    assert retry.status_code == 200, retry.text
+    retried_box = retry.json()["packing_boxes"][0]
+    assert retried_box["qr_asset"]["id"] == qr_asset["id"]
+    assert retried_box["qr_asset"]["status"] == "ready"
+    assert retried_box["qr_asset"]["preview_url"]
+    assert create_marketplace_calls == 1
+    assert create_cargo_calls == 1
+    assert sticker_calls == 2
+    assert requested_trbx_ids[-1] == [box["wb_trbx_id"]]
+
+    retry_repeat = await async_client.post(
+        f"/operations/fbs-supplies/{supply_id}/packing-boxes/{box['id']}/retry-qr",
+        headers=headers,
+        json={"idempotency_key": retry_key},
+    )
+    assert retry_repeat.status_code == 200, retry_repeat.text
+    assert retry_repeat.json()["packing_boxes"][0]["qr_asset"]["status"] == "ready"
+    assert create_marketplace_calls == 1
+    assert create_cargo_calls == 1
+    assert sticker_calls == 2
+
+
+@pytest.mark.asyncio
+async def test_packing_box_retry_qr_rejects_warehouse_and_unlinked_pvz(
+    async_client: AsyncClient,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    headers, supply_id, _order_ids, box_id = await _seed_packed_supply_with_boxes(
+        async_client,
+        delivery_type="warehouse_sc",
+    )
+    warehouse_retry = await async_client.post(
+        f"/operations/fbs-supplies/{supply_id}/packing-boxes/{box_id}/retry-qr",
+        headers=headers,
+        json={"idempotency_key": str(uuid.uuid4())},
+    )
+    assert warehouse_retry.status_code == 400, warehouse_retry.text
+    assert warehouse_retry.json()["detail"]["code"] == "wrong_delivery_type"
+
+    async def fake_create_cargo(
+        session: AsyncSession,
+        _tenant_id: uuid.UUID,
+        target_supply_id: uuid.UUID,
+        _count: int,
+        drafts: list[object],
+        *_args: object,
+        **_kwargs: object,
+    ) -> list[dict[str, object]]:
+        rows: list[dict[str, object]] = []
+        for index, draft in enumerate(drafts, start=1):
+            row = FbsTrbx(
+                supply_id=target_supply_id,
+                wb_trbx_id=f"WB-UNLINK-{index}",
+                packaging_box_id=draft.packaging_box_id,  # type: ignore[attr-defined]
+            )
+            session.add(row)
+            await session.flush()
+            rows.append({"id": str(row.id), "wb_trbx_id": row.wb_trbx_id})
+        return rows
+
+    monkeypatch.setattr(packing_box_svc.pvz_svc, "create_cargo_places", fake_create_cargo)
+
+    pvz_headers, pvz_supply_id, _, pvz_box_id = await _seed_packed_supply_with_boxes(
+        async_client,
+        delivery_type="pvz",
+    )
+    async with SessionLocal() as session:
+        trbx = await session.scalar(
+            select(FbsTrbx).where(FbsTrbx.supply_id == pvz_supply_id)
+        )
+        assert trbx is not None
+        trbx.packaging_box_id = None
+        await session.commit()
+
+    unlinked_retry = await async_client.post(
+        f"/operations/fbs-supplies/{pvz_supply_id}/packing-boxes/{pvz_box_id}/retry-qr",
+        headers=pvz_headers,
+        json={"idempotency_key": str(uuid.uuid4())},
+    )
+    assert unlinked_retry.status_code == 400, unlinked_retry.text
+    assert unlinked_retry.json()["detail"]["code"] == "packing_box_trbx_not_linked"

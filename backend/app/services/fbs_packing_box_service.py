@@ -30,6 +30,7 @@ from app.models.fbs_wb_operation import (
 from app.models.user import User
 from app.models.warehouse_box import WarehouseBox
 from app.services import fbs_shipment_pvz_service as pvz_svc
+from app.services.fbs_print_asset_service import ensure_cargo_place_qr_assets
 from app.services.fbs_workspace_service import get_supply_workspace
 from app.services.warehouse_box_service import create_warehouse_box
 
@@ -40,6 +41,7 @@ OP_UNASSIGN = "local_packing_box_unassign"
 OP_CLOSE = "local_packing_box_close"
 OP_REOPEN = "local_packing_box_reopen"
 OP_CLEAR = "local_packing_box_clear"
+OP_RETRY_QR = "local_packing_box_retry_qr"
 
 PACKING_BOX_STATUS_OPEN = "open"
 PACKING_BOX_STATUS_CLOSED = "closed"
@@ -605,3 +607,55 @@ async def clear_packing_box(
         idempotency_key=idempotency_key,
         mutate=_clear,
     )
+
+
+def _linked_trbx(supply: FbsSupply, box: FbsPackingBox):
+    return next(
+        (row for row in supply.trbxes if row.packaging_box_id == box.warehouse_box_id),
+        None,
+    )
+
+
+async def retry_packing_box_qr(
+    session: AsyncSession,
+    tenant_id: uuid.UUID,
+    supply_id: uuid.UUID,
+    box_id: uuid.UUID,
+    *,
+    idempotency_key: str,
+    http_client: httpx.AsyncClient,
+) -> dict[str, Any]:
+    supply = await _load_supply(session, tenant_id, supply_id)
+    _require_mutable(supply)
+    if supply.delivery_type != FBS_DELIVERY_TYPE_PVZ:
+        raise FbsPackingBoxError("wrong_delivery_type", http_status=400)
+    box = await _load_box(session, tenant_id, supply_id, box_id)
+    linked_trbx = _linked_trbx(supply, box)
+    if linked_trbx is None:
+        raise FbsPackingBoxError("packing_box_trbx_not_linked", http_status=400)
+
+    req_hash = _request_hash({"supply_id": str(supply_id), "box_id": str(box_id)})
+    operation = await _operation(
+        session,
+        supply,
+        kind=OP_RETRY_QR,
+        idempotency_key=idempotency_key,
+        request_hash=req_hash,
+    )
+    if operation.state == WB_OPERATION_STATE_CONFIRMED:
+        return await get_supply_workspace(session, tenant_id, supply_id)
+
+    await ensure_cargo_place_qr_assets(
+        session,
+        tenant_id,
+        supply,
+        http_client,
+        trbxes=[linked_trbx],
+    )
+    await _confirm_operation(
+        session,
+        operation,
+        response_summary={"box_id": str(box_id), "wb_trbx_id": linked_trbx.wb_trbx_id},
+    )
+    await session.flush()
+    return await get_supply_workspace(session, tenant_id, supply_id)

@@ -1150,6 +1150,39 @@ async def clear_fbs_packing_box(
     return FbsWorkspaceOut.model_validate(workspace)
 
 
+@router.post(
+    "/{supply_id}/packing-boxes/{box_id}/retry-qr",
+    response_model=FbsWorkspaceOut,
+    summary="Retry PVZ packing-box cargo QR for an existing linked trbx",
+    description=(
+        "Fetches the missing cargo-place QR print asset only. Never creates a new WB trbx "
+        "or repeats cargo-place create/reconcile. Allowed for mutable PVZ supplies with "
+        "a local packing box already linked to FbsTrbx via warehouse_box_id."
+    ),
+)
+async def retry_fbs_packing_box_qr(
+    supply_id: uuid.UUID,
+    box_id: uuid.UUID,
+    body: FbsIdempotencyBody,
+    user: Annotated[User, Depends(require_fbs_operator_access)],
+    session: Annotated[AsyncSession, Depends(get_db)],
+) -> FbsWorkspaceOut:
+    async with httpx.AsyncClient() as http_client:
+        try:
+            workspace = await packing_box_svc.retry_packing_box_qr(
+                session,
+                user.tenant_id,
+                supply_id,
+                box_id,
+                idempotency_key=body.idempotency_key,
+                http_client=http_client,
+            )
+        except packing_box_svc.FbsPackingBoxError as exc:
+            _raise_from_packing_box(exc)
+    await session.commit()
+    return FbsWorkspaceOut.model_validate(workspace)
+
+
 @router.post("", response_model=FbsSupplyOut, status_code=status.HTTP_201_CREATED, deprecated=True)
 async def create_fbs_supply(
     body: FbsSupplyCreateBody,

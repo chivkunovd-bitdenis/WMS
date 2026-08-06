@@ -26,6 +26,7 @@ from app.models.fbs_packing_box import FbsPackingBox, FbsPackingBoxItem
 from app.models.fbs_print_asset import (
     PRINT_ASSET_KIND_CARGO_PLACE_QR,
     PRINT_ASSET_KIND_SUPPLY_QR,
+    PRINT_ASSET_STATUS_ERROR,
     PRINT_ASSET_STATUS_READY,
     FbsPrintAsset,
 )
@@ -388,7 +389,7 @@ async def _build_cargo_places(
         FbsPrintAsset.tenant_id == tenant_id,
         FbsPrintAsset.fbs_trbx_id.in_(trbx_ids),
         FbsPrintAsset.kind == PRINT_ASSET_KIND_CARGO_PLACE_QR,
-        FbsPrintAsset.status == PRINT_ASSET_STATUS_READY,
+        FbsPrintAsset.status.in_((PRINT_ASSET_STATUS_READY, PRINT_ASSET_STATUS_ERROR)),
     )
     res = await session.execute(stmt)
     qr_by_trbx = {a.fbs_trbx_id: a for a in res.scalars().all() if a.fbs_trbx_id}
@@ -429,7 +430,7 @@ async def _build_packing_boxes(
             FbsPrintAsset.tenant_id == tenant_id,
             FbsPrintAsset.fbs_trbx_id.in_(trbx_ids),
             FbsPrintAsset.kind == PRINT_ASSET_KIND_CARGO_PLACE_QR,
-            FbsPrintAsset.status == PRINT_ASSET_STATUS_READY,
+            FbsPrintAsset.status.in_((PRINT_ASSET_STATUS_READY, PRINT_ASSET_STATUS_ERROR)),
         )
         qr_by_trbx = {
             row.fbs_trbx_id: row

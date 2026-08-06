@@ -2000,6 +2000,75 @@
         }
       }
     },
+    "/operations/fbs-supplies/{supply_id}/packing-boxes/{box_id}/retry-qr": {
+      "post": {
+        "tags": [
+          "operations"
+        ],
+        "summary": "Retry PVZ packing-box cargo QR for an existing linked trbx",
+        "description": "Fetches the missing cargo-place QR print asset only. Never creates a new WB trbx or repeats cargo-place create/reconcile. Allowed for mutable PVZ supplies with a local packing box already linked to FbsTrbx via warehouse_box_id.",
+        "operationId": "retry_fbs_packing_box_qr_operations_fbs_supplies__supply_id__packing_boxes__box_id__retry_qr_post",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "supply_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Supply Id"
+            }
+          },
+          {
+            "name": "box_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Box Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/FbsIdempotencyBody"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FbsWorkspaceOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/operations/fbs-supplies": {
       "post": {
         "tags": [
