@@ -2346,6 +2346,7 @@ export default function App() {
     const isFulfillmentAdmin = me.role === 'fulfillment_admin'
     const isFulfillmentSeller = me.role === 'fulfillment_seller'
     const ffPermissions = resolveFfPermissions(me.role, me.permissions)
+    const canFbsOps = isFulfillmentAdmin || canAccessFfBlock(me.role, me.permissions, 'packaging')
     const canReceptionOps = canAccessFfBlock(me.role, me.permissions, 'reception')
     const canCellsOps = canAccessFfBlock(me.role, me.permissions, 'cells')
     const portal: 'seller' | 'ff' = 'ff'
@@ -2509,10 +2510,19 @@ export default function App() {
           <Route
             path="ff/fbs"
             element={
-              token ? (
-                <FfFbsOrdersScreen token={token} authHeaders={authHeaders} sellers={sellers} />
+              token && canFbsOps ? (
+                <FfFbsOrdersScreen
+                  token={token}
+                  authHeaders={authHeaders}
+                  sellers={sellers}
+                  isAdmin={isFulfillmentAdmin}
+                />
               ) : (
-                <FfPlaceholderPage title="FBS" hint="Нет токена." testId="ff-fbs-placeholder" />
+                <FfPlaceholderPage
+                  title="FBS"
+                  hint={token ? 'Нет доступа к сборке FBS. Обратитесь к администратору.' : 'Нет токена.'}
+                  testId="ff-fbs-placeholder"
+                />
               )
             }
           />
@@ -2520,12 +2530,12 @@ export default function App() {
           <Route
             path="ff/fbs/stock-sync"
             element={
-              token ? (
+              token && isFulfillmentAdmin ? (
                 <FfFbsStockSyncScreen token={token} authHeaders={authHeaders} sellers={sellers} />
               ) : (
                 <FfPlaceholderPage
                   title="FBS — остатки"
-                  hint="Нет токена."
+                  hint={token ? 'Настройка остатков доступна только администратору.' : 'Нет токена.'}
                   testId="ff-fbs-stock-placeholder"
                 />
               )

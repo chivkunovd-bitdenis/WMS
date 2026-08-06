@@ -25,6 +25,7 @@ from app.models.fbs_order import (
     MARKING_KIND_SGTIN,
     FbsOrder,
 )
+from app.models.fbs_packing_box import FbsPackingBox, FbsPackingBoxItem
 from app.models.fbs_supply import (
     FBS_DELIVERY_TYPE_PVZ,
     FBS_DELIVERY_TYPE_WAREHOUSE_SC,
@@ -40,6 +41,8 @@ from app.models.fbs_wb_operation import (
 )
 from app.services import fbs_marking_service as marking_svc
 from app.services import fbs_shipment_pvz_service as pvz_svc
+from app.services.fbs_print_asset_service import upsert_supply_qr_asset_from_bytes
+from app.services.fbs_print_asset_storage import FbsPrintAssetStorageError
 from app.services.fbs_supply_reconcile_service import (
     create_pending_deliver_operation,
     get_deliver_operation_by_idempotency,
@@ -69,9 +72,7 @@ _DELIVER_READY_ORDER_STATUSES = frozenset({FBS_ORDER_STATUS_PACKED})
 _PACKAGING_PENDING_ORDER_STATUSES = frozenset(
     {FBS_ORDER_STATUS_IN_SUPPLY, FBS_ORDER_STATUS_ASSEMBLING}
 )
-_DELIVER_ALLOWED_DELIVERY_TYPES = frozenset(
-    {FBS_DELIVERY_TYPE_WAREHOUSE_SC, FBS_DELIVERY_TYPE_PVZ}
-)
+_DELIVER_ALLOWED_DELIVERY_TYPES = frozenset({FBS_DELIVERY_TYPE_WAREHOUSE_SC, FBS_DELIVERY_TYPE_PVZ})
 _DELIVER_BLOCKED_SUPPLY_STATUSES = frozenset(
     {
         FBS_SUPPLY_STATUS_IN_DELIVERY,
@@ -96,6 +97,18 @@ class FbsShipmentError(Exception):
         self.retryable = retryable
         self.http_status = http_status
         super().__init__(code)
+
+
+@dataclass(frozen=True)
+class PackingDistribution:
+    box_ids: tuple[uuid.UUID, ...]
+    assignments: tuple[tuple[uuid.UUID, uuid.UUID], ...]
+
+    def assignment_counts(self) -> dict[uuid.UUID, int]:
+        counts: dict[uuid.UUID, int] = {}
+        for order_id, _box_id in self.assignments:
+            counts[order_id] = counts.get(order_id, 0) + 1
+        return counts
 
 
 @dataclass(frozen=True)
@@ -257,11 +270,7 @@ async def _sync_supply_orders_from_wb(
             api_token=token,
             order_ids=batch,
         )
-        by_id = {
-            int(row["id"]): row
-            for row in status_rows
-            if row.get("id") is not None
-        }
+        by_id = {int(row["id"]): row for row in status_rows if row.get("id") is not None}
         for order in orders:
             row = by_id.get(int(order.wb_order_id))
             if row is None:
@@ -272,9 +281,7 @@ async def _sync_supply_orders_from_wb(
 
     for order in orders:
         with suppress(marking_svc.FbsMarkingError):
-            await marking_svc.sync_order_marking_statuses(
-                session, tenant_id, order.id, http_client
-            )
+            await marking_svc.sync_order_marking_statuses(session, tenant_id, order.id, http_client)
 
     supply.last_wb_sync_at = datetime.now(UTC)
     await session.flush()
@@ -282,11 +289,46 @@ async def _sync_supply_orders_from_wb(
     return await _load_supply_orders_read(session, tenant_id, supply.id)
 
 
+async def _load_packing_distribution(
+    session: AsyncSession,
+    tenant_id: uuid.UUID,
+    supply_id: uuid.UUID,
+) -> PackingDistribution:
+    box_ids = tuple(
+        (
+            await session.execute(
+                select(FbsPackingBox.id)
+                .where(
+                    FbsPackingBox.tenant_id == tenant_id,
+                    FbsPackingBox.supply_id == supply_id,
+                )
+                .order_by(FbsPackingBox.id)
+            )
+        ).scalars()
+    )
+    if not box_ids:
+        return PackingDistribution(box_ids=(), assignments=())
+    assignments = tuple(
+        (
+            await session.execute(
+                select(FbsPackingBoxItem.fbs_order_id, FbsPackingBoxItem.box_id)
+                .where(
+                    FbsPackingBoxItem.tenant_id == tenant_id,
+                    FbsPackingBoxItem.box_id.in_(box_ids),
+                )
+                .order_by(FbsPackingBoxItem.fbs_order_id, FbsPackingBoxItem.box_id)
+            )
+        ).tuples()
+    )
+    return PackingDistribution(box_ids=box_ids, assignments=assignments)
+
+
 def _compute_preflight_version(
     supply: FbsSupply,
     orders: list[FbsOrder],
     *,
     cargo_qr_ready: bool,
+    distribution: PackingDistribution,
 ) -> str:
     parts = [
         str(supply.id),
@@ -294,6 +336,8 @@ def _compute_preflight_version(
         supply.delivery_type,
         str(cargo_qr_ready),
     ]
+    parts.extend(f"box:{box_id}" for box_id in distribution.box_ids)
+    parts.extend(f"assignment:{order_id}:{box_id}" for order_id, box_id in distribution.assignments)
     for order in sorted(orders, key=lambda item: item.id):
         parts.extend(
             [
@@ -312,6 +356,7 @@ def _build_delivery_checks(
     orders: list[FbsOrder],
     *,
     cargo_qr_ready: bool,
+    distribution: PackingDistribution,
 ) -> list[DeliveryCheck]:
     checks: list[DeliveryCheck] = []
 
@@ -319,7 +364,7 @@ def _build_delivery_checks(
         checks.append(
             DeliveryCheck(
                 code="supply_bad_status",
-                message="Поставка уже передана или закрыта.",
+                message="Состав поставки уже зафиксирован в WB или поставка закрыта.",
                 ok=False,
             )
         )
@@ -372,7 +417,7 @@ def _build_delivery_checks(
             checks.append(
                 DeliveryCheck(
                     code="orders_not_ready",
-                    message="Заказ не готов к передаче.",
+                    message="Заказ не готов к фиксации состава поставки.",
                     ok=False,
                     order_id=order.id,
                 )
@@ -388,8 +433,10 @@ def _build_delivery_checks(
             )
 
         product = order.product
-        if product is not None and product.requires_honest_sign and not _order_has_sgtin_marking(
-            order
+        if (
+            product is not None
+            and product.requires_honest_sign
+            and not _order_has_sgtin_marking(order)
         ):
             checks.append(
                 DeliveryCheck(
@@ -403,7 +450,7 @@ def _build_delivery_checks(
             checks.append(
                 DeliveryCheck(
                     code="marking_not_allowed",
-                    message="Метаданные WB не допускают передачу.",
+                    message="Метаданные WB не позволяют зафиксировать состав поставки.",
                     ok=False,
                     order_id=order.id,
                 )
@@ -412,11 +459,53 @@ def _build_delivery_checks(
             checks.append(
                 DeliveryCheck(
                     code="marking_allowed",
-                    message="Метаданные WB допускают передачу.",
+                    message="Метаданные WB позволяют зафиксировать состав поставки.",
                     ok=True,
                     order_id=order.id,
                 )
             )
+
+    if not distribution.box_ids:
+        checks.append(
+            DeliveryCheck(
+                code="packing_boxes_required",
+                message="Создайте физические короба WMS.",
+                ok=False,
+            )
+        )
+    else:
+        checks.append(
+            DeliveryCheck(
+                code="packing_boxes_ready",
+                message="Физические короба WMS созданы.",
+                ok=True,
+            )
+        )
+
+    assignment_counts = distribution.assignment_counts()
+    missing_distribution = [
+        order
+        for order in orders
+        if order.status == FBS_ORDER_STATUS_PACKED and assignment_counts.get(order.id, 0) != 1
+    ]
+    if missing_distribution:
+        for order in missing_distribution:
+            checks.append(
+                DeliveryCheck(
+                    code="orders_not_distributed",
+                    message="Упакованный заказ не распределён ровно в один короб.",
+                    ok=False,
+                    order_id=order.id,
+                )
+            )
+    elif orders:
+        checks.append(
+            DeliveryCheck(
+                code="orders_distributed",
+                message="Упакованные заказы полностью распределены по коробам.",
+                ok=True,
+            )
+        )
 
     if supply.delivery_type == FBS_DELIVERY_TYPE_PVZ:
         if not supply.trbxes:
@@ -474,17 +563,17 @@ async def _sync_and_validate_deliver(
     *,
     confirmed_preflight_version: str | None = None,
 ) -> tuple[list[FbsOrder], bool]:
-    orders = await _sync_supply_orders_from_wb(
-        session, tenant_id, supply, http_client, token
-    )
+    orders = await _sync_supply_orders_from_wb(session, tenant_id, supply, http_client, token)
     cargo_qr_ready = True
     if supply.delivery_type == FBS_DELIVERY_TYPE_PVZ:
-        cargo_qr_ready = await pvz_svc.supply_has_ready_cargo_place_qrs(
-            session, tenant_id, supply
-        )
+        cargo_qr_ready = await pvz_svc.supply_has_ready_cargo_place_qrs(session, tenant_id, supply)
+    distribution = await _load_packing_distribution(session, tenant_id, supply.id)
     if confirmed_preflight_version is not None:
         current_version = _compute_preflight_version(
-            supply, orders, cargo_qr_ready=cargo_qr_ready
+            supply,
+            orders,
+            cargo_qr_ready=cargo_qr_ready,
+            distribution=distribution,
         )
         if current_version != confirmed_preflight_version:
             raise FbsShipmentError(
@@ -496,7 +585,12 @@ async def _sync_and_validate_deliver(
                 },
                 http_status=409,
             )
-    checks = _build_delivery_checks(supply, orders, cargo_qr_ready=cargo_qr_ready)
+    checks = _build_delivery_checks(
+        supply,
+        orders,
+        cargo_qr_ready=cargo_qr_ready,
+        distribution=distribution,
+    )
     _validate_checks_pass(checks)
     return orders, cargo_qr_ready
 
@@ -527,18 +621,25 @@ async def preflight_delivery(
         raise FbsShipmentError("wrong_delivery_type")
 
     token = await _require_marketplace_token(session, tenant_id, supply.seller_id)
-    orders = await _sync_supply_orders_from_wb(
-        session, tenant_id, supply, http_client, token
-    )
+    orders = await _sync_supply_orders_from_wb(session, tenant_id, supply, http_client, token)
     cargo_qr_ready = True
     if supply.delivery_type == FBS_DELIVERY_TYPE_PVZ:
-        cargo_qr_ready = await pvz_svc.supply_has_ready_cargo_place_qrs(
-            session, tenant_id, supply
-        )
+        cargo_qr_ready = await pvz_svc.supply_has_ready_cargo_place_qrs(session, tenant_id, supply)
 
-    checks = _build_delivery_checks(supply, orders, cargo_qr_ready=cargo_qr_ready)
+    distribution = await _load_packing_distribution(session, tenant_id, supply.id)
+    checks = _build_delivery_checks(
+        supply,
+        orders,
+        cargo_qr_ready=cargo_qr_ready,
+        distribution=distribution,
+    )
     checked_at = datetime.now(UTC)
-    version = _compute_preflight_version(supply, orders, cargo_qr_ready=cargo_qr_ready)
+    version = _compute_preflight_version(
+        supply,
+        orders,
+        cargo_qr_ready=cargo_qr_ready,
+        distribution=distribution,
+    )
     can_deliver = all(check.ok for check in checks)
     return DeliveryPreflightResult(
         can_deliver=can_deliver,
@@ -579,6 +680,8 @@ async def _fetch_supply_qr_after_deliver(
 ) -> None:
     if supply.delivery_type != FBS_DELIVERY_TYPE_WAREHOUSE_SC:
         return
+    if supply.barcode_file and supply.barcode_asset_id:
+        return
     try:
         png_bytes = await fetch_marketplace_supply_barcode(
             http_client,
@@ -588,6 +691,15 @@ async def _fetch_supply_qr_after_deliver(
     except WildberriesClientError as exc:
         raise FbsShipmentError(_wb_error_code(exc)) from exc
     supply.barcode_file = _save_barcode_png(supply.id, png_bytes)
+    try:
+        await upsert_supply_qr_asset_from_bytes(
+            session,
+            tenant_id=supply.tenant_id,
+            supply=supply,
+            png_bytes=png_bytes,
+        )
+    except FbsPrintAssetStorageError as exc:
+        raise FbsShipmentError(exc.code) from exc
     await session.flush()
 
 
@@ -650,29 +762,23 @@ async def deliver_supply(
                 )
                 # A prior QR failure is recoverable through the same idempotent
                 # request and must never trigger another WB deliver mutation.
-                await _fetch_supply_qr_after_deliver(
-                    session, confirmed_supply, http_client, token
-                )
+                await _fetch_supply_qr_after_deliver(session, confirmed_supply, http_client, token)
                 return confirmed_supply
         if existing.state == WB_OPERATION_STATE_PENDING:
             raise FbsShipmentError(
                 "operation_in_progress",
-                message="Передача в доставку уже выполняется.",
+                message="Фиксация состава в WB уже выполняется.",
                 retryable=True,
                 http_status=503,
             )
         if existing.state == WB_OPERATION_STATE_PENDING_CONFIRMATION:
-            token = await _require_marketplace_token(
-                session, tenant_id, supply_read.seller_id
-            )
+            token = await _require_marketplace_token(session, tenant_id, supply_read.seller_id)
             reconcile_state = await reconcile_supply_delivered(
                 http_client,
                 api_token=token,
                 wb_supply_id=supply_read.wb_supply_id,
             )
-            supply = await _get_supply_for_update(
-                session, tenant_id, supply_id, with_trbxes=True
-            )
+            supply = await _get_supply_for_update(session, tenant_id, supply_id, with_trbxes=True)
             if supply is None:
                 raise FbsShipmentError("supply_not_found")
             await _sync_and_validate_deliver(
@@ -686,9 +792,7 @@ async def deliver_supply(
             if reconcile_state == WB_OPERATION_STATE_CONFIRMED:
                 orders = await _load_locked_supply_orders(session, tenant_id, supply.id)
                 await _persist_confirmed_delivery(session, supply, orders, existing)
-                await _fetch_supply_qr_after_deliver(
-                    session, supply, http_client, token
-                )
+                await _fetch_supply_qr_after_deliver(session, supply, http_client, token)
                 return supply
 
             try:
@@ -724,7 +828,7 @@ async def deliver_supply(
                     )
                     raise FbsShipmentError(
                         "wb_timeout",
-                        message="WB не подтвердил передачу — повторите операцию.",
+                        message="WB не подтвердил фиксацию состава — повторите операцию.",
                         context={"operation_state": "pending_confirmation"},
                         retryable=True,
                         http_status=504,
@@ -811,7 +915,7 @@ async def deliver_supply(
             )
             raise FbsShipmentError(
                 "wb_timeout",
-                message="WB не подтвердил передачу — повторите операцию.",
+                message="WB не подтвердил фиксацию состава — повторите операцию.",
                 context={"operation_state": "pending_confirmation"},
                 retryable=True,
                 http_status=504,
@@ -828,14 +932,14 @@ async def deliver_supply(
     orders = await _load_locked_supply_orders(session, tenant_id, supply.id)
     cargo_qr_ready = True
     if supply.delivery_type == FBS_DELIVERY_TYPE_PVZ:
-        cargo_qr_ready = await pvz_svc.supply_has_ready_cargo_place_qrs(
-            session, tenant_id, supply
-        )
+        cargo_qr_ready = await pvz_svc.supply_has_ready_cargo_place_qrs(session, tenant_id, supply)
+    distribution = await _load_packing_distribution(session, tenant_id, supply.id)
     _validate_checks_pass(
         _build_delivery_checks(
             supply,
             orders,
             cargo_qr_ready=cargo_qr_ready,
+            distribution=distribution,
         )
     )
     await _persist_confirmed_delivery(session, supply, orders, operation)
@@ -854,6 +958,10 @@ async def get_supply_barcode(
     supply = await _get_supply_read(session, tenant_id, supply_id)
     if supply is None:
         raise FbsShipmentError("supply_not_found")
+    if supply.delivery_type != FBS_DELIVERY_TYPE_WAREHOUSE_SC:
+        raise FbsShipmentError("wrong_delivery_type", http_status=409)
+    if supply.status not in {FBS_SUPPLY_STATUS_IN_DELIVERY, FBS_SUPPLY_STATUS_DONE}:
+        raise FbsShipmentError("supply_bad_status", http_status=409)
 
     if supply.barcode_file:
         cached = _resolve_barcode_path(supply.barcode_file)
@@ -874,3 +982,23 @@ async def get_supply_barcode(
     supply.barcode_file = _save_barcode_png(supply.id, png_bytes)
     await session.flush()
     return png_bytes
+
+
+async def retry_supply_qr(
+    session: AsyncSession,
+    tenant_id: uuid.UUID,
+    supply_id: uuid.UUID,
+    http_client: httpx.AsyncClient,
+) -> FbsSupply:
+    """Safely fetch a missing warehouse/SC QR after WB delivery was confirmed."""
+    supply = await _get_supply_for_update(session, tenant_id, supply_id, with_trbxes=True)
+    if supply is None:
+        raise FbsShipmentError("supply_not_found")
+    if supply.delivery_type != FBS_DELIVERY_TYPE_WAREHOUSE_SC:
+        raise FbsShipmentError("wrong_delivery_type", http_status=409)
+    if supply.status not in {FBS_SUPPLY_STATUS_IN_DELIVERY, FBS_SUPPLY_STATUS_DONE}:
+        raise FbsShipmentError("supply_bad_status", http_status=409)
+
+    token = await _require_marketplace_token(session, tenant_id, supply.seller_id)
+    await _fetch_supply_qr_after_deliver(session, supply, http_client, token)
+    return supply

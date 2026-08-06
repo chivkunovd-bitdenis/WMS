@@ -36,7 +36,9 @@ AUTH = {
 
 
 @pytest.fixture()
-def seeded_client(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> tuple[TestClient, Path]:
+def seeded_client(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> tuple[TestClient, Path]:
     db_path = tmp_path / "operator.sqlite"
     monkeypatch.setenv("WB_EMULATOR_DB_PATH", str(db_path))
     monkeypatch.setenv("WB_EMULATOR_TOKEN_MAP", json.dumps(TOKENS))
@@ -73,7 +75,9 @@ def test_tokens_json_has_three_sellers() -> None:
     assert set(token_map.values()) == {"seller_a", "seller_b", "seller_c"}
 
 
-def test_seed_creates_at_least_thirteen_orders(seeded_client: tuple[TestClient, Path]) -> None:
+def test_seed_creates_at_least_thirteen_orders(
+    seeded_client: tuple[TestClient, Path],
+) -> None:
     """TC-23: operator seed yields ≥13 persisted orders."""
     client, db_path = seeded_client
     session = get_session_factory()()
@@ -108,7 +112,9 @@ def test_three_tokens_isolated(seeded_client: tuple[TestClient, Path]) -> None:
             assert ids_by_seller[left].isdisjoint(ids_by_seller[right])
 
 
-def test_cancelled_seed_not_in_orders_new(seeded_client: tuple[TestClient, Path]) -> None:
+def test_cancelled_seed_not_in_orders_new(
+    seeded_client: tuple[TestClient, Path],
+) -> None:
     client, _ = seeded_client
     response = client.get("/api/v3/orders/new", headers=AUTH["token-c"])
     assert response.status_code == 200
@@ -123,7 +129,9 @@ def test_kiz_required_meta_roundtrip(seeded_client: tuple[TestClient, Path]) -> 
     assert by_id[510002].get("requiredMeta") == ["sgtin"]
 
 
-def test_every_sticker_and_qr_png_decodes(seeded_client: tuple[TestClient, Path]) -> None:
+def test_every_sticker_and_qr_png_decodes(
+    seeded_client: tuple[TestClient, Path],
+) -> None:
     """TC-23: order sticker + supply QR + trbx QR are real PNG with dimensions."""
     client, _ = seeded_client
     new = client.get("/api/v3/orders/new", headers=AUTH["token-a"]).json()["orders"]
@@ -139,7 +147,9 @@ def test_every_sticker_and_qr_png_decodes(seeded_client: tuple[TestClient, Path]
     for row in stickers.json()["stickers"]:
         _assert_png(row["file"])
 
-    supply = client.post("/api/v3/supplies", headers=AUTH["token-a"], json={"name": "seed supply"})
+    supply = client.post(
+        "/api/v3/supplies", headers=AUTH["token-a"], json={"name": "seed supply"}
+    )
     assert supply.status_code == 200
     supply_id = supply.json()["id"]
 
@@ -170,7 +180,27 @@ def test_every_sticker_and_qr_png_decodes(seeded_client: tuple[TestClient, Path]
         _assert_png(row["file"])
 
 
-def test_restart_persistence_same_db_file(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+def test_product_image_asset_is_public_deterministic_png(
+    seeded_client: tuple[TestClient, Path],
+) -> None:
+    client, _ = seeded_client
+    first = client.get("/__assets/products/111001.png")
+    second = client.get("/__assets/products/111001.png")
+    other = client.get("/__assets/products/111005.png")
+
+    assert first.status_code == 200
+    assert first.headers["content-type"].startswith("image/png")
+    assert first.headers["cache-control"] == "public, max-age=31536000, immutable"
+    assert first.content.startswith(PNG_MAGIC)
+    assert first.content == second.content
+    assert first.content != other.content
+    image = Image.open(io.BytesIO(first.content))
+    assert image.size == (360, 480)
+
+
+def test_restart_persistence_same_db_file(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
     """TC-23: new client on same SQLite file keeps seeded orders."""
     db_path = tmp_path / "persist.sqlite"
     monkeypatch.setenv("WB_EMULATOR_DB_PATH", str(db_path))
@@ -194,7 +224,9 @@ def test_restart_persistence_same_db_file(tmp_path: Path, monkeypatch: pytest.Mo
     get_settings.cache_clear()
 
 
-def test_idempotent_reseed_no_duplicates(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+def test_idempotent_reseed_no_duplicates(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
     """TC-23: running seed twice does not duplicate order rows."""
     db_path = tmp_path / "reseed.sqlite"
     monkeypatch.setenv("WB_EMULATOR_DB_PATH", str(db_path))
@@ -247,7 +279,9 @@ def test_fault_injection_409(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) ->
     get_settings.cache_clear()
 
 
-def test_fault_injection_timeout(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+def test_fault_injection_timeout(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
     monkeypatch.setenv("WB_EMULATOR_DB_PATH", str(tmp_path / "timeout.sqlite"))
     monkeypatch.setenv("WB_EMULATOR_TOKEN_MAP", json.dumps(TOKENS))
     monkeypatch.setenv("WB_EMULATOR_FAULT_TIMEOUT", "1")

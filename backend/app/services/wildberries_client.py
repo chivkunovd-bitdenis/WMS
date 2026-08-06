@@ -935,6 +935,12 @@ def _marketplace_trbx_create_mock(amount: int, *, supply_id: str) -> list[str]:
     return ids
 
 
+def _marketplace_trbx_delete_mock(trbx_ids: list[str], *, supply_id: str) -> None:
+    current = _mock_trbx_by_supply.get(supply_id, [])
+    remove = set(trbx_ids)
+    _mock_trbx_by_supply[supply_id] = [row for row in current if row not in remove]
+
+
 def _marketplace_trbx_stickers_mock(trbx_ids: list[str]) -> list[dict[str, Any]]:
     tiny_png = _TINY_PNG_BASE64
     return [
@@ -1073,3 +1079,41 @@ async def fetch_marketplace_supply_trbx_list(
         )
     data = response.json()
     return _parse_trbx_ids_from_response(data)
+
+
+async def delete_marketplace_supply_trbx(
+    client: httpx.AsyncClient,
+    *,
+    api_token: str,
+    supply_id: str,
+    trbx_ids: list[str],
+    marketplace_api_base: str | None = None,
+) -> None:
+    """DELETE /api/v3/supplies/{supply_id}/trbx — remove cargo places."""
+    if not trbx_ids:
+        return
+    if _marketplace_supplies_mock_enabled():
+        _marketplace_trbx_delete_mock(trbx_ids, supply_id=supply_id)
+        return
+    base = (marketplace_api_base or settings.wildberries_marketplace_api_base).rstrip("/")
+    url = f"{base}{MARKETPLACE_SUPPLIES_PATH}/{supply_id}/trbx"
+    headers = {
+        "Authorization": api_token,
+        "Content-Type": "application/json",
+    }
+    payload = {"trbxIds": trbx_ids}
+    try:
+        response = await client.request(
+            "DELETE",
+            url,
+            headers=headers,
+            json=payload,
+            timeout=60.0,
+        )
+    except httpx.HTTPError as exc:
+        raise WildberriesClientError("transport_error") from exc
+    if response.status_code >= 400:
+        raise WildberriesClientError(
+            "upstream_error",
+            status_code=response.status_code,
+        )

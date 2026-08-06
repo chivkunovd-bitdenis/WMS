@@ -14,7 +14,6 @@ import {
   Radio,
   RadioGroup,
   Stack,
-  TextField,
   Typography,
 } from '@mui/material'
 import {
@@ -24,6 +23,7 @@ import {
   type FbsSupplyPreflight,
   type FbsWorkspace,
 } from './fbsApi'
+import { ordersWord } from './fbsUx'
 
 type Props = {
   token: string
@@ -56,7 +56,6 @@ export function FbsSupplyCreateDialog({
   onCreated,
 }: Props) {
   const [deliveryType, setDeliveryType] = useState<'warehouse_sc' | 'pvz'>('warehouse_sc')
-  const [name, setName] = useState('')
   const [preflight, setPreflight] = useState<FbsSupplyPreflight | null>(null)
   const [preflightBusy, setPreflightBusy] = useState(false)
   const [creating, setCreating] = useState(false)
@@ -68,7 +67,6 @@ export function FbsSupplyCreateDialog({
   useEffect(() => {
     if (!open) return
     setIdempotencyKey(createFbsIdempotencyKey())
-    setName(`FBS ${new Date().toLocaleDateString('ru-RU')}`)
     setError(null)
   }, [open, orderKey])
 
@@ -106,7 +104,8 @@ export function FbsSupplyCreateDialog({
     setError(null)
     try {
       const workspace = await createFbsSupplyFromOrders(token, authHeaders, {
-        name: name.trim() || `FBS ${new Date().toLocaleDateString('ru-RU')}`,
+        // Имя генерирует WMS: оператору оно не требуется для сборки.
+        name: `FBS ${new Date().toLocaleDateString('ru-RU')}`,
         order_ids: orderIds,
         planned_delivery_type: deliveryType,
         planned_destination: null,
@@ -123,23 +122,15 @@ export function FbsSupplyCreateDialog({
   const summary = preflight?.summary
   return (
     <Dialog open={open} onClose={creating ? undefined : onClose} fullWidth maxWidth="md">
-      <DialogTitle sx={{ pb: 1 }}>
-        <Typography variant="h6" component="div">Новая поставка FBS</Typography>
+      <DialogTitle component="div" sx={{ pb: 1 }}>
+        <Typography component="h2" variant="h6">Новая поставка FBS</Typography>
         <Typography variant="body2" color="text.secondary">
-          Сначала сервер повторно проверит совместимость {orderIds.length} заказов, затем создаст
-          поставку одной атомарной операцией.
+          WMS ещё раз проверит совместимость {orderIds.length} {ordersWord(orderIds.length)} и создаст поставку.
         </Typography>
       </DialogTitle>
       <DialogContent dividers>
         <Stack spacing={2.5}>
           {error ? <Alert severity="error">{error}</Alert> : null}
-
-          <TextField
-            label="Название поставки"
-            value={name}
-            onChange={(event) => setName(event.target.value)}
-            slotProps={{ htmlInput: { maxLength: 200 } }}
-          />
 
           <Box>
             <Typography variant="subtitle2" gutterBottom>
@@ -179,11 +170,8 @@ export function FbsSupplyCreateDialog({
               <Stack direction="row" spacing={1} sx={{ alignItems: 'center' }}>
                 <Chip
                   color={preflight?.compatible ? 'success' : 'error'}
-                  label={preflight?.compatible ? 'Состав совместим' : 'Есть блокирующие ошибки'}
+                  label={preflight?.compatible ? 'Можно создать поставку' : 'Есть причины, которые нужно исправить'}
                 />
-                <Typography variant="body2" color="text.secondary">
-                  Проверено сервером перед созданием
-                </Typography>
               </Stack>
 
               <Box
@@ -197,33 +185,15 @@ export function FbsSupplyCreateDialog({
                 }}
               >
                 <SummaryItem label="Селлер" value={summary.seller.name} />
-                <SummaryItem
-                  label="Склад WB"
-                  value={summary.wb_warehouse.name ?? `ID ${summary.wb_warehouse.id}`}
-                />
                 <SummaryItem label="Склад WMS" value={summary.wms_warehouse.name} />
                 <SummaryItem label="Заказов" value={String(summary.orders_count)} />
                 <SummaryItem
-                  label="Покупатель"
-                  value={summary.buyer_type === 'legal' ? 'Юридическое лицо' : 'Физическое лицо'}
-                />
-                <SummaryItem label="Габарит" value={summary.cargo_type.toUpperCase()} />
-                <SummaryItem
-                  label="Нужна маркировка"
-                  value={String(summary.required_marking_count)}
-                />
-                <SummaryItem
-                  label="Можно через ПВЗ"
-                  value={String(summary.pvz_allowed_count)}
-                />
-                <SummaryItem
-                  label="ПВЗ заблокирован"
-                  value={String(summary.pvz_blocked_count)}
-                />
-                <SummaryItem
-                  label="Ближайший дедлайн"
+                  label="Отгрузить до"
                   value={new Date(summary.nearest_deadline_at).toLocaleString('ru-RU')}
                 />
+                {summary.buyer_type === 'legal' ? <SummaryItem label="Покупатель" value="Юридическое лицо" /> : null}
+                {summary.required_marking_count > 0 ? <SummaryItem label="Нужна маркировка" value={String(summary.required_marking_count)} /> : null}
+                {deliveryType === 'pvz' && summary.pvz_blocked_count > 0 ? <SummaryItem label="Нельзя сдать через ПВЗ" value={String(summary.pvz_blocked_count)} /> : null}
               </Box>
 
               {preflight?.issues.length ? (
@@ -249,7 +219,7 @@ export function FbsSupplyCreateDialog({
           variant="contained"
           size="large"
           onClick={() => void create()}
-          disabled={!preflight?.compatible || preflightBusy || creating || !name.trim()}
+          disabled={!preflight?.compatible || preflightBusy || creating}
           startIcon={creating ? <CircularProgress size={18} color="inherit" /> : undefined}
           data-testid="fbs-create-submit"
         >

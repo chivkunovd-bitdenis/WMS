@@ -1149,6 +1149,23 @@
             }
           }
         ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "anyOf": [
+                  {
+                    "$ref": "#/components/schemas/FbsStartWorkBody"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "title": "Body"
+              }
+            }
+          }
+        },
         "responses": {
           "200": {
             "description": "Successful Response",
@@ -1203,6 +1220,64 @@
             "application/json": {
               "schema": {
                 "$ref": "#/components/schemas/FbsPickScanLocationBody"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FbsPickLocationOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/operations/fbs-supplies/{supply_id}/pick/resolve-location": {
+      "post": {
+        "tags": [
+          "operations"
+        ],
+        "summary": "Resolve Fbs Pick Location",
+        "operationId": "resolve_fbs_pick_location_operations_fbs_supplies__supply_id__pick_resolve_location_post",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "supply_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Supply Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/FbsPickResolveLocationBody"
               }
             }
           }
@@ -1289,6 +1364,64 @@
         }
       }
     },
+    "/operations/fbs-supplies/{supply_id}/pick/confirm-product": {
+      "post": {
+        "tags": [
+          "operations"
+        ],
+        "summary": "Confirm Fbs Pick Product",
+        "operationId": "confirm_fbs_pick_product_operations_fbs_supplies__supply_id__pick_confirm_product_post",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "supply_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Supply Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/FbsPickConfirmProductBody"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FbsWorkspaceOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/operations/fbs-supplies/{supply_id}/pick/{order_id}/undo": {
       "post": {
         "tags": [
@@ -1329,6 +1462,312 @@
             "application/json": {
               "schema": {
                 "$ref": "#/components/schemas/FbsPickUndoBody"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FbsWorkspaceOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/operations/fbs-supplies/{supply_id}/packing-boxes": {
+      "get": {
+        "tags": [
+          "operations"
+        ],
+        "summary": "List Fbs Packing Boxes",
+        "operationId": "list_fbs_packing_boxes_operations_fbs_supplies__supply_id__packing_boxes_get",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "supply_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Supply Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FbsWorkspaceOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "operations"
+        ],
+        "summary": "Create Fbs Packing Boxes",
+        "operationId": "create_fbs_packing_boxes_operations_fbs_supplies__supply_id__packing_boxes_post",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "supply_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Supply Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/FbsPackingBoxesCreateBody"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FbsWorkspaceOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/operations/fbs-supplies/{supply_id}/packing-boxes/{box_id}/orders": {
+      "put": {
+        "tags": [
+          "operations"
+        ],
+        "summary": "Assign Fbs Packing Box Orders",
+        "operationId": "assign_fbs_packing_box_orders_operations_fbs_supplies__supply_id__packing_boxes__box_id__orders_put",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "supply_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Supply Id"
+            }
+          },
+          {
+            "name": "box_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Box Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/FbsPackingBoxOrdersBody"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FbsWorkspaceOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "operations"
+        ],
+        "summary": "Unassign Fbs Packing Box Orders",
+        "operationId": "unassign_fbs_packing_box_orders_operations_fbs_supplies__supply_id__packing_boxes__box_id__orders_delete",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "supply_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Supply Id"
+            }
+          },
+          {
+            "name": "box_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Box Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/FbsPackingBoxOrdersBody"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FbsWorkspaceOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/operations/fbs-supplies/{supply_id}/packing-boxes/{box_id}": {
+      "delete": {
+        "tags": [
+          "operations"
+        ],
+        "summary": "Delete Fbs Packing Box",
+        "operationId": "delete_fbs_packing_box_operations_fbs_supplies__supply_id__packing_boxes__box_id__delete",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "supply_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Supply Id"
+            }
+          },
+          {
+            "name": "box_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Box Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/FbsIdempotencyBody"
               }
             }
           }
@@ -1840,6 +2279,63 @@
           }
         }
       },
+      "delete": {
+        "tags": [
+          "operations"
+        ],
+        "summary": "Delete selected PVZ cargo places",
+        "description": "Removes selected WB cargo places while the supply is still being assembled. Calls WB DELETE /api/v3/supplies/{supplyId}/trbx, then drops local FbsTrbx rows and QR print assets. Retries reconcile via GET trbx list; absent requested IDs count as confirmed delete without re-deleting extras.",
+        "operationId": "delete_fbs_cargo_places_operations_fbs_supplies__supply_id__cargo_places_delete",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "supply_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Supply Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/FbsCargoPlacesDeleteBody"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FbsCargoPlaceListOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
       "get": {
         "tags": [
           "operations"
@@ -2297,6 +2793,64 @@
         }
       }
     },
+    "/operations/fbs-supplies/{supply_id}/finish": {
+      "post": {
+        "tags": [
+          "operations"
+        ],
+        "summary": "Finish Fbs Operator Work",
+        "operationId": "finish_fbs_operator_work_operations_fbs_supplies__supply_id__finish_post",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "supply_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Supply Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/FbsIdempotencyBody"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FbsWorkspaceOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/operations/fbs-supplies/{supply_id}/sync-tracking": {
       "post": {
         "tags": [
@@ -2345,13 +2899,62 @@
         }
       }
     },
+    "/operations/fbs-supplies/{supply_id}/retry-supply-qr": {
+      "post": {
+        "tags": [
+          "operations"
+        ],
+        "summary": "Retry warehouse/SC supply QR after WB composition fixation",
+        "description": "Fetches the missing supply QR print asset only. Never repeats WB composition fixation. Allowed for warehouse_sc supplies in in_delivery or done; PVZ returns 409 wrong_delivery_type.",
+        "operationId": "retry_fbs_supply_qr_operations_fbs_supplies__supply_id__retry_supply_qr_post",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "supply_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Supply Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FbsWorkspaceOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/operations/fbs-supplies/{supply_id}/barcode": {
       "get": {
         "tags": [
           "operations"
         ],
         "summary": "Deprecated compatibility: supply QR binary",
-        "description": "Compatibility layer only. Prefer print-assets kind=supply_qr after deliver (warehouse/sc). Does not return barcode_file paths to the client.",
+        "description": "Compatibility layer only. Prefer print-assets kind=supply_qr after composition fixation (warehouse/sc). Does not return barcode_file paths to the client.",
         "operationId": "get_fbs_supply_barcode_operations_fbs_supplies__supply_id__barcode_get",
         "deprecated": true,
         "security": [
@@ -3641,6 +4244,31 @@
         ],
         "title": "FbsCargoPlacesCreateBody"
       },
+      "FbsCargoPlacesDeleteBody": {
+        "properties": {
+          "wb_trbx_ids": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "maxItems": 100,
+            "minItems": 1,
+            "title": "Wb Trbx Ids"
+          },
+          "idempotency_key": {
+            "type": "string",
+            "maxLength": 128,
+            "minLength": 1,
+            "title": "Idempotency Key"
+          }
+        },
+        "type": "object",
+        "required": [
+          "wb_trbx_ids",
+          "idempotency_key"
+        ],
+        "title": "FbsCargoPlacesDeleteBody"
+      },
       "FbsCargoPlacesPreflightBody": {
         "properties": {
           "count": {
@@ -3782,6 +4410,21 @@
           "checks"
         ],
         "title": "FbsDeliveryPreflightOut"
+      },
+      "FbsIdempotencyBody": {
+        "properties": {
+          "idempotency_key": {
+            "type": "string",
+            "maxLength": 128,
+            "minLength": 1,
+            "title": "Idempotency Key"
+          }
+        },
+        "type": "object",
+        "required": [
+          "idempotency_key"
+        ],
+        "title": "FbsIdempotencyBody"
       },
       "FbsMarkingValueBody": {
         "properties": {
@@ -4245,6 +4888,186 @@
         ],
         "title": "FbsOrderSyncStatusesOut"
       },
+      "FbsPackingBoxOrderOut": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "title": "Id"
+          },
+          "wb_order_id": {
+            "type": "integer",
+            "title": "Wb Order Id"
+          },
+          "product_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Product Id"
+          },
+          "product_name": {
+            "type": "string",
+            "title": "Product Name"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "wb_order_id",
+          "product_id",
+          "product_name"
+        ],
+        "title": "FbsPackingBoxOrderOut"
+      },
+      "FbsPackingBoxOrdersBody": {
+        "properties": {
+          "order_ids": {
+            "items": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "type": "array",
+            "maxItems": 100,
+            "minItems": 1,
+            "title": "Order Ids"
+          },
+          "idempotency_key": {
+            "type": "string",
+            "maxLength": 128,
+            "minLength": 1,
+            "title": "Idempotency Key"
+          }
+        },
+        "type": "object",
+        "required": [
+          "order_ids",
+          "idempotency_key"
+        ],
+        "title": "FbsPackingBoxOrdersBody"
+      },
+      "FbsPackingBoxOut": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "title": "Id"
+          },
+          "box_number": {
+            "type": "integer",
+            "title": "Box Number"
+          },
+          "status": {
+            "type": "string",
+            "title": "Status"
+          },
+          "internal_barcode": {
+            "type": "string",
+            "title": "Internal Barcode"
+          },
+          "wb_trbx_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Wb Trbx Id"
+          },
+          "qr_asset": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/FbsWorkspacePrintAssetOut"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "items_count": {
+            "type": "integer",
+            "title": "Items Count"
+          },
+          "orders": {
+            "items": {
+              "$ref": "#/components/schemas/FbsPackingBoxOrderOut"
+            },
+            "type": "array",
+            "title": "Orders"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "box_number",
+          "status",
+          "internal_barcode",
+          "wb_trbx_id",
+          "qr_asset",
+          "items_count",
+          "orders"
+        ],
+        "title": "FbsPackingBoxOut"
+      },
+      "FbsPackingBoxesCreateBody": {
+        "properties": {
+          "count": {
+            "type": "integer",
+            "maximum": 100.0,
+            "minimum": 1.0,
+            "title": "Count"
+          },
+          "idempotency_key": {
+            "type": "string",
+            "maxLength": 128,
+            "minLength": 1,
+            "title": "Idempotency Key"
+          }
+        },
+        "type": "object",
+        "required": [
+          "count",
+          "idempotency_key"
+        ],
+        "title": "FbsPackingBoxesCreateBody"
+      },
+      "FbsPickConfirmProductBody": {
+        "properties": {
+          "location_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Location Id"
+          },
+          "product_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Product Id"
+          },
+          "order_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Order Id"
+          },
+          "idempotency_key": {
+            "type": "string",
+            "maxLength": 128,
+            "minLength": 1,
+            "title": "Idempotency Key"
+          }
+        },
+        "type": "object",
+        "required": [
+          "location_id",
+          "product_id",
+          "order_id",
+          "idempotency_key"
+        ],
+        "title": "FbsPickConfirmProductBody"
+      },
       "FbsPickLocationExpectedProductOut": {
         "properties": {
           "product_id": {
@@ -4320,6 +5143,36 @@
           "expected_products"
         ],
         "title": "FbsPickLocationOut"
+      },
+      "FbsPickResolveLocationBody": {
+        "properties": {
+          "location_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Location Id"
+          },
+          "location_barcode": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 64
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Location Barcode"
+          }
+        },
+        "type": "object",
+        "title": "FbsPickResolveLocationBody"
       },
       "FbsPickScanLocationBody": {
         "properties": {
@@ -4882,6 +5735,21 @@
         },
         "type": "object",
         "title": "FbsSellerWarehouseOut"
+      },
+      "FbsStartWorkBody": {
+        "properties": {
+          "idempotency_key": {
+            "type": "string",
+            "maxLength": 128,
+            "minLength": 1,
+            "title": "Idempotency Key"
+          }
+        },
+        "type": "object",
+        "required": [
+          "idempotency_key"
+        ],
+        "title": "FbsStartWorkBody"
       },
       "FbsStickerMetaOut": {
         "properties": {
@@ -6649,6 +7517,20 @@
             "type": "array",
             "title": "Cargo Places"
           },
+          "packing_boxes": {
+            "items": {
+              "$ref": "#/components/schemas/FbsPackingBoxOut"
+            },
+            "type": "array",
+            "title": "Packing Boxes"
+          },
+          "unassigned_order_ids": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Unassigned Order Ids"
+          },
           "delivery_preflight": {
             "anyOf": [
               {
@@ -6972,6 +7854,17 @@
                 "type": "null"
               }
             ]
+          },
+          "operator_finished_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Operator Finished At"
           }
         },
         "type": "object",

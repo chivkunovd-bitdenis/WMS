@@ -2,7 +2,7 @@ import { Tab, Tabs } from '@mui/material'
 import { useLocation, useNavigate } from 'react-router-dom'
 
 /** Поднавигация модуля FBS: заказы и остатки WB. */
-export function FfFbsSectionNav() {
+export function FfFbsSectionNav({ showStockSync = false }: { showStockSync?: boolean }) {
   const loc = useLocation()
   const nav = useNavigate()
   const value = loc.pathname.includes('/stock-sync') ? 'stock-sync' : 'orders'
@@ -17,7 +17,9 @@ export function FfFbsSectionNav() {
       data-testid="fbs-section-nav"
     >
       <Tab value="orders" label="Заказы" data-testid="fbs-nav-orders" />
-      <Tab value="stock-sync" label="Остатки WB" data-testid="fbs-nav-stock-sync" />
+      {showStockSync ? (
+        <Tab value="stock-sync" label="Остатки WB" data-testid="fbs-nav-stock-sync" />
+      ) : null}
     </Tabs>
   )
 }

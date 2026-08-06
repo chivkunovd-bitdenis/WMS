@@ -207,6 +207,10 @@ require_reception_access = require_ff_permission(PERM_RECEPTION)
 require_mp_shipments_access = require_ff_or_seller_with_permission(PERM_MP_SHIPMENTS)
 require_cells_access = require_ff_permission(PERM_CELLS)
 require_packaging_access = require_ff_permission(PERM_PACKAGING)
+# FBS picking, packaging and shipment are warehouse-operator work. Keep the
+# alias explicit so administrative FBS setup can continue to use
+# require_fulfillment_admin without accidentally widening its permissions.
+require_fbs_operator_access = require_packaging_access
 require_shift_lead = require_ff_permission(PERM_SHIFT_LEAD)
 
 

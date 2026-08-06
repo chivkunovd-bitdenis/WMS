@@ -71,7 +71,7 @@ FBS_ERROR_MESSAGES_RU: dict[str, str] = {
     "file_missing": "Файл печатного актива отсутствует.",
     "empty_content": "Пустой файл печатного актива.",
     "supply_has_cancelled_orders": "В поставке есть отменённые заказы.",
-    "orders_not_ready": "Заказы не готовы к передаче.",
+    "orders_not_ready": "Заказы не готовы к фиксации состава поставки.",
     "packaging_required": "Требуется завершить упаковку.",
     "marking_required": "Требуется маркировка.",
     "marking_not_allowed": "Маркировка не разрешена Wildberries.",
@@ -92,6 +92,8 @@ FBS_ERROR_MESSAGES_RU: dict[str, str] = {
     "invalid_sticker_path": "Некорректный путь QR грузоместа.",
     "boxes_count_mismatch": "Число коробов не совпадает с count.",
     "cargo_places_preflight_failed": "Preflight грузомест не пройден.",
+    "cargo_place_not_found": "Грузоместо не найдено в поставке.",
+    "empty_cargo_place_selection": "Не выбраны грузоместа для удаления.",
     "measurements_confirmation_required": (
         "Укажите размеры и вес или подтвердите отсутствие данных."
     ),

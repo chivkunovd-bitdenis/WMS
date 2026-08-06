@@ -8,7 +8,7 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel, Field
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.api.deps import require_fulfillment_admin
+from app.api.deps import require_fbs_operator_access
 from app.api.fbs_errors import envelope_from_exc
 from app.db.session import get_db
 from app.models.fbs_order import FbsOrderMarking
@@ -97,7 +97,7 @@ def _raise_from_service(exc: marking_svc.FbsMarkingError) -> None:
 @router.get("/{order_id}/metadata", response_model=FbsOrderMetadataOut)
 async def get_fbs_order_metadata(
     order_id: uuid.UUID,
-    user: Annotated[User, Depends(require_fulfillment_admin)],
+    user: Annotated[User, Depends(require_fbs_operator_access)],
     session: Annotated[AsyncSession, Depends(get_db)],
 ) -> FbsOrderMetadataOut:
     async with httpx.AsyncClient() as http_client:
@@ -118,7 +118,7 @@ async def get_fbs_order_metadata(
 async def scan_fbs_order_metadata(
     order_id: uuid.UUID,
     body: FbsMetadataScanBody,
-    user: Annotated[User, Depends(require_fulfillment_admin)],
+    user: Annotated[User, Depends(require_fbs_operator_access)],
     session: Annotated[AsyncSession, Depends(get_db)],
 ) -> FbsOrderMetadataOut:
     async with httpx.AsyncClient() as http_client:
@@ -141,7 +141,7 @@ async def scan_fbs_order_metadata(
 @router.get("/{order_id}/markings", response_model=list[FbsOrderMarkingOut])
 async def get_fbs_order_markings(
     order_id: uuid.UUID,
-    user: Annotated[User, Depends(require_fulfillment_admin)],
+    user: Annotated[User, Depends(require_fbs_operator_access)],
     session: Annotated[AsyncSession, Depends(get_db)],
 ) -> list[FbsOrderMarkingOut]:
     try:
@@ -156,7 +156,7 @@ async def put_fbs_order_marking(
     order_id: uuid.UUID,
     kind: str,
     body: FbsMarkingValueBody,
-    user: Annotated[User, Depends(require_fulfillment_admin)],
+    user: Annotated[User, Depends(require_fbs_operator_access)],
     session: Annotated[AsyncSession, Depends(get_db)],
 ) -> FbsOrderMarkingOut:
     async with httpx.AsyncClient() as http_client:
@@ -179,7 +179,7 @@ async def put_fbs_order_marking(
 @router.post("/{order_id}/markings/sync", response_model=list[FbsOrderMarkingOut])
 async def sync_fbs_order_markings(
     order_id: uuid.UUID,
-    user: Annotated[User, Depends(require_fulfillment_admin)],
+    user: Annotated[User, Depends(require_fbs_operator_access)],
     session: Annotated[AsyncSession, Depends(get_db)],
 ) -> list[FbsOrderMarkingOut]:
     async with httpx.AsyncClient() as http_client:

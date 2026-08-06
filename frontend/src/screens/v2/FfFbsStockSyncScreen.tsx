@@ -81,6 +81,17 @@ function formatDt(value: string | null): string {
   return d.toLocaleString('ru-RU')
 }
 
+function stockErrorText(code: string | null): string | null {
+  if (!code) return null
+  const labels: Record<string, string> = {
+    wb_unavailable: 'Wildberries временно недоступен',
+    wb_auth_failed: 'Проверьте токен Wildberries',
+    readback_mismatch: 'Wildberries принял не все остатки',
+    product_mapping_missing: 'Не найден товар для выгрузки',
+  }
+  return labels[code] ?? 'Синхронизация завершилась с ошибкой'
+}
+
 function isSyncJob(
   body: { id?: string; bindings_processed?: number },
 ): body is { id: string; status: string } {
@@ -96,7 +107,7 @@ export function FfFbsStockSyncScreen({ token, authHeaders, sellers }: Props) {
   const [feedback, setFeedback] = useState<string | null>(null)
 
   const [addOpen, setAddOpen] = useState(false)
-  const [addWbId, setAddWbId] = useState('501001')
+  const [addWbId, setAddWbId] = useState('')
   const [addWmsId, setAddWmsId] = useState('')
   const [addSyncEnabled, setAddSyncEnabled] = useState(true)
   const [saving, setSaving] = useState(false)
@@ -105,6 +116,7 @@ export function FfFbsStockSyncScreen({ token, authHeaders, sellers }: Props) {
   const [statusLoading, setStatusLoading] = useState(false)
   const [statusData, setStatusData] = useState<FbsStockSyncStatus | null>(null)
   const [statusWbId, setStatusWbId] = useState<number | null>(null)
+  const [pendingDisable, setPendingDisable] = useState<FbsWarehouseBinding | null>(null)
 
   const wmsNameById = useMemo(() => {
     const m = new Map<string, string>()
@@ -221,6 +233,7 @@ export function FfFbsStockSyncScreen({ token, authHeaders, sellers }: Props) {
           row.wb_warehouse_id,
         )
         setFeedback('Привязка отключена')
+        setPendingDisable(null)
         await loadBindings()
       } catch (e) {
         setError(e instanceof Error ? e.message : 'Не удалось отключить привязку')
@@ -292,7 +305,7 @@ export function FfFbsStockSyncScreen({ token, authHeaders, sellers }: Props) {
         Привязка складов Wildberries к складам WMS и ручная выгрузка остатков.
       </Typography>
 
-      <FfFbsSectionNav />
+      <FfFbsSectionNav showStockSync />
 
       {error ? (
         <Alert
@@ -361,7 +374,7 @@ export function FfFbsStockSyncScreen({ token, authHeaders, sellers }: Props) {
             disabled={busy || !selectedSellerId || activeBindings.length === 0}
             data-testid="fbs-stock-sync-all"
           >
-            Синхронизировать всё
+            Выгрузить остатки по всем складам
           </Button>
           {busy ? <CircularProgress size={20} data-testid="fbs-stock-loading" /> : null}
         </Stack>
@@ -371,9 +384,9 @@ export function FfFbsStockSyncScreen({ token, authHeaders, sellers }: Props) {
         <Table size="small">
           <TableHead>
             <TableRow>
-              <TableCell>WB склад</TableCell>
-              <TableCell>WMS склад</TableCell>
-              <TableCell>Синхр.</TableCell>
+              <TableCell>Склад Wildberries</TableCell>
+              <TableCell>Склад WMS</TableCell>
+              <TableCell>Выгружать остатки</TableCell>
               <TableCell>Последний статус</TableCell>
               <TableCell>Обновлено</TableCell>
               <TableCell align="right">Действия</TableCell>
@@ -409,7 +422,7 @@ export function FfFbsStockSyncScreen({ token, authHeaders, sellers }: Props) {
                     <StockSyncStatusChip status={row.last_sync_status} />
                     {row.last_error_code ? (
                       <Typography variant="caption" color="error" sx={{ display: 'block' }}>
-                        {row.last_error_code}
+                        {stockErrorText(row.last_error_code)}
                       </Typography>
                     ) : null}
                   </TableCell>
@@ -422,7 +435,7 @@ export function FfFbsStockSyncScreen({ token, authHeaders, sellers }: Props) {
                         disabled={busy}
                         data-testid="fbs-stock-sync-one"
                       >
-                        Синхр.
+                        Выгрузить остатки
                       </Button>
                       <Button
                         size="small"
@@ -434,7 +447,7 @@ export function FfFbsStockSyncScreen({ token, authHeaders, sellers }: Props) {
                       <Button
                         size="small"
                         color="error"
-                        onClick={() => void handleDisable(row)}
+                        onClick={() => setPendingDisable(row)}
                         data-testid="fbs-stock-disable-binding"
                       >
                         Отключить
@@ -449,15 +462,15 @@ export function FfFbsStockSyncScreen({ token, authHeaders, sellers }: Props) {
       </TableContainer>
 
       <Dialog open={addOpen} onClose={() => setAddOpen(false)} maxWidth="sm" fullWidth>
-        <DialogTitle>Привязка склада WB</DialogTitle>
+        <DialogTitle>Связать склад Wildberries со складом WMS</DialogTitle>
         <DialogContent>
           <Stack spacing={2} sx={{ mt: 1 }}>
             <TextField
-              label="ID склада WB"
+              label="Номер склада Wildberries"
               type="number"
               value={addWbId}
               onChange={(e) => setAddWbId(e.target.value)}
-              helperText="Числовой warehouseId из личного кабинета WB"
+              helperText="Номер указан в кабинете продавца Wildberries"
               slotProps={{ htmlInput: { 'data-testid': 'fbs-stock-add-wb-id' } }}
             />
             <FormControl fullWidth>
@@ -483,7 +496,7 @@ export function FfFbsStockSyncScreen({ token, authHeaders, sellers }: Props) {
                   onChange={(e) => setAddSyncEnabled(e.target.checked)}
                 />
               }
-              label="Синхронизация остатков включена"
+              label="Автоматически выгружать остатки"
             />
           </Stack>
         </DialogContent>
@@ -496,6 +509,31 @@ export function FfFbsStockSyncScreen({ token, authHeaders, sellers }: Props) {
             data-testid="fbs-stock-add-save"
           >
             Сохранить
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      <Dialog
+        open={pendingDisable !== null}
+        onClose={() => setPendingDisable(null)}
+        maxWidth="xs"
+        fullWidth
+      >
+        <DialogTitle>Отключить связь складов?</DialogTitle>
+        <DialogContent>
+          <Typography>
+            Новые заказы с этого склада перестанут попадать в правильный склад WMS, а остатки
+            больше не будут выгружаться в Wildberries.
+          </Typography>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setPendingDisable(null)}>Оставить связь</Button>
+          <Button
+            color="error"
+            variant="contained"
+            onClick={() => pendingDisable && void handleDisable(pendingDisable)}
+          >
+            Отключить
           </Button>
         </DialogActions>
       </Dialog>
@@ -522,14 +560,14 @@ export function FfFbsStockSyncScreen({ token, authHeaders, sellers }: Props) {
                 <StockSyncStatusChip status={statusData.binding_last_sync_status} />
                 {statusData.binding_last_error_code ? (
                   <Typography variant="caption" color="error">
-                    {statusData.binding_last_error_code}
+                    {stockErrorText(statusData.binding_last_error_code)}
                   </Typography>
                 ) : null}
               </Stack>
               <Table size="small">
                 <TableHead>
                   <TableRow>
-                    <TableCell>chrtId</TableCell>
+                    <TableCell>Товар Wildberries</TableCell>
                     <TableCell>Цель</TableCell>
                     <TableCell>Подтверждено</TableCell>
                     <TableCell>Статус</TableCell>
@@ -551,7 +589,12 @@ export function FfFbsStockSyncScreen({ token, authHeaders, sellers }: Props) {
                   ) : (
                     statusData.items.map((item: FbsStockSyncStatusItem) => (
                       <TableRow key={item.chrt_id} data-testid="fbs-stock-status-row">
-                        <TableCell>{item.chrt_id}</TableCell>
+                        <TableCell>
+                          <Typography variant="body2">Товар WB</Typography>
+                          <Typography variant="caption" color="text.secondary">
+                            ID {item.chrt_id}
+                          </Typography>
+                        </TableCell>
                         <TableCell>{item.target ?? '—'}</TableCell>
                         <TableCell>{item.confirmed ?? '—'}</TableCell>
                         <TableCell>

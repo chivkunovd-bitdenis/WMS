@@ -148,6 +148,57 @@ export class FbsApiError extends Error {
   }
 }
 
+export class FbsRequestTimeoutError extends FbsApiError {
+  readonly timeoutMs: number
+
+  constructor(timeoutMs: number) {
+    super(
+      'request_timeout',
+      `Сервер не ответил за ${Math.ceil(timeoutMs / 1000)} сек. Повторите операцию.`,
+      { timeout_ms: timeoutMs },
+      true,
+      0,
+    )
+    this.name = 'FbsRequestTimeoutError'
+    this.timeoutMs = timeoutMs
+  }
+}
+
+export type FbsRequestOptions = {
+  timeoutMs?: number
+  signal?: AbortSignal
+}
+
+export async function fetchWithTimeout(
+  input: RequestInfo | URL,
+  init: RequestInit = {},
+  options: FbsRequestOptions = {},
+): Promise<Response> {
+  const timeoutMs = options.timeoutMs ?? 20_000
+  if (!Number.isFinite(timeoutMs) || timeoutMs <= 0) {
+    throw new RangeError('timeoutMs must be a positive finite number')
+  }
+  const controller = new AbortController()
+  const externalSignal = options.signal ?? init.signal
+  const abortFromExternalSignal = () => controller.abort(externalSignal?.reason)
+  if (externalSignal?.aborted) abortFromExternalSignal()
+  else externalSignal?.addEventListener('abort', abortFromExternalSignal, { once: true })
+
+  let timeoutId: ReturnType<typeof globalThis.setTimeout> | undefined
+  const timeout = new Promise<never>((_, reject) => {
+    timeoutId = globalThis.setTimeout(() => {
+      controller.abort()
+      reject(new FbsRequestTimeoutError(timeoutMs))
+    }, timeoutMs)
+  })
+  try {
+    return await Promise.race([fetch(input, { ...init, signal: controller.signal }), timeout])
+  } finally {
+    if (timeoutId !== undefined) globalThis.clearTimeout(timeoutId)
+    externalSignal?.removeEventListener('abort', abortFromExternalSignal)
+  }
+}
+
 export type FbsOrderMetadata = {
   required: string[]
   optional: string[]
@@ -260,6 +311,17 @@ export type FbsPickLocation = {
   }>
 }
 
+export type FbsPickLocationReference =
+  | { location_id: string; location_barcode?: never }
+  | { location_id?: never; location_barcode: string }
+
+export type FbsManualPickRequest = {
+  location_id: string
+  product_id: string
+  order_id: string
+  idempotency_key: string
+}
+
 export type FbsPrintAsset = {
   id: string
   kind: 'order_sticker' | 'cargo_place_qr' | 'supply_qr'
@@ -289,6 +351,21 @@ export type FbsPrintBatch = {
   order_errors: Array<{ order_id: string; wb_order_id: number; code: string; message: string }>
 }
 
+export type FbsPrintPreviewBlob = {
+  asset: FbsPrintAsset
+  blob: Blob
+}
+
+export type FbsPrintPreviewLoadError = {
+  asset: FbsPrintAsset
+  message: string
+}
+
+export type FbsPrintPreviewLoadResult = {
+  ready: FbsPrintPreviewBlob[]
+  errors: FbsPrintPreviewLoadError[]
+}
+
 export type FbsCargoPlace = {
   id: string
   wb_trbx_id: string
@@ -298,6 +375,24 @@ export type FbsCargoPlace = {
   weight_g: number | null
   qr_asset: FbsPrintAsset | null
   applied_at: string | null
+}
+
+export type FbsPackingBoxOrder = {
+  id: string
+  wb_order_id: number
+  product_id: string | null
+  product_name: string
+}
+
+export type FbsPackingBox = {
+  id: string
+  box_number: number
+  status: 'open'
+  internal_barcode: string
+  wb_trbx_id: string | null
+  qr_asset: FbsPrintAsset | null
+  items_count: number
+  orders: FbsPackingBoxOrder[]
 }
 
 export type FbsCargoPlaceDraft = {
@@ -362,6 +457,7 @@ export type FbsWorkspace = {
     nearest_deadline_at: string
     packaging_task_id: string | null
     barcode_asset: FbsPrintAsset | null
+    operator_finished_at: string | null
   }
   stage:
     | 'composition'
@@ -370,6 +466,7 @@ export type FbsWorkspace = {
     | 'order_stickers'
     | 'handoff_prep'
     | 'delivery'
+    | 'local_finish'
     | 'tracking'
   progress: { picked: number; packed: number; metadata_ready: number; stickers_ready: number; total: number }
   blockers: Array<{
@@ -381,6 +478,8 @@ export type FbsWorkspace = {
   }>
   orders: FbsWorklistOrder[]
   cargo_places: FbsCargoPlace[]
+  packing_boxes: FbsPackingBox[]
+  unassigned_order_ids: string[]
   delivery_preflight: FbsDeliveryPreflight | null
   last_wb_sync_at: string | null
   server_now: string
@@ -413,6 +512,7 @@ export async function fetchFbsWorklist(
     limit?: number
     cursor?: string | null
   } = {},
+  options: FbsRequestOptions = {},
 ): Promise<FbsWorklistPage> {
   const qs = new URLSearchParams({ limit: String(params.limit ?? 100) })
   if (params.seller_id) qs.set('seller_id', params.seller_id)
@@ -420,9 +520,9 @@ export async function fetchFbsWorklist(
   if (params.search) qs.set('search', params.search)
   if (params.cursor) qs.set('cursor', params.cursor)
   return jsonOrThrow<FbsWorklistPage>(
-    await fetch(apiUrl(`/operations/fbs-orders/worklist?${qs.toString()}`), {
+    await fetchWithTimeout(apiUrl(`/operations/fbs-orders/worklist?${qs.toString()}`), {
       headers: { ...ah(token) },
-    }),
+    }, options),
   )
 }
 
@@ -430,13 +530,14 @@ export async function preflightFbsSupply(
   token: string,
   ah: AuthHeaders,
   body: FbsSupplyPreflightRequest,
+  options: FbsRequestOptions = {},
 ): Promise<FbsSupplyPreflight> {
   return jsonOrThrow<FbsSupplyPreflight>(
-    await fetch(apiUrl('/operations/fbs-supplies/preflight'), {
+    await fetchWithTimeout(apiUrl('/operations/fbs-supplies/preflight'), {
       method: 'POST',
       headers: jsonHeaders(token, ah),
       body: JSON.stringify(body),
-    }),
+    }, options),
   )
 }
 
@@ -444,13 +545,14 @@ export async function createFbsSupplyFromOrders(
   token: string,
   ah: AuthHeaders,
   body: FbsSupplyCreateFromOrdersRequest,
+  options: FbsRequestOptions = {},
 ): Promise<FbsWorkspace> {
   return jsonOrThrow<FbsWorkspace>(
-    await fetch(apiUrl('/operations/fbs-supplies/from-orders'), {
+    await fetchWithTimeout(apiUrl('/operations/fbs-supplies/from-orders'), {
       method: 'POST',
       headers: jsonHeaders(token, ah),
       body: JSON.stringify(body),
-    }),
+    }, options),
   )
 }
 
@@ -458,20 +560,69 @@ export async function fetchFbsWorkspace(
   token: string,
   ah: AuthHeaders,
   id: string,
+  options: FbsRequestOptions = {},
 ): Promise<FbsWorkspace> {
   return jsonOrThrow<FbsWorkspace>(
-    await fetch(apiUrl(`/operations/fbs-supplies/${id}/workspace`), {
+    await fetchWithTimeout(apiUrl(`/operations/fbs-supplies/${id}/workspace`), {
+      headers: { ...ah(token) },
+    }, options),
+  )
+}
+
+export async function syncFbsSupplyTracking(
+  token: string,
+  ah: AuthHeaders,
+  id: string,
+): Promise<FbsWorkspace> {
+  return jsonOrThrow<FbsWorkspace>(
+    await fetch(apiUrl(`/operations/fbs-supplies/${id}/sync-tracking`), {
+      method: 'POST',
       headers: { ...ah(token) },
     }),
   )
 }
 
-export async function startFbsSupplyWork(token: string, ah: AuthHeaders, id: string): Promise<FbsWorkspace> {
+export async function retryFbsSupplyQr(
+  token: string,
+  ah: AuthHeaders,
+  id: string,
+  options: FbsRequestOptions = {},
+): Promise<FbsWorkspace> {
   return jsonOrThrow<FbsWorkspace>(
-    await fetch(apiUrl(`/operations/fbs-supplies/${id}/start-work`), {
+    await fetchWithTimeout(apiUrl(`/operations/fbs-supplies/${id}/retry-supply-qr`), {
       method: 'POST',
       headers: { ...ah(token) },
-    }),
+    }, options),
+  )
+}
+
+export async function finishFbsSupplyLocally(
+  token: string,
+  ah: AuthHeaders,
+  supplyId: string,
+  idempotency_key: string,
+  options: FbsRequestOptions = {},
+): Promise<FbsWorkspace> {
+  return jsonOrThrow<FbsWorkspace>(
+    await fetchWithTimeout(apiUrl(`/operations/fbs-supplies/${supplyId}/finish`), {
+      method: 'POST',
+      headers: jsonHeaders(token, ah),
+      body: JSON.stringify({ idempotency_key }),
+    }, options),
+  )
+}
+
+export async function startFbsSupplyWork(
+  token: string,
+  ah: AuthHeaders,
+  id: string,
+  options: FbsRequestOptions = {},
+): Promise<FbsWorkspace> {
+  return jsonOrThrow<FbsWorkspace>(
+    await fetchWithTimeout(apiUrl(`/operations/fbs-supplies/${id}/start-work`), {
+      method: 'POST',
+      headers: { ...ah(token) },
+    }, options),
   )
 }
 
@@ -480,13 +631,30 @@ export async function scanFbsPickLocation(
   ah: AuthHeaders,
   id: string,
   location_barcode: string,
+  options: FbsRequestOptions = {},
 ): Promise<FbsPickLocation> {
   return jsonOrThrow<FbsPickLocation>(
-    await fetch(apiUrl(`/operations/fbs-supplies/${id}/pick/scan-location`), {
+    await fetchWithTimeout(apiUrl(`/operations/fbs-supplies/${id}/pick/scan-location`), {
       method: 'POST',
       headers: jsonHeaders(token, ah),
       body: JSON.stringify({ location_barcode }),
-    }),
+    }, options),
+  )
+}
+
+export async function resolveFbsPickLocation(
+  token: string,
+  ah: AuthHeaders,
+  supplyId: string,
+  reference: FbsPickLocationReference,
+  options: FbsRequestOptions = {},
+): Promise<FbsPickLocation> {
+  return jsonOrThrow<FbsPickLocation>(
+    await fetchWithTimeout(apiUrl(`/operations/fbs-supplies/${supplyId}/pick/resolve-location`), {
+      method: 'POST',
+      headers: jsonHeaders(token, ah),
+      body: JSON.stringify(reference),
+    }, options),
   )
 }
 
@@ -495,13 +663,30 @@ export async function scanFbsPickProduct(
   ah: AuthHeaders,
   id: string,
   body: { location_id: string; product_barcode: string; order_id?: string; idempotency_key: string },
+  options: FbsRequestOptions = {},
 ): Promise<FbsWorkspace> {
   return jsonOrThrow<FbsWorkspace>(
-    await fetch(apiUrl(`/operations/fbs-supplies/${id}/pick/scan-product`), {
+    await fetchWithTimeout(apiUrl(`/operations/fbs-supplies/${id}/pick/scan-product`), {
       method: 'POST',
       headers: jsonHeaders(token, ah),
       body: JSON.stringify(body),
-    }),
+    }, options),
+  )
+}
+
+export async function confirmFbsManualPick(
+  token: string,
+  ah: AuthHeaders,
+  supplyId: string,
+  body: FbsManualPickRequest,
+  options: FbsRequestOptions = {},
+): Promise<FbsWorkspace> {
+  return jsonOrThrow<FbsWorkspace>(
+    await fetchWithTimeout(apiUrl(`/operations/fbs-supplies/${supplyId}/pick/confirm-product`), {
+      method: 'POST',
+      headers: jsonHeaders(token, ah),
+      body: JSON.stringify(body),
+    }, options),
   )
 }
 
@@ -511,13 +696,94 @@ export async function undoFbsPick(
   supplyId: string,
   orderId: string,
   idempotency_key: string,
+  options: FbsRequestOptions = {},
 ): Promise<FbsWorkspace> {
   return jsonOrThrow<FbsWorkspace>(
-    await fetch(apiUrl(`/operations/fbs-supplies/${supplyId}/pick/${orderId}/undo`), {
+    await fetchWithTimeout(apiUrl(`/operations/fbs-supplies/${supplyId}/pick/${orderId}/undo`), {
       method: 'POST',
       headers: jsonHeaders(token, ah),
       body: JSON.stringify({ idempotency_key }),
-    }),
+    }, options),
+  )
+}
+
+export async function fetchFbsPackingBoxes(
+  token: string,
+  ah: AuthHeaders,
+  supplyId: string,
+  options: FbsRequestOptions = {},
+): Promise<FbsWorkspace> {
+  return jsonOrThrow<FbsWorkspace>(
+    await fetchWithTimeout(apiUrl(`/operations/fbs-supplies/${supplyId}/packing-boxes`), {
+      headers: { ...ah(token) },
+    }, options),
+  )
+}
+
+export async function createFbsPackingBoxes(
+  token: string,
+  ah: AuthHeaders,
+  supplyId: string,
+  body: { count: number; idempotency_key: string },
+  options: FbsRequestOptions = {},
+): Promise<FbsWorkspace> {
+  return jsonOrThrow<FbsWorkspace>(
+    await fetchWithTimeout(apiUrl(`/operations/fbs-supplies/${supplyId}/packing-boxes`), {
+      method: 'POST',
+      headers: jsonHeaders(token, ah),
+      body: JSON.stringify(body),
+    }, options),
+  )
+}
+
+export async function assignFbsPackingBoxOrders(
+  token: string,
+  ah: AuthHeaders,
+  supplyId: string,
+  boxId: string,
+  body: { order_ids: string[]; idempotency_key: string },
+  options: FbsRequestOptions = {},
+): Promise<FbsWorkspace> {
+  return jsonOrThrow<FbsWorkspace>(
+    await fetchWithTimeout(apiUrl(`/operations/fbs-supplies/${supplyId}/packing-boxes/${boxId}/orders`), {
+      method: 'PUT',
+      headers: jsonHeaders(token, ah),
+      body: JSON.stringify(body),
+    }, options),
+  )
+}
+
+export async function unassignFbsPackingBoxOrders(
+  token: string,
+  ah: AuthHeaders,
+  supplyId: string,
+  boxId: string,
+  body: { order_ids: string[]; idempotency_key: string },
+  options: FbsRequestOptions = {},
+): Promise<FbsWorkspace> {
+  return jsonOrThrow<FbsWorkspace>(
+    await fetchWithTimeout(apiUrl(`/operations/fbs-supplies/${supplyId}/packing-boxes/${boxId}/orders`), {
+      method: 'DELETE',
+      headers: jsonHeaders(token, ah),
+      body: JSON.stringify(body),
+    }, options),
+  )
+}
+
+export async function deleteFbsPackingBox(
+  token: string,
+  ah: AuthHeaders,
+  supplyId: string,
+  boxId: string,
+  idempotency_key: string,
+  options: FbsRequestOptions = {},
+): Promise<FbsWorkspace> {
+  return jsonOrThrow<FbsWorkspace>(
+    await fetchWithTimeout(apiUrl(`/operations/fbs-supplies/${supplyId}/packing-boxes/${boxId}`), {
+      method: 'DELETE',
+      headers: jsonHeaders(token, ah),
+      body: JSON.stringify({ idempotency_key }),
+    }, options),
   )
 }
 
@@ -538,13 +804,14 @@ export async function scanFbsOrderMetadata(
   ah: AuthHeaders,
   orderId: string,
   body: { kind: string; raw_value: string; idempotency_key: string },
+  options: FbsRequestOptions = {},
 ): Promise<FbsOrderMetadata> {
   return jsonOrThrow<FbsOrderMetadata>(
-    await fetch(apiUrl(`/operations/fbs-orders/${orderId}/metadata/scan`), {
+    await fetchWithTimeout(apiUrl(`/operations/fbs-orders/${orderId}/metadata/scan`), {
       method: 'POST',
       headers: jsonHeaders(token, ah),
       body: JSON.stringify(body),
-    }),
+    }, options),
   )
 }
 
@@ -553,14 +820,55 @@ export async function fetchFbsPrintBatch(
   ah: AuthHeaders,
   supplyId: string,
   body: FbsPrintBatchRequest,
+  options: FbsRequestOptions = {},
 ): Promise<FbsPrintBatch> {
   return jsonOrThrow<FbsPrintBatch>(
-    await fetch(apiUrl(`/operations/fbs-supplies/${supplyId}/print-assets`), {
+    await fetchWithTimeout(apiUrl(`/operations/fbs-supplies/${supplyId}/print-assets`), {
       method: 'POST',
       headers: jsonHeaders(token, ah),
       body: JSON.stringify(body),
+    }, options),
+  )
+}
+
+/**
+ * Loads every protected print image independently. A broken WB asset must not
+ * discard the labels that are already available for printing.
+ */
+export async function fetchFbsPrintPreviewBlobs(
+  token: string,
+  ah: AuthHeaders,
+  assets: FbsPrintAsset[],
+  options: FbsRequestOptions = {},
+): Promise<FbsPrintPreviewLoadResult> {
+  const settled = await Promise.allSettled(
+    assets.map(async (asset): Promise<FbsPrintPreviewBlob> => {
+      if (!asset.preview_url) {
+        throw new Error('У файла нет ссылки на предпросмотр.')
+      }
+      const response = await fetchWithTimeout(resolveFbsAssetUrl(asset.preview_url), {
+        headers: { ...ah(token) },
+      }, options)
+      if (!response.ok) {
+        throw new Error(`Предпросмотр недоступен (${response.status}).`)
+      }
+      return { asset, blob: await response.blob() }
     }),
   )
+
+  const result: FbsPrintPreviewLoadResult = { ready: [], errors: [] }
+  settled.forEach((item, index) => {
+    if (item.status === 'fulfilled') {
+      result.ready.push(item.value)
+      return
+    }
+    const cause = item.reason as unknown
+    result.errors.push({
+      asset: assets[index],
+      message: cause instanceof Error ? cause.message : 'Предпросмотр не загружен.',
+    })
+  })
+  return result
 }
 
 export async function confirmFbsPrintApplied(
@@ -568,13 +876,14 @@ export async function confirmFbsPrintApplied(
   ah: AuthHeaders,
   assetId: string,
   idempotency_key: string,
+  options: FbsRequestOptions = {},
 ): Promise<FbsPrintAsset> {
   return jsonOrThrow<FbsPrintAsset>(
-    await fetch(apiUrl(`/operations/fbs-print-assets/${assetId}/applied`), {
+    await fetchWithTimeout(apiUrl(`/operations/fbs-print-assets/${assetId}/applied`), {
       method: 'POST',
       headers: jsonHeaders(token, ah),
       body: JSON.stringify({ idempotency_key }),
-    }),
+    }, options),
   )
 }
 
@@ -609,6 +918,22 @@ export async function createFbsCargoPlaces(
   return response.cargo_places
 }
 
+export async function deleteFbsCargoPlaces(
+  token: string,
+  ah: AuthHeaders,
+  supplyId: string,
+  body: { wb_trbx_ids: string[]; idempotency_key: string },
+): Promise<FbsCargoPlace[]> {
+  const response = await jsonOrThrow<{ cargo_places: FbsCargoPlace[] }>(
+    await fetch(apiUrl(`/operations/fbs-supplies/${supplyId}/cargo-places`), {
+      method: 'DELETE',
+      headers: jsonHeaders(token, ah),
+      body: JSON.stringify(body),
+    }),
+  )
+  return response.cargo_places
+}
+
 export async function fetchFbsCargoPlaces(
   token: string,
   ah: AuthHeaders,
@@ -626,13 +951,42 @@ export async function preflightFbsDelivery(
   token: string,
   ah: AuthHeaders,
   supplyId: string,
+  options: FbsRequestOptions = {},
 ): Promise<FbsDeliveryPreflight> {
   return jsonOrThrow<FbsDeliveryPreflight>(
-    await fetch(apiUrl(`/operations/fbs-supplies/${supplyId}/delivery-preflight`), {
+    await fetchWithTimeout(apiUrl(`/operations/fbs-supplies/${supplyId}/delivery-preflight`), {
       method: 'POST',
       headers: { ...ah(token) },
-    }),
+    }, options),
   )
+}
+
+export type FbsDeliveryAttemptResult =
+  | { kind: 'delivered'; workspace: FbsWorkspace }
+  | { kind: 'stale_preflight'; preflight: FbsDeliveryPreflight }
+
+/**
+ * Handles the stale-preflight race without silently confirming changed checks.
+ * The caller must render the returned fresh preflight and ask the operator to
+ * confirm again. The idempotency key can then be reused for the next attempt.
+ */
+export async function deliverFbsSupplyWithPreflightRefresh(
+  token: string,
+  ah: AuthHeaders,
+  supplyId: string,
+  body: { idempotency_key: string; confirmed_preflight_version: string },
+  options: FbsRequestOptions = {},
+): Promise<FbsDeliveryAttemptResult> {
+  try {
+    const workspace = await deliverFbsSupply(token, ah, supplyId, body, options)
+    return { kind: 'delivered', workspace }
+  } catch (cause) {
+    if (!(cause instanceof FbsApiError) || cause.code !== 'stale_preflight') throw cause
+    return {
+      kind: 'stale_preflight',
+      preflight: await preflightFbsDelivery(token, ah, supplyId, options),
+    }
+  }
 }
 
 export async function createFbsSupply(
@@ -703,18 +1057,20 @@ export function deliverFbsSupply(
   ah: (t: string) => Record<string, string>,
   id: string,
   body: { idempotency_key: string; confirmed_preflight_version: string },
+  options?: FbsRequestOptions,
 ): Promise<FbsWorkspace>
 export async function deliverFbsSupply(
   token: string,
   ah: (t: string) => Record<string, string>,
   id: string,
   body?: { idempotency_key: string; confirmed_preflight_version: string },
+  options: FbsRequestOptions = {},
 ): Promise<FbsSupply | FbsWorkspace> {
-  const res = await fetch(apiUrl(`/operations/fbs-supplies/${id}/deliver`), {
+  const res = await fetchWithTimeout(apiUrl(`/operations/fbs-supplies/${id}/deliver`), {
     method: 'POST',
     headers: body ? jsonHeaders(token, ah) : { ...ah(token) },
     body: body ? JSON.stringify(body) : undefined,
-  })
+  }, options)
   return jsonOrThrow<FbsSupply | FbsWorkspace>(res)
 }
 
@@ -744,13 +1100,12 @@ export async function getFbsPickingList(
   return data.items
 }
 
-// ── Грузоместа (trbx) для ПВЗ-отгрузок ───────────────────────────────────────
-// Реальные ручки backend/app/api/fbs_supplies.py:
-//   POST /operations/fbs-supplies/{id}/trbx          → создать N грузомест (FbsTrbxCreateBody → FbsTrbxListOut)
-//   POST /operations/fbs-supplies/{id}/trbx/stickers  → получить QR всех грузомест поставки (FbsTrbxStickersOut)
-// Отдельной ручки "список грузомест" на backend нет: /trbx/stickers всегда возвращает
-// ПОЛНЫЙ список грузомест поставки (и попутно докачивает недостающие стикеры у WB),
-// поэтому используем её и как список при открытии карточки.
+// ── Legacy trbx compatibility (deprecated) ───────────────────────────────────
+// Канонический контракт ПВЗ — count-only cargo-places выше (preflightFbsCargoPlaces,
+// createFbsCargoPlaces, fetchFbsCargoPlaces). Без order→trbx allocation.
+// Deprecated compatibility layer:
+//   POST /operations/fbs-supplies/{id}/trbx
+//   POST /operations/fbs-supplies/{id}/trbx/stickers
 
 export type FbsTrbx = {
   id: string
@@ -901,10 +1256,11 @@ export async function fetchFbsWarehouseBindings(
   token: string,
   ah: (t: string) => Record<string, string>,
   sellerId: string,
+  options: FbsRequestOptions = {},
 ): Promise<FbsWarehouseBinding[]> {
-  const res = await fetch(apiUrl(`${sellerBase(sellerId)}/warehouse-bindings`), {
+  const res = await fetchWithTimeout(apiUrl(`${sellerBase(sellerId)}/warehouse-bindings`), {
     headers: { ...ah(token) },
-  })
+  }, options)
   return jsonOrThrow<FbsWarehouseBinding[]>(res)
 }
 
@@ -914,14 +1270,16 @@ export async function upsertFbsWarehouseBinding(
   sellerId: string,
   wbWarehouseId: number,
   body: { wms_warehouse_id: string; stock_sync_enabled: boolean },
+  options: FbsRequestOptions = {},
 ): Promise<FbsWarehouseBinding> {
-  const res = await fetch(
+  const res = await fetchWithTimeout(
     apiUrl(`${sellerBase(sellerId)}/warehouse-bindings/${wbWarehouseId}`),
     {
       method: 'PUT',
       headers: { ...ah(token), 'Content-Type': 'application/json' },
       body: JSON.stringify(body),
     },
+    options,
   )
   return jsonOrThrow<FbsWarehouseBinding>(res)
 }
@@ -931,10 +1289,12 @@ export async function disableFbsWarehouseBinding(
   ah: (t: string) => Record<string, string>,
   sellerId: string,
   wbWarehouseId: number,
+  options: FbsRequestOptions = {},
 ): Promise<FbsWarehouseBinding> {
-  const res = await fetch(
+  const res = await fetchWithTimeout(
     apiUrl(`${sellerBase(sellerId)}/warehouse-bindings/${wbWarehouseId}`),
     { method: 'DELETE', headers: { ...ah(token) } },
+    options,
   )
   return jsonOrThrow<FbsWarehouseBinding>(res)
 }
@@ -944,14 +1304,15 @@ export async function triggerFbsStockSync(
   ah: (t: string) => Record<string, string>,
   sellerId: string,
   wbWarehouseId?: number | null,
+  options: FbsRequestOptions = {},
 ): Promise<FbsStockSyncResult | FbsStockSyncJob> {
-  const res = await fetch(apiUrl(`${sellerBase(sellerId)}/stocks/sync`), {
+  const res = await fetchWithTimeout(apiUrl(`${sellerBase(sellerId)}/stocks/sync`), {
     method: 'POST',
     headers: { ...ah(token), 'Content-Type': 'application/json' },
     body: JSON.stringify(
       wbWarehouseId != null ? { wb_warehouse_id: wbWarehouseId } : {},
     ),
-  })
+  }, options)
   if (!res.ok) throw new Error(await readApiErrorMessage(res))
   return (await res.json()) as FbsStockSyncResult | FbsStockSyncJob
 }
@@ -961,11 +1322,13 @@ export async function fetchFbsStockSyncStatus(
   ah: (t: string) => Record<string, string>,
   sellerId: string,
   wbWarehouseId: number,
+  options: FbsRequestOptions = {},
 ): Promise<FbsStockSyncStatus> {
   const qs = new URLSearchParams({ wb_warehouse_id: String(wbWarehouseId) })
-  const res = await fetch(
+  const res = await fetchWithTimeout(
     apiUrl(`${sellerBase(sellerId)}/stocks/sync-status?${qs.toString()}`),
     { headers: { ...ah(token) } },
+    options,
   )
   return jsonOrThrow<FbsStockSyncStatus>(res)
 }

@@ -25,6 +25,7 @@ from app.models.fbs_print_asset import (
     FBS_PRINT_ASSET_KINDS,
     PRINT_ASSET_KIND_CARGO_PLACE_QR,
     PRINT_ASSET_KIND_ORDER_STICKER,
+    PRINT_ASSET_KIND_SUPPLY_QR,
     PRINT_ASSET_STATUS_ERROR,
     PRINT_ASSET_STATUS_READY,
     PRINT_ASSET_STATUS_REQUESTING,
@@ -43,6 +44,7 @@ from app.services.fbs_print_asset_storage import (
     read_png,
     save_png,
     sha256_checksum,
+    supply_qr_relative_path,
 )
 from app.services.wildberries_client import (
     WildberriesClientError,
@@ -401,6 +403,47 @@ async def upsert_order_sticker_asset_from_bytes(
         _mark_asset_error(asset, code=exc.code, message="Не удалось сохранить стикер.")
         order.sticker_status = STICKER_STATUS_ERROR
         raise
+    return asset
+
+
+async def upsert_supply_qr_asset_from_bytes(
+    session: AsyncSession,
+    *,
+    tenant_id: uuid.UUID,
+    supply: FbsSupply,
+    png_bytes: bytes,
+    fetched_at: datetime | None = None,
+) -> FbsPrintAsset:
+    stmt = select(FbsPrintAsset).where(
+        FbsPrintAsset.tenant_id == tenant_id,
+        FbsPrintAsset.fbs_supply_id == supply.id,
+        FbsPrintAsset.kind == PRINT_ASSET_KIND_SUPPLY_QR,
+    )
+    asset = (await session.execute(stmt)).scalars().first()
+    if asset is None:
+        asset = FbsPrintAsset(
+            tenant_id=tenant_id,
+            seller_id=supply.seller_id,
+            kind=PRINT_ASSET_KIND_SUPPLY_QR,
+            status=PRINT_ASSET_STATUS_REQUESTING,
+            fbs_supply_id=supply.id,
+        )
+        session.add(asset)
+        await session.flush()
+
+    rel = supply_qr_relative_path(supply.id)
+    save_png(rel, png_bytes)
+    asset.status = PRINT_ASSET_STATUS_READY
+    asset.content_type = ORDER_STICKER_CONTENT_TYPE
+    asset.storage_path = rel
+    asset.checksum = sha256_checksum(png_bytes)
+    asset.width_mm = ORDER_STICKER_WIDTH_MM
+    asset.height_mm = ORDER_STICKER_HEIGHT_MM
+    asset.wb_fetched_at = fetched_at or datetime.now(tz=UTC)
+    asset.error_code = None
+    asset.error_message = None
+    supply.barcode_asset_id = asset.id
+    await session.flush()
     return asset
 
 

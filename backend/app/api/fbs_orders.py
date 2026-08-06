@@ -8,7 +8,11 @@ from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query, s
 from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.api.deps import get_effective_seller_id, require_fulfillment_admin
+from app.api.deps import (
+    get_effective_seller_id,
+    require_fbs_operator_access,
+    require_fulfillment_admin,
+)
 from app.api.fbs_errors import raise_fbs_http
 from app.core.settings import settings
 from app.db.session import get_db
@@ -243,7 +247,7 @@ async def start_fbs_orders_sync(
 
 @router.get("/worklist", response_model=FbsWorklistPageOut)
 async def get_fbs_orders_worklist(
-    user: Annotated[User, Depends(require_fulfillment_admin)],
+    user: Annotated[User, Depends(require_fbs_operator_access)],
     session: Annotated[AsyncSession, Depends(get_db)],
     effective_seller_id: Annotated[uuid.UUID | None, Depends(get_effective_seller_id)],
     seller_id: Annotated[uuid.UUID | None, Query()] = None,
@@ -283,7 +287,7 @@ async def get_fbs_orders_worklist(
 
 @router.get("", response_model=list[FbsOrderOut])
 async def get_fbs_orders(
-    user: Annotated[User, Depends(require_fulfillment_admin)],
+    user: Annotated[User, Depends(require_fbs_operator_access)],
     session: Annotated[AsyncSession, Depends(get_db)],
     effective_seller_id: Annotated[uuid.UUID | None, Depends(get_effective_seller_id)],
     seller_id: Annotated[uuid.UUID | None, Query()] = None,
@@ -323,7 +327,7 @@ def _raise_cancellation_http(exc: FbsCancellationError) -> None:
 @router.patch("/{order_id}/cancel", response_model=FbsOrderOut)
 async def cancel_fbs_order(
     order_id: uuid.UUID,
-    user: Annotated[User, Depends(require_fulfillment_admin)],
+    user: Annotated[User, Depends(require_fbs_operator_access)],
     session: Annotated[AsyncSession, Depends(get_db)],
 ) -> FbsOrderOut:
     async with httpx.AsyncClient() as http_client:
@@ -339,7 +343,7 @@ async def cancel_fbs_order(
 @router.post("/sync-statuses", response_model=FbsOrderSyncStatusesOut)
 async def sync_fbs_order_statuses(
     body: FbsOrderSyncStatusesBody,
-    user: Annotated[User, Depends(require_fulfillment_admin)],
+    user: Annotated[User, Depends(require_fbs_operator_access)],
     session: Annotated[AsyncSession, Depends(get_db)],
 ) -> FbsOrderSyncStatusesOut:
     seller = await session.get(Seller, body.seller_id)

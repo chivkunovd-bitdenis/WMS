@@ -217,7 +217,7 @@ export function AuthedAppLayout({
                 <ListItemText primary="Отгрузки на МП" />
               </ListItemButton>
             ) : null}
-            {isAdmin ? (
+            {can('packaging') ? (
               <ListItemButton component={NavLink} to={`${base}/fbs`} data-testid="nav-ff-fbs">
                 <ListItemText primary="FBS" />
               </ListItemButton>

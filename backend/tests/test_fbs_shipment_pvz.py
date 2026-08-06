@@ -4,7 +4,7 @@ import uuid
 from typing import Any
 
 import pytest
-from httpx import AsyncClient
+from httpx import AsyncClient, Response
 from sqlalchemy import select
 
 from app.core.settings import settings
@@ -90,6 +90,25 @@ async def _create_cargo_places(
         json=payload,
     )
     return response
+
+
+async def _delete_cargo_places(
+    async_client: AsyncClient,
+    headers: dict[str, str],
+    supply_id: str,
+    *,
+    wb_trbx_ids: list[str],
+    idempotency_key: str | None = None,
+) -> Response:
+    return await async_client.request(
+        "DELETE",
+        f"/operations/fbs-supplies/{supply_id}/cargo-places",
+        headers=headers,
+        json={
+            "wb_trbx_ids": wb_trbx_ids,
+            "idempotency_key": idempotency_key or str(uuid.uuid4()),
+        },
+    )
 
 
 # TC-17 — count creates WB trbx; each has printable QR; no order→trbx mapping
@@ -757,3 +776,263 @@ async def test_fbs_pvz_deliver_requires_cargo_places_and_qr(
         supply_row = await session.get(FbsSupply, uuid.UUID(supply["id"]))
         assert supply_row is not None
         assert supply_row.status == FBS_SUPPLY_STATUS_IN_DELIVERY
+
+
+# TC-NEW-FBS-PVZ-DELETE-001 — delete selected cargo places while supply is assembling
+@pytest.mark.asyncio
+async def test_pvz_delete_cargo_places_ok(
+    async_client: AsyncClient,
+    enable_wb_marketplace_supplies_mock: None,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    headers, suffix = await _register_ff_admin(async_client)
+    seller_id, warehouse_id, tenant_id = await _setup_seller_with_token(
+        async_client, headers, suffix
+    )
+    supply, _ = await _prepare_pvz_supply(
+        async_client,
+        headers,
+        seller_id,
+        warehouse_id,
+        tenant_id,
+        wb_order_ids=[971001, 971002],
+        supply_name="PVZ delete cargo",
+    )
+
+    create = await _create_cargo_places(async_client, headers, supply["id"], count=2)
+    assert create.status_code == 201, create.text
+    places = create.json()["cargo_places"]
+    assert len(places) == 2
+    delete_target = places[0]["wb_trbx_id"]
+    keep_target = places[1]["wb_trbx_id"]
+    idem_key = str(uuid.uuid4())
+
+    import app.services.fbs_shipment_pvz_service as pvz_mod
+
+    delete_calls = 0
+    real_delete = pvz_mod.delete_marketplace_supply_trbx
+
+    async def counted_delete(
+        client: object,
+        *,
+        api_token: str,
+        supply_id: str,
+        trbx_ids: list[str],
+        marketplace_api_base: str | None = None,
+    ) -> None:
+        nonlocal delete_calls
+        delete_calls += 1
+        await real_delete(
+            client,  # type: ignore[arg-type]
+            api_token=api_token,
+            supply_id=supply_id,
+            trbx_ids=trbx_ids,
+            marketplace_api_base=marketplace_api_base,
+        )
+
+    monkeypatch.setattr(pvz_mod, "delete_marketplace_supply_trbx", counted_delete)
+
+    deleted = await _delete_cargo_places(
+        async_client,
+        headers,
+        supply["id"],
+        wb_trbx_ids=[delete_target],
+        idempotency_key=idem_key,
+    )
+    assert deleted.status_code == 200, deleted.text
+    remaining = deleted.json()["cargo_places"]
+    assert len(remaining) == 1
+    assert remaining[0]["wb_trbx_id"] == keep_target
+    assert delete_calls == 1
+
+    retry = await _delete_cargo_places(
+        async_client,
+        headers,
+        supply["id"],
+        wb_trbx_ids=[delete_target],
+        idempotency_key=idem_key,
+    )
+    assert retry.status_code == 200, retry.text
+    assert [row["wb_trbx_id"] for row in retry.json()["cargo_places"]] == [keep_target]
+    assert delete_calls == 1
+
+    async with SessionLocal() as session:
+        trbx_rows = (
+            await session.execute(
+                select(FbsTrbx).where(FbsTrbx.supply_id == uuid.UUID(supply["id"]))
+            )
+        ).scalars().all()
+        assert len(trbx_rows) == 1
+        assert trbx_rows[0].wb_trbx_id == keep_target
+        assets = (
+            await session.execute(
+                select(FbsPrintAsset).where(
+                    FbsPrintAsset.fbs_trbx_id == trbx_rows[0].id,
+                    FbsPrintAsset.kind == PRINT_ASSET_KIND_CARGO_PLACE_QR,
+                )
+            )
+        ).scalars().all()
+        assert len(assets) == 1
+
+
+# TC-NEW-FBS-PVZ-DELETE-002 — lost DELETE response reconciles without double delete
+@pytest.mark.asyncio
+async def test_pvz_delete_cargo_places_transport_reconciles_without_double_delete(
+    async_client: AsyncClient,
+    enable_wb_marketplace_supplies_mock: None,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    headers, suffix = await _register_ff_admin(async_client)
+    seller_id, warehouse_id, tenant_id = await _setup_seller_with_token(
+        async_client, headers, suffix
+    )
+    supply, _ = await _prepare_pvz_supply(
+        async_client,
+        headers,
+        seller_id,
+        warehouse_id,
+        tenant_id,
+        wb_order_ids=[971101, 971102],
+        supply_name="PVZ delete reconcile",
+    )
+
+    create = await _create_cargo_places(async_client, headers, supply["id"], count=2)
+    assert create.status_code == 201, create.text
+    places = create.json()["cargo_places"]
+    delete_target = places[0]["wb_trbx_id"]
+    keep_target = places[1]["wb_trbx_id"]
+    idem_key = str(uuid.uuid4())
+
+    import app.services.fbs_shipment_pvz_service as pvz_mod
+
+    delete_calls: list[list[str]] = []
+    real_delete = pvz_mod.delete_marketplace_supply_trbx
+
+    async def delete_then_lose_response(
+        client: object,
+        *,
+        api_token: str,
+        supply_id: str,
+        trbx_ids: list[str],
+        marketplace_api_base: str | None = None,
+    ) -> None:
+        delete_calls.append(list(trbx_ids))
+        await real_delete(
+            client,  # type: ignore[arg-type]
+            api_token=api_token,
+            supply_id=supply_id,
+            trbx_ids=trbx_ids,
+            marketplace_api_base=marketplace_api_base,
+        )
+        raise WildberriesClientError("transport_error")
+
+    monkeypatch.setattr(pvz_mod, "delete_marketplace_supply_trbx", delete_then_lose_response)
+
+    first = await _delete_cargo_places(
+        async_client,
+        headers,
+        supply["id"],
+        wb_trbx_ids=[delete_target],
+        idempotency_key=idem_key,
+    )
+    assert first.status_code == 504, first.text
+    assert first.json()["detail"]["code"] == "wb_timeout"
+    assert delete_calls == [[delete_target]]
+
+    async with SessionLocal() as session:
+        trbx_rows = (
+            await session.execute(
+                select(FbsTrbx).where(FbsTrbx.supply_id == uuid.UUID(supply["id"]))
+            )
+        ).scalars().all()
+        assert len(trbx_rows) == 2
+        operation = await session.scalar(
+            select(FbsWbOperation).where(FbsWbOperation.idempotency_key == idem_key)
+        )
+        assert operation is not None
+        assert operation.state == WB_OPERATION_STATE_PENDING_CONFIRMATION
+
+    retry = await _delete_cargo_places(
+        async_client,
+        headers,
+        supply["id"],
+        wb_trbx_ids=[delete_target],
+        idempotency_key=idem_key,
+    )
+    assert retry.status_code == 200, retry.text
+    remaining = retry.json()["cargo_places"]
+    assert len(remaining) == 1
+    assert remaining[0]["wb_trbx_id"] == keep_target
+    assert delete_calls == [[delete_target]]
+
+    async with SessionLocal() as session:
+        operation = await session.scalar(
+            select(FbsWbOperation).where(FbsWbOperation.idempotency_key == idem_key)
+        )
+        assert operation is not None
+        assert operation.state == WB_OPERATION_STATE_CONFIRMED
+
+
+# TC-NEW-FBS-PVZ-DELETE-003 — guards: unknown id, wrong route, post-deliver block
+@pytest.mark.asyncio
+async def test_pvz_delete_cargo_places_guards(
+    async_client: AsyncClient,
+    enable_wb_marketplace_supplies_mock: None,
+) -> None:
+    headers, suffix = await _register_ff_admin(async_client)
+    seller_id, warehouse_id, tenant_id = await _setup_seller_with_token(
+        async_client, headers, suffix
+    )
+
+    pvz_supply, _ = await _prepare_pvz_supply(
+        async_client,
+        headers,
+        seller_id,
+        warehouse_id,
+        tenant_id,
+        wb_order_ids=[971201],
+        supply_name="PVZ delete guards",
+    )
+    create = await _create_cargo_places(async_client, headers, pvz_supply["id"], count=1)
+    assert create.status_code == 201, create.text
+    wb_id = create.json()["cargo_places"][0]["wb_trbx_id"]
+
+    missing = await _delete_cargo_places(
+        async_client,
+        headers,
+        pvz_supply["id"],
+        wb_trbx_ids=["MOCK-TRBX-MISSING"],
+    )
+    assert missing.status_code == 404
+    assert missing.json()["detail"]["code"] == "cargo_place_not_found"
+
+    wh_supply, _ = await _prepare_supply_with_orders(
+        async_client,
+        headers,
+        seller_id,
+        warehouse_id,
+        tenant_id,
+        wb_order_ids=[971202],
+        supply_name="WH delete blocked",
+        delivery_type="warehouse_sc",
+    )
+    wh_delete = await _delete_cargo_places(
+        async_client,
+        headers,
+        wh_supply["id"],
+        wb_trbx_ids=[wb_id],
+    )
+    assert wh_delete.status_code == 400
+    assert wh_delete.json()["detail"]["code"] == "wrong_delivery_type"
+
+    deliver = await _deliver_with_preflight(async_client, headers, pvz_supply["id"])
+    assert deliver.status_code == 200, deliver.text
+
+    blocked = await _delete_cargo_places(
+        async_client,
+        headers,
+        pvz_supply["id"],
+        wb_trbx_ids=[wb_id],
+    )
+    assert blocked.status_code == 409
+    assert blocked.json()["detail"]["code"] == "supply_bad_status"

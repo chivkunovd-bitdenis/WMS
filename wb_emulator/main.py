@@ -12,6 +12,7 @@ from wb_emulator.db import init_db
 from wb_emulator.routes import marketplace_supplies as marketplace_supplies_routes
 from wb_emulator.routes import supplies as supplies_routes
 from wb_emulator.routes.admin import admin_router
+from wb_emulator.routes.assets import router as assets_router
 from wb_emulator.routes.media_meta import router as media_meta_router
 from wb_emulator.routes.orders import router as orders_router
 from wb_emulator.routes.stocks import router as stocks_router
@@ -48,6 +49,7 @@ def create_app() -> FastAPI:
     app.include_router(warehouses_router, prefix="/api/v3")
     app.include_router(stocks_router, prefix="/api/v3")
     app.include_router(admin_router)
+    app.include_router(assets_router)
 
     @app.get("/health", tags=["health"])
     def health() -> dict[str, str]:
