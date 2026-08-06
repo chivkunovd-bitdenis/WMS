@@ -1078,90 +1078,61 @@ export function FfFbsSupplyWorkspace({
                           <Typography variant="body2" sx={{ fontWeight: 700 }}>{row.product.name}</Typography>
                           {row.identifiers ? <Typography variant="caption" color="text.secondary">{row.identifiers}</Typography> : null}
                         </Box>
-                        <TextField
-                          select
-                          size="small"
-                          label="Ячейка"
-                          value={row.location.id}
-                          disabled={!stageIsCurrent || busy}
-                          onChange={(event) => {
-                            const locationId = String(event.target.value)
-                            setManualPickLocationRows((current) => {
-                              const currentRows = current[row.productId] ?? row.selectedLocationIds
-                              const nextRows = [...currentRows]
-                              nextRows[row.rowIndex] = locationId
-                              return { ...current, [row.productId]: nextRows }
-                            })
-                          }}
-                          sx={{ width: { xs: '100%', md: 180 } }}
-                        >
-                          {row.locationOptions.map((location) => (
-                            <MenuItem key={location.id} value={location.id}>{location.code}</MenuItem>
-                          ))}
-                        </TextField>
+                        <Stack direction="row" spacing={0.75} sx={{ width: { xs: '100%', md: 232 } }}>
+                          <TextField
+                            select
+                            size="small"
+                            label="Ячейка"
+                            value={row.location.id}
+                            disabled={!stageIsCurrent || busy}
+                            onChange={(event) => {
+                              const locationId = String(event.target.value)
+                              setManualPickLocationRows((current) => {
+                                const currentRows = current[row.productId] ?? row.selectedLocationIds
+                                const nextRows = [...currentRows]
+                                nextRows[row.rowIndex] = locationId
+                                return { ...current, [row.productId]: nextRows }
+                              })
+                            }}
+                            sx={{ flex: 1 }}
+                          >
+                            {row.locationOptions.map((location) => (
+                              <MenuItem key={location.id} value={location.id}>{location.code}</MenuItem>
+                            ))}
+                          </TextField>
+                          <Button
+                            size="small"
+                            variant="outlined"
+                            disabled={!stageIsCurrent || busy || !row.nextLocationId}
+                            aria-label="Добавить ячейку"
+                            onClick={() => {
+                              if (!row.nextLocationId) return
+                              setManualPickLocationRows((current) => {
+                                const currentRows = current[row.productId] ?? row.selectedLocationIds
+                                return { ...current, [row.productId]: [...currentRows, row.nextLocationId!] }
+                              })
+                            }}
+                            sx={{ minWidth: 38, px: 0 }}
+                          >
+                            +
+                          </Button>
+                        </Stack>
                         <Box sx={{ minWidth: { md: 150 } }}>
                           <Typography variant="body2">К снятию: {row.orderIds.length} шт.</Typography>
                           <Typography variant="caption" color="text.secondary">Доступно: {row.location.available} шт.</Typography>
                         </Box>
-                        <Stack direction="row" spacing={1}>
-                          <Button
-                            variant="contained"
-                            size="small"
-                            disabled={!stageIsCurrent || busy}
-                            onClick={() => void pickFromCell(row.location.id, row.productId, row.orderIds)}
-                          >
-                            Снять {row.orderIds.length} шт.
-                          </Button>
-                          {row.nextLocationId ? (
-                            <Button
-                              size="small"
-                              variant="outlined"
-                              disabled={!stageIsCurrent || busy}
-                              onClick={() => {
-                                setManualPickLocationRows((current) => {
-                                  const currentRows = current[row.productId] ?? row.selectedLocationIds
-                                  return { ...current, [row.productId]: [...currentRows, row.nextLocationId!] }
-                                })
-                              }}
-                            >
-                              +
-                            </Button>
-                          ) : null}
-                        </Stack>
+                        <Button
+                          variant="contained"
+                          size="small"
+                          disabled={!stageIsCurrent || busy}
+                          onClick={() => void pickFromCell(row.location.id, row.productId, row.orderIds)}
+                        >
+                          Снять {row.orderIds.length} шт.
+                        </Button>
                       </Stack>
                     ))}
                   </Stack>
                 )}
-              </Paper>
-              <Paper variant="outlined" sx={{ p: 2 }}>
-                <Typography variant="subtitle1" gutterBottom>Товары в подборе: {workspace.progress.picked}/{workspace.progress.total}</Typography>
-                <Table size="small">
-                  <TableHead><TableRow><TableCell>Товар</TableCell><TableCell>Точная ячейка</TableCell><TableCell>Взять</TableCell><TableCell>Подобрано</TableCell></TableRow></TableHead>
-                  <TableBody>
-                    {pickingRows.map((row) => (
-                      <TableRow key={row.key}>
-                        <TableCell>
-                          <Stack direction="row" spacing={1.5} sx={{ alignItems: 'center' }}>
-                            <ProductPhotoThumb src={row.imageUrl} alt={row.name} size={52} />
-                            <Box>
-                              <Typography variant="body2" sx={{ fontWeight: 700 }}>{row.name}</Typography>
-                              {row.identifiers.length ? (
-                                <Typography variant="caption" color="text.secondary" sx={{ display: 'block' }}>
-                                  {row.identifiers.join(' · ')}
-                                </Typography>
-                              ) : null}
-                            </Box>
-                          </Stack>
-                        </TableCell>
-                        <TableCell>{row.locations.length ? row.locations.join(', ') : 'Ячейка не назначена'}</TableCell>
-                        <TableCell>{row.required}</TableCell>
-                        <TableCell>{row.picked} из {row.required}</TableCell>
-                      </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
-                <Divider sx={{ my: 2 }} />
-                {stageIsCurrent && workspace.orders.some((order) => order.pick.status === 'picked' && order.pack.status !== 'packed') ? <Button size="small" variant="text" onClick={() => setUndoOrderId(workspace.orders.find((order) => order.pick.status === 'picked' && order.pack.status !== 'packed')?.id ?? null)}>Исправить ошибку подбора</Button> : null}
               </Paper>
             </Stack>
           ) : null}
