@@ -252,7 +252,12 @@ async function pickAndPack(page: Page, route: RouteName, testInfo: TestInfo) {
   await page.getByTestId("ff-packaging-pack-btn").click();
   await expect(page.getByTestId("ff-packaging-ack-all-packed")).toHaveCount(0);
   await expect(page.getByTestId("ff-packaging-complete")).toBeEnabled();
-  const [completeResponse] = await Promise.all([
+  const [completeRequest, completeResponse] = await Promise.all([
+    page.waitForRequest(
+      (item) =>
+        item.url().includes("/operations/packaging-tasks/") &&
+        item.url().endsWith("/complete"),
+    ),
     page.waitForResponse(
       (item) =>
         item.url().includes("/operations/packaging-tasks/") &&
@@ -261,6 +266,7 @@ async function pickAndPack(page: Page, route: RouteName, testInfo: TestInfo) {
     ),
     page.getByTestId("ff-packaging-complete").click(),
   ]);
+  expect(completeRequest.postDataJSON()).toEqual({ acknowledge_all_packed: false });
   const completedTask = (await completeResponse.json()) as { status: string };
   expect(completedTask.status).toBe("done");
 

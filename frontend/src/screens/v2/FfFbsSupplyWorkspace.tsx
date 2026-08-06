@@ -649,7 +649,7 @@ export function FfFbsSupplyWorkspace({
       const done = await fetch(apiUrl(`/operations/packaging-tasks/${current.id}/complete`), {
         method: 'POST',
         headers: { ...authHeaders(token), 'Content-Type': 'application/json' },
-        body: JSON.stringify({ acknowledge_all_packed: true }),
+        body: JSON.stringify({ acknowledge_all_packed: false }),
       })
       if (!done.ok) {
         setError(await readApiErrorMessage(done))
