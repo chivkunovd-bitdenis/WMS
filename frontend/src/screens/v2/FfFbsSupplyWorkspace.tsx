@@ -23,17 +23,19 @@ import {
   TableHead,
   TableRow,
   TextField,
+  Tooltip,
   Typography,
 } from '@mui/material'
 import CloseIcon from '@mui/icons-material/Close'
 import DeleteOutlinedIcon from '@mui/icons-material/DeleteOutlined'
 import LocalShippingOutlinedIcon from '@mui/icons-material/LocalShippingOutlined'
 import PrintOutlinedIcon from '@mui/icons-material/PrintOutlined'
+import QrCode2OutlinedIcon from '@mui/icons-material/QrCode2Outlined'
 import RefreshOutlinedIcon from '@mui/icons-material/RefreshOutlined'
 import { apiUrl } from '../../api'
-import { FbsMarkingStatusChip, FbsStickerStatusChip } from '../../components/fbs/FbsChips'
 import { ProductPhotoThumb } from '../../components/ProductPhotoThumb'
-import { FfPackagingTaskPanel, type PackagingTask } from '../ff/FfPackagingPage'
+import { FfPackagingTaskPanel, type PackagingTask, type PackagingTaskLine } from '../ff/FfPackagingPage'
+import { useMarkingCodePrint } from '../../utils/useMarkingCodePrint'
 import { readApiErrorMessage } from '../../utils/readApiErrorMessage'
 import { FbsPrintPreviewDialog } from './FbsPrintPreviewDialog'
 import { buildFbsPickingListPrintHtml, metadataKindLabel, normalizeMetadataKind, ordersWord } from './fbsUx'
@@ -79,8 +81,8 @@ const STAGES = [
   { key: 'composition', label: 'Состав' },
   { key: 'picking', label: 'Подбор' },
   { key: 'packing', label: 'Упаковка и маркировка' },
-  { key: 'boxes', label: 'Упаковка в короба' },
-  { key: 'delivery', label: 'QR поставки' },
+  { key: 'boxes', label: 'Короба' },
+  { key: 'delivery', label: 'Сдача в WB' },
 ] as const
 
 type StageKey = (typeof STAGES)[number]['key']
@@ -114,6 +116,15 @@ function visualStage(stage: FbsWorkspace['stage']): StageKey {
   if (stage === 'order_stickers') return 'packing'
   if (stage === 'handoff_prep') return 'boxes'
   return stage === 'tracking' ? 'delivery' : stage
+}
+
+const MARKING_ACCEPTED_STATUSES = ['accepted', 'assigned', 'allowed_without_check', 'ok']
+const STICKER_PRINTED_STATUSES = ['print_opened', 'applied']
+
+function isOrderMarkingReady(order: FbsWorkspace['orders'][number]) {
+  if (order.metadata.required.length === 0) return true
+  const accepted = order.metadata.states.filter((state) => MARKING_ACCEPTED_STATUSES.includes(state.status))
+  return accepted.length >= order.metadata.required.length
 }
 
 function Metric({ label, value }: { label: string; value: string }) {
@@ -162,6 +173,8 @@ export function FfFbsSupplyWorkspace({
   const [deliverySubmitted, setDeliverySubmitted] = useState(false)
   const [undoOrderId, setUndoOrderId] = useState<string | null>(null)
   const [retryAction, setRetryAction] = useState<(() => void) | null>(null)
+  const [tzLine, setTzLine] = useState<PackagingTaskLine | null>(null)
+  const { openPrint, dialog: markingPrintDialog } = useMarkingCodePrint()
 
   const load = useCallback(
     async (silent = false) => {
@@ -485,6 +498,80 @@ export function FfFbsSupplyWorkspace({
     }
   }
 
+  const refreshPackagingTask = useCallback(async () => {
+    const taskId = workspace?.supply.packaging_task_id
+    if (!taskId) return
+    try {
+      const response = await fetch(apiUrl(`/operations/packaging-tasks/${taskId}`), { headers: { ...authHeaders(token) } })
+      if (response.ok) setPackagingTask((await response.json()) as PackagingTask)
+    } catch {
+      // Обновление задания не критично: следующая загрузка workspace синхронизирует состояние.
+    }
+    await load(true)
+  }, [workspace?.supply.packaging_task_id, token, authHeaders, load])
+
+  /** Печать ЧЗ и ШК конкретного заказа через стандартный конструктор системы. */
+  const openOrderMarkingPrint = (line: PackagingTaskLine, reprint = false) => {
+    openPrint(
+      {
+        token,
+        lineId: line.id,
+        productId: line.product_id,
+        documentNumber: workspace?.supply.name ?? null,
+        qtyNeedPack: 1,
+        markingAvailable: line.marking_available_count,
+        qtyMarkingPrinted: line.qty_marking_printed,
+        requiresHonestSign: line.requires_honest_sign,
+        skuCode: line.sku_code,
+        productName: line.product_name,
+        packagingInstructions: line.packaging_instructions,
+        onPrinted: () => { void refreshPackagingTask() },
+      },
+      { reprint },
+    )
+  }
+
+  /** Одно действие вместо подтверждения упаковки на каждом товаре. */
+  const packEverything = async () => {
+    if (!packagingTask) return
+    setBusy(true)
+    setError(null)
+    setNotice(null)
+    try {
+      let current = packagingTask
+      for (const line of current.lines) {
+        const remaining = line.qty_need_pack - line.qty_packed_in_task
+        if (remaining <= 0) continue
+        const response = await fetch(apiUrl(`/operations/packaging-tasks/${current.id}/lines/${line.id}/pack`), {
+          method: 'POST',
+          headers: { ...authHeaders(token), 'Content-Type': 'application/json' },
+          body: JSON.stringify({ quantity: remaining }),
+        })
+        if (!response.ok) {
+          setError(await readApiErrorMessage(response))
+          return
+        }
+        current = ((await response.json()) as { packaging_task: PackagingTask }).packaging_task
+      }
+      const done = await fetch(apiUrl(`/operations/packaging-tasks/${current.id}/complete`), {
+        method: 'POST',
+        headers: { ...authHeaders(token), 'Content-Type': 'application/json' },
+        body: JSON.stringify({ acknowledge_all_packed: true }),
+      })
+      if (!done.ok) {
+        setError(await readApiErrorMessage(done))
+        return
+      }
+      setPackagingTask((await done.json()) as PackagingTask)
+      setNotice('Упаковка завершена.')
+      await load()
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : 'Не удалось завершить упаковку.')
+    } finally {
+      setBusy(false)
+    }
+  }
+
   const total = workspace?.progress.total ?? 0
   const ready = workspace
     ? Math.min(
@@ -582,6 +669,30 @@ export function FfFbsSupplyWorkspace({
     }))
     printWindow.document.close()
   }
+  const packLineByProduct = useMemo(() => {
+    const map = new Map<string, PackagingTaskLine>()
+    for (const line of packagingTask?.lines ?? []) map.set(line.product_id, line)
+    return map
+  }, [packagingTask])
+
+  /** Строка упаковки — один заказ. Заказы одного товара идут подряд. */
+  const packingOrders = useMemo(() => {
+    if (!workspace) return []
+    return [...workspace.orders].sort((a, b) => {
+      const byName = a.product.name.localeCompare(b.product.name, 'ru')
+      if (byName !== 0) return byName
+      return a.wb_order_id - b.wb_order_id
+    })
+  }, [workspace])
+
+  const orderPrintDone = useCallback(
+    (order: FbsWorkspace['orders'][number]) =>
+      STICKER_PRINTED_STATUSES.includes(order.sticker.status) && isOrderMarkingReady(order),
+    [],
+  )
+
+  const printedOrdersCount = packingOrders.filter(orderPrintDone).length
+
   const stageBlockers = useMemo(() => {
     if (stage === 'packing') {
       return workspace?.blockers.filter((blocker) => blocker.stage === 'packing' || blocker.stage === 'order_stickers') ?? []
@@ -788,43 +899,37 @@ export function FfFbsSupplyWorkspace({
                     alwaysShowPrintAction
                     renderLineActions={(line) => {
                       const lineOrders = workspace.orders.filter((order) => order.product.id === line.product_id)
+                      if (lineOrders.length === 0) return null
+                      const orderIds = lineOrders.map((order) => order.id)
+                      const printedCount = lineOrders.filter((order) => STICKER_PRINTED_STATUSES.includes(order.sticker.status)).length
+                      const stickerFailed = lineOrders.some((order) => order.sticker.status === 'error')
+                      const pendingMetadataOrder = lineOrders.find((order) => !isOrderMarkingReady(order))
+                      const stickerTitle = stickerFailed
+                        ? 'Стикер заказа WB: ошибка получения, можно повторить'
+                        : printedCount === lineOrders.length
+                          ? `Стикеры заказов WB напечатаны: ${printedCount} из ${lineOrders.length}`
+                          : `Печать стикеров заказов WB: ${printedCount} из ${lineOrders.length}`
                       return (
-                        <Stack spacing={0.75} sx={{ alignItems: 'flex-end' }}>
-                          {lineOrders.map((order) => (
-                            <Box key={order.id} data-testid={`fbs-order-marking-${order.id}`}>
-                              <Stack direction="row" spacing={0.5} sx={{ justifyContent: 'flex-end', alignItems: 'center', flexWrap: 'wrap' }}>
-                                <Typography variant="caption" sx={{ fontWeight: 700 }}>WB №{order.wb_order_id}</Typography>
-                                <FbsMarkingStatusChip required={order.metadata.required} states={order.metadata.states} />
-                                <FbsStickerStatusChip status={order.sticker.status} />
-                                {order.metadata.required.length ? (
-                                  <Button
-                                    size="small"
-                                    variant="outlined"
-                                    disabled={!packagingEditable || busy}
-                                    onClick={() => {
-                                      setMetadataOrderId(order.id)
-                                      setMetadataKind(normalizeMetadataKind(order.metadata.required[0]))
-                                      setMetadataValue('')
-                                      setMetadataDialogOpen(true)
-                                    }}
-                                    data-testid={`fbs-metadata-open-${order.id}`}
-                                  >
-                                    Ввести {metadataKindLabel(order.metadata.required[0])}
-                                  </Button>
-                                ) : null}
-                                <Button
-                                  size="small"
-                                  variant="contained"
-                                  startIcon={<PrintOutlinedIcon />}
-                                  disabled={!packagingEditable || busy}
-                                  onClick={() => void requestPrintBatch([order.id])}
-                                  data-testid={`fbs-order-sticker-print-${order.id}`}
-                                >
-                                  Стикер WB
-                                </Button>
-                              </Stack>
-                            </Box>
-                          ))}
+                        <Stack
+                          direction="row"
+                          spacing={0.5}
+                          sx={{ alignItems: 'center', justifyContent: 'flex-end' }}
+                          data-testid={`fbs-line-actions-${line.id}`}
+                        >
+                          <Tooltip title={stickerTitle}>
+                            <span>
+                              <IconButton
+                                size="small"
+                                color={stickerFailed ? 'error' : printedCount === lineOrders.length ? 'success' : 'default'}
+                                disabled={!packagingEditable || busy}
+                                aria-label={stickerTitle}
+                                onClick={() => void requestPrintBatch(orderIds)}
+                                data-testid={`fbs-order-sticker-print-${lineOrders[0].id}`}
+                              >
+                                <QrCode2OutlinedIcon fontSize="small" />
+                              </IconButton>
+                            </span>
+                          </Tooltip>
                         </Stack>
                       )
                     }}

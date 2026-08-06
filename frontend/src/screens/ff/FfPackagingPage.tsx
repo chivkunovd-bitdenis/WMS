@@ -686,7 +686,7 @@ export function FfPackagingTaskPanel({
                     : 'ff-packaging-line'
                 }
                 sx={
-                  markingProgressIncomplete
+                  markingProgressIncomplete && !simplifiedQuantities
                     ? {
                         bgcolor: 'warning.light',
                         '&:hover': { bgcolor: 'warning.light' },
@@ -740,13 +740,15 @@ export function FfPackagingTaskPanel({
                       >
                         напечатано {ln.qty_marking_printed} / нужно {ln.qty_need_pack}
                       </Typography>
-                      <Typography
-                        variant="caption"
-                        color="text.secondary"
-                        data-testid={`ff-packaging-marking-pool-${ln.id}`}
-                      >
-                        дост. {ln.marking_available_count} в пуле
-                      </Typography>
+                      {!simplifiedQuantities ? (
+                        <Typography
+                          variant="caption"
+                          color="text.secondary"
+                          data-testid={`ff-packaging-marking-pool-${ln.id}`}
+                        >
+                          дост. {ln.marking_available_count} в пуле
+                        </Typography>
+                      ) : null}
                     </Stack>
                   ) : (
                     '—'
@@ -754,7 +756,7 @@ export function FfPackagingTaskPanel({
                 </TableCell>
                 <TableCell align="right">
                   <Stack direction="row" spacing={0.5} sx={{ justifyContent: 'flex-end', flexWrap: 'wrap' }}>
-                    {!hidePrintActions && ln.requires_honest_sign && !isMpUnloadTask && ln.qty_need_pack > 0 && ln.qty_marking_printed < 1 ? (
+                    {!hidePrintActions && !simplifiedQuantities && ln.requires_honest_sign && !isMpUnloadTask && ln.qty_need_pack > 0 && ln.qty_marking_printed < 1 ? (
                       <Button
                         size="small"
                         variant="outlined"
