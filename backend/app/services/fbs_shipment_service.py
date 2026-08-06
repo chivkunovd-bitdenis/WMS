@@ -99,9 +99,13 @@ class FbsShipmentError(Exception):
         super().__init__(code)
 
 
+PACKING_BOX_STATUS_CLOSED = "closed"
+
+
 @dataclass(frozen=True)
 class PackingDistribution:
     box_ids: tuple[uuid.UUID, ...]
+    box_statuses: tuple[tuple[uuid.UUID, str], ...]
     assignments: tuple[tuple[uuid.UUID, uuid.UUID], ...]
 
     def assignment_counts(self) -> dict[uuid.UUID, int]:
@@ -294,20 +298,22 @@ async def _load_packing_distribution(
     tenant_id: uuid.UUID,
     supply_id: uuid.UUID,
 ) -> PackingDistribution:
-    box_ids = tuple(
+    box_rows = tuple(
         (
             await session.execute(
-                select(FbsPackingBox.id)
+                select(FbsPackingBox.id, FbsPackingBox.status)
                 .where(
                     FbsPackingBox.tenant_id == tenant_id,
                     FbsPackingBox.supply_id == supply_id,
                 )
                 .order_by(FbsPackingBox.id)
             )
-        ).scalars()
+        ).tuples()
     )
-    if not box_ids:
-        return PackingDistribution(box_ids=(), assignments=())
+    if not box_rows:
+        return PackingDistribution(box_ids=(), box_statuses=(), assignments=())
+    box_ids = tuple(row[0] for row in box_rows)
+    box_statuses = tuple((row[0], str(row[1])) for row in box_rows)
     assignments = tuple(
         (
             await session.execute(
@@ -320,7 +326,11 @@ async def _load_packing_distribution(
             )
         ).tuples()
     )
-    return PackingDistribution(box_ids=box_ids, assignments=assignments)
+    return PackingDistribution(
+        box_ids=box_ids,
+        box_statuses=box_statuses,
+        assignments=assignments,
+    )
 
 
 def _compute_preflight_version(
@@ -336,7 +346,9 @@ def _compute_preflight_version(
         supply.delivery_type,
         str(cargo_qr_ready),
     ]
-    parts.extend(f"box:{box_id}" for box_id in distribution.box_ids)
+    parts.extend(
+        f"box:{box_id}:{status}" for box_id, status in distribution.box_statuses
+    )
     parts.extend(f"assignment:{order_id}:{box_id}" for order_id, box_id in distribution.assignments)
     for order in sorted(orders, key=lambda item: item.id):
         parts.extend(
@@ -507,6 +519,29 @@ def _build_delivery_checks(
             )
         )
 
+    all_boxes_closed = bool(distribution.box_ids) and all(
+        status == PACKING_BOX_STATUS_CLOSED for _, status in distribution.box_statuses
+    )
+    orders_fully_distributed = bool(orders) and not missing_distribution
+    if not distribution.box_ids:
+        pass
+    elif not all_boxes_closed:
+        checks.append(
+            DeliveryCheck(
+                code="packing_boxes_not_closed",
+                message="Закройте все физические короба перед сдачей в WB.",
+                ok=False,
+            )
+        )
+    elif orders_fully_distributed:
+        checks.append(
+            DeliveryCheck(
+                code="packing_boxes_closed",
+                message="Все физические короба закрыты.",  # noqa: RUF001
+                ok=True,
+            )
+        )
+
     if supply.delivery_type == FBS_DELIVERY_TYPE_PVZ:
         if not supply.trbxes:
             checks.append(
@@ -551,7 +586,7 @@ def _checks_to_payload(checks: list[DeliveryCheck]) -> list[dict[str, Any]]:
 def _validate_checks_pass(checks: list[DeliveryCheck]) -> None:
     for check in checks:
         if not check.ok:
-            raise FbsShipmentError(check.code)
+            raise FbsShipmentError(check.code, message=check.message)
 
 
 async def _sync_and_validate_deliver(

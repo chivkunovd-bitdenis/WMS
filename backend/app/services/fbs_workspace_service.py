@@ -40,6 +40,7 @@ from app.models.fbs_supply import (
     FbsSupply,
 )
 from app.models.fbs_trbx import FbsTrbx
+from app.models.seller_wildberries_imported_card import SellerWildberriesImportedCard
 from app.models.tenant_wb_mp_warehouse import TenantWbMpWarehouse
 from app.services.fbs_tracking_service import (
     build_partial_rejection_summary,
@@ -47,6 +48,9 @@ from app.services.fbs_tracking_service import (
     is_tracking_sync_stale,
 )
 from app.services.fbs_worklist_service import build_worklist_items, print_asset_content_url
+from app.services.wb_card_enrichment import first_photo_url_from_card
+
+PACKING_BOX_STATUS_CLOSED = "closed"
 
 
 class FbsWorkspaceError(Exception):
@@ -79,12 +83,16 @@ async def get_supply_workspace(
     packing_boxes, unassigned_order_ids = await _build_packing_boxes(
         session, tenant_id, supply, orders
     )
+    has_open_boxes = any(
+        box["status"] != PACKING_BOX_STATUS_CLOSED for box in packing_boxes
+    )
     stage = _compute_stage(
         supply,
         orders,
         progress,
         has_packing_boxes=bool(packing_boxes),
         unassigned_order_ids=unassigned_order_ids,
+        has_open_boxes=has_open_boxes,
     )
     blockers = _compute_workspace_blockers(
         supply,
@@ -93,6 +101,7 @@ async def get_supply_workspace(
         progress,
         has_packing_boxes=bool(packing_boxes),
         unassigned_order_ids=unassigned_order_ids,
+        has_open_boxes=has_open_boxes,
     )
     cargo_places = await _build_cargo_places(session, tenant_id, supply)
     wb_name = await _wb_warehouse_name(session, tenant_id, orders)
@@ -248,6 +257,7 @@ def _compute_stage(
     *,
     has_packing_boxes: bool,
     unassigned_order_ids: list[str],
+    has_open_boxes: bool,
 ) -> str:
     if (
         supply.status in {FBS_SUPPLY_STATUS_DONE, FBS_SUPPLY_STATUS_IN_DELIVERY}
@@ -265,6 +275,8 @@ def _compute_stage(
     if progress.packed < progress.total:
         return "packing"
     if progress.metadata_ready < progress.total:
+        return "packing"
+    if has_open_boxes:
         return "packing"
     if progress.stickers_ready < progress.total:
         return "order_stickers"
@@ -287,6 +299,7 @@ def _compute_workspace_blockers(
     *,
     has_packing_boxes: bool,
     unassigned_order_ids: list[str],
+    has_open_boxes: bool,
 ) -> list[dict[str, Any]]:
     blockers: list[dict[str, Any]] = []
     if not orders:
@@ -353,7 +366,7 @@ def _compute_workspace_blockers(
                 "retryable": True,
             }
         )
-    if stage == "handoff_prep":
+    if stage in {"packing", "handoff_prep", "delivery"}:
         for order_id in unassigned_order_ids:
             blockers.append(
                 {
@@ -364,6 +377,21 @@ def _compute_workspace_blockers(
                     "retryable": True,
                 }
             )
+    if (
+        has_packing_boxes
+        and not unassigned_order_ids
+        and has_open_boxes
+        and stage in {"packing", "delivery"}
+    ):
+        blockers.append(
+            {
+                "stage": "packing",
+                "code": "packing_boxes_not_closed",
+                "message": "Закройте все физические короба перед сдачей в WB.",
+                "order_id": None,
+                "retryable": False,
+            }
+        )
     if progress.total and progress.stickers_ready < progress.total and stage == "delivery":
         blockers.append(
             {
@@ -399,6 +427,45 @@ async def _build_cargo_places(
     return places
 
 
+async def _load_imported_cards_for_orders(
+    session: AsyncSession,
+    tenant_id: uuid.UUID,
+    orders: list[FbsOrder],
+) -> dict[tuple[uuid.UUID, int], SellerWildberriesImportedCard]:
+    seller_nm_pairs: set[tuple[uuid.UUID, int]] = set()
+    for order in orders:
+        if order.seller_id and order.wb_nm_id is not None:
+            seller_nm_pairs.add((order.seller_id, int(order.wb_nm_id)))
+    if not seller_nm_pairs:
+        return {}
+    seller_ids = {seller_id for seller_id, _ in seller_nm_pairs}
+    nm_ids = {nm_id for _, nm_id in seller_nm_pairs}
+    stmt = select(SellerWildberriesImportedCard).where(
+        SellerWildberriesImportedCard.tenant_id == tenant_id,
+        SellerWildberriesImportedCard.seller_id.in_(seller_ids),
+        SellerWildberriesImportedCard.nm_id.in_(nm_ids),
+    )
+    res = await session.execute(stmt)
+    out: dict[tuple[uuid.UUID, int], SellerWildberriesImportedCard] = {}
+    for card in res.scalars().all():
+        key = (card.seller_id, int(card.nm_id))
+        if key in seller_nm_pairs:
+            out[key] = card
+    return out
+
+
+def _order_image_url(
+    order: FbsOrder,
+    cards: dict[tuple[uuid.UUID, int], SellerWildberriesImportedCard],
+) -> str | None:
+    if order.seller_id is None or order.wb_nm_id is None:
+        return None
+    card = cards.get((order.seller_id, int(order.wb_nm_id)))
+    if card is None or not isinstance(card.raw_json, dict):
+        return None
+    return first_photo_url_from_card(card.raw_json)
+
+
 async def _build_packing_boxes(
     session: AsyncSession,
     tenant_id: uuid.UUID,
@@ -420,6 +487,7 @@ async def _build_packing_boxes(
         .order_by(FbsPackingBox.box_number)
     )
     boxes = list((await session.execute(stmt)).scalars().all())
+    card_by_seller_nm = await _load_imported_cards_for_orders(session, tenant_id, orders)
     trbx_by_warehouse_box = {
         row.packaging_box_id: row for row in supply.trbxes if row.packaging_box_id is not None
     }
@@ -454,6 +522,8 @@ async def _build_packing_boxes(
                         if item.order.product is not None
                         else "Товар не сопоставлен"
                     ),
+                    "image_url": _order_image_url(item.order, card_by_seller_nm),
+                    "quantity": 1,
                 }
             )
         payload.append(

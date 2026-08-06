@@ -23,6 +23,7 @@ from app.models.fbs_supply import (
     FbsSupply,
 )
 from app.models.fbs_trbx import FbsTrbx
+from app.models.seller_wildberries_imported_card import SellerWildberriesImportedCard
 from app.services import fbs_packing_box_service as packing_box_svc
 from app.services.fbs_print_asset_service import CARGO_QR_FETCH_ERROR_MESSAGE
 from app.services.wildberries_client import WildberriesClientError
@@ -367,7 +368,7 @@ async def test_pvz_local_boxes_map_one_to_one_to_wb_cargo_without_order_binding(
 
 
 @pytest.mark.asyncio
-async def test_workspace_stays_in_handoff_prep_until_every_order_is_distributed(
+async def test_workspace_stays_in_packing_while_created_box_is_open(
     async_client: AsyncClient,
 ) -> None:
     headers, suffix, tenant_id = await _register_ff_admin(async_client)
@@ -421,7 +422,7 @@ async def test_workspace_stays_in_handoff_prep_until_every_order_is_distributed(
         json={"count": 1, "idempotency_key": str(uuid.uuid4())},
     )
     assert created.status_code == 201, created.text
-    assert created.json()["stage"] == "handoff_prep"
+    assert created.json()["stage"] == "packing"
     box_id = created.json()["packing_boxes"][0]["id"]
 
     partial = await async_client.put(
@@ -433,7 +434,7 @@ async def test_workspace_stays_in_handoff_prep_until_every_order_is_distributed(
         },
     )
     assert partial.status_code == 200, partial.text
-    assert partial.json()["stage"] == "handoff_prep"
+    assert partial.json()["stage"] == "packing"
     assert partial.json()["unassigned_order_ids"] == [str(order_ids[1])]
     assert any(
         row["code"] == "orders_not_distributed"
@@ -451,8 +452,27 @@ async def test_workspace_stays_in_handoff_prep_until_every_order_is_distributed(
         },
     )
     assert full.status_code == 200, full.text
-    assert full.json()["stage"] == "delivery"
+    assert full.json()["stage"] == "packing"
     assert full.json()["unassigned_order_ids"] == []
+    assert any(
+        row["code"] == "packing_boxes_not_closed"
+        and row["stage"] == "packing"
+        and row["order_id"] is None
+        and row["retryable"] is False
+        for row in full.json()["blockers"]
+    )
+
+    closed = await async_client.post(
+        f"/operations/fbs-supplies/{supply_id}/packing-boxes/{box_id}/close",
+        headers=headers,
+        json={"idempotency_key": str(uuid.uuid4())},
+    )
+    assert closed.status_code == 200, closed.text
+    assert closed.json()["stage"] == "delivery"
+    assert closed.json()["unassigned_order_ids"] == []
+    assert not any(
+        row["code"] == "packing_boxes_not_closed" for row in closed.json()["blockers"]
+    )
 
 
 @pytest.mark.asyncio
@@ -928,3 +948,84 @@ async def test_packing_box_retry_qr_rejects_warehouse_and_unlinked_pvz(
     )
     assert unlinked_retry.status_code == 400, unlinked_retry.text
     assert unlinked_retry.json()["detail"]["code"] == "packing_box_trbx_not_linked"
+
+
+@pytest.mark.asyncio
+async def test_packing_box_order_projection_image_url_and_quantity(
+    async_client: AsyncClient,
+) -> None:
+    headers, suffix, tenant_id = await _register_ff_admin(async_client)
+    seller_id, warehouse_id, location_id = await _create_seller_and_warehouse(
+        async_client, headers, suffix
+    )
+    barcode = f"BAR-IMG-{suffix[-8:]}"
+    product_id = await _create_product(
+        async_client, headers, seller_id, sku=f"SKU-IMG-{suffix}", barcode=barcode
+    )
+    supply_id, order_ids, _ = await _seed_pick_supply(
+        async_client,
+        headers,
+        tenant_id,
+        seller_id,
+        warehouse_id,
+        location_id,
+        product_id,
+        stock_qty=1,
+        order_specs=[(1, timedelta(hours=12))],
+        barcode=barcode,
+    )
+    image_url = f"https://images.example/wb-{suffix[-8:]}.jpg"
+    async with SessionLocal() as session:
+        supply = await session.get(FbsSupply, supply_id)
+        assert supply is not None
+        supply.status = FBS_SUPPLY_STATUS_ASSEMBLING
+        order = await session.get(FbsOrder, order_ids[0])
+        assert order is not None
+        order.pack_status = PACK_STATUS_PACKED
+        order.wb_nm_id = 900001
+        session.add(
+            SellerWildberriesImportedCard(
+                tenant_id=tenant_id,
+                    seller_id=seller_id,
+                nm_id=900001,
+                vendor_code=f"V-{suffix}",
+                title="Card title",
+                raw_json={"photos": [{"big": image_url}]},
+            )
+        )
+        await session.commit()
+
+    created = await async_client.post(
+        f"/operations/fbs-supplies/{supply_id}/packing-boxes",
+        headers=headers,
+        json={"count": 1, "idempotency_key": str(uuid.uuid4())},
+    )
+    assert created.status_code == 201, created.text
+    box_id = created.json()["packing_boxes"][0]["id"]
+    assigned = await async_client.put(
+        f"/operations/fbs-supplies/{supply_id}/packing-boxes/{box_id}/orders",
+        headers=headers,
+        json={
+            "order_ids": [str(order_ids[0])],
+            "idempotency_key": str(uuid.uuid4()),
+        },
+    )
+    assert assigned.status_code == 200, assigned.text
+    order_row = assigned.json()["packing_boxes"][0]["orders"][0]
+    assert order_row["image_url"] == image_url
+    assert order_row["quantity"] == 1
+
+    async with SessionLocal() as session:
+        order = await session.get(FbsOrder, order_ids[0])
+        assert order is not None
+        order.wb_nm_id = 900002
+        await session.commit()
+
+    no_image = await async_client.get(
+        f"/operations/fbs-supplies/{supply_id}/workspace",
+        headers=headers,
+    )
+    assert no_image.status_code == 200, no_image.text
+    fallback_row = no_image.json()["packing_boxes"][0]["orders"][0]
+    assert fallback_row["image_url"] is None
+    assert fallback_row["quantity"] == 1

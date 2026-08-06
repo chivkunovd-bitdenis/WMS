@@ -289,6 +289,8 @@ class FbsPackingBoxOrderOut(BaseModel):
     wb_order_id: int
     product_id: str | None
     product_name: str
+    image_url: str | None = None
+    quantity: int = 1
 
 
 class FbsPackingBoxOut(BaseModel):
@@ -626,6 +628,7 @@ def _raise_from_shipment_service(exc: shipment_svc.FbsShipmentError) -> None:
         "cargo_places_required",
         "cargo_place_qr_not_ready",
         "packing_boxes_required",
+        "packing_boxes_not_closed",
         "orders_not_distributed",
         "missing_idempotency_key",
         "order_cancelled",

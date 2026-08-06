@@ -5185,6 +5185,22 @@
           "product_name": {
             "type": "string",
             "title": "Product Name"
+          },
+          "image_url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Image Url"
+          },
+          "quantity": {
+            "type": "integer",
+            "title": "Quantity",
+            "default": 1
           }
         },
         "type": "object",
