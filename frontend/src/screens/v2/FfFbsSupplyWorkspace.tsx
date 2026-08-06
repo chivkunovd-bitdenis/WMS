@@ -3,7 +3,6 @@ import {
   Alert,
   Box,
   Button,
-  Chip,
   CircularProgress,
   Dialog,
   DialogActions,
@@ -848,6 +847,7 @@ export function FfFbsSupplyWorkspace({
   const boxDistributedCount = assignedBoxOrderIds.size
   const boxTotalCount = workspace?.progress.total ?? 0
   const boxRemainingCount = Math.max(0, boxTotalCount - boxDistributedCount)
+  const supplyQrPrinted = Boolean(workspace?.supply.barcode_asset?.applied_at)
   const boxAssignRows = useMemo(() => {
     const grouped = new Map<string, {
       key: string
@@ -1365,35 +1365,68 @@ export function FfFbsSupplyWorkspace({
 
           {workspace && stage === 'delivery' ? (
             <Stack spacing={2}>
-              {!deliveryConfirmed ? (
-                <Paper variant="outlined" sx={{ p: 2 }}><Stack direction="row" sx={{ justifyContent: 'space-between', alignItems: 'center' }}><Box><Typography variant="h6">Передача в доставку</Typography><Typography variant="body2" color="text.secondary">Перед каждой передачей выполняется свежая серверная проверка WB.</Typography></Box><Button variant="outlined" startIcon={<RefreshOutlinedIcon />} onClick={() => void checkDelivery()}>Проверить готовность</Button></Stack>{deliveryPreflight ? <Stack spacing={1} sx={{ mt: 2 }}>{deliveryPreflight.checks.map((check) => <Alert key={`${check.code}-${check.order_id ?? ''}`} severity={check.ok ? 'success' : 'error'}>{check.message}</Alert>)}<Stack direction="row" sx={{ justifyContent: 'flex-end' }}><Button variant="contained" size="large" disabled={!stageIsCurrent || !deliveryPreflight.can_deliver} onClick={() => setDeliveryConfirmOpen(true)}>Подтвердить передачу WB</Button></Stack></Stack> : null}</Paper>
-              ) : (
-                <Alert severity="success">WB подтвердил передачу поставки в доставку.</Alert>
-              )}
+              <Paper variant="outlined" sx={{ p: 2 }}>
+                <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1.5} sx={{ justifyContent: 'space-between', alignItems: { sm: 'center' } }}>
+                  <Box>
+                    <Typography variant="h6">Сдача в WB</Typography>
+                    <Typography variant="body2" color="text.secondary">
+                      Коробов {workspace.boxes.length} · распределено {boxDistributedCount} из {boxTotalCount} шт.
+                    </Typography>
+                  </Box>
+                  {!deliveryConfirmed ? (
+                    <Button variant="outlined" startIcon={<RefreshOutlinedIcon />} onClick={() => void checkDelivery()}>
+                      Проверить готовность
+                    </Button>
+                  ) : null}
+                </Stack>
+                {!deliveryConfirmed ? (
+                  <Stack spacing={1} sx={{ mt: 2 }}>
+                    {deliveryPreflight?.checks.map((check) => (
+                      <Alert key={`${check.code}-${check.order_id ?? ''}`} severity={check.ok ? 'success' : 'error'}>
+                        {check.message}
+                      </Alert>
+                    ))}
+                    <Stack direction="row" sx={{ justifyContent: 'flex-end' }}>
+                      <Button
+                        variant="contained"
+                        size="large"
+                        disabled={!stageIsCurrent || !deliveryPreflight?.can_deliver}
+                        onClick={() => setDeliveryConfirmOpen(true)}
+                      >
+                        Передать в WB
+                      </Button>
+                    </Stack>
+                  </Stack>
+                ) : null}
+              </Paper>
               {workspace.supply.barcode_asset?.preview_url ? (
                 <Paper variant="outlined" sx={{ p: { xs: 2, md: 3 } }} data-testid="fbs-supply-qr">
                   <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2} sx={{ justifyContent: 'space-between', alignItems: { sm: 'center' } }}>
                     <Box>
-                      <Stack direction="row" spacing={1} sx={{ alignItems: 'center' }}>
-                        <Typography variant="h6">Общий QR поставки WB</Typography>
-                        <Chip label="Готов к печати" color="success" size="small" />
-                      </Stack>
+                      <Typography variant="h6">QR поставки WB</Typography>
                       <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5 }}>
-                        WB сформировал QR после подтверждения передачи. Распечатайте его для сдачи всей поставки.
+                        Распечатайте QR для сдачи всей поставки.
                       </Typography>
                     </Box>
-                    <Button
-                      variant="contained"
-                      size="large"
-                      startIcon={<PrintOutlinedIcon />}
-                      onClick={() => openAssetPreview([workspace.supply.barcode_asset!])}
-                    >
-                      Печать QR поставки
-                    </Button>
+                    <Stack direction="row" spacing={1}>
+                      <Button
+                        variant="contained"
+                        size="large"
+                        startIcon={<PrintOutlinedIcon />}
+                        onClick={() => openAssetPreview([workspace.supply.barcode_asset!])}
+                      >
+                        Печать QR поставки
+                      </Button>
+                      {supplyQrPrinted ? (
+                        <Button size="large" onClick={onClose}>
+                          Завершить работу с поставкой
+                        </Button>
+                      ) : null}
+                    </Stack>
                   </Stack>
                 </Paper>
               ) : null}
-              {deliveryConfirmed && !workspace.supply.barcode_asset?.preview_url ? (
+              {deliveryConfirmed && workspace.supply.delivery_type === 'warehouse_sc' && !workspace.supply.barcode_asset?.preview_url ? (
                 <Alert
                   severity="warning"
                   action={(
@@ -1404,11 +1437,11 @@ export function FfFbsSupplyWorkspace({
                       data-testid="fbs-supply-qr-retry"
                       onClick={() => void run(() => retryFbsSupplyQr(token, authHeaders, workspace.supply.id), 'QR поставки получен.')}
                     >
-                      Получить QR ещё раз
+                      Получить QR повторно
                     </Button>
                   )}
                 >
-                  Поставка уже передана, но WB не вернул общий QR. Повтор получает только QR и не передаёт поставку повторно.
+                  Поставка передана, QR получить не удалось
                 </Alert>
               ) : null}
             </Stack>
