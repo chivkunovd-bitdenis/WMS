@@ -1,4 +1,4 @@
-"""FBS local physical packing boxes.
+"""FBS local physical packing boxes and explicit operator finish.
 
 Revision ID: 20260806_0073
 Revises: 20260804_0072
@@ -20,6 +20,17 @@ depends_on: str | Sequence[str] | None = None
 
 
 def upgrade() -> None:
+    op.add_column("fbs_supplies", sa.Column("operator_finished_at", sa.DateTime(timezone=True)))
+    op.add_column("fbs_supplies", sa.Column("operator_finished_by_user_id", sa.Uuid(as_uuid=True)))
+    op.add_column("fbs_supplies", sa.Column("operator_finish_idempotency_key", sa.String(128)))
+    op.create_foreign_key(
+        "fk_fbs_supplies_operator_finished_by_user_id",
+        "fbs_supplies",
+        "users",
+        ["operator_finished_by_user_id"],
+        ["id"],
+        ondelete="SET NULL",
+    )
     op.create_table(
         "fbs_packing_boxes",
         sa.Column("id", sa.Uuid(as_uuid=True), primary_key=True),
@@ -27,8 +38,7 @@ def upgrade() -> None:
         sa.Column("supply_id", sa.Uuid(as_uuid=True), nullable=False),
         sa.Column("warehouse_box_id", sa.Uuid(as_uuid=True), nullable=False),
         sa.Column("box_number", sa.Integer(), nullable=False),
-        sa.Column("trbx_id", sa.Uuid(as_uuid=True), nullable=True),
-        sa.Column("creation_idempotency_key", sa.String(128), nullable=True),
+        sa.Column("status", sa.String(24), server_default="open", nullable=False),
         sa.Column(
             "created_at",
             sa.DateTime(timezone=True),
@@ -38,23 +48,16 @@ def upgrade() -> None:
         sa.ForeignKeyConstraint(["tenant_id"], ["tenants.id"], ondelete="CASCADE"),
         sa.ForeignKeyConstraint(["supply_id"], ["fbs_supplies.id"], ondelete="CASCADE"),
         sa.ForeignKeyConstraint(["warehouse_box_id"], ["warehouse_boxes.id"], ondelete="RESTRICT"),
-        sa.ForeignKeyConstraint(["trbx_id"], ["fbs_trbxes.id"], ondelete="SET NULL"),
         sa.UniqueConstraint("supply_id", "box_number", name="uq_fbs_packing_boxes_supply_number"),
         sa.UniqueConstraint("warehouse_box_id", name="uq_fbs_packing_boxes_warehouse_box"),
-        sa.UniqueConstraint("trbx_id", name="uq_fbs_packing_boxes_trbx"),
     )
     op.create_index("ix_fbs_packing_boxes_tenant_id", "fbs_packing_boxes", ["tenant_id"])
     op.create_index("ix_fbs_packing_boxes_supply_id", "fbs_packing_boxes", ["supply_id"])
     op.create_index(
-        "ix_fbs_packing_boxes_warehouse_box_id", "fbs_packing_boxes", ["warehouse_box_id"]
-    )
-    op.create_index("ix_fbs_packing_boxes_trbx_id", "fbs_packing_boxes", ["trbx_id"])
-    op.create_index(
-        "ix_fbs_packing_boxes_creation_idempotency_key",
+        "ix_fbs_packing_boxes_warehouse_box_id",
         "fbs_packing_boxes",
-        ["supply_id", "creation_idempotency_key"],
+        ["warehouse_box_id"],
     )
-
     op.create_table(
         "fbs_packing_box_items",
         sa.Column("id", sa.Uuid(as_uuid=True), primary_key=True),
@@ -77,10 +80,20 @@ def upgrade() -> None:
     op.create_index("ix_fbs_packing_box_items_tenant_id", "fbs_packing_box_items", ["tenant_id"])
     op.create_index("ix_fbs_packing_box_items_box_id", "fbs_packing_box_items", ["box_id"])
     op.create_index(
-        "ix_fbs_packing_box_items_fbs_order_id", "fbs_packing_box_items", ["fbs_order_id"]
+        "ix_fbs_packing_box_items_fbs_order_id",
+        "fbs_packing_box_items",
+        ["fbs_order_id"],
     )
 
 
 def downgrade() -> None:
     op.drop_table("fbs_packing_box_items")
     op.drop_table("fbs_packing_boxes")
+    op.drop_constraint(
+        "fk_fbs_supplies_operator_finished_by_user_id",
+        "fbs_supplies",
+        type_="foreignkey",
+    )
+    op.drop_column("fbs_supplies", "operator_finish_idempotency_key")
+    op.drop_column("fbs_supplies", "operator_finished_by_user_id")
+    op.drop_column("fbs_supplies", "operator_finished_at")
