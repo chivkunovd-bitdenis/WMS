@@ -14,7 +14,6 @@ from tests.fbs_operator_emulator_seed import seed_operator_emulator_wms
 
 API_BASE = os.environ.get("FBS_E2E_API_BASE", "http://127.0.0.1:8000")
 EMULATOR_BASE = os.environ.get("FBS_E2E_EMULATOR_BASE", "http://wb-emulator:8000")
-PUBLIC_EMULATOR_BASE = os.environ.get("FBS_E2E_PUBLIC_EMULATOR_BASE", "http://127.0.0.1:18081")
 EMULATOR_ADMIN_TOKEN = os.environ.get("WB_EMULATOR_ADMIN_TOKEN", "fbs-e2e-admin")
 WB_WAREHOUSE_ID = 501001
 
@@ -47,10 +46,7 @@ async def _wait_job(
 
 async def _main() -> None:
     async with httpx.AsyncClient(base_url=API_BASE, timeout=30) as api:
-        seed = await seed_operator_emulator_wms(
-            api,
-            product_image_base_url=PUBLIC_EMULATOR_BASE,
-        )
+        seed = await seed_operator_emulator_wms(api)
         seller = seed.sellers["seller_a"]
         headers = seed.admin_headers
 
@@ -164,7 +160,7 @@ async def _main() -> None:
             )
         )
         by_wb = {int(item["wb_order_id"]): item for item in worklist["items"]}
-        for route, route_items in created.items():
+        for route_items in created.values():
             if len({item["created_at_wb"] for item in route_items}) != len(route_items):
                 raise RuntimeError("dynamic WB orders must have distinct createdAt values")
             for item in route_items:
@@ -178,27 +174,11 @@ async def _main() -> None:
                         f"dynamic WB order {item['wb_order_id']} is blocked: "
                         f"{row['selection_blockers']}"
                     )
-                expected_can_pvz = route == "pvz"
-                if bool(row["can_pvz"]) is not expected_can_pvz:
-                    raise RuntimeError(
-                        f"dynamic WB order {item['wb_order_id']} route mismatch: "
-                        f"expected can_pvz={expected_can_pvz}, got {row['can_pvz']}"
-                    )
-                expected_image_url = (
-                    f"{PUBLIC_EMULATOR_BASE.rstrip('/')}/__assets/products/{item['chrt_id']}.png"
-                )
-                if row["product"]["image_url"] != expected_image_url:
-                    raise RuntimeError(
-                        f"dynamic WB order {item['wb_order_id']} image mismatch: "
-                        f"{row['product']['image_url']!r}"
-                    )
-                item["image_url"] = expected_image_url
                 item["wms_order_id"] = row["id"]
 
         result = {
             "api_base": API_BASE,
             "emulator_base": EMULATOR_BASE,
-            "public_emulator_base": PUBLIC_EMULATOR_BASE,
             "emulator_admin_token": EMULATOR_ADMIN_TOKEN,
             "seller_key": "seller_a",
             "seller_token": seller.token,

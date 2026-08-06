@@ -57,7 +57,6 @@ from app.services.wildberries_credentials_service import (
 )
 
 WB_STICKER_CHUNK_SIZE = 100
-CARGO_QR_FETCH_ERROR_MESSAGE = "Короб создан, QR получить не удалось"
 
 
 class FbsPrintAssetSupplyError(Exception):
@@ -203,9 +202,6 @@ def _mark_asset_error(
     asset.status = PRINT_ASSET_STATUS_ERROR
     asset.error_code = code
     asset.error_message = message
-    asset.content_type = None
-    asset.storage_path = None
-    asset.checksum = None
 
 
 def _persist_order_sticker_bytes(
@@ -268,43 +264,6 @@ def _persist_cargo_qr_bytes(
     trbx.qr_asset_id = asset.id
 
 
-async def _ensure_cargo_qr_asset_row(
-    session: AsyncSession,
-    tenant_id: uuid.UUID,
-    seller_id: uuid.UUID,
-    trbx: FbsTrbx,
-) -> FbsPrintAsset:
-    asset = await _find_cargo_qr_asset(session, tenant_id, trbx.id)
-    if asset is None:
-        asset = FbsPrintAsset(
-            tenant_id=tenant_id,
-            seller_id=seller_id,
-            kind=PRINT_ASSET_KIND_CARGO_PLACE_QR,
-            status=PRINT_ASSET_STATUS_REQUESTING,
-            fbs_trbx_id=trbx.id,
-        )
-        session.add(asset)
-        await session.flush()
-    return asset
-
-
-async def _persist_cargo_qr_fetch_error(
-    session: AsyncSession,
-    tenant_id: uuid.UUID,
-    seller_id: uuid.UUID,
-    trbx: FbsTrbx,
-    *,
-    code: str,
-) -> None:
-    asset = await _ensure_cargo_qr_asset_row(session, tenant_id, seller_id, trbx)
-    _mark_asset_error(
-        asset,
-        code=code,
-        message=CARGO_QR_FETCH_ERROR_MESSAGE,
-    )
-    trbx.qr_asset_id = asset.id
-
-
 async def ensure_cargo_place_qr_assets(
     session: AsyncSession,
     tenant_id: uuid.UUID,
@@ -344,17 +303,11 @@ async def ensure_cargo_place_qr_assets(
         )
     except WildberriesClientError as exc:
         suffix = f"_{exc.status_code}" if exc.status_code else ""
-        error_code = f"wb_{exc.code}{suffix}"
-        for trbx in uncached:
-            await _persist_cargo_qr_fetch_error(
-                session,
-                tenant_id,
-                supply.seller_id,
-                trbx,
-                code=error_code,
-            )
-        await session.flush()
-        return
+        raise FbsPrintAssetError(
+            f"wb_{exc.code}{suffix}",
+            message="WB не вернул QR грузоместа.",
+            retryable=True,
+        ) from exc
 
     by_wb_id: dict[str, dict[str, Any]] = {}
     for row in sticker_rows:
@@ -368,30 +321,32 @@ async def ensure_cargo_place_qr_assets(
     for trbx in uncached:
         sticker_row = by_wb_id.get(trbx.wb_trbx_id)
         if sticker_row is None:
-            await _persist_cargo_qr_fetch_error(
-                session,
-                tenant_id,
-                supply.seller_id,
-                trbx,
-                code="wb_invalid_response",
+            raise FbsPrintAssetError(
+                "wb_invalid_response",
+                message="WB не вернул QR для грузоместа.",
             )
-            continue
         png_bytes: bytes | None = None
         for key in ("file", "barcode", "image"):
             png_bytes = decode_png_payload(sticker_row.get(key))
             if png_bytes is not None:
                 break
         if png_bytes is None:
-            await _persist_cargo_qr_fetch_error(
-                session,
-                tenant_id,
-                supply.seller_id,
-                trbx,
-                code="invalid_sticker_payload",
+            raise FbsPrintAssetError(
+                "invalid_sticker_payload",
+                message="Некорректные данные QR грузоместа.",
             )
-            continue
 
-        asset = await _ensure_cargo_qr_asset_row(session, tenant_id, supply.seller_id, trbx)
+        asset = await _find_cargo_qr_asset(session, tenant_id, trbx.id)
+        if asset is None:
+            asset = FbsPrintAsset(
+                tenant_id=tenant_id,
+                seller_id=supply.seller_id,
+                kind=PRINT_ASSET_KIND_CARGO_PLACE_QR,
+                status=PRINT_ASSET_STATUS_REQUESTING,
+                fbs_trbx_id=trbx.id,
+            )
+            session.add(asset)
+            await session.flush()
         try:
             _persist_cargo_qr_bytes(
                 asset=asset,
@@ -403,9 +358,12 @@ async def ensure_cargo_place_qr_assets(
             _mark_asset_error(
                 asset,
                 code=exc.code,
-                message=CARGO_QR_FETCH_ERROR_MESSAGE,
+                message="Не удалось сохранить QR грузоместа.",
             )
-            trbx.qr_asset_id = asset.id
+            raise FbsPrintAssetError(
+                exc.code,
+                message="Не удалось сохранить QR грузоместа.",
+            ) from exc
 
     await session.flush()
 

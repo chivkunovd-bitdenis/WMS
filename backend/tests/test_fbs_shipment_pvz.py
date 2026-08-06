@@ -10,7 +10,6 @@ from sqlalchemy import select
 from app.core.settings import settings
 from app.db.session import SessionLocal
 from app.models.fbs_order import FBS_ORDER_STATUS_IN_DELIVERY, FbsOrder
-from app.models.fbs_packing_box import FbsPackingBox
 from app.models.fbs_print_asset import PRINT_ASSET_KIND_CARGO_PLACE_QR, FbsPrintAsset
 from app.models.fbs_supply import FBS_SUPPLY_STATUS_IN_DELIVERY, FbsSupply
 from app.models.fbs_trbx import FbsTrbx
@@ -1037,85 +1036,3 @@ async def test_pvz_delete_cargo_places_guards(
     )
     assert blocked.status_code == 409
     assert blocked.json()["detail"]["code"] == "supply_bad_status"
-
-
-# TC-NEW-FBS-BOX-CLOSE-003 — PVZ box-close gate is independent of trbx/QR readiness
-@pytest.mark.asyncio
-async def test_pvz_open_box_blocks_delivery_independent_of_cargo_qr(
-    async_client: AsyncClient,
-    enable_wb_marketplace_supplies_mock: None,
-) -> None:
-    headers, suffix = await _register_ff_admin(async_client)
-    seller_id, warehouse_id, tenant_id = await _setup_seller_with_token(
-        async_client, headers, suffix
-    )
-
-    supply, _ = await _prepare_pvz_supply(
-        async_client,
-        headers,
-        seller_id,
-        warehouse_id,
-        tenant_id,
-        wb_order_ids=[971301, 971302],
-        supply_name="PVZ open box gate",
-    )
-
-    create = await _create_cargo_places(async_client, headers, supply["id"], count=1)
-    assert create.status_code == 201, create.text
-    for place in create.json()["cargo_places"]:
-        assert place["qr_asset"]["status"] == "ready"
-
-    async with SessionLocal() as session:
-        box = await session.scalar(
-            select(FbsPackingBox).where(FbsPackingBox.supply_id == uuid.UUID(supply["id"]))
-        )
-        assert box is not None
-        box.status = "open"
-        await session.commit()
-
-    workspace = await async_client.get(
-        f"/operations/fbs-supplies/{supply['id']}/workspace",
-        headers=headers,
-    )
-    assert workspace.status_code == 200, workspace.text
-    assert workspace.json()["stage"] == "packing"
-    assert any(row["code"] == "packing_boxes_not_closed" for row in workspace.json()["blockers"])
-
-    preflight = await async_client.post(
-        f"/operations/fbs-supplies/{supply['id']}/delivery-preflight",
-        headers=headers,
-    )
-    assert preflight.status_code == 200, preflight.text
-    preflight_body = preflight.json()
-    assert preflight_body["can_deliver"] is False
-    assert any(
-        row["code"] == "cargo_places_ready" and row["ok"] is True
-        for row in preflight_body["checks"]
-    )
-    assert any(
-        row["code"] == "packing_boxes_not_closed" and row["ok"] is False
-        for row in preflight_body["checks"]
-    )
-
-    blocked = await async_client.post(
-        f"/operations/fbs-supplies/{supply['id']}/deliver",
-        headers=headers,
-        json={
-            "idempotency_key": str(uuid.uuid4()),
-            "confirmed_preflight_version": preflight_body["version"],
-        },
-    )
-    assert blocked.status_code == 400
-    assert blocked.json()["detail"]["code"] == "packing_boxes_not_closed"
-
-    async with SessionLocal() as session:
-        box = await session.scalar(
-            select(FbsPackingBox).where(FbsPackingBox.supply_id == uuid.UUID(supply["id"]))
-        )
-        assert box is not None
-        box.status = "closed"
-        await session.commit()
-
-    deliver = await _deliver_with_preflight(async_client, headers, supply["id"])
-    assert deliver.status_code == 200, deliver.text
-    assert deliver.json()["supply"]["status"] == FBS_SUPPLY_STATUS_IN_DELIVERY

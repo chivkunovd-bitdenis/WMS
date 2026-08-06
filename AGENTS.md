@@ -2,28 +2,6 @@
 
 This repo is optimized for an “autopilot” development loop.
 
-## Обязательная сохранность результата в Git
-
-Готовая работа в этом проекте не может оставаться только в `/tmp`, `/private/tmp`, контейнере,
-запущенном локальном фронте или незакоммиченном рабочем дереве. Временный checkout допустим для
-материализации iCloud-файлов и тестов, но не является источником истины.
-
-До любого сообщения «готово» агент обязан:
-
-1. перенести итоговые изменения в постоянный Git-checkout и проверить итоговый diff;
-2. создать отдельную именованную ветку и commit только с файлами текущей задачи;
-3. проверить `git show --stat <SHA>` и сообщить пользователю этот SHA;
-4. отправить ветку в настроенный remote, если результат предназначен для общего тестирования, CI или
-   деплоя; merge в `main` без отдельного разрешения запрещён;
-5. для Railway проверить, что развернутый сервис собран именно из этого SHA, и только после этого
-   называть стенд актуальным.
-
-Локальный адрес, зелёные тесты, архив или работающий Docker-контейнер сами по себе не означают, что
-изменение сохранено или развернуто. Если Git-фиксация не завершена, допустимый статус — только
-«локально реализовано, не сохранено в Git».
-
-Полный выпускной порядок: **[docs/DEVELOPMENT_DURABILITY_POLICY_RU.md](docs/DEVELOPMENT_DURABILITY_POLICY_RU.md)**.
-
 ## Product decisions (source of truth)
 
 Before picking an issue, read **[docs/MVP_DECISIONS_RU.md](docs/MVP_DECISIONS_RU.md)** (RU): tenants, billing liter‑day, WB import‑only, portal scope, printer 58×40, **RU product terms for FF↔MP flows** (поставка vs отгрузка — см. раздел «Терминология» там же).
@@ -119,3 +97,4 @@ Every feature that changes UI flow must ship with at least one Playwright scenar
 The scenario must match the real user path (e.g. register → screen that uses the new API), not an isolated HTTP check. With the default Playwright web server (one API + sqlite file), CI runs **`workers: 1`** to avoid DB lock flakes. In React async submit handlers, capture `const form = e.currentTarget` **before** any `await`, then call `form.reset()` — otherwise Strict Mode can leave `currentTarget` null after awaits.
 
 When asserting on network: subscribe with `page.waitForResponse` **in parallel** with the UI action (`Promise.all([waitForPostOk(...), locator.click()])`). If you `click()` first and only then await the response, the request may already have finished and the test will time out. After a successful submit that resets the form, the next step must refill **all** required fields (e.g. product dimensions), not only the fields that differ from defaults.
+

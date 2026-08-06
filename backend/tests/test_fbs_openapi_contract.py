@@ -15,24 +15,13 @@ REQUIRED_FBS_PATHS = (
     "/operations/fbs-supplies/preflight",
     "/operations/fbs-supplies/from-orders",
     "/operations/fbs-supplies/{supply_id}/workspace",
-    "/operations/fbs-supplies/{supply_id}/start-work",
     "/operations/fbs-supplies/{supply_id}/pick/scan-location",
-    "/operations/fbs-supplies/{supply_id}/pick/resolve-location",
     "/operations/fbs-supplies/{supply_id}/pick/scan-product",
-    "/operations/fbs-supplies/{supply_id}/pick/confirm-product",
-    "/operations/fbs-supplies/{supply_id}/packing-boxes",
-    "/operations/fbs-supplies/{supply_id}/packing-boxes/{box_id}",
-    "/operations/fbs-supplies/{supply_id}/packing-boxes/{box_id}/orders",
-    "/operations/fbs-supplies/{supply_id}/packing-boxes/{box_id}/close",
-    "/operations/fbs-supplies/{supply_id}/packing-boxes/{box_id}/reopen",
-    "/operations/fbs-supplies/{supply_id}/packing-boxes/{box_id}/clear",
-    "/operations/fbs-supplies/{supply_id}/packing-boxes/{box_id}/retry-qr",
     "/operations/fbs-supplies/{supply_id}/print-assets",
     "/operations/fbs-print-assets/{asset_id}/content",
     "/operations/fbs-supplies/{supply_id}/cargo-places",
     "/operations/fbs-supplies/{supply_id}/delivery-preflight",
     "/operations/fbs-supplies/{supply_id}/deliver",
-    "/operations/fbs-supplies/{supply_id}/finish",
 )
 
 DEPRECATED_PATHS = (
@@ -53,7 +42,9 @@ def test_deprecated_print_compatibility_marked_in_openapi() -> None:
     schema = create_app().openapi()
     bind = schema["paths"]["/operations/fbs-supplies/{supply_id}/trbx/{trbx_id}/orders"]["post"]
     stickers = schema["paths"]["/operations/fbs-supplies/{supply_id}/stickers"]["post"]
-    trbx_stickers = schema["paths"]["/operations/fbs-supplies/{supply_id}/trbx/stickers"]["post"]
+    trbx_stickers = schema["paths"]["/operations/fbs-supplies/{supply_id}/trbx/stickers"][
+        "post"
+    ]
     barcode = schema["paths"]["/operations/fbs-supplies/{supply_id}/barcode"]["get"]
     assert bind.get("deprecated") is True
     assert stickers.get("deprecated") is True
@@ -66,12 +57,13 @@ def test_exported_fbs_openapi_file_matches_live_schema() -> None:
     exported = json.loads(EXPORT_PATH.read_text(encoding="utf-8"))
     live = create_app().openapi()
     live_paths = {
-        path: ops for path, ops in live["paths"].items() if path.startswith("/operations/fbs-")
+        path: ops
+        for path, ops in live["paths"].items()
+        if path.startswith("/operations/fbs-")
     }
     assert exported["paths"] == live_paths
     for path in DEPRECATED_PATHS:
         assert exported["paths"][path]["post"].get("deprecated") is True
-    assert (
-        exported["paths"]["/operations/fbs-supplies/{supply_id}/barcode"]["get"].get("deprecated")
-        is True
-    )
+    assert exported["paths"]["/operations/fbs-supplies/{supply_id}/barcode"]["get"].get(
+        "deprecated"
+    ) is True

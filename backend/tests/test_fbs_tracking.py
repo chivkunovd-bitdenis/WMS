@@ -61,7 +61,6 @@ async def _seed_in_delivery_supply(
             status=FBS_SUPPLY_STATUS_IN_DELIVERY,
             delivery_type="warehouse_sc",
             delivered_at=datetime.now(tz=UTC),
-            operator_finished_at=datetime.now(tz=UTC),
         )
         session.add(supply)
         for wb_order_id in wb_order_ids:

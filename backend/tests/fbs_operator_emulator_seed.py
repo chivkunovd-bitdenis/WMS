@@ -15,8 +15,6 @@ from sqlalchemy import select
 from app.db.session import SessionLocal
 from app.models.marking_code import STATUS_AVAILABLE, MarkingCode, MarkingPool, MarkingPoolProduct
 from app.models.product import Product
-from app.models.seller_wildberries_imported_card import SellerWildberriesImportedCard
-from app.models.tenant_wb_mp_warehouse import TenantWbMpWarehouse
 from app.services import inventory_service
 from app.services.sorting_location_service import get_or_create_sorting_location
 from tests.fbs_seed_helpers import DEFAULT_WB_WAREHOUSE_ID, seed_fbs_warehouse_binding
@@ -97,17 +95,18 @@ async def seed_operator_emulator_wms(
     *,
     tokens: dict[str, str] | None = None,
     inventory_qty: int = 50,
-    product_image_base_url: str | None = None,
 ) -> OperatorEmulatorSeedResult:
     """Seed one FF tenant, three sellers, bindings, products, inventory, marking pool stubs."""
     token_map = tokens or load_emulator_tokens()
     templates = load_emulator_templates()
-    headers, tenant_id, suffix, admin_email, admin_password = await _register_ff_admin(async_client)
+    headers, tenant_id, suffix, admin_email, admin_password = await _register_ff_admin(
+        async_client
+    )
 
     warehouse = await async_client.post(
         "/warehouses",
         headers=headers,
-        json={"name": "Основной склад фулфилмента", "code": f"op-wh-{suffix[-8:]}"},
+        json={"name": "Operator FBS WH", "code": f"op-wh-{suffix[-8:]}"},
     )
     assert warehouse.status_code in (200, 201), warehouse.text
     warehouse_id = uuid.UUID(warehouse.json()["id"])
@@ -123,17 +122,6 @@ async def seed_operator_emulator_wms(
 
     async with SessionLocal() as session:
         await get_or_create_sorting_location(session, tenant_id, warehouse_id)
-        session.add(
-            TenantWbMpWarehouse(
-                tenant_id=tenant_id,
-                wb_warehouse_id=DEFAULT_WB_WAREHOUSE_ID,
-                name="Склад WB Коледино",
-                address="Тестовый склад эмулятора",
-                is_active=True,
-                is_transit_active=False,
-            )
-        )
-        await session.commit()
 
     sellers: dict[str, OperatorSellerSeed] = {}
     chrt_templates: dict[tuple[str, int], dict[str, Any]] = {}
@@ -198,31 +186,6 @@ async def seed_operator_emulator_wms(
                 row.wb_nm_id = int(template["nmId"])
                 row.wb_barcode = template["skus"][0]
                 row.requires_honest_sign = requires_kiz
-                if product_image_base_url:
-                    image_url = (
-                        f"{product_image_base_url.rstrip('/')}/__assets/products/{chrt_id}.png"
-                    )
-                    session.add(
-                        SellerWildberriesImportedCard(
-                            tenant_id=tenant_id,
-                            seller_id=seller_id,
-                            nm_id=int(template["nmId"]),
-                            vendor_code=str(template["article"]),
-                            title=str(template["article"]),
-                            raw_json={
-                                "nmID": int(template["nmId"]),
-                                "vendorCode": str(template["article"]),
-                                "title": str(template["article"]),
-                                "photos": [{"big": image_url}],
-                                "sizes": [
-                                    {
-                                        "skus": list(template["skus"]),
-                                        "techSize": "One size",
-                                    }
-                                ],
-                            },
-                        )
-                    )
                 await session.commit()
 
                 await inventory_service.record_movement_and_adjust_balance(

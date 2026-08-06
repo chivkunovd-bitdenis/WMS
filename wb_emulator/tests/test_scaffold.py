@@ -68,13 +68,6 @@ def test_token_map_file_override(client: TestClient) -> None:
     assert settings.seller_key_for_token("env-token") == "seller_env"
 
 
-def test_dynamic_test_token_requires_explicit_switch() -> None:
-    assert Settings().seller_key_for_token("wms-test-seller-1") is None
-    enabled = Settings(allow_dynamic_test_tokens=True)
-    assert enabled.seller_key_for_token("wms-test-seller-1") == "wms-test-seller-1"
-    assert enabled.seller_key_for_token("unknown-token") is None
-
-
 def test_init_db_creates_schema(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     db_path = tmp_path / "manual.sqlite"
     monkeypatch.setenv("WB_EMULATOR_DB_PATH", str(db_path))

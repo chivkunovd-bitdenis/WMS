@@ -1,11 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import {
-  buildFbsPickingListPrintHtml,
-  bindFbsIdempotencyKey,
-  createLatestRequestGuard,
-  normalizeMetadataKind,
-  supportsFbsCommonSupplyQr,
-} from './fbsUx'
+import { buildFbsPickingListPrintHtml, normalizeMetadataKind } from './fbsUx'
 
 describe('FBS required identifiers', () => {
   it('TC-FBS-UX-002 sends the API-supported kind when WB calls it KIZ', () => {
@@ -45,38 +39,5 @@ describe('FBS picking list print document', () => {
     expect(html).toContain('A-01: 2')
     expect(html).toContain('&lt;script&gt;alert(1)&lt;/script&gt;')
     expect(html).not.toContain('javascript:alert(1)')
-  })
-})
-
-describe('FBS async workspace guards', () => {
-  it('reuses one idempotency key when a retryable mutation runs again', async () => {
-    const receivedKeys: string[] = []
-    const operation = bindFbsIdempotencyKey('stable-key', async (key) => {
-      receivedKeys.push(key)
-      return { ok: true }
-    })
-
-    await operation()
-    await operation()
-
-    expect(receivedKeys).toEqual(['stable-key', 'stable-key'])
-  })
-
-  it('allows only the latest polling generation to commit', () => {
-    const guard = createLatestRequestGuard()
-    const slow = guard.begin()
-    const latest = guard.begin()
-
-    expect(guard.isCurrent(slow)).toBe(false)
-    expect(guard.isCurrent(latest)).toBe(true)
-
-    guard.invalidate()
-    expect(guard.isCurrent(latest)).toBe(false)
-  })
-
-  it('exposes the common supply QR only for warehouse or sorting-centre delivery', () => {
-    expect(supportsFbsCommonSupplyQr({ delivery_type: 'warehouse_sc' })).toBe(true)
-    expect(supportsFbsCommonSupplyQr({ delivery_type: 'pvz' })).toBe(false)
-    expect(supportsFbsCommonSupplyQr(null)).toBe(false)
   })
 })

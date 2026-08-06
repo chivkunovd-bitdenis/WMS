@@ -28,7 +28,6 @@ type Seed = {
       barcode: string;
       chrt_id: number;
       created_at_wb: string;
-      image_url: string;
     }>
   >;
 };
@@ -36,9 +35,7 @@ type Workspace = {
   supply: {
     id: string;
     wb_supply_id: string;
-    delivery_type: RouteName;
     packaging_task_id: string | null;
-    operator_finished_at: string | null;
     barcode_asset: {
       id: string;
       preview_url: string | null;
@@ -56,17 +53,6 @@ type Workspace = {
       applied_at: string | null;
     } | null;
   }>;
-  packing_boxes: Array<{
-    id: string;
-    box_number: number;
-    status: "open" | "closed";
-    internal_barcode: string;
-    wb_trbx_id: string | null;
-    items_count: number;
-    orders: Array<{ id: string; wb_order_id: number; product_name: string; image_url: string | null; quantity: number }>;
-    qr_asset: { id: string; preview_url: string | null; applied_at: string | null } | null;
-  }>;
-  unassigned_order_ids: string[];
 };
 
 const seedPath = process.env.FBS_E2E_SEED_FILE;
@@ -141,9 +127,7 @@ test("TC-FBS-U2U-001/002/036: seller and staff role boundaries are enforced in t
   await login(page, seed.role_logins.operator_no_packaging);
   await expect(page.getByTestId("nav-ff-fbs")).toHaveCount(0);
   await page.goto("/app/ff/fbs");
-  await expect(page.getByTestId("ff-fbs-placeholder")).toContainText(
-    "Нет доступа",
-  );
+  await expect(page.getByTestId("ff-fbs-placeholder")).toContainText("Нет доступа");
 
   await page.getByTestId("logout").click();
   const sellerToken = await login(page, seed.role_logins.seller, "/seller/");
@@ -228,72 +212,48 @@ async function createSupply(page: Page, route: RouteName): Promise<Workspace> {
   ]);
   const workspace = (await response.json()) as Workspace;
   await expect(page.getByTestId("fbs-workspace")).toBeVisible();
-  await expect(page.getByTestId("fbs-workspace")).toContainText(
-    "Основной склад фулфилмента",
-  );
-  await expect(page.getByTestId("fbs-workspace")).not.toContainText(
-    "Operator FBS WH",
-  );
   return workspace;
 }
 
 async function pickAndPack(page: Page, route: RouteName, testInfo: TestInfo) {
   const orders = seed.orders[route];
-  let scannerCalls = 0;
-  let manualCalls = 0;
-  const watchScanner = (request: { url(): string }) => {
-    if (request.url().includes("/pick/scan-")) scannerCalls += 1;
-    if (request.url().includes("/pick/confirm-product")) manualCalls += 1;
-  };
-  page.on("request", watchScanner);
   await page.getByRole("button", { name: "Начать работу с поставкой" }).click();
-  await expect(page.getByRole("tab")).toHaveCount(4);
-  await expect(page.getByRole("tab", { name: "Стикеры WB" })).toHaveCount(0);
-  await expect(page.getByRole("tab", { name: "Подготовка к сдаче" })).toHaveCount(0);
-  const requiredByBarcode = new Map<string, number>();
-  for (const order of orders) {
-    requiredByBarcode.set(
-      order.barcode,
-      (requiredByBarcode.get(order.barcode) ?? 0) + 1,
+  await page.getByLabel("Штрихкод ячейки").fill(seed.location_code);
+  await page.getByRole("button", { name: "Подтвердить ячейку" }).click();
+  await expect(
+    page.getByText(new RegExp(`Ячейка ${seed.location_code} подтверждена`)),
+  ).toBeVisible();
+  for (const [index, order] of orders.entries()) {
+    await page.getByLabel("Штрихкод товара").fill(order.barcode);
+    const [pickResponse] = await Promise.all([
+      page.waitForResponse(
+        (item) =>
+          item.url().includes("/pick/scan-product") && item.status() === 200,
+      ),
+      page.getByRole("button", { name: "Подобрать товар" }).click(),
+    ]);
+    const pickedWorkspace = (await pickResponse.json()) as {
+      progress: { picked: number; total: number };
+    };
+    expect(pickedWorkspace.progress).toEqual(
+      expect.objectContaining({ picked: index + 1, total: orders.length }),
     );
   }
-  let pickedTotal = 0;
-  for (const [barcode, quantity] of requiredByBarcode) {
-    const row = page
-      .getByTestId("fbs-manual-picking")
-      .getByRole("row")
-      .filter({ hasText: barcode });
-    await expect(row).toContainText(`К снятию: ${quantity} шт.`);
-    const callsBeforePick = manualCalls;
-    await row
-      .getByRole("button", { name: `Снять ${quantity} шт. с ячейки` })
-      .click();
-    await expect(row).toHaveCount(0);
-    await expect
-      .poll(() => manualCalls - callsBeforePick)
-      .toBe(quantity);
-    pickedTotal += quantity;
-  }
-  page.off("request", watchScanner);
-  expect(scannerCalls).toBe(0);
-  expect(pickedTotal).toBe(orders.length);
-  expect(manualCalls).toBe(orders.length);
   await shot(page, testInfo, `${route}-02-picked`);
 
   await page.getByRole("tab", { name: "Упаковка и маркировка" }).click();
-  await expect(page.getByTestId("ff-packaging-lines-compact")).toHaveCount(0);
-  const packaging = page.getByTestId("ff-packaging-task-panel");
-  await expect(packaging.getByRole("columnheader", { name: "Товар и идентификаторы" })).toBeVisible();
-  await expect(packaging.getByRole("columnheader", { name: "Количество" })).toBeVisible();
-  await expect(page.getByTestId("fbs-order-marking")).toHaveCount(0);
+  const compact = page.getByTestId("ff-packaging-lines-compact");
+  await expect(compact).toBeVisible();
+  const name = page.getByTestId("ff-packaging-compact-product-name").first();
+  const box = await name.boundingBox();
+  expect(box?.width ?? 0).toBeGreaterThan(180);
+  expect(box?.height ?? 999).toBeLessThan(100);
+  expect(
+    await compact.evaluate((node) => node.scrollWidth <= node.clientWidth + 1),
+  ).toBeTruthy();
   await expect(page.getByTestId("ff-packaging-complete")).toBeDisabled();
   await shot(page, testInfo, `${route}-03-packaging-layout`);
-  const packButtons = page.getByTestId("ff-packaging-pack-btn");
-  while ((await packButtons.count()) > 0) {
-    const before = await packButtons.count();
-    await packButtons.first().click();
-    await expect(packButtons).toHaveCount(before - 1);
-  }
+  await page.getByTestId("ff-packaging-pack-btn").click();
   await expect(page.getByTestId("ff-packaging-complete")).toBeEnabled();
   await expect(page.getByTestId("ff-packaging-ack-all-packed")).toHaveCount(0);
   const [completeResponse] = await Promise.all([
@@ -308,56 +268,10 @@ async function pickAndPack(page: Page, route: RouteName, testInfo: TestInfo) {
   const completedTask = (await completeResponse.json()) as { status: string };
   expect(completedTask.status).toBe("done");
 
-  const boxesPanel = page.getByTestId("fbs-packing-boxes");
-  await boxesPanel.getByLabel("Количество коробов").fill("2");
-  await Promise.all([
-    page.waitForResponse((item) => item.url().endsWith("/packing-boxes") && item.request().method() === "POST" && item.status() === 201),
-    page.getByTestId("fbs-boxes-create").click(),
-  ]);
-  const putFirst = async () => {
-    await Promise.all([
-      page.waitForResponse((item) => item.url().includes("/packing-boxes/") && item.url().endsWith("/orders") && item.request().method() === "PUT" && item.status() === 200),
-      boxesPanel.getByRole("button", { name: "Положить в короб" }).first().click(),
-    ]);
-  };
-  await putFirst();
-  await Promise.all([
-    page.waitForResponse((item) => item.url().includes("/packing-boxes/") && item.url().endsWith("/orders") && item.request().method() === "DELETE" && item.status() === 200),
-    page.getByTestId("fbs-boxes-table").getByRole("button", { name: "Убрать" }).click(),
-  ]);
-  await putFirst();
-  await boxesPanel.getByRole("combobox").first().click();
-  await page.getByRole("option", { name: "Короб 2" }).click();
-  await putFirst();
-  await expect(boxesPanel.getByText("Все упакованные товары распределены по коробам.")).toBeVisible();
-  const stickerButtons = page.locator('[data-testid^="fbs-order-sticker-print-"]');
-  const stickerCount = await stickerButtons.count();
-  for (let index = 0; index < stickerCount; index += 1) {
-    await stickerButtons.nth(index).click();
-    await confirmCurrentPreview(page);
-  }
-  await shot(page, testInfo, `${route}-05-order-sticker-applied`);
-
-  const closeButtons = page.locator('[data-testid^="fbs-box-close-"]');
-  while ((await closeButtons.count()) > 0) {
-    const before = await closeButtons.count();
-    await Promise.all([
-      page.waitForResponse((item) => item.url().includes("/packing-boxes/") && item.url().endsWith("/close") && item.status() === 200),
-      closeButtons.first().click(),
-    ]);
-    await expect(closeButtons).toHaveCount(before - 1);
-  }
-  await expect(page.getByRole("tab", { name: "Упаковка и маркировка" })).toHaveAttribute("aria-selected", "true");
-  if (route === "pvz") {
-    await expect(boxesPanel.getByText(/^WB ID:/)).toHaveCount(2);
-  } else {
-    await expect(
-      boxesPanel.getByText("Не требуется", { exact: true }),
-    ).toHaveCount(2);
-  }
-  await expect(page.getByTestId("fbs-go-delivery")).toBeVisible();
-  await page.getByTestId("fbs-go-delivery").click();
-  await expect(page.getByRole("tab", { name: "Сдача в WB", exact: true })).toHaveAttribute("aria-selected", "true");
+  await page.getByRole("tab", { name: "Стикеры WB" }).click();
+  await page.getByRole("button", { name: "Получить все стикеры" }).click();
+  await confirmCurrentPreview(page);
+  await shot(page, testInfo, `${route}-04-order-sticker-applied`);
 }
 
 async function finishRoute(
@@ -367,11 +281,40 @@ async function finishRoute(
   token: string,
   route: RouteName,
   supply: Workspace,
+  testInfo: TestInfo,
 ) {
-  await expect(page.getByRole("tab")).toHaveCount(4);
-  const packedWorkspace = await fetchWorkspace(request, baseURL, token, supply.supply.id);
-  expect(packedWorkspace.packing_boxes).toHaveLength(2);
-  expect(packedWorkspace.unassigned_order_ids).toEqual([]);
+  await page.getByRole("tab", { name: "Подготовка к сдаче" }).click();
+  if (route === "pvz") {
+    let cargoCreateCalls = 0;
+    let cargoDeleteCalls = 0;
+    page.on("request", (item) => {
+      if (item.url().endsWith(`/api/operations/fbs-supplies/${supply.supply.id}/cargo-places`)) {
+        if (item.method() === "POST") cargoCreateCalls += 1;
+        if (item.method() === "DELETE") cargoDeleteCalls += 1;
+      }
+    });
+    await page.getByLabel("Количество физических коробов").fill("2");
+    await page.getByLabel("Проверил каждый короб: сторона не больше 60 см, сумма сторон не больше 140 см, вес не больше 5 кг.").check();
+    await page.getByRole("button", { name: "Создать 2 грузоместа" }).click();
+    await expect(page.getByTestId("fbs-cargo-table")).toBeVisible();
+    await expect(page.getByText("2 создано")).toBeVisible();
+    await expect.poll(() => cargoCreateCalls).toBe(1);
+    await expect(page.getByText("Распределите заказы по коробам")).toHaveCount(0);
+
+    await page.getByRole("button", { name: "Удалить короб 2" }).click();
+    await expect(page.getByRole("dialog", { name: "Удалить грузоместо?" })).toBeVisible();
+    await page.getByTestId("fbs-cargo-delete-confirm").click();
+    await expect(page.getByText("1 создано")).toBeVisible();
+    await expect.poll(() => cargoDeleteCalls).toBe(1);
+
+    await page.getByRole("button", { name: "Печать QR" }).click();
+    await confirmCurrentPreview(page);
+    await shot(page, testInfo, `${route}-05-cargo-qr`);
+  } else {
+    await expect(
+      page.getByText("Для этого маршрута создавать короба в WMS и распределять по ним заказы не нужно."),
+    ).toBeVisible();
+  }
 
   let deliverBody: {
     idempotency_key: string;
@@ -386,40 +329,28 @@ async function finishRoute(
       deliverBody = item.postDataJSON() as typeof deliverBody;
     }
   });
-  await page.getByTestId("fbs-delivery-prepare").click();
-  await page.getByTestId("fbs-delivery-confirm-open").click();
+  await page.getByRole("tab", { name: "Передача и статусы" }).click();
+  await page.getByRole("button", { name: "Проверить готовность" }).click();
+  await page
+    .getByRole("button", { name: "Подтвердить передачу WB" })
+    .click();
   const deliveryDialog = page.getByRole("dialog", {
-    name: "Передать поставку в WB?",
+    name: "Подтвердить передачу в WB?",
   });
   await expect(deliveryDialog).toBeVisible();
   expect(deliverBody).toBeNull();
   await Promise.all([
     page.waitForResponse(
       (item) =>
-        item
-          .url()
-          .includes(
-            `/api/operations/fbs-supplies/${supply.supply.id}/deliver`,
-          ) && item.status() === 200,
+        item.url().includes(`/api/operations/fbs-supplies/${supply.supply.id}/deliver`) &&
+        item.status() === 200,
     ),
     deliveryDialog.getByRole("button", { name: "Передать в WB" }).click(),
   ]);
-  await expect(page.getByText("Статусы WB", { exact: true })).toHaveCount(0);
   await expect(
-    page.getByRole("button", { name: "Обновить статусы" }),
-  ).toHaveCount(0);
-  if (route === "warehouse_sc") {
-    await page.getByRole("button", { name: "Печать QR поставки" }).click();
-  } else {
-    await page.getByRole("button", { name: "Печать всех QR коробов" }).click();
-  }
-  await confirmCurrentPreview(page);
-  await expect(page.getByTestId("fbs-local-finish")).toBeEnabled();
-  await Promise.all([
-    page.waitForResponse((item) => item.url().endsWith(`/api/operations/fbs-supplies/${supply.supply.id}/finish`) && item.status() === 200),
-    page.getByTestId("fbs-local-finish").click(),
-  ]);
-  await expect(page.getByText(/Работа с поставкой завершена/).last()).toBeVisible();
+    page.getByText("WB подтвердил передачу поставки в доставку."),
+  ).toBeVisible();
+  await shot(page, testInfo, `${route}-06-delivered`);
 
   const finalWorkspace = await fetchWorkspace(
     request,
@@ -428,7 +359,6 @@ async function finishRoute(
     supply.supply.id,
   );
   expect(finalWorkspace.stage).toBe("tracking");
-  expect(finalWorkspace.supply.operator_finished_at).toBeTruthy();
   expect(finalWorkspace.supply.packaging_task_id).toBeTruthy();
   expect(deliverBody?.confirmed_preflight_version).toBeTruthy();
   expect(deliverBody?.idempotency_key).toBeTruthy();
@@ -461,7 +391,7 @@ async function finishRoute(
   expect(emuSupply.orders).toEqual(
     seed.orders[route].map((order) => order.wb_order_id),
   );
-  expect(emuSupply.trbxIds.length).toBe(route === "pvz" ? 2 : 0);
+  expect(emuSupply.trbxIds.length).toBe(route === "pvz" ? 1 : 0);
 
   const adminStateResponse = await request.get(
     `${emulatorUrl}/__admin/state?seller=${seed.seller_key}`,
@@ -488,10 +418,26 @@ async function finishRoute(
     orders: seed.orders[route].map((order) => order.wb_order_id),
     trbx:
       route === "pvz"
-        ? emuSupply.trbxIds.map((id) => ({ id, orders: [] }))
+        ? [
+            {
+              id: emuSupply.trbxIds[0],
+              // Canonical PVZ flow keeps order membership at supply level;
+              // physical cargo places are intentionally not order-bound.
+              orders: [],
+            },
+          ]
         : [],
     deliver_calls: 1,
   });
+
+  if (route === "warehouse_sc") {
+    await expect(
+      page.getByRole("button", { name: "Печать QR поставки" }),
+    ).toBeVisible();
+    await page.getByRole("button", { name: "Печать QR поставки" }).click();
+    await confirmCurrentPreview(page);
+    await shot(page, testInfo, `${route}-07-supply-qr`);
+  }
 
   return {
     route,
@@ -502,8 +448,8 @@ async function finishRoute(
   };
 }
 
-// TC-S17-023/025/026 — real browser -> WMS -> Postgres/Celery -> WB emulator, with no FBS route mocks.
-test("TC-S17-023/025/026: warehouse and PVZ operator flows use the real WB emulator", async ({
+// TC-FBS-U2U-007/012/023/024/026/029 — real browser -> WMS -> Postgres/Celery -> WB emulator, with no FBS route mocks.
+test("TC-FBS-U2U-007/012/023/024/026/029: warehouse and PVZ operator flows use the real WB emulator", async ({
   page,
   request,
   baseURL,
@@ -523,42 +469,6 @@ test("TC-S17-023/025/026: warehouse and PVZ operator flows use the real WB emula
   const token = await login(page);
   await page.getByTestId("nav-ff-fbs").click();
   await expect(page.getByTestId("fbs-orders-screen")).toBeVisible();
-  await expect(page.getByText("Подробнее", { exact: true })).toHaveCount(0);
-  await expect(
-    page.getByRole("columnheader", { name: "Селлер" }),
-  ).toBeVisible();
-  await expect(
-    page.getByRole("columnheader", { name: "Маршрут сдачи" }),
-  ).toBeVisible();
-  const worklist = page.getByTestId("fbs-worklist-table");
-  await expect(
-    worklist.getByRole("columnheader", { name: "Ячейка и остаток" }),
-  ).toHaveCount(0);
-  await expect(
-    worklist.getByRole("columnheader", { name: "Статус" }),
-  ).toHaveCount(0);
-  await expect(worklist.getByText("Маркировка:", { exact: true })).toHaveCount(0);
-  const imageOrder = seed.orders.warehouse_sc[0];
-  const thumbnailRoot = page.getByTestId(
-    `fbs-product-photo-${imageOrder.wms_order_id}`,
-  );
-  const thumbnail = thumbnailRoot.locator("img");
-  await expect(thumbnail).toBeVisible();
-  await expect(thumbnail).toHaveAttribute("src", imageOrder.image_url);
-  await expect
-    .poll(() =>
-      thumbnail.evaluate((node: HTMLImageElement) => ({
-        width: node.naturalWidth,
-        height: node.naturalHeight,
-      })),
-    )
-    .toEqual({ width: 360, height: 480 });
-  await thumbnailRoot.hover();
-  const enlarged = page.getByTestId("product-photo-enlarged");
-  await expect(enlarged).toBeVisible();
-  await expect(enlarged).toHaveAttribute("src", imageOrder.image_url);
-  await page.getByRole("heading", { name: "Заказы FBS" }).hover();
-  await expect(enlarged).toHaveCount(0);
   await shot(page, testInfo, "00-real-worklist");
 
   const evidence: Record<string, unknown> = {
@@ -575,16 +485,8 @@ test("TC-S17-023/025/026: warehouse and PVZ operator flows use the real WB emula
       token,
       route,
       supply,
+      testInfo,
     );
-    await page.getByTestId("fbs-workspace").getByLabel("Закрыть").click();
-    await page.getByRole("tab", { name: "В доставке" }).click();
-    const deliveredRow = page.getByTestId(
-      `fbs-order-${seed.orders[route][0].wms_order_id}`,
-    );
-    await expect(deliveredRow).toHaveAttribute("role", "button");
-    await expect(deliveredRow).toHaveAttribute("tabindex", "0");
-    await deliveredRow.click();
-    await expect(page.getByTestId("fbs-workspace")).toBeVisible();
     await page.getByTestId("fbs-workspace").getByLabel("Закрыть").click();
     await page.getByRole("tab", { name: "Новые" }).click();
     await page.getByLabel("Заказ, артикул или штрихкод").fill("");

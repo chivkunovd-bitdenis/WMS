@@ -42,8 +42,6 @@ services:
   api:
     environment:
       WILDBERRIES_MARKETPLACE_API_BASE: http://wb-emulator:8000
-      CONF_FBS_POLL_INTERVAL_SEC: "${CONF_FBS_POLL_INTERVAL_SEC:-60}"
-      CONF_FBS_STATUSES_SYNC_INTERVAL_SEC: "${CONF_FBS_STATUSES_SYNC_INTERVAL_SEC:-120}"
     volumes:
       - type: bind
         source: ./wb_emulator/seed
@@ -56,8 +54,6 @@ services:
   celery_worker:
     environment:
       WILDBERRIES_MARKETPLACE_API_BASE: http://wb-emulator:8000
-      CONF_FBS_POLL_INTERVAL_SEC: "${CONF_FBS_POLL_INTERVAL_SEC:-60}"
-      CONF_FBS_STATUSES_SYNC_INTERVAL_SEC: "${CONF_FBS_STATUSES_SYNC_INTERVAL_SEC:-120}"
     depends_on:
       wb-emulator:
         condition: service_healthy
@@ -65,8 +61,6 @@ services:
   celery_beat:
     environment:
       WILDBERRIES_MARKETPLACE_API_BASE: http://wb-emulator:8000
-      CONF_FBS_POLL_INTERVAL_SEC: "${CONF_FBS_POLL_INTERVAL_SEC:-60}"
-      CONF_FBS_STATUSES_SYNC_INTERVAL_SEC: "${CONF_FBS_STATUSES_SYNC_INTERVAL_SEC:-120}"
     depends_on:
       wb-emulator:
         condition: service_healthy

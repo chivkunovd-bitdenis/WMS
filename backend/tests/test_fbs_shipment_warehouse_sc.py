@@ -18,11 +18,8 @@ from app.models.fbs_order import (
     FBS_ORDER_STATUS_IN_SUPPLY,
     FBS_ORDER_STATUS_NEW,
     FBS_ORDER_STATUS_PACKED,
-    PACK_STATUS_PACKED,
-    PICK_STATUS_PICKED,
     FbsOrder,
 )
-from app.models.fbs_packing_box import FbsPackingBox, FbsPackingBoxItem
 from app.models.fbs_supply import (
     FBS_SUPPLY_STATUS_ASSEMBLING,
     FBS_SUPPLY_STATUS_IN_DELIVERY,
@@ -31,7 +28,6 @@ from app.models.fbs_supply import (
 )
 from app.models.fbs_wb_operation import WB_OPERATION_STATE_CONFIRMED, FbsWbOperation
 from app.models.product import Product
-from app.services.warehouse_box_service import create_warehouse_box
 from app.services.wb_marketplace_orders_service import upsert_order_from_wb_row
 from app.services.wildberries_client import WildberriesClientError
 from tests.fbs_seed_helpers import DEFAULT_WB_WAREHOUSE_ID, seed_fbs_warehouse_binding
@@ -58,7 +54,9 @@ async def _setup_seller_with_token(
     headers: dict[str, str],
     suffix: str,
 ) -> tuple[str, str, uuid.UUID]:
-    seller = await async_client.post("/sellers", headers=headers, json={"name": f"Seller {suffix}"})
+    seller = await async_client.post(
+        "/sellers", headers=headers, json={"name": f"Seller {suffix}"}
+    )
     assert seller.status_code in (200, 201), seller.text
     seller_id = seller.json()["id"]
     tok = await async_client.patch(
@@ -162,7 +160,6 @@ async def _prepare_supply_with_orders(
     products: list[Product | None] | None = None,
     supply_name: str,
     delivery_type: str = "warehouse_sc",
-    distribute_to_boxes: bool = True,
 ) -> tuple[dict[str, Any], list[uuid.UUID]]:
     seller_uuid = uuid.UUID(seller_id)
     warehouse_uuid = uuid.UUID(warehouse_id)
@@ -203,35 +200,6 @@ async def _prepare_supply_with_orders(
             order = await session.get(FbsOrder, local_order_id)
             assert order is not None
             order.status = order_status
-            if order_status == FBS_ORDER_STATUS_PACKED:
-                order.pack_status = PACK_STATUS_PACKED
-                order.pick_status = PICK_STATUS_PICKED
-        if distribute_to_boxes:
-            warehouse_box = await create_warehouse_box(
-                session,
-                tenant_id,
-                warehouse_id=uuid.UUID(warehouse_id),
-            )
-            packing_box = FbsPackingBox(
-                tenant_id=tenant_id,
-                supply_id=uuid.UUID(supply["id"]),
-                warehouse_box_id=warehouse_box.id,
-                box_number=1,
-            )
-            session.add(packing_box)
-            await session.flush()
-            for local_order_id in order_ids:
-                order = await session.get(FbsOrder, local_order_id)
-                assert order is not None
-                if order.status == FBS_ORDER_STATUS_PACKED:
-                    session.add(
-                        FbsPackingBoxItem(
-                            tenant_id=tenant_id,
-                            box_id=packing_box.id,
-                            fbs_order_id=local_order_id,
-                        )
-                    )
-            packing_box.status = "closed"
         await session.commit()
 
     return supply, order_ids
@@ -301,7 +269,7 @@ async def test_fbs_shipment_deliver_ok_and_orders_not_ready(
     assert deliver.status_code == 200, deliver.text
     body = deliver.json()
     assert body["supply"]["status"] == FBS_SUPPLY_STATUS_IN_DELIVERY
-    assert body["stage"] == "local_finish"
+    assert body["stage"] == "tracking"
     assert body["supply"]["barcode_asset"]["kind"] == "supply_qr"
     assert body["supply"]["barcode_asset"]["status"] == "ready"
     assert body["supply"]["barcode_asset"]["preview_url"]
@@ -689,7 +657,7 @@ async def test_warehouse_sc_deliver_qr_failure_keeps_confirmed_delivery_and_retr
     assert retry.status_code == 200, retry.text
     retry_workspace = retry.json()
     assert retry_workspace["supply"]["status"] == FBS_SUPPLY_STATUS_IN_DELIVERY
-    assert retry_workspace["stage"] == "local_finish"
+    assert retry_workspace["stage"] == "tracking"
     assert deliver_calls == 1
     assert qr_calls == 2
 
@@ -860,135 +828,3 @@ async def test_fbs_shipment_deliver_cancelled_order_in_supply(
             order = await session.get(FbsOrder, local_order_id)
             assert order is not None
             assert order.status != FBS_ORDER_STATUS_IN_DELIVERY
-
-
-# TC-NEW-FBS-BOX-CLOSE-001 — warehouse/SC open box blocks stage, preflight and deliver
-@pytest.mark.asyncio
-async def test_warehouse_sc_open_box_blocks_delivery_until_closed(
-    async_client: AsyncClient,
-    enable_wb_marketplace_supplies_mock: None,
-) -> None:
-    headers, suffix = await _register_ff_admin(async_client)
-    seller_id, warehouse_id, tenant_id = await _setup_seller_with_token(
-        async_client, headers, suffix
-    )
-
-    supply, _ = await _prepare_supply_with_orders(
-        async_client,
-        headers,
-        seller_id,
-        warehouse_id,
-        tenant_id,
-        wb_order_ids=[956001, 956002],
-        supply_name="Open box gate WH",
-    )
-
-    async with SessionLocal() as session:
-        box = await session.scalar(
-            select(FbsPackingBox).where(FbsPackingBox.supply_id == uuid.UUID(supply["id"]))
-        )
-        assert box is not None
-        box.status = "open"
-        await session.commit()
-
-    workspace = await async_client.get(
-        f"/operations/fbs-supplies/{supply['id']}/workspace",
-        headers=headers,
-    )
-    assert workspace.status_code == 200, workspace.text
-    body = workspace.json()
-    assert body["stage"] == "packing"
-    assert any(row["code"] == "packing_boxes_not_closed" for row in body["blockers"])
-
-    preflight = await async_client.post(
-        f"/operations/fbs-supplies/{supply['id']}/delivery-preflight",
-        headers=headers,
-    )
-    assert preflight.status_code == 200, preflight.text
-    preflight_body = preflight.json()
-    assert preflight_body["can_deliver"] is False
-    assert any(
-        row["code"] == "packing_boxes_not_closed" and row["ok"] is False
-        for row in preflight_body["checks"]
-    )
-
-    blocked = await _deliver_with_preflight(
-        async_client,
-        headers,
-        supply["id"],
-        confirmed_preflight_version=preflight_body["version"],
-    )
-    assert blocked.status_code == 400
-    assert blocked.json()["detail"]["code"] == "packing_boxes_not_closed"
-
-    async with SessionLocal() as session:
-        box = await session.scalar(
-            select(FbsPackingBox).where(FbsPackingBox.supply_id == uuid.UUID(supply["id"]))
-        )
-        assert box is not None
-        box.status = "closed"
-        await session.commit()
-
-    fresh_preflight = await _delivery_preflight(async_client, headers, supply["id"])
-    assert fresh_preflight["can_deliver"] is True
-    assert any(
-        row["code"] == "packing_boxes_closed" and row["ok"] is True
-        for row in fresh_preflight["checks"]
-    )
-
-    deliver = await _deliver_with_preflight(
-        async_client,
-        headers,
-        supply["id"],
-        confirmed_preflight_version=fresh_preflight["version"],
-    )
-    assert deliver.status_code == 200, deliver.text
-    assert deliver.json()["stage"] == "local_finish"
-
-
-# TC-NEW-FBS-BOX-CLOSE-002 — reopen after preflight makes deliver stale
-@pytest.mark.asyncio
-async def test_warehouse_sc_reopen_box_after_preflight_is_stale(
-    async_client: AsyncClient,
-    enable_wb_marketplace_supplies_mock: None,
-) -> None:
-    headers, suffix = await _register_ff_admin(async_client)
-    seller_id, warehouse_id, tenant_id = await _setup_seller_with_token(
-        async_client, headers, suffix
-    )
-
-    supply, _ = await _prepare_supply_with_orders(
-        async_client,
-        headers,
-        seller_id,
-        warehouse_id,
-        tenant_id,
-        wb_order_ids=[956101],
-        supply_name="Reopen stale WH",
-    )
-
-    preflight = await _delivery_preflight(async_client, headers, supply["id"])
-    assert preflight["can_deliver"] is True
-
-    async with SessionLocal() as session:
-        box = await session.scalar(
-            select(FbsPackingBox).where(FbsPackingBox.supply_id == uuid.UUID(supply["id"]))
-        )
-        assert box is not None
-        box.status = "open"
-        await session.commit()
-
-    stale = await async_client.post(
-        f"/operations/fbs-supplies/{supply['id']}/deliver",
-        headers=headers,
-        json={
-            "idempotency_key": str(uuid.uuid4()),
-            "confirmed_preflight_version": preflight["version"],
-        },
-    )
-    assert stale.status_code == 409
-    assert stale.json()["detail"]["code"] == "stale_preflight"
-
-    refreshed = await _delivery_preflight(async_client, headers, supply["id"])
-    assert refreshed["can_deliver"] is False
-    assert refreshed["version"] != preflight["version"]

@@ -71,7 +71,7 @@ FBS_ERROR_MESSAGES_RU: dict[str, str] = {
     "file_missing": "Файл печатного актива отсутствует.",
     "empty_content": "Пустой файл печатного актива.",
     "supply_has_cancelled_orders": "В поставке есть отменённые заказы.",
-    "orders_not_ready": "Заказы не готовы к фиксации состава поставки.",
+    "orders_not_ready": "Заказы не готовы к передаче.",
     "packaging_required": "Требуется завершить упаковку.",
     "marking_required": "Требуется маркировка.",
     "marking_not_allowed": "Маркировка не разрешена Wildberries.",

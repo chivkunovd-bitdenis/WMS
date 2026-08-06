@@ -18,48 +18,6 @@ export function metadataKindLabel(kind: string) {
     ?? 'Идентификатор'
 }
 
-export type LatestRequestGuard = {
-  begin: () => number
-  isCurrent: (generation: number) => boolean
-  invalidate: () => void
-}
-
-/**
- * Generation guard for polling and async effects. Only the newest request may
- * commit its result; closing/changing the screen invalidates in-flight work.
- */
-export function createLatestRequestGuard(): LatestRequestGuard {
-  let generation = 0
-  return {
-    begin: () => {
-      generation += 1
-      return generation
-    },
-    isCurrent: (candidate) => candidate === generation,
-    invalidate: () => {
-      generation += 1
-    },
-  }
-}
-
-export function supportsFbsCommonSupplyQr(
-  supply: { delivery_type: 'warehouse_sc' | 'pvz' } | null | undefined,
-): boolean {
-  return supply?.delivery_type === 'warehouse_sc'
-}
-
-/**
- * Binds one idempotency key to every retry of the same logical mutation.
- * A timeout may happen after the server committed, so generating a fresh key
- * inside the retry callback could duplicate the operation.
- */
-export function bindFbsIdempotencyKey<T>(
-  idempotencyKey: string,
-  operation: (idempotencyKey: string) => Promise<T>,
-): () => Promise<T> {
-  return () => operation(idempotencyKey)
-}
-
 export type FbsPickingListPrintRow = {
   name: string
   imageUrl: string | null

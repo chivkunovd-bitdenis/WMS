@@ -27,7 +27,6 @@ from app.db.session import SessionLocal
 from app.models.fbs_order import (
     FBS_ORDER_STATUS_NEW,
     FBS_ORDER_STATUS_PACKED,
-    PACK_STATUS_PACKED,
     FbsOrder,
 )
 from app.models.fbs_supply import (
@@ -45,6 +44,7 @@ from tests.fbs_operator_emulator_seed import (
     load_emulator_tokens,
     seed_operator_emulator_wms,
 )
+from tests.test_fbs_shipment_pvz import _create_cargo_places, _default_boxes
 from tests.test_fbs_shipment_warehouse_sc import (
     _deliver_with_preflight,
     _delivery_preflight,
@@ -62,7 +62,9 @@ WB_ORDER_PVZ = 510005
 
 
 @pytest_asyncio.fixture
-async def emulator_stack(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> httpx.AsyncClient:
+async def emulator_stack(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> httpx.AsyncClient:
     token_map = load_emulator_tokens()
     db_path = tmp_path / "handoff-emu.sqlite"
     monkeypatch.setenv("WB_EMULATOR_DB_PATH", str(db_path))
@@ -116,7 +118,9 @@ async def _sync_orders_for_seller(
 ) -> dict[str, Any]:
     seller = seed.sellers[seller_key]
     async with SessionLocal() as session:
-        return await sync_seller_orders(session, seed.tenant_id, seller.seller_id, emu_client)
+        return await sync_seller_orders(
+            session, seed.tenant_id, seller.seller_id, emu_client
+        )
 
 
 async def _local_order_id(
@@ -146,35 +150,7 @@ async def _promote_supply_packed(supply_id: str, order_ids: list[uuid.UUID]) -> 
             order = await session.get(FbsOrder, oid)
             assert order is not None
             order.status = FBS_ORDER_STATUS_PACKED
-            order.pack_status = PACK_STATUS_PACKED
         await session.commit()
-
-
-async def _create_local_box_and_distribute_orders(
-    async_client: AsyncClient,
-    headers: dict[str, str],
-    supply_id: str,
-    order_ids: list[uuid.UUID],
-) -> None:
-    created = await async_client.post(
-        f"/operations/fbs-supplies/{supply_id}/packing-boxes",
-        headers=headers,
-        json={"count": 1, "idempotency_key": str(uuid.uuid4())},
-    )
-    assert created.status_code == 201, created.text
-    boxes = created.json()["packing_boxes"]
-    assert len(boxes) == 1
-
-    assigned = await async_client.put(
-        f"/operations/fbs-supplies/{supply_id}/packing-boxes/{boxes[0]['id']}/orders",
-        headers=headers,
-        json={
-            "order_ids": [str(order_id) for order_id in order_ids],
-            "idempotency_key": str(uuid.uuid4()),
-        },
-    )
-    assert assigned.status_code == 200, assigned.text
-    assert assigned.json()["unassigned_order_ids"] == []
 
 
 @pytest_asyncio.fixture
@@ -234,31 +210,6 @@ async def test_tc01_three_sellers_wms_seed_isolated(
         _ = seller_key
 
 
-async def test_operator_seed_exposes_emulator_product_images_in_worklist(
-    async_client: AsyncClient,
-    emulator_stack: httpx.AsyncClient,
-) -> None:
-    seeded = await seed_operator_emulator_wms(
-        async_client,
-        product_image_base_url="http://emu",
-    )
-    await _sync_orders_for_seller(seeded, "seller_a", emulator_stack)
-
-    seller = seeded.sellers["seller_a"]
-    worklist = await async_client.get(
-        "/operations/fbs-orders/worklist",
-        headers=seeded.admin_headers,
-        params={"seller_id": str(seller.seller_id), "status_group": "new"},
-    )
-    assert worklist.status_code == 200, worklist.text
-    rows = {row["wb_order_id"]: row for row in worklist.json()["items"]}
-    assert rows[WB_ORDER_WAREHOUSE_SC]["product"]["image_url"] == (
-        "http://emu/__assets/products/111001.png"
-    )
-    assert rows[WB_ORDER_PVZ]["product"]["image_url"] == ("http://emu/__assets/products/111005.png")
-    assert rows[WB_ORDER_WAREHOUSE_SC]["wb_warehouse"]["name"] == ("Склад WB Коледино")
-
-
 async def test_tc23_emulator_admin_seed_orders_visible(
     emulator_stack: httpx.AsyncClient,
 ) -> None:
@@ -306,9 +257,6 @@ async def test_full_flow_warehouse_sc_emulator(
         headers=headers,
     )
     await _promote_supply_packed(supply_id, [local_order_id])
-    await _create_local_box_and_distribute_orders(
-        async_client, headers, supply_id, [local_order_id]
-    )
 
     deliver = await _deliver_with_preflight(async_client, headers, supply_id)
     assert deliver.status_code == 200, deliver.text
@@ -351,9 +299,10 @@ async def test_full_flow_pvz_emulator(
     supply_id = create.json()["supply"]["id"]
 
     await _promote_supply_packed(supply_id, [local_order_id])
-    await _create_local_box_and_distribute_orders(
-        async_client, headers, supply_id, [local_order_id]
+    cargo = await _create_cargo_places(
+        async_client, headers, supply_id, count=1, boxes=_default_boxes(1)
     )
+    assert cargo.status_code == 201, cargo.text
 
     deliver = await _deliver_with_preflight(async_client, headers, supply_id)
     assert deliver.status_code == 200, deliver.text
@@ -427,9 +376,6 @@ async def test_emulator_deliver_timeout_pending_confirmation(
     assert create.status_code == 201, create.text
     supply_id = create.json()["supply"]["id"]
     await _promote_supply_packed(supply_id, [local_order_id])
-    await _create_local_box_and_distribute_orders(
-        async_client, headers, supply_id, [local_order_id]
-    )
 
     preflight = await _delivery_preflight(async_client, headers, supply_id)
     deliver_calls = {"count": 0}

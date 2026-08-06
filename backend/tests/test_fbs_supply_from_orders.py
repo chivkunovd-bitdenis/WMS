@@ -53,7 +53,9 @@ async def _setup_seller_with_token(
     headers: dict[str, str],
     suffix: str,
 ) -> tuple[str, str, str]:
-    seller = await async_client.post("/sellers", headers=headers, json={"name": f"Seller {suffix}"})
+    seller = await async_client.post(
+        "/sellers", headers=headers, json={"name": f"Seller {suffix}"}
+    )
     assert seller.status_code in (200, 201), seller.text
     seller_id = seller.json()["id"]
     tok = await async_client.patch(
@@ -357,7 +359,9 @@ async def test_tc03_preflight_b2c_b2b_incompatible(
     )
     assert preflight.status_code == 200, preflight.text
     assert preflight.json()["compatible"] is False
-    assert any(i["code"] == "legal_type_mismatch" for i in preflight.json()["issues"])
+    assert any(
+        i["code"] == "legal_type_mismatch" for i in preflight.json()["issues"]
+    )
 
 
 # TC-04 — different cargo types incompatible
@@ -403,7 +407,9 @@ async def test_tc04_preflight_different_cargo_types(
     )
     assert preflight.status_code == 200, preflight.text
     assert preflight.json()["compatible"] is False
-    assert any(i["code"] == "different_cargo_type" for i in preflight.json()["issues"])
+    assert any(
+        i["code"] == "different_cargo_type" for i in preflight.json()["issues"]
+    )
 
 
 # TC-05 — PVZ blocked for can_pvz=false; warehouse_sc still allowed
@@ -817,37 +823,6 @@ async def test_start_work_idempotent_packaging_task(
     assert second.status_code == 200, second.text
     assert first.json()["supply"]["packaging_task_id"] is not None
     assert (
-        first.json()["supply"]["packaging_task_id"] == second.json()["supply"]["packaging_task_id"]
+        first.json()["supply"]["packaging_task_id"]
+        == second.json()["supply"]["packaging_task_id"]
     )
-
-
-@pytest.mark.asyncio
-async def test_start_work_returns_retryable_504_on_local_timeout(
-    async_client: AsyncClient,
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    headers, _suffix = await _register_ff_admin(async_client)
-
-    async def stalled_start(*args: object, **kwargs: object) -> dict[str, Any]:
-        _ = args, kwargs
-        await asyncio.sleep(0.1)
-        return {}
-
-    monkeypatch.setattr(
-        "app.api.fbs_supplies._START_WORK_TIMEOUT_SECONDS",
-        0.01,
-    )
-    monkeypatch.setattr(
-        "app.api.fbs_supplies.supply_svc.start_supply_work",
-        stalled_start,
-    )
-    response = await async_client.post(
-        f"/operations/fbs-supplies/{uuid.uuid4()}/start-work",
-        headers=headers,
-        json={"idempotency_key": str(uuid.uuid4())},
-    )
-    assert response.status_code == 504, response.text
-    detail = response.json()["detail"]
-    assert detail["code"] == "start_work_timeout"
-    assert detail["retryable"] is True
-    assert detail["context"] == {"operation": "start_work"}

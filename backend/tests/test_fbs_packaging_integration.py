@@ -399,7 +399,7 @@ async def test_fbs_supply_packed_after_packaging_complete(
     seller_id, warehouse_id = await _setup_seller_with_token(async_client, headers, suffix)
     token_payload = await async_client.get("/auth/me", headers=headers)
     tenant_id = uuid.UUID(token_payload.json()["tenant_id"])
-    supply_id, order_ids = await _create_supply_with_orders(
+    supply_id, _ = await _create_supply_with_orders(
         async_client,
         headers,
         seller_id,
@@ -472,25 +472,6 @@ async def test_fbs_supply_packed_after_packaging_complete(
     )
     assert supply.status_code == 200, supply.text
     assert supply.json()["status"] == FBS_SUPPLY_STATUS_PACKED
-
-    boxes = await async_client.post(
-        f"/operations/fbs-supplies/{supply_id}/packing-boxes",
-        headers=headers,
-        json={"count": 1, "idempotency_key": str(uuid.uuid4())},
-    )
-    assert boxes.status_code == 201, boxes.text
-    packing_box_id = boxes.json()["packing_boxes"][0]["id"]
-
-    distributed = await async_client.put(
-        f"/operations/fbs-supplies/{supply_id}/packing-boxes/{packing_box_id}/orders",
-        headers=headers,
-        json={
-            "order_ids": [str(order_id) for order_id in order_ids],
-            "idempotency_key": str(uuid.uuid4()),
-        },
-    )
-    assert distributed.status_code == 200, distributed.text
-    assert distributed.json()["unassigned_order_ids"] == []
 
     deliver = await _deliver_with_preflight(async_client, headers, supply_id)
     assert deliver.status_code == 200, deliver.text

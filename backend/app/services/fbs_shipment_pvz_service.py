@@ -15,7 +15,6 @@ from sqlalchemy.orm import selectinload
 
 from app.models.fbs_print_asset import (
     PRINT_ASSET_KIND_CARGO_PLACE_QR,
-    PRINT_ASSET_STATUS_ERROR,
     PRINT_ASSET_STATUS_READY,
     FbsPrintAsset,
 )
@@ -441,7 +440,7 @@ async def _load_qr_assets(
         FbsPrintAsset.tenant_id == tenant_id,
         FbsPrintAsset.fbs_trbx_id.in_(trbx_ids),
         FbsPrintAsset.kind == PRINT_ASSET_KIND_CARGO_PLACE_QR,
-        FbsPrintAsset.status.in_((PRINT_ASSET_STATUS_READY, PRINT_ASSET_STATUS_ERROR)),
+        FbsPrintAsset.status == PRINT_ASSET_STATUS_READY,
     )
     res = await session.execute(stmt)
     return {asset.fbs_trbx_id: asset for asset in res.scalars().all() if asset.fbs_trbx_id}
@@ -1039,21 +1038,6 @@ async def fetch_trbx_stickers(
         raise FbsShipmentPvzError("supply_not_found")
     _require_pvz_supply(supply)
     await _ensure_cargo_qrs(session, tenant_id, supply, http_client)
-    for trbx in supply.trbxes:
-        asset = await session.scalar(
-            select(FbsPrintAsset).where(
-                FbsPrintAsset.tenant_id == tenant_id,
-                FbsPrintAsset.fbs_trbx_id == trbx.id,
-                FbsPrintAsset.kind == PRINT_ASSET_KIND_CARGO_PLACE_QR,
-            )
-        )
-        if asset is None or asset.status != PRINT_ASSET_STATUS_READY:
-            code = (
-                asset.error_code
-                if asset is not None and asset.error_code
-                else "wb_invalid_response"
-            )
-            raise FbsShipmentPvzError(code)
     await session.flush()
     return [_trbx_meta(trbx) for trbx in supply.trbxes]
 

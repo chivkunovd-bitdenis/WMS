@@ -61,27 +61,6 @@ def test_async_postgresql_database_url_stays_unchanged() -> None:
     assert cfg.database_url == url
 
 
-def test_fbs_test_emulator_rejects_live_wb_base() -> None:
-    with pytest.raises(
-        ValidationError,
-        match="fbs_test_emulator_enabled requires a non-WB marketplace API base",
-    ):
-        Settings(
-            app_env="development",
-            fbs_test_emulator_enabled=True,
-            wildberries_marketplace_api_base="https://marketplace-api.wildberries.ru",
-        )
-
-
-def test_fbs_test_emulator_accepts_dedicated_emulator_base() -> None:
-    cfg = Settings(
-        app_env="development",
-        fbs_test_emulator_enabled=True,
-        wildberries_marketplace_api_base="http://wb-emulator.internal:8000",
-    )
-    assert cfg.fbs_test_emulator_enabled is True
-
-
 def test_cors_origins_adds_staging_entries(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("WMS_CORS_ORIGINS", "https://staging.example.com, https://admin.example.com")
     cfg = Settings(

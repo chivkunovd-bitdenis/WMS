@@ -177,7 +177,7 @@ export function FbsSupplyCreateDialog({
               <Box
                 sx={{
                   display: 'grid',
-                  gridTemplateColumns: { xs: '1fr 1fr', md: 'repeat(5, 1fr)' },
+                  gridTemplateColumns: { xs: '1fr 1fr', md: 'repeat(4, 1fr)' },
                   gap: 2,
                   p: 2,
                   borderRadius: 2,
@@ -186,7 +186,6 @@ export function FbsSupplyCreateDialog({
               >
                 <SummaryItem label="Селлер" value={summary.seller.name} />
                 <SummaryItem label="Склад WMS" value={summary.wms_warehouse.name} />
-                <SummaryItem label="Маршрут" value={deliveryType === 'pvz' ? 'ПВЗ' : 'Склад / СЦ'} />
                 <SummaryItem label="Заказов" value={String(summary.orders_count)} />
                 <SummaryItem
                   label="Отгрузить до"

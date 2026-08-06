@@ -14,7 +14,7 @@ import {
   Typography,
 } from '@mui/material'
 import PrintOutlinedIcon from '@mui/icons-material/PrintOutlined'
-import { fetchFbsPrintPreviewBlobs, type FbsPrintAsset, type FbsPrintBatch } from './fbsApi'
+import { resolveFbsAssetUrl, type FbsPrintAsset, type FbsPrintBatch } from './fbsApi'
 
 type Props = {
   token: string
@@ -44,7 +44,6 @@ export function FbsPrintPreviewDialog({
   const [previews, setPreviews] = useState<Preview[]>([])
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
-  const [previewErrors, setPreviewErrors] = useState<Array<{ asset: FbsPrintAsset; message: string }>>([])
   const [applyingId, setApplyingId] = useState<string | null>(null)
 
   const readyAssets = useMemo(
@@ -61,18 +60,19 @@ export function FbsPrintPreviewDialog({
     const objectUrls: string[] = []
     setLoading(true)
     setError(null)
-    setPreviewErrors([])
-    void fetchFbsPrintPreviewBlobs(token, authHeaders, readyAssets)
-      .then((result) => {
-        const next = result.ready.map(({ asset, blob }) => {
-          const objectUrl = URL.createObjectURL(blob)
-          objectUrls.push(objectUrl)
-          return { asset, objectUrl }
+    void Promise.all(
+      readyAssets.map(async (asset) => {
+        const response = await fetch(resolveFbsAssetUrl(asset.preview_url!), {
+          headers: { ...authHeaders(token) },
         })
-        if (active) {
-          setPreviews(next)
-          setPreviewErrors(result.errors)
-        }
+        if (!response.ok) throw new Error(`Предпросмотр ${asset.id} недоступен (${response.status}).`)
+        const objectUrl = URL.createObjectURL(await response.blob())
+        objectUrls.push(objectUrl)
+        return { asset, objectUrl }
+      }),
+    )
+      .then((next) => {
+        if (active) setPreviews(next)
       })
       .catch((cause: unknown) => {
         if (active) setError(cause instanceof Error ? cause.message : 'Предпросмотр не загружен.')
@@ -130,11 +130,6 @@ export function FbsPrintPreviewDialog({
             {batch?.failed ? <Chip label={`Ошибок ${batch.failed}`} color="error" /> : null}
           </Stack>
           {error ? <Alert severity="error">{error}</Alert> : null}
-          {previewErrors.map((item) => (
-            <Alert key={item.asset.id} severity="error">
-              {assetLabel(item.asset)}: {item.message}
-            </Alert>
-          ))}
           {batch?.order_errors.map((item) => (
             <Alert key={item.order_id} severity="error">
               Заказ WB №{item.wb_order_id}: {item.message}
@@ -155,8 +150,8 @@ export function FbsPrintPreviewDialog({
                 <Typography variant="subtitle2">{assetLabel(asset)}</Typography>
                 <Box component="img" src={objectUrl} alt={assetLabel(asset)} sx={{ width: '100%', aspectRatio: '58 / 40', objectFit: 'contain', bgcolor: '#fff', my: 1.5 }} />
                 <Stack direction="row" spacing={1}>
-                  {previews.length > 1 ? <Button startIcon={<PrintOutlinedIcon />} onClick={() => print([{ asset, objectUrl }])} data-testid={`fbs-preview-print-${asset.id}`}>Печать только этого</Button> : null}
-                  <Button disabled={Boolean(asset.applied_at) || applyingId === asset.id} onClick={() => void apply(asset)} data-testid={`fbs-preview-apply-${asset.id}`}>
+                  {previews.length > 1 ? <Button startIcon={<PrintOutlinedIcon />} onClick={() => print([{ asset, objectUrl }])}>Печать только этого</Button> : null}
+                  <Button disabled={Boolean(asset.applied_at) || applyingId === asset.id} onClick={() => void apply(asset)}>
                     {asset.applied_at ? 'Уже нанесён' : 'Подтвердить нанесение'}
                   </Button>
                 </Stack>
@@ -167,7 +162,7 @@ export function FbsPrintPreviewDialog({
       </DialogContent>
       <DialogActions>
         <Button onClick={onClose} disabled={loading || Boolean(applyingId)}>Закрыть</Button>
-        <Button variant="contained" startIcon={<PrintOutlinedIcon />} disabled={previews.length === 0 || loading} onClick={() => print(previews)} data-testid="fbs-preview-print-all">
+        <Button variant="contained" startIcon={<PrintOutlinedIcon />} disabled={previews.length === 0 || loading} onClick={() => print(previews)}>
           {previews.length === 1 ? 'Печать' : 'Печать всех готовых'}
         </Button>
       </DialogActions>

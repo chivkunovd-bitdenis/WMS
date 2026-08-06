@@ -113,70 +113,21 @@ async def scan_pick_location(
     }
 
 
-async def resolve_pick_location(
-    session: AsyncSession,
-    tenant_id: uuid.UUID,
-    supply_id: uuid.UUID,
-    *,
-    location_id: uuid.UUID | None = None,
-    location_barcode: str | None = None,
-) -> dict[str, Any]:
-    if location_id is None and not (location_barcode or "").strip():
-        raise FbsPickingError("location_required", "Выберите ячейку.", http_status=422)
-    if location_id is not None:
-        supply = await _load_supply(session, tenant_id, supply_id)
-        location = await session.get(StorageLocation, location_id)
-        if (
-            location is None
-            or location.tenant_id != tenant_id
-            or location.warehouse_id != supply.warehouse_id
-        ):
-            raise FbsPickingError(
-                "wrong_location", "Ячейка не найдена на складе поставки.", http_status=404
-            )
-        return await scan_pick_location(
-            session,
-            tenant_id,
-            supply_id,
-            location_barcode=location.barcode or location.code,
-        )
-    return await scan_pick_location(
-        session,
-        tenant_id,
-        supply_id,
-        location_barcode=(location_barcode or "").strip(),
-    )
-
-
 async def scan_pick_product(
     session: AsyncSession,
     tenant_id: uuid.UUID,
     supply_id: uuid.UUID,
     *,
     location_id: uuid.UUID,
-    product_barcode: str | None,
+    product_barcode: str,
     idempotency_key: str,
     actor: User,
     order_id: uuid.UUID | None = None,
-    product_id: uuid.UUID | None = None,
 ) -> dict[str, Any]:
-    existing = await _find_pick_by_scan_idempotency(session, tenant_id, supply_id, idempotency_key)
+    existing = await _find_pick_by_scan_idempotency(
+        session, tenant_id, supply_id, idempotency_key
+    )
     if existing is not None:
-        expected_order_id = order_id or existing.fbs_order_id
-        if (
-            existing.source_storage_location_id != location_id
-            or existing.product_id != (product_id or existing.product_id)
-            or existing.fbs_order_id != expected_order_id
-            or (
-                product_id is None
-                and product_barcode is not None
-                and existing.scanned_product_barcode != product_barcode
-            )
-        ):
-            raise FbsPickingError(
-                "idempotency_key_reused",
-                "Ключ уже использован для другого подбора.",
-            )
         return await get_supply_workspace(session, tenant_id, supply_id)
 
     supply = await _load_supply(session, tenant_id, supply_id)
@@ -196,15 +147,11 @@ async def scan_pick_product(
             "Сканируйте ячейку хранения, а не зону сортировки.",
         )
 
-    product = (
-        await _resolve_product_by_id_for_supply(session, tenant_id, supply, product_id=product_id)
-        if product_id is not None
-        else await _resolve_product_for_supply(
-            session,
-            tenant_id,
-            supply,
-            product_barcode=product_barcode or "",
-        )
+    product = await _resolve_product_for_supply(
+        session,
+        tenant_id,
+        supply,
+        product_barcode=product_barcode,
     )
     if product is None:
         raise FbsPickingError(
@@ -231,7 +178,8 @@ async def scan_pick_product(
         target_order = next((o for o in eligible_orders if o.id == order_id), None)
         if target_order is None:
             picked = any(
-                o.id == order_id and o.pick_status == PICK_STATUS_PICKED for o in supply.orders
+                o.id == order_id and o.pick_status == PICK_STATUS_PICKED
+                for o in supply.orders
             )
             if picked:
                 raise FbsPickingError(
@@ -266,11 +214,15 @@ async def scan_pick_product(
                 "location_code": location.code,
                 "requested": 1,
                 "available": available,
-                "recommended_action": ("Проверьте остаток в другой ячейке или пополните склад."),
+                "recommended_action": (
+                    "Проверьте остаток в другой ячейке или пополните склад."
+                ),
             },
         )
 
-    sorting_location = await get_or_create_sorting_location(session, tenant_id, supply.warehouse_id)
+    sorting_location = await get_or_create_sorting_location(
+        session, tenant_id, supply.warehouse_id
+    )
     try:
         transfer_group_id = await inventory_service.transfer_on_hand_between_locations(
             session,
@@ -310,7 +262,7 @@ async def scan_pick_product(
         source_storage_location_id=location.id,
         sorting_storage_location_id=sorting_location.id,
         product_id=product.id,
-        scanned_product_barcode=product_barcode or product.wb_barcode or product.sku_code,
+        scanned_product_barcode=product_barcode,
         picked_by_user_id=actor.id,
         picked_at=picked_at,
         inventory_movement_id=movement_id,
@@ -359,15 +311,6 @@ async def undo_pick(
             "Отмена подбора недоступна после упаковки.",
             context={"order_id": str(order_id)},
         )
-
-    prior_undo = await _load_undo_by_idempotency(session, tenant_id, supply_id, idempotency_key)
-    if prior_undo is not None:
-        if prior_undo.fbs_order_id != order_id:
-            raise FbsPickingError(
-                "idempotency_key_reused",
-                "Ключ уже использован для другого возврата.",
-            )
-        return await get_supply_workspace(session, tenant_id, supply_id)
 
     pick = await _load_active_pick_for_order(session, tenant_id, order_id)
     if pick is None:
@@ -505,7 +448,9 @@ async def _resolve_product_for_supply(
     *,
     product_barcode: str,
 ) -> Product | None:
-    supply_product_ids = {o.product_id for o in supply.orders if o.product_id is not None}
+    supply_product_ids = {
+        o.product_id for o in supply.orders if o.product_id is not None
+    }
     if not supply_product_ids:
         return None
 
@@ -522,7 +467,11 @@ async def _resolve_product_for_supply(
         return product
 
     order_match = next(
-        (o for o in supply.orders if o.wb_barcode == product_barcode and o.product_id is not None),
+        (
+            o
+            for o in supply.orders
+            if o.wb_barcode == product_barcode and o.product_id is not None
+        ),
         None,
     )
     if order_match is None:
@@ -530,27 +479,14 @@ async def _resolve_product_for_supply(
     return await session.get(Product, order_match.product_id)
 
 
-async def _resolve_product_by_id_for_supply(
-    session: AsyncSession,
-    tenant_id: uuid.UUID,
-    supply: FbsSupply,
-    *,
-    product_id: uuid.UUID,
-) -> Product | None:
-    if product_id not in {order.product_id for order in supply.orders}:
-        return None
-    result = await session.execute(
-        select(Product).where(Product.tenant_id == tenant_id, Product.id == product_id)
-    )
-    return result.scalar_one_or_none()
-
-
 def _eligible_orders_for_product(
     orders: list[FbsOrder],
     product_id: uuid.UUID,
 ) -> list[FbsOrder]:
     return [
-        o for o in orders if o.product_id == product_id and o.pick_status == PICK_STATUS_PENDING
+        o
+        for o in orders
+        if o.product_id == product_id and o.pick_status == PICK_STATUS_PENDING
     ]
 
 
@@ -564,25 +500,7 @@ async def _find_pick_by_scan_idempotency(
         FbsOrderPick.tenant_id == tenant_id,
         FbsOrderPick.fbs_supply_id == supply_id,
         FbsOrderPick.scan_idempotency_key == idempotency_key,
-    )
-    return (await session.execute(stmt)).scalar_one_or_none()
-
-
-async def _load_undo_by_idempotency(
-    session: AsyncSession,
-    tenant_id: uuid.UUID,
-    supply_id: uuid.UUID,
-    idempotency_key: str,
-) -> FbsOrderPick | None:
-    stmt = (
-        select(FbsOrderPick)
-        .join(FbsOrderPickEvent, FbsOrderPickEvent.pick_id == FbsOrderPick.id)
-        .where(
-            FbsOrderPick.tenant_id == tenant_id,
-            FbsOrderPick.fbs_supply_id == supply_id,
-            FbsOrderPickEvent.event_type == PICK_EVENT_UNDONE,
-            FbsOrderPickEvent.idempotency_key == idempotency_key,
-        )
+        FbsOrderPick.undone_at.is_(None),
     )
     return (await session.execute(stmt)).scalar_one_or_none()
 
@@ -603,7 +521,6 @@ async def _load_active_pick_for_order(
 __all__ = [
     "FbsPickingError",
     "FbsWorkspaceError",
-    "resolve_pick_location",
     "scan_pick_location",
     "scan_pick_product",
     "undo_pick",
