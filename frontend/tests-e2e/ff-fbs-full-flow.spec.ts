@@ -241,16 +241,16 @@ async function pickAndPack(page: Page, route: RouteName, testInfo: TestInfo) {
   }
   await shot(page, testInfo, `${route}-02-picked`);
 
-  await page.getByRole("tab", { name: "Упаковка" }).click();
+  await page.getByRole("tab", { name: "Упаковка и маркировка" }).click();
   await expect(page.getByTestId("ff-packaging-line").first()).toBeVisible();
+  await expect(page.getByTestId(/^ff-packaging-line-print-/).first()).toBeVisible();
+  await expect(page.getByRole("button", { name: "Стикер WB" }).first()).toBeVisible();
+  await expect(page.getByRole("tab", { name: "Печать и маркировка" })).toHaveCount(0);
   await expect(page.getByTestId("ff-packaging-pack-btn")).toBeEnabled();
   await expect(page.getByTestId("ff-packaging-complete")).toBeDisabled();
   await shot(page, testInfo, `${route}-03-packaging-layout`);
   await page.getByTestId("ff-packaging-pack-btn").click();
-  const packagingAcknowledgement = page.getByTestId("ff-packaging-ack-all-packed");
-  await expect(packagingAcknowledgement).toBeVisible();
-  await expect(packagingAcknowledgement).toBeEnabled();
-  await packagingAcknowledgement.check();
+  await expect(page.getByTestId("ff-packaging-ack-all-packed")).toHaveCount(0);
   await expect(page.getByTestId("ff-packaging-complete")).toBeEnabled();
   const [completeResponse] = await Promise.all([
     page.waitForResponse(
@@ -264,9 +264,13 @@ async function pickAndPack(page: Page, route: RouteName, testInfo: TestInfo) {
   const completedTask = (await completeResponse.json()) as { status: string };
   expect(completedTask.status).toBe("done");
 
-  await page.getByRole("tab", { name: "Печать и маркировка" }).click();
-  await page.getByRole("button", { name: "Получить все стикеры" }).click();
-  await confirmCurrentPreview(page);
+  const stickerButtons = page.getByRole("button", { name: "Стикер WB" });
+  const stickerCount = await stickerButtons.count();
+  expect(stickerCount).toBeGreaterThan(0);
+  for (let index = 0; index < stickerCount; index += 1) {
+    await stickerButtons.nth(index).click();
+    await confirmCurrentPreview(page);
+  }
   await shot(page, testInfo, `${route}-04-order-sticker-applied`);
 }
 

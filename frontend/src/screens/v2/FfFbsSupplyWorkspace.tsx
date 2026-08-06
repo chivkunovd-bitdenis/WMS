@@ -13,9 +13,7 @@ import {
   Divider,
   IconButton,
   LinearProgress,
-  MenuItem,
   Paper,
-  Select,
   Stack,
   Tab,
   Tabs,
@@ -33,6 +31,7 @@ import LocalShippingOutlinedIcon from '@mui/icons-material/LocalShippingOutlined
 import PrintOutlinedIcon from '@mui/icons-material/PrintOutlined'
 import RefreshOutlinedIcon from '@mui/icons-material/RefreshOutlined'
 import { apiUrl } from '../../api'
+import { FbsMarkingStatusChip, FbsStickerStatusChip } from '../../components/fbs/FbsChips'
 import { ProductPhotoThumb } from '../../components/ProductPhotoThumb'
 import { FfPackagingTaskPanel, type PackagingTask } from '../ff/FfPackagingPage'
 import { readApiErrorMessage } from '../../utils/readApiErrorMessage'
@@ -79,8 +78,7 @@ type Props = {
 const STAGES = [
   { key: 'composition', label: 'Состав' },
   { key: 'picking', label: 'Подбор' },
-  { key: 'packing', label: 'Упаковка' },
-  { key: 'marking', label: 'Печать и маркировка' },
+  { key: 'packing', label: 'Упаковка и маркировка' },
   { key: 'boxes', label: 'Упаковка в короба' },
   { key: 'delivery', label: 'QR поставки' },
 ] as const
@@ -113,7 +111,7 @@ function clearPersistentOperationKey(supplyId: string, action: 'box-create' | 'b
 }
 
 function visualStage(stage: FbsWorkspace['stage']): StageKey {
-  if (stage === 'order_stickers') return 'marking'
+  if (stage === 'order_stickers') return 'packing'
   if (stage === 'handoff_prep') return 'boxes'
   return stage === 'tracking' ? 'delivery' : stage
 }
@@ -150,6 +148,7 @@ export function FfFbsSupplyWorkspace({
   const [metadataOrderId, setMetadataOrderId] = useState('')
   const [metadataKind, setMetadataKind] = useState('sgtin')
   const [metadataValue, setMetadataValue] = useState('')
+  const [metadataDialogOpen, setMetadataDialogOpen] = useState(false)
   const [printBatch, setPrintBatch] = useState<FbsPrintBatch | null>(null)
   const [printPreviewOpen, setPrintPreviewOpen] = useState(false)
   const [packagingTask, setPackagingTask] = useState<PackagingTask | null>(null)
@@ -193,6 +192,7 @@ export function FfFbsSupplyWorkspace({
     setPickLocation(null)
     setMetadataOrderId('')
     setMetadataValue('')
+    setMetadataDialogOpen(false)
     setBoxCount('1')
     setBoxDeleteTarget(null)
     setBoxAssignTarget(null)
@@ -339,6 +339,7 @@ export function FfFbsSupplyWorkspace({
       })
       setMetadataValue('')
       await load(true)
+      setMetadataDialogOpen(false)
       setNotice('Идентификатор передан на серверную проверку WB.')
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : 'Идентификатор не сохранён.')
@@ -582,32 +583,21 @@ export function FfFbsSupplyWorkspace({
     printWindow.document.close()
   }
   const stageBlockers = useMemo(() => {
-    const backendStage = stage === 'marking' ? 'order_stickers' : stage === 'boxes' ? 'handoff_prep' : stage
+    if (stage === 'packing') {
+      return workspace?.blockers.filter((blocker) => blocker.stage === 'packing' || blocker.stage === 'order_stickers') ?? []
+    }
+    const backendStage = stage === 'boxes' ? 'handoff_prep' : stage
     return workspace?.blockers.filter((blocker) => blocker.stage === backendStage) ?? []
   }, [workspace, stage])
   const currentStage = workspace ? visualStage(workspace.stage) : 'composition'
   const currentStageIndex = STAGES.findIndex((item) => item.key === currentStage)
   const stageIsCurrent = stage === currentStage
-  const requiredMetadataOrders = workspace?.orders.filter((order) => order.metadata.required.length > 0) ?? []
   const allPicked = Boolean(workspace && workspace.progress.total > 0 && workspace.progress.picked === workspace.progress.total)
-  const rawStatusLabel = (value: string) => ({
-    waiting: 'Ожидает WB',
-    accepted: 'WB принял',
-    applied: 'Нанесён',
-    ready: 'Готов',
-    error: 'Ошибка',
-    missing: 'Не хватает',
-    checking: 'Проверяется',
-    ok: 'Проверен',
-    assigned: 'Принят',
-    rejected: 'Отклонён WB',
-    replacement_required: 'Нужен новый код',
-    in_delivery: 'Передан в доставку',
-    done: 'Завершён',
-  }[value] ?? 'Статус уточняется')
   const deliveryConfirmed = deliverySubmitted
     || workspace?.stage === 'tracking'
     || ['in_delivery', 'done'].includes(workspace?.supply.status ?? '')
+  const packagingEditable = !deliveryConfirmed
+  const metadataOrder = workspace?.orders.find((order) => order.id === metadataOrderId)
   const assignedBoxOrderIds = new Set(workspace?.boxes.flatMap((box) => box.assigned_order_ids) ?? [])
   const availableForBox = (workspace?.orders ?? []).filter(
     (order) => order.pack.status === 'packed' && !assignedBoxOrderIds.has(order.id),
@@ -782,15 +772,62 @@ export function FfFbsSupplyWorkspace({
 
           {workspace && stage === 'packing' ? (
             <Stack spacing={2}>
-              {!stageIsCurrent ? <Alert severity="success">Упаковка завершена. Этот этап доступен только для просмотра.</Alert> : null}
+              {!packagingEditable ? <Alert severity="success">Поставка уже передана в WB. Упаковка доступна только для просмотра.</Alert> : null}
               {packagingTask ? (
                 <Paper variant="outlined" sx={{ p: 2 }}>
+                  <Box sx={{ mb: 2 }}>
+                    <Typography variant="h6">Упаковка и маркировка</Typography>
+                    <Typography variant="body2" color="text.secondary">В одной строке доступны обычная печать товара, обязательная маркировка и отдельный стикер заказа WB.</Typography>
+                  </Box>
                   <FfPackagingTaskPanel
                     token={token}
                     task={packagingTask}
                     unloadLabel={workspace.supply.name}
                     hideDocumentHeader
-                    hidePrintActions
+                    simplifiedQuantities
+                    alwaysShowPrintAction
+                    renderLineActions={(line) => {
+                      const lineOrders = workspace.orders.filter((order) => order.product.id === line.product_id)
+                      return (
+                        <Stack spacing={0.75} sx={{ alignItems: 'flex-end' }}>
+                          {lineOrders.map((order) => (
+                            <Box key={order.id} data-testid={`fbs-order-marking-${order.id}`}>
+                              <Stack direction="row" spacing={0.5} sx={{ justifyContent: 'flex-end', alignItems: 'center', flexWrap: 'wrap' }}>
+                                <Typography variant="caption" sx={{ fontWeight: 700 }}>WB №{order.wb_order_id}</Typography>
+                                <FbsMarkingStatusChip required={order.metadata.required} states={order.metadata.states} />
+                                <FbsStickerStatusChip status={order.sticker.status} />
+                                {order.metadata.required.length ? (
+                                  <Button
+                                    size="small"
+                                    variant="outlined"
+                                    disabled={!packagingEditable || busy}
+                                    onClick={() => {
+                                      setMetadataOrderId(order.id)
+                                      setMetadataKind(normalizeMetadataKind(order.metadata.required[0]))
+                                      setMetadataValue('')
+                                      setMetadataDialogOpen(true)
+                                    }}
+                                    data-testid={`fbs-metadata-open-${order.id}`}
+                                  >
+                                    Ввести {metadataKindLabel(order.metadata.required[0])}
+                                  </Button>
+                                ) : null}
+                                <Button
+                                  size="small"
+                                  variant="contained"
+                                  startIcon={<PrintOutlinedIcon />}
+                                  disabled={!packagingEditable || busy}
+                                  onClick={() => void requestPrintBatch([order.id])}
+                                  data-testid={`fbs-order-sticker-print-${order.id}`}
+                                >
+                                  Стикер WB
+                                </Button>
+                              </Stack>
+                            </Box>
+                          ))}
+                        </Stack>
+                      )
+                    }}
                     onUpdated={(nextTask) => {
                       setPackagingTask(nextTask)
                       if (nextTask.status === 'done') {
@@ -802,27 +839,7 @@ export function FfFbsSupplyWorkspace({
               ) : (
                 <Alert severity="info">{workspace.supply.packaging_task_id ? 'Загружаем существующее задание упаковки…' : 'Сначала начните работу с поставкой — сервер создаст единственное задание упаковки.'}</Alert>
               )}
-            </Stack>
-          ) : null}
-
-          {workspace && stage === 'marking' ? (
-            <Stack spacing={2}>
-              {!stageIsCurrent ? <Alert severity="success">Печать завершена. Этот этап доступен только для просмотра.</Alert> : null}
-              {packagingTask ? (
-                <Paper variant="outlined" sx={{ p: 2 }}>
-                  <Typography variant="h6">Печать ЧЗ и ШК товара</Typography>
-                  <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>Используется стандартный механизм печати WMS. Упаковку этот экран не меняет.</Typography>
-                  <FfPackagingTaskPanel token={token} task={packagingTask} unloadLabel={workspace.supply.name} hideDocumentHeader printOnly onUpdated={setPackagingTask} />
-                </Paper>
-              ) : <Alert severity="info">Загружаем данные для стандартной печати товара…</Alert>}
-              {requiredMetadataOrders.length ? <Paper variant="outlined" sx={{ p: 2 }}><Typography variant="h6">Маркировка товара</Typography><Typography variant="body2" color="text.secondary" sx={{ mb: 1.5 }}>Отсканируйте обязательный код для выбранного заказа. Сервер сразу проверит его у WB.</Typography><Stack direction={{ xs: 'column', md: 'row' }} spacing={1}><Select size="small" value={metadataOrderId} onChange={(e) => { const id = String(e.target.value); const order = workspace.orders.find((item) => item.id === id); setMetadataOrderId(id); setMetadataKind(normalizeMetadataKind(order?.metadata.required[0] ?? 'sgtin')) }} sx={{ minWidth: 170 }}>{requiredMetadataOrders.map((order) => <MenuItem key={order.id} value={order.id}>Заказ WB №{order.wb_order_id}</MenuItem>)}</Select><Select size="small" value={metadataKind} onChange={(e) => setMetadataKind(String(e.target.value))} sx={{ minWidth: 150 }}>{(workspace.orders.find((order) => order.id === metadataOrderId)?.metadata.required ?? []).map((kind) => <MenuItem key={kind} value={normalizeMetadataKind(kind)}>{metadataKindLabel(kind)}</MenuItem>)}</Select><TextField size="small" label="Код маркировки" value={metadataValue} onChange={(e) => setMetadataValue(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter') void scanMetadata() }} sx={{ flex: 1 }} /><Button variant="contained" disabled={!stageIsCurrent || !metadataValue.trim()} onClick={() => void scanMetadata()}>Проверить код</Button></Stack></Paper> : null}
-              <Paper variant="outlined" sx={{ p: 2 }}>
-                <Typography variant="h6">Стикеры и QR заказов WB</Typography>
-                <Typography variant="body2" color="text.secondary">Получите стикеры, откройте предпросмотр, распечатайте и подтвердите нанесение.</Typography>
-                <Table size="small" sx={{ my: 2 }}><TableHead><TableRow><TableCell>Заказ WB</TableCell><TableCell>Товар</TableCell><TableCell>Состояние</TableCell></TableRow></TableHead><TableBody>{workspace.orders.map((order) => <TableRow key={order.id}><TableCell>№{order.wb_order_id}</TableCell><TableCell>{order.product.name}</TableCell><TableCell>{rawStatusLabel(order.sticker.status)}</TableCell></TableRow>)}</TableBody></Table>
-                <Stack direction="row" spacing={1} sx={{ justifyContent: 'flex-end', flexWrap: 'wrap' }} useFlexGap><Button variant="contained" startIcon={<PrintOutlinedIcon />} disabled={!stageIsCurrent} onClick={() => void requestPrintBatch()}>Получить все стикеры</Button>{printBatch?.missing ? <Button variant="text" disabled={!stageIsCurrent} onClick={() => void requestPrintBatch(undefined, true)}>Повторить отсутствующие</Button> : null}</Stack>
-              </Paper>
-              {printBatch ? <Paper variant="outlined" sx={{ p: 2 }}><Typography variant="body2">Готово: {printBatch.ready}{printBatch.missing ? ` · Не получено: ${printBatch.missing}` : ''}{printBatch.failed ? ` · Ошибок: ${printBatch.failed}` : ''}</Typography><Button variant="outlined" disabled={printBatch.ready === 0} sx={{ mt: 1 }} onClick={() => setPrintPreviewOpen(true)}>Открыть предпросмотр и печать</Button>{printBatch.order_errors.map((item) => <Alert key={item.order_id} severity="error" sx={{ mt: 1 }}>Заказ WB №{item.wb_order_id}: {item.message}</Alert>)}</Paper> : null}
+              {printBatch ? <Paper variant="outlined" sx={{ p: 2 }}><Typography variant="body2">Готово: {printBatch.ready}{printBatch.missing ? ` · Не получено: ${printBatch.missing}` : ''}{printBatch.failed ? ` · Ошибок: ${printBatch.failed}` : ''}</Typography><Button variant="outlined" disabled={printBatch.ready === 0} sx={{ mt: 1 }} onClick={() => setPrintPreviewOpen(true)}>Открыть предпросмотр и печать</Button>{printBatch.missing ? <Button variant="text" disabled={!packagingEditable || busy} sx={{ mt: 1, ml: 1 }} onClick={() => void requestPrintBatch(undefined, true)}>Получить недостающие</Button> : null}{printBatch.order_errors.map((item) => <Alert key={item.order_id} severity="error" sx={{ mt: 1 }}>Заказ WB №{item.wb_order_id}: {item.message}</Alert>)}</Paper> : null}
             </Stack>
           ) : null}
 
@@ -906,6 +923,39 @@ export function FfFbsSupplyWorkspace({
         onClose={() => setPrintPreviewOpen(false)}
         onApplied={(asset) => confirmPrintApplied(asset.id)}
       />
+      <Dialog open={metadataDialogOpen} onClose={busy ? undefined : () => setMetadataDialogOpen(false)} maxWidth="sm" fullWidth data-testid="fbs-marking-dialog">
+        <DialogTitle>Маркировка заказа WB{metadataOrder ? ` №${metadataOrder.wb_order_id}` : ''}</DialogTitle>
+        <DialogContent>
+          <Stack spacing={2} sx={{ pt: 1 }}>
+            {metadataOrder ? (
+              <Stack direction="row" spacing={1.25} sx={{ alignItems: 'center' }}>
+                <ProductPhotoThumb src={metadataOrder.product.image_url} alt={metadataOrder.product.name} size={48} previewSize={280} />
+                <Box>
+                  <Typography variant="body2" sx={{ fontWeight: 700 }}>{metadataOrder.product.name}</Typography>
+                  <Typography variant="caption" color="text.secondary">Введите обязательный {metadataKindLabel(metadataKind)} для проверки.</Typography>
+                </Box>
+              </Stack>
+            ) : null}
+            <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1.5} sx={{ alignItems: { sm: 'center' } }}>
+              <Chip label={metadataKindLabel(metadataKind)} />
+              <TextField
+                autoFocus
+                fullWidth
+                label={`Сканированный ${metadataKindLabel(metadataKind)}`}
+                value={metadataValue}
+                onChange={(event) => setMetadataValue(event.target.value)}
+                disabled={busy}
+                onKeyDown={(event) => { if (event.key === 'Enter' && metadataValue.length > 0) void scanMetadata() }}
+                slotProps={{ htmlInput: { 'data-testid': metadataOrderId ? `fbs-metadata-input-${metadataOrderId}` : 'fbs-metadata-input' } }}
+              />
+            </Stack>
+          </Stack>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setMetadataDialogOpen(false)} disabled={busy}>Отмена</Button>
+          <Button variant="contained" onClick={() => void scanMetadata()} disabled={busy || !metadataOrderId || metadataValue.length === 0} data-testid={metadataOrderId ? `fbs-metadata-submit-${metadataOrderId}` : 'fbs-metadata-submit'}>Проверить</Button>
+        </DialogActions>
+      </Dialog>
       <Dialog open={Boolean(undoOrderId)} onClose={() => setUndoOrderId(null)} maxWidth="xs" fullWidth>
         <DialogTitle>Отменить подбор?</DialogTitle>
         <DialogContent><Typography>Товар будет возвращён в исходную ячейку. Отменяйте только если в подборе действительно ошибка.</Typography></DialogContent>

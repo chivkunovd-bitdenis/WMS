@@ -145,6 +145,58 @@ export function SellerBadge({ name }: { name: string | null }) {
   )
 }
 
+const STICKER_STATUS_META: Record<string, { label: string; color: ChipProps['color'] }> = {
+  not_requested: { label: 'Не напечатан', color: 'default' },
+  requesting: { label: 'Готовим к печати', color: 'info' },
+  ready: { label: 'Не напечатан', color: 'default' },
+  print_opened: { label: 'Напечатан', color: 'primary' },
+  applied: { label: 'Нанесён', color: 'success' },
+  error: { label: 'Ошибка', color: 'error' },
+}
+
+export function FbsStickerStatusChip({ status }: { status: string }) {
+  const meta = STICKER_STATUS_META[status] ?? {
+    label: 'Статус уточняется',
+    color: 'default' as ChipProps['color'],
+  }
+  return (
+    <Chip
+      size="small"
+      variant="outlined"
+      color={meta.color}
+      label={meta.label}
+      data-testid="fbs-sticker-status-chip"
+      data-status={status}
+    />
+  )
+}
+
+type MarkingState = { status: string }
+
+export function FbsMarkingStatusChip({ required, states }: { required: string[]; states: MarkingState[] }) {
+  if (required.length === 0) {
+    return <Chip size="small" variant="outlined" label="Не требуется" data-testid="fbs-marking-status-chip" />
+  }
+  const statuses = states.map((state) => state.status)
+  const hasError = statuses.some((status) => ['rejected', 'replacement_required', 'error'].includes(status))
+  const acceptedCount = statuses.filter((status) => ['accepted', 'assigned', 'allowed_without_check', 'ok'].includes(status)).length
+  const ready = acceptedCount >= required.length
+  const meta = hasError
+    ? { label: 'Требует исправления', color: 'error' as ChipProps['color'] }
+    : ready
+      ? { label: 'Проверена', color: 'success' as ChipProps['color'] }
+      : { label: 'Не проверена', color: 'warning' as ChipProps['color'] }
+  return (
+    <Chip
+      size="small"
+      variant="outlined"
+      color={meta.color}
+      label={meta.label}
+      data-testid="fbs-marking-status-chip"
+    />
+  )
+}
+
 // Статус проверки идентификатора (КИЗ/УИН/IMEI/GTIN) заказа — FbsOrderMarking.check_status.
 const CHECK_STATUS_META: Record<string, { label: string; color: ChipProps['color'] }> = {
   new: { label: 'Новый', color: 'default' },
