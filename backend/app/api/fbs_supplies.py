@@ -1075,6 +1075,81 @@ async def delete_fbs_packing_box(
     return FbsWorkspaceOut.model_validate(workspace)
 
 
+@router.post(
+    "/{supply_id}/packing-boxes/{box_id}/close",
+    response_model=FbsWorkspaceOut,
+)
+async def close_fbs_packing_box(
+    supply_id: uuid.UUID,
+    box_id: uuid.UUID,
+    body: FbsIdempotencyBody,
+    user: Annotated[User, Depends(require_fbs_operator_access)],
+    session: Annotated[AsyncSession, Depends(get_db)],
+) -> FbsWorkspaceOut:
+    try:
+        workspace = await packing_box_svc.close_packing_box(
+            session,
+            user.tenant_id,
+            supply_id,
+            box_id,
+            idempotency_key=body.idempotency_key,
+        )
+    except packing_box_svc.FbsPackingBoxError as exc:
+        _raise_from_packing_box(exc)
+    await session.commit()
+    return FbsWorkspaceOut.model_validate(workspace)
+
+
+@router.post(
+    "/{supply_id}/packing-boxes/{box_id}/reopen",
+    response_model=FbsWorkspaceOut,
+)
+async def reopen_fbs_packing_box(
+    supply_id: uuid.UUID,
+    box_id: uuid.UUID,
+    body: FbsIdempotencyBody,
+    user: Annotated[User, Depends(require_fbs_operator_access)],
+    session: Annotated[AsyncSession, Depends(get_db)],
+) -> FbsWorkspaceOut:
+    try:
+        workspace = await packing_box_svc.reopen_packing_box(
+            session,
+            user.tenant_id,
+            supply_id,
+            box_id,
+            idempotency_key=body.idempotency_key,
+        )
+    except packing_box_svc.FbsPackingBoxError as exc:
+        _raise_from_packing_box(exc)
+    await session.commit()
+    return FbsWorkspaceOut.model_validate(workspace)
+
+
+@router.post(
+    "/{supply_id}/packing-boxes/{box_id}/clear",
+    response_model=FbsWorkspaceOut,
+)
+async def clear_fbs_packing_box(
+    supply_id: uuid.UUID,
+    box_id: uuid.UUID,
+    body: FbsIdempotencyBody,
+    user: Annotated[User, Depends(require_fbs_operator_access)],
+    session: Annotated[AsyncSession, Depends(get_db)],
+) -> FbsWorkspaceOut:
+    try:
+        workspace = await packing_box_svc.clear_packing_box(
+            session,
+            user.tenant_id,
+            supply_id,
+            box_id,
+            idempotency_key=body.idempotency_key,
+        )
+    except packing_box_svc.FbsPackingBoxError as exc:
+        _raise_from_packing_box(exc)
+    await session.commit()
+    return FbsWorkspaceOut.model_validate(workspace)
+
+
 @router.post("", response_model=FbsSupplyOut, status_code=status.HTTP_201_CREATED, deprecated=True)
 async def create_fbs_supply(
     body: FbsSupplyCreateBody,

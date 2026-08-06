@@ -37,6 +37,12 @@ OP_CREATE = "local_packing_boxes_create"
 OP_DELETE = "local_packing_box_delete"
 OP_ASSIGN = "local_packing_box_assign"
 OP_UNASSIGN = "local_packing_box_unassign"
+OP_CLOSE = "local_packing_box_close"
+OP_REOPEN = "local_packing_box_reopen"
+OP_CLEAR = "local_packing_box_clear"
+
+PACKING_BOX_STATUS_OPEN = "open"
+PACKING_BOX_STATUS_CLOSED = "closed"
 
 
 @dataclass
@@ -81,6 +87,32 @@ def _require_mutable(supply: FbsSupply) -> None:
         raise FbsPackingBoxError("supply_not_editable")
     if supply.delivered_at is not None:
         raise FbsPackingBoxError("supply_not_editable")
+
+
+def _require_box_open(box: FbsPackingBox) -> None:
+    if box.status != PACKING_BOX_STATUS_OPEN:
+        raise FbsPackingBoxError("packing_box_closed")
+
+
+async def _load_box(
+    session: AsyncSession,
+    tenant_id: uuid.UUID,
+    supply_id: uuid.UUID,
+    box_id: uuid.UUID,
+    *,
+    with_items: bool = False,
+) -> FbsPackingBox:
+    stmt = select(FbsPackingBox).where(
+        FbsPackingBox.id == box_id,
+        FbsPackingBox.tenant_id == tenant_id,
+        FbsPackingBox.supply_id == supply_id,
+    )
+    if with_items:
+        stmt = stmt.options(selectinload(FbsPackingBox.items))
+    box = await session.scalar(stmt)
+    if box is None:
+        raise FbsPackingBoxError("packing_box_not_found", http_status=404)
+    return box
 
 
 async def _operation(
@@ -319,6 +351,7 @@ async def _change_assignment(
     )
     if box is None:
         raise FbsPackingBoxError("packing_box_not_found", http_status=404)
+    _require_box_open(box)
     req_hash = _request_hash(
         {
             "supply_id": str(supply_id),
@@ -442,3 +475,133 @@ async def delete_packing_box(
     await _confirm_operation(session, operation)
     await session.flush()
     return await get_supply_workspace(session, tenant_id, supply_id)
+
+
+async def _lifecycle_mutation(
+    session: AsyncSession,
+    tenant_id: uuid.UUID,
+    supply_id: uuid.UUID,
+    box_id: uuid.UUID,
+    *,
+    kind: str,
+    idempotency_key: str,
+    mutate: Any,
+) -> dict[str, Any]:
+    supply = await _load_supply(session, tenant_id, supply_id)
+    _require_mutable(supply)
+    req_hash = _request_hash({"supply_id": str(supply_id), "box_id": str(box_id)})
+    operation = await _operation(
+        session,
+        supply,
+        kind=kind,
+        idempotency_key=idempotency_key,
+        request_hash=req_hash,
+    )
+    if operation.state == WB_OPERATION_STATE_CONFIRMED:
+        return await get_supply_workspace(session, tenant_id, supply_id)
+    await mutate(session, tenant_id, supply_id, box_id)
+    await _confirm_operation(session, operation)
+    await session.flush()
+    return await get_supply_workspace(session, tenant_id, supply_id)
+
+
+async def close_packing_box(
+    session: AsyncSession,
+    tenant_id: uuid.UUID,
+    supply_id: uuid.UUID,
+    box_id: uuid.UUID,
+    *,
+    idempotency_key: str,
+) -> dict[str, Any]:
+    async def _close(
+        inner_session: AsyncSession,
+        inner_tenant_id: uuid.UUID,
+        inner_supply_id: uuid.UUID,
+        inner_box_id: uuid.UUID,
+    ) -> None:
+        box = await _load_box(
+            inner_session,
+            inner_tenant_id,
+            inner_supply_id,
+            inner_box_id,
+            with_items=True,
+        )
+        if not box.items:
+            raise FbsPackingBoxError("packing_box_empty")
+        if box.status == PACKING_BOX_STATUS_OPEN:
+            box.status = PACKING_BOX_STATUS_CLOSED
+
+    return await _lifecycle_mutation(
+        session,
+        tenant_id,
+        supply_id,
+        box_id,
+        kind=OP_CLOSE,
+        idempotency_key=idempotency_key,
+        mutate=_close,
+    )
+
+
+async def reopen_packing_box(
+    session: AsyncSession,
+    tenant_id: uuid.UUID,
+    supply_id: uuid.UUID,
+    box_id: uuid.UUID,
+    *,
+    idempotency_key: str,
+) -> dict[str, Any]:
+    async def _reopen(
+        inner_session: AsyncSession,
+        inner_tenant_id: uuid.UUID,
+        inner_supply_id: uuid.UUID,
+        inner_box_id: uuid.UUID,
+    ) -> None:
+        box = await _load_box(inner_session, inner_tenant_id, inner_supply_id, inner_box_id)
+        if box.status == PACKING_BOX_STATUS_CLOSED:
+            box.status = PACKING_BOX_STATUS_OPEN
+
+    return await _lifecycle_mutation(
+        session,
+        tenant_id,
+        supply_id,
+        box_id,
+        kind=OP_REOPEN,
+        idempotency_key=idempotency_key,
+        mutate=_reopen,
+    )
+
+
+async def clear_packing_box(
+    session: AsyncSession,
+    tenant_id: uuid.UUID,
+    supply_id: uuid.UUID,
+    box_id: uuid.UUID,
+    *,
+    idempotency_key: str,
+) -> dict[str, Any]:
+    async def _clear(
+        inner_session: AsyncSession,
+        inner_tenant_id: uuid.UUID,
+        inner_supply_id: uuid.UUID,
+        inner_box_id: uuid.UUID,
+    ) -> None:
+        box = await _load_box(
+            inner_session,
+            inner_tenant_id,
+            inner_supply_id,
+            inner_box_id,
+            with_items=True,
+        )
+        _require_box_open(box)
+        for item in list(box.items):
+            await inner_session.delete(item)
+
+    return await _lifecycle_mutation(
+        session,
+        tenant_id,
+        supply_id,
+        box_id,
+        kind=OP_CLEAR,
+        idempotency_key=idempotency_key,
+        mutate=_clear,
+    )

@@ -1,7 +1,8 @@
 from __future__ import annotations
 
 import uuid
-from datetime import timedelta
+from datetime import UTC, datetime, timedelta
+from typing import Literal
 
 import pytest
 from httpx import AsyncClient
@@ -29,6 +30,64 @@ from tests.test_fbs_picking import (
     _register_ff_admin,
     _seed_pick_supply,
 )
+
+
+async def _seed_packed_supply_with_boxes(
+    async_client: AsyncClient,
+    *,
+    delivery_type: Literal["warehouse_sc", "pvz"] = "warehouse_sc",
+    order_count: int = 2,
+) -> tuple[dict[str, str], uuid.UUID, list[uuid.UUID], str]:
+    headers, suffix, tenant_id = await _register_ff_admin(async_client)
+    seller_id, warehouse_id, location_id = await _create_seller_and_warehouse(
+        async_client, headers, suffix
+    )
+    barcode = f"BAR-LC-{suffix[-8:]}"
+    product_id = await _create_product(
+        async_client, headers, seller_id, sku=f"SKU-LC-{suffix}", barcode=barcode
+    )
+    order_specs = [(index + 1, timedelta(hours=12 * (index + 1))) for index in range(order_count)]
+    supply_id, order_ids, _ = await _seed_pick_supply(
+        async_client,
+        headers,
+        tenant_id,
+        seller_id,
+        warehouse_id,
+        location_id,
+        product_id,
+        stock_qty=order_count,
+        order_specs=order_specs,
+        barcode=barcode,
+    )
+    async with SessionLocal() as session:
+        supply = await session.get(FbsSupply, supply_id)
+        assert supply is not None
+        supply.delivery_type = delivery_type
+        supply.status = FBS_SUPPLY_STATUS_ASSEMBLING
+        for order_id in order_ids:
+            order = await session.get(FbsOrder, order_id)
+            assert order is not None
+            order.pack_status = PACK_STATUS_PACKED
+        await session.commit()
+
+    create_key = str(uuid.uuid4())
+    created = await async_client.post(
+        f"/operations/fbs-supplies/{supply_id}/packing-boxes",
+        headers=headers,
+        json={"count": 1, "idempotency_key": create_key},
+    )
+    assert created.status_code == 201, created.text
+    box_id = created.json()["packing_boxes"][0]["id"]
+    assign = await async_client.put(
+        f"/operations/fbs-supplies/{supply_id}/packing-boxes/{box_id}/orders",
+        headers=headers,
+        json={
+            "order_ids": [str(row) for row in order_ids],
+            "idempotency_key": str(uuid.uuid4()),
+        },
+    )
+    assert assign.status_code == 200, assign.text
+    return headers, supply_id, order_ids, box_id
 
 
 @pytest.mark.asyncio
@@ -392,3 +451,227 @@ async def test_workspace_stays_in_handoff_prep_until_every_order_is_distributed(
     assert full.status_code == 200, full.text
     assert full.json()["stage"] == "delivery"
     assert full.json()["unassigned_order_ids"] == []
+
+
+@pytest.mark.asyncio
+async def test_warehouse_packing_box_lifecycle_close_reopen_clear_and_guards(
+    async_client: AsyncClient,
+) -> None:
+    headers, supply_id, order_ids, box_id = await _seed_packed_supply_with_boxes(
+        async_client,
+        delivery_type="warehouse_sc",
+    )
+    base = f"/operations/fbs-supplies/{supply_id}/packing-boxes/{box_id}"
+
+    empty_close = await async_client.post(
+        f"/operations/fbs-supplies/{supply_id}/packing-boxes/{uuid.uuid4()}/close",
+        headers=headers,
+        json={"idempotency_key": str(uuid.uuid4())},
+    )
+    assert empty_close.status_code == 404
+
+    second_box = await async_client.post(
+        f"/operations/fbs-supplies/{supply_id}/packing-boxes",
+        headers=headers,
+        json={"count": 1, "idempotency_key": str(uuid.uuid4())},
+    )
+    assert second_box.status_code == 201, second_box.text
+    empty_box_id = next(
+        row["id"]
+        for row in second_box.json()["packing_boxes"]
+        if row["items_count"] == 0
+    )
+    reject_empty = await async_client.post(
+        f"/operations/fbs-supplies/{supply_id}/packing-boxes/{empty_box_id}/close",
+        headers=headers,
+        json={"idempotency_key": str(uuid.uuid4())},
+    )
+    assert reject_empty.status_code == 409
+    assert reject_empty.json()["detail"]["code"] == "packing_box_empty"
+
+    close_key = str(uuid.uuid4())
+    closed = await async_client.post(
+        f"{base}/close",
+        headers=headers,
+        json={"idempotency_key": close_key},
+    )
+    assert closed.status_code == 200, closed.text
+    assert closed.json()["packing_boxes"][0]["status"] == "closed"
+    assert closed.json()["packing_boxes"][0]["items_count"] == len(order_ids)
+
+    close_retry = await async_client.post(
+        f"{base}/close",
+        headers=headers,
+        json={"idempotency_key": close_key},
+    )
+    assert close_retry.status_code == 200, close_retry.text
+    assert close_retry.json()["packing_boxes"][0]["status"] == "closed"
+
+    blocked_assign = await async_client.put(
+        f"{base}/orders",
+        headers=headers,
+        json={
+            "order_ids": [str(order_ids[0])],
+            "idempotency_key": str(uuid.uuid4()),
+        },
+    )
+    assert blocked_assign.status_code == 409
+    assert blocked_assign.json()["detail"]["code"] == "packing_box_closed"
+
+    blocked_unassign = await async_client.request(
+        "DELETE",
+        f"{base}/orders",
+        headers=headers,
+        json={
+            "order_ids": [str(order_ids[0])],
+            "idempotency_key": str(uuid.uuid4()),
+        },
+    )
+    assert blocked_unassign.status_code == 409
+    assert blocked_unassign.json()["detail"]["code"] == "packing_box_closed"
+
+    blocked_clear = await async_client.post(
+        f"{base}/clear",
+        headers=headers,
+        json={"idempotency_key": str(uuid.uuid4())},
+    )
+    assert blocked_clear.status_code == 409
+    assert blocked_clear.json()["detail"]["code"] == "packing_box_closed"
+
+    reopen_key = str(uuid.uuid4())
+    reopened = await async_client.post(
+        f"{base}/reopen",
+        headers=headers,
+        json={"idempotency_key": reopen_key},
+    )
+    assert reopened.status_code == 200, reopened.text
+    assert reopened.json()["packing_boxes"][0]["status"] == "open"
+
+    reopen_retry = await async_client.post(
+        f"{base}/reopen",
+        headers=headers,
+        json={"idempotency_key": reopen_key},
+    )
+    assert reopen_retry.status_code == 200, reopen_retry.text
+    assert reopen_retry.json()["packing_boxes"][0]["status"] == "open"
+
+    clear_key = str(uuid.uuid4())
+    cleared = await async_client.post(
+        f"{base}/clear",
+        headers=headers,
+        json={"idempotency_key": clear_key},
+    )
+    assert cleared.status_code == 200, cleared.text
+    assert cleared.json()["packing_boxes"][0]["items_count"] == 0
+    assert set(cleared.json()["unassigned_order_ids"]) == {str(row) for row in order_ids}
+
+    clear_retry = await async_client.post(
+        f"{base}/clear",
+        headers=headers,
+        json={"idempotency_key": clear_key},
+    )
+    assert clear_retry.status_code == 200, clear_retry.text
+    assert cleared.json()["packing_boxes"][0]["items_count"] == 0
+
+    conflict = await async_client.post(
+        f"/operations/fbs-supplies/{supply_id}/packing-boxes/{empty_box_id}/close",
+        headers=headers,
+        json={"idempotency_key": close_key},
+    )
+    assert conflict.status_code == 409
+    assert conflict.json()["detail"]["code"] == "idempotency_key_reused"
+
+
+@pytest.mark.asyncio
+async def test_pvz_packing_box_lifecycle_clear_and_skips_wb_cargo_calls(
+    async_client: AsyncClient,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    cargo_calls: list[str] = []
+
+    async def track_create_cargo(
+        session: AsyncSession,
+        _tenant_id: uuid.UUID,
+        target_supply_id: uuid.UUID,
+        _count: int,
+        drafts: list[object],
+        *_args: object,
+        **_kwargs: object,
+    ) -> list[dict[str, object]]:
+        cargo_calls.append("create")
+        rows: list[dict[str, object]] = []
+        for index, draft in enumerate(drafts, start=1):
+            row = FbsTrbx(
+                supply_id=target_supply_id,
+                wb_trbx_id=f"WB-LC-{index}",
+                packaging_box_id=draft.packaging_box_id,  # type: ignore[attr-defined]
+            )
+            session.add(row)
+            await session.flush()
+            rows.append({"id": str(row.id), "wb_trbx_id": row.wb_trbx_id})
+        return rows
+
+    async def track_delete_cargo(*_args: object, **_kwargs: object) -> list[dict[str, object]]:
+        cargo_calls.append("delete")
+        return []
+
+    monkeypatch.setattr(packing_box_svc.pvz_svc, "create_cargo_places", track_create_cargo)
+    monkeypatch.setattr(packing_box_svc.pvz_svc, "delete_cargo_places", track_delete_cargo)
+
+    headers, supply_id, order_ids, box_id = await _seed_packed_supply_with_boxes(
+        async_client,
+        delivery_type="pvz",
+    )
+    assert cargo_calls == ["create"]
+    cargo_calls.clear()
+
+    base = f"/operations/fbs-supplies/{supply_id}/packing-boxes/{box_id}"
+    close_key = str(uuid.uuid4())
+    closed = await async_client.post(
+        f"{base}/close",
+        headers=headers,
+        json={"idempotency_key": close_key},
+    )
+    assert closed.status_code == 200, closed.text
+    assert closed.json()["packing_boxes"][0]["status"] == "closed"
+
+    reopened = await async_client.post(
+        f"{base}/reopen",
+        headers=headers,
+        json={"idempotency_key": str(uuid.uuid4())},
+    )
+    assert reopened.status_code == 200, reopened.text
+
+    cleared = await async_client.post(
+        f"{base}/clear",
+        headers=headers,
+        json={"idempotency_key": str(uuid.uuid4())},
+    )
+    assert cleared.status_code == 200, cleared.text
+    assert set(cleared.json()["unassigned_order_ids"]) == {str(row) for row in order_ids}
+    assert cargo_calls == []
+
+
+@pytest.mark.asyncio
+async def test_packing_box_lifecycle_rejected_after_confirmed_delivery(
+    async_client: AsyncClient,
+) -> None:
+    headers, supply_id, _order_ids, box_id = await _seed_packed_supply_with_boxes(
+        async_client,
+        delivery_type="warehouse_sc",
+    )
+    async with SessionLocal() as session:
+        supply = await session.get(FbsSupply, supply_id)
+        assert supply is not None
+        supply.delivered_at = datetime.now(tz=UTC)
+        await session.commit()
+
+    base = f"/operations/fbs-supplies/{supply_id}/packing-boxes/{box_id}"
+    for suffix in ("close", "reopen", "clear"):
+        response = await async_client.post(
+            f"{base}/{suffix}",
+            headers=headers,
+            json={"idempotency_key": str(uuid.uuid4())},
+        )
+        assert response.status_code == 409, response.text
+        assert response.json()["detail"]["code"] == "supply_not_editable"
