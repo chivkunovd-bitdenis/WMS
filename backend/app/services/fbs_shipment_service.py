@@ -39,6 +39,7 @@ from app.models.fbs_wb_operation import (
     WB_OPERATION_STATE_PENDING_CONFIRMATION,
 )
 from app.services import fbs_marking_service as marking_svc
+from app.services import fbs_packing_box_service as packing_box_svc
 from app.services import fbs_shipment_pvz_service as pvz_svc
 from app.services.fbs_print_asset_service import upsert_supply_qr_asset_from_bytes
 from app.services.fbs_print_asset_storage import FbsPrintAssetStorageError
@@ -289,12 +290,16 @@ def _compute_preflight_version(
     orders: list[FbsOrder],
     *,
     cargo_qr_ready: bool,
+    has_physical_boxes: bool,
+    unassigned_packed_order_ids: frozenset[uuid.UUID],
 ) -> str:
     parts = [
         str(supply.id),
         supply.status,
         supply.delivery_type,
         str(cargo_qr_ready),
+        str(has_physical_boxes),
+        *(str(order_id) for order_id in sorted(unassigned_packed_order_ids)),
     ]
     for order in sorted(orders, key=lambda item: item.id):
         parts.extend(
@@ -314,6 +319,8 @@ def _build_delivery_checks(
     orders: list[FbsOrder],
     *,
     cargo_qr_ready: bool,
+    has_physical_boxes: bool = True,
+    unassigned_packed_order_ids: frozenset[uuid.UUID] = frozenset(),
 ) -> list[DeliveryCheck]:
     checks: list[DeliveryCheck] = []
 
@@ -420,12 +427,12 @@ def _build_delivery_checks(
                 )
             )
 
-    if supply.delivery_type == FBS_DELIVERY_TYPE_PVZ:
+    if supply.delivery_type == FBS_DELIVERY_TYPE_PVZ and has_physical_boxes:
         if not supply.trbxes:
             checks.append(
                 DeliveryCheck(
-                    code="cargo_places_required",
-                    message="Создайте грузоместа для ПВЗ.",
+                    code="box_qr_not_ready",
+                    message="QR коробов ПВЗ ещё не готовы.",
                     ok=False,
                 )
             )
@@ -445,6 +452,24 @@ def _build_delivery_checks(
                     ok=True,
                 )
             )
+
+    if not has_physical_boxes:
+        checks.append(
+            DeliveryCheck(
+                code="physical_boxes_required",
+                message="Создайте физические короба для передачи поставки.",
+                ok=False,
+            )
+        )
+    for order_id in sorted(unassigned_packed_order_ids):
+        checks.append(
+            DeliveryCheck(
+                code="packed_order_unassigned",
+                message="Упакованный заказ не назначен в физический короб.",
+                ok=False,
+                order_id=order_id,
+            )
+        )
 
     return checks
 
@@ -484,9 +509,16 @@ async def _sync_and_validate_deliver(
         cargo_qr_ready = await pvz_svc.supply_has_ready_cargo_place_qrs(
             session, tenant_id, supply
         )
+    box_readiness = await packing_box_svc.get_delivery_box_readiness(
+        session, tenant_id, supply.id, orders
+    )
     if confirmed_preflight_version is not None:
         current_version = _compute_preflight_version(
-            supply, orders, cargo_qr_ready=cargo_qr_ready
+            supply,
+            orders,
+            cargo_qr_ready=cargo_qr_ready,
+            has_physical_boxes=box_readiness.has_physical_boxes,
+            unassigned_packed_order_ids=box_readiness.unassigned_packed_order_ids,
         )
         if current_version != confirmed_preflight_version:
             raise FbsShipmentError(
@@ -498,7 +530,13 @@ async def _sync_and_validate_deliver(
                 },
                 http_status=409,
             )
-    checks = _build_delivery_checks(supply, orders, cargo_qr_ready=cargo_qr_ready)
+    checks = _build_delivery_checks(
+        supply,
+        orders,
+        cargo_qr_ready=cargo_qr_ready,
+        has_physical_boxes=box_readiness.has_physical_boxes,
+        unassigned_packed_order_ids=box_readiness.unassigned_packed_order_ids,
+    )
     _validate_checks_pass(checks)
     return orders, cargo_qr_ready
 
@@ -537,10 +575,25 @@ async def preflight_delivery(
         cargo_qr_ready = await pvz_svc.supply_has_ready_cargo_place_qrs(
             session, tenant_id, supply
         )
+    box_readiness = await packing_box_svc.get_delivery_box_readiness(
+        session, tenant_id, supply.id, orders
+    )
 
-    checks = _build_delivery_checks(supply, orders, cargo_qr_ready=cargo_qr_ready)
+    checks = _build_delivery_checks(
+        supply,
+        orders,
+        cargo_qr_ready=cargo_qr_ready,
+        has_physical_boxes=box_readiness.has_physical_boxes,
+        unassigned_packed_order_ids=box_readiness.unassigned_packed_order_ids,
+    )
     checked_at = datetime.now(UTC)
-    version = _compute_preflight_version(supply, orders, cargo_qr_ready=cargo_qr_ready)
+    version = _compute_preflight_version(
+        supply,
+        orders,
+        cargo_qr_ready=cargo_qr_ready,
+        has_physical_boxes=box_readiness.has_physical_boxes,
+        unassigned_packed_order_ids=box_readiness.unassigned_packed_order_ids,
+    )
     can_deliver = all(check.ok for check in checks)
     return DeliveryPreflightResult(
         can_deliver=can_deliver,

@@ -241,21 +241,17 @@ async function pickAndPack(page: Page, route: RouteName, testInfo: TestInfo) {
   }
   await shot(page, testInfo, `${route}-02-picked`);
 
-  await page.getByRole("tab", { name: "Упаковка и маркировка" }).click();
-  const compact = page.getByTestId("ff-packaging-lines-compact");
-  await expect(compact).toBeVisible();
-  const name = page.getByTestId("ff-packaging-compact-product-name").first();
-  const box = await name.boundingBox();
-  expect(box?.width ?? 0).toBeGreaterThan(180);
-  expect(box?.height ?? 999).toBeLessThan(100);
-  expect(
-    await compact.evaluate((node) => node.scrollWidth <= node.clientWidth + 1),
-  ).toBeTruthy();
+  await page.getByRole("tab", { name: "Упаковка" }).click();
+  await expect(page.getByTestId("ff-packaging-line").first()).toBeVisible();
+  await expect(page.getByTestId("ff-packaging-pack-btn")).toBeEnabled();
   await expect(page.getByTestId("ff-packaging-complete")).toBeDisabled();
   await shot(page, testInfo, `${route}-03-packaging-layout`);
   await page.getByTestId("ff-packaging-pack-btn").click();
+  const packagingAcknowledgement = page.getByTestId("ff-packaging-ack-all-packed");
+  await expect(packagingAcknowledgement).toBeVisible();
+  await expect(packagingAcknowledgement).toBeEnabled();
+  await packagingAcknowledgement.check();
   await expect(page.getByTestId("ff-packaging-complete")).toBeEnabled();
-  await expect(page.getByTestId("ff-packaging-ack-all-packed")).toHaveCount(0);
   const [completeResponse] = await Promise.all([
     page.waitForResponse(
       (item) =>
@@ -268,7 +264,7 @@ async function pickAndPack(page: Page, route: RouteName, testInfo: TestInfo) {
   const completedTask = (await completeResponse.json()) as { status: string };
   expect(completedTask.status).toBe("done");
 
-  await page.getByRole("tab", { name: "Стикеры WB" }).click();
+  await page.getByRole("tab", { name: "Печать и маркировка" }).click();
   await page.getByRole("button", { name: "Получить все стикеры" }).click();
   await confirmCurrentPreview(page);
   await shot(page, testInfo, `${route}-04-order-sticker-applied`);
@@ -283,38 +279,61 @@ async function finishRoute(
   supply: Workspace,
   testInfo: TestInfo,
 ) {
-  await page.getByRole("tab", { name: "Подготовка к сдаче" }).click();
-  if (route === "pvz") {
-    let cargoCreateCalls = 0;
-    let cargoDeleteCalls = 0;
-    page.on("request", (item) => {
-      if (item.url().endsWith(`/api/operations/fbs-supplies/${supply.supply.id}/cargo-places`)) {
-        if (item.method() === "POST") cargoCreateCalls += 1;
-        if (item.method() === "DELETE") cargoDeleteCalls += 1;
-      }
-    });
-    await page.getByLabel("Количество физических коробов").fill("2");
-    await page.getByLabel("Проверил каждый короб: сторона не больше 60 см, сумма сторон не больше 140 см, вес не больше 5 кг.").check();
-    await page.getByRole("button", { name: "Создать 2 грузоместа" }).click();
-    await expect(page.getByTestId("fbs-cargo-table")).toBeVisible();
-    await expect(page.getByText("2 создано")).toBeVisible();
-    await expect.poll(() => cargoCreateCalls).toBe(1);
-    await expect(page.getByText("Распределите заказы по коробам")).toHaveCount(0);
+  await page.getByRole("tab", { name: "Упаковка в короба" }).click();
+  let boxCreateCalls = 0;
+  let boxAssignCalls = 0;
+  let legacyCargoCalls = 0;
+  const boxesApi = `/api/operations/fbs-supplies/${supply.supply.id}/boxes`;
+  page.on("request", (item) => {
+    const url = item.url();
+    if (url.includes("/cargo-places")) legacyCargoCalls += 1;
+    if (item.method() === "POST" && url.endsWith(boxesApi)) boxCreateCalls += 1;
+    if (
+      item.method() === "POST" &&
+      url.includes(`${boxesApi}/`) &&
+      url.endsWith("/orders")
+    ) {
+      boxAssignCalls += 1;
+    }
+  });
 
-    await page.getByRole("button", { name: "Удалить короб 2" }).click();
-    await expect(page.getByRole("dialog", { name: "Удалить грузоместо?" })).toBeVisible();
-    await page.getByTestId("fbs-cargo-delete-confirm").click();
-    await expect(page.getByText("1 создано")).toBeVisible();
-    await expect.poll(() => cargoDeleteCalls).toBe(1);
+  const boxes = page.getByTestId("fbs-boxes");
+  await expect(boxes).toBeVisible();
+  await expect(page.getByText(/Грузомест/)).toHaveCount(0);
+  await Promise.all([
+    page.waitForResponse(
+      (item) => item.url().endsWith(boxesApi) && item.request().method() === "POST" && item.status() === 201,
+    ),
+    page.getByRole("button", { name: "Добавить короб" }).click(),
+  ]);
+  await expect.poll(() => boxCreateCalls).toBe(1);
+  await expect(boxes.getByText("Короб 1", { exact: true })).toBeVisible();
 
-    await page.getByRole("button", { name: "Печать QR" }).click();
-    await confirmCurrentPreview(page);
-    await shot(page, testInfo, `${route}-05-cargo-qr`);
-  } else {
-    await expect(
-      page.getByText("Для этого маршрута создавать короба в WMS и распределять по ним заказы не нужно."),
-    ).toBeVisible();
+  await boxes.getByRole("button", { name: "Добавить товар" }).click();
+  const addProducts = page.getByRole("dialog", { name: /Добавить товары в короб 1/ });
+  await expect(addProducts).toBeVisible();
+  const packedOrders = addProducts.getByRole("checkbox");
+  await expect(packedOrders).toHaveCount(supply.orders.length);
+  for (let index = 0; index < supply.orders.length; index += 1) {
+    await packedOrders.nth(index).check();
   }
+  await Promise.all([
+    page.waitForResponse(
+      (item) =>
+        item.url().includes(`${boxesApi}/`) &&
+        item.url().endsWith("/orders") &&
+        item.request().method() === "POST" &&
+        item.status() === 200,
+    ),
+    addProducts
+      .getByRole("button", { name: `Добавить ${supply.orders.length} товара` })
+      .click(),
+  ]);
+  await expect(addProducts).toBeHidden();
+  await expect.poll(() => boxAssignCalls).toBe(1);
+  await expect(boxes.getByText(/Заказ WB №/)).toHaveCount(supply.orders.length);
+  await expect.poll(() => legacyCargoCalls).toBe(0);
+  await shot(page, testInfo, `${route}-05-boxes`);
 
   let deliverBody: {
     idempotency_key: string;
@@ -329,7 +348,7 @@ async function finishRoute(
       deliverBody = item.postDataJSON() as typeof deliverBody;
     }
   });
-  await page.getByRole("tab", { name: "Передача и статусы" }).click();
+  await page.getByRole("tab", { name: "QR поставки" }).click();
   await page.getByRole("button", { name: "Проверить готовность" }).click();
   await page
     .getByRole("button", { name: "Подтвердить передачу WB" })
@@ -374,6 +393,21 @@ async function finishRoute(
     },
   );
   expect(repeated.ok(), await repeated.text()).toBeTruthy();
+
+  if (route === "warehouse_sc") {
+    const qrRetry = await request.post(
+      `${baseURL}/api/operations/fbs-supplies/${supply.supply.id}/retry-supply-qr`,
+      { headers: { Authorization: `Bearer ${token}` } },
+    );
+    expect(qrRetry.ok(), await qrRetry.text()).toBeTruthy();
+    const retryWorkspace = (await qrRetry.json()) as Workspace;
+    expect(retryWorkspace.supply.barcode_asset).toEqual(
+      expect.objectContaining({
+        id: finalWorkspace.supply.barcode_asset?.id,
+        preview_url: expect.any(String),
+      }),
+    );
+  }
 
   const emu = await request.get(
     `${emulatorUrl}/api/v3/supplies/${supply.supply.wb_supply_id}`,
@@ -430,14 +464,12 @@ async function finishRoute(
     deliver_calls: 1,
   });
 
-  if (route === "warehouse_sc") {
-    await expect(
-      page.getByRole("button", { name: "Печать QR поставки" }),
-    ).toBeVisible();
-    await page.getByRole("button", { name: "Печать QR поставки" }).click();
-    await confirmCurrentPreview(page);
-    await shot(page, testInfo, `${route}-07-supply-qr`);
-  }
+  await expect(
+    page.getByRole("button", { name: "Печать QR поставки" }),
+  ).toBeVisible();
+  await page.getByRole("button", { name: "Печать QR поставки" }).click();
+  await confirmCurrentPreview(page);
+  await shot(page, testInfo, `${route}-07-supply-qr`);
 
   return {
     route,

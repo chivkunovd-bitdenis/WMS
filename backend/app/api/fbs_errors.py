@@ -78,6 +78,8 @@ FBS_ERROR_MESSAGES_RU: dict[str, str] = {
     "invalid_barcode_path": "Некорректный путь QR поставки.",
     "cargo_places_required": "Нужны грузоместа (ПВЗ).",
     "cargo_place_qr_not_ready": "QR грузомест не готов.",
+    "physical_boxes_required": "Для передачи нужны физические короба.",
+    "packed_order_unassigned": "Упакованный заказ не назначен в короб.",
     "order_cancelled": "Заказ отменён на Wildberries.",
     "supply_bad_status": "Неверный статус поставки.",
     "stale_preflight": "Чек-лист устарел — обновите preflight.",

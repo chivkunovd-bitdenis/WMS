@@ -103,6 +103,10 @@ type TaskPanelProps = {
   hideDocumentHeader?: boolean
   /** Compact operator cards for narrow embedded workspaces such as FBS. */
   compactLayout?: boolean
+  /** Separate printing stage: reuses the standard ЧЗ/ШК dialog without packing actions. */
+  printOnly?: boolean
+  /** Embedded packing stage can keep physical packing free of print controls. */
+  hidePrintActions?: boolean
   onClose?: () => void
   onUpdated: (task: PackagingTask) => void
 }
@@ -138,6 +142,8 @@ export function FfPackagingTaskPanel({
   unloadLabel,
   hideDocumentHeader = false,
   compactLayout = false,
+  printOnly = false,
+  hidePrintActions = false,
   onClose,
   onUpdated,
 }: TaskPanelProps) {
@@ -670,7 +676,7 @@ export function FfPackagingTaskPanel({
                   }}
                   printTestId={`ff-packaging-line-print-${ln.id}`}
                   onPrintClick={
-                    ln.requires_honest_sign || isMpUnloadTask
+                    !hidePrintActions && (printOnly || ln.requires_honest_sign || isMpUnloadTask)
                       ? () => openLinePrint(ln)
                       : undefined
                   }
@@ -704,7 +710,7 @@ export function FfPackagingTaskPanel({
                 </TableCell>
                 <TableCell align="right">
                   <Stack direction="row" spacing={0.5} sx={{ justifyContent: 'flex-end', flexWrap: 'wrap' }}>
-                    {ln.requires_honest_sign && !isMpUnloadTask && ln.qty_need_pack > 0 && ln.qty_marking_printed < 1 ? (
+                    {!hidePrintActions && ln.requires_honest_sign && !isMpUnloadTask && ln.qty_need_pack > 0 && ln.qty_marking_printed < 1 ? (
                       <Button
                         size="small"
                         variant="outlined"

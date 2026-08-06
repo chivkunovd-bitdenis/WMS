@@ -74,6 +74,48 @@ async def scan_pick_location(
             "Сканируйте ячейку хранения, а не зону сортировки.",
         )
 
+    return await _pick_location_payload(session, tenant_id, supply, location)
+
+
+async def select_pick_location(
+    session: AsyncSession,
+    tenant_id: uuid.UUID,
+    supply_id: uuid.UUID,
+    *,
+    location_id: uuid.UUID,
+) -> dict[str, Any]:
+    """Return manual-pick choices for a concrete storage-location UUID."""
+    supply = await _load_supply(session, tenant_id, supply_id)
+    location = await session.scalar(
+        select(StorageLocation)
+        .options(selectinload(StorageLocation.warehouse))
+        .where(
+            StorageLocation.id == location_id,
+            StorageLocation.tenant_id == tenant_id,
+            StorageLocation.warehouse_id == supply.warehouse_id,
+        )
+    )
+    if location is None:
+        raise FbsPickingError(
+            "wrong_location",
+            "Ячейка не принадлежит складу поставки.",
+            http_status=404,
+        )
+    if is_sorting_location(location):
+        raise FbsPickingError(
+            "wrong_location",
+            "Выберите ячейку хранения, а не зону сортировки.",
+        )
+    return await _pick_location_payload(session, tenant_id, supply, location)
+
+
+async def _pick_location_payload(
+    session: AsyncSession,
+    tenant_id: uuid.UUID,
+    supply: FbsSupply,
+    location: StorageLocation,
+) -> dict[str, Any]:
+
     pending_by_product = _pending_orders_by_product(supply.orders)
     product_ids = list(pending_by_product.keys())
     products = await _load_products(session, tenant_id, product_ids)
@@ -123,6 +165,7 @@ async def scan_pick_product(
     idempotency_key: str,
     actor: User,
     order_id: uuid.UUID | None = None,
+    product_id: uuid.UUID | None = None,
 ) -> dict[str, Any]:
     existing = await _find_pick_by_scan_idempotency(
         session, tenant_id, supply_id, idempotency_key
@@ -147,13 +190,17 @@ async def scan_pick_product(
             "Сканируйте ячейку хранения, а не зону сортировки.",
         )
 
-    product = await _resolve_product_for_supply(
-        session,
-        tenant_id,
-        supply,
-        product_barcode=product_barcode,
+    product = (
+        await session.get(Product, product_id)
+        if product_id is not None
+        else await _resolve_product_for_supply(
+            session,
+            tenant_id,
+            supply,
+            product_barcode=product_barcode,
+        )
     )
-    if product is None:
+    if product is None or product.tenant_id != tenant_id:
         raise FbsPickingError(
             "wrong_product",
             "Товар не найден по штрихкоду в этой поставке.",
@@ -196,6 +243,12 @@ async def scan_pick_product(
         target_order = min(eligible_orders, key=lambda o: o.deadline_at)
 
     assert target_order is not None
+    if target_order.pack_status == PACK_STATUS_PACKED:
+        raise FbsPickingError(
+            "order_already_packed",
+            "Подбор недоступен после упаковки заказа.",
+            context={"order_id": str(target_order.id)},
+        )
 
     available = await inventory_service.available_quantity_at_location(
         session,
@@ -285,6 +338,46 @@ async def scan_pick_product(
     target_order.picked_at = picked_at
     await session.flush()
     return await get_supply_workspace(session, tenant_id, supply_id)
+
+
+async def manual_pick_product(
+    session: AsyncSession,
+    tenant_id: uuid.UUID,
+    supply_id: uuid.UUID,
+    *,
+    location_id: uuid.UUID,
+    product_id: uuid.UUID,
+    order_id: uuid.UUID,
+    idempotency_key: str,
+    actor: User,
+) -> dict[str, Any]:
+    """Pick the product already assigned to one explicit order without scanning."""
+    existing = await _find_pick_by_scan_idempotency(
+        session, tenant_id, supply_id, idempotency_key
+    )
+    if existing is not None:
+        if (
+            existing.fbs_order_id != order_id
+            or existing.product_id != product_id
+            or existing.source_storage_location_id != location_id
+        ):
+            raise FbsPickingError(
+                "idempotency_key_reused",
+                "Ключ идемпотентности уже использован для другого подбора.",
+                context={"idempotency_key": idempotency_key},
+            )
+        return await get_supply_workspace(session, tenant_id, supply_id)
+    return await scan_pick_product(
+        session,
+        tenant_id,
+        supply_id,
+        location_id=location_id,
+        product_barcode="",
+        product_id=product_id,
+        order_id=order_id,
+        idempotency_key=idempotency_key,
+        actor=actor,
+    )
 
 
 async def undo_pick(
@@ -521,7 +614,9 @@ async def _load_active_pick_for_order(
 __all__ = [
     "FbsPickingError",
     "FbsWorkspaceError",
+    "manual_pick_product",
     "scan_pick_location",
     "scan_pick_product",
+    "select_pick_location",
     "undo_pick",
 ]

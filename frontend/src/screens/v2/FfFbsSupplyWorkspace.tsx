@@ -11,7 +11,6 @@ import {
   DialogContent,
   DialogTitle,
   Divider,
-  FormControlLabel,
   IconButton,
   LinearProgress,
   MenuItem,
@@ -34,35 +33,39 @@ import LocalShippingOutlinedIcon from '@mui/icons-material/LocalShippingOutlined
 import PrintOutlinedIcon from '@mui/icons-material/PrintOutlined'
 import RefreshOutlinedIcon from '@mui/icons-material/RefreshOutlined'
 import { apiUrl } from '../../api'
+import { ProductPhotoThumb } from '../../components/ProductPhotoThumb'
 import { FfPackagingTaskPanel, type PackagingTask } from '../ff/FfPackagingPage'
 import { readApiErrorMessage } from '../../utils/readApiErrorMessage'
 import { FbsPrintPreviewDialog } from './FbsPrintPreviewDialog'
 import { buildFbsPickingListPrintHtml, metadataKindLabel, normalizeMetadataKind, ordersWord } from './fbsUx'
 import {
   confirmFbsPrintApplied,
-  createFbsCargoPlaces,
+  confirmFbsManualPick,
+  assignFbsPackingBoxOrders,
+  createFbsPackingBoxes,
   createFbsIdempotencyKey,
-  deleteFbsCargoPlaces,
+  deleteFbsPackingBox,
   deliverFbsSupply,
   FbsApiError,
-  fetchFbsCargoPlaces,
   fetchFbsPrintBatch,
   fetchFbsWorkspace,
-  preflightFbsCargoPlaces,
   preflightFbsDelivery,
+  removeFbsPackingBoxOrder,
+  retryFbsPackingBoxQr,
   retryFbsSupplyQr,
   scanFbsOrderMetadata,
   scanFbsPickLocation,
   scanFbsPickProduct,
+  selectFbsManualPickLocation,
   startFbsSupplyWork,
-  syncFbsSupplyTracking,
   undoFbsPick,
-  type FbsCargoPlaceDraft,
   type FbsDeliveryPreflight,
   type FbsPickLocation,
   type FbsPrintBatch,
   type FbsWorkspace,
 } from './fbsApi'
+import { printBarcodeLabel } from '../../utils/printBarcodeLabel'
+import { renderBarcodeDataUrl } from '../../utils/renderBarcodeDataUrl'
 
 type Props = {
   token: string
@@ -76,19 +79,19 @@ type Props = {
 const STAGES = [
   { key: 'composition', label: 'Состав' },
   { key: 'picking', label: 'Подбор' },
-  { key: 'packing', label: 'Упаковка и маркировка' },
-  { key: 'order_stickers', label: 'Стикеры WB' },
-  { key: 'handoff_prep', label: 'Подготовка к сдаче' },
-  { key: 'delivery', label: 'Передача и статусы' },
+  { key: 'packing', label: 'Упаковка' },
+  { key: 'marking', label: 'Печать и маркировка' },
+  { key: 'boxes', label: 'Упаковка в короба' },
+  { key: 'delivery', label: 'QR поставки' },
 ] as const
 
 type StageKey = (typeof STAGES)[number]['key']
 
-function operationKeyStorageName(supplyId: string, action: 'cargo' | 'cargo-delete' | 'delivery', fingerprint = '') {
+function operationKeyStorageName(supplyId: string, action: 'box-create' | 'box-delete' | 'delivery', fingerprint = '') {
   return `wms:fbs:${supplyId}:${action}:${fingerprint}`
 }
 
-function persistentOperationKey(supplyId: string, action: 'cargo' | 'cargo-delete' | 'delivery', fingerprint = '') {
+function persistentOperationKey(supplyId: string, action: 'box-create' | 'box-delete' | 'delivery', fingerprint = '') {
   const storageName = operationKeyStorageName(supplyId, action, fingerprint)
   try {
     const existing = window.sessionStorage.getItem(storageName)
@@ -101,7 +104,7 @@ function persistentOperationKey(supplyId: string, action: 'cargo' | 'cargo-delet
   }
 }
 
-function clearPersistentOperationKey(supplyId: string, action: 'cargo' | 'cargo-delete' | 'delivery', fingerprint = '') {
+function clearPersistentOperationKey(supplyId: string, action: 'box-create' | 'box-delete' | 'delivery', fingerprint = '') {
   try {
     window.sessionStorage.removeItem(operationKeyStorageName(supplyId, action, fingerprint))
   } catch {
@@ -110,6 +113,8 @@ function clearPersistentOperationKey(supplyId: string, action: 'cargo' | 'cargo-
 }
 
 function visualStage(stage: FbsWorkspace['stage']): StageKey {
+  if (stage === 'order_stickers') return 'marking'
+  if (stage === 'handoff_prep') return 'boxes'
   return stage === 'tracking' ? 'delivery' : stage
 }
 
@@ -148,9 +153,10 @@ export function FfFbsSupplyWorkspace({
   const [printBatch, setPrintBatch] = useState<FbsPrintBatch | null>(null)
   const [printPreviewOpen, setPrintPreviewOpen] = useState(false)
   const [packagingTask, setPackagingTask] = useState<PackagingTask | null>(null)
-  const [cargoCount, setCargoCount] = useState('1')
-  const [measurementsConfirmed, setMeasurementsConfirmed] = useState(false)
-  const [cargoDeleteTarget, setCargoDeleteTarget] = useState<string | null>(null)
+  const [boxCount, setBoxCount] = useState('1')
+  const [boxDeleteTarget, setBoxDeleteTarget] = useState<string | null>(null)
+  const [boxAssignTarget, setBoxAssignTarget] = useState<string | null>(null)
+  const [selectedBoxOrderIds, setSelectedBoxOrderIds] = useState<string[]>([])
   const [deliveryPreflight, setDeliveryPreflight] = useState<FbsDeliveryPreflight | null>(null)
   const [deliveryKey, setDeliveryKey] = useState(createFbsIdempotencyKey)
   const [deliveryConfirmOpen, setDeliveryConfirmOpen] = useState(false)
@@ -187,8 +193,10 @@ export function FfFbsSupplyWorkspace({
     setPickLocation(null)
     setMetadataOrderId('')
     setMetadataValue('')
-    setMeasurementsConfirmed(false)
-    setCargoDeleteTarget(null)
+    setBoxCount('1')
+    setBoxDeleteTarget(null)
+    setBoxAssignTarget(null)
+    setSelectedBoxOrderIds([])
     setDeliveryConfirmOpen(false)
     setDeliverySubmitted(false)
     setUndoOrderId(null)
@@ -293,6 +301,32 @@ export function FfFbsSupplyWorkspace({
     if (next) setProductBarcode('')
   }
 
+  const pickFromCell = async (locationId: string, productId: string, orderIds: string[]) => {
+    if (!workspace || orderIds.length === 0) return
+    setBusy(true)
+    setError(null)
+    setNotice(null)
+    try {
+      await selectFbsManualPickLocation(token, authHeaders, workspace.supply.id, locationId)
+      let next = workspace
+      for (const orderId of orderIds) {
+        next = await confirmFbsManualPick(token, authHeaders, workspace.supply.id, {
+          location_id: locationId,
+          product_id: productId,
+          order_id: orderId,
+          idempotency_key: createFbsIdempotencyKey(),
+        })
+      }
+      setWorkspace(next)
+      setStage(visualStage(next.stage))
+      setNotice(`Снято из ячейки: ${orderIds.length} шт.`)
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : 'Не удалось подтвердить подбор из ячейки.')
+    } finally {
+      setBusy(false)
+    }
+  }
+
   const scanMetadata = async () => {
     if (!workspace || !metadataOrderId || metadataValue.length === 0) return
     setBusy(true)
@@ -365,93 +399,56 @@ export function FfFbsSupplyWorkspace({
     setPrintPreviewOpen(true)
   }
 
-  const cargoDrafts = (): FbsCargoPlaceDraft[] => {
-    const maxCount = Math.max(1, (workspace?.orders.length ?? 0) + 1)
-    const count = Math.min(maxCount, Math.max(1, Number(cargoCount) || 1))
-    return Array.from({ length: count }, (_, index) => ({
-      client_id: `box-${index + 1}`,
-      length_mm: null,
-      width_mm: null,
-      height_mm: null,
-      weight_g: null,
-      measurements_confirmed: measurementsConfirmed,
-    }))
-  }
-
-  const createCargo = async () => {
-    if (!workspace || !measurementsConfirmed || workspace.cargo_places.length > 0) return
-    const boxes = cargoDrafts()
-    const cargoFingerprint = encodeURIComponent(JSON.stringify(boxes))
-    const cargoKey = persistentOperationKey(workspace.supply.id, 'cargo', cargoFingerprint)
-    setBusy(true)
-    setError(null)
-    try {
-      const preflight = await preflightFbsCargoPlaces(token, authHeaders, workspace.supply.id, {
-        count: boxes.length,
-        boxes,
-      })
-      if (!preflight.compatible) {
-        setError(preflight.issues.map((issue) => issue.message).join(' '))
-        return
-      }
-      await createFbsCargoPlaces(token, authHeaders, workspace.supply.id, {
-        count: boxes.length,
-        boxes,
-        idempotency_key: cargoKey,
-      })
-      await load(true)
-      clearPersistentOperationKey(workspace.supply.id, 'cargo', cargoFingerprint)
-      setNotice('Грузоместа созданы в WB. Проверьте и нанесите QR.')
-    } catch (cause) {
-      setError(cause instanceof Error ? cause.message : 'Грузоместа не созданы.')
-    } finally {
-      setBusy(false)
-    }
-  }
-
-  const refreshCargoQr = async () => {
+  const createBoxes = async () => {
     if (!workspace) return
-    setBusy(true)
-    setError(null)
-    setRetryAction(null)
-    try {
-      await fetchFbsCargoPlaces(token, authHeaders, workspace.supply.id)
-      await load(true)
-      setNotice('QR грузомест обновлены.')
-    } catch (cause) {
-      setError(cause instanceof Error ? cause.message : 'Не удалось получить QR грузомест.')
-      if (cause instanceof FbsApiError && cause.retryable) {
-        setRetryAction(() => () => { void refreshCargoQr() })
-      }
-    } finally {
-      setBusy(false)
+    const count = Math.min(100, Math.max(1, Number(boxCount) || 1))
+    const key = persistentOperationKey(workspace.supply.id, 'box-create', String(count))
+    const next = await run(
+      () => createFbsPackingBoxes(token, authHeaders, workspace.supply.id, { count, idempotency_key: key }),
+      `${count === 1 ? 'Короб создан.' : `Создано коробов: ${count}.`}`,
+    )
+    if (next) clearPersistentOperationKey(workspace.supply.id, 'box-create', String(count))
+  }
+
+  const assignBoxOrders = async () => {
+    if (!workspace || !boxAssignTarget || selectedBoxOrderIds.length === 0) return
+    const next = await run(
+      () => assignFbsPackingBoxOrders(token, authHeaders, workspace.supply.id, boxAssignTarget, selectedBoxOrderIds),
+      'Товары распределены по коробу.',
+    )
+    if (next) {
+      setBoxAssignTarget(null)
+      setSelectedBoxOrderIds([])
     }
   }
 
-  const deleteCargo = async () => {
-    if (!workspace || !cargoDeleteTarget) return
-    const fingerprint = encodeURIComponent(cargoDeleteTarget)
-    const deleteKey = persistentOperationKey(workspace.supply.id, 'cargo-delete', fingerprint)
-    setBusy(true)
-    setError(null)
-    setRetryAction(null)
-    try {
-      await deleteFbsCargoPlaces(token, authHeaders, workspace.supply.id, {
-        wb_trbx_ids: [cargoDeleteTarget],
-        idempotency_key: deleteKey,
-      })
-      clearPersistentOperationKey(workspace.supply.id, 'cargo-delete', fingerprint)
-      setCargoDeleteTarget(null)
-      await load(true)
-      setNotice('Грузоместо удалено из WB.')
-    } catch (cause) {
-      setError(cause instanceof Error ? cause.message : 'Грузоместо не удалено.')
-      if (cause instanceof FbsApiError && cause.retryable) {
-        setRetryAction(() => () => { void deleteCargo() })
-      }
-    } finally {
-      setBusy(false)
+  const removeBoxOrder = async (boxId: string, orderId: string) => {
+    if (!workspace) return
+    await run(
+      () => removeFbsPackingBoxOrder(token, authHeaders, workspace.supply.id, boxId, orderId),
+      'Товар возвращён в список для распределения.',
+    )
+  }
+
+  const deleteBox = async () => {
+    if (!workspace || !boxDeleteTarget) return
+    const key = persistentOperationKey(workspace.supply.id, 'box-delete', boxDeleteTarget)
+    const next = await run(
+      () => deleteFbsPackingBox(token, authHeaders, workspace.supply.id, boxDeleteTarget, key),
+      'Пустой короб удалён.',
+    )
+    if (next) {
+      clearPersistentOperationKey(workspace.supply.id, 'box-delete', boxDeleteTarget)
+      setBoxDeleteTarget(null)
     }
+  }
+
+  const retryBoxQr = async (boxId: string) => {
+    if (!workspace) return
+    await run(
+      () => retryFbsPackingBoxQr(token, authHeaders, workspace.supply.id, boxId),
+      'QR короба обновлён.',
+    )
   }
 
   const checkDelivery = async () => {
@@ -536,6 +533,33 @@ export function FfFbsSupplyWorkspace({
     }
     return [...grouped.values()]
   }, [workspace])
+  const manualPickRows = useMemo(() => {
+    if (!workspace) return []
+    const byProduct = new Map<string, typeof workspace.orders>()
+    for (const order of workspace.orders) {
+      if (!order.product.id || order.pick.status === 'picked' || order.pack.status === 'packed') continue
+      const current = byProduct.get(order.product.id) ?? []
+      current.push(order)
+      byProduct.set(order.product.id, current)
+    }
+    return [...byProduct.entries()].flatMap(([productId, orders]) => {
+      const locations = new Map<string, { id: string; code: string; available: number }>()
+      for (const order of orders) for (const location of order.inventory.locations) {
+        const current = locations.get(location.id)
+        if (!current || location.available_unpacked > current.available) {
+          locations.set(location.id, { id: location.id, code: location.code, available: location.available_unpacked })
+        }
+      }
+      let index = 0
+      return [...locations.values()].sort((a, b) => a.code.localeCompare(b.code)).flatMap((location) => {
+        const count = Math.min(location.available, orders.length - index)
+        if (count <= 0) return []
+        const orderIds = orders.slice(index, index + count).map((order) => order.id)
+        index += count
+        return [{ productId, location, orderIds, product: orders[0].product }]
+      })
+    })
+  }, [workspace])
   const printPickingList = () => {
     if (!workspace) return
     const printWindow = window.open('', '_blank')
@@ -557,21 +581,15 @@ export function FfFbsSupplyWorkspace({
     }))
     printWindow.document.close()
   }
-  const stageBlockers = useMemo(
-    () => workspace?.blockers.filter((blocker) => blocker.stage === stage) ?? [],
-    [workspace, stage],
-  )
+  const stageBlockers = useMemo(() => {
+    const backendStage = stage === 'marking' ? 'order_stickers' : stage === 'boxes' ? 'handoff_prep' : stage
+    return workspace?.blockers.filter((blocker) => blocker.stage === backendStage) ?? []
+  }, [workspace, stage])
   const currentStage = workspace ? visualStage(workspace.stage) : 'composition'
   const currentStageIndex = STAGES.findIndex((item) => item.key === currentStage)
   const stageIsCurrent = stage === currentStage
   const requiredMetadataOrders = workspace?.orders.filter((order) => order.metadata.required.length > 0) ?? []
   const allPicked = Boolean(workspace && workspace.progress.total > 0 && workspace.progress.picked === workspace.progress.total)
-  const maxCargoCount = Math.max(1, (workspace?.orders.length ?? 0) + 1)
-  const normalizedCargoCount = Math.min(maxCargoCount, Math.max(1, Number(cargoCount) || 1))
-  const cargoCountIsValid = Number.isInteger(Number(cargoCount))
-    && Number(cargoCount) >= 1
-    && Number(cargoCount) <= maxCargoCount
-  const changeCargoCount = (next: number) => setCargoCount(String(Math.min(maxCargoCount, Math.max(1, next))))
   const rawStatusLabel = (value: string) => ({
     waiting: 'Ожидает WB',
     accepted: 'WB принял',
@@ -590,6 +608,11 @@ export function FfFbsSupplyWorkspace({
   const deliveryConfirmed = deliverySubmitted
     || workspace?.stage === 'tracking'
     || ['in_delivery', 'done'].includes(workspace?.supply.status ?? '')
+  const assignedBoxOrderIds = new Set(workspace?.boxes.flatMap((box) => box.assigned_order_ids) ?? [])
+  const availableForBox = (workspace?.orders ?? []).filter(
+    (order) => order.pack.status === 'packed' && !assignedBoxOrderIds.has(order.id),
+  )
+  const boxAssignName = workspace?.boxes.find((box) => box.id === boxAssignTarget)?.box_number
 
   return (
     <Dialog
@@ -693,12 +716,14 @@ export function FfFbsSupplyWorkspace({
                 </Stack>
                 <Divider sx={{ my: 2 }} />
                 <Table size="small">
-                  <TableHead><TableRow><TableCell>Заказ WB</TableCell><TableCell>Товар</TableCell><TableCell>Маркировка</TableCell><TableCell>Подбор</TableCell></TableRow></TableHead>
+                  <TableHead><TableRow><TableCell>Фото</TableCell><TableCell>Заказ WB</TableCell><TableCell>Товар и идентификаторы</TableCell><TableCell>Количество</TableCell><TableCell>Маркировка</TableCell><TableCell>Подбор</TableCell></TableRow></TableHead>
                   <TableBody>
                     {workspace.orders.map((order) => (
                       <TableRow key={order.id}>
+                        <TableCell><ProductPhotoThumb src={order.product.image_url} alt={order.product.name} size={42} previewSize={280} testId={`fbs-composition-photo-${order.id}`} /></TableCell>
                         <TableCell>№{order.wb_order_id}</TableCell>
-                        <TableCell>{order.product.name}<Typography variant="caption" color="text.secondary" sx={{ display: 'block' }}>{order.product.barcode ?? 'ШК не указан'}</Typography></TableCell>
+                        <TableCell><Typography variant="body2" sx={{ fontWeight: 700 }}>{order.product.name}</Typography><Typography variant="caption" color="text.secondary" sx={{ display: 'block' }}>Артикул: {order.product.seller_article ?? '—'}{order.product.barcode ? ` · ШК: ${order.product.barcode}` : ''}</Typography></TableCell>
+                        <TableCell>1 шт.</TableCell>
                         <TableCell>{order.metadata.required.length ? order.metadata.required.join(', ') : 'Не требуется'}</TableCell>
                         <TableCell>{order.pick.status === 'picked' ? 'Подобран' : 'Ожидает'}</TableCell>
                       </TableRow>
@@ -738,6 +763,11 @@ export function FfFbsSupplyWorkspace({
                 {pickLocation ? <Alert severity="success" sx={{ mt: 2 }}>Ячейка {pickLocation.code} подтверждена · {pickLocation.warehouse_name}</Alert> : null}
                 {allPicked ? <Alert severity="success" sx={{ mt: 2 }}>Все товары подобраны. Перейдите к упаковке.</Alert> : null}
               </Paper>
+              <Paper variant="outlined" sx={{ p: 2 }} data-testid="fbs-manual-picking">
+                <Typography variant="h6">Подбор из ячеек</Typography>
+                <Typography variant="body2" color="text.secondary" sx={{ mb: 1.5 }}>Сканер остаётся доступен выше. Здесь можно снять требуемое количество из конкретной ячейки вручную.</Typography>
+                {manualPickRows.length === 0 ? <Alert severity="info">Нет товаров, ожидающих ручного подбора из ячеек.</Alert> : <Stack spacing={1}>{manualPickRows.map((row) => <Stack key={`${row.productId}-${row.location.id}`} direction={{ xs: 'column', md: 'row' }} spacing={1.5} sx={{ alignItems: { md: 'center' }, p: 1.25, bgcolor: 'action.hover', borderRadius: 1.5 }}><ProductPhotoThumb src={row.product.image_url} alt={row.product.name} size={44} /><Box sx={{ flex: 1 }}><Typography variant="body2" sx={{ fontWeight: 700 }}>{row.product.name}</Typography><Typography variant="caption" color="text.secondary">Ячейка {row.location.code} · к снятию {row.orderIds.length} шт. · доступно {row.location.available} шт.</Typography></Box><Button variant="contained" size="small" disabled={!stageIsCurrent || busy} onClick={() => void pickFromCell(row.location.id, row.productId, row.orderIds)}>Снять {row.orderIds.length} шт.</Button></Stack>)}</Stack>}
+              </Paper>
               <Paper variant="outlined" sx={{ p: 2 }}>
                 <Typography variant="subtitle1" gutterBottom>Товары в подборе: {workspace.progress.picked}/{workspace.progress.total}</Typography>
                 <Table size="small">
@@ -760,7 +790,7 @@ export function FfFbsSupplyWorkspace({
                     task={packagingTask}
                     unloadLabel={workspace.supply.name}
                     hideDocumentHeader
-                    compactLayout
+                    hidePrintActions
                     onUpdated={(nextTask) => {
                       setPackagingTask(nextTask)
                       if (nextTask.status === 'done') {
@@ -772,29 +802,23 @@ export function FfFbsSupplyWorkspace({
               ) : (
                 <Alert severity="info">{workspace.supply.packaging_task_id ? 'Загружаем существующее задание упаковки…' : 'Сначала начните работу с поставкой — сервер создаст единственное задание упаковки.'}</Alert>
               )}
-              {requiredMetadataOrders.length ? <Paper variant="outlined" sx={{ p: 2 }}>
-                <Typography variant="h6">Идентификаторы заказа WB</Typography>
-                <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>Отсканируйте требуемый идентификатор. Тип уже выбран для заказа.</Typography>
-                <Stack direction={{ xs: 'column', md: 'row' }} spacing={1.5}>
-                  <Select displayEmpty value={metadataOrderId} disabled={!stageIsCurrent} onChange={(e) => { const id = String(e.target.value); const order = requiredMetadataOrders.find((item) => item.id === id); setMetadataOrderId(id); setMetadataKind(normalizeMetadataKind(order?.metadata.required[0])) }} sx={{ minWidth: 190 }}><MenuItem value="">Выберите заказ</MenuItem>{requiredMetadataOrders.map((order) => <MenuItem key={order.id} value={order.id}>№{order.wb_order_id}</MenuItem>)}</Select>
-                  <Chip label={metadataKindLabel(metadataKind)} />
-                  <TextField label="Отсканированный идентификатор" value={metadataValue} onChange={(e) => setMetadataValue(e.target.value)} disabled={!stageIsCurrent} sx={{ flex: 1 }} />
-                  <Button variant="contained" onClick={() => void scanMetadata()} disabled={!stageIsCurrent || !metadataOrderId || metadataValue.length === 0}>Проверить</Button>
-                </Stack>
-                <Table size="small" sx={{ mt: 2 }}>
-                  <TableHead><TableRow><TableCell>Заказ WB</TableCell><TableCell>Что требуется</TableCell><TableCell>Фактическое состояние</TableCell></TableRow></TableHead>
-                  <TableBody>{requiredMetadataOrders.map((order) => <TableRow key={order.id}><TableCell>№{order.wb_order_id}</TableCell><TableCell>{order.metadata.required.map(metadataKindLabel).join(', ')}</TableCell><TableCell>{order.metadata.states.length ? order.metadata.states.map((state) => `${metadataKindLabel(state.kind)}: ${rawStatusLabel(state.status)}${state.reason ? ` (${state.reason})` : ''}`).join('; ') : 'Данные ещё не переданы'}</TableCell></TableRow>)}</TableBody>
-                </Table>
-              </Paper> : null}
             </Stack>
           ) : null}
 
-          {workspace && stage === 'order_stickers' ? (
+          {workspace && stage === 'marking' ? (
             <Stack spacing={2}>
-              {!stageIsCurrent ? <Alert severity="success">Стикеры подготовлены. Этот этап доступен только для просмотра.</Alert> : null}
+              {!stageIsCurrent ? <Alert severity="success">Печать завершена. Этот этап доступен только для просмотра.</Alert> : null}
+              {packagingTask ? (
+                <Paper variant="outlined" sx={{ p: 2 }}>
+                  <Typography variant="h6">Печать ЧЗ и ШК товара</Typography>
+                  <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>Используется стандартный механизм печати WMS. Упаковку этот экран не меняет.</Typography>
+                  <FfPackagingTaskPanel token={token} task={packagingTask} unloadLabel={workspace.supply.name} hideDocumentHeader printOnly onUpdated={setPackagingTask} />
+                </Paper>
+              ) : <Alert severity="info">Загружаем данные для стандартной печати товара…</Alert>}
+              {requiredMetadataOrders.length ? <Paper variant="outlined" sx={{ p: 2 }}><Typography variant="h6">Маркировка товара</Typography><Typography variant="body2" color="text.secondary" sx={{ mb: 1.5 }}>Отсканируйте обязательный код для выбранного заказа. Сервер сразу проверит его у WB.</Typography><Stack direction={{ xs: 'column', md: 'row' }} spacing={1}><Select size="small" value={metadataOrderId} onChange={(e) => { const id = String(e.target.value); const order = workspace.orders.find((item) => item.id === id); setMetadataOrderId(id); setMetadataKind(normalizeMetadataKind(order?.metadata.required[0] ?? 'sgtin')) }} sx={{ minWidth: 170 }}>{requiredMetadataOrders.map((order) => <MenuItem key={order.id} value={order.id}>Заказ WB №{order.wb_order_id}</MenuItem>)}</Select><Select size="small" value={metadataKind} onChange={(e) => setMetadataKind(String(e.target.value))} sx={{ minWidth: 150 }}>{(workspace.orders.find((order) => order.id === metadataOrderId)?.metadata.required ?? []).map((kind) => <MenuItem key={kind} value={normalizeMetadataKind(kind)}>{metadataKindLabel(kind)}</MenuItem>)}</Select><TextField size="small" label="Код маркировки" value={metadataValue} onChange={(e) => setMetadataValue(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter') void scanMetadata() }} sx={{ flex: 1 }} /><Button variant="contained" disabled={!stageIsCurrent || !metadataValue.trim()} onClick={() => void scanMetadata()}>Проверить код</Button></Stack></Paper> : null}
               <Paper variant="outlined" sx={{ p: 2 }}>
-                <Typography variant="h6">Печать стикеров заказов WB</Typography>
-                <Typography variant="body2" color="text.secondary">Получите все стикеры, проверьте предпросмотр, распечатайте и подтвердите нанесение.</Typography>
+                <Typography variant="h6">Стикеры и QR заказов WB</Typography>
+                <Typography variant="body2" color="text.secondary">Получите стикеры, откройте предпросмотр, распечатайте и подтвердите нанесение.</Typography>
                 <Table size="small" sx={{ my: 2 }}><TableHead><TableRow><TableCell>Заказ WB</TableCell><TableCell>Товар</TableCell><TableCell>Состояние</TableCell></TableRow></TableHead><TableBody>{workspace.orders.map((order) => <TableRow key={order.id}><TableCell>№{order.wb_order_id}</TableCell><TableCell>{order.product.name}</TableCell><TableCell>{rawStatusLabel(order.sticker.status)}</TableCell></TableRow>)}</TableBody></Table>
                 <Stack direction="row" spacing={1} sx={{ justifyContent: 'flex-end', flexWrap: 'wrap' }} useFlexGap><Button variant="contained" startIcon={<PrintOutlinedIcon />} disabled={!stageIsCurrent} onClick={() => void requestPrintBatch()}>Получить все стикеры</Button>{printBatch?.missing ? <Button variant="text" disabled={!stageIsCurrent} onClick={() => void requestPrintBatch(undefined, true)}>Повторить отсутствующие</Button> : null}</Stack>
               </Paper>
@@ -802,210 +826,24 @@ export function FfFbsSupplyWorkspace({
             </Stack>
           ) : null}
 
-          {workspace && stage === 'handoff_prep' ? (
-            workspace.supply.delivery_type === 'pvz' ? (
-              <Stack spacing={2}>
-                {deliveryConfirmed ? <Alert severity="success">Поставка уже передана WB. Грузоместа доступны только для просмотра и печати.</Alert> : null}
-                {workspace.cargo_places.length === 0 ? (
-                  <Paper variant="outlined" sx={{ overflow: 'hidden' }}>
-                    <Box sx={{ px: { xs: 2, md: 3 }, py: 2.5, borderBottom: 1, borderColor: 'divider' }}>
-                      <Stack direction="row" spacing={1} sx={{ alignItems: 'center', mb: 0.5 }}>
-                        <Typography variant="h6">Грузоместа</Typography>
-                        <Chip label="Сдача в ПВЗ" color="primary" size="small" variant="outlined" />
-                      </Stack>
-                      <Typography variant="body2" color="text.secondary">
-                        Укажите количество физических коробов. WB создаст отдельное грузоместо с QR-кодом для каждого короба.
-                      </Typography>
-                    </Box>
-
-                    <Box sx={{ px: { xs: 2, md: 3 }, py: 2.5 }}>
-                      <Stack direction={{ xs: 'column', md: 'row' }} spacing={3} sx={{ alignItems: { md: 'flex-start' } }}>
-                        <Box sx={{ flex: 1 }}>
-                          <Typography variant="subtitle1" sx={{ fontWeight: 750 }}>
-                            Количество коробов
-                          </Typography>
-                          <Typography variant="body2" color="text.secondary" sx={{ mb: 1.5 }}>
-                            Распределять заказы между грузоместами не нужно. Допустимо до {maxCargoCount} грузомест для этой поставки.
-                          </Typography>
-                          <Stack direction="row" spacing={1} sx={{ alignItems: 'center' }}>
-                            <Button
-                              variant="outlined"
-                              aria-label="Уменьшить количество коробов"
-                              data-testid="fbs-cargo-decrement"
-                              disabled={!stageIsCurrent || normalizedCargoCount <= 1}
-                              onClick={() => changeCargoCount(normalizedCargoCount - 1)}
-                              sx={{ minWidth: 44, fontSize: 22, lineHeight: 1 }}
-                            >
-                              −
-                            </Button>
-                            <TextField
-                              value={cargoCount}
-                              type="number"
-                              size="small"
-                              slotProps={{ htmlInput: { min: 1, max: maxCargoCount, 'aria-label': 'Количество физических коробов' } }}
-                              disabled={!stageIsCurrent}
-                              onChange={(event) => setCargoCount(event.target.value)}
-                              onBlur={() => changeCargoCount(normalizedCargoCount)}
-                              data-testid="fbs-cargo-count"
-                              sx={{ width: 96, '& input': { textAlign: 'center', fontWeight: 750 } }}
-                            />
-                            <Button
-                              variant="outlined"
-                              aria-label="Увеличить количество коробов"
-                              data-testid="fbs-cargo-increment"
-                              disabled={!stageIsCurrent || normalizedCargoCount >= maxCargoCount}
-                              onClick={() => changeCargoCount(normalizedCargoCount + 1)}
-                              sx={{ minWidth: 44, fontSize: 22, lineHeight: 1 }}
-                            >
-                              +
-                            </Button>
-                          </Stack>
-                        </Box>
-
-                        <Box sx={{ flex: 1.15, p: 2, bgcolor: 'action.hover', borderRadius: 2 }}>
-                          <Typography variant="subtitle2">Перед созданием</Typography>
-                          <FormControlLabel
-                            sx={{ mt: 0.5, alignItems: 'flex-start' }}
-                            control={(
-                              <Checkbox
-                                checked={measurementsConfirmed}
-                                disabled={!stageIsCurrent}
-                                onChange={(_, value) => setMeasurementsConfirmed(value)}
-                                data-testid="fbs-cargo-limits-confirmed"
-                              />
-                            )}
-                            label={(
-                              <Typography variant="body2" sx={{ pt: 0.75 }}>
-                                Проверил каждый короб: сторона не больше 60 см, сумма сторон не больше 140 см, вес не больше 5 кг.
-                              </Typography>
-                            )}
-                          />
-                        </Box>
-                      </Stack>
-
-                      <Stack direction="row" sx={{ justifyContent: 'flex-end', mt: 2.5 }}>
-                        <Button
-                          variant="contained"
-                          size="large"
-                          disabled={!stageIsCurrent || !measurementsConfirmed || !cargoCountIsValid}
-                          onClick={() => void createCargo()}
-                          data-testid="fbs-cargo-create"
-                        >
-                          Создать {normalizedCargoCount} {normalizedCargoCount === 1 ? 'грузоместо' : 'грузоместа'}
-                        </Button>
-                      </Stack>
-                    </Box>
-                  </Paper>
-                ) : (
-                  <Paper variant="outlined" sx={{ overflow: 'hidden' }} data-testid="fbs-cargo-table">
-                    <Box sx={{ px: { xs: 2, md: 3 }, py: 2.25, borderBottom: 1, borderColor: 'divider' }}>
-                      <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1.5} sx={{ justifyContent: 'space-between', alignItems: { sm: 'center' } }}>
-                        <Box>
-                          <Stack direction="row" spacing={1} sx={{ alignItems: 'center' }}>
-                            <Typography variant="h6">Грузоместа</Typography>
-                            <Chip label={`${workspace.cargo_places.length} создано`} color="success" size="small" />
-                          </Stack>
-                          <Typography variant="body2" color="text.secondary">
-                            Распечатайте QR и наклейте каждый код на отдельный физический короб.
-                          </Typography>
-                        </Box>
-                        {workspace.cargo_places.some((place) => place.qr_asset?.preview_url) ? (
-                          <Button
-                            variant="outlined"
-                            startIcon={<PrintOutlinedIcon />}
-                            data-testid="fbs-cargo-print-all"
-                            onClick={() => openAssetPreview(workspace.cargo_places.flatMap((place) => place.qr_asset ? [place.qr_asset] : []))}
-                          >
-                            Печать всех QR
-                          </Button>
-                        ) : null}
-                      </Stack>
-                    </Box>
-                    {workspace.cargo_places.some((place) => !place.qr_asset?.preview_url) ? (
-                      <Alert
-                        severity="warning"
-                        sx={{ m: 2 }}
-                        action={<Button color="inherit" size="small" disabled={busy} onClick={() => void refreshCargoQr()}>Получить ещё раз</Button>}
-                      >
-                        WB ещё не отдал все QR. Повторный запрос получает коды и не создаёт новые грузоместа.
-                      </Alert>
-                    ) : null}
-                    <Table size="small">
-                      <TableHead>
-                        <TableRow>
-                          <TableCell>Грузоместо</TableCell>
-                          <TableCell>Номер WB</TableCell>
-                          <TableCell>QR-код</TableCell>
-                          <TableCell align="right">Действие</TableCell>
-                        </TableRow>
-                      </TableHead>
-                      <TableBody>
-                        {workspace.cargo_places.map((place, index) => (
-                          <TableRow key={place.id}>
-                            <TableCell sx={{ fontWeight: 700 }}>Короб {index + 1}</TableCell>
-                            <TableCell>{place.wb_trbx_id}</TableCell>
-                            <TableCell>
-                              <Chip
-                                size="small"
-                                color={place.qr_asset?.preview_url ? 'success' : 'warning'}
-                                label={place.qr_asset?.preview_url ? 'Готов' : 'Ожидается'}
-                              />
-                            </TableCell>
-                            <TableCell align="right">
-                              <Stack direction="row" spacing={0.5} sx={{ justifyContent: 'flex-end' }}>
-                                <Button
-                                  size="small"
-                                  startIcon={<PrintOutlinedIcon />}
-                                  disabled={!place.qr_asset?.preview_url}
-                                  onClick={() => place.qr_asset && openAssetPreview([place.qr_asset])}
-                                >
-                                  Печать QR
-                                </Button>
-                                <IconButton
-                                  size="small"
-                                  color="error"
-                                  aria-label={`Удалить короб ${index + 1}`}
-                                  data-testid={`fbs-cargo-delete-${place.wb_trbx_id}`}
-                                  disabled={deliveryConfirmed || busy}
-                                  onClick={() => setCargoDeleteTarget(place.wb_trbx_id)}
-                                >
-                                  <DeleteOutlinedIcon fontSize="small" />
-                                </IconButton>
-                              </Stack>
-                            </TableCell>
-                          </TableRow>
-                        ))}
-                      </TableBody>
-                    </Table>
-                  </Paper>
-                )}
-              </Stack>
-            ) : (
-              <Paper variant="outlined" sx={{ p: { xs: 2, md: 3 } }} data-testid="fbs-warehouse-handoff">
-                <Stack direction={{ xs: 'column', md: 'row' }} spacing={3} sx={{ alignItems: { md: 'flex-start' } }}>
-                  <Box sx={{ flex: 1 }}>
-                    <Stack direction="row" spacing={1} sx={{ alignItems: 'center', mb: 0.75 }}>
-                      <Typography variant="h6">Сдача на склад или СЦ</Typography>
-                      <Chip label="Без грузомест WB" size="small" color="success" variant="outlined" />
-                    </Stack>
-                    <Typography variant="body2" color="text.secondary">
-                      Для этого маршрута создавать короба в WMS и распределять по ним заказы не нужно. Физически упакуйте поставку и переходите к передаче.
-                    </Typography>
-                  </Box>
-                  <Box sx={{ minWidth: { md: 320 }, p: 2, bgcolor: 'action.hover', borderRadius: 2 }}>
-                    <Typography variant="subtitle2">Что будет дальше</Typography>
-                    <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5 }}>
-                      После подтверждённой передачи WB сформирует один общий QR поставки. Он появится на следующем этапе — там же будет печать и безопасный повтор получения.
-                    </Typography>
-                  </Box>
-                </Stack>
-                {workspace.supply.planned_destination ? (
-                  <Alert severity="info" sx={{ mt: 2 }}>
-                    Место сдачи: {workspace.supply.planned_destination.name}, зона {workspace.supply.planned_destination.zone}
-                  </Alert>
-                ) : null}
+          {workspace && stage === 'boxes' ? (
+            <Stack spacing={2}>
+              <Paper variant="outlined" sx={{ overflow: 'hidden' }} data-testid="fbs-boxes">
+                <Box sx={{ px: 2.5, py: 2, borderBottom: 1, borderColor: 'divider' }}>
+                  <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1.5} sx={{ justifyContent: 'space-between', alignItems: { sm: 'center' } }}>
+                    <Box><Typography variant="h6">Упаковка в короба</Typography><Typography variant="body2" color="text.secondary">Создайте короб и добавьте в него только уже упакованные товары.</Typography></Box>
+                    <Stack direction="row" spacing={1}><TextField label="Коробов" value={boxCount} size="small" type="number" disabled={!stageIsCurrent} onChange={(e) => setBoxCount(e.target.value)} slotProps={{ htmlInput: { min: 1, max: 100 } }} sx={{ width: 104 }} /><Button variant="contained" disabled={!stageIsCurrent || !Number(boxCount)} onClick={() => void createBoxes()}>Добавить короб</Button></Stack>
+                  </Stack>
+                </Box>
+                {workspace.boxes.length === 0 ? <Typography color="text.secondary" sx={{ p: 3 }}>Коробов пока нет.</Typography> : <Stack divider={<Divider flexItem />}>
+                  {workspace.boxes.map((box) => {
+                    const assigned = workspace.orders.filter((order) => box.assigned_order_ids.includes(order.id))
+                    return <Box key={box.id} sx={{ p: 2.5 }}><Stack direction={{ xs: 'column', md: 'row' }} spacing={1.5} sx={{ justifyContent: 'space-between', alignItems: { md: 'center' } }}><Box><Typography sx={{ fontWeight: 750 }}>Короб {box.box_number}</Typography><Typography variant="caption" color="text.secondary">ШК: {box.barcode} · {assigned.length} {ordersWord(assigned.length)}</Typography></Box><Stack direction="row" spacing={1} useFlexGap sx={{ flexWrap: 'wrap' }}><Button size="small" onClick={() => printBarcodeLabel({ title: `Короб FBS ${box.box_number}`, barcode: box.barcode, barcodeDataUrl: renderBarcodeDataUrl(box.barcode) })}>Печать ШК</Button><Button size="small" variant="contained" disabled={!stageIsCurrent} onClick={() => { setBoxAssignTarget(box.id); setSelectedBoxOrderIds([]) }}>Добавить товар</Button>{workspace.supply.delivery_type === 'pvz' ? (box.qr_asset?.preview_url ? <Button size="small" onClick={() => openAssetPreview([box.qr_asset!])}>Печать QR</Button> : <Button size="small" disabled={!stageIsCurrent} onClick={() => void retryBoxQr(box.id)}>Получить QR</Button>) : null}<IconButton size="small" color="error" disabled={busy || assigned.length > 0} onClick={() => setBoxDeleteTarget(box.id)} aria-label={`Удалить короб ${box.box_number}`}><DeleteOutlinedIcon fontSize="small" /></IconButton></Stack></Stack>
+                    {assigned.length ? <Stack spacing={1} sx={{ mt: 1.5, pl: { md: 2 } }}>{assigned.map((order) => <Stack key={order.id} direction="row" spacing={1.25} sx={{ alignItems: 'center', p: 1, bgcolor: 'action.hover', borderRadius: 1.5 }}><ProductPhotoThumb src={order.product.image_url} alt={order.product.name} size={36} /><Box sx={{ flex: 1, minWidth: 0 }}><Typography variant="body2" sx={{ fontWeight: 700 }}>{order.product.name}</Typography><Typography variant="caption" color="text.secondary">Заказ WB №{order.wb_order_id} · 1 шт.</Typography></Box><Button size="small" disabled={!stageIsCurrent} onClick={() => void removeBoxOrder(box.id, order.id)}>Убрать</Button></Stack>)}</Stack> : <Typography variant="body2" color="text.secondary" sx={{ mt: 1.5 }}>Добавьте товары в этот короб.</Typography>}</Box>
+                  })}
+                </Stack>}
               </Paper>
-            )
+            </Stack>
           ) : null}
 
           {workspace && stage === 'delivery' ? (
@@ -1038,7 +876,7 @@ export function FfFbsSupplyWorkspace({
                   </Stack>
                 </Paper>
               ) : null}
-              {workspace.supply.delivery_type === 'warehouse_sc' && deliveryConfirmed && !workspace.supply.barcode_asset?.preview_url ? (
+              {deliveryConfirmed && !workspace.supply.barcode_asset?.preview_url ? (
                 <Alert
                   severity="warning"
                   action={(
@@ -1056,7 +894,6 @@ export function FfFbsSupplyWorkspace({
                   Поставка уже передана, но WB не вернул общий QR. Повтор получает только QR и не передаёт поставку повторно.
                 </Alert>
               ) : null}
-              <Paper variant="outlined" sx={{ p: 2 }}><Stack direction="row" sx={{ justifyContent: 'space-between' }}><Box><Typography variant="h6">Статусы WB</Typography><Typography variant="body2" color="text.secondary">Последняя синхронизация: {workspace.last_wb_sync_at ? new Date(workspace.last_wb_sync_at).toLocaleString('ru-RU') : 'ещё не выполнялась'}</Typography>{workspace.wb_sync_stale ? <Chip label="Данные устарели" color="warning" size="small" sx={{ mt: 1 }} /> : null}</Box><Button disabled={busy || ['done', 'cancelled', 'defect'].includes(workspace.supply.status)} onClick={() => void run(() => syncFbsSupplyTracking(token, authHeaders, workspace.supply.id), 'Статусы Wildberries обновлены.')} startIcon={<RefreshOutlinedIcon />}>{workspace.supply.status === 'done' ? 'Статусы зафиксированы' : 'Обновить статусы'}</Button></Stack><Table size="small" sx={{ mt: 2 }}><TableHead><TableRow><TableCell>Заказ WB</TableCell><TableCell>Товар</TableCell><TableCell>Результат WB</TableCell><TableCell>Повтор / причина</TableCell></TableRow></TableHead><TableBody>{(workspace.tracking_summary?.orders ?? workspace.orders.map((order) => ({ order_id: order.id, wb_order_id: order.wb_order_id, tracking_label: order.wb_status ?? order.status, wb_status: order.wb_status, local_status: order.status }))).map((tracking) => { const order = workspace.orders.find((item) => item.id === tracking.order_id); const rejected = workspace.partial_rejection?.rejected_orders.find((item) => item.order_id === tracking.order_id); return <TableRow key={tracking.order_id}><TableCell>№{tracking.wb_order_id}</TableCell><TableCell>{order?.product.name ?? 'Товар не сопоставлен'}</TableCell><TableCell>{rawStatusLabel(tracking.tracking_label)}</TableCell><TableCell>{rejected?.reason ?? (tracking.tracking_label.includes('reject') ? 'Требуется повторная проверка' : '—')}</TableCell></TableRow> })}</TableBody></Table></Paper>
             </Stack>
           ) : null}
         </Box>
@@ -1074,28 +911,30 @@ export function FfFbsSupplyWorkspace({
         <DialogContent><Typography>Товар будет возвращён в исходную ячейку. Отменяйте только если в подборе действительно ошибка.</Typography></DialogContent>
         <DialogActions><Button onClick={() => setUndoOrderId(null)}>Не отменять</Button><Button color="error" variant="contained" onClick={() => { const orderId = undoOrderId; setUndoOrderId(null); if (orderId && workspace) void run(() => undoFbsPick(token, authHeaders, workspace.supply.id, orderId, createFbsIdempotencyKey()), 'Подбор отменён, остаток возвращён в исходную ячейку.') }}>Вернуть в ячейку</Button></DialogActions>
       </Dialog>
-      <Dialog open={Boolean(cargoDeleteTarget)} onClose={busy ? undefined : () => setCargoDeleteTarget(null)} maxWidth="xs" fullWidth>
-        <DialogTitle>Удалить грузоместо?</DialogTitle>
+      <Dialog open={Boolean(boxAssignTarget)} onClose={busy ? undefined : () => setBoxAssignTarget(null)} maxWidth="md" fullWidth>
+        <DialogTitle>Добавить товары в короб {boxAssignName}</DialogTitle>
+        <DialogContent dividers>
+          {availableForBox.length === 0 ? <Alert severity="info">Все упакованные товары уже распределены по коробам.</Alert> : <Stack spacing={1}>{availableForBox.map((order) => <Stack key={order.id} direction="row" spacing={1.25} sx={{ alignItems: 'center', p: 1, borderRadius: 1.5, bgcolor: selectedBoxOrderIds.includes(order.id) ? 'primary.50' : 'action.hover' }}><Checkbox checked={selectedBoxOrderIds.includes(order.id)} onChange={(_, checked) => setSelectedBoxOrderIds((current) => checked ? [...current, order.id] : current.filter((id) => id !== order.id))} /><ProductPhotoThumb src={order.product.image_url} alt={order.product.name} size={44} /><Box sx={{ flex: 1 }}><Typography variant="body2" sx={{ fontWeight: 700 }}>{order.product.name}</Typography><Typography variant="caption" color="text.secondary">Заказ WB №{order.wb_order_id} · 1 шт.</Typography></Box></Stack>)}</Stack>}
+        </DialogContent>
+        <DialogActions><Button onClick={() => setBoxAssignTarget(null)}>Отмена</Button><Button variant="contained" disabled={busy || selectedBoxOrderIds.length === 0} onClick={() => void assignBoxOrders()}>Добавить {selectedBoxOrderIds.length || ''} {selectedBoxOrderIds.length === 1 ? 'товар' : 'товара'}</Button></DialogActions>
+      </Dialog>
+      <Dialog open={Boolean(boxDeleteTarget)} onClose={busy ? undefined : () => setBoxDeleteTarget(null)} maxWidth="xs" fullWidth>
+        <DialogTitle>Удалить пустой короб?</DialogTitle>
         <DialogContent>
           <Stack spacing={1.5}>
-            <Typography>
-              Короб {(workspace?.cargo_places.findIndex((place) => place.wb_trbx_id === cargoDeleteTarget) ?? -1) + 1} и его QR будут удалены из поставки WB.
-            </Typography>
-            <Alert severity="warning">
-              Используйте это, если физический короб создали по ошибке. Заказы перераспределять не нужно — они не привязаны к грузоместу.
-            </Alert>
+            <Typography>Удалить можно только короб без товаров. Если товар уже добавлен, сначала уберите его из короба.</Typography>
           </Stack>
         </DialogContent>
         <DialogActions>
-          <Button onClick={() => setCargoDeleteTarget(null)} disabled={busy}>Не удалять</Button>
-          <Button color="error" variant="contained" onClick={() => void deleteCargo()} disabled={busy} data-testid="fbs-cargo-delete-confirm">
-            Удалить из WB
+          <Button onClick={() => setBoxDeleteTarget(null)} disabled={busy}>Не удалять</Button>
+          <Button color="error" variant="contained" onClick={() => void deleteBox()} disabled={busy} data-testid="fbs-box-delete-confirm">
+            Удалить короб
           </Button>
         </DialogActions>
       </Dialog>
       <Dialog open={deliveryConfirmOpen} onClose={() => setDeliveryConfirmOpen(false)} maxWidth="sm" fullWidth>
         <DialogTitle>Подтвердить передачу в WB?</DialogTitle>
-        <DialogContent>{workspace ? <Stack spacing={1}><Typography>Поставка: {workspace.supply.name}</Typography><Typography>Селлер: {workspace.supply.seller.name}</Typography><Typography>Маршрут: {workspace.supply.delivery_type === 'pvz' ? 'ПВЗ' : 'Склад / СЦ'}</Typography><Typography>Заказов: {workspace.orders.length}{workspace.supply.delivery_type === 'pvz' ? ` · грузомест: ${workspace.cargo_places.length}` : ''}</Typography><Alert severity="warning">Это отправит подтверждение передачи в WB.</Alert></Stack> : null}</DialogContent>
+        <DialogContent>{workspace ? <Stack spacing={1}><Typography>Поставка: {workspace.supply.name}</Typography><Typography>Селлер: {workspace.supply.seller.name}</Typography><Typography>Маршрут: {workspace.supply.delivery_type === 'pvz' ? 'ПВЗ' : 'Склад / СЦ'}</Typography><Typography>Заказов: {workspace.orders.length} · коробов: {workspace.boxes.length}</Typography><Alert severity="warning">Это отправит подтверждение передачи в WB.</Alert></Stack> : null}</DialogContent>
         <DialogActions><Button onClick={() => setDeliveryConfirmOpen(false)}>Отмена</Button><Button variant="contained" onClick={() => { setDeliveryConfirmOpen(false); void deliver() }}>Передать в WB</Button></DialogActions>
       </Dialog>
     </Dialog>

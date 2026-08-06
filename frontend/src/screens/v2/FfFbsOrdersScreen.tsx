@@ -1,14 +1,11 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import {
   Alert,
-  Avatar,
   Box,
   Button,
   Checkbox,
   Chip,
   CircularProgress,
-  Dialog,
-  DialogContent,
   FormControl,
   InputLabel,
   MenuItem,
@@ -30,6 +27,7 @@ import Inventory2OutlinedIcon from '@mui/icons-material/Inventory2Outlined'
 import RefreshOutlinedIcon from '@mui/icons-material/RefreshOutlined'
 import SearchOutlinedIcon from '@mui/icons-material/SearchOutlined'
 import { DeadlinePill, FbsStatusChip } from '../../components/fbs/FbsChips'
+import { ProductPhotoThumb } from '../../components/ProductPhotoThumb'
 import { FbsSupplyCreateDialog } from './FbsSupplyCreateDialog'
 import { FfFbsSectionNav } from './FfFbsSectionNav'
 import { FfFbsSupplyWorkspace } from './FfFbsSupplyWorkspace'
@@ -92,7 +90,6 @@ export function FfFbsOrdersScreen({ token, authHeaders, sellers, isAdmin = false
   const [workspaceOpen, setWorkspaceOpen] = useState(false)
   const [workspaceId, setWorkspaceId] = useState<string | null>(null)
   const [workspaceSeed, setWorkspaceSeed] = useState<FbsWorkspace | null>(null)
-  const [previewUrl, setPreviewUrl] = useState<string | null>(null)
 
   const load = useCallback(async () => {
     setBusy(true)
@@ -255,11 +252,11 @@ export function FfFbsOrdersScreen({ token, authHeaders, sellers, isAdmin = false
                   />
                 ) : null}
               </TableCell>
-              <TableCell sx={{ minWidth: 320 }}>Товар</TableCell>
-              <TableCell sx={{ minWidth: 180 }}>Ячейка и остаток</TableCell>
-              <TableCell sx={{ minWidth: 155 }}>Отгрузить до</TableCell>
-              <TableCell sx={{ minWidth: 130 }}>Статус</TableCell>
-              <TableCell sx={{ minWidth: 150 }}>Следующий шаг</TableCell>
+              <TableCell sx={{ minWidth: 270 }}>Товар</TableCell>
+              <TableCell sx={{ minWidth: 125 }}>Селлер</TableCell>
+              <TableCell sx={{ minWidth: 125 }}>Маршрут сдачи</TableCell>
+              <TableCell sx={{ minWidth: 105 }}>Отгрузить до</TableCell>
+              {statusGroup !== 'new' ? <TableCell sx={{ minWidth: 130 }}>Статус</TableCell> : null}
             </TableRow>
           </TableHead>
           <TableBody>
@@ -270,7 +267,8 @@ export function FfFbsOrdersScreen({ token, authHeaders, sellers, isAdmin = false
                   key={order.id}
                   hover
                   selected={selected.has(order.id)}
-                  sx={{ verticalAlign: 'top' }}
+                  sx={{ verticalAlign: 'top', cursor: order.supply_id ? 'pointer' : 'default' }}
+                  onClick={() => order.supply_id && openWorkspace(order.supply_id)}
                   data-testid={`fbs-order-${order.id}`}
                 >
                   <TableCell padding="checkbox">
@@ -278,39 +276,33 @@ export function FfFbsOrdersScreen({ token, authHeaders, sellers, isAdmin = false
                       <Checkbox
                         checked={selected.has(order.id)}
                         disabled={blocked}
+                        onClick={(event) => event.stopPropagation()}
                         onChange={() => toggle(order.id)}
                       />
                     ) : null}
                   </TableCell>
                   <TableCell>
                     <Stack direction="row" spacing={1.25}>
-                      <Avatar
-                        variant="rounded"
-                        src={order.product.image_url ?? undefined}
-                        onClick={() => order.product.image_url && setPreviewUrl(order.product.image_url)}
-                        sx={{ width: 62, height: 72, cursor: order.product.image_url ? 'zoom-in' : 'default' }}
-                      >
-                        <Inventory2OutlinedIcon />
-                      </Avatar>
+                      <ProductPhotoThumb
+                        src={order.product.image_url}
+                        alt={order.product.name}
+                        size={56}
+                        previewSize={280}
+                        testId={`fbs-product-photo-${order.id}`}
+                      />
                       <Box sx={{ minWidth: 0 }}>
                         <Typography variant="subtitle2" sx={{ lineHeight: 1.25 }}>
                           {order.product.id ? order.product.name : 'Товар не сопоставлен'}
                         </Typography>
                         <Typography variant="caption" color="text.secondary" sx={{ display: 'block' }}>
-                          ШК: {order.product.barcode ?? 'не указан'}
+                          Заказ WB №{order.wb_order_id}
                         </Typography>
-                        <details style={{ marginTop: 6 }}>
-                          <summary style={{ cursor: 'pointer', color: '#5b21b6' }}>Подробнее</summary>
-                          <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 0.5 }}>
-                            Заказ WB №{order.wb_order_id} · Артикул продавца: {order.product.seller_article ?? 'не указан'} · Артикул WB: {order.product.wb_article ?? 'не указан'}
-                          </Typography>
-                          <Typography variant="caption" color="text.secondary" sx={{ display: 'block' }}>
-                            Селлер: {order.seller.name ?? 'не указан'} · WB: {order.wb_warehouse.name ?? `ID ${order.wb_warehouse.id}`} · WMS: {order.wms_warehouse.name}
-                          </Typography>
-                          {order.product.size ? <Typography variant="caption" color="text.secondary">Размер: {order.product.size}</Typography> : null}
-                          {order.buyer_type === 'legal' ? <Typography variant="caption" color="text.secondary" sx={{ display: 'block' }}>Покупатель — юридическое лицо</Typography> : null}
-                          {order.can_pvz ? null : <Typography variant="caption" color="text.secondary" sx={{ display: 'block' }}>Сдать можно только на склад или СЦ</Typography>}
-                        </details>
+                        <Typography variant="caption" color="text.secondary" sx={{ display: 'block' }}>
+                          Артикул: {order.product.seller_article ?? '—'}{order.product.wb_article ? ` · WB ${order.product.wb_article}` : ''}
+                        </Typography>
+                        <Typography variant="caption" color="text.secondary" sx={{ display: 'block' }}>
+                          ШК: {order.product.barcode ?? '—'}{order.product.size ? ` · Размер: ${order.product.size}` : ''}
+                        </Typography>
                         {statusGroup === 'new' && blocked ? (
                           <Stack sx={{ mt: 0.75 }} spacing={0.25}>
                             {order.selection_blockers.map((blocker) => (
@@ -322,31 +314,11 @@ export function FfFbsOrdersScreen({ token, authHeaders, sellers, isAdmin = false
                     </Stack>
                   </TableCell>
                   <TableCell>
-                    {statusGroup === 'new' ? (
-                      <Typography
-                        variant="body2"
-                        color={order.inventory.available_unpacked > 0 ? 'success.main' : 'error.main'}
-                        sx={{ fontWeight: 750 }}
-                      >
-                        Доступно: {order.inventory.available_unpacked}
-                      </Typography>
-                    ) : (
-                      <Typography variant="body2" color="text.secondary">
-                        {order.pick.status === 'picked' ? 'Товар подобран' : 'Смотрите этап поставки'}
-                      </Typography>
-                    )}
-                    {statusGroup === 'new' && order.inventory.locations.length ? (
-                      order.inventory.locations.map((location) => (
-                        <Typography key={location.id} variant="caption" color="text.secondary" sx={{ display: 'block' }}>
-                          {location.code}: {location.available_unpacked}
-                        </Typography>
-                      ))
-                    ) : statusGroup === 'new' ? (
-                      <MissingText>Ячейка не назначена</MissingText>
-                    ) : null}
-                    {statusGroup === 'new' && order.inventory.available_unpacked <= 0 ? (
-                      <MissingText>Остаток отсутствует</MissingText>
-                    ) : null}
+                    <Typography variant="body2">{order.seller.name ?? '—'}</Typography>
+                  </TableCell>
+                  <TableCell>
+                    <Chip size="small" variant="outlined" label={order.can_pvz ? 'ПВЗ' : 'Склад / СЦ'} />
+                    {order.buyer_type === 'legal' ? <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 0.5 }}>Юридическое лицо</Typography> : null}
                   </TableCell>
                   <TableCell>
                     <DeadlinePill
@@ -355,27 +327,13 @@ export function FfFbsOrdersScreen({ token, authHeaders, sellers, isAdmin = false
                       cancelled={order.status === 'cancelled'}
                     />
                   </TableCell>
-                  <TableCell>
-                    <FbsStatusChip status={order.status} />
-                    <Box sx={{ mt: 0.75 }}><MetadataState order={order} /></Box>
-                  </TableCell>
-                  <TableCell>
-                    {order.supply_id ? (
-                      <Button size="small" variant="contained" onClick={() => openWorkspace(order.supply_id!)}>
-                        {statusGroup === 'delivery'
-                          ? 'Открыть статус'
-                          : statusGroup === 'done'
-                            ? 'Открыть историю'
-                            : 'Продолжить работу'}
-                      </Button>
-                    ) : <Typography variant="body2" color="text.secondary">Выберите заказ для создания поставки</Typography>}
-                  </TableCell>
+                  {statusGroup !== 'new' ? <TableCell><FbsStatusChip status={order.status} /><Box sx={{ mt: 0.75 }}><MetadataState order={order} /></Box></TableCell> : null}
                 </TableRow>
               )
             })}
             {!busy && orders.length === 0 ? (
               <TableRow>
-                <TableCell colSpan={6}>
+                <TableCell colSpan={statusGroup === 'new' ? 5 : 6}>
                   <Box sx={{ py: 8, textAlign: 'center' }}>
                     <Inventory2OutlinedIcon sx={{ fontSize: 42, color: 'text.disabled' }} />
                     <Typography variant="subtitle1" sx={{ mt: 1 }}>
@@ -463,11 +421,6 @@ export function FfFbsOrdersScreen({ token, authHeaders, sellers, isAdmin = false
         }}
       />
 
-      <Dialog open={Boolean(previewUrl)} onClose={() => setPreviewUrl(null)} maxWidth="md">
-        <DialogContent sx={{ p: 1 }}>
-          {previewUrl ? <Box component="img" src={previewUrl} alt="Фото товара" sx={{ maxWidth: '80vw', maxHeight: '80vh' }} /> : null}
-        </DialogContent>
-      </Dialog>
     </Box>
   )
 }

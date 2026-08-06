@@ -233,12 +233,26 @@ def test_trbx_delete_after_deliver_keeps_cargo_places(client: TestClient) -> Non
     }
 
 
-def test_barcode_stub_returns_png(client: TestClient) -> None:
+def test_supply_qr_is_available_only_after_delivery_and_retry_is_idempotent(
+    client: TestClient,
+) -> None:
     supply_id = _create_supply(client)
-    response = client.get(f"/api/v3/supplies/{supply_id}/barcode?type=png", headers=AUTH)
-    assert response.status_code == 200
-    assert response.headers["content-type"].startswith("image/png")
-    assert len(response.content) > 0
+    before_delivery = client.get(
+        f"/api/v3/supplies/{supply_id}/barcode?type=png", headers=AUTH
+    )
+    assert before_delivery.status_code == 409
+
+    assert client.patch(f"/api/v3/supplies/{supply_id}/deliver", headers=AUTH).status_code == 204
+
+    first = client.get(f"/api/v3/supplies/{supply_id}/barcode?type=png", headers=AUTH)
+    retry = client.get(f"/api/v3/supplies/{supply_id}/barcode?type=png", headers=AUTH)
+    assert first.status_code == retry.status_code == 200
+    assert first.headers["content-type"].startswith("image/png")
+    assert first.content == retry.content
+
+    state = client.get("/__admin/state?seller=seller_a", headers={"X-Admin-Token": "admin-token"})
+    supply_state = next(row for row in state.json()["supplies"] if row["id"] == supply_id)
+    assert supply_state["deliver_calls"] == 1
 
 
 def test_unknown_supply_returns_404(client: TestClient) -> None:

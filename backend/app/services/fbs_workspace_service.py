@@ -39,6 +39,7 @@ from app.models.fbs_supply import (
 )
 from app.models.fbs_trbx import FbsTrbx
 from app.models.tenant_wb_mp_warehouse import TenantWbMpWarehouse
+from app.services.fbs_packing_box_service import get_boxes_for_workspace
 from app.services.fbs_tracking_service import (
     build_partial_rejection_summary,
     build_tracking_summary,
@@ -75,10 +76,25 @@ async def get_supply_workspace(
     worklist_items = await build_worklist_items(
         session, tenant_id, orders, server_now=server_now
     )
-    progress = _compute_progress(orders)
-    stage = _compute_stage(supply, orders, progress)
-    blockers = _compute_workspace_blockers(supply, orders, stage, progress)
     cargo_places = await _build_cargo_places(session, tenant_id, supply)
+    boxes = await _build_boxes(session, tenant_id, supply_id)
+    progress = _compute_progress(orders)
+    unassigned_packed_order_ids = _unassigned_packed_order_ids(orders, boxes)
+    stage = _compute_stage(
+        supply,
+        orders,
+        progress,
+        has_physical_boxes=bool(boxes),
+        unassigned_packed_order_ids=unassigned_packed_order_ids,
+    )
+    blockers = _compute_workspace_blockers(
+        supply,
+        orders,
+        stage,
+        progress,
+        has_physical_boxes=bool(boxes),
+        unassigned_packed_order_ids=unassigned_packed_order_ids,
+    )
     wb_name = await _wb_warehouse_name(session, tenant_id, orders)
     nearest_deadline = min((o.deadline_at for o in orders), default=server_now)
     barcode_asset = _map_print_asset(supply.barcode_asset)
@@ -126,6 +142,7 @@ async def get_supply_workspace(
         "blockers": blockers,
         "orders": worklist_items,
         "cargo_places": cargo_places,
+        "boxes": boxes,
         "delivery_preflight": None,
         "last_wb_sync_at": (
             supply.last_wb_sync_at.isoformat() if supply.last_wb_sync_at else None
@@ -225,6 +242,9 @@ def _compute_stage(
     supply: FbsSupply,
     orders: list[FbsOrder],
     progress: WorkspaceProgress,
+    *,
+    has_physical_boxes: bool = True,
+    unassigned_packed_order_ids: set[uuid.UUID] | frozenset[uuid.UUID] = frozenset(),
 ) -> str:
     if supply.status in {FBS_SUPPLY_STATUS_DONE, FBS_SUPPLY_STATUS_IN_DELIVERY}:
         return "tracking"
@@ -240,6 +260,8 @@ def _compute_stage(
         return "packing"
     if progress.stickers_ready < progress.total:
         return "order_stickers"
+    if not has_physical_boxes or unassigned_packed_order_ids:
+        return "handoff_prep"
     if supply.delivery_type == FBS_DELIVERY_TYPE_PVZ and not supply.trbxes:
         return "handoff_prep"
     if supply.status == FBS_SUPPLY_STATUS_PACKED:
@@ -254,6 +276,9 @@ def _compute_workspace_blockers(
     orders: list[FbsOrder],
     stage: str,
     progress: WorkspaceProgress,
+    *,
+    has_physical_boxes: bool = True,
+    unassigned_packed_order_ids: set[uuid.UUID] | frozenset[uuid.UUID] = frozenset(),
 ) -> list[dict[str, Any]]:
     blockers: list[dict[str, Any]] = []
     if not orders:
@@ -310,6 +335,27 @@ def _compute_workspace_blockers(
                 "retryable": True,
             }
         )
+    if stage in {"handoff_prep", "delivery"} and not has_physical_boxes:
+        blockers.append(
+            {
+                "stage": "handoff_prep",
+                "code": "physical_boxes_required",
+                "message": "Создайте физические короба для передачи поставки.",
+                "order_id": None,
+                "retryable": True,
+            }
+        )
+    for order in orders:
+        if order.id in unassigned_packed_order_ids:
+            blockers.append(
+                {
+                    "stage": "handoff_prep",
+                    "code": "packed_order_unassigned",
+                    "message": f"Упакованный заказ №{order.wb_order_id} не назначен в короб.",
+                    "order_id": str(order.id),
+                    "retryable": True,
+                }
+            )
     if progress.total and progress.stickers_ready < progress.total and stage == "delivery":
         blockers.append(
             {
@@ -321,6 +367,21 @@ def _compute_workspace_blockers(
             }
         )
     return blockers
+
+
+def _unassigned_packed_order_ids(
+    orders: list[FbsOrder], boxes: list[dict[str, object]]
+) -> set[uuid.UUID]:
+    assigned: set[uuid.UUID] = set()
+    for box in boxes:
+        raw_order_ids = box["assigned_order_ids"]
+        if isinstance(raw_order_ids, list):
+            assigned.update(uuid.UUID(str(order_id)) for order_id in raw_order_ids)
+    return {
+        order.id
+        for order in orders
+        if order.pack_status == PACK_STATUS_PACKED and order.id not in assigned
+    }
 
 
 async def _build_cargo_places(
@@ -343,6 +404,31 @@ async def _build_cargo_places(
     for trbx in supply.trbxes:
         places.append(_map_cargo_place(trbx, qr_by_trbx.get(trbx.id)))
     return places
+
+
+async def _build_boxes(
+    session: AsyncSession,
+    tenant_id: uuid.UUID,
+    supply_id: uuid.UUID,
+) -> list[dict[str, object]]:
+    boxes = await get_boxes_for_workspace(session, tenant_id, supply_id)
+    trbx_ids = [uuid.UUID(str(box["trbx_id"])) for box in boxes if box["trbx_id"]]
+    if not trbx_ids:
+        return boxes
+    result = await session.execute(
+        select(FbsPrintAsset).where(
+            FbsPrintAsset.tenant_id == tenant_id,
+            FbsPrintAsset.fbs_trbx_id.in_(trbx_ids),
+            FbsPrintAsset.kind == PRINT_ASSET_KIND_CARGO_PLACE_QR,
+            FbsPrintAsset.status == PRINT_ASSET_STATUS_READY,
+        )
+    )
+    assets = {asset.fbs_trbx_id: asset for asset in result.scalars().all() if asset.fbs_trbx_id}
+    for box in boxes:
+        trbx_id = box["trbx_id"]
+        if trbx_id:
+            box["qr_asset"] = _map_print_asset(assets.get(uuid.UUID(str(trbx_id))))
+    return boxes
 
 
 def _map_cargo_place(trbx: FbsTrbx, qr_asset: FbsPrintAsset | None) -> dict[str, Any]:

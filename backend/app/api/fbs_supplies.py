@@ -16,6 +16,7 @@ from app.models.fbs_order import FbsOrder
 from app.models.fbs_supply import FbsSupply
 from app.models.user import User
 from app.services import fbs_packaging_integration_service as pack_int_svc
+from app.services import fbs_packing_box_service as packing_box_svc
 from app.services import fbs_picking_service as picking_svc
 from app.services import fbs_shipment_pvz_service as pvz_svc
 from app.services import fbs_shipment_service as shipment_svc
@@ -321,6 +322,29 @@ class FbsCargoPlaceListOut(BaseModel):
     cargo_places: list[FbsCargoPlaceOut]
 
 
+class FbsPackingBoxCreateBody(BaseModel):
+    count: int = Field(ge=1, le=100)
+    idempotency_key: str = Field(min_length=1, max_length=128)
+
+
+class FbsPackingBoxAssignOrdersBody(BaseModel):
+    order_ids: list[uuid.UUID] = Field(min_length=1, max_length=100)
+
+
+class FbsPackingBoxDeleteBody(BaseModel):
+    idempotency_key: str = Field(min_length=1, max_length=128)
+
+
+class FbsPackingBoxOut(BaseModel):
+    id: str
+    box_number: int
+    barcode: str
+    assigned_order_ids: list[str]
+    trbx_id: str | None
+    wb_trbx_id: str | None
+    qr_asset: FbsWorkspacePrintAssetOut | None
+
+
 class FbsDeliveryCheckOut(BaseModel):
     code: str
     message: str
@@ -347,6 +371,7 @@ class FbsWorkspaceOut(BaseModel):
     blockers: list[FbsWorkspaceBlockerOut]
     orders: list[FbsWorklistOrderOut]
     cargo_places: list[FbsCargoPlaceOut]
+    boxes: list[FbsPackingBoxOut]
     delivery_preflight: dict[str, object] | None
     last_wb_sync_at: str | None
     tracking_summary: dict[str, object] | None = None
@@ -357,6 +382,10 @@ class FbsWorkspaceOut(BaseModel):
 
 class FbsPickScanLocationBody(BaseModel):
     location_barcode: str = Field(min_length=1, max_length=64)
+
+
+class FbsPickManualLocationBody(BaseModel):
+    location_id: uuid.UUID
 
 
 class FbsPickLocationExpectedProductOut(BaseModel):
@@ -379,6 +408,13 @@ class FbsPickScanProductBody(BaseModel):
     location_id: uuid.UUID
     product_barcode: str = Field(min_length=1, max_length=64)
     order_id: uuid.UUID | None = None
+    idempotency_key: str = Field(min_length=1, max_length=128)
+
+
+class FbsPickManualProductBody(BaseModel):
+    location_id: uuid.UUID
+    product_id: uuid.UUID
+    order_id: uuid.UUID
     idempotency_key: str = Field(min_length=1, max_length=128)
 
 
@@ -534,16 +570,39 @@ def _raise_from_pvz_service(exc: pvz_svc.FbsShipmentPvzError) -> None:
     raise_fbs_http(status.HTTP_500_INTERNAL_SERVER_ERROR, exc.code)
 
 
+def _raise_from_packing_box_service(exc: packing_box_svc.FbsPackingBoxError) -> None:
+    if exc.code in {"supply_not_found", "packing_box_not_found", "box_assignment_not_found"}:
+        raise_fbs_http(status.HTTP_404_NOT_FOUND, exc.code)
+    if exc.code in {"idempotency_key_reused", "box_not_empty", "order_already_in_box"}:
+        raise_fbs_http(status.HTTP_409_CONFLICT, exc.code)
+    if exc.code in {
+        "order_not_packed",
+        "order_not_in_supply",
+        "empty_order_set",
+        "missing_idempotency_key",
+    }:
+        raise_fbs_http(status.HTTP_400_BAD_REQUEST, exc.code)
+    if exc.code in {"supply_not_editable", "box_cargo_place_unresolved"}:
+        raise_fbs_http(
+            status.HTTP_409_CONFLICT, exc.code, retryable=exc.code == "box_cargo_place_unresolved"
+        )
+    _raise_from_pvz_service(pvz_svc.FbsShipmentPvzError(exc.code))
+
+
 def _raise_from_shipment_service(exc: shipment_svc.FbsShipmentError) -> None:
     detail = envelope_from_exc(exc)
-    if exc.http_status is not None and (exc.context or exc.code in {
-        "wb_timeout",
-        "wb_pending_confirmation",
-        "operation_in_progress",
-        "stale_preflight",
-        "meta_validation_fail",
-        "idempotency_key_reused",
-    }):
+    if exc.http_status is not None and (
+        exc.context
+        or exc.code
+        in {
+            "wb_timeout",
+            "wb_pending_confirmation",
+            "operation_in_progress",
+            "stale_preflight",
+            "meta_validation_fail",
+            "idempotency_key_reused",
+        }
+    ):
         raise HTTPException(status_code=exc.http_status, detail=detail)
     if exc.code in {
         "supply_not_found",
@@ -565,6 +624,8 @@ def _raise_from_shipment_service(exc: shipment_svc.FbsShipmentError) -> None:
         "invalid_barcode_path",
         "cargo_places_required",
         "cargo_place_qr_not_ready",
+        "physical_boxes_required",
+        "packed_order_unassigned",
         "missing_idempotency_key",
         "order_cancelled",
     }:
@@ -770,6 +831,25 @@ async def scan_fbs_pick_location(
     return FbsPickLocationOut.model_validate(payload)
 
 
+@router.post("/{supply_id}/pick/manual/location", response_model=FbsPickLocationOut)
+async def select_fbs_manual_pick_location(
+    supply_id: uuid.UUID,
+    body: FbsPickManualLocationBody,
+    user: Annotated[User, Depends(require_fbs_operator_access)],
+    session: Annotated[AsyncSession, Depends(get_db)],
+) -> FbsPickLocationOut:
+    try:
+        payload = await picking_svc.select_pick_location(
+            session,
+            user.tenant_id,
+            supply_id,
+            location_id=body.location_id,
+        )
+    except picking_svc.FbsPickingError as exc:
+        _raise_from_picking(exc)
+    return FbsPickLocationOut.model_validate(payload)
+
+
 @router.post("/{supply_id}/pick/scan-product", response_model=FbsWorkspaceOut)
 async def scan_fbs_pick_product(
     supply_id: uuid.UUID,
@@ -784,6 +864,30 @@ async def scan_fbs_pick_product(
             supply_id,
             location_id=body.location_id,
             product_barcode=body.product_barcode.strip(),
+            order_id=body.order_id,
+            idempotency_key=body.idempotency_key,
+            actor=user,
+        )
+    except picking_svc.FbsPickingError as exc:
+        _raise_from_picking(exc)
+    await session.commit()
+    return FbsWorkspaceOut.model_validate(workspace)
+
+
+@router.post("/{supply_id}/pick/manual", response_model=FbsWorkspaceOut)
+async def confirm_fbs_manual_pick(
+    supply_id: uuid.UUID,
+    body: FbsPickManualProductBody,
+    user: Annotated[User, Depends(require_fbs_operator_access)],
+    session: Annotated[AsyncSession, Depends(get_db)],
+) -> FbsWorkspaceOut:
+    try:
+        workspace = await picking_svc.manual_pick_product(
+            session,
+            user.tenant_id,
+            supply_id,
+            location_id=body.location_id,
+            product_id=body.product_id,
             order_id=body.order_id,
             idempotency_key=body.idempotency_key,
             actor=user,
@@ -855,6 +959,144 @@ async def get_fbs_supply_workspace(
         if exc.code == "supply_not_found":
             raise_fbs_http(status.HTTP_404_NOT_FOUND, exc.code)
         raise_fbs_http(status.HTTP_500_INTERNAL_SERVER_ERROR, exc.code)
+    return FbsWorkspaceOut.model_validate(workspace)
+
+
+@router.post(
+    "/{supply_id}/boxes",
+    response_model=FbsWorkspaceOut,
+    status_code=status.HTTP_201_CREATED,
+    summary="Create physical FBS boxes",
+)
+async def create_fbs_packing_boxes(
+    supply_id: uuid.UUID,
+    body: FbsPackingBoxCreateBody,
+    user: Annotated[User, Depends(require_fbs_operator_access)],
+    session: Annotated[AsyncSession, Depends(get_db)],
+) -> FbsWorkspaceOut:
+    async with httpx.AsyncClient() as http_client:
+        try:
+            await packing_box_svc.create_boxes(
+                session,
+                user.tenant_id,
+                supply_id,
+                body.count,
+                body.idempotency_key,
+                http_client,
+                actor_user_id=user.id,
+            )
+        except packing_box_svc.FbsPackingBoxError as exc:
+            _raise_from_packing_box_service(exc)
+    await session.commit()
+    return await _workspace_after_packing_box_action(session, user.tenant_id, supply_id)
+
+
+@router.post(
+    "/{supply_id}/boxes/{box_id}/orders",
+    response_model=FbsWorkspaceOut,
+    summary="Assign packed orders to a physical FBS box",
+)
+async def assign_orders_to_fbs_packing_box(
+    supply_id: uuid.UUID,
+    box_id: uuid.UUID,
+    body: FbsPackingBoxAssignOrdersBody,
+    user: Annotated[User, Depends(require_fbs_operator_access)],
+    session: Annotated[AsyncSession, Depends(get_db)],
+) -> FbsWorkspaceOut:
+    try:
+        await packing_box_svc.assign_orders(
+            session,
+            user.tenant_id,
+            supply_id,
+            box_id,
+            body.order_ids,
+            actor_user_id=user.id,
+        )
+    except packing_box_svc.FbsPackingBoxError as exc:
+        _raise_from_packing_box_service(exc)
+    await session.commit()
+    return await _workspace_after_packing_box_action(session, user.tenant_id, supply_id)
+
+
+@router.delete(
+    "/{supply_id}/boxes/{box_id}/orders/{order_id}",
+    response_model=FbsWorkspaceOut,
+    summary="Remove an order from a physical FBS box",
+)
+async def remove_order_from_fbs_packing_box(
+    supply_id: uuid.UUID,
+    box_id: uuid.UUID,
+    order_id: uuid.UUID,
+    user: Annotated[User, Depends(require_fbs_operator_access)],
+    session: Annotated[AsyncSession, Depends(get_db)],
+) -> FbsWorkspaceOut:
+    try:
+        await packing_box_svc.remove_order(session, user.tenant_id, supply_id, box_id, order_id)
+    except packing_box_svc.FbsPackingBoxError as exc:
+        _raise_from_packing_box_service(exc)
+    await session.commit()
+    return await _workspace_after_packing_box_action(session, user.tenant_id, supply_id)
+
+
+@router.delete(
+    "/{supply_id}/boxes/{box_id}",
+    response_model=FbsWorkspaceOut,
+    summary="Delete an empty physical FBS box",
+)
+async def delete_fbs_packing_box(
+    supply_id: uuid.UUID,
+    box_id: uuid.UUID,
+    body: FbsPackingBoxDeleteBody,
+    user: Annotated[User, Depends(require_fbs_operator_access)],
+    session: Annotated[AsyncSession, Depends(get_db)],
+) -> FbsWorkspaceOut:
+    async with httpx.AsyncClient() as http_client:
+        try:
+            await packing_box_svc.delete_box(
+                session,
+                user.tenant_id,
+                supply_id,
+                box_id,
+                body.idempotency_key,
+                http_client,
+            )
+        except packing_box_svc.FbsPackingBoxError as exc:
+            _raise_from_packing_box_service(exc)
+    await session.commit()
+    return await _workspace_after_packing_box_action(session, user.tenant_id, supply_id)
+
+
+@router.post(
+    "/{supply_id}/boxes/{box_id}/retry-qr",
+    response_model=FbsWorkspaceOut,
+    summary="Retry a PVZ box QR without creating a cargo place",
+)
+async def retry_fbs_packing_box_qr(
+    supply_id: uuid.UUID,
+    box_id: uuid.UUID,
+    user: Annotated[User, Depends(require_fbs_operator_access)],
+    session: Annotated[AsyncSession, Depends(get_db)],
+) -> FbsWorkspaceOut:
+    async with httpx.AsyncClient() as http_client:
+        try:
+            await packing_box_svc.retry_box_qr(
+                session, user.tenant_id, supply_id, box_id, http_client
+            )
+        except packing_box_svc.FbsPackingBoxError as exc:
+            _raise_from_packing_box_service(exc)
+    await session.commit()
+    return await _workspace_after_packing_box_action(session, user.tenant_id, supply_id)
+
+
+async def _workspace_after_packing_box_action(
+    session: AsyncSession,
+    tenant_id: uuid.UUID,
+    supply_id: uuid.UUID,
+) -> FbsWorkspaceOut:
+    try:
+        workspace = await get_supply_workspace(session, tenant_id, supply_id)
+    except FbsWorkspaceError as exc:
+        raise_fbs_http(status.HTTP_404_NOT_FOUND, exc.code)
     return FbsWorkspaceOut.model_validate(workspace)
 
 
@@ -1138,16 +1380,18 @@ async def create_fbs_supply_trbx(
     await session.commit()
     return FbsTrbxListOut(
         trbxes=[
-            _trbx_out(pvz_svc.TrbxMeta(
-                id=trbx.id,
-                wb_trbx_id=trbx.wb_trbx_id,
-                packaging_box_id=trbx.packaging_box_id,
-                length_mm=trbx.length_mm,
-                width_mm=trbx.width_mm,
-                height_mm=trbx.height_mm,
-                weight_g=trbx.weight_g,
-                sticker_file=trbx.sticker_file,
-            ))
+            _trbx_out(
+                pvz_svc.TrbxMeta(
+                    id=trbx.id,
+                    wb_trbx_id=trbx.wb_trbx_id,
+                    packaging_box_id=trbx.packaging_box_id,
+                    length_mm=trbx.length_mm,
+                    width_mm=trbx.width_mm,
+                    height_mm=trbx.height_mm,
+                    weight_g=trbx.weight_g,
+                    sticker_file=trbx.sticker_file,
+                )
+            )
             for trbx in trbxes
         ]
     )
@@ -1337,7 +1581,8 @@ async def sync_fbs_supply_tracking(
     summary="Retry warehouse/SC supply QR after confirmed deliver",
     description=(
         "Fetches the missing supply QR print asset only. Never re-invokes WB deliver. "
-        "Allowed for warehouse_sc supplies in in_delivery or done; PVZ returns 409 wrong_delivery_type."
+        "Allowed for warehouse_sc supplies in in_delivery or done; PVZ returns 409 "
+        "wrong_delivery_type."
     ),
 )
 async def retry_fbs_supply_qr(

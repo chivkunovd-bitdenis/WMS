@@ -300,6 +300,16 @@ export type FbsCargoPlace = {
   applied_at: string | null
 }
 
+export type FbsPackingBox = {
+  id: string
+  box_number: number
+  barcode: string
+  assigned_order_ids: string[]
+  trbx_id: string | null
+  wb_trbx_id: string | null
+  qr_asset: FbsPrintAsset | null
+}
+
 export type FbsCargoPlaceDraft = {
   client_id: string
   length_mm: number | null
@@ -381,6 +391,7 @@ export type FbsWorkspace = {
   }>
   orders: FbsWorklistOrder[]
   cargo_places: FbsCargoPlace[]
+  boxes: FbsPackingBox[]
   delivery_preflight: FbsDeliveryPreflight | null
   last_wb_sync_at: string | null
   server_now: string
@@ -531,6 +542,32 @@ export async function scanFbsPickProduct(
   )
 }
 
+export async function selectFbsManualPickLocation(
+  token: string,
+  ah: AuthHeaders,
+  supplyId: string,
+  location_id: string,
+): Promise<FbsPickLocation> {
+  return jsonOrThrow<FbsPickLocation>(
+    await fetch(apiUrl(`/operations/fbs-supplies/${supplyId}/pick/manual/location`), {
+      method: 'POST', headers: jsonHeaders(token, ah), body: JSON.stringify({ location_id }),
+    }),
+  )
+}
+
+export async function confirmFbsManualPick(
+  token: string,
+  ah: AuthHeaders,
+  supplyId: string,
+  body: { location_id: string; product_id: string; order_id: string; idempotency_key: string },
+): Promise<FbsWorkspace> {
+  return jsonOrThrow<FbsWorkspace>(
+    await fetch(apiUrl(`/operations/fbs-supplies/${supplyId}/pick/manual`), {
+      method: 'POST', headers: jsonHeaders(token, ah), body: JSON.stringify(body),
+    }),
+  )
+}
+
 export async function undoFbsPick(
   token: string,
   ah: AuthHeaders,
@@ -543,6 +580,74 @@ export async function undoFbsPick(
       method: 'POST',
       headers: jsonHeaders(token, ah),
       body: JSON.stringify({ idempotency_key }),
+    }),
+  )
+}
+
+export async function createFbsPackingBoxes(
+  token: string,
+  ah: AuthHeaders,
+  supplyId: string,
+  body: { count: number; idempotency_key: string },
+): Promise<FbsWorkspace> {
+  return jsonOrThrow<FbsWorkspace>(
+    await fetch(apiUrl(`/operations/fbs-supplies/${supplyId}/boxes`), {
+      method: 'POST', headers: jsonHeaders(token, ah), body: JSON.stringify(body),
+    }),
+  )
+}
+
+export async function assignFbsPackingBoxOrders(
+  token: string,
+  ah: AuthHeaders,
+  supplyId: string,
+  boxId: string,
+  order_ids: string[],
+): Promise<FbsWorkspace> {
+  return jsonOrThrow<FbsWorkspace>(
+    await fetch(apiUrl(`/operations/fbs-supplies/${supplyId}/boxes/${boxId}/orders`), {
+      method: 'POST', headers: jsonHeaders(token, ah), body: JSON.stringify({ order_ids }),
+    }),
+  )
+}
+
+export async function removeFbsPackingBoxOrder(
+  token: string,
+  ah: AuthHeaders,
+  supplyId: string,
+  boxId: string,
+  orderId: string,
+): Promise<FbsWorkspace> {
+  return jsonOrThrow<FbsWorkspace>(
+    await fetch(apiUrl(`/operations/fbs-supplies/${supplyId}/boxes/${boxId}/orders/${orderId}`), {
+      method: 'DELETE', headers: { ...ah(token) },
+    }),
+  )
+}
+
+export async function deleteFbsPackingBox(
+  token: string,
+  ah: AuthHeaders,
+  supplyId: string,
+  boxId: string,
+  idempotency_key: string,
+): Promise<FbsWorkspace> {
+  return jsonOrThrow<FbsWorkspace>(
+    await fetch(apiUrl(`/operations/fbs-supplies/${supplyId}/boxes/${boxId}`), {
+      method: 'DELETE', headers: jsonHeaders(token, ah), body: JSON.stringify({ idempotency_key }),
+    }),
+  )
+}
+
+export async function retryFbsPackingBoxQr(
+  token: string,
+  ah: AuthHeaders,
+  supplyId: string,
+  boxId: string,
+): Promise<FbsWorkspace> {
+  return jsonOrThrow<FbsWorkspace>(
+    await fetch(apiUrl(`/operations/fbs-supplies/${supplyId}/boxes/${boxId}/retry-qr`), {
+      method: 'POST', headers: { ...ah(token) },
     }),
   )
 }
