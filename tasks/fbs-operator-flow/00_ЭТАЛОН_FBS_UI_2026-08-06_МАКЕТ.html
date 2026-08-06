@@ -1,0 +1,179 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<title>Эталон FBS UI — макет, утверждён 06.08.2026</title>
+<style>
+  :root {
+    --surface-2: #fff; --surface-1: #f6f6f4; --border: #e0e0dc;
+    --text-primary: #1a1a18; --text-secondary: #6b6b66; --text-muted: #94948e;
+    --accent: #5b21b6; --bg-accent: #ede9fe; --success: #1d9e75;
+  }
+  body { font-family: -apple-system, "Segoe UI", Roboto, sans-serif; background: #fafaf8;
+         color: var(--text-primary); margin: 0; padding: 32px; }
+  .wrap { max-width: 900px; margin: 0 auto; }
+  h1 { font-size: 20px; font-weight: 500; margin: 0 0 4px; }
+  .sub { font-size: 13px; color: var(--text-secondary); margin-bottom: 28px; }
+  .stage { font-size: 12px; color: var(--text-muted); margin-bottom: 6px; }
+  .card { background: var(--surface-2); border: 1px solid var(--border); border-radius: 12px;
+          overflow: hidden; margin-bottom: 32px; }
+  .head { padding: 14px 16px; border-bottom: 1px solid var(--border); display: flex;
+          align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
+  .title { font-size: 16px; font-weight: 500; }
+  .meta { font-size: 13px; color: var(--text-secondary); }
+  .row { display: flex; align-items: center; gap: 12px; padding: 11px 16px;
+         border-bottom: 1px solid var(--border); }
+  .row:last-child { border-bottom: 0; }
+  .row.done { background: var(--surface-1); }
+  .row.done .name, .row.done .ids { color: var(--text-secondary); }
+  .ph { width: 40px; height: 40px; border-radius: 6px; background: var(--bg-accent); flex: 0 0 auto; }
+  .ph.sm { width: 28px; height: 28px; border-radius: 5px; }
+  .grow { flex: 1; min-width: 0; }
+  .name { font-size: 14px; }
+  .ids { font-size: 12px; color: var(--text-secondary); }
+  .acts { display: flex; gap: 2px; }
+  button { font-family: inherit; font-size: 13px; background: transparent; color: inherit;
+           border: 1px solid var(--border); border-radius: 8px; padding: 6px 12px; cursor: pointer; }
+  button:hover { background: var(--surface-1); }
+  button.icon { width: 32px; height: 32px; padding: 0; }
+  button.primary { border-color: var(--accent); color: var(--accent); }
+  input { font-family: inherit; font-size: 13px; width: 64px; padding: 6px 8px;
+          border: 1px solid var(--border); border-radius: 8px; }
+  .tick { color: var(--success); font-size: 16px; }
+  .boxbody { padding: 8px 16px 8px 42px; background: var(--surface-1);
+             border-bottom: 1px solid var(--border); }
+  .boxline { display: flex; align-items: center; gap: 10px; padding: 5px 0; font-size: 13px; }
+  .warn { padding: 10px 16px; background: #fdf4e7; border-bottom: 1px solid var(--border);
+          font-size: 13px; color: #854f0b; }
+  .note { font-size: 13px; color: var(--text-secondary); margin: -20px 0 28px; }
+  code { background: var(--surface-1); padding: 1px 5px; border-radius: 4px; font-size: 12px; }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<h1>Эталон FBS UI — макет</h1>
+<div class="sub">Утверждён пользователем 06.08.2026. Спецификация: <code>00_ЭТАЛОН_FBS_UI_2026-08-06_УТВЕРЖДЁН.md</code></div>
+
+<div class="stage">Этап 3 из 5</div>
+<div class="card">
+  <div class="head">
+    <div>
+      <div class="title">Упаковка и маркировка</div>
+      <div class="meta">Напечатано 2 из 4 · упаковано 0 из 4</div>
+    </div>
+    <div style="display:flex; gap:8px;">
+      <button>Печать всего</button>
+      <button class="primary">Всё упаковано</button>
+    </div>
+  </div>
+
+  <div class="warn">Не хватает Честных знаков: нужно 4, в пуле 3</div>
+
+  <div class="row done">
+    <div class="ph"></div>
+    <div class="grow">
+      <div class="name">Брюки мужские классические</div>
+      <div class="ids">FBS-TEST-S1-P1 · 2900101123456 · заказ 960000000001</div>
+    </div>
+    <span class="tick">&#10003;</span>
+    <div class="acts">
+      <button class="icon" title="ТЗ на упаковку">ТЗ</button>
+      <button class="icon" title="Печать QR заказа WB">QR</button>
+      <button class="icon" title="Печать ЧЗ и ШК">&#128438;</button>
+    </div>
+  </div>
+
+  <div class="row done">
+    <div class="ph"></div>
+    <div class="grow">
+      <div class="name">Брюки мужские классические</div>
+      <div class="ids">FBS-TEST-S1-P1 · 2900101123456 · заказ 960000000002</div>
+    </div>
+    <span class="tick">&#10003;</span>
+    <div class="acts">
+      <button class="icon" title="ТЗ на упаковку">ТЗ</button>
+      <button class="icon" title="Печать QR заказа WB">QR</button>
+      <button class="icon" title="Печать ЧЗ и ШК">&#128438;</button>
+    </div>
+  </div>
+
+  <div class="row">
+    <div class="ph"></div>
+    <div class="grow">
+      <div class="name">Футболка базовая</div>
+      <div class="ids">FBS-TEST-S1-P2 · 2900102123462 · заказ 960000000003</div>
+    </div>
+    <div class="acts">
+      <button class="icon" title="ТЗ на упаковку">ТЗ</button>
+      <button class="icon" title="Печать QR заказа WB">QR</button>
+      <button class="icon" title="Печать ЧЗ и ШК">&#128438;</button>
+    </div>
+  </div>
+
+  <div class="row">
+    <div class="ph"></div>
+    <div class="grow">
+      <div class="name">Футболка базовая</div>
+      <div class="ids">FBS-TEST-S1-P2 · 2900102123462 · заказ 960000000004 · <span style="color:#854f0b">ЧЗ не хватило</span></div>
+    </div>
+    <div class="acts">
+      <button class="icon" title="ТЗ на упаковку">ТЗ</button>
+      <button class="icon" title="Печать QR заказа WB">QR</button>
+      <button class="icon" title="Печать ЧЗ и ШК">&#128438;</button>
+    </div>
+  </div>
+</div>
+
+<div class="note">
+  Лента массовой печати: <code>[QR WB заказа] [этикетки из конструктора] [QR WB следующего заказа] […]</code> —
+  QR служит отсечкой блока. Конструктор вызывается один раз при нажатии «Печать всего».
+</div>
+
+<div class="stage">Этап 4 из 5</div>
+<div class="card">
+  <div class="head">
+    <div>
+      <div class="title">Короба · ПВЗ</div>
+      <div class="meta">Распределено 3 из 4 шт · осталось 1</div>
+    </div>
+    <div style="display:flex; gap:8px; align-items:center;">
+      <input type="number" value="1" aria-label="Сколько коробов">
+      <button>Добавить короба</button>
+    </div>
+  </div>
+
+  <div class="row">
+    <span style="color:var(--text-muted)">&#9662;</span>
+    <div class="grow"><span style="font-weight:500">Короб 1</span> <span class="meta">· 2 шт</span></div>
+    <button>QR</button>
+    <button>Добавить товары</button>
+    <button class="icon">&#8942;</button>
+  </div>
+
+  <div class="boxbody">
+    <div class="boxline">
+      <div class="ph sm"></div>
+      <div class="grow">Брюки мужские классические</div>
+      <div class="meta">2 шт</div>
+      <button class="icon" title="Убрать из короба">&#128465;</button>
+    </div>
+  </div>
+
+  <div class="row">
+    <span style="color:var(--text-muted)">&#9656;</span>
+    <div class="grow"><span style="font-weight:500">Короб 2</span> <span class="meta">· 1 шт</span></div>
+    <button>QR</button>
+    <button>Добавить товары</button>
+    <button class="icon">&#8942;</button>
+  </div>
+</div>
+
+<div class="note">
+  Для маршрута «Склад / СЦ» кнопки <code>QR</code> на коробе нет вообще — пусто, без надписей.
+  Дальше не пропускаем, пока весь товар не разложен. Закрытия коробов нет.
+</div>
+
+</div>
+</body>
+</html>
