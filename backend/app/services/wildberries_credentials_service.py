@@ -7,6 +7,7 @@ from datetime import UTC, datetime
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.settings import settings
 from app.models.seller import Seller
 from app.models.seller_wildberries_credentials import SellerWildberriesCredentials
 from app.services.integration_fernet import decrypt_secret, encrypt_secret
@@ -143,8 +144,13 @@ async def get_decrypted_marketplace_token(
     session: AsyncSession, tenant_id: uuid.UUID, seller_id: uuid.UUID
 ) -> str | None:
     """Returns decrypted marketplace API token, or None if seller missing / token unset."""
-    if await _seller_in_tenant(session, tenant_id, seller_id) is None:
+    seller = await _seller_in_tenant(session, tenant_id, seller_id)
+    if seller is None:
         return None
+    if settings.fbs_test_emulator_enabled:
+        # Deliberately not persisted as a credential. The emulator accepts only this
+        # namespace when its own explicit dynamic-test-token switch is enabled.
+        return f"wms-test-{seller.id}"
     row = await session.get(SellerWildberriesCredentials, seller_id)
     if row is None or not row.marketplace_token_encrypted:
         return None

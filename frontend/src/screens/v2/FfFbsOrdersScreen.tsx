@@ -260,9 +260,8 @@ export function FfFbsOrdersScreen({ token, authHeaders, sellers, isAdmin = false
               <TableCell sx={{ minWidth: 270 }}>Товар</TableCell>
               <TableCell sx={{ minWidth: 105 }}>Селлер</TableCell>
               <TableCell sx={{ minWidth: 125 }}>Маршрут сдачи</TableCell>
-              <TableCell sx={{ minWidth: 125 }}>Ячейка и остаток</TableCell>
               <TableCell sx={{ minWidth: 95 }}>Отгрузить до</TableCell>
-              <TableCell sx={{ minWidth: 130 }}>Статус</TableCell>
+              {statusGroup !== 'new' ? <TableCell sx={{ minWidth: 130 }}>Статус</TableCell> : null}
             </TableRow>
           </TableHead>
           <TableBody>
@@ -351,49 +350,24 @@ export function FfFbsOrdersScreen({ token, authHeaders, sellers, isAdmin = false
                     ) : null}
                   </TableCell>
                   <TableCell>
-                    {statusGroup === 'new' ? (
-                      <Typography
-                        variant="body2"
-                        color={order.inventory.available_unpacked > 0 ? 'success.main' : 'error.main'}
-                        sx={{ fontWeight: 750 }}
-                      >
-                        Доступно: {order.inventory.available_unpacked}
-                      </Typography>
-                    ) : (
-                      <Typography variant="body2" color="text.secondary">
-                        {order.pick.status === 'picked' ? 'Товар подобран' : 'Смотрите этап поставки'}
-                      </Typography>
-                    )}
-                    {statusGroup === 'new' && order.inventory.locations.length ? (
-                      order.inventory.locations.map((location) => (
-                        <Typography key={location.id} variant="caption" color="text.secondary" sx={{ display: 'block' }}>
-                          {location.code}: {location.available_unpacked}
-                        </Typography>
-                      ))
-                    ) : statusGroup === 'new' ? (
-                      <MissingText>Ячейка не назначена</MissingText>
-                    ) : null}
-                    {statusGroup === 'new' && order.inventory.available_unpacked <= 0 ? (
-                      <MissingText>Остаток отсутствует</MissingText>
-                    ) : null}
-                  </TableCell>
-                  <TableCell>
                     <DeadlinePill
                       deadlineAt={order.deadline_at}
                       serverNow={serverNow}
                       cancelled={order.status === 'cancelled'}
                     />
                   </TableCell>
-                  <TableCell>
-                    <FbsStatusChip status={order.status} />
-                    <Box sx={{ mt: 0.75 }}><MetadataState order={order} /></Box>
-                  </TableCell>
+                  {statusGroup !== 'new' ? (
+                    <TableCell>
+                      <FbsStatusChip status={order.status} />
+                      <Box sx={{ mt: 0.75 }}><MetadataState order={order} /></Box>
+                    </TableCell>
+                  ) : null}
                 </TableRow>
               )
             })}
             {!busy && orders.length === 0 ? (
               <TableRow>
-                <TableCell colSpan={7}>
+                <TableCell colSpan={statusGroup === 'new' ? 5 : 6}>
                   <Box sx={{ py: 8, textAlign: 'center' }}>
                     <Inventory2OutlinedIcon sx={{ fontSize: 42, color: 'text.disabled' }} />
                     <Typography variant="subtitle1" sx={{ mt: 1 }}>

@@ -93,6 +93,18 @@ class Settings(BaseSettings):
             "without calling the network."
         ),
     )
+    fbs_test_emulator_enabled: bool = Field(
+        default=False,
+        validation_alias=AliasChoices(
+            "WMS_FBS_TEST_EMULATOR_ENABLED",
+            "FBS_TEST_EMULATOR_ENABLED",
+            "fbs_test_emulator_enabled",
+        ),
+        description=(
+            "Railway/local test contour only: route WB Marketplace calls through the "
+            "dedicated emulator using a synthetic per-seller token. Never enable on live WB."
+        ),
+    )
     shop_manager_emails: str = Field(
         default="",
         validation_alias=AliasChoices(
@@ -177,6 +189,13 @@ class Settings(BaseSettings):
 
     @model_validator(mode="after")
     def _validate_prod_secrets(self) -> Self:
+        if (
+            self.fbs_test_emulator_enabled
+            and "wildberries.ru" in self.wildberries_marketplace_api_base.lower()
+        ):
+            raise ValueError(
+                "fbs_test_emulator_enabled requires a non-WB marketplace API base"
+            )
         if self.app_env == "production":
             if not self.wms_secrets_fernet_key:
                 raise ValueError("wms_secrets_fernet_key must be set in production")

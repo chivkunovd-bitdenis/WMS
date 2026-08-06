@@ -467,8 +467,8 @@ async function finishRoute(
   };
 }
 
-// TC-FBS-U2U-007/012/023/024/026/029 — real browser -> WMS -> Postgres/Celery -> WB emulator, with no FBS route mocks.
-test("TC-FBS-U2U-007/012/023/024/026/029: warehouse and PVZ operator flows use the real WB emulator", async ({
+// TC-S17-023/025/026 — real browser -> WMS -> Postgres/Celery -> WB emulator, with no FBS route mocks.
+test("TC-S17-023/025/026: warehouse and PVZ operator flows use the real WB emulator", async ({
   page,
   request,
   baseURL,
@@ -495,6 +495,14 @@ test("TC-FBS-U2U-007/012/023/024/026/029: warehouse and PVZ operator flows use t
   await expect(
     page.getByRole("columnheader", { name: "Маршрут сдачи" }),
   ).toBeVisible();
+  const worklist = page.getByTestId("fbs-worklist-table");
+  await expect(
+    worklist.getByRole("columnheader", { name: "Ячейка и остаток" }),
+  ).toHaveCount(0);
+  await expect(
+    worklist.getByRole("columnheader", { name: "Статус" }),
+  ).toHaveCount(0);
+  await expect(worklist.getByText("Маркировка:", { exact: true })).toHaveCount(0);
   const imageOrder = seed.orders.warehouse_sc[0];
   const thumbnailRoot = page.getByTestId(
     `fbs-product-photo-${imageOrder.wms_order_id}`,

@@ -1,6 +1,6 @@
 # Test cases — FBS operator flow
 
-> **Permanent IDs:** `TC-S17-001` … `TC-S17-024` in `docs/IMPLEMENTED_PRODUCT_SCENARIOS_TEST_CASES_EN.md` §S17 (FBSFLOW-130).
+> **Permanent IDs:** `TC-S17-001` … `TC-S17-026` in `docs/IMPLEMENTED_PRODUCT_SCENARIOS_TEST_CASES_EN.md` §S17 (FBSFLOW-130).
 
 | ID | Сценарий | Ожидаемый результат | Негатив / ограничение |
 |---|---|---|---|
@@ -28,6 +28,8 @@
 | TC-22 | Partial acceptance | Exact accepted/rejected orders, reasons, remaining deadline | supply is not flattened to generic success |
 | TC-23 | Full compose run | Browser/API → backend → queue → PostgreSQL → emulator | emulator does not prove current live WB contract |
 | TC-24 | Live WB smoke | Exact request contracts checked on sandbox/test cabinet | run only with explicit secrets/authorization |
+| TC-25 | Новый рабочий список без дублей | В «Новых» видны товар, селлер, маршрут и срок; ячейка/остаток, статус «Новый» и маркировка не дублируются | Скрытие колонок не отменяет серверные проверки совместимости и остатка |
+| TC-26 | Постоянный тестовый WB-контур | Railway test вызывает отдельный WB emulator с изолированным synthetic token на селлера | Test mode не запускается с официальным `wildberries.ru` и не доказывает live WB |
 
 ## Обязательные frontend browser paths
 
@@ -41,4 +43,3 @@
 8. PVZ cargo places + all QR.
 9. Warehouse/SC QR supply.
 10. WB timeout/409 does not show local success.
-

@@ -676,7 +676,7 @@ Distinct from **operational outbound** (S08) and **seller supply/inbound** (S06)
 
 ## S17 — FBS operator flow (WB Marketplace, fulfillment admin)
 
-Full-cycle FBS: worklist → compatible selection → atomic WB supply → server-side pick → existing `PackagingTask` → marking → print assets → PVZ cargo places or warehouse/SC deliver → post-delivery tracking. Distinct from seller MP unload (S16) and operational outbound (S08). Canonical task IDs: `tasks/fbs-operator-flow/TEST_CASES.md` TC-01…24 → **TC-S17-001…024** below. Wire contract: `tasks/fbs-operator-flow/BACKEND_CONTRACT.md`; errors: `ERROR_CATALOG_RU.md`; OpenAPI: `OPENAPI_NOTES.md`.
+Full-cycle FBS: worklist → compatible selection → atomic WB supply → server-side pick → existing `PackagingTask` → marking → print assets → PVZ cargo places or warehouse/SC deliver → post-delivery tracking. Distinct from seller MP unload (S16) and operational outbound (S08). Canonical task IDs: `tasks/fbs-operator-flow/TEST_CASES.md` TC-01…26 → **TC-S17-001…026** below. Wire contract: `tasks/fbs-operator-flow/BACKEND_CONTRACT.md`; errors: `ERROR_CATALOG_RU.md`; OpenAPI: `OPENAPI_NOTES.md`.
 
 ### TC-S17-001 Three sellers on one WMS warehouse
 
@@ -870,7 +870,23 @@ Full-cycle FBS: worklist → compatible selection → atomic WB supply → serve
 - **Then:** request shapes match `wildberries_fbs_client` contract dated in tests.
 - **Negative:** not run in default CI; failure blocks production rollout claim only.
 
-**Frontend browser paths (Codex, post-backend handoff):** worklist enrichment + live deadline; selection blockers + atomic create; full-screen workspace stages; persistent picking; embedded PackagingTask; marking row states; sticker preview; PVZ cargo + QR; warehouse/SC supply QR; WB timeout/409 never shows local success.
+### TC-S17-025 New-order worklist shows only decision-relevant columns
+
+- **Actor:** fulfillment operator.
+- **Given:** FBS orders are displayed on the **New** tab.
+- **When:** the operator reviews and selects orders for a supply.
+- **Then:** the table shows product, seller, handover route, and deadline; storage cell/stock, the redundant `new` status, and marking progress are not rendered as columns.
+- **Negative / restriction:** server-side stock, mapping, deadline, and compatibility blockers remain enforced and are shown on the affected product row when present.
+
+### TC-S17-026 Stable test contour uses a dedicated WB emulator
+
+- **Actor:** fulfillment operator testing the Railway contour.
+- **Given:** the explicit FBS test-emulator switch and a non-WB Marketplace API base are configured.
+- **When:** the operator creates and processes a supply for any test seller without stored WB credentials.
+- **Then:** WMS uses a synthetic tenant-checked, per-seller token and the request reaches the separate WB emulator; no real seller credential is read or changed.
+- **Negative / restriction:** startup is rejected when test-emulator mode points at `wildberries.ru`; emulator success is not live-WB proof.
+
+**Frontend browser paths (Codex, post-backend handoff):** decision-focused new-order worklist + live deadline; selection blockers + atomic create; full-screen workspace stages; persistent picking; embedded PackagingTask; marking row states; sticker preview; PVZ cargo + QR; warehouse/SC supply QR; WB timeout/409 never shows local success.
 
 ---
 

@@ -7,7 +7,7 @@ from functools import lru_cache
 from pathlib import Path
 from typing import Any
 
-from pydantic import Field, field_validator
+from pydantic import AliasChoices, Field, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -32,6 +32,13 @@ class Settings(BaseSettings):
         default=None,
         validation_alias="WB_EMULATOR_TOKEN_MAP_FILE",
     )
+    allow_dynamic_test_tokens: bool = Field(
+        default=False,
+        validation_alias=AliasChoices(
+            "WB_EMULATOR_ALLOW_DYNAMIC_TEST_TOKENS",
+            "allow_dynamic_test_tokens",
+        ),
+    )
 
     @field_validator("token_map", mode="before")
     @classmethod
@@ -43,9 +50,9 @@ class Settings(BaseSettings):
         if isinstance(value, str):
             parsed = json.loads(value)
             if not isinstance(parsed, dict):
-                raise ValueError("WB_EMULATOR_TOKEN_MAP must be a JSON object")
+                raise TypeError("WB_EMULATOR_TOKEN_MAP must be a JSON object")
             return {str(token): str(seller_key) for token, seller_key in parsed.items()}
-        raise ValueError("WB_EMULATOR_TOKEN_MAP must be a JSON object")
+        raise TypeError("WB_EMULATOR_TOKEN_MAP must be a JSON object")
 
     def resolved_token_map(self) -> dict[str, str]:
         """Merge token map from env and optional JSON file (file overrides env)."""
@@ -61,7 +68,12 @@ class Settings(BaseSettings):
     def seller_key_for_token(self, token: str) -> str | None:
         if not token:
             return None
-        return self.resolved_token_map().get(token)
+        mapped = self.resolved_token_map().get(token)
+        if mapped is not None:
+            return mapped
+        if self.allow_dynamic_test_tokens and token.startswith("wms-test-"):
+            return token
+        return None
 
 
 @lru_cache
