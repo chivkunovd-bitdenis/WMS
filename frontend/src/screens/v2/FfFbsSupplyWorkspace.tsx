@@ -170,6 +170,7 @@ export function FfFbsSupplyWorkspace({
   const [printBatch, setPrintBatch] = useState<FbsPrintBatch | null>(null)
   const [printPreviewOpen, setPrintPreviewOpen] = useState(false)
   const [packagingTask, setPackagingTask] = useState<PackagingTask | null>(null)
+  const [manualPickLocationRows, setManualPickLocationRows] = useState<Record<string, string[]>>({})
   const [boxCount, setBoxCount] = useState('1')
   const [boxAssignTarget, setBoxAssignTarget] = useState<string | null>(null)
   const [boxProductSearch, setBoxProductSearch] = useState('')
@@ -213,6 +214,7 @@ export function FfFbsSupplyWorkspace({
     setDeliveryPreflight(null)
     setPrintBatch(null)
     setPickLocation(null)
+    setManualPickLocationRows({})
     setBoxCount('1')
     setBoxAssignTarget(null)
     setBoxProductSearch('')
@@ -706,7 +708,9 @@ export function FfFbsSupplyWorkspace({
       current.required += 1
       if (order.pick.status === 'picked') current.picked += 1
       current.wbOrders.push(order.wb_order_id)
-      const locations = order.inventory.locations.map((location) => `${location.code}: ${location.available_unpacked}`)
+      const locations = order.inventory.locations
+        .filter((location) => location.available_unpacked > 0)
+        .map((location) => `${location.code}: ${location.available_unpacked}`)
       current.locations = [...new Set([...current.locations, ...locations])]
       if (new Date(order.deadline_at).getTime() < new Date(current.nearestDeadline).getTime()) current.nearestDeadline = order.deadline_at
       grouped.set(key, current)
@@ -725,21 +729,50 @@ export function FfFbsSupplyWorkspace({
     return [...byProduct.entries()].flatMap(([productId, orders]) => {
       const locations = new Map<string, { id: string; code: string; available: number }>()
       for (const order of orders) for (const location of order.inventory.locations) {
+        if (location.available_unpacked <= 0) continue
         const current = locations.get(location.id)
         if (!current || location.available_unpacked > current.available) {
           locations.set(location.id, { id: location.id, code: location.code, available: location.available_unpacked })
         }
       }
-      let index = 0
-      return [...locations.values()].sort((a, b) => a.code.localeCompare(b.code)).flatMap((location) => {
-        const count = Math.min(location.available, orders.length - index)
+      const sortedLocations = [...locations.values()].sort((a, b) => a.code.localeCompare(b.code))
+      if (sortedLocations.length === 0) return []
+      const autoLocationIds: string[] = []
+      let remainingOrders = orders.length
+      for (const location of sortedLocations) {
+        if (remainingOrders <= 0) break
+        autoLocationIds.push(location.id)
+        remainingOrders -= Math.min(location.available, remainingOrders)
+      }
+      const validLocationIds = new Set(sortedLocations.map((location) => location.id))
+      const selectedLocationIds = (manualPickLocationRows[productId] ?? autoLocationIds).filter((locationId, index, list) =>
+        validLocationIds.has(locationId) && list.indexOf(locationId) === index,
+      )
+      if (selectedLocationIds.length === 0) selectedLocationIds.push(sortedLocations[0].id)
+      let orderIndex = 0
+      return selectedLocationIds.flatMap((locationId, rowIndex) => {
+        const location = sortedLocations.find((item) => item.id === locationId) ?? sortedLocations[0]
+        const count = Math.min(location.available, orders.length - orderIndex)
         if (count <= 0) return []
-        const orderIds = orders.slice(index, index + count).map((order) => order.id)
-        index += count
-        return [{ productId, location, orderIds, product: orders[0].product }]
+        const orderIds = orders.slice(orderIndex, orderIndex + count).map((order) => order.id)
+        orderIndex += count
+        const selectedByOtherRows = new Set(selectedLocationIds.filter((_, index) => index !== rowIndex))
+        const locationOptions = sortedLocations.filter((item) => item.id === location.id || !selectedByOtherRows.has(item.id))
+        const nextLocation = sortedLocations.find((item) => !selectedLocationIds.includes(item.id))
+        return [{
+          productId,
+          rowIndex,
+          selectedLocationIds,
+          location,
+          locationOptions,
+          nextLocationId: orderIndex < orders.length ? nextLocation?.id ?? null : null,
+          orderIds,
+          product: orders[0].product,
+          identifiers: [orders[0].product.seller_article, orders[0].product.barcode].filter(Boolean).join(' · '),
+        }]
       })
     })
-  }, [workspace])
+  }, [manualPickLocationRows, workspace])
   const printPickingList = () => {
     if (!workspace) return
     const printWindow = window.open('', '_blank')
@@ -1018,13 +1051,101 @@ export function FfFbsSupplyWorkspace({
               <Paper variant="outlined" sx={{ p: 2 }} data-testid="fbs-manual-picking">
                 <Typography variant="h6">Подбор из ячеек</Typography>
                 <Typography variant="body2" color="text.secondary" sx={{ mb: 1.5 }}>Сканер остаётся доступен выше. Здесь можно снять требуемое количество из конкретной ячейки вручную.</Typography>
-                {manualPickRows.length === 0 ? <Alert severity="info">Нет товаров, ожидающих ручного подбора из ячеек.</Alert> : <Stack spacing={1}>{manualPickRows.map((row) => <Stack key={`${row.productId}-${row.location.id}`} direction={{ xs: 'column', md: 'row' }} spacing={1.5} sx={{ alignItems: { md: 'center' }, p: 1.25, bgcolor: 'action.hover', borderRadius: 1.5 }}><ProductPhotoThumb src={row.product.image_url} alt={row.product.name} size={44} /><Box sx={{ flex: 1 }}><Typography variant="body2" sx={{ fontWeight: 700 }}>{row.product.name}</Typography><Typography variant="caption" color="text.secondary">Ячейка {row.location.code} · к снятию {row.orderIds.length} шт. · доступно {row.location.available} шт.</Typography></Box><Button variant="contained" size="small" disabled={!stageIsCurrent || busy} onClick={() => void pickFromCell(row.location.id, row.productId, row.orderIds)}>Снять {row.orderIds.length} шт.</Button></Stack>)}</Stack>}
+                {manualPickRows.length === 0 ? <Alert severity="info">Нет товаров, ожидающих ручного подбора из ячеек.</Alert> : (
+                  <Stack spacing={1}>
+                    {manualPickRows.map((row) => (
+                      <Stack
+                        key={`${row.productId}-${row.rowIndex}-${row.location.id}`}
+                        direction={{ xs: 'column', md: 'row' }}
+                        spacing={1.5}
+                        sx={{ alignItems: { md: 'center' }, p: 1.25, bgcolor: 'action.hover', borderRadius: 1.5 }}
+                      >
+                        <ProductPhotoThumb src={row.product.image_url} alt={row.product.name} size={44} />
+                        <Box sx={{ flex: 1, minWidth: 0 }}>
+                          <Typography variant="body2" sx={{ fontWeight: 700 }}>{row.product.name}</Typography>
+                          {row.identifiers ? <Typography variant="caption" color="text.secondary">{row.identifiers}</Typography> : null}
+                        </Box>
+                        <TextField
+                          select
+                          size="small"
+                          label="Ячейка"
+                          value={row.location.id}
+                          disabled={!stageIsCurrent || busy}
+                          onChange={(event) => {
+                            const locationId = String(event.target.value)
+                            setManualPickLocationRows((current) => {
+                              const currentRows = current[row.productId] ?? row.selectedLocationIds
+                              const nextRows = [...currentRows]
+                              nextRows[row.rowIndex] = locationId
+                              return { ...current, [row.productId]: nextRows }
+                            })
+                          }}
+                          sx={{ width: { xs: '100%', md: 180 } }}
+                        >
+                          {row.locationOptions.map((location) => (
+                            <MenuItem key={location.id} value={location.id}>{location.code}</MenuItem>
+                          ))}
+                        </TextField>
+                        <Box sx={{ minWidth: { md: 150 } }}>
+                          <Typography variant="body2">К снятию: {row.orderIds.length} шт.</Typography>
+                          <Typography variant="caption" color="text.secondary">Доступно: {row.location.available} шт.</Typography>
+                        </Box>
+                        <Stack direction="row" spacing={1}>
+                          <Button
+                            variant="contained"
+                            size="small"
+                            disabled={!stageIsCurrent || busy}
+                            onClick={() => void pickFromCell(row.location.id, row.productId, row.orderIds)}
+                          >
+                            Снять {row.orderIds.length} шт.
+                          </Button>
+                          {row.nextLocationId ? (
+                            <Button
+                              size="small"
+                              variant="outlined"
+                              disabled={!stageIsCurrent || busy}
+                              onClick={() => {
+                                setManualPickLocationRows((current) => {
+                                  const currentRows = current[row.productId] ?? row.selectedLocationIds
+                                  return { ...current, [row.productId]: [...currentRows, row.nextLocationId!] }
+                                })
+                              }}
+                            >
+                              +
+                            </Button>
+                          ) : null}
+                        </Stack>
+                      </Stack>
+                    ))}
+                  </Stack>
+                )}
               </Paper>
               <Paper variant="outlined" sx={{ p: 2 }}>
                 <Typography variant="subtitle1" gutterBottom>Товары в подборе: {workspace.progress.picked}/{workspace.progress.total}</Typography>
                 <Table size="small">
                   <TableHead><TableRow><TableCell>Товар</TableCell><TableCell>Точная ячейка</TableCell><TableCell>Взять</TableCell><TableCell>Подобрано</TableCell></TableRow></TableHead>
-                  <TableBody>{pickingRows.map((row) => <TableRow key={row.key}><TableCell><Stack direction="row" spacing={1.5} sx={{ alignItems: 'center' }}>{row.imageUrl ? <Box component="img" src={row.imageUrl} alt="" sx={{ width: 52, height: 52, objectFit: 'contain', borderRadius: 1 }} /> : null}<Box><Typography variant="body2" sx={{ fontWeight: 700 }}>{row.name}</Typography><details><summary style={{ cursor: 'pointer', color: '#5b21b6' }}>Подробнее</summary><Typography variant="caption" color="text.secondary" sx={{ display: 'block' }}>{row.identifiers.join(' · ') || 'Идентификаторы не указаны'} · заказы {row.wbOrders.map((id) => `№${id}`).join(', ')}</Typography>{row.marking !== 'Не требуется' ? <Typography variant="caption" color="text.secondary" sx={{ display: 'block' }}>Маркировка: {row.marking}</Typography> : null}<Typography variant="caption" color="text.secondary" sx={{ display: 'block' }}>Отгрузить до {new Date(row.nearestDeadline).toLocaleString('ru-RU')}</Typography></details></Box></Stack></TableCell><TableCell>{row.locations.length ? row.locations.join(', ') : 'Ячейка не назначена'}</TableCell><TableCell>{row.required}</TableCell><TableCell>{row.picked} из {row.required}</TableCell></TableRow>)}</TableBody>
+                  <TableBody>
+                    {pickingRows.map((row) => (
+                      <TableRow key={row.key}>
+                        <TableCell>
+                          <Stack direction="row" spacing={1.5} sx={{ alignItems: 'center' }}>
+                            <ProductPhotoThumb src={row.imageUrl} alt={row.name} size={52} />
+                            <Box>
+                              <Typography variant="body2" sx={{ fontWeight: 700 }}>{row.name}</Typography>
+                              {row.identifiers.length ? (
+                                <Typography variant="caption" color="text.secondary" sx={{ display: 'block' }}>
+                                  {row.identifiers.join(' · ')}
+                                </Typography>
+                              ) : null}
+                            </Box>
+                          </Stack>
+                        </TableCell>
+                        <TableCell>{row.locations.length ? row.locations.join(', ') : 'Ячейка не назначена'}</TableCell>
+                        <TableCell>{row.required}</TableCell>
+                        <TableCell>{row.picked} из {row.required}</TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
                 </Table>
                 <Divider sx={{ my: 2 }} />
                 {stageIsCurrent && workspace.orders.some((order) => order.pick.status === 'picked' && order.pack.status !== 'packed') ? <Button size="small" variant="text" onClick={() => setUndoOrderId(workspace.orders.find((order) => order.pick.status === 'picked' && order.pack.status !== 'packed')?.id ?? null)}>Исправить ошибку подбора</Button> : null}
