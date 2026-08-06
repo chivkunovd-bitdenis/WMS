@@ -21,6 +21,7 @@ from app.models.fbs_wb_operation import (
 from app.services.fbs_print_asset_storage import PNG_MAGIC
 from app.services.wildberries_client import WildberriesClientError
 from tests.test_fbs_shipment_warehouse_sc import (
+    _create_and_fill_physical_box,
     _create_supply,
     _deliver_with_preflight,
     _prepare_supply_with_orders,
@@ -180,6 +181,7 @@ async def test_tc17_pvz_cargo_places_create_qr_and_deliver_without_bind(
     assert content.status_code == 200, content.text
     assert content.content.startswith(PNG_MAGIC)
 
+    await _create_and_fill_physical_box(async_client, headers, supply["id"], order_ids)
     deliver = await _deliver_with_preflight(async_client, headers, supply["id"])
     assert deliver.status_code == 200, deliver.text
     deliver_body = deliver.json()
@@ -199,7 +201,7 @@ async def test_pvz_cargo_places_transport_after_wb_side_effect_reconciles_withou
     seller_id, warehouse_id, tenant_id = await _setup_seller_with_token(
         async_client, headers, suffix
     )
-    supply, _ = await _prepare_pvz_supply(
+    supply, order_ids = await _prepare_pvz_supply(
         async_client,
         headers,
         seller_id,
@@ -289,7 +291,7 @@ async def test_pvz_cargo_places_unresolved_reconcile_returns_structured_504(
     seller_id, warehouse_id, tenant_id = await _setup_seller_with_token(
         async_client, headers, suffix
     )
-    supply, _ = await _prepare_pvz_supply(
+    supply, order_ids = await _prepare_pvz_supply(
         async_client,
         headers,
         seller_id,
@@ -363,7 +365,7 @@ async def test_tc18_pvz_cargo_places_dimension_blockers(
         async_client, headers, suffix
     )
 
-    supply, _ = await _prepare_pvz_supply(
+    supply, order_ids = await _prepare_pvz_supply(
         async_client,
         headers,
         seller_id,
@@ -739,7 +741,7 @@ async def test_fbs_pvz_trbx_stickers_cached_and_wb_error(
 
 
 @pytest.mark.asyncio
-async def test_fbs_pvz_deliver_requires_cargo_places_and_qr(
+async def test_fbs_pvz_deliver_requires_physical_boxes(
     async_client: AsyncClient,
     enable_wb_marketplace_supplies_mock: None,
 ) -> None:
@@ -748,7 +750,7 @@ async def test_fbs_pvz_deliver_requires_cargo_places_and_qr(
         async_client, headers, suffix
     )
 
-    supply, _ = await _prepare_pvz_supply(
+    supply, order_ids = await _prepare_pvz_supply(
         async_client,
         headers,
         seller_id,
@@ -760,10 +762,9 @@ async def test_fbs_pvz_deliver_requires_cargo_places_and_qr(
 
     missing = await _deliver_with_preflight(async_client, headers, supply["id"])
     assert missing.status_code == 400
-    assert missing.json()["detail"]["code"] == "cargo_places_required"
+    assert missing.json()["detail"]["code"] == "physical_boxes_required"
 
-    create = await _create_cargo_places(async_client, headers, supply["id"], count=1)
-    assert create.status_code == 201, create.text
+    await _create_and_fill_physical_box(async_client, headers, supply["id"], order_ids)
 
     deliver = await _deliver_with_preflight(async_client, headers, supply["id"])
     assert deliver.status_code == 200, deliver.text
@@ -984,7 +985,7 @@ async def test_pvz_delete_cargo_places_guards(
         async_client, headers, suffix
     )
 
-    pvz_supply, _ = await _prepare_pvz_supply(
+    pvz_supply, order_ids = await _prepare_pvz_supply(
         async_client,
         headers,
         seller_id,
@@ -1025,6 +1026,7 @@ async def test_pvz_delete_cargo_places_guards(
     assert wh_delete.status_code == 400
     assert wh_delete.json()["detail"]["code"] == "wrong_delivery_type"
 
+    await _create_and_fill_physical_box(async_client, headers, pvz_supply["id"], order_ids)
     deliver = await _deliver_with_preflight(async_client, headers, pvz_supply["id"])
     assert deliver.status_code == 200, deliver.text
 

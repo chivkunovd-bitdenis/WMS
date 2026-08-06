@@ -396,7 +396,7 @@ class FbsDeliveryPreflightOut(BaseModel):
 
 class FbsSupplyDeliverBody(BaseModel):
     idempotency_key: str = Field(min_length=1, max_length=128)
-    confirmed_preflight_version: str = Field(min_length=1, max_length=128)
+    confirmed_preflight_version: str | None = Field(default=None, min_length=1, max_length=128)
 
 
 class FbsWorkspaceProductOut(FbsWorklistProductOut):

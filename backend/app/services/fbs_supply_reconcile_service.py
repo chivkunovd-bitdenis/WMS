@@ -163,7 +163,7 @@ async def mark_cargo_delete_operation_confirmed(
 def request_hash_for_deliver(
     *,
     supply_id: uuid.UUID,
-    confirmed_preflight_version: str,
+    confirmed_preflight_version: str | None,
 ) -> str:
     payload = {
         "supply_id": str(supply_id),
@@ -194,7 +194,7 @@ async def create_pending_deliver_operation(
     idempotency_key: str,
     request_hash: str,
     local_supply_id: uuid.UUID,
-    confirmed_preflight_version: str,
+    confirmed_preflight_version: str | None,
 ) -> FbsWbOperation:
     op = FbsWbOperation(
         tenant_id=tenant_id,

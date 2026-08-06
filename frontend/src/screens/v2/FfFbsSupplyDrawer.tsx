@@ -30,6 +30,7 @@ import {
   Typography,
 } from '@mui/material'
 import {
+  createFbsIdempotencyKey,
   createFbsTrbx,
   deliverFbsSupply,
   fetchFbsTrbxStickers,
@@ -356,7 +357,10 @@ export function FfFbsSupplyDrawer({ token, authHeaders, supplyId, open, onClose,
     setBusy(true)
     setError(null)
     try {
-      setSupply(await deliverFbsSupply(token, authHeaders, supplyId))
+      await deliverFbsSupply(token, authHeaders, supplyId, {
+        idempotency_key: createFbsIdempotencyKey(),
+      })
+      await load()
       setConfirmDeliver(false)
       onChanged?.()
     } catch (e) {
@@ -364,7 +368,7 @@ export function FfFbsSupplyDrawer({ token, authHeaders, supplyId, open, onClose,
     } finally {
       setBusy(false)
     }
-  }, [token, authHeaders, supplyId, onChanged])
+  }, [token, authHeaders, supplyId, load, onChanged])
 
   const canDeliver = supply ? canDeliverFbsSupply(supply) : false
 

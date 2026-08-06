@@ -683,7 +683,7 @@ async def deliver_supply(
     http_client: httpx.AsyncClient,
     *,
     idempotency_key: str,
-    confirmed_preflight_version: str,
+    confirmed_preflight_version: str | None = None,
 ) -> FbsSupply:
     if not idempotency_key.strip():
         raise FbsShipmentError("missing_idempotency_key")

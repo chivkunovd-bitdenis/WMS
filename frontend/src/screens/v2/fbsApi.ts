@@ -903,25 +903,20 @@ export function deliverFbsSupply(
   token: string,
   ah: (t: string) => Record<string, string>,
   id: string,
-): Promise<FbsSupply>
-export function deliverFbsSupply(
-  token: string,
-  ah: (t: string) => Record<string, string>,
-  id: string,
-  body: { idempotency_key: string; confirmed_preflight_version: string },
+  body: { idempotency_key: string; confirmed_preflight_version?: string | null },
 ): Promise<FbsWorkspace>
 export async function deliverFbsSupply(
   token: string,
   ah: (t: string) => Record<string, string>,
   id: string,
-  body?: { idempotency_key: string; confirmed_preflight_version: string },
-): Promise<FbsSupply | FbsWorkspace> {
+  body: { idempotency_key: string; confirmed_preflight_version?: string | null },
+): Promise<FbsWorkspace> {
   const res = await fetch(apiUrl(`/operations/fbs-supplies/${id}/deliver`), {
     method: 'POST',
-    headers: body ? jsonHeaders(token, ah) : { ...ah(token) },
-    body: body ? JSON.stringify(body) : undefined,
+    headers: jsonHeaders(token, ah),
+    body: JSON.stringify(body),
   })
-  return jsonOrThrow<FbsSupply | FbsWorkspace>(res)
+  return jsonOrThrow<FbsWorkspace>(res)
 }
 
 /** Delivery is allowed only after packaging task completed (supply.status === packed). */

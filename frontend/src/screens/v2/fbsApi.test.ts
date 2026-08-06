@@ -42,7 +42,7 @@ describe('FBS API client', () => {
     } satisfies Partial<FbsApiError>)
   })
 
-  it('sends deliver preflight confirmation and returns the canonical workspace', async () => {
+  it('sends direct deliver request and returns the canonical workspace', async () => {
     const workspace = {
       supply: { id: 'supply-1', status: 'in_delivery' },
       stage: 'tracking',
@@ -58,7 +58,6 @@ describe('FBS API client', () => {
 
     const result = await deliverFbsSupply('token', authHeaders, 'supply-1', {
       idempotency_key: 'deliver-1',
-      confirmed_preflight_version: 'v1',
     })
 
     expect(result).toEqual(workspace)
@@ -73,7 +72,6 @@ describe('FBS API client', () => {
       },
       body: JSON.stringify({
         idempotency_key: 'deliver-1',
-        confirmed_preflight_version: 'v1',
       }),
     })
   })

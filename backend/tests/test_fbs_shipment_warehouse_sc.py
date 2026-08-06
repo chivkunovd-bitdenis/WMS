@@ -267,6 +267,20 @@ async def _deliver_with_preflight(
     )
 
 
+async def _deliver_direct(
+    async_client: AsyncClient,
+    headers: dict[str, str],
+    supply_id: str,
+    *,
+    idempotency_key: str | None = None,
+) -> Response:
+    return await async_client.post(
+        f"/operations/fbs-supplies/{supply_id}/deliver",
+        headers=headers,
+        json={"idempotency_key": idempotency_key or str(uuid.uuid4())},
+    )
+
+
 # TC-NEW-FBS-SHIPWH-001 — deliver → in_delivery; bad order status → 400
 @pytest.mark.asyncio
 async def test_fbs_shipment_deliver_ok_and_orders_not_ready(
@@ -295,7 +309,7 @@ async def test_fbs_shipment_deliver_ok_and_orders_not_ready(
         await session.commit()
     await _create_and_fill_physical_box(async_client, headers, supply["id"], order_ids)
 
-    deliver = await _deliver_with_preflight(async_client, headers, supply["id"])
+    deliver = await _deliver_direct(async_client, headers, supply["id"])
     assert deliver.status_code == 200, deliver.text
     body = deliver.json()
     assert body["supply"]["status"] == FBS_SUPPLY_STATUS_IN_DELIVERY

@@ -30,7 +30,6 @@ import DeleteOutlinedIcon from '@mui/icons-material/DeleteOutlined'
 import LocalShippingOutlinedIcon from '@mui/icons-material/LocalShippingOutlined'
 import MoreVertOutlinedIcon from '@mui/icons-material/MoreVertOutlined'
 import PrintOutlinedIcon from '@mui/icons-material/PrintOutlined'
-import RefreshOutlinedIcon from '@mui/icons-material/RefreshOutlined'
 import { apiUrl } from '../../api'
 import { ProductPhotoThumb } from '../../components/ProductPhotoThumb'
 import { type PackagingTask, type PackagingTaskLine } from '../ff/FfPackagingPage'
@@ -51,7 +50,6 @@ import {
   FbsApiError,
   fetchFbsPrintBatch,
   fetchFbsWorkspace,
-  preflightFbsDelivery,
   printFbsOrderTape,
   removeFbsPackingBoxOrder,
   retryFbsPackingBoxQr,
@@ -61,7 +59,6 @@ import {
   selectFbsManualPickLocation,
   startFbsSupplyWork,
   undoFbsPick,
-  type FbsDeliveryPreflight,
   type FbsOrderPrintTapeRequest,
   type FbsPickLocation,
   type FbsPrintBatch,
@@ -82,7 +79,6 @@ const STAGES = [
   { key: 'picking', label: 'Подбор' },
   { key: 'packing', label: 'Упаковка и маркировка' },
   { key: 'boxes', label: 'Короба' },
-  { key: 'delivery', label: 'Сдача в WB' },
 ] as const
 
 type StageKey = (typeof STAGES)[number]['key']
@@ -114,8 +110,8 @@ function clearPersistentOperationKey(supplyId: string, action: 'box-create' | 'b
 
 function visualStage(stage: FbsWorkspace['stage']): StageKey {
   if (stage === 'order_stickers') return 'packing'
-  if (stage === 'handoff_prep') return 'boxes'
-  return stage === 'tracking' ? 'delivery' : stage
+  if (stage === 'handoff_prep' || stage === 'delivery' || stage === 'tracking') return 'boxes'
+  return stage
 }
 
 const MARKING_ACCEPTED_STATUSES = ['accepted', 'assigned', 'pending', 'allowed_without_check', 'ok']
@@ -176,9 +172,7 @@ export function FfFbsSupplyWorkspace({
   const [boxProductQty, setBoxProductQty] = useState<Record<string, string>>({})
   const [boxMenu, setBoxMenu] = useState<{ boxId: string; anchorEl: HTMLElement } | null>(null)
   const [expandedBoxIds, setExpandedBoxIds] = useState<Set<string>>(() => new Set())
-  const [deliveryPreflight, setDeliveryPreflight] = useState<FbsDeliveryPreflight | null>(null)
   const [deliveryKey, setDeliveryKey] = useState(createFbsIdempotencyKey)
-  const [deliveryConfirmOpen, setDeliveryConfirmOpen] = useState(false)
   const [deliverySubmitted, setDeliverySubmitted] = useState(false)
   const [undoOrderId, setUndoOrderId] = useState<string | null>(null)
   const [retryAction, setRetryAction] = useState<(() => void) | null>(null)
@@ -210,7 +204,6 @@ export function FfFbsSupplyWorkspace({
     setWorkspace(initialWorkspace ?? null)
     setStage(initialWorkspace ? visualStage(initialWorkspace.stage) : 'composition')
     setDeliveryKey(persistentOperationKey(supplyId, 'delivery'))
-    setDeliveryPreflight(null)
     setPrintBatch(null)
     setPickLocation(null)
     setManualPickLocationRows({})
@@ -220,7 +213,6 @@ export function FfFbsSupplyWorkspace({
     setBoxProductQty({})
     setBoxMenu(null)
     setExpandedBoxIds(new Set())
-    setDeliveryConfirmOpen(false)
     setDeliverySubmitted(false)
     setUndoOrderId(null)
     setTzLine(null)
@@ -233,7 +225,7 @@ export function FfFbsSupplyWorkspace({
   }, [workspace?.stage])
 
   useEffect(() => {
-    if (!open || !supplyId || !['picking', 'delivery'].includes(stage)) return
+    if (!open || !supplyId || !['picking', 'boxes'].includes(stage)) return
     const timer = window.setInterval(() => {
       if (document.visibilityState === 'visible') void load(true)
     }, 15_000)
@@ -476,36 +468,20 @@ export function FfFbsSupplyWorkspace({
     if (box?.qr_asset?.preview_url) openAssetPreview([box.qr_asset])
   }
 
-  const checkDelivery = async () => {
-    if (!workspace) return
-    setBusy(true)
-    setError(null)
-    try {
-      setDeliveryPreflight(
-        await preflightFbsDelivery(token, authHeaders, workspace.supply.id),
-      )
-    } catch (cause) {
-      setError(cause instanceof Error ? cause.message : 'Проверка передачи не выполнена.')
-    } finally {
-      setBusy(false)
-    }
-  }
-
   const deliver = async () => {
-    if (!workspace || !deliveryPreflight?.can_deliver) return
+    if (!workspace || deliveryConfirmed) return
     const next = await run(
       () =>
         deliverFbsSupply(token, authHeaders, workspace.supply.id, {
           idempotency_key: deliveryKey,
-          confirmed_preflight_version: deliveryPreflight.version,
         }),
       '',
     )
     if (next) {
       clearPersistentOperationKey(workspace.supply.id, 'delivery')
       setDeliveryKey(createFbsIdempotencyKey())
-      setDeliveryPreflight(null)
       setDeliverySubmitted(true)
+      setStage('boxes')
     }
   }
 
@@ -839,7 +815,10 @@ export function FfFbsSupplyWorkspace({
     if (stage === 'packing') {
       return workspace?.blockers.filter((blocker) => blocker.stage === 'packing' || blocker.stage === 'order_stickers') ?? []
     }
-    const backendStage = stage === 'boxes' ? 'handoff_prep' : stage
+    if (stage === 'boxes') {
+      return []
+    }
+    const backendStage = stage
     return workspace?.blockers.filter((blocker) => blocker.stage === backendStage) ?? []
   }, [workspace, stage])
   const currentStage = workspace ? visualStage(workspace.stage) : 'composition'
@@ -865,7 +844,6 @@ export function FfFbsSupplyWorkspace({
   const boxRemainingCount = Math.max(0, boxTotalCount - boxDistributedCount)
   const supplyQrAsset = workspace?.supply.barcode_asset ?? null
   const needsSupplyQr = workspace?.supply.delivery_type === 'warehouse_sc'
-  const supplyQrPrinted = Boolean(supplyQrAsset?.applied_at)
   const boxAssignRows = useMemo(() => {
     const grouped = new Map<string, {
       key: string
@@ -1246,7 +1224,11 @@ export function FfFbsSupplyWorkspace({
                         Распределено {boxDistributedCount} из {boxTotalCount} шт · осталось {boxRemainingCount}
                       </Typography>
                     </Box>
-                    <Stack direction="row" spacing={1}><TextField label="Коробов" value={boxCount} size="small" type="number" disabled={!stageIsCurrent} onChange={(e) => setBoxCount(e.target.value)} slotProps={{ htmlInput: { min: 1, max: 100 } }} sx={{ width: 104 }} /><Button variant="contained" disabled={!stageIsCurrent || !Number(boxCount)} onClick={() => void createBoxes()}>Добавить короба</Button></Stack>
+                    <Stack direction="row" spacing={1} sx={{ alignItems: 'center' }}>
+                      <TextField label="Коробов" value={boxCount} size="small" type="number" disabled={!stageIsCurrent || !packagingEditable} onChange={(e) => setBoxCount(e.target.value)} slotProps={{ htmlInput: { min: 1, max: 100 } }} sx={{ width: 104 }} />
+                      <Button variant="contained" disabled={!stageIsCurrent || !packagingEditable || !Number(boxCount)} onClick={() => void createBoxes()}>Добавить короба</Button>
+                      <Button variant="contained" disabled={busy || deliveryConfirmed} onClick={() => void deliver()}>Передать в WB</Button>
+                    </Stack>
                   </Stack>
                 </Box>
                 <Stack divider={<Divider flexItem />}>
@@ -1302,7 +1284,7 @@ export function FfFbsSupplyWorkspace({
                             ) : null}
                             <Button
                               size="small"
-                              disabled={!stageIsCurrent || busy}
+                              disabled={!stageIsCurrent || !packagingEditable || busy}
                               onClick={() => {
                                 setBoxAssignTarget(box.id)
                                 setBoxProductSearch('')
@@ -1313,7 +1295,7 @@ export function FfFbsSupplyWorkspace({
                             </Button>
                             <IconButton
                               size="small"
-                              disabled={busy}
+                              disabled={!packagingEditable || busy}
                               onClick={(event: MouseEvent<HTMLElement>) => setBoxMenu({ boxId: box.id, anchorEl: event.currentTarget })}
                               aria-label={`Действия короба ${box.box_number}`}
                             >
@@ -1333,7 +1315,7 @@ export function FfFbsSupplyWorkspace({
                                   <Typography variant="body2" color="text.secondary">{row.orderIds.length} шт</Typography>
                                   <IconButton
                                     size="small"
-                                    disabled={!stageIsCurrent || busy}
+                                    disabled={!stageIsCurrent || !packagingEditable || busy}
                                     onClick={() => void removeBoxOrders(box.id, row.orderIds)}
                                     aria-label={`Убрать ${row.name} из короба ${box.box_number}`}
                                   >
@@ -1349,45 +1331,6 @@ export function FfFbsSupplyWorkspace({
                   })}
                 </Stack>
               </Paper>
-            </Stack>
-          ) : null}
-
-          {workspace && stage === 'delivery' ? (
-            <Stack spacing={2}>
-              <Paper variant="outlined" sx={{ p: 2 }}>
-                <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1.5} sx={{ justifyContent: 'space-between', alignItems: { sm: 'center' } }}>
-                  <Box>
-                    <Typography variant="h6">Сдача в WB</Typography>
-                    <Typography variant="body2" color="text.secondary">
-                      Коробов {workspace.boxes.length} · распределено {boxDistributedCount} из {boxTotalCount} шт.
-                    </Typography>
-                  </Box>
-                  {!deliveryConfirmed ? (
-                    <Button variant="outlined" startIcon={<RefreshOutlinedIcon />} onClick={() => void checkDelivery()}>
-                      Проверить готовность
-                    </Button>
-                  ) : null}
-                </Stack>
-                {!deliveryConfirmed ? (
-                  <Stack spacing={1} sx={{ mt: 2 }}>
-                    {deliveryPreflight?.checks.map((check) => (
-                      <Alert key={`${check.code}-${check.order_id ?? ''}`} severity={check.ok ? 'success' : 'error'}>
-                        {check.message}
-                      </Alert>
-                    ))}
-                    <Stack direction="row" sx={{ justifyContent: 'flex-end' }}>
-                      <Button
-                        variant="contained"
-                        size="large"
-                        disabled={!stageIsCurrent || !deliveryPreflight?.can_deliver}
-                        onClick={() => setDeliveryConfirmOpen(true)}
-                      >
-                        Передать в WB
-                      </Button>
-                    </Stack>
-                  </Stack>
-                ) : null}
-              </Paper>
               {deliveryConfirmed && needsSupplyQr && supplyQrAsset?.preview_url ? (
                 <Paper variant="outlined" sx={{ p: { xs: 2, md: 3 } }} data-testid="fbs-supply-qr">
                   <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2} sx={{ justifyContent: 'space-between', alignItems: { sm: 'center' } }}>
@@ -1397,21 +1340,14 @@ export function FfFbsSupplyWorkspace({
                         Распечатайте QR для сдачи всей поставки.
                       </Typography>
                     </Box>
-                    <Stack direction="row" spacing={1}>
-                      <Button
-                        variant="contained"
-                        size="large"
-                        startIcon={<PrintOutlinedIcon />}
-                        onClick={() => openAssetPreview([supplyQrAsset])}
-                      >
-                        Печать QR поставки
-                      </Button>
-                      {supplyQrPrinted ? (
-                        <Button size="large" onClick={onClose}>
-                          Завершить работу с поставкой
-                        </Button>
-                      ) : null}
-                    </Stack>
+                    <Button
+                      variant="contained"
+                      size="large"
+                      startIcon={<PrintOutlinedIcon />}
+                      onClick={() => openAssetPreview([supplyQrAsset])}
+                    >
+                      Печать QR поставки
+                    </Button>
                   </Stack>
                 </Paper>
               ) : null}
@@ -1524,18 +1460,13 @@ export function FfFbsSupplyWorkspace({
         open={Boolean(boxMenu)}
         onClose={() => setBoxMenu(null)}
       >
-        <MenuItem disabled={!boxMenuBox || boxMenuAssignedCount === 0} onClick={() => { if (boxMenuBox) void clearBox(boxMenuBox.id) }}>
+        <MenuItem disabled={!packagingEditable || !boxMenuBox || boxMenuAssignedCount === 0} onClick={() => { if (boxMenuBox) void clearBox(boxMenuBox.id) }}>
           Очистить
         </MenuItem>
-        <MenuItem disabled={!boxMenuBox || boxMenuAssignedCount > 0} onClick={() => { if (boxMenuBox) void deleteBox(boxMenuBox.id) }}>
+        <MenuItem disabled={!packagingEditable || !boxMenuBox || boxMenuAssignedCount > 0} onClick={() => { if (boxMenuBox) void deleteBox(boxMenuBox.id) }}>
           Удалить
         </MenuItem>
       </Menu>
-      <Dialog open={deliveryConfirmOpen} onClose={() => setDeliveryConfirmOpen(false)} maxWidth="sm" fullWidth>
-        <DialogTitle>Подтвердить передачу в WB?</DialogTitle>
-        <DialogContent>{workspace ? <Stack spacing={1}><Typography>Поставка: {workspace.supply.name}</Typography><Typography>Селлер: {workspace.supply.seller.name}</Typography><Typography>Маршрут: {workspace.supply.delivery_type === 'pvz' ? 'ПВЗ' : 'Склад / СЦ'}</Typography><Typography>Заказов: {workspace.orders.length} · коробов: {workspace.boxes.length}</Typography><Alert severity="warning">Это отправит подтверждение передачи в WB.</Alert></Stack> : null}</DialogContent>
-        <DialogActions><Button onClick={() => setDeliveryConfirmOpen(false)}>Отмена</Button><Button variant="contained" onClick={() => { setDeliveryConfirmOpen(false); void deliver() }}>Передать в WB</Button></DialogActions>
-      </Dialog>
     </Dialog>
   )
 }
