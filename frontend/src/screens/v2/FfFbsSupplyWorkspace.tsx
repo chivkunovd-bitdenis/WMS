@@ -847,7 +847,9 @@ export function FfFbsSupplyWorkspace({
   const boxDistributedCount = assignedBoxOrderIds.size
   const boxTotalCount = workspace?.progress.total ?? 0
   const boxRemainingCount = Math.max(0, boxTotalCount - boxDistributedCount)
-  const supplyQrPrinted = Boolean(workspace?.supply.barcode_asset?.applied_at)
+  const supplyQrAsset = workspace?.supply.barcode_asset ?? null
+  const needsSupplyQr = workspace?.supply.delivery_type === 'warehouse_sc'
+  const supplyQrPrinted = Boolean(supplyQrAsset?.applied_at)
   const boxAssignRows = useMemo(() => {
     const grouped = new Map<string, {
       key: string
@@ -1399,7 +1401,7 @@ export function FfFbsSupplyWorkspace({
                   </Stack>
                 ) : null}
               </Paper>
-              {workspace.supply.barcode_asset?.preview_url ? (
+              {deliveryConfirmed && needsSupplyQr && supplyQrAsset?.preview_url ? (
                 <Paper variant="outlined" sx={{ p: { xs: 2, md: 3 } }} data-testid="fbs-supply-qr">
                   <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2} sx={{ justifyContent: 'space-between', alignItems: { sm: 'center' } }}>
                     <Box>
@@ -1413,7 +1415,7 @@ export function FfFbsSupplyWorkspace({
                         variant="contained"
                         size="large"
                         startIcon={<PrintOutlinedIcon />}
-                        onClick={() => openAssetPreview([workspace.supply.barcode_asset!])}
+                        onClick={() => openAssetPreview([supplyQrAsset])}
                       >
                         Печать QR поставки
                       </Button>
@@ -1426,7 +1428,7 @@ export function FfFbsSupplyWorkspace({
                   </Stack>
                 </Paper>
               ) : null}
-              {deliveryConfirmed && workspace.supply.delivery_type === 'warehouse_sc' && !workspace.supply.barcode_asset?.preview_url ? (
+              {deliveryConfirmed && needsSupplyQr && !supplyQrAsset?.preview_url ? (
                 <Alert
                   severity="warning"
                   action={(
