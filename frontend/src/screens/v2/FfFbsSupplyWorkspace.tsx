@@ -1227,7 +1227,6 @@ export function FfFbsSupplyWorkspace({
                     <Stack direction="row" spacing={1} sx={{ alignItems: 'center' }}>
                       <TextField label="Коробов" value={boxCount} size="small" type="number" disabled={!stageIsCurrent || !packagingEditable} onChange={(e) => setBoxCount(e.target.value)} slotProps={{ htmlInput: { min: 1, max: 100 } }} sx={{ width: 104 }} />
                       <Button variant="contained" disabled={!stageIsCurrent || !packagingEditable || !Number(boxCount)} onClick={() => void createBoxes()}>Добавить короба</Button>
-                      <Button variant="contained" disabled={busy || deliveryConfirmed} onClick={() => void deliver()}>Передать в WB</Button>
                     </Stack>
                   </Stack>
                 </Box>
@@ -1331,6 +1330,13 @@ export function FfFbsSupplyWorkspace({
                   })}
                 </Stack>
               </Paper>
+              {!deliveryConfirmed ? (
+                <Stack direction="row" sx={{ justifyContent: 'flex-end' }}>
+                  <Button variant="contained" size="large" disabled={busy} onClick={() => void deliver()}>
+                    Передать в WB
+                  </Button>
+                </Stack>
+              ) : null}
               {deliveryConfirmed && needsSupplyQr && supplyQrAsset?.preview_url ? (
                 <Paper variant="outlined" sx={{ p: { xs: 2, md: 3 } }} data-testid="fbs-supply-qr">
                   <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2} sx={{ justifyContent: 'space-between', alignItems: { sm: 'center' } }}>
