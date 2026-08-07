@@ -694,6 +694,8 @@ async def sync_seller_orders(
     created = 0
     upserted = 0
     orders_received = 0
+    orders_page_error: str | None = None
+    status_sync_error: str | None = None
 
     for row in new_rows:
         _order, was_created = await upsert_order_from_wb_row(
@@ -703,6 +705,8 @@ async def sync_seller_orders(
         orders_received += 1
         if was_created:
             created += 1
+    if orders_received:
+        await session.commit()
 
     next_token: int | None = None
     for _page in range(MAX_ORDERS_PAGES):
@@ -714,7 +718,12 @@ async def sync_seller_orders(
             )
         except WildberriesClientError as exc:
             suffix = f"_{exc.status_code}" if exc.status_code else ""
-            raise WbMarketplaceOrdersError(f"wb_{exc.code}{suffix}") from exc
+            code = f"wb_{exc.code}{suffix}"
+            if orders_received:
+                orders_page_error = code
+                await session.rollback()
+                break
+            raise WbMarketplaceOrdersError(code) from exc
 
         if not page_rows:
             break
@@ -726,21 +735,35 @@ async def sync_seller_orders(
             orders_received += 1
             if was_created:
                 created += 1
+        await session.commit()
         if next_token is None:
             break
 
-    statuses_updated = await sync_order_statuses(
-        session, tenant_id, seller_id, http_client, api_token
-    )
-    await session.commit()
+    statuses_updated = 0
+    if orders_page_error is None:
+        try:
+            statuses_updated = await sync_order_statuses(
+                session, tenant_id, seller_id, http_client, api_token
+            )
+            await session.commit()
+        except WbMarketplaceOrdersError as exc:
+            await session.rollback()
+            if not orders_received:
+                raise
+            status_sync_error = exc.code
 
-    return {
+    result: dict[str, Any] = {
         "seller_id": str(seller_id),
         "orders_received": orders_received,
         "orders_upserted": upserted,
         "orders_created": created,
         "statuses_updated": statuses_updated,
     }
+    if orders_page_error is not None:
+        result["orders_page_error"] = orders_page_error
+    if status_sync_error is not None:
+        result["status_sync_error"] = status_sync_error
+    return result
 
 
 async def list_orders(
