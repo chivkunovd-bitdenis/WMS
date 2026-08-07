@@ -157,6 +157,7 @@ def _patch_wb_order_fetches(
     status_rows: list[dict[str, Any]] | None = None,
     new_raises: BaseException | None = None,
     page_raises: BaseException | None = None,
+    status_raises: BaseException | None = None,
 ) -> None:
     async def fake_new(
         client: object, *, api_token: str, marketplace_api_base: str | None = None
@@ -184,6 +185,8 @@ def _patch_wb_order_fetches(
         order_ids: list[int],
         marketplace_api_base: str | None = None,
     ) -> list[dict[str, Any]]:
+        if status_raises is not None:
+            raise status_raises
         if status_rows is not None:
             return status_rows
         return [{"id": oid, "wbStatus": "waiting"} for oid in order_ids]
@@ -565,6 +568,78 @@ async def test_fbs_sync_job_fails_on_wb_client_error(
     body = await _wait_for_job(async_client, headers, start.json()["id"])
     assert body["status"] == "failed"
     assert body["error_message"] == "wb_upstream_error_502"
+
+
+@pytest.mark.asyncio
+async def test_fbs_sync_keeps_new_orders_when_page_fetch_fails(
+    async_client: AsyncClient,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    headers, suffix = await _register_ff_admin(async_client)
+    seller_id, _warehouse_id = await _setup_seller_with_token(async_client, headers, suffix)
+    seller_uuid = uuid.UUID(seller_id)
+    _patch_wb_order_fetches(
+        monkeypatch,
+        new_rows=[_wb_order_row(order_id=800501)],
+        page_raises=WildberriesClientError("upstream_error", status_code=400),
+    )
+
+    async with SessionLocal() as session:
+        from app.models.seller import Seller
+
+        seller = await session.get(Seller, seller_uuid)
+        assert seller is not None
+        tenant_id = seller.tenant_id
+        import httpx
+
+        async with httpx.AsyncClient() as http_client:
+            result = await sync_seller_orders(session, tenant_id, seller_uuid, http_client)
+
+    assert result["orders_created"] == 1
+    assert result["orders_page_error"] == "wb_upstream_error_400"
+    async with SessionLocal() as session:
+        order = (
+            await session.execute(
+                select(FbsOrder).where(FbsOrder.seller_id == seller_uuid)
+            )
+        ).scalar_one()
+    assert order.wb_order_id == 800501
+
+
+@pytest.mark.asyncio
+async def test_fbs_sync_keeps_new_orders_when_status_fetch_fails(
+    async_client: AsyncClient,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    headers, suffix = await _register_ff_admin(async_client)
+    seller_id, _warehouse_id = await _setup_seller_with_token(async_client, headers, suffix)
+    seller_uuid = uuid.UUID(seller_id)
+    _patch_wb_order_fetches(
+        monkeypatch,
+        new_rows=[_wb_order_row(order_id=800502)],
+        status_raises=WildberriesClientError("upstream_error", status_code=400),
+    )
+
+    async with SessionLocal() as session:
+        from app.models.seller import Seller
+
+        seller = await session.get(Seller, seller_uuid)
+        assert seller is not None
+        tenant_id = seller.tenant_id
+        import httpx
+
+        async with httpx.AsyncClient() as http_client:
+            result = await sync_seller_orders(session, tenant_id, seller_uuid, http_client)
+
+    assert result["orders_created"] == 1
+    assert result["status_sync_error"] == "wb_upstream_error_400"
+    async with SessionLocal() as session:
+        order = (
+            await session.execute(
+                select(FbsOrder).where(FbsOrder.seller_id == seller_uuid)
+            )
+        ).scalar_one()
+    assert order.wb_order_id == 800502
 
 
 # TC-NEW-FBS-INTAKE-004 N3 — missing marketplace token
