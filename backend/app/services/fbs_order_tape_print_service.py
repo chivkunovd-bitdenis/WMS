@@ -14,6 +14,7 @@ from sqlalchemy.orm import selectinload
 from app.models.fbs_order import (
     CHECK_STATUS_NEW,
     MARKING_KIND_SGTIN,
+    META_STATUS_ASSIGNED,
     META_STATUS_PENDING,
     FbsOrder,
     FbsOrderMarking,
@@ -153,7 +154,7 @@ async def print_fbs_order_tape(
                 )
             )
             continue
-        requires_honest_sign = bool(order.product and order.product.requires_honest_sign)
+        requires_honest_sign = _order_requires_sgtin(order)
         if not requires_honest_sign:
             result_orders.append(
                 FbsOrderTapeOrder(
@@ -199,6 +200,28 @@ async def print_fbs_order_tape(
         shortage_total += printed.shortage or 0
         if (printed.shortage or 0) > 0 and not allow_partial:
             continue
+        code_value = printed.codes[0] if printed.codes else None
+        if code_value:
+            try:
+                await marking_svc.upsert_order_marking(
+                    session,
+                    tenant_id,
+                    order.id,
+                    MARKING_KIND_SGTIN,
+                    code_value,
+                    http_client,
+                )
+            except marking_svc.FbsMarkingError as exc:
+                await _mark_printed_sgtin_not_sent(session, order)
+                errors.append(
+                    FbsOrderTapeError(
+                        order_id=order.id,
+                        wb_order_id=int(order.wb_order_id),
+                        code=exc.code,
+                        message=exc.code,
+                    )
+                )
+                continue
         result_orders.append(
             FbsOrderTapeOrder(
                 order_id=order.id,
@@ -300,8 +323,7 @@ async def _preflight_new_code_shortage(
         order.product_id
         for order in orders
         if order.product_id is not None
-        and order.product
-        and order.product.requires_honest_sign
+        and _order_requires_sgtin(order)
         and _existing_sgtin_marking(order) is None
     }
     if not product_ids:
@@ -315,8 +337,7 @@ async def _preflight_new_code_shortage(
     for order in orders:
         if (
             order.product_id is not None
-            and order.product
-            and order.product.requires_honest_sign
+            and _order_requires_sgtin(order)
             and _existing_sgtin_marking(order) is None
         ):
             required_by_product[order.product_id] = required_by_product.get(order.product_id, 0) + 1
@@ -376,6 +397,7 @@ async def _print_or_reprint_order_code(
         layout=layout,
         allow_partial=allow_partial,
         units_to_print=1,
+        force_required=_order_requires_sgtin(order),
         commit=False,
     )
     if result.quantity < 1 or not result.printed_codes:
@@ -392,6 +414,38 @@ def _existing_sgtin_marking(order: FbsOrder) -> FbsOrderMarking | None:
         if marking.kind == MARKING_KIND_SGTIN:
             return marking
     return None
+
+
+def _order_requires_sgtin(order: FbsOrder) -> bool:
+    required = {
+        str(kind).strip().lower() for kind in (order.required_meta_json or []) if str(kind).strip()
+    }
+    return MARKING_KIND_SGTIN in required or bool(
+        order.product and order.product.requires_honest_sign
+    )
+
+
+async def _mark_printed_sgtin_not_sent(
+    session: AsyncSession,
+    order: FbsOrder,
+) -> None:
+    marking = _existing_sgtin_marking(order)
+    if marking is None:
+        return
+    marking.meta_status = META_STATUS_ASSIGNED
+    order.meta_details_json = {
+        MARKING_KIND_SGTIN: {
+            "status": META_STATUS_ASSIGNED,
+            "value": marking.value,
+            "reason": None,
+        }
+    }
+    order.metadata_last_checked_at = datetime.now(UTC)
+    order.metadata_delivery_allowed = marking_svc.compute_delivery_allowed(
+        order,
+        list(order.markings),
+    )
+    await session.flush()
 
 
 async def _assign_printed_code_to_order(

@@ -70,9 +70,9 @@ async def _ensure_tenant(
 
 
 async def _seed_seller_with_marketplace_token(
-  tenant_id: uuid.UUID,
-  *,
-  token_suffix: str,
+    tenant_id: uuid.UUID,
+    *,
+    token_suffix: str,
 ) -> uuid.UUID:
     seller_id = uuid.uuid4()
     async with SessionLocal() as session:
@@ -435,9 +435,9 @@ async def test_fbs_statuses_autopoll_all_sellers(
     assert result.statuses_updated == 3
 
 
-# TC-NEW-FBS-STOCK-013 — successful intake triggers stock sync for seller bindings
+# TC-NEW-FBS-STOCK-013 — order intake does not write stocks unless explicitly requested
 @pytest.mark.asyncio
-async def test_fbs_autopoll_intake_success_calls_stock_sync(
+async def test_fbs_autopoll_intake_success_skips_stock_sync_by_default(
     async_client: AsyncClient,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -485,6 +485,64 @@ async def test_fbs_autopoll_intake_success_calls_stock_sync(
     async with SessionLocal() as session, httpx.AsyncClient() as client:
         stats = await poll_fbs_orders_for_seller(session, target, client)
 
+    assert stock_calls == []
+    assert stats["stocks_bindings_processed"] == 0
+
+
+@pytest.mark.asyncio
+async def test_fbs_autopoll_intake_success_can_opt_into_stock_sync(
+    async_client: AsyncClient,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    tenant_id = uuid.uuid4()
+    seller_id = await _seed_seller_with_marketplace_token(tenant_id, token_suffix="stock-opt")
+    stock_calls: list[uuid.UUID] = []
+
+    async def fake_orders(
+        session: object,
+        tid: uuid.UUID,
+        sid: uuid.UUID,
+        http_client: object,
+        *,
+        warehouse_id: uuid.UUID | None = None,
+    ) -> dict[str, int]:
+        return {
+            "orders_upserted": 1,
+            "orders_created": 1,
+            "statuses_updated": 0,
+        }
+
+    async def fake_stocks(
+        session: object,
+        tid: uuid.UUID,
+        sid: uuid.UUID,
+        http_client: object,
+        *,
+        wb_warehouse_id: int | None = None,
+    ) -> object:
+        stock_calls.append(sid)
+        from app.services.fbs_autopoll_service import SellerStockSyncResult
+
+        return SellerStockSyncResult(bindings_processed=1)
+
+    monkeypatch.setattr(
+        "app.services.fbs_autopoll_service.sync_seller_orders",
+        fake_orders,
+    )
+    monkeypatch.setattr(
+        "app.services.fbs_autopoll_service.sync_seller_stocks",
+        fake_stocks,
+    )
+
+    target = SellerPollTarget(tenant_id=tenant_id, seller_id=seller_id)
+    async with SessionLocal() as session, httpx.AsyncClient() as client:
+        stats = await poll_fbs_orders_for_seller(
+            session,
+            target,
+            client,
+            sync_stocks_after_orders=True,
+        )
+
     assert stock_calls == [seller_id]
     assert stats["stocks_bindings_processed"] == 1
 
@@ -529,9 +587,9 @@ async def test_fbs_autopoll_intake_error_skips_stock_sync(
     assert stock_calls == []
 
 
-# TC-NEW-FBS-STOCK-013 — one seller intake error does not block stock sync for another
+# TC-NEW-FBS-STOCK-013 — order autopoll all sellers does not run stock writes
 @pytest.mark.asyncio
-async def test_fbs_autopoll_seller_error_does_not_block_other_stock_sync(
+async def test_fbs_autopoll_all_sellers_skips_stock_sync(
     async_client: AsyncClient,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -580,8 +638,8 @@ async def test_fbs_autopoll_seller_error_does_not_block_other_stock_sync(
     result = await poll_fbs_orders_all_sellers()
     assert result.sellers_polled == 1
     assert result.seller_errors == 1
-    assert stock_calls == [seller_ids[1]]
-    assert result.stocks_bindings_processed == 1
+    assert stock_calls == []
+    assert result.stocks_bindings_processed == 0
 
 
 # TC-NEW-FBS-STOCK-013 — binding error is logged but other bindings continue

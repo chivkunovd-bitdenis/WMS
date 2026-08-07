@@ -783,20 +783,26 @@ async def test_fbs_supply_promoted_after_marking_when_honest_sign_required(
     )
     assert mark.status_code == 200, mark.text
 
-    async def fake_meta(
+    from app.services.wildberries_fbs_client import MarketplaceOrderMetaRow
+
+    async def fake_meta_batch(
         client: object,
         *,
         api_token: str,
-        order_id: int,
+        order_ids: list[int],
         marketplace_api_base: str | None = None,
-    ) -> dict[str, object]:
-        return {
-            "sgtins": [{"value": "01CIS-PACKINT-TEST", "checkStatus": "ok"}],
-        }
+    ) -> list[MarketplaceOrderMetaRow]:
+        assert order_ids == [920001]
+        return [
+            MarketplaceOrderMetaRow(
+                order_id=920001,
+                meta={"sgtins": [{"value": "01CIS-PACKINT-TEST", "checkStatus": "ok"}]},
+            )
+        ]
 
     monkeypatch.setattr(
-        "app.services.fbs_marking_service.fetch_marketplace_order_meta",
-        fake_meta,
+        "app.services.fbs_marking_service.fetch_marketplace_orders_meta_batch",
+        fake_meta_batch,
     )
     sync = await async_client.post(
         f"/operations/fbs-orders/{order_id}/markings/sync",

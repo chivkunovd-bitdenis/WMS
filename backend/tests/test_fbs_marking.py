@@ -17,6 +17,7 @@ from app.models.fbs_order import (
     FBS_ORDER_STATUS_PACKED,
     META_STATUS_ACCEPTED,
     META_STATUS_ALLOWED_WITHOUT_CHECK,
+    META_STATUS_PENDING,
     META_STATUS_REJECTED,
     FbsOrderMarking,
 )
@@ -191,7 +192,7 @@ async def test_fbs_marking_put_sgtin_ok_and_validation(
     assert frozen.json()["detail"]["code"] == "order_marking_frozen"
 
 
-# TC-NEW-FBS-MARK-002 — sync updates check_status from GET meta
+# TC-NEW-FBS-MARK-002 — sync updates check_status from official batch meta
 @pytest.mark.asyncio
 async def test_fbs_marking_sync_updates_check_status(
     async_client: AsyncClient,
@@ -217,21 +218,26 @@ async def test_fbs_marking_sync_updates_check_status(
     )
     assert put.status_code == 200, put.text
 
-    async def fake_meta(
+    from app.services.wildberries_fbs_client import MarketplaceOrderMetaRow
+
+    async def fake_meta_batch(
         client: object,
         *,
         api_token: str,
-        order_id: int,
+        order_ids: list[int],
         marketplace_api_base: str | None = None,
-    ) -> dict[str, Any]:
-        assert order_id == 920001
-        return {
-            "sgtins": [{"value": cis, "checkStatus": "checking"}],
-        }
+    ) -> list[MarketplaceOrderMetaRow]:
+        assert order_ids == [920001]
+        return [
+            MarketplaceOrderMetaRow(
+                order_id=920001,
+                meta={"sgtins": [{"value": cis, "checkStatus": "checking"}]},
+            )
+        ]
 
     monkeypatch.setattr(
-        "app.services.fbs_marking_service.fetch_marketplace_order_meta",
-        fake_meta,
+        "app.services.fbs_marking_service.fetch_marketplace_orders_meta_batch",
+        fake_meta_batch,
     )
 
     sync = await async_client.post(
@@ -765,6 +771,29 @@ async def test_fbs_metadata_gate_rejected_blocks_allowed_without_check_ok(
             ).scalars()
         )
         assert compute_delivery_allowed(order, markings) is True
+
+
+def test_fbs_metadata_gate_pending_blocks_filled_allows() -> None:
+    from types import SimpleNamespace
+
+    from app.services.fbs_marking_service import (
+        compute_delivery_allowed,
+        derive_meta_status,
+    )
+
+    order = SimpleNamespace(required_meta_json=["sgtin"])
+    pending = SimpleNamespace(kind="sgtin", value="01CIS-PENDING", meta_status=META_STATUS_PENDING)
+    assert compute_delivery_allowed(order, [pending]) is False
+    assert (
+        derive_meta_status(
+            check_status=None,
+            decision="filled",
+            has_value=True,
+        )
+        == META_STATUS_ACCEPTED
+    )
+    filled = SimpleNamespace(kind="sgtin", value="01CIS-FILLED", meta_status=META_STATUS_ACCEPTED)
+    assert compute_delivery_allowed(order, [filled]) is True
 
 
 @pytest.mark.asyncio

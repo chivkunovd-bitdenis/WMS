@@ -262,6 +262,7 @@ def _persist_cargo_qr_bytes(
     asset.error_code = None
     asset.error_message = None
     trbx.qr_asset_id = asset.id
+    trbx.sticker_file = rel
 
 
 async def ensure_cargo_place_qr_assets(
@@ -294,32 +295,34 @@ async def ensure_cargo_place_qr_assets(
     except FbsPrintAssetSupplyError as exc:
         raise FbsPrintAssetError(exc.code, message="Нет доступа к маркетплейсу.") from exc
 
-    try:
-        sticker_rows = await fetch_marketplace_trbx_stickers(
-            http_client,
-            api_token=token,
-            supply_id=supply.wb_supply_id,
-            trbx_ids=[trbx.wb_trbx_id for trbx in uncached],
-        )
-    except WildberriesClientError as exc:
-        suffix = f"_{exc.status_code}" if exc.status_code else ""
-        raise FbsPrintAssetError(
-            f"wb_{exc.code}{suffix}",
-            message="WB не вернул QR грузоместа.",
-            retryable=True,
-        ) from exc
-
-    by_wb_id: dict[str, dict[str, Any]] = {}
-    for row in sticker_rows:
-        for key in ("trbxId", "trbx_id", "id"):
-            wb_id = row.get(key)
-            if wb_id is not None:
-                by_wb_id[str(wb_id)] = row
-                break
-
     fetched_at = datetime.now(tz=UTC)
     for trbx in uncached:
-        sticker_row = by_wb_id.get(trbx.wb_trbx_id)
+        try:
+            sticker_rows = await fetch_marketplace_trbx_stickers(
+                http_client,
+                api_token=token,
+                supply_id=supply.wb_supply_id,
+                trbx_ids=[trbx.wb_trbx_id],
+            )
+        except WildberriesClientError as exc:
+            suffix = f"_{exc.status_code}" if exc.status_code else ""
+            raise FbsPrintAssetError(
+                f"wb_{exc.code}{suffix}",
+                message="WB не вернул QR грузоместа.",
+                retryable=True,
+            ) from exc
+
+        sticker_row: dict[str, Any] | None = None
+        for row in sticker_rows:
+            for key in ("trbxId", "trbx_id", "id"):
+                wb_id = row.get(key)
+                if wb_id is not None and str(wb_id) == trbx.wb_trbx_id:
+                    sticker_row = row
+                    break
+            if sticker_row is not None:
+                break
+        if sticker_row is None and len(sticker_rows) == 1:
+            sticker_row = sticker_rows[0]
         if sticker_row is None:
             raise FbsPrintAssetError(
                 "wb_invalid_response",
@@ -497,8 +500,10 @@ async def request_supply_print_batch(
         asset = await _find_order_sticker_asset(session, tenant_id, order.id)
         if retry_missing and asset is not None and _asset_file_ready(asset):
             continue
-        if asset is not None and asset.status == PRINT_ASSET_STATUS_READY and not _asset_file_ready(
-            asset
+        if (
+            asset is not None
+            and asset.status == PRINT_ASSET_STATUS_READY
+            and not _asset_file_ready(asset)
         ):
             _mark_asset_error(
                 asset,

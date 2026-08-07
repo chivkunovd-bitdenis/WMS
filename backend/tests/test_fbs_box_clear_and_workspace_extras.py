@@ -142,7 +142,7 @@ async def test_clear_box_on_empty_box_is_idempotent(async_client: AsyncClient) -
 
 @pytest.mark.asyncio
 async def test_clear_box_after_supply_delivered_is_rejected(async_client: AsyncClient) -> None:
-    headers, supply_id, order_ids, _product_id, tenant_id = await _packed_supply(async_client)
+    headers, supply_id, order_ids, _product_id, _tenant_id = await _packed_supply(async_client)
 
     created = await async_client.post(
         f"/operations/fbs-supplies/{supply_id}/boxes",
@@ -281,6 +281,7 @@ async def test_workspace_marking_pool_empty_when_nothing_needs_marking(
 @pytest.mark.asyncio
 async def test_order_print_tape_assigns_codes_to_requested_orders(
     async_client: AsyncClient,
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     headers, supply_id, order_ids, product_id, tenant_id = await _packed_supply(
         async_client,
@@ -296,7 +297,7 @@ async def test_order_print_tape_assigns_codes_to_requested_orders(
     async with SessionLocal() as session:
         product = await session.get(Product, product_id)
         assert product is not None
-        product.requires_honest_sign = True
+        product.requires_honest_sign = False
         result = await session.execute(select(FbsOrder).where(FbsOrder.id.in_(order_ids)))
         seller_id: uuid.UUID | None = None
         for order in result.scalars().all():
@@ -316,6 +317,33 @@ async def test_order_print_tape_assigns_codes_to_requested_orders(
             )
         await session.commit()
 
+    wb_meta_puts: list[tuple[int, str, str]] = []
+
+    async def capture_wb_meta_put(
+        client: object,
+        *,
+        api_token: str,
+        order_id: int,
+        kind: str,
+        value: str,
+        marketplace_api_base: str | None = None,
+    ) -> None:
+        del client, api_token, marketplace_api_base
+        wb_meta_puts.append((order_id, kind, value))
+
+    monkeypatch.setattr(
+        "app.services.fbs_marking_service.put_marketplace_order_meta",
+        capture_wb_meta_put,
+    )
+
+    async def fake_marketplace_token(*_args: object, **_kwargs: object) -> str:
+        return "wb-marketplace-token"
+
+    monkeypatch.setattr(
+        "app.services.fbs_marking_service.get_decrypted_marketplace_token",
+        fake_marketplace_token,
+    )
+
     printed = await async_client.post(
         f"/operations/fbs-supplies/{supply_id}/order-print-tape",
         headers=headers,
@@ -331,10 +359,13 @@ async def test_order_print_tape_assigns_codes_to_requested_orders(
     body = printed.json()
     assert body["shortage"] == 0
     assert body["requested"] == 2
-    assert body["ready"] == 2
+    assert body["ready"] == 2, body
     assert [row["order_id"] for row in body["orders"]] == [str(order_id) for order_id in order_ids]
     assert all(row["requires_honest_sign"] is True for row in body["orders"])
     assert all(len(row["printed_codes"]) == 1 for row in body["orders"])
+    assert len(wb_meta_puts) == 2
+    assert {row[0] for row in wb_meta_puts} == {700001, 700002}
+    assert {row[1] for row in wb_meta_puts} == {MARKING_KIND_SGTIN}
 
     async with SessionLocal() as session:
         markings = list(

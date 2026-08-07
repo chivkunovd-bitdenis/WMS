@@ -428,6 +428,7 @@ _LEDGER_CSV_HEADER = (
     "actor_email",
 )
 
+
 def normalize_cis(raw: str) -> str | None:
     text = raw.strip().replace("\ufeff", "")
     if not text:
@@ -1485,6 +1486,7 @@ async def print_codes_for_packaging_line(
     reprint_code_ids: list[uuid.UUID] | None = None,
     duplicate_copies: int | None = None,
     units_to_print: int | None = None,
+    force_required: bool = False,
     commit: bool = True,
 ) -> PrintMarkingCodesResult:
     print_layout = resolve_print_layout(layout, duplicate_copies=duplicate_copies)
@@ -1507,7 +1509,7 @@ async def print_codes_for_packaging_line(
     product = await get_product(session, tenant_id, line.product_id)
     if product is None:
         raise MarkingCodeServiceError("product_not_found")
-    if not product.requires_honest_sign:
+    if not product.requires_honest_sign and not force_required:
         raise MarkingCodeServiceError("marking_not_required")
     if product.seller_id is None:
         raise MarkingCodeServiceError("product_seller_missing")

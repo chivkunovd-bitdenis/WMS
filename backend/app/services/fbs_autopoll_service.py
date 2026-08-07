@@ -180,6 +180,8 @@ async def poll_fbs_orders_for_seller(
     session: AsyncSession,
     target: SellerPollTarget,
     http_client: httpx.AsyncClient,
+    *,
+    sync_stocks_after_orders: bool = False,
 ) -> dict[str, int]:
     result = await sync_seller_orders(
         session,
@@ -187,12 +189,14 @@ async def poll_fbs_orders_for_seller(
         target.seller_id,
         http_client,
     )
-    stock_result = await sync_seller_stocks(
-        session,
-        target.tenant_id,
-        target.seller_id,
-        http_client,
-    )
+    stock_result = SellerStockSyncResult()
+    if sync_stocks_after_orders:
+        stock_result = await sync_seller_stocks(
+            session,
+            target.tenant_id,
+            target.seller_id,
+            http_client,
+        )
     return {
         "orders_upserted": int(result.get("orders_upserted", 0)),
         "orders_created": int(result.get("orders_created", 0)),

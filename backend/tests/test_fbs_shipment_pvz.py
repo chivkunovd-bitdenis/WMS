@@ -201,7 +201,7 @@ async def test_pvz_cargo_places_transport_after_wb_side_effect_reconciles_withou
     seller_id, warehouse_id, tenant_id = await _setup_seller_with_token(
         async_client, headers, suffix
     )
-    supply, order_ids = await _prepare_pvz_supply(
+    supply, _order_ids = await _prepare_pvz_supply(
         async_client,
         headers,
         seller_id,
@@ -291,7 +291,7 @@ async def test_pvz_cargo_places_unresolved_reconcile_returns_structured_504(
     seller_id, warehouse_id, tenant_id = await _setup_seller_with_token(
         async_client, headers, suffix
     )
-    supply, order_ids = await _prepare_pvz_supply(
+    supply, _order_ids = await _prepare_pvz_supply(
         async_client,
         headers,
         seller_id,
@@ -365,7 +365,7 @@ async def test_tc18_pvz_cargo_places_dimension_blockers(
         async_client, headers, suffix
     )
 
-    supply, order_ids = await _prepare_pvz_supply(
+    supply, _order_ids = await _prepare_pvz_supply(
         async_client,
         headers,
         seller_id,
@@ -738,6 +738,69 @@ async def test_fbs_pvz_trbx_stickers_cached_and_wb_error(
     )
     assert fail_resp.status_code == 502
     assert fail_resp.json()["detail"]["code"] == "wb_upstream_error_502"
+
+
+@pytest.mark.asyncio
+async def test_fbs_pvz_trbx_sticker_single_response_without_trbx_id(
+    async_client: AsyncClient,
+    enable_wb_marketplace_supplies_mock: None,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    headers, suffix = await _register_ff_admin(async_client)
+    seller_id, warehouse_id, tenant_id = await _setup_seller_with_token(
+        async_client, headers, suffix
+    )
+
+    supply, _ = await _prepare_pvz_supply(
+        async_client,
+        headers,
+        seller_id,
+        warehouse_id,
+        tenant_id,
+        wb_order_ids=[963101],
+        supply_name="PVZ sticker no trbx id",
+    )
+    create = await async_client.post(
+        f"/operations/fbs-supplies/{supply['id']}/trbx",
+        headers=headers,
+        json={"count": 1},
+    )
+    assert create.status_code == 201, create.text
+    trbx_id = create.json()["trbxes"][0]["id"]
+
+    async with SessionLocal() as session:
+        trbx_row = await session.get(FbsTrbx, uuid.UUID(trbx_id))
+        assert trbx_row is not None
+        trbx_row.qr_asset_id = None
+        assets = await session.execute(
+            select(FbsPrintAsset).where(
+                FbsPrintAsset.fbs_trbx_id == trbx_row.id,
+                FbsPrintAsset.kind == PRINT_ASSET_KIND_CARGO_PLACE_QR,
+            )
+        )
+        for asset in assets.scalars().all():
+            await session.delete(asset)
+        await session.commit()
+
+    import app.services.fbs_print_asset_service as print_mod
+
+    original_fetch = print_mod.fetch_marketplace_trbx_stickers
+
+    async def fetch_without_trbx_id(*args: object, **kwargs: object) -> list[dict[str, object]]:
+        rows = await original_fetch(*args, **kwargs)  # type: ignore[arg-type]
+        assert len(rows) == 1
+        return [{"file": rows[0]["file"], "barcode": rows[0]["barcode"]}]
+
+    monkeypatch.setattr(print_mod, "fetch_marketplace_trbx_stickers", fetch_without_trbx_id)
+
+    retry = await async_client.post(
+        f"/operations/fbs-supplies/{supply['id']}/trbx/stickers",
+        headers=headers,
+        params={"type": "png"},
+    )
+    assert retry.status_code == 200, retry.text
+    body = retry.json()
+    assert body["trbxes"][0]["sticker_file"] is not None
 
 
 @pytest.mark.asyncio
