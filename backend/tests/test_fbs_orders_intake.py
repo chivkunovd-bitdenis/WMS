@@ -3,14 +3,13 @@ from __future__ import annotations
 import asyncio
 import time
 import uuid
-from datetime import datetime, timedelta
+from datetime import UTC, datetime, timedelta
 from typing import Any
 
 import pytest
 from httpx import AsyncClient
 from sqlalchemy import func, select
 
-from app.core.settings import settings
 from app.db.session import SessionLocal
 from app.models.fbs_order import (
     FBS_ORDER_STATUS_NEW,
@@ -19,12 +18,12 @@ from app.models.fbs_order import (
     RESERVE_STATUS_NO_STOCK,
     RESERVE_STATUS_RELEASED,
     RESERVE_STATUS_RESERVED,
-    RESERVE_STATUS_WAREHOUSE_UNMAPPED,
     FbsOrder,
     FbsOrderReservation,
 )
 from app.models.fbs_warehouse_binding import FbsWarehouseBinding
 from app.models.product import Product
+from app.models.warehouse import Warehouse
 from app.services import inventory_service
 from app.services.sorting_location_service import get_or_create_sorting_location
 from app.services.tokens import decode_access_token
@@ -867,9 +866,9 @@ async def test_fbs_orders_bind_to_correct_wms_warehouse(
     assert by_wb[800602]["wb_office_id"] == 99
 
 
-# TC-NEW-FBS-STOCK-004 — unknown WB warehouse stays unmapped, no reserve
+# TC-NEW-FBS-STOCK-004 — unknown WB warehouse creates a technical binding
 @pytest.mark.asyncio
-async def test_fbs_order_unknown_wb_warehouse_unmapped(
+async def test_fbs_order_unknown_wb_warehouse_auto_creates_binding(
     async_client: AsyncClient,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -911,32 +910,60 @@ async def test_fbs_order_unknown_wb_warehouse_unmapped(
 
     listed = await async_client.get("/operations/fbs-orders", headers=headers)
     order = listed.json()[0]
-    assert order["warehouse_id"] is None
+    assert order["warehouse_id"] is not None
     assert order["wb_warehouse_id"] == UNKNOWN_WB_WAREHOUSE
     assert order["mapping_status"] == MAPPING_STATUS_MAPPED
-    assert order["reserve_status"] == RESERVE_STATUS_WAREHOUSE_UNMAPPED
+    assert order["reserve_status"] == RESERVE_STATUS_NO_STOCK
 
     async with SessionLocal() as session:
+        binding_stmt = select(FbsWarehouseBinding).where(
+            FbsWarehouseBinding.seller_id == uuid.UUID(seller_id),
+            FbsWarehouseBinding.wb_warehouse_id == UNKNOWN_WB_WAREHOUSE,
+        )
+        binding = await session.scalar(binding_stmt)
+        assert binding is not None
+        assert str(binding.wms_warehouse_id) == order["warehouse_id"]
+        assert binding.is_active is True
+        assert binding.stock_sync_enabled is False
+
+        warehouse = await session.get(Warehouse, uuid.UUID(order["warehouse_id"]))
+        assert warehouse is not None
+        assert warehouse.code.startswith("fbs-wb-")
+
         count_stmt = select(func.count()).select_from(FbsOrderReservation)
         res = await session.execute(count_stmt)
         assert int(res.scalar_one()) == 0
 
 
-# TC-NEW-FBS-STOCK-004 — unmapped order blocked from supply
+# TC-NEW-FBS-STOCK-004 — zero local WMS stock does not block FBS selection
 @pytest.mark.asyncio
-async def test_fbs_unmapped_order_rejected_from_supply(
+async def test_fbs_order_without_local_stock_is_selectable(
     async_client: AsyncClient,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    monkeypatch.setattr(settings, "e2e_mock_wb_marketplace_supplies", True)
     headers, suffix = await _register_ff_admin(async_client)
     seller_id, warehouse_id = await _setup_seller_with_token(async_client, headers, suffix)
     await _create_binding(async_client, headers, seller_id, WB_WAREHOUSE_A, warehouse_id)
+    product = await async_client.post(
+        "/products",
+        headers=headers,
+        json={
+            "name": "Selectable without local stock",
+            "sku_code": f"SEL-{suffix}",
+            "seller_id": seller_id,
+            "wb_barcode": "FBS-BARCODE-001",
+        },
+    )
+    assert product.status_code in (200, 201), product.text
 
     _patch_wb_order_fetches(
         monkeypatch,
         new_rows=[
-            _wb_order_row(order_id=800801, warehouse_id=UNKNOWN_WB_WAREHOUSE),
+            _wb_order_row(
+                order_id=800801,
+                created_at=datetime.now(UTC).isoformat(),
+                warehouse_id=UNKNOWN_WB_WAREHOUSE,
+            ),
         ],
     )
     start = await async_client.post(
@@ -949,27 +976,25 @@ async def test_fbs_unmapped_order_rejected_from_supply(
 
     listed = await async_client.get("/operations/fbs-orders", headers=headers)
     order_id = listed.json()[0]["id"]
+    assert listed.json()[0]["reserve_status"] == RESERVE_STATUS_NO_STOCK
 
-    supply = await async_client.post(
-        "/operations/fbs-supplies",
+    worklist = await async_client.get(
+        "/operations/fbs-orders/worklist?status_group=new",
         headers=headers,
-        json={
-            "seller_id": seller_id,
-            "warehouse_id": warehouse_id,
-            "name": "Supply",
-            "delivery_type": "warehouse_sc",
-        },
     )
-    assert supply.status_code in (200, 201), supply.text
-    supply_id = supply.json()["id"]
+    assert worklist.status_code == 200, worklist.text
+    worklist_order = worklist.json()["items"][0]
+    assert worklist_order["id"] == order_id
+    assert worklist_order["inventory"]["available_unpacked"] == 0
+    assert worklist_order["selection_blockers"] == []
 
-    add = await async_client.post(
-        f"/operations/fbs-supplies/{supply_id}/orders",
+    preflight = await async_client.post(
+        "/operations/fbs-supplies/preflight",
         headers=headers,
-        json={"order_id": order_id},
+        json={"order_ids": [order_id], "planned_delivery_type": "warehouse_sc"},
     )
-    assert add.status_code == 409
-    assert add.json()["detail"] == "order_warehouse_unmapped"
+    assert preflight.status_code == 200, preflight.text
+    assert preflight.json()["compatible"] is True
 
 
 # Binding later → re-sync assigns warehouse and reserves
@@ -1024,7 +1049,9 @@ async def test_fbs_binding_later_assigns_warehouse_and_reserves(
     await _wait_for_job(async_client, headers, start.json()["id"])
 
     listed = await async_client.get("/operations/fbs-orders", headers=headers)
-    assert listed.json()[0]["reserve_status"] == RESERVE_STATUS_WAREHOUSE_UNMAPPED
+    assert listed.json()[0]["warehouse_id"] is not None
+    assert listed.json()[0]["warehouse_id"] != warehouse_id
+    assert listed.json()[0]["reserve_status"] == RESERVE_STATUS_NO_STOCK
 
     await _create_binding(async_client, headers, seller_id, WB_WAREHOUSE_A, warehouse_id)
 

@@ -26,7 +26,6 @@ from app.models.fbs_order import (
     FBS_ORDER_STATUS_PACKED,
     FBS_ORDER_STATUS_SORTED,
     MAPPING_STATUS_MISSING,
-    RESERVE_STATUS_NO_STOCK,
     FbsOrder,
     FbsOrderMarking,
 )
@@ -516,10 +515,6 @@ def compute_selection_blockers(
     if order.warehouse_id is None:
         blockers.append(
             {"code": "warehouse_unmapped", "message": "Склад WB не привязан к WMS."}
-        )
-    if order.reserve_status == RESERVE_STATUS_NO_STOCK or available_unpacked <= 0:
-        blockers.append(
-            {"code": "insufficient_stock", "message": "Недостаточно неупакованного остатка."}
         )
     if _as_utc(order.deadline_at) < _as_utc(server_now):
         blockers.append(
