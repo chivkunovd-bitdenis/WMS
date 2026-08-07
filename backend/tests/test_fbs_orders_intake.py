@@ -27,6 +27,7 @@ from app.models.fbs_warehouse_binding import FbsWarehouseBinding
 from app.models.product import Product
 from app.services import inventory_service
 from app.services.sorting_location_service import get_or_create_sorting_location
+from app.services.tokens import decode_access_token
 from app.services.wb_marketplace_orders_service import (
     FBS_DEADLINE_HOURS,
     RESERVE_STATUS_WAREHOUSE_REMAP_CONFLICT,
@@ -46,6 +47,7 @@ def _wb_order_row(
     order_id: int = 700001,
     barcode: str = "FBS-BARCODE-001",
     nm_id: int = 900001,
+    chrt_id: int = 555,
     created_at: str = "2026-07-01T12:00:00+03:00",
     office_id: int = 42,
     warehouse_id: int = WB_WAREHOUSE_A,
@@ -55,7 +57,7 @@ def _wb_order_row(
         "rid": f"rid-{order_id}",
         "createdAt": created_at,
         "nmId": nm_id,
-        "chrtId": 555,
+        "chrtId": chrt_id,
         "article": "ART-001",
         "skus": [barcode],
         "price": 199900,
@@ -317,6 +319,64 @@ async def test_fbs_order_product_mapping_success_and_missing(
     assert by_wb[800101]["mapping_status"] == MAPPING_STATUS_MAPPED
     assert by_wb[800102]["product_id"] is None
     assert by_wb[800102]["mapping_status"] == MAPPING_STATUS_MISSING
+
+
+@pytest.mark.asyncio
+async def test_fbs_order_product_mapping_prefers_chrt_id_over_shared_nm_id(
+    async_client: AsyncClient,
+) -> None:
+    headers, suffix = await _register_ff_admin(async_client)
+    seller_id, _warehouse_id = await _setup_seller_with_token(async_client, headers, suffix)
+    token = headers["Authorization"].removeprefix("Bearer ")
+    tenant_id = uuid.UUID(str(decode_access_token(token)["tenant_id"]))
+    product_a = await async_client.post(
+        "/products",
+        headers=headers,
+        json={
+            "name": "Shared nm size A",
+            "sku_code": f"CHRT-A-{suffix}",
+            "seller_id": seller_id,
+            "wb_barcode": f"CHRT-A-BAR-{suffix}",
+            "wb_nm_id": 777777,
+        },
+    )
+    assert product_a.status_code in (200, 201), product_a.text
+    product_b = await async_client.post(
+        "/products",
+        headers=headers,
+        json={
+            "name": "Shared nm size B",
+            "sku_code": f"CHRT-B-{suffix}",
+            "seller_id": seller_id,
+            "wb_barcode": f"CHRT-B-BAR-{suffix}",
+            "wb_nm_id": 777777,
+        },
+    )
+    assert product_b.status_code in (200, 201), product_b.text
+    async with SessionLocal() as session:
+        a = await session.get(Product, uuid.UUID(product_a.json()["id"]))
+        b = await session.get(Product, uuid.UUID(product_b.json()["id"]))
+        assert a is not None
+        assert b is not None
+        a.wb_chrt_id = 111111
+        b.wb_chrt_id = 222222
+        await session.commit()
+
+    async with SessionLocal() as session:
+        order, _created = await upsert_order_from_wb_row(
+            session,
+            tenant_id,
+            uuid.UUID(seller_id),
+            _wb_order_row(
+                order_id=800103,
+                barcode="WB-SIZE-B-ORDER-BARCODE",
+                nm_id=777777,
+                chrt_id=222222,
+            ),
+        )
+
+    assert str(order.product_id) == product_b.json()["id"]
+    assert order.mapping_status == MAPPING_STATUS_MAPPED
 
 
 # TC-NEW-FBS-INTAKE-003

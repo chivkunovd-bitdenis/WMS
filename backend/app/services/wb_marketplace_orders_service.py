@@ -259,15 +259,30 @@ async def _map_product(
     *,
     wb_barcode: str | None,
     wb_nm_id: int | None,
+    wb_chrt_id: int | None,
 ) -> Product | None:
+    async def one_or_none(stmt):
+        rows = list((await session.execute(stmt.limit(2))).scalars().all())
+        if len(rows) == 1:
+            return rows[0]
+        return None
+
+    if wb_chrt_id is not None:
+        stmt = select(Product).where(
+            Product.tenant_id == tenant_id,
+            Product.seller_id == seller_id,
+            Product.wb_chrt_id == wb_chrt_id,
+        )
+        product = await one_or_none(stmt)
+        if product is not None:
+            return product
     if wb_barcode:
         stmt = select(Product).where(
             Product.tenant_id == tenant_id,
             Product.seller_id == seller_id,
             Product.wb_barcode == wb_barcode,
         )
-        res = await session.execute(stmt)
-        product = res.scalar_one_or_none()
+        product = await one_or_none(stmt)
         if product is not None:
             return product
     if wb_nm_id is not None:
@@ -276,8 +291,7 @@ async def _map_product(
             Product.seller_id == seller_id,
             Product.wb_nm_id == wb_nm_id,
         )
-        res = await session.execute(stmt)
-        return res.scalar_one_or_none()
+        return await one_or_none(stmt)
     return None
 
 
@@ -439,6 +453,7 @@ async def _apply_wb_row_to_existing(
             seller_id,
             wb_barcode=existing.wb_barcode,
             wb_nm_id=existing.wb_nm_id,
+            wb_chrt_id=existing.wb_chrt_id,
         )
         if product is not None:
             existing.product_id = product.id
@@ -466,6 +481,8 @@ async def upsert_order_from_wb_row(
     wb_barcode = _first_barcode(row)
     wb_nm_id = row.get("nmId")
     wb_nm_id_int = int(wb_nm_id) if wb_nm_id is not None else None
+    wb_chrt_id = row.get("chrtId")
+    wb_chrt_id_int = int(wb_chrt_id) if wb_chrt_id is not None else None
 
     existing = await _get_order_by_wb_id(session, seller_id, wb_order_id)
     if existing is not None:
@@ -478,6 +495,7 @@ async def upsert_order_from_wb_row(
         seller_id,
         wb_barcode=wb_barcode,
         wb_nm_id=wb_nm_id_int,
+        wb_chrt_id=wb_chrt_id_int,
     )
     mapping_status = MAPPING_STATUS_MAPPED if product is not None else MAPPING_STATUS_MISSING
     wb_warehouse_id = _wb_warehouse_id_from_row(row)
@@ -499,7 +517,7 @@ async def upsert_order_from_wb_row(
         wb_order_id=wb_order_id,
         wb_rid=row.get("rid") if isinstance(row.get("rid"), str) else None,
         wb_nm_id=wb_nm_id_int,
-        wb_chrt_id=int(row["chrtId"]) if row.get("chrtId") is not None else None,
+        wb_chrt_id=wb_chrt_id_int,
         wb_article=str(row["article"]) if row.get("article") is not None else None,
         wb_barcode=wb_barcode,
         price=int(row["price"]) if row.get("price") is not None else None,

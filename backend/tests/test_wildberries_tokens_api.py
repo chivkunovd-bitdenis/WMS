@@ -92,13 +92,16 @@ async def test_wb_tokens_patch_get_roundtrip_and_clear(async_client: AsyncClient
     b1 = p1.json()
     assert b1["has_content_token"] is True
     assert b1["has_supplies_token"] is True
+    assert b1["has_marketplace_token"] is True
 
     async with SessionLocal() as session:
         pair = await get_decrypted_tokens_for_seller(session, tenant_id, sid)
+        marketplace = await get_decrypted_marketplace_token(session, tenant_id, sid)
     assert pair is not None
     c, sup = pair
     assert c == "secret-content"
     assert sup == "supp-1"
+    assert marketplace == "secret-content"
 
     g1 = await async_client.get(
         f"/integrations/wildberries/sellers/{sid}/tokens",
@@ -114,6 +117,7 @@ async def test_wb_tokens_patch_get_roundtrip_and_clear(async_client: AsyncClient
     assert p2.status_code == 200
     assert p2.json()["has_content_token"] is False
     assert p2.json()["has_supplies_token"] is True
+    assert p2.json()["has_marketplace_token"] is False
 
 
 @pytest.mark.asyncio

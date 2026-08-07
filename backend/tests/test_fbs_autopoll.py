@@ -391,9 +391,23 @@ async def test_list_sellers_with_marketplace_token_filters(
 ) -> None:
     tenant_id = uuid.uuid4()
     with_token = await _seed_seller_with_marketplace_token(tenant_id, token_suffix="has")
+    with_unified_content_token = uuid.uuid4()
     without_token = uuid.uuid4()
     async with SessionLocal() as session:
         await _ensure_tenant(session, tenant_id, name_suffix="filter")
+        session.add(
+            Seller(
+                id=with_unified_content_token,
+                tenant_id=tenant_id,
+                name="Content token",
+            )
+        )
+        session.add(
+            SellerWildberriesCredentials(
+                seller_id=with_unified_content_token,
+                content_token_encrypted=encrypt_secret("content-token"),
+            )
+        )
         session.add(
             Seller(
                 id=without_token,
@@ -407,6 +421,7 @@ async def test_list_sellers_with_marketplace_token_filters(
 
     seller_ids = {target.seller_id for target in targets if target.tenant_id == tenant_id}
     assert with_token in seller_ids
+    assert with_unified_content_token in seller_ids
     assert without_token not in seller_ids
 
 
