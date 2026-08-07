@@ -7,7 +7,7 @@ import uuid
 from dataclasses import dataclass
 
 import httpx
-from sqlalchemy import select
+from sqlalchemy import or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.db.session import SessionLocal
@@ -65,7 +65,12 @@ async def list_sellers_with_marketplace_token(
             SellerWildberriesCredentials,
             SellerWildberriesCredentials.seller_id == Seller.id,
         )
-        .where(SellerWildberriesCredentials.marketplace_token_encrypted.isnot(None))
+        .where(
+            or_(
+                SellerWildberriesCredentials.marketplace_token_encrypted.isnot(None),
+                SellerWildberriesCredentials.content_token_encrypted.isnot(None),
+            )
+        )
         .order_by(Seller.tenant_id, Seller.id)
     )
     rows = (await session.execute(stmt)).all()
