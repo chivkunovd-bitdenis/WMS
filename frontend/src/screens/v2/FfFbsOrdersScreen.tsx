@@ -336,10 +336,10 @@ export function FfFbsOrdersScreen({ token, authHeaders, sellers }: Props) {
                   <TableCell>
                     <Typography
                       variant="body2"
-                      color={order.inventory.available_unpacked > 0 ? 'success.main' : 'error.main'}
+                      color={order.inventory.available_unpacked > 0 ? 'success.main' : 'text.secondary'}
                       sx={{ fontWeight: 750 }}
                     >
-                      Доступно: {order.inventory.available_unpacked}
+                      WMS: {order.inventory.available_unpacked}
                     </Typography>
                     {order.inventory.locations.length ? (
                       order.inventory.locations.map((location) => (
@@ -348,11 +348,10 @@ export function FfFbsOrdersScreen({ token, authHeaders, sellers }: Props) {
                         </Typography>
                       ))
                     ) : (
-                      <MissingText>Ячейка не назначена</MissingText>
+                      <Typography variant="caption" color="text.secondary">
+                        Ячейка WMS не указана
+                      </Typography>
                     )}
-                    {order.inventory.available_unpacked <= 0 ? (
-                      <MissingText>Остаток отсутствует</MissingText>
-                    ) : null}
                   </TableCell>
                   <TableCell>
                     <Stack direction="row" spacing={0.5} sx={{ flexWrap: 'wrap' }} useFlexGap>
