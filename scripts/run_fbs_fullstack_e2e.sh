@@ -58,7 +58,7 @@ for _ in {1..90}; do
     "${compose[@]}" exec -T celery_worker \
       celery -A app.celery_app inspect ping --timeout=2 2>&1 || true
   )"
-  if rg -q "pong" <<<"$worker_ping"; then
+  if grep -q "pong" <<<"$worker_ping"; then
     break
   fi
   sleep 1
@@ -67,7 +67,7 @@ worker_ping="$(
   "${compose[@]}" exec -T celery_worker \
     celery -A app.celery_app inspect ping --timeout=5 2>&1 || true
 )"
-rg -q "pong" <<<"$worker_ping"
+grep -q "pong" <<<"$worker_ping"
 
 "${compose[@]}" exec -T \
   -e WB_EMULATOR_ADMIN_TOKEN="$WB_EMULATOR_ADMIN_TOKEN" \
