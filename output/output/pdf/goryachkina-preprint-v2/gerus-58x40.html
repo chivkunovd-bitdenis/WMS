@@ -1,0 +1,111 @@
+<!doctype html><html><head><style>
+  @page { size: 58mm 40mm; margin: 0; }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; }
+  body { font-family: Arial, Helvetica, sans-serif; color: #111; background: #fff; }
+  .label {
+    width: 58mm;
+    height: 40mm;
+    padding: 1.4mm 1.8mm 1mm;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    page-break-after: always;
+    break-after: page;
+  }
+  .label:last-child { page-break-after: auto; break-after: auto; }
+  
+  .barcode-wrap {
+    flex: 0 0 auto;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: flex-start;
+    margin-bottom: 0.8mm;
+  }
+  .barcode-wrap img {
+    width: 52mm;
+    max-width: 100%;
+    height: auto;
+    max-height: 14mm;
+    object-fit: contain;
+    display: block;
+  }
+  .digits {
+    margin: 0.3mm 0 0;
+    font-size: 9pt;
+    letter-spacing: 0.04em;
+    text-align: center;
+    font-family: Arial, Helvetica, sans-serif;
+    line-height: 1.2;
+  }
+  .body {
+    flex: 1 1 auto;
+    min-height: 0;
+    overflow: hidden;
+    margin-top: 0.39mm;
+    line-height: 1.35;
+    font-size: 7.6pt;
+    display: flex;
+    flex-direction: column;
+    justify-content: flex-start;
+  }
+  /*
+   * Межстрочный зазор — через margin-bottom, а не flex "gap": рендер термопринтера
+   * (и старые движки печати) часто игнорируют flex gap → строки слипаются и длинное
+   * название наезжает на «Артикул» (как на фото ИП Горячкина). margin работает везде.
+   */
+  .body > p {
+    margin: 0 0 0.2mm;
+    flex: 0 0 auto;
+    flex-shrink: 0;
+  }
+  .body > p:last-child {
+    margin-bottom: 0;
+  }
+  .seller {
+    font-size: 7.6pt;
+    line-height: 1.35;
+    min-height: 3.63mm;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  /*
+   * Без max-height/overflow: название уже обрезано по символам в JS, поэтому строк
+   * ровно столько, сколько влезает, и они идут обычным потоком — «Артикул» всегда
+   * ниже названия и не может напечататься поверх (баг на термопринтере).
+   */
+  .name {
+    font-size: 7.8pt;
+    font-weight: 400;
+    line-height: 1.35;
+    word-break: break-word;
+  }
+  .meta {
+    line-height: 1.35;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  .meta-composition {
+    white-space: nowrap;
+  }
+  .footer {
+    flex: 0 0 auto;
+    margin: 0.35mm 0 0;
+    font-size: 7.2pt;
+    text-align: left;
+    line-height: 1.2;
+  }
+
+</style></head><body><section class="label" data-testid="product-thermal-label">
+  <div class="barcode-wrap">
+    <img id="barcode" src="data:image/png;base64,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" alt="barcode" />
+    <p class="digits">2052124100089</p>
+  </div>
+  <div class="body">
+    <p class="seller" title="ИП Герус Д.В.">ИП Герус Д.В.</p><p class="name" title="Костюм летний льняной с брюками алладинами тренд 2026 S">Костюм летний льняной с брюками алладинами тренд 2026 S</p><p class="meta">Артикул: KA2K</p><p class="meta">Размер: S</p><p class="meta">Цвет: коричневый</p><p class="meta meta-composition">Состав: Лён - 55%, Вискоза - 45%</p>
+  </div>
+  <p class="footer">Пожалуйста оставьте отзыв</p>
+</section></body></html>

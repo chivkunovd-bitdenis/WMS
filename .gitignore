@@ -41,3 +41,12 @@ backend/alembic_autogen.db
 # Cursor queue autopilot (local only)
 .cursor/state/
 .cursor/wt/
+
+# Мобильный ТСД — отдельный git-репозиторий, живёт локально и без remote
+mobile/
+
+# Спасённое из удалённых копий проекта (см. CLAUDE.md → Архив)
+.archive/
+
+# Изолированные рабочие копии веток — только здесь, никаких клонов рядом с проектом
+.worktrees/
