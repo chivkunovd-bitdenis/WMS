@@ -15,8 +15,8 @@ from app.db.session import get_db
 from app.models.fbs_order import FbsOrder
 from app.models.fbs_supply import FbsSupply
 from app.models.user import User
-from app.services import fbs_packaging_integration_service as pack_int_svc
 from app.services import fbs_order_tape_print_service as order_tape_svc
+from app.services import fbs_packaging_integration_service as pack_int_svc
 from app.services import fbs_packing_box_service as packing_box_svc
 from app.services import fbs_picking_service as picking_svc
 from app.services import fbs_shipment_pvz_service as pvz_svc
@@ -575,7 +575,12 @@ def _raise_from_print_asset_service(exc: FbsPrintAssetError) -> None:
 def _raise_from_order_tape_service(exc: order_tape_svc.FbsOrderTapePrintError) -> None:
     if exc.code in {"supply_not_found", "order_not_in_supply"}:
         raise_fbs_http(status.HTTP_404_NOT_FOUND, exc.code)
-    if exc.code in {"empty_order_set", "invalid_layout_json", "invalid_layout_block", "invalid_layout_copies"}:
+    if exc.code in {
+        "empty_order_set",
+        "invalid_layout_json",
+        "invalid_layout_block",
+        "invalid_layout_copies",
+    }:
         raise_fbs_http(status.HTTP_422_UNPROCESSABLE_ENTITY, exc.code)
     if exc.code.startswith("wb_"):
         raise_fbs_http(status.HTTP_502_BAD_GATEWAY, exc.code)

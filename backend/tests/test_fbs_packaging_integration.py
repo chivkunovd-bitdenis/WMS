@@ -39,7 +39,10 @@ from app.services.wb_marketplace_orders_service import (
     upsert_order_from_wb_row,
 )
 from tests.fbs_seed_helpers import DEFAULT_WB_WAREHOUSE_ID, seed_fbs_warehouse_binding
-from tests.test_fbs_shipment_warehouse_sc import _deliver_with_preflight
+from tests.test_fbs_shipment_warehouse_sc import (
+    _create_and_fill_physical_box,
+    _deliver_with_preflight,
+)
 
 
 async def _register_ff_admin(async_client: AsyncClient) -> tuple[dict[str, str], str]:
@@ -416,6 +419,7 @@ async def test_fbs_supply_packed_after_packaging_complete(
             ).scalars()
         )
         product_ids = {order.product_id for order in orders if order.product_id is not None}
+        packed_order_ids = [order.id for order in orders]
         sorting = await get_or_create_sorting_location(
             session, tenant_id, uuid.UUID(warehouse_id)
         )
@@ -472,6 +476,10 @@ async def test_fbs_supply_packed_after_packaging_complete(
     )
     assert supply.status_code == 200, supply.text
     assert supply.json()["status"] == FBS_SUPPLY_STATUS_PACKED
+
+    # Передача возможна только после раскладки упакованных заказов по физическим
+    # коробам — гейт physical_boxes_required (см. fbs_shipment_service).
+    await _create_and_fill_physical_box(async_client, headers, supply_id, packed_order_ids)
 
     deliver = await _deliver_with_preflight(async_client, headers, supply_id)
     assert deliver.status_code == 200, deliver.text

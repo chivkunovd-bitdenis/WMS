@@ -588,7 +588,9 @@ def _map_order(order: FbsOrder, ctx: dict[str, Any], server_now: datetime) -> di
             "size": size,
             "packaging_instructions": product.packaging_instructions if product else None,
             "has_packaging_instructions": bool(
-                product and product.packaging_instructions and product.packaging_instructions.strip()
+                product
+                and product.packaging_instructions
+                and product.packaging_instructions.strip()
             ),
         },
         "inventory": {

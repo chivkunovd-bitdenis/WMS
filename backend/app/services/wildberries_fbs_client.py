@@ -496,6 +496,17 @@ async def fetch_marketplace_orders_meta_batch(
 ) -> list[MarketplaceOrderMetaRow]:
     """POST /api/marketplace/v3/orders/meta — batch metadata + metaDetails."""
     _validate_marketplace_order_ids_batch(order_ids)
+    if settings.e2e_mock_wb_marketplace_marking:
+        from app.services.wildberries_client import mock_order_meta_snapshot
+
+        return [
+            MarketplaceOrderMetaRow(
+                order_id=order_id,
+                meta_details=(),
+                meta=mock_order_meta_snapshot(order_id),
+            )
+            for order_id in order_ids
+        ]
     url = _marketplace_api_url(
         MARKETPLACE_ORDERS_META_BULK_PATH,
         marketplace_api_base=marketplace_api_base,

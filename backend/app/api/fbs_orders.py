@@ -8,7 +8,11 @@ from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query, s
 from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.api.deps import get_effective_seller_id, require_fbs_operator_access, require_fulfillment_admin
+from app.api.deps import (
+    get_effective_seller_id,
+    require_fbs_operator_access,
+    require_fulfillment_admin,
+)
 from app.api.fbs_errors import raise_fbs_http
 from app.core.settings import settings
 from app.db.session import get_db

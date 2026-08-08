@@ -9,6 +9,7 @@ from fastapi import FastAPI
 
 from wb_emulator.auth import AuthMiddleware
 from wb_emulator.db import init_db
+from wb_emulator.routes import marketplace_orders as marketplace_orders_routes
 from wb_emulator.routes import marketplace_supplies as marketplace_supplies_routes
 from wb_emulator.routes import supplies as supplies_routes
 from wb_emulator.routes.admin import admin_router
@@ -43,6 +44,10 @@ def create_app() -> FastAPI:
     app.include_router(
         marketplace_supplies_routes.router,
         prefix="/api/marketplace/v3/supplies",
+    )
+    app.include_router(
+        marketplace_orders_routes.router,
+        prefix="/api/marketplace/v3/orders",
     )
     app.include_router(media_meta_router, prefix="/api/v3")
     app.include_router(warehouses_router, prefix="/api/v3")
