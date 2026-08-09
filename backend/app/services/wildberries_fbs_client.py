@@ -204,9 +204,33 @@ def parse_meta_validation_fail(data: dict[str, Any]) -> list[MetaValidationFailI
     return items
 
 
+def _is_read_only_token_error(response: httpx.Response) -> bool:
+    """WB отвечает 401 и поясняет, что ключ создан в режиме «Только на чтение».
+
+    Отличать это от «неверный токен» важно: ключ рабочий, заказы по нему приезжают,
+    но записать остаток или создать поставку он не может. Без явного текста
+    селлер будет часами перепроверять валидный ключ.
+    """
+    if response.status_code != 401:
+        return False
+    try:
+        data = response.json()
+    except ValueError:
+        return False
+    if not isinstance(data, dict):
+        return False
+    detail = data.get("detail")
+    return isinstance(detail, str) and "read-only" in detail.lower()
+
+
 def map_upstream_error(response: httpx.Response) -> WildberriesClientError:
     if response.status_code == 409:
         return parse_business_error(response)
+    if _is_read_only_token_error(response):
+        return WildberriesClientError(
+            "token_read_only",
+            status_code=response.status_code,
+        )
     return WildberriesClientError(
         "upstream_error",
         status_code=response.status_code,

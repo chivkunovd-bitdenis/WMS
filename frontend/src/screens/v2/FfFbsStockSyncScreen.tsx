@@ -88,6 +88,9 @@ function stockErrorText(code: string | null): string | null {
     wb_auth_failed: 'Проверьте токен Wildberries',
     readback_mismatch: 'Wildberries принял не все остатки',
     product_mapping_missing: 'Не найден товар для выгрузки',
+    wb_token_read_only_401:
+      'Ключ WB создан «только на чтение». Заказы по нему приходят, но публиковать остатки ' +
+      'и создавать поставки нельзя. Пересоздайте ключ в кабинете WB без этой галочки.',
   }
   return labels[code] ?? 'Синхронизация завершилась с ошибкой'
 }

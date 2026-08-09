@@ -1,7 +1,7 @@
-"""Публикация остатка ФБС привязана к движению товара, а не к ручной кнопке.
+"""Публикация остатка ФБС привязана к движению товара, не к ручной кнопке.
 
 Проверяем самое хрупкое место всей схемы: остаток уезжает в WB после КАЖДОГО движения,
-уезжает ровно один раз на селлера, и не уезжает вовсе, если транзакция откатилась.
+ровно один раз на селлера, и не уезжает вовсе, когда транзакция откатилась.
 Промах в любом из трёх пунктов означает, что в кабинете висит неверная цифра и WB
 продаёт то, чего на складе нет.
 """
@@ -97,7 +97,7 @@ async def test_movement_publishes_stock_once_per_seller(
         assert dispatched == [], "публикация не должна уходить до коммита транзакции"
         await session.commit()
 
-    # Два товара одного селлера в одной транзакции — одна публикация, а не две.
+    # Два товара одного селлера в одной транзакции дают одну публикацию, не две.
     assert dispatched == [seller_id], f"ожидали одну публикацию на селлера, получили {dispatched}"
 
 
@@ -133,3 +133,32 @@ async def test_schedule_collapses_duplicates_and_skips_rollback(
         schedule_seller_stock_publish(session, tenant_id, seller_one)
         await session.rollback()
     assert dispatched == [], "откат транзакции не должен публиковать остаток в WB"
+
+
+def test_read_only_wb_token_is_reported_distinctly() -> None:
+    """WB отвечает 401 и поясняет, что ключ создан «только на чтение».
+
+    Такой ключ читает заказы, но не может записать остаток. Смешивать это
+    и «неверный токен» нельзя: селлер будет перепроверять полностью рабочий ключ.
+    """
+    import httpx
+
+    from app.services.wildberries_fbs_client import map_upstream_error
+
+    read_only = httpx.Response(
+        401,
+        json={
+            "title": "unauthorized",
+            "detail": "read-only token scope not allowed for this route",
+            "status": 401,
+        },
+        request=httpx.Request("PUT", "https://marketplace-api.wildberries.ru/api/v3/stocks/1"),
+    )
+    assert map_upstream_error(read_only).code == "token_read_only"
+
+    plain_401 = httpx.Response(
+        401,
+        json={"title": "unauthorized", "detail": "token is invalid"},
+        request=httpx.Request("PUT", "https://marketplace-api.wildberries.ru/api/v3/stocks/1"),
+    )
+    assert map_upstream_error(plain_401).code == "upstream_error"

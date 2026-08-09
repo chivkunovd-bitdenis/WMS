@@ -98,8 +98,8 @@ async def test_fbs_stock_sync_bulk_keeps_per_product_limits(
 ) -> None:
     """«Включить всем» не должно стирать лимиты, расставленные поштучно.
 
-    Селлер выставляет лимит на одном товаре, потом жмёт массовое включение без лимита —
-    лимит обязан пережить эту операцию, иначе кнопка молча ломает его настройку.
+    Селлер выставляет лимит на одном товаре, потом жмёт массовое включение без лимита.
+    Лимит обязан пережить эту операцию, иначе кнопка молча ломает настройку селлера.
     """
     suffix = str(int(time.time() * 1000))
     reg = await async_client.post(
@@ -171,7 +171,7 @@ async def test_fbs_stock_sync_bulk_keeps_per_product_limits(
     assert plain_row["fbs_stock_sync_enabled"] is True
     assert plain_row["fbs_stock_limit"] is None
 
-    # Явно переданный лимит по-прежнему применяется ко всем.
+    # Явно переданный лимит по-прежнему применяется ко всем товарам.
     bulk_with_limit = await async_client.patch(
         "/products/fbs-stock-sync/bulk",
         headers=seller_headers,
@@ -189,11 +189,11 @@ async def test_enabling_fbs_sync_publishes_stock_immediately(
     async_client: AsyncClient,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """Включение галочки должно отправлять остаток в WB сразу, а не ждать сверки.
+    """Включение галочки должно отправлять остаток в WB сразу, без ожидания сверки.
 
-    По постановке: как только селлер включил синхронизацию, количество с фулфилмента
+    По постановке: как только селлер включил синхронизацию, количество на фулфилменте
     уходит в кабинет. Ждать ближайшего движения товара или пятиминутной фоновой сверки
-    здесь нельзя — до тех пор WB продаёт по пустому остатку.
+    здесь нельзя: до тех пор WB продаёт по пустому остатку.
     """
     from app.services import fbs_stock_publish_service
 
@@ -257,7 +257,7 @@ async def test_enabling_fbs_sync_publishes_stock_immediately(
         "включение галочки не поставило публикацию остатка в очередь"
     )
 
-    # Выключение тоже обязано уехать: WB должен получить ноль, а не старую цифру.
+    # Выключение тоже обязано уехать: WB должен получить ноль вместо старой цифры.
     dispatched.clear()
     disabled = await async_client.patch(
         f"/products/{product_id}/fbs-stock-sync",
@@ -267,7 +267,7 @@ async def test_enabling_fbs_sync_publishes_stock_immediately(
     assert disabled.status_code == 200, disabled.text
     assert [entry[1] for entry in dispatched] == [seller_id]
 
-    # Массовое переключение — одна публикация на селлера, а не по одной на товар.
+    # Массовое переключение даёт одну публикацию на селлера, не по одной на товар.
     dispatched.clear()
     bulk = await async_client.patch(
         "/products/fbs-stock-sync/bulk",
