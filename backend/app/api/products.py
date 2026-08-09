@@ -555,7 +555,7 @@ async def patch_product_fbs_stock_sync(
     enabled_patch: bool | _SkipSentinel = PATCH_SKIP
     if "fbs_stock_sync_enabled" in body.model_fields_set:
         enabled_patch = bool(body.fbs_stock_sync_enabled)
-    limit_patch: int | None | _SkipSentinel = PATCH_SKIP
+    limit_patch: int | _SkipSentinel | None = PATCH_SKIP
     if "fbs_stock_limit" in body.model_fields_set:
         limit_patch = body.fbs_stock_limit
 
@@ -596,7 +596,7 @@ async def patch_products_fbs_stock_sync_bulk(
         seller_scope = effective_seller_id
     if seller_scope is None:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="seller_not_linked")
-    bulk_limit_patch: int | None | _SkipSentinel = PATCH_SKIP
+    bulk_limit_patch: int | _SkipSentinel | None = PATCH_SKIP
     if "fbs_stock_limit" in body.model_fields_set:
         bulk_limit_patch = body.fbs_stock_limit
     try:

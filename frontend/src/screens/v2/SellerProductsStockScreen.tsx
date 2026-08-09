@@ -482,9 +482,12 @@ export function SellerProductsStockScreen({
                           checked={p.fbs_stock_sync_enabled}
                           disabled={fbsPending.has(p.id) || fbsBulkBusy}
                           onChange={(_, checked) => void toggleFbsSync(p, checked)}
-                          inputProps={
-                            { 'data-testid': `seller-fbs-toggle-${p.id}` } as Record<string, string>
-                          }
+                          slotProps={{
+                            input: { 'data-testid': `seller-fbs-toggle-${p.id}` } as Record<
+                              string,
+                              string
+                            >,
+                          }}
                         />
                       }
                       label={
@@ -508,9 +511,11 @@ export function SellerProductsStockScreen({
                           onKeyDown={(e) => {
                             if (e.key === 'Enter') (e.target as HTMLInputElement).blur()
                           }}
-                          inputProps={{
-                            inputMode: 'numeric',
-                            'data-testid': `seller-fbs-limit-${p.id}`,
+                          slotProps={{
+                            htmlInput: {
+                              inputMode: 'numeric',
+                              'data-testid': `seller-fbs-limit-${p.id}`,
+                            },
                           }}
                           sx={{ maxWidth: 130 }}
                         />

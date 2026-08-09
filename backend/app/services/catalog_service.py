@@ -456,7 +456,7 @@ async def update_product_fbs_stock_sync(
     product_id: uuid.UUID,
     *,
     fbs_stock_sync_enabled: bool | _SkipSentinel = SKIP,
-    fbs_stock_limit: int | None | _SkipSentinel = SKIP,
+    fbs_stock_limit: int | _SkipSentinel | None = SKIP,
     commit: bool = True,
 ) -> Product:
     if fbs_stock_sync_enabled is SKIP and fbs_stock_limit is SKIP:
@@ -489,7 +489,7 @@ async def bulk_update_products_fbs_stock_sync(
     *,
     product_ids: list[uuid.UUID] | None,
     fbs_stock_sync_enabled: bool,
-    fbs_stock_limit: int | None | _SkipSentinel = SKIP,
+    fbs_stock_limit: int | _SkipSentinel | None = SKIP,
 ) -> int:
     if fbs_stock_limit is not SKIP and fbs_stock_limit is not None and fbs_stock_limit < 0:
         raise CatalogError("invalid_fbs_stock_limit")
