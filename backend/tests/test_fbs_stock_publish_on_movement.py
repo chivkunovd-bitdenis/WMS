@@ -254,7 +254,8 @@ def test_picking_service_allows_sorting_zone() -> None:
     """
     from pathlib import Path
 
-    source = Path("app/services/fbs_picking_service.py").read_text(encoding="utf-8")
+    service = Path(__file__).resolve().parents[1] / "app" / "services" / "fbs_picking_service.py"
+    source = service.read_text(encoding="utf-8")
     assert "зону сортировки" not in source, (
         "в подборе снова появился запрет на зону сортировки — "
         "он противоречит формуле доступного"
