@@ -243,3 +243,19 @@ async def test_outbound_reservation_publishes_stock(
         await session.commit()
 
     assert dispatched == [seller_id], "резерв под отгрузку не обновил остаток в WB"
+
+
+def test_picking_service_allows_sorting_zone() -> None:
+    """Подбор ФБС обязан принимать зону сортировки.
+
+    Доступное для ФБС считается как storage + sorting, поэтому сортировка уезжает
+    в остаток WB. Если подбор её не принимает, мы публикуем количество, которое
+    оператор физически не может собрать, и заказы зависают.
+    """
+    from pathlib import Path
+
+    source = Path("app/services/fbs_picking_service.py").read_text(encoding="utf-8")
+    assert "зону сортировки" not in source, (
+        "в подборе снова появился запрет на зону сортировки — "
+        "он противоречит формуле доступного"
+    )
