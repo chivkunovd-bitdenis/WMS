@@ -271,31 +271,38 @@ async function pickAndPack(page: Page, route: RouteName, testInfo: TestInfo) {
   expect(completedTask.status).toBe("done");
   await expect(page.getByText("Упаковка завершена.")).toBeVisible();
 
-  // «Печать ЧЗ и ШК» открывает диалог «Печать ШК ВБ» с выбором размера этикетки,
-  // а не превью-модалку. Стикер тянется из WB и отмечается применённым по кнопке «Печать».
-  const stickerButtons = page.getByRole("button", { name: "Печать ЧЗ и ШК" });
-  const stickerCount = await stickerButtons.count();
-  expect(stickerCount).toBeGreaterThan(0);
-  for (let index = 0; index < stickerCount; index += 1) {
-    await stickerButtons.nth(index).click();
+  // Две разные кнопки, их легко перепутать:
+  //   «Печать ЧЗ и ШК» — печать этикетки через конструктор системы, диалог «Печать ШК ВБ»;
+  //   «QR» — стикер заказа из WB, открывает «Проверку перед печатью» с подтверждением нанесения.
+  // Стадию коробов открывает именно нанесение стикера, поэтому проверяем обе.
+  // Печать этикетки не является гейтом стадии, поэтому не требуем её наличия:
+  // в компактной раскладке набор кнопок отличается.
+  const labelButtons = page.getByRole("button", { name: "Печать ЧЗ и ШК" });
+  const labelCount = await labelButtons.count();
+  for (let index = 0; index < labelCount; index += 1) {
+    await labelButtons.nth(index).click();
     const printDialog = page.getByRole("dialog").filter({ hasText: "Печать ШК ВБ" });
     await expect(printDialog).toBeVisible();
     await printDialog.getByRole("button", { name: "Печать", exact: true }).click();
     await expect(printDialog).toBeHidden();
-    // Для товара с Честным знаком печати мало: марку нужно подтвердить нанесённой,
-    // иначе сервер не переведёт поставку на стадию коробов.
-    const preview = page.getByRole("dialog", { name: "Проверка перед печатью" });
-    if (await preview.isVisible().catch(() => false)) {
-      await confirmCurrentPreview(page);
-    }
   }
-  // ВНИМАНИЕ. Здесь спека обрывается, и это не лень, а неразобранный вопрос.
-  // На эмуляторе после печати стикеров вкладка «Короба» остаётся заблокированной:
-  // сервер не переводит поставку на стадию коробов. Похоже, для товара с ЧЗ
-  // (в сиде такие есть, признак приходит из requiredMeta) не хватает подтверждения
-  // нанесения марки — диалог «Проверка перед печатью» не появляется после «Печать ШК ВБ».
-  // Прежде чем дописывать шаги, надо руками пройти этот участок на эмуляторе
-  // и записать реальную последовательность. Подбирать селекторы наугад нельзя.
+
+  // НЕРАЗОБРАНО, не дописывать наугад. Что установлено чтением кода:
+  //   * стадию коробов открывает НАНЕСЕНИЕ стикера заказа, а не печать этикетки;
+  //   * стикер тянет `requestPrintBatch` с kind='order_sticker' и открывает
+  //     диалог «Проверка перед печатью» с кнопкой «Подтвердить нанесение»
+  //     (FbsPrintPreviewDialog, FfFbsSupplyWorkspace.tsx ~1190 и ~340);
+  //   * в текущей вёрстке этот вызов висит на кнопке с подписью «QR»,
+  //     но на экране эмулятора она по имени не находится — вероятно другая
+  //     раскладка панели упаковки, чем та, что я смотрел на стенде.
+  // Следующий шаг: поднять стек с KEEP_FBS_E2E_STACK=1, открыть экран упаковки
+  // руками и выписать реальные подписи кнопок. Только после этого дописывать.
+  const stickerButtons = page.getByRole("button", { name: "QR", exact: true });
+  const stickerCount = await stickerButtons.count();
+  for (let index = 0; index < stickerCount; index += 1) {
+    await stickerButtons.nth(index).click();
+    await confirmCurrentPreview(page);
+  }
   await shot(page, testInfo, `${route}-04-order-sticker-applied`);
 }
 
