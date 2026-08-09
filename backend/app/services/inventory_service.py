@@ -414,6 +414,17 @@ async def sorting_on_hand_in_warehouse(
     return int(await session.scalar(stmt) or 0)
 
 
+async def _schedule_fbs_publish_for_product(
+    session: AsyncSession,
+    tenant_id: uuid.UUID,
+    product_id: uuid.UUID,
+) -> None:
+    """Ставит публикацию остатка ФБС по владельцу товара, если он известен."""
+    product = await session.get(Product, product_id)
+    if product is not None:
+        schedule_seller_stock_publish(session, tenant_id, product.seller_id)
+
+
 async def sync_outbound_line_reservation(
     session: AsyncSession,
     tenant_id: uuid.UUID,
@@ -425,6 +436,12 @@ async def sync_outbound_line_reservation(
             InventoryReservation.outbound_shipment_line_id == line.id,
         )
     )
+
+    # Резерв под исходящую отгрузку вычитается из доступного для ФБС
+    # (`fbs_available_qty_by_product` минусует `_outbound_reserved_by_product`).
+    # Значит и постановка, и снятие резерва меняют цифру, которую должен видеть WB.
+    # Ставим публикацию здесь, до всех ранних `return`, чтобы не потерять ни один путь.
+    await _schedule_fbs_publish_for_product(session, tenant_id, line.product_id)
 
     should_hold = request.status in OUTBOUND_RESERVE_STATUSES and line.shipped_qty < line.quantity
     if not should_hold:

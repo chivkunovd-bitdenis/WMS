@@ -162,3 +162,84 @@ def test_read_only_wb_token_is_reported_distinctly() -> None:
         request=httpx.Request("PUT", "https://marketplace-api.wildberries.ru/api/v3/stocks/1"),
     )
     assert map_upstream_error(plain_401).code == "upstream_error"
+
+
+@pytest.mark.asyncio
+async def test_outbound_reservation_publishes_stock(
+    async_client: AsyncClient,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Резерв под исходящую отгрузку тоже обязан обновлять цифру в кабинете.
+
+    Он вычитается из доступного для ФБС, но движения товара при этом нет.
+    Без публикации WB продолжал бы продавать уже обещанный кому-то товар.
+    """
+    from app.models.outbound_shipment import OutboundShipmentLine, OutboundShipmentRequest
+
+    dispatched: list[str] = []
+    monkeypatch.setattr(
+        fbs_stock_publish_service,
+        "_dispatch",
+        lambda tenant_id, seller_id: dispatched.append(str(seller_id)),
+    )
+
+    suffix = str(int(time.time() * 1000))
+    reg = await async_client.post(
+        "/auth/register",
+        json={
+            "organization_name": "FBS Outbound Reserve",
+            "slug": f"fbs-out-{suffix}",
+            "admin_email": f"fbs-out-{suffix}@example.com",
+            "password": "password123",
+        },
+    )
+    assert reg.status_code == 200
+    headers = {"Authorization": f"Bearer {reg.json()['access_token']}"}
+
+    seller_id = (
+        await async_client.post("/sellers", headers=headers, json={"name": "Seller O"})
+    ).json()["id"]
+    warehouse_id = (
+        await async_client.post(
+            "/warehouses", headers=headers, json={"name": "WH O", "code": f"who{suffix[-8:]}"}
+        )
+    ).json()["id"]
+    product_id = uuid.UUID(
+        (
+            await async_client.post(
+                "/products",
+                headers=headers,
+                json={"name": "Product O", "sku_code": f"FBS-O-{suffix}", "seller_id": seller_id},
+            )
+        ).json()["id"]
+    )
+
+    async with SessionLocal() as session:
+        product = await session.get(Product, product_id)
+        assert product is not None
+        # Статус вне OUTBOUND_RESERVE_STATUSES: резерв снимается. Это и проверяем —
+        # снятие возвращает товар в доступное, и WB обязан увидеть увеличенную цифру.
+        request = OutboundShipmentRequest(
+            tenant_id=product.tenant_id,
+            warehouse_id=uuid.UUID(warehouse_id),
+            status="shipped",
+        )
+        session.add(request)
+        await session.flush()
+        line = OutboundShipmentLine(
+            request_id=request.id,
+            product_id=product_id,
+            quantity=1,
+            shipped_qty=0,
+        )
+        session.add(line)
+        await session.flush()
+
+        dispatched.clear()
+        await inventory_service.sync_outbound_line_reservation(
+            session, product.tenant_id, request, line
+        )
+        assert dispatched == [], "публикация не должна уходить до коммита"
+        await session.commit()
+
+    assert dispatched == [seller_id], "резерв под отгрузку не обновил остаток в WB"
