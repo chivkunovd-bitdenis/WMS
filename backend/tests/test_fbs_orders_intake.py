@@ -924,7 +924,9 @@ async def test_fbs_order_unknown_wb_warehouse_auto_creates_binding(
         assert binding is not None
         assert str(binding.wms_warehouse_id) == order["warehouse_id"]
         assert binding.is_active is True
-        assert binding.stock_sync_enabled is False
+        # Привязка создаётся сразу включённой: от выгрузки нулей защищает
+        # признак на товаре. Выключенный рубильник был второй скрытой заслонкой.
+        assert binding.stock_sync_enabled is True
 
         warehouse = await session.get(Warehouse, uuid.UUID(order["warehouse_id"]))
         assert warehouse is not None

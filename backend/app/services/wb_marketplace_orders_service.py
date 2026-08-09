@@ -263,9 +263,13 @@ async def _resolve_or_create_wms_warehouse_for_wb(
                 wb_warehouse_id=wb_warehouse_id,
                 wms_warehouse_id=warehouse.id,
                 is_active=True,
-                # This binding exists only to make incoming FBS orders operable.
-                # Do not publish zero WMS balances back to WB for it.
-                stock_sync_enabled=False,
+                # Раньше здесь стоял False, чтобы не выгрузить в WB нули по всему складу.
+                # Эта причина ушла: теперь от такого защищает признак на товаре
+                # (`Product.fbs_stock_sync_enabled`, по умолчанию выключен) — без него
+                # в WB не уходит ни числа, ни нуля. Оставлять выключенным рубильник
+                # привязки означало вторую скрытую заслонку: селлер включает галочку,
+                # но выгрузка молча не идёт и возвращает bindings_processed = 0.
+                stock_sync_enabled=True,
             )
             session.add(binding)
             await session.flush()
