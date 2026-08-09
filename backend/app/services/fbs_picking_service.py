@@ -1,4 +1,3 @@
-# ruff: noqa: RUF001
 """Server-side FBS pick scans: location → product → sorting transfer."""
 
 from __future__ import annotations
@@ -32,7 +31,6 @@ from app.services import inventory_service
 from app.services.fbs_workspace_service import FbsWorkspaceError, get_supply_workspace
 from app.services.sorting_location_service import (
     get_or_create_sorting_location,
-    is_sorting_location,
 )
 
 
@@ -68,12 +66,10 @@ async def scan_pick_location(
             "Ячейка не найдена на складе поставки.",
             http_status=404,
         )
-    if is_sorting_location(location):
-        raise FbsPickingError(
-            "wrong_location",
-            "Сканируйте ячейку хранения, а не зону сортировки.",
-        )
-
+    # Зона сортировки — такое же место хранения для подбора ФБС.
+    # Она входит в доступное: `fbs_available_qty_by_product` суммирует storage и sorting.
+    # Запрещать подбор оттуда нельзя, иначе публикуем в WB остаток,
+    # который оператор физически не может собрать.
     return await _pick_location_payload(session, tenant_id, supply, location)
 
 
@@ -100,11 +96,6 @@ async def select_pick_location(
             "wrong_location",
             "Ячейка не принадлежит складу поставки.",
             http_status=404,
-        )
-    if is_sorting_location(location):
-        raise FbsPickingError(
-            "wrong_location",
-            "Выберите ячейку хранения, а не зону сортировки.",
         )
     return await _pick_location_payload(session, tenant_id, supply, location)
 
@@ -184,12 +175,6 @@ async def scan_pick_product(
             "wrong_location",
             "Ячейка не принадлежит складу поставки.",
         )
-    if is_sorting_location(location):
-        raise FbsPickingError(
-            "wrong_location",
-            "Сканируйте ячейку хранения, а не зону сортировки.",
-        )
-
     product = (
         await session.get(Product, product_id)
         if product_id is not None

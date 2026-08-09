@@ -46,7 +46,6 @@ from app.models.tenant_wb_mp_warehouse import TenantWbMpWarehouse
 from app.models.warehouse import Warehouse
 from app.services.fbs_stock_availability_service import fbs_available_qty_by_product
 from app.services.inventory_service import OUTBOUND_RESERVE_STATUSES
-from app.services.sorting_location_service import SORTING_LOCATION_CODE
 from app.services.wb_card_enrichment import (
     first_photo_url_from_card,
     size_from_card_for_barcode,
@@ -378,7 +377,6 @@ async def _load_location_balances(
                 StorageLocation.warehouse_id == wh_id,
                 InventoryBalance.product_id.in_(pid_list),
                 InventoryBalance.quantity_unpacked > 0,
-                StorageLocation.code != SORTING_LOCATION_CODE,
             )
             .order_by(StorageLocation.code.asc())
         )
