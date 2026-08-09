@@ -242,16 +242,16 @@ async function pickAndPack(page: Page, route: RouteName, testInfo: TestInfo) {
   await shot(page, testInfo, `${route}-02-picked`);
 
   await page.getByRole("tab", { name: "Упаковка и маркировка" }).click();
-  await expect(page.getByTestId("ff-packaging-line").first()).toBeVisible();
-  await expect(page.getByTestId(/^ff-packaging-line-print-/).first()).toBeVisible();
-  await expect(page.getByRole("button", { name: "Стикер WB" }).first()).toBeVisible();
+  await expect(page.getByText(/заказ \d+/).first()).toBeVisible();
+  await expect(page.getByRole("button", { name: "QR" }).first()).toBeVisible();
+  await expect(
+    page.getByRole("button", { name: "Печать ЧЗ и ШК" }).first(),
+  ).toBeVisible();
   await expect(page.getByRole("tab", { name: "Печать и маркировка" })).toHaveCount(0);
-  await expect(page.getByTestId("ff-packaging-pack-btn")).toBeEnabled();
-  await expect(page.getByTestId("ff-packaging-complete")).toBeDisabled();
+  await expect(page.getByRole("button", { name: "Всё упаковано" })).toBeEnabled();
+  await expect(page.getByText("Упаковка завершена.")).toHaveCount(0);
   await shot(page, testInfo, `${route}-03-packaging-layout`);
-  await page.getByTestId("ff-packaging-pack-btn").click();
   await expect(page.getByTestId("ff-packaging-ack-all-packed")).toHaveCount(0);
-  await expect(page.getByTestId("ff-packaging-complete")).toBeEnabled();
   const [completeRequest, completeResponse] = await Promise.all([
     page.waitForRequest(
       (item) =>
@@ -264,13 +264,14 @@ async function pickAndPack(page: Page, route: RouteName, testInfo: TestInfo) {
         item.url().endsWith("/complete") &&
         item.status() === 200,
     ),
-    page.getByTestId("ff-packaging-complete").click(),
+    page.getByRole("button", { name: "Всё упаковано" }).click(),
   ]);
   expect(completeRequest.postDataJSON()).toEqual({ acknowledge_all_packed: false });
   const completedTask = (await completeResponse.json()) as { status: string };
   expect(completedTask.status).toBe("done");
+  await expect(page.getByText("Упаковка завершена.")).toBeVisible();
 
-  const stickerButtons = page.getByRole("button", { name: "Стикер WB" });
+  const stickerButtons = page.getByRole("button", { name: "Печать ЧЗ и ШК" });
   const stickerCount = await stickerButtons.count();
   expect(stickerCount).toBeGreaterThan(0);
   for (let index = 0; index < stickerCount; index += 1) {
@@ -490,7 +491,7 @@ async function finishRoute(
   };
 }
 
-// TC-FBS-U2U-007/012/023/024/026/029 — real browser -> WMS -> Postgres/Celery -> WB emulator, with no FBS route mocks.
+// TC-NEW-001, TC-FBS-U2U-007/012/023/024/026/029 — real browser -> WMS -> Postgres/Celery -> WB emulator, with no FBS route mocks.
 test("TC-FBS-U2U-007/012/023/024/026/029: warehouse and PVZ operator flows use the real WB emulator", async ({
   page,
   request,
