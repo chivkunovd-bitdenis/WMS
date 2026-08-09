@@ -27,6 +27,10 @@ class BindTrbxOrdersBody(BaseModel):
     orderIds: list[int] = Field(min_length=1)
 
 
+class DeleteTrbxBody(BaseModel):
+    trbxIds: list[str] = Field(min_length=1)
+
+
 def _seller_key(request: Request) -> str:
     seller_key = getattr(request.state, "seller_key", None)
     if not seller_key:
@@ -139,6 +143,27 @@ def list_trbxes(
     except store.SuppliesStoreError as exc:
         raise _map_store_error(exc) from exc
     return {"trbxIds": list(view.trbx_ids)}
+
+
+@router.delete("/{supply_id}/trbx", status_code=204, response_class=Response)
+def delete_trbxes(
+    supply_id: str,
+    body: DeleteTrbxBody,
+    request: Request,
+    session: DbSession,
+) -> Response:
+    """DELETE /api/v3/supplies/{supplyId}/trbx — remove cargo places by id."""
+    seller_key = _seller_key(request)
+    try:
+        store.delete_trbxes(
+            session,
+            seller_key=seller_key,
+            supply_id=supply_id,
+            trbx_ids=body.trbxIds,
+        )
+    except store.SuppliesStoreError as exc:
+        raise _map_store_error(exc) from exc
+    return Response(status_code=204)
 
 
 @router.patch("/{supply_id}/trbx/{trbx_id}", status_code=204, response_class=Response)

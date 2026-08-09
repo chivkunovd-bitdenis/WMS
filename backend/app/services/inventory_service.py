@@ -28,6 +28,7 @@ from app.models.marketplace_unload_reservation import MarketplaceUnloadReservati
 from app.models.outbound_shipment import OutboundShipmentLine, OutboundShipmentRequest
 from app.models.product import Product
 from app.models.storage_location import StorageLocation
+from app.services.fbs_stock_publish_service import schedule_seller_stock_publish
 from app.services.marketplace_unload_status import RESERVE_STATUSES
 from app.services.sorting_location_service import SORTING_LOCATION_CODE
 
@@ -57,9 +58,7 @@ def _build_positive_balance_upsert(
     update_values = {
         "quantity_unpacked": InventoryBalance.quantity_unpacked + quantity_delta,
         "quantity": (
-            InventoryBalance.quantity_unpacked
-            + InventoryBalance.quantity_packed
-            + quantity_delta
+            InventoryBalance.quantity_unpacked + InventoryBalance.quantity_packed + quantity_delta
         ),
         "updated_at": datetime.now(UTC),
     }
@@ -107,9 +106,7 @@ async def available_at_location(
     storage_location_id: uuid.UUID,
 ) -> int:
     on_hand = await _physical_on_hand(session, tenant_id, product_id, storage_location_id)
-    rsv = await total_reserved_at_location(
-        session, tenant_id, product_id, storage_location_id
-    )
+    rsv = await total_reserved_at_location(session, tenant_id, product_id, storage_location_id)
     return on_hand - rsv
 
 
@@ -188,22 +185,20 @@ async def reserved_totals_by_product(
         .group_by(InventoryReservation.product_id)
     )
     if warehouse_id is not None:
-        stmt = (
-            stmt.outerjoin(
-                StorageLocation,
-                StorageLocation.id == InventoryReservation.storage_location_id,
-            ).where(
-                or_(
-                    and_(
-                        InventoryReservation.storage_location_id.isnot(None),
-                        StorageLocation.tenant_id == tenant_id,
-                        StorageLocation.warehouse_id == warehouse_id,
-                    ),
-                    and_(
-                        InventoryReservation.storage_location_id.is_(None),
-                        InventoryReservation.warehouse_id == warehouse_id,
-                    ),
-                )
+        stmt = stmt.outerjoin(
+            StorageLocation,
+            StorageLocation.id == InventoryReservation.storage_location_id,
+        ).where(
+            or_(
+                and_(
+                    InventoryReservation.storage_location_id.isnot(None),
+                    StorageLocation.tenant_id == tenant_id,
+                    StorageLocation.warehouse_id == warehouse_id,
+                ),
+                and_(
+                    InventoryReservation.storage_location_id.is_(None),
+                    InventoryReservation.warehouse_id == warehouse_id,
+                ),
             )
         )
     res = await session.execute(stmt)
@@ -216,8 +211,7 @@ async def reserved_totals_by_product(
         )
         .join(
             MarketplaceUnloadLine,
-            MarketplaceUnloadLine.id
-            == MarketplaceUnloadReservation.marketplace_unload_line_id,
+            MarketplaceUnloadLine.id == MarketplaceUnloadReservation.marketplace_unload_line_id,
         )
         .join(
             MarketplaceUnloadRequest,
@@ -253,9 +247,7 @@ async def reserved_totals_by_product(
         fbs_map = {pid: int(s or 0) for pid, s in fbs_res.all()}
 
     return {
-        pid: int(outbound_map.get(pid, 0))
-        + int(mp_map.get(pid, 0))
-        + int(fbs_map.get(pid, 0))
+        pid: int(outbound_map.get(pid, 0)) + int(mp_map.get(pid, 0)) + int(fbs_map.get(pid, 0))
         for pid in product_ids
     }
 
@@ -314,9 +306,7 @@ async def list_balances_total(
     if not rows:
         return []
     pids = [pid for pid, *_ in rows]
-    rsv_map = await reserved_totals_by_product(
-        session, tenant_id, pids, warehouse_id=warehouse_id
-    )
+    rsv_map = await reserved_totals_by_product(session, tenant_id, pids, warehouse_id=warehouse_id)
     return [
         (pid, sku, name, qty, sort_qty, unp, pck, int(rsv_map.get(pid, 0)))
         for pid, sku, name, qty, sort_qty, unp, pck in rows
@@ -358,12 +348,8 @@ async def available_quantity_at_location(
     product_id: uuid.UUID,
     storage_location_id: uuid.UUID,
 ) -> int:
-    on_hand = await _physical_on_hand(
-        session, tenant_id, product_id, storage_location_id
-    )
-    reserved = await total_reserved_at_location(
-        session, tenant_id, product_id, storage_location_id
-    )
+    on_hand = await _physical_on_hand(session, tenant_id, product_id, storage_location_id)
+    reserved = await total_reserved_at_location(session, tenant_id, product_id, storage_location_id)
     return on_hand - reserved
 
 
@@ -428,6 +414,17 @@ async def sorting_on_hand_in_warehouse(
     return int(await session.scalar(stmt) or 0)
 
 
+async def _schedule_fbs_publish_for_product(
+    session: AsyncSession,
+    tenant_id: uuid.UUID,
+    product_id: uuid.UUID,
+) -> None:
+    """Ставит публикацию остатка ФБС по владельцу товара, если он известен."""
+    product = await session.get(Product, product_id)
+    if product is not None:
+        schedule_seller_stock_publish(session, tenant_id, product.seller_id)
+
+
 async def sync_outbound_line_reservation(
     session: AsyncSession,
     tenant_id: uuid.UUID,
@@ -440,10 +437,13 @@ async def sync_outbound_line_reservation(
         )
     )
 
-    should_hold = (
-        request.status in OUTBOUND_RESERVE_STATUSES
-        and line.shipped_qty < line.quantity
-    )
+    # Резерв под исходящую отгрузку вычитается из доступного для ФБС
+    # (`fbs_available_qty_by_product` минусует `_outbound_reserved_by_product`).
+    # Значит и постановка, и снятие резерва меняют цифру, которую должен видеть WB.
+    # Ставим публикацию здесь, до всех ранних `return`, чтобы не потерять ни один путь.
+    await _schedule_fbs_publish_for_product(session, tenant_id, line.product_id)
+
+    should_hold = request.status in OUTBOUND_RESERVE_STATUSES and line.shipped_qty < line.quantity
     if not should_hold:
         return
 
@@ -472,9 +472,7 @@ async def sync_outbound_line_reservation(
         return
 
     wh_id = request.warehouse_id
-    on_hand_wh = await storage_on_hand_in_warehouse(
-        session, tenant_id, wh_id, line.product_id
-    )
+    on_hand_wh = await storage_on_hand_in_warehouse(session, tenant_id, wh_id, line.product_id)
     rsv_map = await reserved_totals_by_product(
         session,
         tenant_id,
@@ -570,6 +568,11 @@ async def record_movement_and_adjust_balance(
         marketplace_unload_request_id=marketplace_unload_request_id,
     )
     session.add(movement)
+
+    # Единственная точка, через которую меняется остаток, — значит и единственное место,
+    # где надо поставить в очередь публикацию нового количества в кабинет WB.
+    # Сама публикация уйдёт после коммита, снаружи этой транзакции.
+    schedule_seller_stock_publish(session, tenant_id, prod.seller_id)
 
     if quantity_delta >= 0:
         bind = session.get_bind()
@@ -918,9 +921,7 @@ async def apply_fbs_supply_write_off(
     if quantity < 1:
         msg = "quantity must be positive"
         raise ValueError(msg)
-    bal = await _lock_inventory_balance(
-        session, tenant_id, product_id, storage_location_id
-    )
+    bal = await _lock_inventory_balance(session, tenant_id, product_id, storage_location_id)
     if bal is None or int(bal.quantity) < quantity:
         msg = "insufficient stock"
         raise ValueError(msg)
@@ -947,9 +948,7 @@ async def apply_marketplace_unload_pick(
     if quantity < 1:
         msg = "quantity must be positive"
         raise ValueError(msg)
-    bal = await _lock_inventory_balance(
-        session, tenant_id, product_id, storage_location_id
-    )
+    bal = await _lock_inventory_balance(session, tenant_id, product_id, storage_location_id)
     if bal is None or int(bal.quantity) < quantity:
         msg = "insufficient stock"
         raise ValueError(msg)
@@ -1098,9 +1097,7 @@ async def transfer_on_hand_between_locations(
         msg = "locations must be in the same warehouse"
         raise ValueError(msg)
 
-    on_hand = await _physical_on_hand(
-        session, tenant_id, product_id, from_storage_location_id
-    )
+    on_hand = await _physical_on_hand(session, tenant_id, product_id, from_storage_location_id)
     if on_hand < quantity:
         msg = "insufficient stock"
         raise ValueError(msg)

@@ -378,7 +378,7 @@ export function SellerSettingsScreen({ token, authHeaders }: Props) {
         <DialogContent>
           <Stack spacing={2} sx={{ mt: 1 }}>
             <TextField
-              label="WB Content API key"
+              label="WB API ключ"
               value={contentKey}
               onChange={(e) => setContentKey(e.target.value)}
               fullWidth

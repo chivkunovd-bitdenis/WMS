@@ -1,8 +1,9 @@
-import { useCallback, useEffect, useState, type MouseEvent } from 'react'
+import { useCallback, useEffect, useState, type MouseEvent, type ReactNode } from 'react'
 import { Link as RouterLink, useLocation } from 'react-router-dom'
-import { MoreVertOutlined } from '@mui/icons-material'
+import { MoreVertOutlined, PrintOutlined } from '@mui/icons-material'
 import {
   Alert,
+  Avatar,
   Badge,
   Box,
   Button,
@@ -32,11 +33,12 @@ import {
   Typography,
 } from '@mui/material'
 import { FfProductLineCells, FfProductTableHeadCells } from '../../components/FfProductLineCells'
+import { ProductPhotoThumb } from '../../components/ProductPhotoThumb'
 import { useWbProductCatalog } from '../../hooks/useWbProductCatalog'
 import { apiUrl } from '../../api'
 import { fetchPendingMarking, pendingMarkingLineCount } from '../../utils/pendingMarkingApi'
 import { PageHeader } from '../../ui/PageHeader'
-import { productDisplayMetaFromCatalog } from '../../types/wbProductCatalog'
+import { productDisplayMetaFromCatalog, resolveProductPrimaryBarcode } from '../../types/wbProductCatalog'
 import { readApiErrorMessage } from '../../utils/readApiErrorMessage'
 import { displayMetaToProductLabel } from '../../utils/productBarcodePrint'
 import { useMarkingCodePrint } from '../../utils/useMarkingCodePrint'
@@ -100,6 +102,18 @@ type TaskPanelProps = {
   unloadLabel?: string | null
   /** Hide status chip + «Упаковка» + document numbers when embedded in MP unload modal. */
   hideDocumentHeader?: boolean
+  /** Compact operator cards for narrow embedded workspaces such as FBS. */
+  compactLayout?: boolean
+  /** Keep the standard table but collapse duplicate quantity columns for operator workspaces. */
+  simplifiedQuantities?: boolean
+  /** Expose the standard product print action even when Honest Sign is not required. */
+  alwaysShowPrintAction?: boolean
+  /** Add workflow-specific actions to the existing product row without creating a second table. */
+  renderLineActions?: (line: PackagingTaskLine) => ReactNode
+  /** Separate printing stage: reuses the standard ЧЗ/ШК dialog without packing actions. */
+  printOnly?: boolean
+  /** Embedded packing stage can keep physical packing free of print controls. */
+  hidePrintActions?: boolean
   onClose?: () => void
   onUpdated: (task: PackagingTask) => void
 }
@@ -134,6 +148,12 @@ export function FfPackagingTaskPanel({
   task,
   unloadLabel,
   hideDocumentHeader = false,
+  compactLayout = false,
+  simplifiedQuantities = false,
+  alwaysShowPrintAction = false,
+  renderLineActions,
+  printOnly = false,
+  hidePrintActions = false,
   onClose,
   onUpdated,
 }: TaskPanelProps) {
@@ -329,6 +349,9 @@ export function FfPackagingTaskPanel({
 
   const incompleteMarkingLines = task.lines.filter(isLineMarkingIncomplete)
   const hasIncompleteMarking = incompleteMarkingLines.length > 0
+  const hasIncompletePacking = task.lines.some(
+    (line) => line.qty_packed_in_task < line.qty_need_pack,
+  )
 
   const completeTask = async () => {
     if (hasIncompleteMarking) {
@@ -423,27 +446,228 @@ export function FfPackagingTaskPanel({
           задании сохранено — проверьте строки.
         </Alert>
       ) : null}
-      <TableContainer component={Paper} variant="outlined" sx={{ width: '100%', overflowX: 'hidden' }}>
+      {compactLayout ? (
+        <Stack spacing={1.5} data-testid="ff-packaging-lines-compact">
+          {task.lines.map((ln) => {
+            const displayMeta = productDisplayMetaFromCatalog(
+              ln.product_id,
+              ln,
+              catalogById,
+            );
+            const barcode =
+              resolveProductPrimaryBarcode(displayMeta) || ln.sku_code;
+            const markingProgressIncomplete =
+              isLineMarkingProgressIncomplete(ln);
+            return (
+              <Paper
+                key={ln.id}
+                variant="outlined"
+                data-testid={`ff-packaging-compact-line-${ln.id}`}
+                sx={{
+                  p: 2,
+                  bgcolor: markingProgressIncomplete
+                    ? "warning.light"
+                    : "background.paper",
+                }}
+              >
+                <Stack
+                  direction={{ xs: "column", md: "row" }}
+                  spacing={2}
+                  sx={{ alignItems: { xs: "stretch", md: "center" } }}
+                >
+                  <Stack
+                    direction="row"
+                    spacing={1.5}
+                    sx={{ alignItems: "center", minWidth: 0, flex: 1 }}
+                  >
+                    <Avatar
+                      variant="rounded"
+                      src={displayMeta.wb_primary_image_url ?? undefined}
+                      alt={displayMeta.product_name}
+                      sx={{ width: 64, height: 64, flex: "0 0 auto" }}
+                    />
+                    <Box sx={{ minWidth: 0 }}>
+                      <Typography
+                        variant="subtitle1"
+                        sx={{ fontWeight: 700, overflowWrap: "anywhere" }}
+                        data-testid="ff-packaging-compact-product-name"
+                      >
+                        {displayMeta.product_name}
+                      </Typography>
+                      <Typography
+                        variant="body2"
+                        color="text.secondary"
+                        sx={{ overflowWrap: "anywhere" }}
+                      >
+                        Артикул: {displayMeta.sku_code} · ШК: {barcode}
+                      </Typography>
+                      <Typography
+                        variant="caption"
+                        color="text.secondary"
+                        sx={{ display: "block" }}
+                      >
+                        Артикул продавца: {displayMeta.wb_vendor_code ?? "—"} ·
+                        WB: {displayMeta.wb_nm_id ?? "—"}
+                      </Typography>
+                      <Chip
+                        size="small"
+                        label={`Ячейка ${ln.storage_location_code}`}
+                        sx={{ mt: 0.75 }}
+                      />
+                    </Box>
+                  </Stack>
+
+                  <Box
+                    sx={{
+                      display: "grid",
+                      gridTemplateColumns: "repeat(4, minmax(76px, 1fr))",
+                      gap: 1,
+                      minWidth: { md: 360 },
+                    }}
+                  >
+                    {[
+                      ["Всего", ln.qty_total],
+                      ["На полке", ln.qty_suggested_packed],
+                      ["Упаковать", ln.qty_need_pack],
+                      ["Готово", ln.qty_done],
+                    ].map(([label, value]) => (
+                      <Box key={String(label)} sx={{ textAlign: "center" }}>
+                        <Typography variant="caption" color="text.secondary">
+                          {label}
+                        </Typography>
+                        <Typography variant="h6" sx={{ lineHeight: 1.2 }}>
+                          {value}
+                        </Typography>
+                      </Box>
+                    ))}
+                  </Box>
+
+                  <Stack
+                    spacing={1}
+                    sx={{
+                      alignItems: { xs: "stretch", md: "flex-end" },
+                      minWidth: { md: 170 },
+                    }}
+                  >
+                    {ln.requires_honest_sign ? (
+                      <Chip
+                        size="small"
+                        color={
+                          markingProgressIncomplete ? "warning" : "success"
+                        }
+                        label={`ЧЗ ${ln.qty_marking_printed}/${ln.qty_need_pack}`}
+                      />
+                    ) : (
+                    <Chip
+                      size="small"
+                      variant="outlined"
+                      label="ЧЗ не требуется"
+                    />
+                  )}
+                  <Stack
+                    direction="row"
+                    spacing={0.5}
+                    sx={{ justifyContent: "flex-end", flexWrap: "wrap" }}
+                  >
+                    {ln.requires_honest_sign &&
+                    !isMpUnloadTask &&
+                    ln.qty_need_pack > 0 &&
+                    ln.qty_marking_printed < 1 ? (
+                      <Button
+                        size="small"
+                        variant="outlined"
+                        disabled={busy || ln.marking_available_count < 1}
+                        onClick={() => openLinePrint(ln)}
+                        data-testid="ff-packaging-print-marking"
+                      >
+                        Печать ЧЗ
+                      </Button>
+                    ) : null}
+                    {lineHasOverflowActions(ln) ? (
+                      <IconButton
+                        size="small"
+                        aria-label="Дополнительные действия"
+                        disabled={busy}
+                        onClick={(e) => openLineMenu(e, ln)}
+                        data-testid={`ff-packaging-line-menu-btn-${ln.id}`}
+                      >
+                        <MoreVertOutlined fontSize="small" />
+                      </IconButton>
+                    ) : null}
+                    {!isMpUnloadTask &&
+                    ln.qty_confirmed_packed < ln.qty_suggested_packed ? (
+                      <Button
+                        size="small"
+                        disabled={
+                          busy || !taskEditable || ln.qty_suggested_packed < 1
+                        }
+                        onClick={() => void confirmPacked(ln.id)}
+                        data-testid="ff-packaging-confirm-shelf"
+                      >
+                        Подтвердить с полки
+                      </Button>
+                    ) : null}
+                    {ln.qty_packed_in_task < ln.qty_need_pack ? (
+                      <Button
+                        size="small"
+                        variant="contained"
+                        disabled={busy || !taskEditable}
+                        onClick={() =>
+                          void packQty(
+                            ln.id,
+                            ln.qty_need_pack - ln.qty_packed_in_task,
+                          )
+                        }
+                        data-testid="ff-packaging-pack-btn"
+                      >
+                        Упаковать
+                      </Button>
+                    ) : null}
+                    {renderLineActions?.(ln)}
+                  </Stack>
+                </Stack>
+              </Stack>
+            </Paper>
+          );
+        })}
+      </Stack>
+    ) : (
+      <TableContainer component={Paper} variant="outlined" sx={{ width: '100%', overflowX: 'auto' }}>
         <Table
           size="small"
           sx={{
             tableLayout: 'fixed',
             width: '100%',
+            minWidth: simplifiedQuantities ? 1040 : 1450,
             '& th': { py: 1.25 },
             '& td': { py: 1.25 },
           }}
         >
           <TableHead>
             <TableRow>
-              <FfProductTableHeadCells
-                nameLabel={isMpUnloadTask ? 'Наименование' : 'Наименование / ячейка'}
-              />
-              <TableCell align="right">Всего</TableCell>
-              {!isMpUnloadTask ? (
-                <TableCell align="right">На полке упак.</TableCell>
-              ) : null}
-              <TableCell align="right">Упаковать</TableCell>
-              <TableCell align="right">Готово</TableCell>
+              {simplifiedQuantities ? (
+                <>
+                  <TableCell sx={{ width: 64 }}>Фото</TableCell>
+                  <TableCell>Товар и идентификаторы</TableCell>
+                  <TableCell align="center" sx={{ width: 72 }}>Печать</TableCell>
+                </>
+              ) : (
+                <FfProductTableHeadCells
+                  nameLabel={isMpUnloadTask ? 'Наименование' : 'Наименование / ячейка'}
+                />
+              )}
+              {simplifiedQuantities ? (
+                <TableCell align="right">Количество</TableCell>
+              ) : (
+                <>
+                  <TableCell align="right">Всего</TableCell>
+                  {!isMpUnloadTask ? (
+                    <TableCell align="right">На полке упак.</TableCell>
+                  ) : null}
+                  <TableCell align="right">Упаковать</TableCell>
+                  <TableCell align="right">Готово</TableCell>
+                </>
+              )}
               <TableCell align="right">ЧЗ</TableCell>
               <TableCell align="right">Действия</TableCell>
             </TableRow>
@@ -451,6 +675,7 @@ export function FfPackagingTaskPanel({
           <TableBody>
             {task.lines.map((ln) => {
               const displayMeta = productDisplayMetaFromCatalog(ln.product_id, ln, catalogById)
+              const primaryBarcode = resolveProductPrimaryBarcode(displayMeta) || ln.sku_code
               const markingProgressIncomplete = isLineMarkingProgressIncomplete(ln)
               return (
               <TableRow
@@ -461,7 +686,7 @@ export function FfPackagingTaskPanel({
                     : 'ff-packaging-line'
                 }
                 sx={
-                  markingProgressIncomplete
+                  markingProgressIncomplete && !simplifiedQuantities
                     ? {
                         bgcolor: 'warning.light',
                         '&:hover': { bgcolor: 'warning.light' },
@@ -469,26 +694,43 @@ export function FfPackagingTaskPanel({
                     : undefined
                 }
               >
-                <FfProductLineCells
-                  meta={{
-                    ...displayMeta,
-                    product_name: isMpUnloadTask
-                      ? displayMeta.product_name
-                      : `${displayMeta.product_name} · ${ln.storage_location_code}`,
-                  }}
-                  printTestId={`ff-packaging-line-print-${ln.id}`}
-                  onPrintClick={
-                    ln.requires_honest_sign || isMpUnloadTask
-                      ? () => openLinePrint(ln)
-                      : undefined
-                  }
-                />
-                <TableCell align="right">{ln.qty_total}</TableCell>
-                {!isMpUnloadTask ? (
-                  <TableCell align="right">{ln.qty_suggested_packed}</TableCell>
-                ) : null}
-                <TableCell align="right">{ln.qty_need_pack}</TableCell>
-                <TableCell align="right">{ln.qty_done}</TableCell>
+                {simplifiedQuantities ? (
+                  <>
+                    <TableCell><ProductPhotoThumb src={displayMeta.wb_primary_image_url} alt={displayMeta.product_name} size={48} previewSize={300} /></TableCell>
+                    <TableCell><Typography variant="body2" sx={{ fontWeight: 700 }}>{displayMeta.product_name}</Typography><Typography variant="caption" color="text.secondary" sx={{ display: 'block' }}>Артикул: {displayMeta.sku_code} · ШК: {primaryBarcode}</Typography><Typography variant="caption" color="text.secondary" sx={{ display: 'block' }}>Артикул продавца: {displayMeta.wb_vendor_code ?? '—'} · WB: {displayMeta.wb_nm_id ?? '—'} · Ячейка: {ln.storage_location_code}</Typography></TableCell>
+                    <TableCell align="center">{!hidePrintActions && (alwaysShowPrintAction || printOnly || ln.requires_honest_sign || isMpUnloadTask) ? <IconButton size="small" aria-label={`Печать товара ${displayMeta.product_name}`} onClick={() => openLinePrint(ln)} data-testid={`ff-packaging-line-print-${ln.id}`}><PrintOutlined fontSize="small" /></IconButton> : null}</TableCell>
+                  </>
+                ) : (
+                  <FfProductLineCells
+                    meta={{
+                      ...displayMeta,
+                      product_name: isMpUnloadTask
+                        ? displayMeta.product_name
+                        : `${displayMeta.product_name} · ${ln.storage_location_code}`,
+                    }}
+                    printTestId={`ff-packaging-line-print-${ln.id}`}
+                    onPrintClick={
+                      !hidePrintActions && (alwaysShowPrintAction || printOnly || ln.requires_honest_sign || isMpUnloadTask)
+                        ? () => openLinePrint(ln)
+                        : undefined
+                    }
+                  />
+                )}
+                {simplifiedQuantities ? (
+                  <TableCell align="right">
+                    <Typography variant="body2" sx={{ fontWeight: 700 }}>{ln.qty_need_pack}</Typography>
+                    <Typography variant="caption" color="text.secondary">упаковано {ln.qty_done}</Typography>
+                  </TableCell>
+                ) : (
+                  <>
+                    <TableCell align="right">{ln.qty_total}</TableCell>
+                    {!isMpUnloadTask ? (
+                      <TableCell align="right">{ln.qty_suggested_packed}</TableCell>
+                    ) : null}
+                    <TableCell align="right">{ln.qty_need_pack}</TableCell>
+                    <TableCell align="right">{ln.qty_done}</TableCell>
+                  </>
+                )}
                 <TableCell align="right">
                   {ln.requires_honest_sign ? (
                     <Stack spacing={0.25} sx={{ alignItems: 'flex-end' }}>
@@ -498,13 +740,15 @@ export function FfPackagingTaskPanel({
                       >
                         напечатано {ln.qty_marking_printed} / нужно {ln.qty_need_pack}
                       </Typography>
-                      <Typography
-                        variant="caption"
-                        color="text.secondary"
-                        data-testid={`ff-packaging-marking-pool-${ln.id}`}
-                      >
-                        дост. {ln.marking_available_count} в пуле
-                      </Typography>
+                      {!simplifiedQuantities ? (
+                        <Typography
+                          variant="caption"
+                          color="text.secondary"
+                          data-testid={`ff-packaging-marking-pool-${ln.id}`}
+                        >
+                          дост. {ln.marking_available_count} в пуле
+                        </Typography>
+                      ) : null}
                     </Stack>
                   ) : (
                     '—'
@@ -512,7 +756,7 @@ export function FfPackagingTaskPanel({
                 </TableCell>
                 <TableCell align="right">
                   <Stack direction="row" spacing={0.5} sx={{ justifyContent: 'flex-end', flexWrap: 'wrap' }}>
-                    {ln.requires_honest_sign && !isMpUnloadTask && ln.qty_need_pack > 0 && ln.qty_marking_printed < 1 ? (
+                    {!hidePrintActions && !simplifiedQuantities && ln.requires_honest_sign && !isMpUnloadTask && ln.qty_need_pack > 0 && ln.qty_marking_printed < 1 ? (
                       <Button
                         size="small"
                         variant="outlined"
@@ -555,6 +799,7 @@ export function FfPackagingTaskPanel({
                         Упаковать
                       </Button>
                     ) : null}
+                    {renderLineActions?.(ln)}
                   </Stack>
                 </TableCell>
               </TableRow>
@@ -562,6 +807,7 @@ export function FfPackagingTaskPanel({
           </TableBody>
         </Table>
       </TableContainer>
+      )}
       {taskEditable ? (
         <Paper variant="outlined" sx={{ p: 2 }} data-testid="ff-packaging-complete-panel">
           <Stack spacing={1.5}>
@@ -581,21 +827,27 @@ export function FfPackagingTaskPanel({
                 ))}
               </Alert>
             ) : null}
-            <FormControlLabel
-              control={
-                <Checkbox
-                  checked={ackAllPacked}
-                  disabled={busy}
-                  onChange={(e) => setAckAllPacked(e.target.checked)}
-                  data-testid="ff-packaging-ack-all-packed"
-                />
-              }
-              label="Весь товар уже упакован"
-            />
+            {!compactLayout && !simplifiedQuantities ? (
+              <FormControlLabel
+                control={
+                  <Checkbox
+                    checked={ackAllPacked}
+                    disabled={busy}
+                    onChange={(e) => setAckAllPacked(e.target.checked)}
+                    data-testid="ff-packaging-ack-all-packed"
+                  />
+                }
+                label="Весь товар уже упакован"
+              />
+            ) : null}
             <Button
               variant="contained"
               color="success"
-              disabled={busy || hasIncompleteMarking}
+              disabled={
+                busy ||
+                hasIncompleteMarking ||
+                ((compactLayout || simplifiedQuantities) && hasIncompletePacking)
+              }
               onClick={() => void completeTask()}
               data-testid="ff-packaging-complete"
             >

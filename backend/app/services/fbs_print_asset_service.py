@@ -25,6 +25,7 @@ from app.models.fbs_print_asset import (
     FBS_PRINT_ASSET_KINDS,
     PRINT_ASSET_KIND_CARGO_PLACE_QR,
     PRINT_ASSET_KIND_ORDER_STICKER,
+    PRINT_ASSET_KIND_SUPPLY_QR,
     PRINT_ASSET_STATUS_ERROR,
     PRINT_ASSET_STATUS_READY,
     PRINT_ASSET_STATUS_REQUESTING,
@@ -43,6 +44,7 @@ from app.services.fbs_print_asset_storage import (
     read_png,
     save_png,
     sha256_checksum,
+    supply_qr_relative_path,
 )
 from app.services.wildberries_client import (
     WildberriesClientError,
@@ -260,6 +262,7 @@ def _persist_cargo_qr_bytes(
     asset.error_code = None
     asset.error_message = None
     trbx.qr_asset_id = asset.id
+    trbx.sticker_file = rel
 
 
 async def ensure_cargo_place_qr_assets(
@@ -292,32 +295,34 @@ async def ensure_cargo_place_qr_assets(
     except FbsPrintAssetSupplyError as exc:
         raise FbsPrintAssetError(exc.code, message="Нет доступа к маркетплейсу.") from exc
 
-    try:
-        sticker_rows = await fetch_marketplace_trbx_stickers(
-            http_client,
-            api_token=token,
-            supply_id=supply.wb_supply_id,
-            trbx_ids=[trbx.wb_trbx_id for trbx in uncached],
-        )
-    except WildberriesClientError as exc:
-        suffix = f"_{exc.status_code}" if exc.status_code else ""
-        raise FbsPrintAssetError(
-            f"wb_{exc.code}{suffix}",
-            message="WB не вернул QR грузоместа.",
-            retryable=True,
-        ) from exc
-
-    by_wb_id: dict[str, dict[str, Any]] = {}
-    for row in sticker_rows:
-        for key in ("trbxId", "trbx_id", "id"):
-            wb_id = row.get(key)
-            if wb_id is not None:
-                by_wb_id[str(wb_id)] = row
-                break
-
     fetched_at = datetime.now(tz=UTC)
     for trbx in uncached:
-        sticker_row = by_wb_id.get(trbx.wb_trbx_id)
+        try:
+            sticker_rows = await fetch_marketplace_trbx_stickers(
+                http_client,
+                api_token=token,
+                supply_id=supply.wb_supply_id,
+                trbx_ids=[trbx.wb_trbx_id],
+            )
+        except WildberriesClientError as exc:
+            suffix = f"_{exc.status_code}" if exc.status_code else ""
+            raise FbsPrintAssetError(
+                f"wb_{exc.code}{suffix}",
+                message="WB не вернул QR грузоместа.",
+                retryable=True,
+            ) from exc
+
+        sticker_row: dict[str, Any] | None = None
+        for row in sticker_rows:
+            for key in ("trbxId", "trbx_id", "id"):
+                wb_id = row.get(key)
+                if wb_id is not None and str(wb_id) == trbx.wb_trbx_id:
+                    sticker_row = row
+                    break
+            if sticker_row is not None:
+                break
+        if sticker_row is None and len(sticker_rows) == 1:
+            sticker_row = sticker_rows[0]
         if sticker_row is None:
             raise FbsPrintAssetError(
                 "wb_invalid_response",
@@ -404,6 +409,47 @@ async def upsert_order_sticker_asset_from_bytes(
     return asset
 
 
+async def upsert_supply_qr_asset_from_bytes(
+    session: AsyncSession,
+    *,
+    tenant_id: uuid.UUID,
+    supply: FbsSupply,
+    png_bytes: bytes,
+    fetched_at: datetime | None = None,
+) -> FbsPrintAsset:
+    stmt = select(FbsPrintAsset).where(
+        FbsPrintAsset.tenant_id == tenant_id,
+        FbsPrintAsset.fbs_supply_id == supply.id,
+        FbsPrintAsset.kind == PRINT_ASSET_KIND_SUPPLY_QR,
+    )
+    asset = (await session.execute(stmt)).scalars().first()
+    if asset is None:
+        asset = FbsPrintAsset(
+            tenant_id=tenant_id,
+            seller_id=supply.seller_id,
+            kind=PRINT_ASSET_KIND_SUPPLY_QR,
+            status=PRINT_ASSET_STATUS_REQUESTING,
+            fbs_supply_id=supply.id,
+        )
+        session.add(asset)
+        await session.flush()
+
+    rel = supply_qr_relative_path(supply.id)
+    save_png(rel, png_bytes)
+    asset.status = PRINT_ASSET_STATUS_READY
+    asset.content_type = ORDER_STICKER_CONTENT_TYPE
+    asset.storage_path = rel
+    asset.checksum = sha256_checksum(png_bytes)
+    asset.width_mm = ORDER_STICKER_WIDTH_MM
+    asset.height_mm = ORDER_STICKER_HEIGHT_MM
+    asset.wb_fetched_at = fetched_at or datetime.now(tz=UTC)
+    asset.error_code = None
+    asset.error_message = None
+    supply.barcode_asset_id = asset.id
+    await session.flush()
+    return asset
+
+
 async def request_supply_print_batch(
     session: AsyncSession,
     tenant_id: uuid.UUID,
@@ -454,8 +500,10 @@ async def request_supply_print_batch(
         asset = await _find_order_sticker_asset(session, tenant_id, order.id)
         if retry_missing and asset is not None and _asset_file_ready(asset):
             continue
-        if asset is not None and asset.status == PRINT_ASSET_STATUS_READY and not _asset_file_ready(
-            asset
+        if (
+            asset is not None
+            and asset.status == PRINT_ASSET_STATUS_READY
+            and not _asset_file_ready(asset)
         ):
             _mark_asset_error(
                 asset,

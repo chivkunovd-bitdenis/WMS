@@ -98,3 +98,17 @@ def test_warehouse_route_has_no_cargo_checks() -> None:
     codes = {check.code for check in checks}
     assert "cargo_places_required" not in codes
     assert "cargo_place_qr_not_ready" not in codes
+
+
+def test_deliver_requires_physical_boxes_and_packed_order_assignments() -> None:
+    order_id = uuid.uuid4()
+    checks = _build_delivery_checks(
+        _mock_supply(),
+        [_mock_order(FBS_ORDER_STATUS_PACKED, order_id=order_id)],
+        cargo_qr_ready=True,
+        has_physical_boxes=False,
+        unassigned_packed_order_ids=frozenset({order_id}),
+    )
+    failed = {check.code: check for check in checks if not check.ok}
+    assert failed["physical_boxes_required"].order_id is None
+    assert failed["packed_order_unassigned"].order_id == order_id

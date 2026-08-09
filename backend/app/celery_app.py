@@ -31,4 +31,8 @@ celery_app.conf.beat_schedule = {
         "task": "wms.fbs_order_statuses_autopoll",
         "schedule": float(settings.fbs_statuses_sync_interval_sec),
     },
+    "fbs-stock-reconcile": {
+        "task": "wms.fbs_stock_reconcile",
+        "schedule": float(settings.fbs_stock_reconcile_interval_sec),
+    },
 }

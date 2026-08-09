@@ -20,6 +20,7 @@ def client(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> TestClient:
     db_path = tmp_path / "emu.sqlite"
     monkeypatch.setenv("WB_EMULATOR_DB_PATH", str(db_path))
     monkeypatch.setenv("WB_EMULATOR_TOKEN_MAP", json.dumps({"env-token": "seller_a"}))
+    monkeypatch.setenv("WB_EMULATOR_ADMIN_TOKEN", "admin-token")
     get_settings.cache_clear()
     reset_db_runtime()
 
@@ -67,6 +68,18 @@ def test_add_order_and_deliver_flow(client: TestClient) -> None:
 
     deliver = client.patch(f"/api/v3/supplies/{supply_id}/deliver", headers=AUTH)
     assert deliver.status_code == 204
+
+    state = client.get("/__admin/state?seller=seller_a", headers={"X-Admin-Token": "admin-token"})
+    assert state.status_code == 200
+    supply_state = next(row for row in state.json()["supplies"] if row["id"] == supply_id)
+    assert supply_state == {
+        "id": supply_id,
+        "seller": "seller_a",
+        "done": True,
+        "orders": [1001],
+        "trbx": [],
+        "deliver_calls": 1,
+    }
 
     get_done = client.get(f"/api/v3/supplies/{supply_id}", headers=AUTH)
     assert get_done.json()["done"] is True
@@ -120,12 +133,126 @@ def test_trbx_create_bind_and_stickers_stub(client: TestClient) -> None:
     assert rows[0]["file"]
 
 
-def test_barcode_stub_returns_png(client: TestClient) -> None:
+def test_trbx_delete_removes_only_requested_cargo_place(client: TestClient) -> None:
     supply_id = _create_supply(client)
-    response = client.get(f"/api/v3/supplies/{supply_id}/barcode?type=png", headers=AUTH)
-    assert response.status_code == 200
-    assert response.headers["content-type"].startswith("image/png")
-    assert len(response.content) > 0
+    created = client.post(
+        f"/api/v3/supplies/{supply_id}/trbx",
+        headers=AUTH,
+        json={"amount": 2},
+    )
+    trbx_ids = created.json()["trbxIds"]
+
+    deleted = client.request(
+        "DELETE",
+        f"/api/v3/supplies/{supply_id}/trbx",
+        headers=AUTH,
+        json={"trbxIds": [trbx_ids[0]]},
+    )
+    assert deleted.status_code == 204
+
+    listed = client.get(f"/api/v3/supplies/{supply_id}/trbx", headers=AUTH)
+    assert listed.status_code == 200
+    assert listed.json() == {"trbxIds": [trbx_ids[1]]}
+
+
+def test_trbx_delete_with_missing_or_foreign_id_is_atomic(client: TestClient) -> None:
+    supply_id = _create_supply(client, "target")
+    target_ids = client.post(
+        f"/api/v3/supplies/{supply_id}/trbx", headers=AUTH, json={"amount": 2}
+    ).json()["trbxIds"]
+    other_supply_id = _create_supply(client, "other")
+    foreign_id = client.post(
+        f"/api/v3/supplies/{other_supply_id}/trbx", headers=AUTH, json={"amount": 1}
+    ).json()["trbxIds"][0]
+
+    for invalid_id in ("TRBX-MISSING", foreign_id):
+        response = client.request(
+            "DELETE",
+            f"/api/v3/supplies/{supply_id}/trbx",
+            headers=AUTH,
+            json={"trbxIds": [target_ids[0], invalid_id]},
+        )
+        assert response.status_code == 404
+        assert client.get(f"/api/v3/supplies/{supply_id}/trbx", headers=AUTH).json() == {
+            "trbxIds": target_ids
+        }
+
+
+def test_trbx_delete_is_seller_isolated(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    db_path = tmp_path / "delete-isolation.sqlite"
+    monkeypatch.setenv("WB_EMULATOR_DB_PATH", str(db_path))
+    monkeypatch.setenv(
+        "WB_EMULATOR_TOKEN_MAP",
+        json.dumps({"token-a": "seller_a", "token-b": "seller_b"}),
+    )
+    get_settings.cache_clear()
+    reset_db_runtime()
+
+    with TestClient(create_app()) as iso_client:
+        created = iso_client.post(
+            "/api/v3/supplies", headers={"Authorization": "token-a"}, json={"name": "A only"}
+        )
+        supply_id = created.json()["id"]
+        trbx_id = iso_client.post(
+            f"/api/v3/supplies/{supply_id}/trbx",
+            headers={"Authorization": "token-a"},
+            json={"amount": 1},
+        ).json()["trbxIds"][0]
+
+        foreign_delete = iso_client.request(
+            "DELETE",
+            f"/api/v3/supplies/{supply_id}/trbx",
+            headers={"Authorization": "token-b"},
+            json={"trbxIds": [trbx_id]},
+        )
+        assert foreign_delete.status_code == 404
+        assert iso_client.get(
+            f"/api/v3/supplies/{supply_id}/trbx", headers={"Authorization": "token-a"}
+        ).json() == {"trbxIds": [trbx_id]}
+
+    reset_db_runtime()
+    get_settings.cache_clear()
+
+
+def test_trbx_delete_after_deliver_keeps_cargo_places(client: TestClient) -> None:
+    supply_id = _create_supply(client)
+    trbx_id = client.post(
+        f"/api/v3/supplies/{supply_id}/trbx", headers=AUTH, json={"amount": 1}
+    ).json()["trbxIds"][0]
+    assert client.patch(f"/api/v3/supplies/{supply_id}/deliver", headers=AUTH).status_code == 204
+
+    deleted = client.request(
+        "DELETE",
+        f"/api/v3/supplies/{supply_id}/trbx",
+        headers=AUTH,
+        json={"trbxIds": [trbx_id]},
+    )
+    assert deleted.status_code == 400
+    assert client.get(f"/api/v3/supplies/{supply_id}/trbx", headers=AUTH).json() == {
+        "trbxIds": [trbx_id]
+    }
+
+
+def test_supply_qr_is_available_only_after_delivery_and_retry_is_idempotent(
+    client: TestClient,
+) -> None:
+    supply_id = _create_supply(client)
+    before_delivery = client.get(
+        f"/api/v3/supplies/{supply_id}/barcode?type=png", headers=AUTH
+    )
+    assert before_delivery.status_code == 409
+
+    assert client.patch(f"/api/v3/supplies/{supply_id}/deliver", headers=AUTH).status_code == 204
+
+    first = client.get(f"/api/v3/supplies/{supply_id}/barcode?type=png", headers=AUTH)
+    retry = client.get(f"/api/v3/supplies/{supply_id}/barcode?type=png", headers=AUTH)
+    assert first.status_code == retry.status_code == 200
+    assert first.headers["content-type"].startswith("image/png")
+    assert first.content == retry.content
+
+    state = client.get("/__admin/state?seller=seller_a", headers={"X-Admin-Token": "admin-token"})
+    supply_state = next(row for row in state.json()["supplies"] if row["id"] == supply_id)
+    assert supply_state["deliver_calls"] == 1
 
 
 def test_unknown_supply_returns_404(client: TestClient) -> None:

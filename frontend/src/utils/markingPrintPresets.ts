@@ -42,7 +42,7 @@ export const MARKING_PRINT_PRESETS: PrintPreset[] = [
 ]
 
 export type LayoutTapeItem = {
-  block: PrintLayoutUnit['block']
+  block: TapeBlock
   cis: string
   unitIndex: number
 }
@@ -63,11 +63,12 @@ export function expandLayoutTape(codes: string[], layout: PrintLayout): LayoutTa
   return out
 }
 
-export function blockLabel(block: PrintLayoutUnit['block']): string {
+export function blockLabel(block: TapeBlock): string {
+  if (block === 'wb_qr') return 'QR WB'
   return block === 'cz' ? 'ЧЗ' : 'ШК ВБ'
 }
 
-export type TapeBlock = PrintLayoutUnit['block']
+export type TapeBlock = PrintLayoutUnit['block'] | 'wb_qr'
 
 /** Разворачивает layout одной единицы в плоскую ленту блоков. */
 export function expandLayoutToTape(layout: PrintLayout): TapeBlock[] {
@@ -96,12 +97,16 @@ export function tapeToLayout(tape: TapeBlock[]): PrintLayout {
   }
   const units: PrintLayoutUnit[] = []
   for (const block of tape) {
+    if (block === 'wb_qr') continue
     const last = units[units.length - 1]
     if (last && last.block === block) {
       last.copies += 1
     } else {
       units.push({ block, copies: 1 })
     }
+  }
+  if (units.length < 1) {
+    return { units: [{ block: 'cz', copies: 1 }] }
   }
   return { units }
 }

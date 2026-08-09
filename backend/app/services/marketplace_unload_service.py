@@ -32,6 +32,7 @@ from app.services.document_number_service import (
     assign_display_number_if_missing,
     assign_document_number_if_missing,
 )
+from app.services.fbs_stock_publish_service import schedule_seller_stock_publish
 from app.services.marketplace_unload_status import (
     CANCELLABLE_STATUSES as CANCELLABLE_STATUSES,
 )
@@ -73,6 +74,7 @@ from app.services.wb_mp_warehouse_service import get_cached_mp_warehouse
 if TYPE_CHECKING:
     from app.services.marketplace_unload_box_service import BoxScanResult
 
+
 class MarketplaceUnloadError(Exception):
     def __init__(self, code: str) -> None:
         self.code = code
@@ -96,9 +98,7 @@ def assert_request_visible(
     from app.core.roles import FULFILLMENT_SELLER
 
     seller_id = effective_seller_id if effective_seller_id is not None else user.seller_id
-    if user.role == FULFILLMENT_SELLER and (
-        seller_id is None or req.seller_id != seller_id
-    ):
+    if user.role == FULFILLMENT_SELLER and (seller_id is None or req.seller_id != seller_id):
         raise MarketplaceUnloadError("not_found")
 
 
@@ -350,8 +350,7 @@ async def _mp_reserved_by_product(
         )
         .join(
             MarketplaceUnloadLine,
-            MarketplaceUnloadLine.id
-            == MarketplaceUnloadReservation.marketplace_unload_line_id,
+            MarketplaceUnloadLine.id == MarketplaceUnloadReservation.marketplace_unload_line_id,
         )
         .join(
             MarketplaceUnloadRequest,
@@ -404,9 +403,7 @@ async def _available_product_qty_in_warehouse(
         session, tenant_id, warehouse_id, product_id
     )
     reserved_outbound = (
-        await _outbound_reserved_by_product(
-            session, tenant_id, warehouse_id, [product_id]
-        )
+        await _outbound_reserved_by_product(session, tenant_id, warehouse_id, [product_id])
     ).get(product_id, 0)
     reserved_mp = await _mp_reserved_qty_for_product(
         session,
@@ -417,9 +414,7 @@ async def _available_product_qty_in_warehouse(
     )
     from app.services.fbs_stock_availability_service import fbs_reserved_qty_for_product
 
-    reserved_fbs = await fbs_reserved_qty_for_product(
-        session, tenant_id, warehouse_id, product_id
-    )
+    reserved_fbs = await fbs_reserved_qty_for_product(session, tenant_id, warehouse_id, product_id)
     return on_hand + sorting_on_hand - reserved_outbound - reserved_mp - reserved_fbs
 
 
@@ -480,9 +475,7 @@ async def list_available_products(
     )
     from app.services.fbs_stock_availability_service import fbs_reserved_by_product
 
-    fbs_reserved = await fbs_reserved_by_product(
-        session, tenant_id, warehouse_id, product_ids
-    )
+    fbs_reserved = await fbs_reserved_by_product(session, tenant_id, warehouse_id, product_ids)
     return [
         MarketplaceUnloadAvailableProduct(
             product_id=product_id,
@@ -500,6 +493,17 @@ async def list_available_products(
     ]
 
 
+async def _schedule_fbs_publish_for_request(session: AsyncSession, request_id: uuid.UUID) -> None:
+    """Резерв под отгрузку на МП вычитается из того же пула, что и ФБС.
+
+    Значит любое изменение этого резерва меняет цифру, которую WB должен увидеть
+    по товарам селлера, — ставим публикацию в очередь.
+    """
+    req = await session.get(MarketplaceUnloadRequest, request_id)
+    if req is not None:
+        schedule_seller_stock_publish(session, req.tenant_id, req.seller_id)
+
+
 async def _release_reservations(session: AsyncSession, request_id: uuid.UUID) -> None:
     line_ids_stmt = select(MarketplaceUnloadLine.id).where(
         MarketplaceUnloadLine.request_id == request_id
@@ -513,6 +517,7 @@ async def _release_reservations(session: AsyncSession, request_id: uuid.UUID) ->
             MarketplaceUnloadReservation.marketplace_unload_line_id.in_(line_ids)
         )
     )
+    await _schedule_fbs_publish_for_request(session, request_id)
 
 
 async def _apply_reservations(session: AsyncSession, req: MarketplaceUnloadRequest) -> None:
@@ -527,6 +532,7 @@ async def _apply_reservations(session: AsyncSession, req: MarketplaceUnloadReque
                 quantity=int(ln.quantity),
             )
         )
+    schedule_seller_stock_publish(session, req.tenant_id, req.seller_id)
 
 
 async def add_line(
@@ -702,9 +708,7 @@ async def confirm_request(
     if mpw is None:
         raise MarketplaceUnloadError("wb_mp_warehouse_unknown")
     effective_date = (
-        planned_shipment_date
-        if planned_shipment_date is not None
-        else req.planned_shipment_date
+        planned_shipment_date if planned_shipment_date is not None else req.planned_shipment_date
     )
     if effective_date is None:
         raise MarketplaceUnloadError("planned_shipment_date_required")
@@ -742,9 +746,7 @@ async def submit_request(
     return await confirm_request(session, tenant_id, request_id)
 
 
-async def release_reservations_for_shipped(
-    session: AsyncSession, request_id: uuid.UUID
-) -> None:
+async def release_reservations_for_shipped(session: AsyncSession, request_id: uuid.UUID) -> None:
     await _release_reservations(session, request_id)
 
 
@@ -761,8 +763,7 @@ async def reduce_reservation_for_collect(
         select(MarketplaceUnloadReservation)
         .join(
             MarketplaceUnloadLine,
-            MarketplaceUnloadLine.id
-            == MarketplaceUnloadReservation.marketplace_unload_line_id,
+            MarketplaceUnloadLine.id == MarketplaceUnloadReservation.marketplace_unload_line_id,
         )
         .where(
             MarketplaceUnloadLine.request_id == request_id,
@@ -823,9 +824,7 @@ async def restore_reservation_for_remove(
     reservation.quantity = int(reservation.quantity) + quantity
 
 
-async def delete_empty_boxes_for_ship(
-    session: AsyncSession, req: MarketplaceUnloadRequest
-) -> None:
+async def delete_empty_boxes_for_ship(session: AsyncSession, req: MarketplaceUnloadRequest) -> None:
     """DEC-002: empty boxes (no lines) are removed when shipment is posted."""
     for box in list(req.boxes):
         if not box.lines:

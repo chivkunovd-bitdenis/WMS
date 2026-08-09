@@ -1,14 +1,11 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import {
   Alert,
-  Avatar,
   Box,
   Button,
   Checkbox,
   Chip,
   CircularProgress,
-  Dialog,
-  DialogContent,
   FormControl,
   InputLabel,
   MenuItem,
@@ -26,19 +23,22 @@ import {
   TextField,
   Typography,
 } from '@mui/material'
+import CloudSyncOutlinedIcon from '@mui/icons-material/CloudSyncOutlined'
 import Inventory2OutlinedIcon from '@mui/icons-material/Inventory2Outlined'
 import RefreshOutlinedIcon from '@mui/icons-material/RefreshOutlined'
 import SearchOutlinedIcon from '@mui/icons-material/SearchOutlined'
-import {
-  CargoTypeChip,
-  DeadlinePill,
-  FbsStatusChip,
-  SellerBadge,
-} from '../../components/fbs/FbsChips'
+import { DeadlinePill, FbsStatusChip } from '../../components/fbs/FbsChips'
+import { ProductPhotoThumb } from '../../components/ProductPhotoThumb'
 import { FbsSupplyCreateDialog } from './FbsSupplyCreateDialog'
 import { FfFbsSectionNav } from './FfFbsSectionNav'
 import { FfFbsSupplyWorkspace } from './FfFbsSupplyWorkspace'
-import { fetchFbsWorklist, type FbsWorklistOrder, type FbsWorkspace } from './fbsApi'
+import {
+  fetchFbsWorklist,
+  runFbsOrdersSync,
+  syncFbsOrderStatuses,
+  type FbsWorklistOrder,
+  type FbsWorkspace,
+} from './fbsApi'
 
 type SellerRow = { id: string; name: string }
 
@@ -46,6 +46,7 @@ type Props = {
   token: string
   authHeaders: (token: string) => Record<string, string>
   sellers: SellerRow[]
+  isAdmin?: boolean
 }
 
 const TABS = [
@@ -66,7 +67,7 @@ function MissingText({ children }: { children: string }) {
 
 function MetadataState({ order }: { order: FbsWorklistOrder }) {
   if (order.metadata.required.length === 0) {
-    return <Chip size="small" variant="outlined" color="success" label="Не требуется" />
+    return null
   }
   const rejected = order.metadata.states.some((state) =>
     ['rejected', 'replacement_required'].includes(state.status),
@@ -82,7 +83,7 @@ function MetadataState({ order }: { order: FbsWorklistOrder }) {
   )
 }
 
-export function FfFbsOrdersScreen({ token, authHeaders, sellers }: Props) {
+export function FfFbsOrdersScreen({ token, authHeaders, sellers, isAdmin = false }: Props) {
   const [statusGroup, setStatusGroup] = useState<(typeof TABS)[number]['key']>('new')
   const [sellerId, setSellerId] = useState('__all__')
   const [search, setSearch] = useState('')
@@ -92,11 +93,12 @@ export function FfFbsOrdersScreen({ token, authHeaders, sellers }: Props) {
   const [selected, setSelected] = useState<Set<string>>(new Set())
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [syncing, setSyncing] = useState(false)
+  const [syncNote, setSyncNote] = useState<string | null>(null)
   const [createOpen, setCreateOpen] = useState(false)
   const [workspaceOpen, setWorkspaceOpen] = useState(false)
   const [workspaceId, setWorkspaceId] = useState<string | null>(null)
   const [workspaceSeed, setWorkspaceSeed] = useState<FbsWorkspace | null>(null)
-  const [previewUrl, setPreviewUrl] = useState<string | null>(null)
 
   const load = useCallback(async () => {
     setBusy(true)
@@ -125,6 +127,54 @@ export function FfFbsOrdersScreen({ token, authHeaders, sellers }: Props) {
   useEffect(() => {
     void load()
   }, [load])
+
+  // Ручной поход в Wildberries: тянем новые заказы и подтягиваем их статусы.
+  // Автоопрос делает то же самое раз в минуту, но оператору нужна кнопка на случай,
+  // когда ждать нельзя или фоновый воркер отвалился.
+  const syncTargets = useMemo(
+    () => (sellerId === '__all__' ? sellers.map((seller) => seller.id) : [sellerId]),
+    [sellerId, sellers],
+  )
+
+  const syncWithWb = useCallback(async () => {
+    if (syncTargets.length === 0) {
+      setError('Нет ни одного селлера, по которому можно запросить заказы.')
+      return
+    }
+    setSyncing(true)
+    setError(null)
+    setSyncNote(null)
+    let received = 0
+    let created = 0
+    let statusesUpdated = 0
+    const failures: string[] = []
+    for (const targetSellerId of syncTargets) {
+      const sellerName = sellers.find((seller) => seller.id === targetSellerId)?.name ?? 'селлер'
+      try {
+        const outcome = await runFbsOrdersSync(token, authHeaders, targetSellerId)
+        received += outcome.ordersReceived
+        created += outcome.ordersCreated
+      } catch (cause) {
+        failures.push(`${sellerName}: ${cause instanceof Error ? cause.message : 'ошибка синхронизации'}`)
+        continue
+      }
+      try {
+        statusesUpdated += await syncFbsOrderStatuses(token, authHeaders, targetSellerId)
+      } catch {
+        // Статусы — не критично: заказы уже приехали, покажем их и без обновлённых статусов.
+      }
+    }
+    setSyncing(false)
+    if (failures.length > 0) {
+      setError(failures.join(' · '))
+    }
+    if (failures.length < syncTargets.length) {
+      setSyncNote(
+        `WB отдал заказов: ${received}, из них новых: ${created}. Обновлено статусов: ${statusesUpdated}.`,
+      )
+    }
+    await load()
+  }, [syncTargets, sellers, token, authHeaders, load])
 
   const selectedOrders = useMemo(
     () => orders.filter((order) => selected.has(order.id)),
@@ -171,17 +221,31 @@ export function FfFbsOrdersScreen({ token, authHeaders, sellers }: Props) {
             Соберите совместимые заказы в поставку и проведите её до подтверждённой передачи WB.
           </Typography>
         </Box>
-        <Button
-          variant="outlined"
-          startIcon={<RefreshOutlinedIcon />}
-          onClick={() => void load()}
-          disabled={busy}
-        >
-          Обновить данные
-        </Button>
+        <Stack direction="row" spacing={1.25} sx={{ alignItems: 'flex-start' }}>
+          <Button
+            variant="outlined"
+            startIcon={<RefreshOutlinedIcon />}
+            onClick={() => void load()}
+            disabled={busy || syncing}
+          >
+            Обновить данные
+          </Button>
+          <Button
+            variant="contained"
+            startIcon={
+              syncing ? <CircularProgress size={18} color="inherit" /> : <CloudSyncOutlinedIcon />
+            }
+            onClick={() => void syncWithWb()}
+            disabled={syncing || busy}
+            data-testid="fbs-orders-sync-wb"
+            sx={{ minWidth: 214 }}
+          >
+            {syncing ? 'Забираем заказы…' : 'Забрать заказы из WB'}
+          </Button>
+        </Stack>
       </Stack>
 
-      <FfFbsSectionNav />
+      <FfFbsSectionNav showStockSync={isAdmin} />
 
       <Paper variant="outlined" sx={{ overflow: 'hidden', mt: 2 }}>
         <Tabs
@@ -246,6 +310,17 @@ export function FfFbsOrdersScreen({ token, authHeaders, sellers }: Props) {
         </Alert>
       ) : null}
 
+      {syncNote ? (
+        <Alert
+          severity="success"
+          sx={{ mt: 2 }}
+          onClose={() => setSyncNote(null)}
+          data-testid="fbs-orders-sync-result"
+        >
+          {syncNote}
+        </Alert>
+      ) : null}
+
       <TableContainer component={Paper} variant="outlined" sx={{ mt: 2, maxHeight: 'calc(100vh - 330px)' }}>
         <Table stickyHeader size="small" data-testid="fbs-worklist-table">
           <TableHead>
@@ -259,12 +334,11 @@ export function FfFbsOrdersScreen({ token, authHeaders, sellers }: Props) {
                   />
                 ) : null}
               </TableCell>
-              <TableCell sx={{ minWidth: 310 }}>Товар и заказ</TableCell>
-              <TableCell sx={{ minWidth: 190 }}>Селлер и склады</TableCell>
-              <TableCell sx={{ minWidth: 180 }}>Остаток</TableCell>
-              <TableCell sx={{ minWidth: 170 }}>Маршрут и данные</TableCell>
-              <TableCell sx={{ minWidth: 145 }}>Срок</TableCell>
-              <TableCell sx={{ minWidth: 130 }}>Статус</TableCell>
+              <TableCell sx={{ minWidth: 270 }}>Товар</TableCell>
+              <TableCell sx={{ minWidth: 125 }}>Селлер</TableCell>
+              <TableCell sx={{ minWidth: 125 }}>Маршрут сдачи</TableCell>
+              <TableCell sx={{ minWidth: 105 }}>Отгрузить до</TableCell>
+              {statusGroup !== 'new' ? <TableCell sx={{ minWidth: 130 }}>Статус</TableCell> : null}
             </TableRow>
           </TableHead>
           <TableBody>
@@ -275,7 +349,8 @@ export function FfFbsOrdersScreen({ token, authHeaders, sellers }: Props) {
                   key={order.id}
                   hover
                   selected={selected.has(order.id)}
-                  sx={{ verticalAlign: 'top' }}
+                  sx={{ verticalAlign: 'top', cursor: order.supply_id ? 'pointer' : 'default' }}
+                  onClick={() => order.supply_id && openWorkspace(order.supply_id)}
                   data-testid={`fbs-order-${order.id}`}
                 >
                   <TableCell padding="checkbox">
@@ -283,38 +358,34 @@ export function FfFbsOrdersScreen({ token, authHeaders, sellers }: Props) {
                       <Checkbox
                         checked={selected.has(order.id)}
                         disabled={blocked}
+                        onClick={(event) => event.stopPropagation()}
                         onChange={() => toggle(order.id)}
                       />
                     ) : null}
                   </TableCell>
                   <TableCell>
                     <Stack direction="row" spacing={1.25}>
-                      <Avatar
-                        variant="rounded"
-                        src={order.product.image_url ?? undefined}
-                        onClick={() => order.product.image_url && setPreviewUrl(order.product.image_url)}
-                        sx={{ width: 62, height: 72, cursor: order.product.image_url ? 'zoom-in' : 'default' }}
-                      >
-                        <Inventory2OutlinedIcon />
-                      </Avatar>
+                      <ProductPhotoThumb
+                        src={order.product.image_url}
+                        alt={order.product.name}
+                        size={56}
+                        previewSize={280}
+                        testId={`fbs-product-photo-${order.id}`}
+                      />
                       <Box sx={{ minWidth: 0 }}>
                         <Typography variant="subtitle2" sx={{ lineHeight: 1.25 }}>
                           {order.product.id ? order.product.name : 'Товар не сопоставлен'}
                         </Typography>
-                        <Typography variant="body2" color="text.secondary">
+                        <Typography variant="caption" color="text.secondary" sx={{ display: 'block' }}>
                           Заказ WB №{order.wb_order_id}
                         </Typography>
                         <Typography variant="caption" color="text.secondary" sx={{ display: 'block' }}>
-                          Артикул продавца: {order.product.seller_article ?? 'не указан'}
+                          Артикул: {order.product.seller_article ?? '—'}{order.product.wb_article ? ` · WB ${order.product.wb_article}` : ''}
                         </Typography>
                         <Typography variant="caption" color="text.secondary" sx={{ display: 'block' }}>
-                          Артикул WB: {order.product.wb_article ?? 'не указан'} · ШК:{' '}
-                          {order.product.barcode ?? 'не указан'}
+                          ШК: {order.product.barcode ?? '—'}{order.product.size ? ` · Размер: ${order.product.size}` : ''}
                         </Typography>
-                        {order.product.size ? (
-                          <Chip size="small" label={`Размер ${order.product.size}`} sx={{ mt: 0.5 }} />
-                        ) : null}
-                        {blocked ? (
+                        {statusGroup === 'new' && blocked ? (
                           <Stack sx={{ mt: 0.75 }} spacing={0.25}>
                             {order.selection_blockers.map((blocker) => (
                               <MissingText key={blocker.code}>{blocker.message}</MissingText>
@@ -325,74 +396,26 @@ export function FfFbsOrdersScreen({ token, authHeaders, sellers }: Props) {
                     </Stack>
                   </TableCell>
                   <TableCell>
-                    <SellerBadge name={order.seller.name} />
-                    <Typography variant="body2" sx={{ mt: 0.75 }}>
-                      WB: {order.wb_warehouse.name ?? `ID ${order.wb_warehouse.id}`}
-                    </Typography>
-                    <Typography variant="body2" color="text.secondary">
-                      WMS: {order.wms_warehouse.name}
-                    </Typography>
+                    <Typography variant="body2">{order.seller.name ?? '—'}</Typography>
                   </TableCell>
                   <TableCell>
-                    <Typography
-                      variant="body2"
-                      color={order.inventory.available_unpacked > 0 ? 'success.main' : 'error.main'}
-                      sx={{ fontWeight: 750 }}
-                    >
-                      Доступно: {order.inventory.available_unpacked}
-                    </Typography>
-                    {order.inventory.locations.length ? (
-                      order.inventory.locations.map((location) => (
-                        <Typography key={location.id} variant="caption" color="text.secondary" sx={{ display: 'block' }}>
-                          {location.code}: {location.available_unpacked}
-                        </Typography>
-                      ))
-                    ) : (
-                      <MissingText>Ячейка не назначена</MissingText>
-                    )}
-                    {order.inventory.available_unpacked <= 0 ? (
-                      <MissingText>Остаток отсутствует</MissingText>
-                    ) : null}
+                    <Chip size="small" variant="outlined" label={order.can_pvz ? 'ПВЗ' : 'Склад / СЦ'} />
+                    {order.buyer_type === 'legal' ? <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 0.5 }}>Юридическое лицо</Typography> : null}
                   </TableCell>
                   <TableCell>
-                    <Stack direction="row" spacing={0.5} sx={{ flexWrap: 'wrap' }} useFlexGap>
-                      <CargoTypeChip cargoType={order.cargo_type} />
-                      <Chip
-                        size="small"
-                        variant="outlined"
-                        color={order.can_pvz ? 'success' : 'default'}
-                        label={order.can_pvz ? 'Можно в ПВЗ' : 'Только склад/СЦ'}
-                      />
-                      <Chip
-                        size="small"
-                        variant="outlined"
-                        label={order.buyer_type === 'legal' ? 'Юрлицо' : 'Физлицо'}
-                      />
-                    </Stack>
-                    <Box sx={{ mt: 1 }}>
-                      <MetadataState order={order} />
-                    </Box>
+                    <DeadlinePill
+                      deadlineAt={order.deadline_at}
+                      serverNow={serverNow}
+                      cancelled={order.status === 'cancelled'}
+                    />
                   </TableCell>
-                  <TableCell>
-                    <DeadlinePill deadlineAt={order.deadline_at} serverNow={serverNow} />
-                    <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 0.5 }}>
-                      Создан {new Date(order.created_at_wb).toLocaleString('ru-RU')}
-                    </Typography>
-                  </TableCell>
-                  <TableCell>
-                    <FbsStatusChip status={order.status} />
-                    {order.supply_id ? (
-                      <Button size="small" sx={{ mt: 0.75 }} onClick={() => openWorkspace(order.supply_id!)}>
-                        Открыть поставку
-                      </Button>
-                    ) : null}
-                  </TableCell>
+                  {statusGroup !== 'new' ? <TableCell><FbsStatusChip status={order.status} /><Box sx={{ mt: 0.75 }}><MetadataState order={order} /></Box></TableCell> : null}
                 </TableRow>
               )
             })}
             {!busy && orders.length === 0 ? (
               <TableRow>
-                <TableCell colSpan={7}>
+                <TableCell colSpan={statusGroup === 'new' ? 5 : 6}>
                   <Box sx={{ py: 8, textAlign: 'center' }}>
                     <Inventory2OutlinedIcon sx={{ fontSize: 42, color: 'text.disabled' }} />
                     <Typography variant="subtitle1" sx={{ mt: 1 }}>
@@ -480,11 +503,6 @@ export function FfFbsOrdersScreen({ token, authHeaders, sellers }: Props) {
         }}
       />
 
-      <Dialog open={Boolean(previewUrl)} onClose={() => setPreviewUrl(null)} maxWidth="md">
-        <DialogContent sx={{ p: 1 }}>
-          {previewUrl ? <Box component="img" src={previewUrl} alt="Фото товара" sx={{ maxWidth: '80vw', maxHeight: '80vh' }} /> : null}
-        </DialogContent>
-      </Dialog>
     </Box>
   )
 }

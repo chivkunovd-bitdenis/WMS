@@ -16,6 +16,9 @@ const e2eWebPort = Number(process.env.E2E_WEB_PORT ?? 5174);
 
 export default defineConfig({
   testDir: './tests-e2e',
+  // The real PostgreSQL/WB-emulator flow is started by
+  // scripts/run_fbs_fullstack_e2e.sh with its own seed file and config.
+  testIgnore: '**/ff-fbs-full-flow.spec.ts',
   timeout: 60_000,
   expect: { timeout: 10_000 },
   retries: process.env.CI ? 2 : 0,

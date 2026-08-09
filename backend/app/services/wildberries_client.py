@@ -37,14 +37,6 @@ MARKETPLACE_ORDER_META_PATH = "/api/v3/orders/{order_id}/meta"
 MARKETPLACE_STOCKS_PATH = "/api/v3/stocks/{warehouse_id}"
 MAX_MARKETPLACE_STOCKS_BATCH = 1000
 
-# WB Marketplace meta PUT bodies use plural array keys per kind (see dev.wildberries.ru).
-_META_PUT_BODY_KEYS: dict[str, str] = {
-    "sgtin": "sgtins",
-    "uin": "uins",
-    "imei": "imeis",
-    "gtin": "gtins",
-}
-
 # In-memory store for e2e_mock_wb_marketplace_marking (tests may clear via reset helper).
 _mock_order_meta: dict[int, dict[str, list[dict[str, str]]]] = {}
 
@@ -54,16 +46,13 @@ def reset_mock_marketplace_order_meta() -> None:
     _mock_order_meta.clear()
 
 
-def _meta_plural_key(kind: str) -> str:
-    key = _META_PUT_BODY_KEYS.get(kind)
-    if key is None:
-        raise WildberriesClientError("invalid_meta_kind")
-    return key
-
-
-def build_marketplace_order_meta_put_body(kind: str, value: str) -> dict[str, list[str]]:
+def build_marketplace_order_meta_put_body(kind: str, value: str) -> dict[str, Any]:
     """Build JSON body for PUT /api/v3/orders/{id}/meta/{kind}."""
-    return {_meta_plural_key(kind): [value]}
+    if kind == "sgtin":
+        return {"sgtins": [value]}
+    if kind in {"uin", "imei", "gtin"}:
+        return {kind: value}
+    raise WildberriesClientError("invalid_meta_kind")
 
 
 @dataclass(frozen=True, slots=True)
@@ -434,9 +423,10 @@ async def fetch_marketplace_orders_page(
     base = (marketplace_api_base or settings.wildberries_marketplace_api_base).rstrip("/")
     url = f"{base}{MARKETPLACE_ORDERS_PATH}"
     headers = {"Authorization": api_token}
-    params: dict[str, Any] = {"limit": min(max(limit, 1), 1000)}
-    if next_token is not None:
-        params["next"] = next_token
+    params: dict[str, Any] = {
+        "limit": min(max(limit, 1), 1000),
+        "next": 0 if next_token is None else next_token,
+    }
     try:
         response = await client.get(url, headers=headers, params=params, timeout=60.0)
     except httpx.HTTPError as exc:
@@ -590,7 +580,8 @@ def _marketplace_supply_create_mock(name: str) -> dict[str, Any]:
 
 
 _TINY_PNG_BASE64 = (
-    "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg=="
+    "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAE"
+    "hQGAhKmMIQAAAABJRU5ErkJggg=="
 )
 
 
@@ -815,9 +806,14 @@ async def fetch_marketplace_supply_barcode(
 
 
 def _mock_upsert_order_meta(order_id: int, kind: str, value: str) -> None:
-    plural = _meta_plural_key(kind)
+    if kind == "sgtin":
+        key = "sgtins"
+    elif kind in {"uin", "imei", "gtin"}:
+        key = kind
+    else:
+        raise WildberriesClientError("invalid_meta_kind")
     bucket = _mock_order_meta.setdefault(order_id, {})
-    entries = bucket.setdefault(plural, [])
+    entries = bucket.setdefault(key, [])
     for entry in entries:
         if entry.get("value") == value:
             entry["checkStatus"] = "new"
@@ -827,6 +823,16 @@ def _mock_upsert_order_meta(order_id: int, kind: str, value: str) -> None:
 
 def _mock_order_meta_response(order_id: int) -> dict[str, Any]:
     return dict(_mock_order_meta.get(order_id, {}))
+
+
+def mock_order_meta_snapshot(order_id: int) -> dict[str, Any]:
+    """Снимок mock-меты заказа для batch-клиента (e2e_mock_wb_marketplace_marking).
+
+    Batch-роут POST /api/marketplace/v3/orders/meta живёт в wildberries_fbs_client,
+    но обязан читать тот же mock-стор, что и одиночные PUT/GET здесь, иначе под
+    моком метаданные расходятся.
+    """
+    return _mock_order_meta_response(order_id)
 
 
 async def put_marketplace_order_meta(
@@ -933,6 +939,12 @@ def _marketplace_trbx_create_mock(amount: int, *, supply_id: str) -> list[str]:
     ids = [_next_mock_trbx_id() for _ in range(amount)]
     _mock_trbx_by_supply.setdefault(supply_id, []).extend(ids)
     return ids
+
+
+def _marketplace_trbx_delete_mock(trbx_ids: list[str], *, supply_id: str) -> None:
+    current = _mock_trbx_by_supply.get(supply_id, [])
+    remove = set(trbx_ids)
+    _mock_trbx_by_supply[supply_id] = [row for row in current if row not in remove]
 
 
 def _marketplace_trbx_stickers_mock(trbx_ids: list[str]) -> list[dict[str, Any]]:
@@ -1073,3 +1085,41 @@ async def fetch_marketplace_supply_trbx_list(
         )
     data = response.json()
     return _parse_trbx_ids_from_response(data)
+
+
+async def delete_marketplace_supply_trbx(
+    client: httpx.AsyncClient,
+    *,
+    api_token: str,
+    supply_id: str,
+    trbx_ids: list[str],
+    marketplace_api_base: str | None = None,
+) -> None:
+    """DELETE /api/v3/supplies/{supply_id}/trbx — remove cargo places."""
+    if not trbx_ids:
+        return
+    if _marketplace_supplies_mock_enabled():
+        _marketplace_trbx_delete_mock(trbx_ids, supply_id=supply_id)
+        return
+    base = (marketplace_api_base or settings.wildberries_marketplace_api_base).rstrip("/")
+    url = f"{base}{MARKETPLACE_SUPPLIES_PATH}/{supply_id}/trbx"
+    headers = {
+        "Authorization": api_token,
+        "Content-Type": "application/json",
+    }
+    payload = {"trbxIds": trbx_ids}
+    try:
+        response = await client.request(
+            "DELETE",
+            url,
+            headers=headers,
+            json=payload,
+            timeout=60.0,
+        )
+    except httpx.HTTPError as exc:
+        raise WildberriesClientError("transport_error") from exc
+    if response.status_code >= 400:
+        raise WildberriesClientError(
+            "upstream_error",
+            status_code=response.status_code,
+        )

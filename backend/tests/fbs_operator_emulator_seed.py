@@ -42,8 +42,11 @@ class OperatorSellerSeed:
 class OperatorEmulatorSeedResult:
     tenant_id: uuid.UUID
     admin_headers: dict[str, str]
+    admin_email: str
+    admin_password: str
     warehouse_id: uuid.UUID
     storage_location_id: uuid.UUID
+    storage_location_code: str
     sellers: dict[str, OperatorSellerSeed]
     marking_pools_by_chrt: dict[int, uuid.UUID] = field(default_factory=dict)
 
@@ -64,15 +67,19 @@ def load_emulator_tokens(path: Path | None = None) -> dict[str, str]:
     return {str(token): str(seller_key) for token, seller_key in raw.items()}
 
 
-async def _register_ff_admin(async_client: AsyncClient) -> tuple[dict[str, str], uuid.UUID, str]:
+async def _register_ff_admin(
+    async_client: AsyncClient,
+) -> tuple[dict[str, str], uuid.UUID, str, str, str]:
     suffix = str(time.time_ns())
+    email = f"emu-op-{suffix}@example.com"
+    password = "password123"
     reg = await async_client.post(
         "/auth/register",
         json={
             "organization_name": f"Emu operator {suffix}",
             "slug": f"emu-op-{suffix}",
-            "admin_email": f"emu-op-{suffix}@example.com",
-            "password": "password123",
+            "admin_email": email,
+            "password": password,
         },
     )
     assert reg.status_code == 200, reg.text
@@ -80,7 +87,7 @@ async def _register_ff_admin(async_client: AsyncClient) -> tuple[dict[str, str],
     me = await async_client.get("/auth/me", headers=headers)
     assert me.status_code == 200, me.text
     tenant_id = uuid.UUID(me.json()["tenant_id"])
-    return headers, tenant_id, suffix
+    return headers, tenant_id, suffix, email, password
 
 
 async def seed_operator_emulator_wms(
@@ -92,7 +99,9 @@ async def seed_operator_emulator_wms(
     """Seed one FF tenant, three sellers, bindings, products, inventory, marking pool stubs."""
     token_map = tokens or load_emulator_tokens()
     templates = load_emulator_templates()
-    headers, tenant_id, suffix = await _register_ff_admin(async_client)
+    headers, tenant_id, suffix, admin_email, admin_password = await _register_ff_admin(
+        async_client
+    )
 
     warehouse = await async_client.post(
         "/warehouses",
@@ -102,10 +111,11 @@ async def seed_operator_emulator_wms(
     assert warehouse.status_code in (200, 201), warehouse.text
     warehouse_id = uuid.UUID(warehouse.json()["id"])
 
+    storage_location_code = f"OP-{suffix[-6:]}"
     location = await async_client.post(
         f"/warehouses/{warehouse_id}/locations",
         headers=headers,
-        json={"code": f"OP-{suffix[-6:]}"},
+        json={"code": storage_location_code},
     )
     assert location.status_code in (200, 201), location.text
     storage_location_id = uuid.UUID(location.json()["id"])
@@ -176,6 +186,11 @@ async def seed_operator_emulator_wms(
                 row.wb_nm_id = int(template["nmId"])
                 row.wb_barcode = template["skus"][0]
                 row.requires_honest_sign = requires_kiz
+                # Признак участия в ФБС по умолчанию выключен: иначе включение
+                # синхронизации выгрузило бы в WB весь каталог. Для сида поднимаем
+                # явно, иначе остаток не уедет в эмулятор и тот откажется
+                # создавать заказ, отвечая rejected_no_stock.
+                row.fbs_stock_sync_enabled = True
                 await session.commit()
 
                 await inventory_service.record_movement_and_adjust_balance(
@@ -200,8 +215,11 @@ async def seed_operator_emulator_wms(
     return OperatorEmulatorSeedResult(
         tenant_id=tenant_id,
         admin_headers=headers,
+        admin_email=admin_email,
+        admin_password=admin_password,
         warehouse_id=warehouse_id,
         storage_location_id=storage_location_id,
+        storage_location_code=storage_location_code,
         sellers=sellers,
         marking_pools_by_chrt=marking_pools_by_chrt,
     )

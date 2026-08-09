@@ -78,6 +78,8 @@ FBS_ERROR_MESSAGES_RU: dict[str, str] = {
     "invalid_barcode_path": "Некорректный путь QR поставки.",
     "cargo_places_required": "Нужны грузоместа (ПВЗ).",
     "cargo_place_qr_not_ready": "QR грузомест не готов.",
+    "physical_boxes_required": "Для передачи нужны физические короба.",
+    "packed_order_unassigned": "Упакованный заказ не назначен в короб.",
     "order_cancelled": "Заказ отменён на Wildberries.",
     "supply_bad_status": "Неверный статус поставки.",
     "stale_preflight": "Чек-лист устарел — обновите preflight.",
@@ -92,6 +94,8 @@ FBS_ERROR_MESSAGES_RU: dict[str, str] = {
     "invalid_sticker_path": "Некорректный путь QR грузоместа.",
     "boxes_count_mismatch": "Число коробов не совпадает с count.",
     "cargo_places_preflight_failed": "Preflight грузомест не пройден.",
+    "cargo_place_not_found": "Грузоместо не найдено в поставке.",
+    "empty_cargo_place_selection": "Не выбраны грузоместа для удаления.",
     "measurements_confirmation_required": (
         "Укажите размеры и вес или подтвердите отсутствие данных."
     ),
@@ -111,6 +115,7 @@ FBS_ERROR_MESSAGES_RU: dict[str, str] = {
     "active_fbs_reservations": "Есть активные FBS-резервы.",
     "packaging_box_already_bound": "Короб уже привязан к другому грузоместу.",
     "packaging_box_not_found": "Короб не найден в складе этой поставки.",
+    "supply_already_delivered": "Поставка уже передана в WB, изменение коробов запрещено.",
     "missing_fbs_packaging_location": "Для упакованного заказа не найдена исходная ячейка.",
     "ambiguous_fbs_packaging_fulfillment": (
         "Для заказа найдено несколько активных подтверждений упаковки."

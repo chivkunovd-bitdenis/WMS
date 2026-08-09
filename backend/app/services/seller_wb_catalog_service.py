@@ -4,11 +4,14 @@ from __future__ import annotations
 
 import uuid
 from dataclasses import dataclass
+from datetime import datetime
 from typing import Any
 
 from sqlalchemy import false, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.models.fbs_stock_sync_item import FbsStockSyncItem
+from app.models.fbs_warehouse_binding import FbsWarehouseBinding
 from app.models.product import Product
 from app.models.seller_wildberries_imported_card import SellerWildberriesImportedCard
 from app.services.catalog_service import list_products
@@ -41,6 +44,10 @@ class SellerWbCatalogRow:
     wb_composition: str | None = None
     packaging_instructions: str | None = None
     requires_honest_sign: bool = False
+    fbs_stock_sync_enabled: bool = False
+    fbs_stock_limit: int | None = None
+    fbs_published_amount: int | None = None
+    fbs_sync_status: str | None = None
 
     def as_dict(self) -> dict[str, Any]:
         return {
@@ -59,6 +66,10 @@ class SellerWbCatalogRow:
             "wb_composition": self.wb_composition,
             "packaging_instructions": self.packaging_instructions,
             "requires_honest_sign": self.requires_honest_sign,
+            "fbs_stock_sync_enabled": self.fbs_stock_sync_enabled,
+            "fbs_stock_limit": self.fbs_stock_limit,
+            "fbs_published_amount": self.fbs_published_amount,
+            "fbs_sync_status": self.fbs_sync_status,
         }
 
 
@@ -117,12 +128,76 @@ def _variant_from_raw(
     )
 
 
+@dataclass(frozen=True)
+class _FbsSyncState:
+    published_amount: int | None
+    status: str | None
+    updated_at: datetime
+
+
+async def _load_fbs_sync_state_by_seller_chrt(
+    session: AsyncSession,
+    tenant_id: uuid.UUID,
+    products: list[Product],
+    *,
+    seller_id: uuid.UUID | None = None,
+) -> dict[tuple[uuid.UUID, int], _FbsSyncState]:
+    chrt_ids = {int(p.wb_chrt_id) for p in products if p.wb_chrt_id is not None}
+    if not chrt_ids:
+        return {}
+
+    seller_ids = {p.seller_id for p in products if p.seller_id is not None}
+    stmt = (
+        select(
+            FbsWarehouseBinding.seller_id,
+            FbsStockSyncItem.chrt_id,
+            FbsStockSyncItem.last_confirmed_amount,
+            FbsStockSyncItem.status,
+            FbsStockSyncItem.updated_at,
+        )
+        .join(
+            FbsWarehouseBinding,
+            FbsWarehouseBinding.id == FbsStockSyncItem.binding_id,
+        )
+        .where(
+            FbsWarehouseBinding.tenant_id == tenant_id,
+            FbsStockSyncItem.chrt_id.in_(chrt_ids),
+        )
+    )
+    if seller_id is not None:
+        stmt = stmt.where(FbsWarehouseBinding.seller_id == seller_id)
+    elif seller_ids:
+        stmt = stmt.where(FbsWarehouseBinding.seller_id.in_(seller_ids))
+    else:
+        stmt = stmt.where(false())
+
+    res = await session.execute(stmt)
+    state_by_key: dict[tuple[uuid.UUID, int], _FbsSyncState] = {}
+    for seller_id_row, chrt_id, published_amount, status, updated_at in res.all():
+        key = (seller_id_row, int(chrt_id))
+        current = state_by_key.get(key)
+        candidate = _FbsSyncState(
+            published_amount=published_amount,
+            status=status,
+            updated_at=updated_at,
+        )
+        if current is None or candidate.updated_at > current.updated_at:
+            state_by_key[key] = candidate
+    return state_by_key
+
+
 async def list_seller_wb_catalog_rows(
     session: AsyncSession,
     tenant_id: uuid.UUID,
     seller_id: uuid.UUID,
 ) -> list[SellerWbCatalogRow]:
     products = await list_products(session, tenant_id, seller_id=seller_id)
+    sync_state_by_key = await _load_fbs_sync_state_by_seller_chrt(
+        session,
+        tenant_id,
+        products,
+        seller_id=seller_id,
+    )
     stmt = select(SellerWildberriesImportedCard).where(
         SellerWildberriesImportedCard.seller_id == seller_id,
         SellerWildberriesImportedCard.tenant_id == tenant_id,
@@ -151,6 +226,8 @@ async def list_seller_wb_catalog_rows(
             subj = subject_name_from_card(card_raw)
         if img is None and card_raw:
             img = first_photo_url_from_card(card_raw)
+        chrt_id = int(p.wb_chrt_id) if p.wb_chrt_id is not None else None
+        sync_state = sync_state_by_key.get((seller_id, chrt_id)) if chrt_id is not None else None
         rows.append(
             SellerWbCatalogRow(
                 product_id=p.id,
@@ -168,6 +245,14 @@ async def list_seller_wb_catalog_rows(
                 wb_composition=wb_composition,
                 packaging_instructions=p.packaging_instructions,
                 requires_honest_sign=bool(p.requires_honest_sign),
+                fbs_stock_sync_enabled=bool(p.fbs_stock_sync_enabled),
+                fbs_stock_limit=p.fbs_stock_limit,
+                fbs_published_amount=(
+                    int(sync_state.published_amount)
+                    if sync_state is not None and sync_state.published_amount is not None
+                    else None
+                ),
+                fbs_sync_status=sync_state.status if sync_state is not None else None,
             ),
         )
     return rows
@@ -192,6 +277,10 @@ class FfCatalogRow:
     wb_composition: str | None = None
     packaging_instructions: str | None = None
     requires_honest_sign: bool = False
+    fbs_stock_sync_enabled: bool = False
+    fbs_stock_limit: int | None = None
+    fbs_published_amount: int | None = None
+    fbs_sync_status: str | None = None
 
     def as_dict(self) -> dict[str, Any]:
         return {
@@ -212,6 +301,10 @@ class FfCatalogRow:
             "wb_composition": self.wb_composition,
             "packaging_instructions": self.packaging_instructions,
             "requires_honest_sign": self.requires_honest_sign,
+            "fbs_stock_sync_enabled": self.fbs_stock_sync_enabled,
+            "fbs_stock_limit": self.fbs_stock_limit,
+            "fbs_published_amount": self.fbs_published_amount,
+            "fbs_sync_status": self.fbs_sync_status,
             # Manual/Excel until WB sync/link sets nmID on the same barcode.
             "is_manual": self.wb_nm_id is None,
         }
@@ -227,6 +320,12 @@ async def list_linked_wb_catalog_rows(
     scoped_products = await list_products(session, tenant_id, seller_id=seller_id)
     if not scoped_products:
         return []
+    sync_state_by_key = await _load_fbs_sync_state_by_seller_chrt(
+        session,
+        tenant_id,
+        scoped_products,
+        seller_id=seller_id,
+    )
 
     seller_ids: set[uuid.UUID] = set()
     for p in scoped_products:
@@ -267,6 +366,12 @@ async def list_linked_wb_catalog_rows(
             subj = subject_name_from_card(card_raw)
         if img is None and card_raw:
             img = first_photo_url_from_card(card_raw)
+        chrt_id = int(p.wb_chrt_id) if p.wb_chrt_id is not None else None
+        sync_state = (
+            sync_state_by_key.get((p.seller_id, chrt_id))
+            if p.seller_id is not None and chrt_id is not None
+            else None
+        )
         rows.append(
             FfCatalogRow(
                 product_id=p.id,
@@ -286,6 +391,14 @@ async def list_linked_wb_catalog_rows(
                 wb_composition=wb_composition,
                 packaging_instructions=p.packaging_instructions,
                 requires_honest_sign=bool(p.requires_honest_sign),
+                fbs_stock_sync_enabled=bool(p.fbs_stock_sync_enabled),
+                fbs_stock_limit=p.fbs_stock_limit,
+                fbs_published_amount=(
+                    int(sync_state.published_amount)
+                    if sync_state is not None and sync_state.published_amount is not None
+                    else None
+                ),
+                fbs_sync_status=sync_state.status if sync_state is not None else None,
             ),
         )
     return rows

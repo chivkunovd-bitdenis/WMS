@@ -7,6 +7,7 @@ from app.models.document_sequence import DocumentDisplaySequence, DocumentSequen
 from app.models.fbs_order import FbsOrder, FbsOrderMarking, FbsOrderReservation
 from app.models.fbs_order_pick import FbsOrderPick, FbsOrderPickEvent
 from app.models.fbs_packaging_fulfillment import FbsPackagingFulfillment
+from app.models.fbs_packing_box import FbsPackingBox, FbsPackingBoxItem
 from app.models.fbs_print_asset import FbsPrintAsset
 from app.models.fbs_shipment_reversal_ledger import FbsShipmentReversalLedger
 from app.models.fbs_stock_sync_item import FbsStockSyncItem
@@ -74,6 +75,8 @@ __all__ = [
     "FbsOrderPickEvent",
     "FbsOrderReservation",
     "FbsPackagingFulfillment",
+    "FbsPackingBox",
+    "FbsPackingBoxItem",
     "FbsPrintAsset",
     "FbsShipmentReversalLedger",
     "FbsStockSyncItem",

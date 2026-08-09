@@ -16,6 +16,8 @@ services:
         required: false
     environment:
       WB_EMULATOR_DB_PATH: /data/wb_emulator.sqlite
+      WB_EMULATOR_ADMIN_TOKEN: "${WB_EMULATOR_ADMIN_TOKEN:-fbs-e2e-admin}"
+      WB_EMULATOR_TOKEN_MAP_FILE: /seed/tokens.json
     volumes:
       - wb_emulator_data:/data
       - type: bind
@@ -33,13 +35,18 @@ services:
           "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health')",
         ]
       interval: 5s
-      timeout: 3s
-      retries: 10
+      timeout: 10s
+      retries: 30
       start_period: 5s
 
   api:
     environment:
       WILDBERRIES_MARKETPLACE_API_BASE: http://wb-emulator:8000
+    volumes:
+      - type: bind
+        source: ./wb_emulator/seed
+        target: /wb_emulator/seed
+        read_only: true
     depends_on:
       wb-emulator:
         condition: service_healthy
@@ -57,6 +64,12 @@ services:
     depends_on:
       wb-emulator:
         condition: service_healthy
+
+  web:
+    environment:
+      WMS_PUBLIC_DOMAIN: ":80"
+    volumes:
+      - ./frontend/deploy/Caddyfile:/etc/caddy/Caddyfile:ro
 
 volumes:
   wb_emulator_data:

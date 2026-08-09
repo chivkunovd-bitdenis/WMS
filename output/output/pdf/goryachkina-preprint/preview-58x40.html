@@ -1,0 +1,108 @@
+<!doctype html><html><head><meta charset="utf-8"/><title>58x40</title><style>
+  @page { size: 58mm 40mm; margin: 0; }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; }
+  body { font-family: Arial, Helvetica, sans-serif; color: #111; background: #fff; }
+  .label {
+    width: 58mm;
+    height: 40mm;
+    padding: 1.4mm 1.8mm 1mm;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    page-break-after: always;
+    break-after: page;
+  }
+  .label:last-child { page-break-after: auto; break-after: auto; }
+  
+  .barcode-wrap {
+    flex: 0 0 auto;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: flex-start;
+    margin-bottom: 0.8mm;
+  }
+  .barcode-wrap img {
+    width: 52mm;
+    max-width: 100%;
+    height: auto;
+    max-height: 14mm;
+    object-fit: contain;
+    display: block;
+  }
+  .digits {
+    margin: 0.3mm 0 0;
+    font-size: 9pt;
+    letter-spacing: 0.04em;
+    text-align: center;
+    font-family: Arial, Helvetica, sans-serif;
+    line-height: 1.2;
+  }
+  .body {
+    flex: 1 1 auto;
+    min-height: 0;
+    overflow: hidden;
+    margin-top: 0.62mm;
+    line-height: 1.35;
+    font-size: 7.6pt;
+    display: flex;
+    flex-direction: column;
+    justify-content: flex-start;
+  }
+  /*
+   * Межстрочный зазор — через margin-bottom, а не flex "gap": рендер термопринтера
+   * (и старые движки печати) часто игнорируют flex gap → строки слипаются и длинное
+   * название наезжает на «Артикул» (как на фото ИП Горячкина). margin работает везде.
+   */
+  .body > p {
+    margin: 0 0 0.95mm;
+    flex: 0 0 auto;
+    flex-shrink: 0;
+  }
+  .body > p:last-child {
+    margin-bottom: 0;
+  }
+  .seller {
+    font-size: 7.6pt;
+    line-height: 1.35;
+    min-height: 3.63mm;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  /*
+   * Без max-height/overflow: название уже обрезано по символам в JS, поэтому строк
+   * ровно столько, сколько влезает, и они идут обычным потоком — «Артикул» всегда
+   * ниже названия и не может напечататься поверх (баг на термопринтере).
+   */
+  .name {
+    font-size: 7.8pt;
+    font-weight: 400;
+    line-height: 1.35;
+    word-break: break-word;
+  }
+  .meta {
+    line-height: 1.35;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  .meta-composition {
+    white-space: nowrap;
+  }
+  .footer {
+    font-size: 7.2pt;
+    text-align: left;
+    line-height: 1.2;
+  }
+
+</style></head><body><section class="label" data-testid="product-thermal-label">
+  <div class="barcode-wrap">
+    <img id="barcode" src="data:image/png;base64,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" alt="barcode" />
+    <p class="digits">2052582795896</p>
+  </div>
+  <div class="body">
+    <p class="seller" title="ИП Горячкина Т.И.">ИП Горячкина Т.И.</p><p class="name" title="Очки солнцезащитные квадратные модные брендовые 2026">Очки солнцезащитные квадратные модные брендовые 2026</p><p class="meta">Артикул: ОчкиАнтикоричневыйКВ</p><p class="meta">Цвет: коричневый, шоколадный, шоколадно-коричневый</p><p class="meta">Бренд: Alte Vette</p>
+  </div>
+</section></body></html>

@@ -34,13 +34,15 @@ import { readApiErrorMessage } from '../utils/readApiErrorMessage'
 import {
   beginPrintUserGesture,
   buildMarkingTapeSections,
+  buildWbOrderQrLabelHtml,
   printCzArtifactTape,
   printTapeSections,
   type MarkingTapeUnitInput,
 } from '../utils/printMarkingCodeLabel'
-import type { ProductThermalLabelData } from '../utils/printProductThermalLabel'
+import { buildProductLabelSectionHtml, type ProductThermalLabelData } from '../utils/printProductThermalLabel'
 import { printProductThermalLabels } from '../utils/printProductThermalLabel'
 import { resolveManualWbLabelCount } from '../utils/productBarcodePrint'
+import { renderBarcodeDataUrl } from '../utils/renderBarcodeDataUrl'
 import {
   loadLabelPrintOrientation,
   loadLabelSizeId,
@@ -62,9 +64,90 @@ type PrintedCodeOption = {
   status: string
 }
 
+type FbsTapeAsset = {
+  id: string
+  status: string
+  preview_url: string | null
+  applied_at: string | null
+}
+
+type FbsTapeOrderContext = {
+  orderId: string
+  wbOrderId: number
+  requiresHonestSign: boolean
+  productLabel: ProductThermalLabelData
+}
+
+type FbsTapePrintOrder = {
+  order_id: string
+  wb_order_id: number
+  requires_honest_sign: boolean
+  qr_asset: FbsTapeAsset | null
+  printed_codes: Array<{ id: string; cis_code: string; has_label_artifact: boolean }>
+  shortage: number | null
+}
+
+type FbsTapePrintResult = {
+  orders: FbsTapePrintOrder[]
+  order_errors: Array<{ order_id: string; wb_order_id: number; code: string; message: string }>
+  shortage: number
+}
+
+type FbsTapeContext = {
+  orders: FbsTapeOrderContext[]
+  includeOrderQr: boolean
+  print: (args: { layout: PrintLayout; allowPartial: boolean; reprint: boolean }) => Promise<FbsTapePrintResult>
+  confirmQrApplied: (asset: FbsTapeAsset) => Promise<void>
+}
+
 /** Fixed layout for non-ЧЗ: one WB barcode label per unit, no constructor. */
 const NON_HONEST_SIGN_LABEL_LAYOUT: PrintLayout = {
   units: [{ block: 'label', copies: 1 }],
+}
+
+async function blobToDataUrl(blob: Blob): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader()
+    reader.onload = () => resolve(String(reader.result))
+    reader.onerror = () => reject(reader.error ?? new Error('Не удалось загрузить изображение.'))
+    reader.readAsDataURL(blob)
+  })
+}
+
+async function fetchAuthorizedImageDataUrl(token: string, url: string): Promise<string> {
+  const res = await fetch(/^https?:\/\//i.test(url) ? url : apiUrl(url), {
+    headers: { Authorization: `Bearer ${token}` },
+  })
+  if (!res.ok) {
+    throw new Error('QR заказа WB не загружен.')
+  }
+  return blobToDataUrl(await res.blob())
+}
+
+function labelCopiesFromLayout(layout: PrintLayout): number {
+  return layout.units
+    .filter((unit) => unit.block === 'label')
+    .reduce((sum, unit) => sum + Math.max(1, unit.copies), 0)
+}
+
+function buildProductLabelSections(
+  product: ProductThermalLabelData,
+  count: number,
+  size: LabelSize,
+): string[] {
+  const barcode = product.barcode?.trim()
+  if (!barcode) {
+    throw new Error('У товара нет штрихкода для печати.')
+  }
+  const barcodeDataUrl = renderBarcodeDataUrl(barcode, { variant: 'thermal58' })
+  return Array.from({ length: count }, () =>
+    buildProductLabelSectionHtml(
+      product,
+      barcodeDataUrl,
+      undefined,
+      size,
+    ).replace('data-testid="product-thermal-label"', 'data-testid="product-thermal-label" data-tape-block="label"'),
+  )
 }
 
 export type MarkingPrintContext = {
@@ -83,6 +166,7 @@ export type MarkingPrintContext = {
   productLabel?: ProductThermalLabelData | null
   packagingInstructions?: string | null
   unitsInPack?: number | null
+  fbsTape?: FbsTapeContext
   onPrinted: () => void
 }
 
@@ -132,15 +216,19 @@ export function MarkingPrintDialog({ open, reprint, ctx, busy, onBusyChange, onC
   const [sepWbDone, setSepWbDone] = useState(false)
 
   const requiresHonestSign = ctx?.requiresHonestSign ?? true
+  const fbsTapeMode = Boolean(ctx?.fbsTape)
+  const fbsTapeOrders = ctx?.fbsTape?.orders ?? []
+  const fbsHonestSignOrders = fbsTapeOrders.filter((order) => order.requiresHonestSign)
   const isCatalogSource = ctx?.source === 'catalog'
   const effectiveReprint = reprint || inlineReprint
   const markingAlreadyPrinted = (ctx?.qtyMarkingPrinted ?? 0) > 0
-  const canOpenInlineReprint = Boolean(ctx?.lineId && markingAlreadyPrinted)
+  const canOpenInlineReprint = Boolean(ctx?.lineId && markingAlreadyPrinted && !fbsTapeMode)
   const separateEnabled = separateEnabledFromProfile ?? separateEnabledFromStore
   /** Раздельный режим: только для товаров с ЧЗ и не для перепечатки (там печатается один ЧЗ). */
-  const separateMode = separateEnabled && requiresHonestSign && !effectiveReprint
+  const separateMode = separateEnabled && requiresHonestSign && !effectiveReprint && !fbsTapeMode
   const separateModeResolving =
     open &&
+    !fbsTapeMode &&
     Boolean(ctx?.token) &&
     requiresHonestSign &&
     !effectiveReprint &&
@@ -184,7 +272,7 @@ export function MarkingPrintDialog({ open, reprint, ctx, busy, onBusyChange, onC
   }, [open, ctx])
 
   useEffect(() => {
-    if (!open || !ctx?.token || !requiresHonestSign || effectiveReprint) {
+    if (!open || !ctx?.token || !requiresHonestSign || effectiveReprint || fbsTapeMode) {
       setSeparateEnabledFromProfile(null)
       setSeparateSettingLoading(false)
       return
@@ -211,7 +299,7 @@ export function MarkingPrintDialog({ open, reprint, ctx, busy, onBusyChange, onC
     return () => {
       cancelled = true
     }
-  }, [open, ctx?.token, requiresHonestSign, effectiveReprint, separateEnabledFromStore])
+  }, [open, ctx?.token, requiresHonestSign, effectiveReprint, separateEnabledFromStore, fbsTapeMode])
 
   useEffect(() => {
     if (!open || !ctx) {
@@ -274,7 +362,7 @@ export function MarkingPrintDialog({ open, reprint, ctx, busy, onBusyChange, onC
     })()
   }, [open, ctx?.productId, ctx?.token, requiresHonestSign])
 
-  const reprintLineId = ctx?.lineId
+  const reprintLineId = fbsTapeMode ? undefined : ctx?.lineId
   const reprintToken = ctx?.token
 
   useEffect(() => {
@@ -332,12 +420,16 @@ export function MarkingPrintDialog({ open, reprint, ctx, busy, onBusyChange, onC
   }, [open, effectiveReprint, reprintLineId, reprintToken])
 
   const qtyNeed = effectiveReprint
-    ? selectedReprintCodeIds.length > 0
-      ? selectedReprintCodeIds.length
-      : (ctx?.qtyMarkingPrinted ?? 0)
+    ? fbsTapeMode
+      ? fbsHonestSignOrders.length || fbsTapeOrders.length
+      : selectedReprintCodeIds.length > 0
+        ? selectedReprintCodeIds.length
+        : (ctx?.qtyMarkingPrinted ?? 0)
     : isCatalogSource
       ? catalogPrintQty
-      : (ctx?.qtyNeedPack ?? 0)
+      : fbsTapeMode
+        ? fbsHonestSignOrders.length || fbsTapeOrders.length
+        : (ctx?.qtyNeedPack ?? 0)
   const totalWbLabels = resolveManualWbLabelCount(wbBarcodeQty, printDoubleWbBarcode)
   const available = ctx?.markingAvailable ?? 0
   const shortage = requiresHonestSign && !effectiveReprint && available < qtyNeed ? qtyNeed - available : 0
@@ -444,6 +536,84 @@ export function MarkingPrintDialog({ open, reprint, ctx, busy, onBusyChange, onC
     }
     printProductThermalLabels(label, count, undefined, size)
     markSectionDone(markDone)
+    ctx.onPrinted()
+    if (closeAfter) {
+      onClose()
+    }
+    return true
+  }
+
+  const printFbsTape = async ({
+    layout: printLayout,
+    size,
+    closeAfter,
+  }: TapePrintOptions) => {
+    if (!ctx?.fbsTape) {
+      return false
+    }
+    const result = await ctx.fbsTape.print({
+      layout: printLayout,
+      allowPartial,
+      reprint: effectiveReprint,
+    })
+    if (result.shortage > 0 && !allowPartial) {
+      setError(`Не хватает ${result.shortage} КМ в пуле.`)
+      return false
+    }
+    if (result.orders.length < 1) {
+      const firstError = result.order_errors[0]
+      setError(firstError ? firstError.message : 'Нет заказов для печати.')
+      return false
+    }
+    const orderById = new Map(ctx.fbsTape.orders.map((order) => [order.orderId, order]))
+    const sections: string[] = []
+    const qrAssetsToConfirm: FbsTapeAsset[] = []
+    const fallbackLabelCopies = fbsHonestSignOrders.length > 0
+      ? Math.max(1, labelCopiesFromLayout(printLayout))
+      : Math.max(1, totalWbLabels)
+    for (const printedOrder of result.orders) {
+      const order = orderById.get(printedOrder.order_id)
+      if (!order) continue
+      if (ctx.fbsTape.includeOrderQr) {
+        const asset = printedOrder.qr_asset
+        if (!asset?.preview_url) {
+          setError(`QR заказа WB №${printedOrder.wb_order_id} не получен.`)
+          return false
+        }
+        const qrDataUrl = await fetchAuthorizedImageDataUrl(ctx.token, asset.preview_url)
+        sections.push(buildWbOrderQrLabelHtml(qrDataUrl))
+        if (!asset.applied_at) {
+          qrAssetsToConfirm.push(asset)
+        }
+      }
+      if (printedOrder.requires_honest_sign) {
+        if (printedOrder.printed_codes.length < 1) {
+          continue
+        }
+        const units: MarkingTapeUnitInput[] = printedOrder.printed_codes.map((code) => ({
+          cis: code.cis_code,
+          codeId: code.id,
+          hasLabelArtifact: code.has_label_artifact,
+          productLabel: order.productLabel,
+        }))
+        sections.push(
+          ...(await buildMarkingTapeSections(units, printLayout, order.productLabel, {
+            authToken: ctx.token,
+            labelSize: size,
+          })),
+        )
+      } else {
+        sections.push(...buildProductLabelSections(order.productLabel, fallbackLabelCopies, size))
+      }
+    }
+    if (sections.length < 1) {
+      setError('Нет этикеток для печати.')
+      return false
+    }
+    await printTapeSections(sections, size)
+    for (const asset of qrAssetsToConfirm) {
+      await ctx.fbsTape.confirmQrApplied(asset)
+    }
     ctx.onPrinted()
     if (closeAfter) {
       onClose()
@@ -611,7 +781,9 @@ export function MarkingPrintDialog({ open, reprint, ctx, busy, onBusyChange, onC
     onBusyChange(true)
     setError(null)
     try {
-      if (!requiresHonestSign) {
+      if (ctx.fbsTape) {
+        await printFbsTape({ layout, size: czTapePrintSize, closeAfter: true })
+      } else if (!requiresHonestSign) {
         if (wbBarcodeQty >= 1) {
           await printLabelOnlyTape(totalWbLabels, nonCzPrintSize, true)
         }
@@ -717,7 +889,9 @@ export function MarkingPrintDialog({ open, reprint, ctx, busy, onBusyChange, onC
 
   const printDisabled =
     busy ||
+    (fbsTapeMode && fbsTapeOrders.length < 1) ||
     (effectiveReprint &&
+      !fbsTapeMode &&
       requiresHonestSign &&
       (reprintCodesLoading || selectedReprintCodeIds.length < 1)) ||
     (!effectiveReprint && qtyNeed < 1) ||
@@ -757,7 +931,9 @@ export function MarkingPrintDialog({ open, reprint, ctx, busy, onBusyChange, onC
                 <Typography variant="body2" data-testid="marking-print-qty">
                   {requiresHonestSign
                     ? effectiveReprint
-                      ? `Выбрано для перепечатки: ${selectedReprintCodeIds.length} из ${ctx.qtyMarkingPrinted}`
+                      ? fbsTapeMode
+                        ? `К перепечатке: ${qtyNeed}`
+                        : `Выбрано для перепечатки: ${selectedReprintCodeIds.length} из ${ctx.qtyMarkingPrinted}`
                       : isCatalogSource
                         ? `К печати: ${catalogPrintQty} · Доступно в пуле: ${available}`
                         : `Нужно: ${qtyNeed} · Доступно в пуле: ${available}`
@@ -809,7 +985,7 @@ export function MarkingPrintDialog({ open, reprint, ctx, busy, onBusyChange, onC
               </Alert>
             ) : null}
 
-            {effectiveReprint && requiresHonestSign ? (
+            {effectiveReprint && requiresHonestSign && !fbsTapeMode ? (
               <Alert severity="warning" data-testid="marking-print-reprint-notice">
                 Повторная печать ЧЗ: выберите все или конкретные КМ, которые нужно напечатать ещё раз.
               </Alert>
@@ -1134,7 +1310,7 @@ export function MarkingPrintDialog({ open, reprint, ctx, busy, onBusyChange, onC
               </>
             ) : null}
 
-            {effectiveReprint && requiresHonestSign ? (
+            {effectiveReprint && requiresHonestSign && !fbsTapeMode ? (
               reprintCodesLoading ? (
                 <Typography variant="body2" color="text.secondary">
                   Загрузка напечатанных КМ…
@@ -1189,7 +1365,7 @@ export function MarkingPrintDialog({ open, reprint, ctx, busy, onBusyChange, onC
               )
             ) : null}
 
-            {effectiveReprint && requiresHonestSign && selectedReprintCodeIds.length > 0 ? (
+            {effectiveReprint && requiresHonestSign && !fbsTapeMode && selectedReprintCodeIds.length > 0 ? (
               <Typography variant="body2" data-testid="marking-print-will-print">
                 К перепечатке: {selectedReprintCodeIds.length} КМ
               </Typography>

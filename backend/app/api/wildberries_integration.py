@@ -465,6 +465,7 @@ async def save_and_validate_self_content_token(
             effective_seller_id,
             content_api_token=token,
             supplies_api_token=SKIP,
+            marketplace_api_token=token,
         )
         saved = await upsert_imported_cards(
             session, user.tenant_id, effective_seller_id, total_cards

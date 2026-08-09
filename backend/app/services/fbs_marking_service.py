@@ -38,7 +38,6 @@ from app.models.marking_code import STATUS_AVAILABLE, STATUS_RESERVED, MarkingCo
 from app.services.marking_code_service import normalize_cis
 from app.services.wildberries_client import (
     WildberriesClientError,
-    fetch_marketplace_order_meta,
     put_marketplace_order_meta,
 )
 from app.services.wildberries_credentials_service import (
@@ -58,9 +57,7 @@ _META_KIND_FROM_PLURAL: dict[str, str] = {
     "gtins": "gtin",
 }
 
-_META_DELIVERY_OK = frozenset(
-    {META_STATUS_ACCEPTED, META_STATUS_ALLOWED_WITHOUT_CHECK, META_STATUS_PENDING}
-)
+_META_DELIVERY_OK = frozenset({META_STATUS_ACCEPTED, META_STATUS_ALLOWED_WITHOUT_CHECK})
 
 
 class FbsMarkingError(Exception):
@@ -150,6 +147,7 @@ def map_wb_decision_to_meta_status(decision: str | None) -> str | None:
     key = decision.strip().lower().replace("-", "_").replace(" ", "_")
     mapping = {
         "accepted": META_STATUS_ACCEPTED,
+        "filled": META_STATUS_ACCEPTED,
         "rejected": META_STATUS_REJECTED,
         "pending": META_STATUS_PENDING,
         "allowedwithoutcheck": META_STATUS_ALLOWED_WITHOUT_CHECK,
@@ -522,26 +520,20 @@ async def _sync_order_meta_from_wb(
     token: str,
 ) -> list[FbsOrderMarking]:
     markings = await list_order_markings(session, order.tenant_id, order.id)
-    status_map = parse_wb_meta_statuses(
-        await fetch_marketplace_order_meta(
-            http_client,
-            api_token=token,
-            order_id=int(order.wb_order_id),
-        )
+    batch = await fetch_marketplace_orders_meta_batch(
+        http_client,
+        api_token=token,
+        order_ids=[int(order.wb_order_id)],
     )
     details_by_kind: dict[str, MarketplaceMetaDetail] = {}
-    try:
-        batch = await fetch_marketplace_orders_meta_batch(
-            http_client,
-            api_token=token,
-            order_ids=[int(order.wb_order_id)],
-        )
-        for row in batch:
-            if row.order_id == int(order.wb_order_id):
-                for detail in row.meta_details:
-                    details_by_kind[detail.key.strip().lower()] = detail
-    except WildberriesClientError:
-        pass
+    status_map: dict[tuple[str, str], str] = {}
+    for row in batch:
+        if row.order_id != int(order.wb_order_id):
+            continue
+        if row.meta is not None:
+            status_map.update(parse_wb_meta_statuses(row.meta))
+        for detail in row.meta_details:
+            details_by_kind[detail.key.strip().lower()] = detail
 
     for marking in markings:
         wb_status = status_map.get((marking.kind, marking.value))

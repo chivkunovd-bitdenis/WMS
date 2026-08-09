@@ -2,12 +2,15 @@
 
 from __future__ import annotations
 
-from typing import Any
+from typing import Annotated, Any
 
-from fastapi import APIRouter, HTTPException, Query, Request
+from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from fastapi.responses import Response
 from pydantic import BaseModel, Field
+from sqlalchemy.orm import Session
 
+from wb_emulator.db import get_db
+from wb_emulator.services import supplies_store as store
 from wb_emulator.services.fault_injection import get_faults, maybe_delay
 from wb_emulator.services.marking_meta import (
     META_KINDS,
@@ -22,6 +25,8 @@ from wb_emulator.services.stickers import (
 )
 
 router = APIRouter(tags=["media-meta"])
+
+DbSession = Annotated[Session, Depends(get_db)]
 
 
 class OrderStickersRequest(BaseModel):
@@ -63,13 +68,20 @@ async def post_order_stickers(
 async def get_supply_barcode(
     request: Request,
     supply_id: str,
+    session: DbSession,
     type: str = Query(default="png"),
 ) -> Response:
-    """GET /api/v3/supplies/{supply_id}/barcode — supply QR PNG."""
+    """GET /api/v3/supplies/{supply_id}/barcode — QR after confirmed delivery."""
     seller_key = _seller_key(request)
     await maybe_delay(seller_key, qr=True)
     if type.lower() != "png":
         raise HTTPException(status_code=400, detail="unsupported barcode type")
+    try:
+        supply = store.get_supply(session, seller_key=seller_key, supply_id=supply_id)
+    except store.SuppliesStoreError as exc:
+        raise HTTPException(status_code=404, detail=exc.message) from exc
+    if supply.status != store.SupplyStatus.DELIVERED:
+        raise HTTPException(status_code=409, detail="Supply is not delivered")
     png_bytes = generate_qr_png_bytes(f"SUPPLY:{supply_id}")
     return Response(content=png_bytes, media_type="image/png")
 

@@ -22,8 +22,9 @@ from app.models.fbs_wb_operation import (
     FbsWbOperation,
 )
 from app.services.wildberries_client import WildberriesClientError
-from tests.test_fbs_shipment_pvz import _create_cargo_places, _default_boxes, _prepare_pvz_supply
+from tests.test_fbs_shipment_pvz import _prepare_pvz_supply
 from tests.test_fbs_shipment_warehouse_sc import (
+    _create_and_fill_physical_box,
     _deliver_with_preflight,
     _delivery_preflight,
     _prepare_supply_with_orders,
@@ -58,6 +59,7 @@ async def test_tc19_delivery_preflight_checklist_and_stale_version(
         wb_order_ids=[980001, 980002],
         supply_name="TC-19 checklist",
     )
+    await _create_and_fill_physical_box(async_client, headers, supply["id"], order_ids)
 
     preflight = await _delivery_preflight(async_client, headers, supply["id"])
     assert preflight["can_deliver"] is True
@@ -119,14 +121,7 @@ async def test_tc20_pvz_deliver_timeout_pending_confirmation(
         supply_name="TC-20 PVZ deliver",
     )
 
-    create = await _create_cargo_places(
-        async_client,
-        headers,
-        supply["id"],
-        count=1,
-        boxes=_default_boxes(1),
-    )
-    assert create.status_code == 201, create.text
+    await _create_and_fill_physical_box(async_client, headers, supply["id"], order_ids)
 
     preflight = await _delivery_preflight(async_client, headers, supply["id"])
     assert preflight["can_deliver"] is True
@@ -222,7 +217,7 @@ async def test_tc21_warehouse_sc_qr_after_deliver_route_diff(
         async_client, headers, suffix
     )
 
-    wh_supply, _ = await _prepare_supply_with_orders(
+    wh_supply, wh_order_ids = await _prepare_supply_with_orders(
         async_client,
         headers,
         seller_id,
@@ -232,6 +227,7 @@ async def test_tc21_warehouse_sc_qr_after_deliver_route_diff(
         supply_name="TC-21 warehouse",
         delivery_type="warehouse_sc",
     )
+    await _create_and_fill_physical_box(async_client, headers, wh_supply["id"], wh_order_ids)
 
     wh_preflight = await _delivery_preflight(async_client, headers, wh_supply["id"])
     wh_codes = {check["code"] for check in wh_preflight["checks"]}
@@ -260,9 +256,15 @@ async def test_tc21_warehouse_sc_qr_after_deliver_route_diff(
         wb_order_ids=[982002],
         supply_name="TC-21 PVZ route",
     )
+    pvz_barcode = await async_client.get(
+        f"/operations/fbs-supplies/{pvz_supply['id']}/barcode",
+        headers=headers,
+    )
+    assert pvz_barcode.status_code == 409
+    assert pvz_barcode.json()["detail"]["code"] == "wrong_delivery_type"
     pvz_preflight = await _delivery_preflight(async_client, headers, pvz_supply["id"])
     assert pvz_preflight["can_deliver"] is False
     assert any(
-        check["code"] == "cargo_places_required" and not check["ok"]
+        check["code"] == "physical_boxes_required" and not check["ok"]
         for check in pvz_preflight["checks"]
     )

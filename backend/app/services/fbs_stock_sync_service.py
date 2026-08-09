@@ -167,6 +167,7 @@ async def _load_seller_products(
     stmt = select(Product).where(
         Product.tenant_id == tenant_id,
         Product.seller_id == seller_id,
+        Product.fbs_stock_sync_enabled.is_(True),
     )
     res = await session.execute(stmt)
     return list(res.scalars().all())
@@ -203,6 +204,9 @@ def _build_publish_plan(
             continue
         product = group[0]
         amount = int(availability.get(product.id, 0))
+        amount = max(amount, 0)
+        if product.fbs_stock_limit is not None:
+            amount = min(amount, max(int(product.fbs_stock_limit), 0))
         targets_by_chrt[chrt_id] = _PublishTarget(
             chrt_id=chrt_id,
             amount=amount,
@@ -212,6 +216,8 @@ def _build_publish_plan(
 
     for chrt_id, item in existing_items.items():
         if chrt_id in targets_by_chrt or chrt_id in conflict_chrts:
+            continue
+        if item.status == STOCK_SYNC_STATUS_CONFIRMED and item.last_confirmed_amount == 0:
             continue
         targets_by_chrt[chrt_id] = _PublishTarget(
             chrt_id=chrt_id,
@@ -321,10 +327,7 @@ async def _put_stocks_batch(
         "Content-Type": "application/json",
     }
     payload = {
-        "stocks": [
-            {"chrtId": item.chrt_id, "amount": item.amount}
-            for item in batch
-        ],
+        "stocks": [{"chrtId": item.chrt_id, "amount": item.amount} for item in batch],
     }
     try:
         response = await http_client.put(url, headers=headers, json=payload, timeout=60.0)
@@ -406,9 +409,7 @@ async def _publish_batches(
     if not targets:
         return 0, 0, None
 
-    amounts = [
-        MarketplaceStockAmount(chrt_id=t.chrt_id, amount=t.amount) for t in targets
-    ]
+    amounts = [MarketplaceStockAmount(chrt_id=t.chrt_id, amount=t.amount) for t in targets]
     batches = split_marketplace_stocks_batches(amounts)
     confirmed = 0
     errors = 0
@@ -537,9 +538,7 @@ async def sync_binding_stocks(
         chrt_to_product_ids: dict[int, list[uuid.UUID]] = {}
         for product in products:
             if product.wb_chrt_id is not None:
-                chrt_to_product_ids.setdefault(int(product.wb_chrt_id), []).append(
-                    product.id
-                )
+                chrt_to_product_ids.setdefault(int(product.wb_chrt_id), []).append(product.id)
         if conflict_chrts:
             await _mark_conflict_items(
                 session,

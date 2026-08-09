@@ -25,6 +25,7 @@ from app.services.wildberries_fbs_client import fetch_marketplace_supply_order_i
 
 OPERATION_KIND_SUPPLY_FROM_ORDERS = "supply_from_orders"
 OPERATION_KIND_CARGO_PLACES_CREATE = "cargo_places_create"
+OPERATION_KIND_CARGO_PLACES_DELETE = "cargo_places_delete"
 OPERATION_KIND_SUPPLY_DELIVER = "supply_deliver"
 
 
@@ -87,10 +88,82 @@ async def get_cargo_operation_by_idempotency(
     )
 
 
+def request_hash_for_cargo_places_delete(
+    *,
+    supply_id: uuid.UUID,
+    wb_trbx_ids: list[str],
+) -> str:
+    payload = {
+        "supply_id": str(supply_id),
+        "wb_trbx_ids": sorted(wb_trbx_ids),
+    }
+    raw = json.dumps(payload, sort_keys=True, separators=(",", ":")).encode()
+    return hashlib.sha256(raw).hexdigest()
+
+
+async def get_cargo_delete_operation_by_idempotency(
+    session: AsyncSession,
+    seller_id: uuid.UUID,
+    idempotency_key: str,
+) -> FbsWbOperation | None:
+    return await get_operation_by_idempotency(
+        session,
+        seller_id,
+        idempotency_key,
+        operation_kind=OPERATION_KIND_CARGO_PLACES_DELETE,
+    )
+
+
+async def create_pending_cargo_delete_operation(
+    session: AsyncSession,
+    *,
+    tenant_id: uuid.UUID,
+    seller_id: uuid.UUID,
+    idempotency_key: str,
+    request_hash: str,
+    request_summary: dict[str, Any],
+    local_supply_id: uuid.UUID,
+) -> FbsWbOperation:
+    op = FbsWbOperation(
+        tenant_id=tenant_id,
+        seller_id=seller_id,
+        operation_kind=OPERATION_KIND_CARGO_PLACES_DELETE,
+        idempotency_key=idempotency_key,
+        request_hash=request_hash,
+        request_summary_json=request_summary,
+        local_entity_type="fbs_supply",
+        local_entity_id=local_supply_id,
+        state=WB_OPERATION_STATE_PENDING,
+    )
+    session.add(op)
+    await session.flush()
+    return op
+
+
+async def mark_cargo_delete_operation_confirmed(
+    session: AsyncSession,
+    operation: FbsWbOperation,
+    *,
+    wb_supply_id: str,
+    local_supply_id: uuid.UUID,
+    response_summary: dict[str, Any] | None = None,
+) -> None:
+    operation.state = WB_OPERATION_STATE_CONFIRMED
+    operation.wb_object_id = wb_supply_id
+    operation.wb_object_kind = "supply"
+    operation.local_entity_type = "fbs_supply"
+    operation.local_entity_id = local_supply_id
+    operation.confirmed_at = datetime.now(tz=UTC)
+    operation.response_summary_json = response_summary
+    operation.error_code = None
+    operation.error_context_json = None
+    await session.flush()
+
+
 def request_hash_for_deliver(
     *,
     supply_id: uuid.UUID,
-    confirmed_preflight_version: str,
+    confirmed_preflight_version: str | None,
 ) -> str:
     payload = {
         "supply_id": str(supply_id),
@@ -121,7 +194,7 @@ async def create_pending_deliver_operation(
     idempotency_key: str,
     request_hash: str,
     local_supply_id: uuid.UUID,
-    confirmed_preflight_version: str,
+    confirmed_preflight_version: str | None,
 ) -> FbsWbOperation:
     op = FbsWbOperation(
         tenant_id=tenant_id,

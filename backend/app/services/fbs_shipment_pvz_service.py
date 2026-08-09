@@ -18,7 +18,15 @@ from app.models.fbs_print_asset import (
     PRINT_ASSET_STATUS_READY,
     FbsPrintAsset,
 )
-from app.models.fbs_supply import FBS_DELIVERY_TYPE_PVZ, FbsSupply
+from app.models.fbs_supply import (
+    FBS_DELIVERY_TYPE_PVZ,
+    FBS_SUPPLY_STATUS_ASSEMBLING,
+    FBS_SUPPLY_STATUS_DONE,
+    FBS_SUPPLY_STATUS_DRAFT,
+    FBS_SUPPLY_STATUS_IN_DELIVERY,
+    FBS_SUPPLY_STATUS_PACKED,
+    FbsSupply,
+)
 from app.models.fbs_trbx import FbsTrbx
 from app.models.fbs_wb_operation import (
     WB_OPERATION_STATE_CONFIRMED,
@@ -32,16 +40,21 @@ from app.services.fbs_print_asset_service import (
     map_print_asset,
 )
 from app.services.fbs_supply_reconcile_service import (
+    create_pending_cargo_delete_operation,
     create_pending_cargo_operation,
+    get_cargo_delete_operation_by_idempotency,
     get_cargo_operation_by_idempotency,
+    mark_cargo_delete_operation_confirmed,
     mark_cargo_operation_confirmed,
     mark_operation_failed,
     mark_operation_pending_confirmation,
     request_hash_for_cargo_places,
+    request_hash_for_cargo_places_delete,
 )
 from app.services.wildberries_client import (
     WildberriesClientError,
     create_marketplace_supply_trbx,
+    delete_marketplace_supply_trbx,
     fetch_marketplace_supply_trbx_list,
 )
 from app.services.wildberries_credentials_service import (
@@ -55,10 +68,19 @@ MAX_TRBX_WEIGHT_G = 5000
 MAX_SUPPLY_TRBX_VOLUME_MM3 = 1_000_000_000
 MEASUREMENTS_CONFIRMATION_SOURCE_OPERATOR = "operator_manual_missing_dims"
 
+_CARGO_PLACE_MUTABLE_SUPPLY_STATUSES = frozenset(
+    {
+        FBS_SUPPLY_STATUS_DRAFT,
+        FBS_SUPPLY_STATUS_ASSEMBLING,
+        FBS_SUPPLY_STATUS_PACKED,
+    }
+)
+
 
 class FbsShipmentPvzError(Exception):
-    def __init__(self, code: str) -> None:
+    def __init__(self, code: str, *, http_status: int | None = None) -> None:
         self.code = code
+        self.http_status = http_status
         super().__init__(code)
 
 
@@ -135,6 +157,50 @@ async def _get_supply(
 def _require_pvz_supply(supply: FbsSupply) -> None:
     if supply.delivery_type != FBS_DELIVERY_TYPE_PVZ:
         raise FbsShipmentPvzError("wrong_delivery_type")
+
+
+def _require_cargo_places_mutable_supply(supply: FbsSupply) -> None:
+    if supply.status in {FBS_SUPPLY_STATUS_IN_DELIVERY, FBS_SUPPLY_STATUS_DONE}:
+        raise FbsShipmentPvzError("supply_bad_status", http_status=409)
+    if supply.status not in _CARGO_PLACE_MUTABLE_SUPPLY_STATUSES:
+        raise FbsShipmentPvzError("supply_bad_status", http_status=409)
+
+
+def _normalize_wb_trbx_ids(wb_trbx_ids: list[str]) -> list[str]:
+    if not wb_trbx_ids:
+        raise FbsShipmentPvzError("empty_cargo_place_selection")
+    normalized = list(dict.fromkeys(wb_trbx_ids))
+    if not normalized:
+        raise FbsShipmentPvzError("empty_cargo_place_selection")
+    return normalized
+
+
+def _resolve_trbxes_for_delete(
+    supply: FbsSupply,
+    wb_trbx_ids: list[str],
+) -> list[FbsTrbx]:
+    normalized = _normalize_wb_trbx_ids(wb_trbx_ids)
+    by_wb_id = {trbx.wb_trbx_id: trbx for trbx in supply.trbxes}
+    missing = [wb_id for wb_id in normalized if wb_id not in by_wb_id]
+    if missing:
+        raise FbsShipmentPvzError("cargo_place_not_found")
+    return [by_wb_id[wb_id] for wb_id in normalized]
+
+
+async def _remove_local_trbxes(
+    session: AsyncSession,
+    supply: FbsSupply,
+    wb_trbx_ids: list[str],
+) -> None:
+    by_wb_id = {trbx.wb_trbx_id: trbx for trbx in supply.trbxes}
+    for wb_id in wb_trbx_ids:
+        trbx = by_wb_id.get(wb_id)
+        if trbx is None:
+            continue
+        await session.delete(trbx)
+        if trbx in supply.trbxes:
+            supply.trbxes.remove(trbx)
+    await session.flush()
 
 
 def _box_dims_complete(draft: CargoPlaceDraft) -> bool:
@@ -678,6 +744,222 @@ async def _reconcile_pending_cargo_operation(
         operation,
         created_ids,
         boxes,
+        http_client,
+    )
+
+
+async def _finalize_cargo_delete_operation(
+    session: AsyncSession,
+    tenant_id: uuid.UUID,
+    supply: FbsSupply,
+    operation: Any,
+    wb_trbx_ids: list[str],
+    http_client: httpx.AsyncClient,
+) -> list[dict[str, Any]]:
+    """Remove only the requested cargo places locally after WB delete is confirmed."""
+    await _remove_local_trbxes(session, supply, wb_trbx_ids)
+    await mark_cargo_delete_operation_confirmed(
+        session,
+        operation,
+        wb_supply_id=supply.wb_supply_id,
+        local_supply_id=supply.id,
+        response_summary={"deleted_wb_trbx_ids": wb_trbx_ids},
+    )
+    await session.commit()
+    return await list_cargo_places(session, tenant_id, supply.id, http_client)
+
+
+async def _reconcile_pending_cargo_delete_operation(
+    session: AsyncSession,
+    tenant_id: uuid.UUID,
+    supply: FbsSupply,
+    operation: Any,
+    http_client: httpx.AsyncClient,
+) -> list[dict[str, Any]]:
+    summary = operation.request_summary_json or {}
+    requested_raw = summary.get("wb_trbx_ids")
+    if not isinstance(requested_raw, list):
+        raise FbsShipmentPvzError("wb_pending_confirmation")
+    requested_ids = _normalize_wb_trbx_ids([str(row) for row in requested_raw])
+
+    token = await _require_marketplace_token(session, tenant_id, supply.seller_id)
+    try:
+        current_ids = await fetch_marketplace_supply_trbx_list(
+            http_client,
+            api_token=token,
+            supply_id=supply.wb_supply_id,
+        )
+    except WildberriesClientError as exc:
+        raise FbsShipmentPvzError(
+            "wb_timeout" if exc.code == "transport_error" else _wb_error_code(exc)
+        ) from exc
+
+    still_present = [wb_id for wb_id in requested_ids if wb_id in set(current_ids)]
+    if not still_present:
+        return await _finalize_cargo_delete_operation(
+            session,
+            tenant_id,
+            supply,
+            operation,
+            requested_ids,
+            http_client,
+        )
+
+    try:
+        await delete_marketplace_supply_trbx(
+            http_client,
+            api_token=token,
+            supply_id=supply.wb_supply_id,
+            trbx_ids=still_present,
+        )
+    except WildberriesClientError as exc:
+        if exc.code == "transport_error":
+            await mark_operation_pending_confirmation(
+                session,
+                operation,
+                wb_supply_id=supply.wb_supply_id,
+                local_supply_id=supply.id,
+                error_code="wb_timeout",
+            )
+            await session.commit()
+            raise FbsShipmentPvzError("wb_timeout") from exc
+        await mark_operation_failed(
+            session,
+            operation,
+            error_code=_wb_error_code(exc),
+            local_supply_id=supply.id,
+        )
+        await session.commit()
+        raise FbsShipmentPvzError(_wb_error_code(exc)) from exc
+
+    try:
+        current_after = await fetch_marketplace_supply_trbx_list(
+            http_client,
+            api_token=token,
+            supply_id=supply.wb_supply_id,
+        )
+    except WildberriesClientError as exc:
+        raise FbsShipmentPvzError(
+            "wb_timeout" if exc.code == "transport_error" else _wb_error_code(exc)
+        ) from exc
+
+    still_after = [wb_id for wb_id in requested_ids if wb_id in set(current_after)]
+    if still_after:
+        raise FbsShipmentPvzError("wb_pending_confirmation")
+    return await _finalize_cargo_delete_operation(
+        session,
+        tenant_id,
+        supply,
+        operation,
+        requested_ids,
+        http_client,
+    )
+
+
+async def delete_cargo_places(
+    session: AsyncSession,
+    tenant_id: uuid.UUID,
+    supply_id: uuid.UUID,
+    wb_trbx_ids: list[str],
+    idempotency_key: str,
+    http_client: httpx.AsyncClient,
+) -> list[dict[str, Any]]:
+    if not idempotency_key.strip():
+        raise FbsShipmentPvzError("missing_idempotency_key")
+
+    normalized_ids = _normalize_wb_trbx_ids(wb_trbx_ids)
+    supply = await _get_supply(
+        session,
+        tenant_id,
+        supply_id,
+        with_trbxes=True,
+    )
+    if supply is None:
+        raise FbsShipmentPvzError("supply_not_found")
+    _require_pvz_supply(supply)
+    _require_cargo_places_mutable_supply(supply)
+
+    req_hash = request_hash_for_cargo_places_delete(
+        supply_id=supply.id,
+        wb_trbx_ids=normalized_ids,
+    )
+    existing_op = await get_cargo_delete_operation_by_idempotency(
+        session,
+        supply.seller_id,
+        idempotency_key,
+    )
+    if existing_op is not None:
+        if existing_op.request_hash != req_hash:
+            raise FbsShipmentPvzError("idempotency_key_reused")
+        if existing_op.state == WB_OPERATION_STATE_CONFIRMED:
+            return await list_cargo_places(session, tenant_id, supply_id, http_client)
+        if existing_op.state == WB_OPERATION_STATE_PENDING_CONFIRMATION:
+            return await _reconcile_pending_cargo_delete_operation(
+                session,
+                tenant_id,
+                supply,
+                existing_op,
+                http_client,
+            )
+        if existing_op.state == WB_OPERATION_STATE_PENDING:
+            raise FbsShipmentPvzError("wb_pending_confirmation")
+        if existing_op.state == WB_OPERATION_STATE_FAILED:
+            raise FbsShipmentPvzError(existing_op.error_code or "wb_operation_failed")
+
+    # A confirmed retry must succeed even though the first request already
+    # removed the local FbsTrbx rows. Membership is therefore validated only
+    # for a genuinely new delete operation.
+    _resolve_trbxes_for_delete(supply, normalized_ids)
+
+    token = await _require_marketplace_token(session, tenant_id, supply.seller_id)
+    operation = existing_op
+    if operation is None:
+        operation = await create_pending_cargo_delete_operation(
+            session,
+            tenant_id=tenant_id,
+            seller_id=supply.seller_id,
+            idempotency_key=idempotency_key,
+            request_hash=req_hash,
+            request_summary={
+                "supply_id": str(supply.id),
+                "wb_trbx_ids": normalized_ids,
+            },
+            local_supply_id=supply.id,
+        )
+
+    try:
+        await delete_marketplace_supply_trbx(
+            http_client,
+            api_token=token,
+            supply_id=supply.wb_supply_id,
+            trbx_ids=normalized_ids,
+        )
+    except WildberriesClientError as exc:
+        if exc.code == "transport_error":
+            await mark_operation_pending_confirmation(
+                session,
+                operation,
+                wb_supply_id=supply.wb_supply_id,
+                local_supply_id=supply.id,
+                error_code="wb_timeout",
+            )
+            await session.commit()
+            raise FbsShipmentPvzError("wb_timeout") from exc
+        await mark_operation_failed(
+            session,
+            operation,
+            error_code=_wb_error_code(exc),
+            local_supply_id=supply.id,
+        )
+        await session.commit()
+        raise FbsShipmentPvzError(_wb_error_code(exc)) from exc
+
+    return await _finalize_cargo_delete_operation(
+        session,
+        tenant_id,
+        supply,
+        operation,
+        normalized_ids,
         http_client,
     )
 

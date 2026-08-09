@@ -65,7 +65,7 @@ export function FbsPrintPreviewDialog({
         const response = await fetch(resolveFbsAssetUrl(asset.preview_url!), {
           headers: { ...authHeaders(token) },
         })
-        if (!response.ok) throw new Error(`Preview ${asset.id} недоступен (${response.status}).`)
+        if (!response.ok) throw new Error(`Предпросмотр ${asset.id} недоступен (${response.status}).`)
         const objectUrl = URL.createObjectURL(await response.blob())
         objectUrls.push(objectUrl)
         return { asset, objectUrl }
@@ -75,7 +75,7 @@ export function FbsPrintPreviewDialog({
         if (active) setPreviews(next)
       })
       .catch((cause: unknown) => {
-        if (active) setError(cause instanceof Error ? cause.message : 'Preview не загружен.')
+        if (active) setError(cause instanceof Error ? cause.message : 'Предпросмотр не загружен.')
       })
       .finally(() => {
         if (active) setLoading(false)
@@ -121,13 +121,13 @@ export function FbsPrintPreviewDialog({
 
   return (
     <Dialog open={open} onClose={loading || applyingId ? undefined : onClose} fullWidth maxWidth="lg">
-      <DialogTitle>Preview перед печатью</DialogTitle>
+      <DialogTitle>Проверка перед печатью</DialogTitle>
       <DialogContent dividers>
         <Stack spacing={2}>
           <Stack direction="row" spacing={1} sx={{ flexWrap: 'wrap' }} useFlexGap>
             <Chip label={`Готово ${batch?.ready ?? 0}`} color="success" />
-            <Chip label={`Нет ${batch?.missing ?? 0}`} color={batch?.missing ? 'warning' : 'default'} />
-            <Chip label={`Ошибок ${batch?.failed ?? 0}`} color={batch?.failed ? 'error' : 'default'} />
+            {batch?.missing ? <Chip label={`Не получено ${batch.missing}`} color="warning" /> : null}
+            {batch?.failed ? <Chip label={`Ошибок ${batch.failed}`} color="error" /> : null}
           </Stack>
           {error ? <Alert severity="error">{error}</Alert> : null}
           {batch?.order_errors.map((item) => (
@@ -150,9 +150,7 @@ export function FbsPrintPreviewDialog({
                 <Typography variant="subtitle2">{assetLabel(asset)}</Typography>
                 <Box component="img" src={objectUrl} alt={assetLabel(asset)} sx={{ width: '100%', aspectRatio: '58 / 40', objectFit: 'contain', bgcolor: '#fff', my: 1.5 }} />
                 <Stack direction="row" spacing={1}>
-                  <Button startIcon={<PrintOutlinedIcon />} onClick={() => print([{ asset, objectUrl }])}>
-                    Печать
-                  </Button>
+                  {previews.length > 1 ? <Button startIcon={<PrintOutlinedIcon />} onClick={() => print([{ asset, objectUrl }])}>Печать только этого</Button> : null}
                   <Button disabled={Boolean(asset.applied_at) || applyingId === asset.id} onClick={() => void apply(asset)}>
                     {asset.applied_at ? 'Уже нанесён' : 'Подтвердить нанесение'}
                   </Button>
@@ -165,7 +163,7 @@ export function FbsPrintPreviewDialog({
       <DialogActions>
         <Button onClick={onClose} disabled={loading || Boolean(applyingId)}>Закрыть</Button>
         <Button variant="contained" startIcon={<PrintOutlinedIcon />} disabled={previews.length === 0 || loading} onClick={() => print(previews)}>
-          Печать всех готовых
+          {previews.length === 1 ? 'Печать' : 'Печать всех готовых'}
         </Button>
       </DialogActions>
     </Dialog>

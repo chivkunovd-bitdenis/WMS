@@ -39,7 +39,10 @@ from app.models.fbs_wb_operation import (
     WB_OPERATION_STATE_PENDING_CONFIRMATION,
 )
 from app.services import fbs_marking_service as marking_svc
+from app.services import fbs_packing_box_service as packing_box_svc
 from app.services import fbs_shipment_pvz_service as pvz_svc
+from app.services.fbs_print_asset_service import upsert_supply_qr_asset_from_bytes
+from app.services.fbs_print_asset_storage import FbsPrintAssetStorageError
 from app.services.fbs_supply_reconcile_service import (
     create_pending_deliver_operation,
     get_deliver_operation_by_idempotency,
@@ -287,12 +290,16 @@ def _compute_preflight_version(
     orders: list[FbsOrder],
     *,
     cargo_qr_ready: bool,
+    has_physical_boxes: bool,
+    unassigned_packed_order_ids: frozenset[uuid.UUID],
 ) -> str:
     parts = [
         str(supply.id),
         supply.status,
         supply.delivery_type,
         str(cargo_qr_ready),
+        str(has_physical_boxes),
+        *(str(order_id) for order_id in sorted(unassigned_packed_order_ids)),
     ]
     for order in sorted(orders, key=lambda item: item.id):
         parts.extend(
@@ -312,6 +319,8 @@ def _build_delivery_checks(
     orders: list[FbsOrder],
     *,
     cargo_qr_ready: bool,
+    has_physical_boxes: bool = True,
+    unassigned_packed_order_ids: frozenset[uuid.UUID] = frozenset(),
 ) -> list[DeliveryCheck]:
     checks: list[DeliveryCheck] = []
 
@@ -418,12 +427,12 @@ def _build_delivery_checks(
                 )
             )
 
-    if supply.delivery_type == FBS_DELIVERY_TYPE_PVZ:
+    if supply.delivery_type == FBS_DELIVERY_TYPE_PVZ and has_physical_boxes:
         if not supply.trbxes:
             checks.append(
                 DeliveryCheck(
-                    code="cargo_places_required",
-                    message="Создайте грузоместа для ПВЗ.",
+                    code="box_qr_not_ready",
+                    message="QR коробов ПВЗ ещё не готовы.",
                     ok=False,
                 )
             )
@@ -443,6 +452,24 @@ def _build_delivery_checks(
                     ok=True,
                 )
             )
+
+    if not has_physical_boxes:
+        checks.append(
+            DeliveryCheck(
+                code="physical_boxes_required",
+                message="Создайте физические короба для передачи поставки.",
+                ok=False,
+            )
+        )
+    for order_id in sorted(unassigned_packed_order_ids):
+        checks.append(
+            DeliveryCheck(
+                code="packed_order_unassigned",
+                message="Упакованный заказ не назначен в физический короб.",
+                ok=False,
+                order_id=order_id,
+            )
+        )
 
     return checks
 
@@ -482,9 +509,16 @@ async def _sync_and_validate_deliver(
         cargo_qr_ready = await pvz_svc.supply_has_ready_cargo_place_qrs(
             session, tenant_id, supply
         )
+    box_readiness = await packing_box_svc.get_delivery_box_readiness(
+        session, tenant_id, supply.id, orders
+    )
     if confirmed_preflight_version is not None:
         current_version = _compute_preflight_version(
-            supply, orders, cargo_qr_ready=cargo_qr_ready
+            supply,
+            orders,
+            cargo_qr_ready=cargo_qr_ready,
+            has_physical_boxes=box_readiness.has_physical_boxes,
+            unassigned_packed_order_ids=box_readiness.unassigned_packed_order_ids,
         )
         if current_version != confirmed_preflight_version:
             raise FbsShipmentError(
@@ -496,7 +530,13 @@ async def _sync_and_validate_deliver(
                 },
                 http_status=409,
             )
-    checks = _build_delivery_checks(supply, orders, cargo_qr_ready=cargo_qr_ready)
+    checks = _build_delivery_checks(
+        supply,
+        orders,
+        cargo_qr_ready=cargo_qr_ready,
+        has_physical_boxes=box_readiness.has_physical_boxes,
+        unassigned_packed_order_ids=box_readiness.unassigned_packed_order_ids,
+    )
     _validate_checks_pass(checks)
     return orders, cargo_qr_ready
 
@@ -535,10 +575,25 @@ async def preflight_delivery(
         cargo_qr_ready = await pvz_svc.supply_has_ready_cargo_place_qrs(
             session, tenant_id, supply
         )
+    box_readiness = await packing_box_svc.get_delivery_box_readiness(
+        session, tenant_id, supply.id, orders
+    )
 
-    checks = _build_delivery_checks(supply, orders, cargo_qr_ready=cargo_qr_ready)
+    checks = _build_delivery_checks(
+        supply,
+        orders,
+        cargo_qr_ready=cargo_qr_ready,
+        has_physical_boxes=box_readiness.has_physical_boxes,
+        unassigned_packed_order_ids=box_readiness.unassigned_packed_order_ids,
+    )
     checked_at = datetime.now(UTC)
-    version = _compute_preflight_version(supply, orders, cargo_qr_ready=cargo_qr_ready)
+    version = _compute_preflight_version(
+        supply,
+        orders,
+        cargo_qr_ready=cargo_qr_ready,
+        has_physical_boxes=box_readiness.has_physical_boxes,
+        unassigned_packed_order_ids=box_readiness.unassigned_packed_order_ids,
+    )
     can_deliver = all(check.ok for check in checks)
     return DeliveryPreflightResult(
         can_deliver=can_deliver,
@@ -579,6 +634,8 @@ async def _fetch_supply_qr_after_deliver(
 ) -> None:
     if supply.delivery_type != FBS_DELIVERY_TYPE_WAREHOUSE_SC:
         return
+    if supply.barcode_file and supply.barcode_asset_id:
+        return
     try:
         png_bytes = await fetch_marketplace_supply_barcode(
             http_client,
@@ -588,6 +645,15 @@ async def _fetch_supply_qr_after_deliver(
     except WildberriesClientError as exc:
         raise FbsShipmentError(_wb_error_code(exc)) from exc
     supply.barcode_file = _save_barcode_png(supply.id, png_bytes)
+    try:
+        await upsert_supply_qr_asset_from_bytes(
+            session,
+            tenant_id=supply.tenant_id,
+            supply=supply,
+            png_bytes=png_bytes,
+        )
+    except FbsPrintAssetStorageError as exc:
+        raise FbsShipmentError(exc.code) from exc
     await session.flush()
 
 
@@ -617,7 +683,7 @@ async def deliver_supply(
     http_client: httpx.AsyncClient,
     *,
     idempotency_key: str,
-    confirmed_preflight_version: str,
+    confirmed_preflight_version: str | None = None,
 ) -> FbsSupply:
     if not idempotency_key.strip():
         raise FbsShipmentError("missing_idempotency_key")
@@ -854,6 +920,10 @@ async def get_supply_barcode(
     supply = await _get_supply_read(session, tenant_id, supply_id)
     if supply is None:
         raise FbsShipmentError("supply_not_found")
+    if supply.delivery_type != FBS_DELIVERY_TYPE_WAREHOUSE_SC:
+        raise FbsShipmentError("wrong_delivery_type", http_status=409)
+    if supply.status not in {FBS_SUPPLY_STATUS_IN_DELIVERY, FBS_SUPPLY_STATUS_DONE}:
+        raise FbsShipmentError("supply_bad_status", http_status=409)
 
     if supply.barcode_file:
         cached = _resolve_barcode_path(supply.barcode_file)
@@ -874,3 +944,23 @@ async def get_supply_barcode(
     supply.barcode_file = _save_barcode_png(supply.id, png_bytes)
     await session.flush()
     return png_bytes
+
+
+async def retry_supply_qr(
+    session: AsyncSession,
+    tenant_id: uuid.UUID,
+    supply_id: uuid.UUID,
+    http_client: httpx.AsyncClient,
+) -> FbsSupply:
+    """Safely fetch a missing warehouse/SC QR after WB delivery was confirmed."""
+    supply = await _get_supply_for_update(session, tenant_id, supply_id, with_trbxes=True)
+    if supply is None:
+        raise FbsShipmentError("supply_not_found")
+    if supply.delivery_type != FBS_DELIVERY_TYPE_WAREHOUSE_SC:
+        raise FbsShipmentError("wrong_delivery_type", http_status=409)
+    if supply.status not in {FBS_SUPPLY_STATUS_IN_DELIVERY, FBS_SUPPLY_STATUS_DONE}:
+        raise FbsShipmentError("supply_bad_status", http_status=409)
+
+    token = await _require_marketplace_token(session, tenant_id, supply.seller_id)
+    await _fetch_supply_qr_after_deliver(session, supply, http_client, token)
+    return supply

@@ -38,6 +38,16 @@ class SupplyOrderRow(Base):
     order_id: Mapped[int] = mapped_column(Integer, nullable=False)
 
 
+class SupplyAuditRow(Base):
+    """Persistent call counters used by black-box full-stack assertions."""
+
+    __tablename__ = "emu_supply_audit"
+
+    supply_id: Mapped[str] = mapped_column(String(64), primary_key=True)
+    seller_key: Mapped[str] = mapped_column(String(128), nullable=False, index=True)
+    deliver_calls: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+
+
 class TrbxRow(Base):
     __tablename__ = "emu_trbxes"
 
@@ -100,6 +110,7 @@ def create_supply(session: Session, *, seller_key: str, name: str) -> dict[str, 
     supply_id = _new_supply_id()
     row = SupplyRow(id=supply_id, seller_key=seller_key, name=name, status=SupplyStatus.ACTIVE)
     session.add(row)
+    session.add(SupplyAuditRow(supply_id=supply_id, seller_key=seller_key, deliver_calls=0))
     session.commit()
     return {"id": supply_id, "name": name}
 
@@ -161,11 +172,63 @@ def add_order_to_supply(
 
 
 def deliver_supply(session: Session, *, seller_key: str, supply_id: str) -> None:
+    audit = session.scalar(
+        select(SupplyAuditRow).where(
+            SupplyAuditRow.supply_id == supply_id,
+            SupplyAuditRow.seller_key == seller_key,
+        )
+    )
+    if audit is None:
+        audit = SupplyAuditRow(supply_id=supply_id, seller_key=seller_key, deliver_calls=0)
+        session.add(audit)
+    audit.deliver_calls += 1
+    session.commit()
+
     supply = _get_supply(session, seller_key=seller_key, supply_id=supply_id)
     if supply.status == SupplyStatus.DELIVERED:
         raise SuppliesStoreError("delivered", "Supply already delivered")
     supply.status = SupplyStatus.DELIVERED
     session.commit()
+
+
+def get_admin_supply_state(
+    session: Session, *, seller_key: str | None = None
+) -> list[dict[str, object]]:
+    """Return supply/order/trbx bindings plus WB deliver call counts for E2E evidence."""
+    stmt = select(SupplyRow).order_by(SupplyRow.id)
+    if seller_key is not None:
+        stmt = stmt.where(SupplyRow.seller_key == seller_key)
+
+    result: list[dict[str, object]] = []
+    for supply in session.scalars(stmt):
+        view = get_supply(session, seller_key=supply.seller_key, supply_id=supply.id)
+        audit = session.scalar(
+            select(SupplyAuditRow).where(
+                SupplyAuditRow.supply_id == supply.id,
+                SupplyAuditRow.seller_key == supply.seller_key,
+            )
+        )
+        trbx_rows: list[dict[str, object]] = []
+        for trbx_id in view.trbx_ids:
+            order_ids = list(
+                session.scalars(
+                    select(TrbxOrderRow.order_id)
+                    .where(TrbxOrderRow.trbx_id == trbx_id)
+                    .order_by(TrbxOrderRow.order_id)
+                )
+            )
+            trbx_rows.append({"id": trbx_id, "orders": order_ids})
+        result.append(
+            {
+                "id": view.id,
+                "seller": supply.seller_key,
+                "done": view.status == SupplyStatus.DELIVERED,
+                "orders": view.order_ids,
+                "trbx": trbx_rows,
+                "deliver_calls": audit.deliver_calls if audit is not None else 0,
+            }
+        )
+    return result
 
 
 def create_trbxes(session: Session, *, seller_key: str, supply_id: str, amount: int) -> list[str]:
@@ -179,6 +242,37 @@ def create_trbxes(session: Session, *, seller_key: str, supply_id: str, amount: 
         ids.append(trbx_id)
     session.commit()
     return ids
+
+
+def delete_trbxes(
+    session: Session,
+    *,
+    seller_key: str,
+    supply_id: str,
+    trbx_ids: list[str],
+) -> None:
+    """Delete only cargo places belonging to this seller's active supply."""
+    supply = _get_supply(session, seller_key=seller_key, supply_id=supply_id)
+    if supply.status == SupplyStatus.DELIVERED:
+        raise SuppliesStoreError("delivered", "Supply already delivered")
+
+    requested_ids = set(trbx_ids)
+    rows = list(
+        session.scalars(
+            select(TrbxRow).where(
+                TrbxRow.id.in_(requested_ids),
+                TrbxRow.supply_id == supply_id,
+                TrbxRow.seller_key == seller_key,
+            )
+        )
+    )
+    found_ids = {row.id for row in rows}
+    if found_ids != requested_ids:
+        raise SuppliesStoreError("not_found", "Trbx not found")
+
+    for row in rows:
+        session.delete(row)
+    session.commit()
 
 
 def bind_orders_to_trbx(

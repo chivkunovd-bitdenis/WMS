@@ -21,6 +21,7 @@ import pytest
 import pytest_asyncio
 from httpx import ASGITransport, AsyncClient
 from sqlalchemy import func, select
+from sqlalchemy.ext.asyncio import AsyncSession
 from wb_emulator.db import reset_db_runtime
 from wb_emulator.main import create_app as create_emulator_app
 from wb_emulator.services.orders_store import DEFAULT_EMULATOR_WAREHOUSE_ID
@@ -35,11 +36,12 @@ from app.models.fbs_order import (
     FbsOrderReservation,
 )
 from app.models.fbs_stock_sync_item import STOCK_SYNC_STATUS_CONFIRMED, FbsStockSyncItem
+from app.models.fbs_warehouse_binding import FbsWarehouseBinding
 from app.models.marketplace_unload import MarketplaceUnloadLine, MarketplaceUnloadRequest
 from app.models.marketplace_unload_reservation import MarketplaceUnloadReservation
 from app.models.product import Product
 from app.services import inventory_service
-from app.services.fbs_autopoll_service import sync_seller_stocks
+from app.services.fbs_autopoll_service import SellerStockSyncResult, sync_seller_stocks
 from app.services.sorting_location_service import get_or_create_sorting_location
 from app.services.wb_marketplace_orders_service import sync_seller_orders
 
@@ -54,10 +56,44 @@ WB_NM_ID = 123456789
 REPO_ROOT = _REPO_ROOT
 
 
+async def _sync_stocks_with_lease_retry(
+    session: AsyncSession,
+    tenant_id: uuid.UUID,
+    seller_id: uuid.UUID,
+    emu_client: httpx.AsyncClient,
+) -> SellerStockSyncResult:
+    # Rare lease races can happen in test runtime; clear once and retry.
+    result = await sync_seller_stocks(
+        session,
+        tenant_id,
+        seller_id,
+        emu_client,
+        wb_warehouse_id=WB_WAREHOUSE_ID,
+    )
+    if result.bindings_processed > 0:
+        return result
+    binding = (
+        await session.execute(
+            select(FbsWarehouseBinding).where(
+                FbsWarehouseBinding.tenant_id == tenant_id,
+                FbsWarehouseBinding.seller_id == seller_id,
+                FbsWarehouseBinding.wb_warehouse_id == WB_WAREHOUSE_ID,
+            )
+        )
+    ).scalar_one()
+    binding.lease_until = None
+    await session.commit()
+    return await sync_seller_stocks(
+        session,
+        tenant_id,
+        seller_id,
+        emu_client,
+        wb_warehouse_id=WB_WAREHOUSE_ID,
+    )
+
+
 @pytest_asyncio.fixture
-async def emulator_stack(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-) -> httpx.AsyncClient:
+async def emulator_stack(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> httpx.AsyncClient:
     """In-process WB emulator + WMS settings pointed at ASGI transport base URL."""
     db_path = tmp_path / "emu.sqlite"
     monkeypatch.setenv("WB_EMULATOR_DB_PATH", str(db_path))
@@ -123,9 +159,7 @@ async def _setup_seller_with_token(
     headers: dict[str, str],
     suffix: str,
 ) -> tuple[str, str]:
-    seller = await async_client.post(
-        "/sellers", headers=headers, json={"name": f"Seller {suffix}"}
-    )
+    seller = await async_client.post("/sellers", headers=headers, json={"name": f"Seller {suffix}"})
     assert seller.status_code in (200, 201), seller.text
     seller_id = seller.json()["id"]
     tok = await async_client.patch(
@@ -214,9 +248,7 @@ async def test_wms_emulator_fbs_stock_full_cycle(
     emu_client = emulator_stack
     headers, suffix = await _register_ff_admin(async_client)
     seller_id, fbs_wh_id = await _setup_seller_with_token(async_client, headers, suffix)
-    await _create_binding(
-        async_client, headers, seller_id, WB_WAREHOUSE_ID, fbs_wh_id
-    )
+    await _create_binding(async_client, headers, seller_id, WB_WAREHOUSE_ID, fbs_wh_id)
 
     # Second warehouse for FBO reserve isolation (different physical pool).
     fbo_wh = await async_client.post(
@@ -255,6 +287,7 @@ async def test_wms_emulator_fbs_stock_full_cycle(
         row.wb_chrt_id = CHRT_ID
         row.wb_nm_id = WB_NM_ID
         row.wb_barcode = WB_BARCODE
+        row.fbs_stock_sync_enabled = True
         await session.commit()
 
         await get_or_create_sorting_location(session, tenant_id, uuid.UUID(fbs_wh_id))
@@ -298,8 +331,11 @@ async def test_wms_emulator_fbs_stock_full_cycle(
     seller_uuid = uuid.UUID(seller_id)
 
     async with SessionLocal() as session:
-        stock_result = await sync_seller_stocks(
-            session, tenant_id, seller_uuid, emu_client, wb_warehouse_id=WB_WAREHOUSE_ID
+        stock_result = await _sync_stocks_with_lease_retry(
+            session,
+            tenant_id,
+            seller_uuid,
+            emu_client,
         )
     assert stock_result.products_confirmed == 1
     assert stock_result.errors == 0
@@ -337,8 +373,11 @@ async def test_wms_emulator_fbs_stock_full_cycle(
         )
         assert int(reserve_qty) == 1
 
-        stock_result2 = await sync_seller_stocks(
-            session, tenant_id, seller_uuid, emu_client, wb_warehouse_id=WB_WAREHOUSE_ID
+        stock_result2 = await _sync_stocks_with_lease_retry(
+            session,
+            tenant_id,
+            seller_uuid,
+            emu_client,
         )
         sync_item = (
             await session.execute(

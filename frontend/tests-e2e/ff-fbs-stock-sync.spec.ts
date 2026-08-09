@@ -81,6 +81,7 @@ test('fbs stock sync: bind, manual sync, status panel', async ({ page }) => {
 
   // Disable binding — real DELETE
   await page.getByRole('button', { name: 'Закрыть' }).click()
+  await page.getByTestId('fbs-stock-disable-binding').click()
   await Promise.all([
     page.waitForResponse(
       (r) =>
@@ -89,7 +90,7 @@ test('fbs stock sync: bind, manual sync, status panel', async ({ page }) => {
         r.status() === 200,
     ),
     waitForGetOk(page, '/warehouse-bindings'),
-    page.getByTestId('fbs-stock-disable-binding').click(),
+    page.getByRole('dialog', { name: 'Отключить связь складов?' }).getByRole('button', { name: 'Отключить' }).click(),
   ])
   await expect(page.getByTestId('fbs-stock-bindings-empty')).toBeVisible()
 

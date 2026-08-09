@@ -200,6 +200,8 @@ async def _prepare_supply_with_orders(
             order = await session.get(FbsOrder, local_order_id)
             assert order is not None
             order.status = order_status
+            if order_status == FBS_ORDER_STATUS_PACKED:
+                order.pack_status = "packed"
         await session.commit()
 
     return supply, order_ids
@@ -223,6 +225,27 @@ async def _delivery_preflight(
     return response.json()
 
 
+async def _create_and_fill_physical_box(
+    async_client: AsyncClient,
+    headers: dict[str, str],
+    supply_id: str,
+    order_ids: list[uuid.UUID],
+) -> None:
+    created = await async_client.post(
+        f"/operations/fbs-supplies/{supply_id}/boxes",
+        headers=headers,
+        json={"count": 1, "idempotency_key": f"box-{supply_id}"},
+    )
+    assert created.status_code == 201, created.text
+    box_id = created.json()["boxes"][0]["id"]
+    assigned = await async_client.post(
+        f"/operations/fbs-supplies/{supply_id}/boxes/{box_id}/orders",
+        headers=headers,
+        json={"order_ids": [str(order_id) for order_id in order_ids]},
+    )
+    assert assigned.status_code == 200, assigned.text
+
+
 async def _deliver_with_preflight(
     async_client: AsyncClient,
     headers: dict[str, str],
@@ -241,6 +264,20 @@ async def _deliver_with_preflight(
         f"/operations/fbs-supplies/{supply_id}/deliver",
         headers=headers,
         json=payload,
+    )
+
+
+async def _deliver_direct(
+    async_client: AsyncClient,
+    headers: dict[str, str],
+    supply_id: str,
+    *,
+    idempotency_key: str | None = None,
+) -> Response:
+    return await async_client.post(
+        f"/operations/fbs-supplies/{supply_id}/deliver",
+        headers=headers,
+        json={"idempotency_key": idempotency_key or str(uuid.uuid4())},
     )
 
 
@@ -264,12 +301,22 @@ async def test_fbs_shipment_deliver_ok_and_orders_not_ready(
         wb_order_ids=[950001, 950002],
         supply_name="Deliver OK",
     )
+    async with SessionLocal() as session:
+        for local_order_id in order_ids:
+            order = await session.get(FbsOrder, local_order_id)
+            assert order is not None
+            order.pack_status = "packed"
+        await session.commit()
+    await _create_and_fill_physical_box(async_client, headers, supply["id"], order_ids)
 
-    deliver = await _deliver_with_preflight(async_client, headers, supply["id"])
+    deliver = await _deliver_direct(async_client, headers, supply["id"])
     assert deliver.status_code == 200, deliver.text
     body = deliver.json()
     assert body["supply"]["status"] == FBS_SUPPLY_STATUS_IN_DELIVERY
     assert body["stage"] == "tracking"
+    assert body["supply"]["barcode_asset"]["kind"] == "supply_qr"
+    assert body["supply"]["barcode_asset"]["status"] == "ready"
+    assert body["supply"]["barcode_asset"]["preview_url"]
     for order in body["orders"]:
         assert order["status"] == FBS_ORDER_STATUS_IN_DELIVERY
 
@@ -278,10 +325,24 @@ async def test_fbs_shipment_deliver_ok_and_orders_not_ready(
         assert supply_row is not None
         assert supply_row.status == FBS_SUPPLY_STATUS_IN_DELIVERY
         assert supply_row.delivered_at is not None
+        assert supply_row.barcode_asset_id is not None
         for local_order_id in order_ids:
             order = await session.get(FbsOrder, local_order_id)
             assert order is not None
             assert order.status == FBS_ORDER_STATUS_IN_DELIVERY
+
+        # Simulate a confirmed delivery whose QR asset was lost or unavailable.
+        supply_row.barcode_file = None
+        supply_row.barcode_asset_id = None
+        await session.commit()
+
+    retry_qr = await async_client.post(
+        f"/operations/fbs-supplies/{supply['id']}/retry-supply-qr",
+        headers=headers,
+    )
+    assert retry_qr.status_code == 200, retry_qr.text
+    assert retry_qr.json()["supply"]["barcode_asset"]["status"] == "ready"
+    assert retry_qr.json()["supply"]["barcode_asset"]["preview_url"]
 
     supply_bad, _ = await _prepare_supply_with_orders(
         async_client,
@@ -353,7 +414,7 @@ async def test_fbs_shipment_barcode_png_cached(
         async_client, headers, suffix
     )
 
-    supply, _ = await _prepare_supply_with_orders(
+    supply, order_ids = await _prepare_supply_with_orders(
         async_client,
         headers,
         seller_id,
@@ -362,6 +423,26 @@ async def test_fbs_shipment_barcode_png_cached(
         wb_order_ids=[951001],
         supply_name="Barcode cache",
     )
+
+    before_deliver = await async_client.get(
+        f"/operations/fbs-supplies/{supply['id']}/barcode",
+        headers=headers,
+        params={"type": "png"},
+    )
+    assert before_deliver.status_code == 409
+    assert before_deliver.json()["detail"]["code"] == "supply_bad_status"
+
+    await _create_and_fill_physical_box(async_client, headers, supply["id"], order_ids)
+    deliver = await _deliver_with_preflight(async_client, headers, supply["id"])
+    assert deliver.status_code == 200, deliver.text
+
+    # Deliver creates the canonical print asset. Clear only the legacy binary
+    # cache so this test can prove the deprecated endpoint is cached post-deliver.
+    async with SessionLocal() as session:
+        supply_row = await session.get(FbsSupply, uuid.UUID(supply["id"]))
+        assert supply_row is not None
+        supply_row.barcode_file = None
+        await session.commit()
 
     fetch_calls = 0
 
@@ -459,6 +540,7 @@ async def test_fbs_shipment_marking_required_and_ok(
     )
     assert put.status_code == 200, put.text
 
+    await _create_and_fill_physical_box(async_client, headers, supply["id"], order_ids)
     deliver = await _deliver_with_preflight(async_client, headers, supply["id"])
     assert deliver.status_code == 200, deliver.text
     assert deliver.json()["supply"]["status"] == FBS_SUPPLY_STATUS_IN_DELIVERY
@@ -500,6 +582,7 @@ async def test_fbs_shipment_deliver_wb_error_no_status_change(
         fail_deliver,
     )
 
+    await _create_and_fill_physical_box(async_client, headers, supply["id"], order_ids)
     resp = await _deliver_with_preflight(async_client, headers, supply["id"])
     assert resp.status_code == 502
     assert resp.json()["detail"]["code"] == "wb_upstream_error_502"
@@ -581,6 +664,7 @@ async def test_warehouse_sc_deliver_qr_failure_keeps_confirmed_delivery_and_retr
     monkeypatch.setattr(shipment_mod, "deliver_marketplace_supply", counted_deliver)
     monkeypatch.setattr(shipment_mod, "fetch_marketplace_supply_barcode", fail_first_qr_fetch)
 
+    await _create_and_fill_physical_box(async_client, headers, supply["id"], order_ids)
     preflight = await _delivery_preflight(async_client, headers, supply["id"])
     idem_key = str(uuid.uuid4())
     first = await async_client.post(
@@ -631,7 +715,101 @@ async def test_warehouse_sc_deliver_qr_failure_keeps_confirmed_delivery_and_retr
         assert supply_row.barcode_file is not None
 
 
-# TC-NEW-FBS-SHIPWH-005 — pvz supply deliver requires trbx on every order
+# TC-NEW-FBS-SHIPWH-008 — retry-supply-qr fetches QR only; never calls WB deliver again
+@pytest.mark.asyncio
+async def test_retry_supply_qr_never_calls_wb_deliver(
+    async_client: AsyncClient,
+    enable_wb_marketplace_supplies_mock: None,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    headers, suffix = await _register_ff_admin(async_client)
+    seller_id, warehouse_id, tenant_id = await _setup_seller_with_token(
+        async_client, headers, suffix
+    )
+    supply, order_ids = await _prepare_supply_with_orders(
+        async_client,
+        headers,
+        seller_id,
+        warehouse_id,
+        tenant_id,
+        wb_order_ids=[953201],
+        supply_name="Retry supply QR only",
+    )
+
+    import app.services.fbs_shipment_service as shipment_mod
+
+    deliver_calls = 0
+    real_deliver = shipment_mod.deliver_marketplace_supply
+
+    async def counted_deliver(
+        client: object,
+        *,
+        api_token: str,
+        supply_id: str,
+        marketplace_api_base: str | None = None,
+    ) -> None:
+        nonlocal deliver_calls
+        deliver_calls += 1
+        await real_deliver(
+            client,  # type: ignore[arg-type]
+            api_token=api_token,
+            supply_id=supply_id,
+            marketplace_api_base=marketplace_api_base,
+        )
+
+    monkeypatch.setattr(shipment_mod, "deliver_marketplace_supply", counted_deliver)
+
+    await _create_and_fill_physical_box(async_client, headers, supply["id"], order_ids)
+    deliver = await _deliver_with_preflight(async_client, headers, supply["id"])
+    assert deliver.status_code == 200, deliver.text
+    assert deliver_calls == 1
+
+    async with SessionLocal() as session:
+        supply_row = await session.get(FbsSupply, uuid.UUID(supply["id"]))
+        assert supply_row is not None
+        supply_row.barcode_file = None
+        supply_row.barcode_asset_id = None
+        await session.commit()
+
+    retry_qr = await async_client.post(
+        f"/operations/fbs-supplies/{supply['id']}/retry-supply-qr",
+        headers=headers,
+    )
+    assert retry_qr.status_code == 200, retry_qr.text
+    assert retry_qr.json()["supply"]["barcode_asset"]["status"] == "ready"
+    assert deliver_calls == 1
+
+
+# TC-NEW-FBS-SHIPWH-009 — retry-supply-qr is warehouse/SC-only
+@pytest.mark.asyncio
+async def test_retry_supply_qr_rejects_pvz_delivery_type(
+    async_client: AsyncClient,
+    enable_wb_marketplace_supplies_mock: None,
+) -> None:
+    headers, suffix = await _register_ff_admin(async_client)
+    seller_id, warehouse_id, tenant_id = await _setup_seller_with_token(
+        async_client, headers, suffix
+    )
+    supply, _ = await _prepare_supply_with_orders(
+        async_client,
+        headers,
+        seller_id,
+        warehouse_id,
+        tenant_id,
+        wb_order_ids=[953301],
+        supply_name="PVZ retry QR blocked",
+        delivery_type="pvz",
+    )
+
+    resp = await async_client.post(
+        f"/operations/fbs-supplies/{supply['id']}/retry-supply-qr",
+        headers=headers,
+    )
+    assert resp.status_code == 409
+    assert resp.json()["detail"]["code"] == "wrong_delivery_type"
+
+
+# TC-NEW-FBS-SHIPWH-005 — PVZ deliver requires physical boxes before WB transfer
 @pytest.mark.asyncio
 async def test_fbs_shipment_deliver_pvz_requires_trbx(
     async_client: AsyncClient,
@@ -655,7 +833,7 @@ async def test_fbs_shipment_deliver_pvz_requires_trbx(
 
     resp = await _deliver_with_preflight(async_client, headers, supply["id"])
     assert resp.status_code == 400
-    assert resp.json()["detail"]["code"] == "cargo_places_required"
+    assert resp.json()["detail"]["code"] == "physical_boxes_required"
 
 
 # TC-NEW-FBS-SHIPWH-006 — cancelled order blocks deliver

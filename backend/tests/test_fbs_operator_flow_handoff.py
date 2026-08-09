@@ -44,7 +44,6 @@ from tests.fbs_operator_emulator_seed import (
     load_emulator_tokens,
     seed_operator_emulator_wms,
 )
-from tests.test_fbs_shipment_pvz import _create_cargo_places, _default_boxes
 from tests.test_fbs_shipment_warehouse_sc import (
     _deliver_with_preflight,
     _delivery_preflight,
@@ -150,7 +149,29 @@ async def _promote_supply_packed(supply_id: str, order_ids: list[uuid.UUID]) -> 
             order = await session.get(FbsOrder, oid)
             assert order is not None
             order.status = FBS_ORDER_STATUS_PACKED
+            order.pack_status = "packed"
         await session.commit()
+
+
+async def _create_and_fill_physical_box(
+    async_client: AsyncClient,
+    headers: dict[str, str],
+    supply_id: str,
+    order_ids: list[uuid.UUID],
+) -> None:
+    created = await async_client.post(
+        f"/operations/fbs-supplies/{supply_id}/boxes",
+        headers=headers,
+        json={"count": 1, "idempotency_key": f"handoff-box-{supply_id}"},
+    )
+    assert created.status_code == 201, created.text
+    box_id = created.json()["boxes"][0]["id"]
+    assigned = await async_client.post(
+        f"/operations/fbs-supplies/{supply_id}/boxes/{box_id}/orders",
+        headers=headers,
+        json={"order_ids": [str(order_id) for order_id in order_ids]},
+    )
+    assert assigned.status_code == 200, assigned.text
 
 
 @pytest_asyncio.fixture
@@ -257,6 +278,7 @@ async def test_full_flow_warehouse_sc_emulator(
         headers=headers,
     )
     await _promote_supply_packed(supply_id, [local_order_id])
+    await _create_and_fill_physical_box(async_client, headers, supply_id, [local_order_id])
 
     deliver = await _deliver_with_preflight(async_client, headers, supply_id)
     assert deliver.status_code == 200, deliver.text
@@ -299,10 +321,7 @@ async def test_full_flow_pvz_emulator(
     supply_id = create.json()["supply"]["id"]
 
     await _promote_supply_packed(supply_id, [local_order_id])
-    cargo = await _create_cargo_places(
-        async_client, headers, supply_id, count=1, boxes=_default_boxes(1)
-    )
-    assert cargo.status_code == 201, cargo.text
+    await _create_and_fill_physical_box(async_client, headers, supply_id, [local_order_id])
 
     deliver = await _deliver_with_preflight(async_client, headers, supply_id)
     assert deliver.status_code == 200, deliver.text
@@ -376,6 +395,7 @@ async def test_emulator_deliver_timeout_pending_confirmation(
     assert create.status_code == 201, create.text
     supply_id = create.json()["supply"]["id"]
     await _promote_supply_packed(supply_id, [local_order_id])
+    await _create_and_fill_physical_box(async_client, headers, supply_id, [local_order_id])
 
     preflight = await _delivery_preflight(async_client, headers, supply_id)
     deliver_calls = {"count": 0}

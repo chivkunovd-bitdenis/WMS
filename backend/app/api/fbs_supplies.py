@@ -8,14 +8,16 @@ from fastapi import APIRouter, Depends, HTTPException, Query, Response, status
 from pydantic import BaseModel, Field
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.api.deps import require_fulfillment_admin
+from app.api.deps import require_fbs_operator_access
 from app.api.fbs_errors import envelope_from_exc, raise_fbs_http
-from app.api.fbs_orders import FbsWorklistOrderOut
+from app.api.fbs_orders import FbsWorklistOrderOut, FbsWorklistProductOut
 from app.db.session import get_db
 from app.models.fbs_order import FbsOrder
 from app.models.fbs_supply import FbsSupply
 from app.models.user import User
+from app.services import fbs_order_tape_print_service as order_tape_svc
 from app.services import fbs_packaging_integration_service as pack_int_svc
+from app.services import fbs_packing_box_service as packing_box_svc
 from app.services import fbs_picking_service as picking_svc
 from app.services import fbs_shipment_pvz_service as pvz_svc
 from app.services import fbs_shipment_service as shipment_svc
@@ -182,6 +184,40 @@ class FbsPrintBatchOut(BaseModel):
     order_errors: list[FbsPrintOrderErrorOut]
 
 
+class FbsOrderTapePrintBody(BaseModel):
+    order_ids: list[uuid.UUID] = Field(min_length=1, max_length=500)
+    layout_json: dict[str, object] | None = None
+    allow_partial: bool = False
+    include_order_qr: bool = True
+    reprint: bool = False
+
+
+class FbsOrderTapePrintedCodeOut(BaseModel):
+    id: str
+    cis_code: str
+    has_label_artifact: bool
+
+
+class FbsOrderTapeOrderOut(BaseModel):
+    order_id: str
+    wb_order_id: int
+    requires_honest_sign: bool
+    qr_asset: FbsPrintAssetOut | None
+    codes: list[str]
+    printed_codes: list[FbsOrderTapePrintedCodeOut]
+    shortage: int | None
+
+
+class FbsOrderTapePrintOut(BaseModel):
+    orders: list[FbsOrderTapeOrderOut]
+    requested: int
+    ready: int
+    missing: int
+    failed: int
+    order_errors: list[FbsPrintOrderErrorOut]
+    shortage: int
+
+
 class FbsTrbxCreateBody(BaseModel):
     count: int = Field(ge=1, le=100)
     length_mm: int | None = Field(default=None, ge=1)
@@ -299,6 +335,11 @@ class FbsCargoPlacesCreateBody(BaseModel):
     idempotency_key: str = Field(min_length=1, max_length=128)
 
 
+class FbsCargoPlacesDeleteBody(BaseModel):
+    wb_trbx_ids: list[str] = Field(min_length=1, max_length=100)
+    idempotency_key: str = Field(min_length=1, max_length=128)
+
+
 class FbsCargoPlacePreflightIssueOut(BaseModel):
     client_id: str | None
     code: str
@@ -314,6 +355,29 @@ class FbsCargoPlacesPreflightOut(BaseModel):
 
 class FbsCargoPlaceListOut(BaseModel):
     cargo_places: list[FbsCargoPlaceOut]
+
+
+class FbsPackingBoxCreateBody(BaseModel):
+    count: int = Field(ge=1, le=100)
+    idempotency_key: str = Field(min_length=1, max_length=128)
+
+
+class FbsPackingBoxAssignOrdersBody(BaseModel):
+    order_ids: list[uuid.UUID] = Field(min_length=1, max_length=100)
+
+
+class FbsPackingBoxDeleteBody(BaseModel):
+    idempotency_key: str = Field(min_length=1, max_length=128)
+
+
+class FbsPackingBoxOut(BaseModel):
+    id: str
+    box_number: int
+    barcode: str
+    assigned_order_ids: list[str]
+    trbx_id: str | None
+    wb_trbx_id: str | None
+    qr_asset: FbsWorkspacePrintAssetOut | None
 
 
 class FbsDeliveryCheckOut(BaseModel):
@@ -332,7 +396,23 @@ class FbsDeliveryPreflightOut(BaseModel):
 
 class FbsSupplyDeliverBody(BaseModel):
     idempotency_key: str = Field(min_length=1, max_length=128)
-    confirmed_preflight_version: str = Field(min_length=1, max_length=128)
+    confirmed_preflight_version: str | None = Field(default=None, min_length=1, max_length=128)
+
+
+class FbsWorkspaceProductOut(FbsWorklistProductOut):
+    packaging_instructions: str | None
+    has_packaging_instructions: bool
+
+
+class FbsWorkspaceOrderOut(FbsWorklistOrderOut):
+    product: FbsWorkspaceProductOut
+
+
+class FbsWorkspaceMarkingPoolOut(BaseModel):
+    required: int
+    available: int
+    shortage: int
+    orders_without_code: list[str]
 
 
 class FbsWorkspaceOut(BaseModel):
@@ -340,8 +420,10 @@ class FbsWorkspaceOut(BaseModel):
     stage: str
     progress: FbsWorkspaceProgressOut
     blockers: list[FbsWorkspaceBlockerOut]
-    orders: list[FbsWorklistOrderOut]
+    orders: list[FbsWorkspaceOrderOut]
     cargo_places: list[FbsCargoPlaceOut]
+    boxes: list[FbsPackingBoxOut]
+    marking_pool: FbsWorkspaceMarkingPoolOut
     delivery_preflight: dict[str, object] | None
     last_wb_sync_at: str | None
     tracking_summary: dict[str, object] | None = None
@@ -352,6 +434,10 @@ class FbsWorkspaceOut(BaseModel):
 
 class FbsPickScanLocationBody(BaseModel):
     location_barcode: str = Field(min_length=1, max_length=64)
+
+
+class FbsPickManualLocationBody(BaseModel):
+    location_id: uuid.UUID
 
 
 class FbsPickLocationExpectedProductOut(BaseModel):
@@ -374,6 +460,13 @@ class FbsPickScanProductBody(BaseModel):
     location_id: uuid.UUID
     product_barcode: str = Field(min_length=1, max_length=64)
     order_id: uuid.UUID | None = None
+    idempotency_key: str = Field(min_length=1, max_length=128)
+
+
+class FbsPickManualProductBody(BaseModel):
+    location_id: uuid.UUID
+    product_id: uuid.UUID
+    order_id: uuid.UUID
     idempotency_key: str = Field(min_length=1, max_length=128)
 
 
@@ -479,7 +572,24 @@ def _raise_from_print_asset_service(exc: FbsPrintAssetError) -> None:
     raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=detail)
 
 
+def _raise_from_order_tape_service(exc: order_tape_svc.FbsOrderTapePrintError) -> None:
+    if exc.code in {"supply_not_found", "order_not_in_supply"}:
+        raise_fbs_http(status.HTTP_404_NOT_FOUND, exc.code)
+    if exc.code in {
+        "empty_order_set",
+        "invalid_layout_json",
+        "invalid_layout_block",
+        "invalid_layout_copies",
+    }:
+        raise_fbs_http(status.HTTP_422_UNPROCESSABLE_ENTITY, exc.code)
+    if exc.code.startswith("wb_"):
+        raise_fbs_http(status.HTTP_502_BAD_GATEWAY, exc.code)
+    raise_fbs_http(status.HTTP_500_INTERNAL_SERVER_ERROR, exc.code)
+
+
 def _raise_from_pvz_service(exc: pvz_svc.FbsShipmentPvzError) -> None:
+    if exc.http_status is not None:
+        raise_fbs_http(exc.http_status, exc.code)
     if exc.code in {"wb_timeout", "wb_pending_confirmation"}:
         messages = {
             "wb_timeout": "WB не подтвердил создание грузомест — повторите операцию.",
@@ -498,6 +608,7 @@ def _raise_from_pvz_service(exc: pvz_svc.FbsShipmentPvzError) -> None:
         "supply_not_found",
         "seller_not_found",
         "trbx_not_found",
+        "cargo_place_not_found",
     }:
         raise_fbs_http(status.HTTP_404_NOT_FOUND, exc.code)
     if exc.code == "missing_marketplace_token":
@@ -515,6 +626,7 @@ def _raise_from_pvz_service(exc: pvz_svc.FbsShipmentPvzError) -> None:
         "invalid_sticker_path",
         "boxes_count_mismatch",
         "cargo_places_preflight_failed",
+        "empty_cargo_place_selection",
         "missing_idempotency_key",
     }:
         raise_fbs_http(status.HTTP_400_BAD_REQUEST, exc.code)
@@ -525,16 +637,41 @@ def _raise_from_pvz_service(exc: pvz_svc.FbsShipmentPvzError) -> None:
     raise_fbs_http(status.HTTP_500_INTERNAL_SERVER_ERROR, exc.code)
 
 
+def _raise_from_packing_box_service(exc: packing_box_svc.FbsPackingBoxError) -> None:
+    if exc.code in {"supply_not_found", "packing_box_not_found", "box_assignment_not_found"}:
+        raise_fbs_http(status.HTTP_404_NOT_FOUND, exc.code)
+    if exc.code in {"idempotency_key_reused", "box_not_empty", "order_already_in_box"}:
+        raise_fbs_http(status.HTTP_409_CONFLICT, exc.code)
+    if exc.code in {
+        "order_not_packed",
+        "order_not_in_supply",
+        "empty_order_set",
+        "missing_idempotency_key",
+    }:
+        raise_fbs_http(status.HTTP_400_BAD_REQUEST, exc.code)
+    if exc.code in {"supply_not_editable", "box_cargo_place_unresolved"}:
+        raise_fbs_http(
+            status.HTTP_409_CONFLICT, exc.code, retryable=exc.code == "box_cargo_place_unresolved"
+        )
+    if exc.code == "supply_already_delivered":
+        raise_fbs_http(status.HTTP_409_CONFLICT, exc.code, retryable=False)
+    _raise_from_pvz_service(pvz_svc.FbsShipmentPvzError(exc.code))
+
+
 def _raise_from_shipment_service(exc: shipment_svc.FbsShipmentError) -> None:
     detail = envelope_from_exc(exc)
-    if exc.http_status is not None and (exc.context or exc.code in {
-        "wb_timeout",
-        "wb_pending_confirmation",
-        "operation_in_progress",
-        "stale_preflight",
-        "meta_validation_fail",
-        "idempotency_key_reused",
-    }):
+    if exc.http_status is not None and (
+        exc.context
+        or exc.code
+        in {
+            "wb_timeout",
+            "wb_pending_confirmation",
+            "operation_in_progress",
+            "stale_preflight",
+            "meta_validation_fail",
+            "idempotency_key_reused",
+        }
+    ):
         raise HTTPException(status_code=exc.http_status, detail=detail)
     if exc.code in {
         "supply_not_found",
@@ -543,8 +680,10 @@ def _raise_from_shipment_service(exc: shipment_svc.FbsShipmentError) -> None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=detail)
     if exc.code == "missing_marketplace_token":
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=detail)
+    if exc.code == "wrong_delivery_type":
+        status_code = exc.http_status or status.HTTP_400_BAD_REQUEST
+        raise HTTPException(status_code=status_code, detail=detail)
     if exc.code in {
-        "wrong_delivery_type",
         "supply_empty",
         "supply_has_cancelled_orders",
         "orders_not_ready",
@@ -554,6 +693,8 @@ def _raise_from_shipment_service(exc: shipment_svc.FbsShipmentError) -> None:
         "invalid_barcode_path",
         "cargo_places_required",
         "cargo_place_qr_not_ready",
+        "physical_boxes_required",
+        "packed_order_unassigned",
         "missing_idempotency_key",
         "order_cancelled",
     }:
@@ -678,7 +819,7 @@ def _raise_from_picking(exc: picking_svc.FbsPickingError) -> None:
 @router.post("/preflight", response_model=FbsSupplyPreflightOut)
 async def preflight_fbs_supply(
     body: FbsSupplyPreflightBody,
-    user: Annotated[User, Depends(require_fulfillment_admin)],
+    user: Annotated[User, Depends(require_fbs_operator_access)],
     session: Annotated[AsyncSession, Depends(get_db)],
 ) -> FbsSupplyPreflightOut:
     try:
@@ -696,7 +837,7 @@ async def preflight_fbs_supply(
 @router.post("/from-orders", response_model=FbsWorkspaceOut, status_code=status.HTTP_201_CREATED)
 async def create_fbs_supply_from_orders(
     body: FbsSupplyFromOrdersBody,
-    user: Annotated[User, Depends(require_fulfillment_admin)],
+    user: Annotated[User, Depends(require_fbs_operator_access)],
     session: Annotated[AsyncSession, Depends(get_db)],
 ) -> FbsWorkspaceOut:
     planned_dest = (
@@ -725,7 +866,7 @@ async def create_fbs_supply_from_orders(
 @router.post("/{supply_id}/start-work", response_model=FbsWorkspaceOut)
 async def start_fbs_supply_work(
     supply_id: uuid.UUID,
-    user: Annotated[User, Depends(require_fulfillment_admin)],
+    user: Annotated[User, Depends(require_fbs_operator_access)],
     session: Annotated[AsyncSession, Depends(get_db)],
 ) -> FbsWorkspaceOut:
     try:
@@ -744,7 +885,7 @@ async def start_fbs_supply_work(
 async def scan_fbs_pick_location(
     supply_id: uuid.UUID,
     body: FbsPickScanLocationBody,
-    user: Annotated[User, Depends(require_fulfillment_admin)],
+    user: Annotated[User, Depends(require_fbs_operator_access)],
     session: Annotated[AsyncSession, Depends(get_db)],
 ) -> FbsPickLocationOut:
     try:
@@ -759,11 +900,30 @@ async def scan_fbs_pick_location(
     return FbsPickLocationOut.model_validate(payload)
 
 
+@router.post("/{supply_id}/pick/manual/location", response_model=FbsPickLocationOut)
+async def select_fbs_manual_pick_location(
+    supply_id: uuid.UUID,
+    body: FbsPickManualLocationBody,
+    user: Annotated[User, Depends(require_fbs_operator_access)],
+    session: Annotated[AsyncSession, Depends(get_db)],
+) -> FbsPickLocationOut:
+    try:
+        payload = await picking_svc.select_pick_location(
+            session,
+            user.tenant_id,
+            supply_id,
+            location_id=body.location_id,
+        )
+    except picking_svc.FbsPickingError as exc:
+        _raise_from_picking(exc)
+    return FbsPickLocationOut.model_validate(payload)
+
+
 @router.post("/{supply_id}/pick/scan-product", response_model=FbsWorkspaceOut)
 async def scan_fbs_pick_product(
     supply_id: uuid.UUID,
     body: FbsPickScanProductBody,
-    user: Annotated[User, Depends(require_fulfillment_admin)],
+    user: Annotated[User, Depends(require_fbs_operator_access)],
     session: Annotated[AsyncSession, Depends(get_db)],
 ) -> FbsWorkspaceOut:
     try:
@@ -783,12 +943,36 @@ async def scan_fbs_pick_product(
     return FbsWorkspaceOut.model_validate(workspace)
 
 
+@router.post("/{supply_id}/pick/manual", response_model=FbsWorkspaceOut)
+async def confirm_fbs_manual_pick(
+    supply_id: uuid.UUID,
+    body: FbsPickManualProductBody,
+    user: Annotated[User, Depends(require_fbs_operator_access)],
+    session: Annotated[AsyncSession, Depends(get_db)],
+) -> FbsWorkspaceOut:
+    try:
+        workspace = await picking_svc.manual_pick_product(
+            session,
+            user.tenant_id,
+            supply_id,
+            location_id=body.location_id,
+            product_id=body.product_id,
+            order_id=body.order_id,
+            idempotency_key=body.idempotency_key,
+            actor=user,
+        )
+    except picking_svc.FbsPickingError as exc:
+        _raise_from_picking(exc)
+    await session.commit()
+    return FbsWorkspaceOut.model_validate(workspace)
+
+
 @router.post("/{supply_id}/pick/{order_id}/undo", response_model=FbsWorkspaceOut)
 async def undo_fbs_pick(
     supply_id: uuid.UUID,
     order_id: uuid.UUID,
     body: FbsPickUndoBody,
-    user: Annotated[User, Depends(require_fulfillment_admin)],
+    user: Annotated[User, Depends(require_fbs_operator_access)],
     session: Annotated[AsyncSession, Depends(get_db)],
 ) -> FbsWorkspaceOut:
     try:
@@ -809,7 +993,7 @@ async def undo_fbs_pick(
 @router.post("", response_model=FbsSupplyOut, status_code=status.HTTP_201_CREATED, deprecated=True)
 async def create_fbs_supply(
     body: FbsSupplyCreateBody,
-    user: Annotated[User, Depends(require_fulfillment_admin)],
+    user: Annotated[User, Depends(require_fbs_operator_access)],
     session: Annotated[AsyncSession, Depends(get_db)],
 ) -> FbsSupplyOut:
     async with httpx.AsyncClient() as http_client:
@@ -835,7 +1019,7 @@ async def create_fbs_supply(
 @router.get("/{supply_id}/workspace", response_model=FbsWorkspaceOut)
 async def get_fbs_supply_workspace(
     supply_id: uuid.UUID,
-    user: Annotated[User, Depends(require_fulfillment_admin)],
+    user: Annotated[User, Depends(require_fbs_operator_access)],
     session: Annotated[AsyncSession, Depends(get_db)],
 ) -> FbsWorkspaceOut:
     try:
@@ -847,10 +1031,167 @@ async def get_fbs_supply_workspace(
     return FbsWorkspaceOut.model_validate(workspace)
 
 
+@router.post(
+    "/{supply_id}/boxes",
+    response_model=FbsWorkspaceOut,
+    status_code=status.HTTP_201_CREATED,
+    summary="Create physical FBS boxes",
+)
+async def create_fbs_packing_boxes(
+    supply_id: uuid.UUID,
+    body: FbsPackingBoxCreateBody,
+    user: Annotated[User, Depends(require_fbs_operator_access)],
+    session: Annotated[AsyncSession, Depends(get_db)],
+) -> FbsWorkspaceOut:
+    async with httpx.AsyncClient() as http_client:
+        try:
+            await packing_box_svc.create_boxes(
+                session,
+                user.tenant_id,
+                supply_id,
+                body.count,
+                body.idempotency_key,
+                http_client,
+                actor_user_id=user.id,
+            )
+        except packing_box_svc.FbsPackingBoxError as exc:
+            _raise_from_packing_box_service(exc)
+    await session.commit()
+    return await _workspace_after_packing_box_action(session, user.tenant_id, supply_id)
+
+
+@router.post(
+    "/{supply_id}/boxes/{box_id}/orders",
+    response_model=FbsWorkspaceOut,
+    summary="Assign packed orders to a physical FBS box",
+)
+async def assign_orders_to_fbs_packing_box(
+    supply_id: uuid.UUID,
+    box_id: uuid.UUID,
+    body: FbsPackingBoxAssignOrdersBody,
+    user: Annotated[User, Depends(require_fbs_operator_access)],
+    session: Annotated[AsyncSession, Depends(get_db)],
+) -> FbsWorkspaceOut:
+    try:
+        await packing_box_svc.assign_orders(
+            session,
+            user.tenant_id,
+            supply_id,
+            box_id,
+            body.order_ids,
+            actor_user_id=user.id,
+        )
+    except packing_box_svc.FbsPackingBoxError as exc:
+        _raise_from_packing_box_service(exc)
+    await session.commit()
+    return await _workspace_after_packing_box_action(session, user.tenant_id, supply_id)
+
+
+@router.delete(
+    "/{supply_id}/boxes/{box_id}/orders/{order_id}",
+    response_model=FbsWorkspaceOut,
+    summary="Remove an order from a physical FBS box",
+)
+async def remove_order_from_fbs_packing_box(
+    supply_id: uuid.UUID,
+    box_id: uuid.UUID,
+    order_id: uuid.UUID,
+    user: Annotated[User, Depends(require_fbs_operator_access)],
+    session: Annotated[AsyncSession, Depends(get_db)],
+) -> FbsWorkspaceOut:
+    try:
+        await packing_box_svc.remove_order(session, user.tenant_id, supply_id, box_id, order_id)
+    except packing_box_svc.FbsPackingBoxError as exc:
+        _raise_from_packing_box_service(exc)
+    await session.commit()
+    return await _workspace_after_packing_box_action(session, user.tenant_id, supply_id)
+
+
+@router.delete(
+    "/{supply_id}/boxes/{box_id}",
+    response_model=FbsWorkspaceOut,
+    summary="Delete an empty physical FBS box",
+)
+async def delete_fbs_packing_box(
+    supply_id: uuid.UUID,
+    box_id: uuid.UUID,
+    body: FbsPackingBoxDeleteBody,
+    user: Annotated[User, Depends(require_fbs_operator_access)],
+    session: Annotated[AsyncSession, Depends(get_db)],
+) -> FbsWorkspaceOut:
+    async with httpx.AsyncClient() as http_client:
+        try:
+            await packing_box_svc.delete_box(
+                session,
+                user.tenant_id,
+                supply_id,
+                box_id,
+                body.idempotency_key,
+                http_client,
+            )
+        except packing_box_svc.FbsPackingBoxError as exc:
+            _raise_from_packing_box_service(exc)
+    await session.commit()
+    return await _workspace_after_packing_box_action(session, user.tenant_id, supply_id)
+
+
+@router.post(
+    "/{supply_id}/boxes/{box_id}/clear",
+    response_model=FbsWorkspaceOut,
+    summary="Unassign every order from a physical FBS box",
+)
+async def clear_fbs_packing_box(
+    supply_id: uuid.UUID,
+    box_id: uuid.UUID,
+    user: Annotated[User, Depends(require_fbs_operator_access)],
+    session: Annotated[AsyncSession, Depends(get_db)],
+) -> FbsWorkspaceOut:
+    try:
+        await packing_box_svc.clear_box(session, user.tenant_id, supply_id, box_id)
+    except packing_box_svc.FbsPackingBoxError as exc:
+        _raise_from_packing_box_service(exc)
+    await session.commit()
+    return await _workspace_after_packing_box_action(session, user.tenant_id, supply_id)
+
+
+@router.post(
+    "/{supply_id}/boxes/{box_id}/retry-qr",
+    response_model=FbsWorkspaceOut,
+    summary="Retry a PVZ box QR without creating a cargo place",
+)
+async def retry_fbs_packing_box_qr(
+    supply_id: uuid.UUID,
+    box_id: uuid.UUID,
+    user: Annotated[User, Depends(require_fbs_operator_access)],
+    session: Annotated[AsyncSession, Depends(get_db)],
+) -> FbsWorkspaceOut:
+    async with httpx.AsyncClient() as http_client:
+        try:
+            await packing_box_svc.retry_box_qr(
+                session, user.tenant_id, supply_id, box_id, http_client
+            )
+        except packing_box_svc.FbsPackingBoxError as exc:
+            _raise_from_packing_box_service(exc)
+    await session.commit()
+    return await _workspace_after_packing_box_action(session, user.tenant_id, supply_id)
+
+
+async def _workspace_after_packing_box_action(
+    session: AsyncSession,
+    tenant_id: uuid.UUID,
+    supply_id: uuid.UUID,
+) -> FbsWorkspaceOut:
+    try:
+        workspace = await get_supply_workspace(session, tenant_id, supply_id)
+    except FbsWorkspaceError as exc:
+        raise_fbs_http(status.HTTP_404_NOT_FOUND, exc.code)
+    return FbsWorkspaceOut.model_validate(workspace)
+
+
 @router.get("/{supply_id}", response_model=FbsSupplyOut)
 async def get_fbs_supply(
     supply_id: uuid.UUID,
-    user: Annotated[User, Depends(require_fulfillment_admin)],
+    user: Annotated[User, Depends(require_fbs_operator_access)],
     session: Annotated[AsyncSession, Depends(get_db)],
 ) -> FbsSupplyOut:
     try:
@@ -864,7 +1205,7 @@ async def get_fbs_supply(
 async def add_order_to_fbs_supply(
     supply_id: uuid.UUID,
     body: FbsSupplyAddOrderBody,
-    user: Annotated[User, Depends(require_fulfillment_admin)],
+    user: Annotated[User, Depends(require_fbs_operator_access)],
     session: Annotated[AsyncSession, Depends(get_db)],
 ) -> FbsSupplyOut:
     async with httpx.AsyncClient() as http_client:
@@ -885,7 +1226,7 @@ async def add_order_to_fbs_supply(
 @router.get("/{supply_id}/picking-list", response_model=FbsPickingListOut)
 async def get_fbs_supply_picking_list(
     supply_id: uuid.UUID,
-    user: Annotated[User, Depends(require_fulfillment_admin)],
+    user: Annotated[User, Depends(require_fbs_operator_access)],
     session: Annotated[AsyncSession, Depends(get_db)],
 ) -> FbsPickingListOut:
     try:
@@ -921,7 +1262,7 @@ async def get_fbs_supply_picking_list(
 async def fetch_fbs_supply_stickers(
     supply_id: uuid.UUID,
     body: FbsSupplyStickersBody,
-    user: Annotated[User, Depends(require_fulfillment_admin)],
+    user: Annotated[User, Depends(require_fbs_operator_access)],
     session: Annotated[AsyncSession, Depends(get_db)],
 ) -> FbsStickersOut:
     async with httpx.AsyncClient() as http_client:
@@ -953,7 +1294,7 @@ async def fetch_fbs_supply_stickers(
 async def fetch_fbs_supply_print_assets(
     supply_id: uuid.UUID,
     body: FbsPrintBatchRequest,
-    user: Annotated[User, Depends(require_fulfillment_admin)],
+    user: Annotated[User, Depends(require_fbs_operator_access)],
     session: Annotated[AsyncSession, Depends(get_db)],
 ) -> FbsPrintBatchOut:
     async with httpx.AsyncClient() as http_client:
@@ -988,6 +1329,71 @@ async def fetch_fbs_supply_print_assets(
     )
 
 
+@router.post("/{supply_id}/order-print-tape", response_model=FbsOrderTapePrintOut)
+async def print_fbs_supply_order_tape(
+    supply_id: uuid.UUID,
+    body: FbsOrderTapePrintBody,
+    user: Annotated[User, Depends(require_fbs_operator_access)],
+    session: Annotated[AsyncSession, Depends(get_db)],
+) -> FbsOrderTapePrintOut:
+    async with httpx.AsyncClient() as http_client:
+        try:
+            result = await order_tape_svc.print_fbs_order_tape(
+                session,
+                user.tenant_id,
+                supply_id,
+                order_ids=body.order_ids,
+                layout=body.layout_json,
+                allow_partial=body.allow_partial,
+                include_order_qr=body.include_order_qr,
+                reprint=body.reprint,
+                actor_user_id=user.id,
+                http_client=http_client,
+            )
+        except order_tape_svc.FbsOrderTapePrintError as exc:
+            _raise_from_order_tape_service(exc)
+    await session.commit()
+    assets_by_id = {
+        asset.id: FbsPrintAssetOut(**map_print_asset(asset))
+        for asset in (result.print_batch.assets if result.print_batch else [])
+    }
+    return FbsOrderTapePrintOut(
+        orders=[
+            FbsOrderTapeOrderOut(
+                order_id=str(order.order_id),
+                wb_order_id=order.wb_order_id,
+                requires_honest_sign=order.requires_honest_sign,
+                qr_asset=assets_by_id.get(order.qr_asset_id) if order.qr_asset_id else None,
+                codes=order.codes,
+                printed_codes=[
+                    FbsOrderTapePrintedCodeOut(
+                        id=str(code.id),
+                        cis_code=code.cis_code,
+                        has_label_artifact=code.has_label_artifact,
+                    )
+                    for code in order.printed_codes
+                ],
+                shortage=order.shortage,
+            )
+            for order in result.orders
+        ],
+        requested=result.print_batch.requested if result.print_batch else len(body.order_ids),
+        ready=result.print_batch.ready if result.print_batch else len(result.orders),
+        missing=result.print_batch.missing if result.print_batch else 0,
+        failed=result.print_batch.failed if result.print_batch else 0,
+        order_errors=[
+            FbsPrintOrderErrorOut(
+                order_id=str(err.order_id),
+                wb_order_id=err.wb_order_id,
+                code=err.code,
+                message=err.message,
+            )
+            for err in result.order_errors
+        ],
+        shortage=result.shortage,
+    )
+
+
 @router.post(
     "/{supply_id}/cargo-places/preflight",
     response_model=FbsCargoPlacesPreflightOut,
@@ -995,7 +1401,7 @@ async def fetch_fbs_supply_print_assets(
 async def preflight_fbs_cargo_places(
     supply_id: uuid.UUID,
     body: FbsCargoPlacesPreflightBody,
-    user: Annotated[User, Depends(require_fulfillment_admin)],
+    user: Annotated[User, Depends(require_fbs_operator_access)],
     session: Annotated[AsyncSession, Depends(get_db)],
 ) -> FbsCargoPlacesPreflightOut:
     try:
@@ -1019,7 +1425,7 @@ async def preflight_fbs_cargo_places(
 async def create_fbs_cargo_places(
     supply_id: uuid.UUID,
     body: FbsCargoPlacesCreateBody,
-    user: Annotated[User, Depends(require_fulfillment_admin)],
+    user: Annotated[User, Depends(require_fbs_operator_access)],
     session: Annotated[AsyncSession, Depends(get_db)],
 ) -> FbsCargoPlaceListOut:
     async with httpx.AsyncClient() as http_client:
@@ -1041,10 +1447,45 @@ async def create_fbs_cargo_places(
     return FbsCargoPlaceListOut(cargo_places=[_cargo_place_out(place) for place in places])
 
 
+@router.delete(
+    "/{supply_id}/cargo-places",
+    response_model=FbsCargoPlaceListOut,
+    summary="Delete selected PVZ cargo places",
+    description=(
+        "Removes selected WB cargo places while the supply is still being assembled. "
+        "Calls WB DELETE /api/v3/supplies/{supplyId}/trbx, then drops local FbsTrbx rows "
+        "and QR print assets. Retries reconcile via GET trbx list; absent requested IDs "
+        "count as confirmed delete without re-deleting extras."
+    ),
+)
+async def delete_fbs_cargo_places(
+    supply_id: uuid.UUID,
+    body: FbsCargoPlacesDeleteBody,
+    user: Annotated[User, Depends(require_fbs_operator_access)],
+    session: Annotated[AsyncSession, Depends(get_db)],
+) -> FbsCargoPlaceListOut:
+    async with httpx.AsyncClient() as http_client:
+        try:
+            places = await pvz_svc.delete_cargo_places(
+                session,
+                user.tenant_id,
+                supply_id,
+                body.wb_trbx_ids,
+                body.idempotency_key,
+                http_client,
+            )
+        except pvz_svc.FbsShipmentPvzError as exc:
+            if exc.code in {"wb_timeout", "wb_pending_confirmation"}:
+                await session.commit()
+            _raise_from_pvz_service(exc)
+    await session.commit()
+    return FbsCargoPlaceListOut(cargo_places=[_cargo_place_out(place) for place in places])
+
+
 @router.get("/{supply_id}/cargo-places", response_model=FbsCargoPlaceListOut)
 async def list_fbs_cargo_places(
     supply_id: uuid.UUID,
-    user: Annotated[User, Depends(require_fulfillment_admin)],
+    user: Annotated[User, Depends(require_fbs_operator_access)],
     session: Annotated[AsyncSession, Depends(get_db)],
 ) -> FbsCargoPlaceListOut:
     async with httpx.AsyncClient() as http_client:
@@ -1070,7 +1511,7 @@ async def list_fbs_cargo_places(
 async def create_fbs_supply_trbx(
     supply_id: uuid.UUID,
     body: FbsTrbxCreateBody,
-    user: Annotated[User, Depends(require_fulfillment_admin)],
+    user: Annotated[User, Depends(require_fbs_operator_access)],
     session: Annotated[AsyncSession, Depends(get_db)],
 ) -> FbsTrbxListOut:
     async with httpx.AsyncClient() as http_client:
@@ -1092,16 +1533,18 @@ async def create_fbs_supply_trbx(
     await session.commit()
     return FbsTrbxListOut(
         trbxes=[
-            _trbx_out(pvz_svc.TrbxMeta(
-                id=trbx.id,
-                wb_trbx_id=trbx.wb_trbx_id,
-                packaging_box_id=trbx.packaging_box_id,
-                length_mm=trbx.length_mm,
-                width_mm=trbx.width_mm,
-                height_mm=trbx.height_mm,
-                weight_g=trbx.weight_g,
-                sticker_file=trbx.sticker_file,
-            ))
+            _trbx_out(
+                pvz_svc.TrbxMeta(
+                    id=trbx.id,
+                    wb_trbx_id=trbx.wb_trbx_id,
+                    packaging_box_id=trbx.packaging_box_id,
+                    length_mm=trbx.length_mm,
+                    width_mm=trbx.width_mm,
+                    height_mm=trbx.height_mm,
+                    weight_g=trbx.weight_g,
+                    sticker_file=trbx.sticker_file,
+                )
+            )
             for trbx in trbxes
         ]
     )
@@ -1119,7 +1562,7 @@ async def create_fbs_supply_trbx(
 )
 async def fetch_fbs_supply_trbx_stickers(
     supply_id: uuid.UUID,
-    user: Annotated[User, Depends(require_fulfillment_admin)],
+    user: Annotated[User, Depends(require_fbs_operator_access)],
     session: Annotated[AsyncSession, Depends(get_db)],
     type: Annotated[str, Query()] = "png",
 ) -> FbsTrbxStickersOut:
@@ -1143,7 +1586,7 @@ async def bind_orders_to_fbs_trbx(
     supply_id: uuid.UUID,
     trbx_id: uuid.UUID,
     body: FbsTrbxBindOrdersBody,
-    user: Annotated[User, Depends(require_fulfillment_admin)],
+    user: Annotated[User, Depends(require_fbs_operator_access)],
     session: Annotated[AsyncSession, Depends(get_db)],
 ) -> FbsTrbxOut:
     _ = (supply_id, trbx_id, body, user, session)
@@ -1157,7 +1600,7 @@ async def bind_orders_to_fbs_trbx(
 async def update_fbs_supply_status(
     supply_id: uuid.UUID,
     body: FbsSupplyStatusBody,
-    user: Annotated[User, Depends(require_fulfillment_admin)],
+    user: Annotated[User, Depends(require_fbs_operator_access)],
     session: Annotated[AsyncSession, Depends(get_db)],
 ) -> FbsSupplyOut:
     try:
@@ -1178,7 +1621,7 @@ async def update_fbs_supply_status(
 async def bind_fbs_packaging_box_to_trbx(
     supply_id: uuid.UUID,
     body: FbsTrbxBindBoxBody,
-    user: Annotated[User, Depends(require_fulfillment_admin)],
+    user: Annotated[User, Depends(require_fbs_operator_access)],
     session: Annotated[AsyncSession, Depends(get_db)],
 ) -> FbsTrbxOut:
     try:
@@ -1209,7 +1652,7 @@ async def bind_fbs_packaging_box_to_trbx(
 @router.post("/{supply_id}/delivery-preflight", response_model=FbsDeliveryPreflightOut)
 async def preflight_fbs_delivery(
     supply_id: uuid.UUID,
-    user: Annotated[User, Depends(require_fulfillment_admin)],
+    user: Annotated[User, Depends(require_fbs_operator_access)],
     session: Annotated[AsyncSession, Depends(get_db)],
 ) -> FbsDeliveryPreflightOut:
     async with httpx.AsyncClient() as http_client:
@@ -1231,7 +1674,7 @@ async def preflight_fbs_delivery(
 async def deliver_fbs_supply(
     supply_id: uuid.UUID,
     body: FbsSupplyDeliverBody,
-    user: Annotated[User, Depends(require_fulfillment_admin)],
+    user: Annotated[User, Depends(require_fbs_operator_access)],
     session: Annotated[AsyncSession, Depends(get_db)],
 ) -> FbsWorkspaceOut:
     async with httpx.AsyncClient() as http_client:
@@ -1260,7 +1703,7 @@ async def deliver_fbs_supply(
 @router.post("/{supply_id}/sync-tracking", response_model=FbsWorkspaceOut)
 async def sync_fbs_supply_tracking(
     supply_id: uuid.UUID,
-    user: Annotated[User, Depends(require_fulfillment_admin)],
+    user: Annotated[User, Depends(require_fbs_operator_access)],
     session: Annotated[AsyncSession, Depends(get_db)],
 ) -> FbsWorkspaceOut:
     async with httpx.AsyncClient() as http_client:
@@ -1285,6 +1728,40 @@ async def sync_fbs_supply_tracking(
     return FbsWorkspaceOut.model_validate(workspace)
 
 
+@router.post(
+    "/{supply_id}/retry-supply-qr",
+    response_model=FbsWorkspaceOut,
+    summary="Retry warehouse/SC supply QR after confirmed deliver",
+    description=(
+        "Fetches the missing supply QR print asset only. Never re-invokes WB deliver. "
+        "Allowed for warehouse_sc supplies in in_delivery or done; PVZ returns 409 "
+        "wrong_delivery_type."
+    ),
+)
+async def retry_fbs_supply_qr(
+    supply_id: uuid.UUID,
+    user: Annotated[User, Depends(require_fbs_operator_access)],
+    session: Annotated[AsyncSession, Depends(get_db)],
+) -> FbsWorkspaceOut:
+    async with httpx.AsyncClient() as http_client:
+        try:
+            supply = await shipment_svc.retry_supply_qr(
+                session,
+                user.tenant_id,
+                supply_id,
+                http_client,
+            )
+        except shipment_svc.FbsShipmentError as exc:
+            _raise_from_shipment_service(exc)
+    await session.commit()
+    await session.refresh(supply)
+    try:
+        workspace = await get_supply_workspace(session, user.tenant_id, supply_id)
+    except FbsWorkspaceError as exc:
+        raise_fbs_http(status.HTTP_404_NOT_FOUND, exc.code)
+    return FbsWorkspaceOut.model_validate(workspace)
+
+
 @router.get(
     "/{supply_id}/barcode",
     deprecated=True,
@@ -1296,7 +1773,7 @@ async def sync_fbs_supply_tracking(
 )
 async def get_fbs_supply_barcode(
     supply_id: uuid.UUID,
-    user: Annotated[User, Depends(require_fulfillment_admin)],
+    user: Annotated[User, Depends(require_fbs_operator_access)],
     session: Annotated[AsyncSession, Depends(get_db)],
     type: Annotated[str, Query()] = "png",
 ) -> Response:

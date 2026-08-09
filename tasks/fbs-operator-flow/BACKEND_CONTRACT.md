@@ -307,6 +307,16 @@ Body: `count`, optional `boxes[]`, `idempotency_key`.
 
 Возвращает полный актуальный `FbsCargoPlace[]`; перед ответом reconcile не создаёт новые грузоместа.
 
+### `DELETE /operations/fbs-supplies/{supply_id}/cargo-places`
+
+Body: `wb_trbx_ids[]`, `idempotency_key`.
+
+- только `pvz`, пока поставка в `draft|assembling|packed` (до deliver);
+- вызывает WB `DELETE /api/v3/supplies/{supplyId}/trbx` с `{"trbxIds":[...]}`;
+- после подтверждённого WB delete удаляет локальные `FbsTrbx` и связанные QR print assets только для запрошенных IDs;
+- timeout → `pending_confirmation`; retry сверяет GET trbx list и считает отсутствующие **запрошенные** IDs подтверждённым delete без повторного удаления лишних мест;
+- если часть запрошенных IDs ещё на WB, retry удаляет только их, не трогая уже исчезнувшие.
+
 Удалить / deprecated сделать текущую обязательную ручку `/{trbx_id}/orders`. Она не участвует ни в одном gate.
 
 ## 12. Delivery preflight и передача
@@ -326,6 +336,13 @@ Body: `idempotency_key`, `confirmed_preflight_version`.
 - 409 MetaValidationFail → список конкретных заказов / типов / причин;
 - склад/СЦ: после успеха получает QR поставки;
 - ПВЗ: требует созданные грузоместа и готовые QR до deliver.
+
+### `POST /operations/fbs-supplies/{supply_id}/retry-supply-qr`
+
+- Только `warehouse_sc` после подтверждённого deliver (`in_delivery` или `done`).
+- Повторяет **только** fetch QR поставки (`GET barcode` / print-asset projection); **никогда** не вызывает WB deliver повторно.
+- ПВЗ и поставки до deliver → `409 wrong_delivery_type` или `409 supply_bad_status`.
+- Успешный ответ — полный `FbsWorkspace` с `supply.barcode_asset`.
 
 ## 13. Синхронизация после передачи
 

@@ -7,7 +7,7 @@ from datetime import UTC, datetime, timedelta
 from typing import Any
 
 import httpx
-from sqlalchemy import and_, or_, select
+from sqlalchemy import Select, and_, or_, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -30,8 +30,10 @@ from app.models.fbs_order import (
 )
 from app.models.fbs_warehouse_binding import FbsWarehouseBinding
 from app.models.product import Product
+from app.models.warehouse import Warehouse
 from app.services.fbs_marking_service import apply_wb_meta_requirements_to_order
 from app.services.fbs_stock_availability_service import fbs_available_qty_for_product
+from app.services.fbs_stock_publish_service import schedule_seller_stock_publish
 from app.services.wildberries_client import (
     WildberriesClientError,
     fetch_marketplace_orders_new,
@@ -67,12 +69,11 @@ TERMINAL_FBS_STATUSES = frozenset(
     {FBS_ORDER_STATUS_CANCELLED, FBS_ORDER_STATUS_DONE, FBS_ORDER_STATUS_DEFECT}
 )
 
-STATUSES_EXCLUDED_FROM_WB_SYNC = TERMINAL_FBS_STATUSES | frozenset(
-    {FBS_ORDER_STATUS_SORTED}
-)
+STATUSES_EXCLUDED_FROM_WB_SYNC = TERMINAL_FBS_STATUSES | frozenset({FBS_ORDER_STATUS_SORTED})
 
 SYNC_STATUS_BATCH_SIZE = 500
 MAX_SYNC_STATUS_BATCHES = 20
+AUTO_FBS_WAREHOUSE_CODE_PREFIX = "fbs-wb"
 
 
 class WbMarketplaceOrdersError(Exception):
@@ -193,6 +194,91 @@ async def _resolve_wms_warehouse_from_binding(
     return res.scalar_one_or_none()
 
 
+def _auto_fbs_wms_warehouse_code(seller_id: uuid.UUID, wb_warehouse_id: int) -> str:
+    return f"{AUTO_FBS_WAREHOUSE_CODE_PREFIX}-{seller_id.hex[:8]}-{wb_warehouse_id}"
+
+
+async def _get_or_create_auto_fbs_wms_warehouse(
+    session: AsyncSession,
+    tenant_id: uuid.UUID,
+    seller_id: uuid.UUID,
+    wb_warehouse_id: int,
+) -> Warehouse:
+    code = _auto_fbs_wms_warehouse_code(seller_id, wb_warehouse_id)
+    stmt = select(Warehouse).where(
+        Warehouse.tenant_id == tenant_id,
+        Warehouse.code == code,
+    )
+    res = await session.execute(stmt)
+    existing = res.scalar_one_or_none()
+    if existing is not None:
+        return existing
+
+    warehouse = Warehouse(
+        tenant_id=tenant_id,
+        code=code,
+        name=f"FBS WB {wb_warehouse_id}",
+    )
+    session.add(warehouse)
+    await session.flush()
+    return warehouse
+
+
+async def _resolve_or_create_wms_warehouse_for_wb(
+    session: AsyncSession,
+    tenant_id: uuid.UUID,
+    seller_id: uuid.UUID,
+    wb_warehouse_id: int | None,
+) -> uuid.UUID | None:
+    if wb_warehouse_id is None:
+        return None
+
+    active_resolved = await _resolve_wms_warehouse_from_binding(
+        session, tenant_id, seller_id, wb_warehouse_id
+    )
+    if active_resolved is not None:
+        return active_resolved
+
+    stmt = select(FbsWarehouseBinding).where(
+        FbsWarehouseBinding.tenant_id == tenant_id,
+        FbsWarehouseBinding.seller_id == seller_id,
+        FbsWarehouseBinding.wb_warehouse_id == wb_warehouse_id,
+    )
+    res = await session.execute(stmt)
+    existing = res.scalar_one_or_none()
+    if existing is not None:
+        existing.is_active = True
+        existing.stock_sync_enabled = False
+        await session.flush()
+        return existing.wms_warehouse_id
+
+    try:
+        async with session.begin_nested():
+            warehouse = await _get_or_create_auto_fbs_wms_warehouse(
+                session, tenant_id, seller_id, wb_warehouse_id
+            )
+            binding = FbsWarehouseBinding(
+                tenant_id=tenant_id,
+                seller_id=seller_id,
+                wb_warehouse_id=wb_warehouse_id,
+                wms_warehouse_id=warehouse.id,
+                is_active=True,
+                # This binding exists only to make incoming FBS orders operable.
+                # Do not publish zero WMS balances back to WB for it.
+                stock_sync_enabled=False,
+            )
+            session.add(binding)
+            await session.flush()
+            return warehouse.id
+    except IntegrityError:
+        resolved = await _resolve_wms_warehouse_from_binding(
+            session, tenant_id, seller_id, wb_warehouse_id
+        )
+        if resolved is None:
+            raise
+        return resolved
+
+
 async def _get_reservation_warehouse_id(
     session: AsyncSession, order_id: uuid.UUID
 ) -> uuid.UUID | None:
@@ -229,8 +315,8 @@ async def _assign_wms_warehouse_from_binding(
     order: FbsOrder,
     wb_warehouse_id: int | None,
 ) -> None:
-    """Map WB warehouse to local WMS warehouse via active seller binding."""
-    resolved = await _resolve_wms_warehouse_from_binding(
+    """Map WB warehouse to local WMS warehouse, creating a technical binding if needed."""
+    resolved = await _resolve_or_create_wms_warehouse_for_wb(
         session, tenant_id, seller_id, wb_warehouse_id
     )
     if resolved is None:
@@ -259,15 +345,30 @@ async def _map_product(
     *,
     wb_barcode: str | None,
     wb_nm_id: int | None,
+    wb_chrt_id: int | None,
 ) -> Product | None:
+    async def one_or_none(stmt: Select[tuple[Product]]) -> Product | None:
+        rows = list((await session.execute(stmt.limit(2))).scalars().all())
+        if len(rows) == 1:
+            return rows[0]
+        return None
+
+    if wb_chrt_id is not None:
+        stmt = select(Product).where(
+            Product.tenant_id == tenant_id,
+            Product.seller_id == seller_id,
+            Product.wb_chrt_id == wb_chrt_id,
+        )
+        product = await one_or_none(stmt)
+        if product is not None:
+            return product
     if wb_barcode:
         stmt = select(Product).where(
             Product.tenant_id == tenant_id,
             Product.seller_id == seller_id,
             Product.wb_barcode == wb_barcode,
         )
-        res = await session.execute(stmt)
-        product = res.scalar_one_or_none()
+        product = await one_or_none(stmt)
         if product is not None:
             return product
     if wb_nm_id is not None:
@@ -276,8 +377,7 @@ async def _map_product(
             Product.seller_id == seller_id,
             Product.wb_nm_id == wb_nm_id,
         )
-        res = await session.execute(stmt)
-        return res.scalar_one_or_none()
+        return await one_or_none(stmt)
     return None
 
 
@@ -294,12 +394,8 @@ async def _get_order_by_wb_id(
     return res.scalar_one_or_none()
 
 
-async def _order_has_reservation(
-    session: AsyncSession, order_id: uuid.UUID
-) -> bool:
-    stmt = select(FbsOrderReservation.id).where(
-        FbsOrderReservation.fbs_order_id == order_id
-    )
+async def _order_has_reservation(session: AsyncSession, order_id: uuid.UUID) -> bool:
+    stmt = select(FbsOrderReservation.id).where(FbsOrderReservation.fbs_order_id == order_id)
     res = await session.execute(stmt)
     return res.scalar_one_or_none() is not None
 
@@ -380,18 +476,21 @@ async def _try_reserve_order(
             await session.flush()
     except IntegrityError:
         order.reserve_status = RESERVE_STATUS_NO_STOCK
+        return
+    # Резерв под ФБС-заказ уменьшает доступное — кабинет должен увидеть новую цифру.
+    schedule_seller_stock_publish(session, order.tenant_id, order.seller_id)
 
 
 async def _release_reservation(session: AsyncSession, order: FbsOrder) -> None:
-    stmt = select(FbsOrderReservation).where(
-        FbsOrderReservation.fbs_order_id == order.id
-    )
+    stmt = select(FbsOrderReservation).where(FbsOrderReservation.fbs_order_id == order.id)
     res = await session.execute(stmt)
     reservation = res.scalar_one_or_none()
     if reservation is None:
         return
     await session.delete(reservation)
     order.reserve_status = RESERVE_STATUS_RELEASED
+    # Снятый резерв возвращает товар в доступное — публикуем увеличенную цифру.
+    schedule_seller_stock_publish(session, order.tenant_id, order.seller_id)
 
 
 async def _apply_wb_row_to_existing(
@@ -439,6 +538,7 @@ async def _apply_wb_row_to_existing(
             seller_id,
             wb_barcode=existing.wb_barcode,
             wb_nm_id=existing.wb_nm_id,
+            wb_chrt_id=existing.wb_chrt_id,
         )
         if product is not None:
             existing.product_id = product.id
@@ -466,6 +566,8 @@ async def upsert_order_from_wb_row(
     wb_barcode = _first_barcode(row)
     wb_nm_id = row.get("nmId")
     wb_nm_id_int = int(wb_nm_id) if wb_nm_id is not None else None
+    wb_chrt_id = row.get("chrtId")
+    wb_chrt_id_int = int(wb_chrt_id) if wb_chrt_id is not None else None
 
     existing = await _get_order_by_wb_id(session, seller_id, wb_order_id)
     if existing is not None:
@@ -478,10 +580,11 @@ async def upsert_order_from_wb_row(
         seller_id,
         wb_barcode=wb_barcode,
         wb_nm_id=wb_nm_id_int,
+        wb_chrt_id=wb_chrt_id_int,
     )
     mapping_status = MAPPING_STATUS_MAPPED if product is not None else MAPPING_STATUS_MISSING
     wb_warehouse_id = _wb_warehouse_id_from_row(row)
-    wms_warehouse_id = await _resolve_wms_warehouse_from_binding(
+    wms_warehouse_id = await _resolve_or_create_wms_warehouse_for_wb(
         session, tenant_id, seller_id, wb_warehouse_id
     )
     if product is None:
@@ -499,7 +602,7 @@ async def upsert_order_from_wb_row(
         wb_order_id=wb_order_id,
         wb_rid=row.get("rid") if isinstance(row.get("rid"), str) else None,
         wb_nm_id=wb_nm_id_int,
-        wb_chrt_id=int(row["chrtId"]) if row.get("chrtId") is not None else None,
+        wb_chrt_id=wb_chrt_id_int,
         wb_article=str(row["article"]) if row.get("article") is not None else None,
         wb_barcode=wb_barcode,
         price=int(row["price"]) if row.get("price") is not None else None,
@@ -666,9 +769,7 @@ async def sync_seller_orders(
     api_token = await _resolve_marketplace_api_token(session, tenant_id, seller_id)
 
     try:
-        new_rows = await fetch_marketplace_orders_new(
-            http_client, api_token=api_token
-        )
+        new_rows = await fetch_marketplace_orders_new(http_client, api_token=api_token)
     except WildberriesClientError as exc:
         suffix = f"_{exc.status_code}" if exc.status_code else ""
         raise WbMarketplaceOrdersError(f"wb_{exc.code}{suffix}") from exc
@@ -676,15 +777,17 @@ async def sync_seller_orders(
     created = 0
     upserted = 0
     orders_received = 0
+    orders_page_error: str | None = None
+    status_sync_error: str | None = None
 
     for row in new_rows:
-        _order, was_created = await upsert_order_from_wb_row(
-            session, tenant_id, seller_id, row
-        )
+        _order, was_created = await upsert_order_from_wb_row(session, tenant_id, seller_id, row)
         upserted += 1
         orders_received += 1
         if was_created:
             created += 1
+    if orders_received:
+        await session.commit()
 
     next_token: int | None = None
     for _page in range(MAX_ORDERS_PAGES):
@@ -696,33 +799,50 @@ async def sync_seller_orders(
             )
         except WildberriesClientError as exc:
             suffix = f"_{exc.status_code}" if exc.status_code else ""
-            raise WbMarketplaceOrdersError(f"wb_{exc.code}{suffix}") from exc
+            code = f"wb_{exc.code}{suffix}"
+            if orders_received:
+                orders_page_error = code
+                await session.rollback()
+                break
+            raise WbMarketplaceOrdersError(code) from exc
 
         if not page_rows:
             break
         for row in page_rows:
-            _order, was_created = await upsert_order_from_wb_row(
-                session, tenant_id, seller_id, row
-            )
+            _order, was_created = await upsert_order_from_wb_row(session, tenant_id, seller_id, row)
             upserted += 1
             orders_received += 1
             if was_created:
                 created += 1
+        await session.commit()
         if next_token is None:
             break
 
-    statuses_updated = await sync_order_statuses(
-        session, tenant_id, seller_id, http_client, api_token
-    )
-    await session.commit()
+    statuses_updated = 0
+    if orders_page_error is None:
+        try:
+            statuses_updated = await sync_order_statuses(
+                session, tenant_id, seller_id, http_client, api_token
+            )
+            await session.commit()
+        except WbMarketplaceOrdersError as exc:
+            await session.rollback()
+            if not orders_received:
+                raise
+            status_sync_error = exc.code
 
-    return {
+    result: dict[str, Any] = {
         "seller_id": str(seller_id),
         "orders_received": orders_received,
         "orders_upserted": upserted,
         "orders_created": created,
         "statuses_updated": statuses_updated,
     }
+    if orders_page_error is not None:
+        result["orders_page_error"] = orders_page_error
+    if status_sync_error is not None:
+        result["status_sync_error"] = status_sync_error
+    return result
 
 
 async def list_orders(

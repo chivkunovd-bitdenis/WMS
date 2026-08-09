@@ -21,6 +21,7 @@ from wb_emulator.services.orders_store import (
     order_to_api,
     seed_orders_from_templates,
 )
+from wb_emulator.services.supplies_store import get_admin_supply_state
 
 admin_router = APIRouter(prefix="/__admin", tags=["admin"])
 
@@ -132,4 +133,6 @@ def admin_state(
     db: Session = Depends(get_db),
     _: None = Depends(require_admin_token),
 ) -> dict[str, object]:
-    return get_admin_state(db, seller)
+    result = get_admin_state(db, seller)
+    result["supplies"] = get_admin_supply_state(db, seller_key=seller)
+    return result

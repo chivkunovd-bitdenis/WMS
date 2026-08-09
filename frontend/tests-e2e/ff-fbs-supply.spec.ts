@@ -154,12 +154,13 @@ test('fbs workspace: preflight and deliver', async ({ page }) => {
 
   await page.getByTestId('nav-ff-fbs').click()
   await expect(page.getByTestId('fbs-order-1')).toBeVisible()
-  await page.getByTestId('fbs-order-1').getByRole('button', { name: 'Открыть поставку' }).click()
+  await page.getByTestId('fbs-order-1').getByRole('button', { name: 'Продолжить работу' }).click()
   await expect(page.getByTestId('fbs-workspace')).toBeVisible()
   await page.getByRole('tab', { name: 'Передача и статусы' }).click()
   await page.getByRole('button', { name: 'Проверить готовность' }).click()
   await expect(page.getByText('Поставка готова')).toBeVisible()
-  await page.getByRole('button', { name: 'Передать в доставку' }).click()
+  await page.getByRole('button', { name: 'Подтвердить передачу WB' }).click()
+  await page.getByRole('dialog', { name: 'Подтвердить передачу в WB?' }).getByRole('button', { name: 'Передать в WB' }).click()
 
   await expect(page.getByText('WB подтвердил передачу поставки в доставку.')).toBeVisible()
   expect(deliverBody?.confirmed_preflight_version).toBe('preflight-v1')
@@ -201,7 +202,7 @@ test('fbs orders: create supply from selected orders', async ({ page }) => {
   await page.getByTestId('fbs-order-2').getByRole('checkbox').click()
   await expect(page.getByTestId('fbs-selection-bar')).toBeVisible()
   await page.getByRole('button', { name: 'Сформировать поставку' }).click()
-  await expect(page.getByText('Состав совместим')).toBeVisible()
+  await expect(page.getByText('Можно создать поставку')).toBeVisible()
   await expect(page.getByTestId('fbs-create-submit')).toBeEnabled()
   await page.getByTestId('fbs-create-submit').click()
 
@@ -240,7 +241,7 @@ test('fbs workspace: scan location then product', async ({ page }) => {
   )
 
   await page.getByTestId('nav-ff-fbs').click()
-  await page.getByTestId('fbs-order-1').getByRole('button', { name: 'Открыть поставку' }).click()
+  await page.getByTestId('fbs-order-1').getByRole('button', { name: 'Продолжить работу' }).click()
   await expect(page.getByTestId('fbs-workspace')).toBeVisible()
   await page.getByLabel('Штрихкод ячейки').fill('CELL-A-01')
   await page.getByRole('button', { name: 'Подтвердить ячейку' }).click()

@@ -66,3 +66,18 @@ def run_fbs_order_statuses_autopoll_task() -> None:
     from app.services.fbs_autopoll_service import sync_fbs_order_statuses_all_sellers
 
     asyncio.run(sync_fbs_order_statuses_all_sellers())
+
+
+@celery_app.task(name="wms.fbs_stock_reconcile")
+def run_fbs_stock_reconcile_task() -> None:
+    from app.services.fbs_autopoll_service import reconcile_fbs_stocks_all_sellers
+
+    asyncio.run(reconcile_fbs_stocks_all_sellers())
+
+
+@celery_app.task(name="wms.fbs_stock_publish_seller")
+def run_fbs_stock_publish_seller_task(tenant_id: str, seller_id: str) -> None:
+    """Event-driven publication: one seller, triggered by a stock movement."""
+    from app.services.fbs_stock_publish_service import publish_seller_stocks_now
+
+    asyncio.run(publish_seller_stocks_now(uuid.UUID(tenant_id), uuid.UUID(seller_id)))

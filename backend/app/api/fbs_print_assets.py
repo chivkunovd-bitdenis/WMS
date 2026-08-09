@@ -18,7 +18,7 @@ from fastapi import APIRouter, Depends, HTTPException, Response, status
 from pydantic import BaseModel, Field
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.api.deps import require_fulfillment_admin
+from app.api.deps import require_fbs_operator_access
 from app.api.fbs_errors import envelope_from_exc
 from app.db.session import get_db
 from app.models.user import User
@@ -72,7 +72,7 @@ def _raise_from_print_asset_service(exc: FbsPrintAssetError) -> None:
 @router.get("/{asset_id}/content")
 async def get_fbs_print_asset_content(
     asset_id: uuid.UUID,
-    user: Annotated[User, Depends(require_fulfillment_admin)],
+    user: Annotated[User, Depends(require_fbs_operator_access)],
     session: Annotated[AsyncSession, Depends(get_db)],
 ) -> Response:
     try:
@@ -93,7 +93,7 @@ async def get_fbs_print_asset_content(
 async def confirm_fbs_print_asset_applied(
     asset_id: uuid.UUID,
     body: FbsPrintAssetAppliedBody,
-    user: Annotated[User, Depends(require_fulfillment_admin)],
+    user: Annotated[User, Depends(require_fbs_operator_access)],
     session: Annotated[AsyncSession, Depends(get_db)],
 ) -> FbsPrintAssetOut:
     try:
