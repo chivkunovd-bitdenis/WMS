@@ -1169,3 +1169,112 @@ export async function fetchFbsStockSyncStatus(
   )
   return jsonOrThrow<FbsStockSyncStatus>(res)
 }
+
+// ── Ручная синхронизация заказов с WB ──────────────────────────────────────
+// POST /operations/fbs-orders/sync ставит фоновую задачу и сразу отдаёт её id.
+// Результат приезжает в background job, поэтому его надо дождаться опросом.
+
+export type BackgroundJobRow = {
+  id: string
+  job_type: string
+  status: string
+  payload_json: Record<string, unknown> | null
+  result_json: Record<string, unknown> | null
+  error_message: string | null
+  created_at: string
+  started_at: string | null
+  finished_at: string | null
+}
+
+export type FbsOrdersSyncOutcome = {
+  ordersReceived: number
+  ordersCreated: number
+  ordersUpserted: number
+}
+
+export async function startFbsOrdersSync(
+  token: string,
+  ah: (t: string) => Record<string, string>,
+  sellerId: string,
+): Promise<{ id: string; status: string }> {
+  const res = await fetch(apiUrl('/operations/fbs-orders/sync'), {
+    method: 'POST',
+    headers: { ...ah(token), 'Content-Type': 'application/json' },
+    body: JSON.stringify({ seller_id: sellerId }),
+  })
+  return jsonOrThrow<{ id: string; status: string }>(res)
+}
+
+export async function fetchBackgroundJob(
+  token: string,
+  ah: (t: string) => Record<string, string>,
+  jobId: string,
+): Promise<BackgroundJobRow> {
+  const res = await fetch(apiUrl(`/operations/background-jobs/${jobId}`), {
+    headers: { ...ah(token) },
+  })
+  return jsonOrThrow<BackgroundJobRow>(res)
+}
+
+// Статусы задачи из background_job_service: pending → running → done | failed.
+const JOB_TERMINAL_STATUSES = new Set(['done', 'failed'])
+const JOB_FAILED_STATUSES = new Set(['failed'])
+
+function readCount(result: Record<string, unknown> | null, key: string): number {
+  const value = result?.[key]
+  return typeof value === 'number' ? value : 0
+}
+
+/** Ждёт завершения фоновой задачи, опрашивая её раз в секунду. */
+export async function waitForBackgroundJob(
+  token: string,
+  ah: (t: string) => Record<string, string>,
+  jobId: string,
+  options: { timeoutMs?: number; intervalMs?: number } = {},
+): Promise<BackgroundJobRow> {
+  const timeoutMs = options.timeoutMs ?? 120_000
+  const intervalMs = options.intervalMs ?? 1000
+  const deadline = Date.now() + timeoutMs
+  for (;;) {
+    const job = await fetchBackgroundJob(token, ah, jobId)
+    if (JOB_TERMINAL_STATUSES.has(job.status)) {
+      if (JOB_FAILED_STATUSES.has(job.status)) {
+        throw new Error(job.error_message || 'Синхронизация с WB завершилась ошибкой.')
+      }
+      return job
+    }
+    if (Date.now() > deadline) {
+      throw new Error('Синхронизация с WB не завершилась за 2 минуты. Проверьте фоновые задачи.')
+    }
+    await new Promise((resolve) => setTimeout(resolve, intervalMs))
+  }
+}
+
+/** Полный цикл «дёрнуть синхронизацию и дождаться результата» для одного селлера. */
+export async function runFbsOrdersSync(
+  token: string,
+  ah: (t: string) => Record<string, string>,
+  sellerId: string,
+): Promise<FbsOrdersSyncOutcome> {
+  const started = await startFbsOrdersSync(token, ah, sellerId)
+  const job = await waitForBackgroundJob(token, ah, started.id)
+  return {
+    ordersReceived: readCount(job.result_json, 'orders_received'),
+    ordersCreated: readCount(job.result_json, 'orders_created'),
+    ordersUpserted: readCount(job.result_json, 'orders_upserted'),
+  }
+}
+
+export async function syncFbsOrderStatuses(
+  token: string,
+  ah: (t: string) => Record<string, string>,
+  sellerId: string,
+): Promise<number> {
+  const res = await fetch(apiUrl('/operations/fbs-orders/sync-statuses'), {
+    method: 'POST',
+    headers: { ...ah(token), 'Content-Type': 'application/json' },
+    body: JSON.stringify({ seller_id: sellerId }),
+  })
+  const payload = await jsonOrThrow<{ statuses_updated: number }>(res)
+  return payload.statuses_updated
+}

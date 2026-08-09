@@ -301,6 +301,7 @@ export default function App() {
   const [wbSellerId, setWbSellerId] = useState<string | null>(null)
   const [wbHasContentToken, setWbHasContentToken] = useState(false)
   const [wbHasSuppliesToken, setWbHasSuppliesToken] = useState(false)
+  const [wbHasMarketplaceToken, setWbHasMarketplaceToken] = useState(false)
   const [wbTokensBusy, setWbTokensBusy] = useState(false)
   const [wbSyncBusy, setWbSyncBusy] = useState(false)
   const [wbJobStatus, setWbJobStatus] = useState<string | null>(null)
@@ -799,16 +800,19 @@ export default function App() {
         const j = (await res.json()) as {
           has_content_token: boolean
           has_supplies_token: boolean
+          has_marketplace_token?: boolean
         }
         if (cancelled) {
           return
         }
         setWbHasContentToken(Boolean(j.has_content_token))
         setWbHasSuppliesToken(Boolean(j.has_supplies_token))
+        setWbHasMarketplaceToken(Boolean(j.has_marketplace_token))
       } catch {
         if (!cancelled) {
           setWbHasContentToken(false)
           setWbHasSuppliesToken(false)
+          setWbHasMarketplaceToken(false)
         }
       }
     })()
@@ -1961,12 +1965,16 @@ export default function App() {
       const fd = new FormData(form)
       const content = String(fd.get('wb_content_token') ?? '').trim()
       const supplies = String(fd.get('wb_supplies_token') ?? '').trim()
+      const marketplace = String(fd.get('wb_marketplace_token') ?? '').trim()
       const body: Record<string, string> = {}
       if (content) {
         body.content_api_token = content
       }
       if (supplies) {
         body.supplies_api_token = supplies
+      }
+      if (marketplace) {
+        body.marketplace_api_token = marketplace
       }
       if (Object.keys(body).length === 0) {
         setOpsError('Укажите хотя бы один токен для сохранения.')
@@ -1990,13 +1998,51 @@ export default function App() {
       const j = (await res.json()) as {
         has_content_token: boolean
         has_supplies_token: boolean
+        has_marketplace_token?: boolean
       }
       setWbHasContentToken(Boolean(j.has_content_token))
       setWbHasSuppliesToken(Boolean(j.has_supplies_token))
+      setWbHasMarketplaceToken(Boolean(j.has_marketplace_token))
       form.reset()
     } catch (err) {
       setOpsError(
         err instanceof Error ? err.message : 'Не удалось сохранить токены WB.',
+      )
+    } finally {
+      setWbTokensBusy(false)
+    }
+  }
+
+  // Аварийная кнопка: стереть отдельный маркетплейс-токен, чтобы бэкенд снова
+  // взял единый ключ (`token = marketplace or content`). Понадобилась после того,
+  // как в этом слоте на стенде обнаружился мусор, который иначе нечем перебить.
+  async function onClearWbMarketplaceToken() {
+    if (!token || !wbSellerId) {
+      return
+    }
+    setWbTokensBusy(true)
+    setOpsError(null)
+    try {
+      const res = await fetch(
+        apiUrl(`/integrations/wildberries/sellers/${wbSellerId}/tokens`),
+        {
+          method: 'PATCH',
+          headers: {
+            ...authHeaders(token),
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({ marketplace_api_token: null }),
+        },
+      )
+      if (!res.ok) {
+        setOpsError(await readApiErrorMessage(res))
+        return
+      }
+      const j = (await res.json()) as { has_marketplace_token?: boolean }
+      setWbHasMarketplaceToken(Boolean(j.has_marketplace_token))
+    } catch (err) {
+      setOpsError(
+        err instanceof Error ? err.message : 'Не удалось стереть маркетплейс-токен WB.',
       )
     } finally {
       setWbTokensBusy(false)
@@ -2902,6 +2948,7 @@ export default function App() {
                 setWbSellerId={setWbSellerId}
                 wbHasContentToken={wbHasContentToken}
                 wbHasSuppliesToken={wbHasSuppliesToken}
+                wbHasMarketplaceToken={wbHasMarketplaceToken}
                 wbTokensBusy={wbTokensBusy}
                 wbSyncBusy={wbSyncBusy}
                 wbSuppliesSyncBusy={wbSuppliesSyncBusy}
@@ -2913,6 +2960,7 @@ export default function App() {
                 wbImportedCards={wbImportedCards}
                 wbImportedSupplies={wbImportedSupplies}
                 onSaveWbTokens={(e) => void onSaveWbTokens(e)}
+                onClearWbMarketplaceToken={() => void onClearWbMarketplaceToken()}
                 onStartWbCardsSyncJob={() => void onStartWbCardsSyncJob()}
                 onStartWbSuppliesSyncJob={() => void onStartWbSuppliesSyncJob()}
                 onLinkProductToWb={(e) => void onLinkProductToWb(e)}

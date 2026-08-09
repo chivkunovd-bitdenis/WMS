@@ -23,6 +23,7 @@ import {
   TextField,
   Typography,
 } from '@mui/material'
+import CloudSyncOutlinedIcon from '@mui/icons-material/CloudSyncOutlined'
 import Inventory2OutlinedIcon from '@mui/icons-material/Inventory2Outlined'
 import RefreshOutlinedIcon from '@mui/icons-material/RefreshOutlined'
 import SearchOutlinedIcon from '@mui/icons-material/SearchOutlined'
@@ -31,7 +32,13 @@ import { ProductPhotoThumb } from '../../components/ProductPhotoThumb'
 import { FbsSupplyCreateDialog } from './FbsSupplyCreateDialog'
 import { FfFbsSectionNav } from './FfFbsSectionNav'
 import { FfFbsSupplyWorkspace } from './FfFbsSupplyWorkspace'
-import { fetchFbsWorklist, type FbsWorklistOrder, type FbsWorkspace } from './fbsApi'
+import {
+  fetchFbsWorklist,
+  runFbsOrdersSync,
+  syncFbsOrderStatuses,
+  type FbsWorklistOrder,
+  type FbsWorkspace,
+} from './fbsApi'
 
 type SellerRow = { id: string; name: string }
 
@@ -86,6 +93,8 @@ export function FfFbsOrdersScreen({ token, authHeaders, sellers, isAdmin = false
   const [selected, setSelected] = useState<Set<string>>(new Set())
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [syncing, setSyncing] = useState(false)
+  const [syncNote, setSyncNote] = useState<string | null>(null)
   const [createOpen, setCreateOpen] = useState(false)
   const [workspaceOpen, setWorkspaceOpen] = useState(false)
   const [workspaceId, setWorkspaceId] = useState<string | null>(null)
@@ -118,6 +127,54 @@ export function FfFbsOrdersScreen({ token, authHeaders, sellers, isAdmin = false
   useEffect(() => {
     void load()
   }, [load])
+
+  // Ручной поход в Wildberries: тянем новые заказы и подтягиваем их статусы.
+  // Автоопрос делает то же самое раз в минуту, но оператору нужна кнопка на случай,
+  // когда ждать нельзя или фоновый воркер отвалился.
+  const syncTargets = useMemo(
+    () => (sellerId === '__all__' ? sellers.map((seller) => seller.id) : [sellerId]),
+    [sellerId, sellers],
+  )
+
+  const syncWithWb = useCallback(async () => {
+    if (syncTargets.length === 0) {
+      setError('Нет ни одного селлера, по которому можно запросить заказы.')
+      return
+    }
+    setSyncing(true)
+    setError(null)
+    setSyncNote(null)
+    let received = 0
+    let created = 0
+    let statusesUpdated = 0
+    const failures: string[] = []
+    for (const targetSellerId of syncTargets) {
+      const sellerName = sellers.find((seller) => seller.id === targetSellerId)?.name ?? 'селлер'
+      try {
+        const outcome = await runFbsOrdersSync(token, authHeaders, targetSellerId)
+        received += outcome.ordersReceived
+        created += outcome.ordersCreated
+      } catch (cause) {
+        failures.push(`${sellerName}: ${cause instanceof Error ? cause.message : 'ошибка синхронизации'}`)
+        continue
+      }
+      try {
+        statusesUpdated += await syncFbsOrderStatuses(token, authHeaders, targetSellerId)
+      } catch {
+        // Статусы — не критично: заказы уже приехали, покажем их и без обновлённых статусов.
+      }
+    }
+    setSyncing(false)
+    if (failures.length > 0) {
+      setError(failures.join(' · '))
+    }
+    if (failures.length < syncTargets.length) {
+      setSyncNote(
+        `WB отдал заказов: ${received}, из них новых: ${created}. Обновлено статусов: ${statusesUpdated}.`,
+      )
+    }
+    await load()
+  }, [syncTargets, sellers, token, authHeaders, load])
 
   const selectedOrders = useMemo(
     () => orders.filter((order) => selected.has(order.id)),
@@ -164,14 +221,28 @@ export function FfFbsOrdersScreen({ token, authHeaders, sellers, isAdmin = false
             Соберите совместимые заказы в поставку и проведите её до подтверждённой передачи WB.
           </Typography>
         </Box>
-        <Button
-          variant="outlined"
-          startIcon={<RefreshOutlinedIcon />}
-          onClick={() => void load()}
-          disabled={busy}
-        >
-          Обновить данные
-        </Button>
+        <Stack direction="row" spacing={1.25} sx={{ alignItems: 'flex-start' }}>
+          <Button
+            variant="outlined"
+            startIcon={<RefreshOutlinedIcon />}
+            onClick={() => void load()}
+            disabled={busy || syncing}
+          >
+            Обновить данные
+          </Button>
+          <Button
+            variant="contained"
+            startIcon={
+              syncing ? <CircularProgress size={18} color="inherit" /> : <CloudSyncOutlinedIcon />
+            }
+            onClick={() => void syncWithWb()}
+            disabled={syncing || busy}
+            data-testid="fbs-orders-sync-wb"
+            sx={{ minWidth: 214 }}
+          >
+            {syncing ? 'Забираем заказы…' : 'Забрать заказы из WB'}
+          </Button>
+        </Stack>
       </Stack>
 
       <FfFbsSectionNav showStockSync={isAdmin} />
@@ -236,6 +307,17 @@ export function FfFbsOrdersScreen({ token, authHeaders, sellers, isAdmin = false
       {error ? (
         <Alert severity="error" sx={{ mt: 2 }} onClose={() => setError(null)}>
           {error}
+        </Alert>
+      ) : null}
+
+      {syncNote ? (
+        <Alert
+          severity="success"
+          sx={{ mt: 2 }}
+          onClose={() => setSyncNote(null)}
+          data-testid="fbs-orders-sync-result"
+        >
+          {syncNote}
         </Alert>
       ) : null}
 

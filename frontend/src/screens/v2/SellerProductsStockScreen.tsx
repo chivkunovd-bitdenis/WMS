@@ -13,6 +13,7 @@ import {
   DialogTitle,
   Paper,
   Stack,
+  Switch,
   Table,
   TableBody,
   TableCell,
@@ -41,6 +42,19 @@ type WbCatalogRow = {
   packaging_instructions: string | null
   requires_honest_sign: boolean
   has_packaging_instructions: boolean
+  // Признак «продаём этот товар по ФБС». Пока выключен — в кабинет WB про товар
+  // не пишем ничего, и он не участвует в выгрузке остатков.
+  fbs_stock_sync_enabled: boolean
+  fbs_stock_limit: number | null
+  fbs_published_amount: number | null
+  fbs_sync_status: string | null
+}
+
+const FBS_SYNC_STATUS_LABEL: Record<string, { text: string; color: 'default' | 'success' | 'warning' | 'error' }> = {
+  pending: { text: 'В очереди', color: 'warning' },
+  confirmed: { text: 'В WB', color: 'success' },
+  error: { text: 'Ошибка', color: 'error' },
+  conflict: { text: 'Дубль chrtId', color: 'error' },
 }
 
 type StockSummaryRow = {
@@ -73,6 +87,9 @@ export function SellerProductsStockScreen({
   const [editText, setEditText] = useState('')
   const [editRequiresHonestSign, setEditRequiresHonestSign] = useState(false)
   const [editBusy, setEditBusy] = useState(false)
+  const [fbsPending, setFbsPending] = useState<Set<string>>(new Set())
+  const [limitDraft, setLimitDraft] = useState<Record<string, string>>({})
+  const [fbsBulkBusy, setFbsBulkBusy] = useState(false)
 
   const refreshAll = useCallback(async () => {
     setError(null)
@@ -133,6 +150,11 @@ export function SellerProductsStockScreen({
     return rows.slice(start, start + rowsPerPage)
   }, [page, rows, rowsPerPage])
 
+  const fbsEnabledCount = useMemo(
+    () => rows.filter((row) => row.fbs_stock_sync_enabled).length,
+    [rows],
+  )
+
   function openPackagingEdit(p: WbCatalogRow) {
     setEditProduct(p)
     setEditText(p.packaging_instructions ?? '')
@@ -177,6 +199,119 @@ export function SellerProductsStockScreen({
       setEditBusy(false)
     }
   }
+
+  // ── Синхронизация остатков ФБС по каждому товару ───────────────────────────
+  // Переключатель применяется оптимистично: строка перерисовывается сразу, а если
+  // сервер откажет — возвращаем прежнее значение и показываем ошибку.
+
+  const markFbsPending = useCallback((productId: string, pending: boolean) => {
+    setFbsPending((current) => {
+      const next = new Set(current)
+      if (pending) next.add(productId)
+      else next.delete(productId)
+      return next
+    })
+  }, [])
+
+  const patchRow = useCallback((productId: string, patch: Partial<WbCatalogRow>) => {
+    setCatalog((current) =>
+      current.map((row) => (row.id === productId ? { ...row, ...patch } : row)),
+    )
+  }, [])
+
+  const sendFbsPatch = useCallback(
+    async (productId: string, body: Record<string, unknown>) => {
+      const res = await fetch(apiUrl(`/products/${productId}/fbs-stock-sync`), {
+        method: 'PATCH',
+        headers: { ...authHeaders(token), 'Content-Type': 'application/json' },
+        body: JSON.stringify(body),
+      })
+      if (!res.ok) {
+        throw new Error(await readApiErrorMessage(res))
+      }
+    },
+    [authHeaders, token],
+  )
+
+  const toggleFbsSync = useCallback(
+    async (row: WbCatalogRow, enabled: boolean) => {
+      const previous = row.fbs_stock_sync_enabled
+      setError(null)
+      patchRow(row.id, { fbs_stock_sync_enabled: enabled })
+      markFbsPending(row.id, true)
+      try {
+        await sendFbsPatch(row.id, { fbs_stock_sync_enabled: enabled })
+      } catch (e) {
+        patchRow(row.id, { fbs_stock_sync_enabled: previous })
+        setError(
+          e instanceof Error
+            ? e.message
+            : 'Не удалось переключить синхронизацию остатка по этому товару.',
+        )
+      } finally {
+        markFbsPending(row.id, false)
+      }
+    },
+    [markFbsPending, patchRow, sendFbsPatch],
+  )
+
+  const commitLimit = useCallback(
+    async (row: WbCatalogRow) => {
+      const raw = (limitDraft[row.id] ?? '').trim()
+      const parsed = raw === '' ? null : Number(raw)
+      if (parsed !== null && (!Number.isInteger(parsed) || parsed < 0)) {
+        setError('Лимит должен быть целым числом от нуля или пустым.')
+        return
+      }
+      setLimitDraft((current) => {
+        const next = { ...current }
+        delete next[row.id]
+        return next
+      })
+      if (parsed === row.fbs_stock_limit) {
+        return
+      }
+      const previous = row.fbs_stock_limit
+      setError(null)
+      patchRow(row.id, { fbs_stock_limit: parsed })
+      markFbsPending(row.id, true)
+      try {
+        await sendFbsPatch(row.id, { fbs_stock_limit: parsed })
+      } catch (e) {
+        patchRow(row.id, { fbs_stock_limit: previous })
+        setError(e instanceof Error ? e.message : 'Не удалось сохранить лимит.')
+      } finally {
+        markFbsPending(row.id, false)
+      }
+    },
+    [limitDraft, markFbsPending, patchRow, sendFbsPatch],
+  )
+
+  const bulkFbsSync = useCallback(
+    async (enabled: boolean) => {
+      setError(null)
+      setFbsBulkBusy(true)
+      try {
+        const res = await fetch(apiUrl('/products/fbs-stock-sync/bulk'), {
+          method: 'PATCH',
+          headers: { ...authHeaders(token), 'Content-Type': 'application/json' },
+          body: JSON.stringify({ product_ids: null, fbs_stock_sync_enabled: enabled }),
+        })
+        if (!res.ok) {
+          setError(await readApiErrorMessage(res))
+          return
+        }
+        await refreshAll()
+      } catch (e) {
+        setError(
+          e instanceof Error ? e.message : 'Не удалось переключить синхронизацию по всем товарам.',
+        )
+      } finally {
+        setFbsBulkBusy(false)
+      }
+    },
+    [authHeaders, refreshAll, token],
+  )
 
   async function onSyncProducts() {
     setError(null)
@@ -228,6 +363,51 @@ export function SellerProductsStockScreen({
         </Stack>
       </Paper>
 
+      <Paper variant="outlined" sx={{ p: 2, mb: 2 }} data-testid="seller-fbs-sync-panel">
+        <Typography variant="subtitle1" sx={{ fontWeight: 600 }}>
+          Продажа по ФБС
+        </Typography>
+        <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5, maxWidth: 720 }}>
+          Включите переключатель у тех товаров, которые продаёте по ФБС. С этого момента остаток
+          с фулфилмента уходит в ваш кабинет WB и дальше поддерживается сам: любое движение товара
+          на складе тут же меняет цифру в кабинете. Пока переключатель выключен, WB про этот товар
+          от нас ничего не получает.
+        </Typography>
+        <Stack
+          direction="row"
+          spacing={1.5}
+          sx={{ mt: 1.5, flexWrap: 'wrap', alignItems: 'center' }}
+        >
+          <Chip
+            size="small"
+            variant="outlined"
+            color={fbsEnabledCount > 0 ? 'success' : 'default'}
+            label={`Включено товаров: ${fbsEnabledCount} из ${rows.length}`}
+            data-testid="seller-fbs-enabled-count"
+          />
+          <Button
+            size="small"
+            variant="outlined"
+            disabled={fbsBulkBusy || busy || rows.length === 0}
+            onClick={() => void bulkFbsSync(true)}
+            data-testid="seller-fbs-enable-all"
+          >
+            Включить всем
+          </Button>
+          <Button
+            size="small"
+            variant="outlined"
+            color="warning"
+            disabled={fbsBulkBusy || busy || fbsEnabledCount === 0}
+            onClick={() => void bulkFbsSync(false)}
+            data-testid="seller-fbs-disable-all"
+          >
+            Выключить всем
+          </Button>
+          {fbsBulkBusy ? <CircularProgress size={18} /> : null}
+        </Stack>
+      </Paper>
+
       <TableContainer component={Paper} variant="outlined" data-testid="seller-products-list">
         <Table stickyHeader size="small" data-testid="seller-products-table">
           <TableHead>
@@ -245,6 +425,7 @@ export function SellerProductsStockScreen({
               <TableCell align="right">Зарезерв.</TableCell>
               <TableCell align="right">Остаток</TableCell>
               <TableCell align="right">К отгрузке</TableCell>
+              <TableCell sx={{ minWidth: 210 }}>Продажа по ФБС</TableCell>
               <TableCell>ТЗ упаковки</TableCell>
             </TableRow>
           </TableHead>
@@ -291,6 +472,66 @@ export function SellerProductsStockScreen({
                     </Typography>
                   ) : null}
                 </TableCell>
+                <TableCell data-testid={`seller-fbs-cell-${p.id}`}>
+                  <Stack spacing={0.75}>
+                    <FormControlLabel
+                      sx={{ m: 0 }}
+                      control={
+                        <Switch
+                          size="small"
+                          checked={p.fbs_stock_sync_enabled}
+                          disabled={fbsPending.has(p.id) || fbsBulkBusy}
+                          onChange={(_, checked) => void toggleFbsSync(p, checked)}
+                          inputProps={
+                            { 'data-testid': `seller-fbs-toggle-${p.id}` } as Record<string, string>
+                          }
+                        />
+                      }
+                      label={
+                        <Typography variant="caption" color="text.secondary">
+                          {p.fbs_stock_sync_enabled ? 'Синхронизируем' : 'Выключено'}
+                        </Typography>
+                      }
+                    />
+                    {p.fbs_stock_sync_enabled ? (
+                      <>
+                        <TextField
+                          size="small"
+                          label="Лимит"
+                          placeholder="без лимита"
+                          value={limitDraft[p.id] ?? (p.fbs_stock_limit ?? '')}
+                          disabled={fbsPending.has(p.id) || fbsBulkBusy}
+                          onChange={(e) =>
+                            setLimitDraft((current) => ({ ...current, [p.id]: e.target.value }))
+                          }
+                          onBlur={() => void commitLimit(p)}
+                          onKeyDown={(e) => {
+                            if (e.key === 'Enter') (e.target as HTMLInputElement).blur()
+                          }}
+                          inputProps={{
+                            inputMode: 'numeric',
+                            'data-testid': `seller-fbs-limit-${p.id}`,
+                          }}
+                          sx={{ maxWidth: 130 }}
+                        />
+                        <Stack direction="row" spacing={0.75} sx={{ alignItems: 'center' }}>
+                          <Chip
+                            size="small"
+                            variant="outlined"
+                            color={FBS_SYNC_STATUS_LABEL[p.fbs_sync_status ?? '']?.color ?? 'default'}
+                            label={
+                              FBS_SYNC_STATUS_LABEL[p.fbs_sync_status ?? '']?.text ?? 'Ещё не уходил'
+                            }
+                            data-testid={`seller-fbs-status-${p.id}`}
+                          />
+                          <Typography variant="caption" color="text.secondary">
+                            {p.fbs_published_amount != null ? `${p.fbs_published_amount} шт` : '—'}
+                          </Typography>
+                        </Stack>
+                      </>
+                    ) : null}
+                  </Stack>
+                </TableCell>
                 <TableCell>
                   <Stack direction="row" spacing={1} sx={{ alignItems: 'center' }}>
                     <Chip
@@ -313,7 +554,7 @@ export function SellerProductsStockScreen({
             ))}
             {rows.length === 0 ? (
               <TableRow>
-                <TableCell colSpan={14}>
+                <TableCell colSpan={15}>
                   <Typography variant="body2" color="text.secondary">
                     Пока нет товаров.
                   </Typography>

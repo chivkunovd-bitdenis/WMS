@@ -31,6 +31,7 @@ type Props = {
   setWbSellerId: (id: string) => void
   wbHasContentToken: boolean
   wbHasSuppliesToken: boolean
+  wbHasMarketplaceToken: boolean
   wbTokensBusy: boolean
   wbSyncBusy: boolean
   wbSuppliesSyncBusy: boolean
@@ -43,6 +44,7 @@ type Props = {
   wbImportedSupplies: WbImportedSupplyRow[]
 
   onSaveWbTokens: FormEventHandler<HTMLFormElement>
+  onClearWbMarketplaceToken: () => void
   onStartWbCardsSyncJob: () => void
   onStartWbSuppliesSyncJob: () => void
   onLinkProductToWb: FormEventHandler<HTMLFormElement>
@@ -56,6 +58,7 @@ export function WildberriesScreen(props: Props) {
     setWbSellerId,
     wbHasContentToken,
     wbHasSuppliesToken,
+    wbHasMarketplaceToken,
     wbTokensBusy,
     wbSyncBusy,
     wbSuppliesSyncBusy,
@@ -67,6 +70,7 @@ export function WildberriesScreen(props: Props) {
     wbImportedCards,
     wbImportedSupplies,
     onSaveWbTokens,
+    onClearWbMarketplaceToken,
     onStartWbCardsSyncJob,
     onStartWbSuppliesSyncJob,
     onLinkProductToWb,
@@ -102,7 +106,8 @@ export function WildberriesScreen(props: Props) {
 
                 <p className="subtle" data-testid="wb-token-flags">
                   Контент API: {wbHasContentToken ? 'токен есть' : 'нет токена'} · Поставки API:{' '}
-                  {wbHasSuppliesToken ? 'токен есть' : 'нет токена'}
+                  {wbHasSuppliesToken ? 'токен есть' : 'нет токена'} · Маркетплейс API:{' '}
+                  {wbHasMarketplaceToken ? 'отдельный токен' : 'берём общий'}
                 </p>
 
                 <form data-testid="wb-tokens-form" noValidate onSubmit={onSaveWbTokens}>
@@ -116,6 +121,10 @@ export function WildberriesScreen(props: Props) {
                       placeholder="вставьте токен категории «Контент»"
                     />
                   </label>
+                  <p className="subtle" style={{ marginTop: 4 }}>
+                    Достаточно одного ключа: создайте его в кабинете WB сразу с категориями
+                    «Контент» и «Маркетплейс» — вставленный сюда, он же уйдёт и в заказы FBS.
+                  </p>
                   <label>
                     Токен поставок WB (необязательно)
                     <Input
@@ -126,10 +135,42 @@ export function WildberriesScreen(props: Props) {
                       placeholder="для импорта поставок FBW (первая страница)"
                     />
                   </label>
+                  <label>
+                    Токен маркетплейса WB (необязательно)
+                    <Input
+                      name="wb_marketplace_token"
+                      data-testid="wb-marketplace-token"
+                      type="password"
+                      autoComplete="off"
+                      placeholder="только если для заказов FBS нужен отдельный ключ"
+                    />
+                  </label>
+                  <p className="subtle" style={{ marginTop: 4 }}>
+                    Заполняйте, только если заказы FBS должны ходить под другим ключом. Пока поле
+                    пустое, используется общий токен контента.
+                  </p>
                   <Button type="submit" data-testid="wb-save-tokens" disabled={wbTokensBusy}>
                     {wbTokensBusy ? '…' : 'Сохранить токены'}
                   </Button>
                 </form>
+
+                {wbHasMarketplaceToken ? (
+                  <div style={{ marginTop: 4 }}>
+                    <Button
+                      type="button"
+                      variant="secondary"
+                      data-testid="wb-clear-marketplace-token"
+                      disabled={wbTokensBusy}
+                      onClick={onClearWbMarketplaceToken}
+                    >
+                      {wbTokensBusy ? '…' : 'Стереть маркетплейс-токен'}
+                    </Button>
+                    <p className="subtle" style={{ marginTop: 4 }}>
+                      Если заказы FBS отдают 401, скорее всего в этом слоте лежит устаревший ключ.
+                      Сотрите его — интеграция вернётся на общий токен.
+                    </p>
+                  </div>
+                ) : null}
 
                 <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
                   <Button

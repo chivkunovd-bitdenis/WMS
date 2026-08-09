@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import uuid
 
-from sqlalchemy import func, select
+from sqlalchemy import func, select, update
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
@@ -13,6 +13,7 @@ from app.models.storage_location import StorageLocation
 from app.models.warehouse import Warehouse
 from app.models.warehouse_storage_rack import WarehouseStorageRack
 from app.services import sorting_location_service as sorting_loc_svc
+from app.services.fbs_stock_publish_service import schedule_seller_stock_publish
 
 
 class CatalogError(Exception):
@@ -21,12 +22,15 @@ class CatalogError(Exception):
         super().__init__(code)
 
 
+class _SkipSentinel:
+    pass
+
+
+SKIP = _SkipSentinel()
+
+
 async def list_warehouses(session: AsyncSession, tenant_id: uuid.UUID) -> list[Warehouse]:
-    stmt = (
-        select(Warehouse)
-        .where(Warehouse.tenant_id == tenant_id)
-        .order_by(Warehouse.name)
-    )
+    stmt = select(Warehouse).where(Warehouse.tenant_id == tenant_id).order_by(Warehouse.name)
     res = await session.execute(stmt)
     return list(res.scalars().all())
 
@@ -64,11 +68,7 @@ async def get_storage_location_in_warehouse(
     location_id: uuid.UUID,
 ) -> StorageLocation | None:
     loc = await session.get(StorageLocation, location_id)
-    if (
-        loc is None
-        or loc.tenant_id != tenant_id
-        or loc.warehouse_id != warehouse_id
-    ):
+    if loc is None or loc.tenant_id != tenant_id or loc.warehouse_id != warehouse_id:
         return None
     return loc
 
@@ -146,9 +146,7 @@ async def _get_or_create_rack(
     rack_name: str,
 ) -> WarehouseStorageRack:
     name = _normalize_rack_name(rack_name)
-    existing = await _get_rack_by_name(
-        session, tenant_id, warehouse_id, rack_name=name
-    )
+    existing = await _get_rack_by_name(session, tenant_id, warehouse_id, rack_name=name)
     if existing is not None:
         return existing
 
@@ -163,9 +161,7 @@ async def _get_or_create_rack(
     except IntegrityError as exc:
         await session.rollback()
         # Another request won the race; read it again.
-        existing2 = await _get_rack_by_name(
-            session, tenant_id, warehouse_id, rack_name=name
-        )
+        existing2 = await _get_rack_by_name(session, tenant_id, warehouse_id, rack_name=name)
         if existing2 is not None:
             return existing2
         raise CatalogError("rack_create_failed") from exc
@@ -185,9 +181,7 @@ async def suggest_next_location_for_rack(
         raise CatalogError("invalid_side")
     name = _normalize_rack_name(rack_name)
     max_pos = 0
-    rack = await _get_rack_by_name(
-        session, tenant_id, warehouse_id, rack_name=rack_name
-    )
+    rack = await _get_rack_by_name(session, tenant_id, warehouse_id, rack_name=rack_name)
     if rack is not None:
         stmt = select(func.max(StorageLocation.position)).where(
             StorageLocation.tenant_id == tenant_id,
@@ -219,9 +213,7 @@ async def create_location_from_rack(
     if position is not None and position <= 0:
         raise CatalogError("invalid_position")
 
-    rack = await _get_or_create_rack(
-        session, tenant_id, warehouse_id, rack_name=rack_name
-    )
+    rack = await _get_or_create_rack(session, tenant_id, warehouse_id, rack_name=rack_name)
 
     if position is None:
         position, code = await suggest_next_location_for_rack(
@@ -295,9 +287,7 @@ async def create_location(
     raise CatalogError("barcode_collision")
 
 
-def volume_liters_from_mm(
-    l_mm: int | None, w_mm: int | None, h_mm: int | None
-) -> float | None:
+def volume_liters_from_mm(l_mm: int | None, w_mm: int | None, h_mm: int | None) -> float | None:
     """Объём в литрах: габариты в мм → мм³ / 10⁶ = литры. None если габариты не заданы."""
     if l_mm is None or w_mm is None or h_mm is None:
         return None
@@ -337,9 +327,7 @@ async def list_sellers(
     return list(res.scalars().all())
 
 
-async def create_seller(
-    session: AsyncSession, tenant_id: uuid.UUID, *, name: str
-) -> Seller:
+async def create_seller(session: AsyncSession, tenant_id: uuid.UUID, *, name: str) -> Seller:
     s = Seller(tenant_id=tenant_id, name=name.strip())
     session.add(s)
     await session.commit()
@@ -460,6 +448,72 @@ async def update_packaging_instructions(
     else:
         await session.flush()
     return p
+
+
+async def update_product_fbs_stock_sync(
+    session: AsyncSession,
+    tenant_id: uuid.UUID,
+    product_id: uuid.UUID,
+    *,
+    fbs_stock_sync_enabled: bool | _SkipSentinel = SKIP,
+    fbs_stock_limit: int | None | _SkipSentinel = SKIP,
+    commit: bool = True,
+) -> Product:
+    if fbs_stock_sync_enabled is SKIP and fbs_stock_limit is SKIP:
+        raise CatalogError("empty_patch")
+    if fbs_stock_limit is not SKIP and fbs_stock_limit is not None and fbs_stock_limit < 0:
+        raise CatalogError("invalid_fbs_stock_limit")
+    p = await get_product(session, tenant_id, product_id)
+    if p is None:
+        raise CatalogError("product_not_found")
+    if fbs_stock_sync_enabled is not SKIP:
+        p.fbs_stock_sync_enabled = bool(fbs_stock_sync_enabled)
+    if fbs_stock_limit is not SKIP:
+        p.fbs_stock_limit = fbs_stock_limit
+    # Именно в момент переключения новая цифра должна уехать в кабинет WB:
+    # включили — кабинет видит остаток фулфилмента, выключили — получает ноль.
+    # Ждать ближайшего движения товара или фоновой сверки здесь нельзя.
+    schedule_seller_stock_publish(session, tenant_id, p.seller_id)
+    if commit:
+        await session.commit()
+        await session.refresh(p, attribute_names=["seller"])
+    else:
+        await session.flush()
+    return p
+
+
+async def bulk_update_products_fbs_stock_sync(
+    session: AsyncSession,
+    tenant_id: uuid.UUID,
+    seller_id: uuid.UUID,
+    *,
+    product_ids: list[uuid.UUID] | None,
+    fbs_stock_sync_enabled: bool,
+    fbs_stock_limit: int | None | _SkipSentinel = SKIP,
+) -> int:
+    if fbs_stock_limit is not SKIP and fbs_stock_limit is not None and fbs_stock_limit < 0:
+        raise CatalogError("invalid_fbs_stock_limit")
+    values: dict[str, object] = {"fbs_stock_sync_enabled": fbs_stock_sync_enabled}
+    # Лимит трогаем только когда он явно передан. Иначе «включить всем» стёрло бы
+    # лимиты, которые селлер расставил поштучно.
+    if fbs_stock_limit is not SKIP:
+        values["fbs_stock_limit"] = fbs_stock_limit
+    stmt = (
+        update(Product)
+        .where(
+            Product.tenant_id == tenant_id,
+            Product.seller_id == seller_id,
+        )
+        .values(**values)
+    )
+    if product_ids is not None:
+        if not product_ids:
+            return 0
+        stmt = stmt.where(Product.id.in_(product_ids))
+    result = await session.execute(stmt)
+    schedule_seller_stock_publish(session, tenant_id, seller_id)
+    await session.commit()
+    return int(result.rowcount or 0)
 
 
 async def products_missing_packaging_instructions(

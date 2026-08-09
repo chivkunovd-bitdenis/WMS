@@ -41,6 +41,7 @@ from app.services.fbs_stock_sync_service import (
     ERROR_READBACK_MISMATCH,
     ERROR_SYNC_BUSY,
     NoopStockSyncRateLimiter,
+    _build_publish_plan,
     _try_acquire_lease,
     sync_binding_stocks,
 )
@@ -108,6 +109,8 @@ def _product(
     seller_id: uuid.UUID,
     chrt_id: int | None,
     sku_suffix: str,
+    fbs_stock_sync_enabled: bool = True,
+    fbs_stock_limit: int | None = None,
 ) -> Product:
     return Product(
         id=uuid.uuid4(),
@@ -116,6 +119,8 @@ def _product(
         name=f"Product {sku_suffix}",
         sku_code=f"SKU-{sku_suffix}",
         wb_chrt_id=chrt_id,
+        fbs_stock_sync_enabled=fbs_stock_sync_enabled,
+        fbs_stock_limit=fbs_stock_limit,
     )
 
 
@@ -185,6 +190,131 @@ def _client(transport: _MockStocksTransport) -> httpx.AsyncClient:
         transport=httpx.MockTransport(transport.handler),
         base_url="https://wb-mock.test",
     )
+
+
+@pytest.mark.asyncio
+async def test_sync_skips_products_with_disabled_fbs_sync_flag(
+    db_session: AsyncSession,
+) -> None:
+    ctx = await _seed_binding(db_session)
+    disabled = _product(
+        tenant_id=ctx.tenant.id,
+        seller_id=ctx.seller.id,
+        chrt_id=9101,
+        sku_suffix="disabled",
+        fbs_stock_sync_enabled=False,
+    )
+    db_session.add(disabled)
+    await db_session.commit()
+
+    transport = _MockStocksTransport()
+    async with _client(transport) as http_client:
+        result = await sync_binding_stocks(
+            db_session,
+            ctx.tenant.id,
+            ctx.seller.id,
+            ctx.binding,
+            http_client,
+            marketplace_api_base="https://wb-mock.test",
+        )
+
+    assert result.products_targeted == 0
+    assert result.products_zeroed == 0
+    assert transport.put_calls == []
+
+
+def test_build_publish_plan_applies_stock_limit() -> None:
+    tenant_id = uuid.uuid4()
+    seller_id = uuid.uuid4()
+    product_a = _product(
+        tenant_id=tenant_id,
+        seller_id=seller_id,
+        chrt_id=9201,
+        sku_suffix="limit-100-to-30",
+        fbs_stock_limit=30,
+    )
+    product_b = _product(
+        tenant_id=tenant_id,
+        seller_id=seller_id,
+        chrt_id=9202,
+        sku_suffix="limit-10-to-10",
+        fbs_stock_limit=30,
+    )
+    availability = {
+        product_a.id: 100,
+        product_b.id: 10,
+    }
+
+    targets, skipped_missing, conflict_chrts = _build_publish_plan(
+        [product_a, product_b],
+        availability,
+        {},
+    )
+    by_chrt = {target.chrt_id: target.amount for target in targets}
+
+    assert skipped_missing == []
+    assert conflict_chrts == set()
+    assert by_chrt[9201] == 30
+    assert by_chrt[9202] == 10
+
+
+@pytest.mark.asyncio
+async def test_sync_zeroes_disabled_product_once_then_stops_after_confirmed_zero(
+    db_session: AsyncSession,
+) -> None:
+    ctx = await _seed_binding(db_session)
+    disabled = _product(
+        tenant_id=ctx.tenant.id,
+        seller_id=ctx.seller.id,
+        chrt_id=9301,
+        sku_suffix="disabled-zero-once",
+        fbs_stock_sync_enabled=False,
+    )
+    db_session.add(disabled)
+    await db_session.commit()
+
+    db_session.add(
+        FbsStockSyncItem(
+            binding_id=ctx.binding.id,
+            chrt_id=9301,
+            product_id=disabled.id,
+            last_target_amount=5,
+            last_confirmed_amount=5,
+            status=STOCK_SYNC_STATUS_CONFIRMED,
+        )
+    )
+    await db_session.commit()
+
+    first_transport = _MockStocksTransport()
+    async with _client(first_transport) as http_client:
+        first_result = await sync_binding_stocks(
+            db_session,
+            ctx.tenant.id,
+            ctx.seller.id,
+            ctx.binding,
+            http_client,
+            marketplace_api_base="https://wb-mock.test",
+        )
+
+    assert first_result.products_targeted == 1
+    assert first_result.products_zeroed == 1
+    assert first_transport.put_calls[0][0].chrt_id == 9301
+    assert first_transport.put_calls[0][0].amount == 0
+
+    second_transport = _MockStocksTransport()
+    async with _client(second_transport) as http_client:
+        second_result = await sync_binding_stocks(
+            db_session,
+            ctx.tenant.id,
+            ctx.seller.id,
+            ctx.binding,
+            http_client,
+            marketplace_api_base="https://wb-mock.test",
+        )
+
+    assert second_result.products_targeted == 0
+    assert second_result.products_zeroed == 0
+    assert second_transport.put_calls == []
 
 
 # TC-NEW-FBS-STOCK-009 — PUT + readback happy path
@@ -706,23 +836,31 @@ async def test_partial_batch_failure_leaves_confirmed_batch(
     assert result.errors == 1
 
     confirmed_rows = (
-        await db_session.execute(
-            select(FbsStockSyncItem).where(
-                FbsStockSyncItem.binding_id == ctx.binding.id,
-                FbsStockSyncItem.status == STOCK_SYNC_STATUS_CONFIRMED,
+        (
+            await db_session.execute(
+                select(FbsStockSyncItem).where(
+                    FbsStockSyncItem.binding_id == ctx.binding.id,
+                    FbsStockSyncItem.status == STOCK_SYNC_STATUS_CONFIRMED,
+                )
             )
         )
-    ).scalars().all()
+        .scalars()
+        .all()
+    )
     assert len(confirmed_rows) == 1000
 
     error_rows = (
-        await db_session.execute(
-            select(FbsStockSyncItem).where(
-                FbsStockSyncItem.binding_id == ctx.binding.id,
-                FbsStockSyncItem.status == STOCK_SYNC_STATUS_ERROR,
+        (
+            await db_session.execute(
+                select(FbsStockSyncItem).where(
+                    FbsStockSyncItem.binding_id == ctx.binding.id,
+                    FbsStockSyncItem.status == STOCK_SYNC_STATUS_ERROR,
+                )
             )
         )
-    ).scalars().all()
+        .scalars()
+        .all()
+    )
     assert len(error_rows) == 1
 
     await db_session.refresh(ctx.binding)

@@ -4,7 +4,7 @@ import uuid
 from typing import Annotated, Literal
 
 from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, UploadFile, status
-from pydantic import BaseModel, Field, computed_field
+from pydantic import BaseModel, ConfigDict, Field, computed_field
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.box_import_api_shared import read_xlsx_upload
@@ -18,11 +18,17 @@ from app.core.roles import FULFILLMENT_ADMIN, FULFILLMENT_SELLER
 from app.db.session import get_db
 from app.models.user import User
 from app.services.catalog_service import (
+    SKIP as PATCH_SKIP,
+)
+from app.services.catalog_service import (
     CatalogError,
+    _SkipSentinel,
+    bulk_update_products_fbs_stock_sync,
     create_product,
     get_product,
     list_products,
     update_packaging_instructions,
+    update_product_fbs_stock_sync,
     volume_liters_from_mm,
 )
 from app.services.product_tz_import_service import (
@@ -74,6 +80,10 @@ class SellerWbCatalogOut(BaseModel):
     wb_composition: str | None = None
     packaging_instructions: str | None = None
     requires_honest_sign: bool = False
+    fbs_stock_sync_enabled: bool = False
+    fbs_stock_limit: int | None = None
+    fbs_published_amount: int | None = None
+    fbs_sync_status: str | None = None
     has_packaging_instructions: bool = False
 
 
@@ -97,6 +107,10 @@ class FfCatalogOut(BaseModel):
     wb_composition: str | None = None
     packaging_instructions: str | None = None
     requires_honest_sign: bool = False
+    fbs_stock_sync_enabled: bool = False
+    fbs_stock_limit: int | None = None
+    fbs_published_amount: int | None = None
+    fbs_sync_status: str | None = None
     has_packaging_instructions: bool = False
     is_manual: bool = False
 
@@ -178,6 +192,25 @@ class ProductTzImportApplyOut(BaseModel):
 class PackagingInstructionsPatch(BaseModel):
     packaging_instructions: str | None = Field(default=None, max_length=8000)
     requires_honest_sign: bool | None = None
+
+
+class ProductFbsStockSyncPatch(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    fbs_stock_sync_enabled: bool | None = None
+    fbs_stock_limit: int | None = Field(default=None, ge=0)
+
+
+class ProductFbsStockSyncBulkPatch(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    product_ids: list[uuid.UUID] | None = None
+    fbs_stock_sync_enabled: bool
+    fbs_stock_limit: int | None = Field(default=None, ge=0)
+
+
+class ProductFbsStockSyncBulkOut(BaseModel):
+    updated_count: int
 
 
 def _product_out(p: object) -> ProductOut:
@@ -497,3 +530,89 @@ async def patch_product_packaging_instructions(
             ) from None
         raise
     return _product_out(updated)
+
+
+@router.patch("/{product_id}/fbs-stock-sync", response_model=ProductOut)
+async def patch_product_fbs_stock_sync(
+    product_id: uuid.UUID,
+    body: ProductFbsStockSyncPatch,
+    user: Annotated[User, Depends(get_current_user)],
+    session: Annotated[AsyncSession, Depends(get_db)],
+    effective_seller_id: Annotated[uuid.UUID | None, Depends(get_effective_seller_id)],
+) -> ProductOut:
+    p = await get_product(session, user.tenant_id, product_id)
+    if p is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="product_not_found")
+    if user.role == FULFILLMENT_SELLER:
+        owner_id = user.seller_id
+        if user_can_manage_seller_shops(user) and effective_seller_id is not None:
+            owner_id = effective_seller_id
+        if owner_id is None or p.seller_id != owner_id:
+            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="forbidden")
+    elif user.role != FULFILLMENT_ADMIN:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="forbidden")
+
+    enabled_patch: bool | _SkipSentinel = PATCH_SKIP
+    if "fbs_stock_sync_enabled" in body.model_fields_set:
+        enabled_patch = bool(body.fbs_stock_sync_enabled)
+    limit_patch: int | None | _SkipSentinel = PATCH_SKIP
+    if "fbs_stock_limit" in body.model_fields_set:
+        limit_patch = body.fbs_stock_limit
+
+    try:
+        updated = await update_product_fbs_stock_sync(
+            session,
+            user.tenant_id,
+            product_id,
+            fbs_stock_sync_enabled=enabled_patch,
+            fbs_stock_limit=limit_patch,
+        )
+    except CatalogError as exc:
+        if exc.code in {"empty_patch", "invalid_fbs_stock_limit"}:
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+                detail=exc.code,
+            ) from None
+        if exc.code == "product_not_found":
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="product_not_found",
+            ) from None
+        raise
+    return _product_out(updated)
+
+
+@router.patch("/fbs-stock-sync/bulk", response_model=ProductFbsStockSyncBulkOut)
+async def patch_products_fbs_stock_sync_bulk(
+    body: ProductFbsStockSyncBulkPatch,
+    user: Annotated[User, Depends(get_current_user)],
+    session: Annotated[AsyncSession, Depends(get_db)],
+    effective_seller_id: Annotated[uuid.UUID | None, Depends(get_effective_seller_id)],
+) -> ProductFbsStockSyncBulkOut:
+    if user.role != FULFILLMENT_SELLER:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="forbidden")
+    seller_scope = user.seller_id
+    if user_can_manage_seller_shops(user) and effective_seller_id is not None:
+        seller_scope = effective_seller_id
+    if seller_scope is None:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="seller_not_linked")
+    bulk_limit_patch: int | None | _SkipSentinel = PATCH_SKIP
+    if "fbs_stock_limit" in body.model_fields_set:
+        bulk_limit_patch = body.fbs_stock_limit
+    try:
+        updated_count = await bulk_update_products_fbs_stock_sync(
+            session,
+            user.tenant_id,
+            seller_scope,
+            product_ids=body.product_ids,
+            fbs_stock_sync_enabled=body.fbs_stock_sync_enabled,
+            fbs_stock_limit=bulk_limit_patch,
+        )
+    except CatalogError as exc:
+        if exc.code == "invalid_fbs_stock_limit":
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+                detail=exc.code,
+            ) from None
+        raise
+    return ProductFbsStockSyncBulkOut(updated_count=updated_count)

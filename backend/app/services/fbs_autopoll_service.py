@@ -239,9 +239,7 @@ async def sync_marking_statuses_for_assembling_supplies(
     synced = 0
     for order_id in order_ids:
         try:
-            await sync_order_marking_statuses(
-                session, target.tenant_id, order_id, http_client
-            )
+            await sync_order_marking_statuses(session, target.tenant_id, order_id, http_client)
             synced += 1
         except FbsMarkingError as exc:
             logger.warning(
@@ -360,9 +358,7 @@ async def sync_fbs_order_statuses_all_sellers() -> FbsAutopollCycleResult:
         for target in targets:
             try:
                 async with SessionLocal() as session:
-                    updated = await sync_fbs_order_statuses_for_seller(
-                        session, target, http_client
-                    )
+                    updated = await sync_fbs_order_statuses_for_seller(session, target, http_client)
                     await session.commit()
             except (WbMarketplaceOrdersError, FbsCancellationError) as exc:
                 seller_errors += 1
@@ -397,4 +393,64 @@ async def sync_fbs_order_statuses_all_sellers() -> FbsAutopollCycleResult:
         orders_created=0,
         statuses_updated=statuses_updated,
         seller_errors=seller_errors,
+    )
+
+
+async def reconcile_fbs_stocks_all_sellers() -> FbsAutopollCycleResult:
+    """Safety net: republish FBS availability for every seller, movement events or not.
+
+    Publication is normally event-driven (see `fbs_stock_publish_service`), but an event
+    can be lost — a worker restart, a failed WB call, a movement written outside the
+    usual services. Without this sweep the cabinet would keep selling a stale number,
+    so the cost of a periodic full pass is worth paying.
+    """
+    async with SessionLocal() as session:
+        targets = await list_sellers_with_marketplace_token(session)
+
+    sellers_polled = 0
+    bindings_processed = 0
+    seller_errors = 0
+    stock_errors = 0
+
+    logger.info("fbs stock reconcile: starting cycle for %s sellers", len(targets))
+
+    async with httpx.AsyncClient() as http_client:
+        for target in targets:
+            try:
+                async with SessionLocal() as session:
+                    result = await sync_seller_stocks(
+                        session,
+                        target.tenant_id,
+                        target.seller_id,
+                        http_client,
+                    )
+                    await session.commit()
+            except Exception:
+                seller_errors += 1
+                logger.exception(
+                    "fbs stock reconcile failed for seller %s (tenant %s)",
+                    target.seller_id,
+                    target.tenant_id,
+                )
+                continue
+
+            sellers_polled += 1
+            bindings_processed += result.bindings_processed
+            stock_errors += result.binding_errors
+
+    logger.info(
+        "fbs stock reconcile done: sellers=%s bindings=%s stock_errors=%s errors=%s",
+        sellers_polled,
+        bindings_processed,
+        stock_errors,
+        seller_errors,
+    )
+    return FbsAutopollCycleResult(
+        sellers_polled=sellers_polled,
+        orders_upserted=0,
+        orders_created=0,
+        statuses_updated=0,
+        seller_errors=seller_errors,
+        stocks_bindings_processed=bindings_processed,
+        stock_errors=stock_errors,
     )

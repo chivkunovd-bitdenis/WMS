@@ -33,6 +33,7 @@ from app.models.product import Product
 from app.models.warehouse import Warehouse
 from app.services.fbs_marking_service import apply_wb_meta_requirements_to_order
 from app.services.fbs_stock_availability_service import fbs_available_qty_for_product
+from app.services.fbs_stock_publish_service import schedule_seller_stock_publish
 from app.services.wildberries_client import (
     WildberriesClientError,
     fetch_marketplace_orders_new,
@@ -68,9 +69,7 @@ TERMINAL_FBS_STATUSES = frozenset(
     {FBS_ORDER_STATUS_CANCELLED, FBS_ORDER_STATUS_DONE, FBS_ORDER_STATUS_DEFECT}
 )
 
-STATUSES_EXCLUDED_FROM_WB_SYNC = TERMINAL_FBS_STATUSES | frozenset(
-    {FBS_ORDER_STATUS_SORTED}
-)
+STATUSES_EXCLUDED_FROM_WB_SYNC = TERMINAL_FBS_STATUSES | frozenset({FBS_ORDER_STATUS_SORTED})
 
 SYNC_STATUS_BATCH_SIZE = 500
 MAX_SYNC_STATUS_BATCHES = 20
@@ -395,12 +394,8 @@ async def _get_order_by_wb_id(
     return res.scalar_one_or_none()
 
 
-async def _order_has_reservation(
-    session: AsyncSession, order_id: uuid.UUID
-) -> bool:
-    stmt = select(FbsOrderReservation.id).where(
-        FbsOrderReservation.fbs_order_id == order_id
-    )
+async def _order_has_reservation(session: AsyncSession, order_id: uuid.UUID) -> bool:
+    stmt = select(FbsOrderReservation.id).where(FbsOrderReservation.fbs_order_id == order_id)
     res = await session.execute(stmt)
     return res.scalar_one_or_none() is not None
 
@@ -481,18 +476,21 @@ async def _try_reserve_order(
             await session.flush()
     except IntegrityError:
         order.reserve_status = RESERVE_STATUS_NO_STOCK
+        return
+    # Резерв под ФБС-заказ уменьшает доступное — кабинет должен увидеть новую цифру.
+    schedule_seller_stock_publish(session, order.tenant_id, order.seller_id)
 
 
 async def _release_reservation(session: AsyncSession, order: FbsOrder) -> None:
-    stmt = select(FbsOrderReservation).where(
-        FbsOrderReservation.fbs_order_id == order.id
-    )
+    stmt = select(FbsOrderReservation).where(FbsOrderReservation.fbs_order_id == order.id)
     res = await session.execute(stmt)
     reservation = res.scalar_one_or_none()
     if reservation is None:
         return
     await session.delete(reservation)
     order.reserve_status = RESERVE_STATUS_RELEASED
+    # Снятый резерв возвращает товар в доступное — публикуем увеличенную цифру.
+    schedule_seller_stock_publish(session, order.tenant_id, order.seller_id)
 
 
 async def _apply_wb_row_to_existing(
@@ -771,9 +769,7 @@ async def sync_seller_orders(
     api_token = await _resolve_marketplace_api_token(session, tenant_id, seller_id)
 
     try:
-        new_rows = await fetch_marketplace_orders_new(
-            http_client, api_token=api_token
-        )
+        new_rows = await fetch_marketplace_orders_new(http_client, api_token=api_token)
     except WildberriesClientError as exc:
         suffix = f"_{exc.status_code}" if exc.status_code else ""
         raise WbMarketplaceOrdersError(f"wb_{exc.code}{suffix}") from exc
@@ -785,9 +781,7 @@ async def sync_seller_orders(
     status_sync_error: str | None = None
 
     for row in new_rows:
-        _order, was_created = await upsert_order_from_wb_row(
-            session, tenant_id, seller_id, row
-        )
+        _order, was_created = await upsert_order_from_wb_row(session, tenant_id, seller_id, row)
         upserted += 1
         orders_received += 1
         if was_created:
@@ -815,9 +809,7 @@ async def sync_seller_orders(
         if not page_rows:
             break
         for row in page_rows:
-            _order, was_created = await upsert_order_from_wb_row(
-                session, tenant_id, seller_id, row
-            )
+            _order, was_created = await upsert_order_from_wb_row(session, tenant_id, seller_id, row)
             upserted += 1
             orders_received += 1
             if was_created:

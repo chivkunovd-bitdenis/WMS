@@ -63,21 +63,15 @@ class Settings(BaseSettings):
     )
     e2e_mock_wb_warehouses: bool = Field(
         default=False,
-        description=(
-            "Playwright/e2e: stub WB GET /warehouses JSON without calling the network."
-        ),
+        description=("Playwright/e2e: stub WB GET /warehouses JSON without calling the network."),
     )
     e2e_mock_wb_marketplace_orders: bool = Field(
         default=False,
-        description=(
-            "Playwright/e2e: stub WB Marketplace orders API without calling the network."
-        ),
+        description=("Playwright/e2e: stub WB Marketplace orders API without calling the network."),
     )
     e2e_mock_wb_marketplace_supplies: bool = Field(
         default=False,
-        description=(
-            "Playwright/e2e: stub WB Marketplace supplies/stickers API without network."
-        ),
+        description=("Playwright/e2e: stub WB Marketplace supplies/stickers API without network."),
     )
     e2e_mock_wb_marketplace_warehouses: bool = Field(
         default=False,
@@ -108,9 +102,7 @@ class Settings(BaseSettings):
     wms_data_dir: str = Field(
         default="var/wms-data",
         validation_alias=AliasChoices("WMS_DATA_DIR", "wms_data_dir"),
-        description=(
-            "Local object storage root for dev/tests when S3 is not configured."
-        ),
+        description=("Local object storage root for dev/tests when S3 is not configured."),
     )
     wms_marking_import_local_storage_enabled: bool = Field(
         default=True,
@@ -157,8 +149,8 @@ class Settings(BaseSettings):
         description="Celery Beat interval for polling new FBS orders (seconds).",
     )
     fbs_statuses_sync_interval_sec: int = Field(
-        default=600,
-        ge=120,
+        default=60,
+        ge=60,
         le=7200,
         validation_alias=AliasChoices(
             "CONF_FBS_STATUSES_SYNC_INTERVAL_SEC",
@@ -166,6 +158,20 @@ class Settings(BaseSettings):
         ),
         description="Celery Beat interval for syncing active FBS order statuses (seconds).",
     )
+    fbs_stock_reconcile_interval_sec: int = Field(
+        default=300,
+        ge=60,
+        le=7200,
+        validation_alias=AliasChoices(
+            "CONF_FBS_STOCK_RECONCILE_INTERVAL_SEC",
+            "FBS_STOCK_RECONCILE_INTERVAL_SEC",
+        ),
+        description=(
+            "Celery Beat interval for the FBS stock safety net: republishes availability "
+            "even when no movement event fired (seconds)."
+        ),
+    )
+
     @field_validator("database_url", mode="before")
     @classmethod
     def _normalize_database_url(cls, value: str) -> str:

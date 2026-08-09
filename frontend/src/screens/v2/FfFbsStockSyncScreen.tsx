@@ -584,6 +584,11 @@ export function FfFbsStockSyncScreen({ token, authHeaders, sellers }: Props) {
                         >
                           Нет позиций синхронизации
                         </Typography>
+                        <Typography variant="caption" color="text.secondary">
+                          В выгрузку попадают только товары, у которых селлер сам включил
+                          «Продажу по ФБС» в своём каталоге. Пока он этого не сделал, в WB
+                          по ним ничего не уходит — это не сбой синхронизации.
+                        </Typography>
                       </TableCell>
                     </TableRow>
                   ) : (
