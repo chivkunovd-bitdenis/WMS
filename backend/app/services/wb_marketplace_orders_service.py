@@ -7,7 +7,7 @@ from datetime import UTC, datetime, timedelta
 from typing import Any
 
 import httpx
-from sqlalchemy import and_, or_, select
+from sqlalchemy import Select, and_, or_, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -347,7 +347,7 @@ async def _map_product(
     wb_nm_id: int | None,
     wb_chrt_id: int | None,
 ) -> Product | None:
-    async def one_or_none(stmt):
+    async def one_or_none(stmt: Select[tuple[Product]]) -> Product | None:
         rows = list((await session.execute(stmt.limit(2))).scalars().all())
         if len(rows) == 1:
             return rows[0]

@@ -459,17 +459,20 @@ async def update_product_fbs_stock_sync(
     fbs_stock_limit: int | _SkipSentinel | None = SKIP,
     commit: bool = True,
 ) -> Product:
-    if fbs_stock_sync_enabled is SKIP and fbs_stock_limit is SKIP:
+    enabled_given = not isinstance(fbs_stock_sync_enabled, _SkipSentinel)
+    limit_given = not isinstance(fbs_stock_limit, _SkipSentinel)
+    if not enabled_given and not limit_given:
         raise CatalogError("empty_patch")
-    if fbs_stock_limit is not SKIP and fbs_stock_limit is not None and fbs_stock_limit < 0:
+    limit_value = fbs_stock_limit if limit_given else None
+    if isinstance(limit_value, int) and limit_value < 0:
         raise CatalogError("invalid_fbs_stock_limit")
     p = await get_product(session, tenant_id, product_id)
     if p is None:
         raise CatalogError("product_not_found")
-    if fbs_stock_sync_enabled is not SKIP:
+    if enabled_given:
         p.fbs_stock_sync_enabled = bool(fbs_stock_sync_enabled)
-    if fbs_stock_limit is not SKIP:
-        p.fbs_stock_limit = fbs_stock_limit
+    if limit_given:
+        p.fbs_stock_limit = limit_value if isinstance(limit_value, int) else None
     # Именно в момент переключения новая цифра должна уехать в кабинет WB:
     # включили — кабинет видит остаток фулфилмента, выключили — получает ноль.
     # Ждать ближайшего движения товара или фоновой сверки здесь нельзя.
@@ -491,13 +494,15 @@ async def bulk_update_products_fbs_stock_sync(
     fbs_stock_sync_enabled: bool,
     fbs_stock_limit: int | _SkipSentinel | None = SKIP,
 ) -> int:
-    if fbs_stock_limit is not SKIP and fbs_stock_limit is not None and fbs_stock_limit < 0:
+    limit_given = not isinstance(fbs_stock_limit, _SkipSentinel)
+    limit_value = fbs_stock_limit if limit_given else None
+    if isinstance(limit_value, int) and limit_value < 0:
         raise CatalogError("invalid_fbs_stock_limit")
     values: dict[str, object] = {"fbs_stock_sync_enabled": fbs_stock_sync_enabled}
     # Лимит трогаем только когда он явно передан. Иначе «включить всем» стёрло бы
     # лимиты, которые селлер расставил поштучно.
-    if fbs_stock_limit is not SKIP:
-        values["fbs_stock_limit"] = fbs_stock_limit
+    if limit_given:
+        values["fbs_stock_limit"] = limit_value if isinstance(limit_value, int) else None
     stmt = (
         update(Product)
         .where(
@@ -511,9 +516,10 @@ async def bulk_update_products_fbs_stock_sync(
             return 0
         stmt = stmt.where(Product.id.in_(product_ids))
     result = await session.execute(stmt)
+    updated_count = int(getattr(result, "rowcount", 0) or 0)
     schedule_seller_stock_publish(session, tenant_id, seller_id)
     await session.commit()
-    return int(result.rowcount or 0)
+    return updated_count
 
 
 async def products_missing_packaging_instructions(

@@ -402,10 +402,10 @@ async def _print_or_reprint_order_code(
     )
     if result.quantity < 1 or not result.printed_codes:
         return result
-    code = await session.get(MarkingCode, result.printed_codes[0].id)
-    if code is None or code.status != STATUS_PRINTED:
+    printed_code = await session.get(MarkingCode, result.printed_codes[0].id)
+    if printed_code is None or printed_code.status != STATUS_PRINTED:
         raise mc_svc.MarkingCodeServiceError("code_not_found")
-    await _assign_printed_code_to_order(session, order, code)
+    await _assign_printed_code_to_order(session, order, printed_code)
     return result
 
 
