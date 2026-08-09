@@ -271,13 +271,31 @@ async function pickAndPack(page: Page, route: RouteName, testInfo: TestInfo) {
   expect(completedTask.status).toBe("done");
   await expect(page.getByText("Упаковка завершена.")).toBeVisible();
 
+  // «Печать ЧЗ и ШК» открывает диалог «Печать ШК ВБ» с выбором размера этикетки,
+  // а не превью-модалку. Стикер тянется из WB и отмечается применённым по кнопке «Печать».
   const stickerButtons = page.getByRole("button", { name: "Печать ЧЗ и ШК" });
   const stickerCount = await stickerButtons.count();
   expect(stickerCount).toBeGreaterThan(0);
   for (let index = 0; index < stickerCount; index += 1) {
     await stickerButtons.nth(index).click();
-    await confirmCurrentPreview(page);
+    const printDialog = page.getByRole("dialog").filter({ hasText: "Печать ШК ВБ" });
+    await expect(printDialog).toBeVisible();
+    await printDialog.getByRole("button", { name: "Печать", exact: true }).click();
+    await expect(printDialog).toBeHidden();
+    // Для товара с Честным знаком печати мало: марку нужно подтвердить нанесённой,
+    // иначе сервер не переведёт поставку на стадию коробов.
+    const preview = page.getByRole("dialog", { name: "Проверка перед печатью" });
+    if (await preview.isVisible().catch(() => false)) {
+      await confirmCurrentPreview(page);
+    }
   }
+  // ВНИМАНИЕ. Здесь спека обрывается, и это не лень, а неразобранный вопрос.
+  // На эмуляторе после печати стикеров вкладка «Короба» остаётся заблокированной:
+  // сервер не переводит поставку на стадию коробов. Похоже, для товара с ЧЗ
+  // (в сиде такие есть, признак приходит из requiredMeta) не хватает подтверждения
+  // нанесения марки — диалог «Проверка перед печатью» не появляется после «Печать ШК ВБ».
+  // Прежде чем дописывать шаги, надо руками пройти этот участок на эмуляторе
+  // и записать реальную последовательность. Подбирать селекторы наугад нельзя.
   await shot(page, testInfo, `${route}-04-order-sticker-applied`);
 }
 

@@ -186,6 +186,11 @@ async def seed_operator_emulator_wms(
                 row.wb_nm_id = int(template["nmId"])
                 row.wb_barcode = template["skus"][0]
                 row.requires_honest_sign = requires_kiz
+                # Признак участия в ФБС по умолчанию выключен: иначе включение
+                # синхронизации выгрузило бы в WB весь каталог. Для сида поднимаем
+                # явно, иначе остаток не уедет в эмулятор и тот откажется
+                # создавать заказ, отвечая rejected_no_stock.
+                row.fbs_stock_sync_enabled = True
                 await session.commit()
 
                 await inventory_service.record_movement_and_adjust_balance(
