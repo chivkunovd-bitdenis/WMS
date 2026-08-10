@@ -28,14 +28,19 @@ from app.models.marking_code import (
     EVENT_APPLIED,
     EVENT_VOIDED,
     STATUS_APPLIED,
+    STATUS_AVAILABLE,
+    STATUS_PRINTED,
     STATUS_VOID,
     MarkingCode,
     MarkingCodeEvent,
 )
-from app.models.packaging_task import PackagingTask, PackagingTaskLine
+from app.models.packaging_task import STATUS_IN_PROGRESS, PackagingTask, PackagingTaskLine
 from app.models.product import Product
 from app.models.storage_location import StorageLocation
 from app.services import fbs_kiz_service as kiz_svc
+from app.services import fbs_marking_service as fbs_marking_svc
+from app.services import fbs_workspace_service as fbs_workspace_svc
+from app.services import marking_code_service as mc_svc
 from app.services.wildberries_errors import MetaValidationFailItem, WildberriesBusinessError
 from app.services.wildberries_fbs_client import MarketplaceMetaDetail, MarketplaceOrderMetaRow
 
@@ -1221,3 +1226,476 @@ async def test_fbs_kiz_commit_success_creates_records_event_and_counter(
         line = await session.get(PackagingTaskLine, order.packaging_task_line_id)
         assert line is not None
         assert line.qty_marking_external == 1
+
+
+@pytest.mark.asyncio
+async def test_fbs_kiz_delete_wb_error_does_not_change_records(
+    async_client: AsyncClient,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    # TC-NEW-FBS-KIZ-009: WB delete failure is fail-closed; local rows stay intact.
+    headers, suffix = await _register_ff_admin(async_client)
+    seller_id, warehouse_id, tenant_id = await _setup_seller_warehouse(
+        async_client, headers, suffix
+    )
+    supply_id = await _create_supply(
+        tenant_id=tenant_id,
+        seller_id=seller_id,
+        warehouse_id=warehouse_id,
+        suffix=suffix,
+    )
+    order = await _create_order(
+        tenant_id=tenant_id,
+        seller_id=seller_id,
+        warehouse_id=warehouse_id,
+        supply_id=supply_id,
+        suffix=suffix,
+        wb_order_id=932301,
+        sticker_code="DELETE-WB-ERROR",
+        wb_barcode="DELETE-WB-ERROR-BAR",
+        with_packaging=True,
+    )
+    assert order.packaging_task_line_id is not None
+    value = _cis("DELETEERR")
+    async with SessionLocal() as session:
+        code = MarkingCode(
+            tenant_id=tenant_id,
+            seller_id=seller_id,
+            product_id=order.product_id,
+            cis_code=value,
+            source="external_fbs",
+            status=STATUS_APPLIED,
+            applied_at=datetime.now(tz=UTC),
+            packaging_task_line_id=order.packaging_task_line_id,
+        )
+        session.add(code)
+        await session.flush()
+        line = await session.get(PackagingTaskLine, order.packaging_task_line_id)
+        assert line is not None
+        line.qty_marking_external = 1
+        session.add(
+            FbsOrderMarking(
+                order_id=order.order_id,
+                tenant_id=tenant_id,
+                kind=MARKING_KIND_SGTIN,
+                value=value,
+                source="operator",
+                check_status=CHECK_STATUS_NEW,
+                meta_status=META_STATUS_ACCEPTED,
+                marking_code_id=code.id,
+            )
+        )
+        await session.commit()
+        code_id = code.id
+
+    async def fake_delete(
+        client: object,
+        *,
+        api_token: str,
+        order_id: int,
+        key: str,
+        marketplace_api_base: str | None = None,
+    ) -> None:
+        del client, api_token, order_id, key, marketplace_api_base
+        raise WildberriesBusinessError("delete_failed", status_code=503)
+
+    monkeypatch.setattr(
+        "app.services.fbs_kiz_service.delete_marketplace_order_meta",
+        fake_delete,
+    )
+
+    response = await async_client.delete(
+        f"/operations/fbs-orders/{order.order_id}/kiz",
+        headers=headers,
+    )
+
+    assert response.status_code == 502, response.text
+    assert response.json()["detail"]["code"] == "wb_delete_failed_503"
+    async with SessionLocal() as session:
+        marking_count = await session.scalar(
+            select(func.count(FbsOrderMarking.id)).where(
+                FbsOrderMarking.order_id == order.order_id
+            )
+        )
+        assert int(marking_count or 0) == 1
+        code = await session.get(MarkingCode, code_id)
+        assert code is not None
+        assert code.status == STATUS_APPLIED
+        line = await session.get(PackagingTaskLine, order.packaging_task_line_id)
+        assert line is not None
+        assert line.qty_marking_external == 1
+        voided_count = await session.scalar(
+            select(func.count(MarkingCodeEvent.id)).where(
+                MarkingCodeEvent.code_id == code_id,
+                MarkingCodeEvent.event_type == EVENT_VOIDED,
+            )
+        )
+        assert int(voided_count or 0) == 0
+
+
+@pytest.mark.asyncio
+async def test_fbs_kiz_commit_same_pair_is_idempotent_without_second_wb_call(
+    async_client: AsyncClient,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    # TC-NEW-FBS-KIZ-004: retrying the same active pair is a no-op success.
+    headers, suffix = await _register_ff_admin(async_client)
+    seller_id, warehouse_id, tenant_id = await _setup_seller_warehouse(
+        async_client, headers, suffix
+    )
+    supply_id = await _create_supply(
+        tenant_id=tenant_id,
+        seller_id=seller_id,
+        warehouse_id=warehouse_id,
+        suffix=suffix,
+    )
+    order = await _create_order(
+        tenant_id=tenant_id,
+        seller_id=seller_id,
+        warehouse_id=warehouse_id,
+        supply_id=supply_id,
+        suffix=suffix,
+        wb_order_id=932401,
+        sticker_code="IDEMPOTENT-COMMIT",
+        wb_barcode="IDEMPOTENT-COMMIT-BAR",
+        with_packaging=True,
+    )
+    assert order.packaging_task_line_id is not None
+    value = _cis("IDEMPOTENT")
+    sent: list[tuple[int, str]] = []
+
+    async def fake_put(
+        client: object,
+        *,
+        api_token: str,
+        order_id: int,
+        kind: str,
+        value: str,
+        marketplace_api_base: str | None = None,
+    ) -> None:
+        del client, api_token, kind, marketplace_api_base
+        sent.append((order_id, value))
+
+    async def fake_meta_batch(
+        client: object,
+        *,
+        api_token: str,
+        order_ids: list[int],
+        marketplace_api_base: str | None = None,
+    ) -> list[MarketplaceOrderMetaRow]:
+        del client, api_token, marketplace_api_base
+        order_id = order_ids[0]
+        assert sent == [(order_id, value)]
+        return [
+            MarketplaceOrderMetaRow(
+                order_id=order_id,
+                meta_details=(
+                    MarketplaceMetaDetail(
+                        key=MARKING_KIND_SGTIN,
+                        value=value,
+                        decision="accepted",
+                    ),
+                ),
+                meta={MARKING_KIND_SGTIN: [{"value": value, "checkStatus": "ok"}]},
+            )
+        ]
+
+    monkeypatch.setattr(
+        "app.services.fbs_marking_service.put_marketplace_order_meta",
+        fake_put,
+    )
+    monkeypatch.setattr(
+        "app.services.fbs_marking_service.fetch_marketplace_orders_meta_batch",
+        fake_meta_batch,
+    )
+
+    payload = {
+        "pairs": [
+            {
+                "order_id": str(order.order_id),
+                "value": value,
+                "confirmed": False,
+            }
+        ],
+    }
+    first = await async_client.post(
+        "/operations/fbs-orders/kiz/commit",
+        headers=headers,
+        json={"idempotency_key": "kiz-idempotent-1", **payload},
+    )
+    second = await async_client.post(
+        "/operations/fbs-orders/kiz/commit",
+        headers=headers,
+        json={"idempotency_key": "kiz-idempotent-2", **payload},
+    )
+
+    assert first.status_code == 200, first.text
+    assert second.status_code == 200, second.text
+    assert first.json()[0]["status"] == "ok"
+    assert second.json()[0]["status"] == "ok"
+    assert sent == [(order.wb_order_id, value)]
+    async with SessionLocal() as session:
+        markings = list(
+            (
+                await session.execute(
+                    select(FbsOrderMarking).where(
+                        FbsOrderMarking.order_id == order.order_id
+                    )
+                )
+            ).scalars()
+        )
+        assert len(markings) == 1
+        codes = list(
+            (
+                await session.execute(
+                    select(MarkingCode).where(
+                        MarkingCode.tenant_id == tenant_id,
+                        MarkingCode.cis_code == value,
+                    )
+                )
+            ).scalars()
+        )
+        assert len(codes) == 1
+        line = await session.get(PackagingTaskLine, order.packaging_task_line_id)
+        assert line is not None
+        assert line.qty_marking_external == 1
+        applied_events = await session.scalar(
+            select(func.count(MarkingCodeEvent.id)).where(
+                MarkingCodeEvent.code_id == codes[0].id,
+                MarkingCodeEvent.event_type == EVENT_APPLIED,
+            )
+        )
+        assert int(applied_events or 0) == 1
+
+
+@pytest.mark.asyncio
+async def test_fbs_kiz_external_marking_counts_as_printed_for_pool_and_gate(
+    async_client: AsyncClient,
+) -> None:
+    # TC-NEW-FBS-KIZ-010 / TC-NEW-FBS-KIZ-011: external KIZ reduces print need.
+    headers, suffix = await _register_ff_admin(async_client)
+    me_response = await async_client.get("/auth/me", headers=headers)
+    assert me_response.status_code == 200, me_response.text
+    actor_user_id = uuid.UUID(me_response.json()["id"])
+    seller_id, warehouse_id, tenant_id = await _setup_seller_warehouse(
+        async_client, headers, suffix
+    )
+    supply_id = await _create_supply(
+        tenant_id=tenant_id,
+        seller_id=seller_id,
+        warehouse_id=warehouse_id,
+        suffix=suffix,
+    )
+    now = datetime.now(tz=UTC)
+    order_ids: list[uuid.UUID] = []
+    async with SessionLocal() as session:
+        product = Product(
+            tenant_id=tenant_id,
+            seller_id=seller_id,
+            name="KIZ mixed source product",
+            sku_code=f"KIZ-MIX-{suffix[-8:]}",
+            wb_nm_id=990001,
+            wb_vendor_code="KIZ-MIX-ART",
+            wb_chrt_id=990002,
+            wb_barcode=f"KIZ-MIX-BAR-{suffix[-8:]}",
+            requires_honest_sign=True,
+        )
+        task = PackagingTask(
+            tenant_id=tenant_id,
+            warehouse_id=warehouse_id,
+            status=STATUS_IN_PROGRESS,
+            document_number=f"PKG-KIZ-MIX-{suffix[-8:]}",
+        )
+        location = StorageLocation(
+            tenant_id=tenant_id,
+            warehouse_id=warehouse_id,
+            code=f"KIZ-MIX-{suffix[-8:]}",
+            barcode=f"KIZ-MIX-BAR-{suffix[-8:]}",
+        )
+        session.add_all([product, task, location])
+        await session.flush()
+        line = PackagingTaskLine(
+            task_id=task.id,
+            product_id=product.id,
+            storage_location_id=location.id,
+            qty_total=150,
+            qty_suggested_packed=0,
+            qty_confirmed_packed=0,
+            qty_packed_in_task=150,
+            qty_marking_printed=0,
+            qty_marking_external=100,
+        )
+        session.add(line)
+        await session.flush()
+        supply = await session.get(FbsSupply, supply_id)
+        assert supply is not None
+        supply.packaging_task_id = task.id
+
+        orders: list[FbsOrder] = []
+        for index in range(150):
+            order = FbsOrder(
+                tenant_id=tenant_id,
+                seller_id=seller_id,
+                warehouse_id=warehouse_id,
+                product_id=product.id,
+                wb_order_id=940000 + index,
+                wb_rid=f"rid-mix-{index}",
+                wb_nm_id=product.wb_nm_id,
+                wb_chrt_id=product.wb_chrt_id,
+                wb_article=product.wb_vendor_code,
+                wb_barcode=f"KIZ-MIX-ORDER-BAR-{index}",
+                price=1000,
+                is_legal=False,
+                cargo_type="mgt",
+                wb_office_id=42,
+                wb_warehouse_id=99,
+                can_pvz=False,
+                supply_id=supply_id,
+                sticker_code=f"KIZ-MIX-STICKER-{index}",
+                status=FBS_ORDER_STATUS_PACKED,
+                created_at_wb=now,
+                deadline_at=now + timedelta(minutes=index),
+                mapping_status=MAPPING_STATUS_MAPPED,
+                reserve_status=RESERVE_STATUS_RESERVED,
+                required_meta_json=[MARKING_KIND_SGTIN],
+            )
+            session.add(order)
+            orders.append(order)
+        await session.flush()
+        order_ids = [order.id for order in orders]
+
+        for index, order in enumerate(orders[:100]):
+            value = _cis(f"MIXEXT{index:03d}")
+            external_code = MarkingCode(
+                tenant_id=tenant_id,
+                seller_id=seller_id,
+                product_id=product.id,
+                cis_code=value,
+                source="external_fbs",
+                status=STATUS_APPLIED,
+                applied_at=now,
+                packaging_task_line_id=line.id,
+            )
+            session.add(external_code)
+            await session.flush()
+            session.add(
+                FbsOrderMarking(
+                    order_id=order.id,
+                    tenant_id=tenant_id,
+                    kind=MARKING_KIND_SGTIN,
+                    value=value,
+                    source="operator",
+                    check_status=CHECK_STATUS_NEW,
+                    meta_status=META_STATUS_ACCEPTED,
+                    marking_code_id=external_code.id,
+                )
+            )
+
+        for index in range(50):
+            session.add(
+                MarkingCode(
+                    tenant_id=tenant_id,
+                    seller_id=seller_id,
+                    product_id=product.id,
+                    cis_code=_cis(f"MIXPOOL{index:03d}"),
+                    source="pool",
+                    status=STATUS_AVAILABLE,
+                )
+            )
+        await session.commit()
+        task_id = task.id
+        line_id = line.id
+        product_id = product.id
+
+    async with SessionLocal() as session:
+        orders = list(
+            (
+                await session.execute(
+                    select(FbsOrder).where(FbsOrder.id.in_(order_ids))
+                )
+            ).scalars()
+        )
+        marking_pool = await fbs_workspace_svc._build_marking_pool(
+            session,
+            tenant_id,
+            orders,
+        )
+        assert marking_pool["required"] == 50
+        assert marking_pool["available"] == 50
+        assert marking_pool["shortage"] == 0
+        assert marking_pool["orders_without_code"] == []
+
+        first_marking = (
+            await session.execute(
+                select(FbsOrderMarking).where(
+                    FbsOrderMarking.order_id == order_ids[0]
+                )
+            )
+        ).scalar_one()
+        first_order = await session.get(FbsOrder, order_ids[0])
+        assert first_order is not None
+        state = fbs_marking_svc.build_order_metadata(first_order, [first_marking])[
+            "states"
+        ][0]
+        assert state["source"] == "operator"
+        missing_order = await session.get(FbsOrder, order_ids[-1])
+        assert missing_order is not None
+        missing_state = fbs_marking_svc.build_order_metadata(missing_order, [])["states"][0]
+        assert missing_state["source"] is None
+
+    async with SessionLocal() as session:
+        first_preview = await mc_svc.print_all_for_packaging_task(
+            session,
+            tenant_id,
+            task_id,
+            acting_user_id=actor_user_id,
+            allow_partial=False,
+            dry_run=True,
+        )
+        assert first_preview.quantity == 50
+        assert first_preview.lines[0].quantity == 50
+
+    async with SessionLocal() as session:
+        manual = await mc_svc.print_codes_for_packaging_line(
+            session,
+            tenant_id,
+            line_id,
+            acting_user_id=actor_user_id,
+            units_to_print=10,
+        )
+        assert manual.quantity == 10
+
+    async with SessionLocal() as session:
+        second_preview = await mc_svc.print_all_for_packaging_task(
+            session,
+            tenant_id,
+            task_id,
+            acting_user_id=actor_user_id,
+            allow_partial=False,
+            dry_run=True,
+        )
+        assert second_preview.quantity == 40
+        assert second_preview.lines[0].quantity == 40
+
+    async with SessionLocal() as session:
+        printed_rest = await mc_svc.print_all_for_packaging_task(
+            session,
+            tenant_id,
+            task_id,
+            acting_user_id=actor_user_id,
+            allow_partial=False,
+        )
+        assert printed_rest.quantity == 40
+        line = await session.get(PackagingTaskLine, line_id)
+        assert line is not None
+        await mc_svc.assert_packaging_line_marking_done(session, tenant_id, line)
+        assert line.qty_marking_printed == 50
+        assert line.qty_marking_external == 100
+        printed_count = await session.scalar(
+            select(func.count(MarkingCode.id)).where(
+                MarkingCode.tenant_id == tenant_id,
+                MarkingCode.product_id == product_id,
+                MarkingCode.status == STATUS_PRINTED,
+            )
+        )
+        assert int(printed_count or 0) == 50

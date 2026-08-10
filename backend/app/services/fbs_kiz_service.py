@@ -47,6 +47,7 @@ _POOL_MARKING_SOURCE = "pool"
 _OPERATOR_MARKING_SOURCE = "operator"
 _EXTERNAL_FBS_MARKING_SOURCE = "external_fbs"
 _VOID_REPLACED_REASON = "replaced_by_external_fbs_kiz"
+_VOID_OPERATOR_CANCEL_REASON = "отмена оператором"
 _GS = "\x1d"
 _AIM_PREFIXES = ("]d2", "]d1", "]Q1", "]Q3", "]C1")
 _CIS_MIN_LENGTH = 19
@@ -582,6 +583,7 @@ async def _validate_kiz_pair(
     raw_value: str,
     *,
     for_update: bool = False,
+    check_marking_code_occupancy: bool = True,
 ) -> _ValidatedKizPair:
     value, hints = normalize_scanned_cis(raw_value)
     if not is_probably_cis(value):
@@ -598,7 +600,8 @@ async def _validate_kiz_pair(
         for_update=for_update,
     )
     await _ensure_kiz_not_bound_to_other_order(session, tenant_id, order.id, value)
-    await _ensure_kiz_not_occupied_in_pool(session, tenant_id, value)
+    if check_marking_code_occupancy:
+        await _ensure_kiz_not_occupied_in_pool(session, tenant_id, value)
     return _ValidatedKizPair(order=order, value=value, hints=hints)
 
 
@@ -766,11 +769,39 @@ async def void_existing_sgtin_marking(
             packaging_task=line,
             reason=reason,
         )
-        if marking.source == _OPERATOR_MARKING_SOURCE and line is not None:
+        if code.source == _EXTERNAL_FBS_MARKING_SOURCE and line is not None:
             line.qty_marking_external = max(0, int(line.qty_marking_external) - 1)
 
     await session.delete(marking)
     await session.flush()
+
+
+async def cancel_order_kiz(
+    session: AsyncSession,
+    tenant_id: uuid.UUID,
+    actor_user_id: uuid.UUID | None,
+    order_id: uuid.UUID,
+    http_client: httpx.AsyncClient,
+) -> None:
+    await session.rollback()
+    try:
+        order = await _get_order_for_kiz(session, tenant_id, order_id, for_update=True)
+        current = await _current_sgtin_marking_for_update(session, order.id)
+        if current is None:
+            raise FbsKizError("kiz_not_found", context={"order_id": str(order.id)})
+        await void_existing_sgtin_marking(
+            session,
+            tenant_id,
+            order,
+            current,
+            http_client,
+            actor_user_id=actor_user_id,
+            reason=_VOID_OPERATOR_CANCEL_REASON,
+        )
+        await session.commit()
+    except FbsKizError:
+        await session.rollback()
+        raise
 
 
 async def _commit_one_kiz_pair(
@@ -786,6 +817,7 @@ async def _commit_one_kiz_pair(
         pair.order_id,
         pair.value,
         for_update=True,
+        check_marking_code_occupancy=False,
     )
     order = validated.order
     current = await _current_sgtin_marking_for_update(session, order.id)
@@ -803,6 +835,12 @@ async def _commit_one_kiz_pair(
             "needs_confirmation",
             context={"current_kiz": _mask_kiz(current.value)},
         )
+
+    await _ensure_kiz_not_occupied_in_pool(
+        session,
+        tenant_id,
+        validated.value,
+    )
 
     token = await marking_svc.require_marketplace_token(
         session, tenant_id, order.seller_id

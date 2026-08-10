@@ -321,10 +321,18 @@ def build_order_metadata(
                     "kind": kind,
                     "status": mark.meta_status,
                     "reason": mark.reason,
+                    "source": mark.source,
                 }
             )
         else:
-            states.append({"kind": kind, "status": META_STATUS_MISSING, "reason": None})
+            states.append(
+                {
+                    "kind": kind,
+                    "status": META_STATUS_MISSING,
+                    "reason": None,
+                    "source": None,
+                }
+            )
     delivery_allowed = (
         bool(order.metadata_delivery_allowed)
         if order.metadata_delivery_allowed is not None

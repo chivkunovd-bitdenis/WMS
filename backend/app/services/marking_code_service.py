@@ -1567,11 +1567,11 @@ async def print_codes_for_packaging_line(
             printed_codes=_printed_code_infos(codes),
         )
 
-    if int(line.qty_marking_printed) > 0 and units_to_print is None:
-        raise MarkingCodeServiceError("already_printed_use_reprint")
-
     already_printed = int(line.qty_marking_printed)
-    remaining_need = quantity_needed - already_printed
+    already_external = int(line.qty_marking_external or 0)
+    remaining_need = quantity_needed - already_printed - already_external
+    if already_printed > 0 and units_to_print is None and remaining_need < 1:
+        raise MarkingCodeServiceError("already_printed_use_reprint")
     if remaining_need < 1:
         raise MarkingCodeServiceError("marking_complete")
 
@@ -1580,7 +1580,7 @@ async def print_codes_for_packaging_line(
             raise MarkingCodeServiceError("invalid_print_quantity")
         target_qty = min(units_to_print, remaining_need)
     else:
-        target_qty = quantity_needed
+        target_qty = remaining_need
 
     code_filter, filter_product = await _code_filter_for_product(
         session,
@@ -1880,7 +1880,11 @@ def _lines_needing_marking(task: PackagingTask) -> list[PackagingTaskLine]:
         product = line.product
         if product is None or not product.requires_honest_sign:
             continue
-        remaining = qty_need_pack(line) - int(line.qty_marking_printed)
+        remaining = (
+            qty_need_pack(line)
+            - int(line.qty_marking_printed)
+            - int(line.qty_marking_external or 0)
+        )
         if remaining > 0:
             out.append(line)
     return out
@@ -1957,7 +1961,11 @@ async def _preview_all_lines_print(
                 line.product_id,
             )
 
-        remaining = qty_need_pack(line) - int(line.qty_marking_printed)
+        remaining = (
+            qty_need_pack(line)
+            - int(line.qty_marking_printed)
+            - int(line.qty_marking_external or 0)
+        )
         available = budget[supply_key]
         shortage = max(0, remaining - available)
         if shortage > 0 and not allow_partial:
@@ -2167,7 +2175,8 @@ async def assert_packaging_line_marking_done(
     from app.services.packaging_task_service import qty_done
 
     done = qty_done(line)
-    if done > 0 and int(line.qty_marking_printed) < done:
+    marked = int(line.qty_marking_printed) + int(line.qty_marking_external or 0)
+    if done > 0 and marked < done:
         raise MarkingCodeServiceError("marking_not_done")
 
 
@@ -3235,7 +3244,9 @@ async def list_pending_marking_lines(
         PackagingTask.status.in_(("draft", "in_progress")),
         Product.requires_honest_sign.is_(True),
         qty_need_expr > 0,
-        PackagingTaskLine.qty_marking_printed < qty_need_expr,
+        PackagingTaskLine.qty_marking_printed
+        + PackagingTaskLine.qty_marking_external
+        < qty_need_expr,
     ]
     if warehouse_id is not None:
         base_filters.append(PackagingTask.warehouse_id == warehouse_id)
@@ -3272,6 +3283,7 @@ async def list_pending_marking_lines(
     for line, task, product, loc in page_rows:
         qty_need = qty_need_pack(line)
         printed = int(line.qty_marking_printed)
+        external = int(line.qty_marking_external or 0)
         rows.append(
             PendingMarkingRow(
                 packaging_task_id=task.id,
@@ -3285,7 +3297,7 @@ async def list_pending_marking_lines(
                 storage_location_code=loc.code,
                 qty_need=qty_need,
                 qty_marking_printed=printed,
-                qty_remaining=qty_need - printed,
+                qty_remaining=qty_need - printed - external,
                 marking_available_count=available_by_product.get(product.id, 0),
             )
         )

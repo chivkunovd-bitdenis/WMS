@@ -77,6 +77,8 @@ def _raise_from_service(exc: kiz_svc.FbsKizError) -> None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=detail)
     if exc.code == "order_not_found":
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=detail)
+    if exc.code == "kiz_not_found":
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=detail)
     if exc.code == "missing_marketplace_token":
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=detail)
     if exc.code == "not_a_kiz":
@@ -194,3 +196,22 @@ async def commit_fbs_order_kiz(
             http_client,
         )
     return [_commit_row_out(row) for row in rows]
+
+
+@router.delete("/{order_id}/kiz", status_code=status.HTTP_204_NO_CONTENT)
+async def delete_fbs_order_kiz(
+    order_id: uuid.UUID,
+    user: Annotated[User, Depends(require_fbs_operator_access)],
+    session: Annotated[AsyncSession, Depends(get_db)],
+) -> None:
+    try:
+        async with httpx.AsyncClient() as http_client:
+            await kiz_svc.cancel_order_kiz(
+                session,
+                user.tenant_id,
+                user.id,
+                order_id,
+                http_client,
+            )
+    except kiz_svc.FbsKizError as exc:
+        _raise_from_service(exc)

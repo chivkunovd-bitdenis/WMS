@@ -16,12 +16,14 @@ from app.models.fbs_order import (
     MARKING_KIND_SGTIN,
     META_STATUS_ACCEPTED,
     META_STATUS_ALLOWED_WITHOUT_CHECK,
+    META_STATUS_REJECTED,
     PACK_STATUS_PACKED,
     PICK_STATUS_PICKED,
     STICKER_STATUS_APPLIED,
     STICKER_STATUS_PRINT_OPENED,
     STICKER_STATUS_READY,
     FbsOrder,
+    FbsOrderMarking,
 )
 from app.models.fbs_print_asset import (
     PRINT_ASSET_KIND_CARGO_PLACE_QR,
@@ -444,10 +446,25 @@ async def _build_marking_pool(
     tenant_id: uuid.UUID,
     orders: list[FbsOrder],
 ) -> dict[str, Any]:
-    """Честный знак deficit for the whole supply, reusing the pool count logic
+    """Honest Sign deficit for the whole supply, reusing the pool count logic
     from marking_code_service (no ad-hoc query on MarkingCode here).
     """
-    needing_orders = [order for order in orders if _order_needs_marking_code(order)]
+    order_ids = [order.id for order in orders]
+    marked_order_ids: set[uuid.UUID] = set()
+    if order_ids:
+        marked_stmt = select(FbsOrderMarking.order_id).where(
+            FbsOrderMarking.tenant_id == tenant_id,
+            FbsOrderMarking.order_id.in_(order_ids),
+            FbsOrderMarking.kind == MARKING_KIND_SGTIN,
+            FbsOrderMarking.meta_status != META_STATUS_REJECTED,
+        )
+        marked_order_ids = set((await session.execute(marked_stmt)).scalars().all())
+
+    needing_orders = [
+        order
+        for order in orders
+        if _order_needs_marking_code(order) and order.id not in marked_order_ids
+    ]
     if not needing_orders:
         return {"required": 0, "available": 0, "shortage": 0, "orders_without_code": []}
 
