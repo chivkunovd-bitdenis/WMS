@@ -3,6 +3,7 @@
 
 from __future__ import annotations
 
+import logging
 import uuid
 from collections import defaultdict
 from dataclasses import dataclass
@@ -51,6 +52,7 @@ from app.services.fbs_supply_validator_service import (
     preflight_to_dict,
     validate_supply_composition,
 )
+from app.services.fbs_sticker_code_service import sticker_code_from_wb_row
 from app.services.fbs_workspace_service import get_supply_workspace
 from app.services.fbs_wb_seller_lock_service import wb_seller_lock
 from app.services.wildberries_client import (
@@ -65,6 +67,8 @@ from app.services.wildberries_credentials_service import (
     get_decrypted_marketplace_token,
 )
 from app.services.wildberries_fbs_client import split_marketplace_order_id_batches
+
+logger = logging.getLogger(__name__)
 
 _VALID_DELIVERY_TYPES = {FBS_DELIVERY_TYPE_WAREHOUSE_SC, FBS_DELIVERY_TYPE_PVZ}
 
@@ -550,6 +554,8 @@ async def start_supply_work(
     session: AsyncSession,
     tenant_id: uuid.UUID,
     supply_id: uuid.UUID,
+    *,
+    http_client: httpx.AsyncClient | None = None,
 ) -> dict[str, Any]:
     supply = await _get_supply(session, tenant_id, supply_id, with_orders=True)
     if supply is None:
@@ -563,7 +569,38 @@ async def start_supply_work(
             if order.status == FBS_ORDER_STATUS_IN_SUPPLY:
                 order.status = FBS_ORDER_STATUS_ASSEMBLING
         await session.flush()
+    if http_client is not None:
+        await _request_order_stickers_for_picking(session, tenant_id, supply, http_client)
     return await get_supply_workspace(session, tenant_id, supply_id)
+
+
+async def _request_order_stickers_for_picking(
+    session: AsyncSession,
+    tenant_id: uuid.UUID,
+    supply: FbsSupply,
+    http_client: httpx.AsyncClient,
+) -> None:
+    missing = [order.id for order in supply.orders if not order.sticker_code]
+    if not missing:
+        return
+    try:
+        from app.services.fbs_print_asset_service import FbsPrintAssetError, request_supply_print_batch
+
+        await request_supply_print_batch(
+            session,
+            tenant_id,
+            supply.id,
+            kind="order_sticker",
+            order_ids=missing,
+            retry_missing=True,
+            http_client=http_client,
+        )
+    except FbsPrintAssetError as exc:
+        logger.warning(
+            "fbs supply start-work sticker prefetch skipped supply %s: %s",
+            supply.id,
+            exc.code,
+        )
 
 
 async def create_supply(
@@ -758,8 +795,7 @@ async def fetch_and_cache_stickers(
             sticker_row = by_wb_id.get(int(order.wb_order_id))
             if sticker_row is None:
                 raise FbsSupplyError("wb_stickers_incomplete")
-            barcode = sticker_row.get("barcode")
-            sticker_code = barcode if isinstance(barcode, str) else None
+            sticker_code = sticker_code_from_wb_row(sticker_row)
             png_bytes = decode_png_payload(sticker_row.get("file"))
             if png_bytes is None:
                 raise FbsSupplyError("wb_stickers_incomplete")

@@ -633,7 +633,7 @@ async def test_fbs_supply_stickers_cached(
     body = stickers.json()["stickers"]
     assert len(body) == 3
     for row in body:
-        assert row["sticker_code"] == f"MOCK-{row['wb_order_id']}"
+        assert row["sticker_code"] == f"{row['wb_order_id']} {row['wb_order_id'] + 1}"
         assert row["sticker_file"] is not None
         assert row["sticker_file"].startswith("fbs-print-assets/order-stickers/")
         sticker_path = Path(settings.wms_data_dir) / row["sticker_file"]
@@ -746,6 +746,8 @@ async def test_fbs_supply_stickers_incomplete(
             {
                 "orderId": order_ids[0],
                 "barcode": f"MOCK-{order_ids[0]}",
+                "partA": order_ids[0],
+                "partB": order_ids[0] + 1,
                 "file": tiny_png,
             }
         ]
