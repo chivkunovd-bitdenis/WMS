@@ -626,6 +626,11 @@ async def add_order_to_supply(
         raise FbsSupplyError("order_already_in_supply")
     if order.status != FBS_ORDER_STATUS_NEW:
         raise FbsSupplyError("order_bad_status")
+    if (
+        order.supplier_status is not None
+        and order.supplier_status.strip().lower() != FBS_ORDER_STATUS_NEW
+    ):
+        raise FbsSupplyError("order_bad_status")
 
     token = await _require_marketplace_token(session, tenant_id, supply.seller_id)
     try:

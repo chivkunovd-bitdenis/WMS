@@ -54,6 +54,7 @@ from app.services.fbs_supply_reconcile_service import (
 )
 from app.services.wb_marketplace_orders_service import (
     _apply_wb_status_to_order,
+    _supplier_status_from_row,
     _wb_status_from_row,
 )
 from app.services.wildberries_client import (
@@ -270,8 +271,14 @@ async def _sync_supply_orders_from_wb(
             if row is None:
                 continue
             wb_status = _wb_status_from_row(row)
-            if wb_status is not None:
-                await _apply_wb_status_to_order(session, order, wb_status)
+            supplier_status = _supplier_status_from_row(row)
+            if wb_status is not None or supplier_status is not None:
+                await _apply_wb_status_to_order(
+                    session,
+                    order,
+                    wb_status,
+                    supplier_status=supplier_status,
+                )
 
     for order in orders:
         with suppress(marking_svc.FbsMarkingError):

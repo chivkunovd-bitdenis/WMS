@@ -516,6 +516,69 @@ async def test_tc06_atomic_from_orders_workspace(
 
 
 @pytest.mark.asyncio
+async def test_supplier_processed_order_hidden_from_new_and_rejected_by_create(
+    async_client: AsyncClient,
+    enable_wb_marketplace_supplies_mock: None,
+) -> None:
+    headers, suffix = await _register_ff_admin(async_client)
+    me = await async_client.get("/auth/me", headers=headers)
+    tenant_id = uuid.UUID(me.json()["tenant_id"])
+    seller_id, warehouse_id, location_id = await _setup_seller_with_token(
+        async_client, headers, suffix
+    )
+    product = await _create_product(
+        async_client,
+        headers,
+        seller_id,
+        sku=f"supplier-{suffix[-6:]}",
+    )
+    order_id = await _create_ready_order(
+        tenant_id,
+        uuid.UUID(seller_id),
+        uuid.UUID(warehouse_id),
+        uuid.UUID(location_id),
+        product,
+        order_id=855901,
+    )
+
+    async with SessionLocal() as session:
+        order = await session.get(FbsOrder, order_id)
+        assert order is not None
+        order.supplier_status = "confirm"
+        order.wb_status = "waiting"
+        await session.commit()
+
+    worklist = await async_client.get(
+        "/operations/fbs-orders/worklist?status_group=new",
+        headers=headers,
+    )
+    assert worklist.status_code == 200, worklist.text
+    assert all(item["id"] != str(order_id) for item in worklist.json()["items"])
+
+    preflight = await async_client.post(
+        "/operations/fbs-supplies/preflight",
+        headers=headers,
+        json={"order_ids": [str(order_id)], "planned_delivery_type": "warehouse_sc"},
+    )
+    assert preflight.status_code == 200, preflight.text
+    body = preflight.json()
+    assert body["compatible"] is False
+    assert any(issue["code"] == "order_bad_status" for issue in body["issues"])
+
+    create = await async_client.post(
+        "/operations/fbs-supplies/from-orders",
+        headers=headers,
+        json={
+            "name": "Must not create",
+            "order_ids": [str(order_id)],
+            "planned_delivery_type": "warehouse_sc",
+            "idempotency_key": str(uuid.uuid4()),
+        },
+    )
+    assert create.status_code == 409, create.text
+
+
+@pytest.mark.asyncio
 async def test_from_orders_idempotency_same_key(
     async_client: AsyncClient,
     enable_wb_marketplace_supplies_mock: None,

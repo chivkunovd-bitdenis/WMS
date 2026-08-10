@@ -11,7 +11,12 @@ from httpx import AsyncClient
 from sqlalchemy import func, select
 
 from app.db.session import SessionLocal
-from app.models.fbs_order import FBS_ORDER_STATUS_IN_DELIVERY, FBS_ORDER_STATUS_NEW, FbsOrder
+from app.models.fbs_order import (
+    FBS_ORDER_STATUS_EXTERNAL_PROCESSING,
+    FBS_ORDER_STATUS_IN_DELIVERY,
+    FBS_ORDER_STATUS_NEW,
+    FbsOrder,
+)
 from app.models.seller import Seller
 from app.models.seller_wildberries_credentials import SellerWildberriesCredentials
 from app.models.tenant import Tenant
@@ -383,6 +388,113 @@ async def test_fbs_autopoll_status_sync_updates_sorted(
             )
         ).scalar_one()
     assert order.wb_status == "sorted"
+
+
+@pytest.mark.asyncio
+async def test_fbs_autopoll_supplier_status_moves_new_order_out_of_new(
+    async_client: AsyncClient,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    tenant_id = uuid.uuid4()
+    warehouse_id = uuid.uuid4()
+    seller_id = await _seed_seller_with_marketplace_token(tenant_id, token_suffix="supplier")
+
+    async with SessionLocal() as session:
+        from app.models.warehouse import Warehouse
+
+        session.add(
+            Warehouse(
+                id=warehouse_id,
+                tenant_id=tenant_id,
+                name="WH supplier",
+                code=f"wh-supplier-{time.time_ns()}",
+            )
+        )
+        await seed_fbs_warehouse_binding(
+            session,
+            tenant_id=tenant_id,
+            seller_id=seller_id,
+            wms_warehouse_id=warehouse_id,
+        )
+        order, _ = await upsert_order_from_wb_row(
+            session,
+            tenant_id,
+            seller_id,
+            _wb_order_row(order_id=880101),
+        )
+        assert order.status == FBS_ORDER_STATUS_NEW
+        await session.commit()
+
+    _patch_wb_order_fetches(
+        monkeypatch,
+        status_rows=[{"id": 880101, "supplierStatus": "confirm", "wbStatus": "waiting"}],
+    )
+    target = SellerPollTarget(tenant_id=tenant_id, seller_id=seller_id)
+    async with SessionLocal() as session, httpx.AsyncClient() as client:
+        updated = await sync_fbs_order_statuses_for_seller(session, target, client)
+        await session.commit()
+
+    assert updated == 1
+    async with SessionLocal() as session:
+        order = (
+            await session.execute(select(FbsOrder).where(FbsOrder.wb_order_id == 880101))
+        ).scalar_one()
+    assert order.status == FBS_ORDER_STATUS_EXTERNAL_PROCESSING
+    assert order.supplier_status == "confirm"
+    assert order.wb_status == "waiting"
+
+
+@pytest.mark.asyncio
+async def test_fbs_autopoll_supplier_status_new_keeps_order_new(
+    async_client: AsyncClient,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    tenant_id = uuid.uuid4()
+    warehouse_id = uuid.uuid4()
+    seller_id = await _seed_seller_with_marketplace_token(tenant_id, token_suffix="supplier-new")
+
+    async with SessionLocal() as session:
+        from app.models.warehouse import Warehouse
+
+        session.add(
+            Warehouse(
+                id=warehouse_id,
+                tenant_id=tenant_id,
+                name="WH supplier new",
+                code=f"wh-supplier-new-{time.time_ns()}",
+            )
+        )
+        await seed_fbs_warehouse_binding(
+            session,
+            tenant_id=tenant_id,
+            seller_id=seller_id,
+            wms_warehouse_id=warehouse_id,
+        )
+        await upsert_order_from_wb_row(
+            session,
+            tenant_id,
+            seller_id,
+            _wb_order_row(order_id=880102),
+        )
+        await session.commit()
+
+    _patch_wb_order_fetches(
+        monkeypatch,
+        status_rows=[{"id": 880102, "supplierStatus": "new", "wbStatus": "waiting"}],
+    )
+    target = SellerPollTarget(tenant_id=tenant_id, seller_id=seller_id)
+    async with SessionLocal() as session, httpx.AsyncClient() as client:
+        updated = await sync_fbs_order_statuses_for_seller(session, target, client)
+        await session.commit()
+
+    assert updated == 1
+    async with SessionLocal() as session:
+        order = (
+            await session.execute(select(FbsOrder).where(FbsOrder.wb_order_id == 880102))
+        ).scalar_one()
+    assert order.status == FBS_ORDER_STATUS_NEW
+    assert order.supplier_status == "new"
+    assert order.wb_status == "waiting"
 
 
 @pytest.mark.asyncio

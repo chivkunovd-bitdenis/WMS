@@ -52,9 +52,6 @@ type Props = {
 const TABS = [
   { key: 'new', label: 'Новые' },
   { key: 'active', label: 'В работе' },
-  { key: 'delivery', label: 'В доставке' },
-  { key: 'done', label: 'Завершённые' },
-  { key: 'cancelled', label: 'Отменённые' },
 ] as const
 
 function MissingText({ children }: { children: string }) {
