@@ -23,6 +23,7 @@ import {
   TableHead,
   TableRow,
   TextField,
+  Tooltip,
   Typography,
 } from '@mui/material'
 import CloseIcon from '@mui/icons-material/Close'
@@ -36,6 +37,7 @@ import { type PackagingTask, type PackagingTaskLine } from '../ff/FfPackagingPag
 import { useMarkingCodePrint } from '../../utils/useMarkingCodePrint'
 import { readApiErrorMessage } from '../../utils/readApiErrorMessage'
 import type { ProductThermalLabelData } from '../../utils/printProductThermalLabel'
+import { FbsKizScanDialog } from './FbsKizScanDialog'
 import { FbsPrintPreviewDialog } from './FbsPrintPreviewDialog'
 import { buildFbsPickingListPrintHtml, ordersWord } from './fbsUx'
 import {
@@ -45,6 +47,7 @@ import {
   clearFbsPackingBox,
   createFbsPackingBoxes,
   createFbsIdempotencyKey,
+  deleteFbsOrderKiz,
   deleteFbsPackingBox,
   deliverFbsSupply,
   FbsApiError,
@@ -123,6 +126,17 @@ function isOrderMarkingReady(order: FbsWorkspace['orders'][number]) {
   return accepted.length >= order.metadata.required.length
 }
 
+// КИЗ, внесённый оператором со стикера, — в отличие от напечатанного нами из пула.
+function hasOperatorKiz(order: FbsWorkspace['orders'][number]) {
+  return order.metadata.states.some(
+    (state) =>
+      state.kind === 'sgtin' &&
+      state.source === 'operator' &&
+      state.status !== 'missing' &&
+      state.status !== 'rejected',
+  )
+}
+
 function productLabelFromOrder(order: FbsWorkspace['orders'][number]): ProductThermalLabelData {
   return {
     product_name: order.product.name,
@@ -178,6 +192,8 @@ export function FfFbsSupplyWorkspace({
   const [retryAction, setRetryAction] = useState<(() => void) | null>(null)
   const [tzLine, setTzLine] = useState<PackagingTaskLine | null>(null)
   const [reprintMenu, setReprintMenu] = useState<{ orderId: string; anchorEl: HTMLElement } | null>(null)
+  const [kizOpen, setKizOpen] = useState(false)
+  const [kizUndoOrderId, setKizUndoOrderId] = useState<string | null>(null)
   const { openPrint, dialog: markingPrintDialog } = useMarkingCodePrint()
 
   const load = useCallback(
@@ -1134,6 +1150,13 @@ export function FfFbsSupplyWorkspace({
                         </Typography>
                       </Box>
                       <Stack direction="row" spacing={1}>
+                        <Tooltip title="Только если Честный знак уже наклеен селлером">
+                          <span>
+                            <Button disabled={!packagingEditable || busy} onClick={() => setKizOpen(true)} data-testid="fbs-kiz-open">
+                              Внести КИЗ
+                            </Button>
+                          </span>
+                        </Tooltip>
                         <Button disabled={!packagingEditable || busy || unprintedPackingOrders.length === 0} onClick={() => openBulkOrderMarkingPrint(unprintedPackingOrders)}>
                           Печать всего
                         </Button>
@@ -1179,6 +1202,7 @@ export function FfFbsSupplyWorkspace({
                             </Typography>
                             <Typography variant="caption" sx={{ display: 'block', color: printed ? 'text.secondary' : 'text.secondary' }}>
                               {ids}
+                              {hasOperatorKiz(order) ? ' · КИЗ' : ''}
                               {markingShortOrderIds.has(order.id) ? <Box component="span" sx={{ color: '#854f0b' }}> · ЧЗ не хватило</Box> : null}
                             </Typography>
                           </Box>
@@ -1388,6 +1412,42 @@ export function FfFbsSupplyWorkspace({
         onApplied={(asset) => confirmPrintApplied(asset.id)}
       />
       {markingPrintDialog}
+      {workspace ? (
+        <FbsKizScanDialog
+          token={token}
+          authHeaders={authHeaders}
+          supplyId={workspace.supply.id}
+          open={kizOpen}
+          onClose={() => setKizOpen(false)}
+          onCommitted={() => void load(true)}
+        />
+      ) : null}
+      <Dialog open={Boolean(kizUndoOrderId)} onClose={() => setKizUndoOrderId(null)} maxWidth="xs" fullWidth>
+        <DialogTitle>Отменить КИЗ?</DialogTitle>
+        <DialogContent>
+          <Typography variant="body2">
+            Привязка снимется у нас и в WB. Отменяйте только если КИЗ внесён по ошибке.
+          </Typography>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setKizUndoOrderId(null)}>Не отменять</Button>
+          <Button
+            color="error"
+            variant="contained"
+            onClick={() => {
+              const orderId = kizUndoOrderId
+              setKizUndoOrderId(null)
+              if (!orderId || !workspace) return
+              void run(async () => {
+                await deleteFbsOrderKiz(token, authHeaders, orderId)
+                return fetchFbsWorkspace(token, authHeaders, workspace.supply.id)
+              }, 'КИЗ отменён.')
+            }}
+          >
+            Отменить КИЗ
+          </Button>
+        </DialogActions>
+      </Dialog>
       <Menu
         anchorEl={reprintMenu?.anchorEl ?? null}
         open={Boolean(reprintMenu)}
@@ -1402,6 +1462,17 @@ export function FfFbsSupplyWorkspace({
         >
           Перепечатка
         </MenuItem>
+        {reprintOrder && hasOperatorKiz(reprintOrder) ? (
+          <MenuItem
+            data-testid="fbs-kiz-undo"
+            onClick={() => {
+              setKizUndoOrderId(reprintMenu?.orderId ?? null)
+              setReprintMenu(null)
+            }}
+          >
+            Отменить КИЗ
+          </MenuItem>
+        ) : null}
       </Menu>
       <Dialog open={Boolean(tzLine)} onClose={() => setTzLine(null)} maxWidth="sm" fullWidth>
         <DialogTitle>ТЗ на упаковку</DialogTitle>

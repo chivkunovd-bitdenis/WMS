@@ -652,6 +652,7 @@ async def scan_order_metadata(
             if row is None:
                 row = FbsOrderMarking(
                     order_id=order_id,
+                    tenant_id=tenant_id,
                     kind=kind_norm,
                     value=preserved,
                     check_status=CHECK_STATUS_NEW,
@@ -779,6 +780,7 @@ async def upsert_order_marking(
             if row is None:
                 row = FbsOrderMarking(
                     order_id=order_id,
+                    tenant_id=tenant_id,
                     kind=kind_norm,
                     value=value_norm,
                     check_status=CHECK_STATUS_NEW,

@@ -17,6 +17,7 @@ from sqlalchemy import (
     UniqueConstraint,
     Uuid,
     func,
+    text,
 )
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -317,6 +318,14 @@ class FbsOrderMarking(Base):
             "marking_code_id",
             unique=True,
         ),
+        Index(
+            "uq_fbs_order_markings_tenant_kind_value",
+            "tenant_id",
+            "kind",
+            "value",
+            unique=True,
+            postgresql_where=text("meta_status <> 'rejected'"),
+        ),
     )
 
     id: Mapped[uuid.UUID] = mapped_column(
@@ -328,8 +337,17 @@ class FbsOrderMarking(Base):
         nullable=False,
         index=True,
     )
+    tenant_id: Mapped[uuid.UUID] = mapped_column(
+        Uuid(as_uuid=True),
+        ForeignKey("tenants.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
     kind: Mapped[str] = mapped_column(String(16), nullable=False)
     value: Mapped[str] = mapped_column(String(512), nullable=False)
+    source: Mapped[str] = mapped_column(
+        String(16), nullable=False, default="pool", server_default="pool"
+    )
     check_status: Mapped[str] = mapped_column(
         String(32), nullable=False, default="new", server_default="new"
     )
@@ -347,6 +365,14 @@ class FbsOrderMarking(Base):
     )
     reason: Mapped[str | None] = mapped_column(Text, nullable=True)
     meta_details_json: Mapped[dict[str, Any] | None] = mapped_column(JSON, nullable=True)
+    created_by_user_id: Mapped[uuid.UUID | None] = mapped_column(
+        Uuid(as_uuid=True),
+        ForeignKey("users.id", ondelete="SET NULL"),
+        nullable=True,
+    )
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
+    )
 
     order: Mapped[FbsOrder] = relationship("FbsOrder", back_populates="markings")
     marking_code: Mapped[MarkingCode | None] = relationship("MarkingCode")

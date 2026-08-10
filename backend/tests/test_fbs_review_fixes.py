@@ -627,6 +627,7 @@ async def test_promote_packed_requires_marking_ok(
         session.add(
             FbsOrderMarking(
                 order_id=order_id,
+                tenant_id=tenant_id,
                 kind="sgtin",
                 value="010460000000000021N4N57RTCBUZTQ",
                 check_status=CHECK_STATUS_NEW,

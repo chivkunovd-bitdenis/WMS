@@ -467,8 +467,10 @@ async def _assign_printed_code_to_order(
             if existing is None:
                 existing = FbsOrderMarking(
                     order_id=order.id,
+                    tenant_id=order.tenant_id,
                     kind=MARKING_KIND_SGTIN,
                     value=code.cis_code,
+                    source="pool",
                     check_status=CHECK_STATUS_NEW,
                     meta_status=META_STATUS_PENDING,
                     marking_code_id=code.id,

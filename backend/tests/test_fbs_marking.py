@@ -724,6 +724,7 @@ async def test_fbs_metadata_gate_rejected_blocks_allowed_without_check_ok(
         session.add(
             FbsOrderMarking(
                 order_id=order_id,
+                tenant_id=tenant_id,
                 kind="sgtin",
                 value="01CIS-REJECTED",
                 check_status=CHECK_STATUS_NEW,
@@ -754,6 +755,7 @@ async def test_fbs_metadata_gate_rejected_blocks_allowed_without_check_ok(
         session.add(
             FbsOrderMarking(
                 order_id=order_id,
+                tenant_id=tenant_id,
                 kind="sgtin",
                 value="01CIS-ALLOWED",
                 check_status=CHECK_STATUS_NEW,
