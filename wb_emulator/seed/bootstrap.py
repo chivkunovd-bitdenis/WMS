@@ -88,10 +88,15 @@ def _build_order_payload(spec: dict[str, Any], catalog: dict[str, Any]) -> dict[
         "wbStatus": str(spec.get("wbStatus", "waiting")),
         "cancelled": bool(spec.get("cancelled", False)),
     }
-    if "canPvz" in spec:
-        payload["canPvz"] = bool(spec["canPvz"])
-    if "isPvz" in spec:
-        payload["isPvz"] = bool(spec["isPvz"])
+    # Настоящее имя поля у WB — isPickupPointShipmentAllowed. Эмулятор раньше
+    # отдавал только canPvz/isPvz, которых в реальном ответе нет: из-за этого
+    # ошибка в чтении признака ПВЗ выглядела рабочей и на моках, и в тестах.
+    if "isPickupPointShipmentAllowed" in spec:
+        payload["isPickupPointShipmentAllowed"] = bool(spec["isPickupPointShipmentAllowed"])
+    elif "canPvz" in spec:
+        payload["isPickupPointShipmentAllowed"] = bool(spec["canPvz"])
+    elif "isPvz" in spec:
+        payload["isPickupPointShipmentAllowed"] = bool(spec["isPvz"])
     if "requiredMeta" in spec:
         payload["requiredMeta"] = list(spec["requiredMeta"])
     if "optionalMeta" in spec:

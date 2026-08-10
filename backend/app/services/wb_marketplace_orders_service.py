@@ -125,6 +125,21 @@ def _is_cancelled_wb_row(row: dict[str, Any]) -> bool:
     return wb_status is not None and _is_cancel_like_wb_status(wb_status)
 
 
+def _can_pvz_from_row(row: dict[str, Any]) -> bool:
+    """Разрешена ли сдача заказа через ПВЗ.
+
+    Настоящее поле WB — `isPickupPointShipmentAllowed`. Раньше читались `canPvz`
+    и `isPvz`, которых в ответе WB нет вовсе, поэтому признак всегда выходил false
+    и маршрут ПВЗ был заблокирован для всех заказов. Старые имена оставлены
+    запасными: их отдаёт эмулятор и старые фикстуры.
+    """
+    for key in ("isPickupPointShipmentAllowed", "canPvz", "isPvz"):
+        value = row.get(key)
+        if value is not None:
+            return bool(value)
+    return False
+
+
 def _is_legal_order(row: dict[str, Any]) -> bool:
     if row.get("isLegal") is True:
         return True
@@ -614,7 +629,7 @@ async def upsert_order_from_wb_row(
         cargo_type=_cargo_type_label(row),
         wb_office_id=_wb_office_id_from_row(row),
         wb_warehouse_id=wb_warehouse_id,
-        can_pvz=bool(row.get("canPvz") or row.get("isPvz")),
+        can_pvz=_can_pvz_from_row(row),
         status=FBS_ORDER_STATUS_NEW,
         created_at_wb=created_at_wb,
         deadline_at=deadline_at,
