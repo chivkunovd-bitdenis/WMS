@@ -33,6 +33,7 @@ from app.models.fbs_order import (
     META_STATUS_UNKNOWN,
     FbsOrder,
     FbsOrderMarking,
+    current_order_marking,
 )
 from app.models.marking_code import STATUS_AVAILABLE, STATUS_RESERVED, MarkingCode
 from app.services.marking_code_service import normalize_cis
@@ -277,7 +278,10 @@ def _meta_details_from_wb(details: tuple[MarketplaceMetaDetail, ...]) -> dict[st
 
 def _meta_details_from_markings(markings: list[FbsOrderMarking]) -> dict[str, Any]:
     out: dict[str, Any] = {}
-    for mark in markings:
+    for kind in {marking.kind for marking in markings}:
+        mark = current_order_marking(markings, kind, include_rejected=True)
+        if mark is None:
+            continue
         out[mark.kind] = {
             "status": mark.meta_status,
             "value": mark.value,
@@ -293,9 +297,8 @@ def compute_delivery_allowed(
     required = list(order.required_meta_json or [])
     if not required:
         return True
-    by_kind = {m.kind: m for m in markings}
     for kind in required:
-        mark = by_kind.get(kind)
+        mark = current_order_marking(markings, kind)
         if mark is None:
             return False
         if mark.meta_status in {META_STATUS_REJECTED, META_STATUS_REPLACEMENT_REQUIRED}:
@@ -311,10 +314,9 @@ def build_order_metadata(
 ) -> dict[str, Any]:
     required = list(order.required_meta_json or [])
     optional = list(order.optional_meta_json or [])
-    by_kind = {m.kind: m for m in markings}
     states: list[dict[str, Any]] = []
     for kind in required + [k for k in optional if k not in required]:
-        mark = by_kind.get(kind)
+        mark = current_order_marking(markings, kind, include_rejected=True)
         if mark is not None:
             states.append(
                 {
@@ -356,9 +358,8 @@ def order_marking_blocks_progress(order: FbsOrder) -> bool:
     required = list(order.required_meta_json or [])
     if not required:
         return False
-    by_kind = {m.kind: m for m in order.markings}
     for kind in required:
-        mark = by_kind.get(kind)
+        mark = current_order_marking(list(order.markings), kind)
         if mark is None:
             return True
         if mark.meta_status in {
@@ -548,7 +549,12 @@ async def _sync_order_meta_from_wb(
         if wb_status is not None:
             marking.check_status = wb_status
         meta_detail = details_by_kind.get(marking.kind)
-        if meta_detail is not None:
+        current = current_order_marking(markings, marking.kind, include_rejected=True)
+        detail_matches = meta_detail is not None and (
+            meta_detail.value == marking.value
+            or (meta_detail.value is None and current is marking)
+        )
+        if meta_detail is not None and detail_matches:
             _apply_meta_detail_to_marking(marking, meta_detail, check_status=wb_status)
         elif wb_status is not None:
             marking.meta_status = derive_meta_status(

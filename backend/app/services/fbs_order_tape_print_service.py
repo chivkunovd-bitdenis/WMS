@@ -18,6 +18,7 @@ from app.models.fbs_order import (
     META_STATUS_PENDING,
     FbsOrder,
     FbsOrderMarking,
+    current_order_marking,
 )
 from app.models.fbs_supply import FbsSupply
 from app.models.marking_code import EVENT_REPRINTED, STATUS_PRINTED, MarkingCode
@@ -359,6 +360,8 @@ async def _print_or_reprint_order_code(
     actor_user_id: uuid.UUID,
 ) -> mc_svc.PrintMarkingCodesResult:
     existing = _existing_sgtin_marking(order)
+    if existing is not None and existing.source == "operator":
+        raise mc_svc.MarkingCodeServiceError("operator_kiz_print_forbidden")
     if existing and existing.marking_code is not None:
         code = existing.marking_code
         if reprint:
@@ -410,10 +413,7 @@ async def _print_or_reprint_order_code(
 
 
 def _existing_sgtin_marking(order: FbsOrder) -> FbsOrderMarking | None:
-    for marking in order.markings:
-        if marking.kind == MARKING_KIND_SGTIN:
-            return marking
-    return None
+    return current_order_marking(list(order.markings), MARKING_KIND_SGTIN)
 
 
 def _order_requires_sgtin(order: FbsOrder) -> bool:

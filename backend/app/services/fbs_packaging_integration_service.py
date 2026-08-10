@@ -26,6 +26,7 @@ from app.models.fbs_order import (
     PACK_STATUS_PACKED,
     PICK_STATUS_PICKED,
     FbsOrder,
+    current_order_marking,
 )
 from app.models.fbs_order_pick import FbsOrderPick
 from app.models.fbs_packaging_fulfillment import FbsPackagingFulfillment
@@ -106,14 +107,13 @@ def _order_marking_blocks_promotion(order: FbsOrder) -> bool:
     required = list(order.required_meta_json or [])
     if not required:
         return False
-    by_kind = {m.kind: m for m in order.markings}
     ok_statuses = {
         META_STATUS_ACCEPTED,
         META_STATUS_ALLOWED_WITHOUT_CHECK,
         META_STATUS_PENDING,
     }
     for kind in required:
-        mark = by_kind.get(kind)
+        mark = current_order_marking(list(order.markings), kind)
         if mark is None:
             return True
         if mark.meta_status in {

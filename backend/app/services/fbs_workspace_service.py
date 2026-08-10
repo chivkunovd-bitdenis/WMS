@@ -16,7 +16,9 @@ from app.models.fbs_order import (
     MARKING_KIND_SGTIN,
     META_STATUS_ACCEPTED,
     META_STATUS_ALLOWED_WITHOUT_CHECK,
-    META_STATUS_REJECTED,
+    META_STATUS_ASSIGNED,
+    META_STATUS_PENDING,
+    META_STATUS_SENDING,
     PACK_STATUS_PACKED,
     PICK_STATUS_PICKED,
     STICKER_STATUS_APPLIED,
@@ -65,6 +67,17 @@ class WorkspaceProgress:
     metadata_ready: int
     stickers_ready: int
     total: int
+
+
+_WORKING_MARKING_STATUSES = frozenset(
+    {
+        META_STATUS_ASSIGNED,
+        META_STATUS_SENDING,
+        META_STATUS_PENDING,
+        META_STATUS_ACCEPTED,
+        META_STATUS_ALLOWED_WITHOUT_CHECK,
+    }
+)
 
 
 async def get_supply_workspace(
@@ -456,7 +469,7 @@ async def _build_marking_pool(
             FbsOrderMarking.tenant_id == tenant_id,
             FbsOrderMarking.order_id.in_(order_ids),
             FbsOrderMarking.kind == MARKING_KIND_SGTIN,
-            FbsOrderMarking.meta_status != META_STATUS_REJECTED,
+            FbsOrderMarking.meta_status.in_(_WORKING_MARKING_STATUSES),
         )
         marked_order_ids = set((await session.execute(marked_stmt)).scalars().all())
 

@@ -378,6 +378,29 @@ class FbsOrderMarking(Base):
     marking_code: Mapped[MarkingCode | None] = relationship("MarkingCode")
 
 
+def current_order_marking(
+    markings: list[FbsOrderMarking],
+    kind: str,
+    *,
+    include_rejected: bool = False,
+) -> FbsOrderMarking | None:
+    """Return the newest active marking, with rejected rows used only as fallback."""
+    matching = [marking for marking in markings if marking.kind == kind]
+    active = [
+        marking for marking in matching if marking.meta_status != META_STATUS_REJECTED
+    ]
+    candidates = active or (matching if include_rejected else [])
+    if not candidates:
+        return None
+    return max(
+        candidates,
+        key=lambda marking: (
+            str(getattr(marking, "created_at", "")),
+            str(getattr(marking, "id", "")),
+        ),
+    )
+
+
 class FbsOrderReservation(Base):
     """Warehouse-level reserve for an FBS order (1:1)."""
 

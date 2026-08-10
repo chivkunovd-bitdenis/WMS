@@ -20,8 +20,10 @@ from app.models.fbs_order import (
     MARKING_KIND_SGTIN,
     META_STATUS_ASSIGNED,
     META_STATUS_REJECTED,
+    META_STATUS_REPLACEMENT_REQUIRED,
     FbsOrder,
     FbsOrderMarking,
+    current_order_marking,
 )
 from app.models.fbs_packaging_fulfillment import FbsPackagingFulfillment
 from app.models.fbs_supply import FbsSupply
@@ -39,6 +41,7 @@ from app.models.seller_wildberries_imported_card import SellerWildberriesImporte
 from app.services import fbs_marking_service as marking_svc
 from app.services import marking_code_service as marking_code_svc
 from app.services.wb_card_enrichment import first_photo_url_from_card
+from app.services.wildberries_client import put_marketplace_order_meta
 from app.services.wildberries_errors import WildberriesClientError
 from app.services.wildberries_fbs_client import delete_marketplace_order_meta
 
@@ -48,6 +51,7 @@ _OPERATOR_MARKING_SOURCE = "operator"
 _EXTERNAL_FBS_MARKING_SOURCE = "external_fbs"
 _VOID_REPLACED_REASON = "replaced_by_external_fbs_kiz"
 _VOID_OPERATOR_CANCEL_REASON = "отмена оператором"
+_REPLACEMENT_RESTORE_FAILED = "wb_replacement_restore_failed"
 _GS = "\x1d"
 _AIM_PREFIXES = ("]d2", "]d1", "]Q1", "]Q3", "]C1")
 _CIS_MIN_LENGTH = 19
@@ -65,6 +69,7 @@ _GS1_FIXED_AI_VALUE_LENGTHS: dict[str, int] = {
     "16": 6,
     "17": 6,
     "20": 2,
+    **{f"310{decimal_places}": 6 for decimal_places in range(10)},
 }
 _GS1_VARIABLE_AI_MAX_LENGTHS: dict[str, int] = {
     "10": 20,
@@ -117,7 +122,7 @@ _KEYBOARD_LAYOUT_PAIRS = (
         "\u042c\u0411\u042e,",
         '~QWERTYUIOP{}ASDFGHJKL:"ZXCVBNM<>?',
     ),
-    ('"\u2116;:?', "@#$^&"),
+    ('"\u2116;:?/', "@#$^&|"),
 )
 _KEYBOARD_LAYOUT_MAP = {
     ru_char: qwerty_char
@@ -140,10 +145,12 @@ class FbsKizError(Exception):
         *,
         context: dict[str, Any] | None = None,
         message: str | None = None,
+        persist_failure_state: bool = False,
     ) -> None:
         self.code = code
         self.context = context or {}
         self.message = message
+        self.persist_failure_state = persist_failure_state
         super().__init__(code)
 
 
@@ -231,8 +238,11 @@ def _match_gs_substitute(value: str, position: int) -> str | None:
 
 
 def _is_expected_next_ai(current_ai: str, next_ai: str) -> bool:
-    if current_ai in _GS1_INTERNAL_VARIABLE_AIS:
-        return next_ai in _GS1_INTERNAL_VARIABLE_AIS and int(next_ai) > int(current_ai)
+    if (
+        current_ai in _GS1_INTERNAL_VARIABLE_AIS
+        and next_ai in _GS1_INTERNAL_VARIABLE_AIS
+    ):
+        return int(next_ai) > int(current_ai)
     return next_ai != current_ai
 
 
@@ -301,37 +311,43 @@ def _has_keyboard_layout_noise(value: str) -> bool:
     return any(char in _KEYBOARD_LAYOUT_MARKERS for char in value)
 
 
-def _repair_keyboard_layout(value: str) -> str | None:
-    if not _has_keyboard_layout_noise(value):
-        return None
-    repaired = value.translate(_KEYBOARD_LAYOUT_TRANSLATION)
-    if repaired != value and is_probably_cis(repaired):
-        return repaired
-    return None
+def _strip_aim_prefix(value: str) -> tuple[str, bool]:
+    for prefix in _AIM_PREFIXES:
+        if value.startswith(prefix):
+            return value[len(prefix) :], True
+    return value, False
 
 
 def normalize_scanned_cis(raw: str) -> tuple[str, list[str]]:
     value = raw.rstrip(" \r\n")
     hints: list[str] = []
 
-    for prefix in _AIM_PREFIXES:
-        if value.startswith(prefix):
-            value = value[len(prefix) :]
-            hints.append("aim_prefix")
-            break
+    value, aim_prefix_removed = _strip_aim_prefix(value)
+    if aim_prefix_removed:
+        hints.append("aim_prefix")
 
     value, gs_changed = _restore_gs_substitutes(value)
     if gs_changed:
         hints.append("gs_substitute")
 
-    repaired = _repair_keyboard_layout(value)
-    if repaired is not None:
+    if _has_keyboard_layout_noise(value):
+        repaired = value.translate(_KEYBOARD_LAYOUT_TRANSLATION)
+        repaired, aim_prefix_removed_after_layout = _strip_aim_prefix(repaired)
+        repaired, gs_changed_after_layout = _restore_gs_substitutes(repaired)
+    else:
+        repaired = value
+        aim_prefix_removed_after_layout = False
+        gs_changed_after_layout = False
+    if repaired != value and is_probably_cis(repaired):
         value = repaired
+        if aim_prefix_removed_after_layout and "aim_prefix" not in hints:
+            hints.append("aim_prefix")
         hints.append("keyboard_layout")
-        value, gs_changed_after_layout = _restore_gs_substitutes(value)
         if gs_changed_after_layout and "gs_substitute" not in hints:
             hints.append("gs_substitute")
 
+    hint_order = {"aim_prefix": 0, "gs_substitute": 1, "keyboard_layout": 2}
+    hints.sort(key=hint_order.__getitem__)
     return value, hints
 
 
@@ -369,14 +385,7 @@ def _find_order_by_sticker(orders: list[FbsOrder], sticker: str) -> FbsOrder | N
 
 
 def _current_sgtin_marking(order: FbsOrder) -> FbsOrderMarking | None:
-    candidates = [
-        marking
-        for marking in order.markings
-        if marking.kind == MARKING_KIND_SGTIN and marking.meta_status != META_STATUS_REJECTED
-    ]
-    if not candidates:
-        return None
-    return max(candidates, key=lambda marking: (marking.created_at, marking.id.hex))
+    return current_order_marking(list(order.markings), MARKING_KIND_SGTIN)
 
 
 def _mask_kiz(value: str) -> str:
@@ -566,10 +575,21 @@ async def _get_marking_code_by_cis(
 async def _ensure_kiz_not_occupied_in_pool(
     session: AsyncSession,
     tenant_id: uuid.UUID,
+    order: FbsOrder,
     value: str,
 ) -> None:
     code = await _get_marking_code_by_cis(session, tenant_id, value)
-    if code is not None and code.status != STATUS_AVAILABLE:
+    if code is None:
+        return
+    if code.seller_id != order.seller_id:
+        raise FbsKizError("cross_seller_code")
+    if (
+        order.product_id is not None
+        and code.product_id is not None
+        and code.product_id != order.product_id
+    ):
+        raise FbsKizError("code_product_mismatch")
+    if code.status != STATUS_AVAILABLE:
         raise FbsKizError(
             "duplicate_kiz",
             context={"marking_code_id": str(code.id), "status": code.status},
@@ -601,7 +621,7 @@ async def _validate_kiz_pair(
     )
     await _ensure_kiz_not_bound_to_other_order(session, tenant_id, order.id, value)
     if check_marking_code_occupancy:
-        await _ensure_kiz_not_occupied_in_pool(session, tenant_id, value)
+        await _ensure_kiz_not_occupied_in_pool(session, tenant_id, order, value)
     return _ValidatedKizPair(order=order, value=value, hints=hints)
 
 
@@ -689,44 +709,54 @@ async def _create_or_apply_external_code(
     line: PackagingTaskLine,
 ) -> MarkingCode:
     now = datetime.now(tz=UTC)
-    code = await _get_marking_code_by_cis(
-        session,
-        tenant_id,
-        value,
-        for_update=True,
+    code = MarkingCode(
+        tenant_id=tenant_id,
+        seller_id=order.seller_id,
+        product_id=order.product_id,
+        cis_code=value,
+        source=_EXTERNAL_FBS_MARKING_SOURCE,
+        status=STATUS_APPLIED,
+        applied_at=now,
+        packaging_task_line_id=line.id,
+        pool_id=None,
+        import_batch_id=None,
+        label_artifact_pdf=None,
     )
-    if code is not None and code.status != STATUS_AVAILABLE:
-        raise FbsKizError(
-            "duplicate_kiz",
-            context={"marking_code_id": str(code.id), "status": code.status},
-        )
-    if code is None:
-        code = MarkingCode(
-            tenant_id=tenant_id,
-            seller_id=order.seller_id,
-            product_id=order.product_id,
-            cis_code=value,
-            source=_EXTERNAL_FBS_MARKING_SOURCE,
-            status=STATUS_APPLIED,
-            applied_at=now,
-            packaging_task_line_id=line.id,
-            pool_id=None,
-            import_batch_id=None,
-            label_artifact_pdf=None,
-        )
-        session.add(code)
-    else:
-        code.seller_id = order.seller_id
-        code.product_id = order.product_id
-        code.source = _EXTERNAL_FBS_MARKING_SOURCE
-        code.status = STATUS_APPLIED
-        code.applied_at = now
-        code.packaging_task_line_id = line.id
-        code.pool_id = None
-        code.import_batch_id = None
-        code.label_artifact_pdf = None
+    session.add(code)
     await session.flush()
     return code
+
+
+async def _prepare_code_for_binding(
+    session: AsyncSession,
+    tenant_id: uuid.UUID,
+    order: FbsOrder,
+    value: str,
+    line: PackagingTaskLine,
+) -> tuple[MarkingCode, bool]:
+    try:
+        pool_code = await marking_svc._claim_pool_code_if_present(
+            session,
+            tenant_id=tenant_id,
+            order=order,
+            cis_raw=value,
+        )
+    except marking_svc.FbsMarkingError as exc:
+        raise _marking_error_to_kiz(exc) from exc
+    if pool_code is not None:
+        pool_code.packaging_task_line_id = line.id
+        await session.flush()
+        return pool_code, True
+    return (
+        await _create_or_apply_external_code(
+            session,
+            tenant_id,
+            order,
+            value,
+            line,
+        ),
+        False,
+    )
 
 
 async def void_existing_sgtin_marking(
@@ -743,16 +773,38 @@ async def void_existing_sgtin_marking(
     token = api_token or await marking_svc.require_marketplace_token(
         session, tenant_id, order.seller_id
     )
+    await _delete_sgtin_from_wb(order, http_client, token)
+    await _void_existing_sgtin_marking_locally(
+        session,
+        marking,
+        actor_user_id=actor_user_id,
+        reason=reason,
+    )
+
+
+async def _delete_sgtin_from_wb(
+    order: FbsOrder,
+    http_client: httpx.AsyncClient,
+    api_token: str,
+) -> None:
     try:
         await delete_marketplace_order_meta(
             http_client,
-            api_token=token,
+            api_token=api_token,
             order_id=int(order.wb_order_id),
             key=MARKING_KIND_SGTIN,
         )
     except WildberriesClientError as exc:
         raise FbsKizError(marking_svc._wb_error_code(exc)) from exc
 
+
+async def _void_existing_sgtin_marking_locally(
+    session: AsyncSession,
+    marking: FbsOrderMarking,
+    *,
+    actor_user_id: uuid.UUID | None,
+    reason: str,
+) -> None:
     code = marking.marking_code
     if code is None and marking.marking_code_id is not None:
         code = await session.get(MarkingCode, marking.marking_code_id)
@@ -773,6 +825,56 @@ async def void_existing_sgtin_marking(
             line.qty_marking_external = max(0, int(line.qty_marking_external) - 1)
 
     await session.delete(marking)
+    await session.flush()
+
+
+async def _restore_previous_wb_marking(
+    order: FbsOrder,
+    marking: FbsOrderMarking,
+    http_client: httpx.AsyncClient,
+    api_token: str,
+) -> None:
+    await _delete_sgtin_from_wb(order, http_client, api_token)
+    try:
+        await put_marketplace_order_meta(
+            http_client,
+            api_token=api_token,
+            order_id=int(order.wb_order_id),
+            kind=MARKING_KIND_SGTIN,
+            value=marking.value,
+        )
+    except WildberriesClientError as exc:
+        raise FbsKizError(marking_svc._wb_error_code(exc)) from exc
+
+
+async def _persist_failed_replacement_state(
+    session: AsyncSession,
+    tenant_id: uuid.UUID,
+    order_id: uuid.UUID,
+    *,
+    new_error_code: str,
+    restore_error_code: str,
+) -> None:
+    await session.rollback()
+    order = await _get_order_for_kiz(session, tenant_id, order_id, for_update=True)
+    current = await _current_sgtin_marking_for_update(session, order.id)
+    if current is None:
+        raise FbsKizError("kiz_not_found", context={"order_id": str(order.id)})
+    reason = (
+        "replacement_failed_and_restore_failed: "
+        f"new={new_error_code}; restore={restore_error_code}"
+    )
+    current.meta_status = META_STATUS_REPLACEMENT_REQUIRED
+    current.reason = reason
+    order.meta_details_json = {
+        MARKING_KIND_SGTIN: {
+            "status": META_STATUS_REPLACEMENT_REQUIRED,
+            "value": current.value,
+            "reason": reason,
+        }
+    }
+    order.metadata_delivery_allowed = False
+    order.metadata_last_checked_at = datetime.now(tz=UTC)
     await session.flush()
 
 
@@ -836,33 +938,16 @@ async def _commit_one_kiz_pair(
             context={"current_kiz": _mask_kiz(current.value)},
         )
 
-    await _ensure_kiz_not_occupied_in_pool(
-        session,
-        tenant_id,
-        validated.value,
-    )
-
-    token = await marking_svc.require_marketplace_token(
-        session, tenant_id, order.seller_id
-    )
-    if current is not None:
-        await void_existing_sgtin_marking(
-            session,
-            tenant_id,
-            order,
-            current,
-            http_client,
-            actor_user_id=actor_user_id,
-            api_token=token,
-        )
-
     line_ref = await _packaging_line_for_order(session, tenant_id, order)
-    code = await _create_or_apply_external_code(
+    code, from_pool = await _prepare_code_for_binding(
         session,
         tenant_id,
         order,
         validated.value,
         line_ref.line,
+    )
+    token = await marking_svc.require_marketplace_token(
+        session, tenant_id, order.seller_id
     )
     await marking_code_svc.record_event(
         session,
@@ -877,7 +962,7 @@ async def _commit_one_kiz_pair(
         tenant_id=tenant_id,
         kind=MARKING_KIND_SGTIN,
         value=validated.value,
-        source=_OPERATOR_MARKING_SOURCE,
+        source=_POOL_MARKING_SOURCE if from_pool else _OPERATOR_MARKING_SOURCE,
         check_status=CHECK_STATUS_NEW,
         meta_status=META_STATUS_ASSIGNED,
         marking_code_id=code.id,
@@ -886,7 +971,10 @@ async def _commit_one_kiz_pair(
     session.add(marking)
     await session.flush()
 
+    new_error: FbsKizError | None = None
     try:
+        if current is not None:
+            await _delete_sgtin_from_wb(order, http_client, token)
         await marking_svc.attach_order_meta_to_wb_and_sync(
             session,
             tenant_id,
@@ -895,10 +983,54 @@ async def _commit_one_kiz_pair(
             http_client,
             api_token=token,
         )
+    except FbsKizError as exc:
+        new_error = exc
     except marking_svc.FbsMarkingError as exc:
-        raise _marking_error_to_kiz(exc) from exc
+        new_error = _marking_error_to_kiz(exc)
+    except WildberriesClientError as exc:
+        new_error = FbsKizError(marking_svc._wb_error_code(exc))
+    if new_error is not None:
+        if current is None:
+            raise new_error
+        try:
+            await _restore_previous_wb_marking(
+                order,
+                current,
+                http_client,
+                token,
+            )
+        except FbsKizError as restore_error:
+            await _persist_failed_replacement_state(
+                session,
+                tenant_id,
+                order.id,
+                new_error_code=new_error.code,
+                restore_error_code=restore_error.code,
+            )
+            raise FbsKizError(
+                _REPLACEMENT_RESTORE_FAILED,
+                context={
+                    "new_error": new_error.code,
+                    "restore_error": restore_error.code,
+                },
+                persist_failure_state=True,
+            ) from restore_error
+        raise new_error
 
-    line_ref.line.qty_marking_external = int(line_ref.line.qty_marking_external) + 1
+    if current is not None:
+        await _void_existing_sgtin_marking_locally(
+            session,
+            current,
+            actor_user_id=actor_user_id,
+            reason=_VOID_REPLACED_REASON,
+        )
+
+    previous_was_pool = current is not None and current.source == _POOL_MARKING_SOURCE
+    if from_pool:
+        if not previous_was_pool:
+            line_ref.line.qty_marking_printed = int(line_ref.line.qty_marking_printed) + 1
+    elif not previous_was_pool:
+        line_ref.line.qty_marking_external = int(line_ref.line.qty_marking_external) + 1
     await session.flush()
 
 
@@ -951,7 +1083,10 @@ async def commit_kiz_pairs(
                 )
             )
         except FbsKizError as exc:
-            await session.rollback()
+            if exc.persist_failure_state:
+                await session.commit()
+            else:
+                await session.rollback()
             rows.append(_error_commit_row(pair.order_id, exc))
         else:
             rows.append(_ok_commit_row(pair.order_id))

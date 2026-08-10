@@ -87,6 +87,8 @@ def _raise_from_service(exc: kiz_svc.FbsKizError) -> None:
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=detail)
     if exc.code in {
         "duplicate_kiz",
+        "cross_seller_code",
+        "code_product_mismatch",
         "needs_confirmation",
         "meta_validation_fail",
         "packaging_line_not_found",
