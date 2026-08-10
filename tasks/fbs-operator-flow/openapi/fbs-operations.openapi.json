@@ -678,6 +678,102 @@
         }
       }
     },
+    "/operations/fbs-orders/kiz/validate": {
+      "post": {
+        "tags": [
+          "operations"
+        ],
+        "summary": "Validate Fbs Order Kiz",
+        "operationId": "validate_fbs_order_kiz_operations_fbs_orders_kiz_validate_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/FbsKizValidateBody"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FbsKizValidateOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      }
+    },
+    "/operations/fbs-orders/kiz/commit": {
+      "post": {
+        "tags": [
+          "operations"
+        ],
+        "summary": "Commit Fbs Order Kiz",
+        "operationId": "commit_fbs_order_kiz_operations_fbs_orders_kiz_commit_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/FbsKizCommitBody"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/FbsKizCommitRowOut"
+                  },
+                  "type": "array",
+                  "title": "Response Commit Fbs Order Kiz Operations Fbs Orders Kiz Commit Post"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      }
+    },
     "/operations/fbs-sellers/{seller_id}/warehouses": {
       "get": {
         "tags": [
@@ -4525,6 +4621,84 @@
         ],
         "title": "FbsDeliveryPreflightOut"
       },
+      "FbsKizCommitBody": {
+        "properties": {
+          "pairs": {
+            "items": {
+              "$ref": "#/components/schemas/FbsKizCommitPairIn"
+            },
+            "type": "array",
+            "maxItems": 200,
+            "minItems": 1,
+            "title": "Pairs"
+          },
+          "idempotency_key": {
+            "type": "string",
+            "maxLength": 128,
+            "minLength": 1,
+            "title": "Idempotency Key"
+          }
+        },
+        "type": "object",
+        "required": [
+          "pairs",
+          "idempotency_key"
+        ],
+        "title": "FbsKizCommitBody"
+      },
+      "FbsKizCommitPairIn": {
+        "properties": {
+          "order_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Order Id"
+          },
+          "value": {
+            "type": "string",
+            "maxLength": 512,
+            "title": "Value"
+          },
+          "confirmed": {
+            "type": "boolean",
+            "title": "Confirmed",
+            "default": false
+          }
+        },
+        "type": "object",
+        "required": [
+          "order_id",
+          "value"
+        ],
+        "title": "FbsKizCommitPairIn"
+      },
+      "FbsKizCommitRowOut": {
+        "properties": {
+          "order_id": {
+            "type": "string",
+            "title": "Order Id"
+          },
+          "status": {
+            "type": "string",
+            "title": "Status"
+          },
+          "code": {
+            "type": "string",
+            "title": "Code"
+          },
+          "message": {
+            "type": "string",
+            "title": "Message"
+          }
+        },
+        "type": "object",
+        "required": [
+          "order_id",
+          "status",
+          "code",
+          "message"
+        ],
+        "title": "FbsKizCommitRowOut"
+      },
       "FbsKizCurrentOut": {
         "properties": {
           "masked": {
@@ -4651,6 +4825,47 @@
           "seller_article"
         ],
         "title": "FbsKizProductOut"
+      },
+      "FbsKizValidateBody": {
+        "properties": {
+          "order_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Order Id"
+          },
+          "value": {
+            "type": "string",
+            "maxLength": 512,
+            "title": "Value"
+          }
+        },
+        "type": "object",
+        "required": [
+          "order_id",
+          "value"
+        ],
+        "title": "FbsKizValidateBody"
+      },
+      "FbsKizValidateOut": {
+        "properties": {
+          "ok": {
+            "type": "boolean",
+            "title": "Ok"
+          },
+          "hints": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Hints"
+          }
+        },
+        "type": "object",
+        "required": [
+          "ok",
+          "hints"
+        ],
+        "title": "FbsKizValidateOut"
       },
       "FbsMarkingValueBody": {
         "properties": {

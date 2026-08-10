@@ -364,7 +364,7 @@ def order_marking_blocks_progress(order: FbsOrder) -> bool:
     return False
 
 
-async def _require_marketplace_token(
+async def require_marketplace_token(
     session: AsyncSession, tenant_id: uuid.UUID, seller_id: uuid.UUID
 ) -> str:
     if await _seller_in_tenant(session, tenant_id, seller_id) is None:
@@ -555,6 +555,62 @@ async def _sync_order_meta_from_wb(
     return markings
 
 
+def _meta_validation_reasons(exc: WildberriesBusinessError) -> list[dict[str, Any]]:
+    return [
+        {
+            "order_id": item.order_id,
+            "kind": item.key,
+            "value": item.value,
+            "decision": item.decision,
+            "reason": item.reason,
+        }
+        for item in exc.meta_validation
+    ]
+
+
+async def attach_order_meta_to_wb_and_sync(
+    session: AsyncSession,
+    tenant_id: uuid.UUID,
+    order: FbsOrder,
+    marking: FbsOrderMarking,
+    http_client: httpx.AsyncClient,
+    *,
+    api_token: str | None = None,
+) -> list[FbsOrderMarking]:
+    marking.meta_status = META_STATUS_SENDING
+    await session.flush()
+
+    token = api_token or await require_marketplace_token(
+        session, tenant_id, order.seller_id
+    )
+    try:
+        await put_marketplace_order_meta(
+            http_client,
+            api_token=token,
+            order_id=int(order.wb_order_id),
+            kind=marking.kind,
+            value=marking.value,
+        )
+    except WildberriesBusinessError as exc:
+        marking.meta_status = META_STATUS_REJECTED
+        reasons = _meta_validation_reasons(exc)
+        if exc.meta_validation:
+            marking.reason = exc.meta_validation[0].reason
+        marking.meta_details_json = {"meta_validation": reasons}
+        await session.flush()
+        raise FbsMarkingError(
+            "meta_validation_fail",
+            context={"reasons": reasons},
+        ) from exc
+    except WildberriesClientError as exc:
+        marking.meta_status = META_STATUS_ASSIGNED
+        raise FbsMarkingError(_wb_error_code(exc)) from exc
+
+    markings = await _sync_order_meta_from_wb(session, order, http_client, token)
+    await _notify_supply_marking_update(session, tenant_id, order.id)
+    return markings
+
+
 async def list_order_markings(
     session: AsyncSession,
     tenant_id: uuid.UUID,
@@ -585,7 +641,7 @@ async def get_order_metadata(
         raise FbsMarkingError("order_not_found")
     markings = await list_order_markings(session, tenant_id, order_id)
     if sync_wb and markings:
-        token = await _require_marketplace_token(session, tenant_id, order.seller_id)
+        token = await require_marketplace_token(session, tenant_id, order.seller_id)
         markings = await _sync_order_meta_from_wb(session, order, http_client, token)
         await _notify_supply_marking_update(session, tenant_id, order_id)
     return build_order_metadata(order, markings)
@@ -678,46 +734,17 @@ async def scan_order_metadata(
                 else:
                     row.marking_code_id = None
 
-            row.meta_status = META_STATUS_SENDING
             await session.flush()
     except IntegrityError as exc:
         raise FbsMarkingError("marking_code_already_assigned") from exc
 
-    token = await _require_marketplace_token(session, tenant_id, order.seller_id)
-    try:
-        await put_marketplace_order_meta(
-            http_client,
-            api_token=token,
-            order_id=int(order.wb_order_id),
-            kind=kind_norm,
-            value=preserved,
-        )
-    except WildberriesBusinessError as exc:
-        row.meta_status = META_STATUS_REJECTED
-        reasons = [
-            {
-                "order_id": item.order_id,
-                "kind": item.key,
-                "value": item.value,
-                "decision": item.decision,
-                "reason": item.reason,
-            }
-            for item in exc.meta_validation
-        ]
-        if exc.meta_validation:
-            row.reason = exc.meta_validation[0].reason
-        row.meta_details_json = {"meta_validation": reasons}
-        await session.flush()
-        raise FbsMarkingError(
-            "meta_validation_fail",
-            context={"reasons": reasons},
-        ) from exc
-    except WildberriesClientError as exc:
-        row.meta_status = META_STATUS_ASSIGNED
-        raise FbsMarkingError(_wb_error_code(exc)) from exc
-
-    markings = await _sync_order_meta_from_wb(session, order, http_client, token)
-    await _notify_supply_marking_update(session, tenant_id, order_id)
+    markings = await attach_order_meta_to_wb_and_sync(
+        session,
+        tenant_id,
+        order,
+        row,
+        http_client,
+    )
     return build_order_metadata(order, markings)
 
 
@@ -756,7 +783,7 @@ async def upsert_order_marking(
         if code is not None:
             await _ensure_marking_code_unassigned(session, code.id, order_id)
 
-    token = await _require_marketplace_token(session, tenant_id, order.seller_id)
+    token = await require_marketplace_token(session, tenant_id, order.seller_id)
     try:
         await put_marketplace_order_meta(
             http_client,
@@ -819,7 +846,7 @@ async def sync_order_marking_statuses(
     if not markings:
         return markings
 
-    token = await _require_marketplace_token(session, tenant_id, order.seller_id)
+    token = await require_marketplace_token(session, tenant_id, order.seller_id)
     try:
         markings = await _sync_order_meta_from_wb(session, order, http_client, token)
     except WildberriesClientError as exc:
