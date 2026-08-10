@@ -170,14 +170,25 @@ export function SellerSettingsScreen({ token, authHeaders }: Props) {
         )
         return
       }
-      const j = (await res.json()) as { cards_received?: number; cards_saved?: number }
+      const j = (await res.json()) as {
+        validation_ok?: boolean
+        validation_error?: string | null
+        cards_received?: number
+        cards_saved?: number
+      }
       setOpen(false)
       setContentKey('')
       setHasContentKey(true)
       await refreshWbCardsCount()
-      setOkMsg(
-        `Ключ сохранён. Проверка WB прошла (карточек получено: ${j.cards_received ?? 0}, сохранено: ${j.cards_saved ?? 0}).`,
-      )
+      if (j.validation_ok === false) {
+        setOkMsg(
+          `Ключ сохранён. Проверка WB сейчас не прошла (${j.validation_error ?? 'transport_error'}).`,
+        )
+      } else {
+        setOkMsg(
+          `Ключ сохранён. Проверка WB прошла (карточек получено: ${j.cards_received ?? 0}, сохранено: ${j.cards_saved ?? 0}).`,
+        )
+      }
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Не удалось сохранить ключ.')
     } finally {
