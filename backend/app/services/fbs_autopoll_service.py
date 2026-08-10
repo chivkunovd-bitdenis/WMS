@@ -20,6 +20,7 @@ from app.models.seller_wildberries_credentials import SellerWildberriesCredentia
 from app.services.fbs_cancellation_service import FbsCancellationError, sync_seller_order_statuses
 from app.services.fbs_stock_sync_service import FbsStockSyncError, sync_binding_stocks
 from app.services.fbs_tracking_service import FbsTrackingError, sync_in_delivery_supplies
+from app.services.fbs_wb_seller_lock_service import wb_seller_lock
 from app.services.wb_marketplace_orders_service import (
     WbMarketplaceOrdersError,
     sync_seller_orders,
@@ -296,7 +297,14 @@ async def poll_fbs_orders_all_sellers() -> FbsAutopollCycleResult:
         for target in targets:
             try:
                 async with SessionLocal() as session:
-                    stats = await poll_fbs_orders_for_seller(session, target, http_client)
+                    async with wb_seller_lock(session, target.seller_id) as wb_lock_acquired:
+                        if not wb_lock_acquired:
+                            logger.info(
+                                "fbs autopoll orders skipped busy seller %s",
+                                target.seller_id,
+                            )
+                            continue
+                        stats = await poll_fbs_orders_for_seller(session, target, http_client)
             except WbMarketplaceOrdersError as exc:
                 seller_errors += 1
                 logger.error(
@@ -358,8 +366,17 @@ async def sync_fbs_order_statuses_all_sellers() -> FbsAutopollCycleResult:
         for target in targets:
             try:
                 async with SessionLocal() as session:
-                    updated = await sync_fbs_order_statuses_for_seller(session, target, http_client)
-                    await session.commit()
+                    async with wb_seller_lock(session, target.seller_id) as wb_lock_acquired:
+                        if not wb_lock_acquired:
+                            logger.info(
+                                "fbs autopoll statuses skipped busy seller %s",
+                                target.seller_id,
+                            )
+                            continue
+                        updated = await sync_fbs_order_statuses_for_seller(
+                            session, target, http_client
+                        )
+                        await session.commit()
             except (WbMarketplaceOrdersError, FbsCancellationError) as exc:
                 seller_errors += 1
                 logger.error(
@@ -418,13 +435,20 @@ async def reconcile_fbs_stocks_all_sellers() -> FbsAutopollCycleResult:
         for target in targets:
             try:
                 async with SessionLocal() as session:
-                    result = await sync_seller_stocks(
-                        session,
-                        target.tenant_id,
-                        target.seller_id,
-                        http_client,
-                    )
-                    await session.commit()
+                    async with wb_seller_lock(session, target.seller_id) as wb_lock_acquired:
+                        if not wb_lock_acquired:
+                            logger.info(
+                                "fbs stock reconcile skipped busy seller %s",
+                                target.seller_id,
+                            )
+                            continue
+                        result = await sync_seller_stocks(
+                            session,
+                            target.tenant_id,
+                            target.seller_id,
+                            http_client,
+                        )
+                        await session.commit()
             except Exception:
                 seller_errors += 1
                 logger.exception(
