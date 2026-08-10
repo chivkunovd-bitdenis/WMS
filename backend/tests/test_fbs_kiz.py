@@ -23,6 +23,10 @@ from app.models.fbs_order import (
 )
 from app.models.fbs_supply import FBS_DELIVERY_TYPE_WAREHOUSE_SC, FbsSupply
 from app.models.product import Product
+from app.services import fbs_kiz_service as kiz_svc
+
+_GS = "\x1d"
+_CLEAN_CIS = f"010460043993125321AbCxyz{_GS}91K1aZ{_GS}92Crypto~|#<GS>tail"
 
 
 @dataclass(frozen=True)
@@ -188,6 +192,89 @@ async def _lookup(
         headers=headers,
         params={"supply_id": str(supply_id), "sticker": sticker},
     )
+
+
+@pytest.mark.parametrize("prefix", ["]d2", "]d1", "]Q1", "]Q3", "]C1"])
+def test_normalize_scanned_cis_strips_aim_prefix(prefix: str) -> None:
+    # TC-NEW-FBS-KIZ-002: scanner AIM symbology prefixes are server-normalized.
+    value, hints = kiz_svc.normalize_scanned_cis(f"{prefix}{_CLEAN_CIS}")
+
+    assert value == _CLEAN_CIS
+    assert hints == ["aim_prefix"]
+
+
+@pytest.mark.parametrize("separator", ["~", "|", "#", "<GS>", "{GS}", "\\x1d"])
+def test_normalize_scanned_cis_restores_gs_substitute_only_at_separator(
+    separator: str,
+) -> None:
+    # TC-NEW-FBS-KIZ-002: visible GS substitutes are restored only at GS1 boundaries.
+    raw = f"010460043993125321AbCxyz{separator}91K1aZ{separator}92Crypto~|#<GS>tail"
+
+    value, hints = kiz_svc.normalize_scanned_cis(raw)
+
+    assert value == _CLEAN_CIS
+    assert hints == ["gs_substitute"]
+
+
+def test_normalize_scanned_cis_repairs_keyboard_layout() -> None:
+    # TC-NEW-FBS-KIZ-002: Russian keyboard-layout scans are converted back to QWERTY.
+    raw = (
+        "010460043993125321"
+        "\u0424\u0438\u0421\u0447\u043d\u044f"
+        f"{_GS}91\u041b1\u0444\u042f"
+        f"{_GS}92\u0421\u043a\u043d\u0437\u0435\u0449"
+    )
+
+    value, hints = kiz_svc.normalize_scanned_cis(raw)
+
+    assert value == f"010460043993125321AbCxyz{_GS}91K1aZ{_GS}92Crypto"
+    assert hints == ["keyboard_layout"]
+
+
+def test_normalize_scanned_cis_trims_scanner_suffix() -> None:
+    # TC-NEW-FBS-KIZ-002: scanner suffix whitespace is ignored before validation.
+    value, hints = kiz_svc.normalize_scanned_cis(f"{_CLEAN_CIS}\r\n ")
+
+    assert value == _CLEAN_CIS
+    assert hints == []
+
+
+def test_normalize_scanned_cis_repairs_keyboard_layout_and_gs_together() -> None:
+    # TC-NEW-FBS-KIZ-002: independent scanner issues can be repaired in one pass.
+    raw = (
+        "010460043993125321"
+        "\u0424\u0438\u0421\u0447\u043d\u044f"
+        "~91\u041b1\u0444\u042f#92\u0421\u043a\u043d\u0437\u0435\u0449~tail"
+    )
+
+    value, hints = kiz_svc.normalize_scanned_cis(raw)
+
+    assert value == f"010460043993125321AbCxyz{_GS}91K1aZ{_GS}92Crypto~tail"
+    assert hints == ["gs_substitute", "keyboard_layout"]
+
+
+def test_normalize_scanned_cis_clean_value_has_no_hints() -> None:
+    # TC-NEW-FBS-KIZ-002: valid scanner input is preserved byte-for-byte.
+    value, hints = kiz_svc.normalize_scanned_cis(_CLEAN_CIS)
+
+    assert value == _CLEAN_CIS
+    assert hints == []
+
+
+def test_is_probably_cis_rejects_garbage() -> None:
+    # TC-NEW-FBS-KIZ-002: non-CIS garbage must not be sent to WB.
+    assert kiz_svc.is_probably_cis("laser scanner noise") is False
+
+
+def test_scan_debug_masks_gs_in_edges() -> None:
+    # TC-NEW-FBS-KIZ-002: diagnostics expose scan shape without invisible GS bytes.
+    debug = kiz_svc.scan_debug(f"AB{_GS}CDEFGHIJ{_GS}KL")
+
+    assert debug == {
+        "length": 14,
+        "first8": "AB<GS>CDEFG",
+        "last8": "FGHIJ<GS>KL",
+    }
 
 
 @pytest.mark.asyncio
