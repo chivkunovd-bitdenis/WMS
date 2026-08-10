@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState, type KeyboardEvent } from 'react'
+import { useCallback, useEffect, useRef, useState, type KeyboardEvent } from 'react'
 import {
   Box,
   Button,
@@ -75,6 +75,13 @@ export function FbsKizScanDialog({ token, authHeaders, supplyId, open, onClose, 
   const [confirmTarget, setConfirmTarget] = useState<FbsKizLookup | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
+  const inputRef = useRef<HTMLInputElement | null>(null)
+
+  // Сканер стреляет в активное поле. Пока запрос идёт, поле заблокировано и фокус
+  // теряется — без возврата фокуса следующий выстрел уходит в никуда.
+  const refocus = useCallback(() => {
+    window.setTimeout(() => inputRef.current?.focus(), 0)
+  }, [])
 
   useEffect(() => {
     if (open) return
@@ -93,10 +100,12 @@ export function FbsKizScanDialog({ token, authHeaders, supplyId, open, onClose, 
         const found = await lookupFbsOrderBySticker(token, authHeaders, supplyId, raw)
         if (pairs.some((pair) => pair.orderId === found.order_id)) {
           setError(`Заказ № ${found.wb_order_id} уже в списке`)
+          setValue('')
           return
         }
         if (!found.can_bind) {
           setError(found.block_reason ?? 'На этот заказ КИЗ внести нельзя')
+          setValue('')
           return
         }
         if (found.needs_confirmation) setConfirmTarget(found)
@@ -104,11 +113,13 @@ export function FbsKizScanDialog({ token, authHeaders, supplyId, open, onClose, 
         setValue('')
       } catch (cause) {
         setError(errorText(cause))
+        setValue('')
       } finally {
         setBusy(false)
+        refocus()
       }
     },
-    [token, authHeaders, supplyId, pairs],
+    [token, authHeaders, supplyId, pairs, refocus],
   )
 
   const scanKiz = useCallback(
@@ -116,6 +127,8 @@ export function FbsKizScanDialog({ token, authHeaders, supplyId, open, onClose, 
       if (!active) return
       if (pairs.some((pair) => pair.value === raw)) {
         setError('Этот КИЗ уже в списке')
+        setValue('')
+        refocus()
         return
       }
       setBusy(true)
@@ -139,11 +152,13 @@ export function FbsKizScanDialog({ token, authHeaders, supplyId, open, onClose, 
         setValue('')
       } catch (cause) {
         setError(errorText(cause))
+        setValue('')
       } finally {
         setBusy(false)
+        refocus()
       }
     },
-    [token, authHeaders, active, pairs],
+    [token, authHeaders, active, pairs, refocus],
   )
 
   const onEnter = useCallback(
@@ -186,8 +201,9 @@ export function FbsKizScanDialog({ token, authHeaders, supplyId, open, onClose, 
       setError(errorText(cause))
     } finally {
       setBusy(false)
+      refocus()
     }
-  }, [pairs, token, authHeaders, onCommitted])
+  }, [pairs, token, authHeaders, onCommitted, refocus])
 
   const pendingCount = pairs.filter((pair) => pair.status !== 'ok').length
   const allDone = pairs.length > 0 && pendingCount === 0
@@ -227,6 +243,7 @@ export function FbsKizScanDialog({ token, authHeaders, supplyId, open, onClose, 
               placeholder={active ? 'Сканируйте Честный знак' : 'Сканируйте QR стикера'}
               onChange={(event) => setValue(event.target.value)}
               onKeyDown={onEnter}
+              inputRef={inputRef}
               data-testid="fbs-kiz-input"
             />
 

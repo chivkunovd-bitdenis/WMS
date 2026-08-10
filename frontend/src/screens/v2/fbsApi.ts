@@ -1118,6 +1118,9 @@ export async function deleteFbsOrderKiz(
     method: 'DELETE',
     headers: { ...ah(token) },
   })
+  // Успех приходит пустым 204 — разбирать в нём JSON нечего, иначе отмена,
+  // которая на самом деле прошла, показывается оператору ошибкой.
+  if (res.ok) return
   await jsonOrThrow<{ ok: boolean }>(res)
 }
 
