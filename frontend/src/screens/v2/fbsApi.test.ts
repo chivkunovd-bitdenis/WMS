@@ -6,6 +6,7 @@ import {
   FbsApiError,
   fetchFbsWorklist,
   retryFbsSupplyQr,
+  validateFbsKiz,
 } from './fbsApi'
 
 const authHeaders = (token: string) => ({ Authorization: `Bearer ${token}` })
@@ -15,6 +16,28 @@ afterEach(() => {
 })
 
 describe('FBS API client', () => {
+  it('returns scanner normalization hints from KIZ validation', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(
+      new Response(
+        JSON.stringify({ ok: true, hints: ['keyboard_layout', 'gs_substitute'] }),
+        { status: 200, headers: { 'Content-Type': 'application/json' } },
+      ),
+    )
+    vi.stubGlobal('fetch', fetchMock)
+
+    const result = await validateFbsKiz('token', authHeaders, 'order-1', 'raw-scan')
+
+    expect(result).toEqual({ ok: true, hints: ['keyboard_layout', 'gs_substitute'] })
+    expect(fetchMock).toHaveBeenCalledWith('/api/operations/fbs-orders/kiz/validate', {
+      method: 'POST',
+      headers: {
+        Authorization: 'Bearer token',
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ order_id: 'order-1', value: 'raw-scan' }),
+    })
+  })
+
   it('keeps the structured FBS error envelope for the UI', async () => {
     vi.stubGlobal(
       'fetch',

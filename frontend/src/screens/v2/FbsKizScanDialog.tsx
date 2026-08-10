@@ -2,12 +2,14 @@ import { useCallback, useEffect, useRef, useState, type KeyboardEvent } from 're
 import {
   Box,
   Button,
+  Collapse,
   Dialog,
   DialogActions,
   DialogContent,
   DialogTitle,
   Divider,
   IconButton,
+  Link,
   Paper,
   Stack,
   TextField,
@@ -38,6 +40,17 @@ type Pair = {
   message: string | null
 }
 
+type ScannerDebug = {
+  length: number
+  first8: string
+  last8: string
+}
+
+type DialogError = {
+  text: string
+  debug: ScannerDebug | null
+}
+
 type Props = {
   token: string
   authHeaders: (token: string) => Record<string, string>
@@ -49,23 +62,55 @@ type Props = {
 
 const tail = (value: string) => `…${value.slice(-6)}`
 
+const HINT_TEXT: Record<string, string> = {
+  keyboard_layout: 'исправлена раскладка',
+  gs_substitute: 'восстановлен разделитель',
+  aim_prefix: 'убран префикс сканера',
+}
+
+function errorTextByCode(code: string, message: string, context: unknown): string {
+  if (code === 'sticker_not_found') return 'Стикер не найден в этой поставке'
+  if (code === 'order_frozen') return 'Заказ уже передан в доставку — КИЗ не изменить'
+  if (code === 'duplicate_kiz') {
+    const details = context as { wb_order_id?: number; created_at?: string } | null
+    const order = details?.wb_order_id ? ` в заказ № ${details.wb_order_id}` : ''
+    const when = details?.created_at
+      ? ` от ${new Date(details.created_at).toLocaleDateString('ru-RU')}`
+      : ''
+    return `Этот КИЗ уже внесён${order}${when}`
+  }
+  if (code === 'needs_confirmation') {
+    const details = context as { current_kiz?: string } | null
+    const current = details?.current_kiz ? ` ${details.current_kiz}` : ''
+    return `На этот заказ уже есть ЧЗ${current}. Внести другой КИЗ?`
+  }
+  if (code === 'not_a_kiz') return 'Это не похоже на Честный знак'
+  if (code === 'meta_validation_fail') return `WB не принял: ${message}`
+  if (code.startsWith('wb_')) return 'WB недоступен, попробуйте ещё раз'
+  return message
+}
+
 function errorText(cause: unknown): string {
   if (cause instanceof FbsApiError) {
-    if (cause.code === 'sticker_not_found') return 'Стикер не найден в этой поставке'
-    if (cause.code === 'order_frozen') return 'Заказ уже передан в доставку — КИЗ не изменить'
-    if (cause.code === 'duplicate_kiz') {
-      const context = cause.context as { wb_order_id?: number; created_at?: string } | null
-      const order = context?.wb_order_id ? ` в заказ № ${context.wb_order_id}` : ''
-      const when = context?.created_at
-        ? ` от ${new Date(context.created_at).toLocaleDateString('ru-RU')}`
-        : ''
-      return `Этот КИЗ уже внесён${order}${when}`
-    }
-    if (cause.code === 'meta_validation_fail') return `WB не принял: ${cause.message}`
-    if (cause.code.startsWith('wb_')) return 'WB недоступен, попробуйте ещё раз'
-    return cause.message
+    return errorTextByCode(cause.code, cause.message, cause.context)
   }
   return cause instanceof Error ? cause.message : 'Не удалось выполнить операцию'
+}
+
+function scannerDebug(cause: unknown): ScannerDebug | null {
+  if (!(cause instanceof FbsApiError) || cause.code !== 'not_a_kiz') return null
+  if (!cause.context || typeof cause.context !== 'object') return null
+  const debug = (cause.context as { debug?: unknown }).debug
+  if (!debug || typeof debug !== 'object') return null
+  const row = debug as { length?: unknown; first8?: unknown; last8?: unknown }
+  if (
+    typeof row.length !== 'number' ||
+    typeof row.first8 !== 'string' ||
+    typeof row.last8 !== 'string'
+  ) {
+    return null
+  }
+  return { length: row.length, first8: row.first8, last8: row.last8 }
 }
 
 export function FbsKizScanDialog({ token, authHeaders, supplyId, open, onClose, onCommitted }: Props) {
@@ -73,7 +118,9 @@ export function FbsKizScanDialog({ token, authHeaders, supplyId, open, onClose, 
   const [value, setValue] = useState('')
   const [pairs, setPairs] = useState<Pair[]>([])
   const [confirmTarget, setConfirmTarget] = useState<FbsKizLookup | null>(null)
-  const [error, setError] = useState<string | null>(null)
+  const [error, setError] = useState<DialogError | null>(null)
+  const [hints, setHints] = useState<string[]>([])
+  const [debugOpen, setDebugOpen] = useState(false)
   const [busy, setBusy] = useState(false)
   const inputRef = useRef<HTMLInputElement | null>(null)
 
@@ -90,21 +137,25 @@ export function FbsKizScanDialog({ token, authHeaders, supplyId, open, onClose, 
     setPairs([])
     setConfirmTarget(null)
     setError(null)
+    setHints([])
+    setDebugOpen(false)
   }, [open])
 
   const scanSticker = useCallback(
     async (raw: string) => {
       setBusy(true)
       setError(null)
+      setHints([])
+      setDebugOpen(false)
       try {
         const found = await lookupFbsOrderBySticker(token, authHeaders, supplyId, raw)
         if (pairs.some((pair) => pair.orderId === found.order_id)) {
-          setError(`Заказ № ${found.wb_order_id} уже в списке`)
+          setError({ text: `Заказ № ${found.wb_order_id} уже в списке`, debug: null })
           setValue('')
           return
         }
         if (!found.can_bind) {
-          setError(found.block_reason ?? 'На этот заказ КИЗ внести нельзя')
+          setError({ text: found.block_reason ?? 'На этот заказ КИЗ внести нельзя', debug: null })
           setValue('')
           return
         }
@@ -112,7 +163,7 @@ export function FbsKizScanDialog({ token, authHeaders, supplyId, open, onClose, 
         else setActive(found)
         setValue('')
       } catch (cause) {
-        setError(errorText(cause))
+        setError({ text: errorText(cause), debug: scannerDebug(cause) })
         setValue('')
       } finally {
         setBusy(false)
@@ -126,15 +177,20 @@ export function FbsKizScanDialog({ token, authHeaders, supplyId, open, onClose, 
     async (raw: string) => {
       if (!active) return
       if (pairs.some((pair) => pair.value === raw)) {
-        setError('Этот КИЗ уже в списке')
+        setError({ text: 'Этот КИЗ уже в списке', debug: null })
+        setHints([])
+        setDebugOpen(false)
         setValue('')
         refocus()
         return
       }
       setBusy(true)
       setError(null)
+      setHints([])
+      setDebugOpen(false)
       try {
-        await validateFbsKiz(token, authHeaders, active.order_id, raw)
+        const result = await validateFbsKiz(token, authHeaders, active.order_id, raw)
+        setHints(result.hints)
         setPairs((prev) => [
           ...prev,
           {
@@ -151,7 +207,7 @@ export function FbsKizScanDialog({ token, authHeaders, supplyId, open, onClose, 
         setActive(null)
         setValue('')
       } catch (cause) {
-        setError(errorText(cause))
+        setError({ text: errorText(cause), debug: scannerDebug(cause) })
         setValue('')
       } finally {
         setBusy(false)
@@ -178,6 +234,7 @@ export function FbsKizScanDialog({ token, authHeaders, supplyId, open, onClose, 
     if (pending.length === 0) return
     setBusy(true)
     setError(null)
+    setDebugOpen(false)
     try {
       const results = await commitFbsKiz(
         token,
@@ -192,13 +249,16 @@ export function FbsKizScanDialog({ token, authHeaders, supplyId, open, onClose, 
           return {
             ...pair,
             status: result.status === 'ok' ? 'ok' : 'error',
-            message: result.status === 'ok' ? null : (result.message ?? 'Не сохранено'),
+            message:
+              result.status === 'ok'
+                ? null
+                : errorTextByCode(result.code ?? '', result.message ?? 'Не сохранено', null),
           }
         }),
       )
       onCommitted()
     } catch (cause) {
-      setError(errorText(cause))
+      setError({ text: errorText(cause), debug: scannerDebug(cause) })
     } finally {
       setBusy(false)
       refocus()
@@ -247,9 +307,41 @@ export function FbsKizScanDialog({ token, authHeaders, supplyId, open, onClose, 
               data-testid="fbs-kiz-input"
             />
 
+            {hints.length > 0 ? (
+              <Typography variant="caption" color="text.secondary">
+                {hints.map((hint) => HINT_TEXT[hint] ?? hint).join(' · ')}
+              </Typography>
+            ) : null}
+
             {error ? (
-              <Typography variant="body2" sx={{ color: 'error.main' }} data-testid="fbs-kiz-error">
-                {error}
+              <Typography
+                variant="body2"
+                component="div"
+                sx={{ color: 'error.main' }}
+                data-testid="fbs-kiz-error"
+              >
+                {error.text}
+                {error.debug ? (
+                  <>
+                    <Link
+                      component="button"
+                      type="button"
+                      variant="body2"
+                      color="inherit"
+                      underline="hover"
+                      onClick={() => setDebugOpen((current) => !current)}
+                      sx={{ ml: 1 }}
+                    >
+                      Что приехало со сканера
+                    </Link>
+                    <Collapse in={debugOpen}>
+                      <Typography variant="caption" component="div" color="text.secondary">
+                        Длина: {error.debug.length} · начало: {error.debug.first8 || '—'} · конец:{' '}
+                        {error.debug.last8 || '—'}
+                      </Typography>
+                    </Collapse>
+                  </>
+                ) : null}
               </Typography>
             ) : null}
 

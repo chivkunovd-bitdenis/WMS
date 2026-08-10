@@ -9,6 +9,7 @@ import {
 } from "@playwright/test";
 
 type RouteName = "warehouse_sc" | "pvz";
+type SeedOrderRoute = RouteName | "kiz";
 type Seed = {
   emulator_admin_token: string;
   seller_key: string;
@@ -21,7 +22,7 @@ type Seed = {
     { email: string; password: string }
   >;
   orders: Record<
-    RouteName,
+    SeedOrderRoute,
     Array<{
       wb_order_id: number;
       wms_order_id: string;
@@ -191,7 +192,7 @@ async function confirmCurrentPreview(page: Page) {
   await expect(dialog).toBeHidden();
 }
 
-async function createSupply(page: Page, route: RouteName): Promise<Workspace> {
+async function createSupply(page: Page, route: SeedOrderRoute): Promise<Workspace> {
   const orders = seed.orders[route];
   expect(new Set(orders.map((order) => order.created_at_wb)).size).toBe(2);
   for (const order of orders) {
@@ -214,6 +215,122 @@ async function createSupply(page: Page, route: RouteName): Promise<Workspace> {
   await expect(page.getByTestId("fbs-workspace")).toBeVisible();
   return workspace;
 }
+
+// TC-NEW-FBS-KIZ-013 — two sticker/KIZ pairs update packing progress, then one KIZ is undone.
+test("TC-NEW-FBS-KIZ-013: operator binds and cancels external KIZ in the WB emulator", async ({
+  page,
+  request,
+  baseURL,
+}) => {
+  if (!baseURL) throw new Error("Playwright baseURL is required");
+  const orders = seed.orders.kiz;
+  expect(orders).toHaveLength(2);
+
+  await login(page);
+  await page.getByTestId("nav-ff-fbs").click();
+  await expect(page.getByTestId("fbs-orders-screen")).toBeVisible();
+  await createSupply(page, "kiz");
+
+  await page.getByRole("button", { name: "Начать работу с поставкой" }).click();
+  await page.getByLabel("Штрихкод ячейки").fill(seed.location_code);
+  await page.getByRole("button", { name: "Подтвердить ячейку" }).click();
+  await expect(
+    page.getByText(new RegExp(`Ячейка ${seed.location_code} подтверждена`)),
+  ).toBeVisible();
+  for (const [index, order] of orders.entries()) {
+    await page.getByLabel("Штрихкод товара").fill(order.barcode);
+    const [pickResponse] = await Promise.all([
+      page.waitForResponse(
+        (item) =>
+          item.url().includes("/pick/scan-product") && item.status() === 200,
+      ),
+      page.getByRole("button", { name: "Подобрать товар" }).click(),
+    ]);
+    const pickedWorkspace = (await pickResponse.json()) as {
+      progress: { picked: number; total: number };
+    };
+    expect(pickedWorkspace.progress).toEqual(
+      expect.objectContaining({ picked: index + 1, total: orders.length }),
+    );
+  }
+
+  await page.getByRole("tab", { name: "Упаковка и маркировка" }).click();
+  await expect(page.getByText(/Напечатано 0 из 2/)).toBeVisible();
+
+  const stickerButtons = page.getByRole("button", { name: "QR", exact: true });
+  await expect(stickerButtons).toHaveCount(2);
+  for (let index = 0; index < orders.length; index += 1) {
+    await stickerButtons.nth(index).click();
+    await confirmCurrentPreview(page);
+  }
+  await expect(page.getByText(/Напечатано 0 из 2/)).toBeVisible();
+
+  await page.getByTestId("fbs-kiz-open").click();
+  const dialog = page.getByTestId("fbs-kiz-dialog");
+  const input = page.getByTestId("fbs-kiz-input");
+  await expect(dialog).toBeVisible();
+  const kizValues = [
+    "010460043993125321E2EKIZ000001",
+    "010460043993125321E2EKIZ000002",
+  ];
+  for (const [index, order] of orders.entries()) {
+    const sticker = `WB${String(order.wb_order_id).padStart(10, "0")}`;
+    await input.fill(sticker);
+    await input.press("Enter");
+    await expect(dialog.getByText(`№ ${order.wb_order_id}`)).toBeVisible();
+    await input.fill(kizValues[index]);
+    await input.press("Enter");
+    await expect(page.getByTestId("fbs-kiz-pair")).toHaveCount(index + 1);
+  }
+
+  await Promise.all([
+    page.waitForResponse(
+      (item) =>
+        item.url().includes("/operations/fbs-orders/kiz/commit") &&
+        item.status() === 200,
+    ),
+    page.getByTestId("fbs-kiz-commit").click(),
+  ]);
+  await expect(dialog.getByText("✓")).toHaveCount(2);
+  await dialog.getByRole("button", { name: "Закрыть" }).click();
+
+  await expect(page.getByText(/Напечатано 2 из 2/)).toBeVisible();
+  await expect(page.getByText(/· КИЗ/)).toHaveCount(2);
+  for (const [index, order] of orders.entries()) {
+    const meta = await request.get(
+      `${emulatorUrl}/api/v3/orders/${order.wb_order_id}/meta`,
+      { headers: { Authorization: seed.seller_token } },
+    );
+    expect(meta.ok(), await meta.text()).toBeTruthy();
+    expect((await meta.json()).sgtins).toEqual([
+      { value: kizValues[index], checkStatus: "ok" },
+    ]);
+  }
+
+  await page.getByLabel("Перепечатка").first().click();
+  await page.getByTestId("fbs-kiz-undo").click();
+  const undoDialog = page.getByRole("dialog", { name: "Отменить КИЗ?" });
+  await expect(undoDialog).toBeVisible();
+  await Promise.all([
+    page.waitForResponse(
+      (item) =>
+        item.url().includes(`/operations/fbs-orders/${orders[0].wms_order_id}/kiz`) &&
+        item.request().method() === "DELETE" &&
+        item.status() === 204,
+    ),
+    undoDialog.getByRole("button", { name: "Отменить КИЗ" }).click(),
+  ]);
+
+  await expect(page.getByText("КИЗ отменён.")).toBeVisible();
+  await expect(page.getByText(/Напечатано 1 из 2/)).toBeVisible();
+  await expect(page.getByText(/· КИЗ/)).toHaveCount(1);
+  const cancelledMeta = await request.get(
+    `${emulatorUrl}/api/v3/orders/${orders[0].wb_order_id}/meta`,
+    { headers: { Authorization: seed.seller_token } },
+  );
+  expect(cancelledMeta.ok(), await cancelledMeta.text()).toBeTruthy();
+  expect(await cancelledMeta.json()).toEqual({});
+});
 
 async function pickAndPack(page: Page, route: RouteName, testInfo: TestInfo) {
   const orders = seed.orders[route];

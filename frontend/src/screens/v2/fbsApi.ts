@@ -709,21 +709,6 @@ export async function fetchFbsOrderMetadata(
   )
 }
 
-export async function scanFbsOrderMetadata(
-  token: string,
-  ah: AuthHeaders,
-  orderId: string,
-  body: { kind: string; raw_value: string; idempotency_key: string },
-): Promise<FbsOrderMetadata> {
-  return jsonOrThrow<FbsOrderMetadata>(
-    await fetch(apiUrl(`/operations/fbs-orders/${orderId}/metadata/scan`), {
-      method: 'POST',
-      headers: jsonHeaders(token, ah),
-      body: JSON.stringify(body),
-    }),
-  )
-}
-
 export async function fetchFbsPrintBatch(
   token: string,
   ah: AuthHeaders,
@@ -996,50 +981,6 @@ export async function fetchFbsTrbxStickers(
 // Маркировка в WB привязана к ЗАКАЗУ, а не к артикулу — ручки backend/app/api/fbs_marking.py
 // под /operations/fbs-orders/{order_id}/markings...
 
-export type FbsMarkingKind = 'sgtin' | 'uin' | 'imei' | 'gtin'
-
-export const MARKING_KIND_LABEL: Record<FbsMarkingKind, string> = {
-  sgtin: 'КИЗ (SGTIN)',
-  uin: 'УИН',
-  imei: 'IMEI',
-  gtin: 'GTIN',
-}
-
-export type FbsOrderMarking = {
-  id: string
-  order_id: string
-  kind: string
-  value: string
-  check_status: string // new | checking | ok | error | no_check
-  marking_code_id: string | null
-}
-
-export async function getFbsOrderMarkings(
-  token: string,
-  ah: (t: string) => Record<string, string>,
-  orderId: string,
-): Promise<FbsOrderMarking[]> {
-  const res = await fetch(apiUrl(`/operations/fbs-orders/${orderId}/markings`), {
-    headers: { ...ah(token) },
-  })
-  return jsonOrThrow<FbsOrderMarking[]>(res)
-}
-
-export async function putFbsOrderMarking(
-  token: string,
-  ah: (t: string) => Record<string, string>,
-  orderId: string,
-  kind: FbsMarkingKind,
-  value: string,
-): Promise<FbsOrderMarking> {
-  const res = await fetch(apiUrl(`/operations/fbs-orders/${orderId}/markings/${kind}`), {
-    method: 'PUT',
-    headers: { ...ah(token), 'Content-Type': 'application/json' },
-    body: JSON.stringify({ value }),
-  })
-  return jsonOrThrow<FbsOrderMarking>(res)
-}
-
 // ── Внесение чужих КИЗ по стикеру ────────────────────────────────────────────
 // backend/app/api/fbs_kiz.py — спека tasks/fbs-kiz-manual-binding/TASK.md §5.
 // Сопоставление идёт ТОЛЬКО по стикеру: QR даёт заказ, КИЗ вешается на этот заказ.
@@ -1060,6 +1001,11 @@ export type FbsKizLookup = {
 }
 
 export type FbsKizPair = { order_id: string; value: string; confirmed: boolean }
+
+export type FbsKizValidateResult = {
+  ok: boolean
+  hints: string[]
+}
 
 export type FbsKizCommitResult = {
   order_id: string
@@ -1086,13 +1032,13 @@ export async function validateFbsKiz(
   ah: (t: string) => Record<string, string>,
   orderId: string,
   value: string,
-): Promise<void> {
+): Promise<FbsKizValidateResult> {
   const res = await fetch(apiUrl('/operations/fbs-orders/kiz/validate'), {
     method: 'POST',
     headers: { ...ah(token), 'Content-Type': 'application/json' },
     body: JSON.stringify({ order_id: orderId, value }),
   })
-  await jsonOrThrow<{ ok: boolean }>(res)
+  return jsonOrThrow<FbsKizValidateResult>(res)
 }
 
 export async function commitFbsKiz(

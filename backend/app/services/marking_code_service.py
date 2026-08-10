@@ -1385,6 +1385,7 @@ async def list_product_codes(
         .where(
             MarkingCode.tenant_id == tenant_id,
             MarkingCode.seller_id == product.seller_id,
+            MarkingCode.source == "pool",
             code_filter,
         )
         .order_by(MarkingCode.created_at.desc())
@@ -2637,7 +2638,10 @@ def _ledger_filtered_stmt(
         .outerjoin(Product, Product.id == MarkingCode.product_id)
         .outerjoin(Seller, Seller.id == MarkingCodeEvent.seller_id)
         .outerjoin(User, User.id == MarkingCodeEvent.actor_user_id)
-        .where(MarkingCodeEvent.tenant_id == tenant_id)
+        .where(
+            MarkingCodeEvent.tenant_id == tenant_id,
+            MarkingCode.source == "pool",
+        )
     )
     if seller_id is not None:
         stmt = stmt.where(MarkingCodeEvent.seller_id == seller_id)

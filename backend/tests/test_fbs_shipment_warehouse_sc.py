@@ -12,13 +12,16 @@ from sqlalchemy import select
 from app.core.settings import settings
 from app.db.session import SessionLocal
 from app.models.fbs_order import (
+    CHECK_STATUS_NEW,
     FBS_ORDER_STATUS_ASSEMBLING,
     FBS_ORDER_STATUS_CANCELLED,
     FBS_ORDER_STATUS_IN_DELIVERY,
     FBS_ORDER_STATUS_IN_SUPPLY,
     FBS_ORDER_STATUS_NEW,
     FBS_ORDER_STATUS_PACKED,
+    META_STATUS_ACCEPTED,
     FbsOrder,
+    FbsOrderMarking,
 )
 from app.models.fbs_supply import (
     FBS_SUPPLY_STATUS_ASSEMBLING,
@@ -533,12 +536,18 @@ async def test_fbs_shipment_marking_required_and_ok(
     assert missing.status_code == 400
     assert missing.json()["detail"]["code"] == "marking_required"
 
-    put = await async_client.put(
-        f"/operations/fbs-orders/{order_ids[0]}/markings/sgtin",
-        headers=headers,
-        json={"value": "01CIS-SHIP-001"},
-    )
-    assert put.status_code == 200, put.text
+    async with SessionLocal() as session:
+        session.add(
+            FbsOrderMarking(
+                order_id=order_ids[0],
+                tenant_id=tenant_id,
+                kind="sgtin",
+                value="01CIS-SHIP-001",
+                check_status=CHECK_STATUS_NEW,
+                meta_status=META_STATUS_ACCEPTED,
+            )
+        )
+        await session.commit()
 
     await _create_and_fill_physical_box(async_client, headers, supply["id"], order_ids)
     deliver = await _deliver_with_preflight(async_client, headers, supply["id"])

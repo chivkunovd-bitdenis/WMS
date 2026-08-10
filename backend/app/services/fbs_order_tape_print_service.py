@@ -204,12 +204,14 @@ async def print_fbs_order_tape(
         code_value = printed.codes[0] if printed.codes else None
         if code_value:
             try:
-                await marking_svc.upsert_order_marking(
+                marking = _existing_sgtin_marking(order)
+                if marking is None:
+                    raise marking_svc.FbsMarkingError("order_marking_not_found")
+                await marking_svc.attach_order_meta_to_wb_and_sync(
                     session,
                     tenant_id,
-                    order.id,
-                    MARKING_KIND_SGTIN,
-                    code_value,
+                    order,
+                    marking,
                     http_client,
                 )
             except marking_svc.FbsMarkingError as exc:

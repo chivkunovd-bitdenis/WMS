@@ -11,7 +11,7 @@ from sqlalchemy import select
 from test_packaging_tasks import _register_admin
 
 from app.db.session import SessionLocal
-from app.models.marking_code import MarkingCode
+from app.models.marking_code import STATUS_APPLIED, MarkingCode
 from app.services import marking_code_service as mc_svc
 from app.services.marking_code_service import MarkingCodeServiceError
 from app.services.tokens import decode_access_token
@@ -161,6 +161,57 @@ async def test_list_product_codes_includes_pool_import_without_product_id(
     )
     assert api.status_code == 200, api.text
     assert len(api.json()) == code_count
+
+
+@pytest.mark.asyncio
+async def test_list_product_codes_excludes_external_fbs_registry_code(
+    async_client: AsyncClient,
+) -> None:
+    # TC-NEW-FBS-KIZ-012: the pool inventory must not expose an external FBS KIZ.
+    headers, tenant_id = await _register_tenant_admin(async_client, org_prefix="kiz-source")
+    seller_id = await _create_seller(async_client, headers)
+    product_id = await _create_cz_product(
+        async_client,
+        headers,
+        seller_id=seller_id,
+        sku=f"KIZ-SOURCE-{uuid.uuid4().hex[:6]}",
+    )
+    pool_cis = f"01{'0' * 10}777721{'P' * 20}0001"
+    external_cis = f"01{'0' * 10}777721{'E' * 20}0002"
+
+    async with SessionLocal() as session:
+        session.add_all(
+            [
+                MarkingCode(
+                    tenant_id=tenant_id,
+                    seller_id=seller_id,
+                    product_id=product_id,
+                    cis_code=pool_cis,
+                    source="pool",
+                    status=STATUS_APPLIED,
+                ),
+                MarkingCode(
+                    tenant_id=tenant_id,
+                    seller_id=seller_id,
+                    product_id=product_id,
+                    cis_code=external_cis,
+                    source="external_fbs",
+                    status=STATUS_APPLIED,
+                ),
+            ]
+        )
+        await session.commit()
+
+        rows = await mc_svc.list_product_codes(session, tenant_id, product_id)
+
+    assert [row.cis_code for row in rows] == [pool_cis]
+
+    api = await async_client.get(
+        f"/operations/marking-codes/products/{product_id}/codes",
+        headers=headers,
+    )
+    assert api.status_code == 200, api.text
+    assert [row["cis_code"] for row in api.json()] == [pool_cis]
 
 
 @pytest.mark.asyncio

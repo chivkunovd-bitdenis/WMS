@@ -11,9 +11,13 @@ from test_packaging_tasks import _register_admin
 
 from app.db.session import SessionLocal
 from app.models.marking_code import (
+    EVENT_APPLIED,
+    STATUS_APPLIED,
     STATUS_PRINTED,
     MarkingCode,
+    MarkingCodeEvent,
 )
+from app.services.tokens import decode_access_token
 
 
 async def _seed_pool_with_codes(
@@ -153,6 +157,51 @@ async def test_ledger_filters(async_client: AsyncClient) -> None:
     assert by_doc.status_code == 200
     assert by_doc.json()["total"] == 1
     assert by_doc.json()["rows"][0]["aggregated_count"] == 4
+
+
+@pytest.mark.asyncio
+async def test_ledger_excludes_external_fbs_registry_events(async_client: AsyncClient) -> None:
+    # TC-NEW-FBS-KIZ-012: external FBS KIZ events are not pool consumption events.
+    headers, seller_id, _pool_id, product_id, _ = await _seed_pool_with_codes(async_client)
+    token = headers["Authorization"].removeprefix("Bearer ")
+    tenant_id = uuid.UUID(str(decode_access_token(token)["tenant_id"]))
+
+    async with SessionLocal() as session:
+        code = MarkingCode(
+            tenant_id=tenant_id,
+            seller_id=uuid.UUID(seller_id),
+            product_id=uuid.UUID(product_id),
+            cis_code=f"010000000000777721{'E' * 20}0001",
+            source="external_fbs",
+            status=STATUS_APPLIED,
+        )
+        session.add(code)
+        await session.flush()
+        session.add(
+            MarkingCodeEvent(
+                tenant_id=tenant_id,
+                seller_id=uuid.UUID(seller_id),
+                code_id=code.id,
+                event_type=EVENT_APPLIED,
+            )
+        )
+        await session.commit()
+
+    ledger = await async_client.get(
+        "/operations/marking-codes/ledger",
+        headers=headers,
+        params={"seller_id": seller_id, "event_type": EVENT_APPLIED},
+    )
+    assert ledger.status_code == 200, ledger.text
+    assert ledger.json() == {"rows": [], "total": 0}
+
+    export = await async_client.get(
+        "/operations/marking-codes/ledger/export",
+        headers=headers,
+        params={"seller_id": seller_id, "event_type": EVENT_APPLIED},
+    )
+    assert export.status_code == 200, export.text
+    assert len(export.content.decode("utf-8-sig").strip().splitlines()) == 1
 
 
 @pytest.mark.asyncio

@@ -390,64 +390,6 @@
         }
       }
     },
-    "/operations/fbs-orders/{order_id}/metadata/scan": {
-      "post": {
-        "tags": [
-          "operations"
-        ],
-        "summary": "Scan Fbs Order Metadata",
-        "operationId": "scan_fbs_order_metadata_operations_fbs_orders__order_id__metadata_scan_post",
-        "security": [
-          {
-            "HTTPBearer": []
-          }
-        ],
-        "parameters": [
-          {
-            "name": "order_id",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "string",
-              "format": "uuid",
-              "title": "Order Id"
-            }
-          }
-        ],
-        "requestBody": {
-          "required": true,
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/FbsMetadataScanBody"
-              }
-            }
-          }
-        },
-        "responses": {
-          "200": {
-            "description": "Successful Response",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/FbsOrderMetadataOut"
-                }
-              }
-            }
-          },
-          "422": {
-            "description": "Validation Error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
     "/operations/fbs-orders/{order_id}/markings": {
       "get": {
         "tags": [
@@ -483,73 +425,6 @@
                     "$ref": "#/components/schemas/FbsOrderMarkingOut"
                   },
                   "title": "Response Get Fbs Order Markings Operations Fbs Orders  Order Id  Markings Get"
-                }
-              }
-            }
-          },
-          "422": {
-            "description": "Validation Error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/operations/fbs-orders/{order_id}/markings/{kind}": {
-      "put": {
-        "tags": [
-          "operations"
-        ],
-        "summary": "Put Fbs Order Marking",
-        "operationId": "put_fbs_order_marking_operations_fbs_orders__order_id__markings__kind__put",
-        "security": [
-          {
-            "HTTPBearer": []
-          }
-        ],
-        "parameters": [
-          {
-            "name": "order_id",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "string",
-              "format": "uuid",
-              "title": "Order Id"
-            }
-          },
-          {
-            "name": "kind",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "string",
-              "title": "Kind"
-            }
-          }
-        ],
-        "requestBody": {
-          "required": true,
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/FbsMarkingValueBody"
-              }
-            }
-          }
-        },
-        "responses": {
-          "200": {
-            "description": "Successful Response",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/FbsOrderMarkingOut"
                 }
               }
             }
@@ -772,6 +647,47 @@
             "HTTPBearer": []
           }
         ]
+      }
+    },
+    "/operations/fbs-orders/{order_id}/kiz": {
+      "delete": {
+        "tags": [
+          "operations"
+        ],
+        "summary": "Delete Fbs Order Kiz",
+        "operationId": "delete_fbs_order_kiz_operations_fbs_orders__order_id__kiz_delete",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "order_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Order Id"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
       }
     },
     "/operations/fbs-sellers/{seller_id}/warehouses": {
@@ -4866,50 +4782,6 @@
           "hints"
         ],
         "title": "FbsKizValidateOut"
-      },
-      "FbsMarkingValueBody": {
-        "properties": {
-          "value": {
-            "type": "string",
-            "maxLength": 512,
-            "minLength": 1,
-            "title": "Value"
-          }
-        },
-        "type": "object",
-        "required": [
-          "value"
-        ],
-        "title": "FbsMarkingValueBody"
-      },
-      "FbsMetadataScanBody": {
-        "properties": {
-          "kind": {
-            "type": "string",
-            "maxLength": 16,
-            "minLength": 1,
-            "title": "Kind"
-          },
-          "raw_value": {
-            "type": "string",
-            "maxLength": 512,
-            "minLength": 1,
-            "title": "Raw Value"
-          },
-          "idempotency_key": {
-            "type": "string",
-            "maxLength": 128,
-            "minLength": 1,
-            "title": "Idempotency Key"
-          }
-        },
-        "type": "object",
-        "required": [
-          "kind",
-          "raw_value",
-          "idempotency_key"
-        ],
-        "title": "FbsMetadataScanBody"
       },
       "FbsOrderMarkingOut": {
         "properties": {
