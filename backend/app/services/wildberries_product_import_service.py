@@ -244,7 +244,17 @@ async def upsert_products_from_wb_cards(
                 sku=sku,
                 variant=variant,
             )
-            await session.commit()
+            try:
+                await session.commit()
+            except IntegrityError:
+                # Two WB cards can share vendor code and size while carrying different
+                # barcodes, so both map onto one sku_code, which is unique per tenant.
+                # The insert branch above already tolerates that; without the same guard
+                # here the whole request dies with a 500 and the seller cannot save the
+                # API key at all. Skip the conflicting variant instead.
+                await session.rollback()
+                skipped += 1
+                continue
             updated += 1
 
     return {
