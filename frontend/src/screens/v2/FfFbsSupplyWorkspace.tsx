@@ -657,7 +657,8 @@ export function FfFbsSupplyWorkspace({
       )
     : 0
   const percent = total ? Math.round((ready / total) * 100) : 0
-  const buildPickingRows = (source: FbsWorkspace) => {
+  const pickingRows = useMemo(() => {
+    if (!workspace) return []
     const grouped = new Map<string, {
       key: string
       name: string
@@ -667,11 +668,11 @@ export function FfFbsSupplyWorkspace({
       required: number
       picked: number
       wbOrders: number[]
-      orderCodes: Array<string | null>
+      stickerCodes: Array<string | null>
       marking: string
       nearestDeadline: string
     }>()
-    for (const order of source.orders) {
+    for (const order of workspace.orders) {
       const key = order.product.id ?? `unmapped-${order.id}`
       const current = grouped.get(key) ?? {
         key,
@@ -682,14 +683,14 @@ export function FfFbsSupplyWorkspace({
         required: 0,
         picked: 0,
         wbOrders: [],
-        orderCodes: [],
+        stickerCodes: [],
         marking: order.metadata.required.length ? order.metadata.required.join(', ') : 'Не требуется',
         nearestDeadline: order.deadline_at,
       }
       current.required += 1
       if (order.pick.status === 'picked') current.picked += 1
       current.wbOrders.push(order.wb_order_id)
-      current.orderCodes.push(order.sticker.code)
+      current.stickerCodes.push(order.sticker.code)
       const locations = order.inventory.locations
         .filter((location) => location.available_unpacked > 0)
         .map((location) => `${location.code}: ${location.available_unpacked}`)
@@ -698,8 +699,7 @@ export function FfFbsSupplyWorkspace({
       grouped.set(key, current)
     }
     return [...grouped.values()]
-  }
-
+  }, [workspace])
   const manualPickRows = useMemo(() => {
     if (!workspace) return []
     const byProduct = new Map<string, typeof workspace.orders>()
@@ -767,7 +767,7 @@ export function FfFbsSupplyWorkspace({
       })
     })
   }, [manualPickLocationRows, workspace])
-  const printPickingList = async () => {
+  const printPickingList = () => {
     if (!workspace) return
     const printWindow = window.open('', '_blank')
     if (!printWindow) {
@@ -775,39 +775,18 @@ export function FfFbsSupplyWorkspace({
       return
     }
     printWindow.opener = null
-    setBusy(true)
-    setError(null)
-    try {
-      let source = workspace
-      const missingStickerCodes = source.orders.filter((order) => !order.sticker.code).map((order) => order.id)
-      if (missingStickerCodes.length > 0) {
-        await fetchFbsPrintBatch(token, authHeaders, source.supply.id, {
-          kind: 'order_sticker',
-          order_ids: missingStickerCodes,
-          retry_missing: true,
-        })
-        source = await fetchFbsWorkspace(token, authHeaders, source.supply.id)
-        setWorkspace(source)
-        setStage(visualStage(source.stage))
-      }
-      printWindow.document.open()
-      printWindow.document.write(buildFbsPickingListPrintHtml({
-        supplyName: source.supply.name,
-        wbSupplyId: source.supply.wb_supply_id,
-        sellerName: source.supply.seller.name,
-        wmsWarehouseName: source.supply.wms_warehouse.name,
-        routeLabel: source.supply.delivery_type === 'pvz' ? 'ПВЗ' : 'Склад / СЦ',
-        deadlineLabel: new Date(source.supply.nearest_deadline_at).toLocaleString('ru-RU'),
-        printedAtLabel: new Date().toLocaleString('ru-RU'),
-        rows: buildPickingRows(source),
-      }))
-      printWindow.document.close()
-    } catch (cause) {
-      printWindow.close()
-      setError(cause instanceof Error ? cause.message : 'Не удалось подготовить коды заказов для листа подбора.')
-    } finally {
-      setBusy(false)
-    }
+    printWindow.document.open()
+    printWindow.document.write(buildFbsPickingListPrintHtml({
+      supplyName: workspace.supply.name,
+      wbSupplyId: workspace.supply.wb_supply_id,
+      sellerName: workspace.supply.seller.name,
+      wmsWarehouseName: workspace.supply.wms_warehouse.name,
+      routeLabel: workspace.supply.delivery_type === 'pvz' ? 'ПВЗ' : 'Склад / СЦ',
+      deadlineLabel: new Date(workspace.supply.nearest_deadline_at).toLocaleString('ru-RU'),
+      printedAtLabel: new Date().toLocaleString('ru-RU'),
+      rows: pickingRows,
+    }))
+    printWindow.document.close()
   }
   const packLineByProduct = useMemo(() => {
     const map = new Map<string, PackagingTaskLine>()
@@ -1015,7 +994,7 @@ export function FfFbsSupplyWorkspace({
                       {workspace.orders.length} {ordersWord(workspace.orders.length)} в поставке
                     </Typography>
                   </Box>
-                  <Button variant="outlined" startIcon={<PrintOutlinedIcon />} onClick={() => void printPickingList()} data-testid="fbs-pick-list-print">
+                  <Button variant="outlined" startIcon={<PrintOutlinedIcon />} onClick={printPickingList} data-testid="fbs-pick-list-print">
                     Печать листа подбора
                   </Button>
                 </Stack>
@@ -1055,7 +1034,7 @@ export function FfFbsSupplyWorkspace({
                       Сначала подтвердите ячейку, затем сканируйте товары. Прогресс хранится на сервере.
                     </Typography>
                   </Box>
-                  <Button variant="outlined" startIcon={<PrintOutlinedIcon />} onClick={() => void printPickingList()} data-testid="fbs-pick-list-print">
+                  <Button variant="outlined" startIcon={<PrintOutlinedIcon />} onClick={printPickingList} data-testid="fbs-pick-list-print">
                     Печать листа подбора
                   </Button>
                 </Stack>

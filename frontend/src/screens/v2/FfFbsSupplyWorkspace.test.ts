@@ -28,7 +28,7 @@ describe('FBS picking list print document', () => {
         required: 2,
         picked: 1,
         wbOrders: [500001, 500002],
-        orderCodes: ['56672606304'],
+        stickerCodes: ['56672606304'],
         marking: 'КИЗ',
       }],
     })
@@ -37,7 +37,6 @@ describe('FBS picking list print document', () => {
     expect(html).toContain('FBS &lt;05.08&gt;')
     expect(html).toContain('Seller &amp; Co')
     expect(html).toContain('№500001')
-    expect(html).toContain('Код заказа')
     expect(html).toContain('5667260 <strong>6304</strong>')
     expect(html).toContain('A-01: 2')
     expect(html).toContain('&lt;script&gt;alert(1)&lt;/script&gt;')

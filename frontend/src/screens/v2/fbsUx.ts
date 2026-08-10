@@ -26,7 +26,7 @@ export type FbsPickingListPrintRow = {
   required: number
   picked: number
   wbOrders: number[]
-  orderCodes: Array<string | null>
+  stickerCodes: Array<string | null>
   marking: string
 }
 
@@ -55,7 +55,7 @@ function printableImageUrl(value: string | null) {
   return escapePrintHtml(value)
 }
 
-function renderOrderCode(value: string | null) {
+function renderStickerCode(value: string | null) {
   if (!value) return '—'
   const compact = value.replace(/\s+/g, '')
   if (compact.length <= 4) return `<strong>${escapePrintHtml(compact)}</strong>`
@@ -67,9 +67,9 @@ function renderOrderCode(value: string | null) {
 export function buildFbsPickingListPrintHtml(input: FbsPickingListPrintInput) {
   const rows = input.rows.map((row, index) => {
     const imageUrl = printableImageUrl(row.imageUrl)
-    const nonEmptyOrderCodes = row.orderCodes.filter((code): code is string => Boolean(code))
-    const orderCodes = nonEmptyOrderCodes.length
-      ? nonEmptyOrderCodes.map(renderOrderCode).join('<br />')
+    const nonEmptyStickerCodes = row.stickerCodes.filter((code): code is string => Boolean(code))
+    const stickerCodes = nonEmptyStickerCodes.length
+      ? nonEmptyStickerCodes.map(renderStickerCode).join('<br />')
       : '—'
     return `
       <tr>
@@ -81,7 +81,7 @@ export function buildFbsPickingListPrintHtml(input: FbsPickingListPrintInput) {
         </td>
         <td>${row.locations.length ? row.locations.map(escapePrintHtml).join('<br />') : 'Ячейка не назначена'}</td>
         <td>${row.wbOrders.map((id) => `№${escapePrintHtml(id)}`).join('<br />')}</td>
-        <td class="order-code">${orderCodes}</td>
+        <td class="sticker">${stickerCodes}</td>
         <td class="quantity">${escapePrintHtml(row.required)}</td>
         <td class="quantity">${escapePrintHtml(row.picked)} / ${escapePrintHtml(row.required)}</td>
         <td>${escapePrintHtml(row.marking)}</td>
@@ -111,7 +111,7 @@ export function buildFbsPickingListPrintHtml(input: FbsPickingListPrintInput) {
       .image { width: 54px; text-align: center; }
       .image img { display: block; width: 42px; height: 42px; margin: auto; object-fit: contain; }
       .quantity { width: 62px; text-align: center; font-weight: 700; }
-      .order-code { width: 110px; font-size: 14px; white-space: nowrap; }
+      .sticker { width: 96px; font-size: 14px; white-space: nowrap; }
       .muted { margin-top: 3px; color: #687083; font-size: 10px; }
       .footer { margin-top: 8px; color: #687083; font-size: 10px; }
     </style>
@@ -126,7 +126,7 @@ export function buildFbsPickingListPrintHtml(input: FbsPickingListPrintInput) {
       <div><span>Сдать до</span><strong>${escapePrintHtml(input.deadlineLabel)}</strong></div>
     </div>
     <table>
-      <thead><tr><th class="number">№</th><th class="image">Фото</th><th>Товар и идентификаторы</th><th>Ячейка</th><th>Заказы WB</th><th class="order-code">Код заказа</th><th class="quantity">Взять</th><th class="quantity">Подобрано</th><th>Маркировка</th></tr></thead>
+      <thead><tr><th class="number">№</th><th class="image">Фото</th><th>Товар и идентификаторы</th><th>Ячейка</th><th>Заказы WB</th><th class="sticker">Стикер</th><th class="quantity">Взять</th><th class="quantity">Подобрано</th><th>Маркировка</th></tr></thead>
       <tbody>${rows || '<tr><td colspan="9">В поставке нет товаров для подбора.</td></tr>'}</tbody>
     </table>
     <div class="footer">Сформировано WMS: ${escapePrintHtml(input.printedAtLabel)} · Актуальное серверное состояние на момент печати.</div>
