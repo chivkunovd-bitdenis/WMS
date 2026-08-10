@@ -12,6 +12,7 @@ from sqlalchemy import select
 from app.api.auth import router as auth_router
 from app.api.background_jobs import router as background_jobs_router
 from app.api.discrepancy_acts import router as discrepancy_acts_router
+from app.api.fbs_kiz import router as fbs_kiz_router
 from app.api.fbs_marking import router as fbs_marking_router
 from app.api.fbs_orders import router as fbs_orders_router
 from app.api.fbs_print_assets import router as fbs_print_assets_router
@@ -117,6 +118,7 @@ def create_app() -> FastAPI:
     app.include_router(background_jobs_router)
     app.include_router(fbs_orders_router)
     app.include_router(fbs_marking_router)
+    app.include_router(fbs_kiz_router)
     app.include_router(fbs_sellers_router)
     app.include_router(fbs_supplies_router)
     app.include_router(fbs_print_assets_router)

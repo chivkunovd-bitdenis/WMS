@@ -619,6 +619,65 @@
         }
       }
     },
+    "/operations/fbs-orders/kiz/lookup": {
+      "get": {
+        "tags": [
+          "operations"
+        ],
+        "summary": "Lookup Fbs Order By Sticker",
+        "operationId": "lookup_fbs_order_by_sticker_operations_fbs_orders_kiz_lookup_get",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "supply_id",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Supply Id"
+            }
+          },
+          {
+            "name": "sticker",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 512,
+              "title": "Sticker"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FbsKizLookupOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/operations/fbs-sellers/{seller_id}/warehouses": {
       "get": {
         "tags": [
@@ -4465,6 +4524,133 @@
           "checks"
         ],
         "title": "FbsDeliveryPreflightOut"
+      },
+      "FbsKizCurrentOut": {
+        "properties": {
+          "masked": {
+            "type": "string",
+            "title": "Masked"
+          },
+          "meta_status": {
+            "type": "string",
+            "title": "Meta Status"
+          },
+          "from_pool": {
+            "type": "boolean",
+            "title": "From Pool"
+          }
+        },
+        "type": "object",
+        "required": [
+          "masked",
+          "meta_status",
+          "from_pool"
+        ],
+        "title": "FbsKizCurrentOut"
+      },
+      "FbsKizLookupOut": {
+        "properties": {
+          "order_id": {
+            "type": "string",
+            "title": "Order Id"
+          },
+          "wb_order_id": {
+            "type": "integer",
+            "title": "Wb Order Id"
+          },
+          "product": {
+            "$ref": "#/components/schemas/FbsKizProductOut"
+          },
+          "current_kiz": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/FbsKizCurrentOut"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "needs_confirmation": {
+            "type": "boolean",
+            "title": "Needs Confirmation"
+          },
+          "can_bind": {
+            "type": "boolean",
+            "title": "Can Bind"
+          },
+          "block_reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Block Reason"
+          }
+        },
+        "type": "object",
+        "required": [
+          "order_id",
+          "wb_order_id",
+          "product",
+          "current_kiz",
+          "needs_confirmation",
+          "can_bind",
+          "block_reason"
+        ],
+        "title": "FbsKizLookupOut"
+      },
+      "FbsKizProductOut": {
+        "properties": {
+          "name": {
+            "type": "string",
+            "title": "Name"
+          },
+          "image_url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Image Url"
+          },
+          "barcode": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Barcode"
+          },
+          "seller_article": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Seller Article"
+          }
+        },
+        "type": "object",
+        "required": [
+          "name",
+          "image_url",
+          "barcode",
+          "seller_article"
+        ],
+        "title": "FbsKizProductOut"
       },
       "FbsMarkingValueBody": {
         "properties": {
@@ -8447,6 +8633,44 @@
             "type": "boolean",
             "title": "Requires Honest Sign",
             "default": false
+          },
+          "fbs_stock_sync_enabled": {
+            "type": "boolean",
+            "title": "Fbs Stock Sync Enabled",
+            "default": false
+          },
+          "fbs_stock_limit": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Fbs Stock Limit"
+          },
+          "fbs_published_amount": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Fbs Published Amount"
+          },
+          "fbs_sync_status": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Fbs Sync Status"
           },
           "has_packaging_instructions": {
             "type": "boolean",
@@ -13525,6 +13749,90 @@
         ],
         "title": "ProductCreate"
       },
+      "ProductFbsStockSyncBulkOut": {
+        "properties": {
+          "updated_count": {
+            "type": "integer",
+            "title": "Updated Count"
+          }
+        },
+        "type": "object",
+        "required": [
+          "updated_count"
+        ],
+        "title": "ProductFbsStockSyncBulkOut"
+      },
+      "ProductFbsStockSyncBulkPatch": {
+        "properties": {
+          "product_ids": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string",
+                  "format": "uuid"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Product Ids"
+          },
+          "fbs_stock_sync_enabled": {
+            "type": "boolean",
+            "title": "Fbs Stock Sync Enabled"
+          },
+          "fbs_stock_limit": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "minimum": 0.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Fbs Stock Limit"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "fbs_stock_sync_enabled"
+        ],
+        "title": "ProductFbsStockSyncBulkPatch"
+      },
+      "ProductFbsStockSyncPatch": {
+        "properties": {
+          "fbs_stock_sync_enabled": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Fbs Stock Sync Enabled"
+          },
+          "fbs_stock_limit": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "minimum": 0.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Fbs Stock Limit"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "title": "ProductFbsStockSyncPatch"
+      },
       "ProductLocationHintOut": {
         "properties": {
           "storage_location_id": {
@@ -14589,6 +14897,44 @@
             "type": "boolean",
             "title": "Requires Honest Sign",
             "default": false
+          },
+          "fbs_stock_sync_enabled": {
+            "type": "boolean",
+            "title": "Fbs Stock Sync Enabled",
+            "default": false
+          },
+          "fbs_stock_limit": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Fbs Stock Limit"
+          },
+          "fbs_published_amount": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Fbs Published Amount"
+          },
+          "fbs_sync_status": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Fbs Sync Status"
           },
           "has_packaging_instructions": {
             "type": "boolean",
