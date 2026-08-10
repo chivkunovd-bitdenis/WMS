@@ -358,6 +358,31 @@ async def create_supply_from_orders(
         )
     except WildberriesClientError as exc:
         if exc.code == "transport_error":
+            try:
+                state, confirmed = await reconcile_supply_orders(
+                    http_client,
+                    api_token=token,
+                    wb_supply_id=wb_supply_id,
+                    expected_wb_order_ids=set(wb_order_ids),
+                )
+            except WildberriesClientError as reconcile_exc:
+                if reconcile_exc.code != "transport_error":
+                    raise FbsSupplyError(
+                        _wb_error_code(reconcile_exc),
+                        retryable=False,
+                        http_status=502,
+                    ) from reconcile_exc
+                state, confirmed = WB_OPERATION_STATE_PENDING_CONFIRMATION, set()
+            if state == WB_OPERATION_STATE_CONFIRMED:
+                await _bind_orders_to_supply(session, supply, orders)
+                await mark_operation_confirmed(
+                    session,
+                    operation,
+                    wb_supply_id=wb_supply_id,
+                    local_supply_id=supply.id,
+                    response_summary={"wb_order_ids": sorted(confirmed)},
+                )
+                return await get_supply_workspace(session, tenant_id, supply.id)
             await mark_operation_pending_confirmation(
                 session,
                 operation,
