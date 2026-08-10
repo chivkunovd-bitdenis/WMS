@@ -196,6 +196,7 @@ export type FbsWorklistOrder = {
   can_pvz: boolean
   metadata: FbsOrderMetadata
   sticker: {
+    code: string | null
     status: 'not_requested' | 'requesting' | 'ready' | 'print_opened' | 'applied' | 'error'
     asset_url: string | null
     applied_at: string | null

@@ -607,6 +607,7 @@ def _map_order(order: FbsOrder, ctx: dict[str, Any], server_now: datetime) -> di
         "can_pvz": bool(order.can_pvz),
         "metadata": _build_metadata(order, markings),
         "sticker": {
+            "code": order.sticker_code,
             "status": order.sticker_status,
             "asset_url": sticker_url,
             "applied_at": applied_at.isoformat() if applied_at else None,

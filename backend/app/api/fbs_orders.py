@@ -100,6 +100,7 @@ class FbsWorklistMetadataOut(BaseModel):
 
 
 class FbsWorklistStickerOut(BaseModel):
+    code: str | None
     status: str
     asset_url: str | None
     applied_at: str | None
