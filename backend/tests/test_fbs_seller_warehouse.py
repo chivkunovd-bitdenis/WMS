@@ -108,9 +108,9 @@ async def test_fbs_seller_offices_ok(
     assert office["city"] == "Moscow"
 
 
-# TC-NEW-FBS-WHTOKEN-003 — supplies-only (no marketplace) → 403 on warehouses
+# TC-NEW-FBS-WHTOKEN-003 — supplies-only token is accepted as Marketplace fallback
 @pytest.mark.asyncio
-async def test_fbs_seller_warehouses_supplies_only_403(
+async def test_fbs_seller_warehouses_supplies_only_fallback_ok(
     async_client: AsyncClient,
     enable_wb_marketplace_warehouses_mock: None,
 ) -> None:
@@ -130,8 +130,8 @@ async def test_fbs_seller_warehouses_supplies_only_403(
         f"/operations/fbs-sellers/{seller_id}/warehouses",
         headers=headers,
     )
-    assert r.status_code == 403
-    assert r.json()["detail"] == "missing_marketplace_token"
+    assert r.status_code == 200, r.text
+    assert r.json()[0]["id"] == 501001
 
 
 # TC-NEW-FBS-WHTOKEN-004 — cross-tenant isolation → 404

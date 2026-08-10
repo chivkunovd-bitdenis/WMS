@@ -12,7 +12,7 @@ from sqlalchemy import func, select
 
 from app.db.session import SessionLocal
 from app.models.fbs_order import (
-    FBS_ORDER_STATUS_ASSEMBLING,
+    FBS_ORDER_STATUS_EXTERNAL_PROCESSING,
     FBS_ORDER_STATUS_NEW,
     MAPPING_STATUS_MAPPED,
     MAPPING_STATUS_MISSING,
@@ -450,7 +450,7 @@ async def test_fbs_order_reserve_and_no_stock(
 
 
 @pytest.mark.asyncio
-async def test_fbs_order_status_sync_supplier_confirm_moves_new_to_assembling(
+async def test_fbs_order_status_sync_supplier_confirm_moves_new_to_external_processing(
     async_client: AsyncClient,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -510,8 +510,9 @@ async def test_fbs_order_status_sync_supplier_confirm_moves_new_to_assembling(
     async with SessionLocal() as session:
         order = await session.get(FbsOrder, order_id)
         assert order is not None
-        assert order.wb_status == "confirm"
-        assert order.status == FBS_ORDER_STATUS_ASSEMBLING
+        assert order.wb_status == "waiting"
+        assert order.supplier_status == "confirm"
+        assert order.status == FBS_ORDER_STATUS_EXTERNAL_PROCESSING
 
     new_page = await async_client.get(
         "/operations/fbs-orders/worklist?status_group=new",
@@ -526,7 +527,7 @@ async def test_fbs_order_status_sync_supplier_confirm_moves_new_to_assembling(
     )
     assert active_page.status_code == 200, active_page.text
     by_wb = {item["wb_order_id"]: item for item in active_page.json()["items"]}
-    assert by_wb[800302]["status"] == FBS_ORDER_STATUS_ASSEMBLING
+    assert 800302 not in by_wb
 
 
 # TC-NEW-FBS-INTAKE-004

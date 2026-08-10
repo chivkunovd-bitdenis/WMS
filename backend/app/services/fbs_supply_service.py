@@ -36,6 +36,7 @@ from app.models.fbs_wb_operation import (
 from app.services.catalog_service import get_warehouse
 from app.services.fbs_packaging_integration_service import create_packaging_task_for_supply
 from app.services.fbs_print_asset_storage import decode_png_payload
+from app.services.fbs_sticker_code_service import sticker_code_from_wb_row
 from app.services.fbs_supply_reconcile_service import (
     create_pending_operation,
     get_operation_by_idempotency,
@@ -52,9 +53,8 @@ from app.services.fbs_supply_validator_service import (
     preflight_to_dict,
     validate_supply_composition,
 )
-from app.services.fbs_sticker_code_service import sticker_code_from_wb_row
-from app.services.fbs_workspace_service import get_supply_workspace
 from app.services.fbs_wb_seller_lock_service import wb_seller_lock
+from app.services.fbs_workspace_service import get_supply_workspace
 from app.services.wildberries_client import (
     WildberriesClientError,
     add_order_to_marketplace_supply,
@@ -407,7 +407,10 @@ async def create_supply_from_orders(
                 raise FbsSupplyError(
                     "wb_timeout",
                     message="WB не подтвердил состав поставки — повторите операцию.",
-                    context={"wb_supply_id": wb_supply_id, "operation_state": "pending_confirmation"},
+                    context={
+                        "wb_supply_id": wb_supply_id,
+                        "operation_state": "pending_confirmation",
+                    },
                     retryable=True,
                     http_status=504,
                 ) from exc
@@ -584,7 +587,10 @@ async def _request_order_stickers_for_picking(
     if not missing:
         return
     try:
-        from app.services.fbs_print_asset_service import FbsPrintAssetError, request_supply_print_batch
+        from app.services.fbs_print_asset_service import (
+            FbsPrintAssetError,
+            request_supply_print_batch,
+        )
 
         await request_supply_print_batch(
             session,
@@ -696,6 +702,11 @@ async def add_order_to_supply(
     if order.supply_id is not None and order.supply_id != supply_id:
         raise FbsSupplyError("order_already_in_supply")
     if order.status != FBS_ORDER_STATUS_NEW:
+        raise FbsSupplyError("order_bad_status")
+    if (
+        order.supplier_status is not None
+        and order.supplier_status.strip().lower() != FBS_ORDER_STATUS_NEW
+    ):
         raise FbsSupplyError("order_bad_status")
 
     token = await _require_marketplace_token(session, tenant_id, supply.seller_id)

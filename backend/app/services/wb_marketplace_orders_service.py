@@ -12,10 +12,10 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.fbs_order import (
-    FBS_ORDER_STATUS_ASSEMBLING,
     FBS_ORDER_STATUS_CANCELLED,
     FBS_ORDER_STATUS_DEFECT,
     FBS_ORDER_STATUS_DONE,
+    FBS_ORDER_STATUS_EXTERNAL_PROCESSING,
     FBS_ORDER_STATUS_IN_DELIVERY,
     FBS_ORDER_STATUS_NEW,
     FBS_ORDER_STATUS_SORTED,
@@ -109,45 +109,48 @@ def _first_barcode(row: dict[str, Any]) -> str | None:
     return None
 
 
-def _status_value_from_row(row: dict[str, Any], key: str) -> str | None:
-    val = row.get(key)
-    if isinstance(val, str) and val.strip():
-        return val.strip().lower()
+def _status_from_row(row: dict[str, Any], keys: tuple[str, ...]) -> str | None:
+    for key in keys:
+        val = row.get(key)
+        if isinstance(val, str) and val.strip():
+            return val.strip().lower()
     return None
+
+
+def _supplier_status_from_row(row: dict[str, Any]) -> str | None:
+    return _status_from_row(row, ("supplierStatus", "status"))
 
 
 def _wb_status_from_row(row: dict[str, Any]) -> str | None:
-    for key in ("wbStatus", "supplierStatus", "status"):
-        val = _status_value_from_row(row, key)
-        if val is not None:
-            return val
-    return None
+    return _status_from_row(row, ("wbStatus", "status"))
 
 
-def _order_sync_status_from_row(row: dict[str, Any]) -> str | None:
-    supplier_status = _status_value_from_row(row, "supplierStatus")
-    wb_status = _status_value_from_row(row, "wbStatus")
-    fallback_status = _status_value_from_row(row, "status")
-    for candidate in (supplier_status, wb_status, fallback_status):
-        if candidate is None:
-            continue
-        if (
-            _is_cancel_like_wb_status(candidate)
-            or candidate in {"sold", "sorted", DEFECT_WB_STATUS}
-        ):
-            return candidate
-    if supplier_status == "confirm":
-        return supplier_status
-    return wb_status or supplier_status or fallback_status
-
-
-def _is_cancel_like_wb_status(wb_status: str) -> bool:
-    return wb_status.strip().lower() in CANCEL_LIKE_WB_STATUSES
+def _is_cancel_like_wb_status(wb_status: str | None) -> bool:
+    return wb_status is not None and wb_status.strip().lower() in CANCEL_LIKE_WB_STATUSES
 
 
 def _is_cancelled_wb_row(row: dict[str, Any]) -> bool:
     wb_status = _wb_status_from_row(row)
-    return wb_status is not None and _is_cancel_like_wb_status(wb_status)
+    supplier_status = _supplier_status_from_row(row)
+    return _is_cancel_like_wb_status(wb_status) or _is_cancel_like_wb_status(supplier_status)
+
+
+def _local_status_from_wb_statuses(
+    *,
+    wb_status: str | None,
+    supplier_status: str | None,
+) -> str:
+    if _is_cancel_like_wb_status(wb_status) or _is_cancel_like_wb_status(supplier_status):
+        return FBS_ORDER_STATUS_CANCELLED
+    if wb_status == "sold":
+        return FBS_ORDER_STATUS_DONE
+    if wb_status == "sorted":
+        return FBS_ORDER_STATUS_SORTED
+    if wb_status == DEFECT_WB_STATUS:
+        return FBS_ORDER_STATUS_DEFECT
+    if supplier_status is not None and supplier_status != FBS_ORDER_STATUS_NEW:
+        return FBS_ORDER_STATUS_EXTERNAL_PROCESSING
+    return FBS_ORDER_STATUS_NEW
 
 
 def _can_pvz_from_row(row: dict[str, Any]) -> bool:
@@ -481,7 +484,14 @@ async def _try_reserve_order(
 ) -> None:
     if order.status in TERMINAL_FBS_STATUSES:
         return
+    if order.status == FBS_ORDER_STATUS_EXTERNAL_PROCESSING:
+        return
     if order.wb_status is not None and order.wb_status.lower() in NO_RESERVE_WB_STATUSES:
+        return
+    if (
+        order.supplier_status is not None
+        and order.supplier_status.strip().lower() != FBS_ORDER_STATUS_NEW
+    ):
         return
     if order.product_id is None:
         order.reserve_status = RESERVE_STATUS_SKIPPED_NO_PRODUCT
@@ -537,6 +547,16 @@ async def _release_reservation(session: AsyncSession, order: FbsOrder) -> None:
     schedule_seller_stock_publish(session, order.tenant_id, order.seller_id)
 
 
+async def _move_new_order_to_external_processing(
+    session: AsyncSession,
+    order: FbsOrder,
+) -> None:
+    if order.status != FBS_ORDER_STATUS_NEW or order.supply_id is not None:
+        return
+    order.status = FBS_ORDER_STATUS_EXTERNAL_PROCESSING
+    await _release_reservation(session, order)
+
+
 async def _apply_wb_row_to_existing(
     session: AsyncSession,
     tenant_id: uuid.UUID,
@@ -571,6 +591,15 @@ async def _apply_wb_row_to_existing(
             existing.reserve_status = RESERVE_STATUS_WAREHOUSE_REMAP_CONFLICT
         else:
             existing.wb_warehouse_id = wb_wh_id
+    supplier_status = _supplier_status_from_row(row)
+    wb_status = _wb_status_from_row(row)
+    if supplier_status is not None or wb_status is not None:
+        await _apply_wb_status_to_order(
+            session,
+            existing,
+            wb_status,
+            supplier_status=supplier_status,
+        )
     apply_wb_meta_requirements_to_order(existing, row)
     await _assign_wms_warehouse_from_binding(
         session, tenant_id, seller_id, existing, existing.wb_warehouse_id
@@ -638,6 +667,8 @@ async def upsert_order_from_wb_row(
     else:
         reserve_status = RESERVE_STATUS_NO_STOCK
 
+    wb_status = _wb_status_from_row(row)
+    supplier_status = _supplier_status_from_row(row)
     order = FbsOrder(
         tenant_id=tenant_id,
         seller_id=seller_id,
@@ -655,7 +686,12 @@ async def upsert_order_from_wb_row(
         wb_office_id=_wb_office_id_from_row(row),
         wb_warehouse_id=wb_warehouse_id,
         can_pvz=_can_pvz_from_row(row),
-        status=FBS_ORDER_STATUS_NEW,
+        status=_local_status_from_wb_statuses(
+            wb_status=wb_status,
+            supplier_status=supplier_status,
+        ),
+        wb_status=wb_status,
+        supplier_status=supplier_status,
         created_at_wb=created_at_wb,
         deadline_at=deadline_at,
         mapping_status=mapping_status,
@@ -679,11 +715,28 @@ async def upsert_order_from_wb_row(
 async def _apply_wb_status_to_order(
     session: AsyncSession,
     order: FbsOrder,
-    wb_status: str,
+    wb_status: str | None,
+    *,
+    supplier_status: str | None = None,
 ) -> None:
-    normalized = wb_status.strip().lower()
-    order.wb_status = normalized
-    if _is_cancel_like_wb_status(normalized):
+    normalized_wb = (
+        wb_status.strip().lower() if isinstance(wb_status, str) and wb_status.strip() else None
+    )
+    normalized_supplier = (
+        supplier_status.strip().lower()
+        if isinstance(supplier_status, str) and supplier_status.strip()
+        else None
+    )
+    if normalized_wb is not None:
+        order.wb_status = normalized_wb
+    if normalized_supplier is not None:
+        order.supplier_status = normalized_supplier
+
+    effective_statuses = tuple(
+        status for status in (normalized_wb, normalized_supplier) if status is not None
+    )
+
+    if any(_is_cancel_like_wb_status(status) for status in effective_statuses):
         from app.services.fbs_cancellation_service import reverse_fbs_shipment_if_needed
         from app.services.fbs_packaging_integration_service import (
             detach_cancelled_order_from_supply,
@@ -694,23 +747,22 @@ async def _apply_wb_status_to_order(
         await detach_cancelled_order_from_supply(session, order.tenant_id, order)
         await _release_reservation(session, order)
         return
-    if normalized == "sold":
+    if normalized_wb == "sold":
         order.status = FBS_ORDER_STATUS_DONE
         # Выкуплен: резерв больше не нужен (иначе available навсегда занижен).
         await _release_reservation(session, order)
         return
-    if normalized == "sorted":
+    if normalized_wb == "sorted":
         order.status = FBS_ORDER_STATUS_SORTED
         return
-    if normalized == DEFECT_WB_STATUS:
+    if normalized_wb == DEFECT_WB_STATUS:
         order.status = FBS_ORDER_STATUS_DEFECT
         await _release_reservation(session, order)
         return
-    if normalized == "confirm":
-        if order.status == FBS_ORDER_STATUS_NEW:
-            order.status = FBS_ORDER_STATUS_ASSEMBLING
+    if normalized_supplier is not None and normalized_supplier != FBS_ORDER_STATUS_NEW:
+        await _move_new_order_to_external_processing(session, order)
         return
-    if normalized == "waiting":
+    if normalized_wb == "waiting":
         if order.status != FBS_ORDER_STATUS_IN_DELIVERY:
             return
         return
@@ -773,10 +825,16 @@ async def sync_order_statuses(
             status_row = by_id.get(order.wb_order_id)
             if status_row is None:
                 continue
-            wb_status = _order_sync_status_from_row(status_row)
-            if wb_status is None:
+            wb_status = _wb_status_from_row(status_row)
+            supplier_status = _supplier_status_from_row(status_row)
+            if wb_status is None and supplier_status is None:
                 continue
-            await _apply_wb_status_to_order(session, order, wb_status)
+            await _apply_wb_status_to_order(
+                session,
+                order,
+                wb_status,
+                supplier_status=supplier_status,
+            )
             updated += 1
 
         last_row = orders[-1]

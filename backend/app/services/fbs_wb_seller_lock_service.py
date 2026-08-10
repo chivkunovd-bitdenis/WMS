@@ -15,6 +15,11 @@ from sqlalchemy.ext.asyncio import AsyncSession
 _LOCK_NAMESPACE = b"wms:fbs:wb:seller:"
 
 
+async def _session_uses_postgresql(session: AsyncSession) -> bool:
+    connection = await session.connection()
+    return connection.dialect.name == "postgresql"
+
+
 def wb_seller_lock_key(seller_id: uuid.UUID) -> int:
     digest = hashlib.blake2b(_LOCK_NAMESPACE + seller_id.bytes, digest_size=8).digest()
     raw = int.from_bytes(digest, "big", signed=False)
@@ -31,6 +36,8 @@ async def acquire_wb_seller_lock(
     poll_interval_sec: float = 0.25,
 ) -> int | None:
     lock_key = wb_seller_lock_key(seller_id)
+    if not await _session_uses_postgresql(session):
+        return lock_key
     deadline = monotonic() + max(wait_timeout_sec, 0.0)
     while True:
         acquired = await session.scalar(
@@ -46,6 +53,8 @@ async def acquire_wb_seller_lock(
 
 
 async def release_wb_seller_lock(session: AsyncSession, lock_key: int) -> None:
+    if not await _session_uses_postgresql(session):
+        return
     await session.scalar(
         text("select pg_advisory_unlock(:lock_key)"),
         {"lock_key": lock_key},

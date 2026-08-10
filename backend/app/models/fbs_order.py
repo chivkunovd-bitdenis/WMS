@@ -49,6 +49,7 @@ FBS_ORDER_STATUS_ASSEMBLING = "assembling"
 FBS_ORDER_STATUS_PACKED = "packed"
 FBS_ORDER_STATUS_IN_DELIVERY = "in_delivery"
 FBS_ORDER_STATUS_SORTED = "sorted"
+FBS_ORDER_STATUS_EXTERNAL_PROCESSING = "external_processing"
 FBS_ORDER_STATUS_CANCELLED = "cancelled"
 FBS_ORDER_STATUS_DONE = "done"
 FBS_ORDER_STATUS_DEFECT = "defect"
@@ -64,6 +65,7 @@ FBS_ORDER_MARKING_WRITE_STATUSES = frozenset(
 FBS_ORDER_MARKING_FROZEN_STATUSES = frozenset(
     {
         FBS_ORDER_STATUS_IN_DELIVERY,
+        FBS_ORDER_STATUS_EXTERNAL_PROCESSING,
         FBS_ORDER_STATUS_CANCELLED,
         FBS_ORDER_STATUS_DONE,
     }
@@ -218,6 +220,7 @@ class FbsOrder(Base):
         String(32), nullable=False, default=FBS_ORDER_STATUS_NEW, server_default="new"
     )
     wb_status: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    supplier_status: Mapped[str | None] = mapped_column(String(64), nullable=True)
     created_at_wb: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
     deadline_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
     mapping_status: Mapped[str] = mapped_column(String(32), nullable=False)

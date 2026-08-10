@@ -16,8 +16,8 @@ from app.models.fbs_order import (
     PICK_STATUS_PENDING,
     PICK_STATUS_PICKED,
     RESERVE_STATUS_RESERVED,
-    FbsOrderReservation,
     FbsOrder,
+    FbsOrderReservation,
 )
 from app.models.fbs_order_pick import (
     PICK_EVENT_PICKED,
