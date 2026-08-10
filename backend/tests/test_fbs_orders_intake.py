@@ -12,6 +12,7 @@ from sqlalchemy import func, select
 
 from app.db.session import SessionLocal
 from app.models.fbs_order import (
+    FBS_ORDER_STATUS_ASSEMBLING,
     FBS_ORDER_STATUS_NEW,
     MAPPING_STATUS_MAPPED,
     MAPPING_STATUS_MISSING,
@@ -446,6 +447,86 @@ async def test_fbs_order_reserve_and_no_stock(
         count_stmt = select(func.count()).select_from(FbsOrderReservation)
         res = await session.execute(count_stmt)
         assert int(res.scalar_one()) == 1
+
+
+@pytest.mark.asyncio
+async def test_fbs_order_status_sync_supplier_confirm_moves_new_to_assembling(
+    async_client: AsyncClient,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    headers, suffix = await _register_ff_admin(async_client)
+    seller_id, warehouse_id = await _setup_seller_with_token(async_client, headers, suffix)
+    await _create_binding(async_client, headers, seller_id, WB_WAREHOUSE_A, warehouse_id)
+
+    product = await async_client.post(
+        "/products",
+        headers=headers,
+        json={
+            "name": "Confirm product",
+            "sku_code": f"CNF-{suffix}",
+            "seller_id": seller_id,
+            "wb_barcode": "FBS-CONFIRM-001",
+        },
+    )
+    assert product.status_code in (200, 201), product.text
+    product_id = uuid.UUID(product.json()["id"])
+    seller_uuid = uuid.UUID(seller_id)
+    warehouse_uuid = uuid.UUID(warehouse_id)
+
+    async with SessionLocal() as session:
+        prod = await session.get(Product, product_id)
+        assert prod is not None
+        tenant_id = prod.tenant_id
+        order, _created = await upsert_order_from_wb_row(
+            session,
+            tenant_id,
+            seller_uuid,
+            _wb_order_row(order_id=800302, barcode="FBS-CONFIRM-001"),
+        )
+        await session.commit()
+        order_id = order.id
+        assert order.status == FBS_ORDER_STATUS_NEW
+
+    _patch_wb_order_fetches(
+        monkeypatch,
+        new_rows=[],
+        status_rows=[
+            {"id": 800302, "supplierStatus": "confirm", "wbStatus": "waiting"}
+        ],
+    )
+
+    async with SessionLocal() as session:
+        import httpx
+
+        async with httpx.AsyncClient() as http_client:
+            await sync_seller_orders(
+                session,
+                tenant_id,
+                seller_uuid,
+                http_client,
+                warehouse_id=warehouse_uuid,
+            )
+
+    async with SessionLocal() as session:
+        order = await session.get(FbsOrder, order_id)
+        assert order is not None
+        assert order.wb_status == "confirm"
+        assert order.status == FBS_ORDER_STATUS_ASSEMBLING
+
+    new_page = await async_client.get(
+        "/operations/fbs-orders/worklist?status_group=new",
+        headers=headers,
+    )
+    assert new_page.status_code == 200, new_page.text
+    assert all(item["wb_order_id"] != 800302 for item in new_page.json()["items"])
+
+    active_page = await async_client.get(
+        "/operations/fbs-orders/worklist?status_group=active",
+        headers=headers,
+    )
+    assert active_page.status_code == 200, active_page.text
+    by_wb = {item["wb_order_id"]: item for item in active_page.json()["items"]}
+    assert by_wb[800302]["status"] == FBS_ORDER_STATUS_ASSEMBLING
 
 
 # TC-NEW-FBS-INTAKE-004

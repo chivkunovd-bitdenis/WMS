@@ -12,6 +12,7 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.fbs_order import (
+    FBS_ORDER_STATUS_ASSEMBLING,
     FBS_ORDER_STATUS_CANCELLED,
     FBS_ORDER_STATUS_DEFECT,
     FBS_ORDER_STATUS_DONE,
@@ -108,12 +109,36 @@ def _first_barcode(row: dict[str, Any]) -> str | None:
     return None
 
 
+def _status_value_from_row(row: dict[str, Any], key: str) -> str | None:
+    val = row.get(key)
+    if isinstance(val, str) and val.strip():
+        return val.strip().lower()
+    return None
+
+
 def _wb_status_from_row(row: dict[str, Any]) -> str | None:
     for key in ("wbStatus", "supplierStatus", "status"):
-        val = row.get(key)
-        if isinstance(val, str) and val.strip():
-            return val.strip().lower()
+        val = _status_value_from_row(row, key)
+        if val is not None:
+            return val
     return None
+
+
+def _order_sync_status_from_row(row: dict[str, Any]) -> str | None:
+    supplier_status = _status_value_from_row(row, "supplierStatus")
+    wb_status = _status_value_from_row(row, "wbStatus")
+    fallback_status = _status_value_from_row(row, "status")
+    for candidate in (supplier_status, wb_status, fallback_status):
+        if candidate is None:
+            continue
+        if (
+            _is_cancel_like_wb_status(candidate)
+            or candidate in {"sold", "sorted", DEFECT_WB_STATUS}
+        ):
+            return candidate
+    if supplier_status == "confirm":
+        return supplier_status
+    return wb_status or supplier_status or fallback_status
 
 
 def _is_cancel_like_wb_status(wb_status: str) -> bool:
@@ -681,6 +706,10 @@ async def _apply_wb_status_to_order(
         order.status = FBS_ORDER_STATUS_DEFECT
         await _release_reservation(session, order)
         return
+    if normalized == "confirm":
+        if order.status == FBS_ORDER_STATUS_NEW:
+            order.status = FBS_ORDER_STATUS_ASSEMBLING
+        return
     if normalized == "waiting":
         if order.status != FBS_ORDER_STATUS_IN_DELIVERY:
             return
@@ -744,7 +773,7 @@ async def sync_order_statuses(
             status_row = by_id.get(order.wb_order_id)
             if status_row is None:
                 continue
-            wb_status = _wb_status_from_row(status_row)
+            wb_status = _order_sync_status_from_row(status_row)
             if wb_status is None:
                 continue
             await _apply_wb_status_to_order(session, order, wb_status)
