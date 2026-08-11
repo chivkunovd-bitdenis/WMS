@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { type ChangeEvent, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import {
   Alert,
   Box,
@@ -264,17 +264,26 @@ export function MarkingImportDialog({
   const scrollToTitleGtinRef = useRef<string | null>(null)
   const previewAbortRef = useRef<AbortController | null>(null)
 
-  const sellerProducts = useMemo(
-    () =>
-      catalog.filter(
-        (row) => row.requires_honest_sign && (row.seller_id == null || row.seller_id === sellerId),
-      ),
+  const sellerCatalogProducts = useMemo(
+    () => catalog.filter((row) => row.seller_id == null || row.seller_id === sellerId),
     [catalog, sellerId],
   )
 
-  const reset = useCallback(() => {
+  const sellerProducts = useMemo(
+    () => sellerCatalogProducts.filter((row) => row.requires_honest_sign),
+    [sellerCatalogProducts],
+  )
+
+  const abortPreview = useCallback((clearBusy: boolean) => {
     previewAbortRef.current?.abort()
     previewAbortRef.current = null
+    if (clearBusy) {
+      setParseBusy(false)
+    }
+  }, [])
+
+  const reset = useCallback(() => {
+    abortPreview(true)
     setFiles([])
     setGroups([])
     setPreviewMeta(null)
@@ -282,13 +291,20 @@ export function MarkingImportDialog({
     setTitleErrorGtins(new Set())
     setExpandedProductLists(new Set())
     scrollToTitleGtinRef.current = null
-  }, [])
+  }, [abortPreview])
+
+  useEffect(() => {
+    return () => {
+      abortPreview(false)
+    }
+  }, [abortPreview])
 
   useEffect(() => {
     if (!open) {
       reset()
       return
     }
+    reset()
     void (async () => {
       try {
         const rows = await fetchImportCatalog(token, sellerId, catalogMode)
@@ -343,9 +359,12 @@ export function MarkingImportDialog({
       if (err instanceof DOMException && err.name === 'AbortError') {
         return
       }
-      throw err
+      const message = err instanceof Error ? err.message : 'Не удалось разобрать файл.'
+      setError(message)
+      onError?.(message)
     } finally {
       if (previewAbortRef.current === abortController) {
+        previewAbortRef.current = null
         setParseBusy(false)
       }
     }
@@ -358,6 +377,11 @@ export function MarkingImportDialog({
     const next = [...files, ...Array.from(picked)]
     setFiles(next)
     void runPreview(next)
+  }
+
+  const onFileInputChange = (event: ChangeEvent<HTMLInputElement>) => {
+    onPickFiles(event.target.files)
+    event.target.value = ''
   }
 
   const clearPreview = () => {
@@ -562,7 +586,7 @@ export function MarkingImportDialog({
               accept=".csv,.txt,.tsv,.pdf"
               multiple
               hidden
-              onChange={(e) => onPickFiles(e.target.files)}
+              onChange={onFileInputChange}
               data-testid={`${testIdPrefix}-import-file-input`}
             />
           </Paper>
@@ -662,6 +686,23 @@ export function MarkingImportDialog({
                             />
                           </TableRow>
                         ))}
+                        {visibleProducts.length === 0 ? (
+                          <TableRow>
+                            <TableCell colSpan={3}>
+                              <Typography
+                                variant="body2"
+                                color="text.secondary"
+                                data-testid={`${testIdPrefix}-import-products-empty-${g.gtin}`}
+                              >
+                                {sellerProducts.length === 0 && sellerCatalogProducts.length > 0
+                                  ? 'У этого селлера нет товаров с признаком «Нужен Честный знак при упаковке». Включите его в карточке товара: каталог товаров → товар → упаковка и маркировка.'
+                                  : sellerProducts.length === 0
+                                    ? 'У этого селлера нет товаров для привязки. Сначала добавьте товар в каталог.'
+                                    : 'По поиску товары не найдены. Измените запрос или очистите поиск.'}
+                              </Typography>
+                            </TableCell>
+                          </TableRow>
+                        ) : null}
                       </TableBody>
                     </Table>
                   </TableContainer>

@@ -202,6 +202,12 @@ async def test_self_content_token_skips_packhub_duplicate_sku_conflict_idempoten
     async def fake_fetch_cards_list(*_args: object, **_kwargs: object) -> dict[str, object]:
         return {"cards": [card], "cursor": {"total": 1}}
 
+    async def fake_fetch_marketplace_seller_warehouses(
+        *_args: object,
+        **_kwargs: object,
+    ) -> list[dict[str, object]]:
+        return []
+
     async def noop_sync_task(*_args: object, **_kwargs: object) -> None:
         return None
 
@@ -211,6 +217,10 @@ async def test_self_content_token_skips_packhub_duplicate_sku_conflict_idempoten
     monkeypatch.setattr(
         "app.api.wildberries_integration.fetch_cards_list",
         fake_fetch_cards_list,
+    )
+    monkeypatch.setattr(
+        "app.api.wildberries_integration.fetch_marketplace_seller_warehouses",
+        fake_fetch_marketplace_seller_warehouses,
     )
     monkeypatch.setattr(
         "app.services.wb_mp_warehouse_service.run_wb_mp_warehouses_sync_task",

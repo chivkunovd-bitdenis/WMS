@@ -174,9 +174,19 @@ async def test_seller_single_wb_key_also_enables_marketplace_token(
     async def fake_fetch_cards_list(*_args: object, **_kwargs: object) -> dict[str, object]:
         return {"cards": [], "cursor": {"total": 0}}
 
+    async def fake_fetch_marketplace_seller_warehouses(
+        *_args: object,
+        **_kwargs: object,
+    ) -> list[dict[str, object]]:
+        return []
+
     monkeypatch.setattr(
         "app.api.wildberries_integration.fetch_cards_list",
         fake_fetch_cards_list,
+    )
+    monkeypatch.setattr(
+        "app.api.wildberries_integration.fetch_marketplace_seller_warehouses",
+        fake_fetch_marketplace_seller_warehouses,
     )
 
     suffix = str(int(time.time() * 1000))
@@ -231,6 +241,87 @@ async def test_seller_single_wb_key_also_enables_marketplace_token(
 
 
 @pytest.mark.asyncio
+async def test_self_content_token_does_not_enable_marketplace_without_scope(
+    async_client: AsyncClient,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    async def fake_fetch_cards_list(*_args: object, **_kwargs: object) -> dict[str, object]:
+        return {"cards": [{"nmID": 301}], "cursor": {"total": 1}}
+
+    async def fail_fetch_marketplace_seller_warehouses(
+        *_args: object,
+        **_kwargs: object,
+    ) -> list[dict[str, object]]:
+        raise WildberriesClientError("upstream_error", status_code=401)
+
+    monkeypatch.setattr(
+        "app.api.wildberries_integration.fetch_cards_list",
+        fake_fetch_cards_list,
+    )
+    monkeypatch.setattr(
+        "app.api.wildberries_integration.fetch_marketplace_seller_warehouses",
+        fail_fetch_marketplace_seller_warehouses,
+    )
+    headers, tenant_id, seller_id = await _create_authenticated_seller(async_client)
+
+    response = await async_client.post(
+        "/integrations/wildberries/self/content-token",
+        headers=headers,
+        json={"content_api_token": "content-only-wb-key"},
+    )
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["validation_ok"] is False
+    assert body["validation_error"] == "missing_marketplace_scope"
+    assert body["cards_received"] == 1
+    async with SessionLocal() as session:
+        content, supplies = await get_decrypted_tokens_for_seller(
+            session, tenant_id, seller_id
+        ) or (None, None)
+        marketplace = await get_decrypted_marketplace_token(session, tenant_id, seller_id)
+    assert content == "content-only-wb-key"
+    assert supplies is None
+    assert marketplace is None
+
+
+@pytest.mark.asyncio
+async def test_self_content_token_keeps_200_when_marketplace_validation_unavailable(
+    async_client: AsyncClient,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    async def fake_fetch_cards_list(*_args: object, **_kwargs: object) -> dict[str, object]:
+        return {"cards": [{"nmID": 302}], "cursor": {"total": 1}}
+
+    async def fail_fetch_marketplace_seller_warehouses(
+        *_args: object,
+        **_kwargs: object,
+    ) -> list[dict[str, object]]:
+        raise WildberriesClientError("upstream_error", status_code=502)
+
+    monkeypatch.setattr(
+        "app.api.wildberries_integration.fetch_cards_list",
+        fake_fetch_cards_list,
+    )
+    monkeypatch.setattr(
+        "app.api.wildberries_integration.fetch_marketplace_seller_warehouses",
+        fail_fetch_marketplace_seller_warehouses,
+    )
+    headers, _tenant_id, _seller_id = await _create_authenticated_seller(async_client)
+
+    response = await async_client.post(
+        "/integrations/wildberries/self/content-token",
+        headers=headers,
+        json={"content_api_token": "temporarily-unchecked-wb-key"},
+    )
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["validation_ok"] is False
+    assert body["validation_error"] == "marketplace_upstream_error_502"
+
+
+@pytest.mark.asyncio
 async def test_self_content_token_returns_traced_error_when_task_registration_fails(
     async_client: AsyncClient,
     monkeypatch: pytest.MonkeyPatch,
@@ -242,12 +333,22 @@ async def test_self_content_token_returns_traced_error_when_task_registration_fa
             "cursor": {"total": 2},
         }
 
+    async def fake_fetch_marketplace_seller_warehouses(
+        *_args: object,
+        **_kwargs: object,
+    ) -> list[dict[str, object]]:
+        return []
+
     def fail_add_task(*_args: object, **_kwargs: object) -> None:
         raise RuntimeError("background task registration failed")
 
     monkeypatch.setattr(
         "app.api.wildberries_integration.fetch_cards_list",
         fake_fetch_cards_list,
+    )
+    monkeypatch.setattr(
+        "app.api.wildberries_integration.fetch_marketplace_seller_warehouses",
+        fake_fetch_marketplace_seller_warehouses,
     )
     monkeypatch.setattr(BackgroundTasks, "add_task", fail_add_task)
     caplog.set_level("ERROR", logger="app.api.wildberries_integration")
@@ -284,12 +385,22 @@ async def test_self_content_token_returns_product_conflict_for_integrity_error(
     async def fake_fetch_cards_list(*_args: object, **_kwargs: object) -> dict[str, object]:
         return {"cards": [{"nmID": 201}], "cursor": {"total": 1}}
 
+    async def fake_fetch_marketplace_seller_warehouses(
+        *_args: object,
+        **_kwargs: object,
+    ) -> list[dict[str, object]]:
+        return []
+
     async def fail_product_upsert(*_args: object, **_kwargs: object) -> dict[str, int]:
         raise IntegrityError("INSERT INTO products", {}, RuntimeError("duplicate article"))
 
     monkeypatch.setattr(
         "app.api.wildberries_integration.fetch_cards_list",
         fake_fetch_cards_list,
+    )
+    monkeypatch.setattr(
+        "app.api.wildberries_integration.fetch_marketplace_seller_warehouses",
+        fake_fetch_marketplace_seller_warehouses,
     )
     monkeypatch.setattr(
         "app.api.wildberries_integration.upsert_products_from_wb_cards",

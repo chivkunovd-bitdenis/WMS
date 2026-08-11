@@ -18,7 +18,11 @@ from app.core.roles import FULFILLMENT_SELLER
 from app.core.settings import settings
 from app.db.session import get_db
 from app.models.user import User
-from app.services.wildberries_client import WildberriesClientError, fetch_cards_list
+from app.services.wildberries_client import (
+    WildberriesClientError,
+    fetch_cards_list,
+    fetch_marketplace_seller_warehouses,
+)
 from app.services.wildberries_credentials_service import (
     SKIP,
     TokenPatchValue,
@@ -442,7 +446,7 @@ async def save_and_validate_self_content_token(
     background_tasks: BackgroundTasks,
     effective_seller_id: Annotated[uuid.UUID | None, Depends(get_effective_seller_id)],
 ) -> WildberriesSelfTokenSaveOut | JSONResponse:
-    """Seller saves WB content API key; validate by calling cards list."""
+    """Seller saves WB API key; validate content and marketplace scopes."""
     if user.role != FULFILLMENT_SELLER or effective_seller_id is None:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="forbidden")
     tenant_id = user.tenant_id
@@ -458,6 +462,7 @@ async def save_and_validate_self_content_token(
     nm_id: int | None = None
     total_hint: int | None = None
     validation_error: str | None = None
+    marketplace_validation_ok = False
     try:
         async with httpx.AsyncClient() as client:
             seen: set[tuple[str | None, int | None]] = set()
@@ -491,6 +496,15 @@ async def save_and_validate_self_content_token(
                         total_hint = th
                 if total_hint is not None and len(total_cards) >= total_hint:
                     break
+            try:
+                await fetch_marketplace_seller_warehouses(client, api_token=token)
+                marketplace_validation_ok = True
+            except WildberriesClientError as exc:
+                if exc.code == "upstream_error" and exc.status_code in (401, 403):
+                    validation_error = "missing_marketplace_scope"
+                else:
+                    suffix = f"_{exc.status_code}" if exc.status_code else ""
+                    validation_error = f"marketplace_{exc.code}{suffix}"
     except WildberriesClientError as exc:
         if exc.code == "upstream_error" and exc.status_code in (401, 403):
             raise HTTPException(
@@ -521,8 +535,8 @@ async def save_and_validate_self_content_token(
             tenant_id,
             seller_id,
             content_api_token=token,
-            supplies_api_token=token,
-            marketplace_api_token=token,
+            supplies_api_token=token if marketplace_validation_ok else None,
+            marketplace_api_token=token if marketplace_validation_ok else None,
         )
         if validation_error is None:
             saved = await upsert_imported_cards(
