@@ -53,6 +53,10 @@ def _wb_order_row(
     created_at: str = "2026-07-01T12:00:00+03:00",
     office_id: int = 42,
     warehouse_id: int = WB_WAREHOUSE_A,
+    supply_id: str | None = None,
+    supplier_status: str | None = None,
+    wb_status: str | None = None,
+    is_pickup_point_shipment_allowed: bool | None = None,
 ) -> dict[str, Any]:
     row: dict[str, Any] = {
         "id": order_id,
@@ -69,6 +73,14 @@ def _wb_order_row(
     }
     if warehouse_id is not None:
         row["warehouseId"] = warehouse_id
+    if supply_id is not None:
+        row["supplyId"] = supply_id
+    if supplier_status is not None:
+        row["supplierStatus"] = supplier_status
+    if wb_status is not None:
+        row["wbStatus"] = wb_status
+    if is_pickup_point_shipment_allowed is not None:
+        row["isPickupPointShipmentAllowed"] = is_pickup_point_shipment_allowed
     return row
 
 
@@ -204,54 +216,6 @@ def _patch_wb_order_fetches(
     monkeypatch.setattr(
         "app.services.wb_marketplace_orders_service.fetch_marketplace_orders_status",
         fake_status,
-    )
-
-
-def _patch_wb_supply_link_fetches(
-    monkeypatch: pytest.MonkeyPatch,
-    *,
-    supply_rows: list[dict[str, Any]] | None = None,
-    supply_order_ids: dict[str, list[int]] | None = None,
-    list_raises: BaseException | None = None,
-    order_ids_raises: BaseException | None = None,
-    calls: dict[str, int] | None = None,
-) -> None:
-    async def fake_supplies_list(
-        client: object,
-        *,
-        api_token: str,
-        supplies_api_base: str | None = None,
-        limit: int = 100,
-        offset: int = 0,
-    ) -> list[dict[str, Any]]:
-        _ = client, api_token, supplies_api_base, limit, offset
-        if calls is not None:
-            calls["list"] = calls.get("list", 0) + 1
-        if list_raises is not None:
-            raise list_raises
-        return supply_rows or []
-
-    async def fake_supply_order_ids(
-        client: object,
-        *,
-        api_token: str,
-        wb_supply_id: str,
-        expected_order_ids: list[int] | None = None,
-    ) -> list[int]:
-        _ = client, api_token, expected_order_ids
-        if calls is not None:
-            calls["order_ids"] = calls.get("order_ids", 0) + 1
-        if order_ids_raises is not None:
-            raise order_ids_raises
-        return (supply_order_ids or {}).get(wb_supply_id, [])
-
-    monkeypatch.setattr(
-        "app.services.wb_marketplace_orders_service.fetch_supplies_list",
-        fake_supplies_list,
-    )
-    monkeypatch.setattr(
-        "app.services.wb_marketplace_orders_service.fetch_wb_supply_order_ids",
-        fake_supply_order_ids,
     )
 
 
@@ -610,32 +574,21 @@ async def test_fbs_order_status_sync_links_external_wb_supply(
         prod = await session.get(Product, product_id)
         assert prod is not None
         tenant_id = prod.tenant_id
-        order, _created = await upsert_order_from_wb_row(
-            session,
-            tenant_id,
-            seller_uuid,
-            _wb_order_row(order_id=800401, barcode="FBS-EXT-SUP-001"),
-        )
-        await session.commit()
-        order_id = order.id
 
     _patch_wb_order_fetches(
         monkeypatch,
-        new_rows=[],
+        new_rows=[
+            _wb_order_row(
+                order_id=800401,
+                barcode="FBS-EXT-SUP-001",
+                supply_id="WB-GI-EXT-001",
+                supplier_status="confirm",
+                wb_status="waiting",
+            )
+        ],
         status_rows=[
             {"id": 800401, "supplierStatus": "confirm", "wbStatus": "waiting"}
         ],
-    )
-    _patch_wb_supply_link_fetches(
-        monkeypatch,
-        supply_rows=[
-            {
-                "id": "WB-GI-EXT-001",
-                "name": "External WB supply",
-                "createdAt": "2026-08-11T09:00:00+03:00",
-            }
-        ],
-        supply_order_ids={"WB-GI-EXT-001": [800401]},
     )
 
     async with SessionLocal() as session:
@@ -655,9 +608,12 @@ async def test_fbs_order_status_sync_links_external_wb_supply(
     assert result["supply_links_created"] == 1
 
     async with SessionLocal() as session:
-        order = await session.get(FbsOrder, order_id)
+        order = await session.scalar(
+            select(FbsOrder).where(FbsOrder.wb_order_id == 800401)
+        )
         assert order is not None
         assert order.status == FBS_ORDER_STATUS_ASSEMBLING
+        assert order.wb_supply_id == "WB-GI-EXT-001"
         assert order.supply_id is not None
         supply = await session.get(FbsSupply, order.supply_id)
         assert supply is not None
@@ -693,28 +649,21 @@ async def test_fbs_external_wb_supply_link_is_idempotent(
         prod = await session.get(Product, uuid.UUID(product.json()["id"]))
         assert prod is not None
         tenant_id = prod.tenant_id
-        order, _created = await upsert_order_from_wb_row(
-            session,
-            tenant_id,
-            seller_uuid,
-            _wb_order_row(order_id=800402, barcode="FBS-IDEMP-SUP-001"),
-        )
-        await session.commit()
-        order_id = order.id
 
     _patch_wb_order_fetches(
         monkeypatch,
-        new_rows=[],
+        new_rows=[
+            _wb_order_row(
+                order_id=800402,
+                barcode="FBS-IDEMP-SUP-001",
+                supply_id="WB-GI-IDEMP-001",
+                supplier_status="confirm",
+                wb_status="waiting",
+            )
+        ],
         status_rows=[
             {"id": 800402, "supplierStatus": "confirm", "wbStatus": "waiting"}
         ],
-    )
-    calls: dict[str, int] = {}
-    _patch_wb_supply_link_fetches(
-        monkeypatch,
-        supply_rows=[{"id": "WB-GI-IDEMP-001"}],
-        supply_order_ids={"WB-GI-IDEMP-001": [800402]},
-        calls=calls,
     )
 
     async with SessionLocal() as session:
@@ -738,13 +687,13 @@ async def test_fbs_external_wb_supply_link_is_idempotent(
 
     assert first["supply_linked_orders"] == 1
     assert second["supply_link_candidates"] == 0
-    assert calls["list"] == 1
-    assert calls["order_ids"] == 1
 
     async with SessionLocal() as session:
         supply_count = await session.scalar(select(func.count()).select_from(FbsSupply))
         assert int(supply_count or 0) == 1
-        order = await session.get(FbsOrder, order_id)
+        order = await session.scalar(
+            select(FbsOrder).where(FbsOrder.wb_order_id == 800402)
+        )
         assert order is not None
         assert order.supply_id is not None
 
@@ -765,8 +714,6 @@ async def test_fbs_external_wb_supply_link_skips_wb_calls_without_candidates(
         tenant_id = uuid.UUID(token["tenant_id"])
 
     _patch_wb_order_fetches(monkeypatch, new_rows=[], status_rows=[])
-    calls: dict[str, int] = {}
-    _patch_wb_supply_link_fetches(monkeypatch, calls=calls)
 
     async with SessionLocal() as session:
         import httpx
@@ -781,11 +728,10 @@ async def test_fbs_external_wb_supply_link_skips_wb_calls_without_candidates(
             )
 
     assert result["supply_link_candidates"] == 0
-    assert calls == {}
 
 
 @pytest.mark.asyncio
-async def test_fbs_external_wb_supply_link_soft_fails_on_wb_error(
+async def test_fbs_external_wb_supply_link_soft_fails_on_local_error(
     async_client: AsyncClient,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -811,25 +757,30 @@ async def test_fbs_external_wb_supply_link_soft_fails_on_wb_error(
         prod = await session.get(Product, uuid.UUID(product.json()["id"]))
         assert prod is not None
         tenant_id = prod.tenant_id
-        order, _created = await upsert_order_from_wb_row(
-            session,
-            tenant_id,
-            seller_uuid,
-            _wb_order_row(order_id=800403, barcode="FBS-SOFT-SUP-001"),
-        )
-        await session.commit()
-        order_id = order.id
 
     _patch_wb_order_fetches(
         monkeypatch,
-        new_rows=[],
+        new_rows=[
+            _wb_order_row(
+                order_id=800403,
+                barcode="FBS-SOFT-SUP-001",
+                supply_id="WB-GI-SOFT-001",
+                supplier_status="confirm",
+                wb_status="waiting",
+            )
+        ],
         status_rows=[
             {"id": 800403, "supplierStatus": "confirm", "wbStatus": "waiting"}
         ],
     )
-    _patch_wb_supply_link_fetches(
-        monkeypatch,
-        list_raises=WildberriesClientError("token_read_only", status_code=401),
+
+    async def broken_supply_link(*args: object, **kwargs: object) -> dict[str, Any]:
+        _ = args, kwargs
+        raise RuntimeError("local link failure")
+
+    monkeypatch.setattr(
+        "app.services.wb_marketplace_orders_service.link_confirmed_orders_to_wb_supplies",
+        broken_supply_link,
     )
 
     async with SessionLocal() as session:
@@ -844,11 +795,13 @@ async def test_fbs_external_wb_supply_link_soft_fails_on_wb_error(
                 warehouse_id=warehouse_uuid,
             )
 
-    assert result["supply_link_candidates"] == 1
-    assert result["supply_link_error"] == "wb_token_read_only_401"
+    assert result["supply_link_candidates"] == 0
+    assert result["supply_link_error"] == "local_exception"
 
     async with SessionLocal() as session:
-        order = await session.get(FbsOrder, order_id)
+        order = await session.scalar(
+            select(FbsOrder).where(FbsOrder.wb_order_id == 800403)
+        )
         assert order is not None
         assert order.status == FBS_ORDER_STATUS_EXTERNAL_PROCESSING
         assert order.supply_id is None
@@ -1011,6 +964,76 @@ async def test_fbs_sync_keeps_new_orders_when_page_fetch_fails(
             )
         ).scalar_one()
     assert order.wb_order_id == 800501
+
+
+@pytest.mark.asyncio
+async def test_fbs_history_page_updates_pickup_point_allowed_for_existing_order(
+    async_client: AsyncClient,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    headers, suffix = await _register_ff_admin(async_client)
+    seller_id, warehouse_id = await _setup_seller_with_token(async_client, headers, suffix)
+    await _create_binding(async_client, headers, seller_id, WB_WAREHOUSE_A, warehouse_id)
+
+    product = await async_client.post(
+        "/products",
+        headers=headers,
+        json={
+            "name": "History PVZ product",
+            "sku_code": f"HPVZ-{suffix}",
+            "seller_id": seller_id,
+            "wb_barcode": "FBS-HISTORY-PVZ-001",
+        },
+    )
+    assert product.status_code in (200, 201), product.text
+    seller_uuid = uuid.UUID(seller_id)
+
+    async with SessionLocal() as session:
+        prod = await session.get(Product, uuid.UUID(product.json()["id"]))
+        assert prod is not None
+        tenant_id = prod.tenant_id
+        order, _created = await upsert_order_from_wb_row(
+            session,
+            tenant_id,
+            seller_uuid,
+            _wb_order_row(
+                order_id=800503,
+                barcode="FBS-HISTORY-PVZ-001",
+                is_pickup_point_shipment_allowed=False,
+            ),
+        )
+        await session.commit()
+        order_id = order.id
+
+    _patch_wb_order_fetches(
+        monkeypatch,
+        new_rows=[],
+        page_rows=[
+            _wb_order_row(
+                order_id=800503,
+                barcode="FBS-HISTORY-PVZ-001",
+                is_pickup_point_shipment_allowed=True,
+            )
+        ],
+    )
+
+    async with SessionLocal() as session:
+        import httpx
+
+        async with httpx.AsyncClient() as http_client:
+            result = await sync_seller_orders(
+                session,
+                tenant_id,
+                seller_uuid,
+                http_client,
+                warehouse_id=uuid.UUID(warehouse_id),
+            )
+
+    assert result["orders_upserted"] == 1
+    async with SessionLocal() as session:
+        order = await session.get(FbsOrder, order_id)
+        assert order is not None
+        assert order.can_pvz is True
 
 
 @pytest.mark.asyncio

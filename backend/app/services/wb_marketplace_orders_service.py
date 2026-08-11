@@ -43,14 +43,12 @@ from app.models.warehouse import Warehouse
 from app.services.fbs_marking_service import apply_wb_meta_requirements_to_order
 from app.services.fbs_stock_availability_service import fbs_available_qty_for_product
 from app.services.fbs_stock_publish_service import schedule_seller_stock_publish
-from app.services.fbs_supply_reconcile_service import fetch_wb_supply_order_ids
 from app.services.fbs_wb_seller_lock_service import wb_seller_lock
 from app.services.wildberries_client import (
     WildberriesClientError,
     fetch_marketplace_orders_new,
     fetch_marketplace_orders_page,
     fetch_marketplace_orders_status,
-    fetch_supplies_list,
 )
 from app.services.wildberries_credentials_service import (
     get_decrypted_marketplace_token,
@@ -66,7 +64,6 @@ from app.services.wildberries_fbs_client import split_marketplace_order_id_batch
 
 FBS_DEADLINE_HOURS = 120
 MAX_ORDERS_PAGES = 10
-MAX_SUPPLY_LINK_LIST_LIMIT = 100
 
 RESERVE_STATUS_WAREHOUSE_REMAP_CONFLICT = "warehouse_remap_conflict"
 
@@ -184,7 +181,7 @@ def _local_status_from_wb_statuses(
     return FBS_ORDER_STATUS_NEW
 
 
-def _can_pvz_from_row(row: dict[str, Any]) -> bool:
+def _can_pvz_value_from_row(row: dict[str, Any]) -> bool | None:
     """Разрешена ли сдача заказа через ПВЗ.
 
     Настоящее поле WB — `isPickupPointShipmentAllowed`. Раньше читались `canPvz`
@@ -196,6 +193,13 @@ def _can_pvz_from_row(row: dict[str, Any]) -> bool:
         value = row.get(key)
         if value is not None:
             return bool(value)
+    return None
+
+
+def _can_pvz_from_row(row: dict[str, Any]) -> bool:
+    value = _can_pvz_value_from_row(row)
+    if value is not None:
+        return value
     return False
 
 
@@ -622,6 +626,12 @@ async def _apply_wb_row_to_existing(
             existing.reserve_status = RESERVE_STATUS_WAREHOUSE_REMAP_CONFLICT
         else:
             existing.wb_warehouse_id = wb_wh_id
+    wb_supply_id = _wb_supply_id_from_order_row(row)
+    if wb_supply_id is not None:
+        existing.wb_supply_id = wb_supply_id
+    can_pvz = _can_pvz_value_from_row(row)
+    if can_pvz is not None:
+        existing.can_pvz = can_pvz
     supplier_status = _supplier_status_from_row(row)
     wb_status = _wb_status_from_row(row)
     if supplier_status is not None or wb_status is not None:
@@ -716,6 +726,7 @@ async def upsert_order_from_wb_row(
         cargo_type=_cargo_type_label(row),
         wb_office_id=_wb_office_id_from_row(row),
         wb_warehouse_id=wb_warehouse_id,
+        wb_supply_id=_wb_supply_id_from_order_row(row),
         can_pvz=_can_pvz_from_row(row),
         status=_local_status_from_wb_statuses(
             wb_status=wb_status,
@@ -971,8 +982,8 @@ async def sync_order_statuses(
     return updated
 
 
-def _wb_supply_id_from_row(row: dict[str, Any]) -> str | None:
-    for key in ("id", "supplyId", "supplyID", "supply_id", "wb_supply_id"):
+def _wb_supply_id_from_order_row(row: dict[str, Any]) -> str | None:
+    for key in ("supplyId", "supplyID", "supply_id", "wb_supply_id"):
         value = row.get(key)
         if value is None:
             continue
@@ -991,7 +1002,7 @@ def _wb_supply_name_from_row(row: dict[str, Any], wb_supply_id: str) -> str:
 
 
 def _wb_supply_created_at_from_row(row: dict[str, Any]) -> datetime | None:
-    for key in ("createdAt", "createDate", "created_at"):
+    for key in ("supplyCreatedAt", "supplyCreateDate", "supply_created_at"):
         value = row.get(key)
         if value is not None:
             return _parse_wb_datetime(value)
@@ -1009,6 +1020,7 @@ async def _load_unlinked_confirmed_orders(
             FbsOrder.tenant_id == tenant_id,
             FbsOrder.seller_id == seller_id,
             FbsOrder.supply_id.is_(None),
+            FbsOrder.wb_supply_id.is_not(None),
             FbsOrder.supplier_status == "confirm",
             FbsOrder.status.not_in(tuple(TERMINAL_FBS_STATUSES)),
         )
@@ -1104,6 +1116,7 @@ async def link_confirmed_orders_to_wb_supplies(
     http_client: httpx.AsyncClient,
     api_token: str,
 ) -> dict[str, Any]:
+    _ = http_client, api_token
     candidates = await _load_unlinked_confirmed_orders(session, tenant_id, seller_id)
     if not candidates:
         return {
@@ -1133,68 +1146,27 @@ async def link_confirmed_orders_to_wb_supplies(
                 "supply_link_supplies_scanned": 0,
             }
 
-        candidates_by_wb_id = {int(order.wb_order_id): order for order in candidates}
-        remaining_wb_ids = set(candidates_by_wb_id)
-        linked_orders = 0
-        supplies_created = 0
-        supplies_scanned = 0
+        candidates_by_supply_id: dict[str, list[FbsOrder]] = {}
+        for order in candidates:
+            if order.wb_supply_id is None:
+                continue
+            wb_supply_id = order.wb_supply_id.strip()
+            if wb_supply_id:
+                candidates_by_supply_id.setdefault(wb_supply_id, []).append(order)
 
-        try:
-            supply_rows = await fetch_supplies_list(
-                http_client,
-                api_token=api_token,
-                limit=MAX_SUPPLY_LINK_LIST_LIMIT,
-                offset=0,
-            )
-        except WildberriesClientError as exc:
-            suffix = f"_{exc.status_code}" if exc.status_code else ""
-            code = f"wb_{exc.code}{suffix}"
-            logger.warning(
-                "wb supply link failed: seller=%s step=list error=%s",
-                seller_id,
-                code,
-            )
+        if not candidates_by_supply_id:
             return {
                 "supply_link_candidates": len(candidates),
                 "supply_linked_orders": 0,
                 "supply_links_created": 0,
                 "supply_link_supplies_scanned": 0,
-                "supply_link_error": code,
             }
 
-        first_error: str | None = None
-        for row in supply_rows:
-            if not remaining_wb_ids:
-                break
-            wb_supply_id = _wb_supply_id_from_row(row)
-            if wb_supply_id is None:
-                continue
-            supplies_scanned += 1
-            try:
-                wb_order_ids = await fetch_wb_supply_order_ids(
-                    http_client,
-                    api_token=api_token,
-                    wb_supply_id=wb_supply_id,
-                )
-            except WildberriesClientError as exc:
-                suffix = f"_{exc.status_code}" if exc.status_code else ""
-                first_error = first_error or f"wb_{exc.code}{suffix}"
-                logger.warning(
-                    "wb supply link failed: seller=%s wb_supply_id=%s step=orders error=%s",
-                    seller_id,
-                    wb_supply_id,
-                    first_error,
-                )
-                continue
+        linked_orders = 0
+        supplies_created = 0
+        supplies_scanned = len(candidates_by_supply_id)
 
-            matching_orders = [
-                candidates_by_wb_id[wb_order_id]
-                for wb_order_id in wb_order_ids
-                if wb_order_id in remaining_wb_ids
-            ]
-            if not matching_orders:
-                continue
-
+        for wb_supply_id, matching_orders in candidates_by_supply_id.items():
             existed_before = (
                 await _get_existing_supply_by_wb_id(
                     session, tenant_id, seller_id, wb_supply_id
@@ -1202,7 +1174,12 @@ async def link_confirmed_orders_to_wb_supplies(
                 is not None
             )
             supply = await _get_or_create_wb_origin_supply(
-                session, tenant_id, seller_id, wb_supply_id, row, matching_orders
+                session,
+                tenant_id,
+                seller_id,
+                wb_supply_id,
+                {"supplyId": wb_supply_id},
+                matching_orders,
             )
             if supply is None:
                 continue
@@ -1211,7 +1188,6 @@ async def link_confirmed_orders_to_wb_supplies(
 
             for order in matching_orders:
                 if order.supply_id is not None:
-                    remaining_wb_ids.discard(int(order.wb_order_id))
                     continue
                 if order.warehouse_id is None and order.wb_warehouse_id is not None:
                     order.warehouse_id = await _resolve_or_create_wms_warehouse_for_wb(
@@ -1233,14 +1209,6 @@ async def link_confirmed_orders_to_wb_supplies(
                 }:
                     order.status = FBS_ORDER_STATUS_ASSEMBLING
                 linked_orders += 1
-                remaining_wb_ids.discard(int(order.wb_order_id))
-
-        if remaining_wb_ids:
-            logger.info(
-                "wb supply link incomplete: seller=%s unmatched_orders=%s",
-                seller_id,
-                len(remaining_wb_ids),
-            )
 
         await session.commit()
         result: dict[str, Any] = {
@@ -1249,8 +1217,6 @@ async def link_confirmed_orders_to_wb_supplies(
             "supply_links_created": supplies_created,
             "supply_link_supplies_scanned": supplies_scanned,
         }
-        if first_error is not None:
-            result["supply_link_error"] = first_error
         return result
 
 
@@ -1364,10 +1330,25 @@ async def sync_seller_orders(
                 raise
             status_sync_error = exc.code
         if status_sync_error is None:
-            supply_link_result = await link_confirmed_orders_to_wb_supplies(
-                session, tenant_id, seller_id, http_client, api_token
-            )
-            await session.commit()
+            try:
+                supply_link_result = await link_confirmed_orders_to_wb_supplies(
+                    session, tenant_id, seller_id, http_client, api_token
+                )
+                await session.commit()
+            except Exception as exc:
+                await session.rollback()
+                logger.exception(
+                    "wb supply link failed: seller=%s step=local error=%s",
+                    seller_id,
+                    type(exc).__name__,
+                )
+                supply_link_result = {
+                    "supply_link_candidates": 0,
+                    "supply_linked_orders": 0,
+                    "supply_links_created": 0,
+                    "supply_link_supplies_scanned": 0,
+                    "supply_link_error": "local_exception",
+                }
 
     result: dict[str, Any] = {
         "seller_id": str(seller_id),
