@@ -1,7 +1,7 @@
 """Track FBS supply source.
 
 Revision ID: 20260811_0077
-Revises: 20260809_0076
+Revises: 20260810_0077
 Create Date: 2026-08-11
 """
 
@@ -13,7 +13,7 @@ import sqlalchemy as sa
 from alembic import op
 
 revision: str = "20260811_0077"
-down_revision: str | Sequence[str] | None = "20260809_0076"
+down_revision: str | Sequence[str] | None = "20260810_0077"
 branch_labels: str | Sequence[str] | None = None
 depends_on: str | Sequence[str] | None = None
 
