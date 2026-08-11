@@ -16,6 +16,7 @@ from app.services.wildberries_client import (
 from app.services.wildberries_credentials_service import (
     _seller_in_tenant,
     get_decrypted_marketplace_token,
+    get_decrypted_tokens_for_seller,
 )
 
 
@@ -62,6 +63,12 @@ async def _require_marketplace_token(
     if await _seller_in_tenant(session, tenant_id, seller_id) is None:
         raise FbsSellerWarehouseError("seller_not_found")
     token = await get_decrypted_marketplace_token(session, tenant_id, seller_id)
+    if not token:
+        pair = await get_decrypted_tokens_for_seller(session, tenant_id, seller_id)
+        if pair is None:
+            raise FbsSellerWarehouseError("seller_not_found")
+        _content_token, supplies_token = pair
+        token = supplies_token
     if not token:
         raise FbsSellerWarehouseError("missing_marketplace_token")
     return token

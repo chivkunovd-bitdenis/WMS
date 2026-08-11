@@ -13,7 +13,7 @@ from app.api.deps import (
     require_fbs_operator_access,
     require_fulfillment_admin,
 )
-from app.api.fbs_errors import raise_fbs_http
+from app.api.fbs_errors import envelope_from_exc, raise_fbs_http
 from app.core.settings import settings
 from app.db.session import get_db
 from app.models.fbs_order import FbsOrder
@@ -127,6 +127,7 @@ class FbsWorklistOrderOut(BaseModel):
     wb_order_id: int
     status: str
     wb_status: str | None
+    supplier_status: str | None
     seller: FbsWorklistSellerOut
     wb_warehouse: FbsWorklistWarehouseOut
     wms_warehouse: FbsWorklistWarehouseOut
@@ -172,6 +173,7 @@ class FbsOrderOut(BaseModel):
     trbx_id: str | None
     status: str
     wb_status: str | None
+    supplier_status: str | None
     created_at_wb: str
     deadline_at: str
     mapping_status: str
@@ -202,6 +204,7 @@ def _order_out(order: FbsOrder) -> FbsOrderOut:
         trbx_id=str(order.trbx_id) if order.trbx_id is not None else None,
         status=order.status,
         wb_status=order.wb_status,
+        supplier_status=order.supplier_status,
         created_at_wb=order.created_at_wb.isoformat(),
         deadline_at=order.deadline_at.isoformat(),
         mapping_status=order.mapping_status,
@@ -314,15 +317,16 @@ async def get_fbs_orders(
 
 
 def _raise_cancellation_http(exc: FbsCancellationError) -> None:
+    detail = envelope_from_exc(exc)
     if exc.code == "order_not_found":
-        raise_fbs_http(status.HTTP_404_NOT_FOUND, exc.code)
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=detail)
     if exc.code == "order_not_cancellable":
-        raise_fbs_http(status.HTTP_409_CONFLICT, exc.code)
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=detail)
     if exc.code in ("seller_not_found", "missing_marketplace_token"):
-        raise_fbs_http(status.HTTP_400_BAD_REQUEST, exc.code)
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=detail)
     if exc.code.startswith("wb_"):
-        raise_fbs_http(status.HTTP_502_BAD_GATEWAY, exc.code)
-    raise_fbs_http(status.HTTP_500_INTERNAL_SERVER_ERROR, exc.code)
+        raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail=detail)
+    raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=detail)
 
 
 @router.patch("/{order_id}/cancel", response_model=FbsOrderOut)

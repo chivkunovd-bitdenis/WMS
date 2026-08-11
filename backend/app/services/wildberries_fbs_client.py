@@ -74,6 +74,20 @@ def _marketplace_api_url(
     return f"{base}{path}"
 
 
+def _response_endpoint(response: httpx.Response) -> str | None:
+    try:
+        return response.request.url.raw_path.decode()
+    except RuntimeError:
+        return response.url.raw_path.decode()
+
+
+def _response_text(response: httpx.Response) -> str | None:
+    try:
+        return response.text
+    except UnicodeDecodeError:
+        return None
+
+
 def _marketplace_auth_headers(
     api_token: str,
     *,
@@ -230,20 +244,36 @@ def map_upstream_error(response: httpx.Response) -> WildberriesClientError:
         return WildberriesClientError(
             "token_read_only",
             status_code=response.status_code,
+            endpoint=_response_endpoint(response),
+            response_body=_response_text(response),
         )
     return WildberriesClientError(
         "upstream_error",
         status_code=response.status_code,
+        endpoint=_response_endpoint(response),
+        response_body=_response_text(response),
     )
 
 
 def parse_business_error(response: httpx.Response) -> WildberriesBusinessError:
+    endpoint = _response_endpoint(response)
+    response_body = _response_text(response)
     try:
         data = response.json()
     except ValueError:
-        return WildberriesBusinessError("upstream_error", status_code=409)
+        return WildberriesBusinessError(
+            "upstream_error",
+            status_code=409,
+            endpoint=endpoint,
+            response_body=response_body,
+        )
     if not isinstance(data, dict):
-        return WildberriesBusinessError("upstream_error", status_code=409)
+        return WildberriesBusinessError(
+            "upstream_error",
+            status_code=409,
+            endpoint=endpoint,
+            response_body=response_body,
+        )
     wb_code_raw = data.get("code")
     wb_code = wb_code_raw if isinstance(wb_code_raw, str) else None
     message_raw = data.get("message")
@@ -256,12 +286,16 @@ def parse_business_error(response: httpx.Response) -> WildberriesBusinessError:
             wb_code=wb_code or "MetaValidationFail",
             message=message,
             meta_validation=meta_items,
+            endpoint=endpoint,
+            response_body=response_body,
         )
     return WildberriesBusinessError(
         "business_error",
         status_code=409,
         wb_code=wb_code,
         message=message,
+        endpoint=endpoint,
+        response_body=response_body,
     )
 
 
@@ -413,7 +447,7 @@ async def marketplace_request(
             timeout=60.0,
         )
     except httpx.HTTPError as exc:
-        raise WildberriesClientError("transport_error") from exc
+        raise WildberriesClientError("transport_error", endpoint=url) from exc
     return response
 
 

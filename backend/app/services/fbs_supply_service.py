@@ -69,6 +69,12 @@ from app.services.wildberries_credentials_service import (
     _seller_in_tenant,
     get_decrypted_marketplace_token,
 )
+from app.services.wildberries_errors import (
+    log_wb_client_error,
+    wb_error_context,
+    wb_error_ref,
+    wb_operator_message,
+)
 from app.services.wildberries_fbs_client import split_marketplace_order_id_batches
 
 logger = logging.getLogger(__name__)
@@ -124,6 +130,46 @@ async def _order_has_ready_sticker_asset(
 def _wb_error_code(exc: WildberriesClientError) -> str:
     suffix = f"_{exc.status_code}" if exc.status_code else ""
     return f"wb_{exc.code}{suffix}"
+
+
+def _fbs_supply_error_from_wb(
+    exc: WildberriesClientError,
+    *,
+    tenant_id: uuid.UUID,
+    seller_id: uuid.UUID,
+    local_entity_id: uuid.UUID | str | None = None,
+    wb_supply_id: str | None = None,
+    event: str,
+    retryable: bool | None = None,
+    http_status: int | None = None,
+    extra_context: dict[str, Any] | None = None,
+) -> FbsSupplyError:
+    ref = wb_error_ref()
+    log_wb_client_error(
+        logger,
+        event,
+        exc,
+        tenant_id=tenant_id,
+        seller_id=seller_id,
+        local_entity_id=local_entity_id,
+        wb_object_id=wb_supply_id,
+        ref=ref,
+    )
+    extra: dict[str, Any] = {}
+    if wb_supply_id is not None:
+        extra["wb_supply_id"] = wb_supply_id
+    if local_entity_id is not None:
+        extra["local_entity_id"] = str(local_entity_id)
+    if extra_context:
+        extra.update(extra_context)
+    return FbsSupplyError(
+        _wb_error_code(exc),
+        message=wb_operator_message(exc),
+        context=wb_error_context(exc, ref=ref, extra=extra),
+        retryable=exc.code == "transport_error" if retryable is None else retryable,
+        http_status=http_status
+        or (504 if exc.code == "transport_error" else 502),
+    )
 
 
 async def _require_marketplace_token(
@@ -316,26 +362,6 @@ async def create_supply_from_orders(
             },
         )
 
-        try:
-            wb_row = await create_marketplace_supply(http_client, api_token=token, name=name)
-        except WildberriesClientError as exc:
-            await mark_operation_failed(
-                session,
-                operation,
-                error_code=_wb_error_code(exc),
-            )
-            raise FbsSupplyError(
-                _wb_error_code(exc),
-                retryable=exc.code == "transport_error",
-                http_status=504 if exc.code == "transport_error" else 502,
-            ) from exc
-
-        wb_supply_id_raw = wb_row.get("id")
-        if wb_supply_id_raw is None:
-            await mark_operation_failed(session, operation, error_code="wb_invalid_response")
-            raise FbsSupplyError("wb_invalid_response", http_status=502)
-        wb_supply_id = str(wb_supply_id_raw)
-
         wb_office_id = None
         dest_name = None
         dest_zone = None
@@ -351,7 +377,7 @@ async def create_supply_from_orders(
             tenant_id=tenant_id,
             seller_id=seller_id,
             warehouse_id=summary.wms_warehouse_id,
-            wb_supply_id=wb_supply_id,
+            wb_supply_id=f"PENDING-{operation.id}",
             name=name,
             source=FBS_SUPPLY_SOURCE_WMS,
             status=FBS_SUPPLY_STATUS_DRAFT,
@@ -363,6 +389,38 @@ async def create_supply_from_orders(
             planned_destination_zone=dest_zone,
         )
         session.add(supply)
+        await session.flush()
+        operation.local_entity_type = "fbs_supply"
+        operation.local_entity_id = supply.id
+        await session.flush()
+
+        try:
+            wb_row = await create_marketplace_supply(http_client, api_token=token, name=name)
+        except WildberriesClientError as exc:
+            error = _fbs_supply_error_from_wb(
+                exc,
+                tenant_id=tenant_id,
+                seller_id=seller_id,
+                local_entity_id=supply.id,
+                event="fbs supply from-orders WB create failed",
+            )
+            await mark_operation_failed(
+                session,
+                operation,
+                error_code=error.code,
+                error_context=error.context,
+                local_supply_id=supply.id,
+            )
+            raise error from exc
+
+        wb_supply_id_raw = wb_row.get("id")
+        if wb_supply_id_raw is None:
+            await mark_operation_failed(session, operation, error_code="wb_invalid_response")
+            raise FbsSupplyError("wb_invalid_response", http_status=502)
+        wb_supply_id = str(wb_supply_id_raw)
+        supply.wb_supply_id = wb_supply_id
+        operation.wb_object_id = wb_supply_id
+        operation.wb_object_kind = "supply"
         await session.flush()
 
         wb_order_ids = [int(order.wb_order_id) for order in orders]
@@ -395,11 +453,25 @@ async def create_supply_from_orders(
                     )
                 except WildberriesClientError as reconcile_exc:
                     if reconcile_exc.code != "transport_error":
-                        raise FbsSupplyError(
-                            _wb_error_code(reconcile_exc),
+                        error = _fbs_supply_error_from_wb(
+                            reconcile_exc,
+                            tenant_id=tenant_id,
+                            seller_id=seller_id,
+                            local_entity_id=supply.id,
+                            wb_supply_id=wb_supply_id,
+                            event="fbs supply from-orders WB reconcile failed",
                             retryable=False,
                             http_status=502,
-                        ) from reconcile_exc
+                        )
+                        await mark_operation_failed(
+                            session,
+                            operation,
+                            error_code=error.code,
+                            error_context=error.context,
+                            wb_supply_id=wb_supply_id,
+                            local_supply_id=supply.id,
+                        )
+                        raise error from reconcile_exc
                     state, confirmed = WB_OPERATION_STATE_PENDING_CONFIRMATION, set()
                 if state == WB_OPERATION_STATE_CONFIRMED:
                     await _bind_orders_to_supply(session, supply, orders)
@@ -429,18 +501,25 @@ async def create_supply_from_orders(
                     retryable=True,
                     http_status=504,
                 ) from exc
+            error = _fbs_supply_error_from_wb(
+                exc,
+                tenant_id=tenant_id,
+                seller_id=seller_id,
+                local_entity_id=supply.id,
+                wb_supply_id=wb_supply_id,
+                event="fbs supply from-orders WB add-orders failed",
+                retryable=False,
+                http_status=502,
+            )
             await mark_operation_failed(
                 session,
                 operation,
-                error_code=_wb_error_code(exc),
+                error_code=error.code,
+                error_context=error.context,
                 wb_supply_id=wb_supply_id,
                 local_supply_id=supply.id,
             )
-            raise FbsSupplyError(
-                _wb_error_code(exc),
-                retryable=False,
-                http_status=502,
-            ) from exc
+            raise error from exc
 
         state, _confirmed = await reconcile_supply_orders(
             http_client,
@@ -519,6 +598,16 @@ async def _resume_from_orders_operation(
                 )
             except WildberriesClientError as exc:
                 if exc.code == "transport_error":
+                    log_wb_client_error(
+                        logger,
+                        "fbs supply from-orders WB resume add-orders timeout",
+                        exc,
+                        tenant_id=tenant_id,
+                        seller_id=operation.seller_id,
+                        local_entity_id=supply.id,
+                        wb_object_id=operation.wb_object_id,
+                        ref=wb_error_ref(),
+                    )
                     raise FbsSupplyError(
                         "wb_timeout",
                         message="WB не подтвердил состав поставки — повторите операцию.",
@@ -526,8 +615,14 @@ async def _resume_from_orders_operation(
                         retryable=True,
                         http_status=504,
                     ) from exc
-                raise FbsSupplyError(
-                    _wb_error_code(exc),
+                raise _fbs_supply_error_from_wb(
+                    exc,
+                    tenant_id=tenant_id,
+                    seller_id=operation.seller_id,
+                    local_entity_id=supply.id,
+                    wb_supply_id=operation.wb_object_id,
+                    event="fbs supply from-orders WB resume add-orders failed",
+                    retryable=False,
                     http_status=502,
                 ) from exc
             state, _confirmed = await reconcile_supply_orders(
@@ -648,7 +743,12 @@ async def create_supply(
     try:
         wb_row = await create_marketplace_supply(http_client, api_token=token, name=name)
     except WildberriesClientError as exc:
-        raise FbsSupplyError(_wb_error_code(exc)) from exc
+        raise _fbs_supply_error_from_wb(
+            exc,
+            tenant_id=tenant_id,
+            seller_id=seller_id,
+            event="fbs supply legacy WB create failed",
+        ) from exc
 
     wb_supply_id_raw = wb_row.get("id")
     if wb_supply_id_raw is None:
@@ -719,6 +819,11 @@ async def add_order_to_supply(
         raise FbsSupplyError("order_already_in_supply")
     if order.status != FBS_ORDER_STATUS_NEW:
         raise FbsSupplyError("order_bad_status")
+    if (
+        order.supplier_status is not None
+        and order.supplier_status.strip().lower() != FBS_ORDER_STATUS_NEW
+    ):
+        raise FbsSupplyError("order_bad_status")
 
     token = await _require_marketplace_token(session, tenant_id, supply.seller_id)
     try:
@@ -729,7 +834,15 @@ async def add_order_to_supply(
             order_id=int(order.wb_order_id),
         )
     except WildberriesClientError as exc:
-        raise FbsSupplyError(_wb_error_code(exc)) from exc
+        raise _fbs_supply_error_from_wb(
+            exc,
+            tenant_id=tenant_id,
+            seller_id=supply.seller_id,
+            local_entity_id=supply.id,
+            wb_supply_id=supply.wb_supply_id,
+            event="fbs supply legacy WB add-order failed",
+            extra_context={"wb_order_id": int(order.wb_order_id)},
+        ) from exc
 
     order.supply_id = supply.id
     order.status = FBS_ORDER_STATUS_IN_SUPPLY
@@ -804,7 +917,15 @@ async def fetch_and_cache_stickers(
                 order_ids=order_ids,
             )
         except WildberriesClientError as exc:
-            raise FbsSupplyError(_wb_error_code(exc)) from exc
+            raise _fbs_supply_error_from_wb(
+                exc,
+                tenant_id=tenant_id,
+                seller_id=supply.seller_id,
+                local_entity_id=supply.id,
+                wb_supply_id=supply.wb_supply_id,
+                event="fbs supply WB stickers failed",
+                extra_context={"wb_order_ids": order_ids},
+            ) from exc
 
         by_wb_id: dict[int, dict[str, Any]] = {}
         for row in sticker_rows:

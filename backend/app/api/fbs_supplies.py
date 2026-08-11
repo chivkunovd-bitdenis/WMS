@@ -856,7 +856,9 @@ async def create_fbs_supply_from_orders(
                 http_client=http_client,
             )
         except supply_svc.FbsSupplyError as exc:
-            if exc.code in {"wb_timeout", "wb_pending_confirmation"}:
+            if exc.code in {"wb_timeout", "wb_pending_confirmation"} or (
+                exc.code.startswith("wb_") and exc.context.get("wb_supply_id")
+            ):
                 await session.commit()
             _raise_from_service(exc)
     await session.commit()
