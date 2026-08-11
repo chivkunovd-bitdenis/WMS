@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import logging
 import uuid
 from datetime import UTC, datetime, timedelta
 from typing import Any
@@ -29,17 +30,26 @@ from app.models.fbs_order import (
     FbsOrder,
     FbsOrderReservation,
 )
+from app.models.fbs_supply import (
+    FBS_DELIVERY_TYPE_WAREHOUSE_SC,
+    FBS_SUPPLY_SOURCE_WB,
+    FBS_SUPPLY_STATUS_ASSEMBLING,
+    FbsSupply,
+)
 from app.models.fbs_warehouse_binding import FbsWarehouseBinding
 from app.models.product import Product
 from app.models.warehouse import Warehouse
 from app.services.fbs_marking_service import apply_wb_meta_requirements_to_order
 from app.services.fbs_stock_availability_service import fbs_available_qty_for_product
 from app.services.fbs_stock_publish_service import schedule_seller_stock_publish
+from app.services.fbs_supply_reconcile_service import fetch_wb_supply_order_ids
+from app.services.fbs_wb_seller_lock_service import wb_seller_lock
 from app.services.wildberries_client import (
     WildberriesClientError,
     fetch_marketplace_orders_new,
     fetch_marketplace_orders_page,
     fetch_marketplace_orders_status,
+    fetch_supplies_list,
 )
 from app.services.wildberries_credentials_service import (
     get_decrypted_marketplace_token,
@@ -48,6 +58,7 @@ from app.services.wildberries_credentials_service import (
 
 FBS_DEADLINE_HOURS = 120
 MAX_ORDERS_PAGES = 10
+MAX_SUPPLY_LINK_LIST_LIMIT = 100
 
 RESERVE_STATUS_WAREHOUSE_REMAP_CONFLICT = "warehouse_remap_conflict"
 
@@ -75,6 +86,8 @@ STATUSES_EXCLUDED_FROM_WB_SYNC = TERMINAL_FBS_STATUSES | frozenset({FBS_ORDER_ST
 SYNC_STATUS_BATCH_SIZE = 500
 MAX_SYNC_STATUS_BATCHES = 20
 AUTO_FBS_WAREHOUSE_CODE_PREFIX = "fbs-wb"
+
+logger = logging.getLogger(__name__)
 
 
 class WbMarketplaceOrdersError(Exception):
@@ -787,6 +800,286 @@ async def sync_order_statuses(
     return updated
 
 
+def _wb_supply_id_from_row(row: dict[str, Any]) -> str | None:
+    for key in ("id", "supplyId", "supplyID", "supply_id", "wb_supply_id"):
+        value = row.get(key)
+        if value is None:
+            continue
+        text = str(value).strip()
+        if text:
+            return text
+    return None
+
+
+def _wb_supply_name_from_row(row: dict[str, Any], wb_supply_id: str) -> str:
+    for key in ("name", "supplyName", "supply_name"):
+        value = row.get(key)
+        if isinstance(value, str) and value.strip():
+            return value.strip()
+    return f"WB supply {wb_supply_id}"
+
+
+def _wb_supply_created_at_from_row(row: dict[str, Any]) -> datetime | None:
+    for key in ("createdAt", "createDate", "created_at"):
+        value = row.get(key)
+        if value is not None:
+            return _parse_wb_datetime(value)
+    return None
+
+
+async def _load_unlinked_confirmed_orders(
+    session: AsyncSession,
+    tenant_id: uuid.UUID,
+    seller_id: uuid.UUID,
+) -> list[FbsOrder]:
+    stmt = (
+        select(FbsOrder)
+        .where(
+            FbsOrder.tenant_id == tenant_id,
+            FbsOrder.seller_id == seller_id,
+            FbsOrder.supply_id.is_(None),
+            FbsOrder.wb_status == "confirm",
+            FbsOrder.status.not_in(tuple(TERMINAL_FBS_STATUSES)),
+        )
+        .order_by(FbsOrder.created_at_wb.asc(), FbsOrder.id.asc())
+    )
+    res = await session.execute(stmt)
+    return list(res.scalars().all())
+
+
+async def _get_existing_supply_by_wb_id(
+    session: AsyncSession,
+    tenant_id: uuid.UUID,
+    seller_id: uuid.UUID,
+    wb_supply_id: str,
+) -> FbsSupply | None:
+    stmt = select(FbsSupply).where(
+        FbsSupply.tenant_id == tenant_id,
+        FbsSupply.seller_id == seller_id,
+        FbsSupply.wb_supply_id == wb_supply_id,
+    )
+    res = await session.execute(stmt.limit(1))
+    return res.scalar_one_or_none()
+
+
+async def _resolve_supply_warehouse_for_orders(
+    session: AsyncSession,
+    tenant_id: uuid.UUID,
+    seller_id: uuid.UUID,
+    orders: list[FbsOrder],
+) -> uuid.UUID | None:
+    for order in orders:
+        if order.warehouse_id is not None:
+            return order.warehouse_id
+        if order.wb_warehouse_id is None:
+            continue
+        resolved = await _resolve_or_create_wms_warehouse_for_wb(
+            session, tenant_id, seller_id, order.wb_warehouse_id
+        )
+        if resolved is not None:
+            order.warehouse_id = resolved
+            return resolved
+    return None
+
+
+async def _get_or_create_wb_origin_supply(
+    session: AsyncSession,
+    tenant_id: uuid.UUID,
+    seller_id: uuid.UUID,
+    wb_supply_id: str,
+    row: dict[str, Any],
+    matching_orders: list[FbsOrder],
+) -> FbsSupply | None:
+    existing = await _get_existing_supply_by_wb_id(
+        session, tenant_id, seller_id, wb_supply_id
+    )
+    if existing is not None:
+        return existing
+
+    warehouse_id = await _resolve_supply_warehouse_for_orders(
+        session, tenant_id, seller_id, matching_orders
+    )
+    if warehouse_id is None:
+        logger.warning(
+            "wb supply link skipped: seller=%s wb_supply_id=%s reason=no_local_warehouse",
+            seller_id,
+            wb_supply_id,
+        )
+        return None
+
+    first_order = matching_orders[0]
+    supply = FbsSupply(
+        tenant_id=tenant_id,
+        seller_id=seller_id,
+        warehouse_id=warehouse_id,
+        wb_supply_id=wb_supply_id,
+        name=_wb_supply_name_from_row(row, wb_supply_id),
+        source=FBS_SUPPLY_SOURCE_WB,
+        status=FBS_SUPPLY_STATUS_ASSEMBLING,
+        delivery_type=FBS_DELIVERY_TYPE_WAREHOUSE_SC,
+        cargo_type=first_order.cargo_type,
+        wb_office_id=first_order.wb_office_id,
+        created_at_wb=_wb_supply_created_at_from_row(row),
+    )
+    session.add(supply)
+    await session.flush()
+    return supply
+
+
+async def link_confirmed_orders_to_wb_supplies(
+    session: AsyncSession,
+    tenant_id: uuid.UUID,
+    seller_id: uuid.UUID,
+    http_client: httpx.AsyncClient,
+    api_token: str,
+) -> dict[str, Any]:
+    candidates = await _load_unlinked_confirmed_orders(session, tenant_id, seller_id)
+    if not candidates:
+        return {
+            "supply_link_candidates": 0,
+            "supply_linked_orders": 0,
+            "supply_links_created": 0,
+            "supply_link_supplies_scanned": 0,
+        }
+
+    async with wb_seller_lock(session, seller_id) as acquired:
+        if not acquired:
+            logger.info("wb supply link skipped: seller=%s reason=lock_busy", seller_id)
+            return {
+                "supply_link_candidates": len(candidates),
+                "supply_linked_orders": 0,
+                "supply_links_created": 0,
+                "supply_link_supplies_scanned": 0,
+                "supply_link_skipped": "seller_lock_busy",
+            }
+
+        candidates = await _load_unlinked_confirmed_orders(session, tenant_id, seller_id)
+        if not candidates:
+            return {
+                "supply_link_candidates": 0,
+                "supply_linked_orders": 0,
+                "supply_links_created": 0,
+                "supply_link_supplies_scanned": 0,
+            }
+
+        candidates_by_wb_id = {int(order.wb_order_id): order for order in candidates}
+        remaining_wb_ids = set(candidates_by_wb_id)
+        linked_orders = 0
+        supplies_created = 0
+        supplies_scanned = 0
+
+        try:
+            supply_rows = await fetch_supplies_list(
+                http_client,
+                api_token=api_token,
+                limit=MAX_SUPPLY_LINK_LIST_LIMIT,
+                offset=0,
+            )
+        except WildberriesClientError as exc:
+            suffix = f"_{exc.status_code}" if exc.status_code else ""
+            code = f"wb_{exc.code}{suffix}"
+            logger.warning(
+                "wb supply link failed: seller=%s step=list error=%s",
+                seller_id,
+                code,
+            )
+            return {
+                "supply_link_candidates": len(candidates),
+                "supply_linked_orders": 0,
+                "supply_links_created": 0,
+                "supply_link_supplies_scanned": 0,
+                "supply_link_error": code,
+            }
+
+        first_error: str | None = None
+        for row in supply_rows:
+            if not remaining_wb_ids:
+                break
+            wb_supply_id = _wb_supply_id_from_row(row)
+            if wb_supply_id is None:
+                continue
+            supplies_scanned += 1
+            try:
+                wb_order_ids = await fetch_wb_supply_order_ids(
+                    http_client,
+                    api_token=api_token,
+                    wb_supply_id=wb_supply_id,
+                )
+            except WildberriesClientError as exc:
+                suffix = f"_{exc.status_code}" if exc.status_code else ""
+                first_error = first_error or f"wb_{exc.code}{suffix}"
+                logger.warning(
+                    "wb supply link failed: seller=%s wb_supply_id=%s step=orders error=%s",
+                    seller_id,
+                    wb_supply_id,
+                    first_error,
+                )
+                continue
+
+            matching_orders = [
+                candidates_by_wb_id[wb_order_id]
+                for wb_order_id in wb_order_ids
+                if wb_order_id in remaining_wb_ids
+            ]
+            if not matching_orders:
+                continue
+
+            existed_before = (
+                await _get_existing_supply_by_wb_id(
+                    session, tenant_id, seller_id, wb_supply_id
+                )
+                is not None
+            )
+            supply = await _get_or_create_wb_origin_supply(
+                session, tenant_id, seller_id, wb_supply_id, row, matching_orders
+            )
+            if supply is None:
+                continue
+            if not existed_before:
+                supplies_created += 1
+
+            for order in matching_orders:
+                if order.supply_id is not None:
+                    remaining_wb_ids.discard(int(order.wb_order_id))
+                    continue
+                if order.warehouse_id is None and order.wb_warehouse_id is not None:
+                    order.warehouse_id = await _resolve_or_create_wms_warehouse_for_wb(
+                        session, tenant_id, seller_id, order.wb_warehouse_id
+                    )
+                if order.warehouse_id != supply.warehouse_id:
+                    logger.warning(
+                        "wb supply link skipped: seller=%s wb_supply_id=%s wb_order_id=%s "
+                        "reason=warehouse_mismatch",
+                        seller_id,
+                        wb_supply_id,
+                        order.wb_order_id,
+                    )
+                    continue
+                order.supply_id = supply.id
+                if order.status == FBS_ORDER_STATUS_NEW:
+                    order.status = FBS_ORDER_STATUS_ASSEMBLING
+                linked_orders += 1
+                remaining_wb_ids.discard(int(order.wb_order_id))
+
+        if remaining_wb_ids:
+            logger.info(
+                "wb supply link incomplete: seller=%s unmatched_orders=%s",
+                seller_id,
+                len(remaining_wb_ids),
+            )
+
+        await session.commit()
+        result: dict[str, Any] = {
+            "supply_link_candidates": len(candidates),
+            "supply_linked_orders": linked_orders,
+            "supply_links_created": supplies_created,
+            "supply_link_supplies_scanned": supplies_scanned,
+        }
+        if first_error is not None:
+            result["supply_link_error"] = first_error
+        return result
+
+
 async def _resolve_marketplace_api_token(
     session: AsyncSession,
     tenant_id: uuid.UUID,
@@ -827,6 +1120,7 @@ async def sync_seller_orders(
     orders_received = 0
     orders_page_error: str | None = None
     status_sync_error: str | None = None
+    supply_link_result: dict[str, Any] = {}
 
     for row in new_rows:
         _order, was_created = await upsert_order_from_wb_row(session, tenant_id, seller_id, row)
@@ -878,6 +1172,11 @@ async def sync_seller_orders(
             if not orders_received:
                 raise
             status_sync_error = exc.code
+        if status_sync_error is None:
+            supply_link_result = await link_confirmed_orders_to_wb_supplies(
+                session, tenant_id, seller_id, http_client, api_token
+            )
+            await session.commit()
 
     result: dict[str, Any] = {
         "seller_id": str(seller_id),
@@ -886,6 +1185,7 @@ async def sync_seller_orders(
         "orders_created": created,
         "statuses_updated": statuses_updated,
     }
+    result.update(supply_link_result)
     if orders_page_error is not None:
         result["orders_page_error"] = orders_page_error
     if status_sync_error is not None:

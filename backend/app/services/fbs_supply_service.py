@@ -25,6 +25,7 @@ from app.models.fbs_order import (
 from app.models.fbs_supply import (
     FBS_DELIVERY_TYPE_PVZ,
     FBS_DELIVERY_TYPE_WAREHOUSE_SC,
+    FBS_SUPPLY_SOURCE_WMS,
     FBS_SUPPLY_STATUS_ASSEMBLING,
     FBS_SUPPLY_STATUS_DRAFT,
     FbsSupply,
@@ -352,6 +353,7 @@ async def create_supply_from_orders(
             warehouse_id=summary.wms_warehouse_id,
             wb_supply_id=wb_supply_id,
             name=name,
+            source=FBS_SUPPLY_SOURCE_WMS,
             status=FBS_SUPPLY_STATUS_DRAFT,
             delivery_type=planned_delivery_type,
             cargo_type=summary.cargo_type,
@@ -659,6 +661,7 @@ async def create_supply(
         warehouse_id=warehouse_id,
         wb_supply_id=wb_supply_id,
         name=name,
+        source=FBS_SUPPLY_SOURCE_WMS,
         status=FBS_SUPPLY_STATUS_DRAFT,
         delivery_type=delivery_type,
         cargo_type=cargo_type,
