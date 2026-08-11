@@ -23,6 +23,7 @@ from app.models.fbs_order import (
 from app.models.fbs_supply import FbsSupply
 from app.models.fbs_wb_operation import (
     WB_OPERATION_STATE_CONFIRMED,
+    WB_OPERATION_STATE_FAILED,
     WB_OPERATION_STATE_PENDING_CONFIRMATION,
     FbsWbOperation,
 )
@@ -873,6 +874,106 @@ async def test_add_failure_no_false_success_legacy_path(
         assert order is not None
         assert order.supply_id is None
         assert order.status == FBS_ORDER_STATUS_NEW
+
+
+@pytest.mark.asyncio
+async def test_from_orders_add_failure_persists_wb_supply_reference(
+    async_client: AsyncClient,
+    enable_wb_marketplace_supplies_mock: None,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    headers, suffix = await _register_ff_admin(async_client)
+    me = await async_client.get("/auth/me", headers=headers)
+    tenant_id = uuid.UUID(me.json()["tenant_id"])
+    seller_id, warehouse_id, location_id = await _setup_seller_with_token(
+        async_client, headers, suffix
+    )
+    product = await _create_product(
+        async_client, headers, seller_id, sku=f"wb-fail-{suffix[-6:]}"
+    )
+    order_id = await _create_ready_order(
+        tenant_id,
+        uuid.UUID(seller_id),
+        uuid.UUID(warehouse_id),
+        uuid.UUID(location_id),
+        product,
+        order_id=859101,
+    )
+    idem_key = str(uuid.uuid4())
+
+    async def fake_create_supply(
+        client: object,
+        *,
+        api_token: str,
+        name: str,
+        marketplace_api_base: str | None = None,
+    ) -> dict[str, str]:
+        return {"id": "WB-GI-FAILED-ADD"}
+
+    async def fail_batch_add(
+        client: object,
+        *,
+        api_token: str,
+        supply_id: str,
+        order_ids: list[int],
+        marketplace_api_base: str | None = None,
+    ) -> None:
+        raise WildberriesClientError(
+            "upstream_error",
+            status_code=409,
+            endpoint=f"/api/marketplace/v3/supplies/{supply_id}/orders",
+            response_body='{"message":"order 859101 is not allowed in this supply"}',
+        )
+
+    monkeypatch.setattr(
+        "app.services.fbs_supply_service.create_marketplace_supply",
+        fake_create_supply,
+    )
+    monkeypatch.setattr(
+        "app.services.fbs_supply_service.add_orders_to_marketplace_supply",
+        fail_batch_add,
+    )
+
+    resp = await async_client.post(
+        "/operations/fbs-supplies/from-orders",
+        headers=headers,
+        json={
+            "name": "WB failed add",
+            "order_ids": [str(order_id)],
+            "planned_delivery_type": "warehouse_sc",
+            "idempotency_key": idem_key,
+        },
+    )
+    assert resp.status_code == 502, resp.text
+    detail = resp.json()["detail"]
+    assert detail["code"] == "wb_upstream_error_409"
+    assert "order 859101 is not allowed" in detail["message"]
+    assert detail["context"]["wb_supply_id"] == "WB-GI-FAILED-ADD"
+    assert detail["context"]["wb_status_code"] == 409
+    assert detail["context"]["ref"].startswith("wb-")
+
+    async with SessionLocal() as session:
+        supply = await session.scalar(
+            select(FbsSupply).where(FbsSupply.wb_supply_id == "WB-GI-FAILED-ADD")
+        )
+        assert supply is not None
+        assert supply.seller_id == uuid.UUID(seller_id)
+        assert supply.tenant_id == tenant_id
+        order = await session.get(FbsOrder, order_id)
+        assert order is not None
+        assert order.supply_id is None
+        assert order.status == FBS_ORDER_STATUS_NEW
+        op = await session.scalar(
+            select(FbsWbOperation).where(FbsWbOperation.idempotency_key == idem_key)
+        )
+        assert op is not None
+        assert op.state == WB_OPERATION_STATE_FAILED
+        assert op.wb_object_id == "WB-GI-FAILED-ADD"
+        assert op.local_entity_id == supply.id
+        assert op.error_context_json is not None
+        assert op.error_context_json["wb_response_body"] == (
+            '{"message":"order 859101 is not allowed in this supply"}'
+        )
 
 
 @pytest.mark.asyncio

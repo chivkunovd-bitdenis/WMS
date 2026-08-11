@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import logging
 import uuid
 from datetime import UTC, datetime, timedelta
 from typing import Any
@@ -45,6 +46,13 @@ from app.services.wildberries_credentials_service import (
     get_decrypted_marketplace_token,
     get_decrypted_tokens_for_seller,
 )
+from app.services.wildberries_errors import (
+    log_wb_client_error,
+    wb_error_context,
+    wb_error_ref,
+    wb_operator_message,
+)
+from app.services.wildberries_fbs_client import split_marketplace_order_id_batches
 
 FBS_DEADLINE_HOURS = 120
 MAX_ORDERS_PAGES = 10
@@ -76,10 +84,22 @@ SYNC_STATUS_BATCH_SIZE = 500
 MAX_SYNC_STATUS_BATCHES = 20
 AUTO_FBS_WAREHOUSE_CODE_PREFIX = "fbs-wb"
 
+logger = logging.getLogger(__name__)
+
 
 class WbMarketplaceOrdersError(Exception):
-    def __init__(self, code: str) -> None:
+    def __init__(
+        self,
+        code: str,
+        *,
+        message: str | None = None,
+        context: dict[str, Any] | None = None,
+        retryable: bool = False,
+    ) -> None:
         self.code = code
+        self.message = message or code
+        self.context = context or {}
+        self.retryable = retryable
         super().__init__(code)
 
 
@@ -768,6 +788,84 @@ async def _apply_wb_status_to_order(
         return
 
 
+def _wb_orders_error_from_client(
+    exc: WildberriesClientError,
+    *,
+    ref: str,
+    extra_context: dict[str, Any] | None = None,
+) -> WbMarketplaceOrdersError:
+    suffix = f"_{exc.status_code}" if exc.status_code else ""
+    return WbMarketplaceOrdersError(
+        f"wb_{exc.code}{suffix}",
+        message=wb_operator_message(exc),
+        context=wb_error_context(exc, ref=ref, extra=extra_context),
+        retryable=exc.code == "transport_error",
+    )
+
+
+async def _fetch_status_rows_resilient(
+    http_client: httpx.AsyncClient,
+    *,
+    api_token: str,
+    tenant_id: uuid.UUID,
+    seller_id: uuid.UUID,
+    orders_by_wb_id: dict[int, list[FbsOrder]],
+) -> list[dict[str, Any]]:
+    status_rows: list[dict[str, Any]] = []
+    wb_ids = sorted(orders_by_wb_id)
+    for batch in split_marketplace_order_id_batches(wb_ids):
+        try:
+            status_rows.extend(
+                await fetch_marketplace_orders_status(
+                    http_client,
+                    api_token=api_token,
+                    order_ids=batch,
+                )
+            )
+            continue
+        except WildberriesClientError as exc:
+            ref = wb_error_ref()
+            log_wb_client_error(
+                logger,
+                "fbs order status WB batch failed; retrying per order",
+                exc,
+                tenant_id=tenant_id,
+                seller_id=seller_id,
+                local_entity_id=None,
+                wb_object_id=",".join(str(item) for item in batch[:10]),
+                ref=ref,
+                level=logging.WARNING,
+            )
+            if len(batch) == 1:
+                continue
+
+        for wb_order_id in batch:
+            try:
+                status_rows.extend(
+                    await fetch_marketplace_orders_status(
+                        http_client,
+                        api_token=api_token,
+                        order_ids=[wb_order_id],
+                    )
+                )
+            except WildberriesClientError as exc:
+                ref = wb_error_ref()
+                local_ids = [str(order.id) for order in orders_by_wb_id.get(wb_order_id, [])]
+                log_wb_client_error(
+                    logger,
+                    "fbs order status WB single order skipped",
+                    exc,
+                    tenant_id=tenant_id,
+                    seller_id=seller_id,
+                    local_entity_id=",".join(local_ids) or None,
+                    wb_object_id=wb_order_id,
+                    ref=ref,
+                    level=logging.WARNING,
+                )
+                continue
+    return status_rows
+
+
 async def sync_order_statuses(
     session: AsyncSession,
     tenant_id: uuid.UUID,
@@ -806,14 +904,31 @@ async def sync_order_statuses(
         if not orders:
             break
 
-        wb_ids = [o.wb_order_id for o in orders]
-        try:
-            status_rows = await fetch_marketplace_orders_status(
-                http_client, api_token=api_token, order_ids=wb_ids
-            )
-        except WildberriesClientError as exc:
-            suffix = f"_{exc.status_code}" if exc.status_code else ""
-            raise WbMarketplaceOrdersError(f"wb_{exc.code}{suffix}") from exc
+        orders_by_wb_id: dict[int, list[FbsOrder]] = {}
+        for order in orders:
+            if order.wb_order_id <= 0:
+                logger.warning(
+                    "fbs order status skipped invalid local wb_order_id tenant_id=%s "
+                    "seller_id=%s order_id=%s wb_order_id=%s",
+                    tenant_id,
+                    seller_id,
+                    order.id,
+                    order.wb_order_id,
+                )
+                continue
+            orders_by_wb_id.setdefault(int(order.wb_order_id), []).append(order)
+        if not orders_by_wb_id:
+            last_row = orders[-1]
+            last_created_at = last_row.created_at_wb
+            last_id = last_row.id
+            continue
+        status_rows = await _fetch_status_rows_resilient(
+            http_client,
+            api_token=api_token,
+            tenant_id=tenant_id,
+            seller_id=seller_id,
+            orders_by_wb_id=orders_by_wb_id,
+        )
 
         by_id: dict[int, dict[str, Any]] = {}
         for row in status_rows:
@@ -877,8 +992,16 @@ async def sync_seller_orders(
     try:
         new_rows = await fetch_marketplace_orders_new(http_client, api_token=api_token)
     except WildberriesClientError as exc:
-        suffix = f"_{exc.status_code}" if exc.status_code else ""
-        raise WbMarketplaceOrdersError(f"wb_{exc.code}{suffix}") from exc
+        ref = wb_error_ref()
+        log_wb_client_error(
+            logger,
+            "fbs orders WB new-orders failed",
+            exc,
+            tenant_id=tenant_id,
+            seller_id=seller_id,
+            ref=ref,
+        )
+        raise _wb_orders_error_from_client(exc, ref=ref) from exc
 
     created = 0
     upserted = 0
@@ -904,13 +1027,22 @@ async def sync_seller_orders(
                 next_token=next_token,
             )
         except WildberriesClientError as exc:
-            suffix = f"_{exc.status_code}" if exc.status_code else ""
-            code = f"wb_{exc.code}{suffix}"
+            ref = wb_error_ref()
+            log_wb_client_error(
+                logger,
+                "fbs orders WB page failed",
+                exc,
+                tenant_id=tenant_id,
+                seller_id=seller_id,
+                ref=ref,
+            )
+            error = _wb_orders_error_from_client(exc, ref=ref)
+            code = error.code
             if orders_received:
                 orders_page_error = code
                 await session.rollback()
                 break
-            raise WbMarketplaceOrdersError(code) from exc
+            raise error from exc
 
         if not page_rows:
             break

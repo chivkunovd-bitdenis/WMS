@@ -31,6 +31,12 @@ from app.services.wildberries_client import (
     WildberriesClientError,
     cancel_marketplace_order,
 )
+from app.services.wildberries_errors import (
+    log_wb_client_error,
+    wb_error_context,
+    wb_error_ref,
+    wb_operator_message,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -45,8 +51,18 @@ NON_CANCELLABLE_STATUSES = frozenset(
 
 
 class FbsCancellationError(Exception):
-    def __init__(self, code: str) -> None:
+    def __init__(
+        self,
+        code: str,
+        *,
+        message: str | None = None,
+        context: dict[str, object] | None = None,
+        retryable: bool = False,
+    ) -> None:
         self.code = code
+        self.message = message or code
+        self.context = context or {}
+        self.retryable = retryable
         super().__init__(code)
 
 
@@ -134,7 +150,12 @@ async def cancel_order(
             session, tenant_id, order.seller_id
         )
     except WbMarketplaceOrdersError as exc:
-        raise FbsCancellationError(exc.code) from exc
+        raise FbsCancellationError(
+            exc.code,
+            message=exc.message,
+            context=exc.context,
+            retryable=exc.retryable,
+        ) from exc
 
     try:
         await cancel_marketplace_order(
@@ -144,7 +165,27 @@ async def cancel_order(
         )
     except WildberriesClientError as exc:
         suffix = f"_{exc.status_code}" if exc.status_code else ""
-        raise FbsCancellationError(f"wb_{exc.code}{suffix}") from exc
+        ref = wb_error_ref()
+        log_wb_client_error(
+            logger,
+            "fbs order WB cancel failed",
+            exc,
+            tenant_id=tenant_id,
+            seller_id=order.seller_id,
+            local_entity_id=order.id,
+            wb_object_id=order.wb_order_id,
+            ref=ref,
+        )
+        raise FbsCancellationError(
+            f"wb_{exc.code}{suffix}",
+            message=wb_operator_message(exc),
+            context=wb_error_context(
+                exc,
+                ref=ref,
+                extra={"order_id": str(order.id), "wb_order_id": order.wb_order_id},
+            ),
+            retryable=exc.code == "transport_error",
+        ) from exc
 
     order.status = FBS_ORDER_STATUS_CANCELLED
     order.wb_status = "cancelled"
@@ -168,7 +209,12 @@ async def sync_seller_order_statuses(
     try:
         api_token = await _resolve_marketplace_api_token(session, tenant_id, seller_id)
     except WbMarketplaceOrdersError as exc:
-        raise FbsCancellationError(exc.code) from exc
+        raise FbsCancellationError(
+            exc.code,
+            message=exc.message,
+            context=exc.context,
+            retryable=exc.retryable,
+        ) from exc
     try:
         updated = await sync_order_statuses(
             session, tenant_id, seller_id, http_client, api_token
@@ -176,4 +222,9 @@ async def sync_seller_order_statuses(
         await session.flush()
         return updated
     except WbMarketplaceOrdersError as exc:
-        raise FbsCancellationError(exc.code) from exc
+        raise FbsCancellationError(
+            exc.code,
+            message=exc.message,
+            context=exc.context,
+            retryable=exc.retryable,
+        ) from exc
