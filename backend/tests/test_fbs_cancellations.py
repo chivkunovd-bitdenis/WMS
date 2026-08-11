@@ -468,7 +468,12 @@ async def test_cancel_wb_error_surfaces_502(
         order_id: int,
         marketplace_api_base: str | None = None,
     ) -> None:
-        raise WildberriesClientError("upstream_error", status_code=409)
+        raise WildberriesClientError(
+            "upstream_error",
+            status_code=409,
+            endpoint=f"/api/v3/orders/{order_id}/cancel",
+            response_body='{"message":"order cannot be cancelled after sorting"}',
+        )
 
     monkeypatch.setattr(
         "app.services.fbs_cancellation_service.cancel_marketplace_order",
@@ -479,9 +484,14 @@ async def test_cancel_wb_error_surfaces_502(
         f"/operations/fbs-orders/{order_id}/cancel",
         headers=headers,
     )
-    _assert_fbs_error(
-        resp,
-        status_code=502,
-        code="wb_upstream_error_409",
-        message="Ошибка Wildberries.",
+    assert resp.status_code == 502, resp.text
+    detail = resp.json()["detail"]
+    assert detail["code"] == "wb_upstream_error_409"
+    assert detail["message"] == (
+        "Wildberries ответил: order cannot be cancelled after sorting"
     )
+    assert detail["context"]["wb_status_code"] == 409
+    assert detail["context"]["wb_endpoint"] == "/api/v3/orders/810601/cancel"
+    assert detail["context"]["wb_order_id"] == 810601
+    assert detail["context"]["ref"].startswith("wb-")
+    assert detail["retryable"] is False

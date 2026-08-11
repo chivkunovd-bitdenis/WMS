@@ -34,6 +34,7 @@ from app.services.wb_marketplace_orders_service import (
     WbMarketplaceOrdersError,
     upsert_order_from_wb_row,
 )
+from app.services.wildberries_client import WildberriesClientError
 from tests.fbs_seed_helpers import DEFAULT_WB_WAREHOUSE_ID, seed_fbs_warehouse_binding
 
 
@@ -442,6 +443,91 @@ async def test_fbs_autopoll_supplier_status_moves_new_order_out_of_new(
     assert order.status == FBS_ORDER_STATUS_EXTERNAL_PROCESSING
     assert order.supplier_status == "confirm"
     assert order.wb_status == "waiting"
+
+
+@pytest.mark.asyncio
+async def test_fbs_autopoll_status_sync_splits_batches_and_skips_bad_order(
+    async_client: AsyncClient,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    tenant_id = uuid.uuid4()
+    warehouse_id = uuid.uuid4()
+    seller_id = await _seed_seller_with_marketplace_token(tenant_id, token_suffix="split")
+    bad_wb_order_id = 880250
+
+    async with SessionLocal() as session:
+        from app.models.warehouse import Warehouse
+
+        session.add(
+            Warehouse(
+                id=warehouse_id,
+                tenant_id=tenant_id,
+                name="WH split",
+                code=f"wh-split-{time.time_ns()}",
+            )
+        )
+        await seed_fbs_warehouse_binding(
+            session,
+            tenant_id=tenant_id,
+            seller_id=seller_id,
+            wms_warehouse_id=warehouse_id,
+        )
+        for wb_order_id in range(880200, 880305):
+            order, _ = await upsert_order_from_wb_row(
+                session,
+                tenant_id,
+                seller_id,
+                _wb_order_row(order_id=wb_order_id),
+            )
+            order.status = FBS_ORDER_STATUS_IN_DELIVERY
+            order.wb_status = "waiting"
+        await session.commit()
+
+    calls: list[list[int]] = []
+
+    async def fake_status(
+        client: object,
+        *,
+        api_token: str,
+        order_ids: list[int],
+        marketplace_api_base: str | None = None,
+    ) -> list[dict[str, object]]:
+        calls.append(list(order_ids))
+        assert len(order_ids) <= 100
+        if bad_wb_order_id in order_ids:
+            raise WildberriesClientError(
+                "upstream_error",
+                status_code=400,
+                endpoint="/api/v3/orders/status",
+                response_body='{"message":"unknown order id"}',
+            )
+        return [{"id": order_id, "wbStatus": "sorted"} for order_id in order_ids]
+
+    monkeypatch.setattr(
+        "app.services.wb_marketplace_orders_service.fetch_marketplace_orders_status",
+        fake_status,
+    )
+    target = SellerPollTarget(tenant_id=tenant_id, seller_id=seller_id)
+    async with SessionLocal() as session, httpx.AsyncClient() as client:
+        updated = await sync_fbs_order_statuses_for_seller(session, target, client)
+        await session.commit()
+
+    assert updated == 104
+    assert any(len(call) == 100 for call in calls)
+    assert [bad_wb_order_id] in calls
+
+    async with SessionLocal() as session:
+        rows = (
+            await session.execute(
+                select(FbsOrder).where(
+                    FbsOrder.seller_id == seller_id,
+                    FbsOrder.wb_order_id.between(880200, 880304),
+                )
+            )
+        ).scalars().all()
+    by_wb_id = {row.wb_order_id: row for row in rows}
+    assert by_wb_id[bad_wb_order_id].wb_status == "waiting"
+    assert sum(1 for row in rows if row.wb_status == "sorted") == 104
 
 
 @pytest.mark.asyncio

@@ -237,6 +237,8 @@ async def test_fbs_order_upsert_idempotent_and_deadline(
     async_client: AsyncClient,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
+    # A bad /orders/status identifier is isolated and logged; it must not mark
+    # the whole seller sync as failed after the production WB-invalid-request fix.
     headers, suffix = await _register_ff_admin(async_client)
     seller_id, warehouse_id = await _setup_seller_with_token(async_client, headers, suffix)
     await _create_binding(async_client, headers, seller_id, WB_WAREHOUSE_A, warehouse_id)
@@ -713,7 +715,7 @@ async def test_fbs_sync_keeps_new_orders_when_status_fetch_fails(
             result = await sync_seller_orders(session, tenant_id, seller_uuid, http_client)
 
     assert result["orders_created"] == 1
-    assert result["status_sync_error"] == "wb_upstream_error_400"
+    assert "status_sync_error" not in result
     async with SessionLocal() as session:
         order = (
             await session.execute(
