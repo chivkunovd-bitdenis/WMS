@@ -162,6 +162,4 @@ async def get_decrypted_marketplace_token(
         return decrypt_secret(row.content_token_encrypted)
     if row.marketplace_token_encrypted:
         return decrypt_secret(row.marketplace_token_encrypted)
-    if row.supplies_token_encrypted:
-        return decrypt_secret(row.supplies_token_encrypted)
     return None

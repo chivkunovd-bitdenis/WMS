@@ -1,13 +1,16 @@
 from __future__ import annotations
 
 import json
+import logging
 import uuid
 from datetime import datetime
-from typing import Annotated
+from typing import Annotated, Literal
 
 import httpx
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Request, status
+from fastapi.responses import JSONResponse
 from pydantic import BaseModel, Field
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.deps import get_current_user, get_effective_seller_id, require_fulfillment_admin
@@ -36,6 +39,7 @@ from app.services.wildberries_product_link_service import (
 )
 
 router = APIRouter(prefix="/integrations/wildberries", tags=["integrations"])
+logger = logging.getLogger(__name__)
 
 
 class WildberriesStatusOut(BaseModel):
@@ -105,6 +109,12 @@ class WildberriesSelfTokenSaveOut(BaseModel):
     products_skipped: int = 0
 
 
+class WildberriesSelfTokenSaveErrorOut(BaseModel):
+    code: Literal["token_save_failed", "product_conflict"]
+    message: str
+    ref: str
+
+
 class WildberriesSelfSyncOut(BaseModel):
     ok: bool = True
     cards_received: int
@@ -112,6 +122,35 @@ class WildberriesSelfSyncOut(BaseModel):
     products_created: int
     products_updated: int
     products_skipped: int
+
+
+def _self_token_save_error_response(
+    exc: Exception,
+    *,
+    tenant_id: uuid.UUID,
+    seller_id: uuid.UUID,
+    cards_count: int,
+    status_code: int,
+    code: Literal["token_save_failed", "product_conflict"],
+    message: str,
+) -> JSONResponse:
+    incident_ref = uuid.uuid4().hex[:12]
+    logger.exception(
+        "WB self content token save failed ref=%s tenant_id=%s seller_id=%s "
+        "cards_count=%d exception_type=%s error_code=%s",
+        incident_ref,
+        tenant_id,
+        seller_id,
+        cards_count,
+        type(exc).__name__,
+        code,
+    )
+    body = WildberriesSelfTokenSaveErrorOut(
+        code=code,
+        message=message,
+        ref=incident_ref,
+    )
+    return JSONResponse(status_code=status_code, content=body.model_dump())
 
 
 def _parse_token_merge_patch(
@@ -388,17 +427,26 @@ async def patch_seller_wildberries_tokens(
     )
 
 
-@router.post("/self/content-token", response_model=WildberriesSelfTokenSaveOut)
+@router.post(
+    "/self/content-token",
+    response_model=WildberriesSelfTokenSaveOut,
+    responses={
+        status.HTTP_409_CONFLICT: {"model": WildberriesSelfTokenSaveErrorOut},
+        status.HTTP_500_INTERNAL_SERVER_ERROR: {"model": WildberriesSelfTokenSaveErrorOut},
+    },
+)
 async def save_and_validate_self_content_token(
     body: WildberriesSelfTokenSaveBody,
     user: Annotated[User, Depends(get_current_user)],
     session: Annotated[AsyncSession, Depends(get_db)],
     background_tasks: BackgroundTasks,
     effective_seller_id: Annotated[uuid.UUID | None, Depends(get_effective_seller_id)],
-) -> WildberriesSelfTokenSaveOut:
+) -> WildberriesSelfTokenSaveOut | JSONResponse:
     """Seller saves WB content API key; validate by calling cards list."""
     if user.role != FULFILLMENT_SELLER or effective_seller_id is None:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="forbidden")
+    tenant_id = user.tenant_id
+    seller_id = effective_seller_id
     token = body.content_api_token.strip()
     if not token:
         raise HTTPException(
@@ -449,6 +497,11 @@ async def save_and_validate_self_content_token(
                 status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
                 detail="invalid_wb_token",
             ) from None
+        if exc.code == "invalid_json":
+            raise HTTPException(
+                status_code=status.HTTP_502_BAD_GATEWAY,
+                detail=exc.code,
+            ) from None
         suffix = f"_{exc.status_code}" if exc.status_code else ""
         validation_error = f"{exc.code}{suffix}"
     except httpx.HTTPError:
@@ -465,29 +518,56 @@ async def save_and_validate_self_content_token(
     try:
         await patch_seller_tokens(
             session,
-            user.tenant_id,
-            effective_seller_id,
+            tenant_id,
+            seller_id,
             content_api_token=token,
             supplies_api_token=token,
             marketplace_api_token=token,
         )
         if validation_error is None:
             saved = await upsert_imported_cards(
-                session, user.tenant_id, effective_seller_id, total_cards
+                session, tenant_id, seller_id, total_cards
             )
             prod_stats = await upsert_products_from_wb_cards(
-                session, user.tenant_id, effective_seller_id, total_cards
+                session, tenant_id, seller_id, total_cards
+            )
+            from app.services.wb_mp_warehouse_service import run_wb_mp_warehouses_sync_task
+
+            background_tasks.add_task(
+                run_wb_mp_warehouses_sync_task,
+                tenant_id,
+                seller_id,
             )
     except WildberriesCredentialsError as exc:
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
             detail=exc.code,
         ) from None
-    from app.services.wb_mp_warehouse_service import run_wb_mp_warehouses_sync_task
-
-    if validation_error is None:
-        background_tasks.add_task(
-            run_wb_mp_warehouses_sync_task, user.tenant_id, effective_seller_id
+    except IntegrityError as exc:
+        return _self_token_save_error_response(
+            exc,
+            tenant_id=tenant_id,
+            seller_id=seller_id,
+            cards_count=n,
+            status_code=status.HTTP_409_CONFLICT,
+            code="product_conflict",
+            message=(
+                "Не удалось завершить импорт товаров Wildberries: "  # noqa: RUF001
+                "обнаружен конфликт артикулов."
+            ),
+        )
+    except Exception as exc:
+        return _self_token_save_error_response(
+            exc,
+            tenant_id=tenant_id,
+            seller_id=seller_id,
+            cards_count=n,
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            code="token_save_failed",
+            message=(
+                "Не удалось сохранить ключ Wildberries. "  # noqa: RUF001
+                "Сообщите поддержке идентификатор ошибки из поля ref."
+            ),
         )
     return WildberriesSelfTokenSaveOut(
         validation_ok=validation_error is None,

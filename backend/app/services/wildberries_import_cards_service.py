@@ -86,7 +86,7 @@ async def upsert_imported_cards(
             row.raw_json = raw
             row.updated_at = now
         n += 1
-    await session.flush()
+    await session.commit()
     return n
 
 

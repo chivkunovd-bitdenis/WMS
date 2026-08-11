@@ -50,6 +50,25 @@ async def test_fetch_cards_list_upstream_error() -> None:
     assert excinfo.value.status_code == 401
 
 
+@pytest.mark.parametrize("body", ["", "<html>not json</html>"])
+@pytest.mark.asyncio
+async def test_fetch_cards_list_invalid_json(body: str) -> None:
+    def handler(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(200, text=body)
+
+    transport = httpx.MockTransport(handler)
+    async with httpx.AsyncClient(transport=transport, base_url="https://wb-mock.test") as client:
+        with pytest.raises(WildberriesClientError) as excinfo:
+            await fetch_cards_list(
+                client,
+                api_token="wb-token",
+                content_api_base="https://wb-mock.test",
+            )
+
+    assert excinfo.value.code == "invalid_json"
+    assert excinfo.value.status_code is None
+
+
 @pytest.mark.asyncio
 async def test_fetch_supplies_list_e2e_stub(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(settings, "e2e_mock_wb_supplies", True)
