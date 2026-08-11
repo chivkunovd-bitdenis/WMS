@@ -272,7 +272,10 @@ async def fetch_cards_list(
             "upstream_error",
             status_code=response.status_code,
         )
-    return cast(dict[str, Any], response.json())
+    try:
+        return cast(dict[str, Any], response.json())
+    except ValueError as exc:
+        raise WildberriesClientError("invalid_json") from exc
 
 
 async def fetch_supplies_list(
