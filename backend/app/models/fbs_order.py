@@ -199,6 +199,7 @@ class FbsOrder(Base):
     cargo_type: Mapped[str | None] = mapped_column(String(16), nullable=True)
     wb_office_id: Mapped[int | None] = mapped_column(Integer, nullable=True)
     wb_warehouse_id: Mapped[int | None] = mapped_column(BigInteger, nullable=True, index=True)
+    wb_supply_id: Mapped[str | None] = mapped_column(String(64), nullable=True, index=True)
     can_pvz: Mapped[bool] = mapped_column(
         Boolean, nullable=False, default=False, server_default="false"
     )
