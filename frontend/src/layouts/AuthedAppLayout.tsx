@@ -61,7 +61,7 @@ export function AuthedAppLayout({
         >
           <Toolbar sx={{ display: 'flex', justifyContent: 'space-between', gap: 2 }}>
             <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5, minWidth: 0 }}>
-              <WmsBrandMark size={26} />
+              <WmsBrandMark size={26} portal="seller" />
               <Typography variant="h6" noWrap>
                 {title}
               </Typography>
