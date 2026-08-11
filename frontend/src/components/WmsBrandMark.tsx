@@ -8,11 +8,11 @@ type Props = {
 }
 
 const MARK_SRC: Record<WmsPortal, string> = {
-  fulfillment: '/favicon.svg',
-  seller: '/favicon-seller.svg',
+  fulfillment: '/portal-logo-ff.png',
+  seller: '/portal-logo-seller.png',
 }
 
-/** Portal mark — same asset as the matching favicon. */
+/** Portal logo — same asset as the matching favicon. */
 export function WmsBrandMark({ size = 28, portal = 'fulfillment' }: Props) {
   return (
     <Box
