@@ -28,6 +28,7 @@ export type FbsOrderRow = {
   trbx_id: string | null
   status: string
   wb_status: string | null
+  supplier_status: string | null
   created_at_wb: string
   deadline_at: string
   mapping_status: string // mapped | missing
@@ -36,14 +37,12 @@ export type FbsOrderRow = {
   updated_at: string
 }
 
-export type FbsOrdersTab = 'new' | 'assembly' | 'delivery' | 'done'
+export type FbsOrdersTab = 'new' | 'active'
 
-// Группировка статусов заказа по вкладкам (зеркалит WB).
+// Рабочие вкладки FF: создание поставки и сборка уже созданной поставки.
 export const TAB_STATUSES: Record<FbsOrdersTab, string[]> = {
   new: ['new'],
-  assembly: ['in_supply', 'assembling', 'packed'],
-  delivery: ['in_delivery', 'sorted'],
-  done: ['done', 'cancelled', 'defect'],
+  active: ['in_supply', 'assembling', 'packed'],
 }
 
 export async function fetchFbsOrders(
@@ -173,6 +172,7 @@ export type FbsWorklistOrder = {
   wb_order_id: number
   status: string
   wb_status: string | null
+  supplier_status: string | null
   seller: { id: string; name: string }
   wb_warehouse: { id: number; name: string | null }
   wms_warehouse: { id: string; name: string }
@@ -196,6 +196,7 @@ export type FbsWorklistOrder = {
   can_pvz: boolean
   metadata: FbsOrderMetadata
   sticker: {
+    code: string | null
     status: 'not_requested' | 'requesting' | 'ready' | 'print_opened' | 'applied' | 'error'
     asset_url: string | null
     applied_at: string | null

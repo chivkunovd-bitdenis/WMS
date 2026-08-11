@@ -19,12 +19,9 @@ from app.models.fbs_order import (
     FBS_ORDER_STATUS_ASSEMBLING,
     FBS_ORDER_STATUS_CANCELLED,
     FBS_ORDER_STATUS_DEFECT,
-    FBS_ORDER_STATUS_DONE,
-    FBS_ORDER_STATUS_IN_DELIVERY,
     FBS_ORDER_STATUS_IN_SUPPLY,
     FBS_ORDER_STATUS_NEW,
     FBS_ORDER_STATUS_PACKED,
-    FBS_ORDER_STATUS_SORTED,
     MAPPING_STATUS_MISSING,
     FbsOrder,
     FbsOrderMarking,
@@ -60,14 +57,15 @@ STATUS_GROUP_MAP: dict[str, frozenset[str]] = {
             FBS_ORDER_STATUS_PACKED,
         }
     ),
-    "delivery": frozenset({FBS_ORDER_STATUS_IN_DELIVERY, FBS_ORDER_STATUS_SORTED}),
-    "done": frozenset({FBS_ORDER_STATUS_DONE}),
-    "cancelled": frozenset({FBS_ORDER_STATUS_CANCELLED, FBS_ORDER_STATUS_DEFECT}),
 }
 
 MISSING_WMS_WAREHOUSE = "Склад не привязан"
 MISSING_WB_WAREHOUSE = "Склад WB неизвестен"
 MISSING_PRODUCT = "Товар не сопоставлен"
+
+
+def _is_supplier_status_new(supplier_status: str | None) -> bool:
+    return supplier_status is None or supplier_status.strip().lower() == FBS_ORDER_STATUS_NEW
 
 
 @dataclass(frozen=True)
@@ -158,6 +156,13 @@ async def _fetch_orders_page(
             msg = "invalid_status_group"
             raise ValueError(msg)
         stmt = stmt.where(FbsOrder.status.in_(allowed))
+        if status_group == "new":
+            stmt = stmt.where(
+                or_(
+                    FbsOrder.supplier_status.is_(None),
+                    func.lower(FbsOrder.supplier_status) == FBS_ORDER_STATUS_NEW,
+                )
+            )
     if search and search.strip():
         term = search.strip()
         clauses: list[ColumnElement[bool]] = [
@@ -502,6 +507,13 @@ def compute_selection_blockers(
         blockers.append(
             {"code": "order_cancelled", "message": "Заказ отменён или брак."}
         )
+    if not _is_supplier_status_new(order.supplier_status):
+        blockers.append(
+            {
+                "code": "order_external_processing",
+                "message": "Заказ уже ушёл в кабинете WB.",
+            }
+        )
     if order.supply_id is not None:
         blockers.append(
             {"code": "already_in_supply", "message": "Заказ уже в поставке."}
@@ -564,6 +576,7 @@ def _map_order(order: FbsOrder, ctx: dict[str, Any], server_now: datetime) -> di
         "wb_order_id": int(order.wb_order_id),
         "status": order.status,
         "wb_status": order.wb_status,
+        "supplier_status": order.supplier_status,
         "seller": {
             "id": str(order.seller_id),
             "name": seller.name if seller else "Селлер не найден",
@@ -607,6 +620,7 @@ def _map_order(order: FbsOrder, ctx: dict[str, Any], server_now: datetime) -> di
         "can_pvz": bool(order.can_pvz),
         "metadata": _build_metadata(order, markings),
         "sticker": {
+            "code": order.sticker_code,
             "status": order.sticker_status,
             "asset_url": sticker_url,
             "applied_at": applied_at.isoformat() if applied_at else None,

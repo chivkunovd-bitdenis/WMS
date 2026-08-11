@@ -149,7 +149,7 @@ class Settings(BaseSettings):
         description="Celery Beat interval for polling new FBS orders (seconds).",
     )
     fbs_statuses_sync_interval_sec: int = Field(
-        default=60,
+        default=600,
         ge=60,
         le=7200,
         validation_alias=AliasChoices(

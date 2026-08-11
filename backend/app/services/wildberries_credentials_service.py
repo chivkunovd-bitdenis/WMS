@@ -45,10 +45,11 @@ async def get_public_token_status(
     row = await session.get(SellerWildberriesCredentials, seller_id)
     if row is None:
         return False, False, False, None
+    has_seller_key = bool(row.content_token_encrypted)
     return (
-        bool(row.content_token_encrypted),
-        bool(row.supplies_token_encrypted),
-        bool(row.marketplace_token_encrypted),
+        has_seller_key,
+        has_seller_key or bool(row.supplies_token_encrypted),
+        has_seller_key or bool(row.marketplace_token_encrypted),
         row.updated_at,
     )
 
@@ -126,7 +127,12 @@ async def patch_seller_tokens(
 async def get_decrypted_tokens_for_seller(
     session: AsyncSession, tenant_id: uuid.UUID, seller_id: uuid.UUID
 ) -> tuple[str | None, str | None] | None:
-    """For sync jobs: returns (content_token, supplies_token) or None if seller missing."""
+    """
+    For sync jobs: returns (content_token, supplies_token) or None if seller missing.
+
+    The seller cabinet key is canonical; supplies falls back to that same key when
+    an old dedicated supplies token is not present.
+    """
     if await _seller_in_tenant(session, tenant_id, seller_id) is None:
         return None
     row = await session.get(SellerWildberriesCredentials, seller_id)
@@ -138,6 +144,8 @@ async def get_decrypted_tokens_for_seller(
         content = decrypt_secret(row.content_token_encrypted)
     if row.supplies_token_encrypted:
         supplies = decrypt_secret(row.supplies_token_encrypted)
+    elif content:
+        supplies = content
     return content, supplies
 
 
@@ -150,7 +158,10 @@ async def get_decrypted_marketplace_token(
     row = await session.get(SellerWildberriesCredentials, seller_id)
     if row is None:
         return None
-    token = row.marketplace_token_encrypted or row.content_token_encrypted
-    if not token:
-        return None
-    return decrypt_secret(token)
+    if row.content_token_encrypted:
+        return decrypt_secret(row.content_token_encrypted)
+    if row.marketplace_token_encrypted:
+        return decrypt_secret(row.marketplace_token_encrypted)
+    if row.supplies_token_encrypted:
+        return decrypt_secret(row.supplies_token_encrypted)
+    return None

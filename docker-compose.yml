@@ -97,6 +97,7 @@ services:
     build:
       context: .
       dockerfile: frontend/Dockerfile.seller.prod
+    restart: unless-stopped
     depends_on:
       - api
     ports:

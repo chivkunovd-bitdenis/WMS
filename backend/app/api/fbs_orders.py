@@ -100,6 +100,7 @@ class FbsWorklistMetadataOut(BaseModel):
 
 
 class FbsWorklistStickerOut(BaseModel):
+    code: str | None
     status: str
     asset_url: str | None
     applied_at: str | None
@@ -126,6 +127,7 @@ class FbsWorklistOrderOut(BaseModel):
     wb_order_id: int
     status: str
     wb_status: str | None
+    supplier_status: str | None
     seller: FbsWorklistSellerOut
     wb_warehouse: FbsWorklistWarehouseOut
     wms_warehouse: FbsWorklistWarehouseOut
@@ -171,6 +173,7 @@ class FbsOrderOut(BaseModel):
     trbx_id: str | None
     status: str
     wb_status: str | None
+    supplier_status: str | None
     created_at_wb: str
     deadline_at: str
     mapping_status: str
@@ -201,6 +204,7 @@ def _order_out(order: FbsOrder) -> FbsOrderOut:
         trbx_id=str(order.trbx_id) if order.trbx_id is not None else None,
         status=order.status,
         wb_status=order.wb_status,
+        supplier_status=order.supplier_status,
         created_at_wb=order.created_at_wb.isoformat(),
         deadline_at=order.deadline_at.isoformat(),
         mapping_status=order.mapping_status,

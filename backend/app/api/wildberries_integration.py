@@ -96,6 +96,8 @@ class WildberriesSelfTokenSaveBody(BaseModel):
 
 class WildberriesSelfTokenSaveOut(BaseModel):
     ok: bool = True
+    validation_ok: bool = True
+    validation_error: str | None = None
     cards_received: int
     cards_saved: int
     products_created: int = 0
@@ -407,6 +409,7 @@ async def save_and_validate_self_content_token(
     updated_at: str | None = None
     nm_id: int | None = None
     total_hint: int | None = None
+    validation_error: str | None = None
     try:
         async with httpx.AsyncClient() as client:
             seen: set[tuple[str | None, int | None]] = set()
@@ -446,17 +449,18 @@ async def save_and_validate_self_content_token(
                 status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
                 detail="invalid_wb_token",
             ) from None
-        raise HTTPException(
-            status_code=status.HTTP_502_BAD_GATEWAY,
-            detail=exc.code,
-        ) from None
+        suffix = f"_{exc.status_code}" if exc.status_code else ""
+        validation_error = f"{exc.code}{suffix}"
     except httpx.HTTPError:
-        raise HTTPException(
-            status_code=status.HTTP_502_BAD_GATEWAY,
-            detail="transport_error",
-        ) from None
+        validation_error = "transport_error"
 
     n = len(total_cards)
+    saved = 0
+    prod_stats = {
+        "products_created": 0,
+        "products_updated": 0,
+        "products_skipped": 0,
+    }
 
     try:
         await patch_seller_tokens(
@@ -464,15 +468,16 @@ async def save_and_validate_self_content_token(
             user.tenant_id,
             effective_seller_id,
             content_api_token=token,
-            supplies_api_token=SKIP,
+            supplies_api_token=token,
             marketplace_api_token=token,
         )
-        saved = await upsert_imported_cards(
-            session, user.tenant_id, effective_seller_id, total_cards
-        )
-        prod_stats = await upsert_products_from_wb_cards(
-            session, user.tenant_id, effective_seller_id, total_cards
-        )
+        if validation_error is None:
+            saved = await upsert_imported_cards(
+                session, user.tenant_id, effective_seller_id, total_cards
+            )
+            prod_stats = await upsert_products_from_wb_cards(
+                session, user.tenant_id, effective_seller_id, total_cards
+            )
     except WildberriesCredentialsError as exc:
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
@@ -480,8 +485,13 @@ async def save_and_validate_self_content_token(
         ) from None
     from app.services.wb_mp_warehouse_service import run_wb_mp_warehouses_sync_task
 
-    background_tasks.add_task(run_wb_mp_warehouses_sync_task, user.tenant_id, effective_seller_id)
+    if validation_error is None:
+        background_tasks.add_task(
+            run_wb_mp_warehouses_sync_task, user.tenant_id, effective_seller_id
+        )
     return WildberriesSelfTokenSaveOut(
+        validation_ok=validation_error is None,
+        validation_error=validation_error,
         cards_received=n,
         cards_saved=saved,
         products_created=prod_stats["products_created"],

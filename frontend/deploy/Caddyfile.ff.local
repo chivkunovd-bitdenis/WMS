@@ -1,0 +1,22 @@
+:80 {
+  encode gzip zstd
+
+  # API is mounted under /api/* on the public origin, but FastAPI routes are rooted at /.
+  handle_path /api/* {
+    reverse_proxy api:8000
+  }
+
+  # Keep the legacy seller URL alive on the FF host for saved browser logins.
+  redir /seller /seller/
+  handle /seller* {
+    root * /srv
+    try_files {path} /seller/index.html
+    file_server
+  }
+
+  handle {
+    root * /srv
+    try_files {path} /index.html
+    file_server
+  }
+}

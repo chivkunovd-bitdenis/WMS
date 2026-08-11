@@ -599,7 +599,9 @@ async def test_fbs_pick_idempotency_no_double_pick(async_client: AsyncClient) ->
 
 
 @pytest.mark.asyncio
-async def test_fbs_pick_insufficient_unpacked_context(async_client: AsyncClient) -> None:
+async def test_fbs_pick_allows_short_unpacked_with_compensation(
+    async_client: AsyncClient,
+) -> None:
     headers, suffix, tenant_id = await _register_ff_admin(async_client)
     seller_id, warehouse_id, location_id = await _create_seller_and_warehouse(
         async_client, headers, suffix
@@ -628,12 +630,8 @@ async def test_fbs_pick_insufficient_unpacked_context(async_client: AsyncClient)
         barcode=barcode,
         idempotency_key=str(uuid.uuid4()),
     )
-    assert resp.status_code == 409
-    detail = resp.json()["detail"]
-    assert detail["code"] == "insufficient_unpacked"
-    ctx = detail["context"]
-    assert ctx["order_id"] == str(order_ids[0])
-    assert ctx["product_id"] == str(product_id)
-    assert ctx["location_id"] == str(location_id)
-    assert ctx["requested"] == 1
-    assert "recommended_action" in ctx
+    assert resp.status_code == 200, resp.text
+    body = resp.json()
+    assert body["progress"]["picked"] == 1
+    picked = [order for order in body["orders"] if order["pick"]["status"] == "picked"]
+    assert [order["id"] for order in picked] == [str(order_ids[0])]

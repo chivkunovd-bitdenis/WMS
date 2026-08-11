@@ -68,6 +68,7 @@ _BLOCKER_TO_ISSUE: dict[str, tuple[str, str]] = {
     "warehouse_unmapped": ("warehouse_unmapped", "Склад WB не привязан к WMS."),
     "insufficient_stock": ("insufficient_stock", "Недостаточно неупакованного остатка."),
     "deadline_passed": ("deadline_passed", "Срок сборки истёк."),
+    "order_external_processing": ("order_bad_status", "Заказ уже ушёл в кабинете WB."),
 }
 
 
@@ -248,14 +249,6 @@ def _per_order_issues(
                     message=message,
                 )
             )
-        if planned_delivery_type == "pvz" and not order.can_pvz:
-            issues.append(
-                SupplyValidationIssue(
-                    order_id=order.id,
-                    code="pvz_not_allowed",
-                    message=f"Заказ №{order.wb_order_id} нельзя сдавать в ПВЗ.",
-                )
-            )
     return issues
 
 
@@ -269,7 +262,6 @@ async def _build_summary(
     warehouse: Warehouse | None = first.warehouse
     wb_wh_id = int(first.wb_warehouse_id or 0)
     wb_name = await _wb_warehouse_name(session, tenant_id, wb_wh_id) if wb_wh_id else None
-    pvz_allowed = sum(1 for o in orders if o.can_pvz)
     required_marking = sum(1 for o in orders if _order_requires_marking(o))
     nearest = min(o.deadline_at for o in orders)
     return SupplyPreflightSummary(
@@ -283,8 +275,8 @@ async def _build_summary(
         cargo_type=first.cargo_type or "unknown",
         orders_count=len(orders),
         required_marking_count=required_marking,
-        pvz_allowed_count=pvz_allowed,
-        pvz_blocked_count=len(orders) - pvz_allowed,
+        pvz_allowed_count=len(orders),
+        pvz_blocked_count=0,
         nearest_deadline_at=nearest,
     )
 
