@@ -181,9 +181,15 @@ export function SellerSettingsScreen({ token, authHeaders }: Props) {
       setHasContentKey(true)
       await refreshWbCardsCount()
       if (j.validation_ok === false) {
-        setOkMsg(
-          `Ключ сохранён. Проверка WB сейчас не прошла (${j.validation_error ?? 'transport_error'}).`,
-        )
+        if (j.validation_error === 'missing_marketplace_scope') {
+          setOkMsg(
+            'Ключ сохранён только для карточек WB. В ключе нет прав на «Маркетплейс»: включите эту категорию в кабинете WB и сохраните ключ заново.',
+          )
+        } else {
+          setOkMsg(
+            `Ключ сохранён. Проверка WB сейчас не прошла (${j.validation_error ?? 'transport_error'}).`,
+          )
+        }
       } else {
         setOkMsg(
           `Ключ сохранён. Проверка WB прошла (карточек получено: ${j.cards_received ?? 0}, сохранено: ${j.cards_saved ?? 0}).`,

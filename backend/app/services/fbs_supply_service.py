@@ -15,6 +15,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
+from app.core.settings import settings
 from app.models.fbs_order import (
     FBS_ORDER_STATUS_ASSEMBLING,
     FBS_ORDER_STATUS_IN_SUPPLY,
@@ -24,6 +25,7 @@ from app.models.fbs_order import (
 from app.models.fbs_supply import (
     FBS_DELIVERY_TYPE_PVZ,
     FBS_DELIVERY_TYPE_WAREHOUSE_SC,
+    FBS_SUPPLY_SOURCE_WMS,
     FBS_SUPPLY_STATUS_ASSEMBLING,
     FBS_SUPPLY_STATUS_DRAFT,
     FbsSupply,
@@ -59,6 +61,7 @@ from app.services.wildberries_client import (
     WildberriesClientError,
     add_order_to_marketplace_supply,
     add_orders_to_marketplace_supply,
+    consume_next_mock_marketplace_supply_add_error,
     create_marketplace_supply,
     fetch_marketplace_order_stickers,
 )
@@ -376,6 +379,7 @@ async def create_supply_from_orders(
             warehouse_id=summary.wms_warehouse_id,
             wb_supply_id=f"PENDING-{operation.id}",
             name=name,
+            source=FBS_SUPPLY_SOURCE_WMS,
             status=FBS_SUPPLY_STATUS_DRAFT,
             delivery_type=planned_delivery_type,
             cargo_type=summary.cargo_type,
@@ -421,6 +425,17 @@ async def create_supply_from_orders(
 
         wb_order_ids = [int(order.wb_order_id) for order in orders]
         try:
+            mock_error = (
+                settings.e2e_mock_wb_marketplace_supply_add_error_once
+                or consume_next_mock_marketplace_supply_add_error()
+            )
+            settings.e2e_mock_wb_marketplace_supply_add_error_once = None
+            if mock_error is not None:
+                if mock_error == "transport_error":
+                    settings.e2e_mock_wb_marketplace_supply_readback_error_once = (
+                        "transport_error"
+                    )
+                raise WildberriesClientError(mock_error)
             await _execute_wb_batch_add(
                 http_client,
                 api_token=token,
@@ -746,6 +761,7 @@ async def create_supply(
         warehouse_id=warehouse_id,
         wb_supply_id=wb_supply_id,
         name=name,
+        source=FBS_SUPPLY_SOURCE_WMS,
         status=FBS_SUPPLY_STATUS_DRAFT,
         delivery_type=delivery_type,
         cargo_type=cargo_type,

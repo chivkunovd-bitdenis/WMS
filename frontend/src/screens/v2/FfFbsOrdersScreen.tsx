@@ -21,6 +21,7 @@ import {
   TableHead,
   TableRow,
   TextField,
+  Tooltip,
   Typography,
 } from '@mui/material'
 import CloudSyncOutlinedIcon from '@mui/icons-material/CloudSyncOutlined'
@@ -53,6 +54,9 @@ const TABS = [
   { key: 'new', label: 'Новые' },
   { key: 'active', label: 'В работе' },
 ] as const
+
+const EXTERNAL_WB_SUPPLY_HINT =
+  'Поставку создали в кабинете Wildberries, а в WMS она не привязана. Открыть её здесь нельзя.'
 
 function MissingText({ children }: { children: string }) {
   return (
@@ -341,14 +345,26 @@ export function FfFbsOrdersScreen({ token, authHeaders, sellers, isAdmin = false
           <TableBody>
             {orders.map((order) => {
               const blocked = order.selection_blockers.length > 0
-              return (
+              const localSupplyMissing = statusGroup !== 'new' && !order.supply_id
+              const row = (
                 <TableRow
                   key={order.id}
-                  hover
+                  hover={!localSupplyMissing}
                   selected={selected.has(order.id)}
-                  sx={{ verticalAlign: 'top', cursor: order.supply_id ? 'pointer' : 'default' }}
+                  sx={{
+                    verticalAlign: 'top',
+                    cursor: order.supply_id ? 'pointer' : 'default',
+                    ...(localSupplyMissing
+                      ? {
+                          bgcolor: 'action.disabledBackground',
+                          opacity: 0.72,
+                          '&:hover': { bgcolor: 'action.disabledBackground' },
+                        }
+                      : {}),
+                  }}
                   onClick={() => order.supply_id && openWorkspace(order.supply_id)}
                   data-testid={`fbs-order-${order.id}`}
+                  aria-disabled={localSupplyMissing ? true : undefined}
                 >
                   <TableCell padding="checkbox">
                     {statusGroup === 'new' ? (
@@ -406,8 +422,33 @@ export function FfFbsOrdersScreen({ token, authHeaders, sellers, isAdmin = false
                       cancelled={order.status === 'cancelled'}
                     />
                   </TableCell>
-                  {statusGroup !== 'new' ? <TableCell><FbsStatusChip status={order.status} /><Box sx={{ mt: 0.75 }}><MetadataState order={order} /></Box></TableCell> : null}
+                  {statusGroup !== 'new' ? (
+                    <TableCell>
+                      <FbsStatusChip status={order.status} />
+                      <Stack sx={{ mt: 0.75, alignItems: 'flex-start' }} spacing={0.75}>
+                        {localSupplyMissing ? (
+                          <Tooltip title={EXTERNAL_WB_SUPPLY_HINT}>
+                            <Chip
+                              size="small"
+                              variant="outlined"
+                              color="warning"
+                              label="Поставка создана в WB"
+                              data-testid={`fbs-order-${order.id}-external-supply`}
+                            />
+                          </Tooltip>
+                        ) : null}
+                        <MetadataState order={order} />
+                      </Stack>
+                    </TableCell>
+                  ) : null}
                 </TableRow>
+              )
+              return (
+                localSupplyMissing ? (
+                  <Tooltip key={order.id} title={EXTERNAL_WB_SUPPLY_HINT} placement="top" arrow>
+                    {row}
+                  </Tooltip>
+                ) : row
               )
             })}
             {!busy && orders.length === 0 ? (

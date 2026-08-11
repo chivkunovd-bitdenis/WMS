@@ -414,9 +414,9 @@ async def test_tc04_preflight_different_cargo_types(
     )
 
 
-# TC-05 — PVZ blocked for can_pvz=false; warehouse_sc still allowed
+# TC-05 — PVZ preflight ignores the legacy can_pvz gate; warehouse_sc still allowed
 @pytest.mark.asyncio
-async def test_tc05_preflight_pvz_does_not_block_can_pvz_false(
+async def test_tc05_preflight_pvz_ignores_legacy_can_pvz_gate(
     async_client: AsyncClient,
     enable_wb_marketplace_supplies_mock: None,
 ) -> None:

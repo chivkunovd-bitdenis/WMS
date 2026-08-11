@@ -61,11 +61,26 @@ def _wb_error_from_response(
 
 # In-memory store for e2e_mock_wb_marketplace_marking (tests may clear via reset helper).
 _mock_order_meta: dict[int, dict[str, list[dict[str, str]]]] = {}
+_mock_marketplace_supply_add_error_once: str | None = None
 
 
 def reset_mock_marketplace_order_meta() -> None:
     """Clear mock marking meta store (tests only)."""
     _mock_order_meta.clear()
+
+
+def fail_next_mock_marketplace_supply_add(error_code: str) -> None:
+    """Make the next mock supply add-orders call fail (tests only)."""
+    global _mock_marketplace_supply_add_error_once
+    _mock_marketplace_supply_add_error_once = error_code
+
+
+def consume_next_mock_marketplace_supply_add_error() -> str | None:
+    """Return and clear the next mock add-orders failure code (tests only)."""
+    global _mock_marketplace_supply_add_error_once
+    error_code = _mock_marketplace_supply_add_error_once
+    _mock_marketplace_supply_add_error_once = None
+    return error_code
 
 
 def build_marketplace_order_meta_put_body(kind: str, value: str) -> dict[str, Any]:
@@ -294,7 +309,10 @@ async def fetch_cards_list(
             "upstream_error",
             status_code=response.status_code,
         )
-    return cast(dict[str, Any], response.json())
+    try:
+        return cast(dict[str, Any], response.json())
+    except ValueError as exc:
+        raise WildberriesClientError("invalid_json") from exc
 
 
 async def fetch_supplies_list(
@@ -711,6 +729,8 @@ async def add_orders_to_marketplace_supply(
 ) -> None:
     """PATCH /api/marketplace/v3/supplies/{supply_id}/orders — batch ≤100."""
     if _marketplace_supplies_mock_enabled():
+        if (error_code := consume_next_mock_marketplace_supply_add_error()) is not None:
+            raise WildberriesClientError(error_code)
         return
     await add_orders_to_marketplace_supply_batch(
         client,

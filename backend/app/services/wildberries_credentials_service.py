@@ -45,11 +45,10 @@ async def get_public_token_status(
     row = await session.get(SellerWildberriesCredentials, seller_id)
     if row is None:
         return False, False, False, None
-    has_seller_key = bool(row.content_token_encrypted)
     return (
-        has_seller_key,
-        has_seller_key or bool(row.supplies_token_encrypted),
-        has_seller_key or bool(row.marketplace_token_encrypted),
+        bool(row.content_token_encrypted),
+        bool(row.supplies_token_encrypted),
+        bool(row.marketplace_token_encrypted),
         row.updated_at,
     )
 
@@ -144,8 +143,6 @@ async def get_decrypted_tokens_for_seller(
         content = decrypt_secret(row.content_token_encrypted)
     if row.supplies_token_encrypted:
         supplies = decrypt_secret(row.supplies_token_encrypted)
-    elif content:
-        supplies = content
     return content, supplies
 
 
@@ -158,10 +155,6 @@ async def get_decrypted_marketplace_token(
     row = await session.get(SellerWildberriesCredentials, seller_id)
     if row is None:
         return None
-    if row.content_token_encrypted:
-        return decrypt_secret(row.content_token_encrypted)
     if row.marketplace_token_encrypted:
         return decrypt_secret(row.marketplace_token_encrypted)
-    if row.supplies_token_encrypted:
-        return decrypt_secret(row.supplies_token_encrypted)
     return None
