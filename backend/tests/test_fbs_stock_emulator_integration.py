@@ -238,6 +238,18 @@ def test_prod_compose_has_no_wb_emulator() -> None:
     assert "wildberries_marketplace_api_base" not in lowered.replace("_", "")
 
 
+# TC-NEW-FBS-STOCK-019
+def test_prod_compose_runs_migrations_once_before_workers() -> None:
+    """Prod compose must serialize Alembic before API and Celery start."""
+    prod = (REPO_ROOT / "docker-compose.prod.yml").read_text(encoding="utf-8")
+    worker_block = prod.split("  celery_worker:", 1)[1].split("  celery_beat:", 1)[0]
+
+    assert "  migrations:" in prod
+    assert 'command: ["alembic", "upgrade", "head"]' in prod
+    assert "service_completed_successfully" in prod
+    assert "alembic upgrade head" not in worker_block
+
+
 # TC-NEW-FBS-STOCK-017
 @pytest.mark.asyncio
 async def test_wms_emulator_fbs_stock_full_cycle(

@@ -21,9 +21,21 @@ if [[ -f docker-compose.wms-host-8088.yml ]]; then
   COMPOSE+=(-f docker-compose.wms-host-8088.yml)
 fi
 
-echo "==> docker compose prod build & up"
-"${COMPOSE[@]}" build
-"${COMPOSE[@]}" up -d
+BUILD_SERVICES=(migrations api celery_worker celery_beat web)
+
+echo "==> docker compose prod build (sequential)"
+for service in "${BUILD_SERVICES[@]}"; do
+  "${COMPOSE[@]}" build "$service"
+done
+
+echo "==> start infrastructure"
+"${COMPOSE[@]}" up -d --wait db redis
+
+echo "==> run database migrations"
+"${COMPOSE[@]}" run --rm migrations
+
+echo "==> start application services"
+"${COMPOSE[@]}" up -d --no-deps api celery_worker celery_beat web
 
 echo "==> status"
 "${COMPOSE[@]}" ps
