@@ -371,6 +371,10 @@ async def fetch_wb_supply_order_ids(
     expected_order_ids: list[int] | None = None,
 ) -> list[int]:
     if settings.e2e_mock_wb_marketplace_supplies:
+        if settings.e2e_mock_wb_marketplace_supply_readback_error_once is not None:
+            error_code = settings.e2e_mock_wb_marketplace_supply_readback_error_once
+            settings.e2e_mock_wb_marketplace_supply_readback_error_once = None
+            raise WildberriesClientError(error_code)
         return list(expected_order_ids or [])
     return await fetch_marketplace_supply_order_ids(
         http_client,

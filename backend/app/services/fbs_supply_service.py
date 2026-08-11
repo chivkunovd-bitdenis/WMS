@@ -15,6 +15,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
+from app.core.settings import settings
 from app.models.fbs_order import (
     FBS_ORDER_STATUS_ASSEMBLING,
     FBS_ORDER_STATUS_IN_SUPPLY,
@@ -36,6 +37,7 @@ from app.models.fbs_wb_operation import (
 from app.services.catalog_service import get_warehouse
 from app.services.fbs_packaging_integration_service import create_packaging_task_for_supply
 from app.services.fbs_print_asset_storage import decode_png_payload
+from app.services.fbs_sticker_code_service import sticker_code_from_wb_row
 from app.services.fbs_supply_reconcile_service import (
     create_pending_operation,
     get_operation_by_idempotency,
@@ -52,13 +54,13 @@ from app.services.fbs_supply_validator_service import (
     preflight_to_dict,
     validate_supply_composition,
 )
-from app.services.fbs_sticker_code_service import sticker_code_from_wb_row
-from app.services.fbs_workspace_service import get_supply_workspace
 from app.services.fbs_wb_seller_lock_service import wb_seller_lock
+from app.services.fbs_workspace_service import get_supply_workspace
 from app.services.wildberries_client import (
     WildberriesClientError,
     add_order_to_marketplace_supply,
     add_orders_to_marketplace_supply,
+    consume_next_mock_marketplace_supply_add_error,
     create_marketplace_supply,
     fetch_marketplace_order_stickers,
 )
@@ -363,6 +365,17 @@ async def create_supply_from_orders(
 
         wb_order_ids = [int(order.wb_order_id) for order in orders]
         try:
+            mock_error = (
+                settings.e2e_mock_wb_marketplace_supply_add_error_once
+                or consume_next_mock_marketplace_supply_add_error()
+            )
+            settings.e2e_mock_wb_marketplace_supply_add_error_once = None
+            if mock_error is not None:
+                if mock_error == "transport_error":
+                    settings.e2e_mock_wb_marketplace_supply_readback_error_once = (
+                        "transport_error"
+                    )
+                raise WildberriesClientError(mock_error)
             await _execute_wb_batch_add(
                 http_client,
                 api_token=token,
@@ -407,7 +420,10 @@ async def create_supply_from_orders(
                 raise FbsSupplyError(
                     "wb_timeout",
                     message="WB не подтвердил состав поставки — повторите операцию.",
-                    context={"wb_supply_id": wb_supply_id, "operation_state": "pending_confirmation"},
+                    context={
+                        "wb_supply_id": wb_supply_id,
+                        "operation_state": "pending_confirmation",
+                    },
                     retryable=True,
                     http_status=504,
                 ) from exc
@@ -584,7 +600,10 @@ async def _request_order_stickers_for_picking(
     if not missing:
         return
     try:
-        from app.services.fbs_print_asset_service import FbsPrintAssetError, request_supply_print_batch
+        from app.services.fbs_print_asset_service import (
+            FbsPrintAssetError,
+            request_supply_print_batch,
+        )
 
         await request_supply_print_batch(
             session,
