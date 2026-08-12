@@ -12,7 +12,10 @@ from sqlalchemy import event, select
 
 from app.db.session import SessionLocal, engine
 from app.models.fbs_order import (
+    FBS_ORDER_STATUS_CANCELLED,
+    FBS_ORDER_STATUS_DEFECT,
     FBS_ORDER_STATUS_DONE,
+    FBS_ORDER_STATUS_EXTERNAL_PROCESSING,
     FBS_ORDER_STATUS_IN_DELIVERY,
     FBS_ORDER_STATUS_NEW,
     FBS_ORDER_STATUS_SORTED,
@@ -221,19 +224,43 @@ async def test_fbs_worklist_delivery_and_done_groups(async_client: AsyncClient) 
     assert sorted_delivery.status_code == 200, sorted_delivery.text
     assert [item["id"] for item in sorted_delivery.json()["items"]] == [str(order_id)]
 
+    for terminal_status in (
+        FBS_ORDER_STATUS_DONE,
+        FBS_ORDER_STATUS_CANCELLED,
+        FBS_ORDER_STATUS_DEFECT,
+    ):
+        async with SessionLocal() as session:
+            order = await session.get(FbsOrder, order_id)
+            assert order is not None
+            order.status = terminal_status
+            await session.commit()
+
+        done = await async_client.get(
+            "/operations/fbs-orders/worklist",
+            headers=headers,
+            params={"seller_id": str(seller_id), "status_group": "done"},
+        )
+        assert done.status_code == 200, done.text
+        assert [item["id"] for item in done.json()["items"]] == [str(order_id)]
+
     async with SessionLocal() as session:
         order = await session.get(FbsOrder, order_id)
         assert order is not None
-        order.status = FBS_ORDER_STATUS_DONE
+        order.status = FBS_ORDER_STATUS_EXTERNAL_PROCESSING
+        order.supplier_status = "confirm"
         await session.commit()
 
-    done = await async_client.get(
+    active = await async_client.get(
         "/operations/fbs-orders/worklist",
         headers=headers,
-        params={"seller_id": str(seller_id), "status_group": "done"},
+        params={"seller_id": str(seller_id), "status_group": "active"},
     )
-    assert done.status_code == 200, done.text
-    assert [item["id"] for item in done.json()["items"]] == [str(order_id)]
+    assert active.status_code == 200, active.text
+    assert [item["id"] for item in active.json()["items"]] == [str(order_id)]
+    assert any(
+        blocker["code"] == "order_external_processing"
+        for blocker in active.json()["items"][0]["selection_blockers"]
+    )
 
 
 @pytest.mark.asyncio
