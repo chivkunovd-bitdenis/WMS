@@ -14,12 +14,17 @@ import {
   Typography,
 } from '@mui/material'
 import { PageHeader } from '../../ui/PageHeader'
-import { formatDateTimeLocal } from '../../utils/formatDateTimeLocal'
 import {
   filterReceptionQueue,
   filterSortingQueue,
   type InboundQueueRow,
 } from '../../utils/inboundQueues'
+import {
+  inboundQueueBoxesLabel,
+  inboundQueueDocumentLabel,
+  inboundQueueUnitsLabel,
+  type InboundSummaryRef,
+} from './inboundReceivingHelpers'
 
 export type InboundWorkspace = 'reception' | 'sorting'
 
@@ -65,46 +70,66 @@ export function FfInboundQueuePage({ workspace, rows, onOpen }: Props) {
           <Table size="small">
             <TableHead>
               <TableRow>
-                <TableCell>Статус</TableCell>
+                <TableCell>№ документа</TableCell>
                 <TableCell>Селлер</TableCell>
-                <TableCell align="right">Строк</TableCell>
+                <TableCell>Состав</TableCell>
+                <TableCell align="right">Короба</TableCell>
                 {workspace === 'sorting' ? (
                   <TableCell align="right">Осталось, шт</TableCell>
                 ) : null}
-                <TableCell>План доставки</TableCell>
-                <TableCell>Создано</TableCell>
+                <TableCell>Статус</TableCell>
               </TableRow>
             </TableHead>
             <TableBody>
-              {filtered.map((row) => (
-                <TableRow
-                  key={row.id}
-                  hover
-                  sx={{ cursor: 'pointer' }}
-                  onClick={() => onOpen(row.id)}
-                  data-testid="ff-inbound-queue-row"
-                  data-request-id={row.id}
-                >
-                  <TableCell>
-                    <Chip
-                      size="small"
-                      label={statusLabel(row.status, workspace)}
-                      data-testid="ff-inbound-queue-status"
-                    />
-                  </TableCell>
-                  <TableCell>{row.seller_name ?? '—'}</TableCell>
-                  <TableCell align="right">{row.line_count}</TableCell>
-                  {workspace === 'sorting' ? (
-                    <TableCell align="right" data-testid="ff-inbound-queue-sorting-qty">
-                      {row.sorting_remaining_qty ?? 0}
+              {filtered.map((row) => {
+                const summary = row as InboundQueueRow & InboundSummaryRef
+                return (
+                  <TableRow
+                    key={row.id}
+                    hover
+                    tabIndex={0}
+                    sx={{
+                      cursor: 'pointer',
+                      '&:focus-visible': {
+                        outline: (theme) => `2px solid ${theme.palette.primary.main}`,
+                        outlineOffset: -2,
+                      },
+                    }}
+                    onClick={() => onOpen(row.id)}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter') {
+                        e.preventDefault()
+                        onOpen(row.id)
+                      }
+                    }}
+                    data-testid="ff-inbound-queue-row"
+                    data-request-id={row.id}
+                  >
+                    <TableCell data-testid="ff-inbound-queue-document">
+                      {inboundQueueDocumentLabel(summary)}
                     </TableCell>
-                  ) : null}
-                  <TableCell>{row.planned_delivery_date ?? '—'}</TableCell>
-                  <TableCell>
-                    {row.created_at ? formatDateTimeLocal(row.created_at) : '—'}
-                  </TableCell>
-                </TableRow>
-              ))}
+                    <TableCell>{row.seller_name ?? '—'}</TableCell>
+                    <TableCell data-testid="ff-inbound-queue-composition">
+                      {row.line_count} поз. · {inboundQueueUnitsLabel(summary)}
+                    </TableCell>
+                    <TableCell align="right" data-testid="ff-inbound-queue-boxes">
+                      {inboundQueueBoxesLabel(summary)}
+                    </TableCell>
+                    {workspace === 'sorting' ? (
+                      <TableCell align="right" data-testid="ff-inbound-queue-sorting-qty">
+                        {row.sorting_remaining_qty ?? 0}
+                      </TableCell>
+                    ) : null}
+                    <TableCell>
+                      <Chip
+                        size="small"
+                        label={statusLabel(row.status, workspace)}
+                        data-testid="ff-inbound-queue-status"
+                      />
+                    </TableCell>
+                  </TableRow>
+                )
+              })}
             </TableBody>
           </Table>
         </TableContainer>

@@ -8,7 +8,7 @@ import {
   seedFfSellerInbound,
 } from './inbound-boxes-helpers';
 
-// TC-NEW-IN-01 — скан в приёмку, ручная правка, завершение с модалкой расхождений.
+// TC-NEW-IN-01 — очередь с человеческой идентичностью, скан в приёмку, ручная правка, завершение с модалкой расхождений.
 test('inbound receiving v2 — scan, manual edit, finish with discrepancy', async ({ page }) => {
   const seed = await seedFfSellerInbound(page, `rcv-${Date.now()}`);
   await apiCreateSubmittedInbound(page.request, seed, {
@@ -18,8 +18,19 @@ test('inbound receiving v2 — scan, manual edit, finish with discrepancy', asyn
 
   await loginFfAdmin(page, seed.adminEmail, seed.password);
   await page.getByTestId('nav-ff-reception').click();
-  await page.getByTestId('ff-inbound-queue-table').locator('tbody tr').first().click();
+  await expect(page.getByTestId('ff-inbound-queue-document').first()).toContainText('№');
+  await expect(page.getByTestId('ff-inbound-queue-row').first()).toContainText('Box Seller');
+  await expect(page.getByTestId('ff-inbound-queue-composition').first()).toContainText('1 поз.');
+  await expect(page.getByTestId('ff-inbound-queue-composition').first()).toContainText('ед.');
+  await expect(page.getByTestId('ff-inbound-queue-boxes').first()).toContainText('0 из 1');
+  await expect(page.getByTestId('ff-inbound-queue-status').first()).toContainText('Передано');
+  await page.getByTestId('ff-inbound-queue-row').first().focus();
+  await page.keyboard.press('Enter');
   await expect(page.getByTestId('ff-inbound-doc-root')).toBeVisible();
+  await expect(page.getByTestId('ff-inbound-compact-summary')).toContainText('Box Seller');
+  await expect(page.getByTestId('ff-inbound-received-summary')).toContainText('0 из 3');
+  await expect(page.getByTestId('ff-inbound-boxes-summary')).toContainText('0 из 1');
+  await expect(page.getByTestId('ff-inbound-discrepancy-summary')).toContainText('Расхождения');
   const tableLayout = await page.getByTestId('ff-inbound-lines-table').evaluate((table) => {
     const container = table.closest('.MuiTableContainer-root');
     const headCells = Array.from(table.querySelectorAll('thead th'));
@@ -50,9 +61,20 @@ test('inbound receiving v2 — scan, manual edit, finish with discrepancy', asyn
     page.getByTestId('ff-inbound-receiving-scan-input').press('Enter'),
   ]);
   await expect(page.getByTestId('ff-inbound-line-actual-display').first()).toHaveText('1');
+  await expect(page.getByTestId('ff-inbound-receiving-scan-input')).toBeFocused();
+  await expect(page.getByTestId('ff-inbound-received-summary')).toContainText('1 из 3');
 
   await page.getByTestId('ff-inbound-line-manual-edit').first().click();
-  await page.getByTestId('ff-inbound-line-actual').fill('2');
+  const manualActual = page.getByTestId('ff-inbound-line-actual');
+  await manualActual.fill('2.9');
+  await manualActual.press('Enter');
+  await expect(manualActual).toBeFocused();
+  await expect(page.getByText('Только целое количество без дробей.')).toBeVisible();
+  await manualActual.fill('');
+  await manualActual.press('Enter');
+  await expect(manualActual).toBeFocused();
+  await expect(page.getByText('Укажите целое количество.')).toBeVisible();
+  await manualActual.fill('2');
   await Promise.all([
     waitForPatchOk(page, INBOUND_API, (u) => u.includes('/actual')),
     page.getByTestId('ff-inbound-line-manual-edit').first().click(),
@@ -73,6 +95,9 @@ test('inbound receiving v2 — scan, manual edit, finish with discrepancy', asyn
 
   await page.getByTestId('ff-inbound-verify-complete').click();
   await expect(page.getByTestId('ff-inbound-discrepancy-dialog')).toBeVisible();
+  await expect(page.getByTestId('ff-inbound-discrepancy-line')).toContainText(seed.sku);
+  await expect(page.getByTestId('ff-inbound-discrepancy-line')).toContainText('Излишек 97');
+  await expect(page.getByTestId('ff-inbound-discrepancy-box-summary')).toContainText('Короба: 0 из 1');
   await Promise.all([
     waitForPostOk(page, INBOUND_API, (u) => u.includes('/complete-receiving')),
     page.getByTestId('ff-inbound-discrepancy-confirm').click(),

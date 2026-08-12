@@ -8,9 +8,47 @@ export type InboundBoxRef = {
 }
 
 export type InboundLineRef = {
+  sku_code?: string
+  product_name?: string
+  expected_qty?: number
   product_id: string
   actual_qty: number | null
   effective_actual_qty?: number | null
+}
+
+export type InboundSummaryRef = {
+  display_number?: string | null
+  public_number?: string | null
+  human_number?: string | null
+  document_number?: string | null
+  line_count?: number
+  planned_box_count?: number | null
+  actual_box_count?: number | null
+  boxes_discrepancy?: boolean
+  has_discrepancy?: boolean
+  goods_qty_total?: number | null
+  expected_qty_total?: number | null
+  units_total?: number | null
+}
+
+export type InboundReceivingTotals = {
+  expectedQty: number
+  acceptedQty: number
+  plannedBoxes: number | null
+  actualBoxes: number
+  lineDiscrepancyCount: number
+  hasBoxDiscrepancy: boolean
+  hasAnyDiscrepancy: boolean
+}
+
+export type InboundDiscrepancyLine = {
+  productId: string
+  skuCode: string
+  productName: string
+  expectedQty: number
+  acceptedQty: number
+  shortage: number
+  surplus: number
 }
 
 export function isReceivingStatus(status: string): boolean {
@@ -32,6 +70,18 @@ export function inboundStatusRu(status: string): string {
   if (isSortingStatus(status)) return 'В сортировке'
   if (isDoneStatus(status)) return 'Оприходовано'
   return status
+}
+
+export function integerQtyError(raw: string): string | null {
+  const value = raw.trim()
+  if (value === '') return 'Укажите целое количество.'
+  if (!/^\d+$/.test(value)) return 'Только целое количество без дробей.'
+  return null
+}
+
+export function parseIntegerQty(raw: string): number | null {
+  if (integerQtyError(raw) != null) return null
+  return Number(raw.trim())
 }
 
 export function boxTotalForProduct(boxes: InboundBoxRef[], productId: string): number {
@@ -88,4 +138,78 @@ export function scanErrorMessageRu(code: string): string {
     return 'Нельзя удалить короб с товарами.'
   }
   return code
+}
+
+export function inboundQueueDocumentLabel(row: InboundSummaryRef): string {
+  const preferred = row.display_number ?? row.public_number ?? row.human_number
+  if (preferred?.trim()) return `№ ${preferred.trim().replace(/^№\s*/, '')}`
+  if (row.document_number?.trim()) return `№ ${row.document_number.trim()}`
+  return '№ —'
+}
+
+export function inboundQueueUnitsLabel(row: InboundSummaryRef): string {
+  const exact = row.goods_qty_total ?? row.expected_qty_total ?? row.units_total
+  if (typeof exact === 'number' && Number.isFinite(exact)) {
+    return `${exact} ед.`
+  }
+  const lines = row.line_count ?? 0
+  if (lines <= 0) return '0 ед.'
+  return `от ${lines} ед.`
+}
+
+export function inboundQueueBoxesLabel(row: InboundSummaryRef): string {
+  const actual = row.actual_box_count ?? 0
+  if (row.planned_box_count == null) return `${actual} коробов`
+  return `${actual} из ${row.planned_box_count}`
+}
+
+export function buildInboundReceivingTotals(
+  lines: InboundLineRef[],
+  boxes: InboundBoxRef[],
+  status?: string,
+  plannedBoxCount?: number | null,
+): InboundReceivingTotals {
+  let expectedQty = 0
+  let acceptedQty = 0
+  let lineDiscrepancyCount = 0
+  for (const line of lines) {
+    const expected = line.expected_qty ?? 0
+    const accepted = effectiveActualQty(line, boxes, status)
+    expectedQty += expected
+    acceptedQty += accepted
+    if (accepted !== expected) lineDiscrepancyCount += 1
+  }
+  const actualBoxes = boxes.length
+  const hasBoxDiscrepancy = plannedBoxCount != null && actualBoxes !== plannedBoxCount
+  return {
+    expectedQty,
+    acceptedQty,
+    plannedBoxes: plannedBoxCount ?? null,
+    actualBoxes,
+    lineDiscrepancyCount,
+    hasBoxDiscrepancy,
+    hasAnyDiscrepancy: lineDiscrepancyCount > 0 || hasBoxDiscrepancy,
+  }
+}
+
+export function buildInboundDiscrepancyLines(
+  lines: InboundLineRef[],
+  boxes: InboundBoxRef[],
+  status?: string,
+): InboundDiscrepancyLine[] {
+  return lines
+    .map((line) => {
+      const expectedQty = line.expected_qty ?? 0
+      const acceptedQty = effectiveActualQty(line, boxes, status)
+      return {
+        productId: line.product_id,
+        skuCode: line.sku_code ?? 'SKU',
+        productName: line.product_name ?? '',
+        expectedQty,
+        acceptedQty,
+        shortage: Math.max(0, expectedQty - acceptedQty),
+        surplus: Math.max(0, acceptedQty - expectedQty),
+      }
+    })
+    .filter((line) => line.shortage > 0 || line.surplus > 0)
 }

@@ -47,12 +47,16 @@ import { FfInboundBoxAddDialog } from './FfInboundBoxAddDialog'
 import { FfInboundSortingPanel } from './FfInboundSortingPanel'
 import { BoxImportDialog } from '../../components/BoxImportDialog'
 import {
+  buildInboundDiscrepancyLines,
+  buildInboundReceivingTotals,
   effectiveActualQty,
   inboundStatusRu,
+  integerQtyError,
   isDoneStatus,
   isReceivingStatus,
   isSortingStatus,
   looseQtyFromDisplayedTotal,
+  parseIntegerQty,
   scanErrorMessageRu,
 } from './inboundReceivingHelpers'
 import { suggestNextLocationCode } from '../../utils/suggestNextLocationCode'
@@ -176,7 +180,9 @@ export function FfInboundRequestView({
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [actualDraftByLineId, setActualDraftByLineId] = useState<Record<string, string>>({})
+  const [actualDraftErrorByLineId, setActualDraftErrorByLineId] = useState<Record<string, string>>({})
   const actualDraftRef = useRef(actualDraftByLineId)
+  const actualInputRefs = useRef<Record<string, HTMLInputElement | null>>({})
 
   const [distOpen, setDistOpen] = useState(false)
   const [distBusy, setDistBusy] = useState(false)
@@ -198,6 +204,7 @@ export function FfInboundRequestView({
   const [newLocationCode, setNewLocationCode] = useState('')
   const [requestWarehouse, setRequestWarehouse] = useState<WarehouseRow | null>(null)
   const loadDetailSeq = useRef(0)
+  const receivingScanInputRef = useRef<HTMLInputElement | null>(null)
 
   const sortingView = workspace === 'sorting'
   const receptionClosed =
@@ -254,6 +261,35 @@ export function FfInboundRequestView({
     () => formatHumanDocumentNumber(detail),
     [detail],
   )
+
+  const receivingTotals = useMemo(
+    () =>
+      buildInboundReceivingTotals(
+        detail?.lines ?? [],
+        detail?.boxes ?? [],
+        detail?.status,
+        detail?.planned_box_count ?? null,
+      ),
+    [detail?.boxes, detail?.lines, detail?.planned_box_count, detail?.status],
+  )
+
+  const discrepancyLines = useMemo(
+    () => buildInboundDiscrepancyLines(detail?.lines ?? [], detail?.boxes ?? [], detail?.status),
+    [detail?.boxes, detail?.lines, detail?.status],
+  )
+
+  const focusReceivingScanInput = () => {
+    window.setTimeout(() => {
+      receivingScanInputRef.current?.focus()
+    }, 0)
+  }
+
+  const focusActualInput = (lineId: string) => {
+    window.setTimeout(() => {
+      actualInputRefs.current[lineId]?.focus()
+      actualInputRefs.current[lineId]?.select()
+    }, 0)
+  }
 
   const loadDetail = useCallback(async (): Promise<InboundDetail> => {
     const seq = ++loadDetailSeq.current
@@ -434,6 +470,15 @@ export function FfInboundRequestView({
           continue
         }
         next[ln.id] = String(effectiveActualQty(ln, boxes, detail.status))
+      }
+      return next
+    })
+    setActualDraftErrorByLineId((prev) => {
+      const next: Record<string, string> = {}
+      for (const ln of detail.lines) {
+        if (manualEditLineId === ln.id && prev[ln.id]) {
+          next[ln.id] = prev[ln.id]!
+        }
       }
       return next
     })
@@ -1012,6 +1057,7 @@ export function FfInboundRequestView({
       }
       setReceivingScan('')
       await loadDetail()
+      focusReceivingScanInput()
     } catch (e) {
       setScanToastError(e instanceof Error ? e.message : 'Не удалось выполнить скан.')
     } finally {
@@ -1117,7 +1163,7 @@ export function FfInboundRequestView({
   }
 
   const requestCompleteReceiving = () => {
-    if (hasLineDiscrepancy) {
+    if (receivingTotals.hasAnyDiscrepancy) {
       setFinishConfirmOpen(true)
       return
     }
@@ -1154,12 +1200,17 @@ export function FfInboundRequestView({
       rawOverride ??
       actualDraftRef.current[lineId] ??
       actualDraftByLineId[lineId]
-    const v = Number(raw)
-    if (!Number.isFinite(v) || v < 0) {
-      setError('Укажите целое количество ≥ 0.')
+    const validationError = integerQtyError(raw)
+    if (validationError) {
+      setActualDraftErrorByLineId((prev) => ({ ...prev, [lineId]: validationError }))
+      setManualEditLineId(lineId)
+      focusActualInput(lineId)
       return
     }
-    const displayed = Math.floor(v)
+    const displayed = parseIntegerQty(raw)
+    if (displayed == null) {
+      return
+    }
     const line = detail?.lines.find((ln) => ln.id === lineId)
     if (!line) {
       return
@@ -1167,11 +1218,13 @@ export function FfInboundRequestView({
     const boxes = detail?.boxes ?? []
     const currentEffective = effectiveActualQty(line, boxes, detail?.status)
     if (displayed === currentEffective) {
+      setActualDraftErrorByLineId((prev) => ({ ...prev, [lineId]: '' }))
       setManualEditLineId(null)
       return
     }
     const loose = looseQtyFromDisplayedTotal(displayed, line, boxes)
     await setLineActual(lineId, loose)
+    setActualDraftErrorByLineId((prev) => ({ ...prev, [lineId]: '' }))
     setManualEditLineId(null)
   }
 
@@ -1247,11 +1300,43 @@ export function FfInboundRequestView({
                 ) : null}
               </Stack>
 
-              {detail.planned_box_count != null ? (
-                <Typography variant="body2" color="text.secondary" data-testid="ff-inbound-planned-boxes">
-                  План коробов: <strong>{detail.planned_box_count}</strong>
+              <Stack
+                direction="row"
+                spacing={1.5}
+                useFlexGap
+                sx={{
+                  alignItems: 'center',
+                  flexWrap: 'wrap',
+                  justifyContent: { xs: 'flex-start', sm: 'flex-end' },
+                }}
+                data-testid="ff-inbound-compact-summary"
+              >
+                <Typography variant="body2" color="text.secondary" data-testid="ff-inbound-seller-name">
+                  Селлер: <strong>{detail.seller_name ?? '—'}</strong>
                 </Typography>
-              ) : null}
+                <Typography variant="body2" color="text.secondary" data-testid="ff-inbound-received-summary">
+                  Принято: <strong>{receivingTotals.acceptedQty} из {receivingTotals.expectedQty}</strong>
+                </Typography>
+                <Typography variant="body2" color="text.secondary" data-testid="ff-inbound-boxes-summary">
+                  Короба:{' '}
+                  <strong>
+                    {receivingTotals.actualBoxes}
+                    {receivingTotals.plannedBoxes != null ? ` из ${receivingTotals.plannedBoxes}` : ''}
+                  </strong>
+                </Typography>
+                <Typography
+                  variant="body2"
+                  color={receivingTotals.hasAnyDiscrepancy ? 'warning.dark' : 'success.dark'}
+                  data-testid="ff-inbound-discrepancy-summary"
+                >
+                  Расхождения:{' '}
+                  <strong>
+                    {receivingTotals.hasAnyDiscrepancy
+                      ? `${receivingTotals.lineDiscrepancyCount}${receivingTotals.hasBoxDiscrepancy ? ' + короба' : ''}`
+                      : 'нет'}
+                  </strong>
+                </Typography>
+              </Stack>
             </Stack>
 
             <Stack
@@ -1537,19 +1622,28 @@ export function FfInboundRequestView({
                         >
                           {manualOpen && actualEditable ? (
                             <TextField
-                              type="number"
+                              type="text"
                               size="small"
                               value={
                                 actualDraftByLineId[ln.id] ??
                                 String(effectiveActualQty(ln, boxes, detail.status))
                               }
                               disabled={busy}
+                              error={Boolean(actualDraftErrorByLineId[ln.id])}
+                              helperText={actualDraftErrorByLineId[ln.id] || ' '}
+                              inputRef={(node) => {
+                                actualInputRefs.current[ln.id] = node
+                              }}
                               onChange={(e) => {
                                 const nextVal = e.target.value
                                 actualDraftRef.current = {
                                   ...actualDraftRef.current,
                                   [ln.id]: nextVal,
                                 }
+                                setActualDraftErrorByLineId((prev) => ({
+                                  ...prev,
+                                  [ln.id]: '',
+                                }))
                                 setActualDraftByLineId((prev) => ({
                                   ...prev,
                                   [ln.id]: nextVal,
@@ -1557,7 +1651,8 @@ export function FfInboundRequestView({
                               }}
                               slotProps={{
                                 htmlInput: {
-                                  min: 0,
+                                  inputMode: 'numeric',
+                                  pattern: '[0-9]*',
                                   'data-testid': 'ff-inbound-line-actual',
                                   onBlur: (e: FocusEvent<HTMLInputElement>) => {
                                     if (manualEditLineId !== ln.id) {
@@ -1573,7 +1668,7 @@ export function FfInboundRequestView({
                                   },
                                 },
                               }}
-                              sx={{ width: 88 }}
+                              sx={{ width: 132 }}
                             />
                           ) : (
                             <Typography
@@ -1650,6 +1745,7 @@ export function FfInboundRequestView({
                   label="Штрихкод товара"
                   value={receivingScan}
                   disabled={busy || boxAddDialogBoxId != null}
+                  inputRef={receivingScanInputRef}
                   onChange={(e) => setReceivingScan(e.target.value)}
                   onKeyDown={(e) => {
                     if (e.key === 'Enter') {
@@ -2280,13 +2376,73 @@ export function FfInboundRequestView({
         open={finishConfirmOpen}
         onClose={() => setFinishConfirmOpen(false)}
         data-testid="ff-inbound-discrepancy-dialog"
+        maxWidth="sm"
+        fullWidth
       >
         <DialogTitle>Есть расхождения, провести приёмку?</DialogTitle>
         <DialogContent>
-          <Typography variant="body2">
-            Факт по одной или нескольким позициям не совпадает с планом. Приёмка будет проведена с
-            расхождением.
-          </Typography>
+          <Stack spacing={2}>
+            {discrepancyLines.length > 0 ? (
+              <TableContainer component={Paper} variant="outlined">
+                <Table size="small" data-testid="ff-inbound-discrepancy-lines">
+                  <TableHead>
+                    <TableRow>
+                      <TableCell>SKU</TableCell>
+                      <TableCell align="right">Ожидалось</TableCell>
+                      <TableCell align="right">Принято</TableCell>
+                      <TableCell align="right">Отклонение</TableCell>
+                    </TableRow>
+                  </TableHead>
+                  <TableBody>
+                    {discrepancyLines.map((line) => (
+                      <TableRow key={line.productId} data-testid="ff-inbound-discrepancy-line">
+                        <TableCell>
+                          <Typography variant="body2" sx={{ fontWeight: 700 }}>
+                            {line.skuCode}
+                          </Typography>
+                          {line.productName ? (
+                            <Typography variant="caption" color="text.secondary">
+                              {line.productName}
+                            </Typography>
+                          ) : null}
+                        </TableCell>
+                        <TableCell align="right">{line.expectedQty}</TableCell>
+                        <TableCell align="right">{line.acceptedQty}</TableCell>
+                        <TableCell align="right">
+                          {line.shortage > 0 ? `Недостача ${line.shortage}` : `Излишек ${line.surplus}`}
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </TableContainer>
+            ) : (
+              <Typography variant="body2" color="text.secondary">
+                По SKU расхождений нет.
+              </Typography>
+            )}
+
+            <Paper
+              variant="outlined"
+              sx={{
+                p: 1.5,
+                bgcolor: receivingTotals.hasBoxDiscrepancy
+                  ? (theme) => alpha(theme.palette.warning.main, 0.12)
+                  : 'background.paper',
+              }}
+              data-testid="ff-inbound-discrepancy-box-summary"
+            >
+              <Typography variant="body2" sx={{ fontWeight: 700 }}>
+                Короба: {receivingTotals.actualBoxes}
+                {receivingTotals.plannedBoxes != null ? ` из ${receivingTotals.plannedBoxes}` : ''}
+              </Typography>
+              {receivingTotals.hasBoxDiscrepancy ? (
+                <Typography variant="body2" color="warning.dark">
+                  Количество коробов отличается от плана.
+                </Typography>
+              ) : null}
+            </Paper>
+          </Stack>
         </DialogContent>
         <DialogActions>
           <Button onClick={() => setFinishConfirmOpen(false)} disabled={busy}>
