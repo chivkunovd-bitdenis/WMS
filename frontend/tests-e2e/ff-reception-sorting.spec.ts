@@ -3,6 +3,58 @@ import { test, expect } from '@playwright/test';
 import { waitForGetOk, waitForPostOk } from './api-waits';
 import { openFulfillmentRegistration } from './auth-flow';
 
+// TC-NEW-FF-INBOUND-001 — ФФ создаёт черновик приёмки из очереди приёмки и сразу открывает документ.
+test('ff reception can create inbound draft and open it', async ({ page }) => {
+  const email = `e2e-ff-inb-${Date.now()}@example.com`;
+  const whCode = `wh-ff-inb-${Date.now()}`;
+
+  await page.goto('/');
+  await openFulfillmentRegistration(page);
+  await page.getByTestId('register-form').getByLabel('Организация').fill('E2E FF Inbound');
+  await page.getByTestId('register-form').getByLabel('Email администратора').fill(email);
+  await page.getByTestId('register-form').getByLabel('Пароль').fill('password123');
+  const [regRes] = await Promise.all([
+    waitForPostOk(page, '/api/auth/register'),
+    waitForGetOk(page, '/api/auth/me'),
+    page.getByTestId('register-form').getByRole('button', { name: 'Создать аккаунт' }).click(),
+  ]);
+  const token = ((await regRes.json()) as { access_token: string }).access_token;
+  const h = { Authorization: `Bearer ${token}` };
+
+  const wh = await page.request.post('/api/warehouses', {
+    headers: h,
+    data: { name: 'Склад ФФ', code: whCode },
+  });
+  expect(wh.ok()).toBeTruthy();
+
+  await page.goto('/app/ff/reception');
+  await expect(page.getByTestId('ff-reception-page')).toBeVisible();
+  await expect(page.getByTestId('ff-inbound-create')).toBeEnabled();
+
+  const [createRes] = await Promise.all([
+    waitForPostOk(
+      page,
+      '/api/operations/inbound-intake-requests',
+      (u) => !u.includes('/lines') && !u.includes('/submit'),
+    ),
+    page.getByTestId('ff-inbound-create').click(),
+  ]);
+  expect(createRes.ok()).toBeTruthy();
+  const created = (await createRes.json()) as { id: string; status: string };
+  expect(created.status).toBe('draft');
+
+  await expect(page.getByTestId('ff-doc-dialog')).toBeVisible();
+  await expect(page.getByTestId('ff-inbound-doc-root')).toBeVisible();
+  await expect(page.getByTestId('ff-inbound-status-chip')).toContainText('Черновик');
+  await expect(page.getByTestId('ff-inbound-add-products')).toBeVisible();
+
+  await page.getByTestId('ff-doc-dialog-close').click();
+  await expect(page.getByTestId('ff-inbound-queue-row').first()).toHaveAttribute(
+    'data-request-id',
+    created.id,
+  );
+});
+
 // TC-S06-007 — остаток после verify (зона сортировки); раскладка → доступно в ячейках.
 test('ff verify posts to sorting zone; sorting queue and product columns', async ({ page }) => {
   const email = `e2e-sort-${Date.now()}@example.com`;
@@ -32,7 +84,7 @@ test('ff verify posts to sorting zone; sorting queue and product columns', async
     headers: h,
     data: { code: 'STORE-1' },
   });
-  const lid = ((await loc.json()) as { id: string }).id;
+  expect(loc.ok()).toBeTruthy();
 
   const pr = await page.request.post('/api/products', {
     headers: h,
