@@ -34,6 +34,7 @@ import { FbsSupplyCreateDialog } from './FbsSupplyCreateDialog'
 import { FfFbsSectionNav } from './FfFbsSectionNav'
 import { FfFbsSupplyWorkspace } from './FfFbsSupplyWorkspace'
 import {
+  fetchFbsSellerWarehouses,
   fetchFbsWorklist,
   runFbsOrdersSync,
   syncFbsOrderStatuses,
@@ -54,6 +55,8 @@ type Props = {
 const TABS = [
   { key: 'new', label: 'Новые' },
   { key: 'active', label: 'В работе' },
+  { key: 'delivery', label: 'В доставке' },
+  { key: 'done', label: 'Завершённые' },
 ] as const
 
 const EXTERNAL_WB_SUPPLY_HINT =
@@ -85,8 +88,11 @@ function MetadataState({ order }: { order: FbsWorklistOrder }) {
   )
 }
 
-function warehouseOptionLabel(option: FbsWorklistWarehouseOption) {
-  return option.name || `WB ${option.wb_warehouse.id}`
+function warehouseOptionLabel(
+  option: FbsWorklistWarehouseOption,
+  sellerWarehouseNames: Record<string, string>,
+) {
+  return sellerWarehouseNames[option.id] || `WB ${option.wb_warehouse.id}`
 }
 
 export function FfFbsOrdersScreen({ token, authHeaders, sellers, isAdmin = false }: Props) {
@@ -97,6 +103,7 @@ export function FfFbsOrdersScreen({ token, authHeaders, sellers, isAdmin = false
   const [appliedSearch, setAppliedSearch] = useState('')
   const [orders, setOrders] = useState<FbsWorklistOrder[]>([])
   const [warehouseOptions, setWarehouseOptions] = useState<FbsWorklistWarehouseOption[]>([])
+  const [sellerWarehouseNames, setSellerWarehouseNames] = useState<Record<string, string>>({})
   const [serverNow, setServerNow] = useState<string | null>(null)
   const [selected, setSelected] = useState<Set<string>>(new Set())
   const [busy, setBusy] = useState(false)
@@ -146,6 +153,25 @@ export function FfFbsOrdersScreen({ token, authHeaders, sellers, isAdmin = false
   useEffect(() => {
     void load()
   }, [load])
+
+  useEffect(() => {
+    let cancelled = false
+    setSellerWarehouseNames({})
+    if (statusGroup !== 'new' || sellerId === '__all__') return
+    void fetchFbsSellerWarehouses(token, authHeaders, sellerId)
+      .then((warehouses) => {
+        if (cancelled) return
+        setSellerWarehouseNames(Object.fromEntries(
+          warehouses
+            .filter((warehouse) => warehouse.id != null && warehouse.name?.trim())
+            .map((warehouse) => [String(warehouse.id), warehouse.name!.trim()]),
+        ))
+      })
+      .catch(() => {
+        // WB names are optional for loading the worklist; IDs remain usable as fallback.
+      })
+    return () => { cancelled = true }
+  }, [token, authHeaders, sellerId, statusGroup])
 
   // Ручной поход в Wildberries: тянем новые заказы и подтягиваем их статусы.
   // Автоопрос делает то же самое раз в минуту, но оператору нужна кнопка на случай,
@@ -308,7 +334,7 @@ export function FfFbsOrdersScreen({ token, authHeaders, sellers, isAdmin = false
               ))}
             </Select>
           </FormControl>
-          {statusGroup === 'new' ? (
+          {statusGroup === 'new' && sellerId !== '__all__' ? (
             <FormControl sx={{ minWidth: 260 }}>
               <InputLabel id="fbs-worklist-warehouse-label">Склад селлера</InputLabel>
               <Select
@@ -328,7 +354,7 @@ export function FfFbsOrdersScreen({ token, authHeaders, sellers, isAdmin = false
                     value={warehouse.id}
                     data-testid={`fbs-worklist-warehouse-${warehouse.id}`}
                   >
-                    {warehouseOptionLabel(warehouse)}
+                    {warehouseOptionLabel(warehouse, sellerWarehouseNames)}
                   </MenuItem>
                 ))}
               </Select>

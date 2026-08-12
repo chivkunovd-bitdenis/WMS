@@ -173,6 +173,11 @@ export type FbsWorklistWarehouseOption = {
   wb_warehouse: { id: number; name: string | null }
 }
 
+export type FbsSellerWarehouse = {
+  id: number | null
+  name: string | null
+}
+
 export type FbsWorklistOrder = {
   id: string
   wb_order_id: number
@@ -1051,6 +1056,18 @@ export async function putFbsOrderMarking(
 
 // ── Привязки складов WB ↔ WMS + синхронизация остатков ───────────────────────
 // backend/app/api/fbs_sellers.py — /operations/fbs-sellers/{seller_id}/...
+
+export async function fetchFbsSellerWarehouses(
+  token: string,
+  ah: AuthHeaders,
+  sellerId: string,
+): Promise<FbsSellerWarehouse[]> {
+  return jsonOrThrow<FbsSellerWarehouse[]>(
+    await fetch(apiUrl(`/operations/fbs-sellers/${sellerId}/warehouses`), {
+      headers: { ...ah(token) },
+    }),
+  )
+}
 
 export type FbsWarehouseBinding = {
   id: string

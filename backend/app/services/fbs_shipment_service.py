@@ -93,6 +93,8 @@ _DELIVER_BLOCKED_SUPPLY_STATUSES = frozenset(
 
 logger = logging.getLogger(__name__)
 
+_WB_DISPATCH_PENDING_MESSAGE = "fix them to dispatch items"
+
 
 class FbsShipmentError(Exception):
     def __init__(
@@ -110,6 +112,15 @@ class FbsShipmentError(Exception):
         self.retryable = retryable
         self.http_status = http_status
         super().__init__(code)
+
+
+def _meta_validation_message(exc: WildberriesBusinessError) -> tuple[str, bool]:
+    if (exc.message or "").strip().lower() == _WB_DISPATCH_PENDING_MESSAGE:
+        return (
+            "Wildberries ещё обрабатывает поставку. Повторите передачу через минуту.",
+            True,
+        )
+    return (exc.message or "WB отклонил метаданные заказов.", False)
 
 
 @dataclass(frozen=True)
@@ -839,6 +850,7 @@ async def deliver_supply(
                 )
             except WildberriesBusinessError as exc:
                 meta_context = _meta_validation_context(exc)
+                message, retryable = _meta_validation_message(exc)
                 await mark_operation_failed(
                     session,
                     existing,
@@ -849,8 +861,9 @@ async def deliver_supply(
                 )
                 raise FbsShipmentError(
                     "meta_validation_fail",
-                    message=exc.message or "WB отклонил метаданные заказов.",
+                    message=message,
                     context={"meta_validation": meta_context},
+                    retryable=retryable,
                     http_status=409,
                 ) from exc
             except WildberriesClientError as exc:
@@ -948,6 +961,7 @@ async def deliver_supply(
         )
     except WildberriesBusinessError as exc:
         meta_context = _meta_validation_context(exc)
+        message, retryable = _meta_validation_message(exc)
         await mark_operation_failed(
             session,
             operation,
@@ -958,8 +972,9 @@ async def deliver_supply(
         )
         raise FbsShipmentError(
             "meta_validation_fail",
-            message=exc.message or "WB отклонил метаданные заказов.",
+            message=message,
             context={"meta_validation": meta_context},
+            retryable=retryable,
             http_status=409,
         ) from exc
     except WildberriesClientError as exc:

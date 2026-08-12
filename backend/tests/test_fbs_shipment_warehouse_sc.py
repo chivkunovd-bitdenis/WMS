@@ -30,6 +30,7 @@ from app.models.fbs_wb_operation import WB_OPERATION_STATE_CONFIRMED, FbsWbOpera
 from app.models.product import Product
 from app.services.wb_marketplace_orders_service import upsert_order_from_wb_row
 from app.services.wildberries_client import WildberriesClientError
+from app.services.wildberries_errors import WildberriesBusinessError
 from tests.fbs_seed_helpers import DEFAULT_WB_WAREHOUSE_ID, seed_fbs_warehouse_binding
 
 
@@ -358,6 +359,56 @@ async def test_fbs_shipment_deliver_ok_and_orders_not_ready(
     bad = await _deliver_with_preflight(async_client, headers, supply_bad["id"])
     assert bad.status_code == 400
     assert bad.json()["detail"]["code"] == "orders_not_ready"
+
+
+# TC-NEW-FBS-SHIPWH-006 — temporary WB dispatch rejection is actionable and retryable.
+@pytest.mark.asyncio
+async def test_fbs_shipment_translates_temporary_dispatch_rejection(
+    async_client: AsyncClient,
+    enable_wb_marketplace_supplies_mock: None,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    headers, suffix = await _register_ff_admin(async_client)
+    seller_id, warehouse_id, tenant_id = await _setup_seller_with_token(
+        async_client, headers, suffix
+    )
+    supply, order_ids = await _prepare_supply_with_orders(
+        async_client,
+        headers,
+        seller_id,
+        warehouse_id,
+        tenant_id,
+        wb_order_ids=[950004],
+        supply_name="Temporary WB dispatch rejection",
+    )
+    await _create_and_fill_physical_box(async_client, headers, supply["id"], order_ids)
+
+    deliver_calls = 0
+
+    async def reject_dispatch(*_args: object, **_kwargs: object) -> None:
+        nonlocal deliver_calls
+        deliver_calls += 1
+        raise WildberriesBusinessError(
+            "meta_validation_fail",
+            status_code=409,
+            wb_code="MetaValidationFail",
+            message="Fix them to dispatch items",
+        )
+
+    monkeypatch.setattr(
+        "app.services.fbs_shipment_service.deliver_marketplace_supply",
+        reject_dispatch,
+    )
+
+    response = await _deliver_direct(async_client, headers, supply["id"])
+    assert response.status_code == 409, response.text
+    detail = response.json()["detail"]
+    assert detail["code"] == "meta_validation_fail"
+    assert detail["message"] == (
+        "Wildberries ещё обрабатывает поставку. Повторите передачу через минуту."
+    )
+    assert detail["retryable"] is True
+    assert deliver_calls == 1
 
 
 # TC-NEW-FBS-SHIPWH-001b — deliver blocked until packaging complete

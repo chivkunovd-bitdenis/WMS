@@ -12,7 +12,10 @@ from sqlalchemy import event, select
 
 from app.db.session import SessionLocal, engine
 from app.models.fbs_order import (
+    FBS_ORDER_STATUS_DONE,
+    FBS_ORDER_STATUS_IN_DELIVERY,
     FBS_ORDER_STATUS_NEW,
+    FBS_ORDER_STATUS_SORTED,
     MAPPING_STATUS_MAPPED,
     RESERVE_STATUS_RESERVED,
     FbsOrder,
@@ -180,6 +183,57 @@ async def test_fbs_worklist_happy_path(async_client: AsyncClient) -> None:
     options_by_id = {option["id"]: option for option in body["warehouse_options"]}
     assert str(DEFAULT_WB_WAREHOUSE_ID) in options_by_id
     assert options_by_id[str(DEFAULT_WB_WAREHOUSE_ID)]["name"] == "WB Москва"
+
+
+@pytest.mark.asyncio
+async def test_fbs_worklist_delivery_and_done_groups(async_client: AsyncClient) -> None:
+    """TC-S17-001: transferred and completed orders remain visible in separate groups."""
+    headers, seller_id, _, _, _, order_ids = await _setup_ff_admin_with_stock(
+        async_client, order_count=1
+    )
+    order_id = order_ids[0]
+
+    async with SessionLocal() as session:
+        order = await session.get(FbsOrder, order_id)
+        assert order is not None
+        order.status = FBS_ORDER_STATUS_IN_DELIVERY
+        await session.commit()
+
+    delivery = await async_client.get(
+        "/operations/fbs-orders/worklist",
+        headers=headers,
+        params={"seller_id": str(seller_id), "status_group": "delivery"},
+    )
+    assert delivery.status_code == 200, delivery.text
+    assert [item["id"] for item in delivery.json()["items"]] == [str(order_id)]
+
+    async with SessionLocal() as session:
+        order = await session.get(FbsOrder, order_id)
+        assert order is not None
+        order.status = FBS_ORDER_STATUS_SORTED
+        await session.commit()
+
+    sorted_delivery = await async_client.get(
+        "/operations/fbs-orders/worklist",
+        headers=headers,
+        params={"seller_id": str(seller_id), "status_group": "delivery"},
+    )
+    assert sorted_delivery.status_code == 200, sorted_delivery.text
+    assert [item["id"] for item in sorted_delivery.json()["items"]] == [str(order_id)]
+
+    async with SessionLocal() as session:
+        order = await session.get(FbsOrder, order_id)
+        assert order is not None
+        order.status = FBS_ORDER_STATUS_DONE
+        await session.commit()
+
+    done = await async_client.get(
+        "/operations/fbs-orders/worklist",
+        headers=headers,
+        params={"seller_id": str(seller_id), "status_group": "done"},
+    )
+    assert done.status_code == 200, done.text
+    assert [item["id"] for item in done.json()["items"]] == [str(order_id)]
 
 
 @pytest.mark.asyncio

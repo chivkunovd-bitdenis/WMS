@@ -19,9 +19,12 @@ from app.models.fbs_order import (
     FBS_ORDER_STATUS_ASSEMBLING,
     FBS_ORDER_STATUS_CANCELLED,
     FBS_ORDER_STATUS_DEFECT,
+    FBS_ORDER_STATUS_DONE,
+    FBS_ORDER_STATUS_IN_DELIVERY,
     FBS_ORDER_STATUS_IN_SUPPLY,
     FBS_ORDER_STATUS_NEW,
     FBS_ORDER_STATUS_PACKED,
+    FBS_ORDER_STATUS_SORTED,
     MAPPING_STATUS_MISSING,
     FbsOrder,
     FbsOrderMarking,
@@ -57,6 +60,8 @@ STATUS_GROUP_MAP: dict[str, frozenset[str]] = {
             FBS_ORDER_STATUS_PACKED,
         }
     ),
+    "delivery": frozenset({FBS_ORDER_STATUS_IN_DELIVERY, FBS_ORDER_STATUS_SORTED}),
+    "done": frozenset({FBS_ORDER_STATUS_DONE}),
 }
 
 MISSING_WMS_WAREHOUSE = "Склад не привязан"
