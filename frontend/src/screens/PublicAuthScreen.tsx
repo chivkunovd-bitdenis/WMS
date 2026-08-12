@@ -39,11 +39,7 @@ export function PublicAuthScreen({
 }: Props) {
   const [mode, setMode] = useState<AuthMode>('login')
   const isFf = variant === 'fulfillment'
-
-  const title = isFf ? 'Портал фулфилмента' : 'Портал селлера'
-  const subtitle = isFf
-    ? 'Регистрация организации — для первого администратора. Аккаунты селлеров создаёт админ фулфилмента.'
-    : 'Вход для селлера. Регистрация недоступна — доступ выдаёт администратор вашего фулфилмента.'
+  const portal = isFf ? 'fulfillment' : 'seller'
 
   if (pendingPasswordSetupEmail) {
     return (
@@ -59,9 +55,16 @@ export function PublicAuthScreen({
       >
         <Container maxWidth="sm">
           <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
-            <Typography variant="h5" component="h1">
-              {title}
-            </Typography>
+            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
+              <WmsBrandMark size={48} portal={portal} />
+              <Typography
+                variant="h5"
+                component="h1"
+                sx={{ fontWeight: 900, letterSpacing: 0 }}
+              >
+                Короб ВМС
+              </Typography>
+            </Box>
             {error ? (
               <Alert severity="error" data-testid="auth-error">
                 {error}
@@ -154,14 +157,15 @@ export function PublicAuthScreen({
       <Container maxWidth="sm">
         <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
           <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
-            <WmsBrandMark size={32} portal={isFf ? 'fulfillment' : 'seller'} />
-            <Typography variant="h5" component="h1">
-              WMS · {title}
+            <WmsBrandMark size={48} portal={portal} />
+            <Typography
+              variant="h5"
+              component="h1"
+              sx={{ fontWeight: 900, letterSpacing: 0 }}
+            >
+              Короб ВМС
             </Typography>
           </Box>
-          <Typography variant="body2" color="text.secondary">
-            {subtitle}
-          </Typography>
           {error ? (
             <Alert severity="error" data-testid="auth-error">
               {error}
