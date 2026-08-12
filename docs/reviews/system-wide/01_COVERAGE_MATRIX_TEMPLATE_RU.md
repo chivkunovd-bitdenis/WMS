@@ -32,6 +32,12 @@
 |---|---|---|---|---|---|---|---|
 | INV-001 | Пример: FBS — новые заказы | комплектовщик ФФ | `/app/ff/fbs` | API + WB sync worker | tenant + seller | FBS handoff | product |
 
+## Инвентарь действий экрана
+
+| Screen ID | Route | Role | Visible control/action | Scenario ID | Feedback checked | State/read-back checked | Reload/retry checked | Status / reason |
+|---|---|---|---|---|---|---|---|---|
+| SCREEN-001 | example | operator | primary action | REV-001-HAPPY | NOT_RUN | NOT_RUN | NOT_RUN | NOT_RUN |
+
 ## Охват исходного кода
 
 Tracked source-файлы группируются по модулю. Generated/vendor/evidence-артефакты не требуют построчного ревью, но их исключение записывается. Для каждой группы должен быть статус `REVIEWED`, `EXCLUDED` или `BLOCKED`.
@@ -79,6 +85,7 @@ Tracked source-файлы группируются по модулю. Generated/
 - Inventory rows total / covered:
 - Scenario rows total / PASS / FAIL / GAP / BLOCKED / NOT_RUN:
 - UI routes total / screens evidenced:
+- Visible actions total / exercised / N/A with reason:
 - Tracked code areas total / reviewed / excluded / blocked:
 - Contract conflicts total / resolved / blocking:
 - P0/P1 second reproductions complete:
