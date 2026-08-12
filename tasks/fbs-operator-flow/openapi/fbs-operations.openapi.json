@@ -98,6 +98,23 @@
             }
           },
           {
+            "name": "wb_warehouse_id",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "integer",
+                  "exclusiveMinimum": 0
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Wb Warehouse Id"
+            }
+          },
+          {
             "name": "search",
             "in": "query",
             "required": false,
@@ -4801,6 +4818,17 @@
             ],
             "title": "Wb Status"
           },
+          "supplier_status": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Supplier Status"
+          },
           "created_at_wb": {
             "type": "string",
             "title": "Created At Wb"
@@ -4848,6 +4876,7 @@
           "trbx_id",
           "status",
           "wb_status",
+          "supplier_status",
           "created_at_wb",
           "deadline_at",
           "mapping_status",
@@ -7256,6 +7285,17 @@
             ],
             "title": "Wb Status"
           },
+          "supplier_status": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Supplier Status"
+          },
           "seller": {
             "$ref": "#/components/schemas/FbsWorklistSellerOut"
           },
@@ -7328,6 +7368,7 @@
           "wb_order_id",
           "status",
           "wb_status",
+          "supplier_status",
           "seller",
           "wb_warehouse",
           "wms_warehouse",
@@ -7395,13 +7436,21 @@
           "server_now": {
             "type": "string",
             "title": "Server Now"
+          },
+          "warehouse_options": {
+            "items": {
+              "$ref": "#/components/schemas/FbsWorklistWarehouseOptionOut"
+            },
+            "type": "array",
+            "title": "Warehouse Options"
           }
         },
         "type": "object",
         "required": [
           "items",
           "next_cursor",
-          "server_now"
+          "server_now",
+          "warehouse_options"
         ],
         "title": "FbsWorklistPageOut"
       },
@@ -7547,6 +7596,17 @@
       },
       "FbsWorklistStickerOut": {
         "properties": {
+          "code": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Code"
+          },
           "status": {
             "type": "string",
             "title": "Status"
@@ -7576,11 +7636,34 @@
         },
         "type": "object",
         "required": [
+          "code",
           "status",
           "asset_url",
           "applied_at"
         ],
         "title": "FbsWorklistStickerOut"
+      },
+      "FbsWorklistWarehouseOptionOut": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "title": "Id"
+          },
+          "name": {
+            "type": "string",
+            "title": "Name"
+          },
+          "wb_warehouse": {
+            "$ref": "#/components/schemas/FbsWorklistWarehouseOut"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "name",
+          "wb_warehouse"
+        ],
+        "title": "FbsWorklistWarehouseOptionOut"
       },
       "FbsWorklistWarehouseOut": {
         "properties": {
@@ -7710,6 +7793,17 @@
             ],
             "title": "Wb Status"
           },
+          "supplier_status": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Supplier Status"
+          },
           "seller": {
             "$ref": "#/components/schemas/FbsWorklistSellerOut"
           },
@@ -7782,6 +7876,7 @@
           "wb_order_id",
           "status",
           "wb_status",
+          "supplier_status",
           "seller",
           "wb_warehouse",
           "wms_warehouse",
@@ -8447,6 +8542,44 @@
             "type": "boolean",
             "title": "Requires Honest Sign",
             "default": false
+          },
+          "fbs_stock_sync_enabled": {
+            "type": "boolean",
+            "title": "Fbs Stock Sync Enabled",
+            "default": false
+          },
+          "fbs_stock_limit": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Fbs Stock Limit"
+          },
+          "fbs_published_amount": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Fbs Published Amount"
+          },
+          "fbs_sync_status": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Fbs Sync Status"
           },
           "has_packaging_instructions": {
             "type": "boolean",
@@ -13525,6 +13658,90 @@
         ],
         "title": "ProductCreate"
       },
+      "ProductFbsStockSyncBulkOut": {
+        "properties": {
+          "updated_count": {
+            "type": "integer",
+            "title": "Updated Count"
+          }
+        },
+        "type": "object",
+        "required": [
+          "updated_count"
+        ],
+        "title": "ProductFbsStockSyncBulkOut"
+      },
+      "ProductFbsStockSyncBulkPatch": {
+        "properties": {
+          "product_ids": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string",
+                  "format": "uuid"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Product Ids"
+          },
+          "fbs_stock_sync_enabled": {
+            "type": "boolean",
+            "title": "Fbs Stock Sync Enabled"
+          },
+          "fbs_stock_limit": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "minimum": 0.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Fbs Stock Limit"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "fbs_stock_sync_enabled"
+        ],
+        "title": "ProductFbsStockSyncBulkPatch"
+      },
+      "ProductFbsStockSyncPatch": {
+        "properties": {
+          "fbs_stock_sync_enabled": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Fbs Stock Sync Enabled"
+          },
+          "fbs_stock_limit": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "minimum": 0.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Fbs Stock Limit"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "title": "ProductFbsStockSyncPatch"
+      },
       "ProductLocationHintOut": {
         "properties": {
           "storage_location_id": {
@@ -14590,6 +14807,44 @@
             "title": "Requires Honest Sign",
             "default": false
           },
+          "fbs_stock_sync_enabled": {
+            "type": "boolean",
+            "title": "Fbs Stock Sync Enabled",
+            "default": false
+          },
+          "fbs_stock_limit": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Fbs Stock Limit"
+          },
+          "fbs_published_amount": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Fbs Published Amount"
+          },
+          "fbs_sync_status": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Fbs Sync Status"
+          },
           "has_packaging_instructions": {
             "type": "boolean",
             "title": "Has Packaging Instructions",
@@ -15616,12 +15871,55 @@
         ],
         "title": "WildberriesSelfTokenSaveBody"
       },
+      "WildberriesSelfTokenSaveErrorOut": {
+        "properties": {
+          "code": {
+            "type": "string",
+            "enum": [
+              "token_save_failed",
+              "product_conflict"
+            ],
+            "title": "Code"
+          },
+          "message": {
+            "type": "string",
+            "title": "Message"
+          },
+          "ref": {
+            "type": "string",
+            "title": "Ref"
+          }
+        },
+        "type": "object",
+        "required": [
+          "code",
+          "message",
+          "ref"
+        ],
+        "title": "WildberriesSelfTokenSaveErrorOut"
+      },
       "WildberriesSelfTokenSaveOut": {
         "properties": {
           "ok": {
             "type": "boolean",
             "title": "Ok",
             "default": true
+          },
+          "validation_ok": {
+            "type": "boolean",
+            "title": "Validation Ok",
+            "default": true
+          },
+          "validation_error": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Validation Error"
           },
           "cards_received": {
             "type": "integer",
