@@ -205,6 +205,7 @@ test('address storage off hides cell UI on marketplace unload', async ({ page })
     page.locator('[data-doc-kind="marketplace_unload"]').first().click(),
   ])
   await expect(page.getByTestId('ff-supplies-doc-dialog')).toBeVisible()
+  await page.getByTestId('ff-mp-tab-boxes').click()
   await expect(page.getByTestId('ff-mp-boxes')).toBeVisible()
   await expect(page.getByTestId('ff-mp-active-location')).toHaveCount(0)
   await expect(page.getByTestId('ff-mp-start-picking')).toHaveCount(0)

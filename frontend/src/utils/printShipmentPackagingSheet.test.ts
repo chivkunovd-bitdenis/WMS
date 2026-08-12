@@ -21,7 +21,12 @@ function makeItem(overrides: Partial<PackagingSheetItem> = {}): PackagingSheetIt
 
 const base: ShipmentPackagingSheetData = {
   documentNumber: '№000034',
+  documentType: 'Отгрузка на МП',
   sellerName: 'ООО Ромашка',
+  shipmentDate: '2026-08-12',
+  warehouseName: 'Склад ФФ',
+  marketplaceWarehouseName: 'Коледино (507)',
+  createdAt: '12.08.2026, 10:30',
   items: [makeItem()],
 }
 
@@ -30,9 +35,13 @@ describe('buildShipmentPackagingSheetHtml', () => {
     const html = buildShipmentPackagingSheetHtml(base)
     expect(html).toContain('size: A4')
     expect(html).not.toContain('size: A4 landscape')
-    expect(html).toContain('ТЗ на упаковку — Отгрузка №000034')
+    expect(html).toContain('Лист отгрузки')
     expect(html).toContain('ООО Ромашка')
-    expect(html).not.toContain('Склад ФФ')
+    expect(html).toContain('2026-08-12')
+    expect(html).toContain('Отгрузка на МП')
+    expect(html).toContain('№000034')
+    expect(html).toContain('Склад ФФ')
+    expect(html).toContain('Коледино (507)')
     expect(html).not.toContain('Создано')
     expect(html).not.toContain('Актуальная версия')
   })
@@ -40,11 +49,11 @@ describe('buildShipmentPackagingSheetHtml', () => {
   it('renders shipment line quantity in a dedicated column', () => {
     const html = buildShipmentPackagingSheetHtml(base)
     expect(html).toContain('data-testid="tz-sheet-qty"')
-    expect(html).toContain('>Кол-во</span>')
-    expect(html).toContain('>3</span>')
+    expect(html).toContain('<th>Кол-во</th>')
+    expect(html).toContain('data-testid="tz-sheet-qty">3</td>')
   })
 
-  it('renders one card per item with photo, article, barcode and ТЗ text', () => {
+  it('renders one row per item with photo, article, barcode and instructions', () => {
     const html = buildShipmentPackagingSheetHtml(base)
     expect(html).toContain('data-testid="tz-sheet-card"')
     expect(html).toContain('Сложить в пакет, наклеить стикер WB')
@@ -56,9 +65,9 @@ describe('buildShipmentPackagingSheetHtml', () => {
 
   it('renders barcode on a separate bold line in the product header', () => {
     const html = buildShipmentPackagingSheetHtml(base)
-    expect(html).toContain('class="pk-barcode"')
-    expect(html).toContain('ШК: 2000000000015')
-    expect(html).not.toMatch(/pk-meta[^>]*>[^<]*ШК:/)
+    expect(html).toContain('data-testid="shipment-sheet-barcode"')
+    expect(html).toContain('>2000000000015</td>')
+    expect(html).not.toContain('ШК: 2000000000015')
   })
 
   it('renders only name, articles and barcode — no size/composition/description', () => {
@@ -67,16 +76,15 @@ describe('buildShipmentPackagingSheetHtml', () => {
     expect(html).not.toContain('Состав:')
   })
 
-  it('renders product info as a highlighted block above the ТЗ block', () => {
+  it('renders a compact table with an empty Fact column', () => {
     const html = buildShipmentPackagingSheetHtml(base)
-    const productIdx = html.indexOf('class="pk-product"')
-    const tzIdx = html.indexOf('class="pk-tz"')
-    expect(productIdx).toBeGreaterThan(-1)
-    expect(tzIdx).toBeGreaterThan(productIdx)
+    expect(html).toContain('data-testid="shipment-sheet-table"')
+    expect(html).toContain('<th>Факт</th>')
+    expect(html).toContain('data-testid="shipment-sheet-fact"')
     expect(html).toContain('print-color-adjust: exact')
   })
 
-  it('keeps a card from splitting across pages', () => {
+  it('keeps a row from splitting across pages', () => {
     const html = buildShipmentPackagingSheetHtml(base)
     expect(html).toContain('page-break-inside: avoid')
   })
@@ -86,7 +94,7 @@ describe('buildShipmentPackagingSheetHtml', () => {
       ...base,
       items: [makeItem({ instructions: null, photo_url: null })],
     })
-    expect(html).toContain('ТЗ не заполнено')
+    expect(html).toContain('Инструкция не заполнена')
     expect(html).toContain('pk-photo-empty')
   })
 

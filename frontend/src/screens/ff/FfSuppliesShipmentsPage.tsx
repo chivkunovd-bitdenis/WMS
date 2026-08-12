@@ -1,7 +1,12 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type MouseEvent } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import { useBarcodeScanner } from '../../hooks/useBarcodeScanner'
-import { DeleteOutlineOutlined, MoreVertOutlined } from '@mui/icons-material'
+import {
+  ArrowForwardOutlined,
+  DeleteOutlineOutlined,
+  MoreVertOutlined,
+  PrintOutlined,
+} from '@mui/icons-material'
 import {
   Alert,
   Box,
@@ -49,7 +54,6 @@ import { FfMarketplaceUnloadBoxAddDialog } from './FfMarketplaceUnloadBoxAddDial
 import { BoxImportDialog } from '../../components/BoxImportDialog'
 import { formatHumanDocumentNumber } from './documentDisplay'
 import { formatDateTimeLocal } from '../../utils/formatDateTimeLocal'
-import { printMarketplaceUnloadWaybill } from '../../utils/printShipmentWaybill'
 import { printBarcodeLabel } from '../../utils/printBarcodeLabel'
 import { renderBarcodeDataUrl } from '../../utils/renderBarcodeDataUrl'
 import {
@@ -161,7 +165,7 @@ type DiscrepancyActDetail = {
 
 type DocKind = 'inbound' | 'outbound' | 'marketplace_unload' | 'discrepancy_act'
 
-type MpUnloadTab = 'products' | 'packaging'
+type MpUnloadTab = 'plan' | 'picking' | 'packaging' | 'boxes' | 'final'
 
 /** Быстрые фильтры без операционной «Отгрузки» — только «Отгрузки на МП». */
 type QuickFilterKind = 'all' | 'inbound' | 'marketplace_unload' | 'discrepancy_act'
@@ -198,6 +202,18 @@ function kindRu(kind: DocKind): string {
   if (kind === 'outbound') return 'Отгрузка'
   if (kind === 'marketplace_unload') return 'Отгрузка на МП'
   return 'Расхождение'
+}
+
+const mpUnloadSteps: { value: MpUnloadTab; label: string; testId: string }[] = [
+  { value: 'plan', label: 'План', testId: 'ff-mp-tab-products' },
+  { value: 'picking', label: 'Подбор', testId: 'ff-mp-tab-picking' },
+  { value: 'packaging', label: 'Упаковка/ЧЗ', testId: 'ff-mp-tab-packaging' },
+  { value: 'boxes', label: 'Короба', testId: 'ff-mp-tab-boxes' },
+  { value: 'final', label: 'Печать/финал', testId: 'ff-mp-tab-final' },
+]
+
+function mpUnloadStepLabel(step: MpUnloadTab): string {
+  return mpUnloadSteps.find((item) => item.value === step)?.label ?? step
 }
 
 type ProductPick = { id: string; sku_code: string; name: string }
@@ -261,7 +277,7 @@ export function FfSuppliesShipmentsPage({
 
   const [docModal, setDocModal] = useState<null | 'marketplace_unload' | 'discrepancy_act'>(null)
   const [docModalId, setDocModalId] = useState<string | null>(null)
-  const [mpUnloadTab, setMpUnloadTab] = useState<MpUnloadTab>('products')
+  const [mpUnloadTab, setMpUnloadTab] = useState<MpUnloadTab>('plan')
   const [packagingTask, setPackagingTask] = useState<PackagingTask | null>(null)
   const [packagingTaskError, setPackagingTaskError] = useState<string | null>(null)
   const [modalBusy, setModalBusy] = useState(false)
@@ -664,7 +680,7 @@ export function FfSuppliesShipmentsPage({
     setWbMpWarehouses([])
     setMpPickerOpen(false)
     setMpLineBarcodeScan('')
-    setMpUnloadTab('products')
+    setMpUnloadTab('plan')
     setPackagingTask(null)
     setPackagingTaskError(null)
     mpTabInitForRef.current = null
@@ -946,9 +962,20 @@ export function FfSuppliesShipmentsPage({
         quantity: ln.quantity,
       }
     })
+    const wbName =
+      wbMpWarehouses.find((w) => w.wb_warehouse_id === unloadDetail.wb_mp_warehouse_id)?.name ??
+      null
     printShipmentPackagingSheet({
       documentNumber: unloadDisplayNumber ?? '—',
+      documentType: 'Отгрузка на МП',
       sellerName: unloadDetail.seller_name,
+      shipmentDate: unloadDetail.planned_shipment_date,
+      warehouseName: unloadDetail.warehouse_name,
+      marketplaceWarehouseName:
+        wbName != null && unloadDetail.wb_mp_warehouse_id != null
+          ? `${wbName} (${unloadDetail.wb_mp_warehouse_id})`
+          : null,
+      createdAt: unloadDetail.created_at ? formatDateTimeLocal(unloadDetail.created_at) : null,
       items,
     })
   }
@@ -1607,7 +1634,7 @@ export function FfSuppliesShipmentsPage({
       return
     }
     mpTabInitForRef.current = docModalId
-    setMpUnloadTab('products')
+    setMpUnloadTab('plan')
   }, [unloadDetail, docModalId, docModal])
 
   const mpDateEditable =
@@ -1630,6 +1657,50 @@ export function FfSuppliesShipmentsPage({
         : null,
     }
   }, [unloadDetail, docModal])
+
+  const mpShipped = docModal === 'marketplace_unload' && unloadDetail?.status === 'shipped'
+  const mpAfterConfirm = mpExecutionPhase || mpShipped
+  const mpStepEnabled = useCallback(
+    (step: MpUnloadTab) => {
+      if (!unloadDetail || docModal !== 'marketplace_unload') {
+        return false
+      }
+      if (step === 'plan') {
+        return true
+      }
+      if (step === 'picking') {
+        return mpAfterConfirm || unloadDetail.pick_allocations.length > 0
+      }
+      if (step === 'packaging') {
+        return Boolean(unloadDetail.linked_packaging_task)
+      }
+      if (step === 'boxes') {
+        return mpAfterConfirm || mpVisibleBoxes.length > 0
+      }
+      return mpAfterConfirm
+    },
+    [docModal, mpAfterConfirm, mpVisibleBoxes.length, unloadDetail],
+  )
+  const mpNextStep = useMemo(() => {
+    const currentIdx = mpUnloadSteps.findIndex((step) => step.value === mpUnloadTab)
+    if (currentIdx < 0) {
+      return null
+    }
+    return (
+      mpUnloadSteps
+        .slice(currentIdx + 1)
+        .find((step) => mpStepEnabled(step.value))?.value ?? null
+    )
+  }, [mpStepEnabled, mpUnloadTab])
+
+  useEffect(() => {
+    if (!unloadDetail || docModal !== 'marketplace_unload') {
+      return
+    }
+    if (!mpStepEnabled(mpUnloadTab)) {
+      setMpUnloadTab('plan')
+    }
+  }, [docModal, mpStepEnabled, mpUnloadTab, unloadDetail])
 
   const draftDoc =
     mpDraft ||
@@ -1739,7 +1810,7 @@ export function FfSuppliesShipmentsPage({
       docModal !== null &&
       docModalId !== null &&
       docModal === 'marketplace_unload' &&
-      mpUnloadTab === 'products' &&
+      mpUnloadTab === 'plan' &&
       mpLineDraft &&
       mpDraft &&
       boxAddDialogBoxId == null &&
@@ -1756,7 +1827,7 @@ export function FfSuppliesShipmentsPage({
       docModal !== null &&
       docModalId !== null &&
       docModal === 'marketplace_unload' &&
-      mpUnloadTab === 'products' &&
+      mpUnloadTab === 'boxes' &&
       mpExecutionPhase &&
       boxAddDialogBoxId == null &&
       !mpPickerOpen &&
@@ -2209,25 +2280,31 @@ export function FfSuppliesShipmentsPage({
             </Paper>
           ) : null}
           {docModal === 'marketplace_unload' && unloadDetail ? (
-            <Box sx={{ mb: 2 }}>
+            <Box sx={{ mb: 2 }} data-testid="ff-mp-process">
               <Tabs
                 value={mpUnloadTab}
-                onChange={(_e, value: MpUnloadTab) => setMpUnloadTab(value)}
+                onChange={(_e, value: MpUnloadTab) => {
+                  if (mpStepEnabled(value)) {
+                    setMpUnloadTab(value)
+                  }
+                }}
                 variant="scrollable"
                 scrollButtons="auto"
                 sx={{ borderBottom: 1, borderColor: 'divider', mb: 2 }}
+                data-testid="ff-mp-process-tabs"
               >
-                <Tab label="Товары" value="products" data-testid="ff-mp-tab-products" />
-                <Tab
-                  label="Упаковка"
-                  value="packaging"
-                  disabled={!unloadDetail.linked_packaging_task}
-                  data-testid="ff-mp-tab-packaging"
-                />
-
+                {mpUnloadSteps.map((step) => (
+                  <Tab
+                    key={step.value}
+                    label={step.label}
+                    value={step.value}
+                    disabled={!mpStepEnabled(step.value)}
+                    data-testid={step.testId}
+                  />
+                ))}
               </Tabs>
-              {mpUnloadTab === 'products' ? (
-                <Stack spacing={2}>
+              {mpUnloadTab === 'plan' ? (
+                <Stack spacing={2} data-testid="ff-mp-tab-plan-panel">
                   {unloadDetail.seller_name ? (
                     <Typography variant="body2" color="text.secondary">
                       Селлер: <strong>{unloadDetail.seller_name}</strong>
@@ -2390,74 +2467,92 @@ export function FfSuppliesShipmentsPage({
                       })()}
                     </TableBody>
                   </Table>
-                  {unloadDetail.lines.length > 0 ? (
-                    <Stack
-                      direction="row"
-                      spacing={1}
-                      useFlexGap
-                      data-testid="ff-mp-print-actions"
-                      sx={{ mt: 1, flexWrap: 'wrap' }}
+                </Stack>
+              ) : null}
+              {mpUnloadTab === 'picking' ? (
+                <Box data-testid="ff-mp-tab-picking-panel">
+                  {unloadDetail.pick_allocations.length > 0 ? (
+                    <Table
+                      size="small"
+                      data-testid="ff-mp-picking-allocations"
+                      sx={{ tableLayout: 'fixed', width: '100%' }}
                     >
-                      <Button
-                        variant="outlined"
-                        size="small"
-                        disabled={modalBusy}
-                        data-testid="ff-mp-print-waybill"
-                        onClick={() => {
-                            const wbName =
-                              wbMpWarehouses.find(
-                                (w) => w.wb_warehouse_id === unloadDetail.wb_mp_warehouse_id,
-                              )?.name ?? null
-                            printMarketplaceUnloadWaybill({
-                              documentId: unloadDetail.id,
-                              statusLabel: statusRu(unloadDetail.status),
-                              warehouseName: unloadDetail.warehouse_name,
-                              sellerName: unloadDetail.seller_name,
-                              wbWarehouseLabel:
-                                wbName != null && unloadDetail.wb_mp_warehouse_id != null
-                                  ? `${wbName} (${unloadDetail.wb_mp_warehouse_id})`
-                                  : null,
-                              plannedDate: unloadDetail.planned_shipment_date,
-                              createdAt: unloadDetail.created_at
-                                ? formatDateTimeLocal(unloadDetail.created_at)
-                                : null,
-                              lines: unloadDetail.lines.map((ln) => ({
-                                sku_code: ln.sku_code,
-                                product_name: ln.product_name,
-                                quantity: ln.quantity,
-                              })),
-                              pickAllocations: unloadDetail.pick_allocations.map((a) => ({
-                                location_code: a.location_code,
-                                sku_code: a.sku_code,
-                                quantity: a.quantity,
-                              })),
-                            })
-                          }}
-                        >
-                          Печать накладной
-                        </Button>
-                      <Button
-                        variant="outlined"
-                        size="small"
-                        disabled={modalBusy}
-                        data-testid="ff-mp-print-tz"
-                        onClick={printPackagingSheet}
-                      >
-                        Печать ТЗ
-                      </Button>
-                    </Stack>
-                  ) : null}
-                  <Box data-testid="ff-mp-boxes">
-              {(() => {
-                const allBoxes = mpVisibleBoxes
-                return (
-                  <Stack spacing={1.5}>
-                    <Typography variant="subtitle2">Сборка в короба</Typography>
+                      <TableHead>
+                        <TableRow>
+                          <TableCell sx={{ width: '24%' }}>Ячейка</TableCell>
+                          <TableCell sx={{ width: '28%' }}>Артикул</TableCell>
+                          <TableCell>Товар</TableCell>
+                          <TableCell align="right" sx={{ width: 120 }}>
+                            Подобрать
+                          </TableCell>
+                        </TableRow>
+                      </TableHead>
+                      <TableBody>
+                        {unloadDetail.pick_allocations.map((allocation) => (
+                          <TableRow
+                            key={allocation.id}
+                            data-testid={`ff-mp-picking-allocation-${allocation.id}`}
+                          >
+                            <TableCell>{allocation.location_code}</TableCell>
+                            <TableCell sx={{ overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                              {allocation.sku_code}
+                            </TableCell>
+                            <TableCell sx={{ overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                              {allocation.product_name}
+                            </TableCell>
+                            <TableCell align="right">{allocation.quantity}</TableCell>
+                          </TableRow>
+                        ))}
+                      </TableBody>
+                    </Table>
+                  ) : (
                     <Typography variant="body2" color="text.secondary">
-                      Сканируйте WHB готового короба, чтобы привязать его к отгрузке. Новые короба
-                      создавайте только при необходимости.
+                      Подбор появится после утверждения плана.
                     </Typography>
-
+                  )}
+                </Box>
+              ) : null}
+              {mpUnloadTab === 'packaging' ? (
+                <Box data-testid="ff-mp-tab-packaging-panel">
+                  {packagingTaskError ? (
+                    <Alert severity="error" sx={{ mb: 2 }}>
+                      {packagingTaskError}
+                    </Alert>
+                  ) : null}
+                  {packagingTask && token ? (
+                    <FfPackagingTaskPanel
+                      token={token}
+                      task={packagingTask}
+                      hideDocumentHeader
+                      compactLayout
+                      onUpdated={(task) => {
+                        setPackagingTask(task)
+                        void loadDocDetail()
+                      }}
+                    />
+                  ) : unloadDetail?.linked_packaging_task ? (
+                    <Typography
+                      variant="body2"
+                      color="text.secondary"
+                      data-testid="ff-mp-packaging-task-created"
+                    >
+                      Задание на упаковку создано.
+                    </Typography>
+                  ) : (
+                    <Typography
+                      variant="body2"
+                      color="text.secondary"
+                      data-testid="ff-mp-packaging-empty"
+                    >
+                      Задание на упаковку ещё не создано.
+                    </Typography>
+                  )}
+                </Box>
+              ) : null}
+              {mpUnloadTab === 'boxes' ? (
+                <Box data-testid="ff-mp-boxes">
+                  <Stack spacing={1.5}>
+                    <Typography variant="subtitle2">Короба</Typography>
                     {mpExecutionPhase ? (
                       <Paper variant="outlined" sx={{ p: 1.5 }}>
                         <Stack spacing={1.25}>
@@ -2498,7 +2593,7 @@ export function FfSuppliesShipmentsPage({
                             </Button>
                           </Box>
 
-                          {allBoxes.length > 0 ? (
+                          {mpVisibleBoxes.length > 0 ? (
                             <Stack spacing={1.5}>
                               {mpBoxesOrdered.map((b, idx) =>
                                 renderMpBoxCard(
@@ -2565,8 +2660,11 @@ export function FfSuppliesShipmentsPage({
                           </Stack>
                         </Stack>
                       </Paper>
-                    ) : null}
-
+                    ) : (
+                      <Typography variant="body2" color="text.secondary">
+                        Короба доступны после утверждения плана.
+                      </Typography>
+                    )}
                     <Menu
                       anchorEl={boxMenuAnchor}
                       open={Boolean(boxMenuAnchor)}
@@ -2619,47 +2717,39 @@ export function FfSuppliesShipmentsPage({
                       </MenuItem>
                     </Menu>
                   </Stack>
-                )
-              })()}
-            </Box>
-
-                </Stack>
-              ) : null}
-              {mpUnloadTab === 'packaging' ? (
-                <Box data-testid="ff-mp-tab-packaging-panel">
-                  {packagingTaskError ? (
-                    <Alert severity="error" sx={{ mb: 2 }}>
-                      {packagingTaskError}
-                    </Alert>
-                  ) : null}
-                  {packagingTask && token ? (
-                    <FfPackagingTaskPanel
-                      token={token}
-                      task={packagingTask}
-                      hideDocumentHeader
-                      onUpdated={(task) => {
-                        setPackagingTask(task)
-                        void loadDocDetail()
-                      }}
-                    />
-                  ) : unloadDetail?.linked_packaging_task ? (
-                    <Typography
-                      variant="body2"
-                      color="text.secondary"
-                      data-testid="ff-mp-packaging-task-created"
-                    >
-                      Задание на упаковку создано.
-                    </Typography>
-                  ) : (
-                    <Typography
-                      variant="body2"
-                      color="text.secondary"
-                      data-testid="ff-mp-packaging-empty"
-                    >
-                      Задание на упаковку ещё не создано.
-                    </Typography>
-                  )}
                 </Box>
+              ) : null}
+              {mpUnloadTab === 'final' ? (
+                <Stack spacing={1.5} data-testid="ff-mp-tab-final-panel">
+                  {unloadDetail.lines.length > 0 ? (
+                    <Stack
+                      direction="row"
+                      spacing={1}
+                      useFlexGap
+                      data-testid="ff-mp-print-actions"
+                      sx={{ flexWrap: 'wrap' }}
+                    >
+                      <Button
+                        variant="outlined"
+                        size="small"
+                        startIcon={<PrintOutlined fontSize="small" />}
+                        disabled={modalBusy}
+                        data-testid="ff-mp-print-shipment-sheet"
+                        onClick={printPackagingSheet}
+                      >
+                        Печать листа отгрузки
+                      </Button>
+                    </Stack>
+                  ) : null}
+                  <Paper variant="outlined" sx={{ p: 1.5, bgcolor: 'action.hover' }}>
+                    <Stack spacing={0.5}>
+                      <Typography variant="subtitle2">Финал</Typography>
+                      <Typography variant="body2" color="text.secondary">
+                        Завершение доступно после упаковки и распределения товара по коробам.
+                      </Typography>
+                    </Stack>
+                  </Paper>
+                </Stack>
               ) : null}
             </Box>
           ) : null}
@@ -2830,9 +2920,9 @@ export function FfSuppliesShipmentsPage({
                   }
                   onClick={() => void submitDoc()}
                   data-testid="ff-supplies-doc-submit"
-                >
-                  Утвердить
-                </Button>
+	                >
+	                  Утвердить план
+	                </Button>
                 {mpSubmitted ? (
                   <Button
                     variant="outlined"
@@ -2846,22 +2936,35 @@ export function FfSuppliesShipmentsPage({
                 ) : null}
               </>
             ) : null}
-            {docModal === 'marketplace_unload' && unloadDetail && mpExecutionPhase ? (
-              <>
-                <Button
-                  variant="contained"
-                  color="primary"
-                  disabled={
-                    modalBusy ||
-                    (mpCollectSummary?.distributed ?? 0) < 1 ||
-                    !mpPackagingComplete
-                  }
-                  onClick={() => requestShipMpUnload()}
-                  data-testid="ff-mp-ship"
-                >
-                  Завершить
-                </Button>
-                {mpCancellable ? (
+	            {docModal === 'marketplace_unload' && unloadDetail && mpExecutionPhase ? (
+	              <>
+	                {mpUnloadTab === 'final' ? (
+	                  <Button
+	                    variant="contained"
+	                    color="primary"
+	                    disabled={
+	                      modalBusy ||
+	                      (mpCollectSummary?.distributed ?? 0) < 1 ||
+	                      !mpPackagingComplete
+	                    }
+	                    onClick={() => requestShipMpUnload()}
+	                    data-testid="ff-mp-ship"
+	                  >
+	                    Завершить
+	                  </Button>
+	                ) : mpNextStep ? (
+	                  <Button
+	                    variant="contained"
+	                    color="primary"
+	                    endIcon={<ArrowForwardOutlined fontSize="small" />}
+	                    disabled={modalBusy}
+	                    onClick={() => setMpUnloadTab(mpNextStep)}
+	                    data-testid="ff-mp-next-step"
+	                  >
+	                    Далее: {mpUnloadStepLabel(mpNextStep)}
+	                  </Button>
+	                ) : null}
+	                {mpCancellable ? (
                   <Button
                     variant="outlined"
                     color="error"

@@ -4,8 +4,8 @@ import { waitForGetOk, waitForPostOk } from './api-waits';
 import { openFulfillmentRegistration } from './auth-flow';
 import {beginInboundReceivingWithBoxes,  fulfillInboundViaBoxScans } from './inbound-boxes-helpers';
 
-// TC-NEW-G13-001 — печать накладной отгрузки на МП (US-G-13).
-test('FF prints marketplace unload waybill from document dialog', async ({ page }) => {
+// TC-NEW-G13-001 — единый печатный лист отгрузки на МП (US-G-13).
+test('FF prints marketplace unload shipment sheet from final step', async ({ page }) => {
   const email = `e2e-wb-${Date.now()}@example.com`;
   const password = 'password123';
   const e2eApi = process.env.E2E_API_ORIGIN ?? 'http://127.0.0.1:18000';
@@ -100,9 +100,12 @@ test('FF prints marketplace unload waybill from document dialog', async ({ page 
   await page.request.post(`${baseIn}/${inboundId}/verify`, { headers: auth });
   await page.request.post(`${baseIn}/${inboundId}/post`, { headers: auth });
 
+  const whs = await page.request.get(`${e2eApi}/operations/wb-mp-warehouses`, { headers: auth });
+  const wbWid = Number(((await whs.json()) as { wb_warehouse_id: number }[])[0].wb_warehouse_id);
+
   const mp = await page.request.post(`${e2eApi}/operations/marketplace-unload-requests`, {
     headers: auth,
-    data: JSON.stringify({ warehouse_id: wid, seller_id: sellerId }),
+    data: JSON.stringify({ warehouse_id: wid, seller_id: sellerId, wb_mp_warehouse_id: wbWid }),
   });
   const mid = String(((await mp.json()) as { id: string }).id);
   const linesRes = await page.request.put(
@@ -113,6 +116,14 @@ test('FF prints marketplace unload waybill from document dialog', async ({ page 
     },
   );
   expect(linesRes.ok()).toBeTruthy();
+  const confirmRes = await page.request.post(
+    `${e2eApi}/operations/marketplace-unload-requests/${mid}/confirm`,
+    {
+      headers: auth,
+      data: JSON.stringify({ planned_shipment_date: '2026-08-12' }),
+    },
+  );
+  expect(confirmRes.ok(), await confirmRes.text()).toBeTruthy();
 
   await page.goto('/app/ff/mp-shipments');
   await expect(page.getByTestId('ff-mp-shipments-page')).toBeVisible();
@@ -120,7 +131,8 @@ test('FF prints marketplace unload waybill from document dialog', async ({ page 
   await page.getByTestId('ff-docs-row').first().click();
   await expect(page.getByTestId('ff-supplies-doc-dialog')).toBeVisible();
   await expect(page.getByTestId('ff-supplies-doc-lines')).toContainText(sku);
-  const printBtn = page.getByTestId('ff-mp-print-waybill');
+  await page.getByTestId('ff-mp-tab-final').click();
+  const printBtn = page.getByTestId('ff-mp-print-shipment-sheet');
   await expect(printBtn).toBeVisible();
   await expect(printBtn).toBeEnabled();
   await printBtn.click();

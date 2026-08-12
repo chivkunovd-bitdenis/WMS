@@ -298,6 +298,7 @@ test('MP unload full flow: parallel boxes then packaging then ship', async ({ pa
   await expect(page.getByTestId('ff-supplies-doc-dialog')).toContainText('Утверждено')
 
   // Parallel path: fill boxes before packaging is done (MP-005 / MP-032).
+  await page.getByTestId('ff-mp-tab-boxes').click()
   await expect(page.getByTestId('ff-mp-boxes')).toBeVisible()
   await expect(page.getByTestId('ff-mp-box-batch-create')).toBeEnabled()
   await page.getByTestId('ff-mp-box-batch-count').locator('input').fill('2')
@@ -318,7 +319,7 @@ test('MP unload full flow: parallel boxes then packaging then ship', async ({ pa
 
   await expect(page.getByTestId('ff-mp-shipment-summary-distributed')).toHaveText(String(PLAN_QTY))
   await expect(page.getByTestId('ff-mp-shipment-summary-remaining')).toHaveText('0')
-  await expect(page.getByTestId('ff-mp-ship')).toBeDisabled()
+  await expect(page.getByTestId('ff-mp-next-step')).toBeVisible()
 
   await page.getByTestId('ff-mp-tab-packaging').click()
   await expect(page.getByTestId('ff-mp-tab-packaging-panel')).toBeVisible()
@@ -345,7 +346,7 @@ test('MP unload full flow: parallel boxes then packaging then ship', async ({ pa
   ])
   await expect(page.getByTestId('ff-mp-shipment-summary-packed')).toHaveText(`${PLAN_QTY}/${PLAN_QTY}`)
 
-  await page.getByTestId('ff-mp-tab-products').click()
+  await page.getByTestId('ff-mp-tab-final').click()
   await expect(page.getByTestId('ff-mp-ship')).toBeEnabled()
   await Promise.all([
     waitForPostOk(page, `/api/operations/marketplace-unload-requests/${requestId}/ship`),
