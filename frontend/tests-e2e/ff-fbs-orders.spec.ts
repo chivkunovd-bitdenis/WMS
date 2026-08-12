@@ -45,8 +45,13 @@ function order(id: string, over: Partial<FbsWorklistFixture> = {}): FbsWorklistF
   }
 }
 
-function worklist(items: FbsWorklistFixture[]) {
-  return { items, next_cursor: null, server_now: new Date().toISOString() }
+function worklist(items: FbsWorklistFixture[], warehouseOptions: FbsWorklistFixture[] = []) {
+  return {
+    items,
+    next_cursor: null,
+    server_now: new Date().toISOString(),
+    warehouse_options: warehouseOptions,
+  }
 }
 
 function workspace(items: FbsWorklistFixture[]) {
@@ -118,7 +123,7 @@ test('fbs orders: list, tabs and empty state', async ({ page }) => {
   await expect(page.getByTestId('fbs-order-1')).toBeVisible()
   await expect(page.getByTestId('fbs-order-2')).toBeVisible()
 
-  await page.getByRole('tab', { name: 'В доставке' }).click()
+  await page.getByRole('tab', { name: 'В работе' }).click()
   await expect(page.getByText('Заказов в этой группе нет')).toBeVisible()
 })
 
@@ -161,7 +166,7 @@ test('fbs orders: filter by seller', async ({ page }) => {
   await expect(page.getByTestId('fbs-order-2')).toBeVisible()
 
   // Выбираем первого селлера — список сужается до одного заказа.
-  await page.getByLabel('Селлер').click()
+  await page.getByRole('combobox', { name: 'Селлер', exact: true }).click()
   await page.getByRole('option', { name: 'Селлер Один' }).click()
   await expect(page.getByTestId('fbs-order-1')).toBeVisible()
   await expect(page.getByTestId('fbs-order-2')).toHaveCount(0)
@@ -208,11 +213,52 @@ test('fbs orders: active row without local supply explains why it cannot open', 
   await page.getByTestId('fbs-order-2').hover()
   await expect(page.getByText(EXTERNAL_WB_SUPPLY_HINT)).toBeVisible()
 
-  await page.getByTestId('fbs-order-2').click()
+  await page.getByTestId('fbs-order-2').click({ force: true })
   await expect(page.getByTestId('fbs-workspace')).toHaveCount(0)
   expect(workspaceRequests).toBe(0)
 
+  await page.mouse.move(0, 0)
+  await expect(page.getByText(EXTERNAL_WB_SUPPLY_HINT)).toHaveCount(0)
   await page.getByTestId('fbs-order-1').click()
   await expect(page.getByTestId('fbs-workspace')).toBeVisible()
   expect(workspaceRequests).toBe(1)
+})
+
+// TC-S17-025 — new-tab worklist is filtered by seller warehouse via API.
+test('fbs orders: filter new orders by warehouse', async ({ page }) => {
+  await registerFf(page, 'warehouse')
+
+  const warehouseOptions = [
+    { id: 'w-1', name: 'WH Юг', wb_warehouse: { id: 501001, name: 'WB Юг' } },
+    { id: 'w-2', name: 'WH Север', wb_warehouse: { id: 501002, name: 'WB Север' } },
+  ]
+  const orderOne = order('1', {
+    wms_warehouse: { id: 'w-1', name: 'WH Юг' },
+    wb_warehouse: { id: 501001, name: 'WB Юг' },
+  })
+  const orderTwo = order('2', {
+    wms_warehouse: { id: 'w-2', name: 'WH Север' },
+    wb_warehouse: { id: 501002, name: 'WB Север' },
+  })
+  let lastWarehouseId: string | null = null
+
+  await page.route('**/operations/fbs-orders/worklist**', async (route) => {
+    if (route.request().method() !== 'GET') return route.fallback()
+    const url = new URL(route.request().url())
+    lastWarehouseId = url.searchParams.get('warehouse_id')
+    const body = lastWarehouseId === 'w-2' ? worklist([orderTwo], warehouseOptions) : worklist([orderOne, orderTwo], warehouseOptions)
+    await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(body) })
+  })
+
+  await page.getByTestId('nav-ff-fbs').click()
+  await expect(page.getByTestId('fbs-orders-screen')).toBeVisible()
+  await expect(page.getByTestId('fbs-order-1')).toBeVisible()
+  await expect(page.getByTestId('fbs-order-2')).toBeVisible()
+
+  await page.getByRole('combobox', { name: 'Склад селлера' }).click()
+  await page.getByRole('option', { name: 'WH Север · WB Север' }).click()
+
+  await expect(page.getByTestId('fbs-order-2')).toBeVisible()
+  await expect(page.getByTestId('fbs-order-1')).toHaveCount(0)
+  expect(lastWarehouseId).toBe('w-2')
 })

@@ -167,6 +167,12 @@ export type FbsOrderMetadata = {
   last_checked_at: string | null
 }
 
+export type FbsWorklistWarehouseOption = {
+  id: string
+  name: string
+  wb_warehouse: { id: number; name: string | null }
+}
+
 export type FbsWorklistOrder = {
   id: string
   wb_order_id: number
@@ -217,6 +223,7 @@ export type FbsWorklistPage = {
   items: FbsWorklistOrder[]
   next_cursor: string | null
   server_now: string
+  warehouse_options: FbsWorklistWarehouseOption[]
 }
 
 export type FbsSupplyPreflightRequest = {
@@ -452,6 +459,7 @@ export async function fetchFbsWorklist(
   params: {
     seller_id?: string | null
     status_group?: string | null
+    warehouse_id?: string | null
     search?: string | null
     limit?: number
     cursor?: string | null
@@ -460,6 +468,7 @@ export async function fetchFbsWorklist(
   const qs = new URLSearchParams({ limit: String(params.limit ?? 100) })
   if (params.seller_id) qs.set('seller_id', params.seller_id)
   if (params.status_group) qs.set('status_group', params.status_group)
+  if (params.warehouse_id) qs.set('warehouse_id', params.warehouse_id)
   if (params.search) qs.set('search', params.search)
   if (params.cursor) qs.set('cursor', params.cursor)
   return jsonOrThrow<FbsWorklistPage>(
