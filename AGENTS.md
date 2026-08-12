@@ -25,6 +25,17 @@ Before picking an issue, read **[docs/MVP_DECISIONS_RU.md](docs/MVP_DECISIONS_RU
 
 Epic map for splitting work: **[docs/BACKLOG_EPICS_RU.md](docs/BACKLOG_EPICS_RU.md)**.
 
+## Обязательный gate-протокол для WMS-фичей
+
+Для любой WMS-фичи, рефакторинга складского процесса или UI/UX-изменения сначала
+прочитай **[docs/WMS_FEATURE_GATE_PROTOCOL_RU.md](docs/WMS_FEATURE_GATE_PROTOCOL_RU.md)**.
+
+Этот протокол строже общего autopilot loop: одна фича проходит изолированных
+агентов в порядке BA -> Product / UX -> Atomic Dev -> Code Review -> Browser
+Product QA. Разработка запрещена, пока product agent не дал явный OK именно по
+этой фиче. Нельзя смешивать несколько фичей в один dev-проход и нельзя
+объявлять фичу готовой без живого browser product QA.
+
 ## UI (портал FF)
 
 Новые и правимые экраны фулфилмента — **единый MUI-дизайн** (без legacy `Card`/`Input` из `frontend/src/ui` в основной области). Эталон: `FfProductsCatalogScreen.tsx`. Правила: **[docs/UI_DESIGN_SYSTEM_RU.md](docs/UI_DESIGN_SYSTEM_RU.md)**.
@@ -114,4 +125,3 @@ Every feature that changes UI flow must ship with at least one Playwright scenar
 The scenario must match the real user path (e.g. register → screen that uses the new API), not an isolated HTTP check. With the default Playwright web server (one API + sqlite file), CI runs **`workers: 1`** to avoid DB lock flakes. In React async submit handlers, capture `const form = e.currentTarget` **before** any `await`, then call `form.reset()` — otherwise Strict Mode can leave `currentTarget` null after awaits.
 
 When asserting on network: subscribe with `page.waitForResponse` **in parallel** with the UI action (`Promise.all([waitForPostOk(...), locator.click()])`). If you `click()` first and only then await the response, the request may already have finished and the test will time out. After a successful submit that resets the form, the next step must refill **all** required fields (e.g. product dimensions), not only the fields that differ from defaults.
-
