@@ -10,6 +10,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.models.fbs_order import FbsOrderReservation
 from app.models.inventory_balance import InventoryBalance
 from app.models.storage_location import StorageLocation
+from app.services import stock_direction_service
 from app.services.sorting_location_service import SORTING_LOCATION_CODE
 
 
@@ -128,7 +129,7 @@ async def fbs_available_qty_by_product(
     *,
     exclude_fbs_order_ids: frozenset[uuid.UUID] | None = None,
 ) -> dict[uuid.UUID, int]:
-    """max(0, storage + sorting - outbound - FBS); excludes MarketplaceUnloadReservation."""
+    """FBS pool minus active FBS reserves; legacy physical formula when no directions exist."""
     if not product_ids:
         return {}
     from app.services.marketplace_unload_service import _outbound_reserved_by_product
@@ -146,11 +147,18 @@ async def fbs_available_qty_by_product(
         product_ids,
         exclude_fbs_order_ids=exclude_fbs_order_ids,
     )
+    direction_map = await stock_direction_service.direction_totals_by_product(
+        session, tenant_id, product_ids
+    )
     result: dict[uuid.UUID, int] = {}
     for pid in product_ids:
+        directions = direction_map.get(pid)
+        fbs = int(fbs_map.get(pid, 0))
+        if directions is not None and directions.has_any:
+            result[pid] = clamp_nonneg(directions.fbs - fbs)
+            continue
         storage, sorting = on_hand_map.get(pid, (0, 0))
         outbound = int(outbound_map.get(pid, 0))
-        fbs = int(fbs_map.get(pid, 0))
         result[pid] = clamp_nonneg(storage + sorting - outbound - fbs)
     return result
 

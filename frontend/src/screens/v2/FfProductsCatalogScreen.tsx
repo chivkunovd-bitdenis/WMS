@@ -82,6 +82,9 @@ type StockSummaryRow = {
   quantity_in_storage: number
   reserved: number
   available: number
+  quantity_fbs: number
+  quantity_reserved_directions: number
+  quantity_free_fbo: number
 }
 
 type Props = {
@@ -179,6 +182,9 @@ export function FfProductsCatalogScreen({ token, authHeaders, sellers, onSellers
         quantity_in_storage: bal?.quantity_in_storage ?? 0,
         reserved: bal?.reserved ?? 0,
         available: bal?.available ?? 0,
+        quantity_fbs: bal?.quantity_fbs ?? 0,
+        quantity_reserved_directions: bal?.quantity_reserved_directions ?? 0,
+        quantity_free_fbo: bal?.quantity_free_fbo ?? (bal?.quantity ?? 0),
       }
     })
     if (selectedSellerId === '__all__') {
@@ -378,7 +384,7 @@ export function FfProductsCatalogScreen({ token, authHeaders, sellers, onSellers
                 </TableSortLabel>
                 <Tooltip
                   arrow
-                  title="Доступно для FBO = товар в ячейках минус резервы. Товар в сортировке ещё не свободный остаток."
+                  title="Свободный FBO = общий остаток минус FBS-пул и обычные направления."
                 >
                   <InfoOutlinedIcon
                     sx={{ ml: 0.5, fontSize: 15, verticalAlign: 'text-bottom', color: 'text.secondary' }}
@@ -479,11 +485,11 @@ export function FfProductsCatalogScreen({ token, authHeaders, sellers, onSellers
                   <Stack direction="row" spacing={0.5} sx={{ alignItems: 'center' }}>
                     <Box sx={{ minWidth: 0 }}>
                       <Typography variant="body2" noWrap>
-                        Ячейки {p.quantity_in_storage} · Сортировка{' '}
-                        <span data-testid="ff-product-qty-sorting">{p.quantity_in_sorting}</span>
+                        FBS {p.quantity_fbs} · Резервы {p.quantity_reserved_directions}
                       </Typography>
                       <Typography variant="caption" color="text.secondary" noWrap>
-                        Свободно для FBO {p.available}
+                        Свободный FBO {p.quantity_free_fbo} · Сортировка{' '}
+                        <span data-testid="ff-product-qty-sorting">{p.quantity_in_sorting}</span>
                       </Typography>
                     </Box>
                     <Tooltip title="Показать распределение остатка" arrow>
@@ -554,24 +560,27 @@ export function FfProductsCatalogScreen({ token, authHeaders, sellers, onSellers
             <Divider />
             <Stack spacing={0.75}>
               <DistributionLine
+                label="FBS"
+                value={distributionProduct.quantity_fbs}
+                testId={`ff-product-fbs-${distributionProduct.id}`}
+              />
+              <DistributionLine
+                label="Резервы/наборы"
+                value={distributionProduct.quantity_reserved_directions}
+                testId={`ff-product-reserve-directions-${distributionProduct.id}`}
+              />
+              <DistributionLine label="Свободно для FBO" value={distributionProduct.quantity_free_fbo} strong />
+              <Divider />
+              <DistributionLine
                 label="Не упаковано"
                 value={distributionProduct.quantity_unpacked}
                 testId={`ff-product-unpacked-${distributionProduct.id}`}
               />
-              <DistributionLine
-                label="Упаковано"
-                value={distributionProduct.quantity_packed}
-                testId={`ff-product-packed-${distributionProduct.id}`}
-              />
+              <DistributionLine label="Упаковано" value={distributionProduct.quantity_packed} />
               <DistributionLine label="Сортировка" value={distributionProduct.quantity_in_sorting} />
               <DistributionLine label="В ячейках" value={distributionProduct.quantity_in_storage} />
-              <DistributionLine label="Резервы" value={distributionProduct.reserved} />
-              <DistributionLine label="Свободно для FBO" value={distributionProduct.available} strong />
+              <DistributionLine label="Технический резерв" value={distributionProduct.reserved} />
             </Stack>
-            <Typography variant="caption" color="text.secondary">
-              Доступно для FBO = в ячейках − резервы. Данных по FBS-направлениям в ответе каталога
-              сейчас нет, поэтому разбивка по направлениям здесь не показывается.
-            </Typography>
           </Stack>
         ) : null}
       </Popover>

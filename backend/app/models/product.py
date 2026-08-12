@@ -26,6 +26,7 @@ if TYPE_CHECKING:
     from app.models.inventory_movement import InventoryMovement
     from app.models.outbound_shipment import OutboundShipmentLine
     from app.models.seller import Seller
+    from app.models.stock_direction import StockDirection
     from app.models.tenant import Tenant
 
 
@@ -85,4 +86,9 @@ class Product(Base):
     outbound_shipment_lines: Mapped[list[OutboundShipmentLine]] = relationship(
         "OutboundShipmentLine",
         back_populates="product",
+    )
+    stock_directions: Mapped[list[StockDirection]] = relationship(
+        "StockDirection",
+        back_populates="product",
+        cascade="all, delete-orphan",
     )

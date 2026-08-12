@@ -25,7 +25,7 @@ from app.models.product import Product
 from app.models.seller import Seller
 from app.models.storage_location import StorageLocation
 from app.models.user import User
-from app.services import inventory_service
+from app.services import inventory_service, stock_direction_service
 from app.services.catalog_service import get_warehouse
 from app.services.document_number_service import (
     DOC_TYPE_UNLOAD,
@@ -415,6 +415,12 @@ async def _available_product_qty_in_warehouse(
     from app.services.fbs_stock_availability_service import fbs_reserved_qty_for_product
 
     reserved_fbs = await fbs_reserved_qty_for_product(session, tenant_id, warehouse_id, product_id)
+    directions = await stock_direction_service.direction_totals_by_product(
+        session, tenant_id, [product_id]
+    )
+    direction_total = directions.get(product_id)
+    if direction_total is not None and direction_total.has_any:
+        return on_hand + sorting_on_hand - direction_total.total - reserved_outbound - reserved_mp
     return on_hand + sorting_on_hand - reserved_outbound - reserved_mp - reserved_fbs
 
 
@@ -476,6 +482,9 @@ async def list_available_products(
     from app.services.fbs_stock_availability_service import fbs_reserved_by_product
 
     fbs_reserved = await fbs_reserved_by_product(session, tenant_id, warehouse_id, product_ids)
+    direction_totals = await stock_direction_service.direction_totals_by_product(
+        session, tenant_id, product_ids
+    )
     return [
         MarketplaceUnloadAvailableProduct(
             product_id=product_id,
@@ -484,9 +493,14 @@ async def list_available_products(
             available=max(
                 0,
                 quantity_total
+                - (
+                    direction_totals[product_id].total
+                    if direction_totals.get(product_id) is not None
+                    and direction_totals[product_id].has_any
+                    else int(fbs_reserved.get(product_id, 0))
+                )
                 - outbound_reserved.get(product_id, 0)
-                - mp_reserved.get(product_id, 0)
-                - fbs_reserved.get(product_id, 0),
+                - mp_reserved.get(product_id, 0),
             ),
         )
         for product_id, sku_code, product_name, quantity_total in stock_rows

@@ -925,6 +925,20 @@ async def apply_fbs_supply_write_off(
     if bal is None or int(bal.quantity) < quantity:
         msg = "insufficient stock"
         raise ValueError(msg)
+    from app.services import stock_direction_service
+
+    try:
+        await stock_direction_service.consume_fbs_pool(
+            session,
+            tenant_id,
+            product_id,
+            quantity,
+        )
+    except stock_direction_service.StockDirectionError as exc:
+        if exc.code == "insufficient_fbs_pool":
+            msg = "insufficient_fbs_pool"
+            raise ValueError(msg) from exc
+        raise
     return await record_movement_and_adjust_balance(
         session,
         tenant_id=tenant_id,
