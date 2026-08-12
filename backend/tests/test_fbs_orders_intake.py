@@ -543,7 +543,11 @@ async def test_fbs_order_status_sync_supplier_confirm_moves_new_to_external_proc
     )
     assert active_page.status_code == 200, active_page.text
     by_wb = {item["wb_order_id"]: item for item in active_page.json()["items"]}
-    assert 800302 not in by_wb
+    assert by_wb[800302]["status"] == FBS_ORDER_STATUS_EXTERNAL_PROCESSING
+    assert any(
+        blocker["code"] == "order_external_processing"
+        for blocker in by_wb[800302]["selection_blockers"]
+    )
 
 
 @pytest.mark.asyncio

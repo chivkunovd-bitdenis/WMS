@@ -114,7 +114,13 @@ test('fbs orders: list, tabs and empty state', async ({ page }) => {
   await page.route('**/operations/fbs-orders/worklist**', async (route) => {
     if (route.request().method() !== 'GET') return route.fallback()
     const statusGroup = new URL(route.request().url()).searchParams.get('status_group')
-    const body = statusGroup === 'new' ? worklist([order('1'), order('2')]) : worklist([])
+    const body = statusGroup === 'new'
+      ? worklist([order('1'), order('2')])
+      : statusGroup === 'delivery'
+        ? worklist([order('3', { status: 'in_delivery', supply_id: 'sup-3' })])
+        : statusGroup === 'done'
+          ? worklist([order('4', { status: 'done', supply_id: 'sup-4' })])
+          : worklist([])
     await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(body) })
   })
 
@@ -125,6 +131,12 @@ test('fbs orders: list, tabs and empty state', async ({ page }) => {
 
   await page.getByRole('tab', { name: 'В работе' }).click()
   await expect(page.getByText('Заказов в этой группе нет')).toBeVisible()
+
+  await page.getByRole('tab', { name: 'В доставке' }).click()
+  await expect(page.getByTestId('fbs-order-3')).toBeVisible()
+
+  await page.getByRole('tab', { name: 'Завершённые' }).click()
+  await expect(page.getByTestId('fbs-order-4')).toBeVisible()
 })
 
 // TC-FBS-FE-002 — seller_id передаётся в canonical worklist и меняет строки ответа.
@@ -228,9 +240,18 @@ test('fbs orders: active row without local supply explains why it cannot open', 
 test('fbs orders: filter new orders by warehouse', async ({ page }) => {
   await registerFf(page, 'warehouse')
 
+  await page.getByTestId('nav-sellers').click()
+  await page.getByTestId('seller-name').fill('ИП Иванова')
+  await page.getByTestId('seller-email').fill(`seller-warehouse-${Date.now()}@example.com`)
+  const [sellerResponse] = await Promise.all([
+    waitForPostOk(page, '/api/sellers/with-account'),
+    page.getByTestId('seller-submit').click(),
+  ])
+  const sellerId = ((await sellerResponse.json()) as { seller_id: string }).seller_id
+
   const warehouseOptions = [
-    { id: '501001', name: 'WB Юг', wb_warehouse: { id: 501001, name: 'WB Юг' } },
-    { id: '501002', name: 'WB Север', wb_warehouse: { id: 501002, name: 'WB Север' } },
+    { id: '501001', name: 'WB 501001', wb_warehouse: { id: 501001, name: 'WB 501001' } },
+    { id: '501002', name: 'WB 501002', wb_warehouse: { id: 501002, name: 'WB 501002' } },
   ]
   const orderOne = order('1', {
     wms_warehouse: { id: 'w-1', name: 'WH Юг' },
@@ -241,6 +262,17 @@ test('fbs orders: filter new orders by warehouse', async ({ page }) => {
     wb_warehouse: { id: 501002, name: 'WB Север' },
   })
   let lastWbWarehouseId: string | null = null
+
+  await page.route(`**/operations/fbs-sellers/${sellerId}/warehouses`, async (route) => {
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify([
+        { id: 501001, name: 'Лосиный парк 1' },
+        { id: 501002, name: 'Казань' },
+      ]),
+    })
+  })
 
   await page.route('**/operations/fbs-orders/worklist**', async (route) => {
     if (route.request().method() !== 'GET') return route.fallback()
@@ -255,8 +287,10 @@ test('fbs orders: filter new orders by warehouse', async ({ page }) => {
   await expect(page.getByTestId('fbs-order-1')).toBeVisible()
   await expect(page.getByTestId('fbs-order-2')).toBeVisible()
 
+  await page.getByRole('combobox', { name: 'Селлер', exact: true }).click()
+  await page.getByRole('option', { name: 'ИП Иванова' }).click()
   await page.getByRole('combobox', { name: 'Склад селлера' }).click()
-  await page.getByRole('option', { name: 'WB Север' }).click()
+  await page.getByRole('option', { name: 'Казань' }).click()
 
   await expect(page.getByTestId('fbs-order-2')).toBeVisible()
   await expect(page.getByTestId('fbs-order-1')).toHaveCount(0)

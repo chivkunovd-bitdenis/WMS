@@ -12,9 +12,11 @@ from sqlalchemy import func, select
 
 from app.db.session import SessionLocal
 from app.models.fbs_order import (
+    FBS_ORDER_STATUS_DONE,
     FBS_ORDER_STATUS_EXTERNAL_PROCESSING,
     FBS_ORDER_STATUS_IN_DELIVERY,
     FBS_ORDER_STATUS_NEW,
+    FBS_ORDER_STATUS_SORTED,
     FbsOrder,
 )
 from app.models.seller import Seller
@@ -337,7 +339,7 @@ async def test_fbs_autopoll_idempotent_upsert(
 
 # TC-NEW-FBS-AUTOPOLL-005
 @pytest.mark.asyncio
-async def test_fbs_autopoll_status_sync_updates_sorted(
+async def test_fbs_autopoll_status_sync_updates_sorted_then_sold(
     async_client: AsyncClient,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -389,6 +391,26 @@ async def test_fbs_autopoll_status_sync_updates_sorted(
             )
         ).scalar_one()
     assert order.wb_status == "sorted"
+    assert order.status == FBS_ORDER_STATUS_SORTED
+
+    _patch_wb_order_fetches(
+        monkeypatch,
+        status_rows=[{"id": 880001, "supplierStatus": "complete", "wbStatus": "sold"}],
+    )
+    async with SessionLocal() as session, httpx.AsyncClient() as client:
+        updated = await sync_fbs_order_statuses_for_seller(session, target, client)
+        await session.commit()
+
+    assert updated == 1
+    async with SessionLocal() as session:
+        order = (
+            await session.execute(
+                select(FbsOrder).where(FbsOrder.wb_order_id == 880001)
+            )
+        ).scalar_one()
+    assert order.wb_status == "sold"
+    assert order.supplier_status == "complete"
+    assert order.status == FBS_ORDER_STATUS_DONE
 
 
 @pytest.mark.asyncio

@@ -9,7 +9,7 @@ from fastapi import APIRouter, Depends, HTTPException, Path, Query, Response, st
 from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.api.deps import require_fulfillment_admin
+from app.api.deps import require_fbs_operator_access, require_fulfillment_admin
 from app.api.fbs_errors import envelope_from_exc, raise_fbs_http
 from app.core.settings import settings
 from app.db.session import get_db
@@ -166,7 +166,7 @@ class FbsStockSyncStatusOut(BaseModel):
 @router.get("/{seller_id}/warehouses", response_model=list[FbsSellerWarehouseOut])
 async def list_fbs_seller_warehouses(
     seller_id: uuid.UUID,
-    user: Annotated[User, Depends(require_fulfillment_admin)],
+    user: Annotated[User, Depends(require_fbs_operator_access)],
     session: Annotated[AsyncSession, Depends(get_db)],
 ) -> list[FbsSellerWarehouseOut]:
     async with httpx.AsyncClient() as http_client:

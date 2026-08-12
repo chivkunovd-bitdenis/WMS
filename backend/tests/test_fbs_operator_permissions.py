@@ -80,6 +80,7 @@ async def test_packaging_staff_can_use_fbs_operator_routes_but_not_admin_setup(
     for method, path in (
         ("GET", f"/operations/fbs-supplies/{missing_id}/workspace"),
         ("POST", f"/operations/fbs-supplies/{missing_id}/retry-supply-qr"),
+        ("GET", f"/operations/fbs-sellers/{missing_id}/warehouses"),
         ("GET", f"/operations/fbs-orders/{missing_id}/metadata"),
         ("GET", f"/operations/fbs-print-assets/{missing_id}/content"),
     ):
