@@ -16,6 +16,7 @@ import {
 import { WmsBrandMark } from '../../components/WmsBrandMark'
 import { NotificationBell } from '../../components/NotificationBell'
 import { SellerShopSidebar, type SellerShopRow } from '../../components/SellerShopSidebar'
+import { emptySellerPermissions, type SellerPermissions } from '../../utils/sellerPermissions'
 
 type Props = {
   children: ReactNode
@@ -29,6 +30,7 @@ type Props = {
   delegatableShops?: SellerShopRow[]
   switchableShops?: SellerShopRow[]
   shopsBusy?: boolean
+  permissions?: SellerPermissions
   onToggleShop?: (sellerId: string, enabled: boolean) => void
   onSwitchShop?: (sellerId: string | null) => void
 }
@@ -45,6 +47,7 @@ export function SellerLayout({
   delegatableShops = [],
   switchableShops = [],
   shopsBusy = false,
+  permissions = emptySellerPermissions(),
   onToggleShop,
   onSwitchShop,
 }: Props) {
@@ -110,18 +113,26 @@ export function SellerLayout({
         <Toolbar />
         <Box sx={{ p: 1 }}>
           <List dense aria-label="Разделы">
-            <ListItemButton component={NavLink} to={`${base}/documents`} data-testid="nav-seller-documents">
-              <ListItemText primary="Документы" />
-            </ListItemButton>
-            <ListItemButton component={NavLink} to={`${base}/products`} data-testid="nav-seller-products">
-              <ListItemText primary="Товары" />
-            </ListItemButton>
-            <ListItemButton component={NavLink} to={`${base}/honest-sign`} data-testid="nav-seller-honest-sign">
-              <ListItemText primary="Честный знак" />
-            </ListItemButton>
-            <ListItemButton component={NavLink} to={`${base}/settings`} data-testid="nav-seller-settings">
-              <ListItemText primary="Настройки" />
-            </ListItemButton>
+            {permissions.documents ? (
+              <ListItemButton component={NavLink} to={`${base}/documents`} data-testid="nav-seller-documents">
+                <ListItemText primary="Документы" />
+              </ListItemButton>
+            ) : null}
+            {permissions.products ? (
+              <ListItemButton component={NavLink} to={`${base}/products`} data-testid="nav-seller-products">
+                <ListItemText primary="Товары" />
+              </ListItemButton>
+            ) : null}
+            {permissions.honest_sign ? (
+              <ListItemButton component={NavLink} to={`${base}/honest-sign`} data-testid="nav-seller-honest-sign">
+                <ListItemText primary="Честный знак" />
+              </ListItemButton>
+            ) : null}
+            {permissions.settings || permissions.staff ? (
+              <ListItemButton component={NavLink} to={`${base}/settings`} data-testid="nav-seller-settings">
+                <ListItemText primary="Настройки" />
+              </ListItemButton>
+            ) : null}
           </List>
           {onToggleShop && onSwitchShop ? (
             <SellerShopSidebar
@@ -145,4 +156,3 @@ export function SellerLayout({
     </Box>
   )
 }
-

@@ -1,8 +1,13 @@
 import { useCallback, useEffect, useState } from 'react'
 import { Navigate, Route, Routes } from 'react-router-dom'
+import { Alert } from '@mui/material'
 import { apiUrl } from '../../api'
 import { useAuth } from '../../hooks/useAuth'
 import { readApiErrorMessage } from '../../utils/readApiErrorMessage'
+import {
+  firstAllowedSellerPath,
+  resolveSellerPermissions,
+} from '../../utils/sellerPermissions'
 import { ProfileLoadingScreen } from '../../screens/ProfileLoadingScreen'
 import { PublicAuthScreen } from '../../screens/PublicAuthScreen'
 import { SellerDocumentsScreen } from '../../screens/v2/SellerDocumentsScreen'
@@ -237,6 +242,12 @@ export function SellerApp() {
       return null
     }
     const catalogScopeKey = me.active_seller_id ?? me.seller_id ?? 'none'
+    const sellerPermissions = resolveSellerPermissions(me.seller_permissions)
+    const accessDenied = (
+      <Alert severity="warning" data-testid="seller-access-denied">
+        Нет доступа к этому разделу. Обратитесь к администратору селлера.
+      </Alert>
+    )
     return (
       <SellerLayout
         onLogout={() => logout()}
@@ -253,6 +264,7 @@ export function SellerApp() {
         delegatableShops={me.delegatable_shops ?? []}
         switchableShops={me.switchable_shops ?? []}
         shopsBusy={shopsBusy}
+        permissions={sellerPermissions}
         {...(me.can_manage_seller_shops ||
         (me.switchable_shops?.length ?? 0) > 1
           ? {
@@ -263,76 +275,88 @@ export function SellerApp() {
           : {})}
       >
         <Routes>
-          <Route path="/" element={<Navigate to="/documents" replace />} />
+          <Route
+            path="/"
+            element={<Navigate to={firstAllowedSellerPath(sellerPermissions)} replace />}
+          />
           <Route
             path="/documents"
             element={
-              <SellerDocumentsScreen
-                key={catalogScopeKey}
-                busy={opsBusy}
-                catalogScopeKey={catalogScopeKey}
-                error={opsError}
-                token={token}
-                authHeaders={authHeaders}
-                warehouseId={selectedWarehouseId ?? warehouses[0]?.id ?? null}
-                inboundSummaries={inboundSummaries}
-                mpUnloadSummaries={mpUnloadSummaries}
-                onCreateCorrection={() =>
-                  setOpsError(
-                    'Акт расхождений: будет реализован отдельным документом на следующем этапе.',
-                  )
-                }
-                onCreateMpUnload={async () => {
-                  if (!token) {
-                    return null
-                  }
-                  const wid = selectedWarehouseId ?? warehouses[0]?.id
-                  if (!wid) {
-                    setOpsError('Склад ФФ не найден.')
-                    return null
-                  }
-                  setOpsBusy(true)
-                  setOpsError(null)
-                  try {
-                    const res = await fetch(
-                      apiUrl('/operations/marketplace-unload-requests/seller'),
-                      {
-                        method: 'POST',
-                        headers: {
-                          ...authHeaders(token),
-                          'Content-Type': 'application/json',
-                        },
-                        body: JSON.stringify({ warehouse_id: wid }),
-                      },
+              sellerPermissions.documents ? (
+                <SellerDocumentsScreen
+                  key={catalogScopeKey}
+                  busy={opsBusy}
+                  catalogScopeKey={catalogScopeKey}
+                  error={opsError}
+                  token={token}
+                  authHeaders={authHeaders}
+                  warehouseId={selectedWarehouseId ?? warehouses[0]?.id ?? null}
+                  inboundSummaries={inboundSummaries}
+                  mpUnloadSummaries={mpUnloadSummaries}
+                  onRefreshInboundList={async () => {
+                    if (token) {
+                      await refreshInboundList(token)
+                    }
+                  }}
+                  onCreateCorrection={() =>
+                    setOpsError(
+                      'Акт расхождений: будет реализован отдельным документом на следующем этапе.',
                     )
-                    if (!res.ok) {
-                      setOpsError(await readApiErrorMessage(res))
+                  }
+                  onCreateMpUnload={async () => {
+                    if (!token) {
                       return null
                     }
-                    const created = (await res.json()) as { id: string }
-                    await refreshMpUnloadList(token)
-                    return created.id
-                  } catch (e) {
-                    setOpsError(
-                      e instanceof Error ? e.message : 'Не удалось создать отгрузку на МП.',
-                    )
-                    return null
-                  } finally {
-                    setOpsBusy(false)
-                  }
-                }}
-                onRefreshMpUnloadList={async () => {
-                  if (token) {
-                    await refreshMpUnloadList(token)
-                  }
-                }}
-              />
+                    const wid = selectedWarehouseId ?? warehouses[0]?.id
+                    if (!wid) {
+                      setOpsError('Склад ФФ не найден.')
+                      return null
+                    }
+                    setOpsBusy(true)
+                    setOpsError(null)
+                    try {
+                      const res = await fetch(
+                        apiUrl('/operations/marketplace-unload-requests/seller'),
+                        {
+                          method: 'POST',
+                          headers: {
+                            ...authHeaders(token),
+                            'Content-Type': 'application/json',
+                          },
+                          body: JSON.stringify({ warehouse_id: wid }),
+                        },
+                      )
+                      if (!res.ok) {
+                        setOpsError(await readApiErrorMessage(res))
+                        return null
+                      }
+                      const created = (await res.json()) as { id: string }
+                      await refreshMpUnloadList(token)
+                      return created.id
+                    } catch (e) {
+                      setOpsError(
+                        e instanceof Error ? e.message : 'Не удалось создать отгрузку на МП.',
+                      )
+                      return null
+                    } finally {
+                      setOpsBusy(false)
+                    }
+                  }}
+                  onRefreshMpUnloadList={async () => {
+                    if (token) {
+                      await refreshMpUnloadList(token)
+                    }
+                  }}
+                />
+              ) : (
+                accessDenied
+              )
             }
           />
           <Route
             path="/inbound/new"
             element={
-              token ? (
+              token && sellerPermissions.documents ? (
                 <SellerInboundDraftScreen
                   key={catalogScopeKey}
                   token={token}
@@ -342,13 +366,15 @@ export function SellerApp() {
                     token ? refreshInboundList(token) : undefined
                   }
                 />
-              ) : null
+              ) : (
+                accessDenied
+              )
             }
           />
           <Route
             path="/inbound/:requestId"
             element={
-              token ? (
+              token && sellerPermissions.documents ? (
                 <SellerInboundDraftScreen
                   key={catalogScopeKey}
                   token={token}
@@ -358,43 +384,55 @@ export function SellerApp() {
                     token ? refreshInboundList(token) : undefined
                   }
                 />
-              ) : null
+              ) : (
+                accessDenied
+              )
             }
           />
           <Route
             path="/products"
             element={
-              token ? (
+              token && sellerPermissions.products ? (
                 <SellerProductsStockScreen
                   key={catalogScopeKey}
                   token={token}
                   authHeaders={authHeaders}
                 />
-              ) : null
+              ) : (
+                accessDenied
+              )
             }
           />
           <Route
             path="/honest-sign"
             element={
-              token ? (
+              token && sellerPermissions.honest_sign ? (
                 <SellerHonestSignScreen
                   key={catalogScopeKey}
                   token={token}
                   sellerId={me.active_seller_id ?? me.seller_id ?? ''}
                 />
-              ) : null
+              ) : (
+                accessDenied
+              )
             }
           />
           <Route
             path="/settings"
             element={
-              token ? (
+              token && (sellerPermissions.settings || sellerPermissions.staff) ? (
                 <SellerSettingsScreen
                   key={catalogScopeKey}
                   token={token}
                   authHeaders={authHeaders}
+                  permissions={sellerPermissions}
+                  onStaffChanged={async () => {
+                    await reloadMe()
+                  }}
                 />
-              ) : null
+              ) : (
+                accessDenied
+              )
             }
           />
           <Route
@@ -405,7 +443,10 @@ export function SellerApp() {
               ) : null
             }
           />
-          <Route path="*" element={<Navigate to="/documents" replace />} />
+          <Route
+            path="*"
+            element={<Navigate to={firstAllowedSellerPath(sellerPermissions)} replace />}
+          />
         </Routes>
       </SellerLayout>
     )
@@ -417,4 +458,3 @@ export function SellerApp() {
     </Routes>
   )
 }
-

@@ -28,6 +28,7 @@ from app.api.notifications import router as notifications_router
 from app.api.outbound_shipment import router as outbound_shipment_router
 from app.api.packaging_tasks import router as packaging_tasks_router
 from app.api.products import router as products_router
+from app.api.seller_staff_accounts import router as seller_staff_accounts_router
 from app.api.sellers import router as sellers_router
 from app.api.staff_accounts import router as staff_accounts_router
 from app.api.stock_transfer import router as stock_transfer_router
@@ -98,6 +99,7 @@ def create_app() -> FastAPI:
     app.include_router(health_router)
     app.include_router(auth_router)
     app.include_router(staff_accounts_router)
+    app.include_router(seller_staff_accounts_router)
     app.include_router(tenant_settings_router)
     app.include_router(sellers_router)
     app.include_router(warehouses_router)

@@ -18,7 +18,9 @@ import {
   TableRow,
   Typography,
 } from '@mui/material'
+import { apiUrl } from '../../api'
 import { SellerMarketplaceUnloadDialog } from '../../components/SellerMarketplaceUnloadDialog'
+import { readApiErrorMessage } from '../../utils/readApiErrorMessage'
 
 type DocType = 'inbound' | 'mp_unload' | 'correction'
 
@@ -72,6 +74,7 @@ type Props = {
   mpUnloadSummaries: MpUnloadSummaryRow[]
   onCreateCorrection: () => void
   onCreateMpUnload: () => Promise<string | null>
+  onRefreshInboundList: () => Promise<void>
   onRefreshMpUnloadList: () => Promise<void>
 }
 
@@ -86,12 +89,16 @@ export function SellerDocumentsScreen({
   mpUnloadSummaries,
   onCreateCorrection,
   onCreateMpUnload,
+  onRefreshInboundList,
   onRefreshMpUnloadList,
 }: Props) {
   const navigate = useNavigate()
   const [type, setType] = useState<DocType | 'all'>('all')
   const [sort, setSort] = useState<'date_desc' | 'date_asc'>('date_desc')
   const [mpDialogId, setMpDialogId] = useState<string | null>(null)
+  const [deleteBusyKey, setDeleteBusyKey] = useState<string | null>(null)
+  const [deleteError, setDeleteError] = useState<string | null>(null)
+  const [deleteOk, setDeleteOk] = useState<string | null>(null)
 
   const rows = useMemo(() => {
     const all: DocumentRow[] = [
@@ -122,6 +129,45 @@ export function SellerDocumentsScreen({
     })
   }, [inboundSummaries, mpUnloadSummaries, sort, type])
 
+  async function deleteDraftDocument(row: DocumentRow): Promise<void> {
+    if (!token || row.status !== 'draft') {
+      return
+    }
+    const key = `${row.type}:${row.id}`
+    const path =
+      row.type === 'inbound'
+        ? `/operations/inbound-intake-requests/${row.id}`
+        : row.type === 'mp_unload'
+          ? `/operations/marketplace-unload-requests/${row.id}`
+          : null
+    if (!path) {
+      return
+    }
+    setDeleteBusyKey(key)
+    setDeleteError(null)
+    setDeleteOk(null)
+    try {
+      const res = await fetch(apiUrl(path), {
+        method: 'DELETE',
+        headers: authHeaders(token),
+      })
+      if (!res.ok) {
+        setDeleteError(await readApiErrorMessage(res))
+        return
+      }
+      if (row.type === 'inbound') {
+        await onRefreshInboundList()
+      } else {
+        await onRefreshMpUnloadList()
+      }
+      setDeleteOk('Черновик удалён.')
+    } catch (e) {
+      setDeleteError(e instanceof Error ? e.message : 'Не удалось удалить черновик.')
+    } finally {
+      setDeleteBusyKey(null)
+    }
+  }
+
   return (
     <Box>
       <Typography variant="h5" gutterBottom>
@@ -134,6 +180,16 @@ export function SellerDocumentsScreen({
       {error ? (
         <Alert severity="error" sx={{ mb: 2 }} data-testid="seller-documents-error">
           {error}
+        </Alert>
+      ) : null}
+      {deleteError ? (
+        <Alert severity="error" sx={{ mb: 2 }} data-testid="seller-documents-delete-error">
+          {deleteError}
+        </Alert>
+      ) : null}
+      {deleteOk ? (
+        <Alert severity="success" sx={{ mb: 2 }} data-testid="seller-documents-delete-ok">
+          {deleteOk}
         </Alert>
       ) : null}
 
@@ -223,6 +279,7 @@ export function SellerDocumentsScreen({
               <TableCell>Дата</TableCell>
               <TableCell>Статус</TableCell>
               <TableCell align="right">Строк</TableCell>
+              <TableCell align="right">Действия</TableCell>
             </TableRow>
           </TableHead>
           <TableBody>
@@ -254,11 +311,32 @@ export function SellerDocumentsScreen({
                 <TableCell sx={{ color: 'text.secondary' }}>{r.date ?? '—'}</TableCell>
                 <TableCell>{statusRu(r.status, r.type)}</TableCell>
                 <TableCell align="right">{r.line_count}</TableCell>
+                <TableCell align="right">
+                  {r.status === 'draft' && (r.type === 'inbound' || r.type === 'mp_unload') ? (
+                    <Button
+                      size="small"
+                      variant="outlined"
+                      color="error"
+                      disabled={deleteBusyKey === `${r.type}:${r.id}`}
+                      data-testid="seller-delete-draft"
+                      onClick={(e) => {
+                        e.stopPropagation()
+                        void deleteDraftDocument(r)
+                      }}
+                    >
+                      Удалить
+                    </Button>
+                  ) : (
+                    <Typography variant="body2" color="text.disabled">
+                      —
+                    </Typography>
+                  )}
+                </TableCell>
               </TableRow>
             ))}
             {rows.length === 0 ? (
               <TableRow>
-                <TableCell colSpan={4}>
+                <TableCell colSpan={5}>
                   <Typography variant="body2" color="text.secondary">
                     Пока нет документов.
                   </Typography>

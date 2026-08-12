@@ -4,7 +4,17 @@ import uuid
 from datetime import date
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, UploadFile, status
+from fastapi import (
+    APIRouter,
+    Depends,
+    File,
+    Form,
+    HTTPException,
+    Query,
+    Response,
+    UploadFile,
+    status,
+)
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from pydantic import BaseModel, Field
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -740,6 +750,35 @@ async def get_marketplace_unload(
         sync_packaging=True,
         seller_plan_only=_seller_plan_only(user),
     )
+
+
+@router.delete("/{request_id}", status_code=status.HTTP_204_NO_CONTENT)
+async def delete_marketplace_unload_draft(
+    request_id: uuid.UUID,
+    user: Annotated[User, Depends(require_mp_shipments_access)],
+    session: Annotated[AsyncSession, Depends(get_db)],
+    credentials: Annotated[
+        HTTPAuthorizationCredentials | None, Depends(_bearer)
+    ],
+    effective_seller_id: Annotated[uuid.UUID | None, Depends(get_effective_seller_id)],
+) -> Response:
+    await _get_visible_request(
+        session,
+        user,
+        request_id,
+        credentials,
+        effective_seller_id=effective_seller_id,
+    )
+    try:
+        await svc.delete_draft_request(session, user.tenant_id, request_id)
+    except MarketplaceUnloadError as exc:
+        if exc.code == "not_draft":
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail="not_draft",
+            ) from None
+        raise _map_mu_err(exc) from None
+    return Response(status_code=status.HTTP_204_NO_CONTENT)
 
 
 @router.post(

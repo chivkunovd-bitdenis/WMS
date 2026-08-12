@@ -980,6 +980,21 @@ async def cancel_request(
     return r2
 
 
+async def delete_draft_request(
+    session: AsyncSession,
+    tenant_id: uuid.UUID,
+    request_id: uuid.UUID,
+) -> None:
+    req = await get_request(session, tenant_id, request_id)
+    if req is None:
+        raise MarketplaceUnloadError("not_found")
+    if req.status != STATUS_DRAFT:
+        raise MarketplaceUnloadError("not_draft")
+    await _release_reservations(session, request_id)
+    await session.delete(req)
+    await session.commit()
+
+
 async def delete_line(
     session: AsyncSession,
     tenant_id: uuid.UUID,

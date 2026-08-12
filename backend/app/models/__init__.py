@@ -51,6 +51,7 @@ from app.models.product_tz_import import ProductTzImport
 from app.models.seller import Seller
 from app.models.seller_marking_credentials import SellerMarkingCredentials
 from app.models.seller_shop_delegation import SellerShopDelegation
+from app.models.seller_staff_permissions import SellerStaffPermissions
 from app.models.seller_wildberries_credentials import SellerWildberriesCredentials
 from app.models.seller_wildberries_imported_card import SellerWildberriesImportedCard
 from app.models.seller_wildberries_imported_supply import SellerWildberriesImportedSupply
@@ -116,6 +117,7 @@ __all__ = [
     "Seller",
     "SellerMarkingCredentials",
     "SellerShopDelegation",
+    "SellerStaffPermissions",
     "SellerWildberriesCredentials",
     "SellerWildberriesImportedCard",
     "SellerWildberriesImportedSupply",

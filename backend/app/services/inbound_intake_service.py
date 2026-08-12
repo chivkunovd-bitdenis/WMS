@@ -352,6 +352,31 @@ async def delete_draft_line(
     await session.commit()
 
 
+async def delete_draft_request(
+    session: AsyncSession,
+    tenant_id: uuid.UUID,
+    request_id: uuid.UUID,
+    *,
+    seller_product_owner_id: uuid.UUID | None = None,
+) -> None:
+    req = await get_request(
+        session,
+        tenant_id,
+        request_id,
+        seller_product_owner_id=seller_product_owner_id,
+    )
+    if req is None:
+        raise InboundIntakeError("request_not_found")
+    if req.status != STATUS_DRAFT:
+        raise InboundIntakeError("not_draft")
+    if any(line.posted_qty != 0 for line in req.lines):
+        raise InboundIntakeError("line_already_posted")
+    if any(box_line.posted_qty != 0 for box in req.boxes for box_line in box.lines):
+        raise InboundIntakeError("line_already_posted")
+    await session.delete(req)
+    await session.commit()
+
+
 async def patch_request_draft(
     session: AsyncSession,
     tenant_id: uuid.UUID,

@@ -11,6 +11,7 @@ import {
   isFfPortalRole,
   type FfPermissions,
 } from '../utils/ffPermissions'
+import type { SellerPermissions } from '../utils/sellerPermissions'
 
 export type Me = {
   email: string
@@ -36,6 +37,7 @@ export type Me = {
     is_home?: boolean
   }[]
   permissions?: FfPermissions | null
+  seller_permissions?: SellerPermissions | null
   address_storage_enabled?: boolean
   separate_marking_print_enabled?: boolean
 }

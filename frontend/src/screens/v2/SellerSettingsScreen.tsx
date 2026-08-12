@@ -1,8 +1,10 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useState, type FormEvent } from 'react'
 import {
   Alert,
   Box,
   Button,
+  Checkbox,
+  CircularProgress,
   Dialog,
   DialogActions,
   DialogContent,
@@ -16,15 +18,27 @@ import {
   Select,
   Stack,
   Switch,
+  Table,
+  TableBody,
+  TableCell,
+  TableContainer,
+  TableHead,
+  TableRow,
   TextField,
   Typography,
 } from '@mui/material'
 import { apiUrl } from '../../api'
 import { readApiErrorMessage } from '../../utils/readApiErrorMessage'
+import {
+  SELLER_PERMISSION_BLOCKS,
+  type SellerPermissions,
+} from '../../utils/sellerPermissions'
 
 type Props = {
   token: string
   authHeaders: (t: string) => Record<string, string>
+  permissions: SellerPermissions
+  onStaffChanged?: () => void | Promise<void>
 }
 
 type MarkingCredentialsState = {
@@ -38,6 +52,24 @@ type MarkingCredentialsState = {
   edo_route: string
   auto_introduce: boolean
   auto_emit_limit: number | null
+}
+
+type SellerStaffAccountRow = {
+  id: string
+  email: string
+  role: string
+  seller_id: string
+  must_set_password: boolean
+  is_owner: boolean
+  permissions: SellerPermissions
+}
+
+const DEFAULT_STAFF_PERMISSIONS: SellerPermissions = {
+  documents: true,
+  products: true,
+  honest_sign: true,
+  settings: false,
+  staff: false,
 }
 
 const SIGNING_OPTIONS = [
@@ -56,7 +88,12 @@ const MARKETPLACE_OPTIONS = [
   { value: 'ozon', label: 'Ozon' },
 ] as const
 
-export function SellerSettingsScreen({ token, authHeaders }: Props) {
+export function SellerSettingsScreen({
+  token,
+  authHeaders,
+  permissions,
+  onStaffChanged,
+}: Props) {
   const [open, setOpen] = useState(false)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -77,8 +114,19 @@ export function SellerSettingsScreen({ token, authHeaders }: Props) {
   const [marketplace, setMarketplace] = useState('wildberries')
   const [autoIntroduce, setAutoIntroduce] = useState(false)
   const [autoEmitLimit, setAutoEmitLimit] = useState('')
+  const [staffRows, setStaffRows] = useState<SellerStaffAccountRow[]>([])
+  const [staffBusy, setStaffBusy] = useState(false)
+  const [staffPermBusyId, setStaffPermBusyId] = useState<string | null>(null)
+  const [staffError, setStaffError] = useState<string | null>(null)
+  const [staffOk, setStaffOk] = useState<string | null>(null)
+  const [staffCreatePerms, setStaffCreatePerms] = useState<SellerPermissions>(
+    DEFAULT_STAFF_PERMISSIONS,
+  )
 
   useEffect(() => {
+    if (!permissions.settings) {
+      return
+    }
     let cancelled = false
     void (async () => {
       try {
@@ -99,7 +147,7 @@ export function SellerSettingsScreen({ token, authHeaders }: Props) {
     return () => {
       cancelled = true
     }
-  }, [authHeaders, token])
+  }, [authHeaders, permissions.settings, token])
 
   async function loadMarkingCredentials(): Promise<void> {
     try {
@@ -124,9 +172,36 @@ export function SellerSettingsScreen({ token, authHeaders }: Props) {
   }
 
   useEffect(() => {
+    if (!permissions.settings) {
+      return
+    }
     void loadMarkingCredentials()
     // eslint-disable-next-line react-hooks/exhaustive-deps -- reload when token changes
-  }, [token])
+  }, [permissions.settings, token])
+
+  async function loadStaffRows(): Promise<void> {
+    if (!permissions.staff) {
+      return
+    }
+    const res = await fetch(apiUrl('/auth/seller-staff-accounts'), {
+      headers: { ...authHeaders(token) },
+    })
+    if (!res.ok) {
+      throw new Error(await readApiErrorMessage(res))
+    }
+    setStaffRows((await res.json()) as SellerStaffAccountRow[])
+  }
+
+  useEffect(() => {
+    if (!permissions.staff) {
+      setStaffRows([])
+      return
+    }
+    void loadStaffRows().catch((e: unknown) => {
+      setStaffError(e instanceof Error ? e.message : 'Не удалось загрузить сотрудников.')
+    })
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- reload when permission or token changes
+  }, [permissions.staff, token])
 
   async function refreshWbCardsCount(): Promise<void> {
     try {
@@ -264,6 +339,81 @@ export function SellerSettingsScreen({ token, authHeaders }: Props) {
     }
   }
 
+  async function onCreateStaff(e: FormEvent<HTMLFormElement>): Promise<void> {
+    e.preventDefault()
+    const form = e.currentTarget
+    const fd = new FormData(form)
+    const email = String(fd.get('seller_staff_email') ?? '').trim()
+    if (!email) {
+      setStaffError('Укажите email сотрудника.')
+      return
+    }
+    setStaffBusy(true)
+    setStaffError(null)
+    setStaffOk(null)
+    try {
+      const res = await fetch(apiUrl('/auth/seller-staff-accounts'), {
+        method: 'POST',
+        headers: {
+          ...authHeaders(token),
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ email, permissions: staffCreatePerms }),
+      })
+      if (!res.ok) {
+        setStaffError(await readApiErrorMessage(res))
+        return
+      }
+      form.reset()
+      setStaffCreatePerms(DEFAULT_STAFF_PERMISSIONS)
+      await loadStaffRows()
+      await onStaffChanged?.()
+      setStaffOk(
+        `Сотрудник ${email} добавлен. Первый вход — с пустым паролем, затем сотрудник задаст новый пароль.`,
+      )
+    } catch (e) {
+      setStaffError(e instanceof Error ? e.message : 'Не удалось добавить сотрудника.')
+    } finally {
+      setStaffBusy(false)
+    }
+  }
+
+  async function onToggleStaffPermission(
+    row: SellerStaffAccountRow,
+    key: keyof SellerPermissions,
+    checked: boolean,
+  ): Promise<void> {
+    if (row.is_owner) {
+      return
+    }
+    const next: SellerPermissions = { ...row.permissions, [key]: checked }
+    setStaffPermBusyId(row.id)
+    setStaffError(null)
+    setStaffOk(null)
+    try {
+      const res = await fetch(apiUrl(`/auth/seller-staff-accounts/${row.id}/permissions`), {
+        method: 'PATCH',
+        headers: {
+          ...authHeaders(token),
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(next),
+      })
+      if (!res.ok) {
+        setStaffError(await readApiErrorMessage(res))
+        return
+      }
+      const updated = (await res.json()) as SellerStaffAccountRow
+      setStaffRows((prev) => prev.map((r) => (r.id === updated.id ? updated : r)))
+      await onStaffChanged?.()
+      setStaffOk(`${row.email}: права сохранены.`)
+    } catch (e) {
+      setStaffError(e instanceof Error ? e.message : 'Не удалось сохранить права.')
+    } finally {
+      setStaffPermBusyId(null)
+    }
+  }
+
   const signingLabel =
     SIGNING_OPTIONS.find((o) => o.value === czCreds?.signing_method)?.label ?? '—'
 
@@ -284,6 +434,173 @@ export function SellerSettingsScreen({ token, authHeaders }: Props) {
         </Alert>
       ) : null}
 
+      {permissions.staff ? (
+        <Paper
+          variant="outlined"
+          sx={{ p: 2, maxWidth: 920, mb: 2 }}
+          data-testid="seller-staff-panel"
+        >
+          <Stack spacing={2}>
+            <Box>
+              <Typography variant="h6">Сотрудники селлера</Typography>
+              <Typography variant="body2" color="text.secondary">
+                Пользователи этого селлера и доступ к разделам личного кабинета.
+              </Typography>
+            </Box>
+            {staffError ? (
+              <Alert severity="error" data-testid="seller-staff-error">
+                {staffError}
+              </Alert>
+            ) : null}
+            {staffOk ? (
+              <Alert severity="success" data-testid="seller-staff-ok">
+                {staffOk}
+              </Alert>
+            ) : null}
+            <TableContainer
+              sx={{
+                border: '1px solid',
+                borderColor: 'divider',
+                borderRadius: 1,
+                overflowX: 'auto',
+              }}
+              data-testid="seller-staff-table-wrap"
+            >
+              <Table size="small" data-testid="seller-staff-table">
+                <TableHead>
+                  <TableRow>
+                    <TableCell sx={{ minWidth: 220 }}>Email</TableCell>
+                    {SELLER_PERMISSION_BLOCKS.map((block) => (
+                      <TableCell key={block.key} align="center" sx={{ minWidth: 104 }}>
+                        {block.label}
+                      </TableCell>
+                    ))}
+                  </TableRow>
+                </TableHead>
+                <TableBody>
+                  {staffRows.map((row) => (
+                    <TableRow
+                      key={row.id}
+                      hover
+                      data-testid="seller-staff-row"
+                      data-staff-id={row.id}
+                    >
+                      <TableCell>
+                        <Typography variant="body2">{row.email}</Typography>
+                        <Typography
+                          variant="caption"
+                          color={row.is_owner ? 'text.secondary' : 'warning.main'}
+                        >
+                          {row.is_owner
+                            ? 'владелец селлера'
+                            : row.must_set_password
+                              ? 'ожидает первый вход'
+                              : 'сотрудник'}
+                        </Typography>
+                      </TableCell>
+                      {SELLER_PERMISSION_BLOCKS.map((block) => (
+                        <TableCell key={block.key} align="center" padding="checkbox">
+                          <Checkbox
+                            size="small"
+                            checked={row.permissions[block.key]}
+                            disabled={row.is_owner || staffPermBusyId === row.id}
+                            slotProps={{
+                              root: {
+                                'data-testid': `seller-staff-perm-${row.id}-${block.key}`,
+                              } as React.HTMLAttributes<HTMLSpanElement>,
+                              input: {
+                                'aria-label': `${block.label} для ${row.email}`,
+                              } as React.InputHTMLAttributes<HTMLInputElement>,
+                            }}
+                            onChange={(e) =>
+                              void onToggleStaffPermission(row, block.key, e.target.checked)
+                            }
+                          />
+                        </TableCell>
+                      ))}
+                    </TableRow>
+                  ))}
+                  {staffRows.length === 0 ? (
+                    <TableRow>
+                      <TableCell colSpan={SELLER_PERMISSION_BLOCKS.length + 1}>
+                        <Typography variant="body2" color="text.secondary">
+                          Пока нет сотрудников.
+                        </Typography>
+                      </TableCell>
+                    </TableRow>
+                  ) : null}
+                </TableBody>
+              </Table>
+            </TableContainer>
+
+            <Box
+              component="form"
+              noValidate
+              onSubmit={(e) => void onCreateStaff(e)}
+              data-testid="seller-staff-create-form"
+              sx={{ borderTop: '1px solid', borderColor: 'divider', pt: 2 }}
+            >
+              <Stack spacing={1.5}>
+                <Typography variant="subtitle1" sx={{ fontWeight: 600 }}>
+                  Добавить сотрудника
+                </Typography>
+                <Stack
+                  direction={{ xs: 'column', sm: 'row' }}
+                  spacing={1.5}
+                  sx={{ alignItems: { xs: 'stretch', sm: 'flex-start' } }}
+                >
+                  <TextField
+                    name="seller_staff_email"
+                    label="Email для входа"
+                    type="email"
+                    required
+                    fullWidth
+                    size="small"
+                    autoComplete="off"
+                    helperText="Пароль задаётся при первом входе"
+                    slotProps={{ htmlInput: { 'data-testid': 'seller-staff-email' } }}
+                    sx={{ flex: 1 }}
+                  />
+                  <Button
+                    type="submit"
+                    variant="contained"
+                    disabled={staffBusy}
+                    data-testid="seller-staff-submit"
+                    startIcon={staffBusy ? <CircularProgress size={16} color="inherit" /> : null}
+                    sx={{ minWidth: { sm: 140 }, mt: { xs: 0, sm: 0.5 } }}
+                  >
+                    {staffBusy ? 'Сохранение…' : 'Добавить'}
+                  </Button>
+                </Stack>
+                <Stack direction="row" spacing={1} sx={{ flexWrap: 'wrap', rowGap: 0.5 }}>
+                  {SELLER_PERMISSION_BLOCKS.map((block) => (
+                    <FormControlLabel
+                      key={block.key}
+                      control={
+                        <Checkbox
+                          size="small"
+                          checked={staffCreatePerms[block.key]}
+                          onChange={(e) =>
+                            setStaffCreatePerms((prev) => ({
+                              ...prev,
+                              [block.key]: e.target.checked,
+                            }))
+                          }
+                          data-testid={`seller-staff-create-perm-${block.key}`}
+                        />
+                      }
+                      label={block.label}
+                    />
+                  ))}
+                </Stack>
+              </Stack>
+            </Box>
+          </Stack>
+        </Paper>
+      ) : null}
+
+      {permissions.settings ? (
+        <>
       <Paper variant="outlined" sx={{ p: 2, maxWidth: 720, mb: 2 }} data-testid="seller-settings-wb-card">
         <Stack spacing={1.5}>
           <Typography variant="h6">Wildberries</Typography>
@@ -546,6 +863,8 @@ export function SellerSettingsScreen({ token, authHeaders }: Props) {
           </Button>
         </DialogActions>
       </Dialog>
+        </>
+      ) : null}
     </Box>
   )
 }

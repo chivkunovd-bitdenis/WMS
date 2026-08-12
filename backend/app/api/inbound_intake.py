@@ -557,6 +557,48 @@ async def get_inbound_request(
     return _request_out(r, lines=lines_out, boxes=boxes_out)
 
 
+@router.delete("/{request_id}", status_code=status.HTTP_204_NO_CONTENT)
+async def delete_inbound_draft_request(
+    request_id: uuid.UUID,
+    user: Annotated[User, Depends(get_current_user)],
+    session: Annotated[AsyncSession, Depends(get_db)],
+    seller_scope: Annotated[uuid.UUID | None, Depends(seller_line_product_scope)],
+) -> Response:
+    if user.role not in (FULFILLMENT_ADMIN, FULFILLMENT_SELLER):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="forbidden",
+        )
+    request_seller_scope: uuid.UUID | None = (
+        None if user.role == FULFILLMENT_ADMIN else seller_scope
+    )
+    try:
+        await svc.delete_draft_request(
+            session,
+            user.tenant_id,
+            request_id,
+            seller_product_owner_id=request_seller_scope,
+        )
+    except InboundIntakeError as exc:
+        if exc.code == "request_not_found":
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="request_not_found",
+            ) from None
+        if exc.code == "not_draft":
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail="not_draft",
+            ) from None
+        if exc.code == "line_already_posted":
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail="line_already_posted",
+            ) from None
+        raise
+    return Response(status_code=status.HTTP_204_NO_CONTENT)
+
+
 @router.patch("/{request_id}", response_model=InboundIntakeRequestOut)
 async def patch_inbound_request_planned(
     request_id: uuid.UUID,
