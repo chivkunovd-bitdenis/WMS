@@ -229,8 +229,8 @@ test('fbs orders: filter new orders by warehouse', async ({ page }) => {
   await registerFf(page, 'warehouse')
 
   const warehouseOptions = [
-    { id: 'w-1', name: 'WH Юг', wb_warehouse: { id: 501001, name: 'WB Юг' } },
-    { id: 'w-2', name: 'WH Север', wb_warehouse: { id: 501002, name: 'WB Север' } },
+    { id: '501001', name: 'WB Юг', wb_warehouse: { id: 501001, name: 'WB Юг' } },
+    { id: '501002', name: 'WB Север', wb_warehouse: { id: 501002, name: 'WB Север' } },
   ]
   const orderOne = order('1', {
     wms_warehouse: { id: 'w-1', name: 'WH Юг' },
@@ -240,13 +240,13 @@ test('fbs orders: filter new orders by warehouse', async ({ page }) => {
     wms_warehouse: { id: 'w-2', name: 'WH Север' },
     wb_warehouse: { id: 501002, name: 'WB Север' },
   })
-  let lastWarehouseId: string | null = null
+  let lastWbWarehouseId: string | null = null
 
   await page.route('**/operations/fbs-orders/worklist**', async (route) => {
     if (route.request().method() !== 'GET') return route.fallback()
     const url = new URL(route.request().url())
-    lastWarehouseId = url.searchParams.get('warehouse_id')
-    const body = lastWarehouseId === 'w-2' ? worklist([orderTwo], warehouseOptions) : worklist([orderOne, orderTwo], warehouseOptions)
+    lastWbWarehouseId = url.searchParams.get('wb_warehouse_id')
+    const body = lastWbWarehouseId === '501002' ? worklist([orderTwo], warehouseOptions) : worklist([orderOne, orderTwo], warehouseOptions)
     await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(body) })
   })
 
@@ -256,9 +256,9 @@ test('fbs orders: filter new orders by warehouse', async ({ page }) => {
   await expect(page.getByTestId('fbs-order-2')).toBeVisible()
 
   await page.getByRole('combobox', { name: 'Склад селлера' }).click()
-  await page.getByRole('option', { name: 'WH Север · WB Север' }).click()
+  await page.getByRole('option', { name: 'WB Север' }).click()
 
   await expect(page.getByTestId('fbs-order-2')).toBeVisible()
   await expect(page.getByTestId('fbs-order-1')).toHaveCount(0)
-  expect(lastWarehouseId).toBe('w-2')
+  expect(lastWbWarehouseId).toBe('501002')
 })

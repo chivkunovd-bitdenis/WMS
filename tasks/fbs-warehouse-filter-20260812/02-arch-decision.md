@@ -1,8 +1,8 @@
 # 02 — Арх-решение + стек  🔒 ГЕЙТ 1
 
 ## Принятое решение
-- **Подход:** расширить существующий FBS worklist параметром `warehouse_id` и вернуть в той же выдаче список доступных складов для фильтра. На фронте показать MUI Select только на вкладке «Новые».
-- **Стек / инструменты:** FastAPI query-параметр, SQLAlchemy-фильтр по `FbsOrder.warehouse_id`, React state, MUI `FormControl`/`Select`, pytest, Playwright.
+- **Подход:** расширить существующий FBS worklist параметром `wb_warehouse_id` и вернуть в той же выдаче список WB-складов из заказов для фильтра. На фронте показать MUI Select только на вкладке «Новые».
+- **Стек / инструменты:** FastAPI query-параметр, SQLAlchemy-фильтр по `FbsOrder.wb_warehouse_id`, React state, MUI `FormControl`/`Select`, pytest, Playwright.
 - **Затрагиваемые части системы:** `backend/app/api/fbs_orders.py`, `backend/app/services/fbs_worklist_service.py`, `frontend/src/screens/v2/fbsApi.ts`, `frontend/src/screens/v2/FfFbsOrdersScreen.tsx`.
 - **Осознанно НЕ делаем:** не добавляем колонку склада в таблицу, не вводим новый endpoint, не меняем создание поставок, не фильтруем только на клиенте.
 - **Влияние на прод/данные/миграции:** миграций нет, секреты и WB-кабинеты не трогаются. Обратная совместимость API сохраняется для старых клиентов: добавлен необязательный query-параметр и новое поле ответа.

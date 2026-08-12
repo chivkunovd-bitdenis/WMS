@@ -875,7 +875,7 @@ Full-cycle FBS: worklist → compatible selection → atomic WB supply → serve
 - **Actor:** fulfillment admin.
 - **Given:** the **New** FBS worklist has orders for one seller on two seller/WB warehouses mapped to WMS warehouses.
 - **When:** operator opens **New** and selects one seller warehouse in the warehouse filter.
-- **Then:** the table shows only orders for that selected warehouse and sends `warehouse_id` to the worklist API.
+- **Then:** the table shows only orders for that selected WB warehouse and sends `wb_warehouse_id` to the worklist API.
 - **Negative / restriction:** changing seller or leaving **New** resets the warehouse filter; filtering must happen server-side so pagination cannot hide matching orders.
 
 **Frontend browser paths (Codex, post-backend handoff):** worklist enrichment + live deadline; selection blockers + atomic create; full-screen workspace stages; persistent picking; embedded PackagingTask; marking row states; sticker preview; PVZ cargo + QR; warehouse/SC supply QR; WB timeout/409 never shows local success.
