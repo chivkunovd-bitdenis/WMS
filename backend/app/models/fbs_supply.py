@@ -23,6 +23,9 @@ FBS_SUPPLY_STATUS_PACKED = "packed"
 FBS_SUPPLY_STATUS_IN_DELIVERY = "in_delivery"
 FBS_SUPPLY_STATUS_DONE = "done"
 
+FBS_SUPPLY_SOURCE_WMS = "wms"
+FBS_SUPPLY_SOURCE_WB = "wb"
+
 FBS_DELIVERY_TYPE_WAREHOUSE_SC = "warehouse_sc"
 FBS_DELIVERY_TYPE_PVZ = "pvz"
 
@@ -44,6 +47,12 @@ class FbsSupply(Base):
     )
     wb_supply_id: Mapped[str] = mapped_column(String(64), nullable=False, index=True)
     name: Mapped[str] = mapped_column(String(255), nullable=False)
+    source: Mapped[str] = mapped_column(
+        String(16),
+        nullable=False,
+        default=FBS_SUPPLY_SOURCE_WMS,
+        server_default=FBS_SUPPLY_SOURCE_WMS,
+    )
     status: Mapped[str] = mapped_column(
         String(32),
         nullable=False,
