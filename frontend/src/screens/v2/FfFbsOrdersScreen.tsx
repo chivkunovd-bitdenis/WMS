@@ -37,6 +37,7 @@ import {
   runFbsOrdersSync,
   syncFbsOrderStatuses,
   type FbsWorklistOrder,
+  type FbsWorklistWarehouseOption,
   type FbsWorkspace,
 } from './fbsApi'
 
@@ -83,12 +84,19 @@ function MetadataState({ order }: { order: FbsWorklistOrder }) {
   )
 }
 
+function warehouseOptionLabel(option: FbsWorklistWarehouseOption) {
+  const wbName = option.wb_warehouse.name ?? `WB ${option.wb_warehouse.id}`
+  return `${option.name} · ${wbName}`
+}
+
 export function FfFbsOrdersScreen({ token, authHeaders, sellers, isAdmin = false }: Props) {
   const [statusGroup, setStatusGroup] = useState<(typeof TABS)[number]['key']>('new')
   const [sellerId, setSellerId] = useState('__all__')
+  const [warehouseId, setWarehouseId] = useState('__all__')
   const [search, setSearch] = useState('')
   const [appliedSearch, setAppliedSearch] = useState('')
   const [orders, setOrders] = useState<FbsWorklistOrder[]>([])
+  const [warehouseOptions, setWarehouseOptions] = useState<FbsWorklistWarehouseOption[]>([])
   const [serverNow, setServerNow] = useState<string | null>(null)
   const [selected, setSelected] = useState<Set<string>>(new Set())
   const [busy, setBusy] = useState(false)
@@ -107,10 +115,20 @@ export function FfFbsOrdersScreen({ token, authHeaders, sellers, isAdmin = false
       const page = await fetchFbsWorklist(token, authHeaders, {
         seller_id: sellerId === '__all__' ? null : sellerId,
         status_group: statusGroup,
+        warehouse_id: statusGroup === 'new' && warehouseId !== '__all__' ? warehouseId : null,
         search: appliedSearch || null,
         limit: 200,
       })
       setOrders(page.items)
+      setWarehouseOptions(statusGroup === 'new' ? page.warehouse_options ?? [] : [])
+      if (
+        statusGroup === 'new' &&
+        warehouseId !== '__all__' &&
+        !(page.warehouse_options ?? []).some((warehouse) => warehouse.id === warehouseId)
+      ) {
+        setWarehouseId('__all__')
+        setSelected(new Set())
+      }
       setServerNow(page.server_now)
       setSelected((current) => {
         const visible = new Set(page.items.map((order) => order.id))
@@ -118,11 +136,12 @@ export function FfFbsOrdersScreen({ token, authHeaders, sellers, isAdmin = false
       })
     } catch (cause) {
       setOrders([])
+      setWarehouseOptions([])
       setError(cause instanceof Error ? cause.message : 'Не удалось загрузить заказы FBS.')
     } finally {
       setBusy(false)
     }
-  }, [token, authHeaders, sellerId, statusGroup, appliedSearch])
+  }, [token, authHeaders, sellerId, statusGroup, warehouseId, appliedSearch])
 
   useEffect(() => {
     void load()
@@ -252,6 +271,7 @@ export function FfFbsOrdersScreen({ token, authHeaders, sellers, isAdmin = false
           value={statusGroup}
           onChange={(_, value) => {
             setStatusGroup(value)
+            setWarehouseId('__all__')
             setSelected(new Set())
           }}
           variant="scrollable"
@@ -274,7 +294,11 @@ export function FfFbsOrdersScreen({ token, authHeaders, sellers, isAdmin = false
               labelId="fbs-worklist-seller-label"
               label="Селлер"
               value={sellerId}
-              onChange={(event) => setSellerId(String(event.target.value))}
+              onChange={(event) => {
+                setSellerId(String(event.target.value))
+                setWarehouseId('__all__')
+                setSelected(new Set())
+              }}
             >
               <MenuItem value="__all__">Все селлеры</MenuItem>
               {sellers.map((seller) => (
@@ -284,6 +308,32 @@ export function FfFbsOrdersScreen({ token, authHeaders, sellers, isAdmin = false
               ))}
             </Select>
           </FormControl>
+          {statusGroup === 'new' ? (
+            <FormControl sx={{ minWidth: 260 }}>
+              <InputLabel id="fbs-worklist-warehouse-label">Склад селлера</InputLabel>
+              <Select
+                labelId="fbs-worklist-warehouse-label"
+                label="Склад селлера"
+                value={warehouseId}
+                onChange={(event) => {
+                  setWarehouseId(String(event.target.value))
+                  setSelected(new Set())
+                }}
+                data-testid="fbs-worklist-warehouse"
+              >
+                <MenuItem value="__all__">Все склады</MenuItem>
+                {warehouseOptions.map((warehouse) => (
+                  <MenuItem
+                    key={warehouse.id}
+                    value={warehouse.id}
+                    data-testid={`fbs-worklist-warehouse-${warehouse.id}`}
+                  >
+                    {warehouseOptionLabel(warehouse)}
+                  </MenuItem>
+                ))}
+              </Select>
+            </FormControl>
+          ) : null}
           <TextField
             fullWidth
             label="Заказ, артикул или штрихкод"

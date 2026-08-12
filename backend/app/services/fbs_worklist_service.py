@@ -75,6 +75,7 @@ class WorklistPage:
     items: list[dict[str, Any]]
     next_cursor: str | None
     server_now: str
+    warehouse_options: list[dict[str, Any]]
 
 
 @dataclass(frozen=True)
@@ -113,6 +114,7 @@ async def fetch_worklist_page(
     *,
     seller_id: uuid.UUID | None = None,
     status_group: str | None = None,
+    warehouse_id: uuid.UUID | None = None,
     search: str | None = None,
     limit: int = 100,
     cursor: str | None = None,
@@ -123,11 +125,18 @@ async def fetch_worklist_page(
         tenant_id,
         seller_id=seller_id,
         status_group=status_group,
+        warehouse_id=warehouse_id,
         search=search,
         limit=limit,
         cursor=cursor,
     )
     items = await build_worklist_items(session, tenant_id, orders, server_now=server_now)
+    warehouse_options = await _fetch_warehouse_options(
+        session,
+        tenant_id,
+        seller_id=seller_id,
+        status_group=status_group,
+    )
     next_cursor: str | None = None
     if len(orders) == limit:
         last = orders[-1]
@@ -136,6 +145,7 @@ async def fetch_worklist_page(
         items=items,
         next_cursor=next_cursor,
         server_now=server_now.isoformat(),
+        warehouse_options=warehouse_options,
     )
 
 
@@ -145,6 +155,7 @@ async def _fetch_orders_page(
     *,
     seller_id: uuid.UUID | None,
     status_group: str | None,
+    warehouse_id: uuid.UUID | None,
     search: str | None,
     limit: int,
     cursor: str | None,
@@ -158,6 +169,8 @@ async def _fetch_orders_page(
             msg = "invalid_status_group"
             raise ValueError(msg)
         stmt = stmt.where(FbsOrder.status.in_(allowed))
+    if warehouse_id is not None:
+        stmt = stmt.where(FbsOrder.warehouse_id == warehouse_id)
     if search and search.strip():
         term = search.strip()
         clauses: list[ColumnElement[bool]] = [
@@ -181,6 +194,61 @@ async def _fetch_orders_page(
     stmt = stmt.order_by(FbsOrder.deadline_at.asc(), FbsOrder.id.asc()).limit(limit)
     res = await session.execute(stmt)
     return list(res.scalars().all())
+
+
+async def _fetch_warehouse_options(
+    session: AsyncSession,
+    tenant_id: uuid.UUID,
+    *,
+    seller_id: uuid.UUID | None,
+    status_group: str | None,
+) -> list[dict[str, Any]]:
+    stmt = (
+        select(
+            FbsOrder.warehouse_id,
+            Warehouse.name,
+            FbsOrder.wb_warehouse_id,
+            TenantWbMpWarehouse.name,
+        )
+        .distinct()
+        .join(Warehouse, Warehouse.id == FbsOrder.warehouse_id)
+        .outerjoin(
+            TenantWbMpWarehouse,
+            and_(
+                TenantWbMpWarehouse.tenant_id == FbsOrder.tenant_id,
+                TenantWbMpWarehouse.wb_warehouse_id == FbsOrder.wb_warehouse_id,
+            ),
+        )
+        .where(
+            FbsOrder.tenant_id == tenant_id,
+            FbsOrder.warehouse_id.is_not(None),
+            Warehouse.tenant_id == tenant_id,
+        )
+    )
+    if seller_id is not None:
+        stmt = stmt.where(FbsOrder.seller_id == seller_id)
+    if status_group:
+        allowed = STATUS_GROUP_MAP[status_group]
+        stmt = stmt.where(FbsOrder.status.in_(allowed))
+    stmt = stmt.order_by(Warehouse.name.asc(), FbsOrder.wb_warehouse_id.asc())
+    res = await session.execute(stmt)
+    options: dict[str, dict[str, Any]] = {}
+    for wms_id, wms_name, wb_id, wb_name in res.all():
+        if wms_id is None:
+            continue
+        key = str(wms_id)
+        options.setdefault(
+            key,
+            {
+                "id": key,
+                "name": wms_name or MISSING_WMS_WAREHOUSE,
+                "wb_warehouse": {
+                    "id": int(wb_id) if wb_id is not None else 0,
+                    "name": wb_name if wb_name else MISSING_WB_WAREHOUSE,
+                },
+            },
+        )
+    return list(options.values())
 
 
 async def build_worklist_items(

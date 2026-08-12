@@ -676,7 +676,7 @@ Distinct from **operational outbound** (S08) and **seller supply/inbound** (S06)
 
 ## S17 — FBS operator flow (WB Marketplace, fulfillment admin)
 
-Full-cycle FBS: worklist → compatible selection → atomic WB supply → server-side pick → existing `PackagingTask` → marking → print assets → PVZ cargo places or warehouse/SC deliver → post-delivery tracking. Distinct from seller MP unload (S16) and operational outbound (S08). Canonical task IDs: `tasks/fbs-operator-flow/TEST_CASES.md` TC-01…24 → **TC-S17-001…024** below. Wire contract: `tasks/fbs-operator-flow/BACKEND_CONTRACT.md`; errors: `ERROR_CATALOG_RU.md`; OpenAPI: `OPENAPI_NOTES.md`.
+Full-cycle FBS: worklist → compatible selection → atomic WB supply → server-side pick → existing `PackagingTask` → marking → print assets → PVZ cargo places or warehouse/SC deliver → post-delivery tracking. Distinct from seller MP unload (S16) and operational outbound (S08). Canonical task IDs: `tasks/fbs-operator-flow/TEST_CASES.md` TC-01…24 → **TC-S17-001…024** below, plus post-handoff UI extensions from this catalog. Wire contract: `tasks/fbs-operator-flow/BACKEND_CONTRACT.md`; errors: `ERROR_CATALOG_RU.md`; OpenAPI: `OPENAPI_NOTES.md`.
 
 ### TC-S17-001 Three sellers on one WMS warehouse
 
@@ -869,6 +869,14 @@ Full-cycle FBS: worklist → compatible selection → atomic WB supply → serve
 - **When:** representative create/meta/sticker/trbx/deliver calls against live WB.
 - **Then:** request shapes match `wildberries_fbs_client` contract dated in tests.
 - **Negative:** not run in default CI; failure blocks production rollout claim only.
+
+### TC-S17-025 New worklist filters by seller warehouse
+
+- **Actor:** fulfillment admin.
+- **Given:** the **New** FBS worklist has orders for one seller on two seller/WB warehouses mapped to WMS warehouses.
+- **When:** operator opens **New** and selects one seller warehouse in the warehouse filter.
+- **Then:** the table shows only orders for that selected warehouse and sends `warehouse_id` to the worklist API.
+- **Negative / restriction:** changing seller or leaving **New** resets the warehouse filter; filtering must happen server-side so pagination cannot hide matching orders.
 
 **Frontend browser paths (Codex, post-backend handoff):** worklist enrichment + live deadline; selection blockers + atomic create; full-screen workspace stages; persistent picking; embedded PackagingTask; marking row states; sticker preview; PVZ cargo + QR; warehouse/SC supply QR; WB timeout/409 never shows local success.
 

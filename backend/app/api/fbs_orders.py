@@ -144,10 +144,17 @@ class FbsWorklistOrderOut(BaseModel):
     selection_blockers: list[FbsWorklistBlockerOut]
 
 
+class FbsWorklistWarehouseOptionOut(BaseModel):
+    id: str
+    name: str
+    wb_warehouse: FbsWorklistWarehouseOut
+
+
 class FbsWorklistPageOut(BaseModel):
     items: list[FbsWorklistOrderOut]
     next_cursor: str | None
     server_now: str
+    warehouse_options: list[FbsWorklistWarehouseOptionOut]
 
 
 class FbsOrderOut(BaseModel):
@@ -252,6 +259,7 @@ async def get_fbs_orders_worklist(
     effective_seller_id: Annotated[uuid.UUID | None, Depends(get_effective_seller_id)],
     seller_id: Annotated[uuid.UUID | None, Query()] = None,
     status_group: Annotated[str | None, Query()] = None,
+    warehouse_id: Annotated[uuid.UUID | None, Query()] = None,
     search: Annotated[str | None, Query()] = None,
     limit: Annotated[int, Query(ge=1, le=500)] = 100,
     cursor: Annotated[str | None, Query()] = None,
@@ -267,6 +275,7 @@ async def get_fbs_orders_worklist(
             user.tenant_id,
             seller_id=filter_seller,
             status_group=status_group,
+            warehouse_id=warehouse_id,
             search=search,
             limit=limit,
             cursor=cursor,
@@ -281,6 +290,7 @@ async def get_fbs_orders_worklist(
             "items": page.items,
             "next_cursor": page.next_cursor,
             "server_now": page.server_now,
+            "warehouse_options": page.warehouse_options,
         }
     )
 
