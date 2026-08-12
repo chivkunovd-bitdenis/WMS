@@ -21,7 +21,14 @@ export function WmsBrandMark({ size = 28, portal = 'fulfillment' }: Props) {
       alt=""
       aria-hidden
       data-testid={portal === 'seller' ? 'wms-brand-mark-seller' : 'wms-brand-mark'}
-      sx={{ width: size, height: size, flexShrink: 0, display: 'block' }}
+      sx={{
+        width: size,
+        height: size,
+        flexShrink: 0,
+        display: 'block',
+        borderRadius: '50%',
+        objectFit: 'cover',
+      }}
     />
   )
 }
