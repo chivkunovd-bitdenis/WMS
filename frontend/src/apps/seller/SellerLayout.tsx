@@ -36,7 +36,6 @@ type Props = {
 export function SellerLayout({
   children,
   onLogout,
-  title = 'WMS',
   userLabel,
   userRoleLabel,
   canManageSellerShops = false,
@@ -66,9 +65,9 @@ export function SellerLayout({
       >
         <Toolbar sx={{ display: 'flex', justifyContent: 'space-between', gap: 2 }}>
           <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5, minWidth: 0 }}>
-            <WmsBrandMark size={26} portal="seller" />
-            <Typography variant="h6" noWrap>
-              {title}
+            <WmsBrandMark size={44} portal="seller" />
+            <Typography variant="h5" noWrap sx={{ fontWeight: 900, letterSpacing: 0 }}>
+              Короб ВМС
             </Typography>
           </Box>
           <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
@@ -145,4 +144,3 @@ export function SellerLayout({
     </Box>
   )
 }
-

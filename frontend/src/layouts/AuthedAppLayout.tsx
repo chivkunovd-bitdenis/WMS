@@ -34,8 +34,6 @@ type Props = {
 export function AuthedAppLayout({
   children,
   onLogout,
-  title = 'WMS',
-  subtitle,
   userLabel,
   userRoleLabel,
   portal,
@@ -61,9 +59,9 @@ export function AuthedAppLayout({
         >
           <Toolbar sx={{ display: 'flex', justifyContent: 'space-between', gap: 2 }}>
             <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5, minWidth: 0 }}>
-              <WmsBrandMark size={26} />
-              <Typography variant="h6" noWrap>
-                {title}
+              <WmsBrandMark size={44} portal="seller" />
+              <Typography variant="h5" noWrap sx={{ fontWeight: 900, letterSpacing: 0 }}>
+                Короб ВМС
               </Typography>
             </Box>
             <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
@@ -156,15 +154,10 @@ export function AuthedAppLayout({
       >
         <Toolbar sx={{ display: 'flex', justifyContent: 'space-between', gap: 2 }}>
           <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5, minWidth: 0 }}>
-            <WmsBrandMark size={26} />
-            <Typography variant="h6" noWrap>
-              {title}
+            <WmsBrandMark size={48} />
+            <Typography variant="h5" noWrap sx={{ fontWeight: 900, letterSpacing: 0 }}>
+              Короб ВМС
             </Typography>
-            {subtitle ? (
-              <Typography variant="body2" color="text.secondary" noWrap>
-                {subtitle}
-              </Typography>
-            ) : null}
           </Box>
           <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
             {userLabel ? (

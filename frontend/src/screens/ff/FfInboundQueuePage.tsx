@@ -2,6 +2,7 @@ import { useMemo } from 'react'
 import {
   Alert,
   Box,
+  Button,
   Chip,
   Paper,
   Stack,
@@ -27,6 +28,8 @@ type Props = {
   workspace: InboundWorkspace
   rows: InboundQueueRow[]
   onOpen: (id: string) => void
+  onCreateDraft?: () => void | Promise<void>
+  creatingDraft?: boolean
 }
 
 function statusLabel(status: string, workspace: InboundWorkspace): string {
@@ -38,7 +41,13 @@ function statusLabel(status: string, workspace: InboundWorkspace): string {
   return status
 }
 
-export function FfInboundQueuePage({ workspace, rows, onOpen }: Props) {
+export function FfInboundQueuePage({
+  workspace,
+  rows,
+  onOpen,
+  onCreateDraft,
+  creatingDraft = false,
+}: Props) {
   const filtered = useMemo(
     () => (workspace === 'reception' ? filterReceptionQueue(rows) : filterSortingQueue(rows)),
     [rows, workspace],
@@ -53,6 +62,19 @@ export function FfInboundQueuePage({ workspace, rows, onOpen }: Props) {
   return (
     <Box data-testid={workspace === 'reception' ? 'ff-reception-page' : 'ff-sorting-page'}>
       <PageHeader title={title} description={subtitle} />
+
+      {workspace === 'reception' && onCreateDraft ? (
+        <Stack direction="row" sx={{ mb: 2, justifyContent: 'flex-end' }}>
+          <Button
+            variant="contained"
+            disabled={creatingDraft}
+            onClick={() => void onCreateDraft()}
+            data-testid="ff-inbound-create"
+          >
+            Создать приёмку
+          </Button>
+        </Stack>
+      ) : null}
 
       {filtered.length === 0 ? (
         <Alert severity="info" data-testid="ff-inbound-queue-empty">
