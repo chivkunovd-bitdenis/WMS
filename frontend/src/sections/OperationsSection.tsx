@@ -3,6 +3,7 @@ import { Button } from '../ui/Button'
 import { Card } from '../ui/Card'
 import { Input } from '../ui/Input'
 import { Select } from '../ui/Select'
+import { movementTypeLabel } from '../utils/movementTypeLabel'
 
 type WarehouseRow = { id: string; name: string; code: string }
 type LocationRow = { id: string; code: string; warehouse_id: string }
@@ -482,7 +483,7 @@ export function OperationsSection(props: Props) {
                   {inboundMovements.map((m) => (
                     <li key={m.id} data-testid="inbound-movement-row">
                       {m.quantity_delta > 0 ? '+' : ''}
-                      {m.quantity_delta} · {m.movement_type}
+                      {m.quantity_delta} · {movementTypeLabel(m.movement_type)}
                     </li>
                   ))}
                 </ul>
@@ -524,7 +525,7 @@ export function OperationsSection(props: Props) {
           {globalMovements.map((m) => (
             <li key={m.id} data-testid="global-movement-row">
               {m.sku_code}: {m.quantity_delta > 0 ? '+' : ''}
-              {m.quantity_delta} · {m.movement_type}
+              {m.quantity_delta} · {movementTypeLabel(m.movement_type)}
             </li>
           ))}
         </ul>
@@ -859,7 +860,7 @@ export function OperationsSection(props: Props) {
                 <ul className="list-plain" data-testid="outbound-movements-list">
                   {outboundMovements.map((m) => (
                     <li key={m.id} data-testid="outbound-movement-row">
-                      {m.quantity_delta} · {m.movement_type}
+                      {m.quantity_delta} · {movementTypeLabel(m.movement_type)}
                     </li>
                   ))}
                 </ul>
@@ -871,4 +872,3 @@ export function OperationsSection(props: Props) {
     </div>
   )
 }
-

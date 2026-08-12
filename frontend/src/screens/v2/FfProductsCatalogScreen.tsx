@@ -541,10 +541,10 @@ export function FfProductsCatalogScreen({ token, authHeaders, sellers, onSellers
         onClose={() => setDistributionAnchor(null)}
         anchorOrigin={{ vertical: 'bottom', horizontal: 'right' }}
         transformOrigin={{ vertical: 'top', horizontal: 'right' }}
-        slotProps={{ paper: { sx: { p: 2, width: 320 }, 'data-testid': 'ff-products-distribution-popover' } }}
+        slotProps={{ paper: { sx: { p: 2, width: 320 } } }}
       >
         {distributionProduct ? (
-          <Stack spacing={1.25}>
+          <Stack spacing={1.25} data-testid="ff-products-distribution-popover">
             <Box>
               <Typography variant="subtitle2">{distributionProduct.sku_code}</Typography>
               <Typography variant="body2" color="text.secondary" noWrap>

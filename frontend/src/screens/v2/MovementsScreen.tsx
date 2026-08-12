@@ -1,10 +1,27 @@
-import { Button } from '../../ui/Button'
-import { Card } from '../../ui/Card'
+import { useEffect, useRef } from 'react'
+import {
+  Alert,
+  Box,
+  Button,
+  Chip,
+  Paper,
+  Stack,
+  Table,
+  TableBody,
+  TableCell,
+  TableContainer,
+  TableHead,
+  TableRow,
+  Typography,
+} from '@mui/material'
 import { Screen } from '../AppV2Screens'
+import { formatDateTimeLocal } from '../../utils/formatDateTimeLocal'
+import { movementTypeLabel } from '../../utils/movementTypeLabel'
 
 type GlobalMovementRow = {
   id: string
   sku_code: string
+  created_at?: string
   quantity_delta: number
   movement_type: string
 }
@@ -28,69 +45,110 @@ export function MovementsScreen({
   backgroundJobResult,
   onStartMovementsDigestJob,
 }: Props) {
+  const autoLoadStarted = useRef(false)
+
+  useEffect(() => {
+    if (autoLoadStarted.current) return
+    autoLoadStarted.current = true
+    void onRefreshGlobalMovementsClick()
+  }, [onRefreshGlobalMovementsClick])
+
   return (
     <Screen title="Журнал движений" subtitle="Последние операции по складу">
       {isFulfillmentAdmin ? (
-        <Card className="card" data-testid="background-job-section">
-          <p className="subtle">
-            Сервер считает сводку по журналу движений в фоне; статус обновляется после запуска.
-          </p>
-          <Button
-            type="button"
-            data-testid="background-job-start"
-            disabled={opsBusy}
-            onClick={onStartMovementsDigestJob}
+        <Paper variant="outlined" sx={{ p: 2 }} data-testid="background-job-section">
+          <Stack
+            spacing={1.5}
+            direction={{ xs: 'column', sm: 'row' }}
+            sx={{ alignItems: { sm: 'center' } }}
           >
-            {opsBusy ? '…' : 'Сводка по движениям'}
-          </Button>
-          <p className="subtle" data-testid="background-job-status">
-            Статус: {backgroundJobStatus ?? '—'}
-          </p>
+            <Typography variant="body2" color="text.secondary" sx={{ flex: 1 }}>
+              Сводка помогает руководителю быстро проверить последние изменения остатков.
+            </Typography>
+            <Button
+              variant="outlined"
+              type="button"
+              data-testid="background-job-start"
+              disabled={opsBusy}
+              onClick={onStartMovementsDigestJob}
+            >
+              {opsBusy ? 'Считаем...' : 'Сводка по движениям'}
+            </Button>
+            <Chip
+              size="small"
+              variant="outlined"
+              label={backgroundJobStatus ? `Статус: ${backgroundJobStatus}` : 'Сводка не запускалась'}
+              data-testid="background-job-status"
+            />
+          </Stack>
           {backgroundJobResult ? (
-            <p data-testid="background-job-result">{backgroundJobResult}</p>
+            <Alert severity="info" sx={{ mt: 1.5 }} data-testid="background-job-result">
+              {backgroundJobResult}
+            </Alert>
           ) : null}
-        </Card>
+        </Paper>
       ) : null}
 
-      <Card className="card" data-testid="global-movements-section">
-        <p className="subtle">
-          Последние операции по складу (приёмка, перемещение, отгрузка).
-        </p>
-        <Button type="button" data-testid="global-movements-refresh" onClick={onRefreshGlobalMovementsClick}>
-          Обновить
-        </Button>
-        <div data-testid="global-movements-list">
-          <table className="ui-table" data-testid="global-movements-table">
-            <thead>
-              <tr>
-                <th>SKU</th>
-                <th>Δ</th>
-                <th>Тип</th>
-              </tr>
-            </thead>
-            <tbody>
-              {globalMovements.map((m) => (
-                <tr key={m.id} data-testid="global-movement-row">
-                  <td>{m.sku_code}</td>
-                  <td>
-                    {m.quantity_delta > 0 ? '+' : ''}
-                    {m.quantity_delta}
-                  </td>
-                  <td>{m.movement_type}</td>
-                </tr>
-              ))}
-              {globalMovements.length === 0 ? (
-                <tr>
-                  <td colSpan={3}>
-                    <span className="subtle">Пока пусто.</span>
-                  </td>
-                </tr>
-              ) : null}
-            </tbody>
-          </table>
-        </div>
-      </Card>
+      <Paper variant="outlined" sx={{ p: 2 }} data-testid="global-movements-section">
+        <Stack spacing={1.5}>
+          <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1} sx={{ alignItems: { sm: 'center' } }}>
+            <Box sx={{ flex: 1 }}>
+              <Typography variant="subtitle1">Последние движения</Typography>
+              <Typography variant="body2" color="text.secondary">
+                Приёмка, перемещения и отгрузки загружаются сразу при открытии журнала.
+              </Typography>
+            </Box>
+            <Button
+              variant="outlined"
+              type="button"
+              data-testid="global-movements-refresh"
+              onClick={onRefreshGlobalMovementsClick}
+            >
+              Обновить
+            </Button>
+          </Stack>
+          <TableContainer data-testid="global-movements-list">
+            <Table size="small" data-testid="global-movements-table">
+              <TableHead>
+                <TableRow>
+                  <TableCell>Время</TableCell>
+                  <TableCell>SKU</TableCell>
+                  <TableCell align="right">Изменение</TableCell>
+                  <TableCell>Операция</TableCell>
+                </TableRow>
+              </TableHead>
+              <TableBody>
+                {globalMovements.map((m) => (
+                  <TableRow key={m.id} data-testid="global-movement-row">
+                    <TableCell>{m.created_at ? formatDateTimeLocal(m.created_at) : '—'}</TableCell>
+                    <TableCell>{m.sku_code}</TableCell>
+                    <TableCell
+                      align="right"
+                      sx={{
+                        fontWeight: 700,
+                        color: m.quantity_delta < 0 ? 'error.main' : 'success.main',
+                      }}
+                    >
+                      {m.quantity_delta > 0 ? '+' : ''}
+                      {m.quantity_delta}
+                    </TableCell>
+                    <TableCell>{movementTypeLabel(m.movement_type)}</TableCell>
+                  </TableRow>
+                ))}
+                {globalMovements.length === 0 ? (
+                  <TableRow>
+                    <TableCell colSpan={4}>
+                      <Typography variant="body2" color="text.secondary">
+                        Движений пока нет. После приёмки, перемещения или отгрузки строки появятся здесь автоматически.
+                      </Typography>
+                    </TableCell>
+                  </TableRow>
+                ) : null}
+              </TableBody>
+            </Table>
+          </TableContainer>
+        </Stack>
+      </Paper>
     </Screen>
   )
 }
-

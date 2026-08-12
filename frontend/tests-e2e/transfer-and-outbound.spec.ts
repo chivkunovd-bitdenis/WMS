@@ -110,7 +110,7 @@ test('stock transfer and outbound shipment — UI', async ({ page }) => {
     waitForGetOk(page, '/api/operations/inventory-movements'),
     page.getByTestId('global-movements-refresh').click(),
   ]);
-  await expect(page.getByTestId('global-movements-list')).toContainText('stock_transfer_out');
+  await expect(page.getByTestId('global-movements-list')).toContainText('Перемещение: списано');
 
   const baseOut = '/api/operations/outbound-shipment-requests';
   await page.goto('/app/ops/outbound');
@@ -149,6 +149,6 @@ test('stock transfer and outbound shipment — UI', async ({ page }) => {
     .getByTestId('outbound-movements-list')
     .getByTestId('outbound-movement-row');
   await expect(movRows).toHaveCount(2);
-  await expect(movRows.nth(0)).toContainText('outbound_shipment');
-  await expect(movRows.nth(1)).toContainText('outbound_shipment');
+  await expect(movRows.nth(0)).toContainText('Отгрузка');
+  await expect(movRows.nth(1)).toContainText('Отгрузка');
 });

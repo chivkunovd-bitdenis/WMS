@@ -6,6 +6,7 @@ import { Card } from '../../ui/Card'
 import { Input } from '../../ui/Input'
 import { Select } from '../../ui/Select'
 import { Screen } from '../AppV2Screens'
+import { movementTypeLabel } from '../../utils/movementTypeLabel'
 
 type WarehouseRow = { id: string; name: string; code: string }
 type LocationRow = { id: string; code: string; warehouse_id: string }
@@ -646,7 +647,7 @@ export function InboundScreen(props: Props) {
                       {inboundMovements.map((m) => (
                         <li key={m.id} data-testid="inbound-movement-row">
                           {m.quantity_delta > 0 ? '+' : ''}
-                          {m.quantity_delta} · {m.movement_type}
+                          {m.quantity_delta} · {movementTypeLabel(m.movement_type)}
                         </li>
                       ))}
                     </ul>
@@ -676,4 +677,3 @@ export function InboundScreen(props: Props) {
     </Screen>
   )
 }
-

@@ -132,7 +132,7 @@ test('create inbound request, add line, submit — UI and API', async ({ page })
       page
         .getByTestId('inbound-movements-list')
         .getByTestId('inbound-movement-row')
-        .filter({ hasText: '+4 · stock_transfer_in' }),
+        .filter({ hasText: '+4 · Перемещение: принято' }),
     ).toHaveCount(1);
   const invRow = page
     .getByTestId('inventory-balance-list')
