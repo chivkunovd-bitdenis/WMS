@@ -177,7 +177,9 @@ async def test_fbs_worklist_happy_path(async_client: AsyncClient) -> None:
     assert len(item["inventory"]["locations"]) >= 1
     assert "price" not in item
     assert item["selection_blockers"] == []
-    assert item["wms_warehouse"]["id"] in {option["id"] for option in body["warehouse_options"]}
+    options_by_id = {option["id"]: option for option in body["warehouse_options"]}
+    assert str(DEFAULT_WB_WAREHOUSE_ID) in options_by_id
+    assert options_by_id[str(DEFAULT_WB_WAREHOUSE_ID)]["name"] == "WB Москва"
 
 
 @pytest.mark.asyncio
@@ -186,7 +188,7 @@ async def test_fbs_worklist_filters_new_orders_by_warehouse(async_client: AsyncC
     (
         headers,
         seller_id,
-        warehouse_a_id,
+        _warehouse_a_id,
         product_id,
         _location_a_id,
         order_ids,
@@ -268,7 +270,7 @@ async def test_fbs_worklist_filters_new_orders_by_warehouse(async_client: AsyncC
     )
     assert unfiltered.status_code == 200, unfiltered.text
     option_ids = {option["id"] for option in unfiltered.json()["warehouse_options"]}
-    assert {str(warehouse_a_id), str(warehouse_b_id)} <= option_ids
+    assert {str(DEFAULT_WB_WAREHOUSE_ID), str(wb_warehouse_b)} <= option_ids
 
     filtered = await async_client.get(
         "/operations/fbs-orders/worklist",
@@ -276,7 +278,7 @@ async def test_fbs_worklist_filters_new_orders_by_warehouse(async_client: AsyncC
         params={
             "seller_id": str(seller_id),
             "status_group": "new",
-            "warehouse_id": str(warehouse_b_id),
+            "wb_warehouse_id": wb_warehouse_b,
             "limit": 10,
         },
     )

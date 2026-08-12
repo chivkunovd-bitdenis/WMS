@@ -459,7 +459,7 @@ export async function fetchFbsWorklist(
   params: {
     seller_id?: string | null
     status_group?: string | null
-    warehouse_id?: string | null
+    wb_warehouse_id?: string | null
     search?: string | null
     limit?: number
     cursor?: string | null
@@ -468,7 +468,7 @@ export async function fetchFbsWorklist(
   const qs = new URLSearchParams({ limit: String(params.limit ?? 100) })
   if (params.seller_id) qs.set('seller_id', params.seller_id)
   if (params.status_group) qs.set('status_group', params.status_group)
-  if (params.warehouse_id) qs.set('warehouse_id', params.warehouse_id)
+  if (params.wb_warehouse_id) qs.set('wb_warehouse_id', params.wb_warehouse_id)
   if (params.search) qs.set('search', params.search)
   if (params.cursor) qs.set('cursor', params.cursor)
   return jsonOrThrow<FbsWorklistPage>(

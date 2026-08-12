@@ -119,7 +119,7 @@ async def fetch_worklist_page(
     *,
     seller_id: uuid.UUID | None = None,
     status_group: str | None = None,
-    warehouse_id: uuid.UUID | None = None,
+    wb_warehouse_id: int | None = None,
     search: str | None = None,
     limit: int = 100,
     cursor: str | None = None,
@@ -130,7 +130,7 @@ async def fetch_worklist_page(
         tenant_id,
         seller_id=seller_id,
         status_group=status_group,
-        warehouse_id=warehouse_id,
+        wb_warehouse_id=wb_warehouse_id,
         search=search,
         limit=limit,
         cursor=cursor,
@@ -160,7 +160,7 @@ async def _fetch_orders_page(
     *,
     seller_id: uuid.UUID | None,
     status_group: str | None,
-    warehouse_id: uuid.UUID | None,
+    wb_warehouse_id: int | None,
     search: str | None,
     limit: int,
     cursor: str | None,
@@ -176,8 +176,8 @@ async def _fetch_orders_page(
         stmt = stmt.where(FbsOrder.status.in_(allowed))
         if status_group == "new":
             stmt = stmt.where(_supplier_new_clause())
-    if warehouse_id is not None:
-        stmt = stmt.where(FbsOrder.warehouse_id == warehouse_id)
+    if wb_warehouse_id is not None:
+        stmt = stmt.where(FbsOrder.wb_warehouse_id == wb_warehouse_id)
     if search and search.strip():
         term = search.strip()
         clauses: list[ColumnElement[bool]] = [
@@ -212,13 +212,10 @@ async def _fetch_warehouse_options(
 ) -> list[dict[str, Any]]:
     stmt = (
         select(
-            FbsOrder.warehouse_id,
-            Warehouse.name,
             FbsOrder.wb_warehouse_id,
             TenantWbMpWarehouse.name,
         )
         .distinct()
-        .join(Warehouse, Warehouse.id == FbsOrder.warehouse_id)
         .outerjoin(
             TenantWbMpWarehouse,
             and_(
@@ -228,8 +225,7 @@ async def _fetch_warehouse_options(
         )
         .where(
             FbsOrder.tenant_id == tenant_id,
-            FbsOrder.warehouse_id.is_not(None),
-            Warehouse.tenant_id == tenant_id,
+            FbsOrder.wb_warehouse_id.is_not(None),
         )
     )
     if seller_id is not None:
@@ -239,21 +235,27 @@ async def _fetch_warehouse_options(
         stmt = stmt.where(FbsOrder.status.in_(allowed))
         if status_group == "new":
             stmt = stmt.where(_supplier_new_clause())
-    stmt = stmt.order_by(Warehouse.name.asc(), FbsOrder.wb_warehouse_id.asc())
+    stmt = stmt.order_by(TenantWbMpWarehouse.name.asc(), FbsOrder.wb_warehouse_id.asc())
     res = await session.execute(stmt)
     options: dict[str, dict[str, Any]] = {}
-    for wms_id, wms_name, wb_id, wb_name in res.all():
-        if wms_id is None:
+    for wb_id, wb_name in res.all():
+        if wb_id is None:
             continue
-        key = str(wms_id)
+        wb_id_int = int(wb_id)
+        key = str(wb_id_int)
+        label = (
+            wb_name.strip()
+            if isinstance(wb_name, str) and wb_name.strip()
+            else f"WB {wb_id_int}"
+        )
         options.setdefault(
             key,
             {
                 "id": key,
-                "name": wms_name or MISSING_WMS_WAREHOUSE,
+                "name": label,
                 "wb_warehouse": {
-                    "id": int(wb_id) if wb_id is not None else 0,
-                    "name": wb_name if wb_name else MISSING_WB_WAREHOUSE,
+                    "id": wb_id_int,
+                    "name": label,
                 },
             },
         )
