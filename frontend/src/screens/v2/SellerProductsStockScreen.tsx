@@ -1,4 +1,4 @@
-import { Fragment, useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import {
   Alert,
   Box,
@@ -7,12 +7,12 @@ import {
   Chip,
   FormControlLabel,
   CircularProgress,
-  Collapse,
   Divider,
   Dialog,
   DialogActions,
   DialogContent,
   DialogTitle,
+  Drawer,
   Paper,
   Stack,
   Switch,
@@ -111,7 +111,7 @@ export function SellerProductsStockScreen({
   const [fbsPending, setFbsPending] = useState<Set<string>>(new Set())
   const [limitDraft, setLimitDraft] = useState<Record<string, string>>({})
   const [fbsBulkBusy, setFbsBulkBusy] = useState(false)
-  const [expandedProductId, setExpandedProductId] = useState<string | null>(null)
+  const [directionProductId, setDirectionProductId] = useState<string | null>(null)
   const [directions, setDirections] = useState<Record<string, StockDirectionRow[]>>({})
   const [directionDrafts, setDirectionDrafts] = useState<Record<string, DirectionDraft>>({})
   const [directionBusy, setDirectionBusy] = useState<Set<string>>(new Set())
@@ -241,16 +241,21 @@ export function SellerProductsStockScreen({
     [authHeaders, markDirectionBusy, token],
   )
 
-  const toggleDirections = useCallback(
+  const openDirections = useCallback(
     async (productId: string) => {
-      const next = expandedProductId === productId ? null : productId
-      setExpandedProductId(next)
-      if (next && directions[next] == null) {
-        await loadDirections(next)
+      setDirectionProductId(productId)
+      if (directions[productId] == null) {
+        await loadDirections(productId)
       }
     },
-    [directions, expandedProductId, loadDirections],
+    [directions, loadDirections],
   )
+
+  const directionProduct = useMemo(
+    () => rows.find((row) => row.id === directionProductId) ?? null,
+    [directionProductId, rows],
+  )
+  const drawerDraft = directionProduct ? directionDraftFor(directionProduct.id) : null
 
   const createDirection = useCallback(
     async (productId: string) => {
@@ -533,10 +538,9 @@ export function SellerProductsStockScreen({
           Продажа по ФБС
         </Typography>
         <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5, maxWidth: 720 }}>
-          Включите переключатель у тех товаров, которые продаёте по ФБС. С этого момента остаток
-          с фулфилмента уходит в ваш кабинет WB и дальше поддерживается сам: любое движение товара
-          на складе тут же меняет цифру в кабинете. Пока переключатель выключен, WB про этот товар
-          от нас ничего не получает.
+          WB получает только FBS-пул, который выделен в распределении товара галкой FBS. Если
+          FBS-пул равен нулю, в WB уходит ноль, даже когда общий остаток на фулфилменте больше.
+          Остальные направления остаются резервами или свободным FBO-остатком.
         </Typography>
         <Stack
           direction="row"
@@ -577,89 +581,59 @@ export function SellerProductsStockScreen({
         <Table stickyHeader size="small" data-testid="seller-products-table">
           <TableHead>
             <TableRow>
-              <TableCell>Фото</TableCell>
-              <TableCell>SKU</TableCell>
-              <TableCell>Размер</TableCell>
+              <TableCell>Товар</TableCell>
+              <TableCell>Артикул WB</TableCell>
               <TableCell>ШК</TableCell>
-              <TableCell>Артикул продавца</TableCell>
-              <TableCell>nm</TableCell>
-              <TableCell>Название</TableCell>
               <TableCell align="right">На ФФ</TableCell>
-              <TableCell align="right">В сортировке</TableCell>
               <TableCell align="right">В ячейках</TableCell>
-              <TableCell align="right">Зарезерв.</TableCell>
-              <TableCell align="right">Остаток</TableCell>
-              <TableCell align="right">К отгрузке</TableCell>
-              <TableCell sx={{ minWidth: 190 }}>Распределение</TableCell>
+              <TableCell align="right">Свободный FBO</TableCell>
+              <TableCell sx={{ minWidth: 170 }}>Распределение</TableCell>
               <TableCell sx={{ minWidth: 210 }}>Продажа по ФБС</TableCell>
               <TableCell>ТЗ упаковки</TableCell>
             </TableRow>
           </TableHead>
           <TableBody>
-            {pagedRows.map((p) => {
-              const draft = directionDraftFor(p.id)
-              const rowDirections = directions[p.id] ?? []
-              const isExpanded = expandedProductId === p.id
-              const isDirectionBusy = directionBusy.has(p.id)
-              return (
-              <Fragment key={p.id}>
-              <TableRow hover data-testid="seller-product-row">
+            {pagedRows.map((p) => (
+              <TableRow hover data-testid="seller-product-row" key={p.id}>
                 <TableCell>
-                  <ProductPhotoThumb src={p.wb_primary_image_url} />
+                  <Stack direction="row" spacing={1.25} sx={{ alignItems: 'center', minWidth: 260 }}>
+                    <ProductPhotoThumb src={p.wb_primary_image_url} />
+                    <Box sx={{ minWidth: 0 }}>
+                      <Typography variant="body2" sx={{ fontWeight: 600 }}>
+                        {p.name}
+                      </Typography>
+                      <Typography variant="caption" color="text.secondary" sx={{ display: 'block' }}>
+                        SKU {p.sku_code}
+                        {p.wb_vendor_code ? ` · ${p.wb_vendor_code}` : ''}
+                        {p.wb_size ? ` · ${p.wb_size}` : ''}
+                      </Typography>
+                    </Box>
+                  </Stack>
                 </TableCell>
-                <TableCell>{p.sku_code}</TableCell>
-                <TableCell>{p.wb_size ?? '—'}</TableCell>
-                <TableCell>{p.wb_primary_barcode ?? (p.wb_barcodes[0] ?? '—')}</TableCell>
-                <TableCell>{p.wb_vendor_code ?? '—'}</TableCell>
                 <TableCell>{p.wb_nm_id ?? '—'}</TableCell>
-                <TableCell>{p.name}</TableCell>
+                <TableCell>{p.wb_primary_barcode ?? (p.wb_barcodes[0] ?? '—')}</TableCell>
                 <TableCell align="right" data-testid="seller-stock-on-hand">
                   {p.stock_on_hand}
-                </TableCell>
-                <TableCell align="right" data-testid="seller-stock-in-sorting">
-                  {p.stock_in_sorting}
                 </TableCell>
                 <TableCell align="right" data-testid="seller-stock-in-storage">
                   {p.stock_in_storage}
                 </TableCell>
-                <TableCell align="right" data-testid="seller-stock-reserved">
-                  {p.stock_reserved}
-                </TableCell>
-                <TableCell align="right" data-testid="seller-stock-free-total">
-                  {p.stock_free_total}
-                </TableCell>
-                <TableCell align="right">
-                  <Box component="span" data-testid="seller-stock-available">
-                    {p.stock_available_for_mp}
-                  </Box>
-                  {p.stock_reserved > 0 ? (
-                    <Typography
-                      component="span"
-                      variant="caption"
-                      color="text.secondary"
-                      sx={{ display: 'block' }}
-                      data-testid="seller-stock-available-hint"
-                    >
-                      (свободно {p.stock_free_total})
-                    </Typography>
-                  ) : null}
+                <TableCell align="right" data-testid="seller-stock-free-fbo">
+                  {p.stock_free_fbo}
                 </TableCell>
                 <TableCell data-testid={`seller-stock-distribution-${p.id}`}>
-                  <Stack spacing={0.25}>
-                    <Typography variant="body2">FBS {p.stock_fbs} шт</Typography>
-                    <Typography variant="body2">
-                      Резервы {p.stock_reserved_directions} шт
-                    </Typography>
-                    <Typography variant="body2" sx={{ fontWeight: 700 }}>
-                      Свободный FBO {p.stock_free_fbo} шт
+                  <Stack spacing={0.5}>
+                    <Typography variant="body2" sx={{ whiteSpace: 'nowrap' }}>
+                      FBS {p.stock_fbs} шт · резервы {p.stock_reserved_directions} шт
                     </Typography>
                     <Button
                       size="small"
-                      sx={{ alignSelf: 'flex-start', minWidth: 0, px: 0 }}
-                      onClick={() => void toggleDirections(p.id)}
+                      variant="outlined"
+                      sx={{ alignSelf: 'flex-start' }}
+                      onClick={() => void openDirections(p.id)}
                       data-testid={`seller-stock-directions-toggle-${p.id}`}
                     >
-                      {isExpanded ? 'Скрыть' : 'Направления'}
+                      Распределение
                     </Button>
                   </Stack>
                 </TableCell>
@@ -689,6 +663,11 @@ export function SellerProductsStockScreen({
                     />
                     {p.fbs_stock_sync_enabled ? (
                       <>
+                        {p.stock_fbs === 0 ? (
+                          <Alert severity="info" variant="outlined" sx={{ py: 0 }}>
+                            FBS-пул 0: в WB уйдёт 0 шт.
+                          </Alert>
+                        ) : null}
                         <TextField
                           size="small"
                           label="Лимит"
@@ -747,119 +726,10 @@ export function SellerProductsStockScreen({
                   </Stack>
                 </TableCell>
               </TableRow>
-              <TableRow>
-                <TableCell colSpan={16} sx={{ p: 0, borderBottom: isExpanded ? undefined : 0 }}>
-                  <Collapse in={isExpanded} timeout="auto" unmountOnExit>
-                    <Box sx={{ p: 2, bgcolor: 'action.hover' }} data-testid={`seller-stock-directions-panel-${p.id}`}>
-                      <Stack spacing={1.5}>
-                        <Stack spacing={0.75}>
-                          {rowDirections.length === 0 && !isDirectionBusy ? (
-                            <Typography variant="body2" color="text.secondary">
-                              Направлений пока нет.
-                            </Typography>
-                          ) : null}
-                          {rowDirections.map((direction) => (
-                            <Stack
-                              key={direction.id}
-                              direction={{ xs: 'column', sm: 'row' }}
-                              spacing={1}
-                              sx={{ alignItems: { sm: 'center' } }}
-                              data-testid={`seller-stock-direction-row-${direction.id}`}
-                            >
-                              <Box sx={{ minWidth: 0, flex: 1 }}>
-                                <Typography variant="body2" sx={{ fontWeight: 600 }}>
-                                  {direction.name}
-                                </Typography>
-                                <Typography variant="caption" color="text.secondary">
-                                  {direction.is_fbs ? 'FBS-пул' : 'Резерв/набор'} · {direction.quantity} шт
-                                </Typography>
-                                {direction.comment ? (
-                                  <Typography variant="caption" color="text.secondary" sx={{ display: 'block' }}>
-                                    {direction.comment}
-                                  </Typography>
-                                ) : null}
-                              </Box>
-                              <Button
-                                size="small"
-                                color="warning"
-                                disabled={isDirectionBusy}
-                                onClick={() => void deleteDirection(p.id, direction.id)}
-                                data-testid={`seller-stock-direction-delete-${direction.id}`}
-                              >
-                                Удалить
-                              </Button>
-                            </Stack>
-                          ))}
-                        </Stack>
-                        <Divider />
-                        <Stack
-                          direction={{ xs: 'column', md: 'row' }}
-                          spacing={1}
-                          sx={{ alignItems: { md: 'center' } }}
-                        >
-                          <TextField
-                            size="small"
-                            label="Название"
-                            value={draft.name}
-                            onChange={(e) => patchDirectionDraft(p.id, { name: e.target.value })}
-                            slotProps={{
-                              htmlInput: { 'data-testid': `seller-stock-direction-name-${p.id}` },
-                            }}
-                          />
-                          <TextField
-                            size="small"
-                            label="Количество"
-                            value={draft.quantity}
-                            onChange={(e) => patchDirectionDraft(p.id, { quantity: e.target.value })}
-                            slotProps={{
-                              htmlInput: {
-                                inputMode: 'numeric',
-                                'data-testid': `seller-stock-direction-quantity-${p.id}`,
-                              },
-                            }}
-                            sx={{ maxWidth: 150 }}
-                          />
-                          <TextField
-                            size="small"
-                            label="Комментарий"
-                            value={draft.comment}
-                            onChange={(e) => patchDirectionDraft(p.id, { comment: e.target.value })}
-                            slotProps={{
-                              htmlInput: { 'data-testid': `seller-stock-direction-comment-${p.id}` },
-                            }}
-                            sx={{ minWidth: 220 }}
-                          />
-                          <FormControlLabel
-                            sx={{ m: 0 }}
-                            control={
-                              <Checkbox
-                                checked={draft.is_fbs}
-                                onChange={(e) => patchDirectionDraft(p.id, { is_fbs: e.target.checked })}
-                                data-testid={`seller-stock-direction-fbs-${p.id}`}
-                              />
-                            }
-                            label="FBS"
-                          />
-                          <Button
-                            variant="contained"
-                            disabled={isDirectionBusy}
-                            onClick={() => void createDirection(p.id)}
-                            data-testid={`seller-stock-direction-submit-${p.id}`}
-                          >
-                            Добавить
-                          </Button>
-                          {isDirectionBusy ? <CircularProgress size={18} /> : null}
-                        </Stack>
-                      </Stack>
-                    </Box>
-                  </Collapse>
-                </TableCell>
-              </TableRow>
-              </Fragment>
-            )})}
+            ))}
             {rows.length === 0 ? (
               <TableRow>
-                <TableCell colSpan={16}>
+                <TableCell colSpan={9}>
                   <Typography variant="body2" color="text.secondary">
                     Пока нет товаров.
                   </Typography>
@@ -884,6 +754,164 @@ export function SellerProductsStockScreen({
           data-testid="seller-products-pagination"
         />
       </TableContainer>
+
+      <Drawer
+        anchor="right"
+        open={directionProduct != null}
+        onClose={() => setDirectionProductId(null)}
+        slotProps={{
+          paper: { sx: { width: { xs: '100%', sm: 480 }, maxWidth: '100%' } },
+        }}
+        data-testid={
+          directionProduct ? `seller-stock-directions-panel-${directionProduct.id}` : undefined
+        }
+      >
+        {directionProduct && drawerDraft ? (
+          <Box sx={{ p: 2.5 }}>
+            <Stack spacing={2}>
+              <Box>
+                <Typography variant="h6">Распределение остатка</Typography>
+                <Typography variant="body2" color="text.secondary">
+                  {directionProduct.sku_code} · {directionProduct.name}
+                </Typography>
+              </Box>
+              <Stack direction="row" spacing={2}>
+                <Box>
+                  <Typography variant="caption" color="text.secondary">
+                    FBS
+                  </Typography>
+                  <Typography variant="h6">{directionProduct.stock_fbs} шт</Typography>
+                </Box>
+                <Box>
+                  <Typography variant="caption" color="text.secondary">
+                    Резервы
+                  </Typography>
+                  <Typography variant="h6">
+                    {directionProduct.stock_reserved_directions} шт
+                  </Typography>
+                </Box>
+                <Box>
+                  <Typography variant="caption" color="text.secondary">
+                    Свободный FBO
+                  </Typography>
+                  <Typography variant="h6">{directionProduct.stock_free_fbo} шт</Typography>
+                </Box>
+              </Stack>
+              {directionProduct.stock_fbs === 0 ? (
+                <Alert severity="info" variant="outlined">
+                  FBS-пул не выделен. При включённой синхронизации WB получит 0 шт.
+                </Alert>
+              ) : null}
+              <Divider />
+              <Stack spacing={1}>
+                {directions[directionProduct.id]?.length === 0 &&
+                !directionBusy.has(directionProduct.id) ? (
+                  <Typography variant="body2" color="text.secondary">
+                    Направлений пока нет.
+                  </Typography>
+                ) : null}
+                {(directions[directionProduct.id] ?? []).map((direction) => (
+                  <Paper
+                    key={direction.id}
+                    variant="outlined"
+                    sx={{ p: 1.25 }}
+                    data-testid={`seller-stock-direction-row-${direction.id}`}
+                  >
+                    <Stack direction="row" spacing={1} sx={{ alignItems: 'flex-start' }}>
+                      <Box sx={{ minWidth: 0, flex: 1 }}>
+                        <Typography variant="body2" sx={{ fontWeight: 600 }}>
+                          {direction.name}
+                        </Typography>
+                        <Typography variant="caption" color="text.secondary">
+                          {direction.is_fbs ? 'FBS-пул' : 'Резерв/набор'} · {direction.quantity} шт
+                        </Typography>
+                        {direction.comment ? (
+                          <Typography variant="caption" color="text.secondary" sx={{ display: 'block' }}>
+                            {direction.comment}
+                          </Typography>
+                        ) : null}
+                      </Box>
+                      <Button
+                        size="small"
+                        color="warning"
+                        disabled={directionBusy.has(directionProduct.id)}
+                        onClick={() => void deleteDirection(directionProduct.id, direction.id)}
+                        data-testid={`seller-stock-direction-delete-${direction.id}`}
+                      >
+                        Удалить
+                      </Button>
+                    </Stack>
+                  </Paper>
+                ))}
+              </Stack>
+              <Divider />
+              <Stack spacing={1.25}>
+                <TextField
+                  size="small"
+                  label="Название"
+                  value={drawerDraft.name}
+                  onChange={(e) => patchDirectionDraft(directionProduct.id, { name: e.target.value })}
+                  slotProps={{
+                    htmlInput: { 'data-testid': `seller-stock-direction-name-${directionProduct.id}` },
+                  }}
+                />
+                <TextField
+                  size="small"
+                  label="Количество"
+                  value={drawerDraft.quantity}
+                  onChange={(e) =>
+                    patchDirectionDraft(directionProduct.id, { quantity: e.target.value })
+                  }
+                  slotProps={{
+                    htmlInput: {
+                      inputMode: 'numeric',
+                      'data-testid': `seller-stock-direction-quantity-${directionProduct.id}`,
+                    },
+                  }}
+                />
+                <TextField
+                  size="small"
+                  label="Комментарий"
+                  value={drawerDraft.comment}
+                  onChange={(e) =>
+                    patchDirectionDraft(directionProduct.id, { comment: e.target.value })
+                  }
+                  slotProps={{
+                    htmlInput: {
+                      'data-testid': `seller-stock-direction-comment-${directionProduct.id}`,
+                    },
+                  }}
+                />
+                <FormControlLabel
+                  sx={{ m: 0 }}
+                  control={
+                    <Checkbox
+                      checked={drawerDraft.is_fbs}
+                      onChange={(e) =>
+                        patchDirectionDraft(directionProduct.id, { is_fbs: e.target.checked })
+                      }
+                      data-testid={`seller-stock-direction-fbs-${directionProduct.id}`}
+                    />
+                  }
+                  label="FBS-пул для публикации в WB"
+                />
+                <Stack direction="row" spacing={1} sx={{ alignItems: 'center' }}>
+                  <Button
+                    variant="contained"
+                    disabled={directionBusy.has(directionProduct.id)}
+                    onClick={() => void createDirection(directionProduct.id)}
+                    data-testid={`seller-stock-direction-submit-${directionProduct.id}`}
+                  >
+                    Добавить
+                  </Button>
+                  <Button onClick={() => setDirectionProductId(null)}>Закрыть</Button>
+                  {directionBusy.has(directionProduct.id) ? <CircularProgress size={18} /> : null}
+                </Stack>
+              </Stack>
+            </Stack>
+          </Box>
+        ) : null}
+      </Drawer>
 
       <Dialog
         open={editProduct != null}

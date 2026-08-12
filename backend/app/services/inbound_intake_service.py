@@ -39,6 +39,10 @@ STATUS_RECEIVING = "receiving"
 STATUS_SORTING = "sorting"
 STATUS_DONE = "done"
 
+OPERATION_TYPE_INBOUND = "inbound"
+OPERATION_TYPE_RETURN = "return"
+OPERATION_TYPES = frozenset({OPERATION_TYPE_INBOUND, OPERATION_TYPE_RETURN})
+
 # Collapsed legacy names (same values — IN-BE-03 updates API labels)
 STATUS_PRIMARY_ACCEPTED = STATUS_RECEIVING
 STATUS_VERIFYING = STATUS_RECEIVING
@@ -125,10 +129,14 @@ async def create_request(
     warehouse_id: uuid.UUID,
     seller_id: uuid.UUID | None = None,
     planned_delivery_date: date | None = None,
+    operation_type: str = OPERATION_TYPE_INBOUND,
 ) -> InboundIntakeRequest:
     wh = await get_warehouse(session, tenant_id, warehouse_id)
     if wh is None:
         raise InboundIntakeError("warehouse_not_found")
+    normalized_operation_type = operation_type.strip().lower()
+    if normalized_operation_type not in OPERATION_TYPES:
+        raise InboundIntakeError("invalid_operation_type")
     if seller_id is not None:
         sl = await session.get(Seller, seller_id)
         if sl is None or sl.tenant_id != tenant_id:
@@ -137,6 +145,7 @@ async def create_request(
         tenant_id=tenant_id,
         warehouse_id=warehouse_id,
         status=STATUS_DRAFT,
+        operation_type=normalized_operation_type,
         seller_id=seller_id,
         planned_delivery_date=planned_delivery_date,
         planned_box_count=None,
@@ -570,6 +579,87 @@ async def _request_barcode_index(
     return idx
 
 
+async def _seller_catalog_barcode_index(
+    session: AsyncSession,
+    tenant_id: uuid.UUID,
+    seller_id: uuid.UUID,
+) -> dict[str, uuid.UUID]:
+    rows = await list_seller_wb_catalog_rows(session, tenant_id, seller_id)
+    idx: dict[str, uuid.UUID] = {}
+    for row in rows:
+        key = row.sku_code.strip()
+        if key:
+            idx[key] = row.product_id
+            idx[key.upper()] = row.product_id
+        for b in row.wb_barcodes:
+            k = str(b).strip()
+            if k:
+                idx[k] = row.product_id
+                idx[k.upper()] = row.product_id
+        if row.wb_primary_barcode:
+            k2 = row.wb_primary_barcode.strip()
+            if k2:
+                idx[k2] = row.product_id
+                idx[k2.upper()] = row.product_id
+    return idx
+
+
+async def add_or_increment_received_product(
+    session: AsyncSession,
+    tenant_id: uuid.UUID,
+    request_id: uuid.UUID,
+    *,
+    product_id: uuid.UUID,
+    actual_qty: int = 1,
+) -> InboundIntakeLine:
+    if actual_qty < 1:
+        raise InboundIntakeError("invalid_qty")
+    req = await get_request(session, tenant_id, request_id)
+    if req is None:
+        raise InboundIntakeError("request_not_found")
+    if req.status == STATUS_SUBMITTED:
+        req.status = STATUS_RECEIVING
+        req.primary_accepted_at = datetime.now(UTC)
+    elif req.status not in RECEIVING_STATUSES:
+        raise InboundIntakeError("not_verifying")
+
+    prod_stmt = select(Product).where(
+        Product.id == product_id,
+        Product.tenant_id == tenant_id,
+    )
+    prod_res = await session.execute(prod_stmt)
+    product = prod_res.scalar_one_or_none()
+    if product is None:
+        raise InboundIntakeError("product_not_found")
+    if product.seller_id is None:
+        raise InboundIntakeError("product_seller_mismatch")
+    if req.seller_id is None:
+        req.seller_id = product.seller_id
+    elif product.seller_id != req.seller_id:
+        raise InboundIntakeError("product_seller_mismatch")
+
+    line = next((ln for ln in req.lines if ln.product_id == product_id), None)
+    if line is None:
+        line = InboundIntakeLine(
+            request_id=request_id,
+            product_id=product_id,
+            expected_qty=0,
+            actual_qty=actual_qty,
+            posted_qty=0,
+            added_by_fulfillment=True,
+        )
+        session.add(line)
+    else:
+        new_loose = _loose_qty(line) + actual_qty
+        box_total = await _box_total_for_product(session, request_id, line.product_id)
+        if line.posted_qty > new_loose + box_total:
+            raise InboundIntakeError("actual_below_posted")
+        line.actual_qty = new_loose
+    await session.commit()
+    await session.refresh(line)
+    return line
+
+
 async def scan_barcode_to_loose_intake(
     session: AsyncSession,
     tenant_id: uuid.UUID,
@@ -591,19 +681,18 @@ async def scan_barcode_to_loose_intake(
         raise InboundIntakeError("not_verifying")
     idx = await _request_barcode_index(session, tenant_id, req)
     product_id = idx.get(raw) or idx.get(raw.upper())
+    if product_id is None and req.seller_id is not None:
+        seller_idx = await _seller_catalog_barcode_index(session, tenant_id, req.seller_id)
+        product_id = seller_idx.get(raw) or seller_idx.get(raw.upper())
     if product_id is None:
         raise InboundIntakeError("product_not_on_request")
-    line = next((ln for ln in req.lines if ln.product_id == product_id), None)
-    if line is None:
-        raise InboundIntakeError("product_not_on_request")
-    new_loose = _loose_qty(line) + 1
-    box_total = await _box_total_for_product(session, request_id, line.product_id)
-    if line.posted_qty > new_loose + box_total:
-        raise InboundIntakeError("actual_below_posted")
-    line.actual_qty = new_loose
-    await session.commit()
-    await session.refresh(line)
-    return line
+    return await add_or_increment_received_product(
+        session,
+        tenant_id,
+        request_id,
+        product_id=product_id,
+        actual_qty=1,
+    )
 
 
 async def set_line_actual_qty(

@@ -652,3 +652,95 @@ async def test_inbound_draft_patch_qty_delete_patch_planned(async_client: AsyncC
     got = await async_client.get(f"{base}/{rid}", headers=sh)
     assert got.status_code == 200, got.text
     assert got.json()["lines"] == []
+
+
+@pytest.mark.asyncio
+async def test_inbound_receiving_accepts_seller_catalog_product_as_discrepancy(
+    async_client: AsyncClient,
+) -> None:
+    suffix = str(int(time.time() * 1000))
+    reg = await async_client.post(
+        "/auth/register",
+        json={
+            "organization_name": "Return Mix Co",
+            "slug": f"ret-mix-{suffix}",
+            "admin_email": f"ret-mix-{suffix}@example.com",
+            "password": "password123",
+        },
+    )
+    assert reg.status_code == 200, reg.text
+    ah = {"Authorization": f"Bearer {reg.json()['access_token']}"}
+    sh, sid = await _create_seller_headers(
+        async_client,
+        admin_headers=ah,
+        seller_name="Return Seller",
+        seller_email=f"ret-mix-seller-{suffix}@example.com",
+    )
+    wh = await async_client.post(
+        "/warehouses",
+        headers=ah,
+        json={"name": "Return WH", "code": f"ret-wh-{suffix}"},
+    )
+    assert wh.status_code == 200, wh.text
+    wid = wh.json()["id"]
+    planned = await async_client.post(
+        "/products",
+        headers=ah,
+        json={
+            "name": "Заявленный цвет",
+            "sku_code": f"RET-PLAN-{suffix}",
+            "seller_id": sid,
+        },
+    )
+    assert planned.status_code == 200, planned.text
+    arrived_barcode = f"RET-FACT-{suffix}"
+    arrived = await async_client.post(
+        "/products",
+        headers=ah,
+        json={
+            "name": "Приехавший цвет",
+            "sku_code": f"RET-ARR-{suffix}",
+            "wb_barcode": arrived_barcode,
+            "seller_id": sid,
+        },
+    )
+    assert arrived.status_code == 200, arrived.text
+
+    base = "/operations/inbound-intake-requests"
+    cr = await async_client.post(
+        base,
+        headers=sh,
+        json={"warehouse_id": wid, "operation_type": "return"},
+    )
+    assert cr.status_code == 201, cr.text
+    assert cr.json()["operation_type"] == "return"
+    rid = cr.json()["id"]
+    add = await async_client.post(
+        f"{base}/{rid}/lines",
+        headers=sh,
+        json={"product_id": planned.json()["id"], "expected_qty": 1},
+    )
+    assert add.status_code == 201, add.text
+    sub = await async_client.post(f"{base}/{rid}/submit", headers=sh)
+    assert sub.status_code == 200, sub.text
+
+    scan = await async_client.post(
+        f"{base}/{rid}/receiving/scan",
+        headers=ah,
+        json={"barcode": arrived_barcode},
+    )
+    assert scan.status_code == 200, scan.text
+    scanned = scan.json()
+    assert scanned["product_id"] == arrived.json()["id"]
+    assert scanned["expected_qty"] == 0
+    assert scanned["actual_qty"] == 1
+    assert scanned["effective_actual_qty"] == 1
+    assert scanned["added_by_fulfillment"] is True
+
+    done = await async_client.post(f"{base}/{rid}/complete-receiving", headers=ah)
+    assert done.status_code == 200, done.text
+    data = done.json()
+    assert data["has_discrepancy"] is True
+    fact_line = next(ln for ln in data["lines"] if ln["product_id"] == arrived.json()["id"])
+    assert fact_line["expected_qty"] == 0
+    assert fact_line["actual_qty"] == 1

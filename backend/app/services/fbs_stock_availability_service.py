@@ -129,17 +129,13 @@ async def fbs_available_qty_by_product(
     *,
     exclude_fbs_order_ids: frozenset[uuid.UUID] | None = None,
 ) -> dict[uuid.UUID, int]:
-    """FBS pool minus active FBS reserves; legacy physical formula when no directions exist."""
+    """FBS pool minus active FBS reserves.
+
+    No stock direction means no product quantity is intentionally assigned to FBS,
+    so WB publication and FBS order reservation must see zero.
+    """
     if not product_ids:
         return {}
-    from app.services.marketplace_unload_service import _outbound_reserved_by_product
-
-    on_hand_map = await _storage_and_sorting_on_hand_by_product(
-        session, tenant_id, warehouse_id, product_ids
-    )
-    outbound_map = await _outbound_reserved_by_product(
-        session, tenant_id, warehouse_id, product_ids
-    )
     fbs_map = await fbs_reserved_by_product(
         session,
         tenant_id,
@@ -157,9 +153,7 @@ async def fbs_available_qty_by_product(
         if directions is not None and directions.has_any:
             result[pid] = clamp_nonneg(directions.fbs - fbs)
             continue
-        storage, sorting = on_hand_map.get(pid, (0, 0))
-        outbound = int(outbound_map.get(pid, 0))
-        result[pid] = clamp_nonneg(storage + sorting - outbound - fbs)
+        result[pid] = 0
     return result
 
 

@@ -224,7 +224,7 @@ export function WbProductPickerDialog({
       <DialogContent dividers>
         <Stack spacing={2} sx={{ mb: 2 }}>
           <TextField
-            label="Поиск (артикул, ШК, nm, название, артикул продавца)"
+            label="Поиск (артикул, ШК, артикул WB, название, артикул продавца)"
             value={pickerSearch}
             onChange={(e) => setPickerSearch(e.target.value)}
             onKeyDown={(e) => {

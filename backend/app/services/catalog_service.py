@@ -389,6 +389,7 @@ async def create_product(
         length_mm=dim_l,
         width_mm=dim_w,
         height_mm=dim_h,
+        volume_liters=volume_liters_from_mm(dim_l, dim_w, dim_h),
         wb_barcode=barcode,
         wb_size=size,
         wb_vendor_code=vendor,
@@ -442,6 +443,32 @@ async def update_packaging_instructions(
     p.packaging_instructions = text if text else None
     if requires_honest_sign is not None:
         p.requires_honest_sign = requires_honest_sign
+    if commit:
+        await session.commit()
+        await session.refresh(p, attribute_names=["seller"])
+    else:
+        await session.flush()
+    return p
+
+
+async def update_product_dimensions(
+    session: AsyncSession,
+    tenant_id: uuid.UUID,
+    product_id: uuid.UUID,
+    *,
+    length_mm: int | None,
+    width_mm: int | None,
+    height_mm: int | None,
+    commit: bool = True,
+) -> Product:
+    dim_l, dim_w, dim_h = _normalize_dimensions(length_mm, width_mm, height_mm)
+    p = await get_product(session, tenant_id, product_id)
+    if p is None:
+        raise CatalogError("product_not_found")
+    p.length_mm = dim_l
+    p.width_mm = dim_w
+    p.height_mm = dim_h
+    p.volume_liters = volume_liters_from_mm(dim_l, dim_w, dim_h)
     if commit:
         await session.commit()
         await session.refresh(p, attribute_names=["seller"])

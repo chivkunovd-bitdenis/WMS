@@ -1081,6 +1081,8 @@ export default function App() {
         fd.get('inbound_planned_delivery_date') ?? '',
       ).trim()
       const planned_delivery_date = planned_delivery_date_raw || null
+      const operation_type =
+        String(fd.get('inbound_operation_type') ?? 'inbound').trim() || 'inbound'
       const warehouseId =
         whFromForm ||
         selectedWarehouseId ||
@@ -1099,7 +1101,7 @@ export default function App() {
           ...authHeaders(token),
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({ warehouse_id: warehouseId, planned_delivery_date }),
+        body: JSON.stringify({ warehouse_id: warehouseId, planned_delivery_date, operation_type }),
       })
       if (!res.ok) {
         setOpsError(await readApiErrorMessage(res))
@@ -3009,6 +3011,7 @@ export default function App() {
                   requestId={selectedInboundId}
                   isFulfillmentAdmin={canReceptionOps}
                   workspace={ffInboundWorkspace}
+                  sellers={sellers}
                   addressStorageEnabled={me?.address_storage_enabled !== false}
                   onClose={() => {
                     setFfDocModal(null)

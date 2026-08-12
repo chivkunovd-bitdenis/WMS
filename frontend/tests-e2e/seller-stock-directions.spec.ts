@@ -94,13 +94,12 @@ test('seller creates stock directions and sees FBS, reserves, free FBO', async (
   await expect(row.getByTestId(`seller-stock-distribution-${productId}`)).toContainText(
     'FBS 0 шт',
   )
-  await expect(row.getByTestId(`seller-stock-distribution-${productId}`)).toContainText(
-    'Свободный FBO 10 шт',
-  )
+  await expect(row.getByTestId('seller-stock-free-fbo')).toHaveText('10')
 
   await row.getByTestId(`seller-stock-directions-toggle-${productId}`).click()
   const panel = page.getByTestId(`seller-stock-directions-panel-${productId}`)
   await expect(panel).toBeVisible()
+  await expect(panel).toContainText('FBS-пул не выделен')
 
   await page.getByTestId(`seller-stock-direction-name-${productId}`).fill('FBS WB')
   await page.getByTestId(`seller-stock-direction-quantity-${productId}`).fill('3')
@@ -117,9 +116,7 @@ test('seller creates stock directions and sees FBS, reserves, free FBO', async (
   await expect(row.getByTestId(`seller-stock-distribution-${productId}`)).toContainText(
     'FBS 3 шт',
   )
-  await expect(row.getByTestId(`seller-stock-distribution-${productId}`)).toContainText(
-    'Свободный FBO 7 шт',
-  )
+  await expect(row.getByTestId('seller-stock-free-fbo')).toHaveText('7')
 
   await page.getByTestId(`seller-stock-direction-name-${productId}`).fill('Набор сентябрь')
   await page.getByTestId(`seller-stock-direction-quantity-${productId}`).fill('2')
@@ -133,11 +130,9 @@ test('seller creates stock directions and sees FBS, reserves, free FBO', async (
     page.getByTestId(`seller-stock-direction-submit-${productId}`).click(),
   ])
   await expect(row.getByTestId(`seller-stock-distribution-${productId}`)).toContainText(
-    'Резервы 2 шт',
+    'резервы 2 шт',
   )
-  await expect(row.getByTestId(`seller-stock-distribution-${productId}`)).toContainText(
-    'Свободный FBO 5 шт',
-  )
+  await expect(row.getByTestId('seller-stock-free-fbo')).toHaveText('5')
   await expect(panel).toContainText('FBS-пул')
   await expect(panel).toContainText('Резерв/набор')
 })

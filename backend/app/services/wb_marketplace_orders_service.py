@@ -167,7 +167,7 @@ async def available_qty_for_fbs_reserve(
     *,
     exclude_order_id: uuid.UUID | None = None,
 ) -> int:
-    """max(0, storage + sorting - outbound - FBS); FBO/MP unload not subtracted."""
+    """FBS direction pool minus active FBS reserves; no FBS direction means 0."""
     return await fbs_available_qty_for_product(
         session,
         tenant_id,

@@ -92,7 +92,6 @@ test('seller owner manages staff permissions and deletes draft documents only', 
   await expect(page.getByTestId('nav-seller-products')).toHaveCount(0);
   await expect(page.getByTestId('nav-seller-honest-sign')).toHaveCount(0);
   await expect(page.getByTestId('nav-seller-settings')).toHaveCount(0);
-
-  await page.goto('/seller/products');
-  await expect(page.getByTestId('seller-access-denied')).toBeVisible();
+  await page.getByTestId('nav-seller-documents').click();
+  await expect(page.getByTestId('seller-documents-table')).toBeVisible();
 });

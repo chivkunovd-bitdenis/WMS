@@ -43,8 +43,12 @@ type InboundLine = {
   product_id: string
   sku_code: string
   product_name: string
+  wb_barcode: string | null
+  requires_honest_sign: boolean
+  added_by_fulfillment: boolean
   expected_qty: number
   actual_qty: number | null
+  effective_actual_qty: number | null
   posted_qty: number
   storage_location_id: string | null
   storage_location_code: string | null
@@ -54,6 +58,7 @@ type InboundDetail = {
   id: string
   warehouse_id: string
   status: string
+  operation_type: 'inbound' | 'return'
   planned_delivery_date: string | null
   planned_box_count: number | null
   actual_box_count: number | null
@@ -75,6 +80,15 @@ function statusRu(status: string): string {
   }
   if (status === 'submitted') {
     return 'Передано на склад'
+  }
+  if (status === 'receiving') {
+    return 'Принимается на складе'
+  }
+  if (status === 'sorting') {
+    return 'В сортировке'
+  }
+  if (status === 'done') {
+    return 'Проведено'
   }
   if (status === 'primary_accepted') {
     return 'Принято на складе'
@@ -448,6 +462,7 @@ export function SellerInboundDraftScreen({
   }
 
   const draftLocked = detail != null && detail.status !== 'draft'
+  const factVisible = detail != null && detail.status !== 'draft'
 
   return (
     <Box data-testid="seller-inbound-draft-root">
@@ -519,6 +534,9 @@ export function SellerInboundDraftScreen({
               color={detail.status === 'draft' ? 'default' : 'primary'}
               data-testid="seller-inbound-status-chip"
             />
+            <Typography variant="body2" color="text.secondary" data-testid="seller-inbound-operation-type">
+              Тип: <strong>{detail.operation_type === 'return' ? 'Возврат' : 'Приёмка'}</strong>
+            </Typography>
             <Box sx={{ flexGrow: 1 }} />
             <Button
               variant="outlined"
@@ -573,9 +591,20 @@ export function SellerInboundDraftScreen({
                   <TableCell sx={{ width: 120, pr: 2 }}>Артикул WB</TableCell>
                   <TableCell sx={{ pl: 2 }}>Наименование</TableCell>
                   <TableCell align="right" sx={{ width: 120 }}>
-                    Кол-во
+                    {factVisible ? 'Заявлено' : 'Кол-во'}
                   </TableCell>
-                  <TableCell sx={{ width: 92 }} />
+                  {factVisible ? (
+                    <>
+                      <TableCell align="right" sx={{ width: 112 }}>
+                        Факт
+                      </TableCell>
+                      <TableCell align="right" sx={{ width: 132 }}>
+                        Расхождение
+                      </TableCell>
+                    </>
+                  ) : (
+                    <TableCell sx={{ width: 92 }} />
+                  )}
                 </TableRow>
               </TableHead>
               <TableBody>
@@ -584,13 +613,18 @@ export function SellerInboundDraftScreen({
                   const img = cat?.wb_primary_image_url ?? undefined
                   const barcode =
                     cat?.wb_primary_barcode ??
+                    ln.wb_barcode ??
                     (cat?.wb_barcodes.length ? cat.wb_barcodes[0] ?? null : null)
+                  const actualQty = ln.effective_actual_qty ?? ln.actual_qty ?? 0
+                  const delta = actualQty - ln.expected_qty
+                  const lineHasDiscrepancy = factVisible && (delta !== 0 || ln.added_by_fulfillment)
                   return (
                     <TableRow
                       key={ln.id}
                       hover
                       data-testid="seller-inbound-line-row"
                       sx={{
+                        bgcolor: lineHasDiscrepancy ? 'rgba(211, 47, 47, 0.08)' : undefined,
                         '& td': {
                           px: 1.25,
                         },
@@ -632,43 +666,75 @@ export function SellerInboundDraftScreen({
                         <Typography variant="body2" sx={{ lineHeight: 1.25 }}>
                           {ln.product_name}
                         </Typography>
+                        {ln.added_by_fulfillment ? (
+                          <Typography
+                            variant="caption"
+                            color="error"
+                            data-testid="seller-inbound-line-added-by-ff"
+                          >
+                            Добавлено ФФ
+                          </Typography>
+                        ) : null}
                       </TableCell>
                       <TableCell align="right" sx={{ minWidth: 120 }}>
-                        <TextField
-                          type="number"
-                          size="small"
-                          disabled={draftLocked || busy}
-                          defaultValue={ln.expected_qty}
-                          key={`${ln.id}-${ln.expected_qty}`}
-                          onBlur={(e) => {
-                            const v = Number(e.target.value)
-                            if (!Number.isFinite(v) || v < 1) {
-                              return
-                            }
-                            if (v !== ln.expected_qty) {
-                              void patchLineQty(ln.id, v)
-                            }
-                          }}
-                          slotProps={{ htmlInput: { min: 1, 'data-testid': 'seller-inbound-line-qty' } }}
-                        />
+                        {factVisible ? (
+                          <Box component="span" data-testid="seller-inbound-line-expected">
+                            {ln.expected_qty}
+                          </Box>
+                        ) : (
+                          <TextField
+                            type="number"
+                            size="small"
+                            disabled={draftLocked || busy}
+                            defaultValue={ln.expected_qty}
+                            key={`${ln.id}-${ln.expected_qty}`}
+                            onBlur={(e) => {
+                              const v = Number(e.target.value)
+                              if (!Number.isFinite(v) || v < 1) {
+                                return
+                              }
+                              if (v !== ln.expected_qty) {
+                                void patchLineQty(ln.id, v)
+                              }
+                            }}
+                            slotProps={{
+                              htmlInput: { min: 1, 'data-testid': 'seller-inbound-line-qty' },
+                            }}
+                          />
+                        )}
                       </TableCell>
-                      <TableCell>
-                        <Button
-                          size="small"
-                          color="error"
-                          disabled={draftLocked || busy}
-                          onClick={() => void deleteLine(ln.id)}
-                          data-testid="seller-inbound-line-delete"
-                        >
-                          Удалить
-                        </Button>
-                      </TableCell>
+                      {factVisible ? (
+                        <>
+                          <TableCell align="right" data-testid="seller-inbound-line-actual">
+                            {actualQty}
+                          </TableCell>
+                          <TableCell
+                            align="right"
+                            sx={{ color: lineHasDiscrepancy ? 'error.main' : 'text.secondary' }}
+                            data-testid="seller-inbound-line-discrepancy"
+                          >
+                            {delta === 0 ? '—' : delta > 0 ? `+${delta}` : String(delta)}
+                          </TableCell>
+                        </>
+                      ) : (
+                        <TableCell>
+                          <Button
+                            size="small"
+                            color="error"
+                            disabled={draftLocked || busy}
+                            onClick={() => void deleteLine(ln.id)}
+                            data-testid="seller-inbound-line-delete"
+                          >
+                            Удалить
+                          </Button>
+                        </TableCell>
+                      )}
                     </TableRow>
                   )
                 })}
                 {detail.lines.length === 0 ? (
                   <TableRow>
-                    <TableCell colSpan={8}>
+                    <TableCell colSpan={factVisible ? 10 : 8}>
                       <Typography variant="body2" color="text.secondary">
                         Добавьте товары кнопкой «Добавить товары».
                       </Typography>

@@ -195,6 +195,17 @@ export function InboundScreen(props: Props) {
             {canEditInboundDraft ? (
               <form data-testid="inbound-create-form" noValidate onSubmit={onCreateInboundRequest}>
                 <label>
+                  Тип операции
+                  <Select
+                    name="inbound_operation_type"
+                    data-testid="inbound-create-operation-type"
+                    defaultValue="inbound"
+                  >
+                    <option value="inbound">Приёмка</option>
+                    <option value="return">Возврат</option>
+                  </Select>
+                </label>
+                <label>
                   Дата привоза (план)
                   <Input
                     name="inbound_planned_delivery_date"

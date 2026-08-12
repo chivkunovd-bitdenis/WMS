@@ -69,6 +69,14 @@ async def test_catalog_flow(async_client: AsyncClient) -> None:
     assert data["sku_code"] == "SKU-1"
     assert data["volume_liters"] == pytest.approx(6.0)
 
+    dims = await async_client.patch(
+        f"/products/{data['id']}/dimensions",
+        headers=h,
+        json={"length_mm": 100, "width_mm": 100, "height_mm": 100},
+    )
+    assert dims.status_code == 200, dims.text
+    assert dims.json()["volume_liters"] == pytest.approx(1.0)
+
     plist = await async_client.get("/products", headers=h)
     assert plist.status_code == 200
     assert len(plist.json()) == 1

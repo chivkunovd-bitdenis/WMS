@@ -5,6 +5,7 @@ import {
   INBOUND_API,
   apiCreateSubmittedInbound,
   loginFfAdmin,
+  loginSellerPortal,
   seedFfSellerInbound,
 } from './inbound-boxes-helpers';
 
@@ -27,6 +28,7 @@ test('inbound receiving v2 — scan, manual edit, finish with discrepancy', asyn
   await page.getByTestId('ff-inbound-queue-row').first().focus();
   await page.keyboard.press('Enter');
   await expect(page.getByTestId('ff-inbound-doc-root')).toBeVisible();
+  await expect(page.getByTestId('ff-inbound-doc-root').getByRole('tab', { name: /упаковка/i })).toHaveCount(0);
   await expect(page.getByTestId('ff-inbound-compact-summary')).toContainText('Box Seller');
   await expect(page.getByTestId('ff-inbound-received-summary')).toContainText('0 из 3');
   await expect(page.getByTestId('ff-inbound-boxes-summary')).toContainText('0 из 1');
@@ -187,6 +189,133 @@ test('inbound receiving v2 — foreign barcode shows toast error', async ({ page
   await expect(page.getByTestId('ff-inbound-scan-error-snackbar')).toContainText(
     'Товар не найден в этой поставке',
   );
+});
+
+// TC-NEW-IN-05 — возврат: скан товара селлера вне заявки создаёт красное расхождение, габариты сохраняются из строки.
+test('inbound receiving v2 — return accepts seller catalog discrepancy and dimensions', async ({
+  page,
+}) => {
+  const suffix = `rcv-return-${Date.now()}`;
+  const seed = await seedFfSellerInbound(page, suffix);
+  const adminHeaders = { Authorization: `Bearer ${seed.token}` };
+  const factSku = `sku-return-fact-${suffix}`;
+  const factBarcode = `wb-return-fact-${suffix}`;
+  const otherSellerName = `Other Return Seller ${suffix}`;
+
+  const otherSeller = await page.request.post('/api/sellers', {
+    headers: adminHeaders,
+    data: { name: otherSellerName },
+  });
+  expect(otherSeller.ok()).toBeTruthy();
+
+  const factProductRes = await page.request.post('/api/products', {
+    headers: adminHeaders,
+    data: {
+      name: 'Return Fact Product',
+      sku_code: factSku,
+      wb_barcode: factBarcode,
+      seller_id: seed.sellerId,
+      length_mm: 120,
+      width_mm: 80,
+      height_mm: 40,
+    },
+  });
+  expect(factProductRes.ok()).toBeTruthy();
+
+  const sellerLogin = await page.request.post('/api/auth/login', {
+    data: { email: seed.sellerEmail, password: seed.password },
+  });
+  expect(sellerLogin.ok()).toBeTruthy();
+  const sellerToken = String(((await sellerLogin.json()) as { access_token: string }).access_token);
+  const sellerHeaders = { Authorization: `Bearer ${sellerToken}` };
+
+  const createReturn = await page.request.post(INBOUND_API, {
+    headers: sellerHeaders,
+    data: { warehouse_id: seed.warehouseId, operation_type: 'return' },
+  });
+  expect(createReturn.ok()).toBeTruthy();
+  const requestId = String(((await createReturn.json()) as { id: string }).id);
+  const addPlannedLine = await page.request.post(`${INBOUND_API}/${requestId}/lines`, {
+    headers: sellerHeaders,
+    data: { product_id: seed.productId, expected_qty: 1 },
+  });
+  expect(addPlannedLine.ok()).toBeTruthy();
+  const submitReturn = await page.request.post(`${INBOUND_API}/${requestId}/submit`, {
+    headers: sellerHeaders,
+  });
+  expect(submitReturn.ok()).toBeTruthy();
+
+  await loginFfAdmin(page, seed.adminEmail, seed.password);
+  await page.getByTestId('nav-ff-reception').click();
+  await page.getByTestId('ff-inbound-queue-table').locator('tbody tr').first().click();
+  await expect(page.getByTestId('ff-inbound-doc-root')).toBeVisible();
+  await expect(page.getByTestId('ff-inbound-operation-type')).toContainText('Возврат');
+  await expect(page.getByTestId('ff-inbound-return-autoprint')).toBeVisible();
+  await page.getByTestId('ff-inbound-receiving-create-manual-product').click();
+  await expect(page.getByTestId('ff-manual-product-dialog')).toBeVisible();
+  await page.getByTestId('ff-manual-product-seller').click();
+  const sellerListbox = page.getByRole('listbox');
+  await expect(sellerListbox.getByText(/Box Seller/)).toBeVisible();
+  await expect(sellerListbox.getByText(otherSellerName, { exact: true })).toHaveCount(0);
+  await page.keyboard.press('Escape');
+  await page.getByRole('button', { name: 'Отмена' }).click();
+  await expect(page.getByTestId('ff-manual-product-dialog')).toHaveCount(0);
+  await page.getByTestId('ff-inbound-return-autoprint').click();
+  await page.evaluate(() => {
+    (
+      window as unknown as {
+        __WMS_CAPTURE_PRINT_HTML__?: boolean
+        __WMS_LAST_PRINT_HTML__?: string
+      }
+    ).__WMS_CAPTURE_PRINT_HTML__ = true;
+    (window as unknown as { __WMS_LAST_PRINT_HTML__?: string }).__WMS_LAST_PRINT_HTML__ = '';
+  });
+
+  await page.getByTestId('ff-inbound-receiving-scan-input').fill(factBarcode);
+  await Promise.all([
+    waitForPostOk(page, INBOUND_API, (u) => u.includes('/receiving/scan')),
+    page.getByTestId('ff-inbound-receiving-scan-submit').click(),
+  ]);
+  await page.waitForFunction(
+    (barcode) =>
+      Boolean(
+        (window as unknown as { __WMS_LAST_PRINT_HTML__?: string }).__WMS_LAST_PRINT_HTML__?.includes(
+          String(barcode),
+        ),
+      ),
+    factBarcode,
+  );
+
+  const factRow = page.getByTestId('ff-inbound-line-row-discrepancy').filter({ hasText: factSku });
+  await expect(factRow).toBeVisible();
+  await expect(factRow).toContainText('Добавлено ФФ');
+  await expect(factRow.getByTestId('ff-inbound-line-actual-display')).toHaveText('1');
+
+  await factRow.getByTestId('ff-inbound-line-dimensions-edit').click();
+  await expect(page.getByTestId('ff-inbound-dimensions-dialog')).toBeVisible();
+  await page.getByTestId('ff-inbound-dimensions-length').fill('200');
+  await page.getByTestId('ff-inbound-dimensions-width').fill('100');
+  await page.getByTestId('ff-inbound-dimensions-height').fill('50');
+  await Promise.all([
+    waitForPatchOk(page, '/api/products', (u) => u.includes('/dimensions')),
+    page.getByTestId('ff-inbound-dimensions-save').click(),
+  ]);
+  await expect(page.getByTestId('ff-inbound-dimensions-dialog')).toHaveCount(0);
+  await expect(factRow.getByTestId('ff-inbound-line-dimensions')).toContainText('200×100×50 мм');
+  await expect(factRow.getByTestId('ff-inbound-line-dimensions')).toContainText('1.00 л');
+
+  await loginSellerPortal(page, seed.sellerEmail, seed.password);
+  await page.getByTestId('nav-seller-documents').click();
+  await page.getByTestId('seller-documents-row').filter({ hasText: 'Поставка' }).first().click();
+  await expect(page.getByTestId('seller-inbound-draft-form')).toBeVisible();
+  const sellerFactRow = page.getByTestId('seller-inbound-line-row').filter({ hasText: factSku });
+  await expect(sellerFactRow).toBeVisible();
+  await expect(sellerFactRow.getByTestId('seller-inbound-line-added-by-ff')).toContainText(
+    'Добавлено ФФ',
+  );
+  await expect(sellerFactRow.getByTestId('seller-inbound-line-expected')).toHaveText('0');
+  await expect(sellerFactRow.getByTestId('seller-inbound-line-actual')).toHaveText('1');
+  await expect(sellerFactRow.getByTestId('seller-inbound-line-discrepancy')).toHaveText('+1');
 });
 
 // TC-NEW-IN-04 — короб 6 шт. + ручная правка итога до 10 → PATCH loose=4, без double count.

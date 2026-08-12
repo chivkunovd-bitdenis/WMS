@@ -23,7 +23,7 @@ from app.models.fbs_order import (
     FbsOrderReservation,
 )
 from app.models.product import Product
-from app.services import inventory_service
+from app.services import inventory_service, stock_direction_service
 from app.services.fbs_cancellation_service import penalty_band_for_order
 from app.services.sorting_location_service import get_or_create_sorting_location
 from app.services.wb_marketplace_orders_service import (
@@ -156,6 +156,14 @@ async def _seed_reserved_order(
             storage_location_id=sorting.id,
             quantity_delta=2,
             movement_type="inbound_intake",
+        )
+        await stock_direction_service.create_stock_direction(
+            session,
+            tenant_id,
+            product.id,
+            name="FBS pool",
+            quantity=2,
+            is_fbs=True,
         )
 
         row = _wb_order_row(

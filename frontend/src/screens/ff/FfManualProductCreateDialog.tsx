@@ -20,6 +20,7 @@ import { apiUrl } from '../../api'
 import { readApiErrorMessage } from '../../utils/readApiErrorMessage'
 
 type SellerRow = { id: string; name: string }
+type CreatedProduct = { id: string }
 
 type Props = {
   open: boolean
@@ -28,7 +29,7 @@ type Props = {
   sellers: SellerRow[]
   defaultSellerId?: string | null
   onClose: () => void
-  onCreated: () => void | Promise<void>
+  onCreated: (product: CreatedProduct) => void | Promise<void>
 }
 
 export function FfManualProductCreateDialog({
@@ -138,8 +139,9 @@ export function FfManualProductCreateDialog({
         setError(raw)
         return
       }
+      const created = (await res.json()) as CreatedProduct
       reset()
-      await onCreated()
+      await onCreated(created)
       onClose()
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Не удалось создать товар.')

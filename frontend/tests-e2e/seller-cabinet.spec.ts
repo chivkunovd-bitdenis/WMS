@@ -3,6 +3,7 @@ import { test, expect } from '@playwright/test';
 import {
   waitForGetOk,
   waitForPostOk,
+  waitForPutOk,
 } from './api-waits';
 import { loginAsSeller, openFulfillmentRegistration } from './auth-flow';
 
@@ -98,4 +99,92 @@ test('admin creates seller user; seller sees filtered catalog and inbound', asyn
     page.getByTestId('seller-inbound-submit-warehouse').click(),
   ]);
   await expect(page.getByTestId('seller-documents-row')).toHaveCount(1);
+});
+
+// TC-NEW-SELLER-SCOPE-001 — shop manager sees only products of the active allowed seller.
+test('seller shop manager switches allowed seller without seeing forbidden products', async ({
+  page,
+}) => {
+  const suffix = Date.now();
+  const adminEmail = `e2e-scope-admin-${suffix}@example.com`;
+  const managerEmail = `vitalik-e2e-${suffix}@mail.ru`;
+  const password = 'password123';
+  const skuHome = `SCOPE-HOME-${suffix}`;
+  const skuAllowed = `SCOPE-ALLOWED-${suffix}`;
+  const skuForbidden = `SCOPE-FORBIDDEN-${suffix}`;
+
+  await page.goto('/');
+  await openFulfillmentRegistration(page);
+  await page.getByTestId('register-form').getByLabel('Организация').fill('E2E Seller Scope');
+  await page.getByTestId('register-form').getByLabel('Email администратора').fill(adminEmail);
+  await page.getByTestId('register-form').getByLabel('Пароль').fill(password);
+  const [regRes] = await Promise.all([
+    waitForPostOk(page, '/api/auth/register'),
+    waitForGetOk(page, '/api/auth/me'),
+    page.getByTestId('register-form').getByRole('button', { name: 'Создать аккаунт' }).click(),
+  ]);
+  const adminToken = String(((await regRes.json()) as { access_token: string }).access_token);
+  const h = { Authorization: `Bearer ${adminToken}` };
+
+  const home = await page.request.post('/api/sellers/with-account', {
+    headers: h,
+    data: { name: 'Home Scope Shop', email: managerEmail, password },
+  });
+  expect(home.ok()).toBeTruthy();
+  const homeSellerId = String(((await home.json()) as { seller_id: string }).seller_id);
+  const allowed = await page.request.post('/api/sellers', {
+    headers: h,
+    data: { name: 'Allowed Scope Shop' },
+  });
+  expect(allowed.ok()).toBeTruthy();
+  const allowedSellerId = String(((await allowed.json()) as { id: string }).id);
+  const forbidden = await page.request.post('/api/sellers', {
+    headers: h,
+    data: { name: 'Forbidden Scope Shop' },
+  });
+  expect(forbidden.ok()).toBeTruthy();
+  const forbiddenSellerId = String(((await forbidden.json()) as { id: string }).id);
+
+  for (const [sellerId, sku, name] of [
+    [homeSellerId, skuHome, 'Home Scope Product'],
+    [allowedSellerId, skuAllowed, 'Allowed Scope Product'],
+    [forbiddenSellerId, skuForbidden, 'Forbidden Scope Product'],
+  ]) {
+    const product = await page.request.post('/api/products', {
+      headers: h,
+      data: {
+        name,
+        sku_code: sku,
+        length_mm: 10,
+        width_mm: 10,
+        height_mm: 10,
+        seller_id: sellerId,
+      },
+    });
+    expect(product.ok()).toBeTruthy();
+  }
+
+  await page.getByTestId('logout').click();
+  await loginAsSeller(page, managerEmail, password, { firstTime: false });
+  await expect(page.getByTestId('seller-shops-panel')).toBeVisible();
+
+  await page.getByTestId('nav-seller-products').click();
+  await expect(page.getByTestId('seller-products-table')).toBeVisible();
+  await expect(page.getByTestId('seller-products-table')).toContainText(skuHome);
+  await expect(page.getByTestId('seller-products-table')).not.toContainText(skuAllowed);
+  await expect(page.getByTestId('seller-products-table')).not.toContainText(skuForbidden);
+
+  await Promise.all([
+    waitForPutOk(page, '/api/auth/seller-shops'),
+    page.getByTestId(`seller-shop-check-${allowedSellerId}`).click(),
+  ]);
+  await Promise.all([
+    waitForPostOk(page, '/api/auth/switch-seller'),
+    page.getByTestId(`seller-shop-switch-${allowedSellerId}`).click(),
+  ]);
+  await page.getByTestId('nav-seller-products').click();
+  await expect(page.getByTestId('seller-products-table')).toBeVisible();
+  await expect(page.getByTestId('seller-products-table')).toContainText(skuAllowed);
+  await expect(page.getByTestId('seller-products-table')).not.toContainText(skuHome);
+  await expect(page.getByTestId('seller-products-table')).not.toContainText(skuForbidden);
 });

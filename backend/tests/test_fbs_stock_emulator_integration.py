@@ -40,7 +40,7 @@ from app.models.fbs_warehouse_binding import FbsWarehouseBinding
 from app.models.marketplace_unload import MarketplaceUnloadLine, MarketplaceUnloadRequest
 from app.models.marketplace_unload_reservation import MarketplaceUnloadReservation
 from app.models.product import Product
-from app.services import inventory_service
+from app.services import inventory_service, stock_direction_service
 from app.services.fbs_autopoll_service import SellerStockSyncResult, sync_seller_stocks
 from app.services.sorting_location_service import get_or_create_sorting_location
 from app.services.wb_marketplace_orders_service import sync_seller_orders
@@ -298,6 +298,14 @@ async def test_wms_emulator_fbs_stock_full_cycle(
             storage_location_id=uuid.UUID(storage_loc_id),
             quantity_delta=1,
             movement_type="inbound_intake",
+        )
+        await stock_direction_service.create_stock_direction(
+            session,
+            tenant_id,
+            product_id,
+            name="FBS pool",
+            quantity=1,
+            is_fbs=True,
         )
 
         unload = MarketplaceUnloadRequest(

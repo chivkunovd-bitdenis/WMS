@@ -30,7 +30,7 @@ from app.models.fbs_trbx import FbsTrbx
 from app.models.inventory_movement import MOVEMENT_TYPE_FBS_SHIPMENT, InventoryMovement
 from app.models.packaging_task import PackagingTask, PackagingTaskLine
 from app.models.warehouse_box import WarehouseBox
-from app.services import inventory_service
+from app.services import inventory_service, stock_direction_service
 from app.services.fbs_packaging_integration_service import create_packaging_task_for_supply
 from app.services.fbs_stock_availability_service import fbs_available_qty_for_product
 from app.services.sorting_location_service import get_or_create_sorting_location
@@ -891,6 +891,14 @@ async def test_fbs_promote_write_off_shelf_confirm_sold_does_not_resurrect_avail
             storage_location_id=sorting.id,
             quantity_delta=5,
             movement_type="inbound_intake",
+        )
+        await stock_direction_service.create_stock_direction(
+            session,
+            tenant_id,
+            product_id,
+            name="FBS pool",
+            quantity=5,
+            is_fbs=True,
         )
         await session.commit()
         order_id = order.id
