@@ -7,6 +7,7 @@ import { openFulfillmentRegistration } from './auth-flow'
 // Given: FF admin, есть товары селлеров, один товар не принимался на склад; When: открывает «Каталог»;
 // Then: видны все товары селлеров; у принятых остаток равен actual_qty, у непринятых — 0.
 test('ff products: filter by seller and sort by name/quantity', async ({ page }) => {
+  await page.setViewportSize({ width: 1280, height: 800 })
   const email = `e2e-ff-products-${Date.now()}@example.com`
   const password = 'password123'
 
@@ -135,6 +136,15 @@ test('ff products: filter by seller and sort by name/quantity', async ({ page })
   await page.getByTestId('nav-ff-products').click()
   await expect(page.getByTestId('ff-products-list')).toBeVisible()
   await expect(page.getByTestId('ff-products-table')).toBeVisible()
+  const tableHead = page.getByTestId('ff-products-table').locator('thead')
+  await expect(tableHead).not.toContainText('WB nm')
+  await expect(tableHead).toContainText('Артикул WB')
+  await expect(tableHead).toContainText('Распределение')
+  await expect(tableHead).toContainText('Доступно')
+  await expect(tableHead).not.toContainText('Не упак.')
+  await expect(tableHead).not.toContainText('Упаковано')
+  await expect(tableHead).not.toContainText('В сортировке')
+  await expect(page.getByTestId('ff-products-available-formula')).toBeVisible()
 
   // Filter by seller A
   await page.getByTestId('ff-products-seller-filter').click()
@@ -144,7 +154,11 @@ test('ff products: filter by seller and sort by name/quantity', async ({ page })
   await expect(page.getByTestId('ff-product-row')).toHaveCount(2)
   await expect(page.getByTestId('ff-products-table')).toContainText(skuA)
   await expect(page.getByTestId('ff-products-table')).toContainText(skuPrivate)
-  await expect(page.getByTestId(`ff-product-unpacked-${prodA.id}`)).toHaveText('2')
+  await page.getByTestId(`ff-product-distribution-${prodA.id}`).click()
+  await expect(page.getByTestId('ff-products-distribution-popover')).toBeVisible()
+  await expect(page.getByTestId('ff-products-distribution-popover')).toContainText('Свободно для FBO')
+  await expect(page.getByTestId(`ff-product-unpacked-${prodA.id}`)).toHaveText('2 шт')
+  await page.keyboard.press('Escape')
 
   // Switch to All
   await page.getByTestId('ff-products-seller-filter').click()
@@ -176,7 +190,7 @@ test('ff products: filter by seller and sort by name/quantity', async ({ page })
 
   // Sort by name asc: Alpha first
   await page.getByTestId('ff-products-sort-name').click()
-  const firstNameAfterName = await page.getByTestId('ff-product-row').first().locator('td').nth(6).innerText()
+  const firstNameAfterName = await page.getByTestId('ff-product-row').first().locator('td').nth(3).innerText()
   expect(firstNameAfterName).toContain('Alpha')
 
   // Photo cell exists (even if WB photo missing in mocks): first column rendered and has avatar element.

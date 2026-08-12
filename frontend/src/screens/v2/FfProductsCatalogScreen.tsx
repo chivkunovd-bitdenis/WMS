@@ -7,14 +7,17 @@ import {
   Chip,
   FormControlLabel,
   CircularProgress,
+  Divider,
   Dialog,
   DialogActions,
   DialogContent,
   DialogTitle,
   FormControl,
+  IconButton,
   InputLabel,
   MenuItem,
   Paper,
+  Popover,
   Select,
   Stack,
   Table,
@@ -25,8 +28,11 @@ import {
   TableRow,
   TableSortLabel,
   TextField,
+  Tooltip,
   Typography,
 } from '@mui/material'
+import InfoOutlinedIcon from '@mui/icons-material/InfoOutlined'
+import Inventory2OutlinedIcon from '@mui/icons-material/Inventory2Outlined'
 import { apiUrl } from '../../api'
 import { ProductPhotoThumb } from '../../components/ProductPhotoThumb'
 import { ProductBarcodeCell } from '../../components/ProductBarcodeCell'
@@ -87,6 +93,7 @@ type Props = {
 
 type SortKey = 'name' | 'quantity'
 type SortDir = 'asc' | 'desc'
+type DistributionAnchor = { productId: string; element: HTMLElement } | null
 
 function rowMatchesSearch(
   row: {
@@ -126,6 +133,7 @@ export function FfProductsCatalogScreen({ token, authHeaders, sellers, onSellers
   const [importOpen, setImportOpen] = useState(false)
   const [sellerCreateOpen, setSellerCreateOpen] = useState(false)
   const [importNotice, setImportNotice] = useState<string | null>(null)
+  const [distributionAnchor, setDistributionAnchor] = useState<DistributionAnchor>(null)
 
   const load = useCallback(async () => {
     setError(null)
@@ -187,13 +195,13 @@ export function FfProductsCatalogScreen({ token, authHeaders, sellers, onSellers
     const dir = sortDir === 'asc' ? 1 : -1
     return [...filteredRows].sort((a, b) => {
       if (sortKey === 'quantity') {
-        const d = (a.quantity - b.quantity) * dir
+        const d = (a.available - b.available) * dir
         if (d !== 0) return d
         return a.name.localeCompare(b.name) * dir
       }
       const d = a.name.localeCompare(b.name) * dir
       if (d !== 0) return d
-      return (a.quantity - b.quantity) * dir
+      return (a.available - b.available) * dir
     })
   }, [filteredRows, sortDir, sortKey])
 
@@ -222,6 +230,10 @@ export function FfProductsCatalogScreen({ token, authHeaders, sellers, onSellers
       requires_honest_sign: editRequiresHonestSign,
     })
   }
+
+  const distributionProduct = distributionAnchor
+    ? sortedRows.find((p) => p.id === distributionAnchor.productId) ?? null
+    : null
 
   async function savePackagingInstructions() {
     if (!editProduct) return
@@ -341,11 +353,8 @@ export function FfProductsCatalogScreen({ token, authHeaders, sellers, onSellers
           <TableHead>
             <TableRow>
               <TableCell width={68}>Фото</TableCell>
-              <TableCell width={140}>SKU</TableCell>
-              <TableCell width={80}>Размер</TableCell>
-              <TableCell width={190}>ШК</TableCell>
-              <TableCell width={160}>Артикул продавца</TableCell>
-              <TableCell width={110}>WB nm</TableCell>
+              <TableCell width={230}>SKU / ШК</TableCell>
+              <TableCell width={120}>Артикул WB</TableCell>
               <TableCell>
                 <TableSortLabel
                   active={sortKey === 'name'}
@@ -357,32 +366,27 @@ export function FfProductsCatalogScreen({ token, authHeaders, sellers, onSellers
                 </TableSortLabel>
               </TableCell>
               <TableCell width={220}>Селлер</TableCell>
-              <TableCell width={120}>ТЗ упаковки</TableCell>
-              <TableCell align="right" width={100}>
+              <TableCell width={130}>ТЗ / ЧЗ</TableCell>
+              <TableCell align="right" width={130}>
                 <TableSortLabel
                   active={sortKey === 'quantity'}
                   direction={sortKey === 'quantity' ? sortDir : 'asc'}
                   onClick={() => toggleSort('quantity')}
                   data-testid="ff-products-sort-quantity"
                 >
-                  На складе
+                  Доступно
                 </TableSortLabel>
+                <Tooltip
+                  arrow
+                  title="Доступно для FBO = товар в ячейках минус резервы. Товар в сортировке ещё не свободный остаток."
+                >
+                  <InfoOutlinedIcon
+                    sx={{ ml: 0.5, fontSize: 15, verticalAlign: 'text-bottom', color: 'text.secondary' }}
+                    data-testid="ff-products-available-formula"
+                  />
+                </Tooltip>
               </TableCell>
-              <TableCell align="right" width={100} data-testid="ff-products-col-unpacked">
-                Не упак.
-              </TableCell>
-              <TableCell align="right" width={100} data-testid="ff-products-col-packed">
-                Упаковано
-              </TableCell>
-              <TableCell align="right" width={120} data-testid="ff-products-col-sorting">
-                В сортировке
-              </TableCell>
-              <TableCell align="right" width={120}>
-                В ячейках
-              </TableCell>
-              <TableCell align="right" width={110}>
-                Доступно
-              </TableCell>
+              <TableCell width={190}>Распределение</TableCell>
               <TableCell align="center" width={56} />
             </TableRow>
           </TableHead>
@@ -395,61 +399,107 @@ export function FfProductsCatalogScreen({ token, authHeaders, sellers, onSellers
                 <TableCell>
                   <ProductPhotoThumb src={p.wb_primary_image_url} />
                 </TableCell>
-                <TableCell>{p.sku_code}</TableCell>
-                <TableCell>{p.wb_size ?? '—'}</TableCell>
                 <TableCell>
-                  <ProductBarcodeCell
-                    barcode={barcode || null}
-                    wb_size={p.wb_size}
-                    wb_composition={p.wb_composition}
-                    testId={`ff-catalog-barcode-${p.id}`}
-                  />
+                  <Stack spacing={0.5}>
+                    <Typography variant="body2" sx={{ fontWeight: 600 }}>
+                      {p.sku_code}
+                    </Typography>
+                    <ProductBarcodeCell
+                      barcode={barcode || null}
+                      wb_size={p.wb_size}
+                      wb_composition={p.wb_composition}
+                      testId={`ff-catalog-barcode-${p.id}`}
+                    />
+                  </Stack>
                 </TableCell>
-                <TableCell>{p.wb_vendor_code ?? '—'}</TableCell>
                 <TableCell>{p.wb_nm_id ?? '—'}</TableCell>
                 <TableCell>
-                  <Stack direction="row" spacing={0.5} sx={{ alignItems: 'center', flexWrap: 'wrap' }}>
-                    <span>{p.name}</span>
-                    {p.is_manual ? (
-                      <Chip
-                        size="small"
-                        label="Вручную"
-                        variant="outlined"
-                        data-testid={`ff-product-manual-${p.id}`}
-                      />
+                  <Stack spacing={0.25}>
+                    <Stack direction="row" spacing={0.5} sx={{ alignItems: 'center', flexWrap: 'wrap' }}>
+                      <span>{p.name}</span>
+                      {p.is_manual ? (
+                        <Chip
+                          size="small"
+                          label="Вручную"
+                          variant="outlined"
+                          data-testid={`ff-product-manual-${p.id}`}
+                        />
+                      ) : null}
+                    </Stack>
+                    {p.wb_vendor_code ? (
+                      <Typography variant="caption" color="text.secondary">
+                        Артикул продавца: {p.wb_vendor_code}
+                      </Typography>
+                    ) : null}
+                    {p.wb_size ? (
+                      <Typography variant="caption" color="text.secondary">
+                        Размер: {p.wb_size}
+                      </Typography>
                     ) : null}
                   </Stack>
                 </TableCell>
                 <TableCell>{p.seller_name ?? '—'}</TableCell>
                 <TableCell>
-                  <Stack direction="row" spacing={0.5} sx={{ alignItems: 'center' }}>
-                    <Chip
-                      size="small"
-                      label={p.has_packaging_instructions ? 'Заполнено' : 'Нет ТЗ'}
-                      color={p.has_packaging_instructions ? 'success' : 'warning'}
+                  <Stack spacing={0.5}>
+                    <Typography
+                      variant="body2"
+                      color={p.has_packaging_instructions ? 'text.primary' : 'text.secondary'}
                       data-testid={`ff-packaging-status-${p.id}`}
-                    />
+                    >
+                      {p.has_packaging_instructions ? 'Заполнено' : 'Нет ТЗ'}
+                    </Typography>
+                    {p.requires_honest_sign ? (
+                      <Typography variant="caption" color="text.secondary">
+                        ЧЗ нужен
+                      </Typography>
+                    ) : null}
                     <Button
                       size="small"
                       onClick={() => openPackagingEdit(p)}
                       data-testid={`ff-packaging-edit-${p.id}`}
+                      sx={{ alignSelf: 'flex-start', minWidth: 0, px: 0 }}
                     >
                       ТЗ
                     </Button>
                   </Stack>
                 </TableCell>
-                <TableCell align="right">{p.quantity}</TableCell>
-                <TableCell align="right" data-testid={`ff-product-unpacked-${p.id}`}>
-                  {p.quantity_unpacked}
+                <TableCell align="right">
+                  <Stack spacing={0.25} sx={{ alignItems: 'flex-end' }}>
+                    <Typography variant="body2" sx={{ fontWeight: 700 }}>
+                      {p.available} шт
+                    </Typography>
+                    {p.reserved > 0 ? (
+                      <Typography variant="caption" color="text.secondary">
+                        резерв {p.reserved}
+                      </Typography>
+                    ) : null}
+                  </Stack>
                 </TableCell>
-                <TableCell align="right" data-testid={`ff-product-packed-${p.id}`}>
-                  {p.quantity_packed}
+                <TableCell>
+                  <Stack direction="row" spacing={0.5} sx={{ alignItems: 'center' }}>
+                    <Box sx={{ minWidth: 0 }}>
+                      <Typography variant="body2" noWrap>
+                        Ячейки {p.quantity_in_storage} · Сортировка{' '}
+                        <span data-testid="ff-product-qty-sorting">{p.quantity_in_sorting}</span>
+                      </Typography>
+                      <Typography variant="caption" color="text.secondary" noWrap>
+                        Свободно для FBO {p.available}
+                      </Typography>
+                    </Box>
+                    <Tooltip title="Показать распределение остатка" arrow>
+                      <IconButton
+                        size="small"
+                        onClick={(event) =>
+                          setDistributionAnchor({ productId: p.id, element: event.currentTarget })
+                        }
+                        data-testid={`ff-product-distribution-${p.id}`}
+                        aria-label={`Распределение остатка ${p.sku_code}`}
+                      >
+                        <Inventory2OutlinedIcon fontSize="small" />
+                      </IconButton>
+                    </Tooltip>
+                  </Stack>
                 </TableCell>
-                <TableCell align="right" data-testid="ff-product-qty-sorting">
-                  {p.quantity_in_sorting}
-                </TableCell>
-                <TableCell align="right">{p.quantity_in_storage}</TableCell>
-                <TableCell align="right">{p.available}</TableCell>
                 <TableCell align="center">
                   <ProductBarcodePrintButton
                     meta={displayMeta}
@@ -462,7 +512,7 @@ export function FfProductsCatalogScreen({ token, authHeaders, sellers, onSellers
             )})}
             {sortedRows.length === 0 && !busy ? (
               <TableRow>
-                <TableCell colSpan={16}>
+                <TableCell colSpan={9}>
                   {searchQuery.trim() ? (
                     <Typography variant="body2" color="text.secondary" data-testid="ff-products-search-empty">
                       Ничего не найдено по запросу «{searchQuery.trim()}».
@@ -484,6 +534,47 @@ export function FfProductsCatalogScreen({ token, authHeaders, sellers, onSellers
           </TableBody>
         </Table>
       </TableContainer>
+
+      <Popover
+        open={Boolean(distributionAnchor)}
+        anchorEl={distributionAnchor?.element ?? null}
+        onClose={() => setDistributionAnchor(null)}
+        anchorOrigin={{ vertical: 'bottom', horizontal: 'right' }}
+        transformOrigin={{ vertical: 'top', horizontal: 'right' }}
+        slotProps={{ paper: { sx: { p: 2, width: 320 }, 'data-testid': 'ff-products-distribution-popover' } }}
+      >
+        {distributionProduct ? (
+          <Stack spacing={1.25}>
+            <Box>
+              <Typography variant="subtitle2">{distributionProduct.sku_code}</Typography>
+              <Typography variant="body2" color="text.secondary" noWrap>
+                {distributionProduct.name}
+              </Typography>
+            </Box>
+            <Divider />
+            <Stack spacing={0.75}>
+              <DistributionLine
+                label="Не упаковано"
+                value={distributionProduct.quantity_unpacked}
+                testId={`ff-product-unpacked-${distributionProduct.id}`}
+              />
+              <DistributionLine
+                label="Упаковано"
+                value={distributionProduct.quantity_packed}
+                testId={`ff-product-packed-${distributionProduct.id}`}
+              />
+              <DistributionLine label="Сортировка" value={distributionProduct.quantity_in_sorting} />
+              <DistributionLine label="В ячейках" value={distributionProduct.quantity_in_storage} />
+              <DistributionLine label="Резервы" value={distributionProduct.reserved} />
+              <DistributionLine label="Свободно для FBO" value={distributionProduct.available} strong />
+            </Stack>
+            <Typography variant="caption" color="text.secondary">
+              Доступно для FBO = в ячейках − резервы. Данных по FBS-направлениям в ответе каталога
+              сейчас нет, поэтому разбивка по направлениям здесь не показывается.
+            </Typography>
+          </Stack>
+        ) : null}
+      </Popover>
 
       <FfManualProductCreateDialog
         open={createOpen}
@@ -576,5 +667,28 @@ export function FfProductsCatalogScreen({ token, authHeaders, sellers, onSellers
       </Dialog>
     </Box>
     </FfProductMarkingPrintProvider>
+  )
+}
+
+function DistributionLine({
+  label,
+  value,
+  strong = false,
+  testId,
+}: {
+  label: string
+  value: number
+  strong?: boolean
+  testId?: string
+}) {
+  return (
+    <Stack direction="row" sx={{ justifyContent: 'space-between', gap: 2 }}>
+      <Typography variant="body2" color={strong ? 'text.primary' : 'text.secondary'}>
+        {label}
+      </Typography>
+      <Typography variant="body2" sx={{ fontWeight: strong ? 700 : 500 }} data-testid={testId}>
+        {value} шт
+      </Typography>
+    </Stack>
   )
 }
