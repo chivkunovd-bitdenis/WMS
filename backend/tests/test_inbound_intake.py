@@ -655,6 +655,86 @@ async def test_inbound_draft_patch_qty_delete_patch_planned(async_client: AsyncC
 
 
 @pytest.mark.asyncio
+async def test_inbound_receiving_accepts_seller_catalog_product_in_regular_intake(
+    async_client: AsyncClient,
+) -> None:
+    suffix = str(int(time.time() * 1000))
+    reg = await async_client.post(
+        "/auth/register",
+        json={
+            "organization_name": "Regular Mix Co",
+            "slug": f"reg-mix-{suffix}",
+            "admin_email": f"reg-mix-{suffix}@example.com",
+            "password": "password123",
+        },
+    )
+    assert reg.status_code == 200, reg.text
+    ah = {"Authorization": f"Bearer {reg.json()['access_token']}"}
+    sh, sid = await _create_seller_headers(
+        async_client,
+        admin_headers=ah,
+        seller_name="Regular Seller",
+        seller_email=f"reg-mix-seller-{suffix}@example.com",
+    )
+    wh = await async_client.post(
+        "/warehouses",
+        headers=ah,
+        json={"name": "Regular WH", "code": f"reg-wh-{suffix}"},
+    )
+    assert wh.status_code == 200, wh.text
+    wid = wh.json()["id"]
+
+    planned = await async_client.post(
+        "/products",
+        headers=ah,
+        json={
+            "name": "Заявленный товар",
+            "sku_code": f"REG-PLAN-{suffix}",
+            "seller_id": sid,
+        },
+    )
+    assert planned.status_code == 200, planned.text
+    arrived_barcode = f"REG-FACT-{suffix}"
+    arrived = await async_client.post(
+        "/products",
+        headers=ah,
+        json={
+            "name": "Приехавший товар",
+            "sku_code": f"REG-ARR-{suffix}",
+            "wb_barcode": arrived_barcode,
+            "seller_id": sid,
+        },
+    )
+    assert arrived.status_code == 200, arrived.text
+
+    base = "/operations/inbound-intake-requests"
+    cr = await async_client.post(base, headers=sh, json={"warehouse_id": wid})
+    assert cr.status_code == 201, cr.text
+    rid = cr.json()["id"]
+    add = await async_client.post(
+        f"{base}/{rid}/lines",
+        headers=sh,
+        json={"product_id": planned.json()["id"], "expected_qty": 2},
+    )
+    assert add.status_code == 201, add.text
+    sub = await async_client.post(f"{base}/{rid}/submit", headers=sh)
+    assert sub.status_code == 200, sub.text
+
+    scan = await async_client.post(
+        f"{base}/{rid}/receiving/scan",
+        headers=ah,
+        json={"barcode": arrived_barcode},
+    )
+    assert scan.status_code == 200, scan.text
+    scanned = scan.json()
+    assert scanned["product_id"] == arrived.json()["id"]
+    assert scanned["expected_qty"] == 0
+    assert scanned["actual_qty"] == 1
+    assert scanned["effective_actual_qty"] == 1
+    assert scanned["added_by_fulfillment"] is True
+
+
+@pytest.mark.asyncio
 async def test_inbound_receiving_accepts_seller_catalog_product_as_discrepancy(
     async_client: AsyncClient,
 ) -> None:

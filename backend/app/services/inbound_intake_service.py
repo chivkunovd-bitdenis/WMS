@@ -548,34 +548,43 @@ async def _request_barcode_index(
     session: AsyncSession,
     tenant_id: uuid.UUID,
     req: InboundIntakeRequest,
+    *,
+    include_seller_catalog: bool = False,
 ) -> dict[str, uuid.UUID]:
     product_ids = {ln.product_id for ln in req.lines}
-    if not product_ids:
+    if not product_ids and not include_seller_catalog:
         return {}
-    stmt = select(Product).where(
-        Product.tenant_id == tenant_id,
-        Product.id.in_(product_ids),
-    )
-    res = await session.execute(stmt)
-    products = list(res.scalars().all())
     idx: dict[str, uuid.UUID] = {}
-    for p in products:
-        key = p.sku_code.strip()
-        if key:
-            idx[key] = p.id
+    if product_ids:
+        stmt = select(Product).where(
+            Product.tenant_id == tenant_id,
+            Product.id.in_(product_ids),
+        )
+        res = await session.execute(stmt)
+        products = list(res.scalars().all())
+        for p in products:
+            key = p.sku_code.strip()
+            if key:
+                idx[key] = p.id
     if req.seller_id is not None:
         rows = await list_seller_wb_catalog_rows(session, tenant_id, req.seller_id)
         for row in rows:
-            if row.product_id not in product_ids:
+            if not include_seller_catalog and row.product_id not in product_ids:
                 continue
+            sku_key = row.sku_code.strip()
+            if sku_key:
+                idx[sku_key] = row.product_id
+                idx[sku_key.upper()] = row.product_id
             for b in row.wb_barcodes:
                 key = str(b).strip()
                 if key:
                     idx[key] = row.product_id
+                    idx[key.upper()] = row.product_id
             if row.wb_primary_barcode:
                 k = row.wb_primary_barcode.strip()
                 if k:
                     idx[k] = row.product_id
+                    idx[k.upper()] = row.product_id
     return idx
 
 
@@ -679,11 +688,13 @@ async def scan_barcode_to_loose_intake(
         req.primary_accepted_at = datetime.now(UTC)
     elif req.status not in RECEIVING_STATUSES:
         raise InboundIntakeError("not_verifying")
-    idx = await _request_barcode_index(session, tenant_id, req)
+    idx = await _request_barcode_index(
+        session,
+        tenant_id,
+        req,
+        include_seller_catalog=True,
+    )
     product_id = idx.get(raw) or idx.get(raw.upper())
-    if product_id is None and req.seller_id is not None:
-        seller_idx = await _seller_catalog_barcode_index(session, tenant_id, req.seller_id)
-        product_id = seller_idx.get(raw) or seller_idx.get(raw.upper())
     if product_id is None:
         raise InboundIntakeError("product_not_on_request")
     return await add_or_increment_received_product(
