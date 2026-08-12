@@ -2331,6 +2331,42 @@ export default function App() {
     refreshMarketplaceUnloadList,
   ])
 
+  const onCreateFfInboundDraft = useCallback(async (): Promise<{ id: string } | null> => {
+    if (!token) {
+      return null
+    }
+    const wid = selectedWarehouseId ?? warehouses[0]?.id ?? null
+    if (!wid) {
+      setOpsError('Склад ФФ не найден.')
+      return null
+    }
+    setFfSuppliesNotice(null)
+    setOpsError(null)
+    setOpsBusy(true)
+    try {
+      const res = await fetch(apiUrl('/operations/inbound-intake-requests'), {
+        method: 'POST',
+        headers: {
+          ...authHeaders(token),
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ warehouse_id: wid }),
+      })
+      if (!res.ok) {
+        setOpsError(await readApiErrorMessage(res))
+        return null
+      }
+      const created = (await res.json()) as { id: string }
+      await refreshInboundList(token)
+      return created
+    } catch (e) {
+      setOpsError(e instanceof Error ? e.message : 'Не удалось создать приёмку.')
+      return null
+    } finally {
+      setOpsBusy(false)
+    }
+  }, [authHeaders, refreshInboundList, selectedWarehouseId, token, warehouses])
+
   const onCreateFfDiscrepancyAct = useCallback(async (): Promise<{ id: string } | null> => {
     if (!token) {
       return null
@@ -2511,6 +2547,17 @@ export default function App() {
               <FfInboundQueuePage
                 workspace="reception"
                 rows={inboundSummaries}
+                creatingDraft={opsBusy}
+                onCreateDraft={async () => {
+                  const created = await onCreateFfInboundDraft()
+                  if (!created?.id) {
+                    return
+                  }
+                  setSelectedOutboundId(null)
+                  setSelectedInboundId(created.id)
+                  setFfInboundWorkspace('reception')
+                  setFfDocModal('inbound')
+                }}
                 onOpen={(id) => {
                   setSelectedOutboundId(null)
                   setSelectedInboundId(id)
