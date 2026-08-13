@@ -22,7 +22,7 @@ code review и живого browser QA. `Product/UX passed` означает, ч
 | F06 Накладная по факту | BA_READY | PRODUCT_APPROVED_AFTER_REWORK | DEV_DONE | CODE_REVIEW_PASSED | BROWSER_PRODUCT_QA_PASSED | integration_pending |
 | F07 FBO/MP отгрузка по шагам | BA_READY | PRODUCT_APPROVED_HYBRID_FLOW | DEV_DONE | CODE_REVIEW_PASSED | BROWSER_PRODUCT_QA_PASSED | integration_pending |
 | F08 Направления остатков/FBS-пул | BA_UX_REWORK_READY | PRODUCT_APPROVED_AFTER_REWORK | DEV_REWORK_DONE | CODE_REVIEW_PASSED | BROWSER_PRODUCT_QA_PASSED | integration_pending |
-| F09 Свободный FBO | BA_READY | PRODUCT_APPROVED_FOR_DEV | DEV_DONE | CODE_REVIEW_PASSED | browser_qa_in_progress | live browser QA запущен |
+| F09 Свободный FBO | BA_READY | PRODUCT_APPROVED_FOR_DEV | DEV_DONE | CODE_REVIEW_PASSED | BROWSER_PRODUCT_QA_PASSED | integration_pending |
 | F10 FBS sync берёт FBS-пул | BA_READY | PRODUCT_APPROVED_FOR_DEV | DEV_REWORK_DONE | CODE_REVIEW_PASSED_AFTER_REWORK | browser_qa_pending_after_rework | code review after warehouse-scope rework passed; ждёт browser QA |
 | F11 Упрощённый FF каталог | BA_READY | PRODUCT_APPROVED_FOR_DEV | DEV_DONE | CODE_REVIEW_PASSED | BROWSER_PRODUCT_QA_PASSED | integration_pending |
 | F12 Monthly snapshot | BA_READY | PRODUCT_APPROVED_FOR_MINIMAL_UI | DEV_DONE | CODE_REVIEW_PASSED | BROWSER_PRODUCT_QA_PASSED | integration_pending |
@@ -153,13 +153,13 @@ tests_run: `test_stock_directions.py`, `seller-stock-directions.spec.ts`, headed
 
 ## F09. Свободный остаток для FBO
 
-status: ba_ready, product_approved_for_dev, dev_done, code_review_passed, browser_qa_in_progress
+status: ba_ready, product_approved_for_dev, dev_done, code_review_passed, browser_qa_passed, integration_pending
 business_goal: FBO отгружает только остаток после всех направлений.
 main_real_world_scenario: было 1000, направления 500, к FBO доступно 500.
 product_review_result: PRODUCT_APPROVED_FOR_DEV; artifact `evidence/f09-f10-product-unblock/F09_F10_PRODUCT_UX_VERDICT_RU.md`.
 dev_result: MP/FBO availability закреплена как free FBO минус active MP/outbound reserves; превышение free FBO возвращает human-mapped `insufficient_free_fbo`; picker/modal показывает короткое `Доступно FBO` / `доступно для FBO N`, без `Лимит`.
 code_review_result: CODE_REVIEW_PASSED; artifact `evidence/f09-code-review/F09_CODE_REVIEW_RU.md`.
-browser_qa_result: live browser QA currently running.
+browser_qa_result: BROWSER_PRODUCT_QA_PASSED; artifact `evidence/f09-browser-product-qa/F09_BROWSER_PRODUCT_QA_RU.md`.
 changed_files: `backend/app/services/marketplace_unload_service.py`, `backend/app/api/marketplace_unload_requests.py`, `backend/tests/test_marketplace_unload_availability.py`, `frontend/src/components/WbProductPickerDialog.tsx`, `frontend/src/components/SellerMarketplaceUnloadDialog.tsx`, `frontend/src/screens/ff/FfSuppliesShipmentsPage.tsx`, `frontend/src/utils/readApiErrorMessage.ts`.
 tests_run: `pytest backend/tests/test_stock_directions.py backend/tests/test_marketplace_unload_availability.py -q`; backend targeted `ruff check`; frontend `npm run build`; Playwright `seller-mp-unload.spec.ts`, `ff-mp-full-flow.spec.ts`.
 dev_evidence: `evidence/f09-dev/F09_DEV_RESULT_RU.md`.
