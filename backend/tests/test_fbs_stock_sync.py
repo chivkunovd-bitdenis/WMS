@@ -33,6 +33,7 @@ from app.models.fbs_warehouse_binding import FbsWarehouseBinding
 from app.models.product import Product
 from app.models.seller import Seller
 from app.models.seller_wildberries_credentials import SellerWildberriesCredentials
+from app.models.stock_direction import StockDirection
 from app.models.tenant import Tenant
 from app.models.warehouse import Warehouse
 from app.services.fbs_stock_sync_service import (
@@ -40,6 +41,8 @@ from app.services.fbs_stock_sync_service import (
     ERROR_DUPLICATE_CHRT,
     ERROR_READBACK_MISMATCH,
     ERROR_SYNC_BUSY,
+    ERROR_UNSAFE_STOCK_UNKNOWN,
+    ERROR_UNSAFE_ZERO_BLOCKED,
     NoopStockSyncRateLimiter,
     _build_publish_plan,
     _try_acquire_lease,
@@ -122,6 +125,24 @@ def _product(
         fbs_stock_sync_enabled=fbs_stock_sync_enabled,
         fbs_stock_limit=fbs_stock_limit,
     )
+
+
+async def _add_fbs_pool(
+    session: AsyncSession,
+    ctx: _SeedContext,
+    product: Product,
+    quantity: int,
+) -> None:
+    session.add(
+        StockDirection(
+            tenant_id=ctx.tenant.id,
+            product_id=product.id,
+            name=f"FBS pool {product.sku_code}",
+            quantity=quantity,
+            is_fbs=True,
+        )
+    )
+    await session.commit()
 
 
 @dataclass
@@ -245,21 +266,61 @@ def test_build_publish_plan_applies_stock_limit() -> None:
         product_b.id: 10,
     }
 
-    targets, skipped_missing, conflict_chrts = _build_publish_plan(
+    targets, blocked_targets, skipped_missing, conflict_chrts = _build_publish_plan(
         [product_a, product_b],
         availability,
         {},
     )
     by_chrt = {target.chrt_id: target.amount for target in targets}
 
+    assert blocked_targets == []
     assert skipped_missing == []
     assert conflict_chrts == set()
     assert by_chrt[9201] == 30
     assert by_chrt[9202] == 10
 
 
+def test_build_publish_plan_blocks_missing_or_zero_amounts() -> None:
+    tenant_id = uuid.uuid4()
+    seller_id = uuid.uuid4()
+    missing = _product(
+        tenant_id=tenant_id,
+        seller_id=seller_id,
+        chrt_id=9211,
+        sku_suffix="missing-availability",
+    )
+    explicit_zero = _product(
+        tenant_id=tenant_id,
+        seller_id=seller_id,
+        chrt_id=9212,
+        sku_suffix="explicit-zero",
+    )
+    limit_zero = _product(
+        tenant_id=tenant_id,
+        seller_id=seller_id,
+        chrt_id=9213,
+        sku_suffix="limit-zero",
+        fbs_stock_limit=0,
+    )
+
+    targets, blocked_targets, skipped_missing, conflict_chrts = _build_publish_plan(
+        [missing, explicit_zero, limit_zero],
+        {explicit_zero.id: 0, limit_zero.id: 5},
+        {},
+    )
+
+    assert targets == []
+    assert skipped_missing == []
+    assert conflict_chrts == set()
+    assert {(target.chrt_id, target.error_code) for target in blocked_targets} == {
+        (9211, ERROR_UNSAFE_STOCK_UNKNOWN),
+        (9212, ERROR_UNSAFE_ZERO_BLOCKED),
+        (9213, ERROR_UNSAFE_ZERO_BLOCKED),
+    }
+
+
 @pytest.mark.asyncio
-async def test_sync_zeroes_disabled_product_once_then_stops_after_confirmed_zero(
+async def test_sync_does_not_zero_disabled_product_from_stale_confirmed_item(
     db_session: AsyncSession,
 ) -> None:
     ctx = await _seed_binding(db_session)
@@ -285,9 +346,9 @@ async def test_sync_zeroes_disabled_product_once_then_stops_after_confirmed_zero
     )
     await db_session.commit()
 
-    first_transport = _MockStocksTransport()
-    async with _client(first_transport) as http_client:
-        first_result = await sync_binding_stocks(
+    transport = _MockStocksTransport()
+    async with _client(transport) as http_client:
+        result = await sync_binding_stocks(
             db_session,
             ctx.tenant.id,
             ctx.seller.id,
@@ -296,14 +357,31 @@ async def test_sync_zeroes_disabled_product_once_then_stops_after_confirmed_zero
             marketplace_api_base="https://wb-mock.test",
         )
 
-    assert first_result.products_targeted == 1
-    assert first_result.products_zeroed == 1
-    assert first_transport.put_calls[0][0].chrt_id == 9301
-    assert first_transport.put_calls[0][0].amount == 0
+    assert result.products_targeted == 0
+    assert result.products_zeroed == 0
+    assert result.errors == 0
+    assert transport.put_calls == []
 
-    second_transport = _MockStocksTransport()
-    async with _client(second_transport) as http_client:
-        second_result = await sync_binding_stocks(
+
+# TC-NEW-F22-001 — enabled sync without an explicit FBS pool must not publish 0
+@pytest.mark.asyncio
+async def test_sync_blocks_enabled_product_without_fbs_pool_before_wb_put(
+    db_session: AsyncSession,
+) -> None:
+    ctx = await _seed_binding(db_session)
+    product = _product(
+        tenant_id=ctx.tenant.id,
+        seller_id=ctx.seller.id,
+        chrt_id=331,
+        sku_suffix="no-fbs-pool",
+    )
+    db_session.add(product)
+    await db_session.commit()
+
+    transport = _MockStocksTransport()
+    transport.stored[331] = 20
+    async with _client(transport) as http_client:
+        result = await sync_binding_stocks(
             db_session,
             ctx.tenant.id,
             ctx.seller.id,
@@ -312,9 +390,24 @@ async def test_sync_zeroes_disabled_product_once_then_stops_after_confirmed_zero
             marketplace_api_base="https://wb-mock.test",
         )
 
-    assert second_result.products_targeted == 0
-    assert second_result.products_zeroed == 0
-    assert second_transport.put_calls == []
+    assert result.products_targeted == 0
+    assert result.products_confirmed == 0
+    assert result.errors == 1
+    assert transport.put_calls == []
+    assert transport.stored[331] == 20
+
+    item = (
+        await db_session.execute(
+            select(FbsStockSyncItem).where(FbsStockSyncItem.binding_id == ctx.binding.id)
+        )
+    ).scalar_one()
+    assert item.status == STOCK_SYNC_STATUS_ERROR
+    assert item.last_error_code == ERROR_UNSAFE_STOCK_UNKNOWN
+    assert item.last_confirmed_amount is None
+
+    await db_session.refresh(ctx.binding)
+    assert ctx.binding.last_sync_status == STOCK_SYNC_STATUS_ERROR
+    assert ctx.binding.last_error_code == ERROR_UNSAFE_STOCK_UNKNOWN
 
 
 # TC-NEW-FBS-STOCK-009 — PUT + readback happy path
@@ -329,6 +422,7 @@ async def test_sync_confirms_when_readback_matches(db_session: AsyncSession) -> 
     )
     db_session.add(product)
     await db_session.commit()
+    await _add_fbs_pool(db_session, ctx, product, 7)
 
     transport = _MockStocksTransport()
     async with _client(transport) as http_client:
@@ -352,7 +446,7 @@ async def test_sync_confirms_when_readback_matches(db_session: AsyncSession) -> 
         )
     ).scalar_one()
     assert item.status == STOCK_SYNC_STATUS_CONFIRMED
-    assert item.last_confirmed_amount == 0
+    assert item.last_confirmed_amount == 7
     assert "wb-test-token-secret" not in str(result)
 
 
@@ -368,6 +462,7 @@ async def test_sync_marks_error_on_readback_mismatch(db_session: AsyncSession) -
     )
     db_session.add(product)
     await db_session.commit()
+    await _add_fbs_pool(db_session, ctx, product, 5)
 
     transport = _MockStocksTransport(readback_overrides={444: 6})
     async with _client(transport) as http_client:
@@ -394,9 +489,9 @@ async def test_sync_marks_error_on_readback_mismatch(db_session: AsyncSession) -
     assert ctx.binding.last_error_code == ERROR_READBACK_MISMATCH
 
 
-# TC-NEW-FBS-STOCK-010 — zero stale published chrt
+# TC-NEW-F22-001 — stale confirmed rows must not produce automatic PUT 0
 @pytest.mark.asyncio
-async def test_sync_zeroes_previously_published_absent_product(
+async def test_sync_skips_previously_published_absent_product_without_zeroing(
     db_session: AsyncSession,
 ) -> None:
     ctx = await _seed_binding(db_session)
@@ -422,10 +517,10 @@ async def test_sync_zeroes_previously_published_absent_product(
             marketplace_api_base="https://wb-mock.test",
         )
 
-    assert result.products_zeroed == 1
-    assert result.products_targeted == 1
-    assert transport.put_calls[0][0].amount == 0
-    assert transport.stored[999] == 0
+    assert result.products_zeroed == 0
+    assert result.products_targeted == 0
+    assert transport.put_calls == []
+    assert transport.stored == {}
 
 
 # TC-NEW-FBS-STOCK-011 — missing chrt + duplicate conflict
@@ -460,6 +555,7 @@ async def test_sync_skips_missing_chrt_and_conflicts_duplicates(
     )
     db_session.add_all([missing, dup_a, dup_b, ok])
     await db_session.commit()
+    await _add_fbs_pool(db_session, ctx, ok, 8)
 
     transport = _MockStocksTransport()
     async with _client(transport) as http_client:
@@ -506,6 +602,19 @@ async def test_sync_splits_1001_items_into_two_batches(db_session: AsyncSession)
     ]
     db_session.add_all(products)
     await db_session.commit()
+    db_session.add_all(
+        [
+            StockDirection(
+                tenant_id=ctx.tenant.id,
+                product_id=product.id,
+                name=f"FBS pool {product.sku_code}",
+                quantity=1,
+                is_fbs=True,
+            )
+            for product in products
+        ]
+    )
+    await db_session.commit()
 
     transport = _MockStocksTransport()
     async with _client(transport) as http_client:
@@ -544,6 +653,7 @@ async def test_sync_upstream_error_marks_batch_error(
     )
     db_session.add(product)
     await db_session.commit()
+    await _add_fbs_pool(db_session, ctx, product, 4)
 
     transport = _MockStocksTransport(put_status_sequence=[status_code])
     async with _client(transport) as http_client:
@@ -585,6 +695,7 @@ async def test_sync_429_after_retry_marks_binding_upstream_error(
     )
     db_session.add(product)
     await db_session.commit()
+    await _add_fbs_pool(db_session, ctx, product, 4)
 
     transport = _MockStocksTransport(put_status_sequence=[429, 429])
     async with _client(transport) as http_client:
@@ -619,6 +730,7 @@ async def test_sync_transport_error_marks_binding_not_readback_mismatch(
     )
     db_session.add(product)
     await db_session.commit()
+    await _add_fbs_pool(db_session, ctx, product, 4)
 
     def handler(request: httpx.Request) -> httpx.Response:
         if request.method == "PUT":
@@ -658,6 +770,7 @@ async def test_sync_429_retries_once_then_succeeds(db_session: AsyncSession) -> 
     )
     db_session.add(product)
     await db_session.commit()
+    await _add_fbs_pool(db_session, ctx, product, 4)
 
     transport = _MockStocksTransport(put_status_sequence=[429])
     limiter = RecordingRateLimiter()
@@ -702,6 +815,7 @@ async def test_default_rate_limiter_paces_wb_calls(
     )
     db_session.add(product)
     await db_session.commit()
+    await _add_fbs_pool(db_session, ctx, product, 4)
 
     transport = _MockStocksTransport()
     async with _client(transport) as http_client:
@@ -743,6 +857,7 @@ async def test_sync_429_honors_retry_after_on_production_limiter(
     )
     db_session.add(product)
     await db_session.commit()
+    await _add_fbs_pool(db_session, ctx, product, 4)
 
     transport = _MockStocksTransport(put_status_sequence=[429])
     async with _client(transport) as http_client:
@@ -803,6 +918,19 @@ async def test_partial_batch_failure_leaves_confirmed_batch(
     ]
     db_session.add_all(products)
     await db_session.commit()
+    db_session.add_all(
+        [
+            StockDirection(
+                tenant_id=ctx.tenant.id,
+                product_id=product.id,
+                name=f"FBS pool {product.sku_code}",
+                quantity=1,
+                is_fbs=True,
+            )
+            for product in products
+        ]
+    )
+    await db_session.commit()
 
     call_count = 0
 
@@ -815,7 +943,7 @@ async def test_partial_batch_failure_leaves_confirmed_batch(
             return httpx.Response(204)
         body = json.loads(request.content.decode())
         chrt_ids = body.get("chrtIds", [])
-        stocks = [{"chrtId": cid, "amount": 0} for cid in chrt_ids]
+        stocks = [{"chrtId": cid, "amount": 1} for cid in chrt_ids]
         return httpx.Response(200, json={"stocks": stocks})
 
     transport = httpx.MockTransport(handler)

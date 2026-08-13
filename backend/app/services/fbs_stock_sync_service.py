@@ -24,6 +24,7 @@ from app.models.fbs_stock_sync_item import (
 from app.models.fbs_warehouse_binding import FbsWarehouseBinding
 from app.models.product import Product
 from app.models.seller import Seller
+from app.services import stock_direction_service
 from app.services.fbs_stock_availability_service import fbs_available_qty_by_product
 from app.services.wildberries_client import (
     MARKETPLACE_STOCKS_PATH,
@@ -49,6 +50,8 @@ ERROR_MISSING_TOKEN = "missing_marketplace_token"
 ERROR_SYNC_BUSY = "sync_busy"
 ERROR_BINDING_MISMATCH = "binding_mismatch"
 ERROR_SELLER_NOT_FOUND = "seller_not_found"
+ERROR_UNSAFE_STOCK_UNKNOWN = "unsafe_stock_unknown"
+ERROR_UNSAFE_ZERO_BLOCKED = "unsafe_zero_blocked"
 
 
 class StockSyncRateLimiter(Protocol):
@@ -95,7 +98,13 @@ class _PublishTarget:
     chrt_id: int
     amount: int
     product_id: uuid.UUID | None
-    zeroed: bool
+
+
+@dataclass(frozen=True, slots=True)
+class _BlockedTarget:
+    chrt_id: int
+    product_id: uuid.UUID
+    error_code: str
 
 
 async def _seller_in_tenant(
@@ -186,8 +195,8 @@ def _build_publish_plan(
     products: list[Product],
     availability: dict[uuid.UUID, int],
     existing_items: dict[int, FbsStockSyncItem],
-) -> tuple[list[_PublishTarget], list[uuid.UUID], set[int]]:
-    """Return (publish targets, skipped missing chrt product ids, conflict chrt ids)."""
+) -> tuple[list[_PublishTarget], list[_BlockedTarget], list[uuid.UUID], set[int]]:
+    """Return safe publish targets, blocked targets, missing chrt ids, and conflicts."""
     skipped_missing: list[uuid.UUID] = []
     chrt_to_products: dict[int, list[Product]] = {}
     for product in products:
@@ -199,34 +208,41 @@ def _build_publish_plan(
     conflict_chrts = {chrt for chrt, group in chrt_to_products.items() if len(group) > 1}
 
     targets_by_chrt: dict[int, _PublishTarget] = {}
+    blocked_targets: list[_BlockedTarget] = []
     for chrt_id, group in chrt_to_products.items():
         if chrt_id in conflict_chrts:
             continue
         product = group[0]
-        amount = int(availability.get(product.id, 0))
+        if product.id not in availability:
+            blocked_targets.append(
+                _BlockedTarget(
+                    chrt_id=chrt_id,
+                    product_id=product.id,
+                    error_code=ERROR_UNSAFE_STOCK_UNKNOWN,
+                )
+            )
+            continue
+        amount = int(availability[product.id])
         amount = max(amount, 0)
         if product.fbs_stock_limit is not None:
             amount = min(amount, max(int(product.fbs_stock_limit), 0))
+        if amount == 0:
+            blocked_targets.append(
+                _BlockedTarget(
+                    chrt_id=chrt_id,
+                    product_id=product.id,
+                    error_code=ERROR_UNSAFE_ZERO_BLOCKED,
+                )
+            )
+            continue
         targets_by_chrt[chrt_id] = _PublishTarget(
             chrt_id=chrt_id,
             amount=amount,
             product_id=product.id,
-            zeroed=False,
         )
 
-    for chrt_id, item in existing_items.items():
-        if chrt_id in targets_by_chrt or chrt_id in conflict_chrts:
-            continue
-        if item.status == STOCK_SYNC_STATUS_CONFIRMED and item.last_confirmed_amount == 0:
-            continue
-        targets_by_chrt[chrt_id] = _PublishTarget(
-            chrt_id=chrt_id,
-            amount=0,
-            product_id=item.product_id,
-            zeroed=True,
-        )
-
-    return list(targets_by_chrt.values()), skipped_missing, conflict_chrts
+    _ = existing_items
+    return list(targets_by_chrt.values()), blocked_targets, skipped_missing, conflict_chrts
 
 
 async def _upsert_pending_items(
@@ -276,6 +292,31 @@ async def _mark_conflict_items(
             item.status = STOCK_SYNC_STATUS_CONFLICT
             item.last_error_code = ERROR_DUPLICATE_CHRT
     if conflict_chrts:
+        await session.commit()
+
+
+async def _mark_blocked_items(
+    session: AsyncSession,
+    binding_id: uuid.UUID,
+    blocked_targets: list[_BlockedTarget],
+    existing_items: dict[int, FbsStockSyncItem],
+) -> None:
+    for target in blocked_targets:
+        item = existing_items.get(target.chrt_id)
+        if item is None:
+            item = FbsStockSyncItem(
+                binding_id=binding_id,
+                chrt_id=target.chrt_id,
+                product_id=target.product_id,
+            )
+            session.add(item)
+            existing_items[target.chrt_id] = item
+        else:
+            item.product_id = target.product_id
+        item.status = STOCK_SYNC_STATUS_ERROR
+        item.last_error_code = target.error_code
+        item.last_target_amount = None
+    if blocked_targets:
         await session.commit()
 
 
@@ -528,9 +569,18 @@ async def sync_binding_stocks(
             binding.wms_warehouse_id,
             product_ids,
         )
+        direction_map = await stock_direction_service.direction_totals_by_product(
+            session, tenant_id, product_ids
+        )
+        availability = {
+            product_id: amount
+            for product_id, amount in availability.items()
+            if direction_map.get(product_id) is not None
+            and direction_map[product_id].has_any
+        }
         existing_items = await _load_existing_sync_items(session, binding.id)
 
-        targets, skipped_missing, conflict_chrts = _build_publish_plan(
+        targets, blocked_targets, skipped_missing, conflict_chrts = _build_publish_plan(
             products, availability, existing_items
         )
         result.skipped_missing_chrt_id = skipped_missing
@@ -548,10 +598,12 @@ async def sync_binding_stocks(
                 existing_items,
             )
             result.conflicts = len(conflict_chrts)
+        if blocked_targets:
+            await _mark_blocked_items(session, binding.id, blocked_targets, existing_items)
 
         publish_targets = [t for t in targets if t.chrt_id not in conflict_chrts]
         result.products_targeted = len(publish_targets)
-        result.products_zeroed = sum(1 for t in publish_targets if t.zeroed)
+        result.products_zeroed = 0
 
         sync_items = await _upsert_pending_items(
             session, binding.id, publish_targets, existing_items
@@ -568,12 +620,16 @@ async def sync_binding_stocks(
             marketplace_api_base=marketplace_api_base,
         )
         result.products_confirmed = confirmed
-        result.errors = errors + result.conflicts
+        blocked_error_count = len(blocked_targets)
+        result.errors = errors + result.conflicts + blocked_error_count
         result.bindings_processed = 1
 
         if errors > 0:
             binding.last_sync_status = STOCK_SYNC_STATUS_ERROR
             binding.last_error_code = publish_error_code
+        elif blocked_error_count > 0:
+            binding.last_sync_status = STOCK_SYNC_STATUS_ERROR
+            binding.last_error_code = blocked_targets[0].error_code
         elif result.conflicts > 0:
             binding.last_sync_status = STOCK_SYNC_STATUS_CONFLICT
             binding.last_error_code = ERROR_DUPLICATE_CHRT
