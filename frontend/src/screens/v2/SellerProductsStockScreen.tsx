@@ -79,6 +79,7 @@ export function SellerProductsStockScreen({
 }: Props) {
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [notice, setNotice] = useState<string | null>(null)
   const [catalog, setCatalog] = useState<WbCatalogRow[]>([])
   const [stock, setStock] = useState<StockSummaryRow[]>([])
   const [page, setPage] = useState(0)
@@ -90,6 +91,8 @@ export function SellerProductsStockScreen({
   const [fbsPending, setFbsPending] = useState<Set<string>>(new Set())
   const [limitDraft, setLimitDraft] = useState<Record<string, string>>({})
   const [fbsBulkBusy, setFbsBulkBusy] = useState(false)
+  const [selectedProductIds, setSelectedProductIds] = useState<Set<string>>(new Set())
+  const [bulkHonestSignBusy, setBulkHonestSignBusy] = useState(false)
 
   const refreshAll = useCallback(async () => {
     setError(null)
@@ -154,6 +157,42 @@ export function SellerProductsStockScreen({
     () => rows.filter((row) => row.fbs_stock_sync_enabled).length,
     [rows],
   )
+  const honestSignEnabledCount = useMemo(
+    () => rows.filter((row) => row.requires_honest_sign).length,
+    [rows],
+  )
+  const productIds = useMemo(() => rows.map((row) => row.id), [rows])
+  const selectedCount = selectedProductIds.size
+  const allProductsSelected =
+    productIds.length > 0 && productIds.every((id) => selectedProductIds.has(id))
+  const someProductsSelected = productIds.some((id) => selectedProductIds.has(id))
+
+  useEffect(() => {
+    const existing = new Set(productIds)
+    setSelectedProductIds((current) => {
+      const nextIds = [...current].filter((id) => existing.has(id))
+      if (nextIds.length === current.size) {
+        return current
+      }
+      return new Set(nextIds)
+    })
+  }, [productIds])
+
+  function toggleAllProducts(checked: boolean) {
+    setSelectedProductIds(checked ? new Set(productIds) : new Set())
+  }
+
+  function toggleProductSelected(productId: string, checked: boolean) {
+    setSelectedProductIds((current) => {
+      const next = new Set(current)
+      if (checked) {
+        next.add(productId)
+      } else {
+        next.delete(productId)
+      }
+      return next
+    })
+  }
 
   function openPackagingEdit(p: WbCatalogRow) {
     setEditProduct(p)
@@ -175,6 +214,7 @@ export function SellerProductsStockScreen({
     if (!editProduct) return
     setEditBusy(true)
     setError(null)
+    setNotice(null)
     try {
       const res = await fetch(
         apiUrl(`/products/${editProduct.id}/packaging-instructions`),
@@ -197,6 +237,44 @@ export function SellerProductsStockScreen({
       setError(e instanceof Error ? e.message : 'Не удалось сохранить ТЗ.')
     } finally {
       setEditBusy(false)
+    }
+  }
+
+  async function applyHonestSignToSelected() {
+    const productIdsToUpdate = [...selectedProductIds]
+    if (productIdsToUpdate.length === 0) return
+    const selectedIds = new Set(productIdsToUpdate)
+    setBulkHonestSignBusy(true)
+    setError(null)
+    setNotice(null)
+    try {
+      const res = await fetch(apiUrl('/products/requires-honest-sign/bulk'), {
+        method: 'PATCH',
+        headers: { ...authHeaders(token), 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          product_ids: productIdsToUpdate,
+          requires_honest_sign: true,
+        }),
+      })
+      if (!res.ok) {
+        setError(await readApiErrorMessage(res))
+        return
+      }
+      const body = (await res.json()) as { updated_count: number }
+      setCatalog((current) =>
+        current.map((row) =>
+          selectedIds.has(row.id) ? { ...row, requires_honest_sign: true } : row,
+        ),
+      )
+      setSelectedProductIds(new Set())
+      setNotice(`Честный знак включён: ${body.updated_count} товаров.`)
+      await refreshAll()
+    } catch (e) {
+      setError(
+        e instanceof Error ? e.message : 'Не удалось включить Честный знак выбранным товарам.',
+      )
+    } finally {
+      setBulkHonestSignBusy(false)
     }
   }
 
@@ -290,6 +368,7 @@ export function SellerProductsStockScreen({
   const bulkFbsSync = useCallback(
     async (enabled: boolean) => {
       setError(null)
+      setNotice(null)
       setFbsBulkBusy(true)
       try {
         const res = await fetch(apiUrl('/products/fbs-stock-sync/bulk'), {
@@ -315,6 +394,7 @@ export function SellerProductsStockScreen({
 
   async function onSyncProducts() {
     setError(null)
+    setNotice(null)
     setBusy(true)
     try {
       const res = await fetch(apiUrl('/integrations/wildberries/self/sync-products'), {
@@ -348,6 +428,16 @@ export function SellerProductsStockScreen({
           {error}
         </Alert>
       ) : null}
+      {notice ? (
+        <Alert
+          severity="success"
+          sx={{ mb: 2 }}
+          data-testid="seller-products-notice"
+          onClose={() => setNotice(null)}
+        >
+          {notice}
+        </Alert>
+      ) : null}
 
       <Paper variant="outlined" sx={{ p: 2, mb: 2 }} data-testid="seller-products-actions">
         <Stack direction="row" spacing={1.5} sx={{ flexWrap: 'wrap', alignItems: 'center' }}>
@@ -359,7 +449,33 @@ export function SellerProductsStockScreen({
           >
             Синхронизировать по API
           </Button>
+          <Chip
+            size="small"
+            variant="outlined"
+            color={honestSignEnabledCount > 0 ? 'info' : 'default'}
+            label={`ЧЗ: ${honestSignEnabledCount} из ${rows.length}`}
+            data-testid="seller-products-honest-sign-count"
+          />
+          {selectedCount > 0 ? (
+            <Chip
+              size="small"
+              variant="outlined"
+              color="primary"
+              label={`Выбрано: ${selectedCount}`}
+              data-testid="seller-products-selected-count"
+            />
+          ) : null}
+          <Button
+            variant="outlined"
+            color="success"
+            disabled={bulkHonestSignBusy || busy || selectedCount === 0}
+            onClick={() => void applyHonestSignToSelected()}
+            data-testid="seller-products-bulk-honest-sign"
+          >
+            Нужен ЧЗ выбранным
+          </Button>
           {busy ? <CircularProgress size={18} /> : null}
+          {bulkHonestSignBusy ? <CircularProgress size={18} /> : null}
         </Stack>
       </Paper>
 
@@ -412,6 +528,17 @@ export function SellerProductsStockScreen({
         <Table stickyHeader size="small" data-testid="seller-products-table">
           <TableHead>
             <TableRow>
+              <TableCell padding="checkbox" width={52}>
+                <Checkbox
+                  size="small"
+                  checked={allProductsSelected}
+                  indeterminate={someProductsSelected && !allProductsSelected}
+                  disabled={busy || productIds.length === 0}
+                  onChange={(e) => toggleAllProducts(e.target.checked)}
+                  slotProps={{ input: { 'aria-label': 'Выбрать все товары' } }}
+                  data-testid="seller-products-select-all"
+                />
+              </TableCell>
               <TableCell>Фото</TableCell>
               <TableCell>SKU</TableCell>
               <TableCell>Размер</TableCell>
@@ -432,6 +559,15 @@ export function SellerProductsStockScreen({
           <TableBody>
             {pagedRows.map((p) => (
               <TableRow key={p.id} hover data-testid="seller-product-row">
+                <TableCell padding="checkbox">
+                  <Checkbox
+                    size="small"
+                    checked={selectedProductIds.has(p.id)}
+                    onChange={(e) => toggleProductSelected(p.id, e.target.checked)}
+                    slotProps={{ input: { 'aria-label': `Выбрать товар ${p.sku_code}` } }}
+                    data-testid={`seller-product-select-${p.id}`}
+                  />
+                </TableCell>
                 <TableCell>
                   <ProductPhotoThumb src={p.wb_primary_image_url} />
                 </TableCell>
@@ -546,6 +682,15 @@ export function SellerProductsStockScreen({
                       variant="outlined"
                       data-testid={`seller-packaging-status-${p.id}`}
                     />
+                    {p.requires_honest_sign ? (
+                      <Chip
+                        size="small"
+                        label="ЧЗ"
+                        color="info"
+                        variant="outlined"
+                        data-testid={`seller-honest-sign-status-${p.id}`}
+                      />
+                    ) : null}
                     <Button
                       size="small"
                       onClick={() => openPackagingEdit(p)}
@@ -559,7 +704,7 @@ export function SellerProductsStockScreen({
             ))}
             {rows.length === 0 ? (
               <TableRow>
-                <TableCell colSpan={15}>
+                <TableCell colSpan={16}>
                   <Typography variant="body2" color="text.secondary">
                     Пока нет товаров.
                   </Typography>
