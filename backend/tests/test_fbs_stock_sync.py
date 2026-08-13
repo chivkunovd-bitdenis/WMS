@@ -42,6 +42,7 @@ from app.models.tenant import Tenant
 from app.models.warehouse import Warehouse
 from app.services.fbs_stock_sync_service import (
     DEFAULT_RATE_INTERVAL_SECONDS,
+    ERROR_AMBIGUOUS_WAREHOUSE_SCOPE,
     ERROR_DUPLICATE_CHRT,
     ERROR_READBACK_MISMATCH,
     ERROR_SYNC_BUSY,
@@ -550,6 +551,89 @@ async def test_sync_publishes_fbs_pool_minus_fbs_order_reservations_only(
     assert item.status == STOCK_SYNC_STATUS_CONFIRMED
     assert item.last_target_amount == 193
     assert item.last_confirmed_amount == 193
+
+
+# TC-NEW-F10-002 — product-level FBS pool must not be duplicated across WB warehouses.
+@pytest.mark.asyncio
+async def test_sync_blocks_product_level_fbs_pool_with_two_stock_sync_bindings(
+    db_session: AsyncSession,
+) -> None:
+    ctx = await _seed_binding(db_session, wb_warehouse_id=501101)
+    second_warehouse = Warehouse(
+        id=uuid.uuid4(),
+        tenant_id=ctx.tenant.id,
+        name="Second FBS WH",
+        code=f"wh2-{uuid.uuid4().hex[:6]}",
+    )
+    second_binding = FbsWarehouseBinding(
+        id=uuid.uuid4(),
+        tenant_id=ctx.tenant.id,
+        seller_id=ctx.seller.id,
+        wb_warehouse_id=501102,
+        wms_warehouse_id=second_warehouse.id,
+        is_active=True,
+        stock_sync_enabled=True,
+    )
+    product = _product(
+        tenant_id=ctx.tenant.id,
+        seller_id=ctx.seller.id,
+        chrt_id=1211,
+        sku_suffix="f10-ambiguous-pool",
+    )
+    db_session.add_all([second_warehouse, second_binding, product])
+    await db_session.commit()
+    await _add_fbs_pool(db_session, ctx, product, 12)
+
+    transport = _MockStocksTransport()
+    transport.stored[1211] = 20
+    async with _client(transport) as http_client:
+        first_result = await sync_binding_stocks(
+            db_session,
+            ctx.tenant.id,
+            ctx.seller.id,
+            ctx.binding,
+            http_client,
+            marketplace_api_base="https://wb-mock.test",
+        )
+        second_result = await sync_binding_stocks(
+            db_session,
+            ctx.tenant.id,
+            ctx.seller.id,
+            second_binding,
+            http_client,
+            marketplace_api_base="https://wb-mock.test",
+        )
+
+    assert first_result.products_targeted == 0
+    assert second_result.products_targeted == 0
+    assert first_result.products_confirmed == 0
+    assert second_result.products_confirmed == 0
+    assert first_result.errors == 1
+    assert second_result.errors == 1
+    assert transport.put_calls == []
+    assert transport.post_calls == []
+    assert transport.stored[1211] == 20
+
+    rows = list(
+        (
+            await db_session.execute(
+                select(FbsStockSyncItem).where(FbsStockSyncItem.chrt_id == 1211)
+            )
+        )
+        .scalars()
+        .all()
+    )
+    assert len(rows) == 2
+    assert {row.binding_id for row in rows} == {ctx.binding.id, second_binding.id}
+    assert {row.status for row in rows} == {STOCK_SYNC_STATUS_ERROR}
+    assert {row.last_error_code for row in rows} == {ERROR_AMBIGUOUS_WAREHOUSE_SCOPE}
+    assert all(row.last_target_amount is None for row in rows)
+    assert all(row.last_confirmed_amount is None for row in rows)
+
+    await db_session.refresh(ctx.binding)
+    await db_session.refresh(second_binding)
+    assert ctx.binding.last_error_code == ERROR_AMBIGUOUS_WAREHOUSE_SCOPE
+    assert second_binding.last_error_code == ERROR_AMBIGUOUS_WAREHOUSE_SCOPE
 
 
 @pytest.mark.asyncio

@@ -52,6 +52,7 @@ ERROR_BINDING_MISMATCH = "binding_mismatch"
 ERROR_SELLER_NOT_FOUND = "seller_not_found"
 ERROR_UNSAFE_STOCK_UNKNOWN = "unsafe_stock_unknown"
 ERROR_UNSAFE_ZERO_BLOCKED = "unsafe_zero_blocked"
+ERROR_AMBIGUOUS_WAREHOUSE_SCOPE = "ambiguous_warehouse_scope"
 
 
 class StockSyncRateLimiter(Protocol):
@@ -196,9 +197,11 @@ def _build_publish_plan(
     products: list[Product],
     availability: dict[uuid.UUID, int],
     existing_items: dict[int, FbsStockSyncItem],
+    product_block_errors: dict[uuid.UUID, str] | None = None,
 ) -> tuple[list[_PublishTarget], list[_BlockedTarget], list[uuid.UUID], set[int]]:
     """Return safe publish targets, blocked targets, missing chrt ids, and conflicts."""
     skipped_missing: list[uuid.UUID] = []
+    block_errors = product_block_errors or {}
     chrt_to_products: dict[int, list[Product]] = {}
     for product in products:
         if product.wb_chrt_id is None:
@@ -214,6 +217,16 @@ def _build_publish_plan(
         if chrt_id in conflict_chrts:
             continue
         product = group[0]
+        blocked_error = block_errors.get(product.id)
+        if blocked_error is not None:
+            blocked_targets.append(
+                _BlockedTarget(
+                    chrt_id=chrt_id,
+                    product_id=product.id,
+                    error_code=blocked_error,
+                )
+            )
+            continue
         if product.id not in availability:
             blocked_targets.append(
                 _BlockedTarget(
@@ -244,6 +257,25 @@ def _build_publish_plan(
 
     _ = existing_items
     return list(targets_by_chrt.values()), blocked_targets, skipped_missing, conflict_chrts
+
+
+async def _seller_has_ambiguous_stock_sync_scope(
+    session: AsyncSession,
+    tenant_id: uuid.UUID,
+    seller_id: uuid.UUID,
+) -> bool:
+    stmt = (
+        select(FbsWarehouseBinding.id)
+        .where(
+            FbsWarehouseBinding.tenant_id == tenant_id,
+            FbsWarehouseBinding.seller_id == seller_id,
+            FbsWarehouseBinding.is_active.is_(True),
+            FbsWarehouseBinding.stock_sync_enabled.is_(True),
+        )
+        .limit(2)
+    )
+    rows = list((await session.execute(stmt)).scalars().all())
+    return len(rows) > 1
 
 
 async def _upsert_pending_items(
@@ -579,10 +611,17 @@ async def sync_binding_stocks(
             if direction_map.get(product_id) is not None
             and direction_map[product_id].has_any
         }
+        product_block_errors: dict[uuid.UUID, str] = {}
+        if await _seller_has_ambiguous_stock_sync_scope(session, tenant_id, seller_id):
+            product_block_errors = {
+                product_id: ERROR_AMBIGUOUS_WAREHOUSE_SCOPE
+                for product_id, directions in direction_map.items()
+                if directions.fbs > 0
+            }
         existing_items = await _load_existing_sync_items(session, binding.id)
 
         targets, blocked_targets, skipped_missing, conflict_chrts = _build_publish_plan(
-            products, availability, existing_items
+            products, availability, existing_items, product_block_errors
         )
         result.skipped_missing_chrt_id = skipped_missing
 
