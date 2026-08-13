@@ -1,0 +1,86 @@
+{
+  "status": "BROWSER_PRODUCT_QA_FAILED",
+  "checks": [
+    {
+      "name": "seller UI blocks missing FBS pool from sending zero",
+      "passed": true,
+      "statusBefore": "Нет FBS",
+      "toggleEnabled": false,
+      "stockBefore": 20,
+      "stockAfterDisabledAttempt": 20,
+      "matchingRequests": []
+    },
+    {
+      "name": "seller products header has no Limit column",
+      "passed": true,
+      "headerText": "\tТовар\tWB / ШК\tОстаток\tFBS-пул\tПубликация WB\tТЗ / ЧЗ\tДействия\n"
+    },
+    {
+      "name": "seller products screen has no raw technical errors",
+      "passed": true,
+      "matchedTextSample": "Портал селлера\nf22-seller-1786630475186@example.com · fulfillment_seller\n0\nВыйти\nДокументы\nТовары\nЧестный знак\nНастройки\nТовары\n\nКаталог WB и остаток на фулфилменте. Остаток — всего на ФФ минус резерв; отгрузку на МП можно планировать только по колонке «В ячейках» (после раскладки ФФ).\n\nСинхронизировать по API\nПубликация FBS в WB\nПубликуется: 0 из 1\n\tТовар\tWB / ШК\tОстаток\tFBS-пул\tПубликация WB\tТЗ / ЧЗ\tДействия\n\n\t\n\nF22 Safe Sync Product\n\nSKU F22-SAFE-1786630475186\n\t\n\n22022022\n\nF22-WB-BARCODE\n\t\n\n0\n\n0\n0\n\t\n\nFBS 0 шт\n\nрезервы 0 шт\nFBS\n\t\nНет FBS\n\t\nБез ТЗ\nЧЗ нет\n\t\nТЗ\n\nНа странице\n\n10\n\n1–1 of 1"
+    },
+    {
+      "name": "1280px layout has no horizontal page overflow or black strip",
+      "passed": true,
+      "innerWidth": 1280,
+      "scrollWidth": 1280,
+      "bodyScrollWidth": 1280,
+      "blackStrip": false
+    },
+    {
+      "name": "backend scheduled enable with missing pool keeps WB at 20",
+      "passed": true,
+      "emulatorAmount": 20,
+      "syncItem": {
+        "chrt_id": 111001,
+        "product_id": "2accb903-1301-489a-9e9d-2a4524667619",
+        "target": null,
+        "confirmed": null,
+        "status": "error",
+        "error": "unsafe_stock_unknown",
+        "timestamp": "2026-08-13T14:14:38"
+      },
+      "syncResult": {
+        "bindings_processed": 0,
+        "products_targeted": 0,
+        "products_confirmed": 0,
+        "products_zeroed": 0,
+        "conflicts": 0,
+        "errors": 0,
+        "binding_errors": 0
+      }
+    },
+    {
+      "name": "positive FBS pool publishes 7 only after readback",
+      "passed": true,
+      "emulatorAmount": 7,
+      "syncItem": {
+        "chrt_id": 111001,
+        "product_id": "2accb903-1301-489a-9e9d-2a4524667619",
+        "target": 7,
+        "confirmed": 7,
+        "status": "confirmed",
+        "error": null,
+        "timestamp": "2026-08-13T14:14:40"
+      },
+      "syncResult": {
+        "bindings_processed": 0,
+        "products_targeted": 0,
+        "products_confirmed": 0,
+        "products_zeroed": 0,
+        "conflicts": 0,
+        "errors": 0,
+        "binding_errors": 0
+      }
+    },
+    {
+      "name": "seller UI shows readback-confirmed amount after positive sync",
+      "passed": false,
+      "positiveStatus": "Ошибка WB"
+    }
+  ],
+  "commands": {
+    "runner": "docs/reviews/product-operations-ux/2026-08-12/evidence/f22-browser-product-qa-final/run_f22_browser_product_qa_final.sh"
+  }
+}
