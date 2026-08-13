@@ -1,4 +1,4 @@
-import { test, expect } from '@playwright/test';
+import { test, expect, type Page } from '@playwright/test';
 
 import { waitForPatchOk, waitForPostOk } from './api-waits';
 import {
@@ -8,6 +8,26 @@ import {
   loginSellerPortal,
   seedFfSellerInbound,
 } from './inbound-boxes-helpers';
+
+const PRINT_SENTINEL = '__NO_PRINT__';
+
+async function armPrintCapture(page: Page) {
+  await page.evaluate((sentinel) => {
+    const captureWindow = window as unknown as {
+      __WMS_CAPTURE_PRINT_HTML__?: boolean;
+      __WMS_LAST_PRINT_HTML__?: string;
+    };
+    captureWindow.__WMS_CAPTURE_PRINT_HTML__ = true;
+    captureWindow.__WMS_LAST_PRINT_HTML__ = sentinel;
+  }, PRINT_SENTINEL);
+}
+
+async function lastCapturedPrintHtml(page: Page): Promise<string> {
+  return page.evaluate(() => {
+    const captureWindow = window as unknown as { __WMS_LAST_PRINT_HTML__?: string };
+    return captureWindow.__WMS_LAST_PRINT_HTML__ ?? '';
+  });
+}
 
 // TC-NEW-IN-01 — очередь с человеческой идентичностью, скан в приёмку, ручная правка, завершение с модалкой расхождений.
 test('inbound receiving v2 — scan, manual edit, finish with discrepancy', async ({ page }) => {
@@ -200,6 +220,10 @@ test('inbound receiving v2 — return accepts seller catalog discrepancy and dim
   const adminHeaders = { Authorization: `Bearer ${seed.token}` };
   const factSku = `sku-return-fact-${suffix}`;
   const factBarcode = `wb-return-fact-${suffix}`;
+  const manualPickerSku = `sku-return-picker-${suffix}`;
+  const manualPickerBarcode = `wb-return-picker-${suffix}`;
+  const manualCreatedSku = `sku-return-created-${suffix}`;
+  const manualCreatedBarcode = `wb-return-created-${suffix}`;
   const otherSellerName = `Other Return Seller ${suffix}`;
 
   const otherSeller = await page.request.post('/api/sellers', {
@@ -221,6 +245,20 @@ test('inbound receiving v2 — return accepts seller catalog discrepancy and dim
     },
   });
   expect(factProductRes.ok()).toBeTruthy();
+
+  const manualPickerProductRes = await page.request.post('/api/products', {
+    headers: adminHeaders,
+    data: {
+      name: 'Return Manual Picker Product',
+      sku_code: manualPickerSku,
+      wb_barcode: manualPickerBarcode,
+      seller_id: seed.sellerId,
+      length_mm: 90,
+      width_mm: 70,
+      height_mm: 30,
+    },
+  });
+  expect(manualPickerProductRes.ok()).toBeTruthy();
 
   const sellerLogin = await page.request.post('/api/auth/login', {
     data: { email: seed.sellerEmail, password: seed.password },
@@ -247,7 +285,7 @@ test('inbound receiving v2 — return accepts seller catalog discrepancy and dim
 
   await loginFfAdmin(page, seed.adminEmail, seed.password);
   await page.getByTestId('nav-ff-reception').click();
-  await page.getByTestId('ff-inbound-queue-table').locator('tbody tr').first().click();
+  await page.locator(`[data-testid="ff-inbound-queue-row"][data-request-id="${requestId}"]`).click();
   await expect(page.getByTestId('ff-inbound-doc-root')).toBeVisible();
   await expect(page.getByTestId('ff-inbound-operation-type')).toContainText('Возврат');
   await expect(page.getByTestId('ff-inbound-return-autoprint')).toBeVisible();
@@ -261,15 +299,42 @@ test('inbound receiving v2 — return accepts seller catalog discrepancy and dim
   await page.getByRole('button', { name: 'Отмена' }).click();
   await expect(page.getByTestId('ff-manual-product-dialog')).toHaveCount(0);
   await page.getByTestId('ff-inbound-return-autoprint').click();
-  await page.evaluate(() => {
-    (
-      window as unknown as {
-        __WMS_CAPTURE_PRINT_HTML__?: boolean
-        __WMS_LAST_PRINT_HTML__?: string
-      }
-    ).__WMS_CAPTURE_PRINT_HTML__ = true;
-    (window as unknown as { __WMS_LAST_PRINT_HTML__?: string }).__WMS_LAST_PRINT_HTML__ = '';
+  await armPrintCapture(page);
+
+  await page.getByTestId('ff-inbound-receiving-add-products').click();
+  await expect(page.getByTestId('ff-inbound-picker')).toBeVisible();
+  await page.getByTestId('ff-inbound-picker-search').fill(manualPickerSku);
+  await page.getByTestId('ff-inbound-picker-qty').first().fill('1');
+  await Promise.all([
+    waitForPostOk(page, INBOUND_API, (u) => u.includes('/receiving/lines')),
+    page.getByTestId('ff-inbound-picker-apply').click(),
+  ]);
+  await expect(page.getByTestId('ff-inbound-picker')).toHaveCount(0);
+  await page.waitForTimeout(200);
+  expect(await lastCapturedPrintHtml(page)).toBe(PRINT_SENTINEL);
+
+  const manualPickerRow = page.getByTestId('ff-inbound-line-row-discrepancy').filter({
+    hasText: manualPickerSku,
   });
+  await expect(manualPickerRow).toBeVisible();
+  await expect(manualPickerRow.getByTestId('ff-inbound-line-actual-display')).toHaveText('1');
+
+  await page.getByTestId('ff-inbound-receiving-create-manual-product').click();
+  await expect(page.getByTestId('ff-manual-product-dialog')).toBeVisible();
+  await page.getByTestId('ff-manual-product-name').fill('Return Created Manual Product');
+  await page.getByTestId('ff-manual-product-sku').fill(manualCreatedSku);
+  await page.getByTestId('ff-manual-product-barcode').fill(manualCreatedBarcode);
+  await page.getByTestId('ff-manual-product-length').fill('100');
+  await page.getByTestId('ff-manual-product-width').fill('80');
+  await page.getByTestId('ff-manual-product-height').fill('40');
+  await Promise.all([
+    waitForPostOk(page, '/api/products'),
+    waitForPostOk(page, INBOUND_API, (u) => u.includes('/receiving/lines')),
+    page.getByTestId('ff-manual-product-submit').click(),
+  ]);
+  await expect(page.getByTestId('ff-manual-product-dialog')).toHaveCount(0);
+  await page.waitForTimeout(200);
+  expect(await lastCapturedPrintHtml(page)).toBe(PRINT_SENTINEL);
 
   await page.getByTestId('ff-inbound-receiving-scan-input').fill(factBarcode);
   await Promise.all([
@@ -285,6 +350,10 @@ test('inbound receiving v2 — return accepts seller catalog discrepancy and dim
       ),
     factBarcode,
   );
+  const printHtml = await lastCapturedPrintHtml(page);
+  expect(printHtml).toContain(factBarcode);
+  expect(printHtml).not.toContain(factSku);
+  await expect(page.getByTestId('marking-print-dialog')).toHaveCount(0);
 
   const factRow = page.getByTestId('ff-inbound-line-row-discrepancy').filter({ hasText: factSku });
   await expect(factRow).toBeVisible();

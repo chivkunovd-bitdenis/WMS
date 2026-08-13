@@ -908,9 +908,17 @@ export function FfInboundRequestView({
   }
 
   const printReturnBarcodeForLine = (line: InboundLine) => {
-    const barcode = (line.wb_barcode ?? line.sku_code).trim()
+    const barcode = line.wb_barcode?.trim()
     if (!barcode) {
-      setScanToastError('У товара нет штрихкода для печати.')
+      setScanToastError('У товара нет ШК WB для печати.')
+      return
+    }
+    const captureWindow = window as unknown as {
+      __WMS_CAPTURE_PRINT_HTML__?: boolean
+      __WMS_LAST_PRINT_HTML__?: string
+    }
+    if (captureWindow.__WMS_CAPTURE_PRINT_HTML__) {
+      captureWindow.__WMS_LAST_PRINT_HTML__ = `${line.product_name}\n${barcode}`
       return
     }
     printBarcodeLabel({
@@ -1068,9 +1076,6 @@ export function FfInboundRequestView({
           if (!added) {
             return
           }
-          if (isReturnOperation && returnAutoPrint) {
-            printReturnBarcodeForLine(added)
-          }
           continue
         }
         const existing = lineByProduct.get(productId)
@@ -1132,10 +1137,7 @@ export function FfInboundRequestView({
       } else if (receivingActive) {
         const added = await addReceivedProductFact(product.id, 1)
         if (!added) {
-          return
-        }
-        if (isReturnOperation && returnAutoPrint) {
-          printReturnBarcodeForLine(added)
+          throw new Error('Товар создан, но не добавлен в факт приёмки. Нажмите «Добавить в приёмку» ещё раз.')
         }
       }
       await loadCatalog()
