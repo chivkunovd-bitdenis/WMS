@@ -27,7 +27,7 @@ code review и живого browser QA. `Product/UX passed` означает, ч
 | F11 Упрощённый FF каталог | BA_READY | PRODUCT_APPROVED_FOR_DEV | DEV_DONE | CODE_REVIEW_PASSED | BROWSER_PRODUCT_QA_PASSED | integration_pending |
 | F12 Monthly snapshot | BA_READY | PRODUCT_APPROVED_FOR_MINIMAL_UI | DEV_DONE | CODE_REVIEW_PASSED | BROWSER_PRODUCT_QA_PASSED | integration_pending |
 | F13 Доступ Виталика | BA_READY | PRODUCT_APPROVED_EXISTING_IMPL | DEV_REWORK_DONE | CODE_REVIEW_PASSED | BROWSER_PRODUCT_QA_PASSED | integration_pending |
-| F14 Сотрудники и права | BA_READY | PRODUCT_REWORK_REQUIRED | blocked | blocked | blocked | BA rework artifact: `evidence/f14-ba-rework/F14_BA_REWORK_RU.md`; не пускать в dev/stage без повторного Product/UX OK |
+| F14 Сотрудники и права | BA_READY | PRODUCT_APPROVED_AFTER_REWORK | pending | pending | pending | ready_for_dev; product rereview artifact: `evidence/f14-product-rereview/F14_PRODUCT_REVIEW_RU.md` |
 | F15 Удаление только черновиков | BA_READY | PRODUCT_APPROVED_FOR_DEV | DEV_DONE | CODE_REVIEW_PASSED | BROWSER_PRODUCT_QA_PASSED | integration_pending |
 | F16 nmID по-русски | BA_READY | PRODUCT_APPROVED_AFTER_REWORK | DEV_DONE | CODE_REVIEW_PASSED | BROWSER_PRODUCT_QA_PASSED | integration_pending |
 | F17 Единый печатный документ | BA_READY | PRODUCT_APPROVED_EXISTING_IMPL | DEV_DONE | CODE_REVIEW_PASSED | BROWSER_PRODUCT_QA_PASSED | integration_pending |
@@ -202,11 +202,11 @@ tests_run: `test_seller_shop_scope.py` previous backend evidence; `seller-cabine
 
 ## F14. Сотрудники селлера и ФФ
 
-status: ba_ready_after_rework, product_rejected_rework_required, dev_pending, code_review_pending, browser_qa_pending
+status: ba_ready_after_rework, product_approved_after_rework, dev_pending, code_review_pending, browser_qa_pending
 business_goal: управлять несколькими пользователями кабинета и правами.
 main_real_world_scenario: владелец селлера создаёт сотрудника и назначает права на документы/товары/ЧЗ/настройки/сотрудников.
 ba_rework_artifact: `evidence/f14-ba-rework/F14_BA_REWORK_RU.md`
-product_review_result: PRODUCT_REWORK_REQUIRED; строгий product gate не пройден, нужен повторный Product/UX gate по BA-артефакту, dev/stage запрещены.
+product_review_result: PRODUCT_APPROVED_AFTER_REWORK; repeat Product/UX gate passed by BA rework artifact, dev can start as one atomic F14 slice; dev/code/browser remain pending. Artifact: `evidence/f14-product-rereview/F14_PRODUCT_REVIEW_RU.md`.
 tests_run: `test_seller_staff_and_delete_drafts.py`, `test_staff_users.py`, `ff-staff-users.spec.ts`, `seller-staff-and-delete-drafts.spec.ts`.
 
 ## F15. Удаление только черновиков
