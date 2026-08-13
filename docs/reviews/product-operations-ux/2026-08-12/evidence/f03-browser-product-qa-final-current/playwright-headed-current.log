@@ -1,0 +1,26 @@
+[1A[2K[2m[WebServer] [22mINFO:     Started server process [79249]
+[2m[WebServer] [22mINFO:     Waiting for application startup.
+
+[1A[2K[2m[WebServer] [22mWMS_AUTO_CREATE_SCHEMA=1: tables created (dev/e2e only).
+
+[1A[2K[2m[WebServer] [22mINFO:     Application startup complete.
+
+[1A[2K[2m[WebServer] [22mINFO:     Uvicorn running on http://127.0.0.1:18136 (Press CTRL+C to quit)
+
+[1A[2K[2m[WebServer] [22m(node:79274) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+[2m[WebServer] [22m(Use `node --trace-warnings ...` to show where the warning was created)
+
+
+Running 2 tests using 1 worker
+
+[1A[2K(node:79275) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+
+
+[1A[2K(node:79275) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+
+
+[1A[2K[1/2] [chromium] › ../docs/reviews/product-operations-ux/2026-08-12/evidence/f03-browser-product-qa-final-current/f03-final-product-qa-current.spec.ts:167:5 › F03 final — same-seller catalog scan adds discrepancy and keeps row geometry stable
+[1A[2K[2/2] [chromium] › ../docs/reviews/product-operations-ux/2026-08-12/evidence/f03-browser-product-qa-final-current/f03-final-product-qa-current.spec.ts:327:5 › F03 final — foreign barcode is forbidden with human message
+[1A[2K  2 passed (20.7s)

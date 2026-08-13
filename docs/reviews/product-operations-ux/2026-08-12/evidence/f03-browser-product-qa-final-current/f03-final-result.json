@@ -1,0 +1,193 @@
+{
+  "status": "BROWSER_PRODUCT_QA_PASSED",
+  "url": "http://127.0.0.1:18137/app/ff/reception",
+  "command": "cd /Users/deniscivkunov/Projects/WMS/.worktrees/product-operations-ux-20260812/frontend && E2E_API_PORT=18136 E2E_WEB_PORT=18137 npx playwright test ../docs/reviews/product-operations-ux/2026-08-12/evidence/f03-browser-product-qa-final-current/f03-final-product-qa-current.spec.ts --config ../docs/reviews/product-operations-ux/2026-08-12/evidence/f03-browser-product-qa-final-current/playwright.f03-final-current.config.cjs --project=chromium --headed --reporter=line",
+  "stepsClicked": [
+    "FF login",
+    "nav-ff-reception",
+    "ff-inbound-queue-row for return request",
+    "ff-inbound-receiving-scan-submit same-seller catalog barcode",
+    "ff-inbound-line-dimensions-edit desktop",
+    "ff-inbound-dimensions-save",
+    "ff-inbound-line-dimensions-edit mobile 390px",
+    "dimensions dialog cancel after mobile click",
+    "FF login for same-product overage",
+    "nav-ff-reception for same-product overage",
+    "ff-inbound-queue-row for same-product overage request",
+    "ff-inbound-receiving-scan-submit planned product overage #1",
+    "ff-inbound-receiving-scan-submit planned product overage #2",
+    "FF login for foreign barcode negative",
+    "nav-ff-reception for foreign barcode negative",
+    "ff-inbound-queue-row for foreign barcode request",
+    "ff-inbound-receiving-scan-submit foreign seller barcode"
+  ],
+  "screenshots": [
+    "screenshots/01-desktop-same-seller-added-discrepancy.png",
+    "screenshots/02-desktop-dimensions-dialog-open.png",
+    "screenshots/03-desktop-dimensions-saved.png",
+    "screenshots/04-mobile-390-left-edge-no-global-overflow.png",
+    "screenshots/05-mobile-390-right-edge-actions-clean.png",
+    "screenshots/06-mobile-390-dimensions-dialog-open.png",
+    "screenshots/08-desktop-same-product-overage.png",
+    "screenshots/07-foreign-barcode-human-message.png"
+  ],
+  "checks": {
+    "sameSellerCatalogScan": {
+      "factSku": "SKU-F03-FACT-f03-final-1786632231711-SSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSS",
+      "factBarcode": "WB-F03-FACT-f03-final-1786632231711-9999999999999999999999999999",
+      "expected": "0",
+      "actual": "1",
+      "surplusVisible": "Излишек 1",
+      "deficitVisible": "Недостача 1",
+      "addedByFfVisible": true
+    },
+    "overflow": {
+      "desktopGlobalOverflowPx": 0,
+      "mobileLeftGlobalOverflowPx": 0,
+      "mobileRightGlobalOverflowPx": 0,
+      "mobileInternalTableOverflow": true,
+      "dimensionsButtonStableDesktop": true,
+      "dimensionsButtonStableMobileClick": true
+    },
+    "sameProductOverage": {
+      "plannedSku": "SKU-F03-OVER-f03-overage-1786632239999",
+      "plannedBarcode": "WB-F03-OVER-f03-overage-1786632239999",
+      "expected": "1",
+      "actual": "2",
+      "surplusVisible": "Излишек 1"
+    },
+    "foreignBarcode": {
+      "foreignBarcode": "WB-F03-FOREIGN-f03-foreign-1786632245241",
+      "forbidden": true,
+      "humanMessageVisible": true,
+      "rawCodeHiddenFromUi": true
+    }
+  },
+  "geometry": {
+    "desktop_1280_after_scan": {
+      "viewportWidth": 1280,
+      "documentScrollWidth": 1280,
+      "bodyScrollWidth": 1280,
+      "globalOverflowPx": 0,
+      "tableClientWidth": 1214,
+      "tableScrollWidth": 1214,
+      "containerClientWidth": 1214,
+      "containerScrollWidth": 1214,
+      "containerScrollLeft": 0,
+      "rowWidth": 1214,
+      "rowHeight": 67.921875,
+      "skuClientWidth": 294,
+      "skuScrollWidth": 1094,
+      "barcodeClientWidth": 294,
+      "barcodeScrollWidth": 536,
+      "dimensionsButtonWidth": 40,
+      "dimensionsButtonHeight": 40,
+      "manualButtonWidth": 40,
+      "manualButtonHeight": 40,
+      "dimensionsButtonHitTarget": "ff-inbound-line-dimensions-edit"
+    },
+    "mobile_390_left_edge": {
+      "viewportWidth": 390,
+      "documentScrollWidth": 390,
+      "bodyScrollWidth": 390,
+      "globalOverflowPx": 0,
+      "tableClientWidth": 760,
+      "tableScrollWidth": 760,
+      "containerClientWidth": 324,
+      "containerScrollWidth": 760,
+      "containerScrollLeft": 0,
+      "rowWidth": 760,
+      "rowHeight": 65,
+      "skuClientWidth": 142,
+      "skuScrollWidth": 988,
+      "barcodeClientWidth": 142,
+      "barcodeScrollWidth": 484,
+      "dimensionsButtonWidth": 40,
+      "dimensionsButtonHeight": 40,
+      "manualButtonWidth": 40,
+      "manualButtonHeight": 40,
+      "dimensionsButtonHitTarget": null
+    },
+    "mobile_390_right-edge-actions": {
+      "viewportWidth": 390,
+      "documentScrollWidth": 390,
+      "bodyScrollWidth": 390,
+      "globalOverflowPx": 0,
+      "tableClientWidth": 760,
+      "tableScrollWidth": 760,
+      "containerClientWidth": 324,
+      "containerScrollWidth": 760,
+      "containerScrollLeft": 436,
+      "rowWidth": 760,
+      "rowHeight": 65,
+      "skuClientWidth": 142,
+      "skuScrollWidth": 988,
+      "barcodeClientWidth": 142,
+      "barcodeScrollWidth": 484,
+      "dimensionsButtonWidth": 40,
+      "dimensionsButtonHeight": 40,
+      "manualButtonWidth": 40,
+      "manualButtonHeight": 40,
+      "dimensionsButtonHitTarget": "ff-doc-dialog"
+    },
+    "desktop_1280_same_product_overage": {
+      "viewportWidth": 1280,
+      "documentScrollWidth": 1280,
+      "bodyScrollWidth": 1280,
+      "globalOverflowPx": 0,
+      "tableClientWidth": 1214,
+      "tableScrollWidth": 1214,
+      "containerClientWidth": 1214,
+      "containerScrollWidth": 1214,
+      "containerScrollLeft": 0,
+      "rowWidth": 1214,
+      "rowHeight": 66.421875,
+      "skuClientWidth": 294,
+      "skuScrollWidth": 334,
+      "barcodeClientWidth": 294,
+      "barcodeScrollWidth": 323,
+      "dimensionsButtonWidth": 40,
+      "dimensionsButtonHeight": 40,
+      "manualButtonWidth": 40,
+      "manualButtonHeight": 40,
+      "dimensionsButtonHitTarget": "ff-inbound-line-dimensions-edit"
+    }
+  },
+  "responses": [
+    {
+      "label": "same_seller_catalog_scan",
+      "status": 200,
+      "url": "http://127.0.0.1:18137/api/operations/inbound-intake-requests/988c24f2-eff8-4daa-a11c-79974b1e2681/receiving/scan"
+    },
+    {
+      "label": "same_product_overage_scan_1",
+      "status": 200,
+      "url": "http://127.0.0.1:18137/api/operations/inbound-intake-requests/b08c4262-f395-497b-bea8-5ba4d57aff7a/receiving/scan"
+    },
+    {
+      "label": "same_product_overage_scan_2",
+      "status": 200,
+      "url": "http://127.0.0.1:18137/api/operations/inbound-intake-requests/b08c4262-f395-497b-bea8-5ba4d57aff7a/receiving/scan"
+    },
+    {
+      "label": "foreign_seller_barcode_scan",
+      "status": 422,
+      "responseBody": "{\"detail\":\"product_not_on_request\"}",
+      "humanMessage": "Товар не найден в этой поставке."
+    }
+  ],
+  "tests": [
+    {
+      "title": "F03 final — same-seller catalog scan adds discrepancy and keeps row geometry stable",
+      "status": "passed"
+    },
+    {
+      "title": "F03 final — same planned product overage is visible as red surplus",
+      "status": "passed"
+    },
+    {
+      "title": "F03 final — foreign barcode is forbidden with human message",
+      "status": "passed"
+    }
+  ]
+}
