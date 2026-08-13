@@ -157,10 +157,6 @@ export function SellerProductsStockScreen({
     () => rows.filter((row) => row.fbs_stock_sync_enabled).length,
     [rows],
   )
-  const honestSignEnabledCount = useMemo(
-    () => rows.filter((row) => row.requires_honest_sign).length,
-    [rows],
-  )
   const productIds = useMemo(() => rows.map((row) => row.id), [rows])
   const selectedCount = selectedProductIds.size
   const allProductsSelected =
@@ -449,22 +445,6 @@ export function SellerProductsStockScreen({
           >
             Синхронизировать по API
           </Button>
-          <Chip
-            size="small"
-            variant="outlined"
-            color={honestSignEnabledCount > 0 ? 'info' : 'default'}
-            label={`ЧЗ: ${honestSignEnabledCount} из ${rows.length}`}
-            data-testid="seller-products-honest-sign-count"
-          />
-          {selectedCount > 0 ? (
-            <Chip
-              size="small"
-              variant="outlined"
-              color="primary"
-              label={`Выбрано: ${selectedCount}`}
-              data-testid="seller-products-selected-count"
-            />
-          ) : null}
           <Button
             variant="outlined"
             color="success"
@@ -472,7 +452,7 @@ export function SellerProductsStockScreen({
             onClick={() => void applyHonestSignToSelected()}
             data-testid="seller-products-bulk-honest-sign"
           >
-            Нужен ЧЗ выбранным
+            Включить ЧЗ
           </Button>
           {busy ? <CircularProgress size={18} /> : null}
           {bulkHonestSignBusy ? <CircularProgress size={18} /> : null}

@@ -90,7 +90,7 @@ test('admin creates seller user; seller sees filtered catalog and inbound', asyn
   await expect(page.getByTestId('seller-products-bulk-honest-sign')).toBeDisabled();
 
   await page.getByTestId('seller-products-select-all').click();
-  await expect(page.getByTestId('seller-products-selected-count')).toContainText('Выбрано: 2');
+  await expect(page.getByTestId('seller-products-bulk-honest-sign')).toBeEnabled();
   await Promise.all([
     waitForPatchOk(page, '/api/products/requires-honest-sign/bulk'),
     page.getByTestId('seller-products-bulk-honest-sign').click(),
