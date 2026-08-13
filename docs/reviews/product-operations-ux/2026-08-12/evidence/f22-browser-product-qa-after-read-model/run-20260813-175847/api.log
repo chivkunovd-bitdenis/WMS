@@ -1,0 +1,85 @@
+INFO:     Started server process [82209]
+INFO:     Waiting for application startup.
+WMS_AUTO_CREATE_SCHEMA=1: tables created (dev/e2e only).
+INFO:     Application startup complete.
+INFO:     Uvicorn running on http://127.0.0.1:18222 (Press CTRL+C to quit)
+INFO:     127.0.0.1:57328 - "GET /health HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57331 - "POST /auth/register HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57332 - "POST /sellers HTTP/1.1" 201 Created
+INFO:     127.0.0.1:57331 - "POST /warehouses HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57332 - "PATCH /integrations/wildberries/sellers/f9efceb7-a452-4b5d-8311-d55a69174457/tokens HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57331 - "PUT /operations/fbs-sellers/f9efceb7-a452-4b5d-8311-d55a69174457/warehouse-bindings/501001 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57332 - "POST /auth/seller-accounts HTTP/1.1" 201 Created
+INFO:     127.0.0.1:57331 - "POST /auth/login HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57332 - "POST /products HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57341 - "POST /auth/login HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57342 - "GET /auth/me HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57344 - "GET /warehouses HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57343 - "GET /operations/notifications?limit=8 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57345 - "GET /operations/notifications?limit=8 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57349 - "GET /operations/inbound-intake-requests HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57351 - "GET /operations/marketplace-unload-requests HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57355 - "GET /operations/inventory-balances/summary HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57354 - "GET /products/wb-catalog HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57357 - "GET /operations/inventory-balances/summary HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57359 - "GET /products/wb-catalog HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57331 - "PATCH /products/49dd8165-4a8a-4d5d-b240-a94bba259fbf/fbs-stock-sync HTTP/1.1" 200 OK
+fbs stock sync skipped busy binding f1dd0fad-6e82-45ac-998a-200086bc4ee8 seller f9efceb7-a452-4b5d-8311-d55a69174457 wb_warehouse 501001
+INFO:     127.0.0.1:57332 - "POST /operations/fbs-sellers/f9efceb7-a452-4b5d-8311-d55a69174457/stocks/sync HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57331 - "GET /operations/fbs-sellers/f9efceb7-a452-4b5d-8311-d55a69174457/stocks/sync-status?wb_warehouse_id=501001 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57332 - "POST /warehouses/55158d15-dbca-4e7a-94d3-bd1ae0720a67/locations HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57331 - "POST /operations/inbound-intake-requests HTTP/1.1" 201 Created
+INFO:     127.0.0.1:57332 - "POST /operations/inbound-intake-requests/05840fcf-5ec4-4663-87a6-3bf3093f0a2b/lines HTTP/1.1" 201 Created
+INFO:     127.0.0.1:57331 - "POST /operations/inbound-intake-requests/05840fcf-5ec4-4663-87a6-3bf3093f0a2b/submit HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57332 - "GET /operations/inbound-intake-requests/05840fcf-5ec4-4663-87a6-3bf3093f0a2b HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57331 - "PATCH /operations/inbound-intake-requests/05840fcf-5ec4-4663-87a6-3bf3093f0a2b/lines/a94463de-ad6c-44f7-b7cc-6ec789af67b5/actual HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57332 - "POST /operations/inbound-intake-requests/05840fcf-5ec4-4663-87a6-3bf3093f0a2b/boxes HTTP/1.1" 201 Created
+INFO:     127.0.0.1:57331 - "POST /operations/inbound-intake-requests/05840fcf-5ec4-4663-87a6-3bf3093f0a2b/boxes/open HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57332 - "POST /operations/inbound-intake-requests/05840fcf-5ec4-4663-87a6-3bf3093f0a2b/boxes/f3b030a3-5e4c-4969-a1f4-c9f0a26913ba/scan HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57331 - "POST /operations/inbound-intake-requests/05840fcf-5ec4-4663-87a6-3bf3093f0a2b/boxes/f3b030a3-5e4c-4969-a1f4-c9f0a26913ba/scan HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57332 - "POST /operations/inbound-intake-requests/05840fcf-5ec4-4663-87a6-3bf3093f0a2b/boxes/f3b030a3-5e4c-4969-a1f4-c9f0a26913ba/scan HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57331 - "POST /operations/inbound-intake-requests/05840fcf-5ec4-4663-87a6-3bf3093f0a2b/boxes/f3b030a3-5e4c-4969-a1f4-c9f0a26913ba/scan HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57332 - "POST /operations/inbound-intake-requests/05840fcf-5ec4-4663-87a6-3bf3093f0a2b/boxes/f3b030a3-5e4c-4969-a1f4-c9f0a26913ba/scan HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57331 - "POST /operations/inbound-intake-requests/05840fcf-5ec4-4663-87a6-3bf3093f0a2b/boxes/f3b030a3-5e4c-4969-a1f4-c9f0a26913ba/scan HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57332 - "POST /operations/inbound-intake-requests/05840fcf-5ec4-4663-87a6-3bf3093f0a2b/boxes/f3b030a3-5e4c-4969-a1f4-c9f0a26913ba/scan HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57331 - "POST /operations/inbound-intake-requests/05840fcf-5ec4-4663-87a6-3bf3093f0a2b/boxes/f3b030a3-5e4c-4969-a1f4-c9f0a26913ba/close HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57332 - "POST /operations/inbound-intake-requests/05840fcf-5ec4-4663-87a6-3bf3093f0a2b/verify HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57331 - "POST /operations/inbound-intake-requests/05840fcf-5ec4-4663-87a6-3bf3093f0a2b/post HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57371 - "GET /auth/me HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57372 - "GET /auth/me HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57374 - "GET /warehouses HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57373 - "GET /operations/notifications?limit=8 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57375 - "GET /warehouses HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57376 - "GET /operations/notifications?limit=8 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57378 - "GET /operations/inbound-intake-requests HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57380 - "GET /operations/inbound-intake-requests HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57382 - "GET /operations/marketplace-unload-requests HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57384 - "GET /operations/marketplace-unload-requests HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57387 - "GET /products/wb-catalog HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57390 - "GET /products/wb-catalog HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57388 - "GET /operations/inventory-balances/summary HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57392 - "GET /operations/inventory-balances/summary HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57394 - "GET /products/49dd8165-4a8a-4d5d-b240-a94bba259fbf/stock-directions HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57396 - "POST /products/49dd8165-4a8a-4d5d-b240-a94bba259fbf/stock-directions HTTP/1.1" 201 Created
+INFO:     127.0.0.1:57398 - "GET /products/49dd8165-4a8a-4d5d-b240-a94bba259fbf/stock-directions HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57402 - "GET /products/wb-catalog HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57403 - "GET /operations/inventory-balances/summary HTTP/1.1" 200 OK
+fbs stock sync skipped busy binding f1dd0fad-6e82-45ac-998a-200086bc4ee8 seller f9efceb7-a452-4b5d-8311-d55a69174457 wb_warehouse 501001
+INFO:     127.0.0.1:57331 - "POST /operations/fbs-sellers/f9efceb7-a452-4b5d-8311-d55a69174457/stocks/sync HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57331 - "GET /operations/fbs-sellers/f9efceb7-a452-4b5d-8311-d55a69174457/stocks/sync-status?wb_warehouse_id=501001 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57331 - "GET /operations/fbs-sellers/f9efceb7-a452-4b5d-8311-d55a69174457/stocks/sync-status?wb_warehouse_id=501001 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57411 - "GET /auth/me HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57412 - "GET /auth/me HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57414 - "GET /warehouses HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57413 - "GET /operations/notifications?limit=8 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57415 - "GET /operations/notifications?limit=8 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57416 - "GET /warehouses HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57418 - "GET /operations/inbound-intake-requests HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57420 - "GET /operations/inbound-intake-requests HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57422 - "GET /operations/marketplace-unload-requests HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57424 - "GET /operations/marketplace-unload-requests HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57427 - "GET /products/wb-catalog HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57428 - "GET /operations/inventory-balances/summary HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57430 - "GET /products/wb-catalog HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57432 - "GET /operations/inventory-balances/summary HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57331 - "GET /products/wb-catalog HTTP/1.1" 200 OK

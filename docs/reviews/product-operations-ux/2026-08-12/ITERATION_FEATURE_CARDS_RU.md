@@ -33,7 +33,7 @@ code review и живого browser QA. `Product/UX passed` означает, ч
 | F17 Единый печатный документ | BA_READY | PRODUCT_APPROVED_EXISTING_IMPL | DEV_DONE | CODE_REVIEW_PASSED | BROWSER_PRODUCT_QA_PASSED | integration_pending |
 | F18 Возврат как вариант приёмки | BA_UX_REWORK_READY | PRODUCT_APPROVED_FOR_DEV | DEV_REWORK_DONE | CODE_REVIEW_PASSED | BROWSER_PRODUCT_QA_PASSED | integration_pending |
 | F19 Возврат со сканом/autoprint | BA_UX_REWORK_READY | PRODUCT_APPROVED_FOR_DEV | DEV_DONE | code_review_in_progress | browser_qa_blocked | code review запущен |
-| F22 Safe sync остатков WMS->WB | BA_UX_READY | PRODUCT_APPROVED_FOR_DEV | DEV_REWORK_DONE | CODE_REVIEW_PASSED_AFTER_READ_MODEL | browser_qa_in_progress | live browser QA запущен |
+| F22 Safe sync остатков WMS->WB | BA_UX_READY | PRODUCT_APPROVED_FOR_DEV | DEV_REWORK_DONE | CODE_REVIEW_PASSED_AFTER_READ_MODEL | BROWSER_PRODUCT_QA_PASSED | integration_pending |
 | F23 Каталог товаров селлера cleanup | BA_UX_REWORK_READY | PRODUCT_DESIGN_APPROVED_FOR_DEV | DEV_DONE | CODE_REVIEW_PASSED | BROWSER_PRODUCT_QA_PASSED | integration_pending |
 | F20 Счета клиентам | out_of_scope | out_of_scope | out_of_scope | out_of_scope | out_of_scope | вне релиза |
 | F21 Seller Focus Pro | blocked_missing_repo | blocked_missing_target | blocked | blocked | blocked | нужен repo/target |
