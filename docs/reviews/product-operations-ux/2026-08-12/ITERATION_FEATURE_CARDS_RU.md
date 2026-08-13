@@ -18,11 +18,11 @@ code review и живого browser QA. `Product/UX passed` означает, ч
 | F02 Габариты из приёмки | BA_READY | PRODUCT_APPROVED_FOR_DEV | DEV_DONE | CODE_REVIEW_PASSED | BROWSER_PRODUCT_QA_PASSED | integration_pending |
 | F03 Расхождения и товары селлера | BA_READY | PRODUCT_APPROVED_FOR_DEV | DEV_REWORK_DONE | CODE_REVIEW_PASSED | BROWSER_PRODUCT_QA_PASSED | integration_pending |
 | F04 Ручной товар из приёмки | BA_READY | PRODUCT_APPROVED_FOR_DEV | DEV_REWORK_DONE | CODE_REVIEW_PASSED | BROWSER_PRODUCT_QA_PASSED | integration_pending |
-| F05 Единая карточка ФФ/селлер | BA_READY | PRODUCT_APPROVED_AFTER_REWORK | DEV_REWORK_DONE | code_review_pending_after_rework | browser_qa_pending_after_rework | dev rework закрыл 1280px geometry blocker; ждёт review/QA |
+| F05 Единая карточка ФФ/селлер | BA_READY | PRODUCT_APPROVED_AFTER_REWORK | DEV_REWORK_DONE | CODE_REVIEW_PASSED_AFTER_REWORK | browser_qa_in_progress | live browser QA after geometry запущен |
 | F06 Накладная по факту | BA_READY | PRODUCT_APPROVED_AFTER_REWORK | DEV_DONE | CODE_REVIEW_PASSED | BROWSER_PRODUCT_QA_PASSED | integration_pending |
 | F07 FBO/MP отгрузка по шагам | BA_READY | PRODUCT_APPROVED_HYBRID_FLOW | DEV_DONE | CODE_REVIEW_PASSED | BROWSER_PRODUCT_QA_PASSED | integration_pending |
 | F08 Направления остатков/FBS-пул | BA_UX_REWORK_READY | PRODUCT_APPROVED_AFTER_REWORK | DEV_REWORK_DONE | CODE_REVIEW_PASSED | BROWSER_PRODUCT_QA_PASSED | integration_pending |
-| F09 Свободный FBO | BA_READY | PRODUCT_APPROVED_FOR_DEV | dev_in_progress | blocked | blocked | atomic dev запущен |
+| F09 Свободный FBO | BA_READY | PRODUCT_APPROVED_FOR_DEV | DEV_DONE | CODE_REVIEW_PASSED | browser_qa_in_progress | live browser QA запущен |
 | F10 FBS sync берёт FBS-пул | BA_READY | PRODUCT_APPROVED_FOR_DEV | DEV_REWORK_DONE | code_review_pending_after_rework | browser_qa_pending_after_rework | dev rework закрыл warehouse-scope blocker; ждёт review/QA |
 | F11 Упрощённый FF каталог | BA_READY | PRODUCT_APPROVED_FOR_DEV | DEV_DONE | CODE_REVIEW_PASSED | BROWSER_PRODUCT_QA_PASSED | integration_pending |
 | F12 Monthly snapshot | BA_READY | PRODUCT_APPROVED_FOR_MINIMAL_UI | DEV_DONE | CODE_REVIEW_PASSED | BROWSER_PRODUCT_QA_PASSED | integration_pending |
@@ -153,15 +153,17 @@ tests_run: `test_stock_directions.py`, `seller-stock-directions.spec.ts`, headed
 
 ## F09. Свободный остаток для FBO
 
-status: ba_ready, product_approved_for_dev, dev_done, code_review_pending, browser_qa_pending, integration_pending
+status: ba_ready, product_approved_for_dev, dev_done, code_review_passed, browser_qa_in_progress
 business_goal: FBO отгружает только остаток после всех направлений.
 main_real_world_scenario: было 1000, направления 500, к FBO доступно 500.
 product_review_result: PRODUCT_APPROVED_FOR_DEV; artifact `evidence/f09-f10-product-unblock/F09_F10_PRODUCT_UX_VERDICT_RU.md`.
 dev_result: MP/FBO availability закреплена как free FBO минус active MP/outbound reserves; превышение free FBO возвращает human-mapped `insufficient_free_fbo`; picker/modal показывает короткое `Доступно FBO` / `доступно для FBO N`, без `Лимит`.
+code_review_result: CODE_REVIEW_PASSED; artifact `evidence/f09-code-review/F09_CODE_REVIEW_RU.md`.
+browser_qa_result: live browser QA currently running.
 changed_files: `backend/app/services/marketplace_unload_service.py`, `backend/app/api/marketplace_unload_requests.py`, `backend/tests/test_marketplace_unload_availability.py`, `frontend/src/components/WbProductPickerDialog.tsx`, `frontend/src/components/SellerMarketplaceUnloadDialog.tsx`, `frontend/src/screens/ff/FfSuppliesShipmentsPage.tsx`, `frontend/src/utils/readApiErrorMessage.ts`.
 tests_run: `pytest backend/tests/test_stock_directions.py backend/tests/test_marketplace_unload_availability.py -q`; backend targeted `ruff check`; frontend `npm run build`; Playwright `seller-mp-unload.spec.ts`, `ff-mp-full-flow.spec.ts`.
 dev_evidence: `evidence/f09-dev/F09_DEV_RESULT_RU.md`.
-commit_or_patch_ref: product verdict commit `3a7985319cc5da03229bc1d77f91c75ba1f39f57`; F09 dev commit recorded in final Atomic Dev answer.
+commit_or_patch_ref: product verdict commit `3a7985319cc5da03229bc1d77f91c75ba1f39f57`; dev commit `1689c23261c1b347a3f31c55e9930fcbebca3855`; code review evidence commit `a189c472f7241cd02a0711b6ebbe9e46148f7247`.
 
 ## F10. FBS-синхронизация берёт только FBS-пул
 
