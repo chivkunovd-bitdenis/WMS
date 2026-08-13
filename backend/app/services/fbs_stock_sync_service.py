@@ -154,6 +154,7 @@ async def _try_acquire_lease(
         )
         .values(lease_until=new_lease_until)
         .returning(FbsWarehouseBinding.id)
+        .execution_options(synchronize_session=False)
     )
     result = await session.execute(stmt)
     if result.first() is None:

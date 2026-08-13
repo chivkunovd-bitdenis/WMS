@@ -14,6 +14,7 @@ import json
 import uuid
 from collections.abc import AsyncIterator
 from dataclasses import dataclass, field
+from datetime import UTC, datetime, timedelta
 
 import httpx
 import pytest
@@ -878,8 +879,6 @@ async def test_sync_429_honors_retry_after_on_production_limiter(
 @pytest.mark.asyncio
 async def test_sync_skips_when_lease_active(db_session: AsyncSession) -> None:
     """Concurrent sync: active lease → skipped_busy."""
-    from datetime import UTC, datetime, timedelta
-
     ctx = await _seed_binding(db_session)
     ctx.binding.lease_until = datetime.now(UTC) + timedelta(minutes=5)
     await db_session.commit()
@@ -899,6 +898,22 @@ async def test_sync_skips_when_lease_active(db_session: AsyncSession) -> None:
     assert result.error_code == ERROR_SYNC_BUSY
     assert result.bindings_processed == 0
     assert len(transport.put_calls) == 0
+
+
+@pytest.mark.asyncio
+async def test_try_acquire_lease_handles_naive_loaded_lease_until(
+    db_session: AsyncSession,
+) -> None:
+    """SQLite may load timezone=True values as naive; lease compare must not crash."""
+    ctx = await _seed_binding(db_session)
+    ctx.binding.lease_until = datetime.now(UTC).replace(tzinfo=None) - timedelta(minutes=1)
+    await db_session.commit()
+
+    acquired = await _try_acquire_lease(db_session, ctx.binding)
+
+    assert acquired is True
+    assert ctx.binding.lease_until is not None
+    assert ctx.binding.lease_until.tzinfo is UTC
 
 
 @pytest.mark.asyncio
