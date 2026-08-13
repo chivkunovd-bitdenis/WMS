@@ -18,7 +18,7 @@ code review и живого browser QA. `Product/UX passed` означает, ч
 | F02 Габариты из приёмки | BA_READY | PRODUCT_APPROVED_FOR_DEV | DEV_DONE | CODE_REVIEW_PASSED | BROWSER_PRODUCT_QA_PASSED | integration_pending |
 | F03 Расхождения и товары селлера | BA_READY | PRODUCT_APPROVED_FOR_DEV | DEV_REWORK_DONE | CODE_REVIEW_PASSED | BROWSER_PRODUCT_QA_PASSED | integration_pending |
 | F04 Ручной товар из приёмки | BA_READY | PRODUCT_APPROVED_FOR_DEV | DEV_REWORK_DONE | CODE_REVIEW_PASSED | BROWSER_PRODUCT_QA_PASSED | integration_pending |
-| F05 Единая карточка ФФ/селлер | BA_READY | PRODUCT_APPROVED_AFTER_REWORK | DEV_REWORK_DONE | CODE_REVIEW_PASSED | browser_qa_pending | нужен live browser QA |
+| F05 Единая карточка ФФ/селлер | BA_READY | PRODUCT_APPROVED_AFTER_REWORK | DEV_REWORK_DONE | CODE_REVIEW_PASSED | BROWSER_PRODUCT_QA_FAILED | blocker: seller fact-card на 1280px скрывает колонку `Расхождение` за внутренним scroll |
 | F06 Накладная по факту | BA_READY | PRODUCT_APPROVED_AFTER_REWORK | DEV_DONE | CODE_REVIEW_PASSED | BROWSER_PRODUCT_QA_PASSED | integration_pending |
 | F07 FBO/MP отгрузка по шагам | BA_READY | PRODUCT_APPROVED_HYBRID_FLOW | DEV_DONE | CODE_REVIEW_PASSED | BROWSER_PRODUCT_QA_PASSED | integration_pending |
 | F08 Направления остатков/FBS-пул | BA_UX_REWORK_READY | PRODUCT_APPROVED_AFTER_REWORK | DEV_REWORK_DONE | CODE_REVIEW_PASSED | BROWSER_PRODUCT_QA_PASSED | integration_pending |
@@ -103,7 +103,7 @@ tests_run: `ff-inbound-barcode-add.spec.ts`.
 
 ## F05. Единая карточка приёмки для ФФ и селлера
 
-status: ba_ready, product_approved_after_rework, dev_rework_done, code_review_passed, browser_qa_pending
+status: ba_ready, product_approved_after_rework, dev_rework_done, code_review_passed, browser_qa_failed
 business_goal: ФФ и селлер видят одну фактическую карточку: заявлено, принято, добавлено ФФ, недостача/излишек.
 warehouse_user: оператор ФФ, селлер.
 main_real_world_scenario: после проведения селлер открывает документ и видит факт, а не упрощённый экран.
@@ -112,7 +112,8 @@ ux_decision: тип операции и расхождения выводятс�
 product_review_result: initially_rejected, PRODUCT_APPROVED_AFTER_REWORK.
 code_review_result: CODE_REVIEW_PASSED; artifact `evidence/f05-code-review-current/F05_CODE_REVIEW_CURRENT_RU.md`.
 tests_run: `inbound-receiving-v2.spec.ts`.
-commit_or_patch_ref: code review evidence commit `d8a1f74f939ad048593444a9a024e76bdd5e42bb`; live browser QA currently running.
+browser_qa_result: BROWSER_PRODUCT_QA_FAILED; artifact `evidence/f05-browser-product-qa-final-current/QA_RESULT_RU.md`; blocker: seller fact-card на 1280px скрывает колонку `Расхождение` за внутренним scroll.
+commit_or_patch_ref: code review evidence commit `d8a1f74f939ad048593444a9a024e76bdd5e42bb`; browser QA failed artifact `evidence/f05-browser-product-qa-final-current/QA_RESULT_RU.md`.
 
 ## F06. Накладная из приёмки печатается по факту
 
