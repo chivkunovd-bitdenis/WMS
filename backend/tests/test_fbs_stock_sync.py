@@ -24,6 +24,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.db.session import SessionLocal, engine
 from app.models import Base
+from app.models.fbs_order import FbsOrder, FbsOrderReservation
 from app.models.fbs_stock_sync_item import (
     STOCK_SYNC_STATUS_CONFIRMED,
     STOCK_SYNC_STATUS_CONFLICT,
@@ -31,10 +32,12 @@ from app.models.fbs_stock_sync_item import (
     FbsStockSyncItem,
 )
 from app.models.fbs_warehouse_binding import FbsWarehouseBinding
+from app.models.inventory_balance import InventoryBalance
 from app.models.product import Product
 from app.models.seller import Seller
 from app.models.seller_wildberries_credentials import SellerWildberriesCredentials
 from app.models.stock_direction import StockDirection
+from app.models.storage_location import StorageLocation
 from app.models.tenant import Tenant
 from app.models.warehouse import Warehouse
 from app.services.fbs_stock_sync_service import (
@@ -450,6 +453,103 @@ async def test_sync_confirms_when_readback_matches(db_session: AsyncSession) -> 
     assert item.status == STOCK_SYNC_STATUS_CONFIRMED
     assert item.last_confirmed_amount == 7
     assert "wb-test-token-secret" not in str(result)
+
+
+# TC-NEW-F10-001 — WB receives explicit FBS pool, not total stock or free FBO.
+@pytest.mark.asyncio
+async def test_sync_publishes_fbs_pool_minus_fbs_order_reservations_only(
+    db_session: AsyncSession,
+) -> None:
+    ctx = await _seed_binding(db_session)
+    product = _product(
+        tenant_id=ctx.tenant.id,
+        seller_id=ctx.seller.id,
+        chrt_id=1210,
+        sku_suffix="f10-pool",
+    )
+    location = StorageLocation(
+        id=uuid.uuid4(),
+        tenant_id=ctx.tenant.id,
+        warehouse_id=ctx.warehouse.id,
+        code=f"F10-{uuid.uuid4().hex[:8]}",
+        barcode=f"F10-{uuid.uuid4().hex[:8]}",
+    )
+    order = FbsOrder(
+        tenant_id=ctx.tenant.id,
+        seller_id=ctx.seller.id,
+        warehouse_id=ctx.warehouse.id,
+        product_id=product.id,
+        wb_order_id=812010,
+        created_at_wb=datetime.now(UTC),
+        deadline_at=datetime.now(UTC),
+        mapping_status="mapped",
+        reserve_status="reserved",
+    )
+    db_session.add_all([product, location, order])
+    await db_session.flush()
+    db_session.add_all(
+        [
+            InventoryBalance(
+                tenant_id=ctx.tenant.id,
+                storage_location_id=location.id,
+                product_id=product.id,
+                quantity=1000,
+                quantity_unpacked=1000,
+                quantity_packed=0,
+            ),
+            StockDirection(
+                tenant_id=ctx.tenant.id,
+                product_id=product.id,
+                name="FBS pool for WB",
+                quantity=200,
+                is_fbs=True,
+            ),
+            StockDirection(
+                tenant_id=ctx.tenant.id,
+                product_id=product.id,
+                name="Sets and FBO reserve",
+                quantity=300,
+                is_fbs=False,
+            ),
+            FbsOrderReservation(
+                tenant_id=ctx.tenant.id,
+                fbs_order_id=order.id,
+                product_id=product.id,
+                warehouse_id=ctx.warehouse.id,
+                quantity=7,
+            ),
+        ]
+    )
+    await db_session.commit()
+
+    transport = _MockStocksTransport()
+    async with _client(transport) as http_client:
+        result = await sync_binding_stocks(
+            db_session,
+            ctx.tenant.id,
+            ctx.seller.id,
+            ctx.binding,
+            http_client,
+            marketplace_api_base="https://wb-mock.test",
+        )
+
+    assert result.products_targeted == 1
+    assert result.products_confirmed == 1
+    assert result.errors == 0
+    assert [[entry.amount for entry in batch] for batch in transport.put_calls] == [[193]]
+    assert transport.stored[1210] == 193
+    assert transport.stored[1210] != 1000
+    assert transport.stored[1210] != 500
+    assert transport.post_calls == [[1210]]
+
+    item = (
+        await db_session.execute(
+            select(FbsStockSyncItem).where(FbsStockSyncItem.binding_id == ctx.binding.id)
+        )
+    ).scalar_one()
+    assert item.status == STOCK_SYNC_STATUS_CONFIRMED
+    assert item.last_target_amount == 193
+    assert item.last_confirmed_amount == 193
 
 
 @pytest.mark.asyncio

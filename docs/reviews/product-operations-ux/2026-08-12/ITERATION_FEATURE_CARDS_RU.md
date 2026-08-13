@@ -23,7 +23,7 @@ code review и живого browser QA. `Product/UX passed` означает, ч
 | F07 FBO/MP отгрузка по шагам | BA_READY | PRODUCT_APPROVED_HYBRID_FLOW | DEV_DONE | CODE_REVIEW_PASSED | BROWSER_PRODUCT_QA_PASSED | integration_pending |
 | F08 Направления остатков/FBS-пул | BA_UX_REWORK_READY | PRODUCT_APPROVED_AFTER_REWORK | DEV_REWORK_DONE | CODE_REVIEW_PASSED | BROWSER_PRODUCT_QA_PASSED | integration_pending |
 | F09 Свободный FBO | BA_READY | PRODUCT_APPROVED_FOR_DEV | dev_in_progress | blocked | blocked | atomic dev запущен |
-| F10 FBS sync берёт FBS-пул | BA_READY | PRODUCT_APPROVED_FOR_DEV | dev_in_progress | blocked | blocked | atomic dev запущен после F22 browser QA pass |
+| F10 FBS sync берёт FBS-пул | BA_READY | PRODUCT_APPROVED_FOR_DEV | DEV_DONE | code_review_pending | browser_qa_pending | dev_done; ждёт review/QA |
 | F11 Упрощённый FF каталог | BA_READY | PRODUCT_APPROVED_FOR_DEV | DEV_DONE | CODE_REVIEW_PASSED | BROWSER_PRODUCT_QA_PASSED | integration_pending |
 | F12 Monthly snapshot | BA_READY | PRODUCT_APPROVED_FOR_MINIMAL_UI | DEV_DONE | CODE_REVIEW_PASSED | BROWSER_PRODUCT_QA_PASSED | integration_pending |
 | F13 Доступ Виталика | BA_READY | PRODUCT_APPROVED_EXISTING_IMPL | DEV_REWORK_DONE | CODE_REVIEW_PASSED | BROWSER_PRODUCT_QA_PASSED | integration_pending |
@@ -162,13 +162,16 @@ commit_or_patch_ref: product verdict commit `3a7985319cc5da03229bc1d77f91c75ba1f
 
 ## F10. FBS-синхронизация берёт только FBS-пул
 
-status: ba_ready, product_approved_for_dev, dev_in_progress, code_review_blocked, browser_qa_blocked
+status: ba_ready, product_approved_for_dev, dev_done, code_review_pending, browser_qa_pending
 business_goal: в WB публикуется не весь остаток, а только выделенный FBS-пул.
 main_real_world_scenario: принято 1000, FBS-пул 200, в WB уходит 200.
 product_review_result: PRODUCT_APPROVED_FOR_DEV; artifact `evidence/f09-f10-product-unblock/F09_F10_PRODUCT_UX_VERDICT_RU.md`.
-dev_result: atomic dev currently running after F22 browser QA passed.
-tests_run: `test_stock_directions.py`, `seller-stock-directions.spec.ts`.
-commit_or_patch_ref: product verdict commit `3a7985319cc5da03229bc1d77f91c75ba1f39f57`; F22 browser QA pass commit `646d82c5597b87b30cc10f8426d8b65493b7c19b`.
+dev_result: current F08/F22 sync implementation hardened with F10 regression: physical 1000, FBS-pool 200, non-FBS directions 300, active FBS reservation 7 -> WB target/readback 193; no total-stock/free-FBO fallback and no PUT 0 fallback for missing safe availability.
+code_review_result: pending.
+browser_qa_result: pending.
+changed_files: `backend/tests/test_fbs_stock_sync.py`, `docs/reviews/product-operations-ux/2026-08-12/evidence/f10-dev/F10_DEV_EVIDENCE_RU.md`.
+tests_run: `pytest tests/test_fbs_stock_sync.py::test_sync_publishes_fbs_pool_minus_fbs_order_reservations_only`; `pytest tests/test_fbs_stock_sync.py tests/test_fbs_stock_availability.py`; `pytest tests/test_stock_directions.py::test_directions_drive_fbs_pool_and_mp_free_fbo`; `ruff check tests/test_fbs_stock_sync.py`.
+commit_or_patch_ref: product verdict commit `3a7985319cc5da03229bc1d77f91c75ba1f39f57`; F22 browser QA pass commit `646d82c5597b87b30cc10f8426d8b65493b7c19b`; F10 dev commit recorded in final Atomic Dev answer.
 
 ## F11. Каталог ФФ упростить
 
