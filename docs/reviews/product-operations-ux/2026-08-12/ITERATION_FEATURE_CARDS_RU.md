@@ -18,7 +18,7 @@ code review и живого browser QA. `Product/UX passed` означает, ч
 | F02 Габариты из приёмки | BA_READY | PRODUCT_APPROVED_FOR_DEV | DEV_DONE | CODE_REVIEW_PASSED | BROWSER_PRODUCT_QA_PASSED | integration_pending |
 | F03 Расхождения и товары селлера | BA_READY | PRODUCT_APPROVED_FOR_DEV | DEV_REWORK_DONE | CODE_REVIEW_PASSED | BROWSER_PRODUCT_QA_PASSED | integration_pending |
 | F04 Ручной товар из приёмки | BA_READY | PRODUCT_APPROVED_FOR_DEV | DEV_REWORK_DONE | CODE_REVIEW_PASSED | BROWSER_PRODUCT_QA_PASSED | integration_pending |
-| F05 Единая карточка ФФ/селлер | BA_READY | PRODUCT_APPROVED_AFTER_REWORK | DEV_REWORK_DONE | CODE_REVIEW_PASSED_AFTER_REWORK | browser_qa_in_progress | live browser QA after geometry запущен |
+| F05 Единая карточка ФФ/селлер | BA_READY | PRODUCT_APPROVED_AFTER_REWORK | DEV_REWORK_DONE | CODE_REVIEW_PASSED_AFTER_REWORK | BROWSER_PRODUCT_QA_PASSED | integration_pending |
 | F06 Накладная по факту | BA_READY | PRODUCT_APPROVED_AFTER_REWORK | DEV_DONE | CODE_REVIEW_PASSED | BROWSER_PRODUCT_QA_PASSED | integration_pending |
 | F07 FBO/MP отгрузка по шагам | BA_READY | PRODUCT_APPROVED_HYBRID_FLOW | DEV_DONE | CODE_REVIEW_PASSED | BROWSER_PRODUCT_QA_PASSED | integration_pending |
 | F08 Направления остатков/FBS-пул | BA_UX_REWORK_READY | PRODUCT_APPROVED_AFTER_REWORK | DEV_REWORK_DONE | CODE_REVIEW_PASSED | BROWSER_PRODUCT_QA_PASSED | integration_pending |
@@ -103,7 +103,7 @@ tests_run: `ff-inbound-barcode-add.spec.ts`.
 
 ## F05. Единая карточка приёмки для ФФ и селлера
 
-status: ba_ready, product_approved_after_rework, dev_rework_done_after_geometry, code_review_pending_after_rework, browser_qa_pending_after_rework
+status: ba_ready, product_approved_after_rework, dev_rework_done_after_geometry, code_review_passed_after_rework, browser_qa_passed_after_geometry, integration_pending
 business_goal: ФФ и селлер видят одну фактическую карточку: заявлено, принято, добавлено ФФ, недостача/излишек.
 warehouse_user: оператор ФФ, селлер.
 main_real_world_scenario: после проведения селлер открывает документ и видит факт, а не упрощённый экран.
@@ -111,10 +111,10 @@ screens_touched: карточка приёмки ФФ, селлерская ка
 ux_decision: тип операции и расхождения выводятся в существующей карточке без нового dashboard; селлер в недraft-статусах видит заявлено, факт, расхождение и «Добавлено ФФ».
 product_review_result: initially_rejected, PRODUCT_APPROVED_AFTER_REWORK.
 dev_result: geometry rework убрал внутренний horizontal scroll seller fact-card на 1280px; обязательные `Заявлено`, `Факт`, `Расхождение`, `Добавлено ФФ` остаются видимыми в той же таблице.
-code_review_result: pending_after_geometry_rework; прошлый `CODE_REVIEW_PASSED` относится к состоянию до browser QA blocker.
-tests_run: `npm run test:unit -- sellerInboundDocumentUi.test.ts`; `npx playwright test tests-e2e/seller-inbound-fact-card-geometry.spec.ts --project=chromium --reporter=line`; `npm run build`.
-browser_qa_result: pending_after_geometry_rework; previous failed artifact `evidence/f05-browser-product-qa-final-current/QA_RESULT_RU.md`.
-commit_or_patch_ref: dev evidence `evidence/f05-dev-rework-geometry/DEV_REWORK_GEOMETRY_RU.md`.
+code_review_result: CODE_REVIEW_PASSED_AFTER_REWORK; artifact `evidence/f05-code-review-after-geometry/F05_CODE_REVIEW_AFTER_GEOMETRY_RU.md`.
+tests_run: `npm run test:unit -- sellerInboundDocumentUi.test.ts`; `npx playwright test tests-e2e/seller-inbound-fact-card-geometry.spec.ts --project=chromium --reporter=line`; `npm run build`; live browser QA `E2E_API_PORT=18206 E2E_WEB_PORT=18207 npx playwright test ../docs/reviews/product-operations-ux/2026-08-12/evidence/f05-browser-product-qa-after-geometry/f05-browser-product-qa-after-geometry.spec.ts --config ../docs/reviews/product-operations-ux/2026-08-12/evidence/f05-browser-product-qa-after-geometry/playwright.f05-after-geometry.config.cjs --project=chromium --headed --reporter=line`.
+browser_qa_result: BROWSER_PRODUCT_QA_PASSED; artifact `evidence/f05-browser-product-qa-after-geometry/QA_RESULT_RU.md`; previous failed artifact `evidence/f05-browser-product-qa-final-current/QA_RESULT_RU.md` blocker снят.
+commit_or_patch_ref: dev evidence `evidence/f05-dev-rework-geometry/DEV_REWORK_GEOMETRY_RU.md`; code review evidence `evidence/f05-code-review-after-geometry/F05_CODE_REVIEW_AFTER_GEOMETRY_RU.md`; browser QA evidence `evidence/f05-browser-product-qa-after-geometry/QA_RESULT_RU.md`.
 
 ## F06. Накладная из приёмки печатается по факту
 
