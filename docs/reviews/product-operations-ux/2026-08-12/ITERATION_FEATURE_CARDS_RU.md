@@ -18,7 +18,7 @@ code review и живого browser QA. `Product/UX passed` означает, ч
 | F02 Габариты из приёмки | BA_READY | PRODUCT_APPROVED_FOR_DEV | DEV_DONE | CODE_REVIEW_PASSED | BROWSER_PRODUCT_QA_PASSED | integration_pending |
 | F03 Расхождения и товары селлера | BA_READY | PRODUCT_APPROVED_FOR_DEV | DEV_REWORK_DONE | CODE_REVIEW_PASSED | BROWSER_PRODUCT_QA_PASSED | integration_pending |
 | F04 Ручной товар из приёмки | BA_READY | PRODUCT_APPROVED_FOR_DEV | DEV_REWORK_DONE | CODE_REVIEW_PASSED | BROWSER_PRODUCT_QA_PASSED | integration_pending |
-| F05 Единая карточка ФФ/селлер | BA_READY | PRODUCT_APPROVED_AFTER_REWORK | dev_rework_in_progress | blocked_after_browser_fail | BROWSER_PRODUCT_QA_FAILED | rework запущен: seller fact-card должен показать `Расхождение` на 1280px без scroll |
+| F05 Единая карточка ФФ/селлер | BA_READY | PRODUCT_APPROVED_AFTER_REWORK | DEV_REWORK_DONE | code_review_pending_after_rework | browser_qa_pending_after_rework | dev rework закрыл 1280px geometry blocker; ждёт review/QA |
 | F06 Накладная по факту | BA_READY | PRODUCT_APPROVED_AFTER_REWORK | DEV_DONE | CODE_REVIEW_PASSED | BROWSER_PRODUCT_QA_PASSED | integration_pending |
 | F07 FBO/MP отгрузка по шагам | BA_READY | PRODUCT_APPROVED_HYBRID_FLOW | DEV_DONE | CODE_REVIEW_PASSED | BROWSER_PRODUCT_QA_PASSED | integration_pending |
 | F08 Направления остатков/FBS-пул | BA_UX_REWORK_READY | PRODUCT_APPROVED_AFTER_REWORK | DEV_REWORK_DONE | CODE_REVIEW_PASSED | BROWSER_PRODUCT_QA_PASSED | integration_pending |
@@ -103,17 +103,18 @@ tests_run: `ff-inbound-barcode-add.spec.ts`.
 
 ## F05. Единая карточка приёмки для ФФ и селлера
 
-status: ba_ready, product_approved_after_rework, dev_rework_done, code_review_passed, browser_qa_failed
+status: ba_ready, product_approved_after_rework, dev_rework_done_after_geometry, code_review_pending_after_rework, browser_qa_pending_after_rework
 business_goal: ФФ и селлер видят одну фактическую карточку: заявлено, принято, добавлено ФФ, недостача/излишек.
 warehouse_user: оператор ФФ, селлер.
 main_real_world_scenario: после проведения селлер открывает документ и видит факт, а не упрощённый экран.
 screens_touched: карточка приёмки ФФ, селлерская карточка заявки.
 ux_decision: тип операции и расхождения выводятся в существующей карточке без нового dashboard; селлер в недraft-статусах видит заявлено, факт, расхождение и «Добавлено ФФ».
 product_review_result: initially_rejected, PRODUCT_APPROVED_AFTER_REWORK.
-code_review_result: CODE_REVIEW_PASSED; artifact `evidence/f05-code-review-current/F05_CODE_REVIEW_CURRENT_RU.md`.
-tests_run: `inbound-receiving-v2.spec.ts`.
-browser_qa_result: BROWSER_PRODUCT_QA_FAILED; artifact `evidence/f05-browser-product-qa-final-current/QA_RESULT_RU.md`; blocker: seller fact-card на 1280px скрывает колонку `Расхождение` за внутренним scroll.
-commit_or_patch_ref: code review evidence commit `d8a1f74f939ad048593444a9a024e76bdd5e42bb`; browser QA failed artifact `evidence/f05-browser-product-qa-final-current/QA_RESULT_RU.md`.
+dev_result: geometry rework убрал внутренний horizontal scroll seller fact-card на 1280px; обязательные `Заявлено`, `Факт`, `Расхождение`, `Добавлено ФФ` остаются видимыми в той же таблице.
+code_review_result: pending_after_geometry_rework; прошлый `CODE_REVIEW_PASSED` относится к состоянию до browser QA blocker.
+tests_run: `npm run test:unit -- sellerInboundDocumentUi.test.ts`; `npx playwright test tests-e2e/seller-inbound-fact-card-geometry.spec.ts --project=chromium --reporter=line`; `npm run build`.
+browser_qa_result: pending_after_geometry_rework; previous failed artifact `evidence/f05-browser-product-qa-final-current/QA_RESULT_RU.md`.
+commit_or_patch_ref: dev evidence `evidence/f05-dev-rework-geometry/DEV_REWORK_GEOMETRY_RU.md`.
 
 ## F06. Накладная из приёмки печатается по факту
 

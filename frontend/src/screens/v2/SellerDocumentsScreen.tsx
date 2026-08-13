@@ -16,17 +16,27 @@ import {
   TableContainer,
   TableHead,
   TableRow,
+  ToggleButton,
+  ToggleButtonGroup,
   Typography,
 } from '@mui/material'
 import { apiUrl } from '../../api'
 import { SellerMarketplaceUnloadDialog } from '../../components/SellerMarketplaceUnloadDialog'
 import { readApiErrorMessage } from '../../utils/readApiErrorMessage'
+import {
+  inboundOperationTypeLabel,
+  normalizeInboundOperationType,
+  type InboundOperationType,
+} from '../../utils/inboundOperationType'
 
 type DocType = 'inbound' | 'mp_unload' | 'correction'
+type DocumentFilterType = DocType | 'return' | 'all'
+const UNKNOWN_DOCUMENT_STATUS_LABEL = 'Статус уточняется'
 
 type InboundSummaryRow = {
   id: string
   status: string
+  operation_type?: string | null
   line_count: number
   planned_delivery_date: string | null
 }
@@ -38,21 +48,26 @@ type MpUnloadSummaryRow = {
   created_at?: string
 }
 
-function statusRu(status: string, docType: DocType): string {
+export function sellerDocumentStatusRu(status: string, docType: DocType): string {
   if (docType === 'mp_unload') {
     if (status === 'draft') return 'Черновик'
     if (status === 'submitted') return 'Запланировано'
     if (status === 'confirmed') return 'Подтверждено'
+    if (status === 'collecting') return 'На сборке'
     if (status === 'shipped') return 'Отгружено'
-    return status
+    if (status === 'cancelled') return 'Отменено'
+    return UNKNOWN_DOCUMENT_STATUS_LABEL
   }
   if (status === 'draft') return 'Черновик'
   if (status === 'submitted') return 'Передано на склад'
+  if (status === 'receiving') return 'Принимается на складе'
+  if (status === 'sorting') return 'В сортировке'
+  if (status === 'done') return 'Проведено'
   if (status === 'primary_accepted') return 'Принято на складе'
   if (status === 'verifying') return 'Проверка на складе'
   if (status === 'verified') return 'Проверено на складе'
   if (status === 'posted') return 'Оприходовано'
-  return status
+  return UNKNOWN_DOCUMENT_STATUS_LABEL
 }
 
 type DocumentRow = {
@@ -60,6 +75,7 @@ type DocumentRow = {
   id: string
   date: string | null
   status: string
+  operation_type?: InboundOperationType
   line_count: number
 }
 
@@ -93,7 +109,8 @@ export function SellerDocumentsScreen({
   onRefreshMpUnloadList,
 }: Props) {
   const navigate = useNavigate()
-  const [type, setType] = useState<DocType | 'all'>('all')
+  const [type, setType] = useState<DocumentFilterType>('all')
+  const [createOperationType, setCreateOperationType] = useState<InboundOperationType>('inbound')
   const [sort, setSort] = useState<'date_desc' | 'date_asc'>('date_desc')
   const [mpDialogId, setMpDialogId] = useState<string | null>(null)
   const [deleteBusyKey, setDeleteBusyKey] = useState<string | null>(null)
@@ -107,6 +124,7 @@ export function SellerDocumentsScreen({
         id: r.id,
         date: r.planned_delivery_date,
         status: r.status,
+        operation_type: normalizeInboundOperationType(r.operation_type),
         line_count: r.line_count,
       })),
       ...mpUnloadSummaries.map((r) => ({
@@ -117,7 +135,12 @@ export function SellerDocumentsScreen({
         line_count: r.line_count,
       })),
     ]
-    const filtered = type === 'all' ? all : all.filter((r) => r.type === type)
+    const filtered =
+      type === 'all'
+        ? all
+        : type === 'inbound' || type === 'return'
+          ? all.filter((r) => r.type === 'inbound' && r.operation_type === type)
+          : all.filter((r) => r.type === type)
     const sign = sort === 'date_desc' ? -1 : 1
     return filtered.sort((a, b) => {
       const ad = a.date ?? ''
@@ -209,14 +232,42 @@ export function SellerDocumentsScreen({
           >
             Создать акт расхождений
           </Button>
+          <ToggleButtonGroup
+            exclusive
+            size="small"
+            value={createOperationType}
+            onChange={(_event, next: InboundOperationType | null) => {
+              if (next) {
+                setCreateOperationType(next)
+              }
+            }}
+            aria-label="Тип заявки"
+            data-testid="seller-inbound-operation-toggle"
+            sx={{ alignSelf: { xs: 'stretch', sm: 'auto' } }}
+          >
+            <ToggleButton
+              value="inbound"
+              disabled={busy}
+              data-testid="seller-inbound-operation-supply"
+            >
+              Поставка
+            </ToggleButton>
+            <ToggleButton
+              value="return"
+              disabled={busy}
+              data-testid="seller-inbound-operation-return"
+            >
+              Возврат
+            </ToggleButton>
+          </ToggleButtonGroup>
           <Button
             variant="contained"
             data-testid="seller-create-inbound"
             disabled={busy}
-            onClick={() => navigate('/inbound/new')}
+            onClick={() => navigate(`/inbound/new?operation=${createOperationType}`)}
             sx={{ alignSelf: { xs: 'stretch', sm: 'auto' } }}
           >
-            Создать заявку на поставку
+            {createOperationType === 'return' ? 'Создать возврат' : 'Создать заявку на поставку'}
           </Button>
           <Button
             variant="contained"
@@ -246,11 +297,12 @@ export function SellerDocumentsScreen({
               labelId="seller-documents-type-label"
               label="Тип документа"
               value={type}
-              onChange={(e) => setType(e.target.value as DocType | 'all')}
+              onChange={(e) => setType(e.target.value as DocumentFilterType)}
               data-testid="seller-documents-type"
             >
               <MenuItem value="all">Все</MenuItem>
               <MenuItem value="inbound">Поставка</MenuItem>
+              <MenuItem value="return">Возврат</MenuItem>
               <MenuItem value="mp_unload">Отгрузка на МП</MenuItem>
               <MenuItem value="correction">Акт расхождений</MenuItem>
             </Select>
@@ -289,6 +341,7 @@ export function SellerDocumentsScreen({
                 hover
                 data-testid="seller-documents-row"
                 data-doc-type={r.type}
+                data-doc-operation-type={r.operation_type ?? ''}
                 data-doc-id={r.id}
                 sx={{
                   cursor: r.type === 'inbound' || r.type === 'mp_unload' ? 'pointer' : 'default',
@@ -303,13 +356,13 @@ export function SellerDocumentsScreen({
               >
                 <TableCell>
                   {r.type === 'inbound'
-                    ? 'Поставка'
+                    ? inboundOperationTypeLabel(r.operation_type)
                     : r.type === 'mp_unload'
                       ? 'Отгрузка на МП'
                       : 'Акт расхождений'}
                 </TableCell>
                 <TableCell sx={{ color: 'text.secondary' }}>{r.date ?? '—'}</TableCell>
-                <TableCell>{statusRu(r.status, r.type)}</TableCell>
+                <TableCell>{sellerDocumentStatusRu(r.status, r.type)}</TableCell>
                 <TableCell align="right">{r.line_count}</TableCell>
                 <TableCell align="right">
                   {r.status === 'draft' && (r.type === 'inbound' || r.type === 'mp_unload') ? (
