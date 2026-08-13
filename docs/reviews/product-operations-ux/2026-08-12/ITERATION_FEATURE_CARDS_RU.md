@@ -23,11 +23,11 @@ code review и живого browser QA. `Product/UX passed` означает, ч
 | F07 FBO/MP отгрузка по шагам | BA_READY | PRODUCT_APPROVED_HYBRID_FLOW | DEV_DONE | CODE_REVIEW_PASSED | BROWSER_PRODUCT_QA_PASSED | integration_pending |
 | F08 Направления остатков/FBS-пул | BA_UX_REWORK_READY | PRODUCT_APPROVED_AFTER_REWORK | DEV_REWORK_DONE | CODE_REVIEW_PASSED | BROWSER_PRODUCT_QA_PASSED | integration_pending |
 | F09 Свободный FBO | BA_READY | PRODUCT_APPROVED_FOR_DEV | DEV_DONE | CODE_REVIEW_PASSED | BROWSER_PRODUCT_QA_PASSED | integration_pending |
-| F10 FBS sync берёт FBS-пул | BA_READY | PRODUCT_APPROVED_FOR_DEV | DEV_REWORK_DONE | CODE_REVIEW_PASSED_AFTER_REWORK | browser_qa_pending_after_rework | code review after warehouse-scope rework passed; ждёт browser QA |
+| F10 FBS sync берёт FBS-пул | BA_READY | PRODUCT_APPROVED_FOR_DEV | DEV_REWORK_DONE | CODE_REVIEW_PASSED_AFTER_REWORK | BROWSER_PRODUCT_QA_PASSED | evidence `evidence/f10-browser-product-qa-final/`; integration_pending |
 | F11 Упрощённый FF каталог | BA_READY | PRODUCT_APPROVED_FOR_DEV | DEV_DONE | CODE_REVIEW_PASSED | BROWSER_PRODUCT_QA_PASSED | integration_pending |
 | F12 Monthly snapshot | BA_READY | PRODUCT_APPROVED_FOR_MINIMAL_UI | DEV_DONE | CODE_REVIEW_PASSED | BROWSER_PRODUCT_QA_PASSED | integration_pending |
 | F13 Доступ Виталика | BA_READY | PRODUCT_APPROVED_EXISTING_IMPL | DEV_REWORK_DONE | CODE_REVIEW_PASSED | BROWSER_PRODUCT_QA_PASSED | integration_pending |
-| F14 Сотрудники и права | BA_REWORK_READY | PRODUCT_REWORK_REQUIRED | blocked | blocked | blocked | не пускать в dev/stage |
+| F14 Сотрудники и права | BA_READY | PRODUCT_REWORK_REQUIRED | blocked | blocked | blocked | BA rework artifact: `evidence/f14-ba-rework/F14_BA_REWORK_RU.md`; не пускать в dev/stage без повторного Product/UX OK |
 | F15 Удаление только черновиков | BA_READY | PRODUCT_APPROVED_FOR_DEV | DEV_DONE | CODE_REVIEW_PASSED | BROWSER_PRODUCT_QA_PASSED | integration_pending |
 | F16 nmID по-русски | BA_READY | PRODUCT_APPROVED_AFTER_REWORK | DEV_DONE | CODE_REVIEW_PASSED | BROWSER_PRODUCT_QA_PASSED | integration_pending |
 | F17 Единый печатный документ | BA_READY | PRODUCT_APPROVED_EXISTING_IMPL | DEV_DONE | CODE_REVIEW_PASSED | BROWSER_PRODUCT_QA_PASSED | integration_pending |
@@ -167,15 +167,15 @@ commit_or_patch_ref: product verdict commit `3a7985319cc5da03229bc1d77f91c75ba1f
 
 ## F10. FBS-синхронизация берёт только FBS-пул
 
-status: ba_ready, product_approved_for_dev, dev_rework_done, code_review_passed_after_rework, browser_qa_pending_after_rework
+status: ba_ready, product_approved_for_dev, dev_rework_done, code_review_passed_after_rework, browser_product_qa_passed
 business_goal: в WB публикуется не весь остаток, а только выделенный FBS-пул.
 main_real_world_scenario: принято 1000, FBS-пул 200, в WB уходит 200.
 product_review_result: PRODUCT_APPROVED_FOR_DEV; artifact `evidence/f09-f10-product-unblock/F09_F10_PRODUCT_UX_VERDICT_RU.md`.
 dev_result: FBS sync still publishes explicit FBS pool minus active FBS reservations for a single unambiguous binding (1000 physical, FBS-pool 200, non-FBS 300, reservation 7 -> WB/readback 193). Rework after failed review added fail-closed warehouse-scope guard: when one seller has multiple active stock-sync WB/WMS bindings, a product-level FBS pool is blocked with safe state `ambiguous_warehouse_scope`, no WB PUT and no unsafe zero.
 code_review_result: CODE_REVIEW_PASSED_AFTER_REWORK; artifact `evidence/f10-code-review-after-warehouse-scope/F10_CODE_REVIEW_AFTER_WAREHOUSE_SCOPE_RU.md`. Previous `CODE_REVIEW_FAILED` was at `a70460dbd783da7ca0345140049472d3bcb46c75`.
-browser_qa_result: pending after rework.
+browser_qa_result: BROWSER_PRODUCT_QA_PASSED; live Chromium/Playwright run proved positive path `1000 physical + 200 FBS-pool - 7 active FBS reservation -> WB/readback 193` and ambiguous multi-binding path fail-closed with zero WB PUT/POST, WB stock `20 -> 20`, compact seller UI `Ошибка WB`, and no raw `ambiguous_warehouse_scope` as main UI text. Artifact `evidence/f10-browser-product-qa-final/QA_RESULT_RU.md`.
 changed_files: original dev touched `backend/tests/test_fbs_stock_sync.py`, `docs/reviews/product-operations-ux/2026-08-12/evidence/f10-dev/F10_DEV_EVIDENCE_RU.md`; rework touched `backend/app/services/fbs_stock_sync_service.py`, `backend/tests/test_fbs_stock_sync.py`, `docs/reviews/product-operations-ux/2026-08-12/evidence/f10-dev-rework-warehouse-scope/F10_DEV_REWORK_WAREHOUSE_SCOPE_RU.md`.
-tests_run: `pytest tests/test_fbs_stock_sync.py::test_sync_publishes_fbs_pool_minus_fbs_order_reservations_only tests/test_fbs_stock_sync.py::test_sync_blocks_product_level_fbs_pool_with_two_stock_sync_bindings -q`; `ruff check app/services/fbs_stock_sync_service.py tests/test_fbs_stock_sync.py`; `pytest tests/test_fbs_stock_sync.py tests/test_fbs_stock_availability.py -q`; `pytest tests/test_stock_directions.py::test_directions_drive_fbs_pool_and_mp_free_fbo -q`.
+tests_run: `pytest tests/test_fbs_stock_sync.py::test_sync_publishes_fbs_pool_minus_fbs_order_reservations_only tests/test_fbs_stock_sync.py::test_sync_blocks_product_level_fbs_pool_with_two_stock_sync_bindings -q`; `ruff check app/services/fbs_stock_sync_service.py tests/test_fbs_stock_sync.py`; `pytest tests/test_fbs_stock_sync.py tests/test_fbs_stock_availability.py -q`; `pytest tests/test_stock_directions.py::test_directions_drive_fbs_pool_and_mp_free_fbo -q`; Browser Product QA final: `node docs/reviews/product-operations-ux/2026-08-12/evidence/f10-browser-product-qa-final/f10_browser_product_qa_runner.mjs`.
 commit_or_patch_ref: product verdict commit `3a7985319cc5da03229bc1d77f91c75ba1f39f57`; F22 browser QA pass commit `646d82c5597b87b30cc10f8426d8b65493b7c19b`; F10 dev commit `1e85cc7507865a4b5cce961af99b39cbb2860560`; failed review commit `a70460dbd783da7ca0345140049472d3bcb46c75`; rework commit `4b611f27b2953e37d6003214ee72577af7321ee6`; code review evidence commit recorded in final Code Review answer.
 
 ## F11. Каталог ФФ упростить
@@ -202,10 +202,11 @@ tests_run: `test_seller_shop_scope.py` previous backend evidence; `seller-cabine
 
 ## F14. Сотрудники селлера и ФФ
 
-status: ba_rework_ready, product_rejected_rework_required, dev_pending, code_review_pending, browser_qa_pending
+status: ba_ready_after_rework, product_rejected_rework_required, dev_pending, code_review_pending, browser_qa_pending
 business_goal: управлять несколькими пользователями кабинета и правами.
 main_real_world_scenario: владелец селлера создаёт сотрудника и назначает права на документы/товары/ЧЗ/настройки/сотрудников.
-product_review_result: PRODUCT_REWORK_REQUIRED; строгий gate не пройден, dev/stage запрещены.
+ba_rework_artifact: `evidence/f14-ba-rework/F14_BA_REWORK_RU.md`
+product_review_result: PRODUCT_REWORK_REQUIRED; строгий product gate не пройден, нужен повторный Product/UX gate по BA-артефакту, dev/stage запрещены.
 tests_run: `test_seller_staff_and_delete_drafts.py`, `test_staff_users.py`, `ff-staff-users.spec.ts`, `seller-staff-and-delete-drafts.spec.ts`.
 
 ## F15. Удаление только черновиков
