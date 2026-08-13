@@ -1,0 +1,54 @@
+const path = require('node:path');
+
+const { defineConfig, devices } = require('../../../../../../frontend/node_modules/@playwright/test');
+
+const repoRoot = path.resolve(__dirname, '../../../../../../');
+const backendDir = path.join(repoRoot, 'backend');
+const frontendDir = path.join(repoRoot, 'frontend');
+
+const e2eApiPort = Number(process.env.E2E_API_PORT ?? 18126);
+const e2eWebPort = Number(process.env.E2E_WEB_PORT ?? 18127);
+const e2eDbFile = process.env.E2E_DB_FILE ?? 'e2e-f02-browser-final.db';
+
+module.exports = defineConfig({
+  testDir: __dirname,
+  testMatch: /f02-final-browser-product-qa\.spec\.cjs/,
+  timeout: 120_000,
+  expect: { timeout: 10_000 },
+  workers: 1,
+  use: {
+    baseURL: `http://127.0.0.1:${e2eWebPort}`,
+    trace: 'on',
+    screenshot: 'on',
+  },
+  webServer: [
+    {
+      command: `rm -f ${e2eDbFile} && python3 -m uvicorn app.main:app --host 127.0.0.1 --port ${e2eApiPort}`,
+      cwd: backendDir,
+      env: {
+        ...process.env,
+        WMS_AUTO_CREATE_SCHEMA: '1',
+        DATABASE_URL: `sqlite+aiosqlite:///./${e2eDbFile}`,
+        JWT_SECRET_KEY: 'ci-jwt-secret-key-minimum-32-characters-long',
+        E2E_MOCK_WB_CARDS: '1',
+        E2E_MOCK_WB_SUPPLIES: '1',
+        E2E_MOCK_WB_WAREHOUSES: '1',
+      },
+      port: e2eApiPort,
+      reuseExistingServer: false,
+    },
+    {
+      command: `npm run dev -- --host 0.0.0.0 --port ${e2eWebPort}`,
+      cwd: frontendDir,
+      env: {
+        ...process.env,
+        VITE_API_PROXY: `http://127.0.0.1:${e2eApiPort}`,
+        E2E_SELLER_PATH_PREFIX: '/seller',
+        VITE_SELLER_PORTAL_URL: `http://127.0.0.1:${e2eWebPort}/seller/`,
+      },
+      port: e2eWebPort,
+      reuseExistingServer: false,
+    },
+  ],
+  projects: [{ name: 'chromium', use: { ...devices['Desktop Chrome'] } }],
+});

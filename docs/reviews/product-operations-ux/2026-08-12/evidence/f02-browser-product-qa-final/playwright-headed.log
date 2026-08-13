@@ -1,0 +1,17 @@
+[2m[WebServer] [22mINFO:     Started server process [79940]
+[2m[WebServer] [22mINFO:     Waiting for application startup.
+[2m[WebServer] [22mWMS_AUTO_CREATE_SCHEMA=1: tables created (dev/e2e only).
+[2m[WebServer] [22mINFO:     Application startup complete.
+[2m[WebServer] [22mINFO:     Uvicorn running on http://127.0.0.1:18126 (Press CTRL+C to quit)
+[2m[WebServer] [22m(node:79958) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+[2m[WebServer] [22m(Use `node --trace-warnings ...` to show where the warning was created)
+
+Running 1 test using 1 worker
+
+(node:79959) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:79959) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+  ✓  1 [chromium] › docs/reviews/product-operations-ux/2026-08-12/evidence/f02-browser-product-qa-final/f02-final-browser-product-qa.spec.cjs:47:1 › F02 final browser product QA at 1280px (7.6s)
+
+  1 passed (11.9s)

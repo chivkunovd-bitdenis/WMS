@@ -1,0 +1,79 @@
+{
+  "status": "BROWSER_PRODUCT_QA_PASSED",
+  "runDate": "2026-08-13",
+  "url": "http://127.0.0.1:18127/app/ff/reception",
+  "viewport": {
+    "width": 1280,
+    "height": 800
+  },
+  "seedSku": "sku-box-f02-final-1786632276519",
+  "operationTypeText": "Тип: Поставка",
+  "rowDimensionsText": "200×100×50 мм · 1.00 л",
+  "returnAutoprintControlCount": 0,
+  "visibleReturnAutoprintText": false,
+  "dimensionsButtonInfo": {
+    "ariaLabel": "Габариты",
+    "text": "",
+    "width": 40,
+    "height": 40
+  },
+  "backendReadback": {
+    "length_mm": 200,
+    "width_mm": 100,
+    "height_mm": 50,
+    "volume_liters": 1
+  },
+  "uiMetrics": {
+    "beforeMetrics": {
+      "name": "WMS · Фулфилмент",
+      "viewportWidth": 1280,
+      "viewportHeight": 800,
+      "documentScrollWidth": 1280,
+      "bodyScrollWidth": 1280,
+      "documentClientWidth": 1280,
+      "bodyClientWidth": 1280,
+      "horizontalOverflowPx": 0,
+      "rootBackground": "rgb(255, 255, 255)",
+      "bodyBackground": "rgb(232, 236, 244)",
+      "blackViewportBackground": false
+    },
+    "dialogMetrics": {
+      "name": "WMS · Фулфилмент",
+      "viewportWidth": 1280,
+      "viewportHeight": 800,
+      "documentScrollWidth": 1280,
+      "bodyScrollWidth": 1280,
+      "documentClientWidth": 1280,
+      "bodyClientWidth": 1280,
+      "horizontalOverflowPx": 0,
+      "rootBackground": "rgb(255, 255, 255)",
+      "bodyBackground": "rgb(232, 236, 244)",
+      "blackViewportBackground": false
+    },
+    "afterMetrics": {
+      "name": "WMS · Фулфилмент",
+      "viewportWidth": 1280,
+      "viewportHeight": 800,
+      "documentScrollWidth": 1280,
+      "bodyScrollWidth": 1280,
+      "documentClientWidth": 1280,
+      "bodyClientWidth": 1280,
+      "horizontalOverflowPx": 0,
+      "rootBackground": "rgb(255, 255, 255)",
+      "bodyBackground": "rgb(232, 236, 244)",
+      "blackViewportBackground": false
+    }
+  },
+  "stepsClicked": [
+    "open FF reception card from queue",
+    "click compact dimensions icon in product row",
+    "fill dimensions 200x100x50",
+    "save dimensions"
+  ],
+  "screenshots": [
+    "screenshots/01-1280-inbound-row-before-dimensions.png",
+    "screenshots/02-1280-dimensions-dialog-open.png",
+    "screenshots/03-1280-dimensions-dialog-filled.png",
+    "screenshots/04-1280-saved-dimensions-visible.png"
+  ]
+}
