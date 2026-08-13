@@ -88,6 +88,57 @@ async def test_seller_patches_packaging_instructions(async_client: AsyncClient) 
 
 
 @pytest.mark.asyncio
+async def test_bulk_requires_honest_sign_updates_selected_products(
+    async_client: AsyncClient,
+) -> None:
+    suffix = uuid.uuid4().hex[:8]
+    reg = await async_client.post(
+        "/auth/register",
+        json={
+            "organization_name": "Bulk CHZ",
+            "slug": f"bulk-chz-{suffix}",
+            "admin_email": f"bulk-chz-{suffix}@example.com",
+            "password": "password123",
+        },
+    )
+    h = {"Authorization": f"Bearer {reg.json()['access_token']}"}
+    sel = await async_client.post("/sellers", headers=h, json={"name": "Bulk Brand"})
+    seller_id = sel.json()["id"]
+
+    product_ids: list[str] = []
+    for ix in range(3):
+        pr = await async_client.post(
+            "/products",
+            headers=h,
+            json={
+                "name": f"Bulk P {ix}",
+                "sku_code": f"BULK-CHZ-{suffix}-{ix}",
+                "length_mm": 1,
+                "width_mm": 1,
+                "height_mm": 1,
+                "seller_id": seller_id,
+            },
+        )
+        assert pr.status_code == 200, pr.text
+        product_ids.append(pr.json()["id"])
+
+    bulk = await async_client.patch(
+        "/products/requires-honest-sign/bulk",
+        headers=h,
+        json={"product_ids": product_ids[:2], "requires_honest_sign": True},
+    )
+    assert bulk.status_code == 200, bulk.text
+    assert bulk.json()["updated_count"] == 2
+
+    catalog = await async_client.get("/products/ff-catalog", headers=h)
+    assert catalog.status_code == 200, catalog.text
+    by_id = {row["id"]: row for row in catalog.json()}
+    assert by_id[product_ids[0]]["requires_honest_sign"] is True
+    assert by_id[product_ids[1]]["requires_honest_sign"] is True
+    assert by_id[product_ids[2]]["requires_honest_sign"] is False
+
+
+@pytest.mark.asyncio
 async def test_mp_plan_allowed_without_packaging_instructions(
     async_client: AsyncClient, monkeypatch: pytest.MonkeyPatch
 ) -> None:

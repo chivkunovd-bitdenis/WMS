@@ -126,6 +126,8 @@ export function FfProductsCatalogScreen({ token, authHeaders, sellers, onSellers
   const [importOpen, setImportOpen] = useState(false)
   const [sellerCreateOpen, setSellerCreateOpen] = useState(false)
   const [importNotice, setImportNotice] = useState<string | null>(null)
+  const [selectedProductIds, setSelectedProductIds] = useState<Set<string>>(new Set())
+  const [bulkHonestSignBusy, setBulkHonestSignBusy] = useState(false)
 
   const load = useCallback(async () => {
     setError(null)
@@ -197,6 +199,23 @@ export function FfProductsCatalogScreen({ token, authHeaders, sellers, onSellers
     })
   }, [filteredRows, sortDir, sortKey])
 
+  const visibleProductIds = useMemo(() => sortedRows.map((row) => row.id), [sortedRows])
+  const selectedCount = selectedProductIds.size
+  const allVisibleSelected =
+    visibleProductIds.length > 0 && visibleProductIds.every((id) => selectedProductIds.has(id))
+  const someVisibleSelected = visibleProductIds.some((id) => selectedProductIds.has(id))
+
+  useEffect(() => {
+    const visible = new Set(visibleProductIds)
+    setSelectedProductIds((current) => {
+      const nextIds = [...current].filter((id) => visible.has(id))
+      if (nextIds.length === current.size) {
+        return current
+      }
+      return new Set(nextIds)
+    })
+  }, [visibleProductIds])
+
   function toggleSort(next: SortKey) {
     if (sortKey !== next) {
       setSortKey(next)
@@ -204,6 +223,22 @@ export function FfProductsCatalogScreen({ token, authHeaders, sellers, onSellers
       return
     }
     setSortDir((d) => (d === 'asc' ? 'desc' : 'asc'))
+  }
+
+  function toggleAllVisibleProducts(checked: boolean) {
+    setSelectedProductIds(checked ? new Set(visibleProductIds) : new Set())
+  }
+
+  function toggleProductSelected(productId: string, checked: boolean) {
+    setSelectedProductIds((current) => {
+      const next = new Set(current)
+      if (checked) {
+        next.add(productId)
+      } else {
+        next.delete(productId)
+      }
+      return next
+    })
   }
 
   function openPackagingEdit(p: FfCatalogRow) {
@@ -249,6 +284,43 @@ export function FfProductsCatalogScreen({ token, authHeaders, sellers, onSellers
     }
   }
 
+  async function applyHonestSignToSelected() {
+    const productIds = [...selectedProductIds]
+    if (productIds.length === 0) return
+    const selectedIds = new Set(productIds)
+    setBulkHonestSignBusy(true)
+    setError(null)
+    try {
+      const res = await fetch(apiUrl('/products/requires-honest-sign/bulk'), {
+        method: 'PATCH',
+        headers: { ...authHeaders(token), 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          product_ids: productIds,
+          requires_honest_sign: true,
+        }),
+      })
+      if (!res.ok) {
+        setError(await readApiErrorMessage(res))
+        return
+      }
+      const body = (await res.json()) as { updated_count: number }
+      setCatalog((current) =>
+        current.map((row) =>
+          selectedIds.has(row.id) ? { ...row, requires_honest_sign: true } : row,
+        ),
+      )
+      setSelectedProductIds(new Set())
+      setImportNotice(`Честный знак включён: ${body.updated_count} товаров.`)
+      await load()
+    } catch (e) {
+      setError(
+        e instanceof Error ? e.message : 'Не удалось включить Честный знак выбранным товарам.',
+      )
+    } finally {
+      setBulkHonestSignBusy(false)
+    }
+  }
+
   return (
     <FfProductMarkingPrintProvider token={token}>
     <Box>
@@ -282,6 +354,24 @@ export function FfProductsCatalogScreen({ token, authHeaders, sellers, onSellers
             spacing={1}
             sx={{ justifyContent: 'flex-end' }}
           >
+            {selectedCount > 0 ? (
+              <Chip
+                size="small"
+                variant="outlined"
+                color="primary"
+                label={`Выбрано: ${selectedCount}`}
+                data-testid="ff-products-selected-count"
+              />
+            ) : null}
+            <Button
+              variant="outlined"
+              color="success"
+              disabled={bulkHonestSignBusy || busy || selectedCount === 0}
+              onClick={() => void applyHonestSignToSelected()}
+              data-testid="ff-products-bulk-honest-sign"
+            >
+              Нужен ЧЗ выбранным
+            </Button>
             <Button
               variant="outlined"
               onClick={() => setSellerCreateOpen(true)}
@@ -340,6 +430,17 @@ export function FfProductsCatalogScreen({ token, authHeaders, sellers, onSellers
         <Table stickyHeader size="small" data-testid="ff-products-table">
           <TableHead>
             <TableRow>
+              <TableCell padding="checkbox" width={52}>
+                <Checkbox
+                  size="small"
+                  checked={allVisibleSelected}
+                  indeterminate={someVisibleSelected && !allVisibleSelected}
+                  disabled={busy || sortedRows.length === 0}
+                  onChange={(e) => toggleAllVisibleProducts(e.target.checked)}
+                  slotProps={{ input: { 'aria-label': 'Выбрать все товары' } }}
+                  data-testid="ff-products-select-all"
+                />
+              </TableCell>
               <TableCell width={68}>Фото</TableCell>
               <TableCell width={140}>SKU</TableCell>
               <TableCell width={80}>Размер</TableCell>
@@ -392,6 +493,15 @@ export function FfProductsCatalogScreen({ token, authHeaders, sellers, onSellers
               const barcode = resolveProductPrimaryBarcode(displayMeta)
               return (
               <TableRow key={p.id} hover data-testid="ff-product-row">
+                <TableCell padding="checkbox">
+                  <Checkbox
+                    size="small"
+                    checked={selectedProductIds.has(p.id)}
+                    onChange={(e) => toggleProductSelected(p.id, e.target.checked)}
+                    slotProps={{ input: { 'aria-label': `Выбрать товар ${p.sku_code}` } }}
+                    data-testid={`ff-product-select-${p.id}`}
+                  />
+                </TableCell>
                 <TableCell>
                   <ProductPhotoThumb src={p.wb_primary_image_url} />
                 </TableCell>
@@ -429,6 +539,15 @@ export function FfProductsCatalogScreen({ token, authHeaders, sellers, onSellers
                       color={p.has_packaging_instructions ? 'success' : 'warning'}
                       data-testid={`ff-packaging-status-${p.id}`}
                     />
+                    {p.requires_honest_sign ? (
+                      <Chip
+                        size="small"
+                        label="ЧЗ"
+                        color="info"
+                        variant="outlined"
+                        data-testid={`ff-honest-sign-status-${p.id}`}
+                      />
+                    ) : null}
                     <Button
                       size="small"
                       onClick={() => openPackagingEdit(p)}
@@ -462,7 +581,7 @@ export function FfProductsCatalogScreen({ token, authHeaders, sellers, onSellers
             )})}
             {sortedRows.length === 0 && !busy ? (
               <TableRow>
-                <TableCell colSpan={16}>
+                <TableCell colSpan={17}>
                   {searchQuery.trim() ? (
                     <Typography variant="body2" color="text.secondary" data-testid="ff-products-search-empty">
                       Ничего не найдено по запросу «{searchQuery.trim()}».

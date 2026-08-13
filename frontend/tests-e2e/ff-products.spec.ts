@@ -1,6 +1,6 @@
 import { expect, test } from '@playwright/test'
 
-import { waitForGetOk, waitForPostOk } from './api-waits'
+import { waitForGetOk, waitForPatchOk, waitForPostOk } from './api-waits'
 import { openFulfillmentRegistration } from './auth-flow'
 
 // TC-NEW-001 — FF складской каталог: все товары селлеров, остатки по движениям.
@@ -171,12 +171,12 @@ test('ff products: filter by seller and sort by name/quantity', async ({ page })
   // Sort by quantity desc: first row should be product B (qty 5)
   await page.getByTestId('ff-products-sort-quantity').click()
   await page.getByTestId('ff-products-sort-quantity').click()
-  const firstSkuAfterQty = await page.getByTestId('ff-product-row').first().locator('td').nth(1).innerText()
+  const firstSkuAfterQty = await page.getByTestId('ff-product-row').first().locator('td').nth(2).innerText()
   expect(firstSkuAfterQty).toContain(skuB)
 
   // Sort by name asc: Alpha first
   await page.getByTestId('ff-products-sort-name').click()
-  const firstNameAfterName = await page.getByTestId('ff-product-row').first().locator('td').nth(6).innerText()
+  const firstNameAfterName = await page.getByTestId('ff-product-row').first().locator('td').nth(7).innerText()
   expect(firstNameAfterName).toContain('Alpha')
 
   // Photo cell exists (even if WB photo missing in mocks): first column rendered and has avatar element.
@@ -253,6 +253,77 @@ test('ff products: edit packaging instructions in catalog', async ({ page }) => 
     page.getByTestId('ff-packaging-save').click(),
   ])
   await expect(page.getByTestId(`ff-packaging-status-${productId}`)).toContainText('Заполнено')
+})
+
+// TC-NEW-PKG-09 — FF массово включает признак ЧЗ в каталоге ТЗ.
+// Given: FF admin видит несколько товаров в каталоге; When: выбирает все строки и жмёт «Нужен ЧЗ выбранным»;
+// Then: выбранные товары получают видимый чип «ЧЗ», API возвращает `requires_honest_sign=true`.
+// Negative/restriction: кнопка применения выключена, пока ни один товар не выбран.
+test('ff products: bulk marks selected products as honest sign required', async ({ page }) => {
+  const email = `e2e-ff-bulk-chz-${Date.now()}@example.com`
+  const password = 'password123'
+
+  await page.goto('/')
+  await openFulfillmentRegistration(page)
+  await page.getByTestId('register-form').getByLabel('Организация').fill('E2E FF Bulk CHZ')
+  await page.getByTestId('register-form').getByLabel('Email администратора').fill(email)
+  await page.getByTestId('register-form').getByLabel('Пароль').fill(password)
+  await Promise.all([
+    waitForPostOk(page, '/api/auth/register'),
+    waitForGetOk(page, '/api/auth/me'),
+    page.getByTestId('register-form').getByRole('button', { name: 'Создать аккаунт' }).click(),
+  ])
+
+  const regToken = (await page.evaluate(() => localStorage.getItem('wms_token_ff'))) ?? ''
+  const h = { Authorization: `Bearer ${regToken}` }
+  const productIds: string[] = []
+  for (const name of ['Bulk CHZ Alpha', 'Bulk CHZ Beta', 'Bulk CHZ Gamma']) {
+    const res = await page.request.post('/api/products', {
+      headers: h,
+      data: {
+        name,
+        sku_code: `${name.replaceAll(' ', '-').toUpperCase()}-${Date.now()}`,
+        length_mm: 1,
+        width_mm: 1,
+        height_mm: 1,
+      },
+    })
+    expect(res.ok()).toBeTruthy()
+    productIds.push(String(((await res.json()) as { id: string }).id))
+  }
+
+  await page.reload()
+  await page.getByTestId('nav-ff-products').click()
+  await expect(page.getByTestId('ff-products-list')).toBeVisible()
+  await expect(page.getByTestId('ff-product-row')).toHaveCount(3)
+  await expect(page.getByTestId('ff-products-bulk-honest-sign')).toBeDisabled()
+
+  await page.getByTestId('ff-products-select-all').click()
+  await expect(page.getByTestId('ff-products-selected-count')).toContainText('Выбрано: 3')
+
+  await Promise.all([
+    waitForPatchOk(page, '/api/products/requires-honest-sign/bulk'),
+    page.getByTestId('ff-products-bulk-honest-sign').click(),
+  ])
+
+  await expect(page.getByTestId('ff-products-import-notice')).toContainText(
+    'Честный знак включён',
+  )
+  for (const productId of productIds) {
+    await expect(page.getByTestId(`ff-honest-sign-status-${productId}`)).toBeVisible()
+  }
+
+  const catalog = await page.request.get('/api/products/ff-catalog', { headers: h })
+  expect(catalog.ok()).toBeTruthy()
+  const byId = new Map(
+    ((await catalog.json()) as { id: string; requires_honest_sign: boolean }[]).map((row) => [
+      row.id,
+      row,
+    ]),
+  )
+  expect(productIds.every((productId) => byId.get(productId)?.requires_honest_sign === true)).toBe(
+    true,
+  )
 })
 
 // TC-NEW-MAN-01 — FF создаёт товар вручную; бейдж «Вручную» пока нет карточки WB.

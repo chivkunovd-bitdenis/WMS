@@ -949,6 +949,14 @@ Full-cycle FBS: worklist → compatible selection → atomic WB supply → serve
 - **Then:** the packaging task has exactly **2** lines (one per product); product A's line `qty_total` equals the sum of quantities picked from both cells; no cell/location is exposed on the MP packaging line.
 - **Negative:** before this fix, picking one product from N cells produced N packaging lines for that single product — regression covered by `test_marketplace_unload_packaging_one_row_per_product_across_cells`.
 
+### TC-NEW-PKG-09 FF bulk marks catalog products as Honest Sign required
+
+- **Actor:** fulfillment admin.
+- **Given:** FF product catalog contains several visible product rows.
+- **When:** clicks **Select all** in the catalog table and applies **Honest Sign required** to selected rows.
+- **Then:** selected products persist `requires_honest_sign=true`; each updated row shows a visible **CHZ** marker.
+- **Negative:** bulk apply action is disabled while no product rows are selected.
+
 ---
 
 ## Cross-scenario matrix (acceptance checklist for role tests)
