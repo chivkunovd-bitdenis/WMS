@@ -15,10 +15,10 @@ code review и живого browser QA. `Product/UX passed` означает, ч
 | Фича | BA | Product/UX gate | Dev | Code review | Browser QA | Текущий итог |
 |---|---|---|---|---|---|---|
 | F01 Приёмка без упаковки | BA_READY | PRODUCT_APPROVED_FOR_DEV | DEV_DONE | CODE_REVIEW_PASSED | BROWSER_PRODUCT_QA_PASSED | integration_pending |
-| F02 Габариты из приёмки | BA_READY | PRODUCT_APPROVED_FOR_DEV | DEV_DONE | CODE_REVIEW_PASSED | pending | нужен live browser QA |
-| F03 Расхождения и товары селлера | BA_READY | PRODUCT_APPROVED_FOR_DEV | DEV_REWORK_DONE | CODE_REVIEW_PASSED | failed_before_fix, rerun_pending | нужен повторный live browser QA |
+| F02 Габариты из приёмки | BA_READY | PRODUCT_APPROVED_FOR_DEV | DEV_DONE | CODE_REVIEW_PASSED | BROWSER_PRODUCT_QA_PASSED | integration_pending |
+| F03 Расхождения и товары селлера | BA_READY | PRODUCT_APPROVED_FOR_DEV | DEV_REWORK_DONE | CODE_REVIEW_PASSED | BROWSER_PRODUCT_QA_PASSED | integration_pending |
 | F04 Ручной товар из приёмки | BA_READY | PRODUCT_APPROVED_FOR_DEV | DEV_REWORK_DONE | CODE_REVIEW_PASSED | BROWSER_PRODUCT_QA_PASSED | integration_pending |
-| F05 Единая карточка ФФ/селлер | BA_READY | PRODUCT_APPROVED_AFTER_REWORK | DEV_REWORK_DONE | CODE_REVIEW_FAILED | blocked_by_code_review | нужен rework raw MP-статусов |
+| F05 Единая карточка ФФ/селлер | BA_READY | PRODUCT_APPROVED_AFTER_REWORK | DEV_REWORK_DONE | CODE_REVIEW_PASSED | browser_qa_pending | нужен live browser QA |
 | F06 Накладная по факту | BA_READY | PRODUCT_APPROVED_AFTER_REWORK | DEV_DONE | CODE_REVIEW_PASSED | BROWSER_PRODUCT_QA_PASSED | integration_pending |
 | F07 FBO/MP отгрузка по шагам | BA_READY | PRODUCT_APPROVED_HYBRID_FLOW | DEV_DONE | CODE_REVIEW_PASSED | BROWSER_PRODUCT_QA_PASSED | integration_pending |
 | F08 Направления остатков/FBS-пул | BA_UX_REWORK_READY | PRODUCT_APPROVED_AFTER_REWORK | DEV_REWORK_DONE | CODE_REVIEW_PASSED | BROWSER_PRODUCT_QA_PASSED | integration_pending |
@@ -32,9 +32,9 @@ code review и живого browser QA. `Product/UX passed` означает, ч
 | F16 nmID по-русски | BA_READY | PRODUCT_APPROVED_AFTER_REWORK | DEV_DONE | CODE_REVIEW_PASSED | BROWSER_PRODUCT_QA_PASSED | integration_pending |
 | F17 Единый печатный документ | BA_READY | PRODUCT_APPROVED_EXISTING_IMPL | DEV_DONE | CODE_REVIEW_PASSED | BROWSER_PRODUCT_QA_PASSED | integration_pending |
 | F18 Возврат как вариант приёмки | BA_UX_REWORK_READY | PRODUCT_APPROVED_FOR_DEV | DEV_REWORK_DONE | CODE_REVIEW_PASSED | BROWSER_PRODUCT_QA_PASSED | integration_pending |
-| F19 Возврат со сканом/autoprint | BA_UX_REWORK_READY | PRODUCT_REREVIEW_PENDING | blocked | blocked | blocked | нужен повторный Product/UX |
-| F22 Safe sync остатков WMS->WB | BA_UX_READY | PRODUCT_APPROVED_FOR_DEV | DEV_DONE | CODE_REVIEW_PASSED | browser_qa_pending | нужен live browser QA |
-| F23 Каталог товаров селлера cleanup | BA_UX_REWORK_READY | PRODUCT_DESIGN_APPROVED_FOR_DEV | dev_pending | blocked | blocked | можно отдавать atomic dev |
+| F19 Возврат со сканом/autoprint | BA_UX_REWORK_READY | PRODUCT_APPROVED_FOR_DEV | DEV_DONE | code_review_in_progress | browser_qa_blocked | code review запущен |
+| F22 Safe sync остатков WMS->WB | BA_UX_READY | PRODUCT_APPROVED_FOR_DEV | DEV_REWORK_DONE | CODE_REVIEW_PASSED_AFTER_READ_MODEL | browser_qa_in_progress | live browser QA запущен |
+| F23 Каталог товаров селлера cleanup | BA_UX_REWORK_READY | PRODUCT_DESIGN_APPROVED_FOR_DEV | DEV_DONE | CODE_REVIEW_PASSED | BROWSER_PRODUCT_QA_PASSED | integration_pending |
 | F20 Счета клиентам | out_of_scope | out_of_scope | out_of_scope | out_of_scope | out_of_scope | вне релиза |
 | F21 Seller Focus Pro | blocked_missing_repo | blocked_missing_target | blocked | blocked | blocked | нужен repo/target |
 
@@ -54,7 +54,7 @@ tests_run: `inbound-receiving-v2.spec.ts` проверяет отсутстви�
 
 ## F02. Габариты товара прямо из приёмки
 
-status: ba_ready, product_approved_for_dev, dev_done, code_review_passed, browser_qa_pending
+status: ba_ready, product_approved_for_dev, dev_done, code_review_passed, browser_qa_passed, integration_pending
 business_goal: дать ФФ быстро зафиксировать длину/ширину/высоту по товару при фактической приёмке.
 warehouse_user: оператор приёмки или старший смены.
 main_real_world_scenario: в строке товара нажимают маленькую кнопку габаритов, вводят три размера, система сохраняет объём.
@@ -66,10 +66,13 @@ ux_decision: одна иконка-линейка в строке, компак�
 product_review_result: PRODUCT_APPROVED_FOR_DEV; маленькая кнопка габаритов в строке не перегружает приёмку.
 dev_result: добавлен `PATCH /products/{id}/dimensions`, поле `volume_liters`, миграция `20260812_0079`.
 tests_run: `test_catalog_flow`, `inbound-receiving-v2.spec.ts`.
+code_review_result: CODE_REVIEW_PASSED.
+browser_qa_result: BROWSER_PRODUCT_QA_PASSED; artifact `evidence/f02-browser-product-qa-final/QA_RESULT_RU.md`.
+commit_or_patch_ref: browser QA evidence commit `a51b0528766c03cb98b6dcf72af41692b17aa088`.
 
 ## F03. Приёмка с расхождениями и любыми товарами селлера
 
-status: ba_ready, product_approved_for_dev, dev_rework_done, code_review_passed, browser_qa_failed_before_fix, browser_qa_rerun_pending
+status: ba_ready, product_approved_for_dev, dev_rework_done, code_review_passed, browser_qa_passed, integration_pending
 business_goal: принять фактически приехавший пересорт, недостачу или излишек без блокировки оператора.
 warehouse_user: оператор приёмки ФФ.
 main_real_world_scenario: заявлен один товар, приехал другой товар того же селлера; оператор сканирует его и получает строку с планом 0, фактом больше 0.
@@ -81,6 +84,9 @@ ux_decision: пересорт остаётся в той же таблице п�
 product_review_result: PRODUCT_APPROVED_FOR_DEV; расхождения должны быть в одной таблице факта, без отдельного экрана проблем.
 dev_result: `receiving/scan` и `receiving/lines` добавляют фактическую строку товара селлера.
 tests_run: `test_inbound_receiving_accepts_seller_catalog_product_as_discrepancy`, `inbound-receiving-v2.spec.ts`.
+code_review_result: CODE_REVIEW_PASSED.
+browser_qa_result: BROWSER_PRODUCT_QA_PASSED; artifact `evidence/f03-browser-product-qa-final-current/QA_RESULT_RU.md`.
+commit_or_patch_ref: browser QA evidence commit `494ef8bdc771c00b56daeb4a1511638f5b065a6a`.
 
 ## F04. Создание нового товара из приёмки
 
@@ -97,14 +103,16 @@ tests_run: `ff-inbound-barcode-add.spec.ts`.
 
 ## F05. Единая карточка приёмки для ФФ и селлера
 
-status: ba_ready, product_approved_after_rework, dev_rework_done, code_review_failed, browser_qa_blocked
+status: ba_ready, product_approved_after_rework, dev_rework_done, code_review_passed, browser_qa_pending
 business_goal: ФФ и селлер видят одну фактическую карточку: заявлено, принято, добавлено ФФ, недостача/излишек.
 warehouse_user: оператор ФФ, селлер.
 main_real_world_scenario: после проведения селлер открывает документ и видит факт, а не упрощённый экран.
 screens_touched: карточка приёмки ФФ, селлерская карточка заявки.
 ux_decision: тип операции и расхождения выводятся в существующей карточке без нового dashboard; селлер в недraft-статусах видит заявлено, факт, расхождение и «Добавлено ФФ».
 product_review_result: initially_rejected, PRODUCT_APPROVED_AFTER_REWORK.
+code_review_result: CODE_REVIEW_PASSED; artifact `evidence/f05-code-review-current/F05_CODE_REVIEW_CURRENT_RU.md`.
 tests_run: `inbound-receiving-v2.spec.ts`.
+commit_or_patch_ref: code review evidence commit `d8a1f74f939ad048593444a9a024e76bdd5e42bb`; live browser QA currently running.
 
 ## F06. Накладная из приёмки печатается по факту
 
@@ -219,15 +227,17 @@ tests_run: `test_inbound_receiving_accepts_seller_catalog_product_as_discrepancy
 
 ## F19. Возврат со сканированием и автопечатью ШК
 
-status: ba_ux_rework_ready, product_rereview_pending, dev_blocked, code_review_blocked, browser_qa_blocked
+status: ba_ux_rework_ready, product_approved_for_dev, dev_done, code_review_in_progress, browser_qa_blocked
 business_goal: оператор сканирует возврат, строка растёт на +1, при включенном режиме печатается ШК.
 ux_decision: маленький switch рядом со сканером только для возврата.
-product_review_result: initially_rejected; BA/UX rework ready, repeat Product/UX gate still pending.
+product_review_result: initially_rejected; PRODUCT_APPROVED_FOR_DEV after repeat Product/UX gate in `evidence/f19-product-rereview/F19_PRODUCT_REREVIEW_RU.md`.
+dev_result: autoprint is restricted to return scans with WB barcode only; manual picker/manual create do not autoprint.
 tests_run: `inbound-receiving-v2.spec.ts`.
+commit_or_patch_ref: dev commit `0d87bc3c6bbefc1546f3d4b7467e9553e54bb26f`; code review currently running.
 
 ## F22. Safe sync остатков WMS -> WB / ЛК селлера
 
-status: ba_ux_ready, product_approved_for_dev, dev_done, code_review_passed, browser_qa_pending
+status: ba_ux_ready, product_approved_for_dev, dev_rework_done, code_review_passed_after_read_model, browser_qa_in_progress
 business_goal: не допустить зануления или неверной публикации остатков в WB/ЛК селлера при включении синхронизации, ошибке API, пустом расчете или отсутствии явного FBS-пула.
 warehouse_user: селлер или ФФ-менеджер, который включает синхронизацию FBS-остатков и ожидает, что WMS не испортит реальные остатки в WB.
 main_real_world_scenario: в ЛК WB у товара 20 шт; пользователь включает sync в WMS; если WMS не может безопасно посчитать явный FBS-пул или получает ошибку WB, система не отправляет 0, не помечает успех и показывает человеку понятную ошибку/причину без технического мусора.
@@ -243,16 +253,16 @@ business_assumptions: публикация 0 допустима только е�
 ux_decision: статус sync должен быть компактным и человеческим, без раздутых колонок и кнопок; основной ответ экрана - сколько реально уйдет в WB и почему.
 product_review_result: PRODUCT_APPROVED_FOR_DEV; artifact `evidence/f22-product-review/F22_PRODUCT_VERDICT_SAFE_STOCK_SYNC_RU.md`.
 dev_result: backend fail-closed before WB PUT; missing FBS pool / missing safe availability / `fbs_stock_limit=0` no longer becomes unsafe `amount=0`; stale sync items no longer auto-zero.
-code_review_result: CODE_REVIEW_PASSED; artifact `evidence/f22-code-review/F22_CODE_REVIEW_RU.md`.
-browser_qa_result: pending live seller UI proof, especially WB/emulator `20 -> 20` without FBS pool.
+code_review_result: CODE_REVIEW_PASSED after safe-zero fix, CODE_REVIEW_PASSED_AFTER_REWORK after lease datetime fix, and CODE_REVIEW_PASSED_AFTER_READ_MODEL after seller catalog read-model fix; artifacts `evidence/f22-code-review/F22_CODE_REVIEW_RU.md`, `evidence/f22b-code-review/F22B_CODE_REVIEW_RU.md`, `evidence/f22c-code-review/F22C_CODE_REVIEW_RU.md`.
+browser_qa_result: previous final QA failed after backend confirmed 7 but seller UI still showed `Ошибка WB`; final rerun after read-model fix is currently running.
 changed_files: `backend/app/services/fbs_stock_sync_service.py`, `backend/tests/test_fbs_stock_sync.py`, `backend/tests/test_fbs_stock_emulator_integration.py`.
 tests_run: backend targeted sync tests, ruff, mypy, full backend pytest by dev; code review reran targeted `23 passed`.
-commit_or_patch_ref: dev commit `f62e592c8bec7a0b8c7586fc0fc865b02f15b5e2`, review commit `f1fbb100131d880008652bd6274340bae065bbe2`.
-blocking_issues: нужно проверить текущий `fbs_stock_sync_service`, включение `stock_sync_enabled`, zeroed targets и поведение при ошибке WB/readback.
+commit_or_patch_ref: safe-zero dev commit `f62e592c8bec7a0b8c7586fc0fc865b02f15b5e2`, review commit `f1fbb100131d880008652bd6274340bae065bbe2`, datetime rework commit `3329aa6d270363fe1c6f4227996c51fc8c32fd57`, read-model fix commit `5c1ab614e11c075543f95edac1361e70cdc1c1b2`, read-model code review evidence commit `6ecb716`.
+blocking_issues: live browser QA rerun на negative + positive sync path запущен; без pass не интегрировать.
 
 ## F23. Каталог товаров селлера cleanup
 
-status: ba_ux_rework_ready, product_design_approved_for_dev, dev_done, code_review_pending, browser_qa_blocked
+status: ba_ux_rework_ready, product_design_approved_for_dev, dev_done, code_review_passed, browser_qa_passed, integration_pending
 business_goal: привести каталог товаров селлера к рабочему виду без визуального мусора, перегруза FBS-sync и сломанной геометрии.
 warehouse_user: селлер/ФФ-менеджер, который смотрит остатки, распределение и FBS-публикацию по товарам.
 main_real_world_scenario: пользователь открывает каталог, видит товары и остатки, выделяет нужные строки и выполняет одно действие; таблица не раздувается чипами, полями и дублирующими кнопками.
@@ -268,12 +278,12 @@ business_assumptions: текущий скрин пользователя явл�
 ux_decision: initial DESIGN_REWORK_REQUIRED; rework spec ready in `evidence/f23-ba-ux-rework/F23_BA_UX_REWORK_SPEC_RU.md`; repeat Product+Design gate approved.
 product_review_result: initially PRODUCT_REWORK_REQUIRED; repeat verdict PRODUCT_DESIGN_APPROVED_FOR_DEV in `evidence/f23-product-design-rereview/F23_PRODUCT_DESIGN_REREVIEW_RU.md`.
 dev_result: selected-row bulk publication flow; removed permanent "всем" actions and main-table `Лимит`; compact FBS statuses; 1280px overflow guard; F08 directions drawer CRUD preserved by targeted e2e.
-code_review_result: pending_after_dev.
-browser_qa_result: blocked_until_dev.
+code_review_result: CODE_REVIEW_PASSED; artifact `evidence/f23-code-review/F23_CODE_REVIEW_RU.md`.
+browser_qa_result: BROWSER_PRODUCT_QA_PASSED; artifact `evidence/f23-browser-product-qa/F23_BROWSER_PRODUCT_QA_RU.md`.
 changed_files: `frontend/src/screens/v2/SellerProductsStockScreen.tsx`, `frontend/tests-e2e/seller-stock-directions.spec.ts`.
 tests_run: `npm run build`; `npx playwright test frontend/tests-e2e/seller-stock-directions.spec.ts`.
-commit_or_patch_ref: pending_commit.
-blocking_issues: code review и browser product QA ещё не пройдены; commit зависит от чистого выделения F23 diff из уже грязных F08/F22 файлов.
+commit_or_patch_ref: dev commit `0090a76`, code review commit `d6beb2b`, browser QA commit `1aef9f6`.
+blocking_issues: none for per-feature gate; waits for final integration review/regression.
 
 ## F20. Счета клиентам
 
