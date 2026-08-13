@@ -1,0 +1,181 @@
+{
+  "verdict": "BROWSER_PRODUCT_QA_PASSED",
+  "date": "2026-08-13T12:43:08.447Z",
+  "gitRoot": "/Users/deniscivkunov/Projects/WMS/.worktrees/product-operations-ux-20260812",
+  "web": "http://127.0.0.1:15108",
+  "api": "http://127.0.0.1:18108",
+  "browser": "147.0.7727.15",
+  "seed": {
+    "adminEmail": "f08-browser-admin-1786624960107@example.com",
+    "sellerEmail": "f08-browser-seller-1786624960107@example.com",
+    "sku": "SKU-F08-1786624960107",
+    "productId": "aed594bb-66cf-4131-ad1f-400671f587ee",
+    "sellerId": "5ded25b3-e338-4047-bdb3-a45bbe638228"
+  },
+  "sellerGeometry": {
+    "viewportWidth": 1280,
+    "bodyScrollWidth": 1280,
+    "documentScrollWidth": 1280,
+    "tableScrollWidth": 990,
+    "tableContainerClientWidth": 990,
+    "tableContainerScrollWidth": 990,
+    "rowHeight": 91.515625,
+    "rowText": "F08 compact product with long human name that must not stretch the catalog rowSKU SKU-F08-1786624960107——10106FBS 4 штрезервы 0 штРаспределениеПубликуется в WBНет ТЗРедактировать",
+    "fbsCellText": "Публикуется в WB",
+    "limitControls": 0
+  },
+  "popoverGeometry": {
+    "viewportWidth": 1280,
+    "bodyScrollWidth": 1280,
+    "documentScrollWidth": 1280,
+    "popoverWidth": 320,
+    "popoverRight": 1208,
+    "popoverText": "SKU-F08-1786624960107F08 compact product with long human name that must not stretch the catalog rowFBS4 штРезервы/наборы0 штСвободно для FBO6 шт"
+  },
+  "checks": [
+    {
+      "ok": true,
+      "name": "API health-check",
+      "detail": "200"
+    },
+    {
+      "ok": true,
+      "name": "FF registration and token",
+      "detail": "f08-browser-admin-1786624960107@example.com"
+    },
+    {
+      "ok": true,
+      "name": "Inbound receiving started",
+      "detail": "200"
+    },
+    {
+      "ok": true,
+      "name": "Physical stock seeded via inbound operations",
+      "detail": "SKU-F08-1786624960107: 10"
+    },
+    {
+      "ok": true,
+      "name": "No bulk enable button",
+      "detail": "bulk enable text absent"
+    },
+    {
+      "ok": true,
+      "name": "No bulk disable button",
+      "detail": "bulk disable text absent"
+    },
+    {
+      "ok": true,
+      "name": "No per-row Limit field",
+      "detail": "Лимит absent in product row"
+    },
+    {
+      "ok": true,
+      "name": "No FBS pool status is human",
+      "detail": "FBS-пул не выделен"
+    },
+    {
+      "ok": true,
+      "name": "No FBS pool toggle disabled",
+      "detail": "toggle disabled before FBS direction"
+    },
+    {
+      "ok": true,
+      "name": "FBS direction enables safe publication toggle",
+      "detail": "toggle enabled after FBS allocation"
+    },
+    {
+      "ok": true,
+      "name": "Excess stock error is human",
+      "detail": "Нельзя распределить больше, чем есть на ФФ. Уменьшите количество или освободите другое направление."
+    },
+    {
+      "ok": true,
+      "name": "Raw stock-direction error hidden",
+      "detail": "Нельзя распределить больше, чем есть на ФФ. Уменьшите количество или освободите другое направление."
+    },
+    {
+      "ok": true,
+      "name": "Delete cancel does not call DELETE",
+      "detail": "DELETE requests: 0"
+    },
+    {
+      "ok": true,
+      "name": "Delete requires confirmation",
+      "detail": "DELETE requests: 1"
+    },
+    {
+      "ok": true,
+      "name": "Seller product row compact at 1280px",
+      "detail": "rowHeight=91.515625"
+    },
+    {
+      "ok": true,
+      "name": "No document horizontal overflow / black strip",
+      "detail": "{\"viewportWidth\":1280,\"bodyScrollWidth\":1280,\"documentScrollWidth\":1280,\"tableScrollWidth\":990,\"tableContainerClientWidth\":990,\"tableContainerScrollWidth\":990,\"rowHeight\":91.515625,\"rowText\":\"F08 compact product with long human name that must not stretch the catalog rowSKU SKU-F08-1786624960107——10106FBS 4 штрезервы 0 штРаспределениеПубликуется в WBНет ТЗРедактировать\",\"fbsCellText\":\"Публикуется в WB\",\"limitControls\":0}"
+    },
+    {
+      "ok": true,
+      "name": "No body horizontal overflow",
+      "detail": "{\"viewportWidth\":1280,\"bodyScrollWidth\":1280,\"documentScrollWidth\":1280,\"tableScrollWidth\":990,\"tableContainerClientWidth\":990,\"tableContainerScrollWidth\":990,\"rowHeight\":91.515625,\"rowText\":\"F08 compact product with long human name that must not stretch the catalog rowSKU SKU-F08-1786624960107——10106FBS 4 штрезервы 0 штРаспределениеПубликуется в WBНет ТЗРедактировать\",\"fbsCellText\":\"Публикуется в WB\",\"limitControls\":0}"
+    },
+    {
+      "ok": true,
+      "name": "Seller table does not overflow container",
+      "detail": "{\"viewportWidth\":1280,\"bodyScrollWidth\":1280,\"documentScrollWidth\":1280,\"tableScrollWidth\":990,\"tableContainerClientWidth\":990,\"tableContainerScrollWidth\":990,\"rowHeight\":91.515625,\"rowText\":\"F08 compact product with long human name that must not stretch the catalog rowSKU SKU-F08-1786624960107——10106FBS 4 штрезервы 0 штРаспределениеПубликуется в WBНет ТЗРедактировать\",\"fbsCellText\":\"Публикуется в WB\",\"limitControls\":0}"
+    },
+    {
+      "ok": true,
+      "name": "Limit remains absent after CRUD",
+      "detail": "Публикуется в WB"
+    },
+    {
+      "ok": true,
+      "name": "No hidden seller-fbs-limit controls",
+      "detail": "count=0"
+    },
+    {
+      "ok": true,
+      "name": "No technical/raw texts on seller screen",
+      "detail": "raw technical strings absent"
+    },
+    {
+      "ok": true,
+      "name": "FF popover does not widen document",
+      "detail": "{\"viewportWidth\":1280,\"bodyScrollWidth\":1280,\"documentScrollWidth\":1280,\"popoverWidth\":320,\"popoverRight\":1208,\"popoverText\":\"SKU-F08-1786624960107F08 compact product with long human name that must not stretch the catalog rowFBS4 штРезервы/наборы0 штСвободно для FBO6 шт\"}"
+    },
+    {
+      "ok": true,
+      "name": "FF popover does not widen body",
+      "detail": "{\"viewportWidth\":1280,\"bodyScrollWidth\":1280,\"documentScrollWidth\":1280,\"popoverWidth\":320,\"popoverRight\":1208,\"popoverText\":\"SKU-F08-1786624960107F08 compact product with long human name that must not stretch the catalog rowFBS4 штРезервы/наборы0 штСвободно для FBO6 шт\"}"
+    },
+    {
+      "ok": true,
+      "name": "FF popover stays in viewport",
+      "detail": "{\"viewportWidth\":1280,\"bodyScrollWidth\":1280,\"documentScrollWidth\":1280,\"popoverWidth\":320,\"popoverRight\":1208,\"popoverText\":\"SKU-F08-1786624960107F08 compact product with long human name that must not stretch the catalog rowFBS4 штРезервы/наборы0 штСвободно для FBO6 шт\"}"
+    },
+    {
+      "ok": true,
+      "name": "FF popover content is business-readable",
+      "detail": "SKU-F08-1786624960107F08 compact product with long human name that must not stretch the catalog rowFBS4 штРезервы/наборы0 штСвободно для FBO6 шт"
+    },
+    {
+      "ok": true,
+      "name": "No overloaded/technical text in FF catalog view",
+      "detail": "forbidden strings absent"
+    }
+  ],
+  "commands": [
+    "DATABASE_URL='sqlite+aiosqlite:////Users/deniscivkunov/Projects/WMS/.worktrees/product-operations-ux-20260812/docs/reviews/product-operations-ux/2026-08-12/evidence/f08-browser-product-qa-final/f08-browser-qa.sqlite' WMS_AUTO_CREATE_SCHEMA=1 JWT_SECRET_KEY='qa-jwt-secret-key-minimum-32-characters-long' E2E_MOCK_WB_CARDS=1 E2E_MOCK_WB_SUPPLIES=1 E2E_MOCK_WB_WAREHOUSES=1 python3 -m uvicorn app.main:app --host 127.0.0.1 --port 18108",
+    "VITE_API_PROXY='http://127.0.0.1:18108' E2E_SELLER_PATH_PREFIX='/seller' VITE_SELLER_PORTAL_URL='http://127.0.0.1:15108/seller/' npm run dev -- --host 127.0.0.1 --port 15108",
+    "F08_WEB_ORIGIN='http://127.0.0.1:15108' F08_API_ORIGIN='http://127.0.0.1:18108' node docs/reviews/product-operations-ux/2026-08-12/evidence/f08-browser-product-qa-final/f08-browser-product-qa-final.mjs"
+  ],
+  "screenshots": [
+    "01-seller-catalog-initial-1280.png",
+    "02-seller-directions-panel-empty-fbs.png",
+    "03-seller-after-create-edit-directions.png",
+    "04-seller-human-error-excess-stock.png",
+    "05-seller-delete-confirmation.png",
+    "06-ff-catalog-distribution-popover.png",
+    "07-ff-catalog-distribution-popover-element.png"
+  ]
+}
