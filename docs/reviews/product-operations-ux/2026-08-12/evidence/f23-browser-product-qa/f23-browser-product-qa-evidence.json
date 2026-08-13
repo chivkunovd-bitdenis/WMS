@@ -1,0 +1,39 @@
+{
+  "verdict": "PASSED",
+  "webOrigin": "http://127.0.0.1:5179",
+  "apiOrigin": "http://127.0.0.1:18123",
+  "suffix": "1786628877238",
+  "productId": "2a8af69f-fd07-4cf2-8a6b-a7151d17dc31",
+  "screenshots": [
+    "screenshots/01-seller-products-1280-initial.png",
+    "screenshots/02-selected-only-confirm-dialog.png",
+    "screenshots/03-bulk-result-visible.png",
+    "screenshots/04-f08-direction-created.png",
+    "screenshots/05-f08-direction-deleted.png"
+  ],
+  "checks": {
+    "forbiddenTextAbsent": [],
+    "sellerProductsOpensWithoutCrash": true,
+    "no1280Overflow": true,
+    "noChipChaosOrRawStatuses": true,
+    "selectedOnlyBulkRequest": true,
+    "noFbsPoolSafe": true,
+    "f08DrawerCrud": true
+  },
+  "bulkPatchBody": {
+    "product_ids": [
+      "2a8af69f-fd07-4cf2-8a6b-a7151d17dc31"
+    ],
+    "fbs_stock_sync_enabled": true
+  },
+  "geometry1280": {
+    "viewportWidth": 1280,
+    "documentScrollWidth": 1280,
+    "bodyScrollWidth": 1280,
+    "rowHeight": 91.515625,
+    "fbsCellText": "Нет FBS",
+    "tableScrollWidth": 990,
+    "tableContainerClientWidth": 990,
+    "tableContainerScrollWidth": 990
+  }
+}
