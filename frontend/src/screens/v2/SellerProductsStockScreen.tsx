@@ -4,7 +4,6 @@ import {
   Box,
   Button,
   Checkbox,
-  Chip,
   FormControlLabel,
   CircularProgress,
   Divider,
@@ -13,6 +12,8 @@ import {
   DialogContent,
   DialogTitle,
   Drawer,
+  Menu,
+  MenuItem,
   Paper,
   Stack,
   Switch,
@@ -52,13 +53,6 @@ type WbCatalogRow = {
   fbs_sync_status: string | null
 }
 
-const FBS_SYNC_STATUS_LABEL: Record<string, { text: string; color: 'default' | 'success' | 'warning' | 'error' }> = {
-  pending: { text: 'В очереди', color: 'warning' },
-  confirmed: { text: 'В WB', color: 'success' },
-  error: { text: 'Ошибка', color: 'error' },
-  conflict: { text: 'Дубль chrtId', color: 'error' },
-}
-
 type StockSummaryRow = {
   product_id: string
   sku_code: string
@@ -82,11 +76,60 @@ type StockDirectionRow = {
   is_fbs: boolean
 }
 
+type DirectionDeleteTarget = {
+  productId: string
+  direction: StockDirectionRow
+}
+
 type DirectionDraft = {
   name: string
   comment: string
   quantity: string
   is_fbs: boolean
+}
+
+function emptyDirectionDraft(): DirectionDraft {
+  return {
+    name: '',
+    comment: '',
+    quantity: '',
+    is_fbs: false,
+  }
+}
+
+function directionQuantityFromDraft(raw: string): number | null {
+  const trimmed = raw.trim()
+  if (!trimmed) return null
+  const qty = Number(trimmed)
+  return Number.isInteger(qty) && qty >= 0 ? qty : null
+}
+
+function fbsPublicationState(row: WbCatalogRow & { stock_fbs: number }) {
+  if (row.stock_fbs <= 0) {
+    return { label: 'Нет FBS', color: 'text.secondary', canToggle: false }
+  }
+  if (row.fbs_sync_status === 'error' || row.fbs_sync_status === 'conflict') {
+    return { label: 'Ошибка WB', color: 'error.main', canToggle: true }
+  }
+  if (row.fbs_stock_sync_enabled && row.fbs_sync_status === 'confirmed') {
+    return {
+      label: `WB: ${row.fbs_published_amount ?? row.stock_fbs} шт`,
+      color: 'success.main',
+      canToggle: true,
+    }
+  }
+  if (row.fbs_stock_sync_enabled) {
+    return { label: 'Проверяем WB', color: 'warning.main', canToggle: true }
+  }
+  return { label: 'Пауза', color: 'text.secondary', canToggle: true }
+}
+
+type BulkPublicationAction = 'enable' | 'pause' | 'retry'
+
+const BULK_PUBLICATION_LABEL: Record<BulkPublicationAction, string> = {
+  enable: 'Включить',
+  pause: 'Поставить на паузу',
+  retry: 'Повторить отправку',
 }
 
 type Props = {
@@ -109,12 +152,17 @@ export function SellerProductsStockScreen({
   const [editRequiresHonestSign, setEditRequiresHonestSign] = useState(false)
   const [editBusy, setEditBusy] = useState(false)
   const [fbsPending, setFbsPending] = useState<Set<string>>(new Set())
-  const [limitDraft, setLimitDraft] = useState<Record<string, string>>({})
   const [fbsBulkBusy, setFbsBulkBusy] = useState(false)
+  const [selectedProductIds, setSelectedProductIds] = useState<Set<string>>(new Set())
+  const [bulkMenuAnchor, setBulkMenuAnchor] = useState<HTMLElement | null>(null)
+  const [bulkConfirmAction, setBulkConfirmAction] = useState<BulkPublicationAction | null>(null)
+  const [bulkResult, setBulkResult] = useState<string | null>(null)
   const [directionProductId, setDirectionProductId] = useState<string | null>(null)
   const [directions, setDirections] = useState<Record<string, StockDirectionRow[]>>({})
   const [directionDrafts, setDirectionDrafts] = useState<Record<string, DirectionDraft>>({})
   const [directionBusy, setDirectionBusy] = useState<Set<string>>(new Set())
+  const [editingDirectionId, setEditingDirectionId] = useState<string | null>(null)
+  const [deleteTarget, setDeleteTarget] = useState<DirectionDeleteTarget | null>(null)
 
   const refreshAll = useCallback(async () => {
     setError(null)
@@ -178,10 +226,30 @@ export function SellerProductsStockScreen({
     return rows.slice(start, start + rowsPerPage)
   }, [page, rows, rowsPerPage])
 
-  const fbsEnabledCount = useMemo(
-    () => rows.filter((row) => row.fbs_stock_sync_enabled).length,
+  const fbsPublishingCount = useMemo(
+    () => rows.filter((row) => row.stock_fbs > 0 && row.fbs_stock_sync_enabled).length,
     [rows],
   )
+  const selectedRows = useMemo(
+    () => rows.filter((row) => selectedProductIds.has(row.id)),
+    [rows, selectedProductIds],
+  )
+  const selectedCount = selectedRows.length
+  const visibleProductIds = useMemo(() => pagedRows.map((row) => row.id), [pagedRows])
+  const visibleSelectedCount = useMemo(
+    () => visibleProductIds.filter((id) => selectedProductIds.has(id)).length,
+    [selectedProductIds, visibleProductIds],
+  )
+  const allVisibleSelected = visibleProductIds.length > 0 && visibleSelectedCount === visibleProductIds.length
+  const someVisibleSelected = visibleSelectedCount > 0 && !allVisibleSelected
+
+  useEffect(() => {
+    const rowIds = new Set(rows.map((row) => row.id))
+    setSelectedProductIds((current) => {
+      const next = new Set([...current].filter((id) => rowIds.has(id)))
+      return next.size === current.size ? current : next
+    })
+  }, [rows])
 
   const markDirectionBusy = useCallback((productId: string, pending: boolean) => {
     setDirectionBusy((current) => {
@@ -194,22 +262,14 @@ export function SellerProductsStockScreen({
 
   const directionDraftFor = useCallback(
     (productId: string): DirectionDraft =>
-      directionDrafts[productId] ?? {
-        name: '',
-        comment: '',
-        quantity: '',
-        is_fbs: false,
-      },
+      directionDrafts[productId] ?? emptyDirectionDraft(),
     [directionDrafts],
   )
 
   const patchDirectionDraft = useCallback((productId: string, patch: Partial<DirectionDraft>) => {
     setDirectionDrafts((current) => {
       const prev = current[productId] ?? {
-        name: '',
-        comment: '',
-        quantity: '',
-        is_fbs: false,
+        ...emptyDirectionDraft(),
       }
       return { ...current, [productId]: { ...prev, ...patch } }
     })
@@ -244,6 +304,11 @@ export function SellerProductsStockScreen({
   const openDirections = useCallback(
     async (productId: string) => {
       setDirectionProductId(productId)
+      setEditingDirectionId(null)
+      setDirectionDrafts((current) => ({
+        ...current,
+        [productId]: emptyDirectionDraft(),
+      }))
       if (directions[productId] == null) {
         await loadDirections(productId)
       }
@@ -256,63 +321,129 @@ export function SellerProductsStockScreen({
     [directionProductId, rows],
   )
   const drawerDraft = directionProduct ? directionDraftFor(directionProduct.id) : null
+  const deleteBusy = deleteTarget ? directionBusy.has(deleteTarget.productId) : false
 
-  const createDirection = useCallback(
+  const closeDirections = useCallback(() => {
+    setDirectionProductId(null)
+    setEditingDirectionId(null)
+    setDeleteTarget(null)
+  }, [])
+
+  const startDirectionEdit = useCallback((productId: string, direction: StockDirectionRow) => {
+    setError(null)
+    setEditingDirectionId(direction.id)
+    setDirectionDrafts((current) => ({
+      ...current,
+      [productId]: {
+        name: direction.name,
+        comment: direction.comment ?? '',
+        quantity: String(direction.quantity),
+        is_fbs: direction.is_fbs,
+      },
+    }))
+  }, [])
+
+  const cancelDirectionEdit = useCallback((productId: string) => {
+    setEditingDirectionId(null)
+    setDirectionDrafts((current) => ({
+      ...current,
+      [productId]: emptyDirectionDraft(),
+    }))
+  }, [])
+
+  const submitDirection = useCallback(
     async (productId: string) => {
       const draft = directionDraftFor(productId)
-      const qty = Number(draft.quantity)
+      const qty = directionQuantityFromDraft(draft.quantity)
       if (!draft.name.trim()) {
         setError('Название направления обязательно.')
         return
       }
-      if (!Number.isInteger(qty) || qty < 0) {
+      if (qty == null) {
         setError('Количество направления должно быть целым числом от нуля.')
         return
       }
+      const isEditing = editingDirectionId != null
       markDirectionBusy(productId, true)
       setError(null)
       try {
-        const res = await fetch(apiUrl(`/products/${productId}/stock-directions`), {
-          method: 'POST',
-          headers: { ...authHeaders(token), 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            name: draft.name.trim(),
-            comment: draft.comment.trim() || null,
-            quantity: qty,
-            is_fbs: draft.is_fbs,
-          }),
-        })
+        const res = await fetch(
+          apiUrl(
+            isEditing
+              ? `/products/stock-directions/${editingDirectionId}`
+              : `/products/${productId}/stock-directions`,
+          ),
+          {
+            method: isEditing ? 'PATCH' : 'POST',
+            headers: { ...authHeaders(token), 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              name: draft.name.trim(),
+              comment: draft.comment.trim() || null,
+              quantity: qty,
+              is_fbs: draft.is_fbs,
+            }),
+          },
+        )
         if (!res.ok) {
           setError(await readApiErrorMessage(res))
           return
         }
         setDirectionDrafts((current) => ({
           ...current,
-          [productId]: { name: '', comment: '', quantity: '', is_fbs: false },
+          [productId]: emptyDirectionDraft(),
         }))
+        setEditingDirectionId(null)
         await loadDirections(productId)
         await refreshAll()
       } catch (e) {
-        setError(e instanceof Error ? e.message : 'Не удалось создать направление.')
+        setError(
+          e instanceof Error
+            ? e.message
+            : isEditing
+              ? 'Не удалось сохранить направление.'
+              : 'Не удалось создать направление.',
+        )
       } finally {
         markDirectionBusy(productId, false)
       }
     },
-    [authHeaders, directionDraftFor, loadDirections, markDirectionBusy, refreshAll, token],
+    [
+      authHeaders,
+      directionDraftFor,
+      editingDirectionId,
+      loadDirections,
+      markDirectionBusy,
+      refreshAll,
+      token,
+    ],
   )
 
-  const deleteDirection = useCallback(
-    async (productId: string, directionId: string) => {
+  const requestDeleteDirection = useCallback((productId: string, direction: StockDirectionRow) => {
+    setDeleteTarget({ productId, direction })
+  }, [])
+
+  const confirmDeleteDirection = useCallback(
+    async () => {
+      if (!deleteTarget) return
+      const { productId, direction } = deleteTarget
       markDirectionBusy(productId, true)
       setError(null)
       try {
-        const res = await fetch(apiUrl(`/products/stock-directions/${directionId}`), {
+        const res = await fetch(apiUrl(`/products/stock-directions/${direction.id}`), {
           method: 'DELETE',
           headers: { ...authHeaders(token) },
         })
         if (!res.ok) {
           setError(await readApiErrorMessage(res))
           return
+        }
+        setDeleteTarget(null)
+        if (editingDirectionId === direction.id) {
+          setEditingDirectionId(null)
+          setDirectionDrafts((current) => ({
+            ...current,
+            [productId]: emptyDirectionDraft(),
+          }))
         }
         await loadDirections(productId)
         await refreshAll()
@@ -322,7 +453,15 @@ export function SellerProductsStockScreen({
         markDirectionBusy(productId, false)
       }
     },
-    [authHeaders, loadDirections, markDirectionBusy, refreshAll, token],
+    [
+      authHeaders,
+      deleteTarget,
+      editingDirectionId,
+      loadDirections,
+      markDirectionBusy,
+      refreshAll,
+      token,
+    ],
   )
 
   function openPackagingEdit(p: WbCatalogRow) {
@@ -389,6 +528,29 @@ export function SellerProductsStockScreen({
     )
   }, [])
 
+  const toggleSelectedProduct = useCallback((productId: string, checked: boolean) => {
+    setSelectedProductIds((current) => {
+      const next = new Set(current)
+      if (checked) next.add(productId)
+      else next.delete(productId)
+      return next
+    })
+  }, [])
+
+  const toggleVisibleProducts = useCallback(
+    (checked: boolean) => {
+      setSelectedProductIds((current) => {
+        const next = new Set(current)
+        for (const productId of visibleProductIds) {
+          if (checked) next.add(productId)
+          else next.delete(productId)
+        }
+        return next
+      })
+    },
+    [visibleProductIds],
+  )
+
   const sendFbsPatch = useCallback(
     async (productId: string, body: Record<string, unknown>) => {
       const res = await fetch(apiUrl(`/products/${productId}/fbs-stock-sync`), {
@@ -425,62 +587,64 @@ export function SellerProductsStockScreen({
     [markFbsPending, patchRow, sendFbsPatch],
   )
 
-  const commitLimit = useCallback(
-    async (row: WbCatalogRow) => {
-      const raw = (limitDraft[row.id] ?? '').trim()
-      const parsed = raw === '' ? null : Number(raw)
-      if (parsed !== null && (!Number.isInteger(parsed) || parsed < 0)) {
-        setError('Лимит должен быть целым числом от нуля или пустым.')
-        return
-      }
-      setLimitDraft((current) => {
-        const next = { ...current }
-        delete next[row.id]
-        return next
-      })
-      if (parsed === row.fbs_stock_limit) {
-        return
-      }
-      const previous = row.fbs_stock_limit
-      setError(null)
-      patchRow(row.id, { fbs_stock_limit: parsed })
-      markFbsPending(row.id, true)
-      try {
-        await sendFbsPatch(row.id, { fbs_stock_limit: parsed })
-      } catch (e) {
-        patchRow(row.id, { fbs_stock_limit: previous })
-        setError(e instanceof Error ? e.message : 'Не удалось сохранить лимит.')
-      } finally {
-        markFbsPending(row.id, false)
-      }
-    },
-    [limitDraft, markFbsPending, patchRow, sendFbsPatch],
-  )
+  const closeBulkConfirm = useCallback(() => {
+    if (!fbsBulkBusy) setBulkConfirmAction(null)
+  }, [fbsBulkBusy])
 
-  const bulkFbsSync = useCallback(
-    async (enabled: boolean) => {
+  const requestBulkPublication = useCallback((action: BulkPublicationAction) => {
+    setBulkMenuAnchor(null)
+    setBulkResult(null)
+    setBulkConfirmAction(action)
+  }, [])
+
+  const configureSelectedFbsPool = useCallback(() => {
+    setBulkMenuAnchor(null)
+    const firstSelected = selectedRows[0]
+    if (firstSelected) {
+      void openDirections(firstSelected.id)
+    }
+  }, [openDirections, selectedRows])
+
+  const confirmBulkFbsSync = useCallback(
+    async () => {
+      if (!bulkConfirmAction || selectedRows.length === 0) return
+      const productIds = selectedRows.map((row) => row.id)
+      const enabled = bulkConfirmAction !== 'pause'
       setError(null)
+      setBulkResult(null)
       setFbsBulkBusy(true)
       try {
         const res = await fetch(apiUrl('/products/fbs-stock-sync/bulk'), {
           method: 'PATCH',
           headers: { ...authHeaders(token), 'Content-Type': 'application/json' },
-          body: JSON.stringify({ product_ids: null, fbs_stock_sync_enabled: enabled }),
+          body: JSON.stringify({ product_ids: productIds, fbs_stock_sync_enabled: enabled }),
         })
         if (!res.ok) {
           setError(await readApiErrorMessage(res))
           return
         }
+        const body = (await res.json()) as { updated_count?: number }
+        const updatedCount = body.updated_count ?? productIds.length
+        const skippedCount = Math.max(0, productIds.length - updatedCount)
+        setBulkResult(
+          skippedCount > 0
+            ? `Обновлено ${updatedCount}, пропущено ${skippedCount}. Будут изменены только выбранные товары.`
+            : `Обновлено ${updatedCount}. Будут изменены только выбранные товары.`,
+        )
+        setBulkConfirmAction(null)
+        setSelectedProductIds(new Set())
         await refreshAll()
       } catch (e) {
         setError(
-          e instanceof Error ? e.message : 'Не удалось переключить синхронизацию по всем товарам.',
+          e instanceof Error
+            ? e.message
+            : 'Не удалось изменить публикацию по выбранным товарам.',
         )
       } finally {
         setFbsBulkBusy(false)
       }
     },
-    [authHeaders, refreshAll, token],
+    [authHeaders, bulkConfirmAction, refreshAll, selectedRows, token],
   )
 
   async function onSyncProducts() {
@@ -504,7 +668,15 @@ export function SellerProductsStockScreen({
   }
 
   return (
-    <Box>
+    <Box
+      sx={{
+        minWidth: 0,
+        width: '100%',
+        maxWidth: '100%',
+        boxSizing: 'border-box',
+        overflow: 'hidden',
+      }}
+    >
       <Typography variant="h5" gutterBottom>
         Товары
       </Typography>
@@ -516,6 +688,11 @@ export function SellerProductsStockScreen({
       {error ? (
         <Alert severity="error" sx={{ mb: 2 }} data-testid="seller-products-error">
           {error}
+        </Alert>
+      ) : null}
+      {bulkResult ? (
+        <Alert severity="success" sx={{ mb: 2 }} data-testid="seller-fbs-bulk-result">
+          {bulkResult}
         </Alert>
       ) : null}
 
@@ -534,75 +711,214 @@ export function SellerProductsStockScreen({
       </Paper>
 
       <Paper variant="outlined" sx={{ p: 2, mb: 2 }} data-testid="seller-fbs-sync-panel">
-        <Typography variant="subtitle1" sx={{ fontWeight: 600 }}>
-          Продажа по ФБС
-        </Typography>
-        <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5, maxWidth: 720 }}>
-          WB получает только FBS-пул, который выделен в распределении товара галкой FBS. Если
-          FBS-пул равен нулю, в WB уходит ноль, даже когда общий остаток на фулфилменте больше.
-          Остальные направления остаются резервами или свободным FBO-остатком.
-        </Typography>
         <Stack
           direction="row"
           spacing={1.5}
-          sx={{ mt: 1.5, flexWrap: 'wrap', alignItems: 'center' }}
+          sx={{ flexWrap: 'wrap', alignItems: 'center', justifyContent: 'space-between', gap: 1 }}
         >
-          <Chip
-            size="small"
-            variant="outlined"
-            color={fbsEnabledCount > 0 ? 'success' : 'default'}
-            label={`Включено товаров: ${fbsEnabledCount} из ${rows.length}`}
-            data-testid="seller-fbs-enabled-count"
-          />
-          <Button
-            size="small"
-            variant="outlined"
-            disabled={fbsBulkBusy || busy || rows.length === 0}
-            onClick={() => void bulkFbsSync(true)}
-            data-testid="seller-fbs-enable-all"
-          >
-            Включить всем
-          </Button>
-          <Button
-            size="small"
-            variant="outlined"
-            color="warning"
-            disabled={fbsBulkBusy || busy || fbsEnabledCount === 0}
-            onClick={() => void bulkFbsSync(false)}
-            data-testid="seller-fbs-disable-all"
-          >
-            Выключить всем
-          </Button>
-          {fbsBulkBusy ? <CircularProgress size={18} /> : null}
+          <Stack spacing={0.25} sx={{ minWidth: 0 }}>
+            <Typography variant="subtitle1" sx={{ fontWeight: 600 }}>
+              Публикация FBS в WB
+            </Typography>
+            <Typography
+              variant="caption"
+              color="text.secondary"
+              data-testid="seller-fbs-enabled-count"
+            >
+              Публикуется: {fbsPublishingCount} из {rows.length}
+              {selectedCount > 0 ? ` · выбрано ${selectedCount}` : ''}
+            </Typography>
+          </Stack>
+          <Stack direction="row" spacing={1} sx={{ alignItems: 'center', flexWrap: 'wrap' }}>
+            {selectedCount > 0 ? (
+              <>
+                <Button
+                  size="small"
+                  variant="contained"
+                  disabled={fbsBulkBusy || busy}
+                  onClick={(event) => setBulkMenuAnchor(event.currentTarget)}
+                  data-testid="seller-fbs-bulk-action"
+                >
+                  Изменить публикацию
+                </Button>
+                <Button
+                  size="small"
+                  disabled={fbsBulkBusy}
+                  onClick={() => setSelectedProductIds(new Set())}
+                  data-testid="seller-products-clear-selection"
+                >
+                  Сбросить
+                </Button>
+              </>
+            ) : null}
+            {fbsBulkBusy ? <CircularProgress size={18} /> : null}
+          </Stack>
         </Stack>
       </Paper>
+      <Menu
+        anchorEl={bulkMenuAnchor}
+        open={bulkMenuAnchor != null}
+        onClose={() => setBulkMenuAnchor(null)}
+      >
+        <MenuItem
+          onClick={() => requestBulkPublication('enable')}
+          data-testid="seller-fbs-bulk-enable"
+        >
+          Включить
+        </MenuItem>
+        <MenuItem
+          onClick={() => requestBulkPublication('pause')}
+          data-testid="seller-fbs-bulk-pause"
+        >
+          Поставить на паузу
+        </MenuItem>
+        <MenuItem
+          onClick={() => requestBulkPublication('retry')}
+          data-testid="seller-fbs-bulk-retry"
+        >
+          Повторить отправку
+        </MenuItem>
+        <MenuItem onClick={configureSelectedFbsPool} data-testid="seller-fbs-bulk-configure">
+          Настроить FBS-пул
+        </MenuItem>
+      </Menu>
+      <Dialog
+        open={bulkConfirmAction != null}
+        onClose={closeBulkConfirm}
+        fullWidth
+        maxWidth="sm"
+        data-testid="seller-fbs-bulk-confirm-dialog"
+      >
+        <DialogTitle>
+          {bulkConfirmAction
+            ? `${BULK_PUBLICATION_LABEL[bulkConfirmAction]} публикацию FBS для ${selectedCount} товаров?`
+            : 'Изменить публикацию FBS?'}
+        </DialogTitle>
+        <DialogContent>
+          <Stack spacing={1.25}>
+            <Typography variant="body2" color="text.secondary">
+              Будут изменены только выбранные товары.
+            </Typography>
+            <Stack spacing={0.5} data-testid="seller-fbs-bulk-selected-list">
+              {selectedRows.slice(0, 5).map((row) => (
+                <Typography key={row.id} variant="body2" noWrap>
+                  {row.sku_code} · {row.name}
+                </Typography>
+              ))}
+              {selectedRows.length > 5 ? (
+                <Typography variant="caption" color="text.secondary">
+                  Ещё {selectedRows.length - 5}
+                </Typography>
+              ) : null}
+            </Stack>
+          </Stack>
+        </DialogContent>
+        <DialogActions>
+          <Button disabled={fbsBulkBusy} onClick={closeBulkConfirm}>
+            Отмена
+          </Button>
+          <Button
+            variant="contained"
+            disabled={fbsBulkBusy || selectedCount === 0}
+            onClick={() => void confirmBulkFbsSync()}
+            data-testid="seller-fbs-bulk-confirm-submit"
+          >
+            Подтвердить
+          </Button>
+        </DialogActions>
+      </Dialog>
 
-      <TableContainer component={Paper} variant="outlined" data-testid="seller-products-list">
-        <Table stickyHeader size="small" data-testid="seller-products-table">
+      <TableContainer
+        component={Paper}
+        variant="outlined"
+        sx={{ width: '100%', maxWidth: '100%', minWidth: 0, overflowX: 'hidden' }}
+        data-testid="seller-products-list"
+      >
+        <Table
+          stickyHeader
+          size="small"
+          data-testid="seller-products-table"
+          sx={{
+            width: '100%',
+            tableLayout: 'fixed',
+            '& .MuiTableCell-root': {
+              px: 1,
+              py: 0.5,
+              overflow: 'hidden',
+              verticalAlign: 'middle',
+            },
+            '& .MuiTableCell-head': {
+              fontWeight: 600,
+              lineHeight: 1.2,
+              whiteSpace: 'normal',
+            },
+          }}
+        >
+          <colgroup>
+            <col style={{ width: '4%' }} />
+            <col style={{ width: '28%' }} />
+            <col style={{ width: '13%' }} />
+            <col style={{ width: '14%' }} />
+            <col style={{ width: '12%' }} />
+            <col style={{ width: '15%' }} />
+            <col style={{ width: '8%' }} />
+            <col style={{ width: '6%' }} />
+          </colgroup>
           <TableHead>
             <TableRow>
+              <TableCell padding="checkbox">
+                <Checkbox
+                  size="small"
+                  checked={allVisibleSelected}
+                  indeterminate={someVisibleSelected}
+                  disabled={visibleProductIds.length === 0}
+                  onChange={(event) => toggleVisibleProducts(event.target.checked)}
+                  data-testid="seller-products-select-visible"
+                />
+              </TableCell>
               <TableCell>Товар</TableCell>
-              <TableCell>Артикул WB</TableCell>
-              <TableCell>ШК</TableCell>
-              <TableCell align="right">На ФФ</TableCell>
-              <TableCell align="right">В ячейках</TableCell>
-              <TableCell align="right">Свободный FBO</TableCell>
-              <TableCell sx={{ minWidth: 170 }}>Распределение</TableCell>
-              <TableCell sx={{ minWidth: 210 }}>Продажа по ФБС</TableCell>
-              <TableCell>ТЗ упаковки</TableCell>
+              <TableCell>WB / ШК</TableCell>
+              <TableCell align="right">Остаток</TableCell>
+              <TableCell>FBS-пул</TableCell>
+              <TableCell>Публикация WB</TableCell>
+              <TableCell>ТЗ / ЧЗ</TableCell>
+              <TableCell>Действия</TableCell>
             </TableRow>
           </TableHead>
           <TableBody>
             {pagedRows.map((p) => (
-              <TableRow hover data-testid="seller-product-row" key={p.id}>
+              <TableRow
+                hover
+                selected={selectedProductIds.has(p.id)}
+                data-testid="seller-product-row"
+                key={p.id}
+                sx={{ height: 64 }}
+              >
+                <TableCell padding="checkbox">
+                  <Checkbox
+                    size="small"
+                    checked={selectedProductIds.has(p.id)}
+                    onChange={(event) => toggleSelectedProduct(p.id, event.target.checked)}
+                    data-testid={`seller-product-select-${p.id}`}
+                  />
+                </TableCell>
                 <TableCell>
-                  <Stack direction="row" spacing={1.25} sx={{ alignItems: 'center', minWidth: 260 }}>
+                  <Stack direction="row" spacing={1.25} sx={{ alignItems: 'center', minWidth: 0 }}>
                     <ProductPhotoThumb src={p.wb_primary_image_url} />
-                    <Box sx={{ minWidth: 0 }}>
-                      <Typography variant="body2" sx={{ fontWeight: 600 }}>
+                    <Box sx={{ minWidth: 0, flex: 1 }}>
+                      <Typography
+                        variant="body2"
+                        sx={{ fontWeight: 600, maxWidth: '100%' }}
+                        noWrap
+                      >
                         {p.name}
                       </Typography>
-                      <Typography variant="caption" color="text.secondary" sx={{ display: 'block' }}>
+                      <Typography
+                        variant="caption"
+                        color="text.secondary"
+                        sx={{ display: 'block', maxWidth: '100%' }}
+                        noWrap
+                      >
                         SKU {p.sku_code}
                         {p.wb_vendor_code ? ` · ${p.wb_vendor_code}` : ''}
                         {p.wb_size ? ` · ${p.wb_size}` : ''}
@@ -610,118 +926,133 @@ export function SellerProductsStockScreen({
                     </Box>
                   </Stack>
                 </TableCell>
-                <TableCell>{p.wb_nm_id ?? '—'}</TableCell>
-                <TableCell>{p.wb_primary_barcode ?? (p.wb_barcodes[0] ?? '—')}</TableCell>
-                <TableCell align="right" data-testid="seller-stock-on-hand">
-                  {p.stock_on_hand}
+                <TableCell>
+                  <Stack spacing={0.25} sx={{ minWidth: 0 }}>
+                    <Typography variant="body2" noWrap>
+                      {p.wb_nm_id ?? '—'}
+                    </Typography>
+                    <Typography variant="caption" color="text.secondary" noWrap>
+                      {p.wb_primary_barcode ?? (p.wb_barcodes[0] ?? '—')}
+                    </Typography>
+                  </Stack>
                 </TableCell>
-                <TableCell align="right" data-testid="seller-stock-in-storage">
-                  {p.stock_in_storage}
+                <TableCell align="right">
+                  <Stack spacing={0.25} sx={{ minWidth: 0 }}>
+                    <Typography variant="body2" data-testid="seller-stock-in-storage" noWrap>
+                      {p.stock_in_storage}
+                    </Typography>
+                    <Typography
+                      variant="caption"
+                      color="text.secondary"
+                      data-testid="seller-stock-on-hand"
+                      noWrap
+                    >
+                      {p.stock_on_hand}
+                    </Typography>
+                    <Typography
+                      variant="caption"
+                      color="text.secondary"
+                      data-testid="seller-stock-free-fbo"
+                      noWrap
+                    >
+                      {p.stock_free_fbo}
+                    </Typography>
+                  </Stack>
                 </TableCell>
-                <TableCell align="right" data-testid="seller-stock-free-fbo">
-                  {p.stock_free_fbo}
-                </TableCell>
-                <TableCell data-testid={`seller-stock-distribution-${p.id}`}>
-                  <Stack spacing={0.5}>
-                    <Typography variant="body2" sx={{ whiteSpace: 'nowrap' }}>
-                      FBS {p.stock_fbs} шт · резервы {p.stock_reserved_directions} шт
+                <TableCell
+                  data-testid={`seller-stock-distribution-${p.id}`}
+                  sx={{ minWidth: 0 }}
+                >
+                  <Stack spacing={0.25} sx={{ minWidth: 0 }}>
+                    <Typography variant="body2" noWrap>
+                      FBS {p.stock_fbs} шт
+                    </Typography>
+                    <Typography variant="caption" color="text.secondary" noWrap>
+                      резервы {p.stock_reserved_directions} шт
                     </Typography>
                     <Button
                       size="small"
                       variant="outlined"
-                      sx={{ alignSelf: 'flex-start' }}
+                      sx={{ alignSelf: 'flex-start', width: 44, minWidth: 44, px: 0 }}
                       onClick={() => void openDirections(p.id)}
                       data-testid={`seller-stock-directions-toggle-${p.id}`}
                     >
-                      Распределение
+                      FBS
                     </Button>
                   </Stack>
                 </TableCell>
-                <TableCell data-testid={`seller-fbs-cell-${p.id}`}>
-                  <Stack spacing={0.75}>
-                    <FormControlLabel
-                      sx={{ m: 0 }}
-                      control={
-                        <Switch
-                          size="small"
-                          checked={p.fbs_stock_sync_enabled}
-                          disabled={fbsPending.has(p.id) || fbsBulkBusy}
-                          onChange={(_, checked) => void toggleFbsSync(p, checked)}
-                          slotProps={{
-                            input: { 'data-testid': `seller-fbs-toggle-${p.id}` } as Record<
-                              string,
-                              string
-                            >,
-                          }}
-                        />
-                      }
-                      label={
-                        <Typography variant="caption" color="text.secondary">
-                          {p.fbs_stock_sync_enabled ? 'Синхронизируем' : 'Выключено'}
-                        </Typography>
-                      }
-                    />
-                    {p.fbs_stock_sync_enabled ? (
-                      <>
-                        {p.stock_fbs === 0 ? (
-                          <Alert severity="info" variant="outlined" sx={{ py: 0 }}>
-                            FBS-пул 0: в WB уйдёт 0 шт.
-                          </Alert>
-                        ) : null}
-                        <TextField
-                          size="small"
-                          label="Лимит"
-                          placeholder="без лимита"
-                          value={limitDraft[p.id] ?? (p.fbs_stock_limit ?? '')}
-                          disabled={fbsPending.has(p.id) || fbsBulkBusy}
-                          onChange={(e) =>
-                            setLimitDraft((current) => ({ ...current, [p.id]: e.target.value }))
-                          }
-                          onBlur={() => void commitLimit(p)}
-                          onKeyDown={(e) => {
-                            if (e.key === 'Enter') (e.target as HTMLInputElement).blur()
-                          }}
-                          slotProps={{
-                            htmlInput: {
-                              inputMode: 'numeric',
-                              'data-testid': `seller-fbs-limit-${p.id}`,
-                            },
-                          }}
-                          sx={{ maxWidth: 130 }}
-                        />
-                        <Stack direction="row" spacing={0.75} sx={{ alignItems: 'center' }}>
-                          <Chip
+                <TableCell data-testid={`seller-fbs-cell-${p.id}`} sx={{ minWidth: 0 }}>
+                  {(() => {
+                    const publication = fbsPublicationState(p)
+                    return (
+                      <FormControlLabel
+                        sx={{
+                          m: 0,
+                          maxWidth: '100%',
+                          minWidth: 0,
+                          alignItems: 'center',
+                          '& .MuiFormControlLabel-label': { minWidth: 0 },
+                        }}
+                        control={
+                          <Switch
                             size="small"
-                            variant="outlined"
-                            color={FBS_SYNC_STATUS_LABEL[p.fbs_sync_status ?? '']?.color ?? 'default'}
-                            label={
-                              FBS_SYNC_STATUS_LABEL[p.fbs_sync_status ?? '']?.text ?? 'Ещё не уходил'
+                            checked={publication.canToggle && p.fbs_stock_sync_enabled}
+                            disabled={
+                              fbsPending.has(p.id) || fbsBulkBusy || !publication.canToggle
                             }
-                            data-testid={`seller-fbs-status-${p.id}`}
+                            onChange={(_, checked) => void toggleFbsSync(p, checked)}
+                            slotProps={{
+                              input: { 'data-testid': `seller-fbs-toggle-${p.id}` } as Record<
+                                string,
+                                string
+                              >,
+                            }}
                           />
-                          <Typography variant="caption" color="text.secondary">
-                            {p.fbs_published_amount != null ? `${p.fbs_published_amount} шт` : '—'}
+                        }
+                        label={
+                          <Typography
+                            variant="caption"
+                            color={publication.color}
+                            data-testid={`seller-fbs-status-${p.id}`}
+                            sx={{
+                              display: '-webkit-box',
+                              WebkitLineClamp: 2,
+                              WebkitBoxOrient: 'vertical',
+                              overflow: 'hidden',
+                              maxWidth: '100%',
+                            }}
+                          >
+                            {publication.label}
                           </Typography>
-                        </Stack>
-                      </>
-                    ) : null}
+                        }
+                      />
+                    )
+                  })()}
+                </TableCell>
+                <TableCell sx={{ minWidth: 0 }}>
+                  <Stack spacing={0.25} sx={{ alignItems: 'flex-start', minWidth: 0 }}>
+                    <Typography
+                      variant="caption"
+                      color={p.has_packaging_instructions ? 'text.primary' : 'text.secondary'}
+                      data-testid={`seller-packaging-status-${p.id}`}
+                      noWrap
+                    >
+                      {p.has_packaging_instructions ? 'ТЗ есть' : 'Без ТЗ'}
+                    </Typography>
+                    <Typography variant="caption" color="text.secondary" noWrap>
+                      {p.requires_honest_sign ? 'ЧЗ нужен' : 'ЧЗ нет'}
+                    </Typography>
                   </Stack>
                 </TableCell>
-                <TableCell>
-                  <Stack direction="row" spacing={1} sx={{ alignItems: 'center' }}>
-                    <Chip
-                      size="small"
-                      label={p.has_packaging_instructions ? 'Заполнено' : 'Нет ТЗ'}
-                      color={p.has_packaging_instructions ? 'success' : 'warning'}
-                      variant="outlined"
-                      data-testid={`seller-packaging-status-${p.id}`}
-                    />
+                <TableCell sx={{ minWidth: 0 }}>
+                  <Stack spacing={0.5} sx={{ alignItems: 'flex-start', minWidth: 0 }}>
                     <Button
                       size="small"
                       onClick={() => openPackagingEdit(p)}
                       data-testid={`seller-packaging-edit-${p.id}`}
+                      sx={{ width: 36, minWidth: 36, px: 0 }}
                     >
-                      Редактировать
+                      ТЗ
                     </Button>
                   </Stack>
                 </TableCell>
@@ -729,7 +1060,7 @@ export function SellerProductsStockScreen({
             ))}
             {rows.length === 0 ? (
               <TableRow>
-                <TableCell colSpan={9}>
+                <TableCell colSpan={8}>
                   <Typography variant="body2" color="text.secondary">
                     Пока нет товаров.
                   </Typography>
@@ -758,9 +1089,9 @@ export function SellerProductsStockScreen({
       <Drawer
         anchor="right"
         open={directionProduct != null}
-        onClose={() => setDirectionProductId(null)}
+        onClose={closeDirections}
         slotProps={{
-          paper: { sx: { width: { xs: '100%', sm: 480 }, maxWidth: '100%' } },
+          paper: { sx: { width: { xs: '100%', sm: 500 }, maxWidth: '100%' } },
         }}
         data-testid={
           directionProduct ? `seller-stock-directions-panel-${directionProduct.id}` : undefined
@@ -771,7 +1102,16 @@ export function SellerProductsStockScreen({
             <Stack spacing={2}>
               <Box>
                 <Typography variant="h6">Распределение остатка</Typography>
-                <Typography variant="body2" color="text.secondary">
+                <Typography
+                  variant="body2"
+                  color="text.secondary"
+                  sx={{
+                    display: '-webkit-box',
+                    WebkitLineClamp: 2,
+                    WebkitBoxOrient: 'vertical',
+                    overflow: 'hidden',
+                  }}
+                >
                   {directionProduct.sku_code} · {directionProduct.name}
                 </Typography>
               </Box>
@@ -799,7 +1139,7 @@ export function SellerProductsStockScreen({
               </Stack>
               {directionProduct.stock_fbs === 0 ? (
                 <Alert severity="info" variant="outlined">
-                  FBS-пул не выделен. При включённой синхронизации WB получит 0 шт.
+                  FBS-пул не выделен. Сначала добавьте направление с галкой FBS.
                 </Alert>
               ) : null}
               <Divider />
@@ -819,33 +1159,64 @@ export function SellerProductsStockScreen({
                   >
                     <Stack direction="row" spacing={1} sx={{ alignItems: 'flex-start' }}>
                       <Box sx={{ minWidth: 0, flex: 1 }}>
-                        <Typography variant="body2" sx={{ fontWeight: 600 }}>
+                        <Typography
+                          variant="body2"
+                          sx={{
+                            fontWeight: 600,
+                            display: '-webkit-box',
+                            WebkitLineClamp: 2,
+                            WebkitBoxOrient: 'vertical',
+                            overflow: 'hidden',
+                          }}
+                        >
                           {direction.name}
                         </Typography>
                         <Typography variant="caption" color="text.secondary">
                           {direction.is_fbs ? 'FBS-пул' : 'Резерв/набор'} · {direction.quantity} шт
                         </Typography>
                         {direction.comment ? (
-                          <Typography variant="caption" color="text.secondary" sx={{ display: 'block' }}>
+                          <Typography
+                            variant="caption"
+                            color="text.secondary"
+                            sx={{
+                              display: '-webkit-box',
+                              WebkitLineClamp: 2,
+                              WebkitBoxOrient: 'vertical',
+                              overflow: 'hidden',
+                            }}
+                          >
                             {direction.comment}
                           </Typography>
                         ) : null}
                       </Box>
-                      <Button
-                        size="small"
-                        color="warning"
-                        disabled={directionBusy.has(directionProduct.id)}
-                        onClick={() => void deleteDirection(directionProduct.id, direction.id)}
-                        data-testid={`seller-stock-direction-delete-${direction.id}`}
-                      >
-                        Удалить
-                      </Button>
+                      <Stack direction="row" spacing={0.5} sx={{ flexShrink: 0 }}>
+                        <Button
+                          size="small"
+                          disabled={directionBusy.has(directionProduct.id)}
+                          onClick={() => startDirectionEdit(directionProduct.id, direction)}
+                          data-testid={`seller-stock-direction-edit-${direction.id}`}
+                        >
+                          Редактировать
+                        </Button>
+                        <Button
+                          size="small"
+                          color="warning"
+                          disabled={directionBusy.has(directionProduct.id)}
+                          onClick={() => requestDeleteDirection(directionProduct.id, direction)}
+                          data-testid={`seller-stock-direction-delete-${direction.id}`}
+                        >
+                          Удалить
+                        </Button>
+                      </Stack>
                     </Stack>
                   </Paper>
                 ))}
               </Stack>
               <Divider />
               <Stack spacing={1.25}>
+                <Typography variant="subtitle2" sx={{ fontWeight: 600 }}>
+                  {editingDirectionId ? 'Редактировать направление' : 'Новое направление'}
+                </Typography>
                 <TextField
                   size="small"
                   label="Название"
@@ -872,6 +1243,9 @@ export function SellerProductsStockScreen({
                 <TextField
                   size="small"
                   label="Комментарий"
+                  multiline
+                  minRows={2}
+                  maxRows={3}
                   value={drawerDraft.comment}
                   onChange={(e) =>
                     patchDirectionDraft(directionProduct.id, { comment: e.target.value })
@@ -899,12 +1273,21 @@ export function SellerProductsStockScreen({
                   <Button
                     variant="contained"
                     disabled={directionBusy.has(directionProduct.id)}
-                    onClick={() => void createDirection(directionProduct.id)}
+                    onClick={() => void submitDirection(directionProduct.id)}
                     data-testid={`seller-stock-direction-submit-${directionProduct.id}`}
                   >
-                    Добавить
+                    {editingDirectionId ? 'Сохранить' : 'Добавить'}
                   </Button>
-                  <Button onClick={() => setDirectionProductId(null)}>Закрыть</Button>
+                  {editingDirectionId ? (
+                    <Button
+                      disabled={directionBusy.has(directionProduct.id)}
+                      onClick={() => cancelDirectionEdit(directionProduct.id)}
+                      data-testid={`seller-stock-direction-cancel-edit-${directionProduct.id}`}
+                    >
+                      Отмена
+                    </Button>
+                  ) : null}
+                  <Button onClick={closeDirections}>Закрыть</Button>
                   {directionBusy.has(directionProduct.id) ? <CircularProgress size={18} /> : null}
                 </Stack>
               </Stack>
@@ -912,6 +1295,41 @@ export function SellerProductsStockScreen({
           </Box>
         ) : null}
       </Drawer>
+
+      <Dialog
+        open={deleteTarget != null}
+        onClose={() => {
+          if (!deleteBusy) setDeleteTarget(null)
+        }}
+        fullWidth
+        maxWidth="xs"
+        data-testid="seller-stock-direction-delete-dialog"
+      >
+        <DialogTitle>Удалить направление?</DialogTitle>
+        <DialogContent>
+          {deleteTarget ? (
+            <Typography variant="body2" color="text.secondary">
+              {deleteTarget.direction.is_fbs
+                ? `Направление "${deleteTarget.direction.name}" на ${deleteTarget.direction.quantity} шт будет удалено из FBS-пула.`
+                : `Направление "${deleteTarget.direction.name}" на ${deleteTarget.direction.quantity} шт будет удалено. Эти ${deleteTarget.direction.quantity} шт снова станут свободным FBO-остатком, если не заняты другими операциями.`}
+            </Typography>
+          ) : null}
+        </DialogContent>
+        <DialogActions>
+          <Button disabled={deleteBusy} onClick={() => setDeleteTarget(null)}>
+            Отмена
+          </Button>
+          <Button
+            variant="contained"
+            color="warning"
+            disabled={deleteBusy}
+            onClick={() => void confirmDeleteDirection()}
+            data-testid="seller-stock-direction-confirm-delete"
+          >
+            Удалить
+          </Button>
+        </DialogActions>
+      </Dialog>
 
       <Dialog
         open={editProduct != null}
