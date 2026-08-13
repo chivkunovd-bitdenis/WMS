@@ -152,13 +152,15 @@ tests_run: `test_stock_directions.py`, `seller-stock-directions.spec.ts`, headed
 
 ## F09. Свободный остаток для FBO
 
-status: ba_ready, product_approved_for_dev, dev_in_progress, code_review_blocked, browser_qa_blocked
+status: ba_ready, product_approved_for_dev, dev_done, code_review_pending, browser_qa_pending, integration_pending
 business_goal: FBO отгружает только остаток после всех направлений.
 main_real_world_scenario: было 1000, направления 500, к FBO доступно 500.
 product_review_result: PRODUCT_APPROVED_FOR_DEV; artifact `evidence/f09-f10-product-unblock/F09_F10_PRODUCT_UX_VERDICT_RU.md`.
-dev_result: atomic dev currently running; expected scope is MP/FBO availability from free FBO, without FBS sync changes.
-tests_run: `test_stock_directions.py`, `seller-stock-directions.spec.ts`.
-commit_or_patch_ref: product verdict commit `3a7985319cc5da03229bc1d77f91c75ba1f39f57`.
+dev_result: MP/FBO availability закреплена как free FBO минус active MP/outbound reserves; превышение free FBO возвращает human-mapped `insufficient_free_fbo`; picker/modal показывает короткое `Доступно FBO` / `доступно для FBO N`, без `Лимит`.
+changed_files: `backend/app/services/marketplace_unload_service.py`, `backend/app/api/marketplace_unload_requests.py`, `backend/tests/test_marketplace_unload_availability.py`, `frontend/src/components/WbProductPickerDialog.tsx`, `frontend/src/components/SellerMarketplaceUnloadDialog.tsx`, `frontend/src/screens/ff/FfSuppliesShipmentsPage.tsx`, `frontend/src/utils/readApiErrorMessage.ts`.
+tests_run: `pytest backend/tests/test_stock_directions.py backend/tests/test_marketplace_unload_availability.py -q`; backend targeted `ruff check`; frontend `npm run build`; Playwright `seller-mp-unload.spec.ts`, `ff-mp-full-flow.spec.ts`.
+dev_evidence: `evidence/f09-dev/F09_DEV_RESULT_RU.md`.
+commit_or_patch_ref: product verdict commit `3a7985319cc5da03229bc1d77f91c75ba1f39f57`; F09 dev commit recorded in final Atomic Dev answer.
 
 ## F10. FBS-синхронизация берёт только FBS-пул
 

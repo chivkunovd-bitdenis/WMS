@@ -14,7 +14,7 @@ from app.models.marketplace_unload import MarketplaceUnloadLine, MarketplaceUnlo
 from app.models.marketplace_unload_reservation import MarketplaceUnloadReservation
 from app.models.outbound_shipment import OutboundShipmentLine, OutboundShipmentRequest
 from app.models.product import Product
-from app.services import inventory_service
+from app.services import inventory_service, stock_direction_service
 from app.services.sorting_location_service import get_or_create_sorting_location
 
 
@@ -271,3 +271,160 @@ async def test_mp_availability_includes_sorting_reserves_and_isolation(
         params={"warehouse_id": warehouse_id, "seller_id": seller_a_id},
     )
     assert isolated.status_code == 404
+
+
+@pytest.mark.asyncio
+async def test_mp_availability_uses_free_fbo_after_directions_and_active_reserves(
+    async_client: AsyncClient,
+) -> None:
+    suffix = str(time.time_ns())
+    register = await async_client.post(
+        "/auth/register",
+        json={
+            "organization_name": "MP free FBO",
+            "slug": f"mp-free-fbo-{suffix}",
+            "admin_email": f"mp-free-fbo-{suffix}@example.com",
+            "password": "password123",
+        },
+    )
+    assert register.status_code == 200, register.text
+    admin_headers = {"Authorization": f"Bearer {register.json()['access_token']}"}
+    warehouse = await async_client.post(
+        "/warehouses",
+        headers=admin_headers,
+        json={"name": "FBO Warehouse", "code": f"fbo-{suffix[-8:]}"},
+    )
+    assert warehouse.status_code == 200, warehouse.text
+    seller = await async_client.post(
+        "/sellers", headers=admin_headers, json={"name": "FBO Seller"}
+    )
+    assert seller.status_code == 201, seller.text
+    product = await async_client.post(
+        "/products",
+        headers=admin_headers,
+        json={
+            "name": "FBO Product",
+            "sku_code": f"FBO-{suffix}",
+            "seller_id": seller.json()["id"],
+        },
+    )
+    assert product.status_code == 200, product.text
+    location = await async_client.post(
+        f"/warehouses/{warehouse.json()['id']}/locations",
+        headers=admin_headers,
+        json={"code": f"FBO-A-{suffix[-6:]}"},
+    )
+    assert location.status_code == 200, location.text
+
+    warehouse_id = uuid.UUID(warehouse.json()["id"])
+    seller_id = uuid.UUID(seller.json()["id"])
+    product_id = uuid.UUID(product.json()["id"])
+    location_id = uuid.UUID(location.json()["id"])
+
+    async with SessionLocal() as session:
+        db_product = await session.get(Product, product_id)
+        assert db_product is not None
+        tenant_id = db_product.tenant_id
+        await inventory_service.record_movement_and_adjust_balance(
+            session,
+            tenant_id=tenant_id,
+            product_id=product_id,
+            storage_location_id=location_id,
+            quantity_delta=1000,
+            movement_type="inbound_intake",
+        )
+        await session.commit()
+        await stock_direction_service.create_stock_direction(
+            session,
+            tenant_id,
+            product_id,
+            name="FBS WB",
+            quantity=200,
+            is_fbs=True,
+        )
+        await stock_direction_service.create_stock_direction(
+            session,
+            tenant_id,
+            product_id,
+            name="Наборы сентябрь",
+            quantity=300,
+            is_fbs=False,
+        )
+
+        other_unload = MarketplaceUnloadRequest(
+            tenant_id=tenant_id,
+            warehouse_id=warehouse_id,
+            seller_id=seller_id,
+            status="submitted",
+            ff_modified=False,
+            has_discrepancy=False,
+        )
+        session.add(other_unload)
+        await session.flush()
+        other_line = MarketplaceUnloadLine(
+            request_id=other_unload.id,
+            product_id=product_id,
+            quantity=100,
+        )
+        session.add(other_line)
+        await session.flush()
+        session.add(
+            MarketplaceUnloadReservation(
+                tenant_id=tenant_id,
+                marketplace_unload_line_id=other_line.id,
+                product_id=product_id,
+                warehouse_id=warehouse_id,
+                quantity=100,
+            )
+        )
+        await session.commit()
+
+    summary = await async_client.get(
+        "/operations/inventory-balances/summary",
+        headers=admin_headers,
+        params={"warehouse_id": str(warehouse_id), "seller_id": str(seller_id)},
+    )
+    assert summary.status_code == 200, summary.text
+    summary_row = next(row for row in summary.json() if row["product_id"] == str(product_id))
+    assert summary_row["quantity"] == 1000
+    assert summary_row["quantity_fbs"] == 200
+    assert summary_row["quantity_reserved_directions"] == 300
+    assert summary_row["quantity_free_fbo"] == 500
+    assert summary_row["available"] == 400
+
+    available = await async_client.get(
+        "/operations/marketplace-unload-requests/available-products",
+        headers=admin_headers,
+        params={"warehouse_id": str(warehouse_id), "seller_id": str(seller_id)},
+    )
+    assert available.status_code == 200, available.text
+    assert available.json() == [
+        {
+            "product_id": str(product_id),
+            "sku_code": f"FBO-{suffix}",
+            "product_name": "FBO Product",
+            "available": 400,
+        }
+    ]
+
+    unload = await async_client.post(
+        "/operations/marketplace-unload-requests",
+        headers=admin_headers,
+        json={"warehouse_id": str(warehouse_id), "seller_id": str(seller_id)},
+    )
+    assert unload.status_code == 201, unload.text
+    unload_id = unload.json()["id"]
+    too_much = await async_client.post(
+        f"/operations/marketplace-unload-requests/{unload_id}/lines",
+        headers=admin_headers,
+        json={"product_id": str(product_id), "quantity": 401},
+    )
+    assert too_much.status_code == 422
+    assert too_much.json()["detail"] == "insufficient_free_fbo"
+
+    ok = await async_client.post(
+        f"/operations/marketplace-unload-requests/{unload_id}/lines",
+        headers=admin_headers,
+        json={"product_id": str(product_id), "quantity": 400},
+    )
+    assert ok.status_code == 201, ok.text

@@ -61,6 +61,7 @@ type Props = {
   inDraftMessage?: string
   emptyMessage?: string
   showAvailableColumn?: boolean
+  availableColumnLabel?: string
   getAvailable?: (productId: string) => number
   filterRow?: (row: WbProductPickerCatalogRow) => boolean
   renderTrailingHeadCells?: ReactNode
@@ -133,6 +134,7 @@ export function WbProductPickerDialog({
   inDraftMessage = 'Товар уже добавлен в заявку',
   emptyMessage,
   showAvailableColumn = false,
+  availableColumnLabel = 'Доступно',
   getAvailable,
   filterRow,
   renderTrailingHeadCells,
@@ -291,7 +293,7 @@ export function WbProductPickerDialog({
                 {renderTrailingHeadCells}
                 {showAvailableColumn ? (
                   <TableCell align="right" sx={{ width: 110 }}>
-                    Доступно
+                    {availableColumnLabel}
                   </TableCell>
                 ) : null}
                 <TableCell align="right" sx={{ width: 140 }}>

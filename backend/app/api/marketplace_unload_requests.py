@@ -552,6 +552,11 @@ def _map_mu_err(exc: MarketplaceUnloadError) -> HTTPException:
             status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
             detail="insufficient_available",
         )
+    if exc.code == "insufficient_free_fbo":
+        return HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+            detail="insufficient_free_fbo",
+        )
     if exc.code == "no_lines":
         return HTTPException(status_code=status.HTTP_409_CONFLICT, detail="no_lines")
     if exc.code == "packaging_instructions_required":

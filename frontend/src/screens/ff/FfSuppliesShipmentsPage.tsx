@@ -2872,7 +2872,7 @@ export function FfSuppliesShipmentsPage({
                   {docProductPicklist.map((p) => (
                     <MenuItem key={p.id} value={p.id}>
                       {p.sku_code} — {p.name}
-                      {'available' in p ? ` · доступно ${p.available}` : ''}
+                      {'available' in p ? ` · доступно для FBO ${p.available}` : ''}
                     </MenuItem>
                   ))}
                 </Select>
@@ -3006,9 +3006,10 @@ export function FfSuppliesShipmentsPage({
         applyLabel="Добавить в отгрузку"
         inDraftMessage="Товар уже добавлен в отгрузку"
         showAvailableColumn
+        availableColumnLabel="Доступно FBO"
         getAvailable={mpPickerGetAvailable}
         filterRow={mpPickerFilterRow}
-        emptyMessage="Нет товаров с остатком у выбранного селлера."
+        emptyMessage="Нет свободного FBO остатка для отгрузки."
         onClose={() => setMpPickerOpen(false)}
         onApply={applyMpProductPicker}
       />
