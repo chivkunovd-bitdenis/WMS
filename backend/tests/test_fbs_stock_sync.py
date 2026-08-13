@@ -50,6 +50,7 @@ from app.services.fbs_stock_sync_service import (
     sync_binding_stocks,
 )
 from app.services.integration_fernet import encrypt_secret
+from app.services.seller_wb_catalog_service import list_seller_wb_catalog_rows
 from app.services.wildberries_client import MarketplaceStockAmount
 
 
@@ -449,6 +450,104 @@ async def test_sync_confirms_when_readback_matches(db_session: AsyncSession) -> 
     assert item.status == STOCK_SYNC_STATUS_CONFIRMED
     assert item.last_confirmed_amount == 7
     assert "wb-test-token-secret" not in str(result)
+
+
+@pytest.mark.asyncio
+async def test_seller_catalog_prefers_active_confirmed_readback_over_irrelevant_error(
+    db_session: AsyncSession,
+) -> None:
+    """TC-NEW-F22-001: catalog exposes confirmed WB readback instead of stale safe error."""
+    ctx = await _seed_binding(db_session)
+    product = _product(
+        tenant_id=ctx.tenant.id,
+        seller_id=ctx.seller.id,
+        chrt_id=111001,
+        sku_suffix="catalog-confirmed",
+    )
+    inactive_warehouse = Warehouse(
+        id=uuid.uuid4(),
+        tenant_id=ctx.tenant.id,
+        name="Inactive FBS WH",
+        code=f"inactive-{uuid.uuid4().hex[:6]}",
+    )
+    inactive_binding = FbsWarehouseBinding(
+        id=uuid.uuid4(),
+        tenant_id=ctx.tenant.id,
+        seller_id=ctx.seller.id,
+        wb_warehouse_id=501002,
+        wms_warehouse_id=inactive_warehouse.id,
+        is_active=False,
+        stock_sync_enabled=True,
+    )
+    db_session.add_all(
+        [
+            product,
+            inactive_warehouse,
+            inactive_binding,
+            FbsStockSyncItem(
+                binding_id=ctx.binding.id,
+                chrt_id=111001,
+                product_id=product.id,
+                last_target_amount=7,
+                last_confirmed_amount=7,
+                status=STOCK_SYNC_STATUS_CONFIRMED,
+                updated_at=datetime(2026, 8, 13, 14, 10, tzinfo=UTC),
+            ),
+            FbsStockSyncItem(
+                binding_id=inactive_binding.id,
+                chrt_id=111001,
+                product_id=product.id,
+                last_target_amount=None,
+                last_confirmed_amount=None,
+                status=STOCK_SYNC_STATUS_ERROR,
+                last_error_code=ERROR_UNSAFE_STOCK_UNKNOWN,
+                updated_at=datetime(2026, 8, 13, 14, 20, tzinfo=UTC),
+            ),
+        ]
+    )
+    await db_session.commit()
+
+    rows = await list_seller_wb_catalog_rows(db_session, ctx.tenant.id, ctx.seller.id)
+    row = next(row for row in rows if row.product_id == product.id)
+
+    assert row.fbs_sync_status == STOCK_SYNC_STATUS_CONFIRMED
+    assert row.fbs_published_amount == 7
+
+
+@pytest.mark.asyncio
+async def test_seller_catalog_keeps_active_safe_error_without_confirmed_readback(
+    db_session: AsyncSession,
+) -> None:
+    """TC-NEW-F22-001: safe-zero guard remains visible when active binding has no success."""
+    ctx = await _seed_binding(db_session)
+    product = _product(
+        tenant_id=ctx.tenant.id,
+        seller_id=ctx.seller.id,
+        chrt_id=111002,
+        sku_suffix="catalog-safe-error",
+    )
+    db_session.add_all(
+        [
+            product,
+            FbsStockSyncItem(
+                binding_id=ctx.binding.id,
+                chrt_id=111002,
+                product_id=product.id,
+                last_target_amount=None,
+                last_confirmed_amount=None,
+                status=STOCK_SYNC_STATUS_ERROR,
+                last_error_code=ERROR_UNSAFE_STOCK_UNKNOWN,
+                updated_at=datetime(2026, 8, 13, 14, 30, tzinfo=UTC),
+            ),
+        ]
+    )
+    await db_session.commit()
+
+    rows = await list_seller_wb_catalog_rows(db_session, ctx.tenant.id, ctx.seller.id)
+    row = next(row for row in rows if row.product_id == product.id)
+
+    assert row.fbs_sync_status == STOCK_SYNC_STATUS_ERROR
+    assert row.fbs_published_amount is None
 
 
 @pytest.mark.asyncio

@@ -10,7 +10,7 @@ from typing import Any
 from sqlalchemy import false, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.models.fbs_stock_sync_item import FbsStockSyncItem
+from app.models.fbs_stock_sync_item import STOCK_SYNC_STATUS_CONFIRMED, FbsStockSyncItem
 from app.models.fbs_warehouse_binding import FbsWarehouseBinding
 from app.models.product import Product
 from app.models.seller_wildberries_imported_card import SellerWildberriesImportedCard
@@ -135,6 +135,25 @@ class _FbsSyncState:
     updated_at: datetime
 
 
+def _is_preferred_fbs_sync_state(
+    candidate: _FbsSyncState,
+    current: _FbsSyncState | None,
+) -> bool:
+    if current is None:
+        return True
+    candidate_confirmed = (
+        candidate.status == STOCK_SYNC_STATUS_CONFIRMED
+        and candidate.published_amount is not None
+    )
+    current_confirmed = (
+        current.status == STOCK_SYNC_STATUS_CONFIRMED
+        and current.published_amount is not None
+    )
+    if candidate_confirmed != current_confirmed:
+        return candidate_confirmed
+    return candidate.updated_at > current.updated_at
+
+
 async def _load_fbs_sync_state_by_seller_chrt(
     session: AsyncSession,
     tenant_id: uuid.UUID,
@@ -161,6 +180,8 @@ async def _load_fbs_sync_state_by_seller_chrt(
         )
         .where(
             FbsWarehouseBinding.tenant_id == tenant_id,
+            FbsWarehouseBinding.is_active.is_(True),
+            FbsWarehouseBinding.stock_sync_enabled.is_(True),
             FbsStockSyncItem.chrt_id.in_(chrt_ids),
         )
     )
@@ -181,7 +202,7 @@ async def _load_fbs_sync_state_by_seller_chrt(
             status=status,
             updated_at=updated_at,
         )
-        if current is None or candidate.updated_at > current.updated_at:
+        if _is_preferred_fbs_sync_state(candidate, current):
             state_by_key[key] = candidate
     return state_by_key
 
