@@ -44,9 +44,9 @@ test('ff products: catalog separates product fields and hides stock columns', as
   const sellerA = (await (await apiPost('/sellers', { name: 'E2E Seller A' })).json()) as { id: string }
   const sellerB = (await (await apiPost('/sellers', { name: 'E2E Seller B' })).json()) as { id: string }
 
-  const skuA = `e2e-ff-a-${Date.now()}`
-  const skuB = `e2e-ff-b-${Date.now()}`
-  const skuPrivate = `e2e-ff-private-${Date.now()}`
+  const skuA = 'SKU-CAT-A'
+  const skuB = 'SKU-CAT-B'
+  const skuPrivate = 'SKU-CAT-PRIVATE'
   const barcodeA = '2031111111177'
   const barcodeB = '2031111111188'
   await apiPost('/products', {
