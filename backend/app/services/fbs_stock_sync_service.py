@@ -11,6 +11,7 @@ from typing import Protocol
 
 import httpx
 from sqlalchemy import or_, select, update
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.settings import settings
@@ -284,23 +285,35 @@ async def _upsert_pending_items(
     targets: list[_PublishTarget],
     existing_items: dict[int, FbsStockSyncItem],
 ) -> dict[int, FbsStockSyncItem]:
-    items: dict[int, FbsStockSyncItem] = {}
-    for target in targets:
-        item = existing_items.get(target.chrt_id)
-        if item is None:
-            item = FbsStockSyncItem(
-                binding_id=binding_id,
-                chrt_id=target.chrt_id,
-                product_id=target.product_id,
-            )
-            session.add(item)
-        else:
-            item.product_id = target.product_id
-        item.last_target_amount = target.amount
-        item.status = STOCK_SYNC_STATUS_PENDING
-        item.last_error_code = None
-        items[target.chrt_id] = item
-    await session.commit()
+    def apply_targets(
+        current_items: dict[int, FbsStockSyncItem],
+    ) -> dict[int, FbsStockSyncItem]:
+        items: dict[int, FbsStockSyncItem] = {}
+        for target in targets:
+            item = current_items.get(target.chrt_id)
+            if item is None:
+                item = FbsStockSyncItem(
+                    binding_id=binding_id,
+                    chrt_id=target.chrt_id,
+                    product_id=target.product_id,
+                )
+                session.add(item)
+            else:
+                item.product_id = target.product_id
+            item.last_target_amount = target.amount
+            item.status = STOCK_SYNC_STATUS_PENDING
+            item.last_error_code = None
+            items[target.chrt_id] = item
+        return items
+
+    items = apply_targets(existing_items)
+    try:
+        await session.commit()
+    except IntegrityError:
+        await session.rollback()
+        existing_items = await _load_existing_sync_items(session, binding_id)
+        items = apply_targets(existing_items)
+        await session.commit()
     return items
 
 
@@ -570,6 +583,7 @@ async def sync_binding_stocks(
 ) -> FbsStockSyncResult:
     """Publish absolute FBS stock amounts for one seller WB warehouse binding."""
     limiter = rate_limiter or AsyncStockSyncRateLimiter()
+    binding_id = binding.id
 
     if binding.tenant_id != tenant_id or binding.seller_id != seller_id:
         raise FbsStockSyncError(ERROR_BINDING_MISMATCH)
@@ -679,8 +693,16 @@ async def sync_binding_stocks(
         binding.last_sync_at = _utcnow()
         await session.commit()
     finally:
-        await session.refresh(binding)
-        binding.lease_until = None
+        transaction = session.get_transaction()
+        if transaction is not None:
+            await session.rollback()
+        await session.execute(
+            update(FbsWarehouseBinding)
+            .where(FbsWarehouseBinding.id == binding_id)
+            .values(lease_until=None)
+            .execution_options(synchronize_session=False)
+        )
         await session.commit()
+        binding.lease_until = None
 
     return result
