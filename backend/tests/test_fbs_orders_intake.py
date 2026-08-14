@@ -1496,9 +1496,8 @@ async def test_fbs_binding_later_assigns_warehouse_and_reserves(
     await _wait_for_job(async_client, headers, start.json()["id"])
 
     listed = await async_client.get("/operations/fbs-orders", headers=headers)
-    assert listed.json()[0]["warehouse_id"] is not None
-    assert listed.json()[0]["warehouse_id"] != warehouse_id
-    assert listed.json()[0]["reserve_status"] == RESERVE_STATUS_NO_STOCK
+    assert listed.json()[0]["warehouse_id"] is None
+    assert listed.json()[0]["reserve_status"] == RESERVE_STATUS_WAREHOUSE_UNMAPPED
 
     await _create_binding(async_client, headers, seller_id, WB_WAREHOUSE_A, warehouse_id)
     async with SessionLocal() as session:
