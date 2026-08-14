@@ -32,6 +32,15 @@ type Props = {
   onCreated: (product: CreatedProduct) => void | Promise<void>
 }
 
+function humanManualProductError(raw: string): string {
+  if (raw === 'sku_taken') return 'Такой артикул (SKU) уже есть.'
+  if (raw === 'barcode_taken') return 'Такой штрихкод уже занят.'
+  if (raw === 'seller_not_found') return 'Селлер не найден.'
+  if (raw === 'invalid_dimensions') return 'Укажите все три габарита или оставьте пустыми.'
+  if (/^[a-z0-9_:-]+$/i.test(raw.trim())) return 'Не удалось создать товар.'
+  return raw || 'Не удалось создать товар.'
+}
+
 export function FfManualProductCreateDialog({
   open,
   token,
@@ -125,23 +134,7 @@ export function FfManualProductCreateDialog({
         })
         if (!res.ok) {
           const raw = await readApiErrorMessage(res)
-          if (raw === 'sku_taken') {
-            setError('Такой артикул (SKU) уже есть.')
-            return
-          }
-          if (raw === 'barcode_taken') {
-            setError('Такой штрихкод уже занят.')
-            return
-          }
-          if (raw === 'seller_not_found') {
-            setError('Селлер не найден.')
-            return
-          }
-          if (raw === 'invalid_dimensions') {
-            setError('Укажите все три габарита или оставьте пустыми.')
-            return
-          }
-          setError(raw)
+          setError(humanManualProductError(raw))
           return
         }
         created = (await res.json()) as CreatedProduct

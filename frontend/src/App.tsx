@@ -44,7 +44,6 @@ import { FfPlaceholderPage } from './screens/ff/FfPlaceholderPage'
 import { FfInboundRequestView, type InboundRequestWorkspace } from './screens/ff/FfInboundRequestView'
 import { FfInboundQueuePage } from './screens/ff/FfInboundQueuePage'
 import { FfProductsCatalogScreen } from './screens/v2/FfProductsCatalogScreen'
-import { FfInventorySnapshotScreen } from './screens/v2/FfInventorySnapshotScreen'
 import { FfFbsOrdersScreen } from './screens/v2/FfFbsOrdersScreen'
 import { FfFbsStockSyncScreen } from './screens/v2/FfFbsStockSyncScreen'
 import { FfSettingsScreen } from './screens/ff/FfSettingsScreen'
@@ -2828,25 +2827,7 @@ export default function App() {
 
           <Route
             path="ff/inventory"
-            element={
-              canCellsOps ? (
-                token ? (
-                  <FfInventorySnapshotScreen
-                    token={token}
-                    authHeaders={authHeaders}
-                    canRunSnapshot={isFulfillmentAdmin}
-                  />
-                ) : (
-                  <FfPlaceholderPage
-                    title="Снимки остатков"
-                    hint="Нет токена."
-                    testId="ff-inventory-placeholder"
-                  />
-                )
-              ) : (
-                ffAccessDenied
-              )
-            }
+            element={token && canCellsOps ? <Navigate to={`${base}/products`} replace /> : ffAccessDenied}
           />
 
           <Route

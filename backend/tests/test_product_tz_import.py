@@ -87,6 +87,23 @@ def test_parse_product_tz_xlsx_sheet_name_is_irrelevant() -> None:
     assert rows[0]["vendor_article"] == "ART-any"
 
 
+def test_parse_product_tz_xlsx_reads_clean_name_and_wb_nm_id() -> None:
+    wb = Workbook()
+    ws = wb.active
+    assert ws is not None
+    ws.title = "Каталог"
+    ws.append(["Название товара", "Артикул продавца", "SKU", "Штрихкод", "WB/nmId", "Размер", "ТЗ упаковки"])
+    ws.append(["Чистое название", "ART-clean", "SKU-clean", "2031111111177", 777001, "48", "ТЗ"])
+    buf = io.BytesIO()
+    wb.save(buf)
+
+    _sheet, rows = parse_product_tz_xlsx(buf.getvalue(), filename="catalog.xlsx")
+
+    assert rows[0]["name"] == "Чистое название"
+    assert rows[0]["sku"] == "SKU-clean"
+    assert rows[0]["wb_nm_id"] == 777001
+
+
 def test_parse_product_tz_xlsx_picks_matching_sheet_among_others() -> None:
     """Workbook has an unrelated sheet plus the real template — the real one wins."""
     wb = Workbook()
@@ -158,6 +175,8 @@ async def test_product_tz_import_preview_and_apply(async_client: AsyncClient) ->
     assert body["summary"]["create_count"] == 2
     assert body["summary"]["error_count"] == 0
     assert all(r["packaging_instructions"] == "1 - Достаем куртку" for r in body["rows"])
+    assert {r["name"] for r in body["rows"]} == {"Chin-56005beige"}
+    assert all(r["size"] in {"46", "48"} for r in body["rows"])
 
     apply = await async_client.post(
         "/products/import-tz/apply",
@@ -178,6 +197,8 @@ async def test_product_tz_import_preview_and_apply(async_client: AsyncClient) ->
     assert len(rows) == 2
     assert all(r["is_manual"] is True for r in rows)
     assert all(r["has_packaging_instructions"] is True for r in rows)
+    assert {r["name"] for r in rows} == {"Chin-56005beige"}
+    assert {r["wb_size"] for r in rows} == {"46", "48"}
     barcodes = {r["wb_primary_barcode"] for r in rows}
     assert barcodes == {"2038493603840", "2038493603857"}
 
@@ -206,6 +227,31 @@ async def test_product_tz_import_preview_and_apply(async_client: AsyncClient) ->
     assert all(
         "Обновлённое ТЗ" in (r["packaging_instructions"] or "") for r in catalog2.json()
     )
+
+
+@pytest.mark.asyncio
+async def test_product_tz_template_download(async_client: AsyncClient) -> None:
+    suffix = str(int(time.time() * 1000))
+    reg = await async_client.post(
+        "/auth/register",
+        json={
+            "organization_name": "TZ Template Co",
+            "slug": f"tz-template-{suffix}",
+            "admin_email": f"tz-template-{suffix}@example.com",
+            "password": "password123",
+        },
+    )
+    assert reg.status_code == 200, reg.text
+    h = {"Authorization": f"Bearer {reg.json()['access_token']}"}
+
+    template = await async_client.get("/products/import-tz/template", headers=h)
+
+    assert template.status_code == 200, template.text
+    sheet, rows = parse_product_tz_xlsx(template.content, filename="template.xlsx")
+    assert sheet == "Каталог товаров"
+    assert rows[0]["name"] == "Футболка oversize"
+    assert rows[0]["vendor_article"] == "ART-001"
+    assert rows[0]["wb_nm_id"] == 123456789
 
 
 @pytest.mark.asyncio

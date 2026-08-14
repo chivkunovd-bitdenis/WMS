@@ -23,6 +23,7 @@ import {
   Typography,
 } from '@mui/material'
 import CloudUploadOutlined from '@mui/icons-material/CloudUploadOutlined'
+import DownloadOutlined from '@mui/icons-material/DownloadOutlined'
 import { apiUrl } from '../../api'
 import { readApiErrorMessage } from '../../utils/readApiErrorMessage'
 import { createLatestRequestSequence } from '../../utils/latestRequestSequence'
@@ -31,6 +32,7 @@ type SellerRow = { id: string; name: string }
 
 type PreviewRow = {
   row: number
+  wb_nm_id: number | null
   vendor_article: string | null
   size: string | null
   barcode: string | null
@@ -85,10 +87,18 @@ async function readImportError(res: Response): Promise<string> {
     if (typeof d === 'object' && d !== null && !Array.isArray(d) && 'message' in d) {
       return String((d as { message?: string }).message ?? 'Ошибка импорта')
     }
-    return await readApiErrorMessage(new Response(text, { status: res.status, headers: res.headers }))
+    const message = await readApiErrorMessage(new Response(text, { status: res.status, headers: res.headers }))
+    return /^[a-z0-9_:-]+$/i.test(message) ? 'Не удалось обработать файл.' : message
   } catch {
     return `Ошибка ${res.status}`
   }
+}
+
+function actionLabel(action: PreviewRow['action']): string {
+  if (action === 'create') return 'создать'
+  if (action === 'update') return 'обновить'
+  if (action === 'skip') return 'пропустить'
+  return 'ошибка'
 }
 
 export function FfProductTzImportDialog({
@@ -103,6 +113,7 @@ export function FfProductTzImportDialog({
   const [file, setFile] = useState<File | null>(null)
   const [preview, setPreview] = useState<PreviewResponse | null>(null)
   const [busy, setBusy] = useState(false)
+  const [templateBusy, setTemplateBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [ignoreErrors, setIgnoreErrors] = useState(false)
   const previewRequests = useRef(createLatestRequestSequence())
@@ -116,6 +127,7 @@ export function FfProductTzImportDialog({
       setFile(null)
       setPreview(null)
       setBusy(false)
+      setTemplateBusy(false)
       setError(null)
     }
   }, [open, defaultSellerId])
@@ -134,6 +146,7 @@ export function FfProductTzImportDialog({
     setPreview(null)
     setError(null)
     setBusy(false)
+    setTemplateBusy(false)
     setIgnoreErrors(false)
     setSellerId(defaultSellerId ?? '')
   }
@@ -188,6 +201,33 @@ export function FfProductTzImportDialog({
     }
   }
 
+  async function downloadTemplate() {
+    setTemplateBusy(true)
+    setError(null)
+    try {
+      const res = await fetch(apiUrl('/products/import-tz/template'), {
+        headers: { Authorization: `Bearer ${token}` },
+      })
+      if (!res.ok) {
+        setError(await readImportError(res))
+        return
+      }
+      const blob = await res.blob()
+      const url = URL.createObjectURL(blob)
+      const link = document.createElement('a')
+      link.href = url
+      link.download = 'wms-product-catalog-template.xlsx'
+      document.body.appendChild(link)
+      link.click()
+      link.remove()
+      URL.revokeObjectURL(url)
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Не удалось скачать шаблон.')
+    } finally {
+      setTemplateBusy(false)
+    }
+  }
+
   async function runApply() {
     if (!file || !sellerId || !canApply) return
     const applyRequestId = applyRequests.current.next()
@@ -220,9 +260,13 @@ export function FfProductTzImportDialog({
       if (!applyRequests.current.isLatest(applyRequestId)) {
         return
       }
+      const quantityMessage =
+        body.added_quantity > 0
+          ? `, учтено количество: ${body.added_quantity}`
+          : ''
       const msg = body.already_applied
-        ? 'Этот файл уже применён. Остатки повторно не добавлены.'
-        : `Создано: ${body.created_count}, обновлено: ${body.updated_count}, добавлено в сортировку: ${body.added_quantity}, движений: ${body.movement_count}, пропущено: ${body.skipped_count}`
+        ? 'Этот файл уже применён. Повторных изменений не внесено.'
+        : `Создано: ${body.created_count}, обновлено: ${body.updated_count}, пропущено: ${body.skipped_count}${quantityMessage}`
       await onApplied(msg)
       if (!applyRequests.current.isLatest(applyRequestId)) {
         return
@@ -242,7 +286,7 @@ export function FfProductTzImportDialog({
 
   return (
     <Dialog open={open} onClose={handleClose} fullWidth maxWidth="md" data-testid="ff-tz-import-dialog">
-      <DialogTitle>Загрузить товары из Excel (ТЗ)</DialogTitle>
+      <DialogTitle>Загрузить товары из Excel</DialogTitle>
       <DialogContent sx={{ maxHeight: '70vh', overflow: 'auto' }}>
         <Stack spacing={2} sx={{ mt: 1 }}>
           {error ? (
@@ -274,33 +318,44 @@ export function FfProductTzImportDialog({
               ))}
             </Select>
           </FormControl>
-          <Button
-            component="label"
-            variant="outlined"
-            startIcon={<CloudUploadOutlined />}
-            disabled={busy || !sellerId}
-            data-testid="ff-tz-import-file"
-          >
-            Выбрать .xlsx
-            <input
-              hidden
-              type="file"
-              accept=".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-              onChange={(e) => {
-                applyRequests.current.invalidate()
-                const f = e.target.files?.[0] ?? null
-                e.target.value = ''
-                setFile(f)
-                if (f) {
-                  void runPreview(f)
-                } else {
-                  previewRequests.current.invalidate()
-                  setPreview(null)
-                  setBusy(false)
-                }
-              }}
-            />
-          </Button>
+          <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1}>
+            <Button
+              variant="outlined"
+              startIcon={templateBusy ? <CircularProgress size={16} /> : <DownloadOutlined />}
+              disabled={busy || templateBusy}
+              onClick={() => void downloadTemplate()}
+              data-testid="ff-tz-import-template"
+            >
+              Скачать шаблон
+            </Button>
+            <Button
+              component="label"
+              variant="contained"
+              startIcon={<CloudUploadOutlined />}
+              disabled={busy || !sellerId}
+              data-testid="ff-tz-import-file"
+            >
+              Выбрать .xlsx
+              <input
+                hidden
+                type="file"
+                accept=".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+                onChange={(e) => {
+                  applyRequests.current.invalidate()
+                  const f = e.target.files?.[0] ?? null
+                  e.target.value = ''
+                  setFile(f)
+                  if (f) {
+                    void runPreview(f)
+                  } else {
+                    previewRequests.current.invalidate()
+                    setPreview(null)
+                    setBusy(false)
+                  }
+                }}
+              />
+            </Button>
+          </Stack>
           {file ? (
             <Typography variant="body2" color="text.secondary">
               Файл: {file.name}
@@ -311,7 +366,7 @@ export function FfProductTzImportDialog({
             <Box>
               <Typography variant="body2" sx={{ mb: 1 }} data-testid="ff-tz-import-summary">
                 Лист «{preview.sheet_name}»: создать {preview.summary.create_count}, обновить{' '}
-                {preview.summary.update_count}, заявлено {preview.summary.declared_total}, ошибок{' '}
+                {preview.summary.update_count}, пропустить {preview.summary.skip_count}, ошибок{' '}
                 {preview.summary.error_count}
               </Typography>
               {preview.summary.error_count > 0 ? (
@@ -330,32 +385,38 @@ export function FfProductTzImportDialog({
                 <TableHead>
                   <TableRow>
                     <TableCell>Строка</TableCell>
-                    <TableCell>Артикул</TableCell>
-                    <TableCell>Размер</TableCell>
-                    <TableCell>ШК</TableCell>
+                    <TableCell>Название</TableCell>
+                    <TableCell>Артикул селлера</TableCell>
                     <TableCell>SKU</TableCell>
-                    <TableCell align="right">Заявлено</TableCell>
+                    <TableCell>ШК</TableCell>
+                    <TableCell>WB/nmId</TableCell>
+                    <TableCell>Размер</TableCell>
+                    <TableCell align="right">Кол-во</TableCell>
                     <TableCell>Действие</TableCell>
                     <TableCell>ТЗ</TableCell>
+                    <TableCell>Причина</TableCell>
                   </TableRow>
                 </TableHead>
                 <TableBody>
                   {preview.rows.slice(0, 80).map((r) => (
                     <TableRow key={`${r.row}-${r.barcode ?? ''}`}>
                       <TableCell>{r.row}</TableCell>
+                      <TableCell>{r.name || '—'}</TableCell>
                       <TableCell>{r.vendor_article ?? '—'}</TableCell>
-                      <TableCell>{r.size ?? '—'}</TableCell>
-                      <TableCell>{r.barcode ?? '—'}</TableCell>
                       <TableCell>{r.sku_code || '—'}</TableCell>
+                      <TableCell>{r.barcode ?? '—'}</TableCell>
+                      <TableCell>{r.wb_nm_id ?? '—'}</TableCell>
+                      <TableCell>{r.size ?? '—'}</TableCell>
                       <TableCell align="right">{r.declared_quantity ?? '—'}</TableCell>
-                      <TableCell>
-                        {r.action === 'error' ? r.error_message || r.error_code : r.action}
-                      </TableCell>
+                      <TableCell>{actionLabel(r.action)}</TableCell>
                       <TableCell sx={{ maxWidth: 220 }}>
                         {r.packaging_instructions
                           ? r.packaging_instructions.slice(0, 80) +
                             (r.packaging_instructions.length > 80 ? '…' : '')
                           : 'нет'}
+                      </TableCell>
+                      <TableCell sx={{ maxWidth: 220 }}>
+                        {r.action === 'error' ? r.error_message || 'Проверьте строку.' : '—'}
                       </TableCell>
                     </TableRow>
                   ))}
