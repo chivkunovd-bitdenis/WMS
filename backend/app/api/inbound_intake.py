@@ -25,7 +25,7 @@ from app.api.deps import (
     require_reception_or_seller_draft_access,
     seller_line_product_scope,
 )
-from app.core.roles import FULFILLMENT_SELLER
+from app.core.roles import FULFILLMENT_ADMIN, FULFILLMENT_SELLER
 from app.db.session import get_db
 from app.models.inbound_intake import (
     InboundIntakeBox,

@@ -22,6 +22,7 @@ from app.api.deps import (
 from app.core.roles import FULFILLMENT_SELLER
 from app.core.settings import settings
 from app.db.session import get_db
+from app.models.user import User
 from app.services.seller_staff_permissions_service import PERM_SETTINGS
 from app.services.wildberries_client import (
     WildberriesClientError,
