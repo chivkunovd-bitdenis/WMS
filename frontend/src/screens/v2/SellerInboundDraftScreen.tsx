@@ -633,8 +633,16 @@ export function SellerInboundDraftScreen({
     })
   }, [])
 
-  const sellerCanEdit = detail != null && (detail.status === 'draft' || detail.status === 'submitted')
+  const hasWarehouseContext = Boolean(warehouseId) || warehouses.length > 0
+  const sellerCanEdit =
+    detail != null &&
+    (detail.status === 'draft' ||
+      (detail.status === 'submitted' && hasWarehouseContext))
   const draftLocked = detail != null && !sellerCanEdit
+  const readOnlyHint =
+    detail?.status === 'submitted' && !hasWarehouseContext
+      ? 'Склад не загрузился, поэтому заявка открыта только для просмотра. Обновите страницу или вернитесь к документам.'
+      : 'Приёмку взял в работу склад, изменения теперь вносит фулфилмент'
   const draftOperationLabel = operationTypeRu(detail?.operation_type ?? requestedOperationType)
   const newDraftTitle =
     draftOperationLabel === 'Возврат' ? 'Новая заявка на возврат' : 'Новая заявка на поставку'
@@ -817,7 +825,7 @@ export function SellerInboundDraftScreen({
       ) : null}
       {detail && !sellerCanEdit ? (
         <Alert severity="info" sx={{ mb: 2 }} data-testid="seller-inbound-readonly-hint">
-          Приёмку взял в работу склад, изменения теперь вносит фулфилмент
+          {readOnlyHint}
         </Alert>
       ) : null}
 

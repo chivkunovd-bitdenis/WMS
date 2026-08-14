@@ -286,8 +286,8 @@ export function SellerApp({ navigationBasePath = '' }: SellerAppProps) {
         userLabel={me.email}
         userRoleLabel={
           me.active_seller_name && me.active_seller_name !== me.home_seller_name
-            ? `${me.role} · ${me.active_seller_name}`
-            : me.role
+            ? `Селлер · ${me.active_seller_name}`
+            : 'Селлер'
         }
         canManageSellerShops={Boolean(me.can_manage_seller_shops)}
         homeSellerId={me.home_seller_id ?? me.seller_id ?? null}

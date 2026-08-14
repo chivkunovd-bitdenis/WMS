@@ -408,7 +408,7 @@ export function SellerSettingsScreen({
       setStaffCreatePerms(DEFAULT_STAFF_PERMISSIONS)
       await loadStaffRows()
       await onStaffChanged?.()
-      setStaffOk('Сотрудник добавлен')
+      setStaffOk(`Сотрудник добавлен: ${email}`)
     } catch (e) {
       setStaffError(e instanceof Error ? e.message : 'Не удалось добавить сотрудника.')
     } finally {
