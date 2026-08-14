@@ -179,6 +179,10 @@ async def _task_out(
     *,
     pick_resync_warning: bool = False,
 ) -> PackagingTaskOut:
+    loaded = await pkg_svc.get_task(session, tenant_id, task.id)
+    if loaded is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="not_found")
+    task = loaded
     line_outs: list[PackagingTaskLineOut] = []
     for ln in task.lines:
         available = 0
