@@ -158,7 +158,24 @@ after the final returned blockers. There is no current
 `FINAL_BROWSER_GROUP_FAILED` or `FINAL_BROWSER_GROUP_BLOCKED` verdict in the
 latest rerun set.
 
-This is still not a staging deployment proof. Stage readiness additionally
-requires preserving the current relevant code/evidence in Git with scoped
-staging/commit, pushing the intended branch if stage must build remotely, and
-verifying that staging is actually built from that commit SHA.
+## Stage Deployment Proof
+
+Stage deployment was verified after this final browser regression:
+
+- application deploy commit:
+  `595bf93404794ade562b7f9fc4d6c1bdc09267c6`;
+- `origin/staging` points to the same SHA;
+- Railway backend `WMS` deployment
+  `321617c0-5727-445d-a426-c6b2ee952b3c` returned `SUCCESS`;
+- Railway frontend `web` deployment
+  `063166b4-a27e-4071-a558-b0aeeaeecd24` returned `SUCCESS`;
+- public web smoke passed on
+  `https://web-production-9e7c1.up.railway.app/`;
+- public API smoke passed on `/api/health` and backend `/health`;
+- live Chromium `headless=false` browser smoke passed for the staging login
+  shell at `1440x900`;
+- deployed frontend HTML references `/assets/ff-BEgAjw6d.js`, matching the
+  local Railway-arg build from the final tree.
+
+Stage proof artifact:
+`evidence/stage-deploy-verification-595bf93/STAGE_DEPLOY_VERIFICATION_595BF93_RU.md`.

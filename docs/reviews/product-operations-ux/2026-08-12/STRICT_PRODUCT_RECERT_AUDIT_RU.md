@@ -16,11 +16,13 @@ HEAD на момент старта проверки: `ea08284021818233516a19422
 уточнения роли Product / UX Agent в
 `HANDOFF_TO_NEW_CHAT_STRICT_WMS_GATE_RU.md`.
 
-## Текущий статус после strict final rerun 2026-08-14
+## Текущий статус после strict final rerun и stage verification 2026-08-14
 
 Оперативный итог на 2026-08-14: все active release features `F01-F19`, `F22`,
 `F23` имеют strict live Product evidence, повторный Final Integration Review
-прошёл, финальный live Product Browser Regression rerun прошёл.
+прошёл, финальный live Product Browser Regression rerun прошёл, stage развернут
+и проверен из application deploy commit
+`595bf93404794ade562b7f9fc4d6c1bdc09267c6`.
 
 Новый финальный источник истины:
 `docs/reviews/product-operations-ux/2026-08-12/evidence/final-browser-regression-rerun-live-strict/FINAL_BROWSER_REGRESSION_RERUN_LIVE_STRICT_RU.md`
@@ -40,8 +42,13 @@ Verdict: `FINAL_BROWSER_REGRESSION_PASSED`.
   Product Browser QA;
 - staff/routes и packaging/delete группы прошли live browser rerun.
 
-Ограничение: это не доказывает staging deployment. До stage-ready статуса нужен
-scoped Git commit/push и проверка, что stage собран именно из этого commit SHA.
+Stage proof:
+`docs/reviews/product-operations-ux/2026-08-12/evidence/stage-deploy-verification-595bf93/STAGE_DEPLOY_VERIFICATION_595BF93_RU.md`
+с verdict `STAGE_DEPLOY_VERIFIED`.
+
+Проверено: `origin/staging` указывает на итоговый SHA, Railway deployments
+`WMS`/`web` имеют status `SUCCESS`, public smoke passed, live Chromium
+`headless=false` browser smoke of the staging login shell passed.
 
 ## Главный вывод
 

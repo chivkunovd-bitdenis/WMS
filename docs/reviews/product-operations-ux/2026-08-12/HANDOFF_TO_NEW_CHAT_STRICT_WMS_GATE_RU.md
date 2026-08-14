@@ -6,21 +6,43 @@
 
 Ветка: `iteration/wms-product-ux-features-20260812`.
 
-Текущий HEAD на момент handoff: `ea08284021818233516a19422aee5f905c55d295`.
+Application deploy SHA после завершения strict gate и stage verification:
+`595bf93404794ade562b7f9fc4d6c1bdc09267c6`.
+
+Примечание: итоговые evidence-документы stage могут быть сохранены отдельным
+docs-only commit после деплоя. Это не меняет application deploy SHA, из которого
+собраны backend/frontend на Railway.
 
 Исторический статус на момент первоначального handoff: **не готов**, **не
 прошёл final integration review**, **не проходил финальный общий browser
 regression после возвратов**, **на staging не лить**.
 
-Текущий статус после автономного strict rerun 2026-08-14: per-feature strict
-live Product gates закрыты, повторный Final Integration Review прошёл, финальный
-live Product Browser Regression rerun прошёл. Оперативный artifact:
+Текущий статус после автономного strict rerun и stage verification 2026-08-14:
+per-feature strict live Product gates закрыты, повторный Final Integration
+Review прошёл, финальный live Product Browser Regression rerun прошёл, stage
+развернут и проверен из итогового commit. Оперативный browser-regression
+artifact:
 `evidence/final-browser-regression-rerun-live-strict/FINAL_BROWSER_REGRESSION_RERUN_LIVE_STRICT_RU.md`
 с verdict `FINAL_BROWSER_REGRESSION_PASSED`.
 
-Важно: это всё ещё не staging deployment proof. До слова “готово на stage”
-нужно сохранить релевантный результат в scoped Git commit, при необходимости
-push ветки, затем проверить, что stage реально собран из этого commit SHA.
+Stage proof artifact:
+`evidence/stage-deploy-verification-595bf93/STAGE_DEPLOY_VERIFICATION_595BF93_RU.md`
+с verdict `STAGE_DEPLOY_VERIFIED`.
+
+Проверенный stage:
+
+- application deploy SHA: `595bf93404794ade562b7f9fc4d6c1bdc09267c6`;
+- `origin/staging` -> этот SHA;
+- Railway backend `WMS` deployment
+  `321617c0-5727-445d-a426-c6b2ee952b3c` -> `SUCCESS`;
+- Railway frontend `web` deployment
+  `063166b4-a27e-4071-a558-b0aeeaeecd24` -> `SUCCESS`;
+- public web smoke passed:
+  `https://web-production-9e7c1.up.railway.app/`;
+- public API smoke passed:
+  `https://wms-production-780c.up.railway.app/health`;
+- live Chromium `headless=false` browser smoke passed at `1440x900`, screenshot
+  and JSON saved under `evidence/stage-deploy-verification-595bf93/`.
 
 ## 1. Что произошло и почему этот handoff нужен
 
