@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import io
 import uuid
+from collections.abc import Sequence
 from typing import Annotated, Literal
 
 from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, UploadFile, status
@@ -49,6 +50,7 @@ from app.services.product_tz_import_service import (
 from app.services.seller_shop_service import user_can_manage_seller_shops
 from app.services.seller_staff_permissions_service import PERM_PRODUCTS
 from app.services.seller_wb_catalog_service import (
+    FfCatalogRow,
     list_ff_catalog_rows,
     list_linked_wb_catalog_rows,
     list_seller_wb_catalog_rows,
@@ -546,15 +548,12 @@ def _tz_preview_out(result: object) -> ProductTzImportPreviewOut:
 async def _ff_catalog_out_rows(
     session: AsyncSession,
     tenant_id: uuid.UUID,
-    rows: list[object],
+    rows: Sequence[FfCatalogRow],
 ) -> list[FfCatalogOut]:
-    from app.services.seller_wb_catalog_service import SellerWbCatalogRow
-
-    typed_rows = [r for r in rows if isinstance(r, SellerWbCatalogRow)]
     counts = await mc_svc.count_available_for_products_batch(
         session,
         tenant_id,
-        {r.product_id for r in typed_rows},
+        {r.product_id for r in rows},
     )
     return [
         FfCatalogOut(
@@ -562,7 +561,7 @@ async def _ff_catalog_out_rows(
             has_packaging_instructions=bool((r.packaging_instructions or "").strip()),
             marking_available_count=counts.get(r.product_id, 0),
         )
-        for r in typed_rows
+        for r in rows
     ]
 
 
