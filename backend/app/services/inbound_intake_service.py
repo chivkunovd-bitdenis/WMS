@@ -12,6 +12,7 @@ from sqlalchemy.orm import selectinload
 from app.models.inbound_intake import (
     InboundIntakeBox,
     InboundIntakeBoxLine,
+    InboundIntakeCargoPlace,
     InboundIntakeDistributionLine,
     InboundIntakeLine,
     InboundIntakeRequest,
@@ -217,6 +218,7 @@ async def get_request(
                     InboundIntakeBoxLine.product
                 ),
             ),
+            selectinload(InboundIntakeRequest.cargo_places),
         )
     )
     res = await session.execute(stmt)
@@ -539,9 +541,69 @@ async def begin_receiving(
     tenant_id: uuid.UUID,
     request_id: uuid.UUID,
 ) -> InboundIntakeRequest:
-    return await primary_accept_request(
-        session, tenant_id, request_id, actual_box_count=None
+    req = await get_request(session, tenant_id, request_id)
+    if req is None:
+        raise InboundIntakeError("request_not_found")
+    if req.status == STATUS_DRAFT:
+        if len(req.lines) == 0:
+            raise InboundIntakeError("submit_empty")
+        req.status = STATUS_RECEIVING
+        req.primary_accepted_at = datetime.now(UTC)
+        await session.commit()
+        await session.refresh(req)
+        return req
+    return await primary_accept_request(session, tenant_id, request_id, actual_box_count=None)
+
+
+async def create_cargo_places(
+    session: AsyncSession,
+    tenant_id: uuid.UUID,
+    request_id: uuid.UUID,
+    *,
+    quantity: int,
+) -> list[InboundIntakeCargoPlace]:
+    if quantity < 1 or quantity > 1000:
+        raise InboundIntakeError("invalid_qty")
+    req = await get_request(session, tenant_id, request_id)
+    if req is None:
+        raise InboundIntakeError("request_not_found")
+    if req.status in DONE_STATUSES:
+        raise InboundIntakeError("not_editable")
+    start_number = (
+        max((place.place_number for place in req.cargo_places), default=0) + 1
     )
+    created: list[InboundIntakeCargoPlace] = []
+    for offset in range(quantity):
+        place = InboundIntakeCargoPlace(
+            tenant_id=tenant_id,
+            request_id=request_id,
+            place_number=start_number + offset,
+            internal_barcode=f"ICG-{request_id.hex[:8].upper()}-{start_number + offset:04d}",
+        )
+        session.add(place)
+        created.append(place)
+    await session.commit()
+    for place in created:
+        await session.refresh(place)
+    return created
+
+
+async def mark_cargo_place_label_printed(
+    session: AsyncSession,
+    tenant_id: uuid.UUID,
+    request_id: uuid.UUID,
+    place_id: uuid.UUID,
+) -> InboundIntakeCargoPlace:
+    req = await get_request(session, tenant_id, request_id)
+    if req is None:
+        raise InboundIntakeError("request_not_found")
+    place = await session.get(InboundIntakeCargoPlace, place_id)
+    if place is None or place.request_id != request_id or place.tenant_id != tenant_id:
+        raise InboundIntakeError("cargo_place_not_found")
+    place.label_printed_at = datetime.now(UTC)
+    await session.commit()
+    await session.refresh(place)
+    return place
 
 
 async def _request_barcode_index(
@@ -620,7 +682,6 @@ async def add_or_increment_received_product(
     *,
     product_id: uuid.UUID,
     actual_qty: int = 1,
-    allow_manual_product: bool = False,
 ) -> InboundIntakeLine:
     if actual_qty < 1:
         raise InboundIntakeError("invalid_qty")
@@ -692,7 +753,7 @@ async def scan_barcode_to_loose_intake(
         session,
         tenant_id,
         req,
-        include_seller_catalog=True,
+        include_seller_catalog=False,
     )
     product_id = idx.get(raw) or idx.get(raw.upper())
     if product_id is None:

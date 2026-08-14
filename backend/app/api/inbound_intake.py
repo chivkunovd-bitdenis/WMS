@@ -30,6 +30,7 @@ from app.db.session import get_db
 from app.models.inbound_intake import (
     InboundIntakeBox,
     InboundIntakeBoxLine,
+    InboundIntakeCargoPlace,
     InboundIntakeDistributionLine,
     InboundIntakeLine,
     InboundIntakeRequest,
@@ -80,6 +81,7 @@ class InboundIntakeLineExpectedPatch(BaseModel):
 class InboundIntakeLineReceiveBody(BaseModel):
     quantity: int = Field(ge=1, le=1_000_000_000)
 
+
 class InboundIntakeLineActualPatch(BaseModel):
     actual_qty: int = Field(ge=0, le=1_000_000_000)
 
@@ -106,6 +108,14 @@ class InboundIntakeBoxOut(BaseModel):
     lines: list[InboundIntakeBoxLineOut] = Field(default_factory=list)
 
 
+class InboundCargoPlaceOut(BaseModel):
+    id: str
+    place_number: int
+    internal_barcode: str
+    label_printed_at: str | None = None
+    created_at: str
+
+
 class InboundBoxBarcodeBody(BaseModel):
     barcode: str = Field(min_length=1, max_length=128)
 
@@ -121,7 +131,11 @@ class InboundReceivingScanBody(BaseModel):
 class InboundReceivingLineBody(BaseModel):
     product_id: uuid.UUID
     actual_qty: int = Field(default=1, ge=1, le=1_000_000_000)
-    source: Literal["seller_catalog", "manual_created"] = "seller_catalog"
+    source: Literal["seller_catalog"] = "seller_catalog"
+
+
+class InboundCargoPlaceCreate(BaseModel):
+    quantity: int = Field(default=1, ge=1, le=1000)
 
 
 class InboundBoxLineQuantityBody(BaseModel):
@@ -148,6 +162,7 @@ class InboundIntakeLineOut(BaseModel):
     length_mm: int | None = None
     width_mm: int | None = None
     height_mm: int | None = None
+    weight_g: int | None = None
     volume_liters: float | None = None
     added_by_fulfillment: bool = False
     expected_qty: int
@@ -195,6 +210,7 @@ class InboundIntakeRequestOut(BaseModel):
     distribution_completed_at: str | None = None
     sorting_remaining_qty: int = 0
     boxes: list[InboundIntakeBoxOut] = Field(default_factory=list)
+    cargo_places: list[InboundCargoPlaceOut] = Field(default_factory=list)
     lines: list[InboundIntakeLineOut]
 
 
@@ -240,6 +256,18 @@ def _box_out(b: InboundIntakeBox) -> InboundIntakeBoxOut:
     )
 
 
+def _cargo_place_out(place: InboundIntakeCargoPlace) -> InboundCargoPlaceOut:
+    return InboundCargoPlaceOut(
+        id=str(place.id),
+        place_number=int(place.place_number),
+        internal_barcode=place.internal_barcode,
+        label_printed_at=place.label_printed_at.isoformat()
+        if place.label_printed_at
+        else None,
+        created_at=place.created_at.isoformat(),
+    )
+
+
 def _map_inbound_box_err(exc: InboundIntakeBoxError) -> HTTPException:
     code = exc.code
     if code == "request_not_found":
@@ -274,7 +302,7 @@ def _map_inbound_box_err(exc: InboundIntakeBoxError) -> HTTPException:
 
 def _map_inbound_svc_err(exc: InboundIntakeError) -> HTTPException:
     code = exc.code
-    if code in ("request_not_found", "line_not_found"):
+    if code in ("request_not_found", "line_not_found", "cargo_place_not_found"):
         return HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=code)
     if code in (
         "not_draft",
@@ -376,6 +404,12 @@ def _request_out(
         else None,
         sorting_remaining_qty=svc.sorting_remaining_qty(r),
         boxes=boxes_out,
+        cargo_places=[
+            _cargo_place_out(place)
+            for place in sorted(r.cargo_places, key=lambda x: x.place_number)
+        ]
+        if "cargo_places" not in sa_inspect(r).unloaded
+        else [],
         lines=lines_out,
     )
 
@@ -397,6 +431,7 @@ def _line_out_from_orm(
         length_mm=product.length_mm,
         width_mm=product.width_mm,
         height_mm=product.height_mm,
+        weight_g=product.weight_g,
         volume_liters=(
             product.volume_liters
             if product.volume_liters is not None
@@ -561,6 +596,28 @@ async def create_inbound_request(
     return _request_out(r, lines=[], boxes=[])
 
 
+@router.post(
+    "/{request_id}/begin-receiving",
+    response_model=InboundIntakeRequestOut,
+)
+async def begin_inbound_receiving(
+    request_id: uuid.UUID,
+    user: Annotated[User, Depends(require_reception_access)],
+    session: Annotated[AsyncSession, Depends(get_db)],
+) -> InboundIntakeRequestOut:
+    try:
+        r = await svc.begin_receiving(session, user.tenant_id, request_id)
+    except InboundIntakeError as exc:
+        raise _map_inbound_svc_err(exc) from None
+    r2 = await svc.get_request(session, user.tenant_id, r.id)
+    if r2 is None:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="request_missing",
+        )
+    return _request_out(r2)
+
+
 @router.get("/{request_id}", response_model=InboundIntakeRequestOut)
 async def get_inbound_request(
     request_id: uuid.UUID,
@@ -703,6 +760,51 @@ async def create_inbound_box(
 
 
 @router.post(
+    "/{request_id}/cargo-places",
+    response_model=list[InboundCargoPlaceOut],
+    status_code=status.HTTP_201_CREATED,
+)
+async def create_inbound_cargo_places(
+    request_id: uuid.UUID,
+    body: InboundCargoPlaceCreate,
+    user: Annotated[User, Depends(require_reception_access)],
+    session: Annotated[AsyncSession, Depends(get_db)],
+) -> list[InboundCargoPlaceOut]:
+    try:
+        places = await svc.create_cargo_places(
+            session,
+            user.tenant_id,
+            request_id,
+            quantity=body.quantity,
+        )
+    except InboundIntakeError as exc:
+        raise _map_inbound_svc_err(exc) from None
+    return [_cargo_place_out(place) for place in places]
+
+
+@router.post(
+    "/{request_id}/cargo-places/{place_id}/mark-label-printed",
+    response_model=InboundCargoPlaceOut,
+)
+async def mark_inbound_cargo_place_label_printed(
+    request_id: uuid.UUID,
+    place_id: uuid.UUID,
+    user: Annotated[User, Depends(require_reception_access)],
+    session: Annotated[AsyncSession, Depends(get_db)],
+) -> InboundCargoPlaceOut:
+    try:
+        place = await svc.mark_cargo_place_label_printed(
+            session,
+            user.tenant_id,
+            request_id,
+            place_id,
+        )
+    except InboundIntakeError as exc:
+        raise _map_inbound_svc_err(exc) from None
+    return _cargo_place_out(place)
+
+
+@router.post(
     "/{request_id}/import-boxes/preview",
     response_model=BoxImportPreviewOut,
 )
@@ -831,7 +933,6 @@ async def add_received_product_line(
             request_id,
             product_id=body.product_id,
             actual_qty=body.actual_qty,
-            allow_manual_product=body.source == "manual_created",
         )
     except InboundIntakeError as exc:
         raise _map_inbound_svc_err(exc) from None

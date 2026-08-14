@@ -58,6 +58,7 @@ class Product(Base):
     length_mm: Mapped[int | None] = mapped_column(Integer, nullable=True)
     width_mm: Mapped[int | None] = mapped_column(Integer, nullable=True)
     height_mm: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    weight_g: Mapped[int | None] = mapped_column(Integer, nullable=True)
     volume_liters: Mapped[float | None] = mapped_column(Float, nullable=True)
     packaging_instructions: Mapped[str | None] = mapped_column(Text, nullable=True)
     requires_honest_sign: Mapped[bool] = mapped_column(

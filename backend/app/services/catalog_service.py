@@ -355,6 +355,14 @@ def _normalize_dimensions(
     return length_mm, width_mm, height_mm
 
 
+def _normalize_weight_g(weight_g: int | None) -> int | None:
+    if weight_g is None:
+        return None
+    if weight_g <= 0:
+        raise CatalogError("invalid_weight")
+    return weight_g
+
+
 async def create_product(
     session: AsyncSession,
     tenant_id: uuid.UUID,
@@ -364,6 +372,7 @@ async def create_product(
     length_mm: int | None = None,
     width_mm: int | None = None,
     height_mm: int | None = None,
+    weight_g: int | None = None,
     seller_id: uuid.UUID | None = None,
     wb_barcode: str | None = None,
     wb_size: str | None = None,
@@ -373,6 +382,7 @@ async def create_product(
     commit: bool = True,
 ) -> Product:
     dim_l, dim_w, dim_h = _normalize_dimensions(length_mm, width_mm, height_mm)
+    normalized_weight_g = _normalize_weight_g(weight_g)
     if seller_id is not None:
         sel = await session.get(Seller, seller_id)
         if sel is None or sel.tenant_id != tenant_id:
@@ -389,6 +399,7 @@ async def create_product(
         length_mm=dim_l,
         width_mm=dim_w,
         height_mm=dim_h,
+        weight_g=normalized_weight_g,
         volume_liters=volume_liters_from_mm(dim_l, dim_w, dim_h),
         wb_barcode=barcode,
         wb_size=size,
@@ -459,15 +470,20 @@ async def update_product_dimensions(
     length_mm: int | None,
     width_mm: int | None,
     height_mm: int | None,
+    weight_g: int | None = None,
+    weight_g_set: bool = False,
     commit: bool = True,
 ) -> Product:
     dim_l, dim_w, dim_h = _normalize_dimensions(length_mm, width_mm, height_mm)
+    normalized_weight_g = _normalize_weight_g(weight_g) if weight_g_set else None
     p = await get_product(session, tenant_id, product_id)
     if p is None:
         raise CatalogError("product_not_found")
     p.length_mm = dim_l
     p.width_mm = dim_w
     p.height_mm = dim_h
+    if weight_g_set:
+        p.weight_g = normalized_weight_g
     p.volume_liters = volume_liters_from_mm(dim_l, dim_w, dim_h)
     if commit:
         await session.commit()

@@ -73,6 +73,7 @@ class ProductCreate(BaseModel):
     length_mm: int | None = Field(default=None, ge=1, le=10_000_000)
     width_mm: int | None = Field(default=None, ge=1, le=10_000_000)
     height_mm: int | None = Field(default=None, ge=1, le=10_000_000)
+    weight_g: int | None = Field(default=None, ge=1, le=1_000_000_000)
     seller_id: uuid.UUID | None = None
     wb_barcode: str | None = Field(default=None, max_length=64)
     wb_size: str | None = Field(default=None, max_length=64)
@@ -141,6 +142,7 @@ class ProductOut(BaseModel):
     length_mm: int | None = None
     width_mm: int | None = None
     height_mm: int | None = None
+    weight_g: int | None = None
     seller_id: str | None
     seller_name: str | None
     wb_nm_id: int | None = None
@@ -210,9 +212,10 @@ class PackagingInstructionsPatch(BaseModel):
 
 
 class ProductDimensionsPatch(BaseModel):
-    length_mm: int = Field(ge=1, le=10_000_000)
-    width_mm: int = Field(ge=1, le=10_000_000)
-    height_mm: int = Field(ge=1, le=10_000_000)
+    length_mm: int | None = Field(default=None, ge=1, le=10_000_000)
+    width_mm: int | None = Field(default=None, ge=1, le=10_000_000)
+    height_mm: int | None = Field(default=None, ge=1, le=10_000_000)
+    weight_g: int | None = Field(default=None, ge=1, le=1_000_000_000)
 
 
 class ProductHonestSignBulkPatch(BaseModel):
@@ -283,6 +286,7 @@ def _product_out(p: object) -> ProductOut:
         length_mm=p.length_mm,
         width_mm=p.width_mm,
         height_mm=p.height_mm,
+        weight_g=p.weight_g,
         seller_id=str(p.seller_id) if p.seller_id else None,
         seller_name=p.seller.name if p.seller is not None else None,
         wb_nm_id=int(p.wb_nm_id) if p.wb_nm_id is not None else None,
@@ -477,6 +481,7 @@ async def post_product(
             length_mm=body.length_mm,
             width_mm=body.width_mm,
             height_mm=body.height_mm,
+            weight_g=body.weight_g,
             seller_id=body.seller_id,
             wb_barcode=body.wb_barcode,
             wb_size=body.wb_size,
@@ -485,10 +490,10 @@ async def post_product(
             requires_honest_sign=body.requires_honest_sign,
         )
     except CatalogError as exc:
-        if exc.code == "invalid_dimensions":
+        if exc.code in ("invalid_dimensions", "invalid_weight"):
             raise HTTPException(
                 status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
-                detail="invalid_dimensions",
+                detail=exc.code,
             ) from None
         if exc.code in {"sku_taken", "barcode_taken"}:
             raise HTTPException(
@@ -670,19 +675,26 @@ async def patch_product_dimensions(
     elif user.role != FULFILLMENT_ADMIN:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="forbidden")
     try:
+        patch_fields = body.model_dump(exclude_unset=True)
+        dimension_keys = {"length_mm", "width_mm", "height_mm"}
+        touched_dimensions = bool(dimension_keys & patch_fields.keys())
+        if touched_dimensions and not dimension_keys.issubset(patch_fields.keys()):
+            raise CatalogError("invalid_dimensions")
         updated = await update_product_dimensions(
             session,
             user.tenant_id,
             product_id,
-            length_mm=body.length_mm,
-            width_mm=body.width_mm,
-            height_mm=body.height_mm,
+            length_mm=patch_fields.get("length_mm") if touched_dimensions else p.length_mm,
+            width_mm=patch_fields.get("width_mm") if touched_dimensions else p.width_mm,
+            height_mm=patch_fields.get("height_mm") if touched_dimensions else p.height_mm,
+            weight_g=patch_fields.get("weight_g"),
+            weight_g_set="weight_g" in patch_fields,
         )
     except CatalogError as exc:
-        if exc.code == "invalid_dimensions":
+        if exc.code in ("invalid_dimensions", "invalid_weight"):
             raise HTTPException(
                 status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
-                detail="invalid_dimensions",
+                detail=exc.code,
             ) from None
         if exc.code == "product_not_found":
             raise HTTPException(
