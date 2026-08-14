@@ -6,6 +6,7 @@ import {
   apiCreateSubmittedInbound,
   beginInboundReceiving,
   beginInboundReceivingWithBoxes,
+  expandInboundPackages,
   ffInboundBoxAddManualQty,
   loginFfAdmin,
   openFfInboundDoc,
@@ -59,6 +60,7 @@ test.describe('FF inbound box piece intake', () => {
     await loginFfAdmin(page, seed.adminEmail, seed.password);
     await openFfInboundDoc(page, seed, { skipLogin: true });
 
+    await expandInboundPackages(page);
     await page.getByTestId('ff-inbound-add-to-box').click();
     await page.getByTestId('ff-inbound-box-row').first().getByRole('button', { name: 'Наполнить' }).click();
     await expect(page.getByTestId('ff-inbound-box-add-dialog')).toBeVisible();
@@ -190,6 +192,7 @@ test('STAB-IN-FE-03 box add modal product row and target box qty', async ({ page
   await page.getByTestId('ff-inbound-queue-table').locator('tbody tr').first().click();
   await expect(page.getByTestId('ff-inbound-doc-root')).toBeVisible();
 
+  await expandInboundPackages(page);
   for (let i = 0; i < 2; i++) {
     await Promise.all([
       waitForPostOk(page, INBOUND_API, (u) => u.endsWith('/boxes')),

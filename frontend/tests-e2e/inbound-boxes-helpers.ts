@@ -464,6 +464,7 @@ export async function apiCreateSubmittedInbound(
 
 /** FF modal: create box, open fill, direct qty field, hide modal. */
 export async function ffInboundBoxAddManualQty(page: Page, quantity: number): Promise<void> {
+  await expandInboundPackages(page);
   const boxRows = page.getByTestId('ff-inbound-box-row');
   const boxCountBefore = await boxRows.count();
   await Promise.all([
@@ -484,6 +485,25 @@ export async function ffInboundBoxAddManualQty(page: Page, quantity: number): Pr
     page.getByTestId('ff-inbound-box-add-dismiss').click(),
   ]);
   await expect(page.getByTestId('ff-inbound-box-add-dialog')).toBeHidden();
+}
+
+export async function expandInboundPackages(page: Page): Promise<void> {
+  const panel = page.getByTestId('ff-inbound-boxes-panel');
+  if (!(await panel.isVisible().catch(() => false))) {
+    await page.getByTestId('ff-inbound-packages-toggle').click();
+  }
+  await expect(panel).toBeVisible();
+}
+
+export async function scanInboundReceiving(page: Page, barcode: string): Promise<void> {
+  await Promise.all([
+    waitForPostOk(page, INBOUND_API, (u) => u.includes('/receiving/scan')),
+    (async () => {
+      await page.getByTestId('ff-inbound-doc-root').click({ position: { x: 8, y: 8 } });
+      await page.keyboard.type(barcode, { delay: 1 });
+      await page.keyboard.press('Enter');
+    })(),
+  ]);
 }
 
 /** Set quantity for the first line in the active open box (blur saves via PUT). */

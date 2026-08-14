@@ -6,6 +6,7 @@ import {
   INBOUND_API,
   apiCreateSubmittedInbound,
   beginInboundReceiving,
+  expandInboundPackages,
   loginFfAdmin,
   openFfInboundDoc,
   seedFfSellerInbound,
@@ -30,6 +31,7 @@ test.describe('FF inbound box import from xlsx', () => {
     await loginFfAdmin(page, seed.adminEmail, seed.password);
     await openFfInboundDoc(page, seed, { skipLogin: true });
 
+    await expandInboundPackages(page);
     await expect(page.getByTestId('ff-inbound-import-boxes')).toBeVisible();
     await page.getByTestId('ff-inbound-import-boxes').click();
     await expect(page.getByTestId('ff-inbound-box-import-dialog')).toBeVisible();
@@ -67,6 +69,7 @@ test.describe('FF inbound box import from xlsx', () => {
     await loginFfAdmin(page, seed.adminEmail, seed.password);
     await openFfInboundDoc(page, seed, { skipLogin: true });
 
+    await expandInboundPackages(page);
     await page.getByTestId('ff-inbound-import-boxes').click();
     await expect(page.getByTestId('ff-inbound-box-import-dialog')).toBeVisible();
 

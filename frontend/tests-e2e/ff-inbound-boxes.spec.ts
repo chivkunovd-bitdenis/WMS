@@ -17,6 +17,7 @@ import {
   loginSellerPortal,
   openFfInboundDoc,
   beginInboundReceivingWithBoxes,
+  expandInboundPackages,
   seedFfSellerInbound,
   expectSellerPortalReady,
   sellerPath,
@@ -113,7 +114,7 @@ test.describe('US-B-01 FF receiving creates on-demand boxes', () => {
 
     await expect(page.getByTestId('ff-inbound-planned-boxes')).toContainText('4');
     await expect(page.getByTestId('ff-inbound-status-chip')).toContainText('Приёмка');
-    await expect(page.getByTestId('ff-inbound-boxes-panel')).toBeVisible();
+    await expandInboundPackages(page);
     await expect(page.getByTestId('ff-inbound-box-row')).toHaveCount(4);
 
     await page.getByTestId('ff-inbound-close').click();
@@ -121,7 +122,7 @@ test.describe('US-B-01 FF receiving creates on-demand boxes', () => {
 
     await page.getByTestId('nav-ff-reception').click();
     await page.getByTestId('ff-inbound-queue-table').locator('tbody tr').first().click();
-    await expect(page.getByTestId('ff-inbound-boxes-panel')).toBeVisible();
+    await expandInboundPackages(page);
     await expect(page.getByTestId('ff-inbound-box-row')).toHaveCount(4);
   });
 });
@@ -141,7 +142,7 @@ test.describe('US-B-02 inbound box barcodes and print actions', () => {
     await beginInboundReceivingWithBoxes(page.request, h, rid, { boxCount: 3, closeEach: true });
     await openFfInboundDoc(page, seed);
 
-    await expect(page.getByTestId('ff-inbound-boxes-panel')).toBeVisible();
+    await expandInboundPackages(page);
 
     const rows = page.getByTestId('ff-inbound-box-row');
     await expect(rows).toHaveCount(3);

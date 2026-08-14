@@ -5,8 +5,10 @@ import {
   INBOUND_API,
   apiCreateSubmittedInbound,
   beginInboundReceiving,
+  expandInboundPackages,
   loginFfAdmin,
   loginSellerPortal,
+  scanInboundReceiving,
   seedFfSellerInbound,
 } from './inbound-boxes-helpers';
 
@@ -86,13 +88,8 @@ test('inbound receiving v2 — scan, manual edit, finish with discrepancy', asyn
 
   await expect(page.getByTestId('ff-inbound-line-actual-display').first()).toHaveText('0');
 
-  await page.getByTestId('ff-inbound-receiving-scan-input').fill(seed.sku);
-  await Promise.all([
-    waitForPostOk(page, INBOUND_API, (u) => u.includes('/receiving/scan')),
-    page.getByTestId('ff-inbound-receiving-scan-input').press('Enter'),
-  ]);
+  await scanInboundReceiving(page, seed.sku);
   await expect(page.getByTestId('ff-inbound-line-actual-display').first()).toHaveText('1');
-  await expect(page.getByTestId('ff-inbound-receiving-scan-input')).toBeFocused();
   await expect(page.getByTestId('ff-inbound-received-summary')).toContainText('1 из 3');
 
   await page.getByTestId('ff-inbound-line-manual-edit').first().click();
@@ -148,7 +145,7 @@ test('inbound receiving v2 — ordinary receiving hides return autoprint switch'
   await loginFfAdmin(page, seed.adminEmail, seed.password);
   await page.getByTestId('nav-ff-reception').click();
   await page.locator(`[data-testid="ff-inbound-queue-row"][data-request-id="${requestId}"]`).click();
-  await expect(page.getByTestId('ff-inbound-receiving-scan-panel')).toBeVisible();
+  await expect(page.getByTestId('ff-inbound-doc-root')).toBeVisible();
   await expect(page.getByTestId('ff-inbound-operation-type')).toContainText('Поставка');
   await expect(page.getByTestId('ff-inbound-return-autoprint')).toHaveCount(0);
 });
@@ -276,7 +273,7 @@ test('inbound receiving v2 — multiple boxes stay independent', async ({ page }
   await loginFfAdmin(page, seed.adminEmail, seed.password);
   await page.getByTestId('nav-ff-reception').click();
   await page.getByTestId('ff-inbound-queue-table').locator('tbody tr').first().click();
-  await expect(page.getByTestId('ff-inbound-receiving-scan-panel')).toBeVisible();
+  await expandInboundPackages(page);
 
   for (let i = 0; i < 3; i++) {
     await Promise.all([
@@ -306,11 +303,7 @@ test('inbound receiving v2 — multiple boxes stay independent', async ({ page }
   await expect(page.getByTestId('ff-inbound-box-row').nth(1)).toContainText(seed.sku);
   await expect(page.getByTestId('ff-inbound-add-to-box')).toBeEnabled();
 
-  await page.getByTestId('ff-inbound-receiving-scan-input').fill(seed.sku);
-  await Promise.all([
-    waitForPostOk(page, INBOUND_API, (u) => u.includes('/receiving/scan')),
-    page.getByTestId('ff-inbound-receiving-scan-submit').click(),
-  ]);
+  await scanInboundReceiving(page, seed.sku);
   await expect(page.getByTestId('ff-inbound-line-actual-display').first()).toHaveText('2', {
     timeout: 20_000,
   });
@@ -332,9 +325,8 @@ test('inbound receiving v2 — foreign barcode shows toast error', async ({ page
   await loginFfAdmin(page, seed.adminEmail, seed.password);
   await page.getByTestId('nav-ff-reception').click();
   await page.getByTestId('ff-inbound-queue-table').locator('tbody tr').first().click();
-  await expect(page.getByTestId('ff-inbound-receiving-scan-input')).toBeVisible();
+  await expect(page.getByTestId('ff-inbound-doc-root')).toBeVisible();
 
-  await page.getByTestId('ff-inbound-receiving-scan-input').fill('UNKNOWN-BARCODE-999');
   await Promise.all([
     page.waitForResponse(
       (r) =>
@@ -342,10 +334,14 @@ test('inbound receiving v2 — foreign barcode shows toast error', async ({ page
         r.request().method() === 'POST' &&
         r.status() === 422,
     ),
-    page.getByTestId('ff-inbound-receiving-scan-submit').click(),
+    (async () => {
+      await page.getByTestId('ff-inbound-doc-root').click({ position: { x: 8, y: 8 } });
+      await page.keyboard.type('UNKNOWN-BARCODE-999', { delay: 1 });
+      await page.keyboard.press('Enter');
+    })(),
   ]);
   await expect(page.getByTestId('ff-inbound-scan-error-snackbar')).toContainText(
-    'Товар не найден в этой поставке',
+    'Добавить товар',
   );
 });
 
@@ -360,15 +356,6 @@ test('inbound receiving v2 — return accepts seller catalog discrepancy and dim
   const factBarcode = `wb-return-fact-${suffix}`;
   const manualPickerSku = `sku-return-picker-${suffix}`;
   const manualPickerBarcode = `wb-return-picker-${suffix}`;
-  const manualCreatedSku = `sku-return-created-${suffix}`;
-  const manualCreatedBarcode = `wb-return-created-${suffix}`;
-  const otherSellerName = `Other Return Seller ${suffix}`;
-
-  const otherSeller = await page.request.post('/api/sellers', {
-    headers: adminHeaders,
-    data: { name: otherSellerName },
-  });
-  expect(otherSeller.ok()).toBeTruthy();
 
   const factProductRes = await page.request.post('/api/products', {
     headers: adminHeaders,
@@ -427,15 +414,7 @@ test('inbound receiving v2 — return accepts seller catalog discrepancy and dim
   await expect(page.getByTestId('ff-inbound-doc-root')).toBeVisible();
   await expect(page.getByTestId('ff-inbound-operation-type')).toContainText('Возврат');
   await expect(page.getByTestId('ff-inbound-return-autoprint')).toBeVisible();
-  await page.getByTestId('ff-inbound-receiving-create-manual-product').click();
-  await expect(page.getByTestId('ff-manual-product-dialog')).toBeVisible();
-  await page.getByTestId('ff-manual-product-seller').click();
-  const sellerListbox = page.getByRole('listbox');
-  await expect(sellerListbox.getByText(/Box Seller/)).toBeVisible();
-  await expect(sellerListbox.getByText(otherSellerName, { exact: true })).toHaveCount(0);
-  await page.keyboard.press('Escape');
-  await page.getByRole('button', { name: 'Отмена' }).click();
-  await expect(page.getByTestId('ff-manual-product-dialog')).toHaveCount(0);
+  await expect(page.getByTestId('ff-inbound-receiving-create-manual-product')).toHaveCount(0);
   await page.getByTestId('ff-inbound-return-autoprint').click();
   await armPrintCapture(page);
 
@@ -457,28 +436,18 @@ test('inbound receiving v2 — return accepts seller catalog discrepancy and dim
   await expect(manualPickerRow).toBeVisible();
   await expect(manualPickerRow.getByTestId('ff-inbound-line-actual-display')).toHaveText('1');
 
-  await page.getByTestId('ff-inbound-receiving-create-manual-product').click();
-  await expect(page.getByTestId('ff-manual-product-dialog')).toBeVisible();
-  await page.getByTestId('ff-manual-product-name').fill('Return Created Manual Product');
-  await page.getByTestId('ff-manual-product-sku').fill(manualCreatedSku);
-  await page.getByTestId('ff-manual-product-barcode').fill(manualCreatedBarcode);
-  await page.getByTestId('ff-manual-product-length').fill('100');
-  await page.getByTestId('ff-manual-product-width').fill('80');
-  await page.getByTestId('ff-manual-product-height').fill('40');
+  await page.getByTestId('ff-inbound-receiving-add-products').click();
+  await page.getByTestId('ff-inbound-picker-search').fill(factSku);
+  await page.getByTestId('ff-inbound-picker-qty').first().fill('1');
   await Promise.all([
-    waitForPostOk(page, '/api/products'),
     waitForPostOk(page, INBOUND_API, (u) => u.includes('/receiving/lines')),
-    page.getByTestId('ff-manual-product-submit').click(),
+    page.getByTestId('ff-inbound-picker-apply').click(),
   ]);
-  await expect(page.getByTestId('ff-manual-product-dialog')).toHaveCount(0);
+  await expect(page.getByTestId('ff-inbound-picker')).toHaveCount(0);
   await page.waitForTimeout(200);
   expect(await lastCapturedPrintHtml(page)).toBe(PRINT_SENTINEL);
 
-  await page.getByTestId('ff-inbound-receiving-scan-input').fill(factBarcode);
-  await Promise.all([
-    waitForPostOk(page, INBOUND_API, (u) => u.includes('/receiving/scan')),
-    page.getByTestId('ff-inbound-receiving-scan-submit').click(),
-  ]);
+  await scanInboundReceiving(page, factBarcode);
   await page.waitForFunction(
     (barcode) =>
       Boolean(
@@ -496,7 +465,7 @@ test('inbound receiving v2 — return accepts seller catalog discrepancy and dim
   const factRow = page.getByTestId('ff-inbound-line-row-discrepancy').filter({ hasText: factSku });
   await expect(factRow).toBeVisible();
   await expect(factRow).toContainText('Добавлено ФФ');
-  await expect(factRow.getByTestId('ff-inbound-line-actual-display')).toHaveText('1');
+  await expect(factRow.getByTestId('ff-inbound-line-actual-display')).toHaveText('2');
 
   await factRow.getByTestId('ff-inbound-line-dimensions-edit').click();
   await expect(page.getByTestId('ff-inbound-dimensions-dialog')).toBeVisible();
@@ -595,11 +564,16 @@ test('inbound receiving v2 — return autoprint fails closed when scanned line h
   await page.getByTestId('ff-inbound-return-autoprint').click();
   await armPrintCapture(page);
 
-  await page.getByTestId('ff-inbound-receiving-scan-input').fill(factBarcode);
+  await page.getByTestId('ff-inbound-receiving-add-products').click();
+  await page.getByTestId('ff-inbound-picker-search').fill(factSku);
+  await page.getByTestId('ff-inbound-picker-qty').first().fill('1');
   await Promise.all([
-    waitForPostOk(page, INBOUND_API, (u) => u.includes('/receiving/scan')),
-    page.getByTestId('ff-inbound-receiving-scan-submit').click(),
+    waitForPostOk(page, INBOUND_API, (u) => u.includes('/receiving/lines')),
+    page.getByTestId('ff-inbound-picker-apply').click(),
   ]);
+  await expect(page.getByTestId('ff-inbound-picker')).toHaveCount(0);
+
+  await scanInboundReceiving(page, factBarcode);
 
   await expect(page.getByTestId('ff-inbound-scan-error-snackbar')).toContainText(
     'У товара нет ШК WB для печати.',
@@ -610,7 +584,7 @@ test('inbound receiving v2 — return autoprint fails closed when scanned line h
 
   const factRow = page.getByTestId('ff-inbound-line-row-discrepancy').filter({ hasText: factSku });
   await expect(factRow).toBeVisible();
-  await expect(factRow.getByTestId('ff-inbound-line-actual-display')).toHaveText('1');
+  await expect(factRow.getByTestId('ff-inbound-line-actual-display')).toHaveText('2');
 });
 
 // TC-NEW-IN-07 — селлер после проведения видит фактическую карточку: недостача, излишек и строка "Добавлено ФФ".
@@ -625,11 +599,25 @@ test('inbound receiving v2 — seller sees conducted factual card after FF short
   });
   const addedSku = `ff-added-${suffix}`;
   const addedBarcode = `ff-added-barcode-${suffix}`;
+  const adminHeaders = { Authorization: `Bearer ${seed.token}` };
+  const addedProduct = await page.request.post('/api/products', {
+    headers: adminHeaders,
+    data: {
+      name: 'FF Added Seller Card Product',
+      sku_code: addedSku,
+      wb_barcode: addedBarcode,
+      seller_id: seed.sellerId,
+      length_mm: 100,
+      width_mm: 80,
+      height_mm: 50,
+    },
+  });
+  expect(addedProduct.ok()).toBeTruthy();
 
   await loginFfAdmin(page, seed.adminEmail, seed.password);
   await page.getByTestId('nav-ff-reception').click();
   await page.getByTestId('ff-inbound-queue-table').locator('tbody tr').first().click();
-  await expect(page.getByTestId('ff-inbound-receiving-scan-panel')).toBeVisible();
+  await expect(page.getByTestId('ff-inbound-doc-root')).toBeVisible();
 
   await page.getByTestId('ff-inbound-line-manual-edit').first().click();
   await page.getByTestId('ff-inbound-line-actual').fill('2');
@@ -639,20 +627,14 @@ test('inbound receiving v2 — seller sees conducted factual card after FF short
   ]);
   await expect(page.getByTestId('ff-inbound-line-actual-display').first()).toHaveText('2');
 
-  await page.getByTestId('ff-inbound-receiving-create-manual-product').click();
-  await expect(page.getByTestId('ff-manual-product-dialog')).toBeVisible();
-  await page.getByTestId('ff-manual-product-name').fill('FF Added Seller Card Product');
-  await page.getByTestId('ff-manual-product-sku').fill(addedSku);
-  await page.getByTestId('ff-manual-product-barcode').fill(addedBarcode);
-  await page.getByTestId('ff-manual-product-length').fill('100');
-  await page.getByTestId('ff-manual-product-width').fill('80');
-  await page.getByTestId('ff-manual-product-height').fill('50');
+  await page.getByTestId('ff-inbound-receiving-add-products').click();
+  await page.getByTestId('ff-inbound-picker-search').fill(addedSku);
+  await page.getByTestId('ff-inbound-picker-qty').first().fill('1');
   await Promise.all([
-    waitForPostOk(page, '/api/products'),
     waitForPostOk(page, INBOUND_API, (u) => u.includes('/receiving/lines')),
-    page.getByTestId('ff-manual-product-submit').click(),
+    page.getByTestId('ff-inbound-picker-apply').click(),
   ]);
-  await expect(page.getByTestId('ff-manual-product-dialog')).toHaveCount(0);
+  await expect(page.getByTestId('ff-inbound-picker')).toHaveCount(0);
 
   const ffAddedRow = page.getByTestId('ff-inbound-line-row-discrepancy').filter({ hasText: addedSku });
   await expect(ffAddedRow).toBeVisible();
@@ -787,11 +769,11 @@ test('inbound receiving v2 — seller factual card uses human warehouse fallback
   expect(warehouseSummaryText).not.toMatch(uuidPattern);
 });
 
-// TC-NEW-IN-06 — активная приёмка: FF создаёт новый ручной товар, он сразу попадает в факт как расхождение.
-test('inbound receiving v2 — active receiving creates manual product as FF-added fact line', async ({
+// TC-NEW-IN-06 — отсутствующий товар не создаётся из активной приёмки.
+test('inbound receiving v2 — active receiving offers only seller catalog add', async ({
   page,
 }) => {
-  const suffix = `rcv-manual-active-${Date.now()}`;
+  const suffix = `rcv-no-manual-active-${Date.now()}`;
   const seed = await seedFfSellerInbound(page, suffix);
   const adminHeaders = { Authorization: `Bearer ${seed.token}` };
   const requestId = await apiCreateSubmittedInbound(page.request, seed, {
@@ -800,226 +782,20 @@ test('inbound receiving v2 — active receiving creates manual product as FF-add
   });
   await beginInboundReceiving(page.request, adminHeaders, requestId);
 
-  const manualSku = `manual-active-${suffix}`;
-  const manualBarcode = `manual-active-barcode-${suffix}`;
-
   await loginFfAdmin(page, seed.adminEmail, seed.password);
   await page.getByTestId('nav-ff-reception').click();
   await page.getByTestId('ff-inbound-queue-table').locator('tbody tr').first().click();
-  await expect(page.getByTestId('ff-inbound-receiving-scan-panel')).toBeVisible();
+  await expect(page.getByTestId('ff-inbound-doc-root')).toBeVisible();
+  await expect(page.getByTestId('ff-inbound-receiving-create-manual-product')).toHaveCount(0);
 
-  await page.getByTestId('ff-inbound-receiving-create-manual-product').click();
-  await expect(page.getByTestId('ff-manual-product-dialog')).toBeVisible();
-  await page.getByTestId('ff-manual-product-name').fill('Manual Active Receiving Product');
-  await page.getByTestId('ff-manual-product-sku').fill(manualSku);
-  await page.getByTestId('ff-manual-product-barcode').fill(manualBarcode);
-  await page.getByTestId('ff-manual-product-length').fill('100');
-  await page.getByTestId('ff-manual-product-width').fill('80');
-  await page.getByTestId('ff-manual-product-height').fill('50');
-
-  await Promise.all([
-    waitForPostOk(page, '/api/products'),
-    waitForPostOk(page, INBOUND_API, (u) => u.includes('/receiving/lines')),
-    page.getByTestId('ff-manual-product-submit').click(),
-  ]);
-
-  await expect(page.getByTestId('ff-manual-product-dialog')).toHaveCount(0);
-  const factRow = page.getByTestId('ff-inbound-line-row-discrepancy').filter({ hasText: manualSku });
-  await expect(factRow).toBeVisible();
-  await expect(factRow.getByTestId('ff-inbound-line-added-by-ff')).toContainText('Добавлено ФФ');
-  await expect(factRow.getByTestId('ff-inbound-line-expected')).toHaveText('0');
-  await expect(factRow.getByTestId('ff-inbound-line-actual-display')).toHaveText('1');
-});
-
-// TC-NEW-IN-06 — негатив: если созданный товар не добавился в факт, повторная отправка привязывает тот же товар без второго create.
-test('inbound receiving v2 — manual product attach failure retries without duplicate product create', async ({
-  page,
-}) => {
-  const suffix = `rcv-manual-fail-${Date.now()}`;
-  const seed = await seedFfSellerInbound(page, suffix);
-  const adminHeaders = { Authorization: `Bearer ${seed.token}` };
-  const requestId = await apiCreateSubmittedInbound(page.request, seed, {
-    plannedBoxes: 0,
-    expectedQty: 1,
-  });
-  await beginInboundReceiving(page.request, adminHeaders, requestId);
-
-  const manualSku = `manual-fail-${suffix}`;
-  const receivingBodies: Array<{ product_id?: string; actual_qty?: number; source?: string }> = [];
-  let receivingLineAttempts = 0;
-  let productCreatePosts = 0;
-
-  await page.route(`**${INBOUND_API}/**/receiving/lines`, async (route) => {
-    if (route.request().method() === 'POST') {
-      receivingLineAttempts += 1;
-      receivingBodies.push(
-        JSON.parse(route.request().postData() ?? '{}') as {
-          product_id?: string;
-          actual_qty?: number;
-          source?: string;
-        },
-      );
-      if (receivingLineAttempts === 1) {
-        await route.fulfill({ status: 500, body: 'receiving_line_failed' });
-        return;
-      }
-      await route.fallback();
-      return;
-    }
-    await route.fallback();
-  });
-  page.on('request', (request) => {
-    if (request.method() === 'POST' && request.url().includes('/api/products')) {
-      productCreatePosts += 1;
-    }
-  });
-
-  await loginFfAdmin(page, seed.adminEmail, seed.password);
-  await page.getByTestId('nav-ff-reception').click();
-  await page.getByTestId('ff-inbound-queue-table').locator('tbody tr').first().click();
-  await expect(page.getByTestId('ff-inbound-receiving-scan-panel')).toBeVisible();
-
-  await page.getByTestId('ff-inbound-receiving-create-manual-product').click();
-  await expect(page.getByTestId('ff-manual-product-dialog')).toBeVisible();
-  await page.getByTestId('ff-manual-product-name').fill('Manual Failed Attach Product');
-  await page.getByTestId('ff-manual-product-sku').fill(manualSku);
-  await page.getByTestId('ff-manual-product-length').fill('100');
-  await page.getByTestId('ff-manual-product-width').fill('80');
-  await page.getByTestId('ff-manual-product-height').fill('50');
-
-  await Promise.all([
-    waitForPostOk(page, '/api/products'),
-    page.waitForResponse(
-      (r) =>
-        r.url().includes('/receiving/lines') &&
-        r.request().method() === 'POST' &&
-        r.status() === 500,
-    ),
-    page.getByTestId('ff-manual-product-submit').click(),
-  ]);
-
-  await expect(page.getByTestId('ff-manual-product-dialog')).toBeVisible();
-  await expect(page.getByTestId('ff-manual-product-error')).toContainText(
-    'Товар создан, но не добавлен в факт приёмки.',
+  await page.getByTestId('ff-inbound-receiving-add-products').click();
+  await expect(page.getByTestId('ff-inbound-picker')).toBeVisible();
+  await page.getByTestId('ff-inbound-picker-search').fill(`missing-${suffix}`);
+  await page.getByTestId('ff-inbound-picker-search').press('Enter');
+  await expect(page.getByTestId('ff-inbound-picker-scan-error')).toContainText(
+    'Товар не найден в каталоге селлера',
   );
-  await expect(page.getByTestId('ff-manual-product-sku')).toHaveValue(manualSku);
-  await expect(page.getByTestId('ff-manual-product-name')).toHaveValue('Manual Failed Attach Product');
-  await expect(page.getByTestId('ff-manual-product-submit')).toContainText('Добавить в приёмку');
-  expect(productCreatePosts).toBe(1);
-  expect(receivingLineAttempts).toBe(1);
-
-  await Promise.all([
-    waitForPostOk(page, INBOUND_API, (u) => u.includes('/receiving/lines')),
-    page.getByTestId('ff-manual-product-submit').click(),
-  ]);
-
-  expect(productCreatePosts).toBe(1);
-  expect(receivingLineAttempts).toBe(2);
-  expect(receivingBodies).toHaveLength(2);
-  expect(receivingBodies[0]).toMatchObject({ actual_qty: 1, source: 'manual_created' });
-  expect(receivingBodies[1]).toMatchObject({
-    product_id: receivingBodies[0].product_id,
-    actual_qty: 1,
-    source: 'manual_created',
-  });
-
   await expect(page.getByTestId('ff-manual-product-dialog')).toHaveCount(0);
-  const factRow = page.getByTestId('ff-inbound-line-row-discrepancy').filter({ hasText: manualSku });
-  await expect(factRow).toBeVisible();
-  await expect(factRow.getByTestId('ff-inbound-line-added-by-ff')).toContainText('Добавлено ФФ');
-  await expect(factRow.getByTestId('ff-inbound-line-expected')).toHaveText('0');
-  await expect(factRow.getByTestId('ff-inbound-line-actual-display')).toHaveText('1');
-});
-
-// TC-NEW-IN-06 — негатив: успешный attach закрывает диалог даже если последующий refresh детали падает.
-test('inbound receiving v2 — manual product attach success closes when detail refresh fails', async ({
-  page,
-}) => {
-  const suffix = `rcv-manual-refresh-fail-${Date.now()}`;
-  const seed = await seedFfSellerInbound(page, suffix);
-  const adminHeaders = { Authorization: `Bearer ${seed.token}` };
-  const requestId = await apiCreateSubmittedInbound(page.request, seed, {
-    plannedBoxes: 0,
-    expectedQty: 1,
-  });
-  await beginInboundReceiving(page.request, adminHeaders, requestId);
-
-  const manualSku = `manual-refresh-fail-${suffix}`;
-  const receivingBodies: Array<{ product_id?: string; actual_qty?: number; source?: string }> = [];
-  let failNextDetailGet = false;
-  let detailRefreshFailures = 0;
-  let receivingLineAttempts = 0;
-  let productCreatePosts = 0;
-
-  await page.route(`**${INBOUND_API}/**`, async (route) => {
-    const request = route.request();
-    const pathname = new URL(request.url()).pathname;
-    if (request.method() === 'POST' && pathname.endsWith('/receiving/lines')) {
-      receivingLineAttempts += 1;
-      receivingBodies.push(
-        JSON.parse(request.postData() ?? '{}') as {
-          product_id?: string;
-          actual_qty?: number;
-          source?: string;
-        },
-      );
-      failNextDetailGet = true;
-      await route.fallback();
-      return;
-    }
-    if (failNextDetailGet && request.method() === 'GET' && pathname === `${INBOUND_API}/${requestId}`) {
-      failNextDetailGet = false;
-      detailRefreshFailures += 1;
-      await route.fulfill({
-        status: 500,
-        contentType: 'application/json',
-        body: JSON.stringify({ detail: 'detail_refresh_failed' }),
-      });
-      return;
-    }
-    await route.fallback();
-  });
-  page.on('request', (request) => {
-    if (request.method() === 'POST' && request.url().includes('/api/products')) {
-      productCreatePosts += 1;
-    }
-  });
-
-  await loginFfAdmin(page, seed.adminEmail, seed.password);
-  await page.getByTestId('nav-ff-reception').click();
-  await page.getByTestId('ff-inbound-queue-table').locator('tbody tr').first().click();
-  await expect(page.getByTestId('ff-inbound-receiving-scan-panel')).toBeVisible();
-
-  await page.getByTestId('ff-inbound-receiving-create-manual-product').click();
-  await expect(page.getByTestId('ff-manual-product-dialog')).toBeVisible();
-  await page.getByTestId('ff-manual-product-name').fill('Manual Refresh Failure Product');
-  await page.getByTestId('ff-manual-product-sku').fill(manualSku);
-  await page.getByTestId('ff-manual-product-length').fill('100');
-  await page.getByTestId('ff-manual-product-width').fill('80');
-  await page.getByTestId('ff-manual-product-height').fill('50');
-
-  await Promise.all([
-    waitForPostOk(page, '/api/products'),
-    waitForPostOk(page, INBOUND_API, (u) => u.includes('/receiving/lines')),
-    page.waitForResponse(
-      (r) =>
-        r.url().endsWith(`${INBOUND_API}/${requestId}`) &&
-        r.request().method() === 'GET' &&
-        r.status() === 500,
-    ),
-    page.getByTestId('ff-manual-product-submit').click(),
-  ]);
-
-  await expect(page.getByTestId('ff-manual-product-dialog')).toHaveCount(0);
-  await expect(page.getByTestId('ff-manual-product-submit')).toHaveCount(0);
-  await expect(page.getByTestId('ff-inbound-doc-error')).toHaveCount(0);
-  expect(productCreatePosts).toBe(1);
-  expect(detailRefreshFailures).toBe(1);
-  expect(receivingLineAttempts).toBe(1);
-  expect(receivingBodies).toHaveLength(1);
-  expect(receivingBodies[0]).toMatchObject({ actual_qty: 1, source: 'manual_created' });
-  await page.waitForTimeout(300);
-  expect(receivingLineAttempts).toBe(1);
 });
 
 // TC-NEW-IN-04 — короб 6 шт. + ручная правка итога до 10 → PATCH loose=4, без double count.
@@ -1033,7 +809,7 @@ test('inbound receiving v2 — manual edit with box saves loose not total', asyn
   await loginFfAdmin(page, seed.adminEmail, seed.password);
   await page.getByTestId('nav-ff-reception').click();
   await page.getByTestId('ff-inbound-queue-table').locator('tbody tr').first().click();
-  await expect(page.getByTestId('ff-inbound-receiving-scan-panel')).toBeVisible();
+  await expandInboundPackages(page);
 
   await page.getByTestId('ff-inbound-add-to-box').click();
   await page.getByTestId('ff-inbound-box-row').first().getByRole('button', { name: 'Наполнить' }).click();

@@ -1,10 +1,13 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type FocusEvent, type KeyboardEvent } from 'react'
 import { useBarcodeScanner } from '../../hooks/useBarcodeScanner'
-import AddOutlined from '@mui/icons-material/AddOutlined'
 import EditOutlined from '@mui/icons-material/EditOutlined'
+import ExpandMoreOutlined from '@mui/icons-material/ExpandMoreOutlined'
 import PrintOutlined from '@mui/icons-material/PrintOutlined'
 import StraightenOutlined from '@mui/icons-material/StraightenOutlined'
 import {
+  Accordion,
+  AccordionDetails,
+  AccordionSummary,
   Alert,
   Box,
   Button,
@@ -53,7 +56,6 @@ import { printInboundSupplyWaybill } from '../../utils/printShipmentWaybill'
 import { readApiErrorMessage } from '../../utils/readApiErrorMessage'
 import { inboundOperationTypeLabel } from '../../utils/inboundOperationType'
 import { FfInboundBoxAddDialog } from './FfInboundBoxAddDialog'
-import { FfManualProductCreateDialog } from './FfManualProductCreateDialog'
 import { FfInboundSortingPanel } from './FfInboundSortingPanel'
 import { BoxImportDialog } from '../../components/BoxImportDialog'
 import {
@@ -100,6 +102,14 @@ type InboundBox = {
   lines: InboundBoxLine[]
 }
 
+type InboundCargoPlace = {
+  id: string
+  place_number: number
+  internal_barcode: string
+  label_printed_at: string | null
+  created_at: string
+}
+
 type InboundLine = {
   id: string
   product_id: string
@@ -110,6 +120,7 @@ type InboundLine = {
   length_mm: number | null
   width_mm: number | null
   height_mm: number | null
+  weight_g: number | null
   volume_liters: number | null
   added_by_fulfillment: boolean
   expected_qty: number
@@ -223,6 +234,7 @@ type InboundDetail = {
   distribution_completed_at: string | null
   sorting_remaining_qty?: number
   boxes: InboundBox[]
+  cargo_places: InboundCargoPlace[]
   lines: InboundLine[]
 }
 
@@ -269,6 +281,17 @@ function formatLineDiscrepancy(expectedQty: number, actualQty: number): string |
   return null
 }
 
+function inboundStatusChipColor(
+  status: string,
+): 'default' | 'primary' | 'secondary' | 'success' | 'warning' | 'info' {
+  if (status === 'draft') return 'default'
+  if (status === 'submitted') return 'info'
+  if (isReceivingStatus(status)) return 'warning'
+  if (isSortingStatus(status)) return 'secondary'
+  if (isDoneStatus(status)) return 'success'
+  return 'primary'
+}
+
 type Props = {
   token: string
   requestId: string
@@ -284,7 +307,6 @@ export function FfInboundRequestView({
   requestId,
   isFulfillmentAdmin,
   workspace = 'full',
-  sellers = [],
   onClose,
   addressStorageEnabled = true,
 }: Props) {
@@ -307,25 +329,27 @@ export function FfInboundRequestView({
   const [cellHintsByProductId, setCellHintsByProductId] = useState<Record<string, CellLocationHint[]>>({})
 
   const [pickerOpen, setPickerOpen] = useState(false)
-  const [manualProductOpen, setManualProductOpen] = useState(false)
   const [dimensionsLine, setDimensionsLine] = useState<InboundLine | null>(null)
-  const [dimensionDraft, setDimensionDraft] = useState({ length: '', width: '', height: '' })
+  const [dimensionDraft, setDimensionDraft] = useState({ length: '', width: '', height: '', weight: '' })
   const [dimensionError, setDimensionError] = useState<string | null>(null)
   const [returnAutoPrint, setReturnAutoPrint] = useState(false)
 
   const [plannedDateDraft, setPlannedDateDraft] = useState<string>('')
-  const [lineBarcodeScan, setLineBarcodeScan] = useState('')
-  const [receivingScan, setReceivingScan] = useState('')
   const [manualEditLineId, setManualEditLineId] = useState<string | null>(null)
   const [boxAddDialogBoxId, setBoxAddDialogBoxId] = useState<string | null>(null)
   const [finishConfirmOpen, setFinishConfirmOpen] = useState(false)
   const [scanToastError, setScanToastError] = useState<string | null>(null)
   const [importSuccessMsg, setImportSuccessMsg] = useState<string | null>(null)
   const [boxImportOpen, setBoxImportOpen] = useState(false)
+  const [packagesExpanded, setPackagesExpanded] = useState(false)
+  const [cargoDialogOpen, setCargoDialogOpen] = useState(false)
+  const [cargoCount, setCargoCount] = useState('1')
+  const [cargoError, setCargoError] = useState<string | null>(null)
+  const [closeConfirmOpen, setCloseConfirmOpen] = useState(false)
+  const [saveSuccessMsg, setSaveSuccessMsg] = useState<string | null>(null)
   const [newLocationCode, setNewLocationCode] = useState('')
   const [requestWarehouse, setRequestWarehouse] = useState<WarehouseRow | null>(null)
   const loadDetailSeq = useRef(0)
-  const receivingScanInputRef = useRef<HTMLInputElement | null>(null)
 
   const sortingView = workspace === 'sorting'
   const receptionClosed =
@@ -345,10 +369,8 @@ export function FfInboundRequestView({
       receivingActive &&
       boxAddDialogBoxId == null &&
       !pickerOpen &&
-      !manualProductOpen &&
       dimensionsLine == null,
     onScan: (code) => {
-      setReceivingScan(code)
       void scanToReceiving(code)
     },
   })
@@ -360,10 +382,8 @@ export function FfInboundRequestView({
       detail?.status === 'draft' &&
       boxAddDialogBoxId == null &&
       !pickerOpen &&
-      !manualProductOpen &&
       dimensionsLine == null,
     onScan: (code) => {
-      setLineBarcodeScan(code)
       void addLineByBarcode(code)
     },
   })
@@ -409,12 +429,6 @@ export function FfInboundRequestView({
     () => buildInboundDiscrepancyLines(detail?.lines ?? [], detail?.boxes ?? [], detail?.status),
     [detail?.boxes, detail?.lines, detail?.status],
   )
-
-  const focusReceivingScanInput = () => {
-    window.setTimeout(() => {
-      receivingScanInputRef.current?.focus()
-    }, 0)
-  }
 
   const focusActualInput = (lineId: string) => {
     window.setTimeout(() => {
@@ -709,20 +723,6 @@ export function FfInboundRequestView({
     return lineProductIds
   }, [detail?.status, lineProductIds])
 
-  const manualProductSellers = useMemo(() => {
-    if (detail?.seller_id) {
-      const matched = sellers.find((s) => s.id === detail.seller_id)
-      if (matched) {
-        return [matched]
-      }
-      return [{ id: detail.seller_id, name: detail.seller_name ?? 'Селлер заявки' }]
-    }
-    if (sellers.length > 0) {
-      return sellers
-    }
-    return []
-  }, [detail?.seller_id, detail?.seller_name, sellers])
-
   const draftLocked = detail != null && detail.status !== 'draft'
 
   const acceptedQtyByProductId = useMemo(() => {
@@ -990,11 +990,17 @@ export function FfInboundRequestView({
   }
 
   const formatLineDimensions = (line: InboundLine): string => {
-    if (line.length_mm == null || line.width_mm == null || line.height_mm == null) {
-      return '—'
+    const parts: string[] = []
+    if (line.length_mm != null && line.width_mm != null && line.height_mm != null) {
+      parts.push(`${line.length_mm}×${line.width_mm}×${line.height_mm} мм`)
+      if (line.volume_liters != null) {
+        parts.push(`${line.volume_liters.toFixed(2)} л`)
+      }
     }
-    const volume = line.volume_liters != null ? ` · ${line.volume_liters.toFixed(2)} л` : ''
-    return `${line.length_mm}×${line.width_mm}×${line.height_mm} мм${volume}`
+    if (line.weight_g != null) {
+      parts.push(`${(line.weight_g / 1000).toFixed(2)} кг`)
+    }
+    return parts.length > 0 ? parts.join(' · ') : '—'
   }
 
   const openDimensionsEditor = (line: InboundLine) => {
@@ -1003,6 +1009,7 @@ export function FfInboundRequestView({
       length: line.length_mm != null ? String(line.length_mm) : '',
       width: line.width_mm != null ? String(line.width_mm) : '',
       height: line.height_mm != null ? String(line.height_mm) : '',
+      weight: line.weight_g != null ? String(line.weight_g) : '',
     })
     setDimensionError(null)
   }
@@ -1031,12 +1038,11 @@ export function FfInboundRequestView({
   const addReceivedProductFact = async (
     productId: string,
     qty: number,
-    source: 'seller_catalog' | 'manual_created' = 'seller_catalog',
   ): Promise<InboundLine | null> => {
     const res = await fetch(apiUrl(`/operations/inbound-intake-requests/${requestId}/receiving/lines`), {
       method: 'POST',
       headers: { ...authHeaders, 'Content-Type': 'application/json' },
-      body: JSON.stringify({ product_id: productId, actual_qty: qty, source }),
+      body: JSON.stringify({ product_id: productId, actual_qty: qty, source: 'seller_catalog' }),
     })
     if (!res.ok) {
       setError(scanErrorMessageRu(await readApiErrorMessage(res)))
@@ -1047,11 +1053,39 @@ export function FfInboundRequestView({
 
   const saveDimensions = async () => {
     if (!dimensionsLine) return
-    const length = Math.floor(Number(dimensionDraft.length))
-    const width = Math.floor(Number(dimensionDraft.width))
-    const height = Math.floor(Number(dimensionDraft.height))
-    if (!length || !width || !height || length < 1 || width < 1 || height < 1) {
-      setDimensionError('Укажите длину, ширину и высоту больше нуля.')
+    const dimRaw = [dimensionDraft.length, dimensionDraft.width, dimensionDraft.height]
+    const hasAnyDimension = dimRaw.some((v) => v.trim() !== '')
+    const hasAllDimensions = dimRaw.every((v) => v.trim() !== '')
+    if (hasAnyDimension && !hasAllDimensions) {
+      setDimensionError('Для габаритов укажите длину, ширину и высоту вместе.')
+      return
+    }
+    const length = hasAllDimensions ? Math.floor(Number(dimensionDraft.length)) : null
+    const width = hasAllDimensions ? Math.floor(Number(dimensionDraft.width)) : null
+    const height = hasAllDimensions ? Math.floor(Number(dimensionDraft.height)) : null
+    if (
+      hasAllDimensions &&
+      (length == null || width == null || height == null || length < 1 || width < 1 || height < 1)
+    ) {
+      setDimensionError('Габариты должны быть больше нуля.')
+      return
+    }
+    const weight = dimensionDraft.weight.trim() === '' ? null : Math.floor(Number(dimensionDraft.weight))
+    if (weight != null && (!Number.isFinite(weight) || weight < 1)) {
+      setDimensionError('Вес должен быть больше нуля.')
+      return
+    }
+    const payload: Record<string, number | null> = {}
+    if (hasAllDimensions) {
+      payload.length_mm = length
+      payload.width_mm = width
+      payload.height_mm = height
+    }
+    if (dimensionDraft.weight.trim() !== '') {
+      payload.weight_g = weight
+    }
+    if (Object.keys(payload).length === 0) {
+      setDimensionsLine(null)
       return
     }
     setBusy(true)
@@ -1060,7 +1094,7 @@ export function FfInboundRequestView({
       const res = await fetch(apiUrl(`/products/${dimensionsLine.product_id}/dimensions`), {
         method: 'PATCH',
         headers: { ...authHeaders, 'Content-Type': 'application/json' },
-        body: JSON.stringify({ length_mm: length, width_mm: width, height_mm: height }),
+        body: JSON.stringify(payload),
       })
       if (!res.ok) {
         setDimensionError(await readApiErrorMessage(res))
@@ -1111,7 +1145,7 @@ export function FfInboundRequestView({
 
   const addLineByBarcode = async (rawInput?: string) => {
     if (!detail) return
-    const code = (rawInput ?? lineBarcodeScan).trim()
+    const code = (rawInput ?? '').trim()
     if (!code) return
     setBusy(true)
     setError(null)
@@ -1123,7 +1157,7 @@ export function FfInboundRequestView({
       }
       const productId = resolveProductIdByBarcode(cat, code)
       if (!productId) {
-        setError('Товар не найден по штрихкоду или артикулу.')
+        setError('Товар не найден в каталоге селлера. Добавление нового товара будет отдельной задачей.')
         return
       }
       const existing = detail.lines.find((ln) => ln.product_id === productId)
@@ -1153,7 +1187,6 @@ export function FfInboundRequestView({
           return
         }
       }
-      setLineBarcodeScan('')
       await loadDetail()
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Не удалось добавить строку по штрихкоду.')
@@ -1220,38 +1253,6 @@ export function FfInboundRequestView({
     }
   }
 
-  const onManualProductCreated = async (product: { id: string }) => {
-    if (!detail) {
-      throw new Error('Документ приёмки не загружен. Товар создан, но не добавлен в документ.')
-    }
-    setBusy(true)
-    setError(null)
-    try {
-      if (detail.status === 'draft') {
-        const res = await fetch(apiUrl(`/operations/inbound-intake-requests/${requestId}/lines`), {
-          method: 'POST',
-          headers: { ...authHeaders, 'Content-Type': 'application/json' },
-          body: JSON.stringify({ product_id: product.id, expected_qty: 1 }),
-        })
-        if (!res.ok) {
-          const message = await readApiErrorMessage(res)
-          setError(message)
-          throw new Error(message)
-        }
-      } else if (receivingActive) {
-        const added = await addReceivedProductFact(product.id, 1, 'manual_created')
-        if (!added) {
-          throw new Error('Товар создан, но не добавлен в факт приёмки. Нажмите «Добавить в приёмку» ещё раз.')
-        }
-      } else {
-        throw new Error('Сейчас нельзя добавить созданный товар в этот документ.')
-      }
-      void Promise.allSettled([loadCatalog(), loadDetail()])
-    } finally {
-      setBusy(false)
-    }
-  }
-
   const submitToWarehouse = async () => {
     setBusy(true)
     setError(null)
@@ -1267,6 +1268,26 @@ export function FfInboundRequestView({
       await loadDetail()
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Не удалось передать на склад.')
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  const beginReceiving = async () => {
+    setBusy(true)
+    setError(null)
+    try {
+      const res = await fetch(
+        apiUrl(`/operations/inbound-intake-requests/${requestId}/begin-receiving`),
+        { method: 'POST', headers: authHeaders },
+      )
+      if (!res.ok) {
+        setError(await readApiErrorMessage(res))
+        return
+      }
+      await loadDetail()
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Не удалось начать приёмку.')
     } finally {
       setBusy(false)
     }
@@ -1318,8 +1339,43 @@ export function FfInboundRequestView({
     }
   }
 
+  const printInboundCargoPlaceLabel = async (place: InboundCargoPlace) => {
+    setBusy(true)
+    setError(null)
+    try {
+      const dataUrl = renderBarcodeDataUrl(place.internal_barcode)
+      printBarcodeLabel({
+        title: `Грузоместо № ${place.place_number}`,
+        barcode: place.internal_barcode,
+        barcodeDataUrl: dataUrl,
+      })
+      const res = await fetch(
+        apiUrl(
+          `/operations/inbound-intake-requests/${requestId}/cargo-places/${place.id}/mark-label-printed`,
+        ),
+        { method: 'POST', headers: authHeaders },
+      )
+      if (!res.ok) {
+        setError(await readApiErrorMessage(res))
+        return
+      }
+      await loadDetail()
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Не удалось напечатать этикетку грузоместа.')
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  const printAllInboundCargoPlaceLabels = async () => {
+    if (!detail?.cargo_places?.length) return
+    for (const place of detail.cargo_places) {
+      await printInboundCargoPlaceLabel(place)
+    }
+  }
+
   const scanToReceiving = async (raw?: string) => {
-    const code = (raw ?? receivingScan).trim()
+    const code = (raw ?? '').trim()
     if (!code) return
     setBusy(true)
     setError(null)
@@ -1340,9 +1396,7 @@ export function FfInboundRequestView({
       if (isReturnOperation && returnAutoPrint) {
         printReturnBarcodeForLine(scannedLine)
       }
-      setReceivingScan('')
       await loadDetail()
-      focusReceivingScanInput()
     } catch (e) {
       setScanToastError(e instanceof Error ? e.message : 'Не удалось выполнить скан.')
     } finally {
@@ -1364,6 +1418,7 @@ export function FfInboundRequestView({
       }
       const box = (await res.json()) as { id: string }
       await loadDetail()
+      setPackagesExpanded(true)
       return box.id
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Не удалось создать короб.')
@@ -1379,6 +1434,36 @@ export function FfInboundRequestView({
 
   const handleCreateBox = async () => {
     await createInboundBox()
+  }
+
+  const createCargoPlaces = async () => {
+    const count = Math.floor(Number(cargoCount))
+    if (!Number.isFinite(count) || count < 1 || count > 1000) {
+      setCargoError('Укажите количество грузомест от 1 до 1000.')
+      return
+    }
+    setBusy(true)
+    setCargoError(null)
+    setError(null)
+    try {
+      const res = await fetch(apiUrl(`/operations/inbound-intake-requests/${requestId}/cargo-places`), {
+        method: 'POST',
+        headers: { ...authHeaders, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ quantity: count }),
+      })
+      if (!res.ok) {
+        setCargoError(await readApiErrorMessage(res))
+        return
+      }
+      setCargoDialogOpen(false)
+      setCargoCount('1')
+      setPackagesExpanded(true)
+      await loadDetail()
+    } catch (e) {
+      setCargoError(e instanceof Error ? e.message : 'Не удалось создать грузоместа.')
+    } finally {
+      setBusy(false)
+    }
   }
 
   const deleteInboundBox = async (boxId: string) => {
@@ -1513,9 +1598,46 @@ export function FfInboundRequestView({
     setManualEditLineId(null)
   }
 
+  const hasUnsavedActualChange = useMemo(() => {
+    if (!manualEditLineId || !detail) return false
+    const line = detail.lines.find((ln) => ln.id === manualEditLineId)
+    if (!line) return false
+    const raw = actualDraftByLineId[manualEditLineId]
+    if (raw == null) return false
+    const current = String(effectiveActualQty(line, detail.boxes ?? [], detail.status))
+    return raw.trim() !== current
+  }, [actualDraftByLineId, detail, manualEditLineId])
+
+  const handleSaveDocument = async () => {
+    if (manualEditLineId) {
+      const raw = actualDraftRef.current[manualEditLineId] ?? actualDraftByLineId[manualEditLineId] ?? ''
+      const validationError = integerQtyError(raw)
+      if (validationError) {
+        setActualDraftErrorByLineId((prev) => ({ ...prev, [manualEditLineId]: validationError }))
+        focusActualInput(manualEditLineId)
+        return
+      }
+      await saveManualLineActual(manualEditLineId, raw)
+    }
+    setSaveSuccessMsg('Документ сохранён.')
+  }
+
+  const handleClose = () => {
+    if (hasUnsavedActualChange) {
+      setCloseConfirmOpen(true)
+      return
+    }
+    onClose()
+  }
+
   const boxes = useMemo(
     () => [...(detail?.boxes ?? [])].sort((a, b) => a.box_number - b.box_number),
     [detail?.boxes],
+  )
+
+  const cargoPlaces = useMemo(
+    () => [...(detail?.cargo_places ?? [])].sort((a, b) => a.place_number - b.place_number),
+    [detail?.cargo_places],
   )
 
   const boxAddDialogBox = useMemo(
@@ -1635,6 +1757,12 @@ export function FfInboundRequestView({
                     {receivingTotals.plannedBoxes != null ? ` из ${receivingTotals.plannedBoxes}` : ''}
                   </strong>
                 </Typography>
+                <Typography variant="body2" color="text.secondary" data-testid="ff-inbound-volume-summary">
+                  Литраж: <strong>{receivingTotals.totalVolumeLiters.toFixed(2)} л</strong>
+                </Typography>
+                <Typography variant="body2" color="text.secondary" data-testid="ff-inbound-weight-summary">
+                  Вес: <strong>{receivingTotals.totalWeightKg.toFixed(2)} кг</strong>
+                </Typography>
                 <Typography
                   variant="body2"
                   color={receivingTotals.hasAnyDiscrepancy ? 'warning.dark' : 'success.dark'}
@@ -1673,7 +1801,7 @@ export function FfInboundRequestView({
               />
               <Chip
                 label={inboundStatusRu(detail.status)}
-                color={detail.status === 'draft' ? 'default' : 'primary'}
+                color={inboundStatusChipColor(detail.status)}
                 data-testid="ff-inbound-status-chip"
               />
             </Stack>
@@ -1688,6 +1816,34 @@ export function FfInboundRequestView({
                 flexWrap: 'wrap',
               }}
             >
+              {isFulfillmentAdmin &&
+              workspace !== 'sorting' &&
+              receivingActive ? (
+                <>
+                  <Button
+                    variant="contained"
+                    disabled={busy}
+                    onClick={() => void openPicker()}
+                    data-testid="ff-inbound-receiving-add-products"
+                  >
+                    Добавить товар
+                  </Button>
+                  {isReturnOperation ? (
+                    <FormControlLabel
+                      control={
+                        <Switch
+                          size="small"
+                          checked={returnAutoPrint}
+                          onChange={(e) => setReturnAutoPrint(e.target.checked)}
+                          data-testid="ff-inbound-return-autoprint"
+                        />
+                      }
+                      label="Печатать ШК при скане"
+                    />
+                  ) : null}
+                </>
+              ) : null}
+
               {isFulfillmentAdmin &&
               workspace !== 'sorting' &&
               receivingActive ? (
@@ -1717,67 +1873,26 @@ export function FfInboundRequestView({
 
               {detail.status === 'draft' ? (
                 <>
-                  <Stack
-                    direction={{ xs: 'column', sm: 'row' }}
-                    spacing={1}
-                    sx={{ width: { xs: '100%', sm: 'auto' }, flexBasis: { xs: '100%', sm: 'auto' } }}
-                    data-testid="ff-inbound-line-barcode-row"
-                  >
-                    <TextField
-                      size="small"
-                      label="Штрихкод / артикул"
-                      value={lineBarcodeScan}
-                      disabled={draftLocked || busy}
-                      onChange={(e) => setLineBarcodeScan(e.target.value)}
-                      onKeyDown={(e) => {
-                        if (e.key === 'Enter') {
-                          e.preventDefault()
-                          void addLineByBarcode()
-                        }
-                      }}
-                      slotProps={{ htmlInput: { 'data-testid': 'ff-inbound-line-barcode-scan' } }}
-                      sx={{ minWidth: 220, flexGrow: 1 }}
-                    />
-                    <Button
-                      variant="outlined"
-                      disabled={draftLocked || busy || !lineBarcodeScan.trim()}
-                      onClick={() => void addLineByBarcode()}
-                      data-testid="ff-inbound-line-barcode-add"
-                    >
-                      Добавить по ШК
-                    </Button>
-                  </Stack>
                   <Button
-                    variant="outlined"
+                    variant="contained"
                     disabled={draftLocked || busy}
                     onClick={() => void openPicker()}
                     data-testid="ff-inbound-add-products"
                   >
-                    Добавить товары
+                    Добавить товар
                   </Button>
-                  {isFulfillmentAdmin ? (
-                    <Tooltip title="Создать товар">
-                      <span>
-                        <IconButton
-                          size="small"
-                          disabled={draftLocked || busy || manualProductSellers.length === 0}
-                          onClick={() => setManualProductOpen(true)}
-                          data-testid="ff-inbound-create-manual-product"
-                          aria-label="Создать товар"
-                        >
-                          <AddOutlined fontSize="small" />
-                        </IconButton>
-                      </span>
-                    </Tooltip>
-                  ) : null}
                   <Button
                     variant="contained"
                     color="secondary"
                     disabled={busy || detail.lines.length === 0}
-                    onClick={() => void submitToWarehouse()}
+                    onClick={() =>
+                      isFulfillmentAdmin
+                        ? void beginReceiving()
+                        : void submitToWarehouse()
+                    }
                     data-testid="ff-inbound-submit-warehouse"
                   >
-                    Передать на склад
+                    {isFulfillmentAdmin ? 'Начать приёмку' : 'Передать на склад'}
                   </Button>
                 </>
               ) : null}
@@ -1827,7 +1942,16 @@ export function FfInboundRequestView({
                 </Button>
               ) : null}
 
-              <Button variant="outlined" disabled={busy} onClick={onClose} data-testid="ff-inbound-close">
+              <Button
+                variant="outlined"
+                disabled={busy}
+                onClick={() => void handleSaveDocument()}
+                data-testid="ff-inbound-save"
+              >
+                Сохранить
+              </Button>
+
+              <Button variant="outlined" disabled={busy} onClick={handleClose} data-testid="ff-inbound-close">
                 Закрыть
               </Button>
             </Stack>
@@ -2128,7 +2252,7 @@ export function FfInboundRequestView({
                   <TableRow>
                     <TableCell colSpan={4}>
                       <Typography variant="body2" color="text.secondary">
-                        Пока нет строк. Добавьте товары.
+                        Товаров пока нет. Нажмите «Добавить товар» или отсканируйте ШК товара из каталога селлера.
                       </Typography>
                     </TableCell>
                   </TableRow>
@@ -2144,223 +2268,216 @@ export function FfInboundRequestView({
             </Alert>
           ) : null}
 
-          {isFulfillmentAdmin && !sortingView && receivingActive ? (
-            <Paper variant="outlined" sx={{ p: 2, mt: 2 }} data-testid="ff-inbound-receiving-scan-panel">
-              <Typography variant="subtitle2" sx={{ fontWeight: 800, mb: 1 }}>
-                Скан приёмки
-              </Typography>
-              <Typography variant="body2" color="text.secondary" sx={{ mb: 1.5 }}>
-                Скан штрихкода товара добавляет +1 к принятому количеству. Скан в короб — только
-                в карточке короба.
-              </Typography>
-              <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1}>
-                <TextField
-                  size="small"
-                  label="Штрихкод товара"
-                  value={receivingScan}
-                  disabled={busy || boxAddDialogBoxId != null}
-                  inputRef={receivingScanInputRef}
-                  onChange={(e) => setReceivingScan(e.target.value)}
-                  onKeyDown={(e) => {
-                    if (e.key === 'Enter') {
-                      e.preventDefault()
-                      void scanToReceiving()
-                    }
-                  }}
-                  slotProps={{ htmlInput: { 'data-testid': 'ff-inbound-receiving-scan-input' } }}
-                  sx={{ minWidth: 220, flexGrow: 1 }}
-                />
-                <Button
-                  variant="contained"
-                  disabled={busy || !receivingScan.trim() || boxAddDialogBoxId != null}
-                  onClick={() => void scanToReceiving()}
-                  data-testid="ff-inbound-receiving-scan-submit"
-                >
-                  Скан
-                </Button>
-                <Button
-                  variant="outlined"
-                  disabled={busy}
-                  onClick={() => void openPicker()}
-                  data-testid="ff-inbound-receiving-add-products"
-                >
-                  Добавить факт
-                </Button>
-                <Tooltip title="Создать товар">
-                  <span>
-                    <IconButton
-                      size="small"
-                      disabled={busy || manualProductSellers.length === 0}
-                      onClick={() => setManualProductOpen(true)}
-                      data-testid="ff-inbound-receiving-create-manual-product"
-                      aria-label="Создать товар"
-                    >
-                      <AddOutlined fontSize="small" />
-                    </IconButton>
-                  </span>
-                </Tooltip>
-                {isReturnOperation ? (
-                  <FormControlLabel
-                    control={
-                      <Switch
-                        size="small"
-                        checked={returnAutoPrint}
-                        onChange={(e) => setReturnAutoPrint(e.target.checked)}
-                        data-testid="ff-inbound-return-autoprint"
-                      />
-                    }
-                    label="Печатать ШК при скане"
-                    sx={{ ml: { sm: 0.5 } }}
-                  />
-                ) : null}
-                <Button
-                  variant="outlined"
-                  disabled={busy}
-                  onClick={() => setBoxImportOpen(true)}
-                  data-testid="ff-inbound-import-boxes"
-                >
-                  Загрузить по накладной
-                </Button>
-                <Button
-                  variant="contained"
-                  disabled={busy}
-                  onClick={() => void handleCreateBox()}
-                  data-testid="ff-inbound-add-to-box"
-                >
-                  Создать короб
-                </Button>
-                <Button
-                  variant="contained"
-                  disabled={busy}
-                  onClick={() => void requestCompleteReceiving()}
-                  data-testid="ff-inbound-verify-complete-panel"
-                >
-                  Завершить приёмку
-                </Button>
-              </Stack>
-              {hasLineDiscrepancy ? (
-                <Alert severity="warning" sx={{ mt: 1.5 }} data-testid="ff-inbound-discrepancy-hint">
-                  Есть расхождения с планом — при завершении потребуется подтверждение.
-                </Alert>
-              ) : null}
-            </Paper>
+          {isFulfillmentAdmin && !sortingView && receivingActive && hasLineDiscrepancy ? (
+            <Alert severity="warning" sx={{ mt: 2 }} data-testid="ff-inbound-discrepancy-hint">
+              Есть расхождения с планом — при завершении потребуется подтверждение.
+            </Alert>
           ) : null}
 
-          {isFulfillmentAdmin && !sortingView && boxes.length > 0 ? (
-            <Paper variant="outlined" sx={{ p: 2, mt: 2 }} data-testid="ff-inbound-boxes-panel">
-              <Stack
-                direction={{ xs: 'column', sm: 'row' }}
-                spacing={1}
-                sx={{ alignItems: { sm: 'center' }, mb: 1.5 }}
+          {isFulfillmentAdmin && !sortingView ? (
+            <Accordion
+              expanded={packagesExpanded}
+              onChange={(_, expanded) => setPackagesExpanded(expanded)}
+              sx={{ mt: 2, border: 1, borderColor: 'divider', boxShadow: 'none', '&:before': { display: 'none' } }}
+              data-testid="ff-inbound-packages-accordion"
+            >
+              <AccordionSummary
+                expandIcon={<ExpandMoreOutlined />}
+                data-testid="ff-inbound-packages-toggle"
               >
-                <Box sx={{ flexGrow: 1 }}>
+                <Stack direction="row" spacing={1.5} sx={{ alignItems: 'center', flexWrap: 'wrap' }}>
                   <Typography variant="subtitle2" sx={{ fontWeight: 800 }}>
-                    Короба приёмки
+                    Короба и грузоместа
                   </Typography>
-                  <Typography variant="body2" color="text.secondary">
-                    Создайте короб — он появится в списке. Наполняйте по кнопке «Наполнить»; можно
-                    возвращаться и менять состав, пока приёмка не завершена.
-                  </Typography>
-                </Box>
-                <Button
-                  variant="outlined"
-                  disabled={busy}
-                  onClick={() => setBoxImportOpen(true)}
-                  data-testid="ff-inbound-boxes-import"
-                >
-                  Загрузить по накладной
-                </Button>
-                <Button
-                  variant="outlined"
-                  disabled={busy}
-                  onClick={() => void printAllInboundBoxLabels()}
-                  data-testid="ff-inbound-boxes-print-all"
-                >
-                  Печать всех
-                </Button>
-              </Stack>
-              <Stack spacing={1.5}>
-                {boxes.map((box) => {
-                  const visibleLines = box.lines.filter((ln) => ln.quantity > 0)
-                  return (
-                    <Paper
-                      key={box.id}
-                      variant="outlined"
-                      sx={{ overflow: 'hidden', bgcolor: 'background.paper' }}
-                      data-testid="ff-inbound-box-row"
+                  <Chip size="small" label={`Короба: ${boxes.length}`} />
+                  <Chip size="small" label={`Грузоместа: ${cargoPlaces.length}`} />
+                </Stack>
+              </AccordionSummary>
+              <AccordionDetails data-testid="ff-inbound-boxes-panel">
+                <Stack spacing={1.5}>
+                  <Stack
+                    direction={{ xs: 'column', sm: 'row' }}
+                    spacing={1}
+                    sx={{ alignItems: { sm: 'center' }, flexWrap: 'wrap' }}
+                  >
+                    <Button
+                      variant="contained"
+                      disabled={busy || !receivingActive}
+                      onClick={() => void handleCreateBox()}
+                      data-testid="ff-inbound-add-to-box"
                     >
-                      <Stack
-                        direction={{ xs: 'column', sm: 'row' }}
-                        spacing={1}
-                        sx={{
-                          alignItems: { sm: 'center' },
-                          px: 1.25,
-                          py: 1,
-                          bgcolor: 'action.hover',
-                          borderBottom: 1,
-                          borderColor: 'divider',
-                        }}
-                        data-testid={`ff-inbound-box-header-${box.id}`}
+                      Создать короба
+                    </Button>
+                    <Button
+                      variant="contained"
+                      disabled={busy || !receivingActive}
+                      onClick={() => {
+                        setCargoError(null)
+                        setCargoDialogOpen(true)
+                      }}
+                      data-testid="ff-inbound-create-cargo-places"
+                    >
+                      Создать грузоместа
+                    </Button>
+                    <Button
+                      variant="outlined"
+                      disabled={busy || !receivingActive}
+                      onClick={() => setBoxImportOpen(true)}
+                      data-testid="ff-inbound-import-boxes"
+                    >
+                      Загрузить по накладной
+                    </Button>
+                    <Button
+                      variant="outlined"
+                      disabled={busy || boxes.length === 0}
+                      onClick={() => void printAllInboundBoxLabels()}
+                      data-testid="ff-inbound-boxes-print-all"
+                    >
+                      Печать коробов
+                    </Button>
+                    <Button
+                      variant="outlined"
+                      disabled={busy || cargoPlaces.length === 0}
+                      onClick={() => void printAllInboundCargoPlaceLabels()}
+                      data-testid="ff-inbound-cargo-places-print-all"
+                    >
+                      Печать грузомест
+                    </Button>
+                  </Stack>
+
+                  <Stack spacing={1}>
+                    <Typography variant="body2" sx={{ fontWeight: 700 }}>
+                      Короба
+                    </Typography>
+                    {boxes.length === 0 ? (
+                      <Typography variant="body2" color="text.secondary">
+                        Короба ещё не созданы.
+                      </Typography>
+                    ) : null}
+                    {boxes.map((box) => {
+                      const visibleLines = box.lines.filter((ln) => ln.quantity > 0)
+                      return (
+                        <Paper
+                          key={box.id}
+                          variant="outlined"
+                          sx={{ overflow: 'hidden', bgcolor: 'background.paper' }}
+                          data-testid="ff-inbound-box-row"
+                        >
+                          <Stack
+                            direction={{ xs: 'column', sm: 'row' }}
+                            spacing={1}
+                            sx={{
+                              alignItems: { sm: 'center' },
+                              px: 1.25,
+                              py: 1,
+                              bgcolor: 'action.hover',
+                              borderBottom: 1,
+                              borderColor: 'divider',
+                            }}
+                            data-testid={`ff-inbound-box-header-${box.id}`}
+                          >
+                            <Typography variant="body2" sx={{ fontWeight: 700 }}>
+                              Короб № {box.box_number}{' '}
+                              <Typography component="code" variant="body2">
+                                {box.internal_barcode}
+                              </Typography>
+                            </Typography>
+                            <Box sx={{ flexGrow: 1 }} />
+                            <Stack direction="row" spacing={0.5} sx={{ flexWrap: 'wrap' }}>
+                              <Button
+                                size="small"
+                                variant="contained"
+                                disabled={busy || !receivingActive}
+                                onClick={() => openBoxAddDialog(box.id)}
+                                data-testid={`ff-inbound-box-fill-${box.id}`}
+                              >
+                                Наполнить
+                              </Button>
+                              <Button
+                                size="small"
+                                variant="outlined"
+                                disabled={busy || !receivingActive || visibleLines.length > 0}
+                                onClick={() => void deleteInboundBox(box.id)}
+                                data-testid={`ff-inbound-box-delete-${box.id}`}
+                              >
+                                Удалить
+                              </Button>
+                              <Button
+                                size="small"
+                                variant="outlined"
+                                disabled={busy}
+                                onClick={() => void printInboundBoxLabel(box)}
+                                data-testid={`ff-inbound-box-print-${box.id}`}
+                              >
+                                Печать
+                              </Button>
+                            </Stack>
+                          </Stack>
+                          {visibleLines.length > 0 ? (
+                            <Stack spacing={0.25} sx={{ px: 1.25, py: 1, bgcolor: 'background.paper' }}>
+                              {visibleLines.map((ln) => (
+                                <Typography key={ln.id} variant="body2" color="text.secondary">
+                                  {ln.sku_code} · {ln.product_name}: {ln.quantity}
+                                </Typography>
+                              ))}
+                            </Stack>
+                          ) : (
+                            <Typography
+                              variant="body2"
+                              color="text.secondary"
+                              sx={{ px: 1.25, py: 1, bgcolor: 'background.paper' }}
+                            >
+                              Пока нет товаров
+                            </Typography>
+                          )}
+                        </Paper>
+                      )
+                    })}
+                  </Stack>
+
+                  <Stack spacing={1}>
+                    <Typography variant="body2" sx={{ fontWeight: 700 }}>
+                      Грузоместа
+                    </Typography>
+                    {cargoPlaces.length === 0 ? (
+                      <Typography variant="body2" color="text.secondary">
+                        Грузоместа ещё не созданы.
+                      </Typography>
+                    ) : null}
+                    {cargoPlaces.map((place) => (
+                      <Paper
+                        key={place.id}
+                        variant="outlined"
+                        sx={{ px: 1.25, py: 1 }}
+                        data-testid="ff-inbound-cargo-place-row"
                       >
-                        <Typography variant="body2" sx={{ fontWeight: 700 }}>
-                          Короб № {box.box_number}{' '}
-                          <Typography component="code" variant="body2">
-                            {box.internal_barcode}
+                        <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1} sx={{ alignItems: { sm: 'center' } }}>
+                          <Typography variant="body2" sx={{ fontWeight: 700 }}>
+                            Грузоместо № {place.place_number}{' '}
+                            <Typography component="code" variant="body2">
+                              {place.internal_barcode}
+                            </Typography>
                           </Typography>
-                        </Typography>
-                        <Box sx={{ flexGrow: 1 }} />
-                        <Stack direction="row" spacing={0.5} sx={{ flexWrap: 'wrap' }}>
-                          <Button
-                            size="small"
-                            variant="contained"
-                            disabled={busy || !receivingActive}
-                            onClick={() => openBoxAddDialog(box.id)}
-                            data-testid={`ff-inbound-box-fill-${box.id}`}
-                          >
-                            Наполнить
-                          </Button>
-                          <Button
-                            size="small"
-                            variant="outlined"
-                            disabled={busy || !receivingActive || visibleLines.length > 0}
-                            onClick={() => void deleteInboundBox(box.id)}
-                            data-testid={`ff-inbound-box-delete-${box.id}`}
-                          >
-                            Удалить
-                          </Button>
+                          <Box sx={{ flexGrow: 1 }} />
+                          {place.label_printed_at ? (
+                            <Chip size="small" color="success" label="Этикетка напечатана" />
+                          ) : null}
                           <Button
                             size="small"
                             variant="outlined"
                             disabled={busy}
-                            onClick={() => void printInboundBoxLabel(box)}
-                            data-testid={`ff-inbound-box-print-${box.id}`}
+                            onClick={() => void printInboundCargoPlaceLabel(place)}
+                            data-testid={`ff-inbound-cargo-place-print-${place.id}`}
                           >
                             Печать
                           </Button>
                         </Stack>
-                      </Stack>
-                      {visibleLines.length > 0 ? (
-                        <Stack spacing={0.25} sx={{ px: 1.25, py: 1, bgcolor: 'background.paper' }}>
-                          {visibleLines.map((ln) => (
-                            <Typography key={ln.id} variant="body2" color="text.secondary">
-                              {ln.sku_code} · {ln.product_name}: {ln.quantity}
-                            </Typography>
-                          ))}
-                        </Stack>
-                      ) : (
-                        <Typography
-                          variant="body2"
-                          color="text.secondary"
-                          sx={{ px: 1.25, py: 1, bgcolor: 'background.paper' }}
-                        >
-                          Пока нет товаров
-                        </Typography>
-                      )}
-                    </Paper>
-                  )
-                })}
-              </Stack>
-            </Paper>
+                      </Paper>
+                    ))}
+                  </Stack>
+                </Stack>
+              </AccordionDetails>
+            </Accordion>
           ) : null}
 
           {isFulfillmentAdmin && !sortingView ? (
@@ -2750,19 +2867,10 @@ export function FfInboundRequestView({
         testIdPrefix="ff-inbound-picker"
         variant="ff"
         qtyColumnLabel={detail?.status === 'draft' ? 'Кол-во в заявку' : 'Факт'}
-        applyLabel={detail?.status === 'draft' ? 'Добавить в заявку' : 'Добавить факт'}
+        applyLabel={detail?.status === 'draft' ? 'Добавить в заявку' : 'Добавить товар'}
+        emptyMessage="В каталоге селлера нет товаров по этому поиску."
         onClose={() => setPickerOpen(false)}
         onApply={applyPicker}
-      />
-
-      <FfManualProductCreateDialog
-        open={manualProductOpen}
-        token={token}
-        authHeaders={(t) => ({ Authorization: `Bearer ${t}` })}
-        sellers={manualProductSellers}
-        defaultSellerId={detail?.seller_id ?? null}
-        onClose={() => setManualProductOpen(false)}
-        onCreated={onManualProductCreated}
       />
 
       <Dialog
@@ -2811,6 +2919,14 @@ export function FfInboundRequestView({
                 slotProps={{ htmlInput: { min: 1, 'data-testid': 'ff-inbound-dimensions-height' } }}
               />
             </Stack>
+            <TextField
+              size="small"
+              label="Вес, г"
+              type="number"
+              value={dimensionDraft.weight}
+              onChange={(e) => setDimensionDraft((prev) => ({ ...prev, weight: e.target.value }))}
+              slotProps={{ htmlInput: { min: 1, 'data-testid': 'ff-inbound-dimensions-weight' } }}
+            />
           </Stack>
         </DialogContent>
         <DialogActions>
@@ -2878,6 +2994,49 @@ export function FfInboundRequestView({
         />
       ) : null}
 
+      <Dialog
+        open={cargoDialogOpen}
+        onClose={() => {
+          if (!busy) setCargoDialogOpen(false)
+        }}
+        maxWidth="xs"
+        fullWidth
+        data-testid="ff-inbound-cargo-places-dialog"
+      >
+        <DialogTitle>Создать грузоместа</DialogTitle>
+        <DialogContent>
+          <Stack spacing={2} sx={{ mt: 1 }}>
+            {cargoError ? (
+              <Alert severity="error" data-testid="ff-inbound-cargo-places-error">
+                {cargoError}
+              </Alert>
+            ) : null}
+            <TextField
+              size="small"
+              label="Количество грузомест"
+              type="number"
+              value={cargoCount}
+              disabled={busy}
+              onChange={(e) => setCargoCount(e.target.value)}
+              slotProps={{ htmlInput: { min: 1, max: 1000, 'data-testid': 'ff-inbound-cargo-places-count' } }}
+            />
+          </Stack>
+        </DialogContent>
+        <DialogActions>
+          <Button disabled={busy} onClick={() => setCargoDialogOpen(false)}>
+            Отмена
+          </Button>
+          <Button
+            variant="contained"
+            disabled={busy}
+            onClick={() => void createCargoPlaces()}
+            data-testid="ff-inbound-cargo-places-create"
+          >
+            Создать
+          </Button>
+        </DialogActions>
+      </Dialog>
+
       <Snackbar
         open={scanToastError !== null}
         autoHideDuration={3500}
@@ -2894,6 +3053,52 @@ export function FfInboundRequestView({
           {scanToastError}
         </Alert>
       </Snackbar>
+
+      <Snackbar
+        open={saveSuccessMsg !== null}
+        autoHideDuration={2500}
+        onClose={() => setSaveSuccessMsg(null)}
+        anchorOrigin={{ vertical: 'bottom', horizontal: 'center' }}
+      >
+        <Alert
+          severity="success"
+          variant="filled"
+          onClose={() => setSaveSuccessMsg(null)}
+          data-testid="ff-inbound-save-success-snackbar"
+          sx={{ width: '100%' }}
+        >
+          {saveSuccessMsg}
+        </Alert>
+      </Snackbar>
+
+      <Dialog
+        open={closeConfirmOpen}
+        onClose={() => setCloseConfirmOpen(false)}
+        maxWidth="xs"
+        fullWidth
+        data-testid="ff-inbound-close-confirm-dialog"
+      >
+        <DialogTitle>Закрыть без сохранения?</DialogTitle>
+        <DialogContent>
+          <Typography variant="body2" color="text.secondary">
+            В строке факта осталось несохранённое количество.
+          </Typography>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setCloseConfirmOpen(false)}>Остаться</Button>
+          <Button
+            color="warning"
+            variant="contained"
+            onClick={() => {
+              setCloseConfirmOpen(false)
+              onClose()
+            }}
+            data-testid="ff-inbound-close-confirm"
+          >
+            Закрыть
+          </Button>
+        </DialogActions>
+      </Dialog>
 
       <Dialog
         open={finishConfirmOpen}

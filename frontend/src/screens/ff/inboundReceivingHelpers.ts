@@ -16,6 +16,8 @@ export type InboundLineRef = {
   product_id: string
   actual_qty: number | null
   effective_actual_qty?: number | null
+  volume_liters?: number | null
+  weight_g?: number | null
 }
 
 export type InboundSummaryRef = {
@@ -39,6 +41,8 @@ export type InboundReceivingTotals = {
   acceptedQty: number
   plannedBoxes: number | null
   actualBoxes: number
+  totalVolumeLiters: number
+  totalWeightKg: number
   lineDiscrepancyCount: number
   hasBoxDiscrepancy: boolean
   hasAnyDiscrepancy: boolean
@@ -129,10 +133,10 @@ export function looseQtyFromDisplayedTotal(
 
 export function scanErrorMessageRu(code: string): string {
   if (code === 'product_not_on_request' || code === 'barcode_unknown') {
-    return 'Товар не найден в этой поставке.'
+    return 'Товар не найден в документе. Нажмите «Добавить товар» и выберите его из каталога селлера.'
   }
   if (code === 'product_not_in_seller_catalog') {
-    return 'Товар не найден в WB-каталоге этого селлера. Для разовой приёмки создайте товар вручную.'
+    return 'Товар не найден в каталоге селлера. Добавление нового товара будет отдельной задачей.'
   }
   if (code === 'product_seller_mismatch' || code === 'mixed_seller_lines') {
     return 'Товар относится к другому селлеру. В одной приёмке нельзя смешивать селлеров.'
@@ -196,12 +200,20 @@ export function buildInboundReceivingTotals(
 ): InboundReceivingTotals {
   let expectedQty = 0
   let acceptedQty = 0
+  let totalVolumeLiters = 0
+  let totalWeightKg = 0
   let lineDiscrepancyCount = 0
   for (const line of lines) {
     const expected = line.expected_qty ?? 0
     const accepted = effectiveActualQty(line, boxes, status)
     expectedQty += expected
     acceptedQty += accepted
+    if (line.volume_liters != null && Number.isFinite(line.volume_liters)) {
+      totalVolumeLiters += accepted * line.volume_liters
+    }
+    if (line.weight_g != null && Number.isFinite(line.weight_g)) {
+      totalWeightKg += (accepted * line.weight_g) / 1000
+    }
     if (accepted !== expected) lineDiscrepancyCount += 1
   }
   const actualBoxes = boxes.length
@@ -211,6 +223,8 @@ export function buildInboundReceivingTotals(
     acceptedQty,
     plannedBoxes: plannedBoxCount ?? null,
     actualBoxes,
+    totalVolumeLiters,
+    totalWeightKg,
     lineDiscrepancyCount,
     hasBoxDiscrepancy,
     hasAnyDiscrepancy: lineDiscrepancyCount > 0 || hasBoxDiscrepancy,

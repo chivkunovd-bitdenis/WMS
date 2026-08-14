@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState, type ReactNode } from 'react'
 import {
+  Alert,
   Box,
   Button,
   Dialog,
@@ -145,12 +146,14 @@ export function WbProductPickerDialog({
   const [pickerSearch, setPickerSearch] = useState('')
   const [pickerCategory, setPickerCategory] = useState('__all__')
   const [pickerQtyByProduct, setPickerQtyByProduct] = useState<Record<string, number>>({})
+  const [pickerError, setPickerError] = useState<string | null>(null)
 
   useEffect(() => {
     if (!open) {
       setPickerSearch('')
       setPickerCategory('__all__')
       setPickerQtyByProduct({})
+      setPickerError(null)
     }
   }, [open])
 
@@ -228,7 +231,10 @@ export function WbProductPickerDialog({
           <TextField
             label="Поиск (артикул, ШК, артикул WB, название, артикул продавца)"
             value={pickerSearch}
-            onChange={(e) => setPickerSearch(e.target.value)}
+            onChange={(e) => {
+              setPickerSearch(e.target.value)
+              setPickerError(null)
+            }}
             onKeyDown={(e) => {
               if (e.key !== 'Enter' || !catalog) {
                 return
@@ -237,9 +243,15 @@ export function WbProductPickerDialog({
               const productId = resolveProductIdByBarcode(catalog, pickerSearch)
               const targetId =
                 productId ?? (filteredPickerRows.length === 1 ? filteredPickerRows[0]!.id : null)
-              if (!targetId || disabledProductIds.has(targetId)) {
+              if (!targetId) {
+                setPickerError('Товар не найден в каталоге селлера.')
                 return
               }
+              if (disabledProductIds.has(targetId)) {
+                setPickerError(inDraftMessage)
+                return
+              }
+              setPickerError(null)
               setPickerQty(targetId, (pickerQtyByProduct[targetId] ?? 0) + 1)
               setPickerSearch('')
             }}
@@ -264,6 +276,11 @@ export function WbProductPickerDialog({
               ))}
             </Select>
           </FormControl>
+          {pickerError ? (
+            <Alert severity="error" data-testid={`${testIdPrefix}-scan-error`}>
+              {pickerError}
+            </Alert>
+          ) : null}
         </Stack>
         <TableContainer sx={{ width: '100%', overflowX: 'hidden' }}>
           <Table
