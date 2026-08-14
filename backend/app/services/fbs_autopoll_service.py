@@ -117,6 +117,8 @@ async def sync_seller_stocks(
     )
     result = SellerStockSyncResult()
     for binding in bindings:
+        binding_id = binding.id
+        binding_wb_warehouse_id = binding.wb_warehouse_id
         try:
             binding_result = await sync_binding_stocks(
                 session,
@@ -128,9 +130,9 @@ async def sync_seller_stocks(
             if binding_result.skipped_busy:
                 logger.warning(
                     "fbs stock sync skipped busy binding %s seller %s wb_warehouse %s",
-                    binding.id,
+                    binding_id,
                     seller_id,
-                    binding.wb_warehouse_id,
+                    binding_wb_warehouse_id,
                 )
                 continue
             result.bindings_processed += binding_result.bindings_processed
@@ -146,7 +148,7 @@ async def sync_seller_stocks(
             logger.warning(
                 "fbs stock sync binding failed seller %s wb_warehouse %s: %s",
                 seller_id,
-                binding.wb_warehouse_id,
+                binding_wb_warehouse_id,
                 exc.code,
             )
         except Exception:
@@ -154,7 +156,7 @@ async def sync_seller_stocks(
             logger.exception(
                 "fbs stock sync binding failed seller %s wb_warehouse %s",
                 seller_id,
-                binding.wb_warehouse_id,
+                binding_wb_warehouse_id,
             )
     return result
 

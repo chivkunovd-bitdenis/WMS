@@ -23,10 +23,12 @@ os.environ["WMS_DATA_DIR"] = str(_TEST_DATA_DIR)
 from app.db.session import SessionLocal, engine, get_db
 from app.main import create_app
 from app.models import Base
+from app.services.fbs_stock_publish_service import drain_background_stock_publish_tasks
 
 
 @pytest_asyncio.fixture
 async def async_client() -> AsyncIterator[AsyncClient]:
+    await drain_background_stock_publish_tasks()
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.drop_all)
     async with engine.begin() as conn:
@@ -44,5 +46,6 @@ async def async_client() -> AsyncIterator[AsyncClient]:
         yield client
 
     app.dependency_overrides.clear()
+    await drain_background_stock_publish_tasks()
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.drop_all)
