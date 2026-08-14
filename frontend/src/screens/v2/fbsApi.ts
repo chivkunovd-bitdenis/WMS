@@ -176,6 +176,21 @@ export type FbsWorklistWarehouseOption = {
 export type FbsSellerWarehouse = {
   id: number | null
   name: string | null
+  address: string | null
+  officeId: number | null
+  cargoType: number | null
+  deliveryType: number | null
+  isDeleting: boolean | null
+  isProcessing: boolean | null
+}
+
+export type FbsSellerOffice = {
+  id: number | null
+  officeId: number | null
+  name: string | null
+  city: string | null
+  address: string | null
+  selected: boolean | null
 }
 
 export type FbsWorklistOrder = {
@@ -1064,6 +1079,18 @@ export async function fetchFbsSellerWarehouses(
 ): Promise<FbsSellerWarehouse[]> {
   return jsonOrThrow<FbsSellerWarehouse[]>(
     await fetch(apiUrl(`/operations/fbs-sellers/${sellerId}/warehouses`), {
+      headers: { ...ah(token) },
+    }),
+  )
+}
+
+export async function fetchFbsSellerOffices(
+  token: string,
+  ah: AuthHeaders,
+  sellerId: string,
+): Promise<FbsSellerOffice[]> {
+  return jsonOrThrow<FbsSellerOffice[]>(
+    await fetch(apiUrl(`/operations/fbs-sellers/${sellerId}/offices`), {
       headers: { ...ah(token) },
     }),
   )

@@ -10,7 +10,6 @@ import {
   DialogContent,
   DialogTitle,
   FormControl,
-  FormControlLabel,
   InputLabel,
   MenuItem,
   Paper,
@@ -23,7 +22,6 @@ import {
   TableContainer,
   TableHead,
   TableRow,
-  TextField,
   Typography,
 } from '@mui/material'
 import type { ChipProps } from '@mui/material'
@@ -32,11 +30,15 @@ import { readApiErrorMessage } from '../../utils/readApiErrorMessage'
 import { FfFbsSectionNav } from './FfFbsSectionNav'
 import {
   disableFbsWarehouseBinding,
+  fetchFbsSellerOffices,
+  fetchFbsSellerWarehouses,
   fetchFbsStockSyncStatus,
   fetchFbsWarehouseBindings,
   STOCK_SYNC_STATUS_LABEL,
   triggerFbsStockSync,
   upsertFbsWarehouseBinding,
+  type FbsSellerOffice,
+  type FbsSellerWarehouse,
   type FbsStockSyncStatus,
   type FbsStockSyncStatusItem,
   type FbsWarehouseBinding,
@@ -44,11 +46,29 @@ import {
 
 type SellerRow = { id: string; name: string }
 type WmsWarehouseRow = { id: string; name: string; code: string }
+type InventoryBalanceSummaryRow = { quantity_fbs: number }
 
 type Props = {
   token: string
   authHeaders: (t: string) => Record<string, string>
   sellers: SellerRow[]
+}
+
+type SellerWarehouseView = {
+  wbId: number
+  name: string
+  address: string | null
+  city: string
+  wbStatus: string
+  binding: FbsWarehouseBinding | null
+  selectedWmsId: string
+  isMapped: boolean
+  isTechnicalBinding: boolean
+  stockSyncEnabled: boolean
+  fbsStockTotal: number | null
+  lastSyncStatus: string | null
+  lastSyncAt: string | null
+  lastErrorCode: string | null
 }
 
 const STATUS_COLOR: Record<string, ChipProps['color']> = {
@@ -58,16 +78,29 @@ const STATUS_COLOR: Record<string, ChipProps['color']> = {
   conflict: 'warning',
 }
 
+function isSyncJob(
+  body: { id?: string; bindings_processed?: number },
+): body is { id: string; status: string } {
+  return typeof body.id === 'string' && body.bindings_processed === undefined
+}
+
+function isTechnicalWmsWarehouse(row: WmsWarehouseRow | undefined): boolean {
+  if (!row) return false
+  return row.code.startsWith('fbs-wb-') || row.name.startsWith('FBS WB ')
+}
+
 function StockSyncStatusChip({ status }: { status: string | null }) {
   if (!status) {
-    return <Chip size="small" variant="outlined" label="—" data-testid="fbs-stock-status-chip" />
+    return (
+      <Chip size="small" variant="outlined" label="не запускалась" data-testid="fbs-stock-status-chip" />
+    )
   }
   return (
     <Chip
       size="small"
       variant="outlined"
       color={STATUS_COLOR[status] ?? 'default'}
-      label={STOCK_SYNC_STATUS_LABEL[status] ?? status}
+      label={STOCK_SYNC_STATUS_LABEL[status] ?? 'требует проверки'}
       data-testid="fbs-stock-status-chip"
       data-status={status}
     />
@@ -89,47 +122,133 @@ function stockErrorText(code: string | null): string | null {
     readback_mismatch: 'Wildberries принял не все остатки',
     product_mapping_missing: 'Не найден товар для выгрузки',
     wb_token_read_only_401:
-      'Ключ WB создан «только на чтение». Заказы по нему приходят, но публиковать остатки ' +
-      'и создавать поставки нельзя. Пересоздайте ключ в кабинете WB без этой галочки.',
+      'Ключ WB создан «только на чтение». Нужен ключ с правом публикации остатков.',
   }
   return labels[code] ?? 'Синхронизация завершилась с ошибкой'
 }
 
-function isSyncJob(
-  body: { id?: string; bindings_processed?: number },
-): body is { id: string; status: string } {
-  return typeof body.id === 'string' && body.bindings_processed === undefined
+function warehouseStatus(row: FbsSellerWarehouse | undefined): string {
+  if (!row) return 'требует настройки'
+  if (row.isDeleting) return 'удаляется в WB'
+  if (row.isProcessing) return 'обновляется в WB'
+  return 'активен в WB'
+}
+
+function bindingText(row: SellerWarehouseView): string {
+  if (!row.binding || !row.binding.is_active || row.isTechnicalBinding) {
+    return 'склад не сопоставлен'
+  }
+  return row.stockSyncEnabled ? 'публикация включена' : 'готов к публикации'
+}
+
+function bindingColor(row: SellerWarehouseView): ChipProps['color'] {
+  if (!row.binding || !row.binding.is_active || row.isTechnicalBinding) return 'warning'
+  return row.stockSyncEnabled ? 'success' : 'default'
+}
+
+function formatFbsStockTotal(value: number | null): string {
+  return value == null ? '—' : `${value} шт`
 }
 
 export function FfFbsStockSyncScreen({ token, authHeaders, sellers }: Props) {
   const [selectedSellerId, setSelectedSellerId] = useState('')
   const [warehouses, setWarehouses] = useState<WmsWarehouseRow[]>([])
+  const [sellerWarehouses, setSellerWarehouses] = useState<FbsSellerWarehouse[]>([])
+  const [sellerOffices, setSellerOffices] = useState<FbsSellerOffice[]>([])
   const [bindings, setBindings] = useState<FbsWarehouseBinding[]>([])
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [feedback, setFeedback] = useState<string | null>(null)
-
-  const [addOpen, setAddOpen] = useState(false)
-  const [addWbId, setAddWbId] = useState('')
-  const [addWmsId, setAddWmsId] = useState('')
-  const [addSyncEnabled, setAddSyncEnabled] = useState(true)
-  const [saving, setSaving] = useState(false)
+  const [stockTotalsByWarehouseId, setStockTotalsByWarehouseId] = useState<
+    Record<string, number>
+  >({})
+  const [savingWbId, setSavingWbId] = useState<number | null>(null)
 
   const [statusOpen, setStatusOpen] = useState(false)
   const [statusLoading, setStatusLoading] = useState(false)
   const [statusData, setStatusData] = useState<FbsStockSyncStatus | null>(null)
   const [statusWbId, setStatusWbId] = useState<number | null>(null)
-  const [pendingDisable, setPendingDisable] = useState<FbsWarehouseBinding | null>(null)
+  const [pendingDisable, setPendingDisable] = useState<SellerWarehouseView | null>(null)
 
-  const wmsNameById = useMemo(() => {
-    const m = new Map<string, string>()
-    for (const w of warehouses) m.set(w.id, `${w.name} (${w.code})`)
+  const wmsById = useMemo(() => {
+    const m = new Map<string, WmsWarehouseRow>()
+    for (const w of warehouses) m.set(w.id, w)
     return m
   }, [warehouses])
 
-  const activeBindings = useMemo(
-    () => bindings.filter((b) => b.is_active),
-    [bindings],
+  const physicalWarehouses = useMemo(
+    () => warehouses.filter((w) => !isTechnicalWmsWarehouse(w)),
+    [warehouses],
+  )
+
+  const officeCityById = useMemo(() => {
+    const m = new Map<number, string>()
+    for (const office of sellerOffices) {
+      const city = office.city?.trim()
+      if (!city) continue
+      if (office.officeId != null) m.set(office.officeId, city)
+      if (office.id != null) m.set(office.id, city)
+    }
+    return m
+  }, [sellerOffices])
+
+  const bindingsByWbId = useMemo(() => {
+    const m = new Map<number, FbsWarehouseBinding>()
+    for (const b of bindings) m.set(b.wb_warehouse_id, b)
+    return m
+  }, [bindings])
+
+  const rows = useMemo<SellerWarehouseView[]>(() => {
+    const byWb = new Map<number, FbsSellerWarehouse | undefined>()
+    for (const wh of sellerWarehouses) {
+      if (wh.id != null) byWb.set(wh.id, wh)
+    }
+    for (const binding of bindings) {
+      if (!byWb.has(binding.wb_warehouse_id)) {
+        byWb.set(binding.wb_warehouse_id, undefined)
+      }
+    }
+    return Array.from(byWb.entries())
+      .sort(([a], [b]) => a - b)
+      .map(([wbId, wb]) => {
+        const binding = bindingsByWbId.get(wbId) ?? null
+        const wms = binding ? wmsById.get(binding.wms_warehouse_id) : undefined
+        const technical = Boolean(binding && isTechnicalWmsWarehouse(wms))
+        const mapped = Boolean(binding?.is_active && wms && !technical)
+        const city =
+          wb?.officeId != null ? officeCityById.get(wb.officeId) : undefined
+        return {
+          wbId,
+          name: wb?.name?.trim() || `WB ${wbId}`,
+          address: wb?.address?.trim() || null,
+          city: city || 'город не определён',
+          wbStatus: warehouseStatus(wb),
+          binding,
+          selectedWmsId: mapped && binding ? binding.wms_warehouse_id : '',
+          isMapped: mapped,
+          isTechnicalBinding: technical,
+          stockSyncEnabled: Boolean(mapped && binding?.stock_sync_enabled),
+          fbsStockTotal:
+            mapped && binding
+              ? stockTotalsByWarehouseId[binding.wms_warehouse_id] ?? null
+              : null,
+          lastSyncStatus: binding?.last_sync_status ?? null,
+          lastSyncAt: binding?.last_sync_at ?? null,
+          lastErrorCode: binding?.last_error_code ?? null,
+        }
+      })
+  }, [
+    bindings,
+    bindingsByWbId,
+    officeCityById,
+    sellerWarehouses,
+    stockTotalsByWarehouseId,
+    wmsById,
+  ])
+
+  const syncableRows = useMemo(
+    () => rows.filter((row) => row.isMapped && row.stockSyncEnabled),
+    [rows],
   )
 
   const loadWarehouses = useCallback(async () => {
@@ -138,26 +257,85 @@ export function FfFbsStockSyncScreen({ token, authHeaders, sellers }: Props) {
     setWarehouses((await res.json()) as WmsWarehouseRow[])
   }, [token, authHeaders])
 
-  const loadBindings = useCallback(async () => {
+  const loadSellerWarehouseData = useCallback(async () => {
     if (!selectedSellerId) {
       setBindings([])
+      setSellerWarehouses([])
+      setSellerOffices([])
       return
     }
     setError(null)
     setBusy(true)
     try {
-      const rows = await fetchFbsWarehouseBindings(token, authHeaders, selectedSellerId)
-      setBindings(rows)
+      const bindingRows = await fetchFbsWarehouseBindings(token, authHeaders, selectedSellerId)
+      setBindings(bindingRows)
+      try {
+        const [wbRows, officeRows] = await Promise.all([
+          fetchFbsSellerWarehouses(token, authHeaders, selectedSellerId),
+          fetchFbsSellerOffices(token, authHeaders, selectedSellerId),
+        ])
+        setSellerWarehouses(wbRows)
+        setSellerOffices(officeRows)
+      } catch (e) {
+        setSellerWarehouses([])
+        setSellerOffices([])
+        setError(
+          e instanceof Error
+            ? e.message
+            : 'Склады WB не загружены: подключите токен WB Marketplace или обновите список',
+        )
+      }
     } catch (e) {
-      setError(e instanceof Error ? e.message : 'Не удалось загрузить привязки')
       setBindings([])
+      setSellerWarehouses([])
+      setSellerOffices([])
+      setError(e instanceof Error ? e.message : 'Не удалось загрузить склады селлера')
     } finally {
       setBusy(false)
     }
   }, [token, authHeaders, selectedSellerId])
 
+  const loadStockTotals = useCallback(
+    async (bindingRows: FbsWarehouseBinding[]) => {
+      if (!selectedSellerId) {
+        setStockTotalsByWarehouseId({})
+        return
+      }
+      const physicalBindingRows = bindingRows.filter((binding) => {
+        const wms = wmsById.get(binding.wms_warehouse_id)
+        return binding.is_active && wms && !isTechnicalWmsWarehouse(wms)
+      })
+      if (physicalBindingRows.length === 0) {
+        setStockTotalsByWarehouseId({})
+        return
+      }
+      const warehouseIds = [...new Set(physicalBindingRows.map((row) => row.wms_warehouse_id))]
+      const entries = await Promise.all(
+        warehouseIds.map(async (warehouseId) => {
+          const qs = new URLSearchParams({
+            seller_id: selectedSellerId,
+            warehouse_id: warehouseId,
+          })
+          const res = await fetch(apiUrl(`/operations/inventory-balances/summary?${qs}`), {
+            headers: { ...authHeaders(token) },
+          })
+          if (!res.ok) throw new Error(await readApiErrorMessage(res))
+          const summary = (await res.json()) as InventoryBalanceSummaryRow[]
+          const total = summary.reduce(
+            (sum, row) => sum + Math.max(0, Number(row.quantity_fbs) || 0),
+            0,
+          )
+          return [warehouseId, total] as const
+        }),
+      )
+      setStockTotalsByWarehouseId(Object.fromEntries(entries))
+    },
+    [authHeaders, selectedSellerId, token, wmsById],
+  )
+
   useEffect(() => {
-    if (sellers.length > 0 && !selectedSellerId) {
+    const currentExists = sellers.some((s) => s.id === selectedSellerId)
+    if (sellers.length > 0 && (!selectedSellerId || !currentExists)) {
       setSelectedSellerId(sellers[0].id)
     }
   }, [sellers, selectedSellerId])
@@ -169,85 +347,89 @@ export function FfFbsStockSyncScreen({ token, authHeaders, sellers }: Props) {
   }, [loadWarehouses])
 
   useEffect(() => {
-    void loadBindings()
-  }, [loadBindings])
+    void loadSellerWarehouseData()
+  }, [loadSellerWarehouseData])
 
-  const handleAddBinding = useCallback(async () => {
-    const wbId = Number(addWbId)
-    if (!selectedSellerId || !addWmsId || !Number.isFinite(wbId) || wbId <= 0) {
-      setError('Укажите селлера, ID склада WB и склад WMS')
-      return
-    }
-    setSaving(true)
-    setError(null)
-    try {
-      await upsertFbsWarehouseBinding(token, authHeaders, selectedSellerId, wbId, {
-        wms_warehouse_id: addWmsId,
-        stock_sync_enabled: addSyncEnabled,
-      })
-      setAddOpen(false)
-      setFeedback('Привязка сохранена')
-      await loadBindings()
-    } catch (e) {
-      setError(e instanceof Error ? e.message : 'Не удалось сохранить привязку')
-    } finally {
-      setSaving(false)
-    }
-  }, [
-    addSyncEnabled,
-    addWbId,
-    addWmsId,
-    authHeaders,
-    loadBindings,
-    selectedSellerId,
-    token,
-  ])
+  useEffect(() => {
+    void loadStockTotals(bindings).catch(() => {
+      setStockTotalsByWarehouseId({})
+    })
+  }, [bindings, loadStockTotals])
+
+  const handleBind = useCallback(
+    async (row: SellerWarehouseView, wmsWarehouseId: string) => {
+      if (!selectedSellerId) return
+      if (!wmsWarehouseId) {
+        if (row.binding?.is_active) setPendingDisable(row)
+        return
+      }
+      setSavingWbId(row.wbId)
+      setError(null)
+      try {
+        await upsertFbsWarehouseBinding(token, authHeaders, selectedSellerId, row.wbId, {
+          wms_warehouse_id: wmsWarehouseId,
+          stock_sync_enabled: row.isMapped ? row.stockSyncEnabled : false,
+        })
+        setFeedback('Склад WB сопоставлен со складом WMS')
+        await loadSellerWarehouseData()
+      } catch (e) {
+        setError(e instanceof Error ? e.message : 'Не удалось сохранить сопоставление')
+      } finally {
+        setSavingWbId(null)
+      }
+    },
+    [authHeaders, loadSellerWarehouseData, selectedSellerId, token],
+  )
 
   const handleToggleSync = useCallback(
-    async (row: FbsWarehouseBinding) => {
+    async (row: SellerWarehouseView) => {
+      if (!row.binding || !row.isMapped || !selectedSellerId) return
       setError(null)
+      setSavingWbId(row.wbId)
       try {
-        await upsertFbsWarehouseBinding(
-          token,
-          authHeaders,
-          selectedSellerId,
-          row.wb_warehouse_id,
-          {
-            wms_warehouse_id: row.wms_warehouse_id,
-            stock_sync_enabled: !row.stock_sync_enabled,
-          },
-        )
-        await loadBindings()
+        await upsertFbsWarehouseBinding(token, authHeaders, selectedSellerId, row.wbId, {
+          wms_warehouse_id: row.binding.wms_warehouse_id,
+          stock_sync_enabled: !row.stockSyncEnabled,
+        })
+        setFeedback(!row.stockSyncEnabled ? 'Публикация включена' : 'Публикация выключена')
+        await loadSellerWarehouseData()
       } catch (e) {
-        setError(e instanceof Error ? e.message : 'Не удалось переключить синхронизацию')
+        setError(e instanceof Error ? e.message : 'Не удалось переключить публикацию')
+      } finally {
+        setSavingWbId(null)
       }
     },
-    [authHeaders, loadBindings, selectedSellerId, token],
+    [authHeaders, loadSellerWarehouseData, selectedSellerId, token],
   )
 
-  const handleDisable = useCallback(
-    async (row: FbsWarehouseBinding) => {
-      setError(null)
-      try {
-        await disableFbsWarehouseBinding(
-          token,
-          authHeaders,
-          selectedSellerId,
-          row.wb_warehouse_id,
-        )
-        setFeedback('Привязка отключена')
-        setPendingDisable(null)
-        await loadBindings()
-      } catch (e) {
-        setError(e instanceof Error ? e.message : 'Не удалось отключить привязку')
-      }
-    },
-    [authHeaders, loadBindings, selectedSellerId, token],
-  )
+  const handleDisable = useCallback(async () => {
+    if (!pendingDisable?.binding || !selectedSellerId) return
+    setError(null)
+    setSavingWbId(pendingDisable.wbId)
+    try {
+      await disableFbsWarehouseBinding(
+        token,
+        authHeaders,
+        selectedSellerId,
+        pendingDisable.wbId,
+      )
+      setFeedback('Сопоставление отключено')
+      setPendingDisable(null)
+      await loadSellerWarehouseData()
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Не удалось отключить сопоставление')
+    } finally {
+      setSavingWbId(null)
+    }
+  }, [authHeaders, loadSellerWarehouseData, pendingDisable, selectedSellerId, token])
 
   const handleSync = useCallback(
-    async (wbWarehouseId?: number) => {
+    async (row?: SellerWarehouseView) => {
       if (!selectedSellerId) return
+      if (row && !row.isMapped) {
+        setError('Сначала сопоставьте склад WB со складом WMS')
+        return
+      }
       setError(null)
       setFeedback(null)
       setBusy(true)
@@ -256,28 +438,29 @@ export function FfFbsStockSyncScreen({ token, authHeaders, sellers }: Props) {
           token,
           authHeaders,
           selectedSellerId,
-          wbWarehouseId ?? null,
+          row?.wbId ?? null,
         )
         if (isSyncJob(result)) {
           setFeedback(`Синхронизация поставлена в очередь (задача ${result.id})`)
         } else {
           setFeedback(
-            `Синхронизация: обработано ${result.bindings_processed}, целевых ${result.products_targeted}, подтверждено ${result.products_confirmed}, ошибок ${result.errors}`,
+            `Синхронизация: складов ${result.bindings_processed}, товаров ${result.products_targeted}, подтверждено ${result.products_confirmed}, ошибок ${result.errors}`,
           )
         }
-        await loadBindings()
+        await loadSellerWarehouseData()
       } catch (e) {
         setError(e instanceof Error ? e.message : 'Синхронизация не удалась')
       } finally {
         setBusy(false)
       }
     },
-    [authHeaders, loadBindings, selectedSellerId, token],
+    [authHeaders, loadSellerWarehouseData, selectedSellerId, token],
   )
 
   const openStatus = useCallback(
-    async (wbWarehouseId: number) => {
-      setStatusWbId(wbWarehouseId)
+    async (row: SellerWarehouseView) => {
+      if (!row.binding) return
+      setStatusWbId(row.wbId)
       setStatusOpen(true)
       setStatusData(null)
       setStatusLoading(true)
@@ -286,7 +469,7 @@ export function FfFbsStockSyncScreen({ token, authHeaders, sellers }: Props) {
           token,
           authHeaders,
           selectedSellerId,
-          wbWarehouseId,
+          row.wbId,
         )
         setStatusData(data)
       } catch (e) {
@@ -305,7 +488,7 @@ export function FfFbsStockSyncScreen({ token, authHeaders, sellers }: Props) {
         FBS
       </Typography>
       <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
-        Привязка складов Wildberries к складам WMS и ручная выгрузка остатков.
+        Склады селлера WB, сопоставление с физическими складами WMS и публикация остатков.
       </Typography>
 
       <FfFbsSectionNav showStockSync />
@@ -332,13 +515,19 @@ export function FfFbsStockSyncScreen({ token, authHeaders, sellers }: Props) {
         </Alert>
       ) : null}
 
+      {physicalWarehouses.length === 0 ? (
+        <Alert severity="warning" sx={{ mb: 2 }} data-testid="fbs-stock-no-wms">
+          Создайте WMS-склад перед сопоставлением складов WB.
+        </Alert>
+      ) : null}
+
       <Paper variant="outlined" sx={{ p: 2, mb: 2 }} data-testid="fbs-stock-filters">
         <Stack
           direction={{ xs: 'column', sm: 'row' }}
           spacing={2}
           sx={{ alignItems: { sm: 'center' } }}
         >
-          <FormControl size="small" sx={{ minWidth: 220 }}>
+          <FormControl size="small" sx={{ minWidth: 240 }}>
             <InputLabel id="fbs-stock-seller-label">Селлер</InputLabel>
             <Select
               labelId="fbs-stock-seller-label"
@@ -356,7 +545,7 @@ export function FfFbsStockSyncScreen({ token, authHeaders, sellers }: Props) {
           </FormControl>
           <Button
             variant="outlined"
-            onClick={() => void loadBindings()}
+            onClick={() => void loadSellerWarehouseData()}
             disabled={busy || !selectedSellerId}
             data-testid="fbs-stock-refresh"
           >
@@ -364,20 +553,11 @@ export function FfFbsStockSyncScreen({ token, authHeaders, sellers }: Props) {
           </Button>
           <Button
             variant="contained"
-            onClick={() => setAddOpen(true)}
-            disabled={!selectedSellerId}
-            data-testid="fbs-stock-add-binding"
-          >
-            Добавить привязку
-          </Button>
-          <Button
-            variant="contained"
-            color="secondary"
             onClick={() => void handleSync()}
-            disabled={busy || !selectedSellerId || activeBindings.length === 0}
+            disabled={busy || !selectedSellerId || syncableRows.length === 0}
             data-testid="fbs-stock-sync-all"
           >
-            Выгрузить остатки по всем складам
+            Выгрузить остатки по включённым складам
           </Button>
           {busy ? <CircularProgress size={20} data-testid="fbs-stock-loading" /> : null}
         </Stack>
@@ -387,62 +567,111 @@ export function FfFbsStockSyncScreen({ token, authHeaders, sellers }: Props) {
         <Table size="small">
           <TableHead>
             <TableRow>
-              <TableCell>Склад Wildberries</TableCell>
+              <TableCell>Склад WB</TableCell>
+              <TableCell>Город</TableCell>
+              <TableCell>Адрес</TableCell>
+              <TableCell>Состояние</TableCell>
               <TableCell>Склад WMS</TableCell>
-              <TableCell>Выгружать остатки</TableCell>
-              <TableCell>Последний статус</TableCell>
-              <TableCell>Обновлено</TableCell>
+              <TableCell>FBS остаток</TableCell>
+              <TableCell>Публикация</TableCell>
+              <TableCell>Последнее подтверждение</TableCell>
               <TableCell align="right">Действия</TableCell>
             </TableRow>
           </TableHead>
           <TableBody>
-            {activeBindings.length === 0 ? (
+            {rows.length === 0 ? (
               <TableRow>
-                <TableCell colSpan={6}>
+                <TableCell colSpan={9}>
                   <Box sx={{ py: 3, textAlign: 'center' }} data-testid="fbs-stock-bindings-empty">
                     <Typography color="text.secondary">
-                      Нет активных привязок. Добавьте склад WB и выберите склад WMS.
+                      Склады WB не загружены: подключите токен WB Marketplace или обновите список.
                     </Typography>
                   </Box>
                 </TableCell>
               </TableRow>
             ) : (
-              activeBindings.map((row) => (
-                <TableRow key={row.id} data-testid="fbs-stock-binding-row">
-                  <TableCell>{row.wb_warehouse_id}</TableCell>
+              rows.map((row) => (
+                <TableRow key={row.wbId} data-testid="fbs-stock-binding-row">
                   <TableCell>
-                    {wmsNameById.get(row.wms_warehouse_id) ?? row.wms_warehouse_id}
+                    <Typography variant="body2" sx={{ fontWeight: 650 }}>
+                      {row.name}
+                    </Typography>
+                    <Typography variant="caption" color="text.secondary">
+                      WB ID {row.wbId}
+                    </Typography>
                   </TableCell>
-                  <TableCell>
-                    <Switch
-                      size="small"
-                      checked={row.stock_sync_enabled}
-                      onChange={() => void handleToggleSync(row)}
-                      data-testid="fbs-stock-sync-toggle"
-                    />
-                  </TableCell>
-                  <TableCell>
-                    <StockSyncStatusChip status={row.last_sync_status} />
-                    {row.last_error_code ? (
-                      <Typography variant="caption" color="error" sx={{ display: 'block' }}>
-                        {stockErrorText(row.last_error_code)}
+                  <TableCell>{row.city}</TableCell>
+                  <TableCell>{row.address || 'адрес не указан'}</TableCell>
+                  <TableCell>{row.wbStatus}</TableCell>
+                  <TableCell sx={{ minWidth: 230 }}>
+                    <FormControl size="small" fullWidth>
+                      <InputLabel id={`fbs-stock-wms-label-${row.wbId}`}>Склад WMS</InputLabel>
+                      <Select
+                        labelId={`fbs-stock-wms-label-${row.wbId}`}
+                        label="Склад WMS"
+                        value={row.selectedWmsId}
+                        onChange={(e) => void handleBind(row, e.target.value)}
+                        disabled={savingWbId === row.wbId || physicalWarehouses.length === 0}
+                        data-testid="fbs-stock-row-wms-select"
+                      >
+                        <MenuItem value="">склад не сопоставлен</MenuItem>
+                        {physicalWarehouses.map((w) => (
+                          <MenuItem key={w.id} value={w.id}>
+                            {w.name} ({w.code})
+                          </MenuItem>
+                        ))}
+                      </Select>
+                    </FormControl>
+                    {row.isTechnicalBinding ? (
+                      <Typography variant="caption" color="warning.main">
+                        Старый технический склад не используется для публикации.
                       </Typography>
                     ) : null}
                   </TableCell>
-                  <TableCell>{formatDt(row.last_sync_at)}</TableCell>
+                  <TableCell data-testid="fbs-stock-total">
+                    {formatFbsStockTotal(row.fbsStockTotal)}
+                  </TableCell>
+                  <TableCell>
+                    <Stack spacing={0.75}>
+                      <Chip
+                        size="small"
+                        variant="outlined"
+                        color={bindingColor(row)}
+                        label={bindingText(row)}
+                        data-testid="fbs-stock-binding-state"
+                      />
+                      <Stack direction="row" spacing={1} sx={{ alignItems: 'center' }}>
+                        <Switch
+                          size="small"
+                          checked={row.stockSyncEnabled}
+                          onChange={() => void handleToggleSync(row)}
+                          disabled={!row.isMapped || savingWbId === row.wbId}
+                          data-testid="fbs-stock-sync-toggle"
+                        />
+                        <StockSyncStatusChip status={row.lastSyncStatus} />
+                      </Stack>
+                      {row.lastErrorCode ? (
+                        <Typography variant="caption" color="error">
+                          {stockErrorText(row.lastErrorCode)}
+                        </Typography>
+                      ) : null}
+                    </Stack>
+                  </TableCell>
+                  <TableCell>{formatDt(row.lastSyncAt)}</TableCell>
                   <TableCell align="right">
                     <Stack direction="row" spacing={1} sx={{ justifyContent: 'flex-end' }}>
                       <Button
                         size="small"
-                        onClick={() => void handleSync(row.wb_warehouse_id)}
-                        disabled={busy}
+                        onClick={() => void handleSync(row)}
+                        disabled={busy || !row.isMapped || !row.stockSyncEnabled}
                         data-testid="fbs-stock-sync-one"
                       >
-                        Выгрузить остатки
+                        Выгрузить
                       </Button>
                       <Button
                         size="small"
-                        onClick={() => void openStatus(row.wb_warehouse_id)}
+                        onClick={() => void openStatus(row)}
+                        disabled={!row.binding}
                         data-testid="fbs-stock-status-btn"
                       >
                         Статус
@@ -451,6 +680,7 @@ export function FfFbsStockSyncScreen({ token, authHeaders, sellers }: Props) {
                         size="small"
                         color="error"
                         onClick={() => setPendingDisable(row)}
+                        disabled={!row.binding?.is_active || savingWbId === row.wbId}
                         data-testid="fbs-stock-disable-binding"
                       >
                         Отключить
@@ -464,78 +694,22 @@ export function FfFbsStockSyncScreen({ token, authHeaders, sellers }: Props) {
         </Table>
       </TableContainer>
 
-      <Dialog open={addOpen} onClose={() => setAddOpen(false)} maxWidth="sm" fullWidth>
-        <DialogTitle>Связать склад Wildberries со складом WMS</DialogTitle>
-        <DialogContent>
-          <Stack spacing={2} sx={{ mt: 1 }}>
-            <TextField
-              label="Номер склада Wildberries"
-              type="number"
-              value={addWbId}
-              onChange={(e) => setAddWbId(e.target.value)}
-              helperText="Номер указан в кабинете продавца Wildberries"
-              slotProps={{ htmlInput: { 'data-testid': 'fbs-stock-add-wb-id' } }}
-            />
-            <FormControl fullWidth>
-              <InputLabel id="fbs-stock-add-wms-label">Склад WMS</InputLabel>
-              <Select
-                labelId="fbs-stock-add-wms-label"
-                label="Склад WMS"
-                value={addWmsId}
-                onChange={(e) => setAddWmsId(e.target.value)}
-                data-testid="fbs-stock-add-wms-select"
-              >
-                {warehouses.map((w) => (
-                  <MenuItem key={w.id} value={w.id}>
-                    {w.name} ({w.code})
-                  </MenuItem>
-                ))}
-              </Select>
-            </FormControl>
-            <FormControlLabel
-              control={
-                <Switch
-                  checked={addSyncEnabled}
-                  onChange={(e) => setAddSyncEnabled(e.target.checked)}
-                />
-              }
-              label="Автоматически выгружать остатки"
-            />
-          </Stack>
-        </DialogContent>
-        <DialogActions>
-          <Button onClick={() => setAddOpen(false)}>Отмена</Button>
-          <Button
-            variant="contained"
-            onClick={() => void handleAddBinding()}
-            disabled={saving}
-            data-testid="fbs-stock-add-save"
-          >
-            Сохранить
-          </Button>
-        </DialogActions>
-      </Dialog>
-
       <Dialog
         open={pendingDisable !== null}
         onClose={() => setPendingDisable(null)}
         maxWidth="xs"
         fullWidth
       >
-        <DialogTitle>Отключить связь складов?</DialogTitle>
+        <DialogTitle>Отключить сопоставление складов?</DialogTitle>
         <DialogContent>
           <Typography>
-            Новые заказы с этого склада перестанут попадать в правильный склад WMS, а остатки
-            больше не будут выгружаться в Wildberries.
+            Новые заказы с этого WB-склада останутся видимыми, но будут заблокированы до
+            нового сопоставления со складом WMS.
           </Typography>
         </DialogContent>
         <DialogActions>
           <Button onClick={() => setPendingDisable(null)}>Оставить связь</Button>
-          <Button
-            color="error"
-            variant="contained"
-            onClick={() => pendingDisable && void handleDisable(pendingDisable)}
-          >
+          <Button color="error" variant="contained" onClick={() => void handleDisable()}>
             Отключить
           </Button>
         </DialogActions>
@@ -548,9 +722,7 @@ export function FfFbsStockSyncScreen({ token, authHeaders, sellers }: Props) {
         fullWidth
         data-testid="fbs-stock-status-panel"
       >
-        <DialogTitle>
-          Статус синхронизации — WB {statusWbId ?? '—'}
-        </DialogTitle>
+        <DialogTitle>Статус синхронизации — WB {statusWbId ?? '—'}</DialogTitle>
         <DialogContent>
           {statusLoading ? (
             <Box sx={{ py: 4, textAlign: 'center' }}>
@@ -559,7 +731,7 @@ export function FfFbsStockSyncScreen({ token, authHeaders, sellers }: Props) {
           ) : statusData ? (
             <Stack spacing={2}>
               <Stack direction="row" spacing={2} sx={{ alignItems: 'center' }}>
-                <Typography variant="body2">Статус привязки:</Typography>
+                <Typography variant="body2">Статус сопоставления:</Typography>
                 <StockSyncStatusChip status={statusData.binding_last_sync_status} />
                 {statusData.binding_last_error_code ? (
                   <Typography variant="caption" color="error">
@@ -571,8 +743,8 @@ export function FfFbsStockSyncScreen({ token, authHeaders, sellers }: Props) {
                 <TableHead>
                   <TableRow>
                     <TableCell>Товар Wildberries</TableCell>
-                    <TableCell>Цель</TableCell>
-                    <TableCell>Подтверждено</TableCell>
+                    <TableCell>К публикации</TableCell>
+                    <TableCell>Подтверждено WB</TableCell>
                     <TableCell>Статус</TableCell>
                     <TableCell>Ошибка</TableCell>
                   </TableRow>
@@ -581,16 +753,11 @@ export function FfFbsStockSyncScreen({ token, authHeaders, sellers }: Props) {
                   {statusData.items.length === 0 ? (
                     <TableRow>
                       <TableCell colSpan={5}>
-                        <Typography
-                          color="text.secondary"
-                          data-testid="fbs-stock-status-empty"
-                        >
+                        <Typography color="text.secondary" data-testid="fbs-stock-status-empty">
                           Нет позиций синхронизации
                         </Typography>
                         <Typography variant="caption" color="text.secondary">
-                          В выгрузку попадают только товары, у которых селлер сам включил
-                          «Продажу по ФБС» в своём каталоге. Пока он этого не сделал, в WB
-                          по ним ничего не уходит — это не сбой синхронизации.
+                          В выгрузку попадают только товары, у которых включена продажа по FBS.
                         </Typography>
                       </TableCell>
                     </TableRow>
@@ -608,7 +775,7 @@ export function FfFbsStockSyncScreen({ token, authHeaders, sellers }: Props) {
                         <TableCell>
                           <StockSyncStatusChip status={item.status} />
                         </TableCell>
-                        <TableCell>{item.error ?? '—'}</TableCell>
+                        <TableCell>{stockErrorText(item.error) ?? '—'}</TableCell>
                       </TableRow>
                     ))
                   )}

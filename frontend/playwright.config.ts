@@ -43,6 +43,7 @@ export default defineConfig({
         E2E_MOCK_WB_CARDS: '1',
         E2E_MOCK_WB_SUPPLIES: '1',
         E2E_MOCK_WB_WAREHOUSES: '1',
+        E2E_MOCK_WB_MARKETPLACE_WAREHOUSES: '1',
       },
       port: e2eApiPort,
       reuseExistingServer: reuse,
