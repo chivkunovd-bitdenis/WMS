@@ -11,12 +11,15 @@ import { expect, test } from "@playwright/test";
  * он оставлен владельцу кабинета.
  */
 
-const STAND = "https://web-production-9e7c1.up.railway.app";
-const EMAIL = "staging-admin@example.com";
-const PASSWORD = "StagingWms2026!";
-const ORDER_ARTICLE = "wb6n9771yd";
+const STAND = process.env.E2E_WEB_ORIGIN ?? "https://web-production-9e7c1.up.railway.app";
+const EMAIL = process.env.LIVE_FBS_STAND_EMAIL;
+const PASSWORD = process.env.LIVE_FBS_STAND_PASSWORD;
+const ORDER_ARTICLE = process.env.LIVE_FBS_STAND_ORDER_ARTICLE ?? "wb6n9771yd";
 
-test.skip(!process.env.LIVE_STAND, "живой стенд: запускать только с LIVE_STAND=1");
+test.skip(
+  !process.env.LIVE_STAND || !EMAIL || !PASSWORD,
+  "живой стенд: запускать только с LIVE_STAND=1 и LIVE_FBS_STAND_EMAIL/LIVE_FBS_STAND_PASSWORD",
+);
 
 test("TC-NEW-FBS-LIVE-001: упаковка, короб и QR грузоместа на живом кабинете", async ({
   page,
