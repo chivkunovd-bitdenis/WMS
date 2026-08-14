@@ -47,7 +47,8 @@ test('ff products: catalog separates product fields and hides stock columns', as
   const skuA = `e2e-ff-a-${Date.now()}`
   const skuB = `e2e-ff-b-${Date.now()}`
   const skuPrivate = `e2e-ff-private-${Date.now()}`
-  const barcodeA = `204${String(Date.now()).slice(-10)}`
+  const barcodeA = '2031111111177'
+  const barcodeB = '2031111111188'
   await apiPost('/products', {
     name: 'Alpha product',
     sku_code: skuA,
@@ -68,7 +69,7 @@ test('ff products: catalog separates product fields and hides stock columns', as
     height_mm: 1,
     seller_id: sellerB.id,
     wb_vendor_code: 'ART-B',
-    wb_barcode: `204${String(Date.now() + 1).slice(-10)}`,
+    wb_barcode: barcodeB,
     wb_size: '48',
   })
   await apiPost('/products', {
@@ -383,7 +384,7 @@ test('ff products: manual create shows manual badge', async ({ page }) => {
 // When: «Загрузить Excel» и Применить;
 // Then: импорт находит нужный лист по структуре колонок (имя листа не важно), товары в каталоге,
 // ТЗ заполнено, бейдж «Вручную».
-test('ff products: import tz xlsx creates manual products with packaging', async ({ page }) => {
+test('ff products: import tz xlsx creates catalog products with packaging', async ({ page }) => {
   const email = `e2e-ff-tz-imp-${Date.now()}@example.com`
   const password = 'password123'
 
@@ -494,8 +495,8 @@ bad.save(${JSON.stringify(badXlsxPath)})
   )
   await expect(page.getByTestId('ff-products-table')).toContainText('E2E Clean Title')
   await expect(page.getByTestId('ff-products-table')).toContainText('E2E-ART')
+  await expect(page.getByTestId('ff-products-table')).toContainText('123456789')
   await expect(page.getByTestId('ff-product-row')).toHaveCount(2)
-  await expect(page.getByText('Вручную').first()).toBeVisible()
   await page.getByTestId('ff-products-search').fill('2039000000001')
   await expect(page.getByTestId('ff-product-row')).toHaveCount(1)
   const balances = await page.request.get('/api/operations/inventory-balances/summary', {
