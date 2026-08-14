@@ -296,6 +296,229 @@ async def test_empty_distribution_complete_rejected(async_client: AsyncClient) -
 
 
 @pytest.mark.asyncio
+async def test_distribution_scan_cell_then_product_and_complete(
+    async_client: AsyncClient,
+) -> None:
+    suffix = str(int(time.time() * 1000))
+    reg = await async_client.post(
+        "/auth/register",
+        json={
+            "organization_name": "Dist Scan Co",
+            "slug": f"dist-scan-{suffix}",
+            "admin_email": f"dist-scan-{suffix}@example.com",
+            "password": "password123",
+        },
+    )
+    assert reg.status_code == 200, reg.text
+    ah = {"Authorization": f"Bearer {reg.json()['access_token']}"}
+
+    wh = await async_client.post(
+        "/warehouses",
+        headers=ah,
+        json={"name": "W", "code": f"ds-{suffix}"},
+    )
+    assert wh.status_code == 200, wh.text
+    wid = wh.json()["id"]
+    loc = await async_client.post(
+        f"/warehouses/{wid}/locations",
+        headers=ah,
+        json={"code": "A-01"},
+    )
+    assert loc.status_code == 200, loc.text
+    lid = loc.json()["id"]
+    loc_barcode = loc.json()["barcode"]
+
+    pr = await async_client.post(
+        "/products",
+        headers=ah,
+        json={
+            "name": "P",
+            "sku_code": f"SKU-DS-{suffix}",
+            "length_mm": 1,
+            "width_mm": 1,
+            "height_mm": 1,
+        },
+    )
+    assert pr.status_code == 200, pr.text
+    pid = pr.json()["id"]
+    sku = pr.json()["sku_code"]
+
+    base = "/operations/inbound-intake-requests"
+    rid = (await async_client.post(base, headers=ah, json={"warehouse_id": wid})).json()["id"]
+    line = await async_client.post(
+        f"{base}/{rid}/lines",
+        headers=ah,
+        json={"product_id": pid, "expected_qty": 2},
+    )
+    assert line.status_code == 201, line.text
+    line_id = line.json()["id"]
+    await async_client.post(f"{base}/{rid}/submit", headers=ah)
+    await post_primary_accept(async_client, base, rid, ah)
+    actual = await async_client.patch(
+        f"{base}/{rid}/lines/{line_id}/actual",
+        headers=ah,
+        json={"actual_qty": 2},
+    )
+    assert actual.status_code == 200, actual.text
+    complete_receiving = await async_client.post(
+        f"{base}/{rid}/complete-receiving", headers=ah
+    )
+    assert complete_receiving.status_code == 200, complete_receiving.text
+
+    no_cell = await async_client.post(
+        f"{base}/{rid}/distribution-scan",
+        headers=ah,
+        json={"barcode": sku},
+    )
+    assert no_cell.status_code == 422, no_cell.text
+    assert no_cell.json()["detail"] == "active_location_required"
+
+    scan_loc = await async_client.post(
+        f"{base}/{rid}/distribution-scan",
+        headers=ah,
+        json={"barcode": loc_barcode},
+    )
+    assert scan_loc.status_code == 200, scan_loc.text
+    assert scan_loc.json()["kind"] == "location"
+    assert scan_loc.json()["active_storage_location_id"] == lid
+    assert scan_loc.json()["active_storage_location_code"] == "A-01"
+
+    for expected_qty in (1, 2):
+        scan_product = await async_client.post(
+            f"{base}/{rid}/distribution-scan",
+            headers=ah,
+            json={"barcode": sku, "active_storage_location_id": lid},
+        )
+        assert scan_product.status_code == 200, scan_product.text
+        body = scan_product.json()
+        assert body["kind"] == "product"
+        assert body["product_id"] == pid
+        assert body["lines"][0]["quantity"] == expected_qty
+
+    too_much = await async_client.post(
+        f"{base}/{rid}/distribution-scan",
+        headers=ah,
+        json={"barcode": sku, "active_storage_location_id": lid},
+    )
+    assert too_much.status_code == 422, too_much.text
+    assert too_much.json()["detail"] == "qty_exceeds_accepted"
+
+    done = await async_client.post(f"{base}/{rid}/distribution-complete", headers=ah)
+    assert done.status_code == 200, done.text
+    assert done.json()["status"] == "done"
+    assert done.json()["sorting_remaining_qty"] == 0
+
+    balances = await async_client.get(
+        "/operations/inventory-balances/summary",
+        headers=ah,
+    )
+    row = next(r for r in balances.json() if r["product_id"] == pid)
+    assert row["quantity_in_sorting"] == 0
+    assert row["quantity_in_storage"] == 2
+
+
+@pytest.mark.asyncio
+async def test_delete_location_with_stock_requires_move_and_hides_cell(
+    async_client: AsyncClient,
+) -> None:
+    suffix = str(int(time.time() * 1000))
+    reg = await async_client.post(
+        "/auth/register",
+        json={
+            "organization_name": "Safe Delete Co",
+            "slug": f"safe-del-{suffix}",
+            "admin_email": f"safe-del-{suffix}@example.com",
+            "password": "password123",
+        },
+    )
+    assert reg.status_code == 200, reg.text
+    ah = {"Authorization": f"Bearer {reg.json()['access_token']}"}
+
+    wh = await async_client.post(
+        "/warehouses",
+        headers=ah,
+        json={"name": "W", "code": f"sd-{suffix}"},
+    )
+    wid = wh.json()["id"]
+    loc = await async_client.post(
+        f"/warehouses/{wid}/locations",
+        headers=ah,
+        json={"code": "DEL-1"},
+    )
+    lid = loc.json()["id"]
+
+    pr = await async_client.post(
+        "/products",
+        headers=ah,
+        json={
+            "name": "P",
+            "sku_code": f"SKU-SD-{suffix}",
+            "length_mm": 1,
+            "width_mm": 1,
+            "height_mm": 1,
+        },
+    )
+    pid = pr.json()["id"]
+
+    base = "/operations/inbound-intake-requests"
+    rid = (await async_client.post(base, headers=ah, json={"warehouse_id": wid})).json()["id"]
+    line = await async_client.post(
+        f"{base}/{rid}/lines",
+        headers=ah,
+        json={"product_id": pid, "expected_qty": 3},
+    )
+    line_id = line.json()["id"]
+    await async_client.post(f"{base}/{rid}/submit", headers=ah)
+    await post_primary_accept(async_client, base, rid, ah)
+    await async_client.patch(
+        f"{base}/{rid}/lines/{line_id}/actual",
+        headers=ah,
+        json={"actual_qty": 3},
+    )
+    await async_client.post(f"{base}/{rid}/complete-receiving", headers=ah)
+    put = await async_client.put(
+        f"{base}/{rid}/distribution-lines",
+        headers=ah,
+        json=[
+            {
+                "product_id": pid,
+                "storage_location_id": lid,
+                "quantity": 3,
+            }
+        ],
+    )
+    assert put.status_code == 200, put.text
+    done = await async_client.post(f"{base}/{rid}/distribution-complete", headers=ah)
+    assert done.status_code == 200, done.text
+
+    blocked = await async_client.delete(f"/warehouses/{wid}/locations/{lid}", headers=ah)
+    assert blocked.status_code == 409, blocked.text
+    assert blocked.json()["detail"] == "location_has_stock"
+
+    deleted = await async_client.delete(
+        f"/warehouses/{wid}/locations/{lid}?move_stock_to=unallocated",
+        headers=ah,
+    )
+    assert deleted.status_code == 204, deleted.text
+
+    visible_locs = await async_client.get(
+        f"/warehouses/{wid}/locations?exclude_sorting_zone=true",
+        headers=ah,
+    )
+    assert visible_locs.status_code == 200, visible_locs.text
+    assert lid not in {row["id"] for row in visible_locs.json()}
+
+    balances = await async_client.get(
+        "/operations/inventory-balances/summary",
+        headers=ah,
+    )
+    row = next(r for r in balances.json() if r["product_id"] == pid)
+    assert row["quantity"] == 3
+    assert row["quantity_in_sorting"] == 3
+    assert row["quantity_in_storage"] == 0
+
+
+@pytest.mark.asyncio
 async def test_distribution_reopen_after_stuck_lock(async_client: AsyncClient) -> None:
     suffix = str(int(time.time() * 1000))
     reg = await async_client.post(

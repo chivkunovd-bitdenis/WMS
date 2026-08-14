@@ -406,7 +406,7 @@ async def delete_location(
         .all()
     )
     if balances:
-        if move_stock_to != "sorting":
+        if move_stock_to not in ("sorting", "unallocated"):
             raise CatalogError("location_has_stock")
         sorting_loc = await sorting_loc_svc.get_or_create_sorting_location(
             session, tenant_id, warehouse_id
