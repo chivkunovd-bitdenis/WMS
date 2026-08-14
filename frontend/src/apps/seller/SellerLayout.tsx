@@ -39,6 +39,7 @@ type Props = {
 export function SellerLayout({
   children,
   onLogout,
+  title,
   userLabel,
   userRoleLabel,
   canManageSellerShops = false,
@@ -74,6 +75,11 @@ export function SellerLayout({
             <Typography variant="h5" noWrap sx={{ fontWeight: 900, letterSpacing: 0 }}>
               Короб ВМС
             </Typography>
+            {title ? (
+              <Typography variant="body2" color="text.secondary" noWrap sx={{ fontWeight: 700 }}>
+                {title}
+              </Typography>
+            ) : null}
           </Box>
           <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
             {userLabel ? (

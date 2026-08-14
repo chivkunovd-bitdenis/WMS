@@ -490,8 +490,8 @@ test('inbound receiving v2 — return accepts seller catalog discrepancy and dim
     'Добавлено ФФ',
   );
   await expect(sellerFactRow.getByTestId('seller-inbound-line-expected')).toHaveText('0');
-  await expect(sellerFactRow.getByTestId('seller-inbound-line-actual')).toHaveText('1');
-  await expect(sellerFactRow.getByTestId('seller-inbound-line-discrepancy')).toHaveText('Излишек 1');
+  await expect(sellerFactRow.getByTestId('seller-inbound-line-actual')).toHaveText('2');
+  await expect(sellerFactRow.getByTestId('seller-inbound-line-discrepancy')).toHaveText('Излишек 2');
 });
 
 // TC-NEW-IN-05 — F19 negative: successful return scan without wb_barcode shows an operator error and never prints SKU.

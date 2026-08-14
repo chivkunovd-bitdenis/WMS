@@ -1752,7 +1752,7 @@ export function FfInboundRequestView({
                 </Typography>
                 <Typography variant="body2" color="text.secondary" data-testid="ff-inbound-boxes-summary">
                   Короба:{' '}
-                  <strong>
+                  <strong data-testid="ff-inbound-planned-boxes">
                     {receivingTotals.actualBoxes}
                     {receivingTotals.plannedBoxes != null ? ` из ${receivingTotals.plannedBoxes}` : ''}
                   </strong>

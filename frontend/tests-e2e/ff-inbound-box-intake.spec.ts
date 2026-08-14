@@ -139,9 +139,12 @@ test.describe('FF inbound box piece intake', () => {
 
     await expect(page.getByTestId('ff-inbound-line-row-match')).toBeVisible();
 
+    await page.getByTestId('ff-inbound-verify-complete').click();
+    await expect(page.getByTestId('ff-inbound-discrepancy-dialog')).toBeVisible();
+    await expect(page.getByTestId('ff-inbound-discrepancy-box-summary')).toContainText('Короба: 0 из 1');
     const [verifyRes] = await Promise.all([
       waitForPostOk(page, INBOUND_API, (u) => u.includes('/complete-receiving')),
-      page.getByTestId('ff-inbound-verify-complete').click(),
+      page.getByTestId('ff-inbound-discrepancy-confirm').click(),
     ]);
     expect(verifyRes.ok()).toBeTruthy();
     await expect(page.getByTestId('ff-inbound-status-chip')).toContainText('В сортировке');
