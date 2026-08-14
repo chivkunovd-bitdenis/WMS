@@ -51,6 +51,9 @@ class InboundIntakeRequest(Base):
         index=True,
     )
     status: Mapped[str] = mapped_column(String(32), nullable=False)
+    operation_type: Mapped[str] = mapped_column(
+        String(32), nullable=False, default="inbound", server_default="inbound"
+    )
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), nullable=False
     )
@@ -207,6 +210,9 @@ class InboundIntakeLine(Base):
     )
     expected_qty: Mapped[int] = mapped_column(Integer, nullable=False)
     actual_qty: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    added_by_fulfillment: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, default=False, server_default="false"
+    )
     posted_qty: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     storage_location_id: Mapped[uuid.UUID | None] = mapped_column(
         Uuid(as_uuid=True),

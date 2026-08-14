@@ -10,7 +10,8 @@ const backendDir = path.resolve(__dirname, '..', 'backend');
 // Avoid collisions with locally running dev servers during development.
 // e2e should start with a fresh backend DB and a dedicated Vite instance.
 const reuse = false;
-const e2eApiPort = 18000;
+const e2eApiPort = Number(process.env.E2E_API_PORT ?? 18000);
+const e2eDbFile = process.env.E2E_DB_FILE ?? 'e2e.db';
 // Use a non-default port to avoid colliding with a locally running `npm run dev`.
 const e2eWebPort = Number(process.env.E2E_WEB_PORT ?? 5174);
 
@@ -32,12 +33,12 @@ export default defineConfig({
   webServer: [
     {
       // Fresh DB file: SQLAlchemy create_all does not migrate existing tables; stale e2e.db breaks schema.
-      command: `rm -f e2e.db && python3 -m uvicorn app.main:app --host 127.0.0.1 --port ${e2eApiPort}`,
+      command: `rm -f ${e2eDbFile} && python3 -m uvicorn app.main:app --host 127.0.0.1 --port ${e2eApiPort}`,
       cwd: backendDir,
       env: {
         ...process.env,
         WMS_AUTO_CREATE_SCHEMA: '1',
-        DATABASE_URL: 'sqlite+aiosqlite:///./e2e.db',
+        DATABASE_URL: `sqlite+aiosqlite:///./${e2eDbFile}`,
         JWT_SECRET_KEY: 'ci-jwt-secret-key-minimum-32-characters-long',
         E2E_MOCK_WB_CARDS: '1',
         E2E_MOCK_WB_SUPPLIES: '1',

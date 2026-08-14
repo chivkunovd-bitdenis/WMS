@@ -11,6 +11,7 @@ import {
   isFfPortalRole,
   type FfPermissions,
 } from '../utils/ffPermissions'
+import type { SellerPermissions } from '../utils/sellerPermissions'
 
 export type Me = {
   email: string
@@ -36,6 +37,7 @@ export type Me = {
     is_home?: boolean
   }[]
   permissions?: FfPermissions | null
+  seller_permissions?: SellerPermissions | null
   address_storage_enabled?: boolean
   separate_marking_print_enabled?: boolean
 }
@@ -65,16 +67,16 @@ export function useAuth(portal: AuthPortal = 'fulfillment') {
       if (!res.ok) {
         const msg = await readApiErrorMessage(res)
         if (res.status === 401) {
-          throw new Error(
-            `Не удалось загрузить профиль (401). ${msg}. Попробуйте войти снова.`,
-          )
+          setStoredToken(null, portal)
+          setToken(null)
+          setMe(null)
+          setError(`Не удалось загрузить профиль (401). ${msg}. Попробуйте войти снова.`)
+          return
         }
         throw new Error(`Не удалось загрузить профиль (${res.status}). ${msg}`)
       }
       setMe((await res.json()) as Me)
     } catch (e) {
-      setStoredToken(null, portal)
-      setToken(null)
       setMe(null)
       setError(
         e instanceof Error

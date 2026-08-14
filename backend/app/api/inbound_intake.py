@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import uuid
 from datetime import date
-from typing import Annotated
+from typing import Annotated, Literal
 
 from fastapi import APIRouter, Depends, File, Form, HTTPException, Response, UploadFile, status
 from pydantic import BaseModel, Field
@@ -41,6 +41,7 @@ from app.services import box_import_service as box_import_svc
 from app.services import inbound_intake_box_service as inbound_box_svc
 from app.services import inbound_intake_service as svc
 from app.services import inventory_service as inv_svc
+from app.services.catalog_service import volume_liters_from_mm
 from app.services.inbound_intake_box_service import InboundIntakeBoxError
 from app.services.inbound_intake_service import InboundIntakeError
 
@@ -53,6 +54,7 @@ router = APIRouter(
 class InboundIntakeRequestCreate(BaseModel):
     warehouse_id: uuid.UUID
     planned_delivery_date: date | None = None
+    operation_type: str = Field(default=svc.OPERATION_TYPE_INBOUND, max_length=32)
 
 
 class InboundIntakeRequestPlannedPatch(BaseModel):
@@ -115,6 +117,12 @@ class InboundReceivingScanBody(BaseModel):
     barcode: str = Field(min_length=1, max_length=128)
 
 
+class InboundReceivingLineBody(BaseModel):
+    product_id: uuid.UUID
+    actual_qty: int = Field(default=1, ge=1, le=1_000_000_000)
+    source: Literal["seller_catalog", "manual_created"] = "seller_catalog"
+
+
 class InboundBoxLineQuantityBody(BaseModel):
     quantity: int = Field(ge=0, le=100_000)
 
@@ -134,6 +142,13 @@ class InboundIntakeLineOut(BaseModel):
     product_id: str
     sku_code: str
     product_name: str
+    wb_barcode: str | None = None
+    requires_honest_sign: bool = False
+    length_mm: int | None = None
+    width_mm: int | None = None
+    height_mm: int | None = None
+    volume_liters: float | None = None
+    added_by_fulfillment: bool = False
     expected_qty: int
     actual_qty: int | None
     effective_actual_qty: int | None = None
@@ -148,6 +163,7 @@ class InboundIntakeRequestSummaryOut(BaseModel):
     display_number: str | None = None
     warehouse_id: str
     status: str
+    operation_type: str = svc.OPERATION_TYPE_INBOUND
     line_count: int
     planned_delivery_date: str | None = None
     planned_box_count: int | None = None
@@ -166,6 +182,7 @@ class InboundIntakeRequestOut(BaseModel):
     display_number: str | None = None
     warehouse_id: str
     status: str
+    operation_type: str = svc.OPERATION_TYPE_INBOUND
     planned_delivery_date: str | None = None
     planned_box_count: int | None = None
     actual_box_count: int | None = None
@@ -286,6 +303,7 @@ def _map_inbound_svc_err(exc: InboundIntakeError) -> HTTPException:
         "storage_not_assigned",
         "lines_missing_storage",
         "product_not_on_request",
+        "product_not_in_seller_catalog",
         "product_seller_mismatch",
         "mixed_seller_lines",
         "qty_exceeds_accepted",
@@ -298,6 +316,8 @@ def _map_inbound_svc_err(exc: InboundIntakeError) -> HTTPException:
         "distribution_incomplete",
         "invalid_actual_box_count",
         "planned_boxes_missing",
+        "seller_missing",
+        "invalid_operation_type",
     ):
         return HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
@@ -339,6 +359,7 @@ def _request_out(
         display_number=r.display_number,
         warehouse_id=str(r.warehouse_id),
         status=r.status,
+        operation_type=r.operation_type,
         planned_delivery_date=r.planned_delivery_date.isoformat()
         if r.planned_delivery_date is not None
         else None,
@@ -370,6 +391,17 @@ def _line_out_from_orm(
         product_id=str(line.product_id),
         sku_code=product.sku_code,
         product_name=product.name,
+        wb_barcode=product.wb_barcode,
+        requires_honest_sign=bool(product.requires_honest_sign),
+        length_mm=product.length_mm,
+        width_mm=product.width_mm,
+        height_mm=product.height_mm,
+        volume_liters=(
+            product.volume_liters
+            if product.volume_liters is not None
+            else volume_liters_from_mm(product.length_mm, product.width_mm, product.height_mm)
+        ),
+        added_by_fulfillment=bool(line.added_by_fulfillment),
         expected_qty=line.expected_qty,
         actual_qty=line.actual_qty,
         effective_actual_qty=effective_actual_qty,
@@ -465,6 +497,7 @@ async def list_inbound_requests(
             display_number=r.display_number,
             warehouse_id=str(r.warehouse_id),
             status=r.status,
+            operation_type=r.operation_type,
             line_count=len(r.lines),
             planned_delivery_date=r.planned_delivery_date.isoformat()
             if r.planned_delivery_date is not None
@@ -510,6 +543,7 @@ async def create_inbound_request(
             warehouse_id=body.warehouse_id,
             seller_id=owning_seller_id,
             planned_delivery_date=body.planned_delivery_date,
+            operation_type=body.operation_type,
         )
     except InboundIntakeError as exc:
         if exc.code == "warehouse_not_found":
@@ -521,6 +555,11 @@ async def create_inbound_request(
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
                 detail="seller_not_found",
+            ) from None
+        if exc.code == "invalid_operation_type":
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+                detail="invalid_operation_type",
             ) from None
         raise
     return _request_out(r, lines=[], boxes=[])
@@ -555,6 +594,48 @@ async def get_inbound_request(
     )
     boxes_out = [_box_out(b) for b in boxes]
     return _request_out(r, lines=lines_out, boxes=boxes_out)
+
+
+@router.delete("/{request_id}", status_code=status.HTTP_204_NO_CONTENT)
+async def delete_inbound_draft_request(
+    request_id: uuid.UUID,
+    user: Annotated[User, Depends(get_current_user)],
+    session: Annotated[AsyncSession, Depends(get_db)],
+    seller_scope: Annotated[uuid.UUID | None, Depends(seller_line_product_scope)],
+) -> Response:
+    if user.role not in (FULFILLMENT_ADMIN, FULFILLMENT_SELLER):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="forbidden",
+        )
+    request_seller_scope: uuid.UUID | None = (
+        None if user.role == FULFILLMENT_ADMIN else seller_scope
+    )
+    try:
+        await svc.delete_draft_request(
+            session,
+            user.tenant_id,
+            request_id,
+            seller_product_owner_id=request_seller_scope,
+        )
+    except InboundIntakeError as exc:
+        if exc.code == "request_not_found":
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="request_not_found",
+            ) from None
+        if exc.code == "not_draft":
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail="not_draft",
+            ) from None
+        if exc.code == "line_already_posted":
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail="line_already_posted",
+            ) from None
+        raise
+    return Response(status_code=status.HTTP_204_NO_CONTENT)
 
 
 @router.patch("/{request_id}", response_model=InboundIntakeRequestOut)
@@ -739,6 +820,40 @@ async def scan_barcode_to_loose_intake(
     return await _line_out_for_request(
         session, request_id, req.status, line, prod
     )
+
+
+@router.post(
+    "/{request_id}/receiving/lines",
+    response_model=InboundIntakeLineOut,
+    status_code=status.HTTP_201_CREATED,
+)
+async def add_received_product_line(
+    request_id: uuid.UUID,
+    body: InboundReceivingLineBody,
+    user: Annotated[User, Depends(require_reception_access)],
+    session: Annotated[AsyncSession, Depends(get_db)],
+) -> InboundIntakeLineOut:
+    try:
+        line = await svc.add_or_increment_received_product(
+            session,
+            user.tenant_id,
+            request_id,
+            product_id=body.product_id,
+            actual_qty=body.actual_qty,
+            allow_manual_product=body.source == "manual_created",
+        )
+    except InboundIntakeError as exc:
+        raise _map_inbound_svc_err(exc) from None
+    prod = await session.get(Product, line.product_id)
+    if prod is None:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="product_missing",
+        )
+    await session.refresh(line, attribute_names=["storage_location"])
+    req = await svc.get_request(session, user.tenant_id, request_id)
+    assert req is not None
+    return await _line_out_for_request(session, request_id, req.status, line, prod)
 
 
 @router.post(

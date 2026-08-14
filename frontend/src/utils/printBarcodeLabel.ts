@@ -1,10 +1,28 @@
 /** Print a CODE128 label (58×40 workflow — same iframe pattern as catalog cell labels). */
+function escapeHtml(text: string): string {
+  return text
+    .replaceAll('&', '&amp;')
+    .replaceAll('<', '&lt;')
+    .replaceAll('>', '&gt;')
+    .replaceAll('"', '&quot;')
+}
+
+declare global {
+  interface Window {
+    __WMS_CAPTURE_PRINT_HTML__?: boolean
+    __WMS_LAST_PRINT_HTML__?: string
+  }
+}
+
 export function printBarcodeLabel(options: {
   title: string
   barcode: string
   barcodeDataUrl: string
 }): void {
   const { title, barcode, barcodeDataUrl } = options
+  const safeTitle = escapeHtml(title)
+  const safeBarcode = escapeHtml(barcode)
+  const safeBarcodeDataUrl = escapeHtml(barcodeDataUrl)
   const html = `<!doctype html>
 <html>
   <head>
@@ -22,12 +40,16 @@ export function printBarcodeLabel(options: {
   </head>
   <body>
     <div class="wrap">
-      <div class="title">${title}</div>
-      <img id="barcode" src="${barcodeDataUrl}" alt="barcode" />
-      <div class="code">${barcode}</div>
+      <div class="title">${safeTitle}</div>
+      <img id="barcode" src="${safeBarcodeDataUrl}" alt="barcode" />
+      <div class="code">${safeBarcode}</div>
     </div>
   </body>
 </html>`
+
+  if (window.__WMS_CAPTURE_PRINT_HTML__) {
+    window.__WMS_LAST_PRINT_HTML__ = html
+  }
 
   const iframe = document.createElement('iframe')
   iframe.setAttribute('aria-hidden', 'true')

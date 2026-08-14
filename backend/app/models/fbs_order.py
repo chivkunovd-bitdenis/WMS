@@ -197,6 +197,7 @@ class FbsOrder(Base):
     cargo_type: Mapped[str | None] = mapped_column(String(16), nullable=True)
     wb_office_id: Mapped[int | None] = mapped_column(Integer, nullable=True)
     wb_warehouse_id: Mapped[int | None] = mapped_column(BigInteger, nullable=True, index=True)
+    wb_supply_id: Mapped[str | None] = mapped_column(String(64), nullable=True, index=True)
     can_pvz: Mapped[bool] = mapped_column(
         Boolean, nullable=False, default=False, server_default="false"
     )
@@ -218,6 +219,7 @@ class FbsOrder(Base):
         String(32), nullable=False, default=FBS_ORDER_STATUS_NEW, server_default="new"
     )
     wb_status: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    supplier_status: Mapped[str | None] = mapped_column(String(64), nullable=True)
     created_at_wb: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
     deadline_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
     mapping_status: Mapped[str] = mapped_column(String(32), nullable=False)

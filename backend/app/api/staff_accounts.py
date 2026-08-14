@@ -8,7 +8,8 @@ from fastapi import APIRouter, Depends, HTTPException, Query, status
 from pydantic import BaseModel, EmailStr, Field, field_validator
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.api.deps import require_fulfillment_admin
+from app.api.deps import get_current_user, require_fulfillment_admin
+from app.core.roles import FULFILLMENT_ADMIN
 from app.db.session import get_db
 from app.models.user import User
 from app.services.auth_service import AuthError, create_staff_user
@@ -20,6 +21,7 @@ from app.services.staff_packaging_billing_service import (
 )
 from app.services.staff_permissions_service import (
     StaffPermissionsSnapshot,
+    can_manage_ff_staff,
     list_staff_users,
     update_staff_permissions,
 )
@@ -87,8 +89,8 @@ class StaffAccountOut(BaseModel):
     role: str
     must_set_password: bool
     permissions: StaffPermissionsOut
-    packaging_rate_rub: str
-    packaging_billing: StaffPackagingBillingOut
+    packaging_rate_rub: str | None = None
+    packaging_billing: StaffPackagingBillingOut | None = None
 
 
 class StaffPackagingRatePatch(BaseModel):
@@ -108,49 +110,116 @@ def _permissions_out(snapshot: StaffPermissionsSnapshot) -> StaffPermissionsOut:
     )
 
 
-@router.get("", response_model=list[StaffAccountOut])
+def _staff_account_out(user: User, perms: StaffPermissionsSnapshot) -> StaffAccountOut:
+    return StaffAccountOut(
+        id=str(user.id),
+        email=user.email,
+        role=user.role,
+        must_set_password=user.must_set_password,
+        permissions=_permissions_out(perms),
+    )
+
+
+async def _staff_permissions_for_user(
+    session: AsyncSession,
+    *,
+    tenant_id: uuid.UUID,
+    user_id: uuid.UUID,
+) -> StaffPermissionsSnapshot:
+    rows = await list_staff_users(session, tenant_id=tenant_id)
+    for row_user, perms in rows:
+        if row_user.id == user_id:
+            return perms
+    return StaffPermissionsSnapshot()
+
+
+async def _staff_account_out_for_actor(
+    session: AsyncSession,
+    *,
+    actor: User,
+    staff_user: User,
+    perms: StaffPermissionsSnapshot,
+    billing_month: str | None = None,
+) -> StaffAccountOut:
+    out = _staff_account_out(staff_user, perms)
+    if actor.role != FULFILLMENT_ADMIN:
+        return out
+
+    month = billing_month or current_billing_month_msk()
+    billing = await aggregate_staff_billing(
+        session,
+        tenant_id=actor.tenant_id,
+        staff_user_ids=[staff_user.id],
+        billing_month=month,
+    )
+    return out.model_copy(
+        update={
+            "packaging_rate_rub": kopecks_to_rub_str(int(staff_user.packaging_rate_kopecks)),
+            "packaging_billing": StaffPackagingBillingOut(
+                billing_month=month,
+                units_packed=billing[staff_user.id].units_packed,
+                earned_rub=kopecks_to_rub_str(billing[staff_user.id].earned_kopecks),
+            ),
+        }
+    )
+
+
+@router.get("", response_model=list[StaffAccountOut], response_model_exclude_none=True)
 async def get_staff_accounts(
-    admin: Annotated[User, Depends(require_fulfillment_admin)],
+    user: Annotated[User, Depends(get_current_user)],
     session: Annotated[AsyncSession, Depends(get_db)],
     billing_month: Annotated[str | None, Query()] = None,
 ) -> list[StaffAccountOut]:
+    if not await can_manage_ff_staff(session, user):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="forbidden",
+        )
+    rows = await list_staff_users(session, tenant_id=user.tenant_id)
+    if user.role != FULFILLMENT_ADMIN:
+        return [_staff_account_out(row_user, perms) for row_user, perms in rows]
+
     month = billing_month or current_billing_month_msk()
-    rows = await list_staff_users(session, tenant_id=admin.tenant_id)
-    staff_ids = [user.id for user, _ in rows]
+    staff_ids = [row_user.id for row_user, _ in rows]
     totals = await aggregate_staff_billing(
         session,
-        tenant_id=admin.tenant_id,
+        tenant_id=user.tenant_id,
         staff_user_ids=staff_ids,
         billing_month=month,
     )
     return [
         StaffAccountOut(
-            id=str(user.id),
-            email=user.email,
-            role=user.role,
-            must_set_password=user.must_set_password,
+            id=str(row_user.id),
+            email=row_user.email,
+            role=row_user.role,
+            must_set_password=row_user.must_set_password,
             permissions=_permissions_out(perms),
-            packaging_rate_rub=kopecks_to_rub_str(int(user.packaging_rate_kopecks)),
+            packaging_rate_rub=kopecks_to_rub_str(int(row_user.packaging_rate_kopecks)),
             packaging_billing=StaffPackagingBillingOut(
                 billing_month=month,
-                units_packed=totals[user.id].units_packed,
-                earned_rub=kopecks_to_rub_str(totals[user.id].earned_kopecks),
+                units_packed=totals[row_user.id].units_packed,
+                earned_rub=kopecks_to_rub_str(totals[row_user.id].earned_kopecks),
             ),
         )
-        for user, perms in rows
+        for row_user, perms in rows
     ]
 
 
-@router.post("", response_model=StaffAccountOut, status_code=201)
+@router.post("", response_model=StaffAccountOut, status_code=201, response_model_exclude_none=True)
 async def post_staff_account(
     body: StaffAccountCreate,
-    admin: Annotated[User, Depends(require_fulfillment_admin)],
+    actor: Annotated[User, Depends(get_current_user)],
     session: Annotated[AsyncSession, Depends(get_db)],
 ) -> StaffAccountOut:
+    if not await can_manage_ff_staff(session, actor):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="forbidden",
+        )
     try:
-        user = await create_staff_user(
+        staff_user = await create_staff_user(
             session,
-            acting_user=admin,
+            acting_user=actor,
             email=str(body.email),
             password=body.password,
         )
@@ -167,31 +236,16 @@ async def post_staff_account(
                 detail="forbidden",
             ) from None
         raise
-    rows = await list_staff_users(session, tenant_id=admin.tenant_id)
-    perms = StaffPermissionsSnapshot()
-    for u, p in rows:
-        if u.id == user.id:
-            perms = p
-            break
-    month = current_billing_month_msk()
-    billing = await aggregate_staff_billing(
+    perms = await _staff_permissions_for_user(
         session,
-        tenant_id=admin.tenant_id,
-        staff_user_ids=[user.id],
-        billing_month=month,
+        tenant_id=actor.tenant_id,
+        user_id=staff_user.id,
     )
-    return StaffAccountOut(
-        id=str(user.id),
-        email=user.email,
-        role=user.role,
-        must_set_password=user.must_set_password,
-        permissions=_permissions_out(perms),
-        packaging_rate_rub=kopecks_to_rub_str(int(user.packaging_rate_kopecks)),
-        packaging_billing=StaffPackagingBillingOut(
-            billing_month=month,
-            units_packed=billing[user.id].units_packed,
-            earned_rub=kopecks_to_rub_str(billing[user.id].earned_kopecks),
-        ),
+    return await _staff_account_out_for_actor(
+        session,
+        actor=actor,
+        staff_user=staff_user,
+        perms=perms,
     )
 
 
@@ -232,44 +286,40 @@ async def patch_staff_packaging_rate(
             status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
             detail="invalid_rate",
         ) from None
-    rows = await list_staff_users(session, tenant_id=admin.tenant_id)
-    perms = StaffPermissionsSnapshot()
-    for u, p in rows:
-        if u.id == user.id:
-            perms = p
-            break
-    billing = await aggregate_staff_billing(
+    perms = await _staff_permissions_for_user(
         session,
         tenant_id=admin.tenant_id,
-        staff_user_ids=[user.id],
+        user_id=user.id,
+    )
+    return await _staff_account_out_for_actor(
+        session,
+        actor=admin,
+        staff_user=user,
+        perms=perms,
         billing_month=month,
     )
-    return StaffAccountOut(
-        id=str(user.id),
-        email=user.email,
-        role=user.role,
-        must_set_password=user.must_set_password,
-        permissions=_permissions_out(perms),
-        packaging_rate_rub=kopecks_to_rub_str(int(user.packaging_rate_kopecks)),
-        packaging_billing=StaffPackagingBillingOut(
-            billing_month=month,
-            units_packed=billing[user.id].units_packed,
-            earned_rub=kopecks_to_rub_str(billing[user.id].earned_kopecks),
-        ),
-    )
 
 
-@router.patch("/{user_id}/permissions", response_model=StaffAccountOut)
+@router.patch(
+    "/{user_id}/permissions",
+    response_model=StaffAccountOut,
+    response_model_exclude_none=True,
+)
 async def patch_staff_permissions(
     user_id: uuid.UUID,
     body: StaffPermissionsBody,
-    admin: Annotated[User, Depends(require_fulfillment_admin)],
+    actor: Annotated[User, Depends(get_current_user)],
     session: Annotated[AsyncSession, Depends(get_db)],
 ) -> StaffAccountOut:
+    if not await can_manage_ff_staff(session, actor):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="forbidden",
+        )
     try:
         user, perms = await update_staff_permissions(
             session,
-            acting_user=admin,
+            acting_user=actor,
             staff_user_id=user_id,
             permissions=body.to_snapshot(),
         )
@@ -280,6 +330,11 @@ async def patch_staff_permissions(
         ) from None
     except PermissionError as exc:
         code = exc.args[0] if exc.args else ""
+        if code == "self_update_forbidden":
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail="self_update_forbidden",
+            ) from None
         if code == "not_staff_user":
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
@@ -289,23 +344,9 @@ async def patch_staff_permissions(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="forbidden",
         ) from None
-    month = current_billing_month_msk()
-    billing = await aggregate_staff_billing(
+    return await _staff_account_out_for_actor(
         session,
-        tenant_id=admin.tenant_id,
-        staff_user_ids=[user.id],
-        billing_month=month,
-    )
-    return StaffAccountOut(
-        id=str(user.id),
-        email=user.email,
-        role=user.role,
-        must_set_password=user.must_set_password,
-        permissions=_permissions_out(perms),
-        packaging_rate_rub=kopecks_to_rub_str(int(user.packaging_rate_kopecks)),
-        packaging_billing=StaffPackagingBillingOut(
-            billing_month=month,
-            units_packed=billing[user.id].units_packed,
-            earned_rub=kopecks_to_rub_str(billing[user.id].earned_kopecks),
-        ),
+        actor=actor,
+        staff_user=user,
+        perms=perms,
     )

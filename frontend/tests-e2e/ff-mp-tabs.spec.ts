@@ -63,12 +63,6 @@ async function expectMpTabSelected(page: Page, tabTestId: string): Promise<void>
   await expect(page.getByTestId(tabTestId)).toHaveAttribute('aria-selected', 'true')
 }
 
-function formatDisplayDocumentNumber(documentNumber: string): string {
-  const counter = documentNumber.match(/(\d+)\s*$/)?.[1]
-  expect(counter).toBeTruthy()
-  return `№${counter!.padStart(6, '0')}`
-}
-
 async function postInboundLineToSorting(
   req: APIRequestContext,
   auth: { Authorization: string },
@@ -284,11 +278,14 @@ test('FF marketplace unload: tabs switch without losing document context', async
   )
   await expect(page.getByTestId('ff-supplies-doc-dialog')).not.toContainText(unloadDocumentNumber)
   await expect(page.getByTestId('ff-mp-tab-products')).toBeVisible()
-  await expect(page.getByTestId('ff-mp-tab-boxes')).toHaveCount(0)
-  await expect(page.getByTestId('ff-mp-tab-final')).toHaveCount(0)
-  await expect(page.getByTestId('ff-mp-boxes')).toBeVisible()
+  await expect(page.getByTestId('ff-mp-tab-picking')).toBeVisible()
+  await expect(page.getByTestId('ff-mp-tab-packaging')).toBeVisible()
+  await expect(page.getByTestId('ff-mp-tab-boxes')).toBeVisible()
+  await expect(page.getByTestId('ff-mp-tab-final')).toBeVisible()
+  await expect(page.getByTestId('ff-mp-boxes')).toHaveCount(0)
   await expectMpTabSelected(page, 'ff-mp-tab-products')
-  await expect(page.getByTestId('ff-mp-ship')).toBeDisabled()
+  await expect(page.getByTestId('ff-mp-next-step')).toContainText('Подбор')
+  await expect(page.getByTestId('ff-mp-ship')).toHaveCount(0)
 
   await expect(page.getByTestId('ff-mp-shipment-summary')).toBeVisible()
   await expect(page.getByTestId('ff-mp-shipment-summary-planned')).toHaveText('2')
@@ -300,6 +297,10 @@ test('FF marketplace unload: tabs switch without losing document context', async
   )
   await expect(page.getByTestId('ff-mp-shipment-summary-packed')).toHaveText('2/2')
 
+  await page.getByTestId('ff-mp-tab-picking').click()
+  await expect(page.getByTestId('ff-mp-tab-picking-panel')).toBeVisible()
+  await expectMpTabSelected(page, 'ff-mp-tab-picking')
+
   await page.getByTestId('ff-mp-tab-packaging').click()
   await expect(page.getByTestId('ff-mp-tab-packaging-panel')).toBeVisible()
   await expectMpTabSelected(page, 'ff-mp-tab-packaging')
@@ -307,11 +308,16 @@ test('FF marketplace unload: tabs switch without losing document context', async
   await expect(page.getByTestId('ff-packaging-task-status')).toHaveCount(0)
   await expect(page.getByTestId('ff-mp-boxes')).toHaveCount(0)
 
+  await page.getByTestId('ff-mp-tab-boxes').click()
+  await expect(page.getByTestId('ff-mp-boxes')).toBeVisible()
+  await expectMpTabSelected(page, 'ff-mp-tab-boxes')
+  await expect(page.getByTestId('ff-mp-ship')).toHaveCount(0)
+  await page.getByTestId('ff-mp-tab-final').click()
+  await expect(page.getByTestId('ff-mp-tab-final-panel')).toBeVisible()
+  await expect(page.getByTestId('ff-mp-ship')).toBeDisabled()
   await page.getByTestId('ff-mp-tab-products').click()
   await expect(page.getByTestId('ff-supplies-doc-lines')).toBeVisible()
-  await expect(page.getByTestId('ff-mp-boxes')).toBeVisible()
   await expectMpTabSelected(page, 'ff-mp-tab-products')
-  await expect(page.getByTestId('ff-mp-ship')).toBeDisabled()
   await expect(page.getByTestId('ff-mp-unload-document-number')).toHaveText(
     `Отгрузка ${unloadDisplayNumber}`,
   )
@@ -468,8 +474,8 @@ test('FF marketplace unload: no packaging progress banner on draft', async ({ pa
   await expect(page.getByTestId('ff-mp-shipment-summary-planned')).toHaveText('2')
   await expect(page.getByTestId('ff-mp-shipment-summary-packed')).toHaveText('—')
   await expect(page.getByTestId('ff-mp-tab-packaging')).toBeDisabled()
-  await expect(page.getByTestId('ff-mp-tab-boxes')).toHaveCount(0)
-  await expect(page.getByTestId('ff-mp-tab-final')).toHaveCount(0)
+  await expect(page.getByTestId('ff-mp-tab-boxes')).toBeDisabled()
+  await expect(page.getByTestId('ff-mp-tab-final')).toBeDisabled()
 })
 
 // TC-NEW-MP-015 — MP-020: главный scan на «Товарах» не принимает штрихкод товара.
@@ -620,6 +626,7 @@ test('FF marketplace unload: main scan rejects product barcode', async ({ page }
   await expect(page.getByTestId('ff-supplies-doc-dialog')).toBeVisible()
   await expectMpTabSelected(page, 'ff-mp-tab-products')
 
+  await page.getByTestId('ff-mp-tab-boxes').click()
   await Promise.all([
     waitForPostOk(page, `/api/operations/marketplace-unload-requests/${mid}/boxes/batch`),
     page.getByTestId('ff-mp-box-batch-create').click(),
@@ -781,7 +788,10 @@ test('TC-NEW-OUT-FE-02: shipment table columns no early red', async ({ page }) =
   await expect(page.getByTestId(`ff-mp-line-plan-${mpLineId}`)).toHaveText('2')
   await expect(page.getByTestId(`ff-mp-line-picked-${mpLineId}`)).toHaveText('0')
   await expect(page.getByTestId(`ff-mp-line-remaining-${mpLineId}`)).toHaveText('2')
-  await expect(page.getByTestId('ff-mp-print-actions')).toBeVisible()
+  await expect(page.getByTestId('ff-mp-print-actions')).toHaveCount(0)
+  await page.getByTestId('ff-mp-tab-boxes').click()
   await expect(page.getByTestId('ff-mp-boxes')).toBeVisible()
+  await page.getByTestId('ff-mp-tab-final').click()
+  await expect(page.getByTestId('ff-mp-print-actions')).toBeVisible()
   await expect(page.getByTestId('ff-mp-ship')).toBeDisabled()
 })

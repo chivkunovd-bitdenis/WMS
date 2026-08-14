@@ -18,8 +18,10 @@ from app.services.seller_shop_service import (
     assert_can_act_as_seller,
     user_can_manage_seller_shops,
 )
+from app.services.seller_staff_permissions_service import PERM_PRODUCTS, get_seller_permissions
 from app.services.staff_permissions_service import (
     PERM_CELLS,
+    PERM_INVENTORY,
     PERM_MP_SHIPMENTS,
     PERM_PACKAGING,
     PERM_RECEPTION,
@@ -212,6 +214,89 @@ require_packaging_access = require_ff_permission(PERM_PACKAGING)
 # require_fulfillment_admin without accidentally widening its permissions.
 require_fbs_operator_access = require_packaging_access
 require_shift_lead = require_ff_permission(PERM_SHIFT_LEAD)
+
+
+async def require_catalog_cells_read_access(
+    user: Annotated[User, Depends(get_current_user)],
+    session: Annotated[AsyncSession, Depends(get_db)],
+) -> User:
+    if user.role == FULFILLMENT_ADMIN:
+        return user
+    if user.role == FULFILLMENT_STAFF:
+        perms = await get_staff_permissions(session, user)
+        if perms.has(PERM_CELLS) or perms.has(PERM_INVENTORY):
+            return user
+    raise HTTPException(
+        status_code=status.HTTP_403_FORBIDDEN,
+        detail="forbidden",
+    )
+
+
+async def assert_seller_permission(
+    session: AsyncSession,
+    user: User,
+    permission: str,
+) -> None:
+    if user.role != FULFILLMENT_SELLER:
+        return
+    if user.seller_id is None:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="seller_not_linked",
+        )
+    perms = await get_seller_permissions(session, user)
+    if not perms.has(permission):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="forbidden",
+        )
+
+
+async def assert_product_catalog_read_access(
+    session: AsyncSession,
+    user: User,
+) -> None:
+    if user.role == FULFILLMENT_ADMIN:
+        return
+    if user.role == FULFILLMENT_SELLER:
+        await assert_seller_permission(session, user, PERM_PRODUCTS)
+        return
+    if user.role == FULFILLMENT_STAFF:
+        perms = await get_staff_permissions(session, user)
+        if any(
+            perms.has(permission)
+            for permission in (
+                PERM_RECEPTION,
+                PERM_MP_SHIPMENTS,
+                PERM_PACKAGING,
+                PERM_CELLS,
+                PERM_INVENTORY,
+            )
+        ):
+            return
+    raise HTTPException(
+        status_code=status.HTTP_403_FORBIDDEN,
+        detail="forbidden",
+    )
+
+
+async def assert_inventory_read_access(
+    session: AsyncSession,
+    user: User,
+) -> None:
+    if user.role == FULFILLMENT_ADMIN:
+        return
+    if user.role == FULFILLMENT_SELLER:
+        await assert_seller_permission(session, user, PERM_PRODUCTS)
+        return
+    if user.role == FULFILLMENT_STAFF:
+        perms = await get_staff_permissions(session, user)
+        if perms.has(PERM_CELLS) or perms.has(PERM_INVENTORY):
+            return
+    raise HTTPException(
+        status_code=status.HTTP_403_FORBIDDEN,
+        detail="forbidden",
+    )
 
 
 async def seller_line_product_scope(

@@ -1,0 +1,179 @@
+INFO:     Started server process [89818]
+INFO:     Waiting for application startup.
+WMS_AUTO_CREATE_SCHEMA=1: tables created (dev/e2e only).
+INFO:     Application startup complete.
+INFO:     Uvicorn running on http://127.0.0.1:52483 (Press CTRL+C to quit)
+INFO:     127.0.0.1:52492 - "GET /health HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52492 - "POST /auth/register HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52497 - "POST /sellers/with-account HTTP/1.1" 201 Created
+INFO:     127.0.0.1:52492 - "POST /warehouses HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52497 - "POST /warehouses/91397675-4ed1-4932-9f8c-3b5599a3cf30/locations HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52492 - "POST /products HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52497 - "POST /sellers/with-account HTTP/1.1" 201 Created
+INFO:     127.0.0.1:52492 - "POST /warehouses HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52497 - "POST /warehouses/8076d543-46f3-4086-9a6e-1c3ff184b072/locations HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52492 - "POST /warehouses HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52497 - "POST /products HTTP/1.1" 200 OK
+INFO:     Started server process [89916]
+INFO:     Waiting for application startup.
+WMS_AUTO_CREATE_SCHEMA=1: tables created (dev/e2e only).
+INFO:     Application startup complete.
+INFO:     Uvicorn running on http://127.0.0.1:52576 (Press CTRL+C to quit)
+INFO:     127.0.0.1:52583 - "GET /health HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52583 - "POST /auth/register HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52585 - "POST /sellers/with-account HTTP/1.1" 201 Created
+INFO:     127.0.0.1:52583 - "POST /warehouses HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52585 - "POST /warehouses/2652c211-d88a-4eac-99b0-0124914046f9/locations HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52583 - "POST /products HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52585 - "POST /sellers/with-account HTTP/1.1" 201 Created
+INFO:     127.0.0.1:52583 - "POST /warehouses HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52585 - "POST /warehouses/620ea5b5-d052-4877-b38f-555be5194a61/locations HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52583 - "POST /warehouses HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52585 - "POST /products HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52600 - "POST /auth/login HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52601 - "GET /auth/me HTTP/1.1" 200 OK
+INFO:     Started server process [90085]
+INFO:     Waiting for application startup.
+WMS_AUTO_CREATE_SCHEMA=1: tables created (dev/e2e only).
+INFO:     Application startup complete.
+INFO:     Uvicorn running on http://127.0.0.1:52828 (Press CTRL+C to quit)
+INFO:     127.0.0.1:52835 - "GET /health HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52835 - "POST /auth/register HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52837 - "POST /sellers/with-account HTTP/1.1" 201 Created
+INFO:     127.0.0.1:52835 - "POST /warehouses HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52837 - "POST /warehouses/794306d6-7b68-45ce-b836-0e04c199b2e9/locations HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52835 - "POST /products HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52837 - "POST /sellers/with-account HTTP/1.1" 201 Created
+INFO:     127.0.0.1:52835 - "POST /warehouses HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52837 - "POST /warehouses/2e98bfa3-25a6-4994-a175-1a21f065d20f/locations HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52835 - "POST /warehouses HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52837 - "POST /products HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52895 - "POST /auth/login HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52925 - "GET /auth/me HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52927 - "GET /warehouses HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52926 - "GET /operations/notifications?limit=8 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52928 - "GET /operations/notifications?limit=8 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52929 - "GET /operations/inbound-intake-requests HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52931 - "GET /operations/marketplace-unload-requests HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52934 - "GET /products/wb-catalog HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52935 - "GET /operations/inventory-balances/summary HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52937 - "GET /products/wb-catalog HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52939 - "GET /operations/inventory-balances/summary HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52951 - "POST /auth/login HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52952 - "GET /auth/me HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52953 - "GET /warehouses HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52954 - "GET /operations/inbound-intake-requests HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52956 - "GET /products HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52957 - "GET /products/ff-catalog HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52958 - "GET /operations/outbound-shipment-requests HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52960 - "GET /sellers HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52962 - "GET /operations/marketplace-unload-requests HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52964 - "GET /operations/notifications?limit=8 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52966 - "GET /operations/notifications?limit=8 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52970 - "GET /operations/discrepancy-acts HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52969 - "GET /warehouses/2e98bfa3-25a6-4994-a175-1a21f065d20f/locations HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52981 - "GET /auth/me HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52982 - "GET /auth/me HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52983 - "GET /operations/notifications?limit=8 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52984 - "GET /warehouses HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52985 - "GET /operations/inbound-intake-requests HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52986 - "GET /operations/notifications?limit=8 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52988 - "GET /warehouses HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52990 - "GET /warehouses HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52994 - "GET /operations/outbound-shipment-requests HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52995 - "GET /products HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52996 - "GET /products/ff-catalog HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53001 - "GET /operations/inbound-intake-requests HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53000 - "GET /warehouses HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53002 - "GET /warehouses/2e98bfa3-25a6-4994-a175-1a21f065d20f/locations HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53004 - "GET /operations/marketplace-unload-requests HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53006 - "GET /sellers HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53011 - "GET /operations/outbound-shipment-requests HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53012 - "GET /products HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53014 - "GET /operations/discrepancy-acts HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53013 - "GET /products/ff-catalog HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53021 - "GET /operations/marketplace-unload-requests HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53020 - "GET /operations/inventory-movements?limit=80 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53029 - "GET /integrations/wildberries/sellers/fb7e845b-2f7b-46b6-ae9d-8b282fdc5048/imported-supplies HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53028 - "GET /integrations/wildberries/sellers/fb7e845b-2f7b-46b6-ae9d-8b282fdc5048/imported-cards HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53026 - "GET /operations/fbs-sellers/fb7e845b-2f7b-46b6-ae9d-8b282fdc5048/warehouse-bindings HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53031 - "GET /sellers HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53027 - "GET /integrations/wildberries/sellers/fb7e845b-2f7b-46b6-ae9d-8b282fdc5048/tokens HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53033 - "GET /operations/discrepancy-acts HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53035 - "GET /operations/inventory-movements?limit=80 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53037 - "GET /operations/fbs-sellers/4079fc9b-66e9-4303-92fe-58042c1bff14/warehouse-bindings HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53039 - "POST /operations/fbs-sellers/4079fc9b-66e9-4303-92fe-58042c1bff14/stocks/sync HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53042 - "GET /operations/fbs-sellers/4079fc9b-66e9-4303-92fe-58042c1bff14/warehouse-bindings HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53050 - "POST /auth/login HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53051 - "GET /auth/me HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53054 - "GET /warehouses HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53053 - "GET /operations/notifications?limit=8 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53055 - "GET /operations/notifications?limit=8 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53056 - "GET /operations/inbound-intake-requests HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53058 - "GET /operations/marketplace-unload-requests HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53061 - "GET /products/wb-catalog HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53062 - "GET /operations/inventory-balances/summary HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53064 - "GET /products/wb-catalog HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53066 - "GET /operations/inventory-balances/summary HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53076 - "POST /auth/login HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53080 - "GET /auth/me HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53081 - "GET /warehouses HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53082 - "GET /operations/inbound-intake-requests HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53086 - "GET /operations/outbound-shipment-requests HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53084 - "GET /products HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53085 - "GET /products/ff-catalog HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53088 - "GET /operations/marketplace-unload-requests HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53090 - "GET /sellers HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53092 - "GET /operations/discrepancy-acts HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53094 - "GET /operations/notifications?limit=8 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53096 - "GET /operations/notifications?limit=8 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53098 - "GET /warehouses/2e98bfa3-25a6-4994-a175-1a21f065d20f/locations HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53106 - "GET /operations/inventory-movements?limit=80 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53117 - "GET /auth/me HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53118 - "GET /auth/me HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53119 - "GET /operations/notifications?limit=8 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53121 - "GET /operations/inbound-intake-requests HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53120 - "GET /warehouses HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53122 - "GET /operations/notifications?limit=8 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53124 - "GET /warehouses HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53126 - "GET /warehouses HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53130 - "GET /operations/outbound-shipment-requests HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53131 - "GET /products HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53132 - "GET /products/ff-catalog HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53137 - "GET /warehouses HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53139 - "GET /warehouses/2e98bfa3-25a6-4994-a175-1a21f065d20f/locations HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53138 - "GET /operations/inbound-intake-requests HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53141 - "GET /operations/marketplace-unload-requests HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53143 - "GET /sellers HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53146 - "GET /products HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53147 - "GET /products/ff-catalog HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53150 - "GET /operations/outbound-shipment-requests HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53151 - "GET /operations/discrepancy-acts HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53155 - "GET /sellers HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53157 - "GET /operations/inventory-movements?limit=80 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53156 - "GET /operations/marketplace-unload-requests HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53165 - "GET /integrations/wildberries/sellers/fb7e845b-2f7b-46b6-ae9d-8b282fdc5048/imported-supplies HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53162 - "GET /operations/fbs-sellers/fb7e845b-2f7b-46b6-ae9d-8b282fdc5048/warehouse-bindings HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53164 - "GET /integrations/wildberries/sellers/fb7e845b-2f7b-46b6-ae9d-8b282fdc5048/imported-cards HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53163 - "GET /integrations/wildberries/sellers/fb7e845b-2f7b-46b6-ae9d-8b282fdc5048/tokens HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53167 - "GET /operations/discrepancy-acts HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53169 - "GET /operations/inventory-movements?limit=80 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53171 - "POST /operations/fbs-sellers/fb7e845b-2f7b-46b6-ae9d-8b282fdc5048/stocks/sync HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53173 - "GET /operations/fbs-sellers/fb7e845b-2f7b-46b6-ae9d-8b282fdc5048/warehouse-bindings HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53181 - "POST /auth/login HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53182 - "GET /auth/me HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53184 - "GET /warehouses HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53183 - "GET /operations/notifications?limit=8 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53185 - "GET /operations/notifications?limit=8 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53186 - "GET /operations/inbound-intake-requests HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53188 - "GET /operations/marketplace-unload-requests HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53191 - "GET /products/wb-catalog HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53192 - "GET /operations/inventory-balances/summary HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53194 - "GET /products/wb-catalog HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53196 - "GET /operations/inventory-balances/summary HTTP/1.1" 200 OK
+INFO:     Shutting down
+INFO:     Waiting for application shutdown.
+INFO:     Application shutdown complete.
+INFO:     Finished server process [90085]
+
+[exit code=null signal=SIGTERM]

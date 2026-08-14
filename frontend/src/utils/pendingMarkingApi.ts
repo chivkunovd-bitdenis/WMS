@@ -10,6 +10,7 @@ export type PendingMarkingLine = {
   product_id: string
   sku_code: string
   product_name: string
+  seller_name?: string | null
   storage_location_code: string
   qty_need: number
   qty_marking_printed: number

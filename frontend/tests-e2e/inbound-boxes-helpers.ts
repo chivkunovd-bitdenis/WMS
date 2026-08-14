@@ -157,7 +157,7 @@ export async function createSellerInboundDraftViaUi(
     waitForPostOk(page, INBOUND_API, (u) => !u.includes('/lines') && !u.includes('/submit')),
     page.getByTestId('seller-create-inbound').click(),
   ]);
-  await page.waitForURL(`**${sellerPath('/inbound/new')}`);
+  await page.waitForURL(`**${sellerPath('/inbound/new')}**`);
   await expect(page.getByTestId('seller-inbound-draft-form')).toBeVisible({ timeout: 20_000 });
 
   const planned = page.getByTestId('seller-inbound-planned-boxes');

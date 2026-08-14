@@ -1,0 +1,60 @@
+[1A[2K[2m[WebServer] [22mINFO:     Started server process [81883]
+
+[1A[2K[2m[WebServer] [22mINFO:     Waiting for application startup.
+
+[1A[2K[2m[WebServer] [22mWMS_AUTO_CREATE_SCHEMA=1: tables created (dev/e2e only).
+
+[1A[2K[2m[WebServer] [22mINFO:     Application startup complete.
+
+[1A[2K[2m[WebServer] [22mINFO:     Uvicorn running on http://127.0.0.1:18146 (Press CTRL+C to quit)
+
+[1A[2K[2m[WebServer] [22m(node:81912) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+[2m[WebServer] [22m(Use `node --trace-warnings ...` to show where the warning was created)
+
+
+Running 1 test using 1 worker
+
+[1A[2K(node:81913) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+
+
+[1A[2K(node:81913) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+
+
+[1A[2K[1/1] [chromium] › ../docs/reviews/product-operations-ux/2026-08-12/evidence/f05-browser-product-qa-final-current/f05-browser-product-qa-final-current.spec.ts:233:5 › F05 final current — FF conducts receiving and seller opens the same factual card
+[1A[2K  1) [chromium] › ../docs/reviews/product-operations-ux/2026-08-12/evidence/f05-browser-product-qa-final-current/f05-browser-product-qa-final-current.spec.ts:233:5 › F05 final current — FF conducts receiving and seller opens the same factual card 
+
+    Error: [2mexpect([22m[31mreceived[39m[2m).[22mtoBeLessThanOrEqual[2m([22m[32mexpected[39m[2m)[22m
+
+    Expected: <= [32m959[39m
+    Received:    [31m1080[39m
+
+      390 |   expect(geometry.documentScrollWidth).toBeLessThanOrEqual(geometry.viewportWidth + 1);
+      391 |   expect(geometry.bodyScrollWidth).toBeLessThanOrEqual(geometry.viewportWidth + 1);
+    > 392 |   expect(geometry.containerScrollWidth).toBeLessThanOrEqual(geometry.containerClientWidth + 1);
+          |                                         ^
+      393 |   expect(geometry.discrepancyHeaderRight).toBeLessThanOrEqual(geometry.containerRight + 1);
+      394 |   expect(geometry.headerCells).toBe(geometry.bodyCells);
+      395 |   expect(geometry.minNameWidth).toBeGreaterThanOrEqual(240);
+        at /Users/deniscivkunov/Projects/WMS/.worktrees/product-operations-ux-20260812/docs/reviews/product-operations-ux/2026-08-12/evidence/f05-browser-product-qa-final-current/f05-browser-product-qa-final-current.spec.ts:392:41
+
+    attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
+    ../docs/reviews/product-operations-ux/2026-08-12/evidence/f05-browser-product-qa-final-current/playwright-output/f05-browser-product-qa-fin-a9f93-opens-the-same-factual-card-chromium/test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    Error Context: ../docs/reviews/product-operations-ux/2026-08-12/evidence/f05-browser-product-qa-final-current/playwright-output/f05-browser-product-qa-fin-a9f93-opens-the-same-factual-card-chromium/error-context.md
+
+    Error Context: ../docs/reviews/product-operations-ux/2026-08-12/evidence/f05-browser-product-qa-final-current/playwright-output/f05-browser-product-qa-fin-a9f93-opens-the-same-factual-card-chromium/error-context.md
+
+    attachment #4: trace (application/zip) ─────────────────────────────────────────────────────────
+    ../docs/reviews/product-operations-ux/2026-08-12/evidence/f05-browser-product-qa-final-current/playwright-output/f05-browser-product-qa-fin-a9f93-opens-the-same-factual-card-chromium/trace.zip
+    Usage:
+
+        npx playwright show-trace ../docs/reviews/product-operations-ux/2026-08-12/evidence/f05-browser-product-qa-final-current/playwright-output/f05-browser-product-qa-fin-a9f93-opens-the-same-factual-card-chromium/trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+
+[1A[2K  1 failed
+    [chromium] › ../docs/reviews/product-operations-ux/2026-08-12/evidence/f05-browser-product-qa-final-current/f05-browser-product-qa-final-current.spec.ts:233:5 › F05 final current — FF conducts receiving and seller opens the same factual card 

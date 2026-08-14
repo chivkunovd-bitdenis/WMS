@@ -178,6 +178,7 @@ test('FF marketplace unload: box add-products modal respects plan limit', async 
     page.locator('[data-doc-kind="marketplace_unload"]').first().click(),
   ])
   await expect(page.getByTestId('ff-supplies-doc-dialog')).toBeVisible()
+  await page.getByTestId('ff-mp-tab-boxes').click()
   await expect(page.getByTestId('ff-mp-boxes')).toBeVisible()
 
   await page.getByTestId('ff-mp-box-batch-count').locator('input').fill('3')
@@ -406,6 +407,7 @@ test('FF marketplace unload: two single-box batch creates both allow add product
     page.locator('[data-doc-kind="marketplace_unload"]').first().click(),
   ])
   await expect(page.getByTestId('ff-supplies-doc-dialog')).toBeVisible()
+  await page.getByTestId('ff-mp-tab-boxes').click()
   await expect(page.getByTestId('ff-mp-boxes')).toBeVisible()
   await expect(page.getByTestId('ff-mp-box-batch-create')).toBeEnabled()
 

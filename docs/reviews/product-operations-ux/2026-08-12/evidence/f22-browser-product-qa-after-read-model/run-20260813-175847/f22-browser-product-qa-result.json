@@ -1,0 +1,155 @@
+{
+  "status": "BROWSER_PRODUCT_QA_PASSED",
+  "checks": [
+    {
+      "name": "negative UI safe-zero path keeps WB at 20 and does not send sync request from disabled toggle",
+      "passed": true,
+      "statusBefore": "Нет FBS",
+      "toggleEnabled": false,
+      "stockBefore": 20,
+      "stockAfterDisabledAttempt": 20,
+      "syncRequests": []
+    },
+    {
+      "name": "seller products header has no Limit column",
+      "passed": true,
+      "headerText": "\tТовар\tWB / ШК\tОстаток\tFBS-пул\tПубликация WB\tТЗ / ЧЗ\tДействия\n"
+    },
+    {
+      "name": "negative seller UI has no raw technical junk",
+      "passed": true,
+      "visibleTextSample": "Портал селлера\nf22-seller-1786633131433@example.com · fulfillment_seller\n0\nВыйти\nДокументы\nТовары\nЧестный знак\nНастройки\nТовары\n\nКаталог WB и остаток на фулфилменте. Остаток — всего на ФФ минус резерв; отгрузку на МП можно планировать только по колонке «В ячейках» (после раскладки ФФ).\n\nСинхронизировать по API\nПубликация FBS в WB\nПубликуется: 0 из 1\n\tТовар\tWB / ШК\tОстаток\tFBS-пул\tПубликация WB\tТЗ / ЧЗ\tДействия\n\n\t\n\nF22 Safe Sync Product\n\nSKU F22-SAFE-1786633131433\n\t\n\n22022022\n\nF22-WB-BARCODE\n\t\n\n0\n\n0\n0\n\t\n\nFBS 0 шт\n\nрезервы 0 шт\nFBS\n\t\nНет FBS\n\t\nБез ТЗ\nЧЗ нет\n\t\nТЗ\n\nНа странице\n\n10\n\n1–1 of 1"
+    },
+    {
+      "name": "1280px seller catalog has no horizontal overflow or black strip before sync",
+      "passed": true,
+      "innerWidth": 1280,
+      "scrollWidth": 1280,
+      "bodyScrollWidth": 1280,
+      "blackStrip": false
+    },
+    {
+      "name": "negative backend sync with missing FBS pool never publishes zero",
+      "passed": true,
+      "syncResult": {
+        "bindings_processed": 0,
+        "products_targeted": 0,
+        "products_confirmed": 0,
+        "products_zeroed": 0,
+        "conflicts": 0,
+        "errors": 0,
+        "binding_errors": 0
+      },
+      "syncItem": {
+        "chrt_id": 111001,
+        "product_id": "49dd8165-4a8a-4d5d-b240-a94bba259fbf",
+        "target": null,
+        "confirmed": null,
+        "status": "error",
+        "error": "unsafe_stock_unknown",
+        "timestamp": "2026-08-13T14:58:54"
+      },
+      "emulatorAmount": 20
+    },
+    {
+      "name": "positive FBS pool publishes 7 and WB readback confirms 7",
+      "passed": true,
+      "syncResult": {
+        "bindings_processed": 0,
+        "products_targeted": 0,
+        "products_confirmed": 0,
+        "products_zeroed": 0,
+        "conflicts": 0,
+        "errors": 0,
+        "binding_errors": 0
+      },
+      "syncItem": {
+        "chrt_id": 111001,
+        "product_id": "49dd8165-4a8a-4d5d-b240-a94bba259fbf",
+        "target": 7,
+        "confirmed": 7,
+        "status": "confirmed",
+        "error": null,
+        "timestamp": "2026-08-13T14:58:56"
+      },
+      "emulatorAmount": 7,
+      "dbSnapshot": {
+        "products": [
+          [
+            "F22-SAFE-1786633131433",
+            1,
+            111001
+          ]
+        ],
+        "bindings": [
+          [
+            501001,
+            1,
+            "confirmed",
+            ""
+          ]
+        ],
+        "items": [
+          [
+            111001,
+            7,
+            7,
+            "confirmed",
+            ""
+          ]
+        ]
+      }
+    },
+    {
+      "name": "seller catalog read-model exposes confirmed amount 7",
+      "passed": true,
+      "readModelRow": {
+        "id": "49dd8165-4a8a-4d5d-b240-a94bba259fbf",
+        "name": "F22 Safe Sync Product",
+        "sku_code": "F22-SAFE-1786633131433",
+        "wb_nm_id": 22022022,
+        "wb_vendor_code": null,
+        "wb_subject_name": null,
+        "wb_primary_image_url": null,
+        "wb_barcodes": [
+          "F22-WB-BARCODE"
+        ],
+        "wb_primary_barcode": "F22-WB-BARCODE",
+        "wb_size": null,
+        "wb_color": null,
+        "wb_brand": null,
+        "wb_composition": null,
+        "packaging_instructions": null,
+        "requires_honest_sign": false,
+        "fbs_stock_sync_enabled": true,
+        "fbs_stock_limit": null,
+        "fbs_published_amount": 7,
+        "fbs_sync_status": "confirmed",
+        "has_packaging_instructions": false
+      }
+    },
+    {
+      "name": "seller UI shows compact confirmed WB: 7 state, not Ошибка WB",
+      "passed": true,
+      "finalStatus": "WB: 7 шт",
+      "visibleTextSample": "Портал селлера\nf22-seller-1786633131433@example.com · fulfillment_seller\n0\nВыйти\nДокументы\nТовары\nЧестный знак\nНастройки\nТовары\n\nКаталог WB и остаток на фулфилменте. Остаток — всего на ФФ минус резерв; отгрузку на МП можно планировать только по колонке «В ячейках» (после раскладки ФФ).\n\nСинхронизировать по API\nПубликация FBS в WB\nПубликуется: 1 из 1\n\tТовар\tWB / ШК\tОстаток\tFBS-пул\tПубликация WB\tТЗ / ЧЗ\tДействия\n\n\t\n\nF22 Safe Sync Product\n\nSKU F22-SAFE-1786633131433\n\t\n\n22022022\n\nF22-WB-BARCODE\n\t\n\n7\n\n7\n0\n\t\n\nFBS 7 шт\n\nрезервы 0 шт\nFBS\n\t\nWB: 7 шт\n\t\nБез ТЗ\nЧЗ нет\n\t\nТЗ\n\nНа странице\n\n10\n\n1–1 of 1"
+    },
+    {
+      "name": "1280px seller catalog has no horizontal overflow or black strip after sync",
+      "passed": true,
+      "innerWidth": 1280,
+      "scrollWidth": 1280,
+      "bodyScrollWidth": 1280,
+      "blackStrip": false
+    },
+    {
+      "name": "final seller UI has no Limit column, raw ids/codes, or visible technical error",
+      "passed": true,
+      "visibleTextSample": "Портал селлера\nf22-seller-1786633131433@example.com · fulfillment_seller\n0\nВыйти\nДокументы\nТовары\nЧестный знак\nНастройки\nТовары\n\nКаталог WB и остаток на фулфилменте. Остаток — всего на ФФ минус резерв; отгрузку на МП можно планировать только по колонке «В ячейках» (после раскладки ФФ).\n\nСинхронизировать по API\nПубликация FBS в WB\nПубликуется: 1 из 1\n\tТовар\tWB / ШК\tОстаток\tFBS-пул\tПубликация WB\tТЗ / ЧЗ\tДействия\n\n\t\n\nF22 Safe Sync Product\n\nSKU F22-SAFE-1786633131433\n\t\n\n22022022\n\nF22-WB-BARCODE\n\t\n\n7\n\n7\n0\n\t\n\nFBS 7 шт\n\nрезервы 0 шт\nFBS\n\t\nWB: 7 шт\n\t\nБез ТЗ\nЧЗ нет\n\t\nТЗ\n\nНа странице\n\n10\n\n1–1 of 1"
+    }
+  ],
+  "commands": {
+    "runner": "docs/reviews/product-operations-ux/2026-08-12/evidence/f22-browser-product-qa-after-read-model/run_f22_browser_product_qa_after_read_model.sh",
+    "scenario": "docs/reviews/product-operations-ux/2026-08-12/evidence/f22-browser-product-qa-after-read-model/f22_browser_product_qa_after_read_model.mjs"
+  }
+}

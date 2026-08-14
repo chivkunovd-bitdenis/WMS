@@ -82,29 +82,28 @@ async def list_delegatable_shops(
     session: AsyncSession,
     user: User,
 ) -> list[tuple[Seller, bool]]:
-    """All tenant sellers except own and test; bool = enabled delegation."""
+    """Explicitly allowed tenant sellers except own and test; bool = enabled."""
     if not user_can_manage_seller_shops(user) or user.seller_id is None:
         return []
-    deleg_stmt = select(SellerShopDelegation).where(
-        SellerShopDelegation.user_id == user.id,
-    )
-    deleg_res = await session.execute(deleg_stmt)
-    enabled_by_seller = {
-        d.target_seller_id: d.enabled for d in deleg_res.scalars().all()
-    }
     sellers_stmt = (
-        select(Seller)
-        .where(Seller.tenant_id == user.tenant_id)
+        select(Seller, SellerShopDelegation.enabled)
+        .join(
+            SellerShopDelegation,
+            SellerShopDelegation.target_seller_id == Seller.id,
+        )
+        .where(
+            SellerShopDelegation.user_id == user.id,
+            Seller.tenant_id == user.tenant_id,
+            Seller.id != user.seller_id,
+        )
         .order_by(Seller.name)
     )
     sellers_res = await session.execute(sellers_stmt)
     out: list[tuple[Seller, bool]] = []
-    for seller in sellers_res.scalars().all():
-        if seller.id == user.seller_id:
-            continue
+    for seller, enabled in sellers_res.all():
         if await is_test_seller(session, user.tenant_id, seller.id):
             continue
-        out.append((seller, enabled_by_seller.get(seller.id, False)))
+        out.append((seller, enabled))
     return out
 
 

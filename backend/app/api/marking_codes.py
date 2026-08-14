@@ -12,6 +12,7 @@ from pydantic import BaseModel, Field
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.deps import (
+    assert_seller_permission,
     get_current_user,
     get_effective_seller_id,
     require_packaging_access,
@@ -26,10 +27,19 @@ from app.services import marking_code_service as mc_svc
 from app.services import print_template_service as pt_svc
 from app.services.catalog_service import get_product
 from app.services.marking_label_artifact_service import pdf_bytes_to_png
+from app.services.seller_staff_permissions_service import PERM_HONEST_SIGN
+
+
+async def require_seller_honest_sign_if_seller(
+    user: Annotated[User, Depends(get_current_user)],
+    session: Annotated[AsyncSession, Depends(get_db)],
+) -> None:
+    await assert_seller_permission(session, user, PERM_HONEST_SIGN)
 
 router = APIRouter(
     prefix="/operations/marking-codes",
     tags=["operations"],
+    dependencies=[Depends(require_seller_honest_sign_if_seller)],
 )
 
 _MAX_UPLOAD_BYTES = 25 * 1024 * 1024
@@ -189,6 +199,7 @@ class PendingMarkingLineOut(BaseModel):
     document_number: str | None
     warehouse_id: str
     seller_id: str | None
+    seller_name: str | None = None
     product_id: str
     sku_code: str
     product_name: str
@@ -1464,6 +1475,7 @@ async def list_pending_marking(
                 document_number=row.document_number,
                 warehouse_id=str(row.warehouse_id),
                 seller_id=str(row.seller_id) if row.seller_id else None,
+                seller_name=row.seller_name,
                 product_id=str(row.product_id),
                 sku_code=row.sku_code,
                 product_name=row.product_name,

@@ -1,0 +1,13 @@
+INFO:     Started server process [76990]
+INFO:     Waiting for application startup.
+INFO:     Application startup complete.
+INFO:     Uvicorn running on http://127.0.0.1:18123 (Press CTRL+C to quit)
+INFO:     127.0.0.1:49657 - "GET /health HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49671 - "PUT /api/v3/stocks/501001 HTTP/1.1" 204 No Content
+INFO:     127.0.0.1:49671 - "POST /api/v3/stocks/501001 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49671 - "POST /api/v3/stocks/501001 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49671 - "POST /api/v3/stocks/501001 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49736 - "PUT /api/v3/stocks/501001 HTTP/1.1" 204 No Content
+INFO:     127.0.0.1:49736 - "POST /api/v3/stocks/501001 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49671 - "POST /api/v3/stocks/501001 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49671 - "POST /api/v3/stocks/501001 HTTP/1.1" 200 OK

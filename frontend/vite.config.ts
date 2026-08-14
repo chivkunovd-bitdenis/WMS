@@ -1,4 +1,4 @@
-import { defineConfig } from 'vite'
+import { defineConfig, type Plugin } from 'vite'
 import react from '@vitejs/plugin-react'
 
 const apiProxyTarget =
@@ -15,9 +15,36 @@ const devClientPort =
     ? Number(devClientPortRaw)
     : undefined
 
+function sellerSpaFallback(): Plugin {
+  const rewriteSellerHtml = (url: string | undefined) => {
+    const path = (url ?? '').split('?')[0] ?? ''
+    return path.startsWith('/seller/') && path !== '/seller/'
+  }
+
+  return {
+    name: 'wms-seller-spa-fallback',
+    configureServer(server) {
+      server.middlewares.use((req, _res, next) => {
+        if (req.method === 'GET' && rewriteSellerHtml(req.url)) {
+          req.url = '/seller/index.html'
+        }
+        next()
+      })
+    },
+    configurePreviewServer(server) {
+      server.middlewares.use((req, _res, next) => {
+        if (req.method === 'GET' && rewriteSellerHtml(req.url)) {
+          req.url = '/seller/index.html'
+        }
+        next()
+      })
+    },
+  }
+}
+
 // https://vite.dev/config/
 export default defineConfig({
-  plugins: [react()],
+  plugins: [react(), sellerSpaFallback()],
   server: {
     ...(devClientPort !== undefined ? { hmr: { clientPort: devClientPort } } : {}),
     proxy: {

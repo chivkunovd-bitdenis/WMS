@@ -8,6 +8,14 @@ export type FfPermissions = {
   shift_lead: boolean
 }
 
+export type FfStaffAccessKey =
+  | 'reception'
+  | 'shipments'
+  | 'catalog_cells'
+  | 'settings_staff'
+
+export type FfStaffAccessState = Record<FfStaffAccessKey, boolean>
+
 export const FF_PERMISSION_BLOCKS: {
   key: keyof FfPermissions
   label: string
@@ -49,6 +57,53 @@ export const FF_PERMISSION_BLOCKS: {
     hint: 'Очередь перепечатки КМ и подтверждение брака',
   },
 ]
+
+export const FF_STAFF_ACCESS_BLOCKS: {
+  key: FfStaffAccessKey
+  label: string
+}[] = [
+  { key: 'reception', label: 'Приёмка' },
+  { key: 'shipments', label: 'Отгрузки' },
+  { key: 'catalog_cells', label: 'Каталог и ячейки' },
+  { key: 'settings_staff', label: 'Настройки и сотрудники' },
+]
+
+export function ffPermissionsToStaffAccess(
+  permissions: FfPermissions,
+): FfStaffAccessState {
+  return {
+    reception: permissions.reception,
+    shipments: permissions.mp_shipments || permissions.packaging,
+    catalog_cells: permissions.cells || permissions.inventory,
+    settings_staff: permissions.settings,
+  }
+}
+
+export function applyFfStaffAccessChange(
+  permissions: FfPermissions,
+  key: FfStaffAccessKey,
+  checked: boolean,
+): FfPermissions {
+  if (key === 'reception') {
+    return { ...permissions, reception: checked }
+  }
+  if (key === 'shipments') {
+    return {
+      ...permissions,
+      mp_shipments: checked,
+      packaging: checked,
+      shift_lead: checked,
+    }
+  }
+  if (key === 'catalog_cells') {
+    return {
+      ...permissions,
+      cells: checked,
+      inventory: checked,
+    }
+  }
+  return { ...permissions, settings: checked }
+}
 
 export function adminFfPermissions(): FfPermissions {
   return {

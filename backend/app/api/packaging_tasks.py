@@ -4,7 +4,7 @@ import uuid
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, StrictInt
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.deps import require_packaging_access
@@ -23,7 +23,7 @@ router = APIRouter(
 class PackagingTaskLineIn(BaseModel):
     product_id: uuid.UUID
     storage_location_id: uuid.UUID | None = None
-    quantity: int = Field(ge=1, le=1_000_000_000)
+    quantity: StrictInt = Field(ge=1, le=1_000_000_000)
 
 
 class PackagingTaskCreate(BaseModel):
@@ -33,13 +33,17 @@ class PackagingTaskCreate(BaseModel):
 
 
 class ConfirmPackedIn(BaseModel):
-    quantity: int | None = Field(default=None, ge=0, le=1_000_000_000)
+    quantity: StrictInt | None = Field(default=None, ge=0, le=1_000_000_000)
 
 
 class PackProgressIn(BaseModel):
-    quantity: int = Field(ge=1, le=1_000_000_000)
+    quantity: StrictInt = Field(ge=1, le=1_000_000_000)
     order_id: uuid.UUID | None = None
     idempotency_key: str | None = Field(default=None, max_length=128)
+
+
+class ScanPackIn(BaseModel):
+    barcode: str = Field(min_length=1, max_length=128)
 
 
 class CompletePackagingIn(BaseModel):
@@ -62,6 +66,8 @@ class PackProgressOut(BaseModel):
 class PackagingTaskLineOut(BaseModel):
     id: str
     product_id: str
+    seller_id: str | None = None
+    seller_name: str | None = None
     sku_code: str
     product_name: str
     storage_location_id: str
@@ -79,17 +85,43 @@ class PackagingTaskLineOut(BaseModel):
     is_complete: bool
 
 
+class PackagingTaskEventOut(BaseModel):
+    id: str
+    event_sequence: int
+    action: str
+    line_id: str | None = None
+    product_id: str | None = None
+    product_name: str | None = None
+    storage_location_id: str | None = None
+    storage_location_code: str | None = None
+    quantity: int
+    note: str | None = None
+    created_by_user_id: str | None = None
+    created_by_user_email: str | None = None
+    created_at: str
+    reversed_at: str | None = None
+
+
 class PackagingTaskOut(BaseModel):
     id: str
     document_number: str | None = None
     display_number: str | None = None
     warehouse_id: str
+    warehouse_name: str | None = None
+    warehouse_code: str | None = None
+    seller_id: str | None = None
+    seller_name: str | None = None
     status: str
     marketplace_unload_request_id: str | None
     inbound_intake_request_id: str | None
     is_complete: bool
     pick_resync_warning: bool = False
+    created_at: str | None = None
+    updated_at: str | None = None
+    completed_at: str | None = None
+    completed_by_user_id: str | None = None
     lines: list[PackagingTaskLineOut]
+    events: list[PackagingTaskEventOut] = Field(default_factory=list)
 
 
 def _line_out(ln: PackagingTaskLine, *, marking_available: int = 0) -> PackagingTaskLineOut:
@@ -98,6 +130,8 @@ def _line_out(ln: PackagingTaskLine, *, marking_available: int = 0) -> Packaging
     return PackagingTaskLineOut(
         id=str(ln.id),
         product_id=str(ln.product_id),
+        seller_id=str(p.seller_id) if p.seller_id else None,
+        seller_name=p.seller.name if p.seller else None,
         sku_code=p.sku_code,
         product_name=p.name,
         storage_location_id=str(ln.storage_location_id),
@@ -116,6 +150,28 @@ def _line_out(ln: PackagingTaskLine, *, marking_available: int = 0) -> Packaging
     )
 
 
+def _event_out(event: object) -> PackagingTaskEventOut:
+    from app.models.packaging_task import PackagingTaskEvent
+
+    assert isinstance(event, PackagingTaskEvent)
+    return PackagingTaskEventOut(
+        id=str(event.id),
+        event_sequence=int(event.event_sequence),
+        action=event.action,
+        line_id=str(event.line_id) if event.line_id else None,
+        product_id=str(event.product_id) if event.product_id else None,
+        product_name=event.product.name if event.product else None,
+        storage_location_id=str(event.storage_location_id) if event.storage_location_id else None,
+        storage_location_code=event.storage_location.code if event.storage_location else None,
+        quantity=int(event.quantity),
+        note=event.note,
+        created_by_user_id=str(event.created_by_user_id) if event.created_by_user_id else None,
+        created_by_user_email=event.created_by_user.email if event.created_by_user else None,
+        created_at=event.created_at.isoformat(),
+        reversed_at=event.reversed_at.isoformat() if event.reversed_at else None,
+    )
+
+
 async def _task_out(
     session: AsyncSession,
     tenant_id: uuid.UUID,
@@ -131,11 +187,27 @@ async def _task_out(
                 session, tenant_id, ln.product_id
             )
         line_outs.append(_line_out(ln, marking_available=available))
+    sellers = {
+        (ln.product.seller_id, ln.product.seller.name if ln.product.seller else None)
+        for ln in task.lines
+    }
+    seller_id: str | None = None
+    seller_name: str | None = None
+    if len(sellers) == 1:
+        only_id, only_name = next(iter(sellers))
+        seller_id = str(only_id) if only_id else None
+        seller_name = only_name
+    elif len(sellers) > 1:
+        seller_name = "Несколько селлеров"
     return PackagingTaskOut(
         id=str(task.id),
         document_number=task.document_number,
         display_number=task.display_number,
         warehouse_id=str(task.warehouse_id),
+        warehouse_name=task.warehouse.name if task.warehouse else None,
+        warehouse_code=task.warehouse.code if task.warehouse else None,
+        seller_id=seller_id,
+        seller_name=seller_name,
         status=task.status,
         marketplace_unload_request_id=(
             str(task.marketplace_unload_request_id)
@@ -147,7 +219,14 @@ async def _task_out(
         ),
         is_complete=pkg_svc.is_task_complete(task),
         pick_resync_warning=pick_resync_warning,
+        created_at=task.created_at.isoformat() if task.created_at else None,
+        updated_at=task.updated_at.isoformat() if task.updated_at else None,
+        completed_at=task.completed_at.isoformat() if task.completed_at else None,
+        completed_by_user_id=(
+            str(task.completed_by_user_id) if task.completed_by_user_id else None
+        ),
         lines=line_outs,
+        events=[_event_out(event) for event in task.events],
     )
 
 
@@ -163,6 +242,11 @@ def _http_from_pkg_error(exc: pkg_svc.PackagingTaskServiceError) -> HTTPExceptio
         "order_product_mismatch",
         "no_eligible_order",
         "fbs_acknowledge_not_allowed",
+        "mixed_seller",
+        "unknown_barcode",
+        "line_already_packed",
+        "undo_not_available",
+        "undo_not_supported",
     }:
         status_code = status.HTTP_409_CONFLICT
     return HTTPException(status_code=status_code, detail=code)
@@ -189,10 +273,19 @@ async def list_packaging_tasks(
     user: Annotated[User, Depends(require_packaging_access)],
     session: Annotated[AsyncSession, Depends(get_db)],
     warehouse_id: Annotated[uuid.UUID | None, Query()] = None,
+    status_filter: Annotated[str, Query(alias="status")] = "open",
+    search: Annotated[str | None, Query(max_length=128)] = None,
 ) -> list[PackagingTaskOut]:
-    tasks = await pkg_svc.list_open_tasks(
-        session, user.tenant_id, warehouse_id=warehouse_id
-    )
+    try:
+        tasks = await pkg_svc.list_tasks(
+            session,
+            user.tenant_id,
+            warehouse_id=warehouse_id,
+            status_filter=status_filter,
+            search=search,
+        )
+    except pkg_svc.PackagingTaskServiceError as exc:
+        raise _http_from_pkg_error(exc) from exc
     out: list[PackagingTaskOut] = []
     for t in tasks:
         out.append(await _task_out(session, user.tenant_id, t))
@@ -264,7 +357,12 @@ async def cancel_packaging_task(
     session: Annotated[AsyncSession, Depends(get_db)],
 ) -> PackagingTaskOut:
     try:
-        task = await pkg_svc.cancel_task(session, user.tenant_id, task_id)
+        task = await pkg_svc.cancel_task(
+            session,
+            user.tenant_id,
+            task_id,
+            acting_user_id=user.id,
+        )
     except pkg_svc.PackagingTaskServiceError as exc:
         raise _http_from_pkg_error(exc) from exc
     return await _task_out(session, user.tenant_id, task)
@@ -325,6 +423,47 @@ async def record_pack_progress(
         packaging_task=await _task_out(session, user.tenant_id, result.task),
         fulfilled_order=fulfilled_order,
     )
+
+
+@router.post("/{task_id}/scan", response_model=PackProgressOut)
+async def record_pack_scan(
+    task_id: uuid.UUID,
+    body: ScanPackIn,
+    user: Annotated[User, Depends(require_packaging_access)],
+    session: Annotated[AsyncSession, Depends(get_db)],
+) -> PackProgressOut:
+    try:
+        result = await pkg_svc.record_pack_scan(
+            session,
+            user.tenant_id,
+            task_id,
+            body.barcode,
+            acting_user_id=user.id,
+        )
+    except pkg_svc.PackagingTaskServiceError as exc:
+        raise _http_from_pkg_error(exc) from exc
+    return PackProgressOut(
+        packaging_task=await _task_out(session, user.tenant_id, result.task),
+        fulfilled_order=None,
+    )
+
+
+@router.post("/{task_id}/undo-last", response_model=PackagingTaskOut)
+async def undo_last_pack_action(
+    task_id: uuid.UUID,
+    user: Annotated[User, Depends(require_packaging_access)],
+    session: Annotated[AsyncSession, Depends(get_db)],
+) -> PackagingTaskOut:
+    try:
+        task = await pkg_svc.undo_last_pack_action(
+            session,
+            user.tenant_id,
+            task_id,
+            acting_user_id=user.id,
+        )
+    except pkg_svc.PackagingTaskServiceError as exc:
+        raise _http_from_pkg_error(exc) from exc
+    return await _task_out(session, user.tenant_id, task)
 
 
 @router.post("/{task_id}/complete", response_model=PackagingTaskOut)

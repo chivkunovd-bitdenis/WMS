@@ -25,7 +25,7 @@ from app.models.product import Product
 from app.models.seller import Seller
 from app.models.storage_location import StorageLocation
 from app.models.user import User
-from app.services import inventory_service
+from app.services import inventory_service, stock_direction_service
 from app.services.catalog_service import get_warehouse
 from app.services.document_number_service import (
     DOC_TYPE_UNLOAD,
@@ -35,6 +35,9 @@ from app.services.document_number_service import (
 from app.services.fbs_stock_publish_service import schedule_seller_stock_publish
 from app.services.marketplace_unload_status import (
     CANCELLABLE_STATUSES as CANCELLABLE_STATUSES,
+)
+from app.services.marketplace_unload_status import (
+    DELETE_EDITABLE_STATUSES as DELETE_EDITABLE_STATUSES,
 )
 from app.services.marketplace_unload_status import (
     EXECUTION_STATUSES as EXECUTION_STATUSES,
@@ -87,6 +90,12 @@ class MarketplaceUnloadAvailableProduct:
     sku_code: str
     product_name: str
     available: int
+
+
+@dataclass(frozen=True)
+class MarketplaceUnloadAvailability:
+    available: int
+    uses_free_fbo_pool: bool
 
 
 def assert_request_visible(
@@ -396,6 +405,24 @@ async def _available_product_qty_in_warehouse(
     *,
     exclude_request_id: uuid.UUID | None = None,
 ) -> int:
+    availability = await _available_product_availability_in_warehouse(
+        session,
+        tenant_id,
+        warehouse_id,
+        product_id,
+        exclude_request_id=exclude_request_id,
+    )
+    return availability.available
+
+
+async def _available_product_availability_in_warehouse(
+    session: AsyncSession,
+    tenant_id: uuid.UUID,
+    warehouse_id: uuid.UUID,
+    product_id: uuid.UUID,
+    *,
+    exclude_request_id: uuid.UUID | None = None,
+) -> MarketplaceUnloadAvailability:
     on_hand = await inventory_service.storage_on_hand_in_warehouse(
         session, tenant_id, warehouse_id, product_id
     )
@@ -415,7 +442,45 @@ async def _available_product_qty_in_warehouse(
     from app.services.fbs_stock_availability_service import fbs_reserved_qty_for_product
 
     reserved_fbs = await fbs_reserved_qty_for_product(session, tenant_id, warehouse_id, product_id)
-    return on_hand + sorting_on_hand - reserved_outbound - reserved_mp - reserved_fbs
+    directions = await stock_direction_service.direction_totals_by_product(
+        session, tenant_id, [product_id]
+    )
+    direction_total = directions.get(product_id)
+    if direction_total is not None and direction_total.has_any:
+        return MarketplaceUnloadAvailability(
+            available=on_hand
+            + sorting_on_hand
+            - direction_total.total
+            - reserved_outbound
+            - reserved_mp,
+            uses_free_fbo_pool=True,
+        )
+    return MarketplaceUnloadAvailability(
+        available=on_hand + sorting_on_hand - reserved_outbound - reserved_mp - reserved_fbs,
+        uses_free_fbo_pool=False,
+    )
+
+
+async def _assert_available_for_unload_quantity(
+    session: AsyncSession,
+    tenant_id: uuid.UUID,
+    warehouse_id: uuid.UUID,
+    product_id: uuid.UUID,
+    quantity: int,
+    *,
+    exclude_request_id: uuid.UUID | None = None,
+) -> None:
+    availability = await _available_product_availability_in_warehouse(
+        session,
+        tenant_id,
+        warehouse_id,
+        product_id,
+        exclude_request_id=exclude_request_id,
+    )
+    if availability.available >= quantity:
+        return
+    code = "insufficient_free_fbo" if availability.uses_free_fbo_pool else "insufficient_available"
+    raise MarketplaceUnloadError(code)
 
 
 async def list_available_products(
@@ -476,6 +541,9 @@ async def list_available_products(
     from app.services.fbs_stock_availability_service import fbs_reserved_by_product
 
     fbs_reserved = await fbs_reserved_by_product(session, tenant_id, warehouse_id, product_ids)
+    direction_totals = await stock_direction_service.direction_totals_by_product(
+        session, tenant_id, product_ids
+    )
     return [
         MarketplaceUnloadAvailableProduct(
             product_id=product_id,
@@ -484,9 +552,14 @@ async def list_available_products(
             available=max(
                 0,
                 quantity_total
+                - (
+                    direction_totals[product_id].total
+                    if direction_totals.get(product_id) is not None
+                    and direction_totals[product_id].has_any
+                    else int(fbs_reserved.get(product_id, 0))
+                )
                 - outbound_reserved.get(product_id, 0)
-                - mp_reserved.get(product_id, 0)
-                - fbs_reserved.get(product_id, 0),
+                - mp_reserved.get(product_id, 0),
             ),
         )
         for product_id, sku_code, product_name, quantity_total in stock_rows
@@ -555,15 +628,14 @@ async def add_line(
         raise MarketplaceUnloadError("product_not_found")
     if req.seller_id is not None and prod.seller_id != req.seller_id:
         raise MarketplaceUnloadError("product_seller_mismatch")
-    available_qty = await _available_product_qty_in_warehouse(
+    await _assert_available_for_unload_quantity(
         session,
         tenant_id,
         req.warehouse_id,
         product_id,
+        quantity,
         exclude_request_id=req.id if req.status in RESERVE_STATUSES else None,
     )
-    if available_qty < quantity:
-        raise MarketplaceUnloadError("insufficient_available")
     line = MarketplaceUnloadLine(
         request_id=req.id,
         product_id=product_id,
@@ -603,11 +675,13 @@ async def replace_lines(
         normalized[product_id] = normalized.get(product_id, 0) + qty
 
     for product_id, qty in normalized.items():
-        available_qty = await _available_product_qty_in_warehouse(
-            session, tenant_id, req.warehouse_id, product_id
+        await _assert_available_for_unload_quantity(
+            session,
+            tenant_id,
+            req.warehouse_id,
+            product_id,
+            qty,
         )
-        if available_qty < qty:
-            raise MarketplaceUnloadError("insufficient_available")
 
     for ln in list(req.lines):
         await session.delete(ln)
@@ -653,15 +727,14 @@ async def plan_request(
     if mpw is None:
         raise MarketplaceUnloadError("wb_mp_warehouse_unknown")
     for ln in req.lines:
-        available_qty = await _available_product_qty_in_warehouse(
+        await _assert_available_for_unload_quantity(
             session,
             tenant_id,
             req.warehouse_id,
             ln.product_id,
+            ln.quantity,
             exclude_request_id=req.id,
         )
-        if available_qty < ln.quantity:
-            raise MarketplaceUnloadError("insufficient_available")
     await _apply_reservations(session, req)
     req.status = STATUS_SUBMITTED
     await session.commit()
@@ -714,15 +787,14 @@ async def confirm_request(
         raise MarketplaceUnloadError("planned_shipment_date_required")
     if req.status == STATUS_DRAFT:
         for ln in req.lines:
-            available_qty = await _available_product_qty_in_warehouse(
+            await _assert_available_for_unload_quantity(
                 session,
                 tenant_id,
                 req.warehouse_id,
                 ln.product_id,
+                ln.quantity,
                 exclude_request_id=req.id,
             )
-            if available_qty < ln.quantity:
-                raise MarketplaceUnloadError("insufficient_available")
         await _apply_reservations(session, req)
     req.planned_shipment_date = effective_date
     req.status = STATUS_CONFIRMED
@@ -980,25 +1052,35 @@ async def cancel_request(
     return r2
 
 
+async def delete_draft_request(
+    session: AsyncSession,
+    tenant_id: uuid.UUID,
+    request_id: uuid.UUID,
+) -> None:
+    req = await get_request(session, tenant_id, request_id)
+    if req is None:
+        raise MarketplaceUnloadError("not_found")
+    if req.status != STATUS_DRAFT:
+        raise MarketplaceUnloadError("not_draft")
+    await _release_reservations(session, request_id)
+    await session.delete(req)
+    await session.commit()
+
+
 async def delete_line(
     session: AsyncSession,
     tenant_id: uuid.UUID,
     request_id: uuid.UUID,
     line_id: uuid.UUID,
-    *,
-    allow_ff_confirmed: bool = False,
 ) -> None:
     req = await get_request(session, tenant_id, request_id)
     if req is None:
         raise MarketplaceUnloadError("not_found")
-    editable = SELLER_EDITABLE_STATUSES if not allow_ff_confirmed else FF_LINE_EDITABLE_STATUSES
-    if req.status not in editable:
-        raise MarketplaceUnloadError("not_editable")
+    if req.status not in DELETE_EDITABLE_STATUSES:
+        raise MarketplaceUnloadError("not_draft")
     line = await session.get(MarketplaceUnloadLine, line_id)
     if line is None or line.request_id != request_id:
         raise MarketplaceUnloadError("line_not_found")
     await session.delete(line)
-    if allow_ff_confirmed and req.status == STATUS_CONFIRMED:
-        req.ff_modified = True
     await session.commit()
     await _sync_packaging_task_for_unload(session, tenant_id, request_id)

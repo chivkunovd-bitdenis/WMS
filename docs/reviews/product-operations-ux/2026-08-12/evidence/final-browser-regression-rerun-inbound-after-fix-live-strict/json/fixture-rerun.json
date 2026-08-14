@@ -1,0 +1,18 @@
+{
+  "suffix": "after-fix-rerun-1786668071455",
+  "adminEmail": "ff-admin-after-fix-rerun-1786668071455@example.com",
+  "sellerEmail": "seller-after-fix-rerun-1786668071455@example.com",
+  "sellerName": "QA Seller after-fix-rerun-1786668071455",
+  "warehouseId": "47eecdd3-6e90-444b-ac5c-df2f5e730220",
+  "warehouseName": "QA WH after-fix-rerun-1786668071455",
+  "locationId": "8368666d-33be-4079-8bc2-3f6ee073c9cd",
+  "locationCode": "A-01",
+  "ordinarySku": "sku-ordinary-after-fix-rerun-1786668071455",
+  "ordinaryBarcode": "wb-ordinary-after-fix-rerun-1786668071455",
+  "ordinaryProductId": "df26fa39-f837-46f6-b996-51001a27221a",
+  "ordinaryRequestId": "64f1a8db-55f0-4659-8ba4-e97846c1b385",
+  "returnSku": "sku-return-after-fix-rerun-1786668071455",
+  "returnBarcode": "wb-return-after-fix-rerun-1786668071455",
+  "returnProductId": "b2e8c44d-5834-48e1-941b-c171ee16e3b4",
+  "returnRequestId": "f50120ea-91ee-4984-b719-a52812172d2a"
+}

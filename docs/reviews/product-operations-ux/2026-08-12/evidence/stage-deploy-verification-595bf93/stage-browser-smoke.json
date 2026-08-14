@@ -1,0 +1,39 @@
+{
+  "verdict": "STAGE_BROWSER_SMOKE_PASSED",
+  "checkedAt": "2026-08-14T05:27:42.618Z",
+  "url": "https://web-production-9e7c1.up.railway.app/",
+  "viewport": "1440x900",
+  "browser": "chromium",
+  "headless": false,
+  "title": "WMS · Фулфилмент",
+  "assetSrc": "/assets/ff-BEgAjw6d.js",
+  "expectedAsset": "/assets/ff-BEgAjw6d.js",
+  "rootCount": 1,
+  "emailVisible": true,
+  "passwordVisible": true,
+  "loginButtonVisible": true,
+  "healthStatus": 200,
+  "responses": [
+    {
+      "url": "https://web-production-9e7c1.up.railway.app/",
+      "status": 200
+    },
+    {
+      "url": "https://web-production-9e7c1.up.railway.app/assets/WmsDatePickersProvider-Cy6VBLR9.css",
+      "status": 200
+    },
+    {
+      "url": "https://web-production-9e7c1.up.railway.app/assets/ff-C8Lao7a-.css",
+      "status": 200
+    },
+    {
+      "url": "https://web-production-9e7c1.up.railway.app/assets/ff-BEgAjw6d.js",
+      "status": 200
+    },
+    {
+      "url": "https://web-production-9e7c1.up.railway.app/assets/WmsDatePickersProvider-D92h81VJ.js",
+      "status": 200
+    }
+  ],
+  "screenshot": "../docs/reviews/product-operations-ux/2026-08-12/evidence/stage-deploy-verification-595bf93/stage-login-shell-1440x900.png"
+}

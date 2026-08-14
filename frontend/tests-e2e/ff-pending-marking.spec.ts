@@ -83,6 +83,10 @@ test('FF pending marking worklist row disappears after print', async ({ page }) 
   await page.getByTestId('ff-packaging-create-open').click()
   await page.getByTestId('ff-packaging-create-warehouse').click()
   await page.getByRole('option', { name: 'WH Pnd' }).click()
+  await page.getByTestId('ff-packaging-create-location').click()
+  await page.getByRole('option', { name: 'Сортировка' }).click()
+  await expect(page.getByTestId('ff-packaging-create-row')).toBeVisible()
+  await page.locator('[data-testid^="ff-packaging-create-row-select-"]').first().click()
   await Promise.all([
     page.waitForResponse(
       (r) =>
@@ -121,6 +125,102 @@ test('FF pending marking worklist row disappears after print', async ({ page }) 
   ])
 
   await expect(page.getByTestId('ff-pending-marking-empty')).toBeVisible()
+})
+
+// TC-R01-PENDING-POOL0 — строка без КМ показывает владельца и следующий шаг.
+test('FF pending marking shows no-codes owner handoff and task link', async ({ page }) => {
+  test.setTimeout(120_000)
+  const email = `e2e-pending-zero-${Date.now()}@example.com`
+  const password = 'password123'
+  const e2eApi = process.env.E2E_API_ORIGIN ?? 'http://127.0.0.1:18000'
+  const sku = `SKU-PND-ZERO-${Date.now()}`
+
+  await page.goto('/')
+  await openFulfillmentRegistration(page)
+  await page.getByTestId('register-form').getByLabel('Организация').fill('E2E Pending Zero')
+  await page.getByTestId('register-form').getByLabel('Email администратора').fill(email)
+  await page.getByTestId('register-form').getByLabel('Пароль').fill(password)
+  const [regRes] = await Promise.all([
+    waitForPostOk(page, '/api/auth/register'),
+    waitForGetOk(page, '/api/auth/me'),
+    page.getByTestId('register-form').getByRole('button', { name: 'Создать аккаунт' }).click(),
+  ])
+  const token = String(((await regRes.json()) as { access_token: string }).access_token)
+  const auth = { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' }
+
+  const sellerRes = await page.request.post(`${e2eApi}/sellers`, {
+    headers: auth,
+    data: JSON.stringify({ name: 'E2E No Codes Seller', email: `zero-${Date.now()}@example.com` }),
+  })
+  const sellerId = String(((await sellerRes.json()) as { id: string }).id)
+  const whRes = await page.request.post(`${e2eApi}/warehouses`, {
+    headers: auth,
+    data: JSON.stringify({ name: 'WH No Codes', code: `wh-zero-${Date.now()}` }),
+  })
+  const whId = String(((await whRes.json()) as { id: string }).id)
+  const prRes = await page.request.post(`${e2eApi}/products`, {
+    headers: auth,
+    data: JSON.stringify({
+      name: 'E2E No Codes Product',
+      sku_code: sku,
+      length_mm: 10,
+      width_mm: 10,
+      height_mm: 10,
+      seller_id: sellerId,
+    }),
+  })
+  const productId = String(((await prRes.json()) as { id: string }).id)
+  await page.request.patch(`${e2eApi}/products/${productId}/packaging-instructions`, {
+    headers: auth,
+    data: JSON.stringify({ requires_honest_sign: true }),
+  })
+
+  const baseIn = `${e2eApi}/operations/inbound-intake-requests`
+  const inbound = await page.request.post(baseIn, {
+    headers: auth,
+    data: JSON.stringify({ warehouse_id: whId }),
+  })
+  const inboundId = String(((await inbound.json()) as { id: string }).id)
+  await page.request.post(`${baseIn}/${inboundId}/lines`, {
+    headers: auth,
+    data: JSON.stringify({ product_id: productId, expected_qty: 1 }),
+  })
+  await page.request.post(`${baseIn}/${inboundId}/submit`, { headers: auth })
+  const { boxes: inboundBoxes } = await beginInboundReceivingWithBoxes(page.request, auth, inboundId, { boxCount: 1 })
+  await fulfillInboundViaBoxScans(page.request, auth, inboundId, inboundBoxes, sku, [1])
+  await page.request.post(`${baseIn}/${inboundId}/verify`, { headers: auth })
+  await page.request.post(`${baseIn}/${inboundId}/post`, { headers: auth })
+
+  await page.getByTestId('nav-ff-packaging').click()
+  await page.getByTestId('ff-packaging-create-open').click()
+  await page.getByTestId('ff-packaging-create-warehouse').click()
+  await page.getByRole('option', { name: 'WH No Codes' }).click()
+  await page.getByTestId('ff-packaging-create-location').click()
+  await page.getByRole('option', { name: 'Сортировка' }).click()
+  await expect(page.getByTestId('ff-packaging-create-row')).toBeVisible()
+  await page.locator('[data-testid^="ff-packaging-create-row-select-"]').first().click()
+  const [createRes] = await Promise.all([
+    page.waitForResponse(
+      (r) =>
+        r.request().method() === 'POST' &&
+        r.url().includes('/operations/packaging-tasks') &&
+        r.status() >= 200 &&
+        r.status() < 300,
+    ),
+    page.getByTestId('ff-packaging-create-submit').click(),
+  ])
+  const taskId = String(((await createRes.json()) as { id: string }).id)
+
+  await page.getByTestId('ff-packaging-pending-link').click()
+  await expect(page.getByTestId('ff-pending-marking-row')).toHaveCount(1)
+  await expect(page.getByTestId('ff-pending-marking-row')).toContainText('Сортировка')
+  await expect(page.getByTestId('ff-pending-marking-row')).not.toContainText('__SORTING__')
+  await expect(page.locator('[data-testid^="ff-pending-marking-no-codes-"]').first()).toHaveText('Нет КМ')
+  await expect(page.getByTestId('ff-pending-marking-row')).toContainText('E2E No Codes Seller')
+  await expect(page.getByTestId('ff-pending-marking-row')).toContainText('Запросите КМ у селлера')
+  await page.locator('[data-testid^="ff-pending-marking-task-link-"]').first().click()
+  await expect(page).toHaveURL(new RegExp(`/app/ff/packaging/${taskId}$`))
+  await expect(page.getByTestId('ff-packaging-task-panel')).toBeVisible()
 })
 
 // TC-NEW-008 — PENDING-01: чекбоксы и печать выбранных (каждая лента по своему товару).
@@ -209,7 +309,13 @@ test('FF pending marking bulk print selected rows', async ({ page }) => {
   await page.getByTestId('ff-packaging-create-open').click()
   await page.getByTestId('ff-packaging-create-warehouse').click()
   await page.getByRole('option', { name: 'WH Bulk' }).click()
+  await page.getByTestId('ff-packaging-create-location').click()
+  await page.getByRole('option', { name: 'Сортировка' }).click()
   await expect(page.getByTestId('ff-packaging-create-row')).toHaveCount(2)
+  const createRowSelectors = page.locator('[data-testid^="ff-packaging-create-row-select-"]')
+  for (let idx = 0; idx < 2; idx += 1) {
+    await createRowSelectors.nth(idx).click()
+  }
   await Promise.all([
     page.waitForResponse(
       (r) =>

@@ -100,7 +100,10 @@ test('FF packaging: defect button creates pending reprint request', async ({ pag
   await page.getByTestId('ff-packaging-create-open').click()
   await page.getByTestId('ff-packaging-create-warehouse').click()
   await page.getByRole('option', { name: 'WH Defect' }).click()
+  await page.getByTestId('ff-packaging-create-location').click()
+  await page.getByRole('option', { name: 'Сортировка' }).click()
   await expect(page.getByTestId('ff-packaging-create-row')).toBeVisible()
+  await page.locator('[data-testid^="ff-packaging-create-row-select-"]').first().click()
 
   await Promise.all([
     page.waitForResponse(

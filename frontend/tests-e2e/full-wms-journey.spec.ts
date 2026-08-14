@@ -116,7 +116,7 @@ test.describe('Full WMS user journey', () => {
       .getByTestId('inbound-movements-list')
       .getByTestId('inbound-movement-row');
     await expect(
-      movementsAfterPost.filter({ hasText: '+5 · stock_transfer_in' }),
+      movementsAfterPost.filter({ hasText: '+5 · Перемещение: принято' }),
     ).toHaveCount(1);
 
     const invRow = page

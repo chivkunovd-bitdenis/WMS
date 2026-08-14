@@ -13,6 +13,7 @@ if TYPE_CHECKING:
     from app.models.ff_staff_permissions import FfStaffPermissions
     from app.models.seller import Seller
     from app.models.seller_shop_delegation import SellerShopDelegation
+    from app.models.seller_staff_permissions import SellerStaffPermissions
     from app.models.tenant import Tenant
 
 
@@ -51,6 +52,12 @@ class User(Base):
     seller: Mapped[Seller | None] = relationship("Seller", back_populates="users")
     ff_staff_permissions: Mapped[FfStaffPermissions | None] = relationship(
         "FfStaffPermissions",
+        back_populates="user",
+        uselist=False,
+        cascade="all, delete-orphan",
+    )
+    seller_staff_permissions: Mapped[SellerStaffPermissions | None] = relationship(
+        "SellerStaffPermissions",
         back_populates="user",
         uselist=False,
         cascade="all, delete-orphan",

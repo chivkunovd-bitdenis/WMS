@@ -1,0 +1,471 @@
+{
+  "verdictCandidate": "FINAL_BROWSER_GROUP_BLOCKED",
+  "browser_used": true,
+  "browser_surface": "standalone Playwright Chromium headless=false after Browser plugin IAB subagent visibility block and chrome unavailable",
+  "viewport_required": {
+    "width": 1280,
+    "height": 720
+  },
+  "ports": {
+    "backend": 18182,
+    "frontend": 5182
+  },
+  "routes": [
+    "/",
+    "/",
+    "/app/ff/reception"
+  ],
+  "clicks": [
+    "Open FF registration form",
+    "Register org: fill QA FF final-inbound-1786666957465",
+    "Register FF admin email: fill ff-admin-final-inbound-1786666957465@example.com",
+    "Register FF password: fill password123",
+    "Submit FF registration",
+    "FF sidebar: Reception",
+    "Open ordinary inbound from queue",
+    "Ordinary edit dimensions",
+    "Dimension length: fill 210",
+    "Dimension width: fill 110",
+    "Dimension height: fill 60",
+    "Save dimensions",
+    "Ordinary scan SKU: fill sku-ordinary-final-inbound-1786666957465",
+    "Ordinary scan submit: press Enter",
+    "Ordinary manual fact edit open",
+    "Ordinary manual fact correction to 3: fill 3",
+    "Ordinary manual fact save",
+    "Ordinary complete receiving",
+    "Confirm discrepancy completion",
+    "Print ordinary inbound waybill",
+    "Close ordinary inbound dialog"
+  ],
+  "screenshots": [
+    "/Users/deniscivkunov/Projects/WMS/.worktrees/product-operations-ux-20260812/docs/reviews/product-operations-ux/2026-08-12/evidence/final-browser-regression-rerun-inbound-live-strict/screenshots/00-login-before-registration-final.png",
+    "/Users/deniscivkunov/Projects/WMS/.worktrees/product-operations-ux-20260812/docs/reviews/product-operations-ux/2026-08-12/evidence/final-browser-regression-rerun-inbound-live-strict/screenshots/01-ff-registered-shell-final.png",
+    "/Users/deniscivkunov/Projects/WMS/.worktrees/product-operations-ux-20260812/docs/reviews/product-operations-ux/2026-08-12/evidence/final-browser-regression-rerun-inbound-live-strict/screenshots/02-ff-reception-queue-final.png",
+    "/Users/deniscivkunov/Projects/WMS/.worktrees/product-operations-ux-20260812/docs/reviews/product-operations-ux/2026-08-12/evidence/final-browser-regression-rerun-inbound-live-strict/screenshots/03-ordinary-open-final.png",
+    "/Users/deniscivkunov/Projects/WMS/.worktrees/product-operations-ux-20260812/docs/reviews/product-operations-ux/2026-08-12/evidence/final-browser-regression-rerun-inbound-live-strict/screenshots/04-ordinary-dimensions-saved-final.png",
+    "/Users/deniscivkunov/Projects/WMS/.worktrees/product-operations-ux-20260812/docs/reviews/product-operations-ux/2026-08-12/evidence/final-browser-regression-rerun-inbound-live-strict/screenshots/05-ordinary-after-scan-final.png",
+    "/Users/deniscivkunov/Projects/WMS/.worktrees/product-operations-ux-20260812/docs/reviews/product-operations-ux/2026-08-12/evidence/final-browser-regression-rerun-inbound-live-strict/screenshots/06-ordinary-manual-discrepancy-final.png",
+    "/Users/deniscivkunov/Projects/WMS/.worktrees/product-operations-ux-20260812/docs/reviews/product-operations-ux/2026-08-12/evidence/final-browser-regression-rerun-inbound-live-strict/screenshots/07-ordinary-discrepancy-dialog-final.png",
+    "/Users/deniscivkunov/Projects/WMS/.worktrees/product-operations-ux-20260812/docs/reviews/product-operations-ux/2026-08-12/evidence/final-browser-regression-rerun-inbound-live-strict/screenshots/08-ordinary-completed-final.png"
+  ],
+  "metrics": {
+    "00_login": {
+      "href": "http://127.0.0.1:5182/",
+      "title": "WMS · Фулфилмент",
+      "viewport": {
+        "width": 1280,
+        "height": 720
+      },
+      "scrollX": 0,
+      "documentScrollWidth": 1280,
+      "bodyScrollWidth": 1280,
+      "appRootScrollWidth": 1280,
+      "appRootClientWidth": 1280,
+      "bodyText": "WMS · Портал фулфилмента\n\nРегистрация организации — для первого администратора. Аккаунты селлеров создаёт админ фулфилмента.\n\nВход\nEmail *\nEmail *\nПароль\nПароль\n\nТолько сотрудники фулфилмента. Селлеры входят на /seller/ (кнопка ниже).\n\nВойти\nВход для селлера (портал /seller/)Регистрация организации (первый админ)",
+      "visibleButtons": [
+        {
+          "text": "Войти",
+          "visible": true,
+          "left": 388,
+          "right": 892,
+          "top": 387,
+          "bottom": 433,
+          "width": 504,
+          "height": 46
+        },
+        {
+          "text": "Регистрация организации (первый админ)",
+          "visible": true,
+          "left": 388,
+          "right": 892,
+          "top": 497,
+          "bottom": 536,
+          "width": 504,
+          "height": 40
+        }
+      ]
+    },
+    "02_ff_reception_queue": {
+      "href": "http://127.0.0.1:5182/app/ff/reception",
+      "title": "WMS · Фулфилмент",
+      "viewport": {
+        "width": 1280,
+        "height": 720
+      },
+      "scrollX": 0,
+      "documentScrollWidth": 1280,
+      "bodyScrollWidth": 1280,
+      "appRootScrollWidth": 1280,
+      "appRootClientWidth": 1280,
+      "bodyText": "Портал ФФ\nff-admin-final-inbound-1786666957465@example.com · администратор\n2\nВыйти\nДашборд\nОтгрузки\nFBS\nПриёмка\nСортировка\nУпаковка\nЯчейки\nСеллеры\nКаталог\nИнвентаризация\nЧестный знак\nНастройки\nПриёмка\n\nПриёмки до завершения поштучного пересчёта. После «Завершить пересчёт» заявка уходит в сортировку, остаток появляется у ФФ.\n\n№ документа\tСеллер\tСостав\tКороба\tСтатус\nПоставка № 000001\tQA Seller final-inbound-1786666957465\t1 поз. · от 1 ед.\t0 из 1\t\nПередано\n\nВозврат № 000002\tQA Seller final-inbound-1786666957465\t1 поз. · от 1 ед.\t0 из 1\t\nПередано",
+      "visibleButtons": [
+        {
+          "text": "2",
+          "visible": true,
+          "left": 1130,
+          "right": 1173,
+          "top": 11,
+          "bottom": 54,
+          "width": 43,
+          "height": 43
+        },
+        {
+          "text": "Выйти",
+          "visible": true,
+          "left": 1189,
+          "right": 1256,
+          "top": 15,
+          "bottom": 49,
+          "width": 67,
+          "height": 34
+        }
+      ]
+    },
+    "03_ordinary_open": {
+      "href": "http://127.0.0.1:5182/app/ff/reception",
+      "title": "WMS · Фулфилмент",
+      "viewport": {
+        "width": 1280,
+        "height": 720
+      },
+      "scrollX": 0,
+      "documentScrollWidth": 1280,
+      "bodyScrollWidth": 1280,
+      "appRootScrollWidth": 1280,
+      "appRootClientWidth": 1280,
+      "bodyText": "Портал ФФ\nff-admin-final-inbound-1786666957465@example.com · администратор\n2\nВыйти\nДашборд\nОтгрузки\nFBS\nПриёмка\nСортировка\nУпаковка\nЯчейки\nСеллеры\nКаталог\nИнвентаризация\nЧестный знак\nНастройки\nПриёмка\n\nПриёмки до завершения поштучного пересчёта. После «Завершить пересчёт» заявка уходит в сортировку, остаток появляется у ФФ.\n\n№ документа\tСеллер\tСостав\tКороба\tСтатус\nПоставка № 000001\tQA Seller final-inbound-1786666957465\t1 поз. · от 1 ед.\t0 из 1\t\nПередано\n\nВозврат № 000002\tQA Seller final-inbound-1786666957465\t1 поз. · от 1 ед.\t0 из 1\t\nПередано\nДокумент\nПриёмка\n№000001\n\nТип: Поставка\n\nСеллер: QA Seller final-inbound-1786666957465\n\nПринято: 0 из 5\n\nКороба: 0 из 1\n\nРасхождения: 1 + короба\n\nДата приёмки (план) *\nDD.\nMM.\nYYYY\nДата приёмки (план) *\nПередано на склад\nЗавершить приёмку\nПечать накладной\nЗакрыть\nТовар\tГабариты\tПлан\tПринято\n\n\nQA Ordinary Product\n\nSKU sku-ordinary-final-inbound-1786666957465\nШК wb-ordinary-final-inbound-1786666957465\n\t\n100×90×50 мм · 0.45 л\n\t\n\n5\n\n\t\n\n0\n\nНедостача 5\nСкан приёмки\n\nСкан штрихкода товара добавляет +1 к принятому количеству. Скан в короб — только в карточке короба.\n\nШтрихкод товара\nШтрихкод товара\nСкан\nДобавить факт\nЗагрузить по накладной\nСоздать короб\nЗавершить приёмку\nЕсть расхождения с планом — при завершении потребуется подтверждение.",
+      "visibleButtons": [
+        {
+          "text": "2",
+          "visible": true,
+          "left": 1130,
+          "right": 1173,
+          "top": 11,
+          "bottom": 54,
+          "width": 43,
+          "height": 43
+        },
+        {
+          "text": "Выйти",
+          "visible": true,
+          "left": 1189,
+          "right": 1256,
+          "top": 15,
+          "bottom": 49,
+          "width": 67,
+          "height": 34
+        },
+        {
+          "text": "Закрыть",
+          "visible": true,
+          "left": 12,
+          "right": 55,
+          "top": 11,
+          "bottom": 54,
+          "width": 43,
+          "height": 43
+        },
+        {
+          "text": "Choose date",
+          "visible": true,
+          "left": 237,
+          "right": 280,
+          "top": 169,
+          "bottom": 212,
+          "width": 43,
+          "height": 43
+        },
+        {
+          "text": "Завершить приёмку",
+          "visible": true,
+          "left": 743,
+          "right": 933,
+          "top": 228,
+          "bottom": 268,
+          "width": 190,
+          "height": 40
+        },
+        {
+          "text": "Печать накладной",
+          "visible": true,
+          "left": 941,
+          "right": 1141,
+          "top": 228,
+          "bottom": 268,
+          "width": 200,
+          "height": 40
+        },
+        {
+          "text": "Закрыть",
+          "visible": true,
+          "left": 1149,
+          "right": 1247,
+          "top": 228,
+          "bottom": 268,
+          "width": 98,
+          "height": 40
+        },
+        {
+          "text": "Печать ШК товара",
+          "visible": true,
+          "left": 701,
+          "right": 733,
+          "top": 349,
+          "bottom": 382,
+          "width": 33,
+          "height": 33
+        },
+        {
+          "text": "Габариты",
+          "visible": true,
+          "left": 885,
+          "right": 925,
+          "top": 345,
+          "bottom": 385,
+          "width": 40,
+          "height": 40
+        },
+        {
+          "text": "Править количество",
+          "visible": true,
+          "left": 1199,
+          "right": 1239,
+          "top": 345,
+          "bottom": 385,
+          "width": 40,
+          "height": 40
+        },
+        {
+          "text": "Скан",
+          "visible": true,
+          "left": 379,
+          "right": 450,
+          "top": 499,
+          "bottom": 542,
+          "width": 71,
+          "height": 43
+        },
+        {
+          "text": "Добавить факт",
+          "visible": true,
+          "left": 458,
+          "right": 606,
+          "top": 499,
+          "bottom": 542,
+          "width": 148,
+          "height": 43
+        },
+        {
+          "text": "Создать товар",
+          "visible": true,
+          "left": 614,
+          "right": 647,
+          "top": 499,
+          "bottom": 532,
+          "width": 33,
+          "height": 33
+        },
+        {
+          "text": "Загрузить по накладной",
+          "visible": true,
+          "left": 655,
+          "right": 877,
+          "top": 499,
+          "bottom": 542,
+          "width": 222,
+          "height": 43
+        },
+        {
+          "text": "Создать короб",
+          "visible": true,
+          "left": 885,
+          "right": 1032,
+          "top": 499,
+          "bottom": 542,
+          "width": 147,
+          "height": 43
+        },
+        {
+          "text": "Завершить приёмку",
+          "visible": true,
+          "left": 1040,
+          "right": 1230,
+          "top": 499,
+          "bottom": 542,
+          "width": 190,
+          "height": 43
+        }
+      ]
+    },
+    "08_ordinary_completed": {
+      "href": "http://127.0.0.1:5182/app/ff/reception",
+      "title": "WMS · Фулфилмент",
+      "viewport": {
+        "width": 1280,
+        "height": 720
+      },
+      "scrollX": 0,
+      "documentScrollWidth": 1280,
+      "bodyScrollWidth": 1280,
+      "appRootScrollWidth": 1280,
+      "appRootClientWidth": 1280,
+      "bodyText": "Портал ФФ\nff-admin-final-inbound-1786666957465@example.com · администратор\n2\nВыйти\nДашборд\nОтгрузки\nFBS\nПриёмка\nСортировка\nУпаковка\nЯчейки\nСеллеры\nКаталог\nИнвентаризация\nЧестный знак\nНастройки\nПриёмка\n\nПриёмки до завершения поштучного пересчёта. После «Завершить пересчёт» заявка уходит в сортировку, остаток появляется у ФФ.\n\n№ документа\tСеллер\tСостав\tКороба\tСтатус\nПоставка № 000001\tQA Seller final-inbound-1786666957465\t1 поз. · от 1 ед.\t0 из 1\t\nПередано\n\nВозврат № 000002\tQA Seller final-inbound-1786666957465\t1 поз. · от 1 ед.\t0 из 1\t\nПередано\nДокумент\nПриёмка\n№000001\n\nТип: Поставка\n\nСеллер: QA Seller final-inbound-1786666957465\n\nПринято: 3 из 5\n\nКороба: 0 из 1\n\nРасхождения: 1 + короба\n\nДата приёмки (план) *\nDD.\nMM.\nYYYY\nДата приёмки (план) *\nВ сортировке\nРедактировать\nПечать накладной\nЗакрыть\nТовар\tГабариты\tПлан\tПринято\n\n\nQA Ordinary Product\n\nSKU sku-ordinary-final-inbound-1786666957465\nШК wb-ordinary-final-inbound-1786666957465\n\t\n210×110×60 мм · 1.39 л\n\t\n\n5\n\n\t\n\n3\n\nНедостача 2\nПриёмка завершена. Остаток принят на склад ФФ (зона «Сортировка»). Разложение по ячейкам — в разделе Сортировка.\nЕсть расхождения, провести приёмку?\nSKU\tОжидалось\tПринято\tОтклонение\n\n\nsku-ordinary-final-inbound-1786666957465\n\nQA Ordinary Product\t5\t3\tНедостача 2\n\nКороба: 0 из 1\n\nКоличество коробов отличается от плана.\n\nОтмена\nЗавершить приёмку",
+      "visibleButtons": [
+        {
+          "text": "2",
+          "visible": true,
+          "left": 1130,
+          "right": 1173,
+          "top": 11,
+          "bottom": 54,
+          "width": 43,
+          "height": 43
+        },
+        {
+          "text": "Выйти",
+          "visible": true,
+          "left": 1189,
+          "right": 1256,
+          "top": 15,
+          "bottom": 49,
+          "width": 67,
+          "height": 34
+        },
+        {
+          "text": "Закрыть",
+          "visible": true,
+          "left": 12,
+          "right": 55,
+          "top": 11,
+          "bottom": 54,
+          "width": 43,
+          "height": 43
+        },
+        {
+          "text": "Choose date",
+          "visible": true,
+          "left": 237,
+          "right": 280,
+          "top": 169,
+          "bottom": 212,
+          "width": 43,
+          "height": 43
+        },
+        {
+          "text": "Редактировать",
+          "visible": true,
+          "left": 759,
+          "right": 933,
+          "top": 228,
+          "bottom": 268,
+          "width": 174,
+          "height": 40
+        },
+        {
+          "text": "Печать накладной",
+          "visible": true,
+          "left": 941,
+          "right": 1141,
+          "top": 228,
+          "bottom": 268,
+          "width": 200,
+          "height": 40
+        },
+        {
+          "text": "Закрыть",
+          "visible": true,
+          "left": 1149,
+          "right": 1247,
+          "top": 228,
+          "bottom": 268,
+          "width": 98,
+          "height": 40
+        },
+        {
+          "text": "Печать ШК товара",
+          "visible": true,
+          "left": 701,
+          "right": 733,
+          "top": 349,
+          "bottom": 382,
+          "width": 33,
+          "height": 33
+        },
+        {
+          "text": "Габариты",
+          "visible": true,
+          "left": 885,
+          "right": 925,
+          "top": 345,
+          "bottom": 385,
+          "width": 40,
+          "height": 40
+        },
+        {
+          "text": "Отмена",
+          "visible": true,
+          "left": 658,
+          "right": 734,
+          "top": 501,
+          "bottom": 541,
+          "width": 76,
+          "height": 40
+        },
+        {
+          "text": "Завершить приёмку",
+          "visible": true,
+          "left": 742,
+          "right": 932,
+          "top": 501,
+          "bottom": 541,
+          "width": 190,
+          "height": 40
+        }
+      ]
+    }
+  },
+  "print": {
+    "ordinary_waybill": {
+      "containsHtml": true,
+      "length": 1656,
+      "hasShortage": true,
+      "hasSku": true,
+      "hasSeller": true,
+      "rawNoise": {
+        "hasRequestId": false,
+        "hasWarehouseId": false,
+        "hasStatusWord": false
+      },
+      "sample": "<!doctype html>\n<html>\n  <head>\n    <meta charset=\"utf-8\" />\n    <title>Поставка №000001</title>\n    <style>\n      @page { margin: 12mm; }\n      body { font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif; font-size: 12px; color: #111; }\n      h1 { font-size: 18px; margin: 0 0 8px; }\n      h2 { font-size: 14px; margin: 16px 0 8px; }\n      .meta { display: grid; grid-template-columns: 1fr 1fr; gap: 6px 24px; margin-bottom: 16px; }\n      .meta dt { font-weight: 600; margin: 0; }\n      .meta dd { margin: 0 0 6px; }\n      table { width: 100%; border-collapse: collapse; }\n      th, td { border: 1px solid #ccc; padding: 6px 8px; text-align: left; }\n      th { background: #f5f5f5; }\n      .foot { margin-top: 24px; font-size: 11px; color: #555; }\n    </style>\n  </head>\n  <body>\n    <h1>Накладная — поставка на склад ФФ · №000001</h1>\n    <dl class=\"meta\">\n      <dt>Документ</dt><dd>Поставка №000001</dd>\n      <dt>Селлер</dt><dd>QA Seller final-inbound-1786666957465</dd>\n      <dt>Дата</dt><dd>—</dd>\n      <dt>Склад ФФ</dt><dd>QA WH final-inbound-1786666957465 (wh-final-inbound-1786666957465)</dd>\n      <dt>Короба (план / факт)</dt><dd>1 / 0</dd>\n    </dl>\n    <h2>Соста"
+    }
+  },
+  "data": {
+    "suffix": "final-inbound-1786666957465",
+    "adminEmail": "ff-admin-final-inbound-1786666957465@example.com",
+    "sellerEmail": "seller-final-inbound-1786666957465@example.com",
+    "sellerId": "bf7972ae-4d4a-4cd2-b3fe-ff577a9c9855",
+    "warehouseId": "52808613-6ac8-47cd-b7df-6e4688b3f504",
+    "locationId": "f0f9abb6-dfb6-4358-b809-83f56461fa20",
+    "ordinaryProductId": "eb6ea049-bc21-42a3-b81e-d856d45e62ba",
+    "returnProductId": "c4fdaa25-dd9b-4bc3-8c32-116897d5cf4f",
+    "ordinaryInboundId": "cfd99469-43f3-48b8-b5d9-c826c1ca768b",
+    "returnInboundId": "b456ca6e-0aae-498e-a0de-5d30920ffcae",
+    "ordinarySku": "sku-ordinary-final-inbound-1786666957465",
+    "ordinaryBarcode": "wb-ordinary-final-inbound-1786666957465",
+    "returnSku": "sku-return-final-inbound-1786666957465",
+    "returnBarcode": "wb-return-final-inbound-1786666957465"
+  },
+  "observations": [
+    "ordinary operation chip: Поставка",
+    "dimensions readback: 210×110×60 мм",
+    "ordinary scan increments fact: 1",
+    "ordinary manual fact readback: 3",
+    "discrepancy dialog shortage: Недостача 2",
+    "ordinary final status: В сортировке"
+  ],
+  "blockers": [],
+  "errors": [
+    "locator.waitFor: Timeout 20000ms exceeded.\nCall log:\n\u001b[2m  - waiting for getByTestId('ff-doc-dialog') to be hidden\u001b[22m\n\n    at /Users/deniscivkunov/Projects/WMS/.worktrees/product-operations-ux-20260812/frontend/[eval1]:194:43"
+  ]
+}

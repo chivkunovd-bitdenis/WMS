@@ -1,0 +1,6 @@
+{
+  "steps": [
+    "before-get"
+  ],
+  "error": "Error: Browser is not available: chrome\n    at su.get (/Users/deniscivkunov/.codex/plugins/cache/openai-bundled/browser/26.803.61601/scripts/browser-client.mjs:928:9698)\n    at process.processTicksAndRejections (node:internal/process/task_queues:104:5)\n    at async $f (/Users/deniscivkunov/.codex/plugins/cache/openai-bundled/browser/26.803.61601/scripts/browser-client.mjs:928:11801)\n    at async FP (/Users/deniscivkunov/.codex/plugins/cache/openai-bundled/browser/26.803.61601/scripts/browser-client.mjs:4095:6993)\n    at async /Users/deniscivkunov/.codex/plugins/cache/openai-bundled/browser/26.803.61601/scripts/browser-client.mjs:4095:7255\n    at async Object.WH [as withCommandTelemetry] (/Users/deniscivkunov/.codex/plugins/cache/openai-bundled/browser/26.803.61601/scripts/browser-client.mjs:4095:7231)\n    at async Jo.executeAgentCommand (/Users/deniscivkunov/.codex/plugins/cache/openai-bundled/browser/26.803.61601/scripts/browser-client.mjs:4095:1591)\n    at async Jo.send (/Users/deniscivkunov/.codex/plugins/cache/openai-bundled/browser/26.803.61601/scripts/browser-client.mjs:926:523)\n    at async yo.get (/Users/deniscivkunov/.codex/plugins/cache/openai-bundled/browser/26.803.61601/scripts/browser-client.mjs:911:214540)\n    at async /Users/deniscivkunov/Desktop/WMS/.node_repl_cell_9.mjs:33:23"
+}

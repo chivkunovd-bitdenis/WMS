@@ -1,6 +1,13 @@
-import { useCallback, useEffect, useState, type MouseEvent, type ReactNode } from 'react'
-import { Link as RouterLink, useLocation } from 'react-router-dom'
-import { MoreVertOutlined, PrintOutlined } from '@mui/icons-material'
+import {
+  useCallback,
+  useEffect,
+  useRef,
+  useState,
+  type MouseEvent,
+  type ReactNode,
+} from 'react'
+import { Link as RouterLink, useLocation, useNavigate, useParams } from 'react-router-dom'
+import { MoreVertOutlined, PrintOutlined, UndoOutlined } from '@mui/icons-material'
 import {
   Alert,
   Avatar,
@@ -8,7 +15,6 @@ import {
   Box,
   Button,
   Checkbox,
-  Chip,
   Dialog,
   DialogActions,
   DialogContent,
@@ -22,18 +28,17 @@ import {
   Paper,
   Select,
   Stack,
-  FormControlLabel,
   Table,
   TableBody,
   TableCell,
   TableContainer,
   TableHead,
   TableRow,
+  Tab,
+  Tabs,
   TextField,
   Typography,
 } from '@mui/material'
-import { FfProductLineCells, FfProductTableHeadCells } from '../../components/FfProductLineCells'
-import { ProductPhotoThumb } from '../../components/ProductPhotoThumb'
 import { useWbProductCatalog } from '../../hooks/useWbProductCatalog'
 import { apiUrl } from '../../api'
 import { fetchPendingMarking, pendingMarkingLineCount } from '../../utils/pendingMarkingApi'
@@ -47,6 +52,8 @@ import { formatHumanDocumentNumber } from './documentDisplay'
 export type PackagingTaskLine = {
   id: string
   product_id: string
+  seller_id?: string | null
+  seller_name?: string | null
   sku_code: string
   product_name: string
   storage_location_id: string
@@ -64,6 +71,23 @@ export type PackagingTaskLine = {
   is_complete: boolean
 }
 
+export type PackagingTaskEvent = {
+  id: string
+  event_sequence: number
+  action: string
+  line_id: string | null
+  product_id: string | null
+  product_name: string | null
+  storage_location_id: string | null
+  storage_location_code: string | null
+  quantity: number
+  note: string | null
+  created_by_user_id: string | null
+  created_by_user_email: string | null
+  created_at: string
+  reversed_at: string | null
+}
+
 export type PackagingTask = {
   id: string
   document_number: string | null
@@ -71,12 +95,21 @@ export type PackagingTask = {
   public_number?: string | null
   human_number?: string | null
   warehouse_id: string
+  warehouse_name?: string | null
+  warehouse_code?: string | null
+  seller_id?: string | null
+  seller_name?: string | null
   status: string
   marketplace_unload_request_id: string | null
   inbound_intake_request_id: string | null
   is_complete: boolean
   pick_resync_warning?: boolean
+  created_at?: string | null
+  updated_at?: string | null
+  completed_at?: string | null
+  completed_by_user_id?: string | null
   lines: PackagingTaskLine[]
+  events?: PackagingTaskEvent[]
 }
 
 type PackProgress = {
@@ -126,6 +159,56 @@ function statusLabel(status: string): string {
   return status
 }
 
+function locationLabel(code?: string | null): string {
+  if (!code) return '—'
+  return code === '__SORTING__' ? 'Сортировка' : code
+}
+
+function taskTotals(task: PackagingTask): { total: number; done: number; remaining: number } {
+  const total = task.lines.reduce((sum, line) => sum + line.qty_total, 0)
+  const done = task.lines.reduce((sum, line) => sum + line.qty_done, 0)
+  return { total, done, remaining: Math.max(0, total - done) }
+}
+
+function taskSellerLabel(task: PackagingTask): string {
+  return task.seller_name ?? task.lines[0]?.seller_name ?? 'Селлер не указан'
+}
+
+function taskPlaceLabel(task: PackagingTask): string {
+  const warehouse = task.warehouse_name ?? task.warehouse_code ?? 'Склад'
+  const cells = Array.from(new Set(task.lines.map((line) => locationLabel(line.storage_location_code))))
+  return `${warehouse} / ${cells.slice(0, 2).join(', ')}${cells.length > 2 ? ` +${cells.length - 2}` : ''}`
+}
+
+function taskProductSummary(task: PackagingTask): string {
+  const names = task.lines.map((line) => line.product_name || line.sku_code).slice(0, 2)
+  return `${names.join(', ')}${task.lines.length > 2 ? ` +${task.lines.length - 2}` : ''}`
+}
+
+function parseStrictPositiveInteger(raw: string): number | null {
+  const value = raw.trim()
+  if (!/^[1-9]\d*$/.test(value)) {
+    return null
+  }
+  return Number(value)
+}
+
+function sellerCountLabel(count: number): string {
+  const mod10 = count % 10
+  const mod100 = count % 100
+  if (mod10 === 1 && mod100 !== 11) {
+    return `${count} селлер`
+  }
+  if (mod10 >= 2 && mod10 <= 4 && (mod100 < 12 || mod100 > 14)) {
+    return `${count} селлера`
+  }
+  return `${count} селлеров`
+}
+
+function comparePackagingEventsAsc(a: PackagingTaskEvent, b: PackagingTaskEvent): number {
+  return a.event_sequence - b.event_sequence
+}
+
 /** Mirrors backend assert_packaging_line_marking_done (qty_done vs qty_marking_printed). */
 function isLineMarkingIncomplete(ln: PackagingTaskLine): boolean {
   if (!ln.requires_honest_sign) {
@@ -143,13 +226,23 @@ function isLineMarkingProgressIncomplete(ln: PackagingTaskLine): boolean {
 const MARKING_NOT_DONE_MESSAGE =
   'Не хватает напечатанных КМ по заданию на упаковку.'
 
+const PACKAGING_API_MESSAGES_RU: Record<string, string> = {
+  unknown_barcode: 'ШК не найден в этом задании. Проверьте товар и выбранное задание.',
+  line_already_packed: 'По этому товару всё уже упаковано.',
+  undo_not_available: 'Нет действия, которое можно отменить.',
+  undo_not_supported: 'Это действие нельзя отменить.',
+}
+
+async function readPackagingApiErrorMessage(res: Response): Promise<string> {
+  const message = await readApiErrorMessage(res)
+  return PACKAGING_API_MESSAGES_RU[message] ?? message
+}
+
 export function FfPackagingTaskPanel({
   token,
   task,
   unloadLabel,
   hideDocumentHeader = false,
-  compactLayout = false,
-  simplifiedQuantities = false,
   alwaysShowPrintAction = false,
   renderLineActions,
   printOnly = false,
@@ -160,7 +253,6 @@ export function FfPackagingTaskPanel({
   const { catalogById } = useWbProductCatalog(token)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
-  const [ackAllPacked, setAckAllPacked] = useState(false)
   const [defectDialogOpen, setDefectDialogOpen] = useState(false)
   const [defectLineId, setDefectLineId] = useState<string | null>(null)
   const [defectCodes, setDefectCodes] = useState<PrintedMarkingCode[]>([])
@@ -170,6 +262,12 @@ export function FfPackagingTaskPanel({
   const [defectDialogError, setDefectDialogError] = useState<string | null>(null)
   const [lineMenuAnchor, setLineMenuAnchor] = useState<null | HTMLElement>(null)
   const [lineMenuLine, setLineMenuLine] = useState<PackagingTaskLine | null>(null)
+  const [scannerValue, setScannerValue] = useState('')
+  const [scannerFeedback, setScannerFeedback] = useState<string | null>(null)
+  const [manualQtyByLine, setManualQtyByLine] = useState<Record<string, string>>({})
+  const [manualErrorByLine, setManualErrorByLine] = useState<Record<string, string>>({})
+  const [undoConfirmEvent, setUndoConfirmEvent] = useState<PackagingTaskEvent | null>(null)
+  const scannerRef = useRef<HTMLInputElement | null>(null)
   const { openPrint, dialog: markingPrintDialog } = useMarkingCodePrint()
 
   const authHeaders = {
@@ -179,6 +277,32 @@ export function FfPackagingTaskPanel({
 
   const productLabelForLine = (ln: PackagingTaskLine) =>
     displayMetaToProductLabel(productDisplayMetaFromCatalog(ln.product_id, ln, catalogById))
+
+  const lineBarcodeForScan = (ln: PackagingTaskLine) => {
+    const displayMeta = productDisplayMetaFromCatalog(ln.product_id, ln, catalogById)
+    return resolveProductPrimaryBarcode(displayMeta) || ln.sku_code
+  }
+
+  const lineRemaining = (ln: PackagingTaskLine) =>
+    Math.max(0, ln.qty_need_pack - ln.qty_packed_in_task)
+
+  const panelTotals = taskTotals(task)
+  const taskEditable = task.status !== 'done' && task.status !== 'cancelled'
+  const isMpUnloadTask = Boolean(task.marketplace_unload_request_id)
+  const orderedEvents = (task.events ?? []).slice().sort(comparePackagingEventsAsc)
+  const reversibleEvents = orderedEvents.filter(
+    (event) =>
+      (event.action === 'scan_pack' || event.action === 'manual_pack') &&
+      event.reversed_at === null,
+  )
+  const lastReversibleEvent = reversibleEvents[reversibleEvents.length - 1] ?? null
+  const canUndo = taskEditable && reversibleEvents.length > 0 && !printOnly
+
+  useEffect(() => {
+    if (taskEditable && !printOnly) {
+      scannerRef.current?.focus()
+    }
+  }, [task.id, taskEditable, printOnly])
 
   const refreshTask = async () => {
     const res = await fetch(apiUrl(`/operations/packaging-tasks/${task.id}`), { headers: authHeaders })
@@ -219,7 +343,7 @@ export function FfPackagingTaskPanel({
         { method: 'POST', headers: authHeaders, body: JSON.stringify({}) },
       )
       if (!res.ok) {
-        setError(await readApiErrorMessage(res))
+        setError(await readPackagingApiErrorMessage(res))
         return
       }
       onUpdated((await res.json()) as PackagingTask)
@@ -231,6 +355,7 @@ export function FfPackagingTaskPanel({
   const packQty = async (lineId: string, qty: number) => {
     setBusy(true)
     setError(null)
+    setScannerFeedback(null)
     try {
       const res = await fetch(
         apiUrl(`/operations/packaging-tasks/${task.id}/lines/${lineId}/pack`),
@@ -241,14 +366,109 @@ export function FfPackagingTaskPanel({
         },
       )
       if (!res.ok) {
-        setError(await readApiErrorMessage(res))
+        setError(await readPackagingApiErrorMessage(res))
         return
       }
       const progress = (await res.json()) as PackProgress
       onUpdated(progress.packaging_task)
+      const line = task.lines.find((ln) => ln.id === lineId)
+      setScannerFeedback(`Добавлено вручную: ${qty} шт${line ? ` · ${line.product_name}` : ''}`)
     } finally {
       setBusy(false)
+      window.setTimeout(() => scannerRef.current?.focus(), 0)
     }
+  }
+
+  const submitScanner = async () => {
+    const barcode = scannerValue.trim()
+    if (!barcode) {
+      setError('Отсканируйте ШК товара или введите количество больше 0')
+      scannerRef.current?.focus()
+      return
+    }
+    const packedBefore = new Map(task.lines.map((ln) => [ln.id, ln.qty_packed_in_task]))
+    setBusy(true)
+    setError(null)
+    setScannerFeedback(null)
+    try {
+      const res = await fetch(apiUrl(`/operations/packaging-tasks/${task.id}/scan`), {
+        method: 'POST',
+        headers: authHeaders,
+        body: JSON.stringify({ barcode }),
+      })
+      if (!res.ok) {
+        setError(await readPackagingApiErrorMessage(res))
+        return
+      }
+      const progress = (await res.json()) as PackProgress
+      onUpdated(progress.packaging_task)
+      setScannerValue('')
+      const changedLine = progress.packaging_task.lines.find(
+        (ln) => ln.qty_packed_in_task > (packedBefore.get(ln.id) ?? 0),
+      )
+      setScannerFeedback(`+1 упаковано${changedLine ? `: ${changedLine.product_name}` : ''}`)
+    } finally {
+      setBusy(false)
+      window.setTimeout(() => scannerRef.current?.focus(), 0)
+    }
+  }
+
+  const submitManualQty = async (ln: PackagingTaskLine) => {
+    const raw = (manualQtyByLine[ln.id] ?? '').trim()
+    const remaining = lineRemaining(ln)
+    let message: string | null = null
+    if (!raw || raw === '0') {
+      message = 'Введите количество больше 0'
+    } else if (parseStrictPositiveInteger(raw) === null) {
+      message = 'Введите целое число'
+    } else if (Number(raw) > remaining) {
+      message = 'По этому товару уже упаковано всё количество'
+    }
+    if (message) {
+      setManualErrorByLine((prev) => ({ ...prev, [ln.id]: message }))
+      return
+    }
+    setManualErrorByLine((prev) => ({ ...prev, [ln.id]: '' }))
+    await packQty(ln.id, Number(raw))
+    setManualQtyByLine((prev) => ({ ...prev, [ln.id]: '' }))
+  }
+
+  const performUndoLast = async (confirmedEvent: PackagingTaskEvent | null = lastReversibleEvent) => {
+    setUndoConfirmEvent(null)
+    setBusy(true)
+    setError(null)
+    setScannerFeedback(null)
+    try {
+      const res = await fetch(apiUrl(`/operations/packaging-tasks/${task.id}/undo-last`), {
+        method: 'POST',
+        headers: authHeaders,
+      })
+      if (!res.ok) {
+        setError(await readPackagingApiErrorMessage(res))
+        return
+      }
+      onUpdated((await res.json()) as PackagingTask)
+      const productLabel = confirmedEvent?.product_name ? ` · ${confirmedEvent.product_name}` : ''
+      setScannerFeedback(
+        confirmedEvent
+          ? `Отменено: ${confirmedEvent.quantity} шт${productLabel}`
+          : 'Последнее действие отменено',
+      )
+    } finally {
+      setBusy(false)
+      window.setTimeout(() => scannerRef.current?.focus(), 0)
+    }
+  }
+
+  const requestUndoLast = () => {
+    if (!lastReversibleEvent) {
+      return
+    }
+    if (lastReversibleEvent.action === 'manual_pack' && lastReversibleEvent.quantity > 1) {
+      setUndoConfirmEvent(lastReversibleEvent)
+      return
+    }
+    void performUndoLast(lastReversibleEvent)
   }
 
   const resetDefectDialog = () => {
@@ -276,7 +496,7 @@ export function FfPackagingTaskPanel({
         { headers: authHeaders },
       )
       if (!codesRes.ok) {
-        setError(await readApiErrorMessage(codesRes))
+        setError(await readPackagingApiErrorMessage(codesRes))
         return
       }
       const codes = ((await codesRes.json()) as { codes: PrintedMarkingCode[] }).codes
@@ -315,7 +535,7 @@ export function FfPackagingTaskPanel({
         },
       )
       if (!defectRes.ok) {
-        setDefectDialogError(await readApiErrorMessage(defectRes))
+        setDefectDialogError(await readPackagingApiErrorMessage(defectRes))
         return
       }
       await refreshTask()
@@ -337,7 +557,7 @@ export function FfPackagingTaskPanel({
         headers: authHeaders,
       })
       if (!res.ok) {
-        setError(await readApiErrorMessage(res))
+        setError(await readPackagingApiErrorMessage(res))
         return
       }
       onUpdated((await res.json()) as PackagingTask)
@@ -354,6 +574,11 @@ export function FfPackagingTaskPanel({
   )
 
   const completeTask = async () => {
+    if (panelTotals.remaining > 0) {
+      setError(`Сначала упакуйте все строки. Осталось ${panelTotals.remaining} шт.`)
+      scannerRef.current?.focus()
+      return
+    }
     if (hasIncompleteMarking) {
       setError(MARKING_NOT_DONE_MESSAGE)
       return
@@ -364,10 +589,10 @@ export function FfPackagingTaskPanel({
       const res = await fetch(apiUrl(`/operations/packaging-tasks/${task.id}/complete`), {
         method: 'POST',
         headers: authHeaders,
-        body: JSON.stringify({ acknowledge_all_packed: ackAllPacked }),
+        body: JSON.stringify({ acknowledge_all_packed: false }),
       })
       if (!res.ok) {
-        setError(await readApiErrorMessage(res))
+        setError(await readPackagingApiErrorMessage(res))
         return
       }
       onUpdated((await res.json()) as PackagingTask)
@@ -380,9 +605,6 @@ export function FfPackagingTaskPanel({
     !task.marketplace_unload_request_id &&
     task.status !== 'done' &&
     task.status !== 'cancelled'
-
-  const taskEditable = task.status !== 'done' && task.status !== 'cancelled'
-  const isMpUnloadTask = Boolean(task.marketplace_unload_request_id)
 
   const lineHasOverflowActions = (ln: PackagingTaskLine) =>
     ln.requires_honest_sign && ln.qty_marking_printed > 0
@@ -401,18 +623,20 @@ export function FfPackagingTaskPanel({
   const displayDocumentNumber = formatHumanDocumentNumber(task)
 
   return (
-    <Stack spacing={2} data-testid="ff-packaging-task-panel">
+    <Stack spacing={2} data-testid="ff-packaging-task-panel" sx={{ maxWidth: '100%', overflowX: 'hidden' }}>
       {hideDocumentHeader ? null : (
-        <Stack direction="row" spacing={1} sx={{ alignItems: 'flex-start', flexWrap: 'wrap' }}>
-          <Chip label={statusLabel(task.status)} size="small" data-testid="ff-packaging-task-status" />
+        <Stack direction="row" spacing={2} sx={{ alignItems: 'flex-start', flexWrap: 'wrap' }}>
           <Stack spacing={0.25} sx={{ minWidth: 0 }}>
             <Typography variant="subtitle1" sx={{ fontWeight: 700, lineHeight: 1.2 }}>
-              Упаковка
+              Задание {displayDocumentNumber ?? '—'}
+            </Typography>
+            <Typography variant="body2" color="text.secondary" data-testid="ff-packaging-task-status">
+              {statusLabel(task.status)}
             </Typography>
             {displayDocumentNumber ? (
               <Typography
-                variant="subtitle2"
-                sx={{ fontWeight: 700, lineHeight: 1.2 }}
+                variant="caption"
+                color="text.secondary"
                 data-testid="ff-packaging-document-number"
               >
                 {displayDocumentNumber}
@@ -446,317 +670,189 @@ export function FfPackagingTaskPanel({
           задании сохранено — проверьте строки.
         </Alert>
       ) : null}
-      {compactLayout ? (
-        <Stack spacing={1.5} data-testid="ff-packaging-lines-compact">
-          {task.lines.map((ln) => {
-            const displayMeta = productDisplayMetaFromCatalog(
-              ln.product_id,
-              ln,
-              catalogById,
-            );
-            const barcode =
-              resolveProductPrimaryBarcode(displayMeta) || ln.sku_code;
-            const markingProgressIncomplete =
-              isLineMarkingProgressIncomplete(ln);
-            return (
-              <Paper
-                key={ln.id}
-                variant="outlined"
-                data-testid={`ff-packaging-compact-line-${ln.id}`}
+      <Paper variant="outlined" sx={{ p: 2 }} data-testid="ff-packaging-work-context">
+        <Box
+          sx={{
+            display: 'grid',
+            gridTemplateColumns: { xs: '1fr', md: '1.2fr 1.4fr 0.8fr' },
+            gap: 1.5,
+            alignItems: 'center',
+          }}
+        >
+          <Box sx={{ minWidth: 0 }}>
+            <Typography variant="caption" color="text.secondary">Селлер</Typography>
+            <Typography variant="body2" sx={{ fontWeight: 700, overflowWrap: 'anywhere' }} data-testid="ff-packaging-task-seller">
+              {taskSellerLabel(task)}
+            </Typography>
+          </Box>
+          <Box sx={{ minWidth: 0 }}>
+            <Typography variant="caption" color="text.secondary">Склад / ячейка</Typography>
+            <Typography variant="body2" sx={{ fontWeight: 700, overflowWrap: 'anywhere' }} data-testid="ff-packaging-task-place">
+              {taskPlaceLabel(task)}
+            </Typography>
+          </Box>
+          <Box sx={{ minWidth: 0 }}>
+            <Typography variant="caption" color="text.secondary">Прогресс</Typography>
+            <Typography variant="body2" sx={{ fontWeight: 700 }} data-testid="ff-packaging-task-progress">
+              Готово {panelTotals.done} / Осталось {panelTotals.remaining}
+            </Typography>
+          </Box>
+        </Box>
+      </Paper>
+      {taskEditable && !printOnly ? (
+        <Paper variant="outlined" sx={{ p: 2 }} data-testid="ff-packaging-scanner-panel">
+          <Stack direction={{ xs: 'column', md: 'row' }} spacing={1.5} sx={{ alignItems: { xs: 'stretch', md: 'flex-start' } }}>
+            <TextField
+              inputRef={scannerRef}
+              label="Сканируйте ШК товара"
+              value={scannerValue}
+              onChange={(e) => setScannerValue(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') {
+                  e.preventDefault()
+                  void submitScanner()
+                }
+              }}
+              disabled={busy}
+              size="small"
+              fullWidth
+              data-testid="ff-packaging-scanner-field"
+              slotProps={{
+                htmlInput: {
+                  'data-testid': 'ff-packaging-scanner-input',
+                },
+              }}
+            />
+            <Button
+              variant="contained"
+              disabled={busy}
+              onClick={() => void submitScanner()}
+              data-testid="ff-packaging-scan-submit"
+              sx={{ minWidth: 120 }}
+            >
+              +1
+            </Button>
+            <Button
+              variant="outlined"
+              color="inherit"
+              startIcon={<UndoOutlined fontSize="small" />}
+              disabled={busy || !canUndo}
+              onClick={requestUndoLast}
+              data-testid="ff-packaging-undo-last"
+              sx={{ minWidth: 190 }}
+            >
+              Отменить последнее
+            </Button>
+          </Stack>
+          {scannerFeedback ? (
+            <Alert severity="success" sx={{ mt: 1.5 }} data-testid="ff-packaging-scan-feedback">
+              {scannerFeedback}
+            </Alert>
+          ) : null}
+        </Paper>
+      ) : null}
+      <Stack spacing={1.5} data-testid="ff-packaging-lines-compact">
+        {task.lines.map((ln) => {
+          const displayMeta = productDisplayMetaFromCatalog(ln.product_id, ln, catalogById)
+          const barcode = lineBarcodeForScan(ln)
+          const remaining = lineRemaining(ln)
+          const markingProgressIncomplete = isLineMarkingProgressIncomplete(ln)
+          const manualError = manualErrorByLine[ln.id]
+          return (
+            <Paper
+              key={ln.id}
+              variant="outlined"
+              data-testid={markingProgressIncomplete ? 'ff-packaging-line-marking-incomplete' : 'ff-packaging-line'}
+              sx={{ p: 1.5, bgcolor: markingProgressIncomplete ? 'warning.light' : 'background.paper' }}
+            >
+              <Box
                 sx={{
-                  p: 2,
-                  bgcolor: markingProgressIncomplete
-                    ? "warning.light"
-                    : "background.paper",
+                  display: 'grid',
+                  gridTemplateColumns: { xs: '1fr', md: 'minmax(300px, 1fr) minmax(220px, 0.7fr) minmax(260px, 0.8fr)' },
+                  gap: 1.5,
+                  alignItems: 'center',
                 }}
               >
-                <Stack
-                  direction={{ xs: "column", md: "row" }}
-                  spacing={2}
-                  sx={{ alignItems: { xs: "stretch", md: "center" } }}
-                >
-                  <Stack
-                    direction="row"
-                    spacing={1.5}
-                    sx={{ alignItems: "center", minWidth: 0, flex: 1 }}
-                  >
-                    <Avatar
-                      variant="rounded"
-                      src={displayMeta.wb_primary_image_url ?? undefined}
-                      alt={displayMeta.product_name}
-                      sx={{ width: 64, height: 64, flex: "0 0 auto" }}
-                    />
-                    <Box sx={{ minWidth: 0 }}>
-                      <Typography
-                        variant="subtitle1"
-                        sx={{ fontWeight: 700, overflowWrap: "anywhere" }}
-                        data-testid="ff-packaging-compact-product-name"
-                      >
-                        {displayMeta.product_name}
-                      </Typography>
-                      <Typography
-                        variant="body2"
-                        color="text.secondary"
-                        sx={{ overflowWrap: "anywhere" }}
-                      >
-                        Артикул: {displayMeta.sku_code} · ШК: {barcode}
-                      </Typography>
-                      <Typography
-                        variant="caption"
-                        color="text.secondary"
-                        sx={{ display: "block" }}
-                      >
-                        Артикул продавца: {displayMeta.wb_vendor_code ?? "—"} ·
-                        WB: {displayMeta.wb_nm_id ?? "—"}
-                      </Typography>
-                      <Chip
-                        size="small"
-                        label={`Ячейка ${ln.storage_location_code}`}
-                        sx={{ mt: 0.75 }}
-                      />
-                    </Box>
-                  </Stack>
-
-                  <Box
-                    sx={{
-                      display: "grid",
-                      gridTemplateColumns: "repeat(4, minmax(76px, 1fr))",
-                      gap: 1,
-                      minWidth: { md: 360 },
-                    }}
-                  >
-                    {[
-                      ["Всего", ln.qty_total],
-                      ["На полке", ln.qty_suggested_packed],
-                      ["Упаковать", ln.qty_need_pack],
-                      ["Готово", ln.qty_done],
-                    ].map(([label, value]) => (
-                      <Box key={String(label)} sx={{ textAlign: "center" }}>
-                        <Typography variant="caption" color="text.secondary">
-                          {label}
-                        </Typography>
-                        <Typography variant="h6" sx={{ lineHeight: 1.2 }}>
-                          {value}
-                        </Typography>
-                      </Box>
-                    ))}
+                <Stack direction="row" spacing={1.25} sx={{ minWidth: 0, alignItems: 'center' }}>
+                  <Avatar
+                    variant="rounded"
+                    src={displayMeta.wb_primary_image_url ?? undefined}
+                    alt={displayMeta.product_name}
+                    sx={{ width: 56, height: 56, flex: '0 0 auto' }}
+                  />
+                  <Box sx={{ minWidth: 0 }}>
+                    <Typography variant="body2" sx={{ fontWeight: 700, overflowWrap: 'anywhere' }} data-testid="ff-packaging-compact-product-name">
+                      {displayMeta.product_name}
+                    </Typography>
+                    <Typography variant="caption" color="text.secondary" sx={{ display: 'block', overflowWrap: 'anywhere' }}>
+                      SKU: {displayMeta.sku_code} · ШК: {barcode}
+                    </Typography>
+                    <Typography variant="caption" color="text.secondary" sx={{ display: 'block', overflowWrap: 'anywhere' }}>
+                      Селлер: {ln.seller_name ?? displayMeta.seller_name ?? '—'} · Ячейка: {locationLabel(ln.storage_location_code)}
+                    </Typography>
                   </Box>
-
-                  <Stack
-                    spacing={1}
-                    sx={{
-                      alignItems: { xs: "stretch", md: "flex-end" },
-                      minWidth: { md: 170 },
-                    }}
-                  >
-                    {ln.requires_honest_sign ? (
-                      <Chip
-                        size="small"
-                        color={
-                          markingProgressIncomplete ? "warning" : "success"
-                        }
-                        label={`ЧЗ ${ln.qty_marking_printed}/${ln.qty_need_pack}`}
-                      />
-                    ) : (
-                    <Chip
-                      size="small"
-                      variant="outlined"
-                      label="ЧЗ не требуется"
-                    />
+                </Stack>
+                <Stack spacing={0.5} sx={{ minWidth: 0 }}>
+                  <Typography variant="body2" sx={{ fontWeight: 700 }} data-testid={`ff-packaging-line-progress-${ln.id}`}>
+                    Готово {ln.qty_done} / Осталось {remaining} / Всего {ln.qty_total}
+                  </Typography>
+                  <Typography variant="caption" color="text.secondary" sx={{ overflowWrap: 'anywhere' }} data-testid="ff-packaging-instructions">
+                    ТЗ: {ln.packaging_instructions?.trim() || 'не задано'}
+                  </Typography>
+                  {ln.requires_honest_sign ? (
+                    <Typography variant="caption" color={markingProgressIncomplete ? 'warning.dark' : 'success.main'} data-testid={`ff-packaging-marking-progress-${ln.id}`}>
+                      ЧЗ: напечатано {ln.qty_marking_printed} / нужно {ln.qty_need_pack}; в пуле {ln.marking_available_count}
+                    </Typography>
+                  ) : (
+                    <Typography variant="caption" color="text.secondary">ЧЗ не требуется</Typography>
                   )}
-                  <Stack
-                    direction="row"
-                    spacing={0.5}
-                    sx={{ justifyContent: "flex-end", flexWrap: "wrap" }}
-                  >
-                    {ln.requires_honest_sign &&
-                    !isMpUnloadTask &&
-                    ln.qty_need_pack > 0 &&
-                    ln.qty_marking_printed < 1 ? (
+                </Stack>
+                <Stack spacing={1} sx={{ alignItems: { xs: 'stretch', md: 'flex-end' } }}>
+                  {taskEditable && !printOnly ? (
+                    <Stack direction="row" spacing={0.75} sx={{ justifyContent: { xs: 'flex-start', md: 'flex-end' }, flexWrap: 'wrap' }}>
+                      <TextField
+                        size="small"
+                        label="+N"
+                        value={manualQtyByLine[ln.id] ?? ''}
+                        error={Boolean(manualError)}
+                        helperText={manualError || ' '}
+                        onChange={(e) => {
+                          setManualQtyByLine((prev) => ({ ...prev, [ln.id]: e.target.value }))
+                          setManualErrorByLine((prev) => ({ ...prev, [ln.id]: '' }))
+                        }}
+                        disabled={busy || remaining < 1}
+                        slotProps={{
+                          htmlInput: {
+                            inputMode: 'numeric',
+                            'data-testid': `ff-packaging-manual-qty-${ln.id}`,
+                          },
+                        }}
+                        sx={{ width: 92 }}
+                      />
                       <Button
                         size="small"
                         variant="outlined"
-                        disabled={busy || ln.marking_available_count < 1}
-                        onClick={() => openLinePrint(ln)}
-                        data-testid="ff-packaging-print-marking"
+                        disabled={busy || remaining < 1}
+                        onClick={() => void submitManualQty(ln)}
+                        data-testid="ff-packaging-pack-btn"
+                        sx={{ minWidth: 64, alignSelf: 'flex-start' }}
                       >
-                        Печать ЧЗ
+                        +N
                       </Button>
-                    ) : null}
-                    {lineHasOverflowActions(ln) ? (
+                    </Stack>
+                  ) : null}
+                  <Stack direction="row" spacing={0.5} sx={{ justifyContent: { xs: 'flex-start', md: 'flex-end' }, flexWrap: 'wrap' }}>
+                    {!hidePrintActions && (alwaysShowPrintAction || printOnly || ln.requires_honest_sign || isMpUnloadTask) ? (
                       <IconButton
                         size="small"
-                        aria-label="Дополнительные действия"
-                        disabled={busy}
-                        onClick={(e) => openLineMenu(e, ln)}
-                        data-testid={`ff-packaging-line-menu-btn-${ln.id}`}
+                        aria-label={`Печать товара ${displayMeta.product_name}`}
+                        onClick={() => openLinePrint(ln)}
+                        data-testid={`ff-packaging-line-print-${ln.id}`}
                       >
-                        <MoreVertOutlined fontSize="small" />
+                        <PrintOutlined fontSize="small" />
                       </IconButton>
                     ) : null}
-                    {!isMpUnloadTask &&
-                    ln.qty_confirmed_packed < ln.qty_suggested_packed ? (
-                      <Button
-                        size="small"
-                        disabled={
-                          busy || !taskEditable || ln.qty_suggested_packed < 1
-                        }
-                        onClick={() => void confirmPacked(ln.id)}
-                        data-testid="ff-packaging-confirm-shelf"
-                      >
-                        Подтвердить с полки
-                      </Button>
-                    ) : null}
-                    {ln.qty_packed_in_task < ln.qty_need_pack ? (
-                      <Button
-                        size="small"
-                        variant="contained"
-                        disabled={busy || !taskEditable}
-                        onClick={() =>
-                          void packQty(
-                            ln.id,
-                            ln.qty_need_pack - ln.qty_packed_in_task,
-                          )
-                        }
-                        data-testid="ff-packaging-pack-btn"
-                      >
-                        Упаковать
-                      </Button>
-                    ) : null}
-                    {renderLineActions?.(ln)}
-                  </Stack>
-                </Stack>
-              </Stack>
-            </Paper>
-          );
-        })}
-      </Stack>
-    ) : (
-      <TableContainer component={Paper} variant="outlined" sx={{ width: '100%', overflowX: 'auto' }}>
-        <Table
-          size="small"
-          sx={{
-            tableLayout: 'fixed',
-            width: '100%',
-            minWidth: simplifiedQuantities ? 1040 : 1450,
-            '& th': { py: 1.25 },
-            '& td': { py: 1.25 },
-          }}
-        >
-          <TableHead>
-            <TableRow>
-              {simplifiedQuantities ? (
-                <>
-                  <TableCell sx={{ width: 64 }}>Фото</TableCell>
-                  <TableCell>Товар и идентификаторы</TableCell>
-                  <TableCell align="center" sx={{ width: 72 }}>Печать</TableCell>
-                </>
-              ) : (
-                <FfProductTableHeadCells
-                  nameLabel={isMpUnloadTask ? 'Наименование' : 'Наименование / ячейка'}
-                />
-              )}
-              {simplifiedQuantities ? (
-                <TableCell align="right">Количество</TableCell>
-              ) : (
-                <>
-                  <TableCell align="right">Всего</TableCell>
-                  {!isMpUnloadTask ? (
-                    <TableCell align="right">На полке упак.</TableCell>
-                  ) : null}
-                  <TableCell align="right">Упаковать</TableCell>
-                  <TableCell align="right">Готово</TableCell>
-                </>
-              )}
-              <TableCell align="right">ЧЗ</TableCell>
-              <TableCell align="right">Действия</TableCell>
-            </TableRow>
-          </TableHead>
-          <TableBody>
-            {task.lines.map((ln) => {
-              const displayMeta = productDisplayMetaFromCatalog(ln.product_id, ln, catalogById)
-              const primaryBarcode = resolveProductPrimaryBarcode(displayMeta) || ln.sku_code
-              const markingProgressIncomplete = isLineMarkingProgressIncomplete(ln)
-              return (
-              <TableRow
-                key={ln.id}
-                data-testid={
-                  markingProgressIncomplete
-                    ? 'ff-packaging-line-marking-incomplete'
-                    : 'ff-packaging-line'
-                }
-                sx={
-                  markingProgressIncomplete && !simplifiedQuantities
-                    ? {
-                        bgcolor: 'warning.light',
-                        '&:hover': { bgcolor: 'warning.light' },
-                      }
-                    : undefined
-                }
-              >
-                {simplifiedQuantities ? (
-                  <>
-                    <TableCell><ProductPhotoThumb src={displayMeta.wb_primary_image_url} alt={displayMeta.product_name} size={48} previewSize={300} /></TableCell>
-                    <TableCell><Typography variant="body2" sx={{ fontWeight: 700 }}>{displayMeta.product_name}</Typography><Typography variant="caption" color="text.secondary" sx={{ display: 'block' }}>Артикул: {displayMeta.sku_code} · ШК: {primaryBarcode}</Typography><Typography variant="caption" color="text.secondary" sx={{ display: 'block' }}>Артикул продавца: {displayMeta.wb_vendor_code ?? '—'} · WB: {displayMeta.wb_nm_id ?? '—'} · Ячейка: {ln.storage_location_code}</Typography></TableCell>
-                    <TableCell align="center">{!hidePrintActions && (alwaysShowPrintAction || printOnly || ln.requires_honest_sign || isMpUnloadTask) ? <IconButton size="small" aria-label={`Печать товара ${displayMeta.product_name}`} onClick={() => openLinePrint(ln)} data-testid={`ff-packaging-line-print-${ln.id}`}><PrintOutlined fontSize="small" /></IconButton> : null}</TableCell>
-                  </>
-                ) : (
-                  <FfProductLineCells
-                    meta={{
-                      ...displayMeta,
-                      product_name: isMpUnloadTask
-                        ? displayMeta.product_name
-                        : `${displayMeta.product_name} · ${ln.storage_location_code}`,
-                    }}
-                    printTestId={`ff-packaging-line-print-${ln.id}`}
-                    onPrintClick={
-                      !hidePrintActions && (alwaysShowPrintAction || printOnly || ln.requires_honest_sign || isMpUnloadTask)
-                        ? () => openLinePrint(ln)
-                        : undefined
-                    }
-                  />
-                )}
-                {simplifiedQuantities ? (
-                  <TableCell align="right">
-                    <Typography variant="body2" sx={{ fontWeight: 700 }}>{ln.qty_need_pack}</Typography>
-                    <Typography variant="caption" color="text.secondary">упаковано {ln.qty_done}</Typography>
-                  </TableCell>
-                ) : (
-                  <>
-                    <TableCell align="right">{ln.qty_total}</TableCell>
-                    {!isMpUnloadTask ? (
-                      <TableCell align="right">{ln.qty_suggested_packed}</TableCell>
-                    ) : null}
-                    <TableCell align="right">{ln.qty_need_pack}</TableCell>
-                    <TableCell align="right">{ln.qty_done}</TableCell>
-                  </>
-                )}
-                <TableCell align="right">
-                  {ln.requires_honest_sign ? (
-                    <Stack spacing={0.25} sx={{ alignItems: 'flex-end' }}>
-                      <Typography
-                        variant="body2"
-                        data-testid={`ff-packaging-marking-progress-${ln.id}`}
-                      >
-                        напечатано {ln.qty_marking_printed} / нужно {ln.qty_need_pack}
-                      </Typography>
-                      {!simplifiedQuantities ? (
-                        <Typography
-                          variant="caption"
-                          color="text.secondary"
-                          data-testid={`ff-packaging-marking-pool-${ln.id}`}
-                        >
-                          дост. {ln.marking_available_count} в пуле
-                        </Typography>
-                      ) : null}
-                    </Stack>
-                  ) : (
-                    '—'
-                  )}
-                </TableCell>
-                <TableCell align="right">
-                  <Stack direction="row" spacing={0.5} sx={{ justifyContent: 'flex-end', flexWrap: 'wrap' }}>
-                    {!hidePrintActions && !simplifiedQuantities && ln.requires_honest_sign && !isMpUnloadTask && ln.qty_need_pack > 0 && ln.qty_marking_printed < 1 ? (
+                    {!hidePrintActions && ln.requires_honest_sign && !isMpUnloadTask && ln.qty_need_pack > 0 && ln.qty_marking_printed < 1 ? (
                       <Button
                         size="small"
                         variant="outlined"
@@ -785,29 +881,17 @@ export function FfPackagingTaskPanel({
                         onClick={() => void confirmPacked(ln.id)}
                         data-testid="ff-packaging-confirm-shelf"
                       >
-                        Подтвердить с полки
-                      </Button>
-                    ) : null}
-                    {ln.qty_packed_in_task < ln.qty_need_pack ? (
-                      <Button
-                        size="small"
-                        variant="contained"
-                        disabled={busy || !taskEditable}
-                        onClick={() => void packQty(ln.id, ln.qty_need_pack - ln.qty_packed_in_task)}
-                        data-testid="ff-packaging-pack-btn"
-                      >
-                        Упаковать
+                        С полки
                       </Button>
                     ) : null}
                     {renderLineActions?.(ln)}
                   </Stack>
-                </TableCell>
-              </TableRow>
-            )})}
-          </TableBody>
-        </Table>
-      </TableContainer>
-      )}
+                </Stack>
+              </Box>
+            </Paper>
+          )
+        })}
+      </Stack>
       {taskEditable ? (
         <Paper variant="outlined" sx={{ p: 2 }} data-testid="ff-packaging-complete-panel">
           <Stack spacing={1.5}>
@@ -827,26 +911,13 @@ export function FfPackagingTaskPanel({
                 ))}
               </Alert>
             ) : null}
-            {!compactLayout && !simplifiedQuantities ? (
-              <FormControlLabel
-                control={
-                  <Checkbox
-                    checked={ackAllPacked}
-                    disabled={busy}
-                    onChange={(e) => setAckAllPacked(e.target.checked)}
-                    data-testid="ff-packaging-ack-all-packed"
-                  />
-                }
-                label="Весь товар уже упакован"
-              />
-            ) : null}
             <Button
               variant="contained"
               color="success"
               disabled={
                 busy ||
                 hasIncompleteMarking ||
-                ((compactLayout || simplifiedQuantities) && hasIncompletePacking)
+                hasIncompletePacking
               }
               onClick={() => void completeTask()}
               data-testid="ff-packaging-complete"
@@ -856,6 +927,67 @@ export function FfPackagingTaskPanel({
           </Stack>
         </Paper>
       ) : null}
+      {(task.events ?? []).length > 0 ? (
+        <Paper variant="outlined" sx={{ p: 2 }} data-testid="ff-packaging-history">
+          <Stack spacing={0.75}>
+            <Typography variant="subtitle2" sx={{ fontWeight: 700 }}>
+              История
+            </Typography>
+            {orderedEvents.slice().reverse().slice(0, 8).map((event) => (
+              <Typography key={event.id} variant="body2" color="text.secondary" sx={{ overflowWrap: 'anywhere' }}>
+                {event.action === 'scan_pack'
+                  ? '+1 скан'
+                  : event.action === 'manual_pack'
+                    ? `+${event.quantity} вручную`
+                    : event.action === 'undo_last'
+                      ? `Отмена ${event.quantity} шт`
+                      : event.action === 'complete'
+                        ? 'Задание выполнено'
+                        : event.action === 'cancel'
+                          ? 'Задание отменено'
+                          : event.action}{' '}
+                · {event.product_name ?? 'задание'} · {event.created_by_user_email ?? 'оператор'} ·{' '}
+                {new Date(event.created_at).toLocaleString('ru-RU')}
+              </Typography>
+            ))}
+          </Stack>
+        </Paper>
+      ) : null}
+      <Dialog
+        open={Boolean(undoConfirmEvent)}
+        onClose={busy ? undefined : () => setUndoConfirmEvent(null)}
+        maxWidth="xs"
+        fullWidth
+        data-testid="ff-packaging-undo-confirm-dialog"
+      >
+        <DialogTitle>Отменить ручное добавление?</DialogTitle>
+        <DialogContent>
+          <Typography variant="body2" data-testid="ff-packaging-undo-confirm-message">
+            Из задания будет снято {undoConfirmEvent?.quantity ?? 0} шт
+            {undoConfirmEvent?.product_name ? ` · ${undoConfirmEvent.product_name}` : ''}.
+            Количество вернётся в «Осталось». Подтвердите только если оператор добавил
+            количество ошибочно.
+          </Typography>
+        </DialogContent>
+        <DialogActions>
+          <Button
+            onClick={() => setUndoConfirmEvent(null)}
+            disabled={busy}
+            data-testid="ff-packaging-undo-confirm-cancel"
+          >
+            Не отменять
+          </Button>
+          <Button
+            color="error"
+            variant="contained"
+            disabled={busy}
+            onClick={() => void performUndoLast(undoConfirmEvent)}
+            data-testid="ff-packaging-undo-confirm-submit"
+          >
+            Отменить +{undoConfirmEvent?.quantity ?? 0}
+          </Button>
+        </DialogActions>
+      </Dialog>
       {markingPrintDialog}
       <Menu
         anchorEl={lineMenuAnchor}
@@ -983,6 +1115,10 @@ type SortingBalanceRow = {
   product_id: string
   sku_code: string
   product_name: string
+  seller_id?: string | null
+  seller_name?: string | null
+  packaging_instructions?: string | null
+  requires_honest_sign?: boolean
   quantity_unpacked: number
 }
 
@@ -994,6 +1130,8 @@ type CreateDialogProps = {
 }
 
 type LocationRow = { id: string; code: string; barcode: string }
+
+type PackagingTaskStatusFilter = 'open' | 'done' | 'cancelled'
 
 function FfCreatePackagingTaskDialog({ open, token, onClose, onCreated }: CreateDialogProps) {
   const { catalogById } = useWbProductCatalog(token, open)
@@ -1030,9 +1168,6 @@ function FfCreatePackagingTaskDialog({ open, token, onClose, onCreated }: Create
       }
       const list = (await res.json()) as WarehouseRow[]
       setWarehouses(list)
-      if (list.length === 1) {
-        setWarehouseId(list[0]!.id)
-      }
     })()
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, token])
@@ -1042,6 +1177,8 @@ function FfCreatePackagingTaskDialog({ open, token, onClose, onCreated }: Create
       setLocations([])
       setLocationId('')
       setRows([])
+      setSelected({})
+      setQtyByProduct({})
       return
     }
     void (async () => {
@@ -1059,8 +1196,10 @@ function FfCreatePackagingTaskDialog({ open, token, onClose, onCreated }: Create
         return a.code.localeCompare(b.code)
       })
       setLocations(sorted)
-      const defaultLoc = sorted.find((l) => l.code === '__SORTING__') ?? sorted[0]
-      setLocationId(defaultLoc?.id ?? '')
+      setLocationId('')
+      setRows([])
+      setSelected({})
+      setQtyByProduct({})
     })()
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, warehouseId, token])
@@ -1068,6 +1207,8 @@ function FfCreatePackagingTaskDialog({ open, token, onClose, onCreated }: Create
   useEffect(() => {
     if (!open || !locationId) {
       setRows([])
+      setSelected({})
+      setQtyByProduct({})
       return
     }
     void (async () => {
@@ -1082,31 +1223,62 @@ function FfCreatePackagingTaskDialog({ open, token, onClose, onCreated }: Create
       const balances = (await balRes.json()) as SortingBalanceRow[]
       const unpacked = balances.filter((b) => b.quantity_unpacked > 0)
       setRows(unpacked)
-      const sel: Record<string, boolean> = {}
       const qty: Record<string, string> = {}
       for (const b of unpacked) {
-        sel[b.product_id] = true
         qty[b.product_id] = String(b.quantity_unpacked)
       }
-      setSelected(sel)
+      setSelected({})
       setQtyByProduct(qty)
     })()
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, locationId, token])
 
+  const selectedRows = rows.filter((row) => selected[row.product_id])
+  const selectedSellerKeys = Array.from(
+    new Set(selectedRows.map((row) => row.seller_id ?? '__NO_SELLER__')),
+  )
+  const selectedSellerCount = selectedSellerKeys.length
+  const hasMixedSellerSelection = selectedSellerKeys.length > 1
+  const selectedQtyTotal = selectedRows.reduce((sum, row) => {
+    const parsed = parseStrictPositiveInteger(qtyByProduct[row.product_id] ?? '')
+    return sum + (parsed ?? 0)
+  }, 0)
+  const selectedRowErrors = new Map<string, string>()
+  for (const row of selectedRows) {
+    const raw = qtyByProduct[row.product_id] ?? ''
+    const parsed = parseStrictPositiveInteger(raw)
+    if (parsed === null) {
+      selectedRowErrors.set(row.product_id, 'Введите целое число')
+    } else if (parsed > row.quantity_unpacked) {
+      selectedRowErrors.set(row.product_id, 'Нельзя больше остатка')
+    }
+  }
+  const createBlocked =
+    busy ||
+    !warehouseId ||
+    !locationId ||
+    selectedRows.length < 1 ||
+    hasMixedSellerSelection ||
+    selectedRowErrors.size > 0
+
   const submit = async () => {
-    const lines = rows
-      .filter((r) => selected[r.product_id])
-      .map((r) => ({
-        product_id: r.product_id,
-        storage_location_id: locationId,
-        quantity: Math.floor(Number(qtyByProduct[r.product_id] ?? '0')),
-      }))
-      .filter((ln) => ln.quantity >= 1)
-    if (!warehouseId || !locationId || lines.length === 0) {
-      setError('Выберите склад, место и хотя бы один товар с количеством ≥ 1.')
+    if (!warehouseId || !locationId || selectedRows.length === 0) {
+      setError('Выберите склад, место и хотя бы один товар с количеством больше 0.')
       return
     }
+    if (hasMixedSellerSelection) {
+      setError('Нельзя создать одно задание для разных селлеров. Выберите товары одного селлера.')
+      return
+    }
+    if (selectedRowErrors.size > 0) {
+      setError('Проверьте количество: нужно целое число от 1 до доступного остатка.')
+      return
+    }
+    const lines = selectedRows.map((r) => ({
+      product_id: r.product_id,
+      storage_location_id: locationId,
+      quantity: parseStrictPositiveInteger(qtyByProduct[r.product_id] ?? '') ?? 0,
+    }))
     setBusy(true)
     setError(null)
     try {
@@ -1116,7 +1288,7 @@ function FfCreatePackagingTaskDialog({ open, token, onClose, onCreated }: Create
         body: JSON.stringify({ warehouse_id: warehouseId, lines }),
       })
       if (!res.ok) {
-        setError(await readApiErrorMessage(res))
+        setError(await readPackagingApiErrorMessage(res))
         return
       }
       onCreated((await res.json()) as PackagingTask)
@@ -1126,16 +1298,22 @@ function FfCreatePackagingTaskDialog({ open, token, onClose, onCreated }: Create
     }
   }
 
-  const locationLabel = (loc: LocationRow) =>
-    loc.code === '__SORTING__' ? 'Сортировка' : loc.code
-
   return (
     <Dialog
       open={open}
       onClose={onClose}
       fullWidth
       maxWidth={false}
-      slotProps={{ paper: { sx: { width: 'min(1200px, 96vw)', maxHeight: '92vh' } } }}
+      slotProps={{
+        paper: {
+          sx: {
+            width: 'min(1120px, calc(100vw - 64px))',
+            maxWidth: 'calc(100vw - 64px)',
+            maxHeight: '92vh',
+            boxSizing: 'border-box',
+          },
+        },
+      }}
       data-testid="ff-packaging-create-dialog"
     >
       <DialogTitle>Создать задание на упаковку</DialogTitle>
@@ -1170,7 +1348,7 @@ function FfCreatePackagingTaskDialog({ open, token, onClose, onCreated }: Create
               >
                 {locations.map((loc) => (
                   <MenuItem key={loc.id} value={loc.id}>
-                    {locationLabel(loc)}
+                    {locationLabel(loc.code)}
                   </MenuItem>
                 ))}
               </Select>
@@ -1178,8 +1356,15 @@ function FfCreatePackagingTaskDialog({ open, token, onClose, onCreated }: Create
           ) : null}
           {warehouseId && locationId && rows.length === 0 ? (
             <Typography variant="body2" color="text.secondary" data-testid="ff-packaging-create-empty">
-              В выбранном месте нет неупакованного товара.
+              В этой ячейке нет товара для упаковки.
             </Typography>
+          ) : null}
+          {rows.length > 0 ? (
+            <Alert severity={hasMixedSellerSelection ? 'error' : 'info'} data-testid="ff-packaging-create-summary">
+              {hasMixedSellerSelection
+                ? 'Нельзя создать одно задание для разных селлеров. Выберите товары одного селлера.'
+                : `Выбрано ${selectedRows.length} строк / ${selectedQtyTotal} шт. / ${sellerCountLabel(selectedSellerCount)}`}
+            </Alert>
           ) : null}
           {rows.length > 0 ? (
             <TableContainer component={Paper} variant="outlined" sx={{ width: '100%', overflowX: 'hidden' }}>
@@ -1195,12 +1380,12 @@ function FfCreatePackagingTaskDialog({ open, token, onClose, onCreated }: Create
               >
                 <TableHead>
                   <TableRow>
-                    <TableCell padding="checkbox" sx={{ width: 48 }} />
-                    <FfProductTableHeadCells />
-                    <TableCell align="right" sx={{ width: 120 }}>
+                    <TableCell padding="checkbox" sx={{ width: 44 }} />
+                    <TableCell>Товар / селлер / ТЗ</TableCell>
+                    <TableCell align="right" sx={{ width: 104 }}>
                       Неупаковано
                     </TableCell>
-                    <TableCell align="right" sx={{ width: 120 }}>
+                    <TableCell align="right" sx={{ width: 112 }}>
                       В задание
                     </TableCell>
                   </TableRow>
@@ -1208,44 +1393,68 @@ function FfCreatePackagingTaskDialog({ open, token, onClose, onCreated }: Create
                 <TableBody>
                   {rows.map((r) => {
                     const displayMeta = productDisplayMetaFromCatalog(r.product_id, r, catalogById)
+                    const primaryBarcode = resolveProductPrimaryBarcode(displayMeta) || r.sku_code
                     return (
-                    <TableRow key={r.product_id} data-testid="ff-packaging-create-row">
-                      <TableCell padding="checkbox">
-                        <Checkbox
-                          checked={Boolean(selected[r.product_id])}
-                          onChange={(e) =>
-                            setSelected((prev) => ({ ...prev, [r.product_id]: e.target.checked }))
-                          }
-                        />
-                      </TableCell>
-                      <FfProductLineCells
-                        meta={displayMeta}
-                        printTestId={`ff-packaging-create-print-${r.product_id}`}
-                      />
-                      <TableCell align="right">{r.quantity_unpacked}</TableCell>
-                      <TableCell align="right">
-                        <TextField
-                          size="small"
-                          type="number"
-                          value={qtyByProduct[r.product_id] ?? ''}
-                          onChange={(e) =>
-                            setQtyByProduct((prev) => ({
-                              ...prev,
-                              [r.product_id]: e.target.value,
-                            }))
-                          }
-                          slotProps={{
-                            htmlInput: {
-                              min: 1,
-                              max: r.quantity_unpacked,
-                              'data-testid': `ff-packaging-create-qty-${r.product_id}`,
-                            },
-                          }}
-                          sx={{ width: 88 }}
-                        />
-                      </TableCell>
-                    </TableRow>
-                  )})}
+                      <TableRow key={r.product_id} data-testid="ff-packaging-create-row">
+                        <TableCell padding="checkbox">
+                          <Checkbox
+                            checked={Boolean(selected[r.product_id])}
+                            onChange={(e) =>
+                              setSelected((prev) => ({ ...prev, [r.product_id]: e.target.checked }))
+                            }
+                            data-testid={`ff-packaging-create-row-select-${r.product_id}`}
+                          />
+                        </TableCell>
+                        <TableCell sx={{ minWidth: 0 }}>
+                          <Stack direction="row" spacing={1.25} sx={{ alignItems: 'flex-start', minWidth: 0 }}>
+                            <Avatar
+                              variant="rounded"
+                              src={displayMeta.wb_primary_image_url ?? undefined}
+                              alt={displayMeta.product_name}
+                              sx={{ width: 42, height: 42, flex: '0 0 auto' }}
+                            />
+                            <Box sx={{ minWidth: 0 }}>
+                              <Typography variant="body2" sx={{ fontWeight: 700, overflowWrap: 'anywhere' }}>
+                                {displayMeta.product_name}
+                              </Typography>
+                              <Typography variant="caption" color="text.secondary" sx={{ display: 'block', overflowWrap: 'anywhere' }}>
+                                SKU: {displayMeta.sku_code} · ШК: {primaryBarcode}
+                                {displayMeta.wb_nm_id ? ` · WB: ${displayMeta.wb_nm_id}` : ''}
+                              </Typography>
+                              <Typography variant="caption" color="text.secondary" sx={{ display: 'block', overflowWrap: 'anywhere' }}>
+                                Селлер: {r.seller_name ?? displayMeta.seller_name ?? '—'}
+                              </Typography>
+                              <Typography variant="caption" color="text.secondary" sx={{ display: 'block', overflowWrap: 'anywhere' }}>
+                                ТЗ: {r.packaging_instructions?.trim() || 'не задано'}
+                              </Typography>
+                            </Box>
+                          </Stack>
+                        </TableCell>
+                        <TableCell align="right">{r.quantity_unpacked}</TableCell>
+                        <TableCell align="right">
+                          <TextField
+                            size="small"
+                            value={qtyByProduct[r.product_id] ?? ''}
+                            error={selectedRowErrors.has(r.product_id)}
+                            helperText={selectedRowErrors.get(r.product_id) ?? ' '}
+                            onChange={(e) =>
+                              setQtyByProduct((prev) => ({
+                                ...prev,
+                                [r.product_id]: e.target.value,
+                              }))
+                            }
+                            slotProps={{
+                              htmlInput: {
+                                inputMode: 'numeric',
+                                'data-testid': `ff-packaging-create-qty-${r.product_id}`,
+                              },
+                            }}
+                            sx={{ width: 84 }}
+                          />
+                        </TableCell>
+                      </TableRow>
+                    )
+                  })}
                 </TableBody>
               </Table>
             </TableContainer>
@@ -1258,7 +1467,7 @@ function FfCreatePackagingTaskDialog({ open, token, onClose, onCreated }: Create
         </Button>
         <Button
           variant="contained"
-          disabled={busy || !warehouseId || rows.length === 0}
+          disabled={createBlocked}
           onClick={() => void submit()}
           data-testid="ff-packaging-create-submit"
         >
@@ -1271,11 +1480,15 @@ function FfCreatePackagingTaskDialog({ open, token, onClose, onCreated }: Create
 
 export function FfPackagingPage({ token }: PageProps) {
   const location = useLocation()
+  const navigate = useNavigate()
+  const { taskId: routeTaskId } = useParams<{ taskId?: string }>()
   const [tasks, setTasks] = useState<PackagingTask[]>([])
   const [selected, setSelected] = useState<PackagingTask | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [createOpen, setCreateOpen] = useState(false)
   const [pendingMarkingCount, setPendingMarkingCount] = useState(0)
+  const [statusFilter, setStatusFilter] = useState<PackagingTaskStatusFilter>('open')
+  const [search, setSearch] = useState('')
 
   const loadTaskById = useCallback(
     async (taskId: string) => {
@@ -1283,7 +1496,7 @@ export function FfPackagingPage({ token }: PageProps) {
         headers: { Authorization: `Bearer ${token}` },
       })
       if (!res.ok) {
-        setError(await readApiErrorMessage(res))
+        setError(await readPackagingApiErrorMessage(res))
         return
       }
       setSelected((await res.json()) as PackagingTask)
@@ -1292,11 +1505,16 @@ export function FfPackagingPage({ token }: PageProps) {
   )
 
   const load = useCallback(async () => {
-    const res = await fetch(apiUrl('/operations/packaging-tasks'), {
+    const params = new URLSearchParams({ status: statusFilter })
+    const trimmedSearch = search.trim()
+    if (trimmedSearch) {
+      params.set('search', trimmedSearch)
+    }
+    const res = await fetch(apiUrl(`/operations/packaging-tasks?${params}`), {
       headers: { Authorization: `Bearer ${token}` },
     })
     if (!res.ok) {
-      setError(await readApiErrorMessage(res))
+      setError(await readPackagingApiErrorMessage(res))
     } else {
       setTasks((await res.json()) as PackagingTask[])
     }
@@ -1306,7 +1524,7 @@ export function FfPackagingPage({ token }: PageProps) {
     } catch {
       setPendingMarkingCount(0)
     }
-  }, [token])
+  }, [search, statusFilter, token])
 
   useEffect(() => {
     void load()
@@ -1314,13 +1532,26 @@ export function FfPackagingPage({ token }: PageProps) {
 
   useEffect(() => {
     const state = location.state as { taskId?: string } | null
-    if (state?.taskId) {
-      void loadTaskById(state.taskId)
+    const nextTaskId = routeTaskId ?? state?.taskId
+    if (nextTaskId) {
+      void loadTaskById(nextTaskId)
+    } else {
+      setSelected(null)
     }
-  }, [location.state, loadTaskById])
+  }, [location.state, loadTaskById, routeTaskId])
+
+  const openTask = (task: PackagingTask) => {
+    setSelected(task)
+    navigate(`/app/ff/packaging/${task.id}`)
+  }
+
+  const closeTask = () => {
+    setSelected(null)
+    navigate('/app/ff/packaging', { replace: true })
+  }
 
   return (
-    <Box data-testid="ff-packaging-page">
+    <Box data-testid="ff-packaging-page" sx={{ minWidth: 0, maxWidth: '100%' }}>
       <PageHeader
         title="Упаковка"
         description="Задания на маркировку и упаковку. Создайте из ячейки или сортировки, либо откройте из отгрузки на МП."
@@ -1349,51 +1580,114 @@ export function FfPackagingPage({ token }: PageProps) {
         <FfPackagingTaskPanel
           token={token}
           task={selected}
-          onClose={() => setSelected(null)}
+          onClose={closeTask}
           onUpdated={(t) => {
             setSelected(t)
             void load()
           }}
         />
       ) : (
-        <TableContainer component={Paper} variant="outlined" data-testid="ff-packaging-queue">
-          <Table size="small">
-            <TableHead>
-              <TableRow>
-                <TableCell>Номер</TableCell>
-                <TableCell>Статус</TableCell>
-                <TableCell>Строк</TableCell>
-                <TableCell>Отгрузка</TableCell>
-              </TableRow>
-            </TableHead>
-            <TableBody>
-              {tasks.length === 0 ? (
+        <Paper variant="outlined" data-testid="ff-packaging-queue" sx={{ overflowX: 'hidden' }}>
+          <Stack spacing={1.5} sx={{ p: 2, pb: 1 }}>
+            <Tabs
+              value={statusFilter}
+              onChange={(_event, value: PackagingTaskStatusFilter) => {
+                setStatusFilter(value)
+                setSelected(null)
+                navigate('/app/ff/packaging', { replace: true })
+              }}
+              variant="scrollable"
+              allowScrollButtonsMobile
+              data-testid="ff-packaging-status-tabs"
+            >
+              <Tab label="Открытые" value="open" data-testid="ff-packaging-tab-open" />
+              <Tab label="Выполненные" value="done" data-testid="ff-packaging-tab-done" />
+              <Tab label="Отменённые" value="cancelled" data-testid="ff-packaging-tab-cancelled" />
+            </Tabs>
+            <TextField
+              size="small"
+              label="Поиск по номеру, товару, селлеру или ячейке"
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              data-testid="ff-packaging-history-search"
+            />
+          </Stack>
+          <TableContainer sx={{ width: '100%', overflowX: 'auto' }}>
+            <Table
+              size="small"
+              sx={{
+                width: '100%',
+                minWidth: 0,
+                tableLayout: 'fixed',
+                '& th, & td': { overflowWrap: 'anywhere' },
+              }}
+            >
+              <TableHead>
                 <TableRow>
-                  <TableCell colSpan={4}>
-                    <Typography variant="body2" color="text.secondary">
-                      Нет открытых заданий.
-                    </Typography>
-                  </TableCell>
+                  <TableCell sx={{ width: 92 }}>Номер</TableCell>
+                  <TableCell sx={{ width: 104 }}>Статус</TableCell>
+                  <TableCell sx={{ width: 150 }}>Селлер</TableCell>
+                  <TableCell sx={{ width: 180 }}>Склад / ячейка</TableCell>
+                  <TableCell>Товар</TableCell>
+                  <TableCell align="right" sx={{ width: 84 }}>Прогресс</TableCell>
+                  <TableCell sx={{ width: 116 }}>Источник</TableCell>
                 </TableRow>
-              ) : (
-                tasks.map((t) => (
-                  <TableRow
-                    key={t.id}
-                    hover
-                    sx={{ cursor: 'pointer' }}
-                    onClick={() => setSelected(t)}
-                    data-testid="ff-packaging-queue-row"
-                  >
-                    <TableCell>{formatHumanDocumentNumber(t) ?? '—'}</TableCell>
-                    <TableCell>{statusLabel(t.status)}</TableCell>
-                    <TableCell>{t.lines.length}</TableCell>
-                    <TableCell>{t.marketplace_unload_request_id ? 'Да' : '—'}</TableCell>
+              </TableHead>
+              <TableBody>
+                {tasks.length === 0 ? (
+                  <TableRow>
+                    <TableCell colSpan={7}>
+                      <Typography variant="body2" color="text.secondary">
+                        {statusFilter === 'open'
+                          ? 'Нет открытых заданий.'
+                          : statusFilter === 'done'
+                            ? 'Нет выполненных заданий.'
+                            : 'Нет отменённых заданий.'}
+                      </Typography>
+                    </TableCell>
                   </TableRow>
-                ))
-              )}
-            </TableBody>
-          </Table>
-        </TableContainer>
+                ) : (
+                  tasks.map((t) => {
+                    const totals = taskTotals(t)
+                    return (
+                      <TableRow
+                        key={t.id}
+                        hover
+                        role="button"
+                        tabIndex={0}
+                        sx={{ cursor: 'pointer' }}
+                        onClick={() => openTask(t)}
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter' || e.key === ' ') {
+                            e.preventDefault()
+                            openTask(t)
+                          }
+                        }}
+                        data-testid="ff-packaging-queue-row"
+                      >
+                        <TableCell>{formatHumanDocumentNumber(t) ?? '—'}</TableCell>
+                        <TableCell>{statusLabel(t.status)}</TableCell>
+                        <TableCell sx={{ maxWidth: 180, overflowWrap: 'anywhere' }}>
+                          {taskSellerLabel(t)}
+                        </TableCell>
+                        <TableCell sx={{ maxWidth: 220, overflowWrap: 'anywhere' }}>
+                          {taskPlaceLabel(t)}
+                        </TableCell>
+                        <TableCell sx={{ maxWidth: 260, overflowWrap: 'anywhere' }}>
+                          {taskProductSummary(t)}
+                        </TableCell>
+                        <TableCell align="right">
+                          {totals.done}/{totals.total}
+                        </TableCell>
+                        <TableCell>{t.marketplace_unload_request_id ? 'Отгрузка МП' : 'Ручное'}</TableCell>
+                      </TableRow>
+                    )
+                  })
+                )}
+              </TableBody>
+            </Table>
+          </TableContainer>
+        </Paper>
       )}
       <FfCreatePackagingTaskDialog
         open={createOpen}
@@ -1401,6 +1695,7 @@ export function FfPackagingPage({ token }: PageProps) {
         onClose={() => setCreateOpen(false)}
         onCreated={(task) => {
           setSelected(task)
+          navigate(`/app/ff/packaging/${task.id}`)
           void load()
         }}
       />
@@ -1436,7 +1731,7 @@ export function FfPackagingTaskDialog({
         headers: { Authorization: `Bearer ${token}` },
       })
       if (!res.ok) {
-        setError(await readApiErrorMessage(res))
+        setError(await readPackagingApiErrorMessage(res))
         return
       }
       setTask((await res.json()) as PackagingTask)

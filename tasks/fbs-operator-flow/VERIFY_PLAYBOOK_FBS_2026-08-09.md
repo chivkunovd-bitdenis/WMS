@@ -9,7 +9,7 @@
 |---|---|
 | Стенд, фронт | `https://web-production-9e7c1.up.railway.app` |
 | Стенд, бэкенд | `https://wms-production-780c.up.railway.app` |
-| Вход на стенд | `staging-admin@example.com` / `StagingWms2026!` |
+| Вход на стенд | `<WMS_STAGING_ADMIN_EMAIL>` / `<WMS_STAGING_ADMIN_PASSWORD>` |
 | Селлер Denmarcs | `53692f4a-bae9-4141-b373-7fc093675ba7` |
 | Склад WB | `1155120` («Дом - Дрожжино»), привязан к складу WMS `086ad3c2-176c-46b9-bfa5-e48ca79b40c4` |
 | Резинки пружинки глянцевые (3 шт) | товар `11a6cbf1-2166-42f5-a29e-6d6f61cb5a79`, артикул `wb6n9771yd`, ШК `2043390974795`, chrtId `543672959` |
@@ -193,7 +193,7 @@ React-обработчик `onChange`, элемент не `disabled`, hit-test 
 ```bash
 # токен стенда
 curl -s -X POST https://wms-production-780c.up.railway.app/auth/login -H 'Content-Type: application/json' \
-  -d '{"email":"staging-admin@example.com","password":"StagingWms2026!"}'
+  -d '{"email":"<WMS_STAGING_ADMIN_EMAIL>","password":"<WMS_STAGING_ADMIN_PASSWORD>"}'
 
 # состояние выгрузки по складу
 curl -s "https://wms-production-780c.up.railway.app/operations/fbs-sellers/53692f4a-bae9-4141-b373-7fc093675ba7/stocks/sync-status?wb_warehouse_id=1155120" -H "Authorization: Bearer $T"

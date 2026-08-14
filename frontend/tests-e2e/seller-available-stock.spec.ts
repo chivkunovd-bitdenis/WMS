@@ -5,9 +5,10 @@ import { loginAsSeller, openFulfillmentRegistration } from './auth-flow';
 import {beginInboundReceivingWithBoxes,  fulfillInboundViaBoxScans } from './inbound-boxes-helpers';
 import { setWmsDateField } from './wms-date-field-helpers';
 
-// TC-S09-001 — селлер видит факт, зарезервировано и доступно на экране «Товары».
+// TC-S09-001 — селлер видит факт и текущую складскую разбивку на экране «Товары».
+// TC-NEW-MP-06 — запланированная MP-отгрузка уменьшает доступно для следующей заявки.
 // TC-NEW-15-001 — без админской подсказки после приёмки: остаток в кабинете селлера.
-test('seller products table shows on hand, reserved, and available after MP plan', async ({
+test('seller products table and next MP picker show current stock after MP plan', async ({
   page,
 }) => {
   test.setTimeout(120_000);
@@ -206,12 +207,38 @@ test('seller products table shows on hand, reserved, and available after MP plan
 
   await page.getByTestId('nav-seller-products').click();
   await expect(page.getByTestId('seller-products-table')).toBeVisible();
+  const tableHead = page.getByTestId('seller-products-table').locator('thead');
+  await expect(tableHead).toContainText('Артикул WB');
+  await expect(tableHead).not.toContainText(/WB nm|nmID|nm_id/);
+
   const row = page.getByTestId('seller-product-row').filter({ hasText: sku });
   await expect(row).toBeVisible();
-  await expect(row.getByTestId('seller-stock-on-hand')).toHaveText('10');
-  await expect(row.getByTestId('seller-stock-in-storage')).toHaveText('10');
-  await expect(row.getByTestId('seller-stock-reserved')).toHaveText('4');
-  await expect(row.getByTestId('seller-stock-free-total')).toHaveText('6');
-  await expect(row.getByTestId('seller-stock-available')).toHaveText('6');
-  await expect(row.getByTestId('seller-stock-available-hint')).toContainText('(свободно 6)');
+  await expect(row).toContainText('424242');
+  await expect(row.getByTestId('seller-stock-on-hand')).toHaveText('На ФФ 10');
+  await expect(row.getByTestId('seller-stock-in-storage')).toHaveText('В ячейках 10');
+  await expect(row.getByTestId('seller-stock-free-fbo')).toHaveText('Свободный FBO 10');
+  const distribution = row.getByTestId(`seller-stock-distribution-${productId}`);
+  await expect(distribution).toContainText('FBS 0 шт');
+  await expect(distribution).toContainText('резервы 0 шт');
+
+  await page.getByTestId('nav-seller-documents').click();
+  await expect(page.getByTestId('seller-documents-table')).toBeVisible();
+  await Promise.all([
+    waitForPostOk(page, '/api/operations/marketplace-unload-requests/seller'),
+    page.waitForResponse(
+      (r) =>
+        r.request().method() === 'GET' &&
+        r.url().includes('/operations/marketplace-unload-requests/available-products') &&
+        r.status() >= 200 &&
+        r.status() < 300,
+    ),
+    page.getByTestId('seller-create-mp-unload').click(),
+  ]);
+  await expect(page.getByTestId('seller-mp-unload-dialog')).toBeVisible();
+  await page.getByTestId('seller-mp-add-products').click();
+  await expect(page.getByTestId('seller-mp-picker')).toBeVisible();
+  await page.getByTestId('seller-mp-picker-search').fill(sku);
+  const pickerRow = page.getByTestId('seller-mp-picker-row').filter({ hasText: sku });
+  await expect(pickerRow).toBeVisible();
+  await expect(pickerRow.locator('td').nth(6)).toHaveText('6');
 });

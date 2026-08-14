@@ -4,18 +4,22 @@ import uuid
 from typing import Annotated, Literal
 
 from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, UploadFile, status
-from pydantic import BaseModel, ConfigDict, Field, computed_field
+from pydantic import BaseModel, ConfigDict, Field
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.box_import_api_shared import read_xlsx_upload
 from app.api.deps import (
+    assert_product_catalog_read_access,
+    assert_seller_permission,
     get_current_user,
     get_effective_seller_id,
+    require_catalog_cells_read_access,
     require_fulfillment_admin,
     seller_line_product_scope,
 )
-from app.core.roles import FULFILLMENT_ADMIN, FULFILLMENT_SELLER
+from app.core.roles import FULFILLMENT_ADMIN, FULFILLMENT_SELLER, FULFILLMENT_STAFF
 from app.db.session import get_db
+from app.models.stock_direction import StockDirection
 from app.models.user import User
 from app.services.catalog_service import (
     SKIP as PATCH_SKIP,
@@ -28,6 +32,7 @@ from app.services.catalog_service import (
     get_product,
     list_products,
     update_packaging_instructions,
+    update_product_dimensions,
     update_product_fbs_stock_sync,
     volume_liters_from_mm,
 )
@@ -37,10 +42,23 @@ from app.services.product_tz_import_service import (
     build_product_tz_preview,
 )
 from app.services.seller_shop_service import user_can_manage_seller_shops
+from app.services.seller_staff_permissions_service import PERM_PRODUCTS
 from app.services.seller_wb_catalog_service import (
     list_ff_catalog_rows,
     list_linked_wb_catalog_rows,
     list_seller_wb_catalog_rows,
+)
+from app.services.staff_permissions_service import (
+    PERM_RECEPTION,
+    PERM_SHIFT_LEAD,
+    get_staff_permissions,
+)
+from app.services.stock_direction_service import (
+    StockDirectionError,
+    create_stock_direction,
+    delete_stock_direction,
+    list_stock_directions,
+    update_stock_direction,
 )
 
 router = APIRouter(prefix="/products", tags=["products"])
@@ -131,11 +149,7 @@ class ProductOut(BaseModel):
     packaging_instructions: str | None = None
     requires_honest_sign: bool = False
     is_manual: bool = False
-
-    @computed_field  # type: ignore[prop-decorator]
-    @property
-    def volume_liters(self) -> float | None:
-        return volume_liters_from_mm(self.length_mm, self.width_mm, self.height_mm)
+    volume_liters: float | None = None
 
 
 class ProductTzRowPreviewOut(BaseModel):
@@ -194,6 +208,12 @@ class PackagingInstructionsPatch(BaseModel):
     requires_honest_sign: bool | None = None
 
 
+class ProductDimensionsPatch(BaseModel):
+    length_mm: int = Field(ge=1, le=10_000_000)
+    width_mm: int = Field(ge=1, le=10_000_000)
+    height_mm: int = Field(ge=1, le=10_000_000)
+
+
 class ProductFbsStockSyncPatch(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
@@ -211,6 +231,33 @@ class ProductFbsStockSyncBulkPatch(BaseModel):
 
 class ProductFbsStockSyncBulkOut(BaseModel):
     updated_count: int
+
+
+class StockDirectionCreate(BaseModel):
+    name: str = Field(min_length=1, max_length=160)
+    comment: str | None = Field(default=None, max_length=2000)
+    quantity: int = Field(ge=0)
+    is_fbs: bool = False
+
+
+class StockDirectionPatch(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    name: str | None = Field(default=None, min_length=1, max_length=160)
+    comment: str | None = Field(default=None, max_length=2000)
+    quantity: int | None = Field(default=None, ge=0)
+    is_fbs: bool | None = None
+
+
+class StockDirectionOut(BaseModel):
+    id: str
+    product_id: str
+    name: str
+    comment: str | None
+    quantity: int
+    is_fbs: bool
+    created_at: str
+    updated_at: str
 
 
 def _product_out(p: object) -> ProductOut:
@@ -234,7 +281,67 @@ def _product_out(p: object) -> ProductOut:
         requires_honest_sign=bool(p.requires_honest_sign),
         # Manual until WB sync/link sets nmID on same barcode.
         is_manual=p.wb_nm_id is None,
+        volume_liters=(
+            p.volume_liters
+            if p.volume_liters is not None
+            else volume_liters_from_mm(p.length_mm, p.width_mm, p.height_mm)
+        ),
     )
+
+
+def _stock_direction_out(direction: object) -> StockDirectionOut:
+    from app.models.stock_direction import StockDirection
+
+    assert isinstance(direction, StockDirection)
+    return StockDirectionOut(
+        id=str(direction.id),
+        product_id=str(direction.product_id),
+        name=direction.name,
+        comment=direction.comment,
+        quantity=int(direction.quantity),
+        is_fbs=bool(direction.is_fbs),
+        created_at=direction.created_at.isoformat(),
+        updated_at=direction.updated_at.isoformat(),
+    )
+
+
+async def _product_seller_scope_for_write(
+    user: User,
+    session: AsyncSession,
+    product_id: uuid.UUID,
+    effective_seller_id: uuid.UUID | None,
+) -> uuid.UUID | None:
+    p = await get_product(session, user.tenant_id, product_id)
+    if p is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="product_not_found")
+    if user.role == FULFILLMENT_ADMIN:
+        return None
+    if user.role != FULFILLMENT_SELLER:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="forbidden")
+    owner_id = user.seller_id
+    if user_can_manage_seller_shops(user) and effective_seller_id is not None:
+        owner_id = effective_seller_id
+    if owner_id is None or p.seller_id != owner_id:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="forbidden")
+    return owner_id
+
+
+def _http_from_stock_direction_error(exc: StockDirectionError) -> HTTPException:
+    if exc.code in {"product_not_found", "direction_not_found"}:
+        return HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=exc.code)
+    if exc.code == "forbidden":
+        return HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="forbidden")
+    if exc.code in {
+        "empty_name",
+        "invalid_quantity",
+        "directions_exceed_stock",
+        "insufficient_fbs_pool",
+    }:
+        return HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+            detail=exc.code,
+        )
+    return HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=exc.code)
 
 
 def _http_from_tz_import_error(exc: ProductTzImportError) -> HTTPException:
@@ -268,6 +375,7 @@ async def get_products(
     session: Annotated[AsyncSession, Depends(get_db)],
     seller_scope: Annotated[uuid.UUID | None, Depends(seller_line_product_scope)],
 ) -> list[ProductOut]:
+    await assert_product_catalog_read_access(session, user)
     rows = await list_products(session, user.tenant_id, seller_id=seller_scope)
     return [_product_out(p) for p in rows]
 
@@ -278,6 +386,7 @@ async def get_seller_wb_catalog(
     session: Annotated[AsyncSession, Depends(get_db)],
     effective_seller_id: Annotated[uuid.UUID | None, Depends(get_effective_seller_id)],
 ) -> list[SellerWbCatalogOut]:
+    await assert_seller_permission(session, user, PERM_PRODUCTS)
     if user.role != FULFILLMENT_SELLER:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
@@ -325,10 +434,12 @@ async def get_linked_wb_catalog(
 
 @router.get("/ff-catalog", response_model=list[FfCatalogOut])
 async def get_ff_catalog(
-    user: Annotated[User, Depends(require_fulfillment_admin)],
+    user: Annotated[User, Depends(require_catalog_cells_read_access)],
     session: Annotated[AsyncSession, Depends(get_db)],
     seller_id: uuid.UUID | None = _seller_id_query,
 ) -> list[FfCatalogOut]:
+    if seller_id is not None and user.role != FULFILLMENT_ADMIN:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="forbidden")
     rows = await list_ff_catalog_rows(session, user.tenant_id, seller_id=seller_id)
     return [
         FfCatalogOut(
@@ -495,6 +606,54 @@ async def post_product_tz_import_apply(
     )
 
 
+@router.patch("/{product_id}/dimensions", response_model=ProductOut)
+async def patch_product_dimensions(
+    product_id: uuid.UUID,
+    body: ProductDimensionsPatch,
+    user: Annotated[User, Depends(get_current_user)],
+    session: Annotated[AsyncSession, Depends(get_db)],
+    effective_seller_id: Annotated[uuid.UUID | None, Depends(get_effective_seller_id)],
+) -> ProductOut:
+    await assert_seller_permission(session, user, PERM_PRODUCTS)
+    p = await get_product(session, user.tenant_id, product_id)
+    if p is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="product_not_found")
+    if user.role == FULFILLMENT_SELLER:
+        owner_id = user.seller_id
+        if user_can_manage_seller_shops(user) and effective_seller_id is not None:
+            owner_id = effective_seller_id
+        if owner_id is None or p.seller_id != owner_id:
+            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="forbidden")
+    elif user.role == FULFILLMENT_STAFF:
+        perms = await get_staff_permissions(session, user)
+        if not (perms.has(PERM_RECEPTION) or perms.has(PERM_SHIFT_LEAD)):
+            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="forbidden")
+    elif user.role != FULFILLMENT_ADMIN:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="forbidden")
+    try:
+        updated = await update_product_dimensions(
+            session,
+            user.tenant_id,
+            product_id,
+            length_mm=body.length_mm,
+            width_mm=body.width_mm,
+            height_mm=body.height_mm,
+        )
+    except CatalogError as exc:
+        if exc.code == "invalid_dimensions":
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+                detail="invalid_dimensions",
+            ) from None
+        if exc.code == "product_not_found":
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="product_not_found",
+            ) from None
+        raise
+    return _product_out(updated)
+
+
 @router.patch("/{product_id}/packaging-instructions", response_model=ProductOut)
 async def patch_product_packaging_instructions(
     product_id: uuid.UUID,
@@ -503,6 +662,7 @@ async def patch_product_packaging_instructions(
     session: Annotated[AsyncSession, Depends(get_db)],
     effective_seller_id: Annotated[uuid.UUID | None, Depends(get_effective_seller_id)],
 ) -> ProductOut:
+    await assert_seller_permission(session, user, PERM_PRODUCTS)
     p = await get_product(session, user.tenant_id, product_id)
     if p is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="product_not_found")
@@ -532,6 +692,135 @@ async def patch_product_packaging_instructions(
     return _product_out(updated)
 
 
+@router.get("/{product_id}/stock-directions", response_model=list[StockDirectionOut])
+async def get_product_stock_directions(
+    product_id: uuid.UUID,
+    user: Annotated[User, Depends(get_current_user)],
+    session: Annotated[AsyncSession, Depends(get_db)],
+    effective_seller_id: Annotated[uuid.UUID | None, Depends(get_effective_seller_id)],
+) -> list[StockDirectionOut]:
+    await assert_seller_permission(session, user, PERM_PRODUCTS)
+    seller_scope = await _product_seller_scope_for_write(
+        user,
+        session,
+        product_id,
+        effective_seller_id,
+    )
+    try:
+        directions = await list_stock_directions(
+            session,
+            user.tenant_id,
+            product_id,
+            seller_scope=seller_scope,
+        )
+    except StockDirectionError as exc:
+        raise _http_from_stock_direction_error(exc) from None
+    return [_stock_direction_out(direction) for direction in directions]
+
+
+@router.post(
+    "/{product_id}/stock-directions",
+    response_model=StockDirectionOut,
+    status_code=status.HTTP_201_CREATED,
+)
+async def post_product_stock_direction(
+    product_id: uuid.UUID,
+    body: StockDirectionCreate,
+    user: Annotated[User, Depends(get_current_user)],
+    session: Annotated[AsyncSession, Depends(get_db)],
+    effective_seller_id: Annotated[uuid.UUID | None, Depends(get_effective_seller_id)],
+) -> StockDirectionOut:
+    await assert_seller_permission(session, user, PERM_PRODUCTS)
+    seller_scope = await _product_seller_scope_for_write(
+        user,
+        session,
+        product_id,
+        effective_seller_id,
+    )
+    try:
+        direction = await create_stock_direction(
+            session,
+            user.tenant_id,
+            product_id,
+            name=body.name,
+            comment=body.comment,
+            quantity=body.quantity,
+            is_fbs=body.is_fbs,
+            seller_scope=seller_scope,
+        )
+    except StockDirectionError as exc:
+        raise _http_from_stock_direction_error(exc) from None
+    return _stock_direction_out(direction)
+
+
+@router.patch("/stock-directions/{direction_id}", response_model=StockDirectionOut)
+async def patch_product_stock_direction(
+    direction_id: uuid.UUID,
+    body: StockDirectionPatch,
+    user: Annotated[User, Depends(get_current_user)],
+    session: Annotated[AsyncSession, Depends(get_db)],
+    effective_seller_id: Annotated[uuid.UUID | None, Depends(get_effective_seller_id)],
+) -> StockDirectionOut:
+    await assert_seller_permission(session, user, PERM_PRODUCTS)
+    if not body.model_fields_set:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+            detail="empty_patch",
+        )
+    direction = await session.get(StockDirection, direction_id)
+    if direction is None or direction.tenant_id != user.tenant_id:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="direction_not_found")
+    seller_scope = await _product_seller_scope_for_write(
+        user,
+        session,
+        direction.product_id,
+        effective_seller_id,
+    )
+    try:
+        updated = await update_stock_direction(
+            session,
+            user.tenant_id,
+            direction_id,
+            name=body.name if "name" in body.model_fields_set else None,
+            comment=body.comment,
+            set_comment="comment" in body.model_fields_set,
+            quantity=body.quantity if "quantity" in body.model_fields_set else None,
+            is_fbs=body.is_fbs if "is_fbs" in body.model_fields_set else None,
+            seller_scope=seller_scope,
+        )
+    except StockDirectionError as exc:
+        raise _http_from_stock_direction_error(exc) from None
+    return _stock_direction_out(updated)
+
+
+@router.delete("/stock-directions/{direction_id}", status_code=status.HTTP_204_NO_CONTENT)
+async def delete_product_stock_direction(
+    direction_id: uuid.UUID,
+    user: Annotated[User, Depends(get_current_user)],
+    session: Annotated[AsyncSession, Depends(get_db)],
+    effective_seller_id: Annotated[uuid.UUID | None, Depends(get_effective_seller_id)],
+) -> None:
+    await assert_seller_permission(session, user, PERM_PRODUCTS)
+    direction = await session.get(StockDirection, direction_id)
+    if direction is None or direction.tenant_id != user.tenant_id:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="direction_not_found")
+    seller_scope = await _product_seller_scope_for_write(
+        user,
+        session,
+        direction.product_id,
+        effective_seller_id,
+    )
+    try:
+        await delete_stock_direction(
+            session,
+            user.tenant_id,
+            direction_id,
+            seller_scope=seller_scope,
+        )
+    except StockDirectionError as exc:
+        raise _http_from_stock_direction_error(exc) from None
+
+
 @router.patch("/{product_id}/fbs-stock-sync", response_model=ProductOut)
 async def patch_product_fbs_stock_sync(
     product_id: uuid.UUID,
@@ -540,6 +829,7 @@ async def patch_product_fbs_stock_sync(
     session: Annotated[AsyncSession, Depends(get_db)],
     effective_seller_id: Annotated[uuid.UUID | None, Depends(get_effective_seller_id)],
 ) -> ProductOut:
+    await assert_seller_permission(session, user, PERM_PRODUCTS)
     p = await get_product(session, user.tenant_id, product_id)
     if p is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="product_not_found")
@@ -589,6 +879,7 @@ async def patch_products_fbs_stock_sync_bulk(
     session: Annotated[AsyncSession, Depends(get_db)],
     effective_seller_id: Annotated[uuid.UUID | None, Depends(get_effective_seller_id)],
 ) -> ProductFbsStockSyncBulkOut:
+    await assert_seller_permission(session, user, PERM_PRODUCTS)
     if user.role != FULFILLMENT_SELLER:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="forbidden")
     seller_scope = user.seller_id

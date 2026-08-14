@@ -1,0 +1,77 @@
+{
+  "verdictCandidate": "FINAL_BROWSER_GROUP_BLOCKED",
+  "browser_used": true,
+  "browser_surface": "standalone Playwright Chromium headless=false after Browser plugin IAB subagent visibility block and chrome unavailable",
+  "viewport_required": {
+    "width": 1280,
+    "height": 720
+  },
+  "ports": {
+    "backend": 18182,
+    "frontend": 5182
+  },
+  "routes": [
+    "/"
+  ],
+  "clicks": [
+    "Open FF registration form",
+    "Register org: fill QA FF final-inbound-1786666786032",
+    "Register FF admin email: fill ff-admin-final-inbound-1786666786032@example.com",
+    "Register FF password: fill password123",
+    "Submit FF registration"
+  ],
+  "screenshots": [
+    "/Users/deniscivkunov/Projects/WMS/.worktrees/product-operations-ux-20260812/docs/reviews/product-operations-ux/2026-08-12/evidence/final-browser-regression-rerun-inbound-live-strict/screenshots/00-login-before-registration.png",
+    "/Users/deniscivkunov/Projects/WMS/.worktrees/product-operations-ux-20260812/docs/reviews/product-operations-ux/2026-08-12/evidence/final-browser-regression-rerun-inbound-live-strict/screenshots/01-ff-registered-shell.png"
+  ],
+  "metrics": {
+    "00_login": {
+      "href": "http://127.0.0.1:5182/",
+      "title": "WMS · Фулфилмент",
+      "viewport": {
+        "width": 1280,
+        "height": 720
+      },
+      "scrollX": 0,
+      "documentScrollWidth": 1280,
+      "bodyScrollWidth": 1280,
+      "appRootScrollWidth": 1280,
+      "appRootClientWidth": 1280,
+      "bodyText": "WMS · Портал фулфилмента\n\nРегистрация организации — для первого администратора. Аккаунты селлеров создаёт админ фулфилмента.\n\nВход\nEmail *\nEmail *\nПароль\nПароль\n\nТолько сотрудники фулфилмента. Селлеры входят на /seller/ (кнопка ниже).\n\nВойти\nВход для селлера (портал /seller/)Регистрация организации (первый админ)",
+      "visibleButtons": [
+        {
+          "text": "Войти",
+          "visible": true,
+          "left": 388,
+          "right": 892,
+          "top": 387,
+          "bottom": 433,
+          "width": 504,
+          "height": 46
+        },
+        {
+          "text": "Регистрация организации (первый админ)",
+          "visible": true,
+          "left": 388,
+          "right": 892,
+          "top": 497,
+          "bottom": 536,
+          "width": 504,
+          "height": 40
+        }
+      ],
+      "blackSamples": []
+    }
+  },
+  "print": {},
+  "data": {
+    "suffix": "final-inbound-1786666786032",
+    "adminEmail": "ff-admin-final-inbound-1786666786032@example.com",
+    "sellerEmail": "seller-final-inbound-1786666786032@example.com"
+  },
+  "observations": [],
+  "blockers": [],
+  "errors": [
+    "Error: patch return planned boxes: 422 {\"detail\":[{\"type\":\"greater_than_equal\",\"loc\":[\"body\",\"planned_box_count\"],\"msg\":\"Input should be greater than or equal to 1\",\"input\":0,\"ctx\":{\"ge\":1}}]}\n    at apiOk (file:///Users/deniscivkunov/Projects/WMS/.worktrees/product-operations-ux-20260812/frontend/[eval1]:38:24)\n    at async createSubmittedInbound (file:///Users/deniscivkunov/Projects/WMS/.worktrees/product-operations-ux-20260812/frontend/[eval1]:154:3)\n    at async file:///Users/deniscivkunov/Projects/WMS/.worktrees/product-operations-ux-20260812/frontend/[eval1]:254:27"
+  ]
+}

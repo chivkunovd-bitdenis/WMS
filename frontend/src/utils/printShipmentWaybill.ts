@@ -15,6 +15,8 @@ export type ShipmentWaybillDocKind =
 export type ShipmentWaybillData = {
   docKind: ShipmentWaybillDocKind
   documentId: string
+  documentNumber?: string | null
+  documentTypeLabel?: string | null
   statusLabel: string
   warehouseName: string
   sellerName: string | null
@@ -30,6 +32,13 @@ export type ShipmentWaybillData = {
 /** @deprecated Use ShipmentWaybillData + printShipmentWaybill */
 export type MarketplaceUnloadWaybillData = Omit<ShipmentWaybillData, 'docKind'> & {
   wbWarehouseLabel: string | null
+}
+
+declare global {
+  interface Window {
+    __WMS_CAPTURE_PRINT_HTML__?: boolean
+    __WMS_LAST_PRINT_HTML__?: string
+  }
 }
 
 function escapeHtml(text: string): string {
@@ -52,9 +61,27 @@ function docTitle(kind: ShipmentWaybillDocKind): string {
 
 function footerText(kind: ShipmentWaybillDocKind): string {
   if (kind === 'inbound_intake') {
-    return 'Накладная для приёмки на складе. Сверка по составу и коробам. Факт — в системе WMS.'
+    return ''
   }
   return 'Печать для сверки перед вывозом. Факт отгрузки — в системе WMS.'
+}
+
+function inboundDocumentNumber(data: ShipmentWaybillData): string {
+  const n = data.documentNumber?.trim()
+  if (!n) {
+    return '№ —'
+  }
+  return n.startsWith('№') ? n : `№ ${n}`
+}
+
+function discrepancyText(expectedQty: number, acceptedQty: number): string {
+  if (acceptedQty < expectedQty) {
+    return `Недостача ${expectedQty - acceptedQty}`
+  }
+  if (acceptedQty > expectedQty) {
+    return `Излишек ${acceptedQty - expectedQty}`
+  }
+  return 'Нет'
 }
 
 /** Печать накладной (A4, браузер). */
@@ -64,6 +91,15 @@ export function printShipmentWaybill(data: ShipmentWaybillData): void {
 
   const lineRows = data.lines
     .map((ln, i) => {
+      if (isInbound) {
+        const factQty = ln.received_qty ?? 0
+        return `<tr>
+          <td><strong>${escapeHtml(ln.sku_code)}</strong><br><span>${escapeHtml(ln.product_name)}</span></td>
+          <td align="right">${ln.quantity}</td>
+          <td align="right">${factQty}</td>
+          <td>${escapeHtml(discrepancyText(ln.quantity, factQty))}</td>
+        </tr>`
+      }
       const shipped =
         isOperational && ln.shipped_qty != null
           ? `<td align="right">${ln.shipped_qty}</td>`
@@ -90,9 +126,9 @@ export function printShipmentWaybill(data: ShipmentWaybillData): void {
     .join('')
 
   const headShipped = isOperational ? '<th align="right">Отгружено</th>' : ''
-  const headReceived = isInbound ? '<th align="right">Принято</th>' : ''
+  const headReceived = ''
   const headCell = isOperational ? '<th>Ячейка</th>' : ''
-  const headQty = isInbound ? 'Заявлено' : 'Кол-во'
+  const headQty = 'Кол-во'
 
   const boxMeta =
     isInbound && (data.plannedBoxCount != null || data.actualBoxCount != null)
@@ -120,13 +156,40 @@ export function printShipmentWaybill(data: ShipmentWaybillData): void {
       ? `<dt>Склад МП (WB)</dt><dd>${escapeHtml(data.wbWarehouseLabel ?? '—')}</dd>`
       : ''
 
-  const colSpan = 4 + (isOperational ? 2 : 0) + (isInbound ? 1 : 0)
+  const colSpan = isInbound ? 4 : 4 + (isOperational ? 2 : 0)
+  const inboundTypeLabel = data.documentTypeLabel?.trim() || 'Поставка'
+  const inboundTitle = `${inboundTypeLabel} ${inboundDocumentNumber(data)}`
+  const printTitle = isInbound ? inboundTitle : `Накладная ${data.documentId.slice(0, 8)}`
+  const headingTitle = isInbound
+    ? `Накладная — ${inboundTypeLabel.toLowerCase()} на склад ФФ · ${inboundDocumentNumber(data)}`
+    : docTitle(data.docKind)
+  const inboundMeta = isInbound
+    ? `<dt>Документ</dt><dd>${escapeHtml(inboundTitle)}</dd>
+      <dt>Селлер</dt><dd>${escapeHtml(data.sellerName ?? '—')}</dd>
+      <dt>Дата</dt><dd>${escapeHtml(data.plannedDate ?? '—')}</dd>
+      <dt>Склад ФФ</dt><dd>${escapeHtml(data.warehouseName || '—')}</dd>
+      ${boxMeta}`
+    : ''
+  const defaultMeta = !isInbound
+    ? `<dt>Документ</dt><dd>${escapeHtml(data.documentId)}</dd>
+      <dt>Статус</dt><dd>${escapeHtml(data.statusLabel)}</dd>
+      <dt>Склад ФФ</dt><dd>${escapeHtml(data.warehouseName)}</dd>
+      <dt>Селлер</dt><dd>${escapeHtml(data.sellerName ?? '—')}</dd>
+      ${wbMeta}
+      ${boxMeta}
+      <dt>Плановая дата</dt><dd>${escapeHtml(data.plannedDate ?? '—')}</dd>
+      <dt>Создано</dt><dd>${escapeHtml(data.createdAt ?? '—')}</dd>`
+    : ''
+  const tableHead = isInbound
+    ? '<tr><th>SKU/товар</th><th align="right">Заявлено</th><th align="right">Факт</th><th>Расхождение</th></tr>'
+    : `<tr><th>#</th><th>SKU</th><th>Наименование</th>${headCell}<th align="right">${headQty}</th>${headReceived}${headShipped}</tr>`
+  const foot = footerText(data.docKind)
 
   const html = `<!doctype html>
 <html>
   <head>
     <meta charset="utf-8" />
-    <title>Накладная ${escapeHtml(data.documentId.slice(0, 8))}</title>
+    <title>${escapeHtml(printTitle)}</title>
     <style>
       @page { margin: 12mm; }
       body { font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif; font-size: 12px; color: #111; }
@@ -142,28 +205,25 @@ export function printShipmentWaybill(data: ShipmentWaybillData): void {
     </style>
   </head>
   <body>
-    <h1>${docTitle(data.docKind)}</h1>
+    <h1>${escapeHtml(headingTitle)}</h1>
     <dl class="meta">
-      <dt>Документ</dt><dd>${escapeHtml(data.documentId)}</dd>
-      <dt>Статус</dt><dd>${escapeHtml(data.statusLabel)}</dd>
-      <dt>Склад ФФ</dt><dd>${escapeHtml(data.warehouseName)}</dd>
-      <dt>Селлер</dt><dd>${escapeHtml(data.sellerName ?? '—')}</dd>
-      ${wbMeta}
-      ${boxMeta}
-      <dt>Плановая дата</dt><dd>${escapeHtml(data.plannedDate ?? '—')}</dd>
-      <dt>Создано</dt><dd>${escapeHtml(data.createdAt ?? '—')}</dd>
+      ${inboundMeta || defaultMeta}
     </dl>
     <h2>Состав</h2>
     <table>
       <thead>
-        <tr><th>#</th><th>SKU</th><th>Наименование</th>${headCell}<th align="right">${headQty}</th>${headReceived}${headShipped}</tr>
+        ${tableHead}
       </thead>
       <tbody>${lineRows || `<tr><td colspan="${colSpan}">Нет строк</td></tr>`}</tbody>
     </table>
     ${pickBlock}
-    <p class="foot">${footerText(data.docKind)}</p>
+    ${foot ? `<p class="foot">${foot}</p>` : ''}
   </body>
 </html>`
+
+  if (typeof window !== 'undefined' && window.__WMS_CAPTURE_PRINT_HTML__) {
+    window.__WMS_LAST_PRINT_HTML__ = html
+  }
 
   const iframe = document.createElement('iframe')
   iframe.setAttribute('aria-hidden', 'true')

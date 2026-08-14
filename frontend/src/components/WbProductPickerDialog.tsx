@@ -61,6 +61,7 @@ type Props = {
   inDraftMessage?: string
   emptyMessage?: string
   showAvailableColumn?: boolean
+  availableColumnLabel?: string
   getAvailable?: (productId: string) => number
   filterRow?: (row: WbProductPickerCatalogRow) => boolean
   renderTrailingHeadCells?: ReactNode
@@ -133,6 +134,7 @@ export function WbProductPickerDialog({
   inDraftMessage = 'Товар уже добавлен в заявку',
   emptyMessage,
   showAvailableColumn = false,
+  availableColumnLabel = 'Доступно',
   getAvailable,
   filterRow,
   renderTrailingHeadCells,
@@ -224,7 +226,7 @@ export function WbProductPickerDialog({
       <DialogContent dividers>
         <Stack spacing={2} sx={{ mb: 2 }}>
           <TextField
-            label="Поиск (артикул, ШК, nm, название, артикул продавца)"
+            label="Поиск (артикул, ШК, артикул WB, название, артикул продавца)"
             value={pickerSearch}
             onChange={(e) => setPickerSearch(e.target.value)}
             onKeyDown={(e) => {
@@ -291,7 +293,7 @@ export function WbProductPickerDialog({
                 {renderTrailingHeadCells}
                 {showAvailableColumn ? (
                   <TableCell align="right" sx={{ width: 110 }}>
-                    Доступно
+                    {availableColumnLabel}
                   </TableCell>
                 ) : null}
                 <TableCell align="right" sx={{ width: 140 }}>

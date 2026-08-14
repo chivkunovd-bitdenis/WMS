@@ -38,7 +38,7 @@ test.describe('US-B-01 seller inbound draft — fields and actions', () => {
       waitForPostOk(page, INBOUND_API, (u) => !u.includes('/lines') && !u.includes('/submit')),
       page.getByTestId('seller-create-inbound').click(),
     ]);
-    await page.waitForURL(`**${sellerPath('/inbound/new')}`);
+    await page.waitForURL(`**${sellerPath('/inbound/new')}**`);
     await expect(page.getByTestId('seller-inbound-draft-form')).toBeVisible({ timeout: 20_000 });
     await expect(page.getByTestId('seller-inbound-status-chip')).toContainText('Черновик');
 
@@ -217,7 +217,7 @@ test.describe('US-B-01 seller first-time login path', () => {
 
     await page.getByTestId('nav-seller-documents').click();
     await page.getByTestId('seller-create-inbound').click();
-    await page.waitForURL(`**${sellerPath('/inbound/new')}`);
+    await page.waitForURL(`**${sellerPath('/inbound/new')}**`);
     await waitForPostOk(page, INBOUND_API, (u) => !u.includes('/lines') && !u.includes('/submit'));
 
     await page.getByTestId('seller-inbound-planned-boxes').fill('2');

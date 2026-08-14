@@ -10,6 +10,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.models.fbs_order import FbsOrderReservation
 from app.models.inventory_balance import InventoryBalance
 from app.models.storage_location import StorageLocation
+from app.services import stock_direction_service
 from app.services.sorting_location_service import SORTING_LOCATION_CODE
 
 
@@ -128,17 +129,13 @@ async def fbs_available_qty_by_product(
     *,
     exclude_fbs_order_ids: frozenset[uuid.UUID] | None = None,
 ) -> dict[uuid.UUID, int]:
-    """max(0, storage + sorting - outbound - FBS); excludes MarketplaceUnloadReservation."""
+    """FBS pool minus active FBS reserves.
+
+    No stock direction means no product quantity is intentionally assigned to FBS,
+    so WB publication and FBS order reservation must see zero.
+    """
     if not product_ids:
         return {}
-    from app.services.marketplace_unload_service import _outbound_reserved_by_product
-
-    on_hand_map = await _storage_and_sorting_on_hand_by_product(
-        session, tenant_id, warehouse_id, product_ids
-    )
-    outbound_map = await _outbound_reserved_by_product(
-        session, tenant_id, warehouse_id, product_ids
-    )
     fbs_map = await fbs_reserved_by_product(
         session,
         tenant_id,
@@ -146,12 +143,17 @@ async def fbs_available_qty_by_product(
         product_ids,
         exclude_fbs_order_ids=exclude_fbs_order_ids,
     )
+    direction_map = await stock_direction_service.direction_totals_by_product(
+        session, tenant_id, product_ids
+    )
     result: dict[uuid.UUID, int] = {}
     for pid in product_ids:
-        storage, sorting = on_hand_map.get(pid, (0, 0))
-        outbound = int(outbound_map.get(pid, 0))
+        directions = direction_map.get(pid)
         fbs = int(fbs_map.get(pid, 0))
-        result[pid] = clamp_nonneg(storage + sorting - outbound - fbs)
+        if directions is not None and directions.has_any:
+            result[pid] = clamp_nonneg(directions.fbs - fbs)
+            continue
+        result[pid] = 0
     return result
 
 

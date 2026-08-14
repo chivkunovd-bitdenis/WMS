@@ -197,6 +197,257 @@ async def test_packaging_task_manual_convert(async_client: AsyncClient) -> None:
 
 
 @pytest.mark.asyncio
+async def test_packaging_create_rejects_mixed_seller_and_decimal_qty(
+    async_client: AsyncClient,
+) -> None:
+    h = await _register_admin(async_client)
+    suffix = uuid.uuid4().hex[:8]
+    wh = await async_client.post(
+        "/warehouses",
+        headers=h,
+        json={"name": "W Mixed", "code": f"w-mix-{suffix}"},
+    )
+    assert wh.status_code == 200, wh.text
+    wh_id = wh.json()["id"]
+    seller_a = await async_client.post(
+        "/sellers",
+        headers=h,
+        json={"name": "Seller A", "email": f"a-{suffix}@example.com"},
+    )
+    seller_b = await async_client.post(
+        "/sellers",
+        headers=h,
+        json={"name": "Seller B", "email": f"b-{suffix}@example.com"},
+    )
+    assert seller_a.status_code == 201, seller_a.text
+    assert seller_b.status_code == 201, seller_b.text
+    products: list[tuple[str, str]] = []
+    for idx, seller_id in enumerate([seller_a.json()["id"], seller_b.json()["id"]]):
+        pr = await async_client.post(
+            "/products",
+            headers=h,
+            json={
+                "name": f"Mixed Product {idx}",
+                "sku_code": f"mix-{suffix}-{idx}",
+                "length_mm": 1,
+                "width_mm": 1,
+                "height_mm": 1,
+                "seller_id": seller_id,
+            },
+        )
+        assert pr.status_code in (200, 201), pr.text
+        product_id = pr.json()["id"]
+        loc_id = await _inventory_at_location(
+            async_client,
+            h,
+            warehouse_id=wh_id,
+            product_id=product_id,
+            qty=2,
+            location_code=f"MIX-{suffix}-{idx}",
+        )
+        products.append((product_id, loc_id))
+
+    mixed = await async_client.post(
+        "/operations/packaging-tasks",
+        headers=h,
+        json={
+            "warehouse_id": wh_id,
+            "lines": [
+                {
+                    "product_id": product_id,
+                    "storage_location_id": loc_id,
+                    "quantity": 1,
+                }
+                for product_id, loc_id in products
+            ],
+        },
+    )
+    assert mixed.status_code == 409, mixed.text
+    assert mixed.json()["detail"] == "mixed_seller"
+
+    decimal_qty = await async_client.post(
+        "/operations/packaging-tasks",
+        headers=h,
+        json={
+            "warehouse_id": wh_id,
+            "lines": [
+                {
+                    "product_id": products[0][0],
+                    "storage_location_id": products[0][1],
+                    "quantity": 1.7,
+                }
+            ],
+        },
+    )
+    assert decimal_qty.status_code == 422, decimal_qty.text
+
+
+@pytest.mark.asyncio
+async def test_packaging_scan_manual_undo_and_done_history(
+    async_client: AsyncClient,
+) -> None:
+    h = await _register_admin(async_client)
+    suffix = uuid.uuid4().hex[:8]
+    seller = await async_client.post(
+        "/sellers",
+        headers=h,
+        json={"name": "Scan Seller", "email": f"scan-{suffix}@example.com"},
+    )
+    seller_id = seller.json()["id"]
+    wh = await async_client.post(
+        "/warehouses",
+        headers=h,
+        json={"name": "W Scan", "code": f"w-scan-{suffix}"},
+    )
+    wh_id = wh.json()["id"]
+    sku = f"scan-{suffix}"
+    pr = await async_client.post(
+        "/products",
+        headers=h,
+        json={
+            "name": "Scan Product",
+            "sku_code": sku,
+            "length_mm": 1,
+            "width_mm": 1,
+            "height_mm": 1,
+            "seller_id": seller_id,
+        },
+    )
+    product_id = pr.json()["id"]
+    loc_id = await _inventory_at_location(
+        async_client,
+        h,
+        warehouse_id=wh_id,
+        product_id=product_id,
+        qty=3,
+        location_code=f"SCAN-{suffix}",
+    )
+    create = await async_client.post(
+        "/operations/packaging-tasks",
+        headers=h,
+        json={
+            "warehouse_id": wh_id,
+            "lines": [
+                {
+                    "product_id": product_id,
+                    "storage_location_id": loc_id,
+                    "quantity": 3,
+                }
+            ],
+        },
+    )
+    assert create.status_code == 201, create.text
+    task = create.json()
+    task_id = task["id"]
+    line_id = task["lines"][0]["id"]
+    assert task["seller_name"] == "Scan Seller"
+    assert task["lines"][0]["seller_name"] == "Scan Seller"
+
+    unknown = await async_client.post(
+        f"/operations/packaging-tasks/{task_id}/scan",
+        headers=h,
+        json={"barcode": "UNKNOWN"},
+    )
+    assert unknown.status_code == 409, unknown.text
+    assert unknown.json()["detail"] == "unknown_barcode"
+    after_unknown = await async_client.get(
+        f"/operations/packaging-tasks/{task_id}",
+        headers=h,
+    )
+    assert after_unknown.json()["lines"][0]["qty_packed_in_task"] == 0
+
+    scanned = await async_client.post(
+        f"/operations/packaging-tasks/{task_id}/scan",
+        headers=h,
+        json={"barcode": sku},
+    )
+    assert scanned.status_code == 200, scanned.text
+    assert scanned.json()["packaging_task"]["lines"][0]["qty_packed_in_task"] == 1
+    assert scanned.json()["packaging_task"]["events"][-1]["action"] == "scan_pack"
+    assert scanned.json()["packaging_task"]["events"][-1]["event_sequence"] == 1
+
+    manual = await async_client.post(
+        f"/operations/packaging-tasks/{task_id}/lines/{line_id}/pack",
+        headers=h,
+        json={"quantity": 2},
+    )
+    assert manual.status_code == 200, manual.text
+    assert manual.json()["packaging_task"]["lines"][0]["qty_packed_in_task"] == 3
+    manual_events = manual.json()["packaging_task"]["events"]
+    assert [event["action"] for event in manual_events[-2:]] == [
+        "scan_pack",
+        "manual_pack",
+    ]
+    assert [event["event_sequence"] for event in manual_events[-2:]] == [1, 2]
+    assert manual_events[-1]["quantity"] == 2
+
+    overage = await async_client.post(
+        f"/operations/packaging-tasks/{task_id}/scan",
+        headers=h,
+        json={"barcode": sku},
+    )
+    assert overage.status_code == 409, overage.text
+    assert overage.json()["detail"] == "line_already_packed"
+    after_overage = await async_client.get(
+        f"/operations/packaging-tasks/{task_id}",
+        headers=h,
+    )
+    assert after_overage.json()["lines"][0]["qty_packed_in_task"] == 3
+
+    undo = await async_client.post(
+        f"/operations/packaging-tasks/{task_id}/undo-last",
+        headers=h,
+    )
+    assert undo.status_code == 200, undo.text
+    assert undo.json()["lines"][0]["qty_packed_in_task"] == 1
+    undo_events = undo.json()["events"]
+    assert undo_events[-2]["action"] == "manual_pack"
+    assert undo_events[-2]["reversed_at"] is not None
+    assert undo_events[-1]["action"] == "undo_last"
+    assert undo_events[-1]["quantity"] == 2
+    assert undo_events[-1]["event_sequence"] == 3
+    bal = await async_client.get(
+        "/operations/inventory-balances",
+        headers=h,
+        params={"storage_location_id": loc_id},
+    )
+    row = next(r for r in bal.json() if r["product_id"] == product_id)
+    assert row["quantity_unpacked"] == 2
+    assert row["quantity_packed"] == 1
+
+    repack = await async_client.post(
+        f"/operations/packaging-tasks/{task_id}/lines/{line_id}/pack",
+        headers=h,
+        json={"quantity": 2},
+    )
+    assert repack.status_code == 200, repack.text
+    done = await async_client.post(
+        f"/operations/packaging-tasks/{task_id}/complete",
+        headers=h,
+        json={"acknowledge_all_packed": False},
+    )
+    assert done.status_code == 200, done.text
+    assert done.json()["status"] == STATUS_DONE
+    done_again = await async_client.post(
+        f"/operations/packaging-tasks/{task_id}/complete",
+        headers=h,
+        json={"acknowledge_all_packed": False},
+    )
+    assert done_again.status_code == 200, done_again.text
+    assert [
+        event["action"] for event in done_again.json()["events"]
+    ].count("complete") == 1
+
+    done_list = await async_client.get(
+        "/operations/packaging-tasks",
+        headers=h,
+        params={"status": "done", "search": sku},
+    )
+    assert done_list.status_code == 200, done_list.text
+    assert task_id in {row["id"] for row in done_list.json()}
+
+
+@pytest.mark.asyncio
 async def test_packaging_blocks_mp_ship_until_done(
     async_client: AsyncClient,
     monkeypatch: pytest.MonkeyPatch,
@@ -430,6 +681,19 @@ async def test_cancel_manual_packaging_task(async_client: AsyncClient) -> None:
     assert cancel.json()["status"] == "cancelled"
     open_list = await async_client.get("/operations/packaging-tasks", headers=h)
     assert task_id not in {t["id"] for t in open_list.json()}
+    cancelled_list = await async_client.get(
+        "/operations/packaging-tasks",
+        headers=h,
+        params={"status": "cancelled", "search": "Cancel Product"},
+    )
+    assert cancelled_list.status_code == 200, cancelled_list.text
+    assert task_id in {t["id"] for t in cancelled_list.json()}
+    cancelled_detail = await async_client.get(
+        f"/operations/packaging-tasks/{task_id}",
+        headers=h,
+    )
+    assert cancelled_detail.status_code == 200, cancelled_detail.text
+    assert cancelled_detail.json()["events"][-1]["action"] == "cancel"
 
 
 @pytest.mark.asyncio
@@ -494,7 +758,7 @@ async def test_cancel_linked_packaging_task_rejected(
 
 
 @pytest.mark.asyncio
-async def test_packaging_reopens_when_unload_plan_changes(
+async def test_packaging_done_unload_plan_stays_done_when_line_delete_rejected(
     async_client: AsyncClient,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -563,18 +827,13 @@ async def test_packaging_reopens_when_unload_plan_changes(
         f"/operations/marketplace-unload-requests/{mid}/lines/{line_id}",
         headers=h,
     )
-    assert deleted.status_code == 204, deleted.text
-    added = await async_client.post(
-        f"/operations/marketplace-unload-requests/{mid}/lines",
-        headers=h,
-        json={"product_id": product_id, "quantity": 4},
-    )
-    assert added.status_code == 201, added.text
+    assert deleted.status_code == 409, deleted.text
+    assert deleted.json()["detail"] == "not_draft"
     task_after = (
         await async_client.get(f"/operations/packaging-tasks/by-unload/{mid}", headers=h)
     ).json()
-    assert task_after["status"] != STATUS_DONE
-    assert task_after["lines"][0]["qty_total"] == 4
+    assert task_after["status"] == STATUS_DONE
+    assert task_after["lines"][0]["qty_total"] == 2
 
 
 @pytest.mark.asyncio

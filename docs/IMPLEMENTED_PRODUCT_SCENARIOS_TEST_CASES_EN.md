@@ -212,6 +212,38 @@ This document expands **[IMPLEMENTED_PRODUCT_SCENARIOS_EN.md](./IMPLEMENTED_PROD
 - **Steps:** **submit** request.
 - **Expected:** request moves to **submitted** state suitable for warehouse processing.
 
+### TC-NEW-F18-001 Seller creates return from documents
+
+- **Actor:** fulfillment seller.
+- **Given:** seller is logged in with document permission; FF warehouse and seller product exist.
+- **When:** seller opens **Documents**, switches the inbound creation control from **Supply** to **Return**, and creates the request.
+- **Then:** the same inbound draft screen opens with visible **Return** type; the request remains in the inbound intake flow and can be filled/submitted like supply.
+- **Negative / restrictions:** no separate return tab/route/queue is created; technical values such as `return` or `operation_type` are not shown to the seller; operation type cannot be edited after draft creation.
+
+### TC-NEW-F18-002 Ordinary supply remains default
+
+- **Actor:** fulfillment seller.
+- **Given:** seller is on **Documents** and does not change the operation selector.
+- **When:** seller creates an inbound request.
+- **Then:** a normal **Supply** draft opens without an extra click and current seller inbound happy path is preserved.
+- **Negative / restrictions:** default supply must not become return accidentally for old or missing operation-type payloads.
+
+### TC-NEW-F18-003 Seller and FF lists show inbound operation type
+
+- **Actor:** fulfillment seller and fulfillment admin.
+- **Given:** one supply and one return inbound request exist for the seller.
+- **When:** seller opens **Documents** and admin opens FF reception/sorting queue.
+- **Then:** rows visibly distinguish **Supply** and **Return**; seller type filter can show all, supply-only, and return-only inbound documents.
+- **Negative / restrictions:** FF uses the existing queue and document-number cell; no extra return-only queue or noisy column is required.
+
+### TC-NEW-F18-004 Return print heading
+
+- **Actor:** fulfillment admin.
+- **Given:** a return inbound request with at least one line is open in FF reception.
+- **When:** admin prints the inbound waybill.
+- **Then:** the primary print heading contains **Return** and the document number; the line table still shows expected/fact/discrepancy.
+- **Negative / restrictions:** metadata-only return label is insufficient; ordinary supply print remains readable as supply.
+
 ### TC-S06-005 Assign or change storage cell on line (when status allows)
 
 - **Actor:** typically admin for warehouse execution (seller may be read-only on some actions).

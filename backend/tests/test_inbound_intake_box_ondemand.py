@@ -48,12 +48,21 @@ async def _submitted_request(
     assert wh.status_code == 200, wh.text
     wid = wh.json()["id"]
 
+    seller = await async_client.post(
+        "/sellers",
+        headers=ah,
+        json={"name": f"Seller {suffix}"},
+    )
+    assert seller.status_code in (200, 201), seller.text
+    seller_id = seller.json()["id"]
+
     pr = await async_client.post(
         "/products",
         headers=ah,
         json={
             "name": "P",
             "sku_code": f"sku-{suffix}",
+            "seller_id": seller_id,
             "length_mm": 100,
             "width_mm": 100,
             "height_mm": 100,
@@ -66,7 +75,7 @@ async def _submitted_request(
     cr = await async_client.post(
         "/operations/inbound-intake-requests",
         headers=ah,
-        json={"warehouse_id": wid},
+        json={"warehouse_id": wid, "seller_id": seller_id},
     )
     assert cr.status_code == 201, cr.text
     rid = uuid.UUID(cr.json()["id"])

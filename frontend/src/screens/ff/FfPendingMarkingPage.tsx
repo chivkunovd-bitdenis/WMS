@@ -34,6 +34,11 @@ function rowPrintable(row: PendingMarkingLine): boolean {
   return row.marking_available_count >= 1
 }
 
+function locationLabel(code?: string | null): string {
+  if (!code) return '—'
+  return code === '__SORTING__' ? 'Сортировка' : code
+}
+
 export function FfPendingMarkingPage({ token }: Props) {
   const [rows, setRows] = useState<PendingMarkingLine[]>([])
   const [lineCount, setLineCount] = useState(0)
@@ -221,7 +226,7 @@ export function FfPendingMarkingPage({ token }: Props) {
                       {row.sku_code}
                     </Typography>
                   </TableCell>
-                  <TableCell>{row.storage_location_code}</TableCell>
+                  <TableCell>{locationLabel(row.storage_location_code)}</TableCell>
                   <TableCell align="right">
                     <Badge
                       badgeContent={row.qty_remaining}
@@ -233,7 +238,35 @@ export function FfPendingMarkingPage({ token }: Props) {
                       </Typography>
                     </Badge>
                   </TableCell>
-                  <TableCell align="right">{row.marking_available_count}</TableCell>
+                  <TableCell align="right">
+                    {rowPrintable(row) ? (
+                      row.marking_available_count
+                    ) : (
+                      <Stack spacing={0.25} sx={{ alignItems: 'flex-end' }}>
+                        <Typography
+                          variant="body2"
+                          color="warning.dark"
+                          data-testid={`ff-pending-marking-no-codes-${row.packaging_task_line_id}`}
+                        >
+                          Нет КМ
+                        </Typography>
+                        <Typography variant="caption" color="text.secondary">
+                          Селлер: {row.seller_name ?? '—'}
+                        </Typography>
+                        <Typography variant="caption" color="text.secondary">
+                          Запросите КМ у селлера
+                        </Typography>
+                        <Link
+                          component={RouterLink}
+                          to={`/app/ff/packaging/${row.packaging_task_id}`}
+                          variant="caption"
+                          data-testid={`ff-pending-marking-task-link-${row.packaging_task_line_id}`}
+                        >
+                          Открыть задание
+                        </Link>
+                      </Stack>
+                    )}
+                  </TableCell>
                   <TableCell align="right">
                     <Button
                       size="small"
