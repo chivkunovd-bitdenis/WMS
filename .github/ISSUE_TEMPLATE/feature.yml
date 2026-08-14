@@ -1,6 +1,6 @@
-name: Feature
-description: A vertical slice feature with acceptance criteria and e2e scenarios
-title: "[FEAT] "
+name: Gated WMS task
+description: Any WMS task with BA feature cards, Product gate, acceptance criteria, and e2e scenarios
+title: "[WMS] "
 labels: ["needs-spec"]
 body:
   - type: textarea
@@ -21,6 +21,27 @@ body:
     validations:
       required: true
   - type: textarea
+    id: product_gate
+    attributes:
+      label: Product gate (mandatory)
+      description: "Заполнить по docs/WMS_FEATURE_GATE_PROTOCOL_RU.md: BA feature cards и Product before dev обязательны до разработки."
+      placeholder: |
+        BA feature cards:
+        - path: docs/feature-gates/YYYY-MM-DD-short-slug/FEATURE_CARDS_RU.md
+        - cards: F-001, F-002
+        - BA agent:
+        - verdicts: BA_READY / BA_REWORK / BA_BLOCKED
+
+        Product before dev:
+        - product agent:
+        - verdicts: PRODUCT_APPROVED_FOR_DEV / PRODUCT_REWORK_REQUIRED / PRODUCT_BLOCKED
+        - main objections / blockers:
+
+        Emergency bypass:
+        - EMERGENCY_BYPASS_USER_APPROVED: no
+    validations:
+      required: true
+  - type: textarea
     id: test_coverage
     attributes:
       label: Test coverage (TC-ID table)
@@ -37,7 +58,7 @@ body:
     id: e2e
     attributes:
       label: E2E scenarios (user journeys)
-      description: "1–3 scenarios that must pass via UI (Playwright)."
+      description: "1–3 scenarios for automated coverage. Playwright does not replace Product Browser Review in a real browser."
       placeholder: |
         1) Login -> Open Receiving -> Create Receipt -> See it in list
         2) ...
@@ -51,9 +72,25 @@ body:
     validations:
       required: false
   - type: textarea
+    id: product_browser_review
+    attributes:
+      label: Product Browser Review after dev
+      description: "Заполняется перед закрытием: реальная видимая вкладка браузера, живые клики, verdict Product Agent."
+      placeholder: |
+        Product Browser Review after dev:
+        - product agent:
+        - real browser used: yes/no
+        - environment URL:
+        - role / tenant / seller / warehouse:
+        - actions clicked:
+        - visible states:
+        - evidence paths:
+        - verdict: PRODUCT_BROWSER_APPROVED / PRODUCT_REWORK_REQUIRED / PRODUCT_BROWSER_BLOCKED
+    validations:
+      required: false
+  - type: textarea
     id: out_of_scope
     attributes:
       label: Out of scope
     validations:
       required: false
-
