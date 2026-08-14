@@ -67,7 +67,12 @@ async def test_fbs_seller_warehouses_ok_and_missing_token_403(
         headers=headers,
     )
     assert no_token.status_code == 403
-    assert no_token.json()["detail"] == "missing_marketplace_token"
+    assert no_token.json()["detail"] == {
+        "code": "missing_marketplace_token",
+        "message": "Нет токена WB Marketplace.",
+        "context": {},
+        "retryable": False,
+    }
 
     await _patch_marketplace_token(async_client, headers, seller_id)
 
@@ -151,7 +156,12 @@ async def test_fbs_seller_warehouses_cross_tenant_404(
         headers=headers_b,
     )
     assert cross.status_code == 404
-    assert cross.json()["detail"] == "seller_not_found"
+    assert cross.json()["detail"] == {
+        "code": "seller_not_found",
+        "message": "Селлер не найден.",
+        "context": {},
+        "retryable": False,
+    }
 
 
 @pytest.mark.asyncio
@@ -180,4 +190,9 @@ async def test_fbs_seller_warehouses_wb_upstream_error_502(
         headers=headers,
     )
     assert r.status_code == 502
-    assert r.json()["detail"] == "wb_upstream_error_502"
+    assert r.json()["detail"] == {
+        "code": "wb_upstream_error_502",
+        "message": "Ошибка Wildberries.",
+        "context": {},
+        "retryable": True,
+    }
