@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import hashlib
+import logging
 import uuid
 from contextlib import suppress
 from dataclasses import dataclass
@@ -54,6 +55,7 @@ from app.services.fbs_supply_reconcile_service import (
 )
 from app.services.wb_marketplace_orders_service import (
     _apply_wb_status_to_order,
+    _supplier_status_from_row,
     _wb_status_from_row,
 )
 from app.services.wildberries_client import (
@@ -65,7 +67,14 @@ from app.services.wildberries_credentials_service import (
     _seller_in_tenant,
     get_decrypted_marketplace_token,
 )
-from app.services.wildberries_errors import WildberriesBusinessError, WildberriesClientError
+from app.services.wildberries_errors import (
+    WildberriesBusinessError,
+    WildberriesClientError,
+    log_wb_client_error,
+    wb_error_context,
+    wb_error_ref,
+    wb_operator_message,
+)
 from app.services.wildberries_fbs_client import split_marketplace_order_id_batches
 
 _DELIVER_READY_ORDER_STATUSES = frozenset({FBS_ORDER_STATUS_PACKED})
@@ -81,6 +90,10 @@ _DELIVER_BLOCKED_SUPPLY_STATUSES = frozenset(
         FBS_SUPPLY_STATUS_DONE,
     }
 )
+
+logger = logging.getLogger(__name__)
+
+_WB_DISPATCH_PENDING_MESSAGE = "fix them to dispatch items"
 
 
 class FbsShipmentError(Exception):
@@ -99,6 +112,15 @@ class FbsShipmentError(Exception):
         self.retryable = retryable
         self.http_status = http_status
         super().__init__(code)
+
+
+def _meta_validation_message(exc: WildberriesBusinessError) -> tuple[str, bool]:
+    if (exc.message or "").strip().lower() == _WB_DISPATCH_PENDING_MESSAGE:
+        return (
+            "Wildberries ещё обрабатывает поставку. Повторите передачу через минуту.",
+            True,
+        )
+    return (exc.message or "WB отклонил метаданные заказов.", False)
 
 
 @dataclass(frozen=True)
@@ -120,6 +142,45 @@ class DeliveryPreflightResult:
 def _wb_error_code(exc: WildberriesClientError) -> str:
     suffix = f"_{exc.status_code}" if exc.status_code else ""
     return f"wb_{exc.code}{suffix}"
+
+
+def _shipment_error_from_wb(
+    exc: WildberriesClientError,
+    *,
+    tenant_id: uuid.UUID,
+    seller_id: uuid.UUID,
+    local_entity_id: uuid.UUID | str | None,
+    wb_supply_id: str | None,
+    event: str,
+    retryable: bool | None = None,
+    http_status: int | None = None,
+    extra_context: dict[str, Any] | None = None,
+) -> FbsShipmentError:
+    ref = wb_error_ref()
+    log_wb_client_error(
+        logger,
+        event,
+        exc,
+        tenant_id=tenant_id,
+        seller_id=seller_id,
+        local_entity_id=local_entity_id,
+        wb_object_id=wb_supply_id,
+        ref=ref,
+    )
+    extra: dict[str, Any] = {}
+    if wb_supply_id is not None:
+        extra["wb_supply_id"] = wb_supply_id
+    if local_entity_id is not None:
+        extra["local_entity_id"] = str(local_entity_id)
+    if extra_context:
+        extra.update(extra_context)
+    return FbsShipmentError(
+        _wb_error_code(exc),
+        message=wb_operator_message(exc),
+        context=wb_error_context(exc, ref=ref, extra=extra),
+        retryable=exc.code == "transport_error" if retryable is None else retryable,
+        http_status=http_status or (504 if exc.code == "transport_error" else 502),
+    )
 
 
 async def _require_marketplace_token(
@@ -255,11 +316,22 @@ async def _sync_supply_orders_from_wb(
 
     wb_ids = [int(order.wb_order_id) for order in orders]
     for batch in split_marketplace_order_id_batches(wb_ids):
-        status_rows = await fetch_marketplace_orders_status(
-            http_client,
-            api_token=token,
-            order_ids=batch,
-        )
+        try:
+            status_rows = await fetch_marketplace_orders_status(
+                http_client,
+                api_token=token,
+                order_ids=batch,
+            )
+        except WildberriesClientError as exc:
+            raise _shipment_error_from_wb(
+                exc,
+                tenant_id=tenant_id,
+                seller_id=supply.seller_id,
+                local_entity_id=supply.id,
+                wb_supply_id=supply.wb_supply_id,
+                event="fbs shipment WB supply status sync failed",
+                extra_context={"wb_order_ids": batch},
+            ) from exc
         by_id = {
             int(row["id"]): row
             for row in status_rows
@@ -270,8 +342,14 @@ async def _sync_supply_orders_from_wb(
             if row is None:
                 continue
             wb_status = _wb_status_from_row(row)
-            if wb_status is not None:
-                await _apply_wb_status_to_order(session, order, wb_status)
+            supplier_status = _supplier_status_from_row(row)
+            if wb_status is not None or supplier_status is not None:
+                await _apply_wb_status_to_order(
+                    session,
+                    order,
+                    wb_status,
+                    supplier_status=supplier_status,
+                )
 
     for order in orders:
         with suppress(marking_svc.FbsMarkingError):
@@ -643,7 +721,14 @@ async def _fetch_supply_qr_after_deliver(
             supply_id=supply.wb_supply_id,
         )
     except WildberriesClientError as exc:
-        raise FbsShipmentError(_wb_error_code(exc)) from exc
+        raise _shipment_error_from_wb(
+            exc,
+            tenant_id=supply.tenant_id,
+            seller_id=supply.seller_id,
+            local_entity_id=supply.id,
+            wb_supply_id=supply.wb_supply_id,
+            event="fbs shipment WB supply QR fetch failed",
+        ) from exc
     supply.barcode_file = _save_barcode_png(supply.id, png_bytes)
     try:
         await upsert_supply_qr_asset_from_bytes(
@@ -765,6 +850,7 @@ async def deliver_supply(
                 )
             except WildberriesBusinessError as exc:
                 meta_context = _meta_validation_context(exc)
+                message, retryable = _meta_validation_message(exc)
                 await mark_operation_failed(
                     session,
                     existing,
@@ -775,12 +861,24 @@ async def deliver_supply(
                 )
                 raise FbsShipmentError(
                     "meta_validation_fail",
-                    message=exc.message or "WB отклонил метаданные заказов.",
+                    message=message,
                     context={"meta_validation": meta_context},
+                    retryable=retryable,
                     http_status=409,
                 ) from exc
             except WildberriesClientError as exc:
                 if exc.code == "transport_error":
+                    ref = wb_error_ref()
+                    log_wb_client_error(
+                        logger,
+                        "fbs shipment WB deliver timeout",
+                        exc,
+                        tenant_id=tenant_id,
+                        seller_id=supply.seller_id,
+                        local_entity_id=supply.id,
+                        wb_object_id=supply.wb_supply_id,
+                        ref=ref,
+                    )
                     await mark_operation_pending_confirmation(
                         session,
                         existing,
@@ -795,14 +893,25 @@ async def deliver_supply(
                         retryable=True,
                         http_status=504,
                     ) from exc
+                error = _shipment_error_from_wb(
+                    exc,
+                    tenant_id=tenant_id,
+                    seller_id=supply.seller_id,
+                    local_entity_id=supply.id,
+                    wb_supply_id=supply.wb_supply_id,
+                    event="fbs shipment WB deliver failed",
+                    retryable=False,
+                    http_status=502,
+                )
                 await mark_operation_failed(
                     session,
                     existing,
-                    error_code=_wb_error_code(exc),
+                    error_code=error.code,
+                    error_context=error.context,
                     wb_supply_id=supply.wb_supply_id,
                     local_supply_id=supply.id,
                 )
-                raise FbsShipmentError(_wb_error_code(exc), http_status=502) from exc
+                raise error from exc
 
             orders = await _load_locked_supply_orders(session, tenant_id, supply.id)
             await _persist_confirmed_delivery(session, supply, orders, existing)
@@ -852,6 +961,7 @@ async def deliver_supply(
         )
     except WildberriesBusinessError as exc:
         meta_context = _meta_validation_context(exc)
+        message, retryable = _meta_validation_message(exc)
         await mark_operation_failed(
             session,
             operation,
@@ -862,12 +972,24 @@ async def deliver_supply(
         )
         raise FbsShipmentError(
             "meta_validation_fail",
-            message=exc.message or "WB отклонил метаданные заказов.",
+            message=message,
             context={"meta_validation": meta_context},
+            retryable=retryable,
             http_status=409,
         ) from exc
     except WildberriesClientError as exc:
         if exc.code == "transport_error":
+            ref = wb_error_ref()
+            log_wb_client_error(
+                logger,
+                "fbs shipment WB deliver timeout",
+                exc,
+                tenant_id=tenant_id,
+                seller_id=supply.seller_id,
+                local_entity_id=supply.id,
+                wb_object_id=supply.wb_supply_id,
+                ref=ref,
+            )
             await mark_operation_pending_confirmation(
                 session,
                 operation,
@@ -882,14 +1004,25 @@ async def deliver_supply(
                 retryable=True,
                 http_status=504,
             ) from exc
+        error = _shipment_error_from_wb(
+            exc,
+            tenant_id=tenant_id,
+            seller_id=supply.seller_id,
+            local_entity_id=supply.id,
+            wb_supply_id=supply.wb_supply_id,
+            event="fbs shipment WB deliver failed",
+            retryable=False,
+            http_status=502,
+        )
         await mark_operation_failed(
             session,
             operation,
-            error_code=_wb_error_code(exc),
+            error_code=error.code,
+            error_context=error.context,
             wb_supply_id=supply.wb_supply_id,
             local_supply_id=supply.id,
         )
-        raise FbsShipmentError(_wb_error_code(exc), http_status=502) from exc
+        raise error from exc
 
     orders = await _load_locked_supply_orders(session, tenant_id, supply.id)
     cargo_qr_ready = True
@@ -939,7 +1072,14 @@ async def get_supply_barcode(
             type=type,
         )
     except WildberriesClientError as exc:
-        raise FbsShipmentError(_wb_error_code(exc)) from exc
+        raise _shipment_error_from_wb(
+            exc,
+            tenant_id=tenant_id,
+            seller_id=supply.seller_id,
+            local_entity_id=supply.id,
+            wb_supply_id=supply.wb_supply_id,
+            event="fbs shipment WB supply barcode fetch failed",
+        ) from exc
 
     supply.barcode_file = _save_barcode_png(supply.id, png_bytes)
     await session.flush()

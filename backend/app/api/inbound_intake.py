@@ -22,9 +22,10 @@ from app.api.deps import (
     get_current_user,
     get_effective_seller_id,
     require_reception_access,
+    require_reception_or_seller_draft_access,
     seller_line_product_scope,
 )
-from app.core.roles import FULFILLMENT_ADMIN, FULFILLMENT_SELLER
+from app.core.roles import FULFILLMENT_SELLER
 from app.db.session import get_db
 from app.models.inbound_intake import (
     InboundIntakeBox,
@@ -518,13 +519,11 @@ async def list_inbound_requests(
 @router.post("", response_model=InboundIntakeRequestOut, status_code=status.HTTP_201_CREATED)
 async def create_inbound_request(
     body: InboundIntakeRequestCreate,
-    user: Annotated[User, Depends(get_current_user)],
+    user: Annotated[User, Depends(require_reception_or_seller_draft_access)],
     session: Annotated[AsyncSession, Depends(get_db)],
     effective_seller_id: Annotated[uuid.UUID | None, Depends(get_effective_seller_id)],
 ) -> InboundIntakeRequestOut:
-    if user.role == FULFILLMENT_ADMIN:
-        owning_seller_id: uuid.UUID | None = None
-    elif user.role == FULFILLMENT_SELLER:
+    if user.role == FULFILLMENT_SELLER:
         if effective_seller_id is None:
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
@@ -532,10 +531,7 @@ async def create_inbound_request(
             )
         owning_seller_id = effective_seller_id
     else:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="forbidden",
-        )
+        owning_seller_id = None
     try:
         r = await svc.create_request(
             session,
@@ -642,17 +638,12 @@ async def delete_inbound_draft_request(
 async def patch_inbound_request_planned(
     request_id: uuid.UUID,
     body: InboundIntakeRequestPlannedPatch,
-    user: Annotated[User, Depends(get_current_user)],
+    user: Annotated[User, Depends(require_reception_or_seller_draft_access)],
     session: Annotated[AsyncSession, Depends(get_db)],
     seller_scope: Annotated[uuid.UUID | None, Depends(seller_line_product_scope)],
 ) -> InboundIntakeRequestOut:
-    if user.role not in (FULFILLMENT_ADMIN, FULFILLMENT_SELLER):
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="forbidden",
-        )
     line_seller_scope: uuid.UUID | None = (
-        None if user.role == FULFILLMENT_ADMIN else seller_scope
+        seller_scope if user.role == FULFILLMENT_SELLER else None
     )
     patch_fields = body.model_dump(exclude_unset=True)
     try:
@@ -1291,17 +1282,12 @@ async def list_inbound_movements(
 async def add_inbound_line(
     request_id: uuid.UUID,
     body: InboundIntakeLineCreate,
-    user: Annotated[User, Depends(get_current_user)],
+    user: Annotated[User, Depends(require_reception_or_seller_draft_access)],
     session: Annotated[AsyncSession, Depends(get_db)],
     seller_scope: Annotated[uuid.UUID | None, Depends(seller_line_product_scope)],
 ) -> InboundIntakeLineOut:
-    if user.role not in (FULFILLMENT_ADMIN, FULFILLMENT_SELLER):
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="forbidden",
-        )
     line_seller_scope: uuid.UUID | None = (
-        None if user.role == FULFILLMENT_ADMIN else seller_scope
+        seller_scope if user.role == FULFILLMENT_SELLER else None
     )
     try:
         line = await svc.add_line(
@@ -1377,17 +1363,12 @@ async def patch_inbound_line_expected(
     request_id: uuid.UUID,
     line_id: uuid.UUID,
     body: InboundIntakeLineExpectedPatch,
-    user: Annotated[User, Depends(get_current_user)],
+    user: Annotated[User, Depends(require_reception_or_seller_draft_access)],
     session: Annotated[AsyncSession, Depends(get_db)],
     seller_scope: Annotated[uuid.UUID | None, Depends(seller_line_product_scope)],
 ) -> InboundIntakeLineOut:
-    if user.role not in (FULFILLMENT_ADMIN, FULFILLMENT_SELLER):
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="forbidden",
-        )
     line_seller_scope: uuid.UUID | None = (
-        None if user.role == FULFILLMENT_ADMIN else seller_scope
+        seller_scope if user.role == FULFILLMENT_SELLER else None
     )
     try:
         line = await svc.update_line_expected_qty(
@@ -1441,17 +1422,12 @@ async def patch_inbound_line_expected(
 async def delete_inbound_draft_line(
     request_id: uuid.UUID,
     line_id: uuid.UUID,
-    user: Annotated[User, Depends(get_current_user)],
+    user: Annotated[User, Depends(require_reception_or_seller_draft_access)],
     session: Annotated[AsyncSession, Depends(get_db)],
     seller_scope: Annotated[uuid.UUID | None, Depends(seller_line_product_scope)],
 ) -> Response:
-    if user.role not in (FULFILLMENT_ADMIN, FULFILLMENT_SELLER):
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="forbidden",
-        )
     line_seller_scope: uuid.UUID | None = (
-        None if user.role == FULFILLMENT_ADMIN else seller_scope
+        seller_scope if user.role == FULFILLMENT_SELLER else None
     )
     try:
         await svc.delete_draft_line(
@@ -1609,15 +1585,10 @@ async def receive_inbound_line(
 @router.post("/{request_id}/submit", response_model=InboundIntakeRequestOut)
 async def submit_inbound_request(
     request_id: uuid.UUID,
-    user: Annotated[User, Depends(get_current_user)],
+    user: Annotated[User, Depends(require_reception_or_seller_draft_access)],
     session: Annotated[AsyncSession, Depends(get_db)],
     seller_scope: Annotated[uuid.UUID | None, Depends(seller_line_product_scope)],
 ) -> InboundIntakeRequestOut:
-    if user.role not in (FULFILLMENT_ADMIN, FULFILLMENT_SELLER):
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="forbidden",
-        )
     try:
         r = await svc.submit_request(
             session,

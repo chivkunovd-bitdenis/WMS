@@ -46,18 +46,33 @@ services:
         condition: service_healthy
       redis:
         condition: service_healthy
+      migrations:
+        condition: service_completed_successfully
     ports:
       - "${WMS_API_PORT:-18080}:8000"
+
+  migrations:
+    build:
+      context: ./backend
+    command: ["alembic", "upgrade", "head"]
+    environment:
+      DATABASE_URL: postgresql+psycopg_async://postgres:postgres@db:5432/wms
+      WMS_DATA_DIR: /var/lib/wms/data
+      WMS_BOOTSTRAP_ADMIN: "1"
+      WMS_BOOTSTRAP_ADMIN_EMAIL: "admin@test.example.com"
+      WMS_BOOTSTRAP_ADMIN_PASSWORD: "password123"
+      WMS_BOOTSTRAP_ORG_NAME: "WMS Test"
+      WMS_BOOTSTRAP_ORG_SLUG: "wms-test"
+    volumes:
+      - wms_data:/var/lib/wms/data
+    depends_on:
+      db:
+        condition: service_healthy
 
   celery_worker:
     build:
       context: ./backend
-    command:
-      [
-        "sh",
-        "-c",
-        "alembic upgrade head && celery -A app.celery_app worker --loglevel=info",
-      ]
+    command: ["celery", "-A", "app.celery_app", "worker", "--loglevel=info"]
     environment:
       DATABASE_URL: postgresql+psycopg_async://postgres:postgres@db:5432/wms
       CELERY_BROKER_URL: redis://redis:6379/0
@@ -66,8 +81,8 @@ services:
         condition: service_healthy
       redis:
         condition: service_healthy
-      api:
-        condition: service_started
+      migrations:
+        condition: service_completed_successfully
 
   celery_beat:
     build:
@@ -79,6 +94,8 @@ services:
     depends_on:
       redis:
         condition: service_healthy
+      migrations:
+        condition: service_completed_successfully
       celery_worker:
         condition: service_started
 
@@ -97,6 +114,7 @@ services:
     build:
       context: .
       dockerfile: frontend/Dockerfile.seller.prod
+    restart: unless-stopped
     depends_on:
       - api
     ports:

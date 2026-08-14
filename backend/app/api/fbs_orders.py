@@ -13,7 +13,7 @@ from app.api.deps import (
     require_fbs_operator_access,
     require_fulfillment_admin,
 )
-from app.api.fbs_errors import raise_fbs_http
+from app.api.fbs_errors import envelope_from_exc, raise_fbs_http
 from app.core.settings import settings
 from app.db.session import get_db
 from app.models.fbs_order import FbsOrder
@@ -100,6 +100,7 @@ class FbsWorklistMetadataOut(BaseModel):
 
 
 class FbsWorklistStickerOut(BaseModel):
+    code: str | None
     status: str
     asset_url: str | None
     applied_at: str | None
@@ -126,6 +127,7 @@ class FbsWorklistOrderOut(BaseModel):
     wb_order_id: int
     status: str
     wb_status: str | None
+    supplier_status: str | None
     seller: FbsWorklistSellerOut
     wb_warehouse: FbsWorklistWarehouseOut
     wms_warehouse: FbsWorklistWarehouseOut
@@ -144,10 +146,17 @@ class FbsWorklistOrderOut(BaseModel):
     selection_blockers: list[FbsWorklistBlockerOut]
 
 
+class FbsWorklistWarehouseOptionOut(BaseModel):
+    id: str
+    name: str
+    wb_warehouse: FbsWorklistWarehouseOut
+
+
 class FbsWorklistPageOut(BaseModel):
     items: list[FbsWorklistOrderOut]
     next_cursor: str | None
     server_now: str
+    warehouse_options: list[FbsWorklistWarehouseOptionOut]
 
 
 class FbsOrderOut(BaseModel):
@@ -171,6 +180,7 @@ class FbsOrderOut(BaseModel):
     trbx_id: str | None
     status: str
     wb_status: str | None
+    supplier_status: str | None
     created_at_wb: str
     deadline_at: str
     mapping_status: str
@@ -201,6 +211,7 @@ def _order_out(order: FbsOrder) -> FbsOrderOut:
         trbx_id=str(order.trbx_id) if order.trbx_id is not None else None,
         status=order.status,
         wb_status=order.wb_status,
+        supplier_status=order.supplier_status,
         created_at_wb=order.created_at_wb.isoformat(),
         deadline_at=order.deadline_at.isoformat(),
         mapping_status=order.mapping_status,
@@ -252,6 +263,7 @@ async def get_fbs_orders_worklist(
     effective_seller_id: Annotated[uuid.UUID | None, Depends(get_effective_seller_id)],
     seller_id: Annotated[uuid.UUID | None, Query()] = None,
     status_group: Annotated[str | None, Query()] = None,
+    wb_warehouse_id: Annotated[int | None, Query(gt=0)] = None,
     search: Annotated[str | None, Query()] = None,
     limit: Annotated[int, Query(ge=1, le=500)] = 100,
     cursor: Annotated[str | None, Query()] = None,
@@ -267,6 +279,7 @@ async def get_fbs_orders_worklist(
             user.tenant_id,
             seller_id=filter_seller,
             status_group=status_group,
+            wb_warehouse_id=wb_warehouse_id,
             search=search,
             limit=limit,
             cursor=cursor,
@@ -281,6 +294,7 @@ async def get_fbs_orders_worklist(
             "items": page.items,
             "next_cursor": page.next_cursor,
             "server_now": page.server_now,
+            "warehouse_options": page.warehouse_options,
         }
     )
 
@@ -313,15 +327,16 @@ async def get_fbs_orders(
 
 
 def _raise_cancellation_http(exc: FbsCancellationError) -> None:
+    detail = envelope_from_exc(exc)
     if exc.code == "order_not_found":
-        raise_fbs_http(status.HTTP_404_NOT_FOUND, exc.code)
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=detail)
     if exc.code == "order_not_cancellable":
-        raise_fbs_http(status.HTTP_409_CONFLICT, exc.code)
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=detail)
     if exc.code in ("seller_not_found", "missing_marketplace_token"):
-        raise_fbs_http(status.HTTP_400_BAD_REQUEST, exc.code)
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=detail)
     if exc.code.startswith("wb_"):
-        raise_fbs_http(status.HTTP_502_BAD_GATEWAY, exc.code)
-    raise_fbs_http(status.HTTP_500_INTERNAL_SERVER_ERROR, exc.code)
+        raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail=detail)
+    raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=detail)
 
 
 @router.patch("/{order_id}/cancel", response_model=FbsOrderOut)

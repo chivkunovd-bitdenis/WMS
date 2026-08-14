@@ -477,6 +477,32 @@ async def update_product_dimensions(
     return p
 
 
+async def bulk_update_products_requires_honest_sign(
+    session: AsyncSession,
+    tenant_id: uuid.UUID,
+    *,
+    product_ids: list[uuid.UUID],
+    requires_honest_sign: bool,
+    seller_id: uuid.UUID | None = None,
+) -> int:
+    if not product_ids:
+        return 0
+    stmt = (
+        update(Product)
+        .where(
+            Product.tenant_id == tenant_id,
+            Product.id.in_(product_ids),
+        )
+        .values(requires_honest_sign=requires_honest_sign)
+    )
+    if seller_id is not None:
+        stmt = stmt.where(Product.seller_id == seller_id)
+    result = await session.execute(stmt)
+    updated_count = int(getattr(result, "rowcount", 0) or 0)
+    await session.commit()
+    return updated_count
+
+
 async def update_product_fbs_stock_sync(
     session: AsyncSession,
     tenant_id: uuid.UUID,

@@ -708,7 +708,7 @@ Distinct from **operational outbound** (S08) and **seller supply/inbound** (S06)
 
 ## S17 — FBS operator flow (WB Marketplace, fulfillment admin)
 
-Full-cycle FBS: worklist → compatible selection → atomic WB supply → server-side pick → existing `PackagingTask` → marking → print assets → PVZ cargo places or warehouse/SC deliver → post-delivery tracking. Distinct from seller MP unload (S16) and operational outbound (S08). Canonical task IDs: `tasks/fbs-operator-flow/TEST_CASES.md` TC-01…24 → **TC-S17-001…024** below. Wire contract: `tasks/fbs-operator-flow/BACKEND_CONTRACT.md`; errors: `ERROR_CATALOG_RU.md`; OpenAPI: `OPENAPI_NOTES.md`.
+Full-cycle FBS: worklist → compatible selection → atomic WB supply → server-side pick → existing `PackagingTask` → marking → print assets → PVZ cargo places or warehouse/SC deliver → post-delivery tracking. Distinct from seller MP unload (S16) and operational outbound (S08). Canonical task IDs: `tasks/fbs-operator-flow/TEST_CASES.md` TC-01…24 → **TC-S17-001…024** below, plus post-handoff UI extensions from this catalog. Wire contract: `tasks/fbs-operator-flow/BACKEND_CONTRACT.md`; errors: `ERROR_CATALOG_RU.md`; OpenAPI: `OPENAPI_NOTES.md`.
 
 ### TC-S17-001 Three sellers on one WMS warehouse
 
@@ -902,6 +902,14 @@ Full-cycle FBS: worklist → compatible selection → atomic WB supply → serve
 - **Then:** request shapes match `wildberries_fbs_client` contract dated in tests.
 - **Negative:** not run in default CI; failure blocks production rollout claim only.
 
+### TC-S17-025 New worklist filters by seller warehouse
+
+- **Actor:** fulfillment admin.
+- **Given:** the **New** FBS worklist has orders for one seller on two seller/WB warehouses mapped to WMS warehouses.
+- **When:** operator opens **New** and selects one seller warehouse in the warehouse filter.
+- **Then:** the table shows only orders for that selected WB warehouse and sends `wb_warehouse_id` to the worklist API.
+- **Negative / restriction:** changing seller or leaving **New** resets the warehouse filter; filtering must happen server-side so pagination cannot hide matching orders.
+
 **Frontend browser paths (Codex, post-backend handoff):** worklist enrichment + live deadline; selection blockers + atomic create; full-screen workspace stages; persistent picking; embedded PackagingTask; marking row states; sticker preview; PVZ cargo + QR; warehouse/SC supply QR; WB timeout/409 never shows local success.
 
 ---
@@ -972,6 +980,14 @@ Full-cycle FBS: worklist → compatible selection → atomic WB supply → serve
 - **When:** product A is picked from **both** cells (partial quantity from each) and product B from its own cell; the shipment/packaging tab is opened.
 - **Then:** the packaging task has exactly **2** lines (one per product); product A's line `qty_total` equals the sum of quantities picked from both cells; no cell/location is exposed on the MP packaging line.
 - **Negative:** before this fix, picking one product from N cells produced N packaging lines for that single product — regression covered by `test_marketplace_unload_packaging_one_row_per_product_across_cells`.
+
+### TC-NEW-PKG-09 FF bulk marks catalog products as Honest Sign required
+
+- **Actor:** fulfillment admin.
+- **Given:** FF product catalog contains several visible product rows.
+- **When:** clicks **Select all** in the catalog table and applies **Honest Sign required** to selected rows.
+- **Then:** selected products persist `requires_honest_sign=true`; each updated row shows a visible **CHZ** marker.
+- **Negative:** bulk apply action is disabled while no product rows are selected.
 
 ---
 

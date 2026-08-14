@@ -29,6 +29,9 @@ FBS_SUPPLY_SOURCE_WB = "wb"
 FBS_DELIVERY_TYPE_WAREHOUSE_SC = "warehouse_sc"
 FBS_DELIVERY_TYPE_PVZ = "pvz"
 
+FBS_SUPPLY_SOURCE_WMS = "wms"
+FBS_SUPPLY_SOURCE_WB = "wb"
+
 
 class FbsSupply(Base):
     __tablename__ = "fbs_supplies"

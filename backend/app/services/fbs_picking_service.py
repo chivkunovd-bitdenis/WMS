@@ -15,7 +15,9 @@ from app.models.fbs_order import (
     PACK_STATUS_PACKED,
     PICK_STATUS_PENDING,
     PICK_STATUS_PICKED,
+    RESERVE_STATUS_RESERVED,
     FbsOrder,
+    FbsOrderReservation,
 )
 from app.models.fbs_order_pick import (
     PICK_EVENT_PICKED,
@@ -24,6 +26,7 @@ from app.models.fbs_order_pick import (
     FbsOrderPickEvent,
 )
 from app.models.fbs_supply import FbsSupply
+from app.models.inventory_movement import InventoryMovement
 from app.models.product import Product
 from app.models.storage_location import StorageLocation
 from app.models.user import User
@@ -241,57 +244,53 @@ async def scan_pick_product(
         product.id,
         location.id,
     )
-    if available < 1:
-        raise FbsPickingError(
-            "insufficient_unpacked",
-            "Недостаточно неупакованного остатка в ячейке.",
-            context={
-                "order_id": str(target_order.id),
-                "product_id": str(product.id),
-                "location_id": str(location.id),
-                "location_code": location.code,
-                "requested": 1,
-                "available": available,
-                "recommended_action": (
-                    "Проверьте остаток в другой ячейке или пополните склад."
-                ),
-            },
-        )
-
     sorting_location = await get_or_create_sorting_location(
         session, tenant_id, supply.warehouse_id
     )
-    try:
-        transfer_group_id = await inventory_service.transfer_on_hand_between_locations(
-            session,
-            tenant_id,
-            from_storage_location_id=location.id,
-            to_storage_location_id=sorting_location.id,
-            product_id=product.id,
-            quantity=1,
+    movement_id: uuid.UUID | None = None
+    if available >= 1 and location.id != sorting_location.id:
+        try:
+            transfer_group_id = await inventory_service.transfer_on_hand_between_locations(
+                session,
+                tenant_id,
+                from_storage_location_id=location.id,
+                to_storage_location_id=sorting_location.id,
+                product_id=product.id,
+                quantity=1,
+            )
+        except ValueError as exc:
+            if str(exc) == "insufficient stock":
+                raise FbsPickingError(
+                    "insufficient_unpacked",
+                    "Недостаточно неупакованного остатка в ячейке.",
+                    context={
+                        "order_id": str(target_order.id),
+                        "product_id": str(product.id),
+                        "location_id": str(location.id),
+                        "location_code": location.code,
+                        "requested": 1,
+                        "available": 0,
+                        "recommended_action": (
+                            "Проверьте остаток в другой ячейке или пополните склад."
+                        ),
+                    },
+                ) from exc
+            raise
+        movement_id = await inventory_service.transfer_out_movement_id(
+            session, tenant_id, transfer_group_id
         )
-    except ValueError as exc:
-        if str(exc) == "insufficient stock":
-            raise FbsPickingError(
-                "insufficient_unpacked",
-                "Недостаточно неупакованного остатка в ячейке.",
-                context={
-                    "order_id": str(target_order.id),
-                    "product_id": str(product.id),
-                    "location_id": str(location.id),
-                    "location_code": location.code,
-                    "requested": 1,
-                    "available": 0,
-                    "recommended_action": (
-                        "Проверьте остаток в другой ячейке или пополните склад."
-                    ),
-                },
-            ) from exc
-        raise
-
-    movement_id = await inventory_service.transfer_out_movement_id(
-        session, tenant_id, transfer_group_id
-    )
+    elif available < 1:
+        movement = await inventory_service.record_movement_and_adjust_balance(
+            session,
+            tenant_id=tenant_id,
+            product_id=product.id,
+            storage_location_id=sorting_location.id,
+            quantity_delta=1,
+            movement_type="fbs_order_pick",
+        )
+        await _ensure_order_reservation(session, target_order, supply)
+        await session.flush()
+        movement_id = movement.id
     picked_at = datetime.now(tz=UTC)
     pick = FbsOrderPick(
         tenant_id=tenant_id,
@@ -408,25 +407,45 @@ async def undo_pick(
     if existing_undo is not None:
         return await get_supply_workspace(session, tenant_id, supply_id)
 
-    try:
-        transfer_group_id = await inventory_service.transfer_on_hand_between_locations(
-            session,
-            tenant_id,
-            from_storage_location_id=pick.sorting_storage_location_id,
-            to_storage_location_id=pick.source_storage_location_id,
-            product_id=pick.product_id,
-            quantity=1,
+    movement_id: uuid.UUID | None = None
+    original_movement_type = None
+    if pick.inventory_movement_id is not None:
+        original_movement_type = await session.scalar(
+            select(InventoryMovement.movement_type).where(
+                InventoryMovement.id == pick.inventory_movement_id,
+                InventoryMovement.tenant_id == tenant_id,
+            )
         )
+    try:
+        if original_movement_type == "fbs_order_pick":
+            movement = await inventory_service.record_movement_and_adjust_balance(
+                session,
+                tenant_id=tenant_id,
+                product_id=pick.product_id,
+                storage_location_id=pick.sorting_storage_location_id,
+                quantity_delta=-1,
+                movement_type="fbs_order_pick_undo",
+            )
+            await session.flush()
+            movement_id = movement.id
+        elif pick.inventory_movement_id is not None:
+            transfer_group_id = await inventory_service.transfer_on_hand_between_locations(
+                session,
+                tenant_id,
+                from_storage_location_id=pick.sorting_storage_location_id,
+                to_storage_location_id=pick.source_storage_location_id,
+                product_id=pick.product_id,
+                quantity=1,
+            )
+            movement_id = await inventory_service.transfer_out_movement_id(
+                session, tenant_id, transfer_group_id
+            )
     except ValueError as exc:
         raise FbsPickingError(
             "insufficient_unpacked",
             "Недостаточно остатка в зоне сортировки для отмены подбора.",
             context={"order_id": str(order_id)},
         ) from exc
-
-    movement_id = await inventory_service.transfer_out_movement_id(
-        session, tenant_id, transfer_group_id
-    )
     undone_at = datetime.now(tz=UTC)
     pick.undone_at = undone_at
     session.add(
@@ -444,6 +463,31 @@ async def undo_pick(
     order.picked_at = None
     await session.flush()
     return await get_supply_workspace(session, tenant_id, supply_id)
+
+
+async def _ensure_order_reservation(
+    session: AsyncSession,
+    order: FbsOrder,
+    supply: FbsSupply,
+) -> None:
+    if order.product_id is None:
+        return
+    existing_id = await session.scalar(
+        select(FbsOrderReservation.id).where(FbsOrderReservation.fbs_order_id == order.id)
+    )
+    if existing_id is not None:
+        order.reserve_status = RESERVE_STATUS_RESERVED
+        return
+    session.add(
+        FbsOrderReservation(
+            tenant_id=order.tenant_id,
+            fbs_order_id=order.id,
+            product_id=order.product_id,
+            warehouse_id=supply.warehouse_id,
+            quantity=1,
+        )
+    )
+    order.reserve_status = RESERVE_STATUS_RESERVED
 
 
 async def _load_supply(

@@ -21,6 +21,7 @@ import {
   TableHead,
   TableRow,
   TextField,
+  Tooltip,
   Typography,
 } from '@mui/material'
 import CloudSyncOutlinedIcon from '@mui/icons-material/CloudSyncOutlined'
@@ -33,10 +34,12 @@ import { FbsSupplyCreateDialog } from './FbsSupplyCreateDialog'
 import { FfFbsSectionNav } from './FfFbsSectionNav'
 import { FfFbsSupplyWorkspace } from './FfFbsSupplyWorkspace'
 import {
+  fetchFbsSellerWarehouses,
   fetchFbsWorklist,
   runFbsOrdersSync,
   syncFbsOrderStatuses,
   type FbsWorklistOrder,
+  type FbsWorklistWarehouseOption,
   type FbsWorkspace,
 } from './fbsApi'
 
@@ -54,8 +57,10 @@ const TABS = [
   { key: 'active', label: 'В работе' },
   { key: 'delivery', label: 'В доставке' },
   { key: 'done', label: 'Завершённые' },
-  { key: 'cancelled', label: 'Отменённые' },
 ] as const
+
+const EXTERNAL_WB_SUPPLY_HINT =
+  'Поставку создали в кабинете Wildberries, а в WMS она не привязана. Открыть её здесь нельзя.'
 
 function MissingText({ children }: { children: string }) {
   return (
@@ -83,12 +88,22 @@ function MetadataState({ order }: { order: FbsWorklistOrder }) {
   )
 }
 
+function warehouseOptionLabel(
+  option: FbsWorklistWarehouseOption,
+  sellerWarehouseNames: Record<string, string>,
+) {
+  return sellerWarehouseNames[option.id] || `WB ${option.wb_warehouse.id}`
+}
+
 export function FfFbsOrdersScreen({ token, authHeaders, sellers, isAdmin = false }: Props) {
   const [statusGroup, setStatusGroup] = useState<(typeof TABS)[number]['key']>('new')
   const [sellerId, setSellerId] = useState('__all__')
+  const [wbWarehouseId, setWbWarehouseId] = useState('__all__')
   const [search, setSearch] = useState('')
   const [appliedSearch, setAppliedSearch] = useState('')
   const [orders, setOrders] = useState<FbsWorklistOrder[]>([])
+  const [warehouseOptions, setWarehouseOptions] = useState<FbsWorklistWarehouseOption[]>([])
+  const [sellerWarehouseNames, setSellerWarehouseNames] = useState<Record<string, string>>({})
   const [serverNow, setServerNow] = useState<string | null>(null)
   const [selected, setSelected] = useState<Set<string>>(new Set())
   const [busy, setBusy] = useState(false)
@@ -107,10 +122,20 @@ export function FfFbsOrdersScreen({ token, authHeaders, sellers, isAdmin = false
       const page = await fetchFbsWorklist(token, authHeaders, {
         seller_id: sellerId === '__all__' ? null : sellerId,
         status_group: statusGroup,
+        wb_warehouse_id: statusGroup === 'new' && wbWarehouseId !== '__all__' ? wbWarehouseId : null,
         search: appliedSearch || null,
         limit: 200,
       })
       setOrders(page.items)
+      setWarehouseOptions(statusGroup === 'new' ? page.warehouse_options ?? [] : [])
+      if (
+        statusGroup === 'new' &&
+        wbWarehouseId !== '__all__' &&
+        !(page.warehouse_options ?? []).some((warehouse) => warehouse.id === wbWarehouseId)
+      ) {
+        setWbWarehouseId('__all__')
+        setSelected(new Set())
+      }
       setServerNow(page.server_now)
       setSelected((current) => {
         const visible = new Set(page.items.map((order) => order.id))
@@ -118,15 +143,35 @@ export function FfFbsOrdersScreen({ token, authHeaders, sellers, isAdmin = false
       })
     } catch (cause) {
       setOrders([])
+      setWarehouseOptions([])
       setError(cause instanceof Error ? cause.message : 'Не удалось загрузить заказы FBS.')
     } finally {
       setBusy(false)
     }
-  }, [token, authHeaders, sellerId, statusGroup, appliedSearch])
+  }, [token, authHeaders, sellerId, statusGroup, wbWarehouseId, appliedSearch])
 
   useEffect(() => {
     void load()
   }, [load])
+
+  useEffect(() => {
+    let cancelled = false
+    setSellerWarehouseNames({})
+    if (statusGroup !== 'new' || sellerId === '__all__') return
+    void fetchFbsSellerWarehouses(token, authHeaders, sellerId)
+      .then((warehouses) => {
+        if (cancelled) return
+        setSellerWarehouseNames(Object.fromEntries(
+          warehouses
+            .filter((warehouse) => warehouse.id != null && warehouse.name?.trim())
+            .map((warehouse) => [String(warehouse.id), warehouse.name!.trim()]),
+        ))
+      })
+      .catch(() => {
+        // WB names are optional for loading the worklist; IDs remain usable as fallback.
+      })
+    return () => { cancelled = true }
+  }, [token, authHeaders, sellerId, statusGroup])
 
   // Ручной поход в Wildberries: тянем новые заказы и подтягиваем их статусы.
   // Автоопрос делает то же самое раз в минуту, но оператору нужна кнопка на случай,
@@ -254,6 +299,7 @@ export function FfFbsOrdersScreen({ token, authHeaders, sellers, isAdmin = false
           value={statusGroup}
           onChange={(_, value) => {
             setStatusGroup(value)
+            setWbWarehouseId('__all__')
             setSelected(new Set())
           }}
           variant="scrollable"
@@ -276,7 +322,11 @@ export function FfFbsOrdersScreen({ token, authHeaders, sellers, isAdmin = false
               labelId="fbs-worklist-seller-label"
               label="Селлер"
               value={sellerId}
-              onChange={(event) => setSellerId(String(event.target.value))}
+              onChange={(event) => {
+                setSellerId(String(event.target.value))
+                setWbWarehouseId('__all__')
+                setSelected(new Set())
+              }}
             >
               <MenuItem value="__all__">Все селлеры</MenuItem>
               {sellers.map((seller) => (
@@ -286,6 +336,32 @@ export function FfFbsOrdersScreen({ token, authHeaders, sellers, isAdmin = false
               ))}
             </Select>
           </FormControl>
+          {statusGroup === 'new' && sellerId !== '__all__' ? (
+            <FormControl sx={{ minWidth: 260 }}>
+              <InputLabel id="fbs-worklist-warehouse-label">Склад селлера</InputLabel>
+              <Select
+                labelId="fbs-worklist-warehouse-label"
+                label="Склад селлера"
+                value={wbWarehouseId}
+                onChange={(event) => {
+                  setWbWarehouseId(String(event.target.value))
+                  setSelected(new Set())
+                }}
+                data-testid="fbs-worklist-warehouse"
+              >
+                <MenuItem value="__all__">Все склады</MenuItem>
+                {warehouseOptions.map((warehouse) => (
+                  <MenuItem
+                    key={warehouse.id}
+                    value={warehouse.id}
+                    data-testid={`fbs-worklist-warehouse-${warehouse.id}`}
+                  >
+                    {warehouseOptionLabel(warehouse, sellerWarehouseNames)}
+                  </MenuItem>
+                ))}
+              </Select>
+            </FormControl>
+          ) : null}
           <TextField
             fullWidth
             label="Заказ, артикул или штрихкод"
@@ -346,14 +422,26 @@ export function FfFbsOrdersScreen({ token, authHeaders, sellers, isAdmin = false
           <TableBody>
             {orders.map((order) => {
               const blocked = order.selection_blockers.length > 0
-              return (
+              const localSupplyMissing = statusGroup !== 'new' && !order.supply_id
+              const row = (
                 <TableRow
                   key={order.id}
-                  hover
+                  hover={!localSupplyMissing}
                   selected={selected.has(order.id)}
-                  sx={{ verticalAlign: 'top', cursor: order.supply_id ? 'pointer' : 'default' }}
+                  sx={{
+                    verticalAlign: 'top',
+                    cursor: order.supply_id ? 'pointer' : 'default',
+                    ...(localSupplyMissing
+                      ? {
+                          bgcolor: 'action.disabledBackground',
+                          opacity: 0.72,
+                          '&:hover': { bgcolor: 'action.disabledBackground' },
+                        }
+                      : {}),
+                  }}
                   onClick={() => order.supply_id && openWorkspace(order.supply_id)}
                   data-testid={`fbs-order-${order.id}`}
+                  aria-disabled={localSupplyMissing ? true : undefined}
                 >
                   <TableCell padding="checkbox">
                     {statusGroup === 'new' ? (
@@ -411,8 +499,33 @@ export function FfFbsOrdersScreen({ token, authHeaders, sellers, isAdmin = false
                       cancelled={order.status === 'cancelled'}
                     />
                   </TableCell>
-                  {statusGroup !== 'new' ? <TableCell><FbsStatusChip status={order.status} /><Box sx={{ mt: 0.75 }}><MetadataState order={order} /></Box></TableCell> : null}
+                  {statusGroup !== 'new' ? (
+                    <TableCell>
+                      <FbsStatusChip status={order.status} />
+                      <Stack sx={{ mt: 0.75, alignItems: 'flex-start' }} spacing={0.75}>
+                        {localSupplyMissing ? (
+                          <Tooltip title={EXTERNAL_WB_SUPPLY_HINT}>
+                            <Chip
+                              size="small"
+                              variant="outlined"
+                              color="warning"
+                              label="Поставка создана в WB"
+                              data-testid={`fbs-order-${order.id}-external-supply`}
+                            />
+                          </Tooltip>
+                        ) : null}
+                        <MetadataState order={order} />
+                      </Stack>
+                    </TableCell>
+                  ) : null}
                 </TableRow>
+              )
+              return (
+                localSupplyMissing ? (
+                  <Tooltip key={order.id} title={EXTERNAL_WB_SUPPLY_HINT} placement="top" arrow>
+                    {row}
+                  </Tooltip>
+                ) : row
               )
             })}
             {!busy && orders.length === 0 ? (

@@ -29,6 +29,7 @@ from app.models.fbs_supply import (
 from app.services.wb_marketplace_orders_service import (
     WbMarketplaceOrdersError,
     _apply_wb_status_to_order,
+    _supplier_status_from_row,
     _wb_status_from_row,
 )
 from app.services.wildberries_client import (
@@ -59,7 +60,6 @@ TERMINAL_ORDER_STATUSES = frozenset(
     {
         FBS_ORDER_STATUS_DONE,
         FBS_ORDER_STATUS_CANCELLED,
-        FBS_ORDER_STATUS_SORTED,
         FBS_ORDER_STATUS_DEFECT,
     }
 )
@@ -255,9 +255,15 @@ async def _sync_supply_orders_from_wb(
             if row is None:
                 continue
             wb_status = _wb_status_from_row(row)
-            if wb_status is None:
+            supplier_status = _supplier_status_from_row(row)
+            if wb_status is None and supplier_status is None:
                 continue
-            await _apply_wb_status_to_order(session, order, wb_status)
+            await _apply_wb_status_to_order(
+                session,
+                order,
+                wb_status,
+                supplier_status=supplier_status,
+            )
             order.last_wb_sync_at = datetime.now(tz=UTC)
             processed += 1
 

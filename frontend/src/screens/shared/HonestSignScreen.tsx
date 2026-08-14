@@ -74,6 +74,21 @@ type ProductInventoryRow = {
   shared_baskets: SharedBasketRow[]
 }
 
+type PoolProduct = {
+  id: string
+  sku_code: string
+  name: string
+}
+
+type PoolListRow = {
+  id: string
+  title: string
+  gtin: string
+  products: PoolProduct[]
+  available: number
+  linked_products_count?: number
+}
+
 type MarkingInventoryResponse = {
   rows: ProductInventoryRow[]
   unlinked_available_count: number
@@ -179,6 +194,7 @@ export function HonestSignScreen({
   const inventoryLoadAbortRef = useRef<AbortController | null>(null)
   const [products, setProducts] = useState<ProductInventoryRow[]>([])
   const [unlinkedAvailable, setUnlinkedAvailable] = useState(0)
+  const [unlinkedPools, setUnlinkedPools] = useState<PoolListRow[]>([])
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [search, setSearch] = useState('')
@@ -210,10 +226,16 @@ export function HonestSignScreen({
             : effectiveSellerId
               ? `?seller_id=${encodeURIComponent(effectiveSellerId)}`
               : ''
-      const res = await fetch(apiUrl(`/operations/marking-codes/inventory${q}`), {
-        headers: { Authorization: `Bearer ${token}` },
-        signal: ac.signal,
-      })
+      const [res, poolsRes] = await Promise.all([
+        fetch(apiUrl(`/operations/marking-codes/inventory${q}`), {
+          headers: { Authorization: `Bearer ${token}` },
+          signal: ac.signal,
+        }),
+        fetch(apiUrl(`/operations/marking-codes/pools${q}`), {
+          headers: { Authorization: `Bearer ${token}` },
+          signal: ac.signal,
+        }),
+      ])
       if (ac.signal.aborted) {
         return
       }
@@ -221,9 +243,19 @@ export function HonestSignScreen({
         setError(await readApiErrorMessage(res))
         return
       }
+      if (!poolsRes.ok) {
+        setError(await readApiErrorMessage(poolsRes))
+        return
+      }
       const body = (await res.json()) as MarkingInventoryResponse
+      const poolRows = (await poolsRes.json()) as PoolListRow[]
       setProducts(body.rows)
       setUnlinkedAvailable(body.unlinked_available_count)
+      setUnlinkedPools(
+        poolRows.filter(
+          (pool) => (pool.linked_products_count ?? pool.products.length) === 0 && pool.available > 0,
+        ),
+      )
     } catch (err) {
       if (err instanceof DOMException && err.name === 'AbortError') {
         return
@@ -240,6 +272,7 @@ export function HonestSignScreen({
     if (sellerIdRequiredForImport && !effectiveSellerId) {
       setProducts([])
       setUnlinkedAvailable(0)
+      setUnlinkedPools([])
       return
     }
     void loadInventory()
@@ -369,8 +402,8 @@ export function HonestSignScreen({
 
       {unlinkedAvailable > 0 ? (
         <Alert severity="info" data-testid={`${testIdPrefix}-unlinked-hint`}>
-          Кодов без привязки к товару: {unlinkedAvailable}. Загрузите файл и привяжите товары при
-          импорте.
+          Кодов без привязки к товару: {unlinkedAvailable}. Откройте пул без привязки и выберите
+          товары на вкладке «Товары».
         </Alert>
       ) : null}
 
@@ -584,6 +617,8 @@ export function HonestSignScreen({
                     <Typography variant="body2" color="text.secondary">
                       {!hasAnyMarkingData
                         ? 'Пока нет кодов маркировки — загрузите КМ из файла.'
+                        : unlinkedAvailable > 0
+                          ? 'Товарных строк пока нет, но есть КМ без привязки. Откройте пул без привязки ниже и выберите товары.'
                         : showSellerDashboard && problematicProducts.length > 0
                           ? 'Товары, требующие внимания, показаны в блоке выше. По фильтру в таблице ничего нет.'
                           : 'Ничего не найдено по фильтру.'}
@@ -706,6 +741,49 @@ export function HonestSignScreen({
           </TableBody>
         </Table>
       </TableContainer>
+
+      {!busy && unlinkedPools.length > 0 ? (
+        <TableContainer component={Paper} variant="outlined" data-testid={`${testIdPrefix}-unlinked-pools`}>
+          <Table size="small">
+            <TableHead>
+              <TableRow>
+                <TableCell sx={{ minWidth: 220 }}>Пул без привязки</TableCell>
+                <TableCell sx={{ minWidth: 140 }}>GTIN</TableCell>
+                <TableCell align="right" sx={{ minWidth: 110 }}>
+                  Доступно
+                </TableCell>
+                <TableCell align="right" sx={{ minWidth: 120 }}>
+                  Действия
+                </TableCell>
+              </TableRow>
+            </TableHead>
+            <TableBody>
+              {unlinkedPools.map((pool) => (
+                <TableRow
+                  key={pool.id}
+                  hover
+                  sx={{ cursor: 'pointer' }}
+                  onClick={() => navigate(`${routeBase}/honest-sign/pool/${pool.id}?tab=products`)}
+                  data-testid={`${testIdPrefix}-unlinked-pool-row-${pool.id}`}
+                >
+                  <TableCell>{pool.title}</TableCell>
+                  <TableCell>{pool.gtin}</TableCell>
+                  <TableCell align="right">{pool.available}</TableCell>
+                  <TableCell align="right" onClick={(e) => e.stopPropagation()}>
+                    <Button
+                      size="small"
+                      onClick={() => navigate(`${routeBase}/honest-sign/pool/${pool.id}?tab=products`)}
+                      data-testid={`${testIdPrefix}-unlinked-pool-link-${pool.id}`}
+                    >
+                      Привязать
+                    </Button>
+                  </TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
+        </TableContainer>
+      ) : null}
 
       {importOpen && effectiveSellerId ? (
         <MarkingImportDialog

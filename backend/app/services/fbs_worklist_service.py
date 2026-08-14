@@ -20,6 +20,7 @@ from app.models.fbs_order import (
     FBS_ORDER_STATUS_CANCELLED,
     FBS_ORDER_STATUS_DEFECT,
     FBS_ORDER_STATUS_DONE,
+    FBS_ORDER_STATUS_EXTERNAL_PROCESSING,
     FBS_ORDER_STATUS_IN_DELIVERY,
     FBS_ORDER_STATUS_IN_SUPPLY,
     FBS_ORDER_STATUS_NEW,
@@ -58,11 +59,13 @@ STATUS_GROUP_MAP: dict[str, frozenset[str]] = {
             FBS_ORDER_STATUS_IN_SUPPLY,
             FBS_ORDER_STATUS_ASSEMBLING,
             FBS_ORDER_STATUS_PACKED,
+            FBS_ORDER_STATUS_EXTERNAL_PROCESSING,
         }
     ),
     "delivery": frozenset({FBS_ORDER_STATUS_IN_DELIVERY, FBS_ORDER_STATUS_SORTED}),
-    "done": frozenset({FBS_ORDER_STATUS_DONE}),
-    "cancelled": frozenset({FBS_ORDER_STATUS_CANCELLED, FBS_ORDER_STATUS_DEFECT}),
+    "done": frozenset(
+        {FBS_ORDER_STATUS_DONE, FBS_ORDER_STATUS_CANCELLED, FBS_ORDER_STATUS_DEFECT}
+    ),
 }
 
 MISSING_WMS_WAREHOUSE = "Склад не привязан"
@@ -70,11 +73,23 @@ MISSING_WB_WAREHOUSE = "Склад WB неизвестен"
 MISSING_PRODUCT = "Товар не сопоставлен"
 
 
+def _is_supplier_status_new(supplier_status: str | None) -> bool:
+    return supplier_status is None or supplier_status.strip().lower() == FBS_ORDER_STATUS_NEW
+
+
+def _supplier_new_clause() -> ColumnElement[bool]:
+    return or_(
+        FbsOrder.supplier_status.is_(None),
+        func.lower(FbsOrder.supplier_status) == FBS_ORDER_STATUS_NEW,
+    )
+
+
 @dataclass(frozen=True)
 class WorklistPage:
     items: list[dict[str, Any]]
     next_cursor: str | None
     server_now: str
+    warehouse_options: list[dict[str, Any]]
 
 
 @dataclass(frozen=True)
@@ -113,6 +128,7 @@ async def fetch_worklist_page(
     *,
     seller_id: uuid.UUID | None = None,
     status_group: str | None = None,
+    wb_warehouse_id: int | None = None,
     search: str | None = None,
     limit: int = 100,
     cursor: str | None = None,
@@ -123,11 +139,18 @@ async def fetch_worklist_page(
         tenant_id,
         seller_id=seller_id,
         status_group=status_group,
+        wb_warehouse_id=wb_warehouse_id,
         search=search,
         limit=limit,
         cursor=cursor,
     )
     items = await build_worklist_items(session, tenant_id, orders, server_now=server_now)
+    warehouse_options = await _fetch_warehouse_options(
+        session,
+        tenant_id,
+        seller_id=seller_id,
+        status_group=status_group,
+    )
     next_cursor: str | None = None
     if len(orders) == limit:
         last = orders[-1]
@@ -136,6 +159,7 @@ async def fetch_worklist_page(
         items=items,
         next_cursor=next_cursor,
         server_now=server_now.isoformat(),
+        warehouse_options=warehouse_options,
     )
 
 
@@ -145,6 +169,7 @@ async def _fetch_orders_page(
     *,
     seller_id: uuid.UUID | None,
     status_group: str | None,
+    wb_warehouse_id: int | None,
     search: str | None,
     limit: int,
     cursor: str | None,
@@ -158,6 +183,10 @@ async def _fetch_orders_page(
             msg = "invalid_status_group"
             raise ValueError(msg)
         stmt = stmt.where(FbsOrder.status.in_(allowed))
+        if status_group == "new":
+            stmt = stmt.where(_supplier_new_clause())
+    if wb_warehouse_id is not None:
+        stmt = stmt.where(FbsOrder.wb_warehouse_id == wb_warehouse_id)
     if search and search.strip():
         term = search.strip()
         clauses: list[ColumnElement[bool]] = [
@@ -181,6 +210,65 @@ async def _fetch_orders_page(
     stmt = stmt.order_by(FbsOrder.deadline_at.asc(), FbsOrder.id.asc()).limit(limit)
     res = await session.execute(stmt)
     return list(res.scalars().all())
+
+
+async def _fetch_warehouse_options(
+    session: AsyncSession,
+    tenant_id: uuid.UUID,
+    *,
+    seller_id: uuid.UUID | None,
+    status_group: str | None,
+) -> list[dict[str, Any]]:
+    stmt = (
+        select(
+            FbsOrder.wb_warehouse_id,
+            TenantWbMpWarehouse.name,
+        )
+        .distinct()
+        .outerjoin(
+            TenantWbMpWarehouse,
+            and_(
+                TenantWbMpWarehouse.tenant_id == FbsOrder.tenant_id,
+                TenantWbMpWarehouse.wb_warehouse_id == FbsOrder.wb_warehouse_id,
+            ),
+        )
+        .where(
+            FbsOrder.tenant_id == tenant_id,
+            FbsOrder.wb_warehouse_id.is_not(None),
+        )
+    )
+    if seller_id is not None:
+        stmt = stmt.where(FbsOrder.seller_id == seller_id)
+    if status_group:
+        allowed = STATUS_GROUP_MAP[status_group]
+        stmt = stmt.where(FbsOrder.status.in_(allowed))
+        if status_group == "new":
+            stmt = stmt.where(_supplier_new_clause())
+    stmt = stmt.order_by(TenantWbMpWarehouse.name.asc(), FbsOrder.wb_warehouse_id.asc())
+    res = await session.execute(stmt)
+    options: dict[str, dict[str, Any]] = {}
+    for wb_id, wb_name in res.all():
+        if wb_id is None:
+            continue
+        wb_id_int = int(wb_id)
+        key = str(wb_id_int)
+        label = (
+            wb_name.strip()
+            if isinstance(wb_name, str) and wb_name.strip()
+            else f"WB {wb_id_int}"
+        )
+        options.setdefault(
+            key,
+            {
+                "id": key,
+                "name": label,
+                "wb_warehouse": {
+                    "id": wb_id_int,
+                    "name": label,
+                },
+            },
+        )
+    return list(options.values())
 
 
 async def build_worklist_items(
@@ -502,6 +590,13 @@ def compute_selection_blockers(
         blockers.append(
             {"code": "order_cancelled", "message": "Заказ отменён или брак."}
         )
+    if not _is_supplier_status_new(order.supplier_status):
+        blockers.append(
+            {
+                "code": "order_external_processing",
+                "message": "Заказ уже ушёл в кабинете WB.",
+            }
+        )
     if order.supply_id is not None:
         blockers.append(
             {"code": "already_in_supply", "message": "Заказ уже в поставке."}
@@ -564,6 +659,7 @@ def _map_order(order: FbsOrder, ctx: dict[str, Any], server_now: datetime) -> di
         "wb_order_id": int(order.wb_order_id),
         "status": order.status,
         "wb_status": order.wb_status,
+        "supplier_status": order.supplier_status,
         "seller": {
             "id": str(order.seller_id),
             "name": seller.name if seller else "Селлер не найден",
@@ -607,6 +703,7 @@ def _map_order(order: FbsOrder, ctx: dict[str, Any], server_now: datetime) -> di
         "can_pvz": bool(order.can_pvz),
         "metadata": _build_metadata(order, markings),
         "sticker": {
+            "code": order.sticker_code,
             "status": order.sticker_status,
             "asset_url": sticker_url,
             "applied_at": applied_at.isoformat() if applied_at else None,

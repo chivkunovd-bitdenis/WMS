@@ -856,7 +856,9 @@ async def create_fbs_supply_from_orders(
                 http_client=http_client,
             )
         except supply_svc.FbsSupplyError as exc:
-            if exc.code in {"wb_timeout", "wb_pending_confirmation"}:
+            if exc.code in {"wb_timeout", "wb_pending_confirmation"} or (
+                exc.code.startswith("wb_") and exc.context.get("wb_supply_id")
+            ):
                 await session.commit()
             _raise_from_service(exc)
     await session.commit()
@@ -869,14 +871,16 @@ async def start_fbs_supply_work(
     user: Annotated[User, Depends(require_fbs_operator_access)],
     session: Annotated[AsyncSession, Depends(get_db)],
 ) -> FbsWorkspaceOut:
-    try:
-        workspace = await supply_svc.start_supply_work(
-            session,
-            user.tenant_id,
-            supply_id,
-        )
-    except supply_svc.FbsSupplyError as exc:
-        _raise_from_service(exc)
+    async with httpx.AsyncClient() as http_client:
+        try:
+            workspace = await supply_svc.start_supply_work(
+                session,
+                user.tenant_id,
+                supply_id,
+                http_client=http_client,
+            )
+        except supply_svc.FbsSupplyError as exc:
+            _raise_from_service(exc)
     await session.commit()
     return FbsWorkspaceOut.model_validate(workspace)
 

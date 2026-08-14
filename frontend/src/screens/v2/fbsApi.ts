@@ -28,6 +28,7 @@ export type FbsOrderRow = {
   trbx_id: string | null
   status: string
   wb_status: string | null
+  supplier_status: string | null
   created_at_wb: string
   deadline_at: string
   mapping_status: string // mapped | missing
@@ -36,14 +37,12 @@ export type FbsOrderRow = {
   updated_at: string
 }
 
-export type FbsOrdersTab = 'new' | 'assembly' | 'delivery' | 'done'
+export type FbsOrdersTab = 'new' | 'active'
 
-// Группировка статусов заказа по вкладкам (зеркалит WB).
+// Рабочие вкладки FF: создание поставки и сборка уже созданной поставки.
 export const TAB_STATUSES: Record<FbsOrdersTab, string[]> = {
   new: ['new'],
-  assembly: ['in_supply', 'assembling', 'packed'],
-  delivery: ['in_delivery', 'sorted'],
-  done: ['done', 'cancelled', 'defect'],
+  active: ['in_supply', 'assembling', 'packed'],
 }
 
 export async function fetchFbsOrders(
@@ -168,11 +167,23 @@ export type FbsOrderMetadata = {
   last_checked_at: string | null
 }
 
+export type FbsWorklistWarehouseOption = {
+  id: string
+  name: string
+  wb_warehouse: { id: number; name: string | null }
+}
+
+export type FbsSellerWarehouse = {
+  id: number | null
+  name: string | null
+}
+
 export type FbsWorklistOrder = {
   id: string
   wb_order_id: number
   status: string
   wb_status: string | null
+  supplier_status: string | null
   seller: { id: string; name: string }
   wb_warehouse: { id: number; name: string | null }
   wms_warehouse: { id: string; name: string }
@@ -196,6 +207,7 @@ export type FbsWorklistOrder = {
   can_pvz: boolean
   metadata: FbsOrderMetadata
   sticker: {
+    code: string | null
     status: 'not_requested' | 'requesting' | 'ready' | 'print_opened' | 'applied' | 'error'
     asset_url: string | null
     applied_at: string | null
@@ -216,6 +228,7 @@ export type FbsWorklistPage = {
   items: FbsWorklistOrder[]
   next_cursor: string | null
   server_now: string
+  warehouse_options: FbsWorklistWarehouseOption[]
 }
 
 export type FbsSupplyPreflightRequest = {
@@ -451,6 +464,7 @@ export async function fetchFbsWorklist(
   params: {
     seller_id?: string | null
     status_group?: string | null
+    wb_warehouse_id?: string | null
     search?: string | null
     limit?: number
     cursor?: string | null
@@ -459,6 +473,7 @@ export async function fetchFbsWorklist(
   const qs = new URLSearchParams({ limit: String(params.limit ?? 100) })
   if (params.seller_id) qs.set('seller_id', params.seller_id)
   if (params.status_group) qs.set('status_group', params.status_group)
+  if (params.wb_warehouse_id) qs.set('wb_warehouse_id', params.wb_warehouse_id)
   if (params.search) qs.set('search', params.search)
   if (params.cursor) qs.set('cursor', params.cursor)
   return jsonOrThrow<FbsWorklistPage>(
@@ -1041,6 +1056,18 @@ export async function putFbsOrderMarking(
 
 // ── Привязки складов WB ↔ WMS + синхронизация остатков ───────────────────────
 // backend/app/api/fbs_sellers.py — /operations/fbs-sellers/{seller_id}/...
+
+export async function fetchFbsSellerWarehouses(
+  token: string,
+  ah: AuthHeaders,
+  sellerId: string,
+): Promise<FbsSellerWarehouse[]> {
+  return jsonOrThrow<FbsSellerWarehouse[]>(
+    await fetch(apiUrl(`/operations/fbs-sellers/${sellerId}/warehouses`), {
+      headers: { ...ah(token) },
+    }),
+  )
+}
 
 export type FbsWarehouseBinding = {
   id: string

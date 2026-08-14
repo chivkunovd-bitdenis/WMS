@@ -48,6 +48,7 @@ from app.services.fbs_tracking_service import (
 )
 from app.services.fbs_worklist_service import build_worklist_items, print_asset_content_url
 from app.services.marking_code_service import count_available_for_products_batch
+from app.services.sorting_location_service import get_or_create_sorting_location
 
 
 class FbsWorkspaceError(Exception):
@@ -78,6 +79,7 @@ async def get_supply_workspace(
     worklist_items = await build_worklist_items(
         session, tenant_id, orders, server_now=server_now
     )
+    await _inject_order_pick_fallback(session, tenant_id, supply, worklist_items)
     cargo_places = await _build_cargo_places(session, tenant_id, supply)
     boxes = await _build_boxes(session, tenant_id, supply_id)
     marking_pool = await _build_marking_pool(session, tenant_id, orders)
@@ -156,6 +158,41 @@ async def get_supply_workspace(
         "wb_sync_stale": wb_sync_stale,
         "server_now": server_now.isoformat(),
     }
+
+
+async def _inject_order_pick_fallback(
+    session: AsyncSession,
+    tenant_id: uuid.UUID,
+    supply: FbsSupply,
+    worklist_items: list[dict[str, Any]],
+) -> None:
+    if not worklist_items:
+        return
+    sorting_location = await get_or_create_sorting_location(
+        session, tenant_id, supply.warehouse_id
+    )
+    orders_by_id = {str(order.id): order for order in supply.orders}
+    for item in worklist_items:
+        order = orders_by_id.get(str(item.get("id")))
+        if order is None or order.product_id is None:
+            continue
+        if order.pick_status == PICK_STATUS_PICKED or order.pack_status == PACK_STATUS_PACKED:
+            continue
+        inventory = item.get("inventory")
+        if not isinstance(inventory, dict):
+            continue
+        if inventory.get("locations"):
+            continue
+        inventory["available_unpacked"] = max(
+            int(inventory.get("available_unpacked") or 0), 1
+        )
+        inventory["locations"] = [
+            {
+                "id": str(sorting_location.id),
+                "code": sorting_location.code,
+                "available_unpacked": 1,
+            }
+        ]
 
 
 async def _load_supply_graph(

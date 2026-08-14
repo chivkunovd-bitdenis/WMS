@@ -73,6 +73,14 @@ class Settings(BaseSettings):
         default=False,
         description=("Playwright/e2e: stub WB Marketplace supplies/stickers API without network."),
     )
+    e2e_mock_wb_marketplace_supply_add_error_once: str | None = Field(
+        default=None,
+        description=("Tests only: make the next mock WB Marketplace supply add-orders call fail."),
+    )
+    e2e_mock_wb_marketplace_supply_readback_error_once: str | None = Field(
+        default=None,
+        description=("Tests only: make the next mock WB Marketplace supply readback call fail."),
+    )
     e2e_mock_wb_marketplace_warehouses: bool = Field(
         default=False,
         description=(
@@ -149,7 +157,7 @@ class Settings(BaseSettings):
         description="Celery Beat interval for polling new FBS orders (seconds).",
     )
     fbs_statuses_sync_interval_sec: int = Field(
-        default=60,
+        default=600,
         ge=60,
         le=7200,
         validation_alias=AliasChoices(

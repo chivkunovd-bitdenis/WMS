@@ -1,13 +1,16 @@
 from __future__ import annotations
 
 import json
+import logging
 import uuid
 from datetime import datetime
-from typing import Annotated
+from typing import Annotated, Literal
 
 import httpx
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Request, status
+from fastapi.responses import JSONResponse
 from pydantic import BaseModel, Field
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.deps import (
@@ -19,9 +22,12 @@ from app.api.deps import (
 from app.core.roles import FULFILLMENT_SELLER
 from app.core.settings import settings
 from app.db.session import get_db
-from app.models.user import User
 from app.services.seller_staff_permissions_service import PERM_SETTINGS
-from app.services.wildberries_client import WildberriesClientError, fetch_cards_list
+from app.services.wildberries_client import (
+    WildberriesClientError,
+    fetch_cards_list,
+    fetch_marketplace_seller_warehouses,
+)
 from app.services.wildberries_credentials_service import (
     SKIP,
     TokenPatchValue,
@@ -42,6 +48,7 @@ from app.services.wildberries_product_link_service import (
 )
 
 router = APIRouter(prefix="/integrations/wildberries", tags=["integrations"])
+logger = logging.getLogger(__name__)
 
 
 class WildberriesStatusOut(BaseModel):
@@ -102,11 +109,19 @@ class WildberriesSelfTokenSaveBody(BaseModel):
 
 class WildberriesSelfTokenSaveOut(BaseModel):
     ok: bool = True
+    validation_ok: bool = True
+    validation_error: str | None = None
     cards_received: int
     cards_saved: int
     products_created: int = 0
     products_updated: int = 0
     products_skipped: int = 0
+
+
+class WildberriesSelfTokenSaveErrorOut(BaseModel):
+    code: Literal["token_save_failed", "product_conflict"]
+    message: str
+    ref: str
 
 
 class WildberriesSelfSyncOut(BaseModel):
@@ -116,6 +131,35 @@ class WildberriesSelfSyncOut(BaseModel):
     products_created: int
     products_updated: int
     products_skipped: int
+
+
+def _self_token_save_error_response(
+    exc: Exception,
+    *,
+    tenant_id: uuid.UUID,
+    seller_id: uuid.UUID,
+    cards_count: int,
+    status_code: int,
+    code: Literal["token_save_failed", "product_conflict"],
+    message: str,
+) -> JSONResponse:
+    incident_ref = uuid.uuid4().hex[:12]
+    logger.exception(
+        "WB self content token save failed ref=%s tenant_id=%s seller_id=%s "
+        "cards_count=%d exception_type=%s error_code=%s",
+        incident_ref,
+        tenant_id,
+        seller_id,
+        cards_count,
+        type(exc).__name__,
+        code,
+    )
+    body = WildberriesSelfTokenSaveErrorOut(
+        code=code,
+        message=message,
+        ref=incident_ref,
+    )
+    return JSONResponse(status_code=status_code, content=body.model_dump())
 
 
 def _parse_token_merge_patch(
@@ -393,18 +437,27 @@ async def patch_seller_wildberries_tokens(
     )
 
 
-@router.post("/self/content-token", response_model=WildberriesSelfTokenSaveOut)
+@router.post(
+    "/self/content-token",
+    response_model=WildberriesSelfTokenSaveOut,
+    responses={
+        status.HTTP_409_CONFLICT: {"model": WildberriesSelfTokenSaveErrorOut},
+        status.HTTP_500_INTERNAL_SERVER_ERROR: {"model": WildberriesSelfTokenSaveErrorOut},
+    },
+)
 async def save_and_validate_self_content_token(
     body: WildberriesSelfTokenSaveBody,
     user: Annotated[User, Depends(get_current_user)],
     session: Annotated[AsyncSession, Depends(get_db)],
     background_tasks: BackgroundTasks,
     effective_seller_id: Annotated[uuid.UUID | None, Depends(get_effective_seller_id)],
-) -> WildberriesSelfTokenSaveOut:
-    """Seller saves WB content API key; validate by calling cards list."""
+) -> WildberriesSelfTokenSaveOut | JSONResponse:
+    """Seller saves WB API key; validate content and marketplace scopes."""
     await assert_seller_permission(session, user, PERM_SETTINGS)
     if user.role != FULFILLMENT_SELLER or effective_seller_id is None:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="forbidden")
+    tenant_id = user.tenant_id
+    seller_id = effective_seller_id
     token = body.content_api_token.strip()
     if not token:
         raise HTTPException(
@@ -415,6 +468,8 @@ async def save_and_validate_self_content_token(
     updated_at: str | None = None
     nm_id: int | None = None
     total_hint: int | None = None
+    validation_error: str | None = None
+    marketplace_validation_ok = False
     try:
         async with httpx.AsyncClient() as client:
             seen: set[tuple[str | None, int | None]] = set()
@@ -448,48 +503,96 @@ async def save_and_validate_self_content_token(
                         total_hint = th
                 if total_hint is not None and len(total_cards) >= total_hint:
                     break
+            try:
+                await fetch_marketplace_seller_warehouses(client, api_token=token)
+                marketplace_validation_ok = True
+            except WildberriesClientError as exc:
+                if exc.code == "upstream_error" and exc.status_code in (401, 403):
+                    validation_error = "missing_marketplace_scope"
+                else:
+                    suffix = f"_{exc.status_code}" if exc.status_code else ""
+                    validation_error = f"marketplace_{exc.code}{suffix}"
     except WildberriesClientError as exc:
         if exc.code == "upstream_error" and exc.status_code in (401, 403):
             raise HTTPException(
                 status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
                 detail="invalid_wb_token",
             ) from None
-        raise HTTPException(
-            status_code=status.HTTP_502_BAD_GATEWAY,
-            detail=exc.code,
-        ) from None
+        if exc.code == "invalid_json":
+            raise HTTPException(
+                status_code=status.HTTP_502_BAD_GATEWAY,
+                detail=exc.code,
+            ) from None
+        suffix = f"_{exc.status_code}" if exc.status_code else ""
+        validation_error = f"{exc.code}{suffix}"
     except httpx.HTTPError:
-        raise HTTPException(
-            status_code=status.HTTP_502_BAD_GATEWAY,
-            detail="transport_error",
-        ) from None
+        validation_error = "transport_error"
 
     n = len(total_cards)
+    saved = 0
+    prod_stats = {
+        "products_created": 0,
+        "products_updated": 0,
+        "products_skipped": 0,
+    }
 
     try:
         await patch_seller_tokens(
             session,
-            user.tenant_id,
-            effective_seller_id,
+            tenant_id,
+            seller_id,
             content_api_token=token,
-            supplies_api_token=SKIP,
-            marketplace_api_token=token,
+            supplies_api_token=token if marketplace_validation_ok else None,
+            marketplace_api_token=token if marketplace_validation_ok else None,
         )
-        saved = await upsert_imported_cards(
-            session, user.tenant_id, effective_seller_id, total_cards
-        )
-        prod_stats = await upsert_products_from_wb_cards(
-            session, user.tenant_id, effective_seller_id, total_cards
-        )
+        if validation_error is None:
+            saved = await upsert_imported_cards(
+                session, tenant_id, seller_id, total_cards
+            )
+            prod_stats = await upsert_products_from_wb_cards(
+                session, tenant_id, seller_id, total_cards
+            )
+            from app.services.wb_mp_warehouse_service import run_wb_mp_warehouses_sync_task
+
+            background_tasks.add_task(
+                run_wb_mp_warehouses_sync_task,
+                tenant_id,
+                seller_id,
+            )
     except WildberriesCredentialsError as exc:
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
             detail=exc.code,
         ) from None
-    from app.services.wb_mp_warehouse_service import run_wb_mp_warehouses_sync_task
-
-    background_tasks.add_task(run_wb_mp_warehouses_sync_task, user.tenant_id, effective_seller_id)
+    except IntegrityError as exc:
+        return _self_token_save_error_response(
+            exc,
+            tenant_id=tenant_id,
+            seller_id=seller_id,
+            cards_count=n,
+            status_code=status.HTTP_409_CONFLICT,
+            code="product_conflict",
+            message=(
+                "Не удалось завершить импорт товаров Wildberries: "  # noqa: RUF001
+                "обнаружен конфликт артикулов."
+            ),
+        )
+    except Exception as exc:
+        return _self_token_save_error_response(
+            exc,
+            tenant_id=tenant_id,
+            seller_id=seller_id,
+            cards_count=n,
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            code="token_save_failed",
+            message=(
+                "Не удалось сохранить ключ Wildberries. "  # noqa: RUF001
+                "Сообщите поддержке идентификатор ошибки из поля ref."
+            ),
+        )
     return WildberriesSelfTokenSaveOut(
+        validation_ok=validation_error is None,
+        validation_error=validation_error,
         cards_received=n,
         cards_saved=saved,
         products_created=prod_stats["products_created"],

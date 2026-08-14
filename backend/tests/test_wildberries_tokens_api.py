@@ -4,14 +4,60 @@ import time
 import uuid
 
 import pytest
+from fastapi import BackgroundTasks
 from httpx import AsyncClient
+from sqlalchemy.exc import IntegrityError
 
 from app.db.session import SessionLocal
 from app.services.tokens import decode_access_token
+from app.services.wildberries_client import WildberriesClientError
 from app.services.wildberries_credentials_service import (
     get_decrypted_marketplace_token,
     get_decrypted_tokens_for_seller,
 )
+
+
+async def _create_authenticated_seller(
+    async_client: AsyncClient,
+) -> tuple[dict[str, str], uuid.UUID, uuid.UUID]:
+    suffix = uuid.uuid4().hex
+    reg = await async_client.post(
+        "/auth/register",
+        json={
+            "organization_name": "WB Token Failure Test",
+            "slug": f"wbt-failure-{suffix}",
+            "admin_email": f"wbt-failure-admin-{suffix}@example.com",
+            "password": "password123",
+        },
+    )
+    assert reg.status_code == 200
+    tenant_id = uuid.UUID(str(decode_access_token(reg.json()["access_token"])["tenant_id"]))
+    admin_headers = {"Authorization": f"Bearer {reg.json()['access_token']}"}
+    seller = await async_client.post(
+        "/sellers",
+        headers=admin_headers,
+        json={"name": "Failure test seller"},
+    )
+    assert seller.status_code == 201
+    seller_id = uuid.UUID(seller.json()["id"])
+    seller_email = f"wbt-failure-seller-{suffix}@example.com"
+    account = await async_client.post(
+        "/auth/seller-accounts",
+        headers=admin_headers,
+        json={
+            "seller_id": str(seller_id),
+            "email": seller_email,
+            "password": "password123",
+        },
+    )
+    assert account.status_code == 201
+    login = await async_client.post(
+        "/auth/login",
+        json={"email": seller_email, "password": "password123"},
+    )
+    assert login.status_code == 200
+    seller_headers = {"Authorization": f"Bearer {login.json()['access_token']}"}
+    return seller_headers, tenant_id, seller_id
 
 
 @pytest.mark.asyncio
@@ -128,9 +174,19 @@ async def test_seller_single_wb_key_also_enables_marketplace_token(
     async def fake_fetch_cards_list(*_args: object, **_kwargs: object) -> dict[str, object]:
         return {"cards": [], "cursor": {"total": 0}}
 
+    async def fake_fetch_marketplace_seller_warehouses(
+        *_args: object,
+        **_kwargs: object,
+    ) -> list[dict[str, object]]:
+        return []
+
     monkeypatch.setattr(
         "app.api.wildberries_integration.fetch_cards_list",
         fake_fetch_cards_list,
+    )
+    monkeypatch.setattr(
+        "app.api.wildberries_integration.fetch_marketplace_seller_warehouses",
+        fake_fetch_marketplace_seller_warehouses,
     )
 
     suffix = str(int(time.time() * 1000))
@@ -182,6 +238,221 @@ async def test_seller_single_wb_key_also_enables_marketplace_token(
         marketplace = await get_decrypted_marketplace_token(session, tenant_id, seller_id)
     assert content == "one-wb-key"
     assert marketplace == "one-wb-key"
+
+
+@pytest.mark.asyncio
+async def test_self_content_token_does_not_enable_marketplace_without_scope(
+    async_client: AsyncClient,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    async def fake_fetch_cards_list(*_args: object, **_kwargs: object) -> dict[str, object]:
+        return {"cards": [{"nmID": 301}], "cursor": {"total": 1}}
+
+    async def fail_fetch_marketplace_seller_warehouses(
+        *_args: object,
+        **_kwargs: object,
+    ) -> list[dict[str, object]]:
+        raise WildberriesClientError("upstream_error", status_code=401)
+
+    monkeypatch.setattr(
+        "app.api.wildberries_integration.fetch_cards_list",
+        fake_fetch_cards_list,
+    )
+    monkeypatch.setattr(
+        "app.api.wildberries_integration.fetch_marketplace_seller_warehouses",
+        fail_fetch_marketplace_seller_warehouses,
+    )
+    headers, tenant_id, seller_id = await _create_authenticated_seller(async_client)
+
+    response = await async_client.post(
+        "/integrations/wildberries/self/content-token",
+        headers=headers,
+        json={"content_api_token": "content-only-wb-key"},
+    )
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["validation_ok"] is False
+    assert body["validation_error"] == "missing_marketplace_scope"
+    assert body["cards_received"] == 1
+    async with SessionLocal() as session:
+        content, supplies = await get_decrypted_tokens_for_seller(
+            session, tenant_id, seller_id
+        ) or (None, None)
+        marketplace = await get_decrypted_marketplace_token(session, tenant_id, seller_id)
+    assert content == "content-only-wb-key"
+    assert supplies is None
+    assert marketplace is None
+
+
+@pytest.mark.asyncio
+async def test_self_content_token_keeps_200_when_marketplace_validation_unavailable(
+    async_client: AsyncClient,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    async def fake_fetch_cards_list(*_args: object, **_kwargs: object) -> dict[str, object]:
+        return {"cards": [{"nmID": 302}], "cursor": {"total": 1}}
+
+    async def fail_fetch_marketplace_seller_warehouses(
+        *_args: object,
+        **_kwargs: object,
+    ) -> list[dict[str, object]]:
+        raise WildberriesClientError("upstream_error", status_code=502)
+
+    monkeypatch.setattr(
+        "app.api.wildberries_integration.fetch_cards_list",
+        fake_fetch_cards_list,
+    )
+    monkeypatch.setattr(
+        "app.api.wildberries_integration.fetch_marketplace_seller_warehouses",
+        fail_fetch_marketplace_seller_warehouses,
+    )
+    headers, _tenant_id, _seller_id = await _create_authenticated_seller(async_client)
+
+    response = await async_client.post(
+        "/integrations/wildberries/self/content-token",
+        headers=headers,
+        json={"content_api_token": "temporarily-unchecked-wb-key"},
+    )
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["validation_ok"] is False
+    assert body["validation_error"] == "marketplace_upstream_error_502"
+
+
+@pytest.mark.asyncio
+async def test_self_content_token_returns_traced_error_when_task_registration_fails(
+    async_client: AsyncClient,
+    monkeypatch: pytest.MonkeyPatch,
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    async def fake_fetch_cards_list(*_args: object, **_kwargs: object) -> dict[str, object]:
+        return {
+            "cards": [{"nmID": 101}, {"nmID": 102}],
+            "cursor": {"total": 2},
+        }
+
+    async def fake_fetch_marketplace_seller_warehouses(
+        *_args: object,
+        **_kwargs: object,
+    ) -> list[dict[str, object]]:
+        return []
+
+    def fail_add_task(*_args: object, **_kwargs: object) -> None:
+        raise RuntimeError("background task registration failed")
+
+    monkeypatch.setattr(
+        "app.api.wildberries_integration.fetch_cards_list",
+        fake_fetch_cards_list,
+    )
+    monkeypatch.setattr(
+        "app.api.wildberries_integration.fetch_marketplace_seller_warehouses",
+        fake_fetch_marketplace_seller_warehouses,
+    )
+    monkeypatch.setattr(BackgroundTasks, "add_task", fail_add_task)
+    caplog.set_level("ERROR", logger="app.api.wildberries_integration")
+    headers, tenant_id, seller_id = await _create_authenticated_seller(async_client)
+
+    response = await async_client.post(
+        "/integrations/wildberries/self/content-token",
+        headers=headers,
+        json={"content_api_token": "one-wb-key"},
+    )
+
+    assert response.status_code == 500
+    body = response.json()
+    assert set(body) == {"code", "message", "ref"}
+    assert body["code"] == "token_save_failed"
+    assert "Wildberries" in body["message"]
+    assert len(body["ref"]) == 12
+    int(body["ref"], 16)
+    log_text = caplog.text
+    assert f"ref={body['ref']}" in log_text
+    assert f"tenant_id={tenant_id}" in log_text
+    assert f"seller_id={seller_id}" in log_text
+    assert "cards_count=2" in log_text
+    assert "exception_type=RuntimeError" in log_text
+    assert "one-wb-key" not in log_text
+
+
+@pytest.mark.asyncio
+async def test_self_content_token_returns_product_conflict_for_integrity_error(
+    async_client: AsyncClient,
+    monkeypatch: pytest.MonkeyPatch,
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    async def fake_fetch_cards_list(*_args: object, **_kwargs: object) -> dict[str, object]:
+        return {"cards": [{"nmID": 201}], "cursor": {"total": 1}}
+
+    async def fake_fetch_marketplace_seller_warehouses(
+        *_args: object,
+        **_kwargs: object,
+    ) -> list[dict[str, object]]:
+        return []
+
+    async def fail_product_upsert(*_args: object, **_kwargs: object) -> dict[str, int]:
+        raise IntegrityError("INSERT INTO products", {}, RuntimeError("duplicate article"))
+
+    monkeypatch.setattr(
+        "app.api.wildberries_integration.fetch_cards_list",
+        fake_fetch_cards_list,
+    )
+    monkeypatch.setattr(
+        "app.api.wildberries_integration.fetch_marketplace_seller_warehouses",
+        fake_fetch_marketplace_seller_warehouses,
+    )
+    monkeypatch.setattr(
+        "app.api.wildberries_integration.upsert_products_from_wb_cards",
+        fail_product_upsert,
+    )
+    caplog.set_level("ERROR", logger="app.api.wildberries_integration")
+    headers, tenant_id, seller_id = await _create_authenticated_seller(async_client)
+
+    response = await async_client.post(
+        "/integrations/wildberries/self/content-token",
+        headers=headers,
+        json={"content_api_token": "conflict-wb-key"},
+    )
+
+    assert response.status_code == 409
+    body = response.json()
+    assert set(body) == {"code", "message", "ref"}
+    assert body["code"] == "product_conflict"
+    assert "конфликт артикулов" in body["message"]
+    assert len(body["ref"]) == 12
+    int(body["ref"], 16)
+    log_text = caplog.text
+    assert f"ref={body['ref']}" in log_text
+    assert f"tenant_id={tenant_id}" in log_text
+    assert f"seller_id={seller_id}" in log_text
+    assert "cards_count=1" in log_text
+    assert "exception_type=IntegrityError" in log_text
+    assert "conflict-wb-key" not in log_text
+
+
+@pytest.mark.asyncio
+async def test_self_content_token_maps_invalid_wb_json_to_bad_gateway(
+    async_client: AsyncClient,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    async def fail_fetch_cards_list(*_args: object, **_kwargs: object) -> dict[str, object]:
+        raise WildberriesClientError("invalid_json")
+
+    monkeypatch.setattr(
+        "app.api.wildberries_integration.fetch_cards_list",
+        fail_fetch_cards_list,
+    )
+    headers, _tenant_id, _seller_id = await _create_authenticated_seller(async_client)
+
+    response = await async_client.post(
+        "/integrations/wildberries/self/content-token",
+        headers=headers,
+        json={"content_api_token": "invalid-json-wb-key"},
+    )
+
+    assert response.status_code == 502
+    assert response.json()["detail"] == "invalid_json"
 
 
 @pytest.mark.asyncio

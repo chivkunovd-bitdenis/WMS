@@ -668,6 +668,7 @@ export function FfFbsSupplyWorkspace({
       required: number
       picked: number
       wbOrders: number[]
+      stickerCodes: Array<string | null>
       marking: string
       nearestDeadline: string
     }>()
@@ -682,12 +683,14 @@ export function FfFbsSupplyWorkspace({
         required: 0,
         picked: 0,
         wbOrders: [],
+        stickerCodes: [],
         marking: order.metadata.required.length ? order.metadata.required.join(', ') : 'Не требуется',
         nearestDeadline: order.deadline_at,
       }
       current.required += 1
       if (order.pick.status === 'picked') current.picked += 1
       current.wbOrders.push(order.wb_order_id)
+      current.stickerCodes.push(order.sticker.code)
       const locations = order.inventory.locations
         .filter((location) => location.available_unpacked > 0)
         .map((location) => `${location.code}: ${location.available_unpacked}`)

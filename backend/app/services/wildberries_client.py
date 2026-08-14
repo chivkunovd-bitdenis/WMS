@@ -37,13 +37,50 @@ MARKETPLACE_ORDER_META_PATH = "/api/v3/orders/{order_id}/meta"
 MARKETPLACE_STOCKS_PATH = "/api/v3/stocks/{warehouse_id}"
 MAX_MARKETPLACE_STOCKS_BATCH = 1000
 
+
+def _wb_response_text(response: httpx.Response) -> str | None:
+    try:
+        return response.text
+    except UnicodeDecodeError:
+        return None
+
+
+def _wb_error_from_response(
+    code: str,
+    response: httpx.Response,
+    *,
+    endpoint: str,
+) -> WildberriesClientError:
+    return WildberriesClientError(
+        code,
+        status_code=response.status_code,
+        endpoint=endpoint,
+        response_body=_wb_response_text(response),
+    )
+
+
 # In-memory store for e2e_mock_wb_marketplace_marking (tests may clear via reset helper).
 _mock_order_meta: dict[int, dict[str, list[dict[str, str]]]] = {}
+_mock_marketplace_supply_add_error_once: str | None = None
 
 
 def reset_mock_marketplace_order_meta() -> None:
     """Clear mock marking meta store (tests only)."""
     _mock_order_meta.clear()
+
+
+def fail_next_mock_marketplace_supply_add(error_code: str) -> None:
+    """Make the next mock supply add-orders call fail (tests only)."""
+    global _mock_marketplace_supply_add_error_once
+    _mock_marketplace_supply_add_error_once = error_code
+
+
+def consume_next_mock_marketplace_supply_add_error() -> str | None:
+    """Return and clear the next mock add-orders failure code (tests only)."""
+    global _mock_marketplace_supply_add_error_once
+    error_code = _mock_marketplace_supply_add_error_once
+    _mock_marketplace_supply_add_error_once = None
+    return error_code
 
 
 def build_marketplace_order_meta_put_body(kind: str, value: str) -> dict[str, Any]:
@@ -272,7 +309,10 @@ async def fetch_cards_list(
             "upstream_error",
             status_code=response.status_code,
         )
-    return cast(dict[str, Any], response.json())
+    try:
+        return cast(dict[str, Any], response.json())
+    except ValueError as exc:
+        raise WildberriesClientError("invalid_json") from exc
 
 
 async def fetch_supplies_list(
@@ -348,11 +388,15 @@ async def fetch_mp_warehouses_list(
     try:
         response = await client.get(url, headers=headers, timeout=60.0)
     except httpx.HTTPError as exc:
-        raise WildberriesClientError("transport_error") from exc
-    if response.status_code >= 400:
         raise WildberriesClientError(
+            "transport_error",
+            endpoint=MARKETPLACE_ORDERS_NEW_PATH,
+        ) from exc
+    if response.status_code >= 400:
+        raise _wb_error_from_response(
             "upstream_error",
-            status_code=response.status_code,
+            response,
+            endpoint=MARKETPLACE_ORDERS_NEW_PATH,
         )
     data = response.json()
     if isinstance(data, list):
@@ -430,11 +474,12 @@ async def fetch_marketplace_orders_page(
     try:
         response = await client.get(url, headers=headers, params=params, timeout=60.0)
     except httpx.HTTPError as exc:
-        raise WildberriesClientError("transport_error") from exc
+        raise WildberriesClientError("transport_error", endpoint=MARKETPLACE_ORDERS_PATH) from exc
     if response.status_code >= 400:
-        raise WildberriesClientError(
+        raise _wb_error_from_response(
             "upstream_error",
-            status_code=response.status_code,
+            response,
+            endpoint=MARKETPLACE_ORDERS_PATH,
         )
     data = response.json()
     if not isinstance(data, dict):
@@ -462,11 +507,15 @@ async def cancel_marketplace_order(
     try:
         response = await client.patch(url, headers=headers, timeout=60.0)
     except httpx.HTTPError as exc:
-        raise WildberriesClientError("transport_error") from exc
-    if response.status_code >= 400:
         raise WildberriesClientError(
+            "transport_error",
+            endpoint=MARKETPLACE_ORDERS_CANCEL_PATH.format(order_id=order_id),
+        ) from exc
+    if response.status_code >= 400:
+        raise _wb_error_from_response(
             "upstream_error",
-            status_code=response.status_code,
+            response,
+            endpoint=MARKETPLACE_ORDERS_CANCEL_PATH.format(order_id=order_id),
         )
 
 
@@ -623,11 +672,12 @@ async def create_marketplace_supply(
     try:
         response = await client.post(url, headers=headers, json=payload, timeout=60.0)
     except httpx.HTTPError as exc:
-        raise WildberriesClientError("transport_error") from exc
+        raise WildberriesClientError("transport_error", endpoint=MARKETPLACE_SUPPLIES_PATH) from exc
     if response.status_code >= 400:
-        raise WildberriesClientError(
+        raise _wb_error_from_response(
             "upstream_error",
-            status_code=response.status_code,
+            response,
+            endpoint=MARKETPLACE_SUPPLIES_PATH,
         )
     if response.status_code == 204 or not response.content:
         raise WildberriesClientError("invalid_response")
@@ -657,11 +707,15 @@ async def add_order_to_marketplace_supply(
     try:
         response = await client.patch(url, headers=headers, timeout=60.0)
     except httpx.HTTPError as exc:
-        raise WildberriesClientError("transport_error") from exc
-    if response.status_code >= 400:
         raise WildberriesClientError(
+            "transport_error",
+            endpoint=f"{MARKETPLACE_SUPPLIES_PATH}/{supply_id}/orders/{order_id}",
+        ) from exc
+    if response.status_code >= 400:
+        raise _wb_error_from_response(
             "upstream_error",
-            status_code=response.status_code,
+            response,
+            endpoint=f"{MARKETPLACE_SUPPLIES_PATH}/{supply_id}/orders/{order_id}",
         )
 
 
@@ -675,6 +729,8 @@ async def add_orders_to_marketplace_supply(
 ) -> None:
     """PATCH /api/marketplace/v3/supplies/{supply_id}/orders — batch ≤100."""
     if _marketplace_supplies_mock_enabled():
+        if (error_code := consume_next_mock_marketplace_supply_add_error()) is not None:
+            raise WildberriesClientError(error_code)
         return
     await add_orders_to_marketplace_supply_batch(
         client,

@@ -20,9 +20,11 @@ from app.models.fbs_order import (
     CHECK_STATUS_NEW,
     FBS_ORDER_STATUS_ASSEMBLING,
     FBS_ORDER_STATUS_CANCELLED,
+    FBS_ORDER_STATUS_DONE,
     FBS_ORDER_STATUS_IN_SUPPLY,
     FBS_ORDER_STATUS_NEW,
     FBS_ORDER_STATUS_PACKED,
+    FBS_ORDER_STATUS_SORTED,
     MAPPING_STATUS_MAPPED,
     META_STATUS_ACCEPTED,
     PACK_STATUS_PACKED,
@@ -757,9 +759,9 @@ async def test_cancel_in_packed_supply_demotes_to_assembling(
         assert kept.supply_id == supply_id
 
 
-# TC-NEW-FBS-FIX-003 — sorted orders excluded from sync queue
+# TC-NEW-FBS-FIX-003 — sorted orders remain in sync until sold
 @pytest.mark.asyncio
-async def test_sync_order_statuses_skips_sorted(
+async def test_sync_order_statuses_advances_sorted_to_sold(
     async_client: AsyncClient,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -771,8 +773,6 @@ async def test_sync_order_statuses_skips_sorted(
     warehouse_uuid = uuid.UUID(warehouse_id)
 
     async with SessionLocal() as session:
-        from app.models.fbs_order import FBS_ORDER_STATUS_SORTED
-
         await seed_fbs_warehouse_binding(
             session,
             tenant_id=tenant_id,
@@ -798,7 +798,10 @@ async def test_sync_order_statuses_skips_sorted(
         marketplace_api_base: str | None = None,
     ) -> list[dict[str, Any]]:
         seen.extend(order_ids)
-        return []
+        return [
+            {"id": order_id, "supplierStatus": "complete", "wbStatus": "sold"}
+            for order_id in order_ids
+        ]
 
     monkeypatch.setattr(
         "app.services.wb_marketplace_orders_service.fetch_marketplace_orders_status",
@@ -812,8 +815,16 @@ async def test_sync_order_statuses_skips_sorted(
             )
         await session.commit()
 
-    assert updated == 0
-    assert seen == []
+    assert updated == 1
+    assert seen == [960001]
+    async with SessionLocal() as session:
+        order = await session.scalar(
+            select(FbsOrder).where(FbsOrder.wb_order_id == 960001)
+        )
+        assert order is not None
+        assert order.wb_status == "sold"
+        assert order.supplier_status == "complete"
+        assert order.status == FBS_ORDER_STATUS_DONE
 
 
 # TC-NEW-FBS-REVERSAL-001 — shipment and reversal stay on the fulfilled line.

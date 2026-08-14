@@ -28,6 +28,7 @@ from app.services.catalog_service import (
     CatalogError,
     _SkipSentinel,
     bulk_update_products_fbs_stock_sync,
+    bulk_update_products_requires_honest_sign,
     create_product,
     get_product,
     list_products,
@@ -212,6 +213,17 @@ class ProductDimensionsPatch(BaseModel):
     length_mm: int = Field(ge=1, le=10_000_000)
     width_mm: int = Field(ge=1, le=10_000_000)
     height_mm: int = Field(ge=1, le=10_000_000)
+
+
+class ProductHonestSignBulkPatch(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    product_ids: list[uuid.UUID] = Field(min_length=1, max_length=10000)
+    requires_honest_sign: bool = True
+
+
+class ProductHonestSignBulkOut(BaseModel):
+    updated_count: int
 
 
 class ProductFbsStockSyncPatch(BaseModel):
@@ -604,6 +616,33 @@ async def post_product_tz_import_apply(
         already_applied=result.already_applied,
         warehouse_id=str(result.warehouse_id) if result.warehouse_id else None,
     )
+
+
+@router.patch("/requires-honest-sign/bulk", response_model=ProductHonestSignBulkOut)
+async def patch_products_requires_honest_sign_bulk(
+    body: ProductHonestSignBulkPatch,
+    user: Annotated[User, Depends(get_current_user)],
+    session: Annotated[AsyncSession, Depends(get_db)],
+    effective_seller_id: Annotated[uuid.UUID | None, Depends(get_effective_seller_id)],
+) -> ProductHonestSignBulkOut:
+    seller_scope: uuid.UUID | None = None
+    if user.role == FULFILLMENT_SELLER:
+        seller_scope = user.seller_id
+        if user_can_manage_seller_shops(user) and effective_seller_id is not None:
+            seller_scope = effective_seller_id
+        if seller_scope is None:
+            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="seller_not_linked")
+    elif user.role != FULFILLMENT_ADMIN:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="forbidden")
+
+    updated_count = await bulk_update_products_requires_honest_sign(
+        session,
+        user.tenant_id,
+        product_ids=body.product_ids,
+        requires_honest_sign=body.requires_honest_sign,
+        seller_id=seller_scope,
+    )
+    return ProductHonestSignBulkOut(updated_count=updated_count)
 
 
 @router.patch("/{product_id}/dimensions", response_model=ProductOut)

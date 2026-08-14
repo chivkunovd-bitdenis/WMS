@@ -4,6 +4,7 @@ import {
   Box,
   Button,
   Checkbox,
+  Chip,
   FormControlLabel,
   CircularProgress,
   Divider,
@@ -143,6 +144,7 @@ export function SellerProductsStockScreen({
 }: Props) {
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [notice, setNotice] = useState<string | null>(null)
   const [catalog, setCatalog] = useState<WbCatalogRow[]>([])
   const [stock, setStock] = useState<StockSummaryRow[]>([])
   const [page, setPage] = useState(0)
@@ -163,6 +165,7 @@ export function SellerProductsStockScreen({
   const [directionBusy, setDirectionBusy] = useState<Set<string>>(new Set())
   const [editingDirectionId, setEditingDirectionId] = useState<string | null>(null)
   const [deleteTarget, setDeleteTarget] = useState<DirectionDeleteTarget | null>(null)
+  const [bulkHonestSignBusy, setBulkHonestSignBusy] = useState(false)
 
   const refreshAll = useCallback(async () => {
     setError(null)
@@ -484,6 +487,7 @@ export function SellerProductsStockScreen({
     if (!editProduct) return
     setEditBusy(true)
     setError(null)
+    setNotice(null)
     try {
       const res = await fetch(
         apiUrl(`/products/${editProduct.id}/packaging-instructions`),
@@ -506,6 +510,44 @@ export function SellerProductsStockScreen({
       setError(e instanceof Error ? e.message : 'Не удалось сохранить ТЗ.')
     } finally {
       setEditBusy(false)
+    }
+  }
+
+  async function applyHonestSignToSelected() {
+    const productIdsToUpdate = [...selectedProductIds]
+    if (productIdsToUpdate.length === 0) return
+    const selectedIds = new Set(productIdsToUpdate)
+    setBulkHonestSignBusy(true)
+    setError(null)
+    setNotice(null)
+    try {
+      const res = await fetch(apiUrl('/products/requires-honest-sign/bulk'), {
+        method: 'PATCH',
+        headers: { ...authHeaders(token), 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          product_ids: productIdsToUpdate,
+          requires_honest_sign: true,
+        }),
+      })
+      if (!res.ok) {
+        setError(await readApiErrorMessage(res))
+        return
+      }
+      const body = (await res.json()) as { updated_count: number }
+      setCatalog((current) =>
+        current.map((row) =>
+          selectedIds.has(row.id) ? { ...row, requires_honest_sign: true } : row,
+        ),
+      )
+      setSelectedProductIds(new Set())
+      setNotice(`Честный знак включён: ${body.updated_count} товаров.`)
+      await refreshAll()
+    } catch (e) {
+      setError(
+        e instanceof Error ? e.message : 'Не удалось включить Честный знак выбранным товарам.',
+      )
+    } finally {
+      setBulkHonestSignBusy(false)
     }
   }
 
@@ -612,6 +654,7 @@ export function SellerProductsStockScreen({
       const enabled = bulkConfirmAction !== 'pause'
       setError(null)
       setBulkResult(null)
+      setNotice(null)
       setFbsBulkBusy(true)
       try {
         const res = await fetch(apiUrl('/products/fbs-stock-sync/bulk'), {
@@ -649,6 +692,7 @@ export function SellerProductsStockScreen({
 
   async function onSyncProducts() {
     setError(null)
+    setNotice(null)
     setBusy(true)
     try {
       const res = await fetch(apiUrl('/integrations/wildberries/self/sync-products'), {
@@ -695,6 +739,16 @@ export function SellerProductsStockScreen({
           {bulkResult}
         </Alert>
       ) : null}
+      {notice ? (
+        <Alert
+          severity="success"
+          sx={{ mb: 2 }}
+          data-testid="seller-products-notice"
+          onClose={() => setNotice(null)}
+        >
+          {notice}
+        </Alert>
+      ) : null}
 
       <Paper variant="outlined" sx={{ p: 2, mb: 2 }} data-testid="seller-products-actions">
         <Stack direction="row" spacing={1.5} sx={{ flexWrap: 'wrap', alignItems: 'center' }}>
@@ -706,7 +760,17 @@ export function SellerProductsStockScreen({
           >
             Синхронизировать по API
           </Button>
+          <Button
+            variant="outlined"
+            color="success"
+            disabled={bulkHonestSignBusy || busy || selectedCount === 0}
+            onClick={() => void applyHonestSignToSelected()}
+            data-testid="seller-products-bulk-honest-sign"
+          >
+            Включить ЧЗ
+          </Button>
           {busy ? <CircularProgress size={18} /> : null}
+          {bulkHonestSignBusy ? <CircularProgress size={18} /> : null}
         </Stack>
       </Paper>
 
@@ -879,7 +943,8 @@ export function SellerProductsStockScreen({
                   indeterminate={someVisibleSelected}
                   disabled={visibleProductIds.length === 0}
                   onChange={(event) => toggleVisibleProducts(event.target.checked)}
-                  data-testid="seller-products-select-visible"
+                  slotProps={{ input: { 'aria-label': 'Выбрать товары на странице' } }}
+                  data-testid="seller-products-select-all"
                 />
               </TableCell>
               <TableCell>Товар</TableCell>
@@ -904,6 +969,7 @@ export function SellerProductsStockScreen({
                     size="small"
                     checked={selectedProductIds.has(p.id)}
                     onChange={(event) => toggleSelectedProduct(p.id, event.target.checked)}
+                    slotProps={{ input: { 'aria-label': `Выбрать товар ${p.sku_code}` } }}
                     data-testid={`seller-product-select-${p.id}`}
                   />
                 </TableCell>
@@ -1060,9 +1126,19 @@ export function SellerProductsStockScreen({
                     >
                       {p.has_packaging_instructions ? 'ТЗ есть' : 'Без ТЗ'}
                     </Typography>
-                    <Typography variant="caption" color="text.secondary" noWrap>
-                      {p.requires_honest_sign ? 'ЧЗ нужен' : 'ЧЗ нет'}
-                    </Typography>
+                    {p.requires_honest_sign ? (
+                      <Chip
+                        size="small"
+                        label="ЧЗ"
+                        color="info"
+                        variant="outlined"
+                        data-testid={`seller-honest-sign-status-${p.id}`}
+                      />
+                    ) : (
+                      <Typography variant="caption" color="text.secondary" noWrap>
+                        ЧЗ нет
+                      </Typography>
+                    )}
                     <Button
                       size="small"
                       variant="outlined"

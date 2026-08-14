@@ -46,6 +46,7 @@ from app.services.fbs_print_asset_storage import (
     sha256_checksum,
     supply_qr_relative_path,
 )
+from app.services.fbs_sticker_code_service import sticker_code_from_wb_row
 from app.services.wildberries_client import (
     WildberriesClientError,
     fetch_marketplace_order_stickers,
@@ -583,8 +584,7 @@ async def request_supply_print_batch(
                     )
                     continue
 
-                barcode = sticker_row.get("barcode")
-                sticker_code = barcode if isinstance(barcode, str) else None
+                sticker_code = sticker_code_from_wb_row(sticker_row)
                 png_bytes = decode_png_payload(sticker_row.get("file"))
                 asset = await _find_order_sticker_asset(session, tenant_id, order.id)
                 if asset is None:

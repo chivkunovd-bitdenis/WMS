@@ -167,6 +167,8 @@ export function FfProductsCatalogScreen({
   const [sellerCreateOpen, setSellerCreateOpen] = useState(false)
   const [importNotice, setImportNotice] = useState<string | null>(null)
   const [distributionAnchor, setDistributionAnchor] = useState<DistributionAnchor>(null)
+  const [selectedProductIds, setSelectedProductIds] = useState<Set<string>>(new Set())
+  const [bulkHonestSignBusy, setBulkHonestSignBusy] = useState(false)
 
   const load = useCallback(async () => {
     setError(null)
@@ -241,6 +243,23 @@ export function FfProductsCatalogScreen({
     })
   }, [filteredRows, sortDir, sortKey])
 
+  const visibleProductIds = useMemo(() => sortedRows.map((row) => row.id), [sortedRows])
+  const selectedCount = selectedProductIds.size
+  const allVisibleSelected =
+    visibleProductIds.length > 0 && visibleProductIds.every((id) => selectedProductIds.has(id))
+  const someVisibleSelected = visibleProductIds.some((id) => selectedProductIds.has(id))
+
+  useEffect(() => {
+    const visible = new Set(visibleProductIds)
+    setSelectedProductIds((current) => {
+      const nextIds = [...current].filter((id) => visible.has(id))
+      if (nextIds.length === current.size) {
+        return current
+      }
+      return new Set(nextIds)
+    })
+  }, [visibleProductIds])
+
   function toggleSort(next: SortKey) {
     if (sortKey !== next) {
       setSortKey(next)
@@ -248,6 +267,22 @@ export function FfProductsCatalogScreen({
       return
     }
     setSortDir((d) => (d === 'asc' ? 'desc' : 'asc'))
+  }
+
+  function toggleAllVisibleProducts(checked: boolean) {
+    setSelectedProductIds(checked ? new Set(visibleProductIds) : new Set())
+  }
+
+  function toggleProductSelected(productId: string, checked: boolean) {
+    setSelectedProductIds((current) => {
+      const next = new Set(current)
+      if (checked) {
+        next.add(productId)
+      } else {
+        next.delete(productId)
+      }
+      return next
+    })
   }
 
   function openPackagingEdit(p: FfCatalogRow) {
@@ -297,6 +332,43 @@ export function FfProductsCatalogScreen({
     }
   }
 
+  async function applyHonestSignToSelected() {
+    const productIds = [...selectedProductIds]
+    if (productIds.length === 0) return
+    const selectedIds = new Set(productIds)
+    setBulkHonestSignBusy(true)
+    setError(null)
+    try {
+      const res = await fetch(apiUrl('/products/requires-honest-sign/bulk'), {
+        method: 'PATCH',
+        headers: { ...authHeaders(token), 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          product_ids: productIds,
+          requires_honest_sign: true,
+        }),
+      })
+      if (!res.ok) {
+        setError(humanFfCatalogError(await readApiErrorMessage(res)))
+        return
+      }
+      const body = (await res.json()) as { updated_count: number }
+      setCatalog((current) =>
+        current.map((row) =>
+          selectedIds.has(row.id) ? { ...row, requires_honest_sign: true } : row,
+        ),
+      )
+      setSelectedProductIds(new Set())
+      setImportNotice(`Честный знак включён: ${body.updated_count} товаров.`)
+      await load()
+    } catch (e) {
+      setError(
+        e instanceof Error ? e.message : 'Не удалось включить Честный знак выбранным товарам.',
+      )
+    } finally {
+      setBulkHonestSignBusy(false)
+    }
+  }
+
   return (
     <FfProductMarkingPrintProvider token={token}>
     <Box
@@ -343,6 +415,24 @@ export function FfProductsCatalogScreen({
               spacing={1}
               sx={{ justifyContent: 'flex-end' }}
             >
+              {selectedCount > 0 ? (
+                <Chip
+                  size="small"
+                  variant="outlined"
+                  color="primary"
+                  label={`Выбрано: ${selectedCount}`}
+                  data-testid="ff-products-selected-count"
+                />
+              ) : null}
+              <Button
+                variant="outlined"
+                color="success"
+                disabled={bulkHonestSignBusy || busy || selectedCount === 0}
+                onClick={() => void applyHonestSignToSelected()}
+                data-testid="ff-products-bulk-honest-sign"
+              >
+                Нужен ЧЗ выбранным
+              </Button>
               <Button
                 variant="outlined"
                 onClick={() => setSellerCreateOpen(true)}
@@ -427,11 +517,12 @@ export function FfProductsCatalogScreen({
           }}
         >
           <colgroup>
+            {canManageCatalog ? <col style={{ width: '4%' }} /> : null}
             <col style={{ width: '6%' }} />
-            <col style={{ width: '15%' }} />
+            <col style={{ width: canManageCatalog ? '14%' : '15%' }} />
             <col style={{ width: '8%' }} />
-            <col style={{ width: '24%' }} />
-            <col style={{ width: '14%' }} />
+            <col style={{ width: canManageCatalog ? '22%' : '24%' }} />
+            <col style={{ width: canManageCatalog ? '13%' : '14%' }} />
             <col style={{ width: '9%' }} />
             <col style={{ width: '8%' }} />
             <col style={{ width: '12%' }} />
@@ -439,6 +530,19 @@ export function FfProductsCatalogScreen({
           </colgroup>
           <TableHead>
             <TableRow>
+              {canManageCatalog ? (
+                <TableCell padding="checkbox" width={52}>
+                  <Checkbox
+                    size="small"
+                    checked={allVisibleSelected}
+                    indeterminate={someVisibleSelected && !allVisibleSelected}
+                    disabled={busy || sortedRows.length === 0}
+                    onChange={(e) => toggleAllVisibleProducts(e.target.checked)}
+                    slotProps={{ input: { 'aria-label': 'Выбрать все товары' } }}
+                    data-testid="ff-products-select-all"
+                  />
+                </TableCell>
+              ) : null}
               <TableCell>Фото</TableCell>
               <TableCell>SKU / ШК</TableCell>
               <TableCell>Артикул WB</TableCell>
@@ -474,6 +578,17 @@ export function FfProductsCatalogScreen({
               const barcode = resolveProductPrimaryBarcode(displayMeta)
               return (
               <TableRow key={p.id} hover data-testid="ff-product-row">
+                {canManageCatalog ? (
+                  <TableCell padding="checkbox">
+                    <Checkbox
+                      size="small"
+                      checked={selectedProductIds.has(p.id)}
+                      onChange={(e) => toggleProductSelected(p.id, e.target.checked)}
+                      slotProps={{ input: { 'aria-label': `Выбрать товар ${p.sku_code}` } }}
+                      data-testid={`ff-product-select-${p.id}`}
+                    />
+                  </TableCell>
+                ) : null}
                 <TableCell>
                   <ProductPhotoThumb src={p.wb_primary_image_url} />
                 </TableCell>
@@ -556,9 +671,13 @@ export function FfProductsCatalogScreen({
                       {p.has_packaging_instructions ? 'Заполнено' : 'Нет ТЗ'}
                     </Typography>
                     {p.requires_honest_sign ? (
-                      <Typography variant="caption" color="text.secondary">
-                        ЧЗ нужен
-                      </Typography>
+                      <Chip
+                        size="small"
+                        label="ЧЗ"
+                        color="info"
+                        variant="outlined"
+                        data-testid={`ff-honest-sign-status-${p.id}`}
+                      />
                     ) : null}
                     {canManageCatalog ? (
                       <Button
@@ -613,7 +732,7 @@ export function FfProductsCatalogScreen({
             )})}
             {sortedRows.length === 0 && !busy ? (
               <TableRow>
-                <TableCell colSpan={9}>
+                <TableCell colSpan={canManageCatalog ? 10 : 9}>
                   {searchQuery.trim() ? (
                     <Typography variant="body2" color="text.secondary" data-testid="ff-products-search-empty">
                       Ничего не найдено по запросу «{searchQuery.trim()}».
