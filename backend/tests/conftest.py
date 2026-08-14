@@ -12,13 +12,14 @@ from sqlalchemy.ext.asyncio import AsyncSession
 os.environ.setdefault(
     "JWT_SECRET_KEY", "test-jwt-secret-key-at-least-32-characters-long"
 )
-_TEST_DB_PATH = Path(__file__).resolve().parent / "wms_pytest.sqlite"
-_TEST_DATA_DIR = Path(__file__).resolve().parent / "wms_pytest_data"
+_TEST_RUN_ID = os.environ.get("PYTEST_XDIST_WORKER", str(os.getpid()))
+_TEST_DB_PATH = Path(__file__).resolve().parent / f"wms_pytest_{_TEST_RUN_ID}.sqlite"
+_TEST_DATA_DIR = Path(__file__).resolve().parent / f"wms_pytest_data_{_TEST_RUN_ID}"
 os.environ["DATABASE_URL"] = os.environ.get(
     "WMS_TEST_DATABASE_URL",
     f"sqlite+aiosqlite:///{_TEST_DB_PATH}",
 )
-os.environ["WMS_DATA_DIR"] = str(_TEST_DATA_DIR)
+os.environ["WMS_DATA_DIR"] = os.environ.get("WMS_TEST_DATA_DIR", str(_TEST_DATA_DIR))
 
 from app.db.session import SessionLocal, engine, get_db
 from app.main import create_app
