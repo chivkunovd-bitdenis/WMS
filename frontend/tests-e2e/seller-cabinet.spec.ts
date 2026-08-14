@@ -1,5 +1,6 @@
 import { randomUUID } from 'node:crypto';
 import { execFileSync } from 'node:child_process';
+import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 import { test, expect } from '@playwright/test';
@@ -12,7 +13,8 @@ import {
 } from './api-waits';
 import { loginAsSeller, openFulfillmentRegistration } from './auth-flow';
 
-const e2eDbPath = fileURLToPath(new URL('../../backend/e2e.db', import.meta.url));
+const backendDir = fileURLToPath(new URL('../../backend/', import.meta.url));
+const e2eDbPath = path.resolve(backendDir, process.env.E2E_DB_FILE ?? 'e2e.db');
 
 function sqliteUuid(id: string): string {
   return id.replaceAll('-', '').toLowerCase();
