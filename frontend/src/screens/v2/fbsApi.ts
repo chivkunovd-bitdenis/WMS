@@ -194,6 +194,10 @@ export type FbsWorklistOrder = {
     seller_article: string | null
     wb_article: number | null
     barcode: string | null
+    sku: string | null
+    chrt_id: number | null
+    category: string | null
+    color: string | null
     size: string | null
     packaging_instructions?: string | null
     has_packaging_instructions?: boolean

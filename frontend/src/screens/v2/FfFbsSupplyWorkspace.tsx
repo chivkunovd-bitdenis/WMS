@@ -986,6 +986,27 @@ export function FfFbsSupplyWorkspace({
 
           {workspace && stage === 'composition' ? (
             <Stack spacing={2}>
+              {workspace.partial_rejection ? (
+                <Alert severity="warning" data-testid="fbs-partial-rejection">
+                  <Typography variant="subtitle2">
+                    WB подтвердил только часть заказов
+                  </Typography>
+                  <Typography variant="body2" sx={{ mt: 0.5 }}>
+                    Вошли в поставку:{' '}
+                    {workspace.partial_rejection.accepted_orders.length
+                      ? workspace.partial_rejection.accepted_orders.map((order) => `№${order.wb_order_id}`).join(', ')
+                      : 'нет'}
+                  </Typography>
+                  <Typography variant="body2">
+                    Не вошли:{' '}
+                    {workspace.partial_rejection.rejected_orders.length
+                      ? workspace.partial_rejection.rejected_orders
+                        .map((order) => `№${order.wb_order_id} — ${order.reason ?? 'WB не подтвердил заказ'}`)
+                        .join('; ')
+                      : 'нет'}
+                  </Typography>
+                </Alert>
+              ) : null}
               <Paper variant="outlined" sx={{ p: 2 }}>
                 <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1.5} sx={{ justifyContent: 'space-between', alignItems: { sm: 'center' } }}>
                   <Box>

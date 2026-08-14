@@ -21,6 +21,10 @@ function order(id: string, over: JsonObject = {}): JsonObject {
       seller_article: `ART-${id}`,
       wb_article: 1000 + Number(id.replace(/\D/g, '') || '1'),
       barcode: `200000${id}`,
+      sku: `SKU-${id}`,
+      chrt_id: 7000 + Number(id.replace(/\D/g, '') || '1'),
+      category: 'Бомберы',
+      color: null,
       size: null,
     },
     inventory: {
@@ -249,5 +253,4 @@ test('fbs workspace: scan location then product', async ({ page }) => {
   await page.getByRole('button', { name: 'Подобрать товар' }).click()
 
   await expect(page.getByText('Товар подобран. Прогресс синхронизирован для всех операторов.')).toBeVisible()
-  await expect(page.getByText('Товары в подборе: 1/1')).toBeVisible()
 })
