@@ -47,17 +47,24 @@ async function expectSellerInboundShell(page: Page, requestId: string): Promise<
   expect(new URL(page.url()).pathname).toBe(`/seller/inbound/${requestId}`);
 }
 
-async function expectFfDeniedSellerProductsShell(page: Page, email: string): Promise<void> {
-  await page.goto('/seller/products');
-  await expect(page).toHaveTitle('WMS · Фулфилмент');
-  await expect(page.getByTestId('app-frame')).toBeVisible();
-  await expect(page.getByTestId('app-topbar')).toContainText('Портал ФФ');
-  await expect(page.getByTestId('topbar-user')).toContainText(email);
-  await expect(page.getByTestId('logout')).toBeVisible();
-  await expect(page.getByTestId('ff-access-denied')).toContainText('Нет доступа к этому разделу.');
-  await expect(page.getByTestId('login-form')).toHaveCount(0);
+async function expectSellerLoginShellWithFfToken(page: Page): Promise<void> {
+  await expect(page).toHaveTitle('WMS · Селлер');
+  await expect(page.getByRole('heading', { name: 'WMS · Портал селлера' })).toBeVisible();
+  await expect(page.getByTestId('login-form')).toBeVisible();
+  await expect(page.getByTestId('app-frame')).toHaveCount(0);
+  await expect(page.getByTestId('app-topbar')).toHaveCount(0);
+  await expect(page.getByTestId('ff-access-denied')).toHaveCount(0);
+  await expect(page.getByTestId('logout')).toHaveCount(0);
   await expect(page.getByTestId('nav-seller-products')).toHaveCount(0);
   await expect(page.getByTestId('seller-products-table')).toHaveCount(0);
+  await expect
+    .poll(() => page.evaluate(() => localStorage.getItem('wms_token_ff')))
+    .toBeTruthy();
+}
+
+async function expectSellerLoginOnSellerProductsWithFfToken(page: Page): Promise<void> {
+  await page.goto('/seller/products');
+  await expectSellerLoginShellWithFfToken(page);
 }
 
 async function createFulfillmentStaffToken(
@@ -92,8 +99,8 @@ async function storeFulfillmentTokenOnly(page: Page, token: string): Promise<voi
   }, token);
 }
 
-// TC-NEW-AUTH-03 — FF admin/staff direct seller deep route stays in FF shell without seller token.
-test('FF admin and staff denied /seller/products stays in FF shell without seller token', async ({
+// TC-NEW-AUTH-03 — seller deep route stays in seller portal even when only FF token exists.
+test('FF admin and staff opening /seller/products see seller login, not FF shell', async ({
   page,
 }) => {
   const suffix = String(Date.now());
@@ -114,7 +121,11 @@ test('FF admin and staff denied /seller/products stays in FF shell without selle
   const adminToken = String(((await registerRes.json()) as { access_token: string }).access_token);
   await storeFulfillmentTokenOnly(page, adminToken);
 
-  await expectFfDeniedSellerProductsShell(page, adminEmail);
+  await expectSellerLoginOnSellerProductsWithFfToken(page);
+  await page.goto('/');
+  await expect(page.getByTestId('app-frame')).toBeVisible();
+  await clientRouteTo(page, '/seller/products');
+  await expectSellerLoginShellWithFfToken(page);
 
   await page.goto('/seller/');
   await expect(page).toHaveTitle('WMS · Селлер');
@@ -128,7 +139,7 @@ test('FF admin and staff denied /seller/products stays in FF shell without selle
     password,
   );
   await storeFulfillmentTokenOnly(page, staffToken);
-  await expectFfDeniedSellerProductsShell(page, staffEmail);
+  await expectSellerLoginOnSellerProductsWithFfToken(page);
 });
 
 // TC-NEW-AUTH-02 — FF и seller: два токена в localStorage, refresh не выбивает другой портал.
@@ -212,7 +223,7 @@ test('FF and seller sessions stay independent on reload and deep seller routes',
 
   await page.goto('/');
   await expect(page.getByTestId('app-frame')).toBeVisible();
-  await clientRouteTo(page, `/seller/inbound/${requestId}`);
+  await page.goto(`/seller/inbound/${requestId}`);
   await expectSellerInboundShell(page, requestId);
   await page.reload();
   await expectSellerInboundShell(page, requestId);

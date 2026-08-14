@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from 'react'
-import { Navigate, Route, Routes, useLocation } from 'react-router-dom'
+import { Navigate, Route, Routes } from 'react-router-dom'
 import { Alert } from '@mui/material'
-import { apiUrl, getStoredToken } from '../../api'
+import { apiUrl } from '../../api'
 import { useAuth } from '../../hooks/useAuth'
 import { readApiErrorMessage } from '../../utils/readApiErrorMessage'
 import {
@@ -16,13 +16,6 @@ import { SellerProductsStockScreen } from '../../screens/v2/SellerProductsStockS
 import { SellerHonestSignScreen } from '../../screens/v2/SellerHonestSignScreen'
 import { SellerSettingsScreen } from '../../screens/v2/SellerSettingsScreen'
 import { NotificationsPage } from '../../screens/shared/NotificationsPage'
-import { FfPlaceholderPage } from '../../screens/ff/FfPlaceholderPage'
-import { AuthedAppLayout } from '../../layouts/AuthedAppLayout'
-import {
-  ffRoleLabel,
-  isFfPortalRole,
-  resolveFfPermissions,
-} from '../../utils/ffPermissions'
 import { SellerLayout } from './SellerLayout'
 
 type InboundSummaryRow = {
@@ -39,61 +32,7 @@ type SellerAppProps = {
   navigationBasePath?: string
 }
 
-function isSellerHomePath(pathname: string, navigationBasePath: string): boolean {
-  const normalizedBase = navigationBasePath.replace(/\/+$/, '')
-  if (!normalizedBase) {
-    return pathname === '/' || pathname === ''
-  }
-  return pathname === normalizedBase || pathname === `${normalizedBase}/`
-}
-
-function FfAccessDeniedPage() {
-  return (
-    <FfPlaceholderPage
-      title="Нет доступа"
-      hint="Нет доступа к этому разделу."
-      testId="ff-access-denied"
-    />
-  )
-}
-
-type FulfillmentAccessDeniedShellProps = {
-  onSessionCleared: () => void
-}
-
-function FulfillmentAccessDeniedShell({
-  onSessionCleared,
-}: FulfillmentAccessDeniedShellProps) {
-  const { token, me, loading, logout } = useAuth('fulfillment')
-  const handleLogout = useCallback(() => {
-    logout()
-    onSessionCleared()
-  }, [logout, onSessionCleared])
-
-  if (token && !me) {
-    return <ProfileLoadingScreen loading={loading} onLogout={handleLogout} />
-  }
-  if (!me || !isFfPortalRole(me.role)) {
-    return <FfAccessDeniedPage />
-  }
-
-  return (
-    <AuthedAppLayout
-      onLogout={handleLogout}
-      title="Портал ФФ"
-      userLabel={me.email}
-      userRoleLabel={ffRoleLabel(me.role)}
-      portal="ff"
-      meRole={me.role}
-      ffPermissions={resolveFfPermissions(me.role, me.permissions)}
-    >
-      <FfAccessDeniedPage />
-    </AuthedAppLayout>
-  )
-}
-
 export function SellerApp({ navigationBasePath = '' }: SellerAppProps) {
-  const location = useLocation()
   const {
     token,
     me,
@@ -111,7 +50,6 @@ export function SellerApp({ navigationBasePath = '' }: SellerAppProps) {
   } = useAuth('seller')
 
   const [shopsBusy, setShopsBusy] = useState(false)
-  const [fulfillmentSessionCleared, setFulfillmentSessionCleared] = useState(false)
 
   const [warehouses, setWarehouses] = useState<WarehouseRow[]>([])
   const [selectedWarehouseId, setSelectedWarehouseId] = useState<string | null>(
@@ -135,24 +73,14 @@ export function SellerApp({ navigationBasePath = '' }: SellerAppProps) {
     (path: string) => `${navigationBasePath}${path}`,
     [navigationBasePath],
   )
-  const onFulfillmentSessionCleared = useCallback(() => {
-    setFulfillmentSessionCleared(true)
-  }, [])
-  const shouldDenyFulfillmentSession =
-    !token &&
-    !fulfillmentSessionCleared &&
-    Boolean(getStoredToken('fulfillment')) &&
-    !isSellerHomePath(location.pathname, navigationBasePath)
 
   useEffect(() => {
     const previousTitle = document.title
-    document.title = shouldDenyFulfillmentSession
-      ? 'WMS · Фулфилмент'
-      : 'WMS · Селлер'
+    document.title = 'WMS · Селлер'
     return () => {
       document.title = previousTitle
     }
-  }, [shouldDenyFulfillmentSession])
+  }, [])
 
   const refreshWarehouses = useCallback(
     async (t: string) => {
@@ -310,9 +238,6 @@ export function SellerApp({ navigationBasePath = '' }: SellerAppProps) {
   }, [me, refreshInboundList, refreshMpUnloadList, refreshWarehouses, token])
 
   const rootElement = (() => {
-    if (shouldDenyFulfillmentSession) {
-      return <FulfillmentAccessDeniedShell onSessionCleared={onFulfillmentSessionCleared} />
-    }
     if (!token) {
       return (
         <PublicAuthScreen

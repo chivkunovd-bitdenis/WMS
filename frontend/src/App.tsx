@@ -1,13 +1,13 @@
 import { useCallback, useEffect, useState } from 'react'
 import './App.css'
-import { apiUrl, getStoredToken } from './api'
+import { apiUrl } from './api'
 import { Navigate, Route, Routes, useLocation, useNavigate } from 'react-router-dom'
 import { ProfileLoadingScreen } from './screens/ProfileLoadingScreen'
 import { PublicAuthScreen } from './screens/PublicAuthScreen'
 import { AuthedAppLayout } from './layouts/AuthedAppLayout'
 import { CatalogSection } from './sections/CatalogSection'
 import { readApiErrorMessage } from './utils/readApiErrorMessage'
-import { useAuth, type Me } from './hooks/useAuth'
+import { useAuth } from './hooks/useAuth'
 import { Screen } from './screens/AppV2Screens'
 import { ProductsScreen } from './screens/v2/ProductsScreen'
 import { SellersScreen } from './screens/v2/SellersScreen'
@@ -48,11 +48,9 @@ import { FfInventorySnapshotScreen } from './screens/v2/FfInventorySnapshotScree
 import { FfFbsOrdersScreen } from './screens/v2/FfFbsOrdersScreen'
 import { FfFbsStockSyncScreen } from './screens/v2/FfFbsStockSyncScreen'
 import { FfSettingsScreen } from './screens/ff/FfSettingsScreen'
-import { SellerApp } from './apps/seller/SellerApp'
 import {
   canAccessFfBlock,
   ffRoleLabel,
-  isFfPortalRole,
   resolveFfPermissions,
 } from './utils/ffPermissions'
 import { setSeparateMarkingPrintEnabled } from './utils/separateMarkingPrint'
@@ -161,51 +159,14 @@ function FfAccessDeniedPage() {
   )
 }
 
-function isSellerPortalHomePath(pathname: string): boolean {
-  return pathname === '/seller' || pathname === '/seller/'
-}
-
-type SellerRouteGuardProps = {
-  ffToken: string | null
-  ffMe: Me | null
-  ffLoading: boolean
-  onFfLogout: () => void
-}
-
-function SellerRouteGuard({
-  ffToken,
-  ffMe,
-  ffLoading,
-  onFfLogout,
-}: SellerRouteGuardProps) {
+function SellerPortalDocumentRedirect() {
   const location = useLocation()
-  const hasSellerToken = Boolean(getStoredToken('seller'))
-  const canOpenSellerPortal =
-    hasSellerToken || isSellerPortalHomePath(location.pathname) || !ffToken
 
-  if (canOpenSellerPortal) {
-    return <SellerApp navigationBasePath="/seller" />
-  }
-  if (!ffMe) {
-    return <ProfileLoadingScreen loading={ffLoading} onLogout={onFfLogout} />
-  }
-  if (!isFfPortalRole(ffMe.role)) {
-    return <SellerApp navigationBasePath="/seller" />
-  }
+  useEffect(() => {
+    window.location.replace(`${location.pathname}${location.search}${location.hash}`)
+  }, [location.hash, location.pathname, location.search])
 
-  return (
-    <AuthedAppLayout
-      onLogout={onFfLogout}
-      title="Портал ФФ"
-      userLabel={ffMe.email}
-      userRoleLabel={ffRoleLabel(ffMe.role)}
-      portal="ff"
-      meRole={ffMe.role}
-      ffPermissions={resolveFfPermissions(ffMe.role, ffMe.permissions)}
-    >
-      <FfAccessDeniedPage />
-    </AuthedAppLayout>
-  )
+  return <ProfileLoadingScreen loading onLogout={() => window.location.replace('/')} />
 }
 
 type OutboundSummaryRow = {
@@ -3208,17 +3169,8 @@ export default function App() {
 
   return (
     <Routes>
-      <Route
-        path="/seller/*"
-        element={
-          <SellerRouteGuard
-            ffToken={token}
-            ffMe={me}
-            ffLoading={loading}
-            onFfLogout={logout}
-          />
-        }
-      />
+      <Route path="/seller" element={<SellerPortalDocumentRedirect />} />
+      <Route path="/seller/*" element={<SellerPortalDocumentRedirect />} />
       <Route path="*" element={rootElement} />
     </Routes>
   )
