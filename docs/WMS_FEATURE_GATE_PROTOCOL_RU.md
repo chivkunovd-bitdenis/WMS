@@ -6,7 +6,8 @@ backend-изменение, складской процесс, FBS/FBO/WB/MP, п
 или любое изменение видимого поведения.
 
 Не нужно сначала классифицировать задачу как "фича", "баг" или "UI-мелочь".
-Классификация не может быть способом обойти Product gate.
+Любая задача сначала превращается в атомарные feature cards и проходит один и тот
+же flow. Классификация не может быть способом обойти Product gate.
 
 Единственное исключение: пользователь прямо пишет, что это срочный production
 hotfix и нужно чинить сейчас. Тогда агент фиксирует
@@ -25,7 +26,8 @@ OK до разработки.
 
 ## Обязательная цепочка
 
-Каждая карточка проходит строго в таком порядке:
+Каждая задача проходит через атомарные feature cards. Каждая карточка проходит
+строго в таком порядке:
 
 1. BA Feature Cards.
 2. Product Before Dev.
@@ -128,9 +130,9 @@ Product Agent до разработки работает по
 
 Выход:
 
-- `PRODUCT_APPROVED_FOR_DEV` - dev может стартовать;
-- `PRODUCT_REWORK_REQUIRED` - карточка возвращается в BA/Product;
-- `PRODUCT_BLOCKED` - не хватает экрана, данных, доступа, fixture или решения.
+- `PRODUCT_APPROVED_FOR_DEV` — dev может стартовать;
+- `PRODUCT_REWORK_REQUIRED` — карточка возвращается в BA/Product;
+- `PRODUCT_BLOCKED` — не хватает экрана, данных, доступа, fixture или решения.
 
 Без `PRODUCT_APPROVED_FOR_DEV` разработка запрещена.
 
@@ -211,8 +213,8 @@ fixture, verdict только `PRODUCT_BROWSER_BLOCKED`.
 
 ## Rework
 
-Изменение после Product verdict аннулирует старый product verdict для затронутой
-карточки или зоны экрана. Rework повторяет цепочку:
+Любое изменение после Product verdict аннулирует старый product verdict для
+затронутой карточки или зоны экрана. Rework повторяет цепочку:
 
 ```text
 BA уточнение -> Product Before Dev -> Dev -> Code Review -> Product Browser Review
