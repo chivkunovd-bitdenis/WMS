@@ -20,13 +20,13 @@ from app.models.fbs_order import (
     RESERVE_STATUS_NO_STOCK,
     RESERVE_STATUS_RELEASED,
     RESERVE_STATUS_RESERVED,
+    RESERVE_STATUS_WAREHOUSE_UNMAPPED,
     FbsOrder,
     FbsOrderReservation,
 )
 from app.models.fbs_supply import FBS_SUPPLY_SOURCE_WB, FbsSupply
 from app.models.fbs_warehouse_binding import FbsWarehouseBinding
 from app.models.product import Product
-from app.models.warehouse import Warehouse
 from app.services import inventory_service, stock_direction_service
 from app.services.sorting_location_service import get_or_create_sorting_location
 from app.services.tokens import decode_access_token
@@ -1320,9 +1320,9 @@ async def test_fbs_orders_bind_to_correct_wms_warehouse(
     assert by_wb[800602]["wb_office_id"] == 99
 
 
-# TC-NEW-FBS-STOCK-004 — unknown WB warehouse creates a technical binding
+# TC-NEW-FBS-STOCK-004 — unknown WB warehouse stays unmapped until explicit binding
 @pytest.mark.asyncio
-async def test_fbs_order_unknown_wb_warehouse_auto_creates_binding(
+async def test_fbs_order_unknown_wb_warehouse_stays_unmapped(
     async_client: AsyncClient,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -1364,10 +1364,10 @@ async def test_fbs_order_unknown_wb_warehouse_auto_creates_binding(
 
     listed = await async_client.get("/operations/fbs-orders", headers=headers)
     order = listed.json()[0]
-    assert order["warehouse_id"] is not None
+    assert order["warehouse_id"] is None
     assert order["wb_warehouse_id"] == UNKNOWN_WB_WAREHOUSE
     assert order["mapping_status"] == MAPPING_STATUS_MAPPED
-    assert order["reserve_status"] == RESERVE_STATUS_NO_STOCK
+    assert order["reserve_status"] == RESERVE_STATUS_WAREHOUSE_UNMAPPED
 
     async with SessionLocal() as session:
         binding_stmt = select(FbsWarehouseBinding).where(
@@ -1375,16 +1375,7 @@ async def test_fbs_order_unknown_wb_warehouse_auto_creates_binding(
             FbsWarehouseBinding.wb_warehouse_id == UNKNOWN_WB_WAREHOUSE,
         )
         binding = await session.scalar(binding_stmt)
-        assert binding is not None
-        assert str(binding.wms_warehouse_id) == order["warehouse_id"]
-        assert binding.is_active is True
-        # Привязка создаётся сразу включённой: от выгрузки нулей защищает
-        # признак на товаре. Выключенный рубильник был второй скрытой заслонкой.
-        assert binding.stock_sync_enabled is True
-
-        warehouse = await session.get(Warehouse, uuid.UUID(order["warehouse_id"]))
-        assert warehouse is not None
-        assert warehouse.code.startswith("fbs-wb-")
+        assert binding is None
 
         count_stmt = select(func.count()).select_from(FbsOrderReservation)
         res = await session.execute(count_stmt)

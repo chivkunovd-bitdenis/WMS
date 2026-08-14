@@ -43,6 +43,7 @@ from app.models.warehouse import Warehouse
 from app.services.fbs_marking_service import apply_wb_meta_requirements_to_order
 from app.services.fbs_stock_availability_service import fbs_available_qty_for_product
 from app.services.fbs_stock_publish_service import schedule_seller_stock_publish
+from app.services.fbs_warehouse_binding_service import is_auto_fbs_wms_warehouse
 from app.services.fbs_wb_seller_lock_service import wb_seller_lock
 from app.services.wildberries_client import (
     WildberriesClientError,
@@ -90,7 +91,6 @@ STATUSES_EXCLUDED_FROM_WB_SYNC = TERMINAL_FBS_STATUSES
 
 SYNC_STATUS_BATCH_SIZE = 500
 MAX_SYNC_STATUS_BATCHES = 20
-AUTO_FBS_WAREHOUSE_CODE_PREFIX = "fbs-wb"
 
 logger = logging.getLogger(__name__)
 
@@ -262,103 +262,38 @@ async def _resolve_wms_warehouse_from_binding(
 ) -> uuid.UUID | None:
     if wb_warehouse_id is None:
         return None
-    stmt = select(FbsWarehouseBinding.wms_warehouse_id).where(
-        FbsWarehouseBinding.tenant_id == tenant_id,
-        FbsWarehouseBinding.seller_id == seller_id,
-        FbsWarehouseBinding.wb_warehouse_id == wb_warehouse_id,
-        FbsWarehouseBinding.is_active.is_(True),
+    stmt = (
+        select(FbsWarehouseBinding, Warehouse)
+        .join(Warehouse, Warehouse.id == FbsWarehouseBinding.wms_warehouse_id)
+        .where(
+            FbsWarehouseBinding.tenant_id == tenant_id,
+            FbsWarehouseBinding.seller_id == seller_id,
+            FbsWarehouseBinding.wb_warehouse_id == wb_warehouse_id,
+            FbsWarehouseBinding.is_active.is_(True),
+            Warehouse.tenant_id == tenant_id,
+        )
     )
     res = await session.execute(stmt)
-    return res.scalar_one_or_none()
+    row = res.one_or_none()
+    if row is None:
+        return None
+    binding, warehouse = row
+    if is_auto_fbs_wms_warehouse(warehouse):
+        binding.stock_sync_enabled = False
+        await session.flush()
+        return None
+    return binding.wms_warehouse_id
 
 
-def _auto_fbs_wms_warehouse_code(seller_id: uuid.UUID, wb_warehouse_id: int) -> str:
-    return f"{AUTO_FBS_WAREHOUSE_CODE_PREFIX}-{seller_id.hex[:8]}-{wb_warehouse_id}"
-
-
-async def _get_or_create_auto_fbs_wms_warehouse(
-    session: AsyncSession,
-    tenant_id: uuid.UUID,
-    seller_id: uuid.UUID,
-    wb_warehouse_id: int,
-) -> Warehouse:
-    code = _auto_fbs_wms_warehouse_code(seller_id, wb_warehouse_id)
-    stmt = select(Warehouse).where(
-        Warehouse.tenant_id == tenant_id,
-        Warehouse.code == code,
-    )
-    res = await session.execute(stmt)
-    existing = res.scalar_one_or_none()
-    if existing is not None:
-        return existing
-
-    warehouse = Warehouse(
-        tenant_id=tenant_id,
-        code=code,
-        name=f"FBS WB {wb_warehouse_id}",
-    )
-    session.add(warehouse)
-    await session.flush()
-    return warehouse
-
-
-async def _resolve_or_create_wms_warehouse_for_wb(
+async def _resolve_wms_warehouse_for_wb(
     session: AsyncSession,
     tenant_id: uuid.UUID,
     seller_id: uuid.UUID,
     wb_warehouse_id: int | None,
 ) -> uuid.UUID | None:
-    if wb_warehouse_id is None:
-        return None
-
-    active_resolved = await _resolve_wms_warehouse_from_binding(
+    return await _resolve_wms_warehouse_from_binding(
         session, tenant_id, seller_id, wb_warehouse_id
     )
-    if active_resolved is not None:
-        return active_resolved
-
-    stmt = select(FbsWarehouseBinding).where(
-        FbsWarehouseBinding.tenant_id == tenant_id,
-        FbsWarehouseBinding.seller_id == seller_id,
-        FbsWarehouseBinding.wb_warehouse_id == wb_warehouse_id,
-    )
-    res = await session.execute(stmt)
-    existing = res.scalar_one_or_none()
-    if existing is not None:
-        existing.is_active = True
-        existing.stock_sync_enabled = False
-        await session.flush()
-        return existing.wms_warehouse_id
-
-    try:
-        async with session.begin_nested():
-            warehouse = await _get_or_create_auto_fbs_wms_warehouse(
-                session, tenant_id, seller_id, wb_warehouse_id
-            )
-            binding = FbsWarehouseBinding(
-                tenant_id=tenant_id,
-                seller_id=seller_id,
-                wb_warehouse_id=wb_warehouse_id,
-                wms_warehouse_id=warehouse.id,
-                is_active=True,
-                # Раньше здесь стоял False, чтобы не выгрузить в WB нули по всему складу.
-                # Эта причина ушла: теперь от такого защищает признак на товаре
-                # (`Product.fbs_stock_sync_enabled`, по умолчанию выключен) — без него
-                # в WB не уходит ни числа, ни нуля. Оставлять выключенным рубильник
-                # привязки означало вторую скрытую заслонку: селлер включает галочку,
-                # но выгрузка молча не идёт и возвращает bindings_processed = 0.
-                stock_sync_enabled=True,
-            )
-            session.add(binding)
-            await session.flush()
-            return warehouse.id
-    except IntegrityError:
-        resolved = await _resolve_wms_warehouse_from_binding(
-            session, tenant_id, seller_id, wb_warehouse_id
-        )
-        if resolved is None:
-            raise
-        return resolved
 
 
 async def _get_reservation_warehouse_id(
@@ -397,13 +332,16 @@ async def _assign_wms_warehouse_from_binding(
     order: FbsOrder,
     wb_warehouse_id: int | None,
 ) -> None:
-    """Map WB warehouse to local WMS warehouse, creating a technical binding if needed."""
-    resolved = await _resolve_or_create_wms_warehouse_for_wb(
+    """Map WB warehouse to local WMS warehouse only through an explicit active binding."""
+    resolved = await _resolve_wms_warehouse_for_wb(
         session, tenant_id, seller_id, wb_warehouse_id
     )
     if resolved is None:
-        if order.warehouse_id is None:
-            order.reserve_status = RESERVE_STATUS_WAREHOUSE_UNMAPPED
+        if order.warehouse_id is not None:
+            current_warehouse = await session.get(Warehouse, order.warehouse_id)
+            if current_warehouse is None or is_auto_fbs_wms_warehouse(current_warehouse):
+                order.warehouse_id = None
+        order.reserve_status = RESERVE_STATUS_WAREHOUSE_UNMAPPED
         return
 
     if order.warehouse_id is None:
@@ -698,7 +636,7 @@ async def upsert_order_from_wb_row(
     )
     mapping_status = MAPPING_STATUS_MAPPED if product is not None else MAPPING_STATUS_MISSING
     wb_warehouse_id = _wb_warehouse_id_from_row(row)
-    wms_warehouse_id = await _resolve_or_create_wms_warehouse_for_wb(
+    wms_warehouse_id = await _resolve_wms_warehouse_for_wb(
         session, tenant_id, seller_id, wb_warehouse_id
     )
     if product is None:
@@ -1053,10 +991,14 @@ async def _resolve_supply_warehouse_for_orders(
 ) -> uuid.UUID | None:
     for order in orders:
         if order.warehouse_id is not None:
-            return order.warehouse_id
+            warehouse = await session.get(Warehouse, order.warehouse_id)
+            if warehouse is not None and not is_auto_fbs_wms_warehouse(warehouse):
+                return order.warehouse_id
+            order.warehouse_id = None
+            order.reserve_status = RESERVE_STATUS_WAREHOUSE_UNMAPPED
         if order.wb_warehouse_id is None:
             continue
-        resolved = await _resolve_or_create_wms_warehouse_for_wb(
+        resolved = await _resolve_wms_warehouse_for_wb(
             session, tenant_id, seller_id, order.wb_warehouse_id
         )
         if resolved is not None:
@@ -1190,7 +1132,7 @@ async def link_confirmed_orders_to_wb_supplies(
                 if order.supply_id is not None:
                     continue
                 if order.warehouse_id is None and order.wb_warehouse_id is not None:
-                    order.warehouse_id = await _resolve_or_create_wms_warehouse_for_wb(
+                    order.warehouse_id = await _resolve_wms_warehouse_for_wb(
                         session, tenant_id, seller_id, order.wb_warehouse_id
                     )
                 if order.warehouse_id != supply.warehouse_id:

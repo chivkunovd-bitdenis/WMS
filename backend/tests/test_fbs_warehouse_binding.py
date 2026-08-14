@@ -35,6 +35,8 @@ from app.models.fbs_stock_sync_item import (
 from app.models.fbs_warehouse_binding import FbsWarehouseBinding
 from app.models.product import Product
 from app.models.seller import Seller
+from app.models.warehouse import Warehouse
+from app.services.fbs_autopoll_service import list_active_stock_sync_bindings
 
 
 def _assert_fbs_error(
@@ -655,3 +657,44 @@ async def test_fbs_stock_sync_cross_tenant_404(async_client: AsyncClient) -> Non
         code="seller_not_found",
         message="Селлер не найден.",
     )
+
+
+# TC-NEW-FBS-STOCK-004 — old technical FBS WB warehouses are not publish sources
+@pytest.mark.asyncio
+async def test_fbs_stock_sync_ignores_auto_technical_warehouse(
+    async_client: AsyncClient,
+) -> None:
+    headers, suffix = await _register_ff_admin(async_client)
+    seller_id = await _create_seller(async_client, headers, suffix)
+
+    async with SessionLocal() as session:
+        seller = await session.get(Seller, uuid.UUID(seller_id))
+        assert seller is not None
+        technical = Warehouse(
+            tenant_id=seller.tenant_id,
+            name="FBS WB 777888",
+            code=f"fbs-wb-{suffix[-8:]}-777888",
+        )
+        session.add(technical)
+        await session.flush()
+        session.add(
+            FbsWarehouseBinding(
+                tenant_id=seller.tenant_id,
+                seller_id=seller.id,
+                wb_warehouse_id=777888,
+                wms_warehouse_id=technical.id,
+                stock_sync_enabled=True,
+                is_active=True,
+            )
+        )
+        await session.commit()
+
+    async with SessionLocal() as session:
+        seller = await session.get(Seller, uuid.UUID(seller_id))
+        assert seller is not None
+        rows = await list_active_stock_sync_bindings(
+            session,
+            seller.tenant_id,
+            seller.id,
+        )
+    assert rows == []
