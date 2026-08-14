@@ -2,6 +2,7 @@ import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from 'rea
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import KeyboardArrowDownIcon from '@mui/icons-material/KeyboardArrowDown'
 import KeyboardArrowRightIcon from '@mui/icons-material/KeyboardArrowRight'
+import PrintOutlined from '@mui/icons-material/PrintOutlined'
 import {
   Alert,
   Box,
@@ -26,12 +27,14 @@ import { SellerWbProductPickerDialog } from '../../components/SellerWbProductPic
 import { apiUrl } from '../../api'
 import { ProductPhotoThumb } from '../../components/ProductPhotoThumb'
 import { ProductBarcodeCell } from '../../components/ProductBarcodeCell'
+import { ProductBarcodePrintDialog } from '../../components/ProductBarcodePrintDialog'
 import { readApiErrorMessage } from '../../utils/readApiErrorMessage'
 import {
   inboundOperationTypeLabel,
   normalizeInboundOperationType,
   type InboundOperationType,
 } from '../../utils/inboundOperationType'
+import type { ProductLineDisplayMeta } from '../../types/wbProductCatalog'
 
 export type WbCatalogRow = {
   id: string
@@ -69,7 +72,9 @@ type InboundBox = {
 
 type InboundDetail = {
   id: string
+  waybill_number: string | null
   warehouse_id: string
+  warehouse_name?: string | null
   status: string
   operation_type: InboundOperationType
   planned_delivery_date: string | null
@@ -209,9 +214,12 @@ export function SellerInboundDraftScreen({
   const [localError, setLocalError] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
   const [pickerOpen, setPickerOpen] = useState(false)
+  const [printMeta, setPrintMeta] = useState<ProductLineDisplayMeta | null>(null)
   const [expandedFactLineIds, setExpandedFactLineIds] = useState<Set<string>>(() => new Set())
   const [plannedDateDraft, setPlannedDateDraft] = useState<string>('')
-  const [plannedBoxCountDraft, setPlannedBoxCountDraft] = useState<string>('1')
+  const [plannedBoxCountDraft, setPlannedBoxCountDraft] = useState<string>('')
+  const [waybillNumberDraft, setWaybillNumberDraft] = useState<string>('')
+  const [localNotice, setLocalNotice] = useState<string | null>(null)
 
   const loadDetail = useCallback(
     async (rid: string) => {
@@ -294,8 +302,14 @@ export function SellerInboundDraftScreen({
   useEffect(() => {
     if (detail?.planned_box_count != null) {
       setPlannedBoxCountDraft(String(detail.planned_box_count))
+    } else {
+      setPlannedBoxCountDraft('')
     }
   }, [detail?.planned_box_count])
+
+  useEffect(() => {
+    setWaybillNumberDraft(detail?.waybill_number ?? '')
+  }, [detail?.waybill_number])
 
   const catalogById = useMemo(() => {
     const m = new Map<string, WbCatalogRow>()
@@ -420,12 +434,13 @@ export function SellerInboundDraftScreen({
     }
   }
 
-  const patchDraftField = async (body: Record<string, unknown>) => {
+  const patchDraftField = async (body: Record<string, unknown>): Promise<boolean> => {
     if (!requestId) {
-      return
+      return false
     }
     setBusy(true)
     setLocalError(null)
+    setLocalNotice(null)
     try {
       const res = await fetch(apiUrl(`/operations/inbound-intake-requests/${requestId}`), {
         method: 'PATCH',
@@ -437,27 +452,53 @@ export function SellerInboundDraftScreen({
       })
       if (!res.ok) {
         setLocalError(await readApiErrorMessage(res))
-        return
+        return false
       }
       setDetail((await res.json()) as InboundDetail)
+      return true
     } catch (e) {
       setLocalError(e instanceof Error ? e.message : 'Не удалось сохранить заявку.')
+      return false
     } finally {
       setBusy(false)
     }
   }
 
-  const patchPlannedDate = async (isoDate: string) => {
-    await patchDraftField({ planned_delivery_date: isoDate })
+  const parsedPlannedBoxCount = (): number | null => {
+    const raw = plannedBoxCountDraft.trim()
+    if (!raw) {
+      return null
+    }
+    const n = Math.floor(Number(raw))
+    return Number.isFinite(n) && n >= 1 ? n : null
   }
 
-  const patchPlannedBoxCount = async (raw: string) => {
-    const n = Math.floor(Number(raw))
-    if (!Number.isFinite(n) || n < 1) {
-      setLocalError('Укажите количество коробов (целое число ≥ 1).')
-      return
+  const draftFieldsDirty = useMemo(() => {
+    if (!detail) {
+      return false
     }
-    await patchDraftField({ planned_box_count: n })
+    const detailDate = detail.planned_delivery_date ?? ''
+    const draftBox = parsedPlannedBoxCount()
+    const detailBox = detail.planned_box_count ?? null
+    return (
+      plannedDateDraft !== detailDate ||
+      draftBox !== detailBox ||
+      waybillNumberDraft.trim() !== (detail.waybill_number ?? '')
+    )
+  }, [detail, plannedBoxCountDraft, plannedDateDraft, waybillNumberDraft])
+
+  const saveDraftFields = async (): Promise<boolean> => {
+    const plannedBoxCount = parsedPlannedBoxCount()
+    const ok = await patchDraftField({
+      planned_delivery_date: plannedDateDraft || null,
+      planned_box_count: plannedBoxCount,
+      waybill_number: waybillNumberDraft.trim() || null,
+    })
+    if (ok) {
+      setLocalNotice('Заявка сохранена.')
+      await onRefreshInboundList()
+    }
+    return ok
   }
 
   const patchLineQty = async (lineId: string, expectedQty: number) => {
@@ -520,6 +561,14 @@ export function SellerInboundDraftScreen({
     if (!requestId) {
       return
     }
+    const plannedBoxCount = parsedPlannedBoxCount()
+    if (plannedBoxCount == null) {
+      setLocalError('Укажите количество грузомест')
+      return
+    }
+    if (!(await saveDraftFields())) {
+      return
+    }
     setBusy(true)
     setLocalError(null)
     try {
@@ -543,12 +592,32 @@ export function SellerInboundDraftScreen({
     }
   }
 
-  const onSaveAndClose = async () => {
-    setLocalError(null)
-    try {
-      await onRefreshInboundList()
-    } finally {
-      navigateToDocuments()
+  const closeDocument = () => {
+    if (draftFieldsDirty && !window.confirm('Закрыть без сохранения?')) {
+      return
+    }
+    navigateToDocuments()
+  }
+
+  const linePrintMeta = (line: InboundLine, cat: WbCatalogRow | undefined): ProductLineDisplayMeta => {
+    const barcode =
+      cat?.wb_primary_barcode ??
+      line.wb_barcode ??
+      (cat?.wb_barcodes.length ? cat.wb_barcodes[0] ?? null : null)
+    return {
+      sku_code: cat?.sku_code ?? line.sku_code,
+      product_name: cat?.name ?? line.product_name,
+      seller_name: null,
+      wb_primary_image_url: cat?.wb_primary_image_url ?? null,
+      wb_primary_barcode: barcode,
+      wb_barcodes: cat?.wb_barcodes ?? (line.wb_barcode ? [line.wb_barcode] : []),
+      wb_vendor_code: cat?.wb_vendor_code ?? null,
+      wb_nm_id: cat?.wb_nm_id ?? null,
+      wb_size: cat?.wb_size ?? null,
+      wb_color: null,
+      wb_brand: null,
+      wb_composition: cat?.wb_composition ?? null,
+      packaging_instructions: null,
     }
   }
 
@@ -564,14 +633,16 @@ export function SellerInboundDraftScreen({
     })
   }, [])
 
-  const draftLocked = detail != null && detail.status !== 'draft'
-  const isDraft = detail == null || detail.status === 'draft'
+  const sellerCanEdit = detail != null && (detail.status === 'draft' || detail.status === 'submitted')
+  const draftLocked = detail != null && !sellerCanEdit
   const draftOperationLabel = operationTypeRu(detail?.operation_type ?? requestedOperationType)
   const newDraftTitle =
     draftOperationLabel === 'Возврат' ? 'Новая заявка на возврат' : 'Новая заявка на поставку'
   const pageTitle = detail
-    ? isDraft
-      ? newDraftTitle
+    ? sellerCanEdit
+      ? detail.status === 'submitted'
+        ? `Заявка передана на склад · ${operationTypeRu(detail.operation_type)}`
+        : newDraftTitle
       : `Карточка приёмки · ${operationTypeRu(detail.operation_type)}`
     : routeRequestId
       ? 'Карточка приёмки'
@@ -739,6 +810,16 @@ export function SellerInboundDraftScreen({
           {localError}
         </Alert>
       ) : null}
+      {localNotice ? (
+        <Alert severity="success" sx={{ mb: 2 }} data-testid="seller-inbound-draft-ok">
+          {localNotice}
+        </Alert>
+      ) : null}
+      {detail && !sellerCanEdit ? (
+        <Alert severity="info" sx={{ mb: 2 }} data-testid="seller-inbound-readonly-hint">
+          Приёмку взял в работу склад, изменения теперь вносит фулфилмент
+        </Alert>
+      ) : null}
 
       {!requestId || !detail ? (
         showLoadError ? (
@@ -770,7 +851,7 @@ export function SellerInboundDraftScreen({
             </Typography>
           </Stack>
         )
-      ) : isDraft ? (
+      ) : sellerCanEdit ? (
         <Paper
           variant="outlined"
           sx={{
@@ -791,12 +872,7 @@ export function SellerInboundDraftScreen({
               label="Дата поставки (план)"
               value={plannedDateDraft || null}
               onChange={(iso) => {
-                const next = iso ?? ''
-                setPlannedDateDraft(next)
-                if (!detail) return
-                if (next !== (detail.planned_delivery_date ?? '')) {
-                  void patchPlannedDate(next)
-                }
+                setPlannedDateDraft(iso ?? '')
               }}
               disabled={draftLocked || busy}
               required
@@ -804,22 +880,29 @@ export function SellerInboundDraftScreen({
               slotProps={{ textField: { fullWidth: false, sx: { minWidth: 220 } } }}
             />
             <TextField
-              label="Коробов (план)"
+              label="Грузомест"
               type="number"
               size="small"
               disabled={draftLocked || busy}
               value={plannedBoxCountDraft}
               onChange={(e) => setPlannedBoxCountDraft(e.target.value)}
-              onBlur={() => {
-                if (!detail) return
-                const n = Math.floor(Number(plannedBoxCountDraft))
-                if (detail.planned_box_count === n) return
-                void patchPlannedBoxCount(plannedBoxCountDraft)
-              }}
               slotProps={{
                 htmlInput: {
-                  min: 1,
+                  min: 0,
                   'data-testid': 'seller-inbound-planned-boxes',
+                },
+              }}
+            />
+            <TextField
+              label="Номер накладной"
+              size="small"
+              disabled={draftLocked || busy}
+              value={waybillNumberDraft}
+              onChange={(e) => setWaybillNumberDraft(e.target.value)}
+              slotProps={{
+                htmlInput: {
+                  maxLength: 128,
+                  'data-testid': 'seller-inbound-waybill-number',
                 },
               }}
             />
@@ -843,26 +926,30 @@ export function SellerInboundDraftScreen({
             <Button
               variant="outlined"
               disabled={busy}
-              onClick={() => void onSaveAndClose()}
+              onClick={() => void saveDraftFields()}
               data-testid="seller-inbound-save-draft"
             >
               Сохранить
             </Button>
             <Button
-              variant="contained"
-              color="secondary"
-              disabled={
-                draftLocked ||
-                busy ||
-                detail.lines.length === 0 ||
-                !Number.isFinite(Number(plannedBoxCountDraft)) ||
-                Math.floor(Number(plannedBoxCountDraft)) < 1
-              }
-              onClick={() => void submitToWarehouse()}
-              data-testid="seller-inbound-submit-warehouse"
+              variant="outlined"
+              disabled={busy}
+              onClick={closeDocument}
+              data-testid="seller-inbound-close"
             >
-              Передать на склад
+              Закрыть
             </Button>
+            {detail.status === 'draft' ? (
+              <Button
+                variant="contained"
+                color="secondary"
+                disabled={draftLocked || busy || detail.lines.length === 0}
+                onClick={() => void submitToWarehouse()}
+                data-testid="seller-inbound-submit-warehouse"
+              >
+                Передать на склад
+              </Button>
+            ) : null}
           </Stack>
 
           <TableContainer
@@ -880,7 +967,7 @@ export function SellerInboundDraftScreen({
               sx={{
                 tableLayout: 'fixed',
                 width: '100%',
-                minWidth: 1040,
+                minWidth: 1096,
                 '& th': { py: 1, lineHeight: 1.2, verticalAlign: 'bottom' },
                 '& td': { py: 1.25, verticalAlign: 'top' },
               }}
@@ -893,6 +980,7 @@ export function SellerInboundDraftScreen({
                 <col style={{ width: 96 }} />
                 <col style={{ width: 272 }} />
                 <col style={{ width: 104 }} />
+                <col style={{ width: 56 }} />
                 <col style={{ width: 92 }} />
               </colgroup>
               <TableHead>
@@ -906,6 +994,7 @@ export function SellerInboundDraftScreen({
                   <TableCell align="right">
                     Кол-во
                   </TableCell>
+                  <TableCell align="center">Печать</TableCell>
                   <TableCell />
                 </TableRow>
               </TableHead>
@@ -917,6 +1006,7 @@ export function SellerInboundDraftScreen({
                     cat?.wb_primary_barcode ??
                     ln.wb_barcode ??
                     (cat?.wb_barcodes.length ? cat.wb_barcodes[0] ?? null : null)
+                  const printLineMeta = linePrintMeta(ln, cat)
                   return (
                     <TableRow
                       key={ln.id}
@@ -1040,6 +1130,21 @@ export function SellerInboundDraftScreen({
                           }}
                         />
                       </TableCell>
+                      <TableCell align="center">
+                        <Tooltip title="Печать товарного ШК">
+                          <span>
+                            <IconButton
+                              size="small"
+                              disabled={!printLineMeta.wb_primary_barcode}
+                              onClick={() => setPrintMeta(printLineMeta)}
+                              data-testid="seller-inbound-line-print-barcode"
+                              aria-label="Печать товарного ШК"
+                            >
+                              <PrintOutlined fontSize="small" />
+                            </IconButton>
+                          </span>
+                        </Tooltip>
+                      </TableCell>
                       <TableCell>
                         <Button
                           size="small"
@@ -1056,7 +1161,7 @@ export function SellerInboundDraftScreen({
                 })}
                 {detail.lines.length === 0 ? (
                   <TableRow>
-                    <TableCell colSpan={8}>
+                    <TableCell colSpan={9}>
                       <Typography variant="body2" color="text.secondary">
                         Добавьте товары кнопкой «Добавить товары».
                       </Typography>
@@ -1446,6 +1551,11 @@ export function SellerInboundDraftScreen({
         qtyColumnLabel="Кол-во в заявку"
         onClose={() => setPickerOpen(false)}
         onApply={applyPicker}
+      />
+      <ProductBarcodePrintDialog
+        open={printMeta !== null}
+        meta={printMeta}
+        onClose={() => setPrintMeta(null)}
       />
     </Box>
   )

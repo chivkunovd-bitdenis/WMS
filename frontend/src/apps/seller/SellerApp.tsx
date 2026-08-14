@@ -20,10 +20,15 @@ import { SellerLayout } from './SellerLayout'
 
 type InboundSummaryRow = {
   id: string
+  waybill_number?: string | null
+  warehouse_id: string
+  warehouse_name?: string | null
   status: string
   operation_type?: string | null
   line_count: number
+  goods_qty_total?: number
   planned_delivery_date: string | null
+  planned_box_count?: number | null
 }
 
 type WarehouseRow = { id: string; name: string; code: string }
@@ -62,7 +67,16 @@ export function SellerApp({ navigationBasePath = '' }: SellerAppProps) {
     [],
   )
   const [mpUnloadSummaries, setMpUnloadSummaries] = useState<
-    { id: string; status: string; line_count: number; created_at?: string }[]
+    {
+      id: string
+      status: string
+      line_count: number
+      goods_qty_total?: number
+      warehouse_id?: string
+      warehouse_name?: string | null
+      planned_shipment_date?: string | null
+      created_at?: string
+    }[]
   >([])
 
   const authHeaders = useCallback(

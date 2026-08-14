@@ -128,7 +128,18 @@ export function FfInboundQueuePage({
                     data-request-id={row.id}
                   >
                     <TableCell data-testid="ff-inbound-queue-document">
-                      {inboundQueueDocumentLabel(summary)}
+                      <Stack spacing={0.25}>
+                        <Typography variant="body2">{inboundQueueDocumentLabel(summary)}</Typography>
+                        {summary.waybill_number?.trim() ? (
+                          <Typography
+                            variant="caption"
+                            color="text.secondary"
+                            data-testid="ff-inbound-queue-waybill-number"
+                          >
+                            Накладная: {summary.waybill_number.trim()}
+                          </Typography>
+                        ) : null}
+                      </Stack>
                     </TableCell>
                     <TableCell>{row.seller_name ?? '—'}</TableCell>
                     <TableCell data-testid="ff-inbound-queue-composition">

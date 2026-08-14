@@ -129,6 +129,7 @@ async def create_request(
     warehouse_id: uuid.UUID,
     seller_id: uuid.UUID | None = None,
     planned_delivery_date: date | None = None,
+    waybill_number: str | None = None,
     operation_type: str = OPERATION_TYPE_INBOUND,
 ) -> InboundIntakeRequest:
     wh = await get_warehouse(session, tenant_id, warehouse_id)
@@ -148,6 +149,7 @@ async def create_request(
         operation_type=normalized_operation_type,
         seller_id=seller_id,
         planned_delivery_date=planned_delivery_date,
+        waybill_number=normalize_waybill_number(waybill_number),
         planned_box_count=None,
     )
     session.add(req)
@@ -181,6 +183,7 @@ async def list_requests(
         .options(
             selectinload(InboundIntakeRequest.lines),
             selectinload(InboundIntakeRequest.seller),
+            selectinload(InboundIntakeRequest.warehouse),
             selectinload(InboundIntakeRequest.boxes),
         )
         .order_by(InboundIntakeRequest.created_at.desc())
@@ -208,6 +211,7 @@ async def get_request(
         )
         .options(
             selectinload(InboundIntakeRequest.seller),
+            selectinload(InboundIntakeRequest.warehouse),
             selectinload(InboundIntakeRequest.lines).options(
                 selectinload(InboundIntakeLine.product),
                 selectinload(InboundIntakeLine.storage_location),
@@ -246,6 +250,23 @@ async def _line_on_request(
     return None
 
 
+def normalize_waybill_number(value: str | None) -> str | None:
+    if value is None:
+        return None
+    normalized = value.strip()
+    return normalized or None
+
+
+def _request_plan_editable(
+    req: InboundIntakeRequest,
+    *,
+    seller_product_owner_id: uuid.UUID | None = None,
+) -> bool:
+    if req.status == STATUS_DRAFT:
+        return True
+    return seller_product_owner_id is not None and req.status == STATUS_SUBMITTED
+
+
 async def add_line(
     session: AsyncSession,
     tenant_id: uuid.UUID,
@@ -266,7 +287,7 @@ async def add_line(
     )
     if req is None:
         raise InboundIntakeError("request_not_found")
-    if req.status != STATUS_DRAFT:
+    if not _request_plan_editable(req, seller_product_owner_id=seller_product_owner_id):
         raise InboundIntakeError("not_draft")
     prod_stmt = select(Product).where(
         Product.id == product_id,
@@ -329,7 +350,7 @@ async def update_line_expected_qty(
     req, line = pair
     if seller_product_owner_id is not None and req.seller_id != seller_product_owner_id:
         raise InboundIntakeError("line_not_found")
-    if req.status != STATUS_DRAFT:
+    if not _request_plan_editable(req, seller_product_owner_id=seller_product_owner_id):
         raise InboundIntakeError("not_draft")
     if line.posted_qty != 0:
         raise InboundIntakeError("line_already_posted")
@@ -353,7 +374,7 @@ async def delete_draft_line(
     req, line = pair
     if seller_product_owner_id is not None and req.seller_id != seller_product_owner_id:
         raise InboundIntakeError("line_not_found")
-    if req.status != STATUS_DRAFT:
+    if not _request_plan_editable(req, seller_product_owner_id=seller_product_owner_id):
         raise InboundIntakeError("not_draft")
     if line.posted_qty != 0:
         raise InboundIntakeError("line_already_posted")
@@ -395,6 +416,8 @@ async def patch_request_draft(
     planned_delivery_date_set: bool = False,
     planned_box_count: int | None = None,
     planned_box_count_set: bool = False,
+    waybill_number: str | None = None,
+    waybill_number_set: bool = False,
     seller_product_owner_id: uuid.UUID | None = None,
 ) -> InboundIntakeRequest:
     req = await get_request(
@@ -405,7 +428,7 @@ async def patch_request_draft(
     )
     if req is None:
         raise InboundIntakeError("request_not_found")
-    if req.status != STATUS_DRAFT:
+    if not _request_plan_editable(req, seller_product_owner_id=seller_product_owner_id):
         raise InboundIntakeError("not_draft")
     if planned_delivery_date_set:
         req.planned_delivery_date = planned_delivery_date
@@ -413,6 +436,8 @@ async def patch_request_draft(
         if planned_box_count is not None and planned_box_count < 1:
             raise InboundIntakeError("invalid_planned_box_count")
         req.planned_box_count = planned_box_count
+    if waybill_number_set:
+        req.waybill_number = normalize_waybill_number(waybill_number)
     await session.commit()
     await session.refresh(req)
     return req

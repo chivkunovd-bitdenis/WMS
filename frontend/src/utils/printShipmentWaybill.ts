@@ -16,6 +16,7 @@ export type ShipmentWaybillData = {
   docKind: ShipmentWaybillDocKind
   documentId: string
   documentNumber?: string | null
+  waybillNumber?: string | null
   documentTypeLabel?: string | null
   statusLabel: string
   warehouseName: string
@@ -165,6 +166,7 @@ export function printShipmentWaybill(data: ShipmentWaybillData): void {
     : docTitle(data.docKind)
   const inboundMeta = isInbound
     ? `<dt>Документ</dt><dd>${escapeHtml(inboundTitle)}</dd>
+      <dt>Накладная селлера</dt><dd>${escapeHtml(data.waybillNumber?.trim() || '—')}</dd>
       <dt>Селлер</dt><dd>${escapeHtml(data.sellerName ?? '—')}</dd>
       <dt>Дата</dt><dd>${escapeHtml(data.plannedDate ?? '—')}</dd>
       <dt>Склад ФФ</dt><dd>${escapeHtml(data.warehouseName || '—')}</dd>

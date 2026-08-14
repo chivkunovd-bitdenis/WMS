@@ -209,6 +209,7 @@ type InboundDetail = {
   display_number?: string | null
   public_number?: string | null
   human_number?: string | null
+  waybill_number?: string | null
   warehouse_id: string
   status: string
   operation_type: 'inbound' | 'return'
@@ -1606,6 +1607,11 @@ export function FfInboundRequestView({
                     {displayDocumentNumber}
                   </Typography>
                 ) : null}
+                {detail.waybill_number?.trim() ? (
+                  <Typography variant="body2" color="text.secondary" data-testid="ff-inbound-waybill-number">
+                    Накладная: <strong>{detail.waybill_number.trim()}</strong>
+                  </Typography>
+                ) : null}
               </Stack>
 
               <Stack
@@ -1806,6 +1812,7 @@ export function FfInboundRequestView({
                     printInboundSupplyWaybill({
                       documentId: detail.id,
                       documentNumber: displayDocumentNumber,
+                      waybillNumber: detail.waybill_number ?? null,
                       documentTypeLabel: operationTypeLabel,
                       statusLabel: inboundStatusRu(detail.status),
                       warehouseName: wh ? `${wh.name} (${wh.code})` : '—',

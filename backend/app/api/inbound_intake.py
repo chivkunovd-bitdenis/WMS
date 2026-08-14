@@ -55,12 +55,14 @@ router = APIRouter(
 class InboundIntakeRequestCreate(BaseModel):
     warehouse_id: uuid.UUID
     planned_delivery_date: date | None = None
+    waybill_number: str | None = Field(default=None, max_length=128)
     operation_type: str = Field(default=svc.OPERATION_TYPE_INBOUND, max_length=32)
 
 
 class InboundIntakeRequestPlannedPatch(BaseModel):
     planned_delivery_date: date | None = None
     planned_box_count: int | None = Field(default=None, ge=1, le=100_000)
+    waybill_number: str | None = Field(default=None, max_length=128)
 
 
 class InboundIntakeLineCreate(BaseModel):
@@ -162,10 +164,13 @@ class InboundIntakeRequestSummaryOut(BaseModel):
     id: str
     document_number: str | None = None
     display_number: str | None = None
+    waybill_number: str | None = None
     warehouse_id: str
+    warehouse_name: str | None = None
     status: str
     operation_type: str = svc.OPERATION_TYPE_INBOUND
     line_count: int
+    goods_qty_total: int = 0
     planned_delivery_date: str | None = None
     planned_box_count: int | None = None
     actual_box_count: int | None = None
@@ -181,7 +186,9 @@ class InboundIntakeRequestOut(BaseModel):
     id: str
     document_number: str | None = None
     display_number: str | None = None
+    waybill_number: str | None = None
     warehouse_id: str
+    warehouse_name: str | None = None
     status: str
     operation_type: str = svc.OPERATION_TYPE_INBOUND
     planned_delivery_date: str | None = None
@@ -358,7 +365,9 @@ def _request_out(
         id=str(r.id),
         document_number=r.document_number,
         display_number=r.display_number,
+        waybill_number=r.waybill_number,
         warehouse_id=str(r.warehouse_id),
+        warehouse_name=r.warehouse.name if r.warehouse is not None else None,
         status=r.status,
         operation_type=r.operation_type,
         planned_delivery_date=r.planned_delivery_date.isoformat()
@@ -496,10 +505,13 @@ async def list_inbound_requests(
             id=str(r.id),
             document_number=r.document_number,
             display_number=r.display_number,
+            waybill_number=r.waybill_number,
             warehouse_id=str(r.warehouse_id),
+            warehouse_name=r.warehouse.name if r.warehouse is not None else None,
             status=r.status,
             operation_type=r.operation_type,
             line_count=len(r.lines),
+            goods_qty_total=sum(int(ln.expected_qty) for ln in r.lines),
             planned_delivery_date=r.planned_delivery_date.isoformat()
             if r.planned_delivery_date is not None
             else None,
@@ -539,6 +551,7 @@ async def create_inbound_request(
             warehouse_id=body.warehouse_id,
             seller_id=owning_seller_id,
             planned_delivery_date=body.planned_delivery_date,
+            waybill_number=body.waybill_number,
             operation_type=body.operation_type,
         )
     except InboundIntakeError as exc:
@@ -655,6 +668,8 @@ async def patch_inbound_request_planned(
             planned_delivery_date_set="planned_delivery_date" in patch_fields,
             planned_box_count=patch_fields.get("planned_box_count"),
             planned_box_count_set="planned_box_count" in patch_fields,
+            waybill_number=patch_fields.get("waybill_number"),
+            waybill_number_set="waybill_number" in patch_fields,
             seller_product_owner_id=line_seller_scope,
         )
     except InboundIntakeError as exc:

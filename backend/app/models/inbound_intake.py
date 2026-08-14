@@ -75,6 +75,7 @@ class InboundIntakeRequest(Base):
     actual_box_count: Mapped[int | None] = mapped_column(Integer, nullable=True)
     boxes_discrepancy: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
     has_discrepancy: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    waybill_number: Mapped[str | None] = mapped_column(String(128), nullable=True)
     document_number: Mapped[str | None] = mapped_column(String(32), nullable=True)
     display_number: Mapped[str | None] = mapped_column(String(16), nullable=True)
 

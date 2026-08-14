@@ -164,8 +164,9 @@ export async function createSellerInboundDraftViaUi(
   await planned.fill(opts.plannedBoxes);
   await Promise.all([
     waitForPatchOk(page, INBOUND_API, (u) => !u.includes('/lines')),
-    planned.blur(),
+    page.getByTestId('seller-inbound-save-draft').click(),
   ]);
+  await expect(page.getByTestId('seller-inbound-draft-ok')).toContainText('Заявка сохранена');
 
   await page.getByTestId('seller-inbound-add-products').click();
   await expect(page.getByTestId('seller-inbound-picker')).toBeVisible();

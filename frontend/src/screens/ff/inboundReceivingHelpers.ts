@@ -23,6 +23,7 @@ export type InboundSummaryRef = {
   public_number?: string | null
   human_number?: string | null
   document_number?: string | null
+  waybill_number?: string | null
   line_count?: number
   planned_box_count?: number | null
   actual_box_count?: number | null
