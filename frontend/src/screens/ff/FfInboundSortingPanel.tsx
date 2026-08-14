@@ -278,14 +278,24 @@ export function FfInboundSortingPanel({
   const [dirty, setDirty] = useState(false)
   const scanInputRef = useRef<HTMLInputElement | null>(null)
   const distributionLoadSeq = useRef(0)
+  const distributionEditSeq = useRef(0)
+  const dirtyRef = useRef(false)
   const activeLocationStorageKey = useMemo(
     () => `wms.ff.sorting.activeLocation.${requestId}`,
     [requestId],
   )
 
-  useEffect(() => {
-    onDirtyChange?.(dirty)
-  }, [dirty, onDirtyChange])
+  const markDirty = useCallback(
+    (nextDirty: boolean) => {
+      if (nextDirty) {
+        distributionEditSeq.current += 1
+      }
+      dirtyRef.current = nextDirty
+      setDirty(nextDirty)
+      onDirtyChange?.(nextDirty)
+    },
+    [onDirtyChange],
+  )
 
   const sortableBoxes = useMemo(
     () =>
@@ -407,11 +417,16 @@ export function FfInboundSortingPanel({
 
   const loadDistribution = useCallback(async () => {
     const seq = ++distributionLoadSeq.current
+    const editSeq = distributionEditSeq.current
     const res = await fetch(
       apiUrl(`/operations/inbound-intake-requests/${requestId}/distribution-lines`),
       { headers: authHeaders },
     )
-    if (seq !== distributionLoadSeq.current) {
+    if (
+      seq !== distributionLoadSeq.current ||
+      editSeq !== distributionEditSeq.current ||
+      dirtyRef.current
+    ) {
       return
     }
     if (!res.ok) {
@@ -422,9 +437,9 @@ export function FfInboundSortingPanel({
     setDistributionLoadError(null)
     const rows = (await res.json()) as DistributionLineOut[]
     hydrateDistributionRows(rows)
-    setDirty(false)
+    markDirty(false)
     setDistributionLoaded(true)
-  }, [authHeaders, hydrateDistributionRows, requestId])
+  }, [authHeaders, hydrateDistributionRows, markDirty, requestId])
 
   useEffect(() => {
     void loadLocations()
@@ -467,6 +482,9 @@ export function FfInboundSortingPanel({
   }, [activeLocationCode, activeLocationId, activeLocationStorageKey])
 
   useEffect(() => {
+    if (dirtyRef.current) {
+      return
+    }
     setDistributionLoaded(false)
     setDistributionLoadError(null)
     setScanMessage(null)
@@ -485,7 +503,7 @@ export function FfInboundSortingPanel({
   }, [distributionLoaded, loadDistribution])
 
   const updateProductRows = (productId: string, updater: (rows: CellDraftRow[]) => CellDraftRow[]) => {
-    setDirty(true)
+    markDirty(true)
     setProductStates((prev) =>
       prev.map((p) => (p.product_id === productId ? { ...p, rows: updater(p.rows) } : p)),
     )
@@ -587,6 +605,7 @@ export function FfInboundSortingPanel({
 
   const persistDistribution = async (): Promise<boolean> => {
     setError(null)
+    distributionEditSeq.current += 1
     try {
       const res = await fetch(
         apiUrl(`/operations/inbound-intake-requests/${requestId}/distribution-lines`),
@@ -602,7 +621,7 @@ export function FfInboundSortingPanel({
       }
       const rows = (await res.json()) as DistributionLineOut[]
       hydrateDistributionRows(rows)
-      setDirty(false)
+      markDirty(false)
       return true
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Не удалось сохранить раскладку.')
@@ -631,6 +650,7 @@ export function FfInboundSortingPanel({
     setScanBusy(true)
     setError(null)
     setScanMessage(null)
+    distributionEditSeq.current += 1
     try {
       const res = await fetch(
         apiUrl(`/operations/inbound-intake-requests/${requestId}/distribution-scan`),
@@ -656,7 +676,7 @@ export function FfInboundSortingPanel({
         setScanMessage(`Активная ячейка: ${result.active_storage_location_code ?? 'без кода'}.`)
       } else {
         hydrateDistributionRows(result.lines)
-        setDirty(false)
+        markDirty(false)
         setHighlightedProductId(result.product_id)
         const product = productStates.find((p) => p.product_id === result.product_id)
         const allocated = result.lines
