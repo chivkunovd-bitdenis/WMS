@@ -38,12 +38,21 @@ type Props = {
 }
 
 function statusLabel(status: string, workspace: InboundWorkspace): string {
-  if (workspace === 'sorting' && status === 'verified') return 'В сортировке'
+  if (workspace === 'sorting' && (status === 'verified' || status === 'sorting')) return 'В сортировке'
   if (status === 'draft') return 'Черновик'
   if (status === 'submitted') return 'Передано'
   if (status === 'primary_accepted') return 'Принято первично'
   if (status === 'verifying') return 'Пересчёт'
+  if (status === 'receiving') return 'В работе'
+  if (status === 'done') return 'Проведён'
   return status
+}
+
+function statusColor(status: string): 'default' | 'info' | 'success' | 'warning' {
+  if (status === 'done') return 'success'
+  if (status === 'sorting' || status === 'verified') return 'warning'
+  if (status === 'receiving' || status === 'primary_accepted' || status === 'verifying') return 'info'
+  return 'default'
 }
 
 export function FfInboundQueuePage({
@@ -146,6 +155,7 @@ export function FfInboundQueuePage({
                       <Chip
                         size="small"
                         label={statusLabel(row.status, workspace)}
+                        color={statusColor(row.status)}
                         data-testid="ff-inbound-queue-status"
                       />
                     </TableCell>
@@ -160,8 +170,7 @@ export function FfInboundQueuePage({
       {workspace === 'sorting' ? (
         <Stack sx={{ mt: 2 }}>
           <Typography variant="body2" color="text.secondary">
-            Ячейка «Сортировка» — буфер принятого товара до раскладки. Она отображается в каталоге склада
-            отдельно от полок хранения.
+            Зона «Сортировка» — служебный буфер принятого товара до раскладки; как обычную полку хранения её не выбирают.
           </Typography>
         </Stack>
       ) : null}

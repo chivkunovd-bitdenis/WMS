@@ -299,6 +299,7 @@ export default function App() {
     null,
   )
   const [ffDocModal, setFfDocModal] = useState<null | 'inbound' | 'outbound'>(null)
+  const [ffDocDirty, setFfDocDirty] = useState(false)
   const [ffInboundWorkspace, setFfInboundWorkspace] =
     useState<InboundRequestWorkspace>('full')
   const [marketplaceUnloadSummaries, setMarketplaceUnloadSummaries] = useState<
@@ -404,7 +405,7 @@ export default function App() {
   const refreshLocations = useCallback(
     async (t: string, warehouseId: string) => {
       const res = await fetch(
-        apiUrl(`/warehouses/${warehouseId}/locations`),
+        apiUrl(`/warehouses/${warehouseId}/locations?exclude_sorting_zone=true`),
         { headers: authHeaders(t) },
       )
       if (!res.ok) {
@@ -1033,6 +1034,190 @@ export default function App() {
       return false
     } finally {
       setCatalogBusy(false)
+    }
+  }
+
+  async function onRenameWarehouse(warehouseId: string, name: string): Promise<boolean> {
+    if (!token) {
+      return false
+    }
+    const trimmed = name.trim()
+    if (!trimmed) {
+      setCatalogError('Укажите название склада.')
+      return false
+    }
+    setCatalogError(null)
+    setCatalogBusy(true)
+    try {
+      const res = await fetch(apiUrl(`/warehouses/${warehouseId}`), {
+        method: 'PATCH',
+        headers: {
+          ...authHeaders(token),
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ name: trimmed }),
+      })
+      if (!res.ok) {
+        setCatalogError(await readApiErrorMessage(res))
+        return false
+      }
+      await refreshWarehouses(token)
+      return true
+    } catch (e) {
+      setCatalogError(e instanceof Error ? e.message : 'Сеть: не удалось переименовать склад.')
+      return false
+    } finally {
+      setCatalogBusy(false)
+    }
+  }
+
+  async function onDeleteWarehouse(warehouseId: string): Promise<boolean> {
+    if (!token) {
+      return false
+    }
+    setCatalogError(null)
+    setCatalogBusy(true)
+    try {
+      const res = await fetch(apiUrl(`/warehouses/${warehouseId}`), {
+        method: 'DELETE',
+        headers: authHeaders(token),
+      })
+      if (!res.ok) {
+        const msg = await readApiErrorMessage(res)
+        setCatalogError(
+          msg === 'warehouse_has_documents'
+            ? 'Нельзя удалить склад: к нему привязаны документы.'
+            : msg === 'warehouse_has_stock'
+              ? 'Нельзя удалить склад: на нём есть остатки.'
+              : msg === 'warehouse_has_locations'
+                ? 'Нельзя удалить склад: сначала удалите обычные ячейки.'
+                : msg,
+        )
+        return false
+      }
+      await refreshWarehouses(token)
+      return true
+    } catch (e) {
+      setCatalogError(e instanceof Error ? e.message : 'Сеть: не удалось удалить склад.')
+      return false
+    } finally {
+      setCatalogBusy(false)
+    }
+  }
+
+  async function onRenameLocation(
+    warehouseId: string,
+    locationId: string,
+    code: string,
+  ): Promise<boolean> {
+    if (!token) {
+      return false
+    }
+    const trimmed = code.trim()
+    if (!trimmed) {
+      setCatalogError('Укажите код ячейки.')
+      return false
+    }
+    setCatalogError(null)
+    setCatalogBusy(true)
+    try {
+      const res = await fetch(apiUrl(`/warehouses/${warehouseId}/locations/${locationId}`), {
+        method: 'PATCH',
+        headers: {
+          ...authHeaders(token),
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ code: trimmed }),
+      })
+      if (!res.ok) {
+        const msg = await readApiErrorMessage(res)
+        setCatalogError(
+          msg === 'location_code_taken'
+            ? 'Такой код ячейки уже есть на этом складе.'
+            : msg === 'system_location_locked'
+              ? 'Служебную зону сортировки нельзя переименовать.'
+              : msg,
+        )
+        return false
+      }
+      await refreshLocations(token, warehouseId)
+      return true
+    } catch (e) {
+      setCatalogError(e instanceof Error ? e.message : 'Сеть: не удалось переименовать ячейку.')
+      return false
+    } finally {
+      setCatalogBusy(false)
+    }
+  }
+
+  async function onDeleteLocation(
+    warehouseId: string,
+    locationId: string,
+    moveStockTo?: 'sorting' | 'unallocated',
+  ): Promise<boolean> {
+    if (!token) {
+      return false
+    }
+    setCatalogError(null)
+    setCatalogBusy(true)
+    try {
+      const params = moveStockTo ? `?move_stock_to=${moveStockTo}` : ''
+      const res = await fetch(apiUrl(`/warehouses/${warehouseId}/locations/${locationId}${params}`), {
+        method: 'DELETE',
+        headers: authHeaders(token),
+      })
+      if (!res.ok) {
+        const msg = await readApiErrorMessage(res)
+        setCatalogError(
+          msg === 'location_has_stock'
+            ? 'В ячейке есть товар. Выберите перенос в сортировку или без ячейки.'
+            : msg === 'system_location_locked'
+              ? 'Служебную зону сортировки нельзя удалить.'
+              : msg,
+        )
+        return false
+      }
+      await refreshLocations(token, warehouseId)
+      return true
+    } catch (e) {
+      setCatalogError(e instanceof Error ? e.message : 'Сеть: не удалось удалить ячейку.')
+      return false
+    } finally {
+      setCatalogBusy(false)
+    }
+  }
+
+  async function onLoadLocationBalances(locationId: string): Promise<
+    {
+      product_id: string
+      sku_code: string
+      product_name: string
+      quantity: number
+      reserved: number
+      available: number
+    }[]
+  > {
+    if (!token) {
+      return []
+    }
+    try {
+      const res = await fetch(
+        apiUrl(`/operations/inventory-balances?storage_location_id=${locationId}`),
+        { headers: authHeaders(token) },
+      )
+      if (!res.ok) {
+        return []
+      }
+      return (await res.json()) as {
+        product_id: string
+        sku_code: string
+        product_name: string
+        quantity: number
+        reserved: number
+        available: number
+      }[]
+    } catch {
+      return []
     }
   }
 
@@ -2466,6 +2651,20 @@ export default function App() {
     }
   }, [token, authHeaders, refreshDiscrepancyActList])
 
+  const closeFfDocument = useCallback(() => {
+    if (ffDocDirty && !window.confirm('Закрыть без сохранения?')) {
+      return
+    }
+    setFfDocDirty(false)
+    setFfDocModal(null)
+    setSelectedInboundId(null)
+    setSelectedOutboundId(null)
+    setFfInboundWorkspace('full')
+    if (token) {
+      void refreshInboundList(token)
+    }
+  }, [ffDocDirty, refreshInboundList, token])
+
   const rootElement = (() => {
     if (!token) {
       return (
@@ -2904,6 +3103,11 @@ export default function App() {
                     products={products}
                     onCreateWarehouse={(e) => void onCreateWarehouse(e)}
                     onCreateLocation={onCreateLocation}
+                    onRenameWarehouse={onRenameWarehouse}
+                    onDeleteWarehouse={onDeleteWarehouse}
+                    onRenameLocation={onRenameLocation}
+                    onDeleteLocation={onDeleteLocation}
+                    onLoadLocationBalances={onLoadLocationBalances}
                     onListWarehouseRacks={onListWarehouseRacks}
                     onSuggestLocation={onSuggestLocation}
                     onCreateProduct={(e) => void onCreateProduct(e)}
@@ -3123,11 +3327,7 @@ export default function App() {
 
         <Dialog
           open={ffDocModal !== null}
-          onClose={() => {
-            setFfDocModal(null)
-            setSelectedInboundId(null)
-            setSelectedOutboundId(null)
-          }}
+          onClose={closeFfDocument}
           fullScreen
           data-testid="ff-doc-dialog"
         >
@@ -3137,11 +3337,7 @@ export default function App() {
                 edge="start"
                 color="inherit"
                 aria-label="Закрыть"
-                onClick={() => {
-                  setFfDocModal(null)
-                  setSelectedInboundId(null)
-                  setSelectedOutboundId(null)
-                }}
+                onClick={closeFfDocument}
                 data-testid="ff-doc-dialog-close"
               >
                 <CloseIcon />
@@ -3161,13 +3357,8 @@ export default function App() {
                   workspace={ffInboundWorkspace}
                   sellers={sellers}
                   addressStorageEnabled={me?.address_storage_enabled !== false}
-                  onClose={() => {
-                    setFfDocModal(null)
-                    setSelectedInboundId(null)
-                    setSelectedOutboundId(null)
-                    setFfInboundWorkspace('full')
-                    void refreshInboundList(token)
-                  }}
+                  onDirtyChange={setFfDocDirty}
+                  onClose={closeFfDocument}
                 />
               ) : (
                 <MuiTypography variant="body2" color="text.secondary">

@@ -3,7 +3,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { suggestNextLocationForRack } from '../utils/formatLocationCode'
 import { storageLocationLabel } from '../utils/inboundQueues'
 import { suggestNextLocationCode } from '../utils/suggestNextLocationCode'
-import { PrintOutlined } from '@mui/icons-material'
+import { DeleteOutlined, EditOutlined, PrintOutlined } from '@mui/icons-material'
 import JsBarcode from 'jsbarcode'
 import {
   Alert,
@@ -36,6 +36,14 @@ import {
 type WarehouseRow = { id: string; name: string; code: string }
 type LocationRow = { id: string; code: string; warehouse_id: string; barcode: string }
 type SellerRow = { id: string; name: string }
+type LocationBalanceRow = {
+  product_id: string
+  sku_code: string
+  product_name: string
+  quantity: number
+  reserved: number
+  available: number
+}
 type ProductRow = {
   id: string
   name: string
@@ -80,6 +88,15 @@ type Props = {
     side?: 1 | 2
     position?: number
   }) => Promise<boolean> // code — превью/совместимость со старым API
+  onRenameWarehouse: (warehouseId: string, name: string) => Promise<boolean>
+  onDeleteWarehouse: (warehouseId: string) => Promise<boolean>
+  onRenameLocation: (warehouseId: string, locationId: string, code: string) => Promise<boolean>
+  onDeleteLocation: (
+    warehouseId: string,
+    locationId: string,
+    moveStockTo?: 'sorting' | 'unallocated',
+  ) => Promise<boolean>
+  onLoadLocationBalances: (locationId: string) => Promise<LocationBalanceRow[]>
   onListWarehouseRacks: (warehouseId: string) => Promise<string[]>
   onSuggestLocation: (
     warehouseId: string,
@@ -121,6 +138,11 @@ export function CatalogSection(props: Props) {
     setSelectedWarehouseId,
     onCreateWarehouse,
     onCreateLocation,
+    onRenameWarehouse,
+    onDeleteWarehouse,
+    onRenameLocation,
+    onDeleteLocation,
+    onLoadLocationBalances,
     onListWarehouseRacks,
     onSuggestLocation,
   } = props
@@ -136,6 +158,14 @@ export function CatalogSection(props: Props) {
   const [printLocation, setPrintLocation] = useState<LocationRow | null>(null)
   const [barcodeRenderError, setBarcodeRenderError] = useState<string | null>(null)
   const [barcodeDataUrl, setBarcodeDataUrl] = useState<string | null>(null)
+  const [warehouseEdit, setWarehouseEdit] = useState<WarehouseRow | null>(null)
+  const [warehouseNameDraft, setWarehouseNameDraft] = useState('')
+  const [warehouseDelete, setWarehouseDelete] = useState<WarehouseRow | null>(null)
+  const [locationEdit, setLocationEdit] = useState<LocationRow | null>(null)
+  const [locationCodeDraft, setLocationCodeDraft] = useState('')
+  const [locationDelete, setLocationDelete] = useState<LocationRow | null>(null)
+  const [locationDeleteBalances, setLocationDeleteBalances] = useState<LocationBalanceRow[]>([])
+  const [locationDeleteLoading, setLocationDeleteLoading] = useState(false)
 
   const selectedWarehouse = useMemo(
     () => warehouses.find((w) => w.id === selectedWarehouseId) ?? null,
@@ -146,6 +176,28 @@ export function CatalogSection(props: Props) {
     if (!selectedWarehouseId) return []
     return locations.filter((l) => l.warehouse_id === selectedWarehouseId)
   }, [locations, selectedWarehouseId])
+
+  const locationDeleteQty = useMemo(
+    () => locationDeleteBalances.reduce((sum, row) => sum + row.quantity, 0),
+    [locationDeleteBalances],
+  )
+
+  const openLocationDelete = (loc: LocationRow) => {
+    setLocationDelete(loc)
+    setLocationDeleteBalances([])
+    setLocationDeleteLoading(true)
+    void (async () => {
+      const rows = await onLoadLocationBalances(loc.id)
+      setLocationDeleteBalances(rows)
+      setLocationDeleteLoading(false)
+    })()
+  }
+
+  const closeLocationDelete = () => {
+    setLocationDelete(null)
+    setLocationDeleteBalances([])
+    setLocationDeleteLoading(false)
+  }
 
   useEffect(() => {
     if (!printDialogOpen || !printLocation) {
@@ -278,6 +330,7 @@ export function CatalogSection(props: Props) {
                   <TableRow>
                     <TableCell>Название</TableCell>
                     <TableCell width={180}>Код</TableCell>
+                    <TableCell align="right" width={96} />
                   </TableRow>
                 </TableHead>
                 <TableBody>
@@ -301,11 +354,42 @@ export function CatalogSection(props: Props) {
                           {w.code}
                         </Typography>
                       </TableCell>
+                      <TableCell align="right">
+                        <Stack direction="row" spacing={0.5} sx={{ justifyContent: 'flex-end' }}>
+                          <Tooltip title="Переименовать склад">
+                            <IconButton
+                              size="small"
+                              aria-label="Переименовать склад"
+                              data-testid="warehouse-rename"
+                              onClick={(event) => {
+                                event.stopPropagation()
+                                setWarehouseEdit(w)
+                                setWarehouseNameDraft(w.name)
+                              }}
+                            >
+                              <EditOutlined fontSize="small" />
+                            </IconButton>
+                          </Tooltip>
+                          <Tooltip title="Удалить склад">
+                            <IconButton
+                              size="small"
+                              aria-label="Удалить склад"
+                              data-testid="warehouse-delete"
+                              onClick={(event) => {
+                                event.stopPropagation()
+                                setWarehouseDelete(w)
+                              }}
+                            >
+                              <DeleteOutlined fontSize="small" />
+                            </IconButton>
+                          </Tooltip>
+                        </Stack>
+                      </TableCell>
                     </TableRow>
                   ))}
                   {warehouses.length === 0 ? (
                     <TableRow>
-                      <TableCell colSpan={2}>
+                      <TableCell colSpan={3}>
                         <Typography variant="body2" color="text.secondary">
                           Пока нет складов. Создайте первый.
                         </Typography>
@@ -377,8 +461,8 @@ export function CatalogSection(props: Props) {
                       </TableCell>
                       <TableCell align="right">
                         {loc.code === '__SORTING__' ? null : (
-                          <Tooltip title="Печать ШК">
-                            <span>
+                          <Stack direction="row" spacing={0.5} sx={{ justifyContent: 'flex-end' }}>
+                            <Tooltip title="Печать ШК">
                               <IconButton
                                 size="small"
                                 aria-label="Печать ШК"
@@ -390,15 +474,38 @@ export function CatalogSection(props: Props) {
                               >
                                 <PrintOutlined fontSize="small" />
                               </IconButton>
-                            </span>
-                          </Tooltip>
+                            </Tooltip>
+                            <Tooltip title="Переименовать ячейку">
+                              <IconButton
+                                size="small"
+                                aria-label="Переименовать ячейку"
+                                data-testid="location-rename"
+                                onClick={() => {
+                                  setLocationEdit(loc)
+                                  setLocationCodeDraft(loc.code)
+                                }}
+                              >
+                                <EditOutlined fontSize="small" />
+                              </IconButton>
+                            </Tooltip>
+                            <Tooltip title="Удалить ячейку">
+                              <IconButton
+                                size="small"
+                                aria-label="Удалить ячейку"
+                                data-testid="location-delete"
+                                onClick={() => openLocationDelete(loc)}
+                              >
+                                <DeleteOutlined fontSize="small" />
+                              </IconButton>
+                            </Tooltip>
+                          </Stack>
                         )}
                       </TableCell>
                     </TableRow>
                   ))}
                   {selectedWarehouseId && visibleLocations.length === 0 ? (
                     <TableRow>
-                      <TableCell>
+                      <TableCell colSpan={3}>
                         <Typography variant="body2" color="text.secondary">
                           Для этого склада пока нет ячеек. Создайте первую.
                         </Typography>
@@ -407,7 +514,7 @@ export function CatalogSection(props: Props) {
                   ) : null}
                   {!selectedWarehouseId ? (
                     <TableRow>
-                      <TableCell>
+                      <TableCell colSpan={3}>
                         <Typography variant="body2" color="text.secondary">
                           Выберите склад сверху — ячейки отфильтруются по нему.
                         </Typography>
@@ -420,6 +527,261 @@ export function CatalogSection(props: Props) {
           </CardContent>
         </MuiCard>
       ) : null}
+
+      <Dialog
+        open={warehouseEdit != null}
+        onClose={() => setWarehouseEdit(null)}
+        fullWidth
+        maxWidth="sm"
+        aria-labelledby="rename-warehouse-title"
+      >
+        <DialogTitle id="rename-warehouse-title">Переименовать склад</DialogTitle>
+        <DialogContent>
+          <TextField
+            autoFocus
+            fullWidth
+            sx={{ mt: 1 }}
+            label="Название"
+            value={warehouseNameDraft}
+            onChange={(event) => setWarehouseNameDraft(event.target.value)}
+            data-testid="warehouse-rename-name"
+          />
+        </DialogContent>
+        <DialogActions>
+          <MuiButton type="button" onClick={() => setWarehouseEdit(null)}>
+            Отмена
+          </MuiButton>
+          <MuiButton
+            type="button"
+            variant="contained"
+            disabled={catalogBusy || !warehouseEdit || !warehouseNameDraft.trim()}
+            data-testid="warehouse-rename-submit"
+            onClick={() => {
+              if (!warehouseEdit) return
+              void (async () => {
+                const ok = await onRenameWarehouse(warehouseEdit.id, warehouseNameDraft)
+                if (ok) {
+                  setWarehouseEdit(null)
+                }
+              })()
+            }}
+          >
+            Сохранить
+          </MuiButton>
+        </DialogActions>
+      </Dialog>
+
+      <Dialog
+        open={warehouseDelete != null}
+        onClose={() => setWarehouseDelete(null)}
+        fullWidth
+        maxWidth="sm"
+        aria-labelledby="delete-warehouse-title"
+      >
+        <DialogTitle id="delete-warehouse-title">Удалить склад</DialogTitle>
+        <DialogContent>
+          <Typography variant="body2" sx={{ mt: 1 }}>
+            {warehouseDelete
+              ? `Склад «${warehouseDelete.name}» будет удалён только если к нему не привязаны документы, ячейки и остатки.`
+              : ''}
+          </Typography>
+        </DialogContent>
+        <DialogActions>
+          <MuiButton type="button" onClick={() => setWarehouseDelete(null)}>
+            Отмена
+          </MuiButton>
+          <MuiButton
+            type="button"
+            color="error"
+            variant="contained"
+            disabled={catalogBusy || !warehouseDelete}
+            data-testid="warehouse-delete-submit"
+            onClick={() => {
+              if (!warehouseDelete) return
+              void (async () => {
+                const ok = await onDeleteWarehouse(warehouseDelete.id)
+                if (ok) {
+                  setWarehouseDelete(null)
+                }
+              })()
+            }}
+          >
+            Удалить
+          </MuiButton>
+        </DialogActions>
+      </Dialog>
+
+      <Dialog
+        open={locationEdit != null}
+        onClose={() => setLocationEdit(null)}
+        fullWidth
+        maxWidth="sm"
+        aria-labelledby="rename-location-title"
+      >
+        <DialogTitle id="rename-location-title">Переименовать ячейку</DialogTitle>
+        <DialogContent>
+          <TextField
+            autoFocus
+            fullWidth
+            sx={{ mt: 1 }}
+            label="Код ячейки"
+            value={locationCodeDraft}
+            onChange={(event) => setLocationCodeDraft(event.target.value)}
+            data-testid="location-rename-code"
+          />
+        </DialogContent>
+        <DialogActions>
+          <MuiButton type="button" onClick={() => setLocationEdit(null)}>
+            Отмена
+          </MuiButton>
+          <MuiButton
+            type="button"
+            variant="contained"
+            disabled={catalogBusy || !locationEdit || !locationCodeDraft.trim()}
+            data-testid="location-rename-submit"
+            onClick={() => {
+              if (!locationEdit) return
+              void (async () => {
+                const ok = await onRenameLocation(
+                  locationEdit.warehouse_id,
+                  locationEdit.id,
+                  locationCodeDraft,
+                )
+                if (ok) {
+                  setLocationEdit(null)
+                }
+              })()
+            }}
+          >
+            Сохранить
+          </MuiButton>
+        </DialogActions>
+      </Dialog>
+
+      <Dialog
+        open={locationDelete != null}
+        onClose={closeLocationDelete}
+        fullWidth
+        maxWidth="sm"
+        aria-labelledby="delete-location-title"
+      >
+        <DialogTitle id="delete-location-title">Удалить ячейку</DialogTitle>
+        <DialogContent>
+          {locationDelete ? (
+            <Stack spacing={1.25} sx={{ mt: 1 }}>
+              <Typography variant="body2">
+                Ячейка {locationDelete.code}. Перед удалением остаток не будет потерян.
+              </Typography>
+              {locationDeleteLoading ? (
+                <Typography variant="body2" color="text.secondary">
+                  Проверяем остатки…
+                </Typography>
+              ) : locationDeleteQty > 0 ? (
+                <>
+                  <Alert severity="warning" data-testid="location-delete-stock-warning">
+                    В ячейке лежит {locationDeleteQty} шт. Выберите, куда перенести товар перед удалением адреса.
+                  </Alert>
+                  <TableContainer>
+                    <Table size="small" data-testid="location-delete-balances">
+                      <TableHead>
+                        <TableRow>
+                          <TableCell>Товар</TableCell>
+                          <TableCell align="right">Шт</TableCell>
+                        </TableRow>
+                      </TableHead>
+                      <TableBody>
+                        {locationDeleteBalances.map((row) => (
+                          <TableRow key={row.product_id}>
+                            <TableCell>
+                              {row.sku_code} · {row.product_name}
+                            </TableCell>
+                            <TableCell align="right">{row.quantity}</TableCell>
+                          </TableRow>
+                        ))}
+                      </TableBody>
+                    </Table>
+                  </TableContainer>
+                </>
+              ) : (
+                <Typography variant="body2" color="text.secondary">
+                  В ячейке нет товара, её можно удалить.
+                </Typography>
+              )}
+            </Stack>
+          ) : null}
+        </DialogContent>
+        <DialogActions sx={{ flexWrap: 'wrap', gap: 1 }}>
+          <MuiButton type="button" onClick={closeLocationDelete}>
+            Отмена
+          </MuiButton>
+          {locationDeleteQty > 0 ? (
+            <>
+              <MuiButton
+                type="button"
+                variant="outlined"
+                disabled={catalogBusy || locationDeleteLoading || !locationDelete}
+                data-testid="location-delete-move-sorting"
+                onClick={() => {
+                  if (!locationDelete) return
+                  void (async () => {
+                    const ok = await onDeleteLocation(
+                      locationDelete.warehouse_id,
+                      locationDelete.id,
+                      'sorting',
+                    )
+                    if (ok) {
+                      closeLocationDelete()
+                    }
+                  })()
+                }}
+              >
+                В сортировку и удалить
+              </MuiButton>
+              <MuiButton
+                type="button"
+                variant="contained"
+                color="warning"
+                disabled={catalogBusy || locationDeleteLoading || !locationDelete}
+                data-testid="location-delete-move-unallocated"
+                onClick={() => {
+                  if (!locationDelete) return
+                  void (async () => {
+                    const ok = await onDeleteLocation(
+                      locationDelete.warehouse_id,
+                      locationDelete.id,
+                      'unallocated',
+                    )
+                    if (ok) {
+                      closeLocationDelete()
+                    }
+                  })()
+                }}
+              >
+                Без ячейки и удалить
+              </MuiButton>
+            </>
+          ) : (
+            <MuiButton
+              type="button"
+              color="error"
+              variant="contained"
+              disabled={catalogBusy || locationDeleteLoading || !locationDelete}
+              data-testid="location-delete-submit"
+              onClick={() => {
+                if (!locationDelete) return
+                void (async () => {
+                  const ok = await onDeleteLocation(locationDelete.warehouse_id, locationDelete.id)
+                  if (ok) {
+                    closeLocationDelete()
+                  }
+                })()
+              }}
+            >
+              Удалить
+            </MuiButton>
+          )}
+        </DialogActions>
+      </Dialog>
 
       <Dialog
         open={warehouseDialogOpen}
@@ -792,4 +1154,3 @@ export function CatalogSection(props: Props) {
     </Box>
   )
 }
-

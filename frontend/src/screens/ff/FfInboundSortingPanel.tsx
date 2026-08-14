@@ -229,6 +229,27 @@ function sumDraftQty(rows: CellDraftRow[]): number {
   return sum
 }
 
+function sortingErrorMessageRu(code: string): string {
+  const normalized = code.trim()
+  const messages: Record<string, string> = {
+    active_location_required: 'Сначала отсканируйте ячейку, потом товар.',
+    barcode_empty: 'Отсканируйте ячейку или товар.',
+    distribution_completed: 'Раскладка уже применена, документ больше не редактируется.',
+    distribution_incomplete: 'Разложите всё принятое количество перед применением.',
+    insufficient_sorting_stock: 'В зоне сортировки не хватает остатка для этой раскладки. Обновите документ и проверьте количество.',
+    invalid_qty: 'Количество должно быть целым числом больше нуля.',
+    location_not_found: 'Ячейка не найдена на складе этой приёмки.',
+    not_distributable: 'Документ ещё не находится в сортировке.',
+    product_not_accepted: 'Этот товар не принят по документу.',
+    product_not_on_request: 'Этот товар не относится к этой приёмке.',
+    qty_exceeds_accepted: 'По этому товару указано больше, чем принято. Уменьшите количество.',
+    qty_exceeds_box_remaining: 'По коробу указано больше товара, чем осталось разложить.',
+    scan_not_found: 'Такой товар или ячейка не найдены в этой приёмке.',
+    sorting_location_reserved: 'Служебную зону сортировки нельзя выбрать как ячейку хранения.',
+  }
+  return messages[normalized] ?? normalized
+}
+
 export function FfInboundSortingPanel({
   token,
   requestId,
@@ -394,7 +415,7 @@ export function FfInboundSortingPanel({
       return
     }
     if (!res.ok) {
-      setDistributionLoadError(await readApiErrorMessage(res))
+      setDistributionLoadError(sortingErrorMessageRu(await readApiErrorMessage(res)))
       setDistributionLoaded(false)
       return
     }
@@ -536,6 +557,11 @@ export function FfInboundSortingPanel({
     return false
   }, [draftSumByProductId, productStates])
 
+  const firstIncompleteProduct = useMemo(
+    () => productStates.find((p) => (remainingByProductId.get(p.product_id) ?? 0) > 0) ?? null,
+    [productStates, remainingByProductId],
+  )
+
   const buildPayload = () => {
     const payload: {
       box_id: string | null
@@ -571,18 +597,7 @@ export function FfInboundSortingPanel({
         },
       )
       if (!res.ok) {
-        const text = await res.text()
-        let detail: unknown = null
-        try {
-          detail = (JSON.parse(text) as { detail?: unknown }).detail
-        } catch {
-          /* use readApiErrorMessage fallback */
-        }
-        if (detail === 'qty_exceeds_accepted') {
-          setError('Превышено принятое количество по товару.')
-        } else {
-          setError(await readApiErrorMessage(new Response(text, { status: res.status })))
-        }
+        setError(sortingErrorMessageRu(await readApiErrorMessage(res)))
         return false
       }
       const rows = (await res.json()) as DistributionLineOut[]
@@ -629,7 +644,7 @@ export function FfInboundSortingPanel({
         },
       )
       if (!res.ok) {
-        setError(await readApiErrorMessage(res))
+        setError(sortingErrorMessageRu(await readApiErrorMessage(res)))
         return
       }
       const result = (await res.json()) as DistributionScanOut
@@ -648,8 +663,9 @@ export function FfInboundSortingPanel({
           .filter((r) => r.product_id === result.product_id)
           .reduce((sum, r) => sum + Number(r.quantity || 0), 0)
         const accepted = product?.accepted ?? 0
+        const remaining = Math.max(0, accepted - allocated)
         setScanMessage(
-          `Скан принят: ${result.active_storage_location_code ?? activeLocationCode ?? 'ячейка'} · разложено ${allocated} из ${accepted}.`,
+          `Скан принят: ${product?.product_name ?? 'товар'} → ${result.active_storage_location_code ?? activeLocationCode ?? 'ячейка'}; разложено ${allocated}, осталось ${remaining}.`,
         )
       }
       setScanValue('')
@@ -685,6 +701,12 @@ export function FfInboundSortingPanel({
       setError('Превышено принятое количество — исправьте строки перед применением.')
       return
     }
+    if (firstIncompleteProduct != null) {
+      setError(
+        `По товару ${firstIncompleteProduct.product_name} осталось разложить ${remainingByProductId.get(firstIncompleteProduct.product_id) ?? 0} шт.`,
+      )
+      return
+    }
     setBusy(true)
     setError(null)
     try {
@@ -695,7 +717,7 @@ export function FfInboundSortingPanel({
         { method: 'POST', headers: authHeaders },
       )
       if (!res.ok) {
-        setError(await readApiErrorMessage(res))
+        setError(sortingErrorMessageRu(await readApiErrorMessage(res)))
         return
       }
       await onReload()
@@ -873,6 +895,11 @@ export function FfInboundSortingPanel({
               sx={{
                 p: 2,
                 minWidth: 0,
+                borderColor: product.product_id === highlightedProductId ? 'info.main' : undefined,
+                boxShadow:
+                  product.product_id === highlightedProductId
+                    ? (theme) => `0 0 0 1px ${theme.palette.info.main}`
+                    : undefined,
                 ...(done
                   ? { opacity: 0.85, bgcolor: (theme) => alpha(theme.palette.success.main, 0.06) }
                   : null),
