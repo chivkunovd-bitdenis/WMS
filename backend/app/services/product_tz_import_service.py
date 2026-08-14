@@ -384,7 +384,10 @@ def parse_product_tz_xlsx(content: bytes, *, filename: str) -> tuple[str, list[d
             declared_quantity, quantity_error = _parse_declared_quantity(quantity_raw)
             wb_nm_id, wb_nm_id_error = _parse_wb_nm_id(wb_nm_id_raw)
             # Quantity-only cells are workbook totals, not product rows.
-            if not any((product_name, vendor, sku_raw, wb_nm_id_raw, size, barcode_raw, label_raw, tz)):
+            has_product_cells = any(
+                (product_name, vendor, sku_raw, wb_nm_id_raw, size, barcode_raw, label_raw, tz)
+            )
+            if not has_product_cells:
                 continue
             barcode = _resolve_barcode(barcode_raw=barcode_raw, label_raw=label_raw)
             rows.append(
@@ -651,7 +654,11 @@ async def build_product_tz_preview(
             continue
         seen_barcodes.add(barcode)
 
-        sku = (sku_raw or "").strip()[:128] or _sku_for_row(vendor=vendor, size=size, barcode=barcode)
+        sku = (sku_raw or "").strip()[:128] or _sku_for_row(
+            vendor=vendor,
+            size=size,
+            barcode=barcode,
+        )
         existing = await _find_by_barcode_seller(session, tenant_id, seller_id, barcode)
         if existing is not None:
             update_count += 1

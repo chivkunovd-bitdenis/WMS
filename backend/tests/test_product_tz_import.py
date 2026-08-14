@@ -92,7 +92,17 @@ def test_parse_product_tz_xlsx_reads_clean_name_and_wb_nm_id() -> None:
     ws = wb.active
     assert ws is not None
     ws.title = "Каталог"
-    ws.append(["Название товара", "Артикул продавца", "SKU", "Штрихкод", "WB/nmId", "Размер", "ТЗ упаковки"])
+    ws.append(
+        [
+            "Название товара",
+            "Артикул продавца",
+            "SKU",
+            "Штрихкод",
+            "WB/nmId",
+            "Размер",
+            "ТЗ упаковки",
+        ]
+    )
     ws.append(["Чистое название", "ART-clean", "SKU-clean", "2031111111177", 777001, "48", "ТЗ"])
     buf = io.BytesIO()
     wb.save(buf)
