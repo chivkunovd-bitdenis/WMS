@@ -208,6 +208,32 @@ def _issue_context(validation: SupplyPreflightResult) -> dict[str, Any]:
     return {"order_ids": order_ids, "reasons": reasons}
 
 
+def _from_orders_wb_context(
+    summary: Any,
+    orders: list[FbsOrder],
+    *,
+    wb_supply_id: str | None = None,
+    confirmed_wb_order_ids: set[int] | None = None,
+) -> dict[str, Any]:
+    context: dict[str, Any] = {
+        "wb_warehouse_id": summary.wb_warehouse_id,
+        "wms_warehouse_id": str(summary.wms_warehouse_id),
+        "order_ids": [str(order.id) for order in orders],
+        "wb_order_ids": [int(order.wb_order_id) for order in orders],
+        "request": {
+            "operation": "supply_from_orders",
+            "orders_count": len(orders),
+        },
+    }
+    if wb_supply_id is not None:
+        context["wb_supply_id"] = wb_supply_id
+    if confirmed_wb_order_ids is not None:
+        context["readback"] = {
+            "confirmed_wb_order_ids": sorted(confirmed_wb_order_ids),
+        }
+    return context
+
+
 async def preflight_supply_composition(
     session: AsyncSession,
     tenant_id: uuid.UUID,
@@ -487,6 +513,7 @@ async def create_supply_from_orders(
                 seller_id=seller_id,
                 local_entity_id=supply.id,
                 event="fbs supply from-orders WB create failed",
+                extra_context=_from_orders_wb_context(summary, orders),
             )
             await mark_operation_failed(
                 session,
@@ -527,53 +554,75 @@ async def create_supply_from_orders(
                 wb_order_ids=wb_order_ids,
             )
         except WildberriesClientError as exc:
-            if exc.code == "transport_error":
-                try:
-                    state, confirmed = await reconcile_supply_orders(
-                        http_client,
-                        api_token=token,
+            try:
+                state, confirmed = await reconcile_supply_orders(
+                    http_client,
+                    api_token=token,
+                    wb_supply_id=wb_supply_id,
+                    expected_wb_order_ids=set(wb_order_ids),
+                )
+            except WildberriesClientError as reconcile_exc:
+                if reconcile_exc.code != "transport_error":
+                    error = _fbs_supply_error_from_wb(
+                        reconcile_exc,
+                        tenant_id=tenant_id,
+                        seller_id=seller_id,
+                        local_entity_id=supply.id,
                         wb_supply_id=wb_supply_id,
-                        expected_wb_order_ids=set(wb_order_ids),
+                        event="fbs supply from-orders WB reconcile failed",
+                        retryable=False,
+                        http_status=502,
+                        extra_context=_from_orders_wb_context(
+                            summary,
+                            orders,
+                            wb_supply_id=wb_supply_id,
+                        ),
                     )
-                except WildberriesClientError as reconcile_exc:
-                    if reconcile_exc.code != "transport_error":
-                        error = _fbs_supply_error_from_wb(
-                            reconcile_exc,
-                            tenant_id=tenant_id,
-                            seller_id=seller_id,
-                            local_entity_id=supply.id,
-                            wb_supply_id=wb_supply_id,
-                            event="fbs supply from-orders WB reconcile failed",
-                            retryable=False,
-                            http_status=502,
-                        )
-                        await mark_operation_failed(
-                            session,
-                            operation,
-                            error_code=error.code,
-                            error_context=error.context,
-                            wb_supply_id=wb_supply_id,
-                            local_supply_id=supply.id,
-                        )
-                        raise error from reconcile_exc
-                    state, confirmed = WB_OPERATION_STATE_PENDING_CONFIRMATION, set()
-                if state == WB_OPERATION_STATE_CONFIRMED:
-                    await _bind_orders_to_supply(session, supply, orders)
-                    await mark_operation_confirmed(
+                    await mark_operation_failed(
                         session,
                         operation,
+                        error_code=error.code,
+                        error_context=error.context,
                         wb_supply_id=wb_supply_id,
                         local_supply_id=supply.id,
-                        response_summary={"wb_order_ids": sorted(confirmed)},
                     )
-                    return await get_supply_workspace(session, tenant_id, supply.id)
+                    raise error from reconcile_exc
+                state, confirmed = WB_OPERATION_STATE_PENDING_CONFIRMATION, set()
+            if state == WB_OPERATION_STATE_CONFIRMED:
+                await _bind_orders_to_supply(session, supply, orders)
+                await mark_operation_confirmed(
+                    session,
+                    operation,
+                    wb_supply_id=wb_supply_id,
+                    local_supply_id=supply.id,
+                    response_summary={"wb_order_ids": sorted(confirmed)},
+                )
+                return await get_supply_workspace(session, tenant_id, supply.id)
+            if confirmed:
+                workspace = await _complete_partial_from_orders(
+                    session,
+                    tenant_id,
+                    operation,
+                    supply,
+                    orders,
+                    wb_supply_id=wb_supply_id,
+                    confirmed_wb_order_ids=confirmed,
+                )
+                if workspace is not None:
+                    return workspace
+            if exc.code == "transport_error":
                 await mark_operation_pending_confirmation(
                     session,
                     operation,
                     wb_supply_id=wb_supply_id,
                     local_supply_id=supply.id,
                     error_code="wb_timeout",
-                    error_context={"wb_supply_id": wb_supply_id},
+                    error_context=_from_orders_wb_context(
+                        summary,
+                        orders,
+                        wb_supply_id=wb_supply_id,
+                        confirmed_wb_order_ids=confirmed,
+                    ),
                 )
                 raise FbsSupplyError(
                     "wb_timeout",
@@ -594,6 +643,12 @@ async def create_supply_from_orders(
                 event="fbs supply from-orders WB add-orders failed",
                 retryable=False,
                 http_status=502,
+                extra_context=_from_orders_wb_context(
+                    summary,
+                    orders,
+                    wb_supply_id=wb_supply_id,
+                    confirmed_wb_order_ids=confirmed,
+                ),
             )
             await mark_operation_failed(
                 session,
@@ -612,11 +667,29 @@ async def create_supply_from_orders(
             expected_wb_order_ids=set(wb_order_ids),
         )
         if state != WB_OPERATION_STATE_CONFIRMED:
+            if _confirmed:
+                workspace = await _complete_partial_from_orders(
+                    session,
+                    tenant_id,
+                    operation,
+                    supply,
+                    orders,
+                    wb_supply_id=wb_supply_id,
+                    confirmed_wb_order_ids=_confirmed,
+                )
+                if workspace is not None:
+                    return workspace
             await mark_operation_pending_confirmation(
                 session,
                 operation,
                 wb_supply_id=wb_supply_id,
                 local_supply_id=supply.id,
+                error_context=_from_orders_wb_context(
+                    summary,
+                    orders,
+                    wb_supply_id=wb_supply_id,
+                    confirmed_wb_order_ids=_confirmed,
+                ),
             )
             raise FbsSupplyError(
                 "wb_pending_confirmation",
@@ -666,13 +739,25 @@ async def _resume_from_orders_operation(
     token = await _require_marketplace_token(session, tenant_id, operation.seller_id)
     wb_order_ids = [int(order.wb_order_id) for order in orders]
     if operation.state == WB_OPERATION_STATE_PENDING_CONFIRMATION:
-        state, _confirmed = await reconcile_supply_orders(
+        state, confirmed = await reconcile_supply_orders(
             http_client,
             api_token=token,
             wb_supply_id=operation.wb_object_id,
             expected_wb_order_ids=set(wb_order_ids),
         )
         if state != WB_OPERATION_STATE_CONFIRMED:
+            if confirmed:
+                workspace = await _complete_partial_from_orders(
+                    session,
+                    tenant_id,
+                    operation,
+                    supply,
+                    orders,
+                    wb_supply_id=operation.wb_object_id,
+                    confirmed_wb_order_ids=confirmed,
+                )
+                if workspace is not None:
+                    return workspace
             try:
                 await _execute_wb_batch_add(
                     http_client,
@@ -709,13 +794,25 @@ async def _resume_from_orders_operation(
                     retryable=False,
                     http_status=502,
                 ) from exc
-            state, _confirmed = await reconcile_supply_orders(
+            state, confirmed = await reconcile_supply_orders(
                 http_client,
                 api_token=token,
                 wb_supply_id=operation.wb_object_id,
                 expected_wb_order_ids=set(wb_order_ids),
             )
         if state != WB_OPERATION_STATE_CONFIRMED:
+            if confirmed:
+                workspace = await _complete_partial_from_orders(
+                    session,
+                    tenant_id,
+                    operation,
+                    supply,
+                    orders,
+                    wb_supply_id=operation.wb_object_id,
+                    confirmed_wb_order_ids=confirmed,
+                )
+                if workspace is not None:
+                    return workspace
             raise FbsSupplyError(
                 "wb_pending_confirmation",
                 message="WB не подтвердил состав поставки — повторите операцию.",

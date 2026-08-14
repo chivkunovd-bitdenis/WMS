@@ -10,7 +10,7 @@ from dataclasses import dataclass
 from datetime import UTC, datetime
 from typing import Any
 
-from sqlalchemy import and_, func, or_, select
+from sqlalchemy import String, and_, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 from sqlalchemy.sql.elements import ColumnElement
@@ -191,12 +191,37 @@ async def _fetch_orders_page(
         stmt = stmt.where(FbsOrder.wb_warehouse_id == wb_warehouse_id)
     if search and search.strip():
         term = search.strip()
+        stmt = stmt.outerjoin(Product, Product.id == FbsOrder.product_id).outerjoin(
+            SellerWildberriesImportedCard,
+            and_(
+                SellerWildberriesImportedCard.tenant_id == FbsOrder.tenant_id,
+                SellerWildberriesImportedCard.seller_id == FbsOrder.seller_id,
+                SellerWildberriesImportedCard.nm_id == FbsOrder.wb_nm_id,
+            ),
+        )
         clauses: list[ColumnElement[bool]] = [
             FbsOrder.wb_barcode.ilike(f"%{term}%"),
             FbsOrder.wb_article.ilike(f"%{term}%"),
+            Product.name.ilike(f"%{term}%"),
+            Product.sku_code.ilike(f"%{term}%"),
+            Product.wb_vendor_code.ilike(f"%{term}%"),
+            Product.wb_barcode.ilike(f"%{term}%"),
+            Product.wb_size.ilike(f"%{term}%"),
+            SellerWildberriesImportedCard.title.ilike(f"%{term}%"),
+            SellerWildberriesImportedCard.vendor_code.ilike(f"%{term}%"),
+            SellerWildberriesImportedCard.raw_json.cast(String).ilike(f"%{term}%"),
         ]
         if term.isdigit():
-            clauses.append(FbsOrder.wb_order_id == int(term))
+            term_num = int(term)
+            clauses.extend(
+                [
+                    FbsOrder.wb_order_id == term_num,
+                    FbsOrder.wb_nm_id == term_num,
+                    FbsOrder.wb_chrt_id == term_num,
+                    Product.wb_nm_id == term_num,
+                    Product.wb_chrt_id == term_num,
+                ]
+            )
         stmt = stmt.where(or_(*clauses))
     if cursor:
         cursor_deadline, cursor_id = _decode_cursor(cursor)
