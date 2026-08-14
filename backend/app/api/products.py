@@ -1,9 +1,12 @@
 from __future__ import annotations
 
+import io
 import uuid
+from collections.abc import Sequence
 from typing import Annotated, Literal
 
 from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, UploadFile, status
+from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, ConfigDict, Field
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -21,6 +24,7 @@ from app.core.roles import FULFILLMENT_ADMIN, FULFILLMENT_SELLER, FULFILLMENT_ST
 from app.db.session import get_db
 from app.models.stock_direction import StockDirection
 from app.models.user import User
+from app.services import marking_code_service as mc_svc
 from app.services.catalog_service import (
     SKIP as PATCH_SKIP,
 )
@@ -41,10 +45,12 @@ from app.services.product_tz_import_service import (
     ProductTzImportError,
     apply_product_tz_import,
     build_product_tz_preview,
+    build_product_tz_template_xlsx,
 )
 from app.services.seller_shop_service import user_can_manage_seller_shops
 from app.services.seller_staff_permissions_service import PERM_PRODUCTS
 from app.services.seller_wb_catalog_service import (
+    FfCatalogRow,
     list_ff_catalog_rows,
     list_linked_wb_catalog_rows,
     list_seller_wb_catalog_rows,
@@ -131,6 +137,7 @@ class FfCatalogOut(BaseModel):
     fbs_published_amount: int | None = None
     fbs_sync_status: str | None = None
     has_packaging_instructions: bool = False
+    marking_available_count: int = 0
     is_manual: bool = False
 
 
@@ -155,6 +162,7 @@ class ProductOut(BaseModel):
 
 class ProductTzRowPreviewOut(BaseModel):
     row: int
+    wb_nm_id: int | None = None
     vendor_article: str | None = None
     size: str | None = None
     barcode: str | None = None
@@ -435,13 +443,7 @@ async def get_linked_wb_catalog(
 ) -> list[FfCatalogOut]:
     """WB enrichment for all products (barcodes/photo) — including before first stock movement."""
     rows = await list_linked_wb_catalog_rows(session, user.tenant_id, seller_id=seller_id)
-    return [
-        FfCatalogOut(
-            **r.as_dict(),
-            has_packaging_instructions=bool((r.packaging_instructions or "").strip()),
-        )
-        for r in rows
-    ]
+    return await _ff_catalog_out_rows(session, user.tenant_id, rows)
 
 
 @router.get("/ff-catalog", response_model=list[FfCatalogOut])
@@ -453,13 +455,7 @@ async def get_ff_catalog(
     if seller_id is not None and user.role != FULFILLMENT_ADMIN:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="forbidden")
     rows = await list_ff_catalog_rows(session, user.tenant_id, seller_id=seller_id)
-    return [
-        FfCatalogOut(
-            **r.as_dict(),
-            has_packaging_instructions=bool((r.packaging_instructions or "").strip()),
-        )
-        for r in rows
-    ]
+    return await _ff_catalog_out_rows(session, user.tenant_id, rows)
 
 
 @router.post("", response_model=ProductOut)
@@ -514,6 +510,7 @@ def _tz_preview_out(result: object) -> ProductTzImportPreviewOut:
         rows=[
             ProductTzRowPreviewOut(
                 row=row.row,
+                wb_nm_id=row.wb_nm_id,
                 vendor_article=row.vendor_article,
                 size=row.size,
                 barcode=row.barcode,
@@ -545,6 +542,42 @@ def _tz_preview_out(result: object) -> ProductTzImportPreviewOut:
             error_count=result.summary.error_count,
             declared_total=result.summary.declared_total,
         ),
+    )
+
+
+async def _ff_catalog_out_rows(
+    session: AsyncSession,
+    tenant_id: uuid.UUID,
+    rows: Sequence[FfCatalogRow],
+) -> list[FfCatalogOut]:
+    counts = await mc_svc.count_available_for_products_batch(
+        session,
+        tenant_id,
+        {r.product_id for r in rows},
+    )
+    return [
+        FfCatalogOut(
+            **r.as_dict(),
+            has_packaging_instructions=bool((r.packaging_instructions or "").strip()),
+            marking_available_count=counts.get(r.product_id, 0),
+        )
+        for r in rows
+    ]
+
+
+@router.get("/import-tz/template")
+async def get_product_tz_import_template(
+    user: Annotated[User, Depends(require_fulfillment_admin)],
+) -> StreamingResponse:
+    del user
+    content = build_product_tz_template_xlsx()
+    headers = {
+        "Content-Disposition": 'attachment; filename="wms-product-catalog-template.xlsx"'
+    }
+    return StreamingResponse(
+        io.BytesIO(content),
+        media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        headers=headers,
     )
 
 

@@ -248,15 +248,6 @@ export function AuthedAppLayout({
                 <ListItemText primary="Каталог" />
               </ListItemButton>
             ) : null}
-            {canCatalogCells ? (
-              <ListItemButton
-                component={NavLink}
-                to={`${base}/inventory`}
-                data-testid="nav-ff-inventory"
-              >
-                <ListItemText primary="Инвентаризация" />
-              </ListItemButton>
-            ) : null}
             {isAdmin ? (
               <ListItemButton
                 component={NavLink}

@@ -175,25 +175,19 @@ test('ff verify posts to sorting zone; sorting queue and product columns', async
   expect(doneRow?.available).toBe(4);
 
   await page.goto('/app/ff/products');
+  await expect(page.getByTestId('ff-products-list')).toBeVisible();
   const prodRow = page.getByTestId('ff-product-row').filter({ hasText: sku });
-  await expect(page.getByTestId('ff-products-table').locator('thead')).toContainText('Доступно');
-  await expect(prodRow).toContainText('4 шт');
-  await expect(prodRow).toContainText('FBS 0');
-  await expect(prodRow).toContainText('Резервы 0');
-  await expect(prodRow).toContainText('FBO 4');
+  await expect(prodRow).toBeVisible();
+  const catalogHead = page.getByTestId('ff-products-table').locator('thead');
+  await expect(catalogHead).toContainText('Название');
+  await expect(catalogHead).toContainText('Артикул селлера');
+  await expect(catalogHead).toContainText('SKU');
+  await expect(catalogHead).toContainText('ШК');
+  await expect(catalogHead).toContainText('Размер');
+  await expect(catalogHead).not.toContainText('Доступно');
+  await expect(catalogHead).not.toContainText('Распределение');
+  await expect(prodRow).toContainText(sku);
   await expect(page.getByTestId('ff-products-table')).not.toContainText('Сортировка');
-
-  await page.getByTestId(`ff-product-distribution-${pid}`).click();
-  const distributionPopover = page.getByTestId('ff-products-distribution-popover');
-  await expect(distributionPopover).toBeVisible();
-  await expect(distributionPopover).toContainText('FBS');
-  await expect(distributionPopover).toContainText('Резервы/наборы');
-  await expect(distributionPopover).toContainText('Свободно для FBO');
-  await expect(page.getByTestId(`ff-product-fbs-${pid}`)).toHaveText('0 шт');
-  await expect(page.getByTestId(`ff-product-reserve-directions-${pid}`)).toHaveText('0 шт');
-  await expect(page.getByTestId(`ff-product-free-fbo-${pid}`)).toHaveText('4 шт');
-  await expect(distributionPopover).not.toContainText('Сортировка');
-  await page.keyboard.press('Escape');
 
   // TC-NEW-PRINT-03 — печать из каталога: единый диалог MarkingPrintDialog.
   await prodRow.getByRole('button', { name: 'Печать ШК товара' }).click();
