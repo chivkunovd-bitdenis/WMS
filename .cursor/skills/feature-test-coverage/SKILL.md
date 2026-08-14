@@ -3,14 +3,20 @@ name: feature-test-coverage
 description: >-
   Помогает оформить таблицу покрытия кейсами (TC-ID, негативы) для issue/PR по
   AGENTS.md репозитория WMS. Используется при словах «кейсы», «test coverage»,
-  «TC-». Не заменяет CI: итоговый стопор — только GitHub Actions.
+  «TC-». Не заменяет обязательные BA feature cards, Product before dev и
+  Product Browser Review after dev.
 ---
 
 # Feature test coverage (WMS)
 
 ## Когда включать
 
-Когда нужно быстро собрать блок `### Test coverage` для issue или PR (удобно любому агенту/человеку). **Жёсткая проверка** — в CI (`scripts/ci/check_pr_test_coverage.py`), не в порядке вызова Cursor-ролей.
+Когда нужно быстро собрать блок `### Test coverage` для issue или PR (удобно любому агенту/человеку). **Жёсткая проверка таблицы** — в CI (`scripts/ci/check_pr_test_coverage.py`).
+
+Важно: этот skill не принимает задачу как продукт. Для любой WMS-задачи сначала
+читай `docs/WMS_FEATURE_GATE_PROTOCOL_RU.md` и запускай обязательный цикл
+`BA feature cards -> Product before dev -> Dev -> Code Review -> Product Browser Review`.
+Зеленый CI, таблица TC-ID и Playwright не заменяют product verdict.
 
 ## Источники (читать по порядку)
 

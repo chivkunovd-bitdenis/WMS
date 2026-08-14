@@ -1,5 +1,8 @@
 #!/usr/bin/env python3
-"""Fail if PR body does not include a substantive Test coverage block (AGENTS.md)."""
+"""Fail if PR body does not include a substantive Test coverage block (AGENTS.md).
+
+This is a technical traceability check. It does not replace the Product gate.
+"""
 
 from __future__ import annotations
 
