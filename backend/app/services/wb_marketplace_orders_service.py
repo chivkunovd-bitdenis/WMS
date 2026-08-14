@@ -5,7 +5,7 @@ from __future__ import annotations
 import logging
 import uuid
 from datetime import UTC, datetime, timedelta
-from typing import Any
+from typing import Any, cast
 
 import httpx
 from sqlalchemy import Select, and_, or_, select
@@ -282,7 +282,7 @@ async def _resolve_wms_warehouse_from_binding(
         binding.stock_sync_enabled = False
         await session.flush()
         return None
-    return binding.wms_warehouse_id
+    return cast(uuid.UUID, binding.wms_warehouse_id)
 
 
 async def _resolve_wms_warehouse_for_wb(
