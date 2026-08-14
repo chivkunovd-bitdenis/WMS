@@ -48,8 +48,10 @@ from app.models.warehouse import Warehouse
 from app.services.fbs_stock_availability_service import fbs_available_qty_by_product
 from app.services.inventory_service import OUTBOUND_RESERVE_STATUSES
 from app.services.wb_card_enrichment import (
+    color_from_card,
     first_photo_url_from_card,
     size_from_card_for_barcode,
+    subject_name_from_card,
 )
 
 STATUS_GROUP_MAP: dict[str, frozenset[str]] = {
@@ -630,6 +632,8 @@ def _map_order(order: FbsOrder, ctx: dict[str, Any], server_now: datetime) -> di
     card_raw = card.raw_json if card and isinstance(card.raw_json, dict) else None
     barcode = order.wb_barcode or (product.wb_barcode if product else None)
     image_url = first_photo_url_from_card(card_raw) if card_raw else None
+    category = subject_name_from_card(card_raw) if card_raw else None
+    color = color_from_card(card_raw) if card_raw else None
     size = None
     if product and product.wb_size:
         size = product.wb_size
@@ -676,9 +680,23 @@ def _map_order(order: FbsOrder, ctx: dict[str, Any], server_now: datetime) -> di
             "id": str(order.product_id) if order.product_id else None,
             "name": product.name if product else MISSING_PRODUCT,
             "image_url": image_url,
-            "seller_article": product.sku_code if product else order.wb_article,
+            "seller_article": (
+                product.wb_vendor_code
+                if product and product.wb_vendor_code
+                else order.wb_article
+            ),
             "wb_article": int(order.wb_nm_id) if order.wb_nm_id is not None else None,
             "barcode": barcode,
+            "sku": product.sku_code if product else None,
+            "chrt_id": (
+                int(order.wb_chrt_id)
+                if order.wb_chrt_id is not None
+                else int(product.wb_chrt_id)
+                if product and product.wb_chrt_id is not None
+                else None
+            ),
+            "category": category,
+            "color": color,
             "size": size,
             "packaging_instructions": product.packaging_instructions if product else None,
             "has_packaging_instructions": bool(

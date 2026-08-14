@@ -240,6 +240,90 @@ async def _bind_orders_to_supply(
     await session.flush()
 
 
+def _partial_from_orders_summary(
+    orders: list[FbsOrder],
+    *,
+    confirmed_wb_order_ids: set[int],
+) -> dict[str, Any]:
+    accepted_orders: list[dict[str, Any]] = []
+    rejected_orders: list[dict[str, Any]] = []
+    for order in orders:
+        row = {
+            "order_id": str(order.id),
+            "wb_order_id": int(order.wb_order_id),
+            "tracking_label": (
+                "accepted"
+                if int(order.wb_order_id) in confirmed_wb_order_ids
+                else "not_confirmed"
+            ),
+            "wb_status": order.wb_status,
+            "local_status": order.status,
+            "remaining_deadline": order.deadline_at.isoformat(),
+        }
+        if int(order.wb_order_id) in confirmed_wb_order_ids:
+            accepted_orders.append(
+                {
+                    **row,
+                    "reason": "WB подтвердил заказ в составе поставки.",
+                }
+            )
+        else:
+            rejected_orders.append(
+                {
+                    **row,
+                    "reason": "WB не подтвердил заказ после сверки состава поставки.",
+                }
+            )
+    return {
+        "accepted_orders": accepted_orders,
+        "rejected_orders": rejected_orders,
+    }
+
+
+async def _complete_partial_from_orders(
+    session: AsyncSession,
+    tenant_id: uuid.UUID,
+    operation: Any,
+    supply: FbsSupply,
+    orders: list[FbsOrder],
+    *,
+    wb_supply_id: str,
+    confirmed_wb_order_ids: set[int],
+) -> dict[str, Any] | None:
+    accepted_orders = [
+        order for order in orders if int(order.wb_order_id) in confirmed_wb_order_ids
+    ]
+    if not accepted_orders:
+        return None
+    await _bind_orders_to_supply(session, supply, accepted_orders)
+    partial_summary = _partial_from_orders_summary(
+        orders,
+        confirmed_wb_order_ids={int(order.wb_order_id) for order in accepted_orders},
+    )
+    await mark_operation_confirmed(
+        session,
+        operation,
+        wb_supply_id=wb_supply_id,
+        local_supply_id=supply.id,
+        response_summary={
+            "partial_confirmation": True,
+            "requested_wb_order_ids": sorted(int(order.wb_order_id) for order in orders),
+            "accepted_wb_order_ids": sorted(
+                int(order.wb_order_id) for order in accepted_orders
+            ),
+            "rejected_wb_order_ids": sorted(
+                int(order.wb_order_id)
+                for order in orders
+                if int(order.wb_order_id) not in confirmed_wb_order_ids
+            ),
+            "partial_rejection": partial_summary,
+        },
+    )
+    workspace = await get_supply_workspace(session, tenant_id, supply.id)
+    workspace["partial_rejection"] = partial_summary
+    return workspace
+
+
 async def _execute_wb_batch_add(
     http_client: httpx.AsyncClient,
     *,

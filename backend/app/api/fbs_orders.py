@@ -71,6 +71,10 @@ class FbsWorklistProductOut(BaseModel):
     seller_article: str | None
     wb_article: int | None
     barcode: str | None
+    sku: str | None = None
+    chrt_id: int | None = None
+    category: str | None = None
+    color: str | None = None
     size: str | None
 
 
