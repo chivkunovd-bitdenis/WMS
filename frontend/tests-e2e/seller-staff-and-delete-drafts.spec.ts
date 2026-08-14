@@ -65,9 +65,16 @@ test('seller owner manages staff permissions and deletes draft documents only', 
   await expect(page.getByTestId('seller-documents-table')).toBeVisible();
   const draftRow = page.getByTestId('seller-documents-row').filter({ hasText: 'Черновик' });
   await expect(draftRow).toHaveCount(1);
+  await draftRow.getByTestId('seller-delete-draft').click();
+  await expect(page.getByTestId('seller-delete-draft-confirm-dialog')).toBeVisible();
+  await page.getByTestId('seller-delete-draft-cancel').click();
+  await expect(page.getByTestId('seller-delete-draft-confirm-dialog')).toHaveCount(0);
+  await expect(draftRow).toHaveCount(1);
+  await draftRow.getByTestId('seller-delete-draft').click();
+  await expect(page.getByTestId('seller-delete-draft-confirm-dialog')).toBeVisible();
   await Promise.all([
     waitForDeleteOk(page, '/api/operations/inbound-intake-requests'),
-    draftRow.getByTestId('seller-delete-draft').click(),
+    page.getByTestId('seller-delete-draft-confirm').click(),
   ]);
   await expect(page.getByTestId('seller-documents-delete-ok')).toContainText('Черновик удалён');
   await expect(page.getByTestId('seller-documents-row')).toHaveCount(0);

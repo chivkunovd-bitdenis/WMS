@@ -18,12 +18,12 @@ export const SELLER_PERMISSION_BLOCKS: {
   },
   {
     key: 'products',
-    label: 'Товары',
+    label: 'Товары и остатки',
     hint: 'Каталог и остатки селлера',
   },
   {
     key: 'honest_sign',
-    label: 'Честный знак',
+    label: 'Честный Знак',
     hint: 'Коды маркировки и пул ЧЗ',
   },
   {

@@ -1,0 +1,235 @@
+import { test, expect } from '@playwright/test';
+
+import { waitForPostOk } from './api-waits';
+import {
+  INBOUND_API,
+  loginFfAdmin,
+  loginSellerPortal,
+  seedFfSellerInbound,
+  sellerPath,
+} from './inbound-boxes-helpers';
+
+test.describe.configure({ timeout: 120_000 });
+
+// TC-NEW-F18-001 / TC-NEW-F18-002 / TC-NEW-F18-003 / TC-NEW-F18-004 / TC-NEW-F18-005 —
+// seller UI creates supply and return drafts; labels survive seller list, FF queue/card, print heading, and page-contained draft table layout.
+test('seller chooses supply or return before inbound draft creation', async ({ page }) => {
+  const seed = await seedFfSellerInbound(page, `f18-op-${Date.now()}`);
+  const returnSku = `f18-return-sku-${seed.suffix}`;
+  const returnProduct = await page.request.post('/api/products', {
+    headers: { Authorization: `Bearer ${seed.token}` },
+    data: {
+      name: 'F18 Return Product',
+      sku_code: returnSku,
+      seller_id: seed.sellerId,
+      length_mm: 100,
+      width_mm: 80,
+      height_mm: 40,
+    },
+  });
+  expect(returnProduct.ok()).toBeTruthy();
+
+  await loginSellerPortal(page, seed.sellerEmail, seed.password);
+  await page.getByTestId('nav-seller-documents').click();
+  await expect(page.getByTestId('seller-documents-table')).toBeVisible();
+  await expect(page.getByTestId('seller-inbound-operation-toggle')).toBeVisible();
+  await expect(page.getByTestId('seller-inbound-operation-supply')).toHaveAttribute(
+    'aria-pressed',
+    'true',
+  );
+
+  const [supplyCreate] = await Promise.all([
+    waitForPostOk(page, INBOUND_API, (u) => !u.includes('/lines') && !u.includes('/submit')),
+    page.getByTestId('seller-create-inbound').click(),
+  ]);
+  const supplyPostBody = JSON.parse(supplyCreate.request().postData() ?? '{}') as {
+    operation_type?: string;
+  };
+  expect(supplyPostBody.operation_type).toBe('inbound');
+  const supply = (await supplyCreate.json()) as { id: string; operation_type: string };
+  expect(supply.operation_type).toBe('inbound');
+  await expect(page.getByRole('heading', { name: 'Новая заявка на поставку' })).toBeVisible();
+  await expect(page.getByTestId('seller-inbound-operation-type')).toContainText('Поставка');
+  await expect(page.getByTestId('seller-inbound-operation-toggle')).toHaveCount(0);
+  await page.getByTestId('seller-inbound-save-draft').click();
+  await expect(page.getByTestId('seller-documents-table')).toBeVisible();
+
+  await page.getByTestId('seller-inbound-operation-return').click();
+  await expect(page.getByTestId('seller-create-inbound')).toContainText('Создать возврат');
+  const [returnCreate] = await Promise.all([
+    waitForPostOk(page, INBOUND_API, (u) => !u.includes('/lines') && !u.includes('/submit')),
+    page.getByTestId('seller-create-inbound').click(),
+  ]);
+  const returnPostBody = JSON.parse(returnCreate.request().postData() ?? '{}') as {
+    operation_type?: string;
+  };
+  expect(returnPostBody.operation_type).toBe('return');
+  const returnDraft = (await returnCreate.json()) as { id: string; operation_type: string };
+  expect(returnDraft.operation_type).toBe('return');
+  await expect(page.getByRole('heading', { name: 'Новая заявка на возврат' })).toBeVisible();
+  await expect(page.getByTestId('seller-inbound-operation-type')).toContainText('Возврат');
+  await expect(page.locator('body')).not.toContainText('operation_type');
+  await expect(page.locator('body')).not.toContainText(/\breturn\b/);
+  expect(page.url()).toContain(sellerPath('/inbound/new'));
+  expect(page.url()).not.toContain('/returns');
+  await page.setViewportSize({ width: 1024, height: 768 });
+
+  await page.getByTestId('seller-inbound-add-products').click();
+  await expect(page.getByTestId('seller-inbound-picker')).toBeVisible();
+  await page.getByTestId('seller-inbound-picker-search').fill(returnSku);
+  await page.getByTestId('seller-inbound-picker-qty').first().fill('2');
+  await Promise.all([
+    waitForPostOk(page, INBOUND_API, (u) => u.includes('/lines')),
+    page.getByTestId('seller-inbound-picker-apply').click(),
+  ]);
+  await expect(page.getByTestId('seller-inbound-picker')).toHaveCount(0);
+  await expect(page.getByTestId('seller-inbound-line-row')).toHaveCount(1);
+  await expect(page.getByTestId('seller-inbound-line-row')).toContainText('F18 Return Product');
+
+  const draftLayout = await page.getByTestId('seller-inbound-draft-form').evaluate((form) => {
+    const table = form.querySelector('[data-testid="seller-inbound-lines-table"]') as HTMLElement | null;
+    if (!table) {
+      throw new Error('seller inbound draft table not found');
+    }
+    const container = table.closest('.MuiTableContainer-root') as HTMLElement | null;
+    const headCells = Array.from(table.querySelectorAll('thead th')) as HTMLElement[];
+    const row = table.querySelector('tbody tr[data-testid="seller-inbound-line-row"]') as HTMLElement | null;
+    if (!row) {
+      throw new Error('seller inbound draft row not found');
+    }
+    const nameIndex = headCells.findIndex((cell) => cell.textContent?.trim() === 'Наименование');
+    const qtyIndex = headCells.findIndex((cell) => cell.textContent?.trim() === 'Кол-во');
+    const nameCell = row.children[nameIndex] as HTMLElement | undefined;
+    const qtyCell = row.children[qtyIndex] as HTMLElement | undefined;
+    const rowRect = row.getBoundingClientRect();
+    const nameRect = nameCell?.getBoundingClientRect();
+    const qtyRect = qtyCell?.getBoundingClientRect();
+    const headerBottom = Math.max(...headCells.map((cell) => cell.getBoundingClientRect().bottom));
+    const firstBodyTop = rowRect.top;
+    return {
+      headerCells: headCells.length,
+      bodyCells: row.children.length,
+      nameText: nameCell?.textContent ?? '',
+      nameWidth: nameRect?.width ?? 0,
+      rowHeight: rowRect.height,
+      headerBottom,
+      firstBodyTop,
+      nameRight: nameRect?.right ?? 0,
+      qtyLeft: qtyRect?.left ?? 0,
+      containerClientWidth: container?.clientWidth ?? 0,
+      containerScrollWidth: container?.scrollWidth ?? 0,
+    };
+  });
+  expect(draftLayout.headerCells).toBe(8);
+  expect(draftLayout.bodyCells).toBe(8);
+  expect(draftLayout.nameText).toContain('F18 Return Product');
+  expect(draftLayout.nameWidth).toBeGreaterThanOrEqual(250);
+  expect(draftLayout.rowHeight).toBeLessThanOrEqual(96);
+  expect(draftLayout.headerBottom).toBeLessThanOrEqual(draftLayout.firstBodyTop + 1);
+  expect(draftLayout.nameRight).toBeLessThanOrEqual(draftLayout.qtyLeft + 1);
+  expect(draftLayout.containerScrollWidth).toBeGreaterThanOrEqual(draftLayout.containerClientWidth);
+  expect(draftLayout.containerScrollWidth).toBeGreaterThanOrEqual(1040);
+
+  await page.setViewportSize({ width: 1280, height: 720 });
+  const returnDraftOverflow = await page.getByTestId('seller-inbound-draft-form').evaluate((form) => {
+    const table = form.querySelector('[data-testid="seller-inbound-lines-table"]') as HTMLElement | null;
+    if (!table) {
+      throw new Error('seller inbound draft table not found');
+    }
+    const container = table.closest('.MuiTableContainer-root') as HTMLElement | null;
+    const appRoot = document.querySelector(
+      '[data-testid="app-root"], [data-testid="app-frame"]',
+    ) as HTMLElement | null;
+    const doc = document.documentElement;
+    const body = document.body;
+    return {
+      viewportWidth: window.innerWidth,
+      scrollX: window.scrollX,
+      documentScrollWidth: doc.scrollWidth,
+      bodyScrollWidth: body.scrollWidth,
+      appRootScrollWidth: appRoot?.scrollWidth ?? 0,
+      appRootClientWidth: appRoot?.clientWidth ?? 0,
+      tableScrollWidth: table.scrollWidth,
+      containerClientWidth: container?.clientWidth ?? 0,
+      containerScrollWidth: container?.scrollWidth ?? 0,
+    };
+  });
+  expect(returnDraftOverflow.documentScrollWidth).toBeLessThanOrEqual(
+    returnDraftOverflow.viewportWidth + 1,
+  );
+  expect(returnDraftOverflow.bodyScrollWidth).toBeLessThanOrEqual(
+    returnDraftOverflow.viewportWidth + 1,
+  );
+  expect(returnDraftOverflow.appRootScrollWidth).toBeLessThanOrEqual(
+    returnDraftOverflow.viewportWidth + 1,
+  );
+  expect(returnDraftOverflow.appRootClientWidth).toBeLessThanOrEqual(
+    returnDraftOverflow.viewportWidth + 1,
+  );
+  expect(returnDraftOverflow.scrollX).toBe(0);
+  expect(returnDraftOverflow.containerClientWidth).toBeLessThanOrEqual(
+    returnDraftOverflow.viewportWidth,
+  );
+  expect(returnDraftOverflow.containerScrollWidth).toBeGreaterThan(
+    returnDraftOverflow.containerClientWidth,
+  );
+  expect(returnDraftOverflow.tableScrollWidth).toBeGreaterThan(
+    returnDraftOverflow.containerClientWidth,
+  );
+
+  await Promise.all([
+    waitForPostOk(page, INBOUND_API, (u) => u.includes('/submit')),
+    page.getByTestId('seller-inbound-submit-warehouse').click(),
+  ]);
+
+  const supplyRow = page.locator(
+    `[data-testid="seller-documents-row"][data-doc-id="${supply.id}"]`,
+  );
+  const returnRow = page.locator(
+    `[data-testid="seller-documents-row"][data-doc-id="${returnDraft.id}"]`,
+  );
+  await expect(supplyRow).toContainText('Поставка');
+  await expect(returnRow).toContainText('Возврат');
+  await expect(returnRow).toHaveAttribute('data-doc-operation-type', 'return');
+
+  await page.getByTestId('seller-documents-type').click();
+  await page.getByRole('option', { name: 'Возврат' }).click();
+  await expect(returnRow).toBeVisible();
+  await expect(supplyRow).toHaveCount(0);
+
+  await page.getByTestId('seller-documents-type').click();
+  await page.getByRole('option', { name: 'Поставка' }).click();
+  await expect(supplyRow).toBeVisible();
+  await expect(returnRow).toHaveCount(0);
+
+  await loginFfAdmin(page, seed.adminEmail, seed.password);
+  await page.getByTestId('nav-ff-reception').click();
+  const ffReturnRow = page.locator(
+    `[data-testid="ff-inbound-queue-row"][data-request-id="${returnDraft.id}"]`,
+  );
+  await expect(ffReturnRow.getByTestId('ff-inbound-queue-document')).toContainText('Возврат');
+  await ffReturnRow.click();
+  await expect(page.getByTestId('ff-inbound-doc-root')).toBeVisible();
+  await expect(page.getByTestId('ff-inbound-operation-type')).toContainText('Возврат');
+  const returnDocumentNumber =
+    (await page.getByTestId('ff-inbound-document-number').textContent())?.trim() ?? '';
+  expect(returnDocumentNumber).toContain('№');
+
+  await page.evaluate(() => {
+    (
+      window as unknown as {
+        __WMS_CAPTURE_PRINT_HTML__?: boolean;
+        __WMS_LAST_PRINT_HTML__?: string;
+      }
+    ).__WMS_CAPTURE_PRINT_HTML__ = true;
+    (window as unknown as { __WMS_LAST_PRINT_HTML__?: string }).__WMS_LAST_PRINT_HTML__ = '';
+  });
+  await page.getByTestId('ff-inbound-print-waybill').click();
+  await expect
+    .poll(async () =>
+      page.evaluate(
+        () => (window as unknown as { __WMS_LAST_PRINT_HTML__?: string }).__WMS_LAST_PRINT_HTML__ ?? '',
+      ),
+    )
+    .toContain(`<h1>Накладная — возврат на склад ФФ · ${returnDocumentNumber}</h1>`);
+});

@@ -1,0 +1,8 @@
+{
+  "steps": [
+    "start"
+  ],
+  "visibilityError": "TypeError: Cannot read properties of undefined (reading 'capabilities')\n    at /Users/deniscivkunov/Desktop/WMS/.node_repl_cell_8.mjs:30:45",
+  "viewportError": "TypeError: Cannot read properties of undefined (reading 'capabilities')\n    at /Users/deniscivkunov/Desktop/WMS/.node_repl_cell_8.mjs:31:44",
+  "openError": "TypeError: Cannot read properties of undefined (reading 'tabs')\n    at /Users/deniscivkunov/Desktop/WMS/.node_repl_cell_8.mjs:32:46"
+}

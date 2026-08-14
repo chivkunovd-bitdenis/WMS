@@ -3208,6 +3208,7 @@ class PendingMarkingRow:
     document_number: str | None
     warehouse_id: uuid.UUID
     seller_id: uuid.UUID | None
+    seller_name: str | None
     product_id: uuid.UUID
     sku_code: str
     product_name: str
@@ -3251,17 +3252,18 @@ async def list_pending_marking_lines(
     total = int((await session.execute(count_stmt)).scalar_one())
 
     stmt = (
-        select(PackagingTaskLine, PackagingTask, Product, StorageLocation)
+        select(PackagingTaskLine, PackagingTask, Product, StorageLocation, Seller)
         .join(PackagingTask, PackagingTask.id == PackagingTaskLine.task_id)
         .join(Product, Product.id == PackagingTaskLine.product_id)
         .join(StorageLocation, StorageLocation.id == PackagingTaskLine.storage_location_id)
+        .outerjoin(Seller, Seller.id == Product.seller_id)
         .where(*base_filters)
         .order_by(PackagingTask.created_at.asc(), PackagingTaskLine.id.asc())
         .limit(limit)
         .offset(offset)
     )
     page_rows = (await session.execute(stmt)).all()
-    product_ids = {product.id for _line, _task, product, _loc in page_rows}
+    product_ids = {product.id for _line, _task, product, _loc, _seller in page_rows}
     available_by_product = await count_available_for_products_batch(
         session,
         tenant_id,
@@ -3269,7 +3271,7 @@ async def list_pending_marking_lines(
     )
 
     rows: list[PendingMarkingRow] = []
-    for line, task, product, loc in page_rows:
+    for line, task, product, loc, seller in page_rows:
         qty_need = qty_need_pack(line)
         printed = int(line.qty_marking_printed)
         rows.append(
@@ -3279,6 +3281,7 @@ async def list_pending_marking_lines(
                 document_number=task.document_number,
                 warehouse_id=task.warehouse_id,
                 seller_id=product.seller_id,
+                seller_name=seller.name if seller else None,
                 product_id=product.id,
                 sku_code=product.sku_code,
                 product_name=product.name,

@@ -3,9 +3,10 @@ import { expect, test } from '@playwright/test'
 import { waitForGetOk, waitForPostOk } from './api-waits'
 import { openFulfillmentRegistration } from './auth-flow'
 
-// TC-NEW-001 — FF складской каталог: все товары селлеров, остатки по движениям.
+// TC-NEW-001 — FF складской каталог: все товары селлеров и бизнес-остаток без внутренних стадий.
 // Given: FF admin, есть товары селлеров, один товар не принимался на склад; When: открывает «Каталог»;
-// Then: видны все товары селлеров; у принятых остаток равен actual_qty, у непринятых — 0.
+// Then: видны все товары селлеров; у принятых доступный остаток равен actual_qty, у непринятых — 0;
+// negative: UI не показывает внутренние стадии движения и формульные технические подсказки.
 test('ff products: filter by seller and sort by name/quantity', async ({ page }) => {
   await page.setViewportSize({ width: 1280, height: 800 })
   const email = `e2e-ff-products-${Date.now()}@example.com`
@@ -141,10 +142,17 @@ test('ff products: filter by seller and sort by name/quantity', async ({ page })
   await expect(tableHead).toContainText('Артикул WB')
   await expect(tableHead).toContainText('Распределение')
   await expect(tableHead).toContainText('Доступно')
-  await expect(tableHead).not.toContainText('Не упак.')
+  await expect(tableHead).not.toContainText('Сортировка')
+  await expect(tableHead).not.toContainText('Не упаковано')
   await expect(tableHead).not.toContainText('Упаковано')
-  await expect(tableHead).not.toContainText('В сортировке')
-  await expect(page.getByTestId('ff-products-available-formula')).toBeVisible()
+  await expect(tableHead).not.toContainText('В ячейках')
+  await expect(tableHead).not.toContainText('Технический резерв')
+  await expect(page.getByTestId('ff-products-table')).not.toContainText('Сортировка')
+  await expect(page.getByTestId('ff-products-table')).not.toContainText('Не упаковано')
+  await expect(page.getByTestId('ff-products-table')).not.toContainText('Упаковано')
+  await expect(page.getByTestId('ff-products-table')).not.toContainText('В ячейках')
+  await expect(page.getByTestId('ff-products-table')).not.toContainText('Технический резерв')
+  await expect(page.getByTestId('ff-products-available-formula')).toHaveCount(0)
 
   // Filter by seller A
   await page.getByTestId('ff-products-seller-filter').click()
@@ -155,9 +163,19 @@ test('ff products: filter by seller and sort by name/quantity', async ({ page })
   await expect(page.getByTestId('ff-products-table')).toContainText(skuA)
   await expect(page.getByTestId('ff-products-table')).toContainText(skuPrivate)
   await page.getByTestId(`ff-product-distribution-${prodA.id}`).click()
-  await expect(page.getByTestId('ff-products-distribution-popover')).toBeVisible()
-  await expect(page.getByTestId('ff-products-distribution-popover')).toContainText('Свободно для FBO')
-  await expect(page.getByTestId(`ff-product-unpacked-${prodA.id}`)).toHaveText('2 шт')
+  const distributionPopover = page.getByTestId('ff-products-distribution-popover')
+  await expect(distributionPopover).toBeVisible()
+  await expect(distributionPopover).toContainText('FBS')
+  await expect(distributionPopover).toContainText('Резервы/наборы')
+  await expect(distributionPopover).toContainText('Свободно для FBO')
+  await expect(page.getByTestId(`ff-product-fbs-${prodA.id}`)).toHaveText('0 шт')
+  await expect(page.getByTestId(`ff-product-reserve-directions-${prodA.id}`)).toHaveText('0 шт')
+  await expect(page.getByTestId(`ff-product-free-fbo-${prodA.id}`)).toHaveText('2 шт')
+  await expect(distributionPopover).not.toContainText('Сортировка')
+  await expect(distributionPopover).not.toContainText('Не упаковано')
+  await expect(distributionPopover).not.toContainText('Упаковано')
+  await expect(distributionPopover).not.toContainText('В ячейках')
+  await expect(distributionPopover).not.toContainText('Технический резерв')
   await page.keyboard.press('Escape')
 
   // Switch to All

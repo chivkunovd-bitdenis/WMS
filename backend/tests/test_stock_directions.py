@@ -1,14 +1,18 @@
 from __future__ import annotations
 
+import asyncio
 import time
 import uuid
+from datetime import UTC, date, datetime, tzinfo
 
 import pytest
 from httpx import AsyncClient
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.db.session import SessionLocal
 from app.models.fbs_order import FbsOrder, FbsOrderReservation
 from app.models.product import Product
+from app.models.stock_direction import StockMonthlySnapshot
 from app.services import inventory_service, stock_direction_service
 from app.services.fbs_stock_availability_service import fbs_available_qty_for_product
 from app.services.marketplace_unload_service import list_available_products
@@ -109,6 +113,68 @@ async def _seller_headers(
     )
     assert login.status_code == 200, login.text
     return {"Authorization": f"Bearer {login.json()['access_token']}"}
+
+
+async def _ff_staff_headers(
+    async_client: AsyncClient,
+    admin_headers: dict[str, str],
+    *,
+    inventory: bool,
+) -> dict[str, str]:
+    email = f"ff-inventory-staff-{time.time_ns()}@example.com"
+    created = await async_client.post(
+        "/auth/staff-accounts",
+        headers=admin_headers,
+        json={"email": email},
+    )
+    assert created.status_code == 201, created.text
+    permissions = await async_client.patch(
+        f"/auth/staff-accounts/{created.json()['id']}/permissions",
+        headers=admin_headers,
+        json={
+            "settings": False,
+            "mp_shipments": False,
+            "reception": False,
+            "cells": False,
+            "inventory": inventory,
+            "packaging": False,
+            "shift_lead": False,
+        },
+    )
+    assert permissions.status_code == 200, permissions.text
+    password = await async_client.post(
+        "/auth/set-initial-password",
+        json={"email": email, "password": "password123"},
+    )
+    assert password.status_code == 200, password.text
+    login = await async_client.post(
+        "/auth/login",
+        json={"email": email, "password": "password123"},
+    )
+    assert login.status_code == 200, login.text
+    return {"Authorization": f"Bearer {login.json()['access_token']}"}
+
+
+def _previous_month(value: date) -> date:
+    if value.month == 1:
+        return date(value.year - 1, 12, 1)
+    return date(value.year, value.month - 1, 1)
+
+
+def test_current_snapshot_month_uses_moscow_business_month(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    class FrozenDateTime:
+        @staticmethod
+        def now(tz: tzinfo | None = None) -> datetime:
+            frozen = datetime(2026, 8, 31, 21, 30, tzinfo=UTC)
+            if tz is None:
+                return frozen.replace(tzinfo=None)
+            return frozen.astimezone(tz)
+
+    monkeypatch.setattr(stock_direction_service, "datetime", FrozenDateTime)
+
+    assert stock_direction_service.current_snapshot_month() == date(2026, 9, 1)
 
 
 @pytest.mark.asyncio
@@ -243,7 +309,8 @@ async def test_directions_drive_fbs_pool_and_mp_free_fbo(
 async def test_monthly_stock_snapshot_captures_distribution(
     async_client: AsyncClient,
 ) -> None:
-    admin_headers, _seller_id, _sku, _warehouse_id, _location_id, product_id = (
+    current_month = stock_direction_service.current_snapshot_month()
+    admin_headers, seller_id, _sku, _warehouse_id, location_id, product_id = (
         await _seed_stocked_product(async_client)
     )
     fbs = await async_client.post(
@@ -262,20 +329,286 @@ async def test_monthly_stock_snapshot_captures_distribution(
     run = await async_client.post(
         "/operations/inventory-balances/monthly-snapshots/run",
         headers=admin_headers,
-        json={"month": "2026-08-12"},
+        json={"month": current_month.isoformat()},
     )
     assert run.status_code == 200, run.text
     row = next(item for item in run.json() if item["product_id"] == str(product_id))
-    assert row["snapshot_month"] == "2026-08-01"
+    assert row["snapshot_month"] == current_month.isoformat()
+    assert row["product_name"] == "Direction Product"
+    assert row["sku_code"] == _sku
     assert row["quantity_total"] == 10
     assert row["quantity_fbs"] == 3
     assert row["quantity_reserved"] == 2
     assert row["quantity_free_fbo"] == 5
 
+    changed_fbs = await async_client.patch(
+        f"/products/stock-directions/{fbs.json()['id']}",
+        headers=admin_headers,
+        json={"quantity": 4},
+    )
+    assert changed_fbs.status_code == 200, changed_fbs.text
+    async with SessionLocal() as session:
+        product = await session.get(Product, product_id)
+        assert product is not None
+        await inventory_service.record_movement_and_adjust_balance(
+            session,
+            tenant_id=product.tenant_id,
+            product_id=product_id,
+            storage_location_id=location_id,
+            quantity_delta=5,
+            movement_type="inbound_intake",
+        )
+        await session.commit()
+
+    rerun = await async_client.post(
+        "/operations/inventory-balances/monthly-snapshots/run",
+        headers=admin_headers,
+        json={"month": current_month.isoformat()},
+    )
+    assert rerun.status_code == 200, rerun.text
+    rerun_row = next(item for item in rerun.json() if item["product_id"] == str(product_id))
+    assert rerun_row["id"] == row["id"]
+    assert rerun_row["quantity_total"] == 10
+    assert rerun_row["quantity_fbs"] == 3
+    assert rerun_row["quantity_reserved"] == 2
+    assert rerun_row["quantity_free_fbo"] == 5
+
+    new_product = await async_client.post(
+        "/products",
+        headers=admin_headers,
+        json={
+            "name": "Late Direction Product",
+            "sku_code": f"LATE-DIR-{time.time_ns()}",
+            "seller_id": seller_id,
+        },
+    )
+    assert new_product.status_code in (200, 201), new_product.text
+    new_product_id = uuid.UUID(new_product.json()["id"])
+    async with SessionLocal() as session:
+        late = await session.get(Product, new_product_id)
+        assert late is not None
+        await inventory_service.record_movement_and_adjust_balance(
+            session,
+            tenant_id=late.tenant_id,
+            product_id=new_product_id,
+            storage_location_id=location_id,
+            quantity_delta=7,
+            movement_type="inbound_intake",
+        )
+        await session.commit()
+
+    late_rerun = await async_client.post(
+        "/operations/inventory-balances/monthly-snapshots/run",
+        headers=admin_headers,
+        json={"month": current_month.isoformat()},
+    )
+    assert late_rerun.status_code == 200, late_rerun.text
+    assert len(late_rerun.json()) == len(run.json())
+    assert all(item["product_id"] != str(new_product_id) for item in late_rerun.json())
+
     listed = await async_client.get(
         "/operations/inventory-balances/monthly-snapshots",
         headers=admin_headers,
-        params={"month": "2026-08-01"},
+        params={"month": current_month.isoformat()},
     )
     assert listed.status_code == 200, listed.text
     assert len([item for item in listed.json() if item["product_id"] == str(product_id)]) == 1
+    assert all(item["product_id"] != str(new_product_id) for item in listed.json())
+
+
+@pytest.mark.asyncio
+async def test_monthly_stock_snapshot_get_requires_ff_inventory_access(
+    async_client: AsyncClient,
+) -> None:
+    current_month = stock_direction_service.current_snapshot_month()
+    admin_headers, seller_id, _sku, _warehouse_id, _location_id, product_id = (
+        await _seed_stocked_product(async_client)
+    )
+
+    run = await async_client.post(
+        "/operations/inventory-balances/monthly-snapshots/run",
+        headers=admin_headers,
+        json={"month": current_month.isoformat()},
+    )
+    assert run.status_code == 200, run.text
+
+    admin_listed = await async_client.get(
+        "/operations/inventory-balances/monthly-snapshots",
+        headers=admin_headers,
+        params={"month": current_month.isoformat()},
+    )
+    assert admin_listed.status_code == 200, admin_listed.text
+    assert [row["product_id"] for row in admin_listed.json()] == [str(product_id)]
+
+    inventory_staff_headers = await _ff_staff_headers(
+        async_client,
+        admin_headers,
+        inventory=True,
+    )
+    staff_listed = await async_client.get(
+        "/operations/inventory-balances/monthly-snapshots",
+        headers=inventory_staff_headers,
+        params={"month": current_month.isoformat()},
+    )
+    assert staff_listed.status_code == 200, staff_listed.text
+    assert staff_listed.json() == admin_listed.json()
+
+    no_inventory_staff_headers = await _ff_staff_headers(
+        async_client,
+        admin_headers,
+        inventory=False,
+    )
+    blocked_staff = await async_client.get(
+        "/operations/inventory-balances/monthly-snapshots",
+        headers=no_inventory_staff_headers,
+        params={"month": current_month.isoformat()},
+    )
+    assert blocked_staff.status_code == 403
+
+    seller_headers = await _seller_headers(async_client, admin_headers, seller_id)
+    blocked_seller = await async_client.get(
+        "/operations/inventory-balances/monthly-snapshots",
+        headers=seller_headers,
+        params={"month": current_month.isoformat()},
+    )
+    assert blocked_seller.status_code == 403
+
+
+@pytest.mark.asyncio
+async def test_monthly_stock_snapshot_concurrent_first_run_returns_persisted_slice(
+    async_client: AsyncClient,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    current_month = stock_direction_service.current_snapshot_month()
+    admin_headers, _seller_id, _sku, _warehouse_id, _location_id, product_id = (
+        await _seed_stocked_product(async_client)
+    )
+    original_list = stock_direction_service.list_monthly_snapshots
+    first_empty_reads = 0
+    first_empty_reads_lock = asyncio.Lock()
+    both_requests_reached_first_empty_read = asyncio.Event()
+
+    async def _wait_after_first_empty_read(
+        session: AsyncSession,
+        tenant_id: uuid.UUID,
+        month: date,
+    ) -> list[StockMonthlySnapshot]:
+        nonlocal first_empty_reads
+        rows = await original_list(session, tenant_id, month)
+        if rows:
+            return rows
+        async with first_empty_reads_lock:
+            first_empty_reads += 1
+            if first_empty_reads == 2:
+                both_requests_reached_first_empty_read.set()
+        await both_requests_reached_first_empty_read.wait()
+        return rows
+
+    monkeypatch.setattr(
+        stock_direction_service,
+        "list_monthly_snapshots",
+        _wait_after_first_empty_read,
+    )
+
+    first, second = await asyncio.gather(
+        async_client.post(
+            "/operations/inventory-balances/monthly-snapshots/run",
+            headers=admin_headers,
+            json={"month": current_month.isoformat()},
+        ),
+        async_client.post(
+            "/operations/inventory-balances/monthly-snapshots/run",
+            headers=admin_headers,
+            json={"month": current_month.isoformat()},
+        ),
+    )
+
+    assert first.status_code == 200, first.text
+    assert second.status_code == 200, second.text
+    assert len(first.json()) == 1
+    assert first.json() == second.json()
+    assert first.json()[0]["product_id"] == str(product_id)
+
+    listed = await async_client.get(
+        "/operations/inventory-balances/monthly-snapshots",
+        headers=admin_headers,
+        params={"month": current_month.isoformat()},
+    )
+    assert listed.status_code == 200, listed.text
+    assert listed.json() == first.json()
+
+
+@pytest.mark.asyncio
+async def test_monthly_stock_snapshot_historical_month_without_rows_fails_closed(
+    async_client: AsyncClient,
+) -> None:
+    historical_month = _previous_month(stock_direction_service.current_snapshot_month())
+    admin_headers, _seller_id, _sku, _warehouse_id, _location_id, _product_id = (
+        await _seed_stocked_product(async_client)
+    )
+
+    run = await async_client.post(
+        "/operations/inventory-balances/monthly-snapshots/run",
+        headers=admin_headers,
+        json={"month": historical_month.isoformat()},
+    )
+    assert run.status_code == 422
+    assert run.json()["detail"] == "monthly_snapshot_historical_empty"
+
+    listed = await async_client.get(
+        "/operations/inventory-balances/monthly-snapshots",
+        headers=admin_headers,
+        params={"month": historical_month.isoformat()},
+    )
+    assert listed.status_code == 200, listed.text
+    assert listed.json() == []
+
+
+@pytest.mark.asyncio
+async def test_monthly_stock_snapshot_empty_current_month_can_run_later(
+    async_client: AsyncClient,
+) -> None:
+    current_month = stock_direction_service.current_snapshot_month()
+    suffix = str(time.time_ns())
+    reg = await async_client.post(
+        "/auth/register",
+        json={
+            "organization_name": "Empty monthly snapshot",
+            "slug": f"empty-monthly-snapshot-{suffix}",
+            "admin_email": f"empty-monthly-snapshot-{suffix}@example.com",
+            "password": "password123",
+        },
+    )
+    assert reg.status_code == 200, reg.text
+    admin_headers = {"Authorization": f"Bearer {reg.json()['access_token']}"}
+
+    empty_run = await async_client.post(
+        "/operations/inventory-balances/monthly-snapshots/run",
+        headers=admin_headers,
+        json={"month": current_month.isoformat()},
+    )
+    assert empty_run.status_code == 422
+    assert empty_run.json()["detail"] == "monthly_snapshot_empty"
+
+    seller = await async_client.post(
+        "/sellers", headers=admin_headers, json={"name": "Late Seller"}
+    )
+    assert seller.status_code in (200, 201), seller.text
+    late_product = await async_client.post(
+        "/products",
+        headers=admin_headers,
+        json={
+            "name": "Late Product After Empty Run",
+            "sku_code": f"LATE-AFTER-EMPTY-{suffix}",
+            "seller_id": seller.json()["id"],
+        },
+    )
+    assert late_product.status_code in (200, 201), late_product.text
+
+    late_run = await async_client.post(
+        "/operations/inventory-balances/monthly-snapshots/run",
+        headers=admin_headers,
+        json={"month": current_month.isoformat()},
+    )
+    assert late_run.status_code == 200, late_run.text
+    assert [row["product_id"] for row in late_run.json()] == [late_product.json()["id"]]

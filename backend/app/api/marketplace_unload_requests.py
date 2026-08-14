@@ -510,6 +510,8 @@ async def _detail_with_packaging(
 def _map_mu_err(exc: MarketplaceUnloadError) -> HTTPException:
     if exc.code == "not_found":
         return HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="not_found")
+    if exc.code == "not_draft":
+        return HTTPException(status_code=status.HTTP_409_CONFLICT, detail="not_draft")
     if exc.code == "not_editable":
         return HTTPException(status_code=status.HTTP_409_CONFLICT, detail="not_editable")
     if exc.code == "bad_status":
@@ -605,6 +607,8 @@ def _map_pick_err(exc: MarketplaceUnloadPickError) -> HTTPException:
 def _map_box_err(exc: MarketplaceUnloadBoxError) -> HTTPException:
     if exc.code == "not_found":
         return HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="not_found")
+    if exc.code == "not_draft":
+        return HTTPException(status_code=status.HTTP_409_CONFLICT, detail="not_draft")
     if exc.code in (
         "not_editable",
         "open_box_exists",
@@ -1259,14 +1263,12 @@ async def delete_marketplace_unload_line(
     ],
 ) -> None:
     await _get_visible_request(session, user, request_id, credentials)
-    allow_ff_confirmed = user.role == FULFILLMENT_ADMIN
     try:
         await svc.delete_line(
             session,
             user.tenant_id,
             request_id,
             line_id,
-            allow_ff_confirmed=allow_ff_confirmed,
         )
     except MarketplaceUnloadError as exc:
         raise _map_mu_err(exc) from None

@@ -83,6 +83,8 @@ function workspace({
     blockers: [],
     orders,
     cargo_places: [],
+    boxes: [],
+    marking_pool: { required: 0, available: 0, shortage: 0, orders_without_code: [] },
     delivery_preflight: null,
     last_wb_sync_at: null,
     server_now: new Date().toISOString(),
@@ -154,16 +156,13 @@ test('fbs workspace: preflight and deliver', async ({ page }) => {
 
   await page.getByTestId('nav-ff-fbs').click()
   await expect(page.getByTestId('fbs-order-1')).toBeVisible()
-  await page.getByTestId('fbs-order-1').getByRole('button', { name: 'Продолжить работу' }).click()
+  await page.getByTestId('fbs-order-1').click()
   await expect(page.getByTestId('fbs-workspace')).toBeVisible()
-  await page.getByRole('tab', { name: 'Передача и статусы' }).click()
-  await page.getByRole('button', { name: 'Проверить готовность' }).click()
-  await expect(page.getByText('Поставка готова')).toBeVisible()
-  await page.getByRole('button', { name: 'Подтвердить передачу WB' }).click()
-  await page.getByRole('dialog', { name: 'Подтвердить передачу в WB?' }).getByRole('button', { name: 'Передать в WB' }).click()
+  await expect(page.getByTestId('fbs-boxes')).toBeVisible()
+  await page.getByRole('button', { name: 'Передать в WB' }).click()
 
-  await expect(page.getByText('WB подтвердил передачу поставки в доставку.')).toBeVisible()
-  expect(deliverBody?.confirmed_preflight_version).toBe('preflight-v1')
+  await expect(page.getByText('Поставка передана, QR получить не удалось')).toBeVisible()
+  expect(deliverBody?.confirmed_preflight_version).toBeUndefined()
   expect(deliverBody?.idempotency_key).toEqual(expect.any(String))
 })
 
@@ -241,7 +240,7 @@ test('fbs workspace: scan location then product', async ({ page }) => {
   )
 
   await page.getByTestId('nav-ff-fbs').click()
-  await page.getByTestId('fbs-order-1').getByRole('button', { name: 'Продолжить работу' }).click()
+  await page.getByTestId('fbs-order-1').click()
   await expect(page.getByTestId('fbs-workspace')).toBeVisible()
   await page.getByLabel('Штрихкод ячейки').fill('CELL-A-01')
   await page.getByRole('button', { name: 'Подтвердить ячейку' }).click()

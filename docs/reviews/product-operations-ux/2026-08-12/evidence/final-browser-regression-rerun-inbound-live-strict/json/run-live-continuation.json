@@ -1,0 +1,161 @@
+{
+  "browser_used": true,
+  "browser_surface": "standalone Playwright Chromium headless=false continuation on same clean qa-final.sqlite fixture",
+  "viewport_required": {
+    "width": 1280,
+    "height": 720
+  },
+  "ports": {
+    "backend": 18182,
+    "frontend": 5182
+  },
+  "routes": [
+    "/",
+    "/app/ff/reception",
+    "/seller/",
+    "/seller/documents",
+    "/seller/inbound/cfd99469-43f3-48b8-b5d9-c826c1ca768b"
+  ],
+  "clicks": [
+    "FF login email: fill ff-admin-final-inbound-1786666957465@example.com",
+    "FF login password: fill password123",
+    "FF login submit",
+    "FF sidebar: Reception for return",
+    "Open return inbound from queue",
+    "Enable return autoprint",
+    "Return scan WB barcode: fill wb-return-final-inbound-1786666957465",
+    "Return scan submit",
+    "Seller login email: fill seller-final-inbound-1786666957465@example.com",
+    "Seller login password: fill password123",
+    "Seller login submit",
+    "Seller sidebar: Documents",
+    "Open seller completed ordinary inbound fact-card"
+  ],
+  "screenshots": [
+    "/Users/deniscivkunov/Projects/WMS/.worktrees/product-operations-ux-20260812/docs/reviews/product-operations-ux/2026-08-12/evidence/final-browser-regression-rerun-inbound-live-strict/screenshots/13-return-queue-continuation.png",
+    "/Users/deniscivkunov/Projects/WMS/.worktrees/product-operations-ux-20260812/docs/reviews/product-operations-ux/2026-08-12/evidence/final-browser-regression-rerun-inbound-live-strict/screenshots/14-return-open-continuation.png",
+    "/Users/deniscivkunov/Projects/WMS/.worktrees/product-operations-ux-20260812/docs/reviews/product-operations-ux/2026-08-12/evidence/final-browser-regression-rerun-inbound-live-strict/screenshots/15-return-after-autoprint-continuation.png",
+    "/Users/deniscivkunov/Projects/WMS/.worktrees/product-operations-ux-20260812/docs/reviews/product-operations-ux/2026-08-12/evidence/final-browser-regression-rerun-inbound-live-strict/screenshots/16-seller-documents-continuation.png",
+    "/Users/deniscivkunov/Projects/WMS/.worktrees/product-operations-ux-20260812/docs/reviews/product-operations-ux/2026-08-12/evidence/final-browser-regression-rerun-inbound-live-strict/screenshots/17-seller-fact-card-continuation.png"
+  ],
+  "metrics": {
+    "13_return_queue": {
+      "href": "http://127.0.0.1:5182/app/ff/reception",
+      "title": "WMS · Фулфилмент",
+      "viewport": {
+        "width": 1280,
+        "height": 720
+      },
+      "scrollX": 0,
+      "documentScrollWidth": 1280,
+      "bodyScrollWidth": 1280,
+      "appRootScrollWidth": 1280,
+      "appRootClientWidth": 1280,
+      "bodyText": "Портал ФФ\nff-admin-final-inbound-1786666957465@example.com · администратор\n2\nВыйти\nДашборд\nОтгрузки\nFBS\nПриёмка\nСортировка\nУпаковка\nЯчейки\nСеллеры\nКаталог\nИнвентаризация\nЧестный знак\nНастройки\nПриёмка\n\nПриёмки до завершения поштучного пересчёта. После «Завершить пересчёт» заявка уходит в сортировку, остаток появляется у ФФ.\n\n№ документа\tСеллер\tСостав\tКороба\tСтатус\nВозврат № 000002\tQA Seller final-inbound-1786666957465\t1 поз. · от 1 ед.\t0 из 1\t\nПередано"
+    },
+    "14_return_open": {
+      "href": "http://127.0.0.1:5182/app/ff/reception",
+      "title": "WMS · Фулфилмент",
+      "viewport": {
+        "width": 1280,
+        "height": 720
+      },
+      "scrollX": 0,
+      "documentScrollWidth": 1280,
+      "bodyScrollWidth": 1280,
+      "appRootScrollWidth": 1280,
+      "appRootClientWidth": 1280,
+      "bodyText": "Портал ФФ\nff-admin-final-inbound-1786666957465@example.com · администратор\n2\nВыйти\nДашборд\nОтгрузки\nFBS\nПриёмка\nСортировка\nУпаковка\nЯчейки\nСеллеры\nКаталог\nИнвентаризация\nЧестный знак\nНастройки\nПриёмка\n\nПриёмки до завершения поштучного пересчёта. После «Завершить пересчёт» заявка уходит в сортировку, остаток появляется у ФФ.\n\n№ документа\tСеллер\tСостав\tКороба\tСтатус\nВозврат № 000002\tQA Seller final-inbound-1786666957465\t1 поз. · от 1 ед.\t0 из 1\t\nПередано\nДокумент\nПриёмка\n№000002\n\nТип: Возврат\n\nСеллер: QA Seller final-inbound-1786666957465\n\nПринято: 0 из 1\n\nКороба: 0 из 1\n\nРасхождения: 1 + короба\n\nДата приёмки (план) *\nDD.\nMM.\nYYYY\nДата приёмки (план) *\nПередано на склад\nЗавершить приёмку\nПечать накладной\nЗакрыть\nТовар\tГабариты\tПлан\tПринято\n\n\nQA Return Product\n\nSKU sku-return-final-inbound-1786666957465\nШК wb-return-final-inbound-1786666957465\n\t\n120×80×40 мм · 0.38 л\n\t\n\n1\n\n\t\n\n0\n\nНедостача 1\nСкан приёмки\n\nСкан штрихкода товара добавляет +1 к принятому количеству. Скан в короб — только в карточке короба.\n\nШтрихкод товара\nШтрихкод товара\nСкан\nДобавить факт\nПечатать ШК при скане\nЗагрузить по накладной\nСоздать короб\nЗавершить приёмку\nЕсть расхождения с планом — при завершении потребуется подтверждение."
+    },
+    "15_return_after_autoprint": {
+      "href": "http://127.0.0.1:5182/app/ff/reception",
+      "title": "WMS · Фулфилмент",
+      "viewport": {
+        "width": 1280,
+        "height": 720
+      },
+      "scrollX": 0,
+      "documentScrollWidth": 1280,
+      "bodyScrollWidth": 1280,
+      "appRootScrollWidth": 1280,
+      "appRootClientWidth": 1280,
+      "bodyText": "Портал ФФ\nff-admin-final-inbound-1786666957465@example.com · администратор\n2\nВыйти\nДашборд\nОтгрузки\nFBS\nПриёмка\nСортировка\nУпаковка\nЯчейки\nСеллеры\nКаталог\nИнвентаризация\nЧестный знак\nНастройки\nПриёмка\n\nПриёмки до завершения поштучного пересчёта. После «Завершить пересчёт» заявка уходит в сортировку, остаток появляется у ФФ.\n\n№ документа\tСеллер\tСостав\tКороба\tСтатус\nВозврат № 000002\tQA Seller final-inbound-1786666957465\t1 поз. · от 1 ед.\t0 из 1\t\nПередано\nДокумент\nПриёмка\n№000002\n\nТип: Возврат\n\nСеллер: QA Seller final-inbound-1786666957465\n\nПринято: 1 из 1\n\nКороба: 0 из 1\n\nРасхождения: 0 + короба\n\nДата приёмки (план) *\nDD.\nMM.\nYYYY\nДата приёмки (план) *\nПриёмка\nЗавершить приёмку\nПечать накладной\nЗакрыть\nТовар\tГабариты\tПлан\tПринято\n\n\nQA Return Product\n\nSKU sku-return-final-inbound-1786666957465\nШК wb-return-final-inbound-1786666957465\n\t\n120×80×40 мм · 0.38 л\n\t\n\n1\n\n\t\n\n1\n\nСкан приёмки\n\nСкан штрихкода товара добавляет +1 к принятому количеству. Скан в короб — только в карточке короба.\n\nШтрихкод товара\nШтрихкод товара\nСкан\nДобавить факт\nПечатать ШК при скане\nЗагрузить по накладной\nСоздать короб\nЗавершить приёмку"
+    },
+    "16_seller_documents": {
+      "href": "http://127.0.0.1:5182/seller/documents",
+      "title": "WMS · Селлер",
+      "viewport": {
+        "width": 1280,
+        "height": 720
+      },
+      "scrollX": 0,
+      "documentScrollWidth": 1280,
+      "bodyScrollWidth": 1280,
+      "appRootScrollWidth": 1280,
+      "appRootClientWidth": 1280,
+      "bodyText": "Портал селлера\nseller-final-inbound-1786666957465@example.com · fulfillment_seller\n0\nВыйти\nДокументы\nТовары\nЧестный знак\nНастройки\nДокументы\n\nПоставки на ФФ и отгрузки на маркетплейс\n\nСоздать акт расхождений\nПоставка\nВозврат\nСоздать заявку на поставку\nСоздать отгрузку на МП\nТип документа\nВсе\nТип документа\nСортировка\nДата (новые сверху)\nСортировка\nТип\tДата\tСтатус\tСтрок\tДействия\nВозврат\t—\tПринимается на складе\t1\t\n\n—\n\n\nПоставка\t—\tВ сортировке\t1\t\n\n—"
+    },
+    "seller_fact_readonly_counts": {
+      "draftForm": 0,
+      "addProducts": 0,
+      "submitWarehouse": 0,
+      "saveDraft": 0,
+      "deleteLine": 0
+    },
+    "seller_fact_raw_noise_hits": [],
+    "17_seller_fact_card": {
+      "href": "http://127.0.0.1:5182/seller/inbound/cfd99469-43f3-48b8-b5d9-c826c1ca768b",
+      "title": "WMS · Селлер",
+      "viewport": {
+        "width": 1280,
+        "height": 720
+      },
+      "scrollX": 0,
+      "documentScrollWidth": 1280,
+      "bodyScrollWidth": 1280,
+      "appRootScrollWidth": 1280,
+      "appRootClientWidth": 1280,
+      "bodyText": "Портал селлера\nseller-final-inbound-1786666957465@example.com · fulfillment_seller\n0\nВыйти\nДокументы\nТовары\nЧестный знак\nНастройки\nКарточка приёмки · Поставка\n\nПоставка\n\n·\n\nВ сортировке\n\n·\n\nQA WH final-inbound-1786666957465 (wh-final-inbound-1786666957465)\n\nИтог приемки\n\nЗаявлено 5 · принято 3\n\nЕсть расхождения\n\nЧто не так\n\nНедостача 2\n\n·\n\nКороба: план 1 · факт 0\n\nТовар\tЗаявлено\tПринято\tИтог\t\n\n\nQA Ordinary Product\n\nАртикул sku-ordinary-final-inbound-1786666957465\n\t5\t3\tНедостача 2\t"
+    }
+  },
+  "print": {
+    "return_autoprint": {
+      "payload": "QA Return Product\nwb-return-final-inbound-1786666957465",
+      "hasReturnBarcode": true,
+      "hasProductName": true,
+      "note": "Return autoprint capture stores product name plus WB barcode for the thermal label path."
+    }
+  },
+  "observations": [
+    "return operation chip: Возврат",
+    "return scan fact readback: 1",
+    "seller fact card heading: Карточка приёмки",
+    "seller fact summary result: Итог приемки",
+    "seller discrepancy summary: Есть расхождения",
+    "seller discrepancy readback: Недостача 2",
+    "seller expected qty: 5",
+    "seller actual qty: 3",
+    "seller line discrepancy: Недостача 2",
+    "Return and seller continuation completed with live Chromium 1280x720. Product failure remains ordinary completion dialog not closing after successful completion."
+  ],
+  "blockers": [
+    "Ordinary inbound completion left the discrepancy dialog visibly open after successful complete-receiving; see 08-ordinary-completed-final.png."
+  ],
+  "errors": [],
+  "data": {
+    "suffix": "final-inbound-1786666957465",
+    "adminEmail": "ff-admin-final-inbound-1786666957465@example.com",
+    "sellerEmail": "seller-final-inbound-1786666957465@example.com",
+    "sellerId": "bf7972ae-4d4a-4cd2-b3fe-ff577a9c9855",
+    "warehouseId": "52808613-6ac8-47cd-b7df-6e4688b3f504",
+    "locationId": "f0f9abb6-dfb6-4358-b809-83f56461fa20",
+    "ordinaryProductId": "eb6ea049-bc21-42a3-b81e-d856d45e62ba",
+    "returnProductId": "c4fdaa25-dd9b-4bc3-8c32-116897d5cf4f",
+    "ordinaryInboundId": "cfd99469-43f3-48b8-b5d9-c826c1ca768b",
+    "returnInboundId": "b456ca6e-0aae-498e-a0de-5d30920ffcae",
+    "ordinarySku": "sku-ordinary-final-inbound-1786666957465",
+    "ordinaryBarcode": "wb-ordinary-final-inbound-1786666957465",
+    "returnSku": "sku-return-final-inbound-1786666957465",
+    "returnBarcode": "wb-return-final-inbound-1786666957465"
+  }
+}

@@ -121,6 +121,16 @@ async def test_seller_owner_creates_staff_user_and_updates_permissions(
         headers=staff_headers,
     )
     assert staff_list_forbidden.status_code == 403
+    products_forbidden = await async_client.get(
+        "/products",
+        headers=staff_headers,
+    )
+    assert products_forbidden.status_code == 403
+    inventory_forbidden = await async_client.get(
+        "/operations/inventory-balances/summary",
+        headers=staff_headers,
+    )
+    assert inventory_forbidden.status_code == 403
 
     patched = await async_client.patch(
         f"/auth/seller-staff-accounts/{staff_id}/permissions",
@@ -136,6 +146,17 @@ async def test_seller_owner_creates_staff_user_and_updates_permissions(
     assert patched.status_code == 200, patched.text
     assert patched.json()["permissions"]["staff"] is True
     assert patched.json()["permissions"]["settings"] is True
+
+    products_allowed = await async_client.get(
+        "/products",
+        headers=staff_headers,
+    )
+    assert products_allowed.status_code == 200, products_allowed.text
+    inventory_allowed = await async_client.get(
+        "/operations/inventory-balances/summary",
+        headers=staff_headers,
+    )
+    assert inventory_allowed.status_code == 200, inventory_allowed.text
 
     staff_list_allowed = await async_client.get(
         "/auth/seller-staff-accounts",

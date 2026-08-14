@@ -432,6 +432,17 @@ export function MarkingPrintDialog({ open, reprint, ctx, busy, onBusyChange, onC
         : (ctx?.qtyNeedPack ?? 0)
   const totalWbLabels = resolveManualWbLabelCount(wbBarcodeQty, printDoubleWbBarcode)
   const available = ctx?.markingAvailable ?? 0
+  const quantitySummaryText = requiresHonestSign
+    ? effectiveReprint
+      ? fbsTapeMode
+        ? `К перепечатке: ${qtyNeed}`
+        : `Выбрано для перепечатки: ${selectedReprintCodeIds.length} из ${ctx?.qtyMarkingPrinted ?? 0}`
+      : isCatalogSource
+        ? `К печати: ${catalogPrintQty} · Доступно в пуле: ${available}`
+        : `Нужно: ${qtyNeed} · Доступно в пуле: ${available}`
+    : isCatalogSource
+      ? `К печати: ${totalWbLabels}`
+      : `К упаковке: ${qtyNeed}`
   const shortage = requiresHonestSign && !effectiveReprint && available < qtyNeed ? qtyNeed - available : 0
   const canPrintCount = effectiveReprint
     ? selectedReprintCodeIds.length
@@ -929,15 +940,7 @@ export function MarkingPrintDialog({ open, reprint, ctx, busy, onBusyChange, onC
                   {ctx.documentNumber ? ` · ${ctx.documentNumber}` : ''}
                 </Typography>
                 <Typography variant="body2" data-testid="marking-print-qty">
-                  {requiresHonestSign
-                    ? effectiveReprint
-                      ? fbsTapeMode
-                        ? `К перепечатке: ${qtyNeed}`
-                        : `Выбрано для перепечатки: ${selectedReprintCodeIds.length} из ${ctx.qtyMarkingPrinted}`
-                      : isCatalogSource
-                        ? `К печати: ${catalogPrintQty} · Доступно в пуле: ${available}`
-                        : `Нужно: ${qtyNeed} · Доступно в пуле: ${available}`
-                    : `К упаковке: ${qtyNeed}`}
+                  {quantitySummaryText}
                 </Typography>
               </Box>
             ) : null}

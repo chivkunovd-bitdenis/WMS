@@ -1,3 +1,7 @@
+import { randomUUID } from 'node:crypto';
+import { execFileSync } from 'node:child_process';
+import { fileURLToPath } from 'node:url';
+
 import { test, expect } from '@playwright/test';
 
 import {
@@ -6,6 +10,19 @@ import {
   waitForPutOk,
 } from './api-waits';
 import { loginAsSeller, openFulfillmentRegistration } from './auth-flow';
+
+const e2eDbPath = fileURLToPath(new URL('../../backend/e2e.db', import.meta.url));
+
+function sqliteUuid(id: string): string {
+  return id.replaceAll('-', '').toLowerCase();
+}
+
+function allowSellerShop(userId: string, sellerId: string, enabled = false): void {
+  execFileSync('sqlite3', [
+    e2eDbPath,
+    `insert into seller_shop_delegations (id, user_id, target_seller_id, enabled) values ('${sqliteUuid(randomUUID())}', '${sqliteUuid(userId)}', '${sqliteUuid(sellerId)}', ${enabled ? 1 : 0})`,
+  ]);
+}
 
 // TC-S12-001 — админ создаёт аккаунт селлера, привязанный к селлеру.
 // TC-S12-002 — вход селлера: дашборд показывает контекст селлера.
@@ -82,7 +99,7 @@ test('admin creates seller user; seller sees filtered catalog and inbound', asyn
   await page.getByTestId('nav-seller-documents').click();
   await expect(page.getByTestId('seller-documents-table')).toBeVisible();
   await page.getByTestId('seller-create-inbound').click();
-  await page.waitForURL('**/seller/inbound/new');
+  await page.waitForURL('**/seller/inbound/new**');
   await waitForPostOk(page, baseIn, (u) => !u.includes('/lines') && !u.includes('/submit'));
   await expect(page.getByTestId('seller-inbound-draft-form')).toBeVisible();
   await page.getByTestId('seller-inbound-add-products').click();
@@ -131,7 +148,9 @@ test('seller shop manager switches allowed seller without seeing forbidden produ
     data: { name: 'Home Scope Shop', email: managerEmail, password },
   });
   expect(home.ok()).toBeTruthy();
-  const homeSellerId = String(((await home.json()) as { seller_id: string }).seller_id);
+  const homeJson = (await home.json()) as { seller_id: string; user_id: string };
+  const homeSellerId = String(homeJson.seller_id);
+  const homeUserId = String(homeJson.user_id);
   const allowed = await page.request.post('/api/sellers', {
     headers: h,
     data: { name: 'Allowed Scope Shop' },
@@ -144,6 +163,8 @@ test('seller shop manager switches allowed seller without seeing forbidden produ
   });
   expect(forbidden.ok()).toBeTruthy();
   const forbiddenSellerId = String(((await forbidden.json()) as { id: string }).id);
+
+  allowSellerShop(homeUserId, allowedSellerId, false);
 
   for (const [sellerId, sku, name] of [
     [homeSellerId, skuHome, 'Home Scope Product'],
@@ -167,6 +188,9 @@ test('seller shop manager switches allowed seller without seeing forbidden produ
   await page.getByTestId('logout').click();
   await loginAsSeller(page, managerEmail, password, { firstTime: false });
   await expect(page.getByTestId('seller-shops-panel')).toBeVisible();
+  await expect(page.getByTestId(`seller-shop-check-${allowedSellerId}`)).toBeVisible();
+  await expect(page.getByTestId(`seller-shop-check-${forbiddenSellerId}`)).toHaveCount(0);
+  await expect(page.getByTestId('seller-shops-checklist')).not.toContainText('Forbidden Scope Shop');
 
   await page.getByTestId('nav-seller-products').click();
   await expect(page.getByTestId('seller-products-table')).toBeVisible();

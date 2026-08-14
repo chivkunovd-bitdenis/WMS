@@ -6,6 +6,11 @@
 
 Важно: предыдущие пометки `browser_qa_passed` были признаны недостоверными для текущего строгого протокола. Ниже фиксируется фактическое состояние gates на текущую итерацию; фича считается завершенной только после отдельного Product/UX verdict, Code Review и живого Browser Product QA.
 
+Обновление 2026-08-13: для release-gate решения эта матрица superseded
+документом `STRICT_PRODUCT_RECERT_AUDIT_RU.md`. Старые `BROWSER_PRODUCT_QA_PASSED`
+нельзя считать закрытием фичи, пока strict Product / UX Agent заново не докажет
+живой product browser pass по уточнённому handoff-контракту.
+
 ## Сводная матрица gate-статусов
 
 Эта таблица явно отделяет первичный или повторный Product/UX gate от разработки,
@@ -27,7 +32,7 @@ code review и живого browser QA. `Product/UX passed` означает, ч
 | F11 Упрощённый FF каталог | BA_READY | PRODUCT_APPROVED_FOR_DEV | DEV_DONE | CODE_REVIEW_PASSED | BROWSER_PRODUCT_QA_PASSED | integration_pending |
 | F12 Monthly snapshot | BA_READY | PRODUCT_APPROVED_FOR_MINIMAL_UI | DEV_DONE | CODE_REVIEW_PASSED | BROWSER_PRODUCT_QA_PASSED | integration_pending |
 | F13 Доступ Виталика | BA_READY | PRODUCT_APPROVED_EXISTING_IMPL | DEV_REWORK_DONE | CODE_REVIEW_PASSED | BROWSER_PRODUCT_QA_PASSED | integration_pending |
-| F14 Сотрудники и права | BA_READY | PRODUCT_APPROVED_AFTER_REWORK | pending | pending | pending | ready_for_dev; product rereview artifact: `evidence/f14-product-rereview/F14_PRODUCT_REVIEW_RU.md` |
+| F14 Сотрудники и права | BA_READY | PRODUCT_APPROVED_AFTER_REWORK | DEV_REWORK_DONE | CODE_REVIEW_PASSED | BROWSER_PRODUCT_QA_PASSED | integration_pending |
 | F15 Удаление только черновиков | BA_READY | PRODUCT_APPROVED_FOR_DEV | DEV_DONE | CODE_REVIEW_PASSED | BROWSER_PRODUCT_QA_PASSED | integration_pending |
 | F16 nmID по-русски | BA_READY | PRODUCT_APPROVED_AFTER_REWORK | DEV_DONE | CODE_REVIEW_PASSED | BROWSER_PRODUCT_QA_PASSED | integration_pending |
 | F17 Единый печатный документ | BA_READY | PRODUCT_APPROVED_EXISTING_IMPL | DEV_DONE | CODE_REVIEW_PASSED | BROWSER_PRODUCT_QA_PASSED | integration_pending |
@@ -202,12 +207,15 @@ tests_run: `test_seller_shop_scope.py` previous backend evidence; `seller-cabine
 
 ## F14. Сотрудники селлера и ФФ
 
-status: ba_ready_after_rework, product_approved_after_rework, dev_pending, code_review_pending, browser_qa_pending
+status: ba_ready_after_rework, product_approved_after_rework, dev_rework_done, code_review_passed, browser_qa_passed, integration_pending
 business_goal: управлять несколькими пользователями кабинета и правами.
 main_real_world_scenario: владелец селлера создаёт сотрудника и назначает права на документы/товары/ЧЗ/настройки/сотрудников.
 ba_rework_artifact: `evidence/f14-ba-rework/F14_BA_REWORK_RU.md`
 product_review_result: PRODUCT_APPROVED_AFTER_REWORK; repeat Product/UX gate passed by BA rework artifact, dev can start as one atomic F14 slice; dev/code/browser remain pending. Artifact: `evidence/f14-product-rereview/F14_PRODUCT_REVIEW_RU.md`.
-tests_run: `test_seller_staff_and_delete_drafts.py`, `test_staff_users.py`, `ff-staff-users.spec.ts`, `seller-staff-and-delete-drafts.spec.ts`.
+dev_result: DEV_REWORK_DONE; artifact `evidence/f14-dev/F14_DEV_RESULT_RU.md`.
+tests_run: `python3 -m pytest backend/tests/test_staff_users.py backend/tests/test_seller_staff_and_delete_drafts.py backend/tests/test_staff_packaging_billing.py -q`; `npm run build`; `npx playwright test tests-e2e/ff-staff-users.spec.ts tests-e2e/ff-staff-packaging-billing.spec.ts --project=chromium --reporter=line`.
+code_review_result: CODE_REVIEW_PASSED; artifact `evidence/f14-code-review/F14_CODE_REVIEW_RU.md`.
+browser_qa_result: BROWSER_PRODUCT_QA_PASSED; artifact `evidence/f14-browser-product-qa/F14_BROWSER_PRODUCT_QA_RU.md`.
 
 ## F15. Удаление только черновиков
 

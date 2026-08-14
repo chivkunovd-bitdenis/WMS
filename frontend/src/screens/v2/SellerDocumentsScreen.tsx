@@ -4,6 +4,11 @@ import {
   Alert,
   Box,
   Button,
+  Dialog,
+  DialogActions,
+  DialogContent,
+  DialogContentText,
+  DialogTitle,
   FormControl,
   InputLabel,
   MenuItem,
@@ -114,6 +119,7 @@ export function SellerDocumentsScreen({
   const [sort, setSort] = useState<'date_desc' | 'date_asc'>('date_desc')
   const [mpDialogId, setMpDialogId] = useState<string | null>(null)
   const [deleteBusyKey, setDeleteBusyKey] = useState<string | null>(null)
+  const [deleteConfirmRow, setDeleteConfirmRow] = useState<DocumentRow | null>(null)
   const [deleteError, setDeleteError] = useState<string | null>(null)
   const [deleteOk, setDeleteOk] = useState<string | null>(null)
 
@@ -264,7 +270,7 @@ export function SellerDocumentsScreen({
             variant="contained"
             data-testid="seller-create-inbound"
             disabled={busy}
-            onClick={() => navigate(`/inbound/new?operation=${createOperationType}`)}
+            onClick={() => navigate(`../inbound/new?operation=${createOperationType}`)}
             sx={{ alignSelf: { xs: 'stretch', sm: 'auto' } }}
           >
             {createOperationType === 'return' ? 'Создать возврат' : 'Создать заявку на поставку'}
@@ -348,7 +354,7 @@ export function SellerDocumentsScreen({
                 }}
                 onClick={() => {
                   if (r.type === 'inbound') {
-                    navigate(`/inbound/${r.id}`)
+                    navigate(`../inbound/${r.id}`)
                   } else if (r.type === 'mp_unload') {
                     setMpDialogId(r.id)
                   }
@@ -374,7 +380,9 @@ export function SellerDocumentsScreen({
                       data-testid="seller-delete-draft"
                       onClick={(e) => {
                         e.stopPropagation()
-                        void deleteDraftDocument(r)
+                        setDeleteError(null)
+                        setDeleteOk(null)
+                        setDeleteConfirmRow(r)
                       }}
                     >
                       Удалить
@@ -399,6 +407,44 @@ export function SellerDocumentsScreen({
           </TableBody>
         </Table>
       </TableContainer>
+
+      {token ? (
+        <Dialog
+          open={deleteConfirmRow !== null}
+          onClose={() => setDeleteConfirmRow(null)}
+          data-testid="seller-delete-draft-confirm-dialog"
+        >
+          <DialogTitle>Удалить черновик?</DialogTitle>
+          <DialogContent>
+            <DialogContentText>
+              Черновик исчезнет из списка. Документы в работе остаются в истории.
+            </DialogContentText>
+          </DialogContent>
+          <DialogActions>
+            <Button
+              onClick={() => setDeleteConfirmRow(null)}
+              data-testid="seller-delete-draft-cancel"
+            >
+              Отмена
+            </Button>
+            <Button
+              color="error"
+              variant="contained"
+              onClick={() => {
+                const row = deleteConfirmRow
+                if (!row) {
+                  return
+                }
+                setDeleteConfirmRow(null)
+                void deleteDraftDocument(row)
+              }}
+              data-testid="seller-delete-draft-confirm"
+            >
+              Удалить
+            </Button>
+          </DialogActions>
+        </Dialog>
+      ) : null}
 
       {token ? (
         <SellerMarketplaceUnloadDialog

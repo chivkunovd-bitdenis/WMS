@@ -843,26 +843,32 @@ export function SellerProductsStockScreen({
             tableLayout: 'fixed',
             '& .MuiTableCell-root': {
               px: 1,
-              py: 0.5,
+              py: 0.375,
               overflow: 'hidden',
               verticalAlign: 'middle',
+            },
+            '& .MuiTypography-root': {
+              lineHeight: 1.15,
             },
             '& .MuiTableCell-head': {
               fontWeight: 600,
               lineHeight: 1.2,
               whiteSpace: 'normal',
             },
+            '& .MuiButton-sizeSmall': {
+              minHeight: 24,
+              lineHeight: 1,
+            },
           }}
         >
           <colgroup>
             <col style={{ width: '4%' }} />
             <col style={{ width: '28%' }} />
-            <col style={{ width: '13%' }} />
-            <col style={{ width: '14%' }} />
-            <col style={{ width: '12%' }} />
             <col style={{ width: '15%' }} />
-            <col style={{ width: '8%' }} />
-            <col style={{ width: '6%' }} />
+            <col style={{ width: '16%' }} />
+            <col style={{ width: '12%' }} />
+            <col style={{ width: '13%' }} />
+            <col style={{ width: '12%' }} />
           </colgroup>
           <TableHead>
             <TableRow>
@@ -877,12 +883,11 @@ export function SellerProductsStockScreen({
                 />
               </TableCell>
               <TableCell>Товар</TableCell>
-              <TableCell>WB / ШК</TableCell>
+              <TableCell>Артикул WB</TableCell>
               <TableCell align="right">Остаток</TableCell>
               <TableCell>FBS-пул</TableCell>
               <TableCell>Публикация WB</TableCell>
               <TableCell>ТЗ / ЧЗ</TableCell>
-              <TableCell>Действия</TableCell>
             </TableRow>
           </TableHead>
           <TableBody>
@@ -892,7 +897,7 @@ export function SellerProductsStockScreen({
                 selected={selectedProductIds.has(p.id)}
                 data-testid="seller-product-row"
                 key={p.id}
-                sx={{ height: 64 }}
+                sx={{ height: 68 }}
               >
                 <TableCell padding="checkbox">
                   <Checkbox
@@ -928,34 +933,48 @@ export function SellerProductsStockScreen({
                 </TableCell>
                 <TableCell>
                   <Stack spacing={0.25} sx={{ minWidth: 0 }}>
-                    <Typography variant="body2" noWrap>
+                    <Typography variant="body2" title={String(p.wb_nm_id ?? '—')} noWrap>
                       {p.wb_nm_id ?? '—'}
                     </Typography>
-                    <Typography variant="caption" color="text.secondary" noWrap>
-                      {p.wb_primary_barcode ?? (p.wb_barcodes[0] ?? '—')}
-                    </Typography>
+                    {p.wb_primary_barcode || p.wb_barcodes[0] ? (
+                      <Typography
+                        variant="caption"
+                        color="text.secondary"
+                        title={p.wb_primary_barcode ?? p.wb_barcodes[0]}
+                        noWrap
+                      >
+                        ШК {p.wb_primary_barcode ?? p.wb_barcodes[0]}
+                      </Typography>
+                    ) : null}
                   </Stack>
                 </TableCell>
                 <TableCell align="right">
-                  <Stack spacing={0.25} sx={{ minWidth: 0 }}>
-                    <Typography variant="body2" data-testid="seller-stock-in-storage" noWrap>
-                      {p.stock_in_storage}
+                  <Stack spacing={0.15} sx={{ minWidth: 0, alignItems: 'flex-end' }}>
+                    <Typography
+                      variant="caption"
+                      data-testid="seller-stock-in-storage"
+                      title={`В ячейках ${p.stock_in_storage}`}
+                      noWrap
+                    >
+                      В ячейках {p.stock_in_storage}
                     </Typography>
                     <Typography
                       variant="caption"
                       color="text.secondary"
                       data-testid="seller-stock-on-hand"
+                      title={`На ФФ ${p.stock_on_hand}`}
                       noWrap
                     >
-                      {p.stock_on_hand}
+                      На ФФ {p.stock_on_hand}
                     </Typography>
                     <Typography
                       variant="caption"
                       color="text.secondary"
                       data-testid="seller-stock-free-fbo"
+                      title={`Свободный FBO ${p.stock_free_fbo}`}
                       noWrap
                     >
-                      {p.stock_free_fbo}
+                      Свободный FBO {p.stock_free_fbo}
                     </Typography>
                   </Stack>
                 </TableCell>
@@ -973,11 +992,13 @@ export function SellerProductsStockScreen({
                     <Button
                       size="small"
                       variant="outlined"
+                      aria-label="Настроить FBS-пул"
+                      title="Настроить FBS-пул"
                       sx={{ alignSelf: 'flex-start', width: 44, minWidth: 44, px: 0 }}
                       onClick={() => void openDirections(p.id)}
                       data-testid={`seller-stock-directions-toggle-${p.id}`}
                     >
-                      FBS
+                      Пул
                     </Button>
                   </Stack>
                 </TableCell>
@@ -1042,14 +1063,13 @@ export function SellerProductsStockScreen({
                     <Typography variant="caption" color="text.secondary" noWrap>
                       {p.requires_honest_sign ? 'ЧЗ нужен' : 'ЧЗ нет'}
                     </Typography>
-                  </Stack>
-                </TableCell>
-                <TableCell sx={{ minWidth: 0 }}>
-                  <Stack spacing={0.5} sx={{ alignItems: 'flex-start', minWidth: 0 }}>
                     <Button
                       size="small"
+                      variant="outlined"
                       onClick={() => openPackagingEdit(p)}
                       data-testid={`seller-packaging-edit-${p.id}`}
+                      aria-label="Редактировать ТЗ"
+                      title="Редактировать ТЗ"
                       sx={{ width: 36, minWidth: 36, px: 0 }}
                     >
                       ТЗ
@@ -1060,7 +1080,7 @@ export function SellerProductsStockScreen({
             ))}
             {rows.length === 0 ? (
               <TableRow>
-                <TableCell colSpan={8}>
+                <TableCell colSpan={7}>
                   <Typography variant="body2" color="text.secondary">
                     Пока нет товаров.
                   </Typography>

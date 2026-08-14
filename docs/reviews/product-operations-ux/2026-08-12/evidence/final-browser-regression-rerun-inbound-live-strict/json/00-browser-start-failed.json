@@ -1,0 +1,14 @@
+{
+  "clicks": [],
+  "routes": [],
+  "screenshots": [],
+  "blockers": [
+    "browser_start_failed: Error: IAB visibility is not supported in a subagent thread\n    at iC (/Users/deniscivkunov/.codex/plugins/cache/openai-bundled/browser/26.803.61601/scripts/browser-client.mjs:928:11351)\n    at Jo.executeAgentCommand (/Users/deniscivkunov/.codex/plugins/cache/openai-bundled/browser/26.803.61601/scripts/browser-client.mjs:4095:2709)\n    at process.processTicksAndRejections (node:internal/process/task_queues:104:5)\n    at async Jo.send (/Users/deniscivkunov/.codex/plugins/cache/openai-bundled/browser/26.803.61601/scripts/browser-client.mjs:926:523)\n    at async xo.new (/Users/deniscivkunov/.codex/plugins/cache/openai-bundled/browser/26.803.61601/scripts/browser-client.mjs:912:170)\n    at async /Users/deniscivkunov/Desktop/WMS/.node_repl_cell_3.mjs:32:22"
+  ],
+  "metrics": {},
+  "printHtml": {},
+  "data": {},
+  "observations": [],
+  "browser_visible_set": true,
+  "viewport_set": true
+}

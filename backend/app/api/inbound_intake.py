@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import uuid
 from datetime import date
-from typing import Annotated
+from typing import Annotated, Literal
 
 from fastapi import APIRouter, Depends, File, Form, HTTPException, Response, UploadFile, status
 from pydantic import BaseModel, Field
@@ -120,6 +120,7 @@ class InboundReceivingScanBody(BaseModel):
 class InboundReceivingLineBody(BaseModel):
     product_id: uuid.UUID
     actual_qty: int = Field(default=1, ge=1, le=1_000_000_000)
+    source: Literal["seller_catalog", "manual_created"] = "seller_catalog"
 
 
 class InboundBoxLineQuantityBody(BaseModel):
@@ -302,6 +303,7 @@ def _map_inbound_svc_err(exc: InboundIntakeError) -> HTTPException:
         "storage_not_assigned",
         "lines_missing_storage",
         "product_not_on_request",
+        "product_not_in_seller_catalog",
         "product_seller_mismatch",
         "mixed_seller_lines",
         "qty_exceeds_accepted",
@@ -838,6 +840,7 @@ async def add_received_product_line(
             request_id,
             product_id=body.product_id,
             actual_qty=body.actual_qty,
+            allow_manual_product=body.source == "manual_created",
         )
     except InboundIntakeError as exc:
         raise _map_inbound_svc_err(exc) from None

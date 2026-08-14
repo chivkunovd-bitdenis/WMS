@@ -8,6 +8,7 @@ from sqlalchemy import and_, case, delete, func, or_, select, update
 from sqlalchemy.dialects.postgresql import insert as postgresql_insert
 from sqlalchemy.dialects.sqlite import insert as sqlite_insert
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import selectinload
 from sqlalchemy.sql.dml import Insert
 
 from app.models.fbs_order import FbsOrderReservation
@@ -512,6 +513,7 @@ async def list_balances_at_location(
             InventoryBalance.tenant_id == tenant_id,
             InventoryBalance.storage_location_id == storage_location_id,
         )
+        .options(selectinload(Product.seller))
         .order_by(Product.sku_code)
     )
     if seller_product_owner_id is not None:
@@ -665,6 +667,50 @@ async def apply_packaging_convert(
     )
     if updated_balance_id is None:
         msg = "insufficient_unpacked"
+        raise ValueError(msg)
+
+
+async def reverse_packaging_convert(
+    session: AsyncSession,
+    *,
+    tenant_id: uuid.UUID,
+    product_id: uuid.UUID,
+    storage_location_id: uuid.UUID,
+    quantity: int,
+) -> None:
+    """Вернуть qty из упаковано в не упаковано в той же ячейке."""
+    if quantity < 1:
+        msg = "quantity must be positive"
+        raise ValueError(msg)
+    loc = await session.get(StorageLocation, storage_location_id)
+    if loc is None or loc.tenant_id != tenant_id:
+        msg = "storage location not found"
+        raise ValueError(msg)
+    prod = await session.get(Product, product_id)
+    if prod is None or prod.tenant_id != tenant_id:
+        msg = "product not found"
+        raise ValueError(msg)
+    unpacked = InventoryBalance.quantity_unpacked
+    packed = InventoryBalance.quantity_packed
+    updated_balance_id = await session.scalar(
+        update(InventoryBalance)
+        .where(
+            InventoryBalance.tenant_id == tenant_id,
+            InventoryBalance.product_id == product_id,
+            InventoryBalance.storage_location_id == storage_location_id,
+            packed >= quantity,
+        )
+        .values(
+            quantity_unpacked=unpacked + quantity,
+            quantity_packed=packed - quantity,
+            quantity=unpacked + packed,
+            updated_at=datetime.now(UTC),
+        )
+        .returning(InventoryBalance.id)
+        .execution_options(synchronize_session=False)
+    )
+    if updated_balance_id is None:
+        msg = "insufficient_packed"
         raise ValueError(msg)
 
 

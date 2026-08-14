@@ -775,7 +775,13 @@ export function FfSuppliesShipmentsPage({
   }
 
   const createBox = async () => {
-    if (!token || !authHeaders || docModal !== 'marketplace_unload' || !docModalId) {
+    if (
+      !token ||
+      !authHeaders ||
+      docModal !== 'marketplace_unload' ||
+      !docModalId ||
+      !canUseMpBoxOperationalControls
+    ) {
       return
     }
     const count = Number(boxBatchCount)
@@ -817,7 +823,13 @@ export function FfSuppliesShipmentsPage({
     barcode: string,
     allowOverPlan: boolean,
   ): Promise<'ok' | 'over_plan' | 'error'> => {
-    if (!token || !authHeaders || docModal !== 'marketplace_unload' || !docModalId) {
+    if (
+      !token ||
+      !authHeaders ||
+      docModal !== 'marketplace_unload' ||
+      !docModalId ||
+      !canUseMpBoxOperationalControls
+    ) {
       return 'error'
     }
     setModalBusy(true)
@@ -868,6 +880,9 @@ export function FfSuppliesShipmentsPage({
   }
 
   const requestAttachBoxScan = (rawInput?: string) => {
+    if (!canUseMpBoxOperationalControls) {
+      return
+    }
     const raw = (rawInput ?? scanBarcode).trim()
     if (!raw) {
       setModalError('Введите штрихкод готового короба (WHB-…).')
@@ -922,6 +937,10 @@ export function FfSuppliesShipmentsPage({
 
   const openBoxMenu = (event: MouseEvent<HTMLElement>, boxId: string) => {
     event.stopPropagation()
+    if (!canUseMpBoxDestructiveControls) {
+      closeBoxMenu()
+      return
+    }
     setBoxMenuAnchor(event.currentTarget)
     setBoxMenuTargetId(boxId)
   }
@@ -981,7 +1000,13 @@ export function FfSuppliesShipmentsPage({
   }
 
   const copyBox = async (boxId: string) => {
-    if (!token || !authHeaders || docModal !== 'marketplace_unload' || !docModalId) {
+    if (
+      !token ||
+      !authHeaders ||
+      docModal !== 'marketplace_unload' ||
+      !docModalId ||
+      !canUseMpBoxDestructiveControls
+    ) {
       return
     }
     closeBoxMenu()
@@ -1006,7 +1031,13 @@ export function FfSuppliesShipmentsPage({
   }
 
   const deleteBox = async (boxId: string) => {
-    if (!token || !authHeaders || docModal !== 'marketplace_unload' || !docModalId) {
+    if (
+      !token ||
+      !authHeaders ||
+      docModal !== 'marketplace_unload' ||
+      !docModalId ||
+      !canUseMpBoxDestructiveControls
+    ) {
       return
     }
     closeBoxMenu()
@@ -1031,7 +1062,13 @@ export function FfSuppliesShipmentsPage({
   }
 
   const removeBoxLine = async (boxId: string, lineId: string) => {
-    if (!token || !authHeaders || docModal !== 'marketplace_unload' || !docModalId) {
+    if (
+      !token ||
+      !authHeaders ||
+      docModal !== 'marketplace_unload' ||
+      !docModalId ||
+      !canUseMpBoxDestructiveControls
+    ) {
       return
     }
     setModalBusy(true)
@@ -1060,8 +1097,25 @@ export function FfSuppliesShipmentsPage({
     }
   }
 
-  const mpBoxesReadOnly =
-    docModal === 'marketplace_unload' && unloadDetail?.status === 'shipped'
+  const canUseMpBoxDestructiveControls =
+    docModal === 'marketplace_unload' && unloadDetail?.status === 'draft'
+  const canUseMpBoxOperationalControls =
+    docModal === 'marketplace_unload' &&
+    (unloadDetail?.status === 'confirmed' || unloadDetail?.status === 'collecting')
+
+  useEffect(() => {
+    if (!canUseMpBoxDestructiveControls) {
+      setBoxMenuAnchor(null)
+      setBoxMenuTargetId(null)
+    }
+    if (!canUseMpBoxOperationalControls) {
+      setBoxAddDialogBoxId(null)
+      setBoxImportOpen(false)
+      setPendingAttachBarcode(null)
+      setMpAttachConfirmOpen(false)
+      setMpAttachOverPlanOpen(false)
+    }
+  }, [canUseMpBoxDestructiveControls, canUseMpBoxOperationalControls])
 
   const mpVisibleBoxes = useMemo(() => {
     const boxes = unloadDetail?.boxes ?? []
@@ -1129,24 +1183,30 @@ export function FfSuppliesShipmentsPage({
     const totalQty = box.lines.reduce((sum, ln) => sum + ln.quantity, 0)
     return (
       <Stack direction="row" spacing={0.5} sx={mpBoxActionsSx}>
-        <Button
-          size="small"
-          variant="outlined"
-          disabled={modalBusy || mpBoxesReadOnly}
-          onClick={() => setBoxAddDialogBoxId(box.id)}
-          data-testid={`ff-mp-box-add-products-${box.id}`}
-        >
-          Наполнить
-        </Button>
-        <IconButton
-          size="small"
-          aria-label="Действия с коробом"
-          data-testid={`ff-mp-box-menu-${box.id}`}
-          disabled={modalBusy}
-          onClick={(e) => openBoxMenu(e, box.id)}
-        >
-          <MoreVertOutlined fontSize="small" />
-        </IconButton>
+        {canUseMpBoxOperationalControls ? (
+          <>
+            <Button
+              size="small"
+              variant="outlined"
+              disabled={modalBusy}
+              onClick={() => setBoxAddDialogBoxId(box.id)}
+              data-testid={`ff-mp-box-add-products-${box.id}`}
+            >
+              Наполнить
+            </Button>
+          </>
+        ) : null}
+        {canUseMpBoxDestructiveControls ? (
+          <IconButton
+            size="small"
+            aria-label="Действия с коробом"
+            data-testid={`ff-mp-box-menu-${box.id}`}
+            disabled={modalBusy}
+            onClick={(e) => openBoxMenu(e, box.id)}
+          >
+            <MoreVertOutlined fontSize="small" />
+          </IconButton>
+        ) : null}
         <IconButton
           size="small"
           aria-label="Печать ШК короба"
@@ -1158,15 +1218,17 @@ export function FfSuppliesShipmentsPage({
             ШК
           </Typography>
         </IconButton>
-        <IconButton
-          size="small"
-          aria-label="Удалить пустой короб"
-          data-testid={`ff-mp-box-delete-${box.id}`}
-          disabled={modalBusy || totalQty > 0}
-          onClick={() => void deleteBox(box.id)}
-        >
-          <DeleteOutlineOutlined fontSize="small" />
-        </IconButton>
+        {canUseMpBoxDestructiveControls ? (
+          <IconButton
+            size="small"
+            aria-label="Удалить пустой короб"
+            data-testid={`ff-mp-box-delete-${box.id}`}
+            disabled={modalBusy || totalQty > 0}
+            onClick={() => void deleteBox(box.id)}
+          >
+            <DeleteOutlineOutlined fontSize="small" />
+          </IconButton>
+        ) : null}
       </Stack>
     )
   }
@@ -1215,7 +1277,9 @@ export function FfSuppliesShipmentsPage({
                     <TableCell align="right" sx={{ ...mpBoxTableHeadCellSx, width: 104 }}>
                       В коробе
                     </TableCell>
-                    <TableCell align="right" sx={{ ...mpBoxTableHeadCellSx, width: 64 }} />
+                    {canUseMpBoxDestructiveControls ? (
+                      <TableCell align="right" sx={{ ...mpBoxTableHeadCellSx, width: 64 }} />
+                    ) : null}
                   </TableRow>
                 </TableHead>
                 <TableBody>
@@ -1228,19 +1292,21 @@ export function FfSuppliesShipmentsPage({
                         {ln.product_name}
                       </TableCell>
                       <TableCell align="right">{ln.quantity}</TableCell>
-                      <TableCell align="right">
-                        <Tooltip title="Убрать из короба">
-                          <IconButton
-                            size="small"
-                            aria-label="Убрать из короба"
-                            data-testid={`ff-mp-box-line-remove-${ln.id}`}
-                            disabled={modalBusy}
-                            onClick={() => void removeBoxLine(box.id, ln.id)}
-                          >
-                            <DeleteOutlineOutlined fontSize="small" />
-                          </IconButton>
-                        </Tooltip>
-                      </TableCell>
+                      {canUseMpBoxDestructiveControls ? (
+                        <TableCell align="right">
+                          <Tooltip title="Убрать из короба">
+                            <IconButton
+                              size="small"
+                              aria-label="Убрать из короба"
+                              data-testid={`ff-mp-box-line-remove-${ln.id}`}
+                              disabled={modalBusy}
+                              onClick={() => void removeBoxLine(box.id, ln.id)}
+                            >
+                              <DeleteOutlineOutlined fontSize="small" />
+                            </IconButton>
+                          </Tooltip>
+                        </TableCell>
+                      ) : null}
                     </TableRow>
                   ))}
                 </TableBody>
@@ -1706,6 +1772,7 @@ export function FfSuppliesShipmentsPage({
     mpDraft ||
     mpSubmitted ||
     (docModal === 'discrepancy_act' && divergeDetail?.status === 'draft')
+  const canDeleteMpUnloadLine = mpDraft
   const mpLineDraft = mpDraft || mpSubmitted
 
   const mpLineProductIds = useMemo(
@@ -2376,7 +2443,7 @@ export function FfSuppliesShipmentsPage({
                             <TableCell align="right">Осталось</TableCell>
                           </>
                         ) : null}
-                        {draftDoc ? <TableCell align="right" width={56} /> : null}
+                        {canDeleteMpUnloadLine ? <TableCell align="right" width={56} /> : null}
                       </TableRow>
                     </TableHead>
                     <TableBody>
@@ -2384,7 +2451,7 @@ export function FfSuppliesShipmentsPage({
                         const lines = unloadDetail.lines
                         const productCols = 6
                         const mpCols = mpExecutionPhase ? 2 : 0
-                        const emptySpan = productCols + 1 + mpCols + (draftDoc ? 1 : 0)
+                        const emptySpan = productCols + 1 + mpCols + (canDeleteMpUnloadLine ? 1 : 0)
                         if (lines.length === 0) {
                           return (
                             <TableRow>
@@ -2443,7 +2510,7 @@ export function FfSuppliesShipmentsPage({
                                   </TableCell>
                                 </>
                               ) : null}
-                              {draftDoc ? (
+                              {canDeleteMpUnloadLine ? (
                                 <TableCell align="right">
                                   <Tooltip title="Удалить строку">
                                     <IconButton
@@ -2553,45 +2620,47 @@ export function FfSuppliesShipmentsPage({
                 <Box data-testid="ff-mp-boxes">
                   <Stack spacing={1.5}>
                     <Typography variant="subtitle2">Короба</Typography>
-                    {mpExecutionPhase ? (
+                    {mpAfterConfirm ? (
                       <Paper variant="outlined" sx={{ p: 1.5 }}>
                         <Stack spacing={1.25}>
-                          <Box
-                            sx={{
-                              display: 'grid',
-                              gap: 1,
-                              gridTemplateColumns: { xs: 'minmax(0, 1fr)', sm: 'minmax(0, 1fr) auto' },
-                              alignItems: 'start',
-                            }}
-                          >
-                            <TextField
-                              size="small"
-                              label="Штрихкод готового короба (WHB-…)"
-                              value={scanBarcode}
-                              onChange={(e) => setScanBarcode(e.target.value)}
-                              onKeyDown={(e) => {
-                                if (e.key === 'Enter') {
-                                  e.preventDefault()
-                                  void doCollectScan()
-                                }
+                          {canUseMpBoxOperationalControls ? (
+                            <Box
+                              sx={{
+                                display: 'grid',
+                                gap: 1,
+                                gridTemplateColumns: { xs: 'minmax(0, 1fr)', sm: 'minmax(0, 1fr) auto' },
+                                alignItems: 'start',
                               }}
-                              disabled={modalBusy}
-                              fullWidth
-                              slotProps={{ htmlInput: { 'data-testid': 'ff-mp-pick-scan-input' } }}
-                              data-testid="ff-mp-pick-scan-field"
-                              sx={{ minWidth: 0 }}
-                            />
-                            <Button
-                              variant="outlined"
-                              size="medium"
-                              sx={{ whiteSpace: 'nowrap' }}
-                              onClick={() => void doCollectScan()}
-                              disabled={modalBusy}
-                              data-testid="ff-mp-pick-scan"
                             >
-                              Привязать
-                            </Button>
-                          </Box>
+                              <TextField
+                                size="small"
+                                label="Штрихкод готового короба (WHB-…)"
+                                value={scanBarcode}
+                                onChange={(e) => setScanBarcode(e.target.value)}
+                                onKeyDown={(e) => {
+                                  if (e.key === 'Enter') {
+                                    e.preventDefault()
+                                    void doCollectScan()
+                                  }
+                                }}
+                                disabled={modalBusy}
+                                fullWidth
+                                slotProps={{ htmlInput: { 'data-testid': 'ff-mp-pick-scan-input' } }}
+                                data-testid="ff-mp-pick-scan-field"
+                                sx={{ minWidth: 0 }}
+                              />
+                              <Button
+                                variant="outlined"
+                                size="medium"
+                                sx={{ whiteSpace: 'nowrap' }}
+                                onClick={() => void doCollectScan()}
+                                disabled={modalBusy}
+                                data-testid="ff-mp-pick-scan"
+                              >
+                                Привязать
+                              </Button>
+                            </Box>
+                          ) : null}
 
                           {mpVisibleBoxes.length > 0 ? (
                             <Stack spacing={1.5}>
@@ -2607,57 +2676,59 @@ export function FfSuppliesShipmentsPage({
                             </Stack>
                           ) : null}
 
-                          <Stack
-                            direction="row"
-                            spacing={1}
-                            sx={{ alignItems: 'center', flexWrap: 'wrap', pt: 0.5 }}
-                          >
-                            <TextField
-                              size="small"
-                              label="Кол-во коробов"
-                              type="number"
-                              value={boxBatchCount}
-                              onChange={(e) => setBoxBatchCount(e.target.value)}
-                              slotProps={{ htmlInput: { min: 1, max: 50 } }}
-                              sx={{ width: 120 }}
-                              disabled={modalBusy}
-                              data-testid="ff-mp-box-batch-count"
-                            />
-                            <FormControl size="small" sx={{ minWidth: 160 }}>
-                              <InputLabel id="ff-mp-box-preset">Пресет</InputLabel>
-                              <Select
-                                labelId="ff-mp-box-preset"
-                                label="Пресет"
-                                value={boxPreset}
-                                onChange={(e) =>
-                                  setBoxPreset(String(e.target.value) as '60_40_40' | '30_20_30')
-                                }
-                                data-testid="ff-mp-box-preset"
+                          {canUseMpBoxOperationalControls ? (
+                            <Stack
+                              direction="row"
+                              spacing={1}
+                              sx={{ alignItems: 'center', flexWrap: 'wrap', pt: 0.5 }}
+                            >
+                              <TextField
+                                size="small"
+                                label="Кол-во коробов"
+                                type="number"
+                                value={boxBatchCount}
+                                onChange={(e) => setBoxBatchCount(e.target.value)}
+                                slotProps={{ htmlInput: { min: 1, max: 50 } }}
+                                sx={{ width: 120 }}
                                 disabled={modalBusy}
+                                data-testid="ff-mp-box-batch-count"
+                              />
+                              <FormControl size="small" sx={{ minWidth: 160 }}>
+                                <InputLabel id="ff-mp-box-preset">Пресет</InputLabel>
+                                <Select
+                                  labelId="ff-mp-box-preset"
+                                  label="Пресет"
+                                  value={boxPreset}
+                                  onChange={(e) =>
+                                    setBoxPreset(String(e.target.value) as '60_40_40' | '30_20_30')
+                                  }
+                                  data-testid="ff-mp-box-preset"
+                                  disabled={modalBusy}
+                                >
+                                  <MenuItem value="60_40_40">60×40×40</MenuItem>
+                                  <MenuItem value="30_20_30">30×20×30</MenuItem>
+                                </Select>
+                              </FormControl>
+                              <Button
+                                variant="outlined"
+                                size="small"
+                                onClick={() => setBoxImportOpen(true)}
+                                disabled={modalBusy}
+                                data-testid="ff-mp-import-boxes"
                               >
-                                <MenuItem value="60_40_40">60×40×40</MenuItem>
-                                <MenuItem value="30_20_30">30×20×30</MenuItem>
-                              </Select>
-                            </FormControl>
-                            <Button
-                              variant="outlined"
-                              size="small"
-                              onClick={() => setBoxImportOpen(true)}
-                              disabled={modalBusy}
-                              data-testid="ff-mp-import-boxes"
-                            >
-                              Загрузить по накладной
-                            </Button>
-                            <Button
-                              variant="outlined"
-                              size="small"
-                              onClick={() => void createBox()}
-                              disabled={modalBusy}
-                              data-testid="ff-mp-box-batch-create"
-                            >
-                              {Number(boxBatchCount) === 1 ? 'Создать короб' : 'Создать короба'}
-                            </Button>
-                          </Stack>
+                                Загрузить по накладной
+                              </Button>
+                              <Button
+                                variant="outlined"
+                                size="small"
+                                onClick={() => void createBox()}
+                                disabled={modalBusy}
+                                data-testid="ff-mp-box-batch-create"
+                              >
+                                {Number(boxBatchCount) === 1 ? 'Создать короб' : 'Создать короба'}
+                              </Button>
+                            </Stack>
+                          ) : null}
                         </Stack>
                       </Paper>
                     ) : (
@@ -2665,57 +2736,59 @@ export function FfSuppliesShipmentsPage({
                         Короба доступны после утверждения плана.
                       </Typography>
                     )}
-                    <Menu
-                      anchorEl={boxMenuAnchor}
-                      open={Boolean(boxMenuAnchor)}
-                      onClose={closeBoxMenu}
-                      data-testid="ff-mp-box-menu"
-                    >
-                      <MenuItem
-                        data-testid="ff-mp-box-menu-print"
-                        disabled={!boxMenuTargetId || !boxById.get(boxMenuTargetId ?? '')?.internal_barcode}
-                        onClick={() => {
-                          const box = boxMenuTargetId ? boxById.get(boxMenuTargetId) : null
-                          if (box) {
-                            printBoxBarcode(box)
-                          }
-                          closeBoxMenu()
-                        }}
+                    {canUseMpBoxDestructiveControls ? (
+                      <Menu
+                        anchorEl={boxMenuAnchor}
+                        open={Boolean(boxMenuAnchor)}
+                        onClose={closeBoxMenu}
+                        data-testid="ff-mp-box-menu"
                       >
-                        Печать ШК
-                      </MenuItem>
-                      <MenuItem
-                        data-testid="ff-mp-box-menu-copy"
-                        disabled={!boxMenuTargetId || modalBusy}
-                        onClick={() => {
-                          if (boxMenuTargetId) {
-                            void copyBox(boxMenuTargetId)
+                        <MenuItem
+                          data-testid="ff-mp-box-menu-print"
+                          disabled={!boxMenuTargetId || !boxById.get(boxMenuTargetId ?? '')?.internal_barcode}
+                          onClick={() => {
+                            const box = boxMenuTargetId ? boxById.get(boxMenuTargetId) : null
+                            if (box) {
+                              printBoxBarcode(box)
+                            }
+                            closeBoxMenu()
+                          }}
+                        >
+                          Печать ШК
+                        </MenuItem>
+                        <MenuItem
+                          data-testid="ff-mp-box-menu-copy"
+                          disabled={!boxMenuTargetId || modalBusy}
+                          onClick={() => {
+                            if (boxMenuTargetId) {
+                              void copyBox(boxMenuTargetId)
+                            }
+                          }}
+                        >
+                          Копировать в новый короб
+                        </MenuItem>
+                        <MenuItem
+                          data-testid="ff-mp-box-menu-delete"
+                          disabled={
+                            !boxMenuTargetId ||
+                            modalBusy ||
+                            (boxMenuTargetId
+                              ? (boxById.get(boxMenuTargetId)?.lines.reduce(
+                                  (s, ln) => s + ln.quantity,
+                                  0,
+                                ) ?? 0) > 0
+                              : true)
                           }
-                        }}
-                      >
-                        Копировать в новый короб
-                      </MenuItem>
-                      <MenuItem
-                        data-testid="ff-mp-box-menu-delete"
-                        disabled={
-                          !boxMenuTargetId ||
-                          modalBusy ||
-                          (boxMenuTargetId
-                            ? (boxById.get(boxMenuTargetId)?.lines.reduce(
-                                (s, ln) => s + ln.quantity,
-                                0,
-                              ) ?? 0) > 0
-                            : true)
-                        }
-                        onClick={() => {
-                          if (boxMenuTargetId) {
-                            void deleteBox(boxMenuTargetId)
-                          }
-                        }}
-                      >
-                        Удалить короб
-                      </MenuItem>
-                    </Menu>
+                          onClick={() => {
+                            if (boxMenuTargetId) {
+                              void deleteBox(boxMenuTargetId)
+                            }
+                          }}
+                        >
+                          Удалить короб
+                        </MenuItem>
+                      </Menu>
+                    ) : null}
                   </Stack>
                 </Box>
               ) : null}
@@ -3034,7 +3107,7 @@ export function FfSuppliesShipmentsPage({
               return barcode ?? 'Короб'
             })()
           }
-          readOnly={mpBoxesReadOnly}
+          readOnly={!canUseMpBoxOperationalControls}
           token={token}
           addressStorageEnabled={addressStorageEnabled}
           catalogById={catalogById}
@@ -3048,7 +3121,7 @@ export function FfSuppliesShipmentsPage({
           }
         />
       ) : null}
-      {boxImportOpen && docModalId && token ? (
+      {boxImportOpen && canUseMpBoxOperationalControls && docModalId && token ? (
         <BoxImportDialog
           open={boxImportOpen}
           token={token}

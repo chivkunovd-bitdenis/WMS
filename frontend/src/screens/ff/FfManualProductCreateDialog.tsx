@@ -54,17 +54,19 @@ export function FfManualProductCreateDialog({
   const [widthMm, setWidthMm] = useState('')
   const [heightMm, setHeightMm] = useState('')
   const [requiresHonestSign, setRequiresHonestSign] = useState(false)
+  const [createdProduct, setCreatedProduct] = useState<CreatedProduct | null>(null)
 
   useEffect(() => {
-    if (open) {
+    if (open && createdProduct == null) {
       setSellerId(defaultSellerId ?? '')
       setError(null)
     }
-  }, [open, defaultSellerId])
+  }, [open, defaultSellerId, createdProduct])
 
   function reset() {
     setError(null)
     setBusy(false)
+    setCreatedProduct(null)
     setSellerId(defaultSellerId ?? '')
     setName('')
     setSku('')
@@ -87,61 +89,66 @@ export function FfManualProductCreateDialog({
   async function onSubmit(e: FormEvent) {
     e.preventDefault()
     setError(null)
-    const trimmedName = name.trim()
-    const trimmedSku = sku.trim()
-    if (!trimmedName || !trimmedSku) {
-      setError('Укажите название и артикул (SKU).')
-      return
-    }
-    if (!sellerId) {
-      setError('Выберите селлера.')
-      return
-    }
     setBusy(true)
     try {
-      const body: Record<string, unknown> = {
-        name: trimmedName,
-        sku_code: trimmedSku,
-        seller_id: sellerId,
-        requires_honest_sign: requiresHonestSign,
-      }
-      if (size.trim()) body.wb_size = size.trim()
-      if (barcode.trim()) body.wb_barcode = barcode.trim()
-      if (vendor.trim()) body.wb_vendor_code = vendor.trim()
-      if (tz.trim()) body.packaging_instructions = tz.trim()
-      if (lengthMm.trim()) body.length_mm = Number(lengthMm)
-      if (widthMm.trim()) body.width_mm = Number(widthMm)
-      if (heightMm.trim()) body.height_mm = Number(heightMm)
+      let created = createdProduct
+      if (created == null) {
+        const trimmedName = name.trim()
+        const trimmedSku = sku.trim()
+        if (!trimmedName || !trimmedSku) {
+          setError('Укажите название и артикул (SKU).')
+          return
+        }
+        if (!sellerId) {
+          setError('Выберите селлера.')
+          return
+        }
 
-      const res = await fetch(apiUrl('/products'), {
-        method: 'POST',
-        headers: { ...authHeaders(token), 'Content-Type': 'application/json' },
-        body: JSON.stringify(body),
-      })
-      if (!res.ok) {
-        const raw = await readApiErrorMessage(res)
-        if (raw === 'sku_taken') {
-          setError('Такой артикул (SKU) уже есть.')
+        const body: Record<string, unknown> = {
+          name: trimmedName,
+          sku_code: trimmedSku,
+          seller_id: sellerId,
+          requires_honest_sign: requiresHonestSign,
+        }
+        if (size.trim()) body.wb_size = size.trim()
+        if (barcode.trim()) body.wb_barcode = barcode.trim()
+        if (vendor.trim()) body.wb_vendor_code = vendor.trim()
+        if (tz.trim()) body.packaging_instructions = tz.trim()
+        if (lengthMm.trim()) body.length_mm = Number(lengthMm)
+        if (widthMm.trim()) body.width_mm = Number(widthMm)
+        if (heightMm.trim()) body.height_mm = Number(heightMm)
+
+        const res = await fetch(apiUrl('/products'), {
+          method: 'POST',
+          headers: { ...authHeaders(token), 'Content-Type': 'application/json' },
+          body: JSON.stringify(body),
+        })
+        if (!res.ok) {
+          const raw = await readApiErrorMessage(res)
+          if (raw === 'sku_taken') {
+            setError('Такой артикул (SKU) уже есть.')
+            return
+          }
+          if (raw === 'barcode_taken') {
+            setError('Такой штрихкод уже занят.')
+            return
+          }
+          if (raw === 'seller_not_found') {
+            setError('Селлер не найден.')
+            return
+          }
+          if (raw === 'invalid_dimensions') {
+            setError('Укажите все три габарита или оставьте пустыми.')
+            return
+          }
+          setError(raw)
           return
         }
-        if (raw === 'barcode_taken') {
-          setError('Такой штрихкод уже занят.')
-          return
-        }
-        if (raw === 'seller_not_found') {
-          setError('Селлер не найден.')
-          return
-        }
-        if (raw === 'invalid_dimensions') {
-          setError('Укажите все три габарита или оставьте пустыми.')
-          return
-        }
-        setError(raw)
-        return
+        created = (await res.json()) as CreatedProduct
+        setCreatedProduct(created)
       }
-      const created = (await res.json()) as CreatedProduct
-      reset()
       await onCreated(created)
+      reset()
       onClose()
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Не удалось создать товар.')
@@ -273,7 +280,7 @@ export function FfManualProductCreateDialog({
             Отмена
           </Button>
           <Button type="submit" variant="contained" disabled={busy} data-testid="ff-manual-product-submit">
-            Создать
+            {createdProduct == null ? 'Создать' : 'Добавить в приёмку'}
           </Button>
         </DialogActions>
       </form>

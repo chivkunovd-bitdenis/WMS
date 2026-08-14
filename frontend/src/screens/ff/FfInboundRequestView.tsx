@@ -16,6 +16,7 @@ import {
   DialogTitle,
   FormControl,
   FormControlLabel,
+  GlobalStyles,
   IconButton,
   InputLabel,
   MenuItem,
@@ -36,17 +37,21 @@ import {
 } from '@mui/material'
 import { alpha } from '@mui/material/styles'
 import { apiUrl } from '../../api'
-import { FfProductLineCells, FfProductTableHeadCells } from '../../components/FfProductLineCells'
 import { FfProductMarkingPrintProvider } from '../../components/FfProductMarkingPrintProvider'
+import { ProductBarcodePrintButton } from '../../components/ProductBarcodePrintButton'
+import { ProductPhotoThumb } from '../../components/ProductPhotoThumb'
 import { WbProductPickerDialog } from '../../components/WbProductPickerDialog'
 import { WmsDateField } from '../../components/WmsDateField'
 import {
+  formatProductBarcodeDisplay,
   productDisplayMetaFromCatalog,
+  type ProductLineDisplayMeta,
   type WbProductCatalogRow,
 } from '../../types/wbProductCatalog'
 import { printBarcodeLabel } from '../../utils/printBarcodeLabel'
 import { printInboundSupplyWaybill } from '../../utils/printShipmentWaybill'
 import { readApiErrorMessage } from '../../utils/readApiErrorMessage'
+import { inboundOperationTypeLabel } from '../../utils/inboundOperationType'
 import { FfInboundBoxAddDialog } from './FfInboundBoxAddDialog'
 import { FfManualProductCreateDialog } from './FfManualProductCreateDialog'
 import { FfInboundSortingPanel } from './FfInboundSortingPanel'
@@ -115,6 +120,89 @@ type InboundLine = {
   storage_location_code: string | null
 }
 
+type InboundProductLineCellProps = {
+  meta: ProductLineDisplayMeta
+  productId: string
+  printTestId: string
+}
+
+function InboundProductLineCell({ meta, productId, printTestId }: InboundProductLineCellProps) {
+  const barcode = formatProductBarcodeDisplay(meta)
+
+  return (
+    <TableCell sx={{ minWidth: 0, overflow: 'hidden' }}>
+      <Stack direction="row" spacing={1} sx={{ alignItems: 'center', minWidth: 0 }}>
+        <Box sx={{ flex: '0 0 44px', display: 'flex' }}>
+          <ProductPhotoThumb
+            src={meta.wb_primary_image_url}
+            alt={meta.product_name}
+            testId="ff-inbound-line-photo"
+          />
+        </Box>
+        <Box sx={{ flex: '1 1 auto', minWidth: 0 }}>
+          <Typography
+            variant="body2"
+            sx={{
+              fontWeight: 700,
+              overflow: 'hidden',
+              textOverflow: 'ellipsis',
+              whiteSpace: 'nowrap',
+            }}
+            title={meta.product_name}
+            data-testid="ff-inbound-line-product-name"
+          >
+            {meta.product_name}
+          </Typography>
+          <Stack
+            direction={{ xs: 'column', sm: 'row' }}
+            spacing={{ xs: 0, sm: 1 }}
+            sx={{ minWidth: 0 }}
+          >
+            <Typography
+              variant="caption"
+              color="text.secondary"
+              sx={{
+                flex: '1 1 0',
+                minWidth: 0,
+                overflow: 'hidden',
+                textOverflow: 'ellipsis',
+                whiteSpace: 'nowrap',
+              }}
+              title={meta.sku_code}
+              data-testid="ff-inbound-line-sku"
+            >
+              SKU {meta.sku_code}
+            </Typography>
+            <Typography
+              variant="caption"
+              color="text.secondary"
+              sx={{
+                flex: '1 1 0',
+                minWidth: 0,
+                overflow: 'hidden',
+                textOverflow: 'ellipsis',
+                whiteSpace: 'nowrap',
+              }}
+              title={barcode !== '—' ? barcode : undefined}
+              data-testid="ff-inbound-line-barcode"
+            >
+              ШК {barcode}
+            </Typography>
+          </Stack>
+        </Box>
+        <Box sx={{ flex: '0 0 40px', display: 'flex', justifyContent: 'center' }}>
+          <ProductBarcodePrintButton
+            meta={meta}
+            testId={printTestId}
+            productId={productId}
+            printSource="catalog"
+          />
+        </Box>
+      </Stack>
+    </TableCell>
+  )
+}
+
 type InboundDetail = {
   id: string
   document_number: string | null
@@ -168,6 +256,17 @@ export type InboundRequestWorkspace = 'reception' | 'sorting' | 'full'
 
 function inboundWorkspaceTitle(workspace: InboundRequestWorkspace): string {
   return workspace === 'sorting' ? 'Сортировка' : 'Приёмка'
+}
+
+function formatLineDiscrepancy(expectedQty: number, actualQty: number): string | null {
+  const delta = actualQty - expectedQty
+  if (delta > 0) {
+    return `Излишек ${delta}`
+  }
+  if (delta < 0) {
+    return `Недостача ${Math.abs(delta)}`
+  }
+  return null
 }
 
 type Props = {
@@ -235,6 +334,7 @@ export function FfInboundRequestView({
     detail != null &&
     (detail.status === 'submitted' || isReceivingStatus(detail.status))
   const isReturnOperation = detail?.operation_type === 'return'
+  const operationTypeLabel = inboundOperationTypeLabel(detail?.operation_type)
   const showInboundLinesTable = !sortingView || receptionClosed
 
   // Глобальный скан: панель приёмки видна и диалог короба не открыт
@@ -931,11 +1031,12 @@ export function FfInboundRequestView({
   const addReceivedProductFact = async (
     productId: string,
     qty: number,
+    source: 'seller_catalog' | 'manual_created' = 'seller_catalog',
   ): Promise<InboundLine | null> => {
     const res = await fetch(apiUrl(`/operations/inbound-intake-requests/${requestId}/receiving/lines`), {
       method: 'POST',
       headers: { ...authHeaders, 'Content-Type': 'application/json' },
-      body: JSON.stringify({ product_id: productId, actual_qty: qty }),
+      body: JSON.stringify({ product_id: productId, actual_qty: qty, source }),
     })
     if (!res.ok) {
       setError(scanErrorMessageRu(await readApiErrorMessage(res)))
@@ -1120,7 +1221,9 @@ export function FfInboundRequestView({
   }
 
   const onManualProductCreated = async (product: { id: string }) => {
-    if (!detail) return
+    if (!detail) {
+      throw new Error('Документ приёмки не загружен. Товар создан, но не добавлен в документ.')
+    }
     setBusy(true)
     setError(null)
     try {
@@ -1131,17 +1234,19 @@ export function FfInboundRequestView({
           body: JSON.stringify({ product_id: product.id, expected_qty: 1 }),
         })
         if (!res.ok) {
-          setError(await readApiErrorMessage(res))
-          return
+          const message = await readApiErrorMessage(res)
+          setError(message)
+          throw new Error(message)
         }
       } else if (receivingActive) {
-        const added = await addReceivedProductFact(product.id, 1)
+        const added = await addReceivedProductFact(product.id, 1, 'manual_created')
         if (!added) {
           throw new Error('Товар создан, но не добавлен в факт приёмки. Нажмите «Добавить в приёмку» ещё раз.')
         }
+      } else {
+        throw new Error('Сейчас нельзя добавить созданный товар в этот документ.')
       }
-      await loadCatalog()
-      await loadDetail()
+      void Promise.allSettled([loadCatalog(), loadDetail()])
     } finally {
       setBusy(false)
     }
@@ -1302,6 +1407,7 @@ export function FfInboundRequestView({
   const completeReceiving = async () => {
     setBusy(true)
     setError(null)
+    setFinishConfirmOpen(false)
     try {
       const res = await fetch(
         apiUrl(`/operations/inbound-intake-requests/${requestId}/complete-receiving`),
@@ -1311,7 +1417,6 @@ export function FfInboundRequestView({
         setError(scanErrorMessageRu(await readApiErrorMessage(res)))
         return
       }
-      setFinishConfirmOpen(false)
       await loadDetail()
       setDistOpen(true)
     } catch (e) {
@@ -1447,7 +1552,19 @@ export function FfInboundRequestView({
 
   return (
     <FfProductMarkingPrintProvider token={token}>
-    <Box data-testid="ff-inbound-doc-root">
+    <GlobalStyles
+      styles={{
+        'body > [aria-hidden="true"]': {
+          width: '100vw',
+          maxWidth: '100vw',
+          overflowX: 'hidden',
+        },
+      }}
+    />
+    <Box
+      data-testid="ff-inbound-doc-root"
+      sx={{ width: '100%', minWidth: 0, maxWidth: '100%', boxSizing: 'border-box' }}
+    >
       {error ? (
         <Alert severity="error" sx={{ mb: 2 }} data-testid="ff-inbound-doc-error">
           {error}
@@ -1457,7 +1574,18 @@ export function FfInboundRequestView({
       {!detail ? (
         <Alert severity="warning">Заявка не найдена или недоступна.</Alert>
       ) : (
-        <Paper variant="outlined" sx={{ p: 2, minHeight: '38vh' }}>
+        <Paper
+          variant="outlined"
+          sx={{
+            p: 2,
+            minHeight: '38vh',
+            width: '100%',
+            minWidth: 0,
+            maxWidth: '100%',
+            boxSizing: 'border-box',
+            overflowX: 'hidden',
+          }}
+        >
           <Stack spacing={2} sx={{ mb: 2 }}>
             <Stack
               direction={{ xs: 'column', sm: 'row' }}
@@ -1492,7 +1620,7 @@ export function FfInboundRequestView({
                 data-testid="ff-inbound-compact-summary"
               >
                 <Typography variant="body2" color="text.secondary" data-testid="ff-inbound-operation-type">
-                  Тип: <strong>{isReturnOperation ? 'Возврат' : 'Приёмка'}</strong>
+                  Тип: <strong>{operationTypeLabel}</strong>
                 </Typography>
                 <Typography variant="body2" color="text.secondary" data-testid="ff-inbound-seller-name">
                   Селлер: <strong>{detail.seller_name ?? '—'}</strong>
@@ -1674,20 +1802,23 @@ export function FfInboundRequestView({
                   data-testid="ff-inbound-print-waybill"
                   onClick={() => {
                     const wh = requestWarehouse
+                    const boxes = detail.boxes ?? []
                     printInboundSupplyWaybill({
                       documentId: detail.id,
+                      documentNumber: displayDocumentNumber,
+                      documentTypeLabel: operationTypeLabel,
                       statusLabel: inboundStatusRu(detail.status),
-                      warehouseName: wh ? `${wh.name} (${wh.code})` : detail.warehouse_id,
+                      warehouseName: wh ? `${wh.name} (${wh.code})` : '—',
                       sellerName: detail.seller_name ?? null,
                       plannedDate: detail.planned_delivery_date,
                       createdAt: detail.created_at ?? null,
                       plannedBoxCount: detail.planned_box_count,
-                      actualBoxCount: detail.actual_box_count,
+                      actualBoxCount: detail.actual_box_count ?? boxes.length,
                       lines: detail.lines.map((ln) => ({
                         sku_code: ln.sku_code,
                         product_name: ln.product_name,
                         quantity: ln.expected_qty,
-                        received_qty: ln.actual_qty,
+                        received_qty: effectiveActualQty(ln, boxes, detail.status),
                       })),
                     })
                   }}
@@ -1740,43 +1871,56 @@ export function FfInboundRequestView({
           ) : null}
 
           {showInboundLinesTable ? (
-          <TableContainer sx={{ width: '100%', overflowX: 'auto' }}>
-            {sortingView && receptionClosed ? (
-              <Typography variant="subtitle2" sx={{ fontWeight: 700, mb: 1 }}>
-                Состав приёмки
-              </Typography>
-            ) : null}
-            <Table
-              size="small"
-              data-testid="ff-inbound-lines-table"
+            <TableContainer
               sx={{
-                tableLayout: 'fixed',
                 width: '100%',
-                '& th': { py: 1.25 },
-                '& td': { py: 1.25 },
+                maxWidth: '100%',
+                minWidth: 0,
+                overflowX: 'auto',
+                WebkitOverflowScrolling: 'touch',
               }}
             >
-              <TableHead>
-                <TableRow>
-                  <FfProductTableHeadCells />
-                  <TableCell sx={{ width: 144 }}>
-                    Габариты
-                  </TableCell>
-                  <TableCell align="right" sx={{ width: 120 }}>
-                    Заявлено
-                  </TableCell>
-                  <TableCell align="right" sx={{ width: 168 }}>
-                    Принято
-                  </TableCell>
-                </TableRow>
-              </TableHead>
-              <TableBody>
-                {detail.lines.map((ln) => {
+              {sortingView && receptionClosed ? (
+                <Typography variant="subtitle2" sx={{ fontWeight: 700, mb: 1 }}>
+                  Состав приёмки
+                </Typography>
+              ) : null}
+              <Table
+                size="small"
+                data-testid="ff-inbound-lines-table"
+                sx={{
+                  tableLayout: 'fixed',
+                  width: '100%',
+                  minWidth: 760,
+                  '& th': { py: 1.25 },
+                  '& td': { py: 1.25 },
+                  '& th, & td': { verticalAlign: 'middle' },
+                }}
+              >
+                <TableHead>
+                  <TableRow>
+                    <TableCell sx={{ minWidth: 0, overflow: 'hidden' }}>
+                      Товар
+                    </TableCell>
+                    <TableCell sx={{ width: 188 }}>
+                      Габариты
+                    </TableCell>
+                    <TableCell align="right" sx={{ width: 112 }}>
+                      План
+                    </TableCell>
+                    <TableCell align="right" sx={{ width: 200 }}>
+                      Принято
+                    </TableCell>
+                  </TableRow>
+                </TableHead>
+                <TableBody>
+                  {detail.lines.map((ln) => {
                   const displayMeta = productDisplayMetaFromCatalog(ln.product_id, ln, catalogById)
                   const boxes = detail.boxes ?? []
                   const effective = effectiveActualQty(ln, boxes, detail.status)
                   const hasDiscrepancy = effective !== ln.expected_qty
                   const matchesExpected = effective === ln.expected_qty && effective > 0
+                  const discrepancyLabel = formatLineDiscrepancy(ln.expected_qty, effective)
                   const rowTestId = matchesExpected
                     ? 'ff-inbound-line-row-match'
                     : hasDiscrepancy
@@ -1806,52 +1950,72 @@ export function FfInboundRequestView({
                           : null),
                       }}
                     >
-                      <FfProductLineCells
+                      <InboundProductLineCell
                         meta={displayMeta}
                         productId={ln.product_id}
-                        printSource="catalog"
                         printTestId={`ff-inbound-line-print-${ln.id}`}
                       />
-                      <TableCell>
+                      <TableCell sx={{ width: 188, minWidth: 0 }}>
                         <Stack direction="row" spacing={0.5} sx={{ alignItems: 'center', minWidth: 0 }}>
                           <Typography
                             variant="caption"
                             color="text.secondary"
-                            sx={{ minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis' }}
+                            sx={{
+                              flex: '1 1 auto',
+                              minWidth: 0,
+                              overflow: 'hidden',
+                              textOverflow: 'ellipsis',
+                              whiteSpace: 'nowrap',
+                            }}
+                            title={formatLineDimensions(ln)}
                             data-testid="ff-inbound-line-dimensions"
                           >
                             {formatLineDimensions(ln)}
                           </Typography>
                           {isFulfillmentAdmin ? (
                             <Tooltip title="Габариты">
-                              <IconButton
-                                size="small"
-                                disabled={busy}
-                                onClick={() => openDimensionsEditor(ln)}
-                                data-testid="ff-inbound-line-dimensions-edit"
-                                aria-label="Габариты"
-                              >
-                                <StraightenOutlined fontSize="small" />
-                              </IconButton>
+                              <Box component="span" sx={{ flex: '0 0 40px', display: 'inline-flex' }}>
+                                <IconButton
+                                  size="small"
+                                  disabled={busy}
+                                  onClick={() => openDimensionsEditor(ln)}
+                                  data-testid="ff-inbound-line-dimensions-edit"
+                                  aria-label="Габариты"
+                                  sx={{ width: 40, height: 40 }}
+                                >
+                                  <StraightenOutlined fontSize="small" />
+                                </IconButton>
+                              </Box>
                             </Tooltip>
                           ) : null}
                         </Stack>
                       </TableCell>
-                      <TableCell align="right">
+                      <TableCell align="right" sx={{ width: 112, minWidth: 0 }}>
                         <Stack spacing={0.25} sx={{ alignItems: 'flex-end' }}>
-                          <Typography variant="body2">{ln.expected_qty}</Typography>
+                          <Typography
+                            variant="body2"
+                            sx={{ fontWeight: 600 }}
+                            data-testid="ff-inbound-line-expected"
+                          >
+                            {ln.expected_qty}
+                          </Typography>
                           {ln.added_by_fulfillment ? (
-                            <Typography variant="caption" color="error.dark">
+                            <Typography
+                              variant="caption"
+                              color="error.dark"
+                              sx={{ whiteSpace: 'nowrap' }}
+                              data-testid="ff-inbound-line-added-by-ff"
+                            >
                               Добавлено ФФ
                             </Typography>
                           ) : null}
                         </Stack>
                       </TableCell>
-                      <TableCell align="right">
+                      <TableCell align="right" sx={{ width: 200, minWidth: 0 }}>
                         <Stack
                           direction="row"
-                          spacing={0.5}
-                          sx={{ justifyContent: 'flex-end', alignItems: 'center' }}
+                          spacing={0.75}
+                          sx={{ justifyContent: 'flex-end', alignItems: 'center', minWidth: 0 }}
                         >
                           {manualOpen && actualEditable ? (
                             <TextField
@@ -1901,22 +2065,39 @@ export function FfInboundRequestView({
                                   },
                                 },
                               }}
-                              sx={{ width: 132 }}
+                              sx={{
+                                flex: '0 0 116px',
+                                width: 116,
+                                '& .MuiFormHelperText-root': { mx: 0 },
+                              }}
                             />
                           ) : (
-                            <Typography
-                              variant="body2"
-                              sx={{ fontWeight: 600, minWidth: 24, textAlign: 'right' }}
-                              data-testid="ff-inbound-line-actual-display"
-                            >
-                              {effective}
-                            </Typography>
+                            <Stack spacing={0.1} sx={{ alignItems: 'flex-end', minWidth: 0, flex: '1 1 auto' }}>
+                              <Typography
+                                variant="body2"
+                                sx={{ fontWeight: 700, minWidth: 24, textAlign: 'right' }}
+                                data-testid="ff-inbound-line-actual-display"
+                              >
+                                {effective}
+                              </Typography>
+                              {discrepancyLabel ? (
+                                <Typography
+                                  variant="caption"
+                                  color="error.dark"
+                                  sx={{ lineHeight: 1.15, whiteSpace: 'nowrap' }}
+                                  data-testid="ff-inbound-line-discrepancy"
+                                >
+                                  {discrepancyLabel}
+                                </Typography>
+                              ) : null}
+                            </Stack>
                           )}
                           {actualEditable ? (
                             <IconButton
                               size="small"
                               aria-label="Править количество"
                               disabled={busy}
+                              sx={{ flex: '0 0 40px', width: 40, height: 40 }}
                               onMouseDown={(e) => {
                                 if (manualOpen) {
                                   e.preventDefault()
@@ -1945,7 +2126,7 @@ export function FfInboundRequestView({
                 })}
                 {detail.lines.length === 0 ? (
                   <TableRow>
-                    <TableCell colSpan={10}>
+                    <TableCell colSpan={4}>
                       <Typography variant="body2" color="text.secondary">
                         Пока нет строк. Добавьте товары.
                       </Typography>

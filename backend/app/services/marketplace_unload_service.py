@@ -37,6 +37,9 @@ from app.services.marketplace_unload_status import (
     CANCELLABLE_STATUSES as CANCELLABLE_STATUSES,
 )
 from app.services.marketplace_unload_status import (
+    DELETE_EDITABLE_STATUSES as DELETE_EDITABLE_STATUSES,
+)
+from app.services.marketplace_unload_status import (
     EXECUTION_STATUSES as EXECUTION_STATUSES,
 )
 from app.services.marketplace_unload_status import (
@@ -1069,20 +1072,15 @@ async def delete_line(
     tenant_id: uuid.UUID,
     request_id: uuid.UUID,
     line_id: uuid.UUID,
-    *,
-    allow_ff_confirmed: bool = False,
 ) -> None:
     req = await get_request(session, tenant_id, request_id)
     if req is None:
         raise MarketplaceUnloadError("not_found")
-    editable = SELLER_EDITABLE_STATUSES if not allow_ff_confirmed else FF_LINE_EDITABLE_STATUSES
-    if req.status not in editable:
-        raise MarketplaceUnloadError("not_editable")
+    if req.status not in DELETE_EDITABLE_STATUSES:
+        raise MarketplaceUnloadError("not_draft")
     line = await session.get(MarketplaceUnloadLine, line_id)
     if line is None or line.request_id != request_id:
         raise MarketplaceUnloadError("line_not_found")
     await session.delete(line)
-    if allow_ff_confirmed and req.status == STATUS_CONFIRMED:
-        req.ff_modified = True
     await session.commit()
     await _sync_packaging_task_for_unload(session, tenant_id, request_id)

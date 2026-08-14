@@ -31,7 +31,6 @@ import {
   Tooltip,
   Typography,
 } from '@mui/material'
-import InfoOutlinedIcon from '@mui/icons-material/InfoOutlined'
 import Inventory2OutlinedIcon from '@mui/icons-material/Inventory2Outlined'
 import { apiUrl } from '../../api'
 import { ProductPhotoThumb } from '../../components/ProductPhotoThumb'
@@ -92,6 +91,7 @@ type Props = {
   authHeaders: (t: string) => Record<string, string>
   sellers: SellerRow[]
   onSellersChanged?: () => void | Promise<void>
+  canManageCatalog?: boolean
 }
 
 type SortKey = 'name' | 'quantity'
@@ -119,7 +119,37 @@ function rowMatchesSearch(
   )
 }
 
-export function FfProductsCatalogScreen({ token, authHeaders, sellers, onSellersChanged }: Props) {
+function humanFfCatalogError(message: string): string {
+  const normalized = message.trim()
+  const lower = normalized.toLowerCase()
+  if (
+    lower === 'forbidden' ||
+    lower.includes('forbidden') ||
+    lower === 'seller_not_linked' ||
+    normalized.includes('Нет доступа')
+  ) {
+    return 'Нет доступа к каталогу.'
+  }
+  if (
+    lower === 'not_authenticated' ||
+    lower === 'invalid_token' ||
+    lower === 'user_not_found'
+  ) {
+    return 'Войдите заново.'
+  }
+  if (/^[a-z0-9_:-]+$/.test(normalized)) {
+    return 'Не удалось загрузить каталог.'
+  }
+  return normalized || 'Не удалось загрузить каталог.'
+}
+
+export function FfProductsCatalogScreen({
+  token,
+  authHeaders,
+  sellers,
+  onSellersChanged,
+  canManageCatalog = false,
+}: Props) {
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [selectedSellerId, setSelectedSellerId] = useState<string>('__all__')
@@ -142,7 +172,7 @@ export function FfProductsCatalogScreen({ token, authHeaders, sellers, onSellers
     setError(null)
     setBusy(true)
     try {
-      const sellerFilter = selectedSellerId !== '__all__' ? selectedSellerId : null
+      const sellerFilter = canManageCatalog && selectedSellerId !== '__all__' ? selectedSellerId : null
       const qs = sellerFilter ? `?seller_id=${encodeURIComponent(sellerFilter)}` : ''
       const [catRes, stRes] = await Promise.all([
         fetch(apiUrl(`/products/ff-catalog${qs}`), { headers: { ...authHeaders(token) } }),
@@ -151,10 +181,10 @@ export function FfProductsCatalogScreen({ token, authHeaders, sellers, onSellers
         }),
       ])
       if (!catRes.ok) {
-        throw new Error(await readApiErrorMessage(catRes))
+        throw new Error(humanFfCatalogError(await readApiErrorMessage(catRes)))
       }
       if (!stRes.ok) {
-        throw new Error(await readApiErrorMessage(stRes))
+        throw new Error(humanFfCatalogError(await readApiErrorMessage(stRes)))
       }
       setCatalog((await catRes.json()) as FfCatalogRow[])
       setStock((await stRes.json()) as StockSummaryRow[])
@@ -163,7 +193,7 @@ export function FfProductsCatalogScreen({ token, authHeaders, sellers, onSellers
     } finally {
       setBusy(false)
     }
-  }, [authHeaders, selectedSellerId, token])
+  }, [authHeaders, canManageCatalog, selectedSellerId, token])
 
   useEffect(() => {
     void load()
@@ -187,11 +217,11 @@ export function FfProductsCatalogScreen({ token, authHeaders, sellers, onSellers
         quantity_free_fbo: bal?.quantity_free_fbo ?? (bal?.quantity ?? 0),
       }
     })
-    if (selectedSellerId === '__all__') {
+    if (!canManageCatalog || selectedSellerId === '__all__') {
       return merged
     }
     return merged.filter((r) => r.seller_id === selectedSellerId)
-  }, [catalog, selectedSellerId, stock])
+  }, [canManageCatalog, catalog, selectedSellerId, stock])
 
   const filteredRows = useMemo(() => {
     return rows.filter((r) => rowMatchesSearch(r, searchQuery))
@@ -255,7 +285,7 @@ export function FfProductsCatalogScreen({ token, authHeaders, sellers, onSellers
         }),
       })
       if (!res.ok) {
-        setError(await readApiErrorMessage(res))
+        setError(humanFfCatalogError(await readApiErrorMessage(res)))
         return
       }
       setEditProduct(null)
@@ -269,7 +299,15 @@ export function FfProductsCatalogScreen({ token, authHeaders, sellers, onSellers
 
   return (
     <FfProductMarkingPrintProvider token={token}>
-    <Box>
+    <Box
+      sx={{
+        minWidth: 0,
+        width: '100%',
+        maxWidth: 'calc(100vw - 308px)',
+        boxSizing: 'border-box',
+        overflowX: 'hidden',
+      }}
+    >
       <Typography variant="h5" gutterBottom>
         Каталог
       </Typography>
@@ -293,35 +331,41 @@ export function FfProductsCatalogScreen({ token, authHeaders, sellers, onSellers
         </Alert>
       ) : null}
 
-      <Paper variant="outlined" sx={{ p: 2, mb: 2 }} data-testid="ff-products-filters">
+      <Paper
+        variant="outlined"
+        sx={{ p: 2, mb: 2, maxWidth: '100%', overflowX: 'hidden' }}
+        data-testid="ff-products-filters"
+      >
         <Stack spacing={2}>
-          <Stack
-            direction={{ xs: 'column', sm: 'row' }}
-            spacing={1}
-            sx={{ justifyContent: 'flex-end' }}
-          >
-            <Button
-              variant="outlined"
-              onClick={() => setSellerCreateOpen(true)}
-              data-testid="ff-products-create-seller"
+          {canManageCatalog ? (
+            <Stack
+              direction={{ xs: 'column', sm: 'row' }}
+              spacing={1}
+              sx={{ justifyContent: 'flex-end' }}
             >
-              Создать селлера
-            </Button>
-            <Button
-              variant="outlined"
-              onClick={() => setImportOpen(true)}
-              data-testid="ff-products-import-tz"
-            >
-              Загрузить Excel
-            </Button>
-            <Button
-              variant="contained"
-              onClick={() => setCreateOpen(true)}
-              data-testid="ff-products-create"
-            >
-              Создать товар
-            </Button>
-          </Stack>
+              <Button
+                variant="outlined"
+                onClick={() => setSellerCreateOpen(true)}
+                data-testid="ff-products-create-seller"
+              >
+                Создать селлера
+              </Button>
+              <Button
+                variant="outlined"
+                onClick={() => setImportOpen(true)}
+                data-testid="ff-products-import-tz"
+              >
+                Загрузить Excel
+              </Button>
+              <Button
+                variant="contained"
+                onClick={() => setCreateOpen(true)}
+                data-testid="ff-products-create"
+              >
+                Создать товар
+              </Button>
+            </Stack>
+          ) : null}
           <TextField
             fullWidth
             size="small"
@@ -332,35 +376,72 @@ export function FfProductsCatalogScreen({ token, authHeaders, sellers, onSellers
             slotProps={{ htmlInput: { 'data-testid': 'ff-products-search' } }}
           />
           <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2} sx={{ alignItems: { sm: 'center' } }}>
-            <FormControl size="small" sx={{ minWidth: 260 }}>
-            <InputLabel id="ff-products-seller-label">Селлер</InputLabel>
-            <Select
-              labelId="ff-products-seller-label"
-              label="Селлер"
-              value={selectedSellerId}
-              onChange={(e) => setSelectedSellerId(String(e.target.value))}
-              data-testid="ff-products-seller-filter"
-            >
-              <MenuItem value="__all__">Все</MenuItem>
-              {sellers.map((s) => (
-                <MenuItem key={s.id} value={s.id}>
-                  {s.name}
-                </MenuItem>
-              ))}
-            </Select>
-          </FormControl>
-          {busy ? <CircularProgress size={18} data-testid="ff-products-loading" /> : null}
+            {canManageCatalog ? (
+              <FormControl size="small" sx={{ minWidth: 260 }}>
+                <InputLabel id="ff-products-seller-label">Селлер</InputLabel>
+                <Select
+                  labelId="ff-products-seller-label"
+                  label="Селлер"
+                  value={selectedSellerId}
+                  onChange={(e) => setSelectedSellerId(String(e.target.value))}
+                  data-testid="ff-products-seller-filter"
+                >
+                  <MenuItem value="__all__">Все</MenuItem>
+                  {sellers.map((s) => (
+                    <MenuItem key={s.id} value={s.id}>
+                      {s.name}
+                    </MenuItem>
+                  ))}
+                </Select>
+              </FormControl>
+            ) : null}
+            {busy ? <CircularProgress size={18} data-testid="ff-products-loading" /> : null}
           </Stack>
         </Stack>
       </Paper>
 
-      <TableContainer component={Paper} variant="outlined" data-testid="ff-products-list">
-        <Table stickyHeader size="small" data-testid="ff-products-table">
+      <TableContainer
+        component={Paper}
+        variant="outlined"
+        sx={{ width: '100%', maxWidth: '100%', minWidth: 0, overflowX: 'hidden' }}
+        data-testid="ff-products-list"
+      >
+        <Table
+          stickyHeader
+          size="small"
+          data-testid="ff-products-table"
+          sx={{
+            width: '100%',
+            tableLayout: 'fixed',
+            '& .MuiTableCell-root': {
+              px: 1,
+              py: 1,
+              overflow: 'hidden',
+              verticalAlign: 'middle',
+            },
+            '& .MuiTableCell-head': {
+              fontWeight: 600,
+              lineHeight: 1.2,
+              whiteSpace: 'normal',
+            },
+          }}
+        >
+          <colgroup>
+            <col style={{ width: '6%' }} />
+            <col style={{ width: '15%' }} />
+            <col style={{ width: '8%' }} />
+            <col style={{ width: '24%' }} />
+            <col style={{ width: '14%' }} />
+            <col style={{ width: '9%' }} />
+            <col style={{ width: '8%' }} />
+            <col style={{ width: '12%' }} />
+            <col style={{ width: '4%' }} />
+          </colgroup>
           <TableHead>
             <TableRow>
-              <TableCell width={68}>Фото</TableCell>
-              <TableCell width={230}>SKU / ШК</TableCell>
-              <TableCell width={120}>Артикул WB</TableCell>
+              <TableCell>Фото</TableCell>
+              <TableCell>SKU / ШК</TableCell>
+              <TableCell>Артикул WB</TableCell>
               <TableCell>
                 <TableSortLabel
                   active={sortKey === 'name'}
@@ -371,9 +452,9 @@ export function FfProductsCatalogScreen({ token, authHeaders, sellers, onSellers
                   Название
                 </TableSortLabel>
               </TableCell>
-              <TableCell width={220}>Селлер</TableCell>
-              <TableCell width={130}>ТЗ / ЧЗ</TableCell>
-              <TableCell align="right" width={130}>
+              <TableCell>Селлер</TableCell>
+              <TableCell>ТЗ / ЧЗ</TableCell>
+              <TableCell align="right">
                 <TableSortLabel
                   active={sortKey === 'quantity'}
                   direction={sortKey === 'quantity' ? sortDir : 'asc'}
@@ -382,18 +463,9 @@ export function FfProductsCatalogScreen({ token, authHeaders, sellers, onSellers
                 >
                   Доступно
                 </TableSortLabel>
-                <Tooltip
-                  arrow
-                  title="Свободный FBO = общий остаток минус FBS-пул и обычные направления."
-                >
-                  <InfoOutlinedIcon
-                    sx={{ ml: 0.5, fontSize: 15, verticalAlign: 'text-bottom', color: 'text.secondary' }}
-                    data-testid="ff-products-available-formula"
-                  />
-                </Tooltip>
               </TableCell>
-              <TableCell width={190}>Распределение</TableCell>
-              <TableCell align="center" width={56} />
+              <TableCell>Распределение</TableCell>
+              <TableCell align="center" />
             </TableRow>
           </TableHead>
           <TableBody>
@@ -406,23 +478,47 @@ export function FfProductsCatalogScreen({ token, authHeaders, sellers, onSellers
                   <ProductPhotoThumb src={p.wb_primary_image_url} />
                 </TableCell>
                 <TableCell>
-                  <Stack spacing={0.5}>
-                    <Typography variant="body2" sx={{ fontWeight: 600 }}>
+                  <Stack spacing={0.5} sx={{ minWidth: 0 }}>
+                    <Typography variant="body2" sx={{ fontWeight: 600 }} noWrap>
                       {p.sku_code}
                     </Typography>
-                    <ProductBarcodeCell
-                      barcode={barcode || null}
-                      wb_size={p.wb_size}
-                      wb_composition={p.wb_composition}
-                      testId={`ff-catalog-barcode-${p.id}`}
-                    />
+                    <Box
+                      sx={{
+                        minWidth: 0,
+                        maxWidth: '100%',
+                        '& [data-testid^="ff-catalog-barcode-"]': { maxWidth: '100%' },
+                      }}
+                    >
+                      <ProductBarcodeCell
+                        barcode={barcode || null}
+                        wb_size={p.wb_size}
+                        wb_composition={p.wb_composition}
+                        testId={`ff-catalog-barcode-${p.id}`}
+                      />
+                    </Box>
                   </Stack>
                 </TableCell>
-                <TableCell>{p.wb_nm_id ?? '—'}</TableCell>
                 <TableCell>
-                  <Stack spacing={0.25}>
-                    <Stack direction="row" spacing={0.5} sx={{ alignItems: 'center', flexWrap: 'wrap' }}>
-                      <span>{p.name}</span>
+                  <Typography variant="body2" noWrap>
+                    {p.wb_nm_id ?? '—'}
+                  </Typography>
+                </TableCell>
+                <TableCell>
+                  <Stack spacing={0.25} sx={{ minWidth: 0 }}>
+                    <Stack direction="row" spacing={0.5} sx={{ alignItems: 'center', minWidth: 0 }}>
+                      <Typography
+                        component="span"
+                        variant="body2"
+                        sx={{
+                          minWidth: 0,
+                          display: '-webkit-box',
+                          WebkitLineClamp: 2,
+                          WebkitBoxOrient: 'vertical',
+                          overflow: 'hidden',
+                        }}
+                      >
+                        {p.name}
+                      </Typography>
                       {p.is_manual ? (
                         <Chip
                           size="small"
@@ -433,24 +529,29 @@ export function FfProductsCatalogScreen({ token, authHeaders, sellers, onSellers
                       ) : null}
                     </Stack>
                     {p.wb_vendor_code ? (
-                      <Typography variant="caption" color="text.secondary">
+                      <Typography variant="caption" color="text.secondary" noWrap>
                         Артикул продавца: {p.wb_vendor_code}
                       </Typography>
                     ) : null}
                     {p.wb_size ? (
-                      <Typography variant="caption" color="text.secondary">
+                      <Typography variant="caption" color="text.secondary" noWrap>
                         Размер: {p.wb_size}
                       </Typography>
                     ) : null}
                   </Stack>
                 </TableCell>
-                <TableCell>{p.seller_name ?? '—'}</TableCell>
                 <TableCell>
-                  <Stack spacing={0.5}>
+                  <Typography variant="body2" noWrap>
+                    {p.seller_name ?? '—'}
+                  </Typography>
+                </TableCell>
+                <TableCell>
+                  <Stack spacing={0.5} sx={{ minWidth: 0, alignItems: 'flex-start' }}>
                     <Typography
                       variant="body2"
                       color={p.has_packaging_instructions ? 'text.primary' : 'text.secondary'}
                       data-testid={`ff-packaging-status-${p.id}`}
+                      noWrap
                     >
                       {p.has_packaging_instructions ? 'Заполнено' : 'Нет ТЗ'}
                     </Typography>
@@ -459,37 +560,31 @@ export function FfProductsCatalogScreen({ token, authHeaders, sellers, onSellers
                         ЧЗ нужен
                       </Typography>
                     ) : null}
-                    <Button
-                      size="small"
-                      onClick={() => openPackagingEdit(p)}
-                      data-testid={`ff-packaging-edit-${p.id}`}
-                      sx={{ alignSelf: 'flex-start', minWidth: 0, px: 0 }}
-                    >
-                      ТЗ
-                    </Button>
-                  </Stack>
-                </TableCell>
-                <TableCell align="right">
-                  <Stack spacing={0.25} sx={{ alignItems: 'flex-end' }}>
-                    <Typography variant="body2" sx={{ fontWeight: 700 }}>
-                      {p.available} шт
-                    </Typography>
-                    {p.reserved > 0 ? (
-                      <Typography variant="caption" color="text.secondary">
-                        резерв {p.reserved}
-                      </Typography>
+                    {canManageCatalog ? (
+                      <Button
+                        size="small"
+                        onClick={() => openPackagingEdit(p)}
+                        data-testid={`ff-packaging-edit-${p.id}`}
+                        sx={{ maxWidth: '100%', minWidth: 0, px: 0 }}
+                      >
+                        ТЗ
+                      </Button>
                     ) : null}
                   </Stack>
                 </TableCell>
+                <TableCell align="right">
+                  <Typography variant="body2" sx={{ fontWeight: 700 }}>
+                    {p.available} шт
+                  </Typography>
+                </TableCell>
                 <TableCell>
-                  <Stack direction="row" spacing={0.5} sx={{ alignItems: 'center' }}>
-                    <Box sx={{ minWidth: 0 }}>
+                  <Stack direction="row" spacing={0.5} sx={{ alignItems: 'center', minWidth: 0 }}>
+                    <Box sx={{ minWidth: 0, flex: 1 }}>
                       <Typography variant="body2" noWrap>
                         FBS {p.quantity_fbs} · Резервы {p.quantity_reserved_directions}
                       </Typography>
                       <Typography variant="caption" color="text.secondary" noWrap>
-                        Свободный FBO {p.quantity_free_fbo} · Сортировка{' '}
-                        <span data-testid="ff-product-qty-sorting">{p.quantity_in_sorting}</span>
+                        FBO {p.quantity_free_fbo}
                       </Typography>
                     </Box>
                     <Tooltip title="Показать распределение остатка" arrow>
@@ -529,8 +624,7 @@ export function FfProductsCatalogScreen({ token, authHeaders, sellers, onSellers
                         Пока нет товаров.
                       </Typography>
                       <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5 }}>
-                        Остаток появляется после завершения пересчёта на приёмке (зона «Сортировка»).
-                        После раскладки по ячейкам товар доступен к резерву.
+                        Остаток появится после приемки товара на склад.
                       </Typography>
                     </>
                   )}
@@ -547,7 +641,18 @@ export function FfProductsCatalogScreen({ token, authHeaders, sellers, onSellers
         onClose={() => setDistributionAnchor(null)}
         anchorOrigin={{ vertical: 'bottom', horizontal: 'right' }}
         transformOrigin={{ vertical: 'top', horizontal: 'right' }}
-        slotProps={{ paper: { sx: { p: 2, width: 320 } } }}
+        marginThreshold={16}
+        slotProps={{
+          paper: {
+            sx: {
+              p: 2,
+              width: 320,
+              maxWidth: 'calc(100vw - 32px)',
+              boxSizing: 'border-box',
+              overflowX: 'hidden',
+            },
+          },
+        }}
       >
         {distributionProduct ? (
           <Stack spacing={1.25} data-testid="ff-products-distribution-popover">
@@ -569,56 +674,55 @@ export function FfProductsCatalogScreen({ token, authHeaders, sellers, onSellers
                 value={distributionProduct.quantity_reserved_directions}
                 testId={`ff-product-reserve-directions-${distributionProduct.id}`}
               />
-              <DistributionLine label="Свободно для FBO" value={distributionProduct.quantity_free_fbo} strong />
-              <Divider />
               <DistributionLine
-                label="Не упаковано"
-                value={distributionProduct.quantity_unpacked}
-                testId={`ff-product-unpacked-${distributionProduct.id}`}
+                label="Свободно для FBO"
+                value={distributionProduct.quantity_free_fbo}
+                testId={`ff-product-free-fbo-${distributionProduct.id}`}
+                strong
               />
-              <DistributionLine label="Упаковано" value={distributionProduct.quantity_packed} />
-              <DistributionLine label="Сортировка" value={distributionProduct.quantity_in_sorting} />
-              <DistributionLine label="В ячейках" value={distributionProduct.quantity_in_storage} />
-              <DistributionLine label="Технический резерв" value={distributionProduct.reserved} />
             </Stack>
           </Stack>
         ) : null}
       </Popover>
 
-      <FfManualProductCreateDialog
-        open={createOpen}
-        token={token}
-        authHeaders={authHeaders}
-        sellers={sellers}
-        defaultSellerId={selectedSellerId !== '__all__' ? selectedSellerId : null}
-        onClose={() => setCreateOpen(false)}
-        onCreated={async () => {
-          setImportNotice('Товар создан.')
-          await load()
-        }}
-      />
-      <FfProductTzImportDialog
-        open={importOpen}
-        token={token}
-        sellers={sellers}
-        defaultSellerId={selectedSellerId !== '__all__' ? selectedSellerId : null}
-        onClose={() => setImportOpen(false)}
-        onApplied={async (message) => {
-          setImportNotice(message)
-          await load()
-        }}
-      />
-      <FfSellerCreateDialog
-        open={sellerCreateOpen}
-        token={token}
-        authHeaders={authHeaders}
-        onClose={() => setSellerCreateOpen(false)}
-        onCreated={async (created) => {
-          await onSellersChanged?.()
-          setSelectedSellerId(created.id)
-          setImportNotice(`Селлер «${created.name}» создан и доступен для создания товаров.`)
-        }}
-      />
+      {canManageCatalog ? (
+        <>
+          <FfManualProductCreateDialog
+            open={createOpen}
+            token={token}
+            authHeaders={authHeaders}
+            sellers={sellers}
+            defaultSellerId={selectedSellerId !== '__all__' ? selectedSellerId : null}
+            onClose={() => setCreateOpen(false)}
+            onCreated={async () => {
+              setImportNotice('Товар создан.')
+              await load()
+            }}
+          />
+          <FfProductTzImportDialog
+            open={importOpen}
+            token={token}
+            sellers={sellers}
+            defaultSellerId={selectedSellerId !== '__all__' ? selectedSellerId : null}
+            onClose={() => setImportOpen(false)}
+            onApplied={async (message) => {
+              setImportNotice(message)
+              await load()
+            }}
+          />
+          <FfSellerCreateDialog
+            open={sellerCreateOpen}
+            token={token}
+            authHeaders={authHeaders}
+            onClose={() => setSellerCreateOpen(false)}
+            onCreated={async (created) => {
+              await onSellersChanged?.()
+              setSelectedSellerId(created.id)
+              setImportNotice(`Селлер «${created.name}» создан и доступен для создания товаров.`)
+            }}
+          />
+        </>
+      ) : null}
 
       <Dialog
         open={editProduct !== null}

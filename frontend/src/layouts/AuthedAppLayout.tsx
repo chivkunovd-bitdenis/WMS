@@ -140,6 +140,9 @@ export function AuthedAppLayout({
   const ffDrawerWidth = 260
   const isAdmin = isFulfillmentAdminRole(meRole)
   const can = (block: keyof FfPermissions) => canAccessFfBlock(meRole, ffPermissions, block)
+  const canMpShipments = isAdmin || can('mp_shipments')
+  const canPackaging = isAdmin || can('packaging')
+  const canCatalogCells = isAdmin || can('cells') || can('inventory')
   return (
     <Box sx={{ display: 'flex', minHeight: '100vh' }} data-testid="app-frame">
       <CssBaseline />
@@ -208,16 +211,16 @@ export function AuthedAppLayout({
             <ListItemButton component={NavLink} to={`${base}/dashboard`} data-testid="nav-dashboard">
               <ListItemText primary="Дашборд" />
             </ListItemButton>
-            {can('mp_shipments') ? (
+            {canMpShipments ? (
               <ListItemButton
                 component={NavLink}
                 to={`${base}/mp-shipments`}
                 data-testid="nav-ff-mp-shipments"
               >
-                <ListItemText primary="Отгрузки на МП" />
+                <ListItemText primary="Отгрузки" />
               </ListItemButton>
             ) : null}
-            {can('packaging') ? (
+            {canPackaging ? (
               <ListItemButton component={NavLink} to={`${base}/fbs`} data-testid="nav-ff-fbs">
                 <ListItemText primary="FBS" />
               </ListItemButton>
@@ -232,14 +235,14 @@ export function AuthedAppLayout({
                 </ListItemButton>
               </>
             ) : null}
-            {can('packaging') ? (
+            {canPackaging ? (
               <ListItemButton component={NavLink} to={`${base}/packaging`} data-testid="nav-ff-packaging">
                 <ListItemText primary="Упаковка" />
               </ListItemButton>
             ) : null}
-            {can('cells') ? (
+            {canCatalogCells ? (
               <ListItemButton component={NavLink} to="/app/catalog" data-testid="nav-catalog">
-                <ListItemText primary="Ячейки" />
+                <ListItemText primary={isAdmin ? 'Ячейки' : 'Каталог и ячейки'} />
               </ListItemButton>
             ) : null}
             {isAdmin ? (
@@ -252,7 +255,7 @@ export function AuthedAppLayout({
                 <ListItemText primary="Каталог" />
               </ListItemButton>
             ) : null}
-            {can('inventory') ? (
+            {canCatalogCells ? (
               <ListItemButton
                 component={NavLink}
                 to={`${base}/inventory`}

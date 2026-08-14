@@ -6,7 +6,21 @@ import uuid
 import pytest
 from httpx import AsyncClient
 
+from app.db.session import SessionLocal
+from app.models.seller_shop_delegation import SellerShopDelegation
 from app.services.tokens import create_access_token, decode_access_token
+
+
+async def _allow_seller_shop(user_id: str, seller_id: str, *, enabled: bool = False) -> None:
+    async with SessionLocal() as session:
+        session.add(
+            SellerShopDelegation(
+                user_id=uuid.UUID(user_id),
+                target_seller_id=uuid.UUID(seller_id),
+                enabled=enabled,
+            )
+        )
+        await session.commit()
 
 
 async def _create_product(
@@ -61,6 +75,7 @@ async def test_shop_manager_scope_requires_enabled_delegation_for_products(
         },
     )
     assert home.status_code == 201, home.text
+    user_a = str(home.json()["user_id"])
     seller_a = str(home.json()["seller_id"])
 
     seller_b_resp = await async_client.post(
@@ -101,6 +116,8 @@ async def test_shop_manager_scope_requires_enabled_delegation_for_products(
         seller_id=seller_c,
     )
 
+    await _allow_seller_shop(user_a, seller_b, enabled=False)
+
     login = await async_client.post(
         "/auth/login",
         json={"email": f"vitalik-home-{suffix}@mail.ru", "password": "password123"},
@@ -111,9 +128,11 @@ async def test_shop_manager_scope_requires_enabled_delegation_for_products(
 
     me = await async_client.get("/auth/me", headers=seller_headers)
     assert me.status_code == 200, me.text
-    assert me.json()["can_manage_seller_shops"] is True
-    assert me.json()["active_seller_id"] == seller_a
-    assert {row["id"] for row in me.json()["switchable_shops"]} == {seller_a}
+    me_body = me.json()
+    assert me_body["can_manage_seller_shops"] is True
+    assert me_body["active_seller_id"] == seller_a
+    assert {row["id"] for row in me_body["switchable_shops"]} == {seller_a}
+    assert {row["id"] for row in me_body["delegatable_shops"]} == {seller_b}
 
     update = await async_client.put(
         "/auth/seller-shops",
@@ -144,6 +163,13 @@ async def test_shop_manager_scope_requires_enabled_delegation_for_products(
         json={"seller_id": seller_c},
     )
     assert switch_c.status_code == 403, switch_c.text
+
+    enable_c = await async_client.put(
+        "/auth/seller-shops",
+        headers=seller_headers,
+        json={"enabled_seller_ids": [seller_b, seller_c]},
+    )
+    assert enable_c.status_code == 422, enable_c.text
 
     home_payload = decode_access_token(home_token)
     forged_c_token = create_access_token(

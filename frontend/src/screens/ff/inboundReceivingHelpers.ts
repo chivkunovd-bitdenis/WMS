@@ -1,3 +1,5 @@
+import { inboundOperationTypeLabel } from '../../utils/inboundOperationType'
+
 export type InboundBoxLineRef = {
   product_id: string
   quantity: number
@@ -29,6 +31,7 @@ export type InboundSummaryRef = {
   goods_qty_total?: number | null
   expected_qty_total?: number | null
   units_total?: number | null
+  operation_type?: string | null
 }
 
 export type InboundReceivingTotals = {
@@ -128,6 +131,27 @@ export function scanErrorMessageRu(code: string): string {
   if (code === 'product_not_on_request' || code === 'barcode_unknown') {
     return 'Товар не найден в этой поставке.'
   }
+  if (code === 'product_not_in_seller_catalog') {
+    return 'Товар не найден в WB-каталоге этого селлера. Для разовой приёмки создайте товар вручную.'
+  }
+  if (code === 'product_seller_mismatch' || code === 'mixed_seller_lines') {
+    return 'Товар относится к другому селлеру. В одной приёмке нельзя смешивать селлеров.'
+  }
+  if (code === 'not_verifying') {
+    return 'Приёмка сейчас не открыта для проверки.'
+  }
+  if (code === 'product_not_found') {
+    return 'Товар не найден.'
+  }
+  if (code === 'invalid_qty') {
+    return 'Количество должно быть больше нуля.'
+  }
+  if (code === 'nothing_to_receive') {
+    return 'Нет товаров для приёмки.'
+  }
+  if (code === 'actual_below_posted') {
+    return 'Нельзя уменьшить принятое количество ниже уже размещённого.'
+  }
   if (code === 'barcode_empty') {
     return 'Введите штрихкод.'
   }
@@ -137,14 +161,15 @@ export function scanErrorMessageRu(code: string): string {
   if (code === 'box_not_empty') {
     return 'Нельзя удалить короб с товарами.'
   }
-  return code
+  return 'Не удалось выполнить действие. Проверьте заявку и попробуйте ещё раз.'
 }
 
 export function inboundQueueDocumentLabel(row: InboundSummaryRef): string {
+  const operationLabel = inboundOperationTypeLabel(row.operation_type)
   const preferred = row.display_number ?? row.public_number ?? row.human_number
-  if (preferred?.trim()) return `№ ${preferred.trim().replace(/^№\s*/, '')}`
-  if (row.document_number?.trim()) return `№ ${row.document_number.trim()}`
-  return '№ —'
+  if (preferred?.trim()) return `${operationLabel} № ${preferred.trim().replace(/^№\s*/, '')}`
+  if (row.document_number?.trim()) return `${operationLabel} № ${row.document_number.trim()}`
+  return `${operationLabel} № —`
 }
 
 export function inboundQueueUnitsLabel(row: InboundSummaryRef): string {

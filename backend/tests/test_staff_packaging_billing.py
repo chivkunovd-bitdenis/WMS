@@ -121,6 +121,7 @@ async def test_staff_packaging_billing_counts_only_packed_in_task(
         json={"rate_rub": "10.00"},
     )
     assert rate_patch.status_code == 200, rate_patch.text
+    assert rate_patch.json()["packaging_rate_rub"] == "10.00"
 
     wh = await async_client.post(
         "/warehouses",
@@ -174,6 +175,7 @@ async def test_staff_packaging_billing_counts_only_packed_in_task(
     listed_open = await async_client.get("/auth/staff-accounts", headers=admin_h)
     assert listed_open.status_code == 200, listed_open.text
     row_open = next(r for r in listed_open.json() if r["id"] == staff_id)
+    assert row_open["packaging_rate_rub"] == "10.00"
     assert row_open["packaging_billing"]["units_packed"] == 0
 
     pack = await async_client.post(
@@ -187,6 +189,7 @@ async def test_staff_packaging_billing_counts_only_packed_in_task(
     listed_before_complete = await async_client.get("/auth/staff-accounts", headers=admin_h)
     assert listed_before_complete.status_code == 200, listed_before_complete.text
     row_before_complete = next(r for r in listed_before_complete.json() if r["id"] == staff_id)
+    assert row_before_complete["packaging_rate_rub"] == "10.00"
     assert row_before_complete["packaging_billing"]["units_packed"] == 0
 
     complete = await async_client.post(
@@ -200,6 +203,7 @@ async def test_staff_packaging_billing_counts_only_packed_in_task(
     listed = await async_client.get("/auth/staff-accounts", headers=admin_h)
     assert listed.status_code == 200, listed.text
     row = next(r for r in listed.json() if r["id"] == staff_id)
+    assert row["packaging_rate_rub"] == "10.00"
     assert row["packaging_billing"]["units_packed"] == 10
     assert row["packaging_billing"]["earned_rub"] == "100.00"
 

@@ -230,18 +230,20 @@ export function FfFbsOrdersScreen({ token, authHeaders, sellers, isAdmin = false
           >
             Обновить данные
           </Button>
-          <Button
-            variant="contained"
-            startIcon={
-              syncing ? <CircularProgress size={18} color="inherit" /> : <CloudSyncOutlinedIcon />
-            }
-            onClick={() => void syncWithWb()}
-            disabled={syncing || busy}
-            data-testid="fbs-orders-sync-wb"
-            sx={{ minWidth: 214 }}
-          >
-            {syncing ? 'Забираем заказы…' : 'Забрать заказы из WB'}
-          </Button>
+          {isAdmin ? (
+            <Button
+              variant="contained"
+              startIcon={
+                syncing ? <CircularProgress size={18} color="inherit" /> : <CloudSyncOutlinedIcon />
+              }
+              onClick={() => void syncWithWb()}
+              disabled={syncing || busy}
+              data-testid="fbs-orders-sync-wb"
+              sx={{ minWidth: 214 }}
+            >
+              {syncing ? 'Забираем заказы…' : 'Забрать заказы из WB'}
+            </Button>
+          ) : null}
         </Stack>
       </Stack>
 

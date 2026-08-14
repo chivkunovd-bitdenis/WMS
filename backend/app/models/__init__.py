@@ -44,7 +44,7 @@ from app.models.marking_code import (
 )
 from app.models.notification import Notification
 from app.models.outbound_shipment import OutboundShipmentLine, OutboundShipmentRequest
-from app.models.packaging_task import PackagingTask, PackagingTaskLine
+from app.models.packaging_task import PackagingTask, PackagingTaskEvent, PackagingTaskLine
 from app.models.print_template import PrintTemplate
 from app.models.product import Product
 from app.models.product_tz_import import ProductTzImport
@@ -111,6 +111,7 @@ __all__ = [
     "OutboundShipmentLine",
     "OutboundShipmentRequest",
     "PackagingTask",
+    "PackagingTaskEvent",
     "PackagingTaskLine",
     "PrintTemplate",
     "Product",

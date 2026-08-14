@@ -31,6 +31,7 @@ type Props = {
   switchableShops?: SellerShopRow[]
   shopsBusy?: boolean
   permissions?: SellerPermissions
+  navigationBasePath?: string
   onToggleShop?: (sellerId: string, enabled: boolean) => void
   onSwitchShop?: (sellerId: string | null) => void
 }
@@ -48,11 +49,12 @@ export function SellerLayout({
   switchableShops = [],
   shopsBusy = false,
   permissions = emptySellerPermissions(),
+  navigationBasePath = '',
   onToggleShop,
   onSwitchShop,
 }: Props) {
   const drawerWidth = 240
-  const base = ''
+  const base = navigationBasePath
   return (
     <Box sx={{ display: 'flex', minHeight: '100vh' }} data-testid="app-frame">
       <CssBaseline />
@@ -81,7 +83,7 @@ export function SellerLayout({
                 {userRoleLabel ? <span> · {userRoleLabel}</span> : null}
               </Box>
             ) : null}
-            <NotificationBell portal="seller" notificationsPath="/notifications" />
+            <NotificationBell portal="seller" notificationsPath={`${base}/notifications`} />
             <MuiButton
               type="button"
               variant="outlined"

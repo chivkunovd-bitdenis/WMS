@@ -103,7 +103,10 @@ test('FF packaging: print honest sign codes for line quantity', async ({ page })
   await page.getByTestId('ff-packaging-create-open').click()
   await page.getByTestId('ff-packaging-create-warehouse').click()
   await page.getByRole('option', { name: 'WH CZ' }).click()
+  await page.getByTestId('ff-packaging-create-location').click()
+  await page.getByRole('option', { name: 'Сортировка' }).click()
   await expect(page.getByTestId('ff-packaging-create-row')).toBeVisible()
+  await page.locator('[data-testid^="ff-packaging-create-row-select-"]').first().click()
 
   await Promise.all([
     page.waitForResponse(
@@ -147,7 +150,7 @@ test('FF packaging: print honest sign codes for line quantity', async ({ page })
 
   await expect(page.locator('[data-testid^="ff-packaging-marking-progress-"]')).toBeVisible()
   await expect(page.getByText('напечатано 1 / нужно 1')).toBeVisible()
-  await expect(page.getByText(/дост\.\s+\d+\s+в пуле/)).toBeVisible()
+  await expect(page.getByText(/в пуле\s+\d+/)).toBeVisible()
 })
 
 // TC-NEW-CROSS-01 — перепечатка одного выбранного КМ из строки упаковки.
@@ -240,7 +243,10 @@ test('FF packaging: reprint selected marking codes', async ({ page }) => {
   await page.getByTestId('ff-packaging-create-open').click()
   await page.getByTestId('ff-packaging-create-warehouse').click()
   await page.getByRole('option', { name: 'WH Reprint' }).click()
+  await page.getByTestId('ff-packaging-create-location').click()
+  await page.getByRole('option', { name: 'Сортировка' }).click()
   await expect(page.getByTestId('ff-packaging-create-row')).toBeVisible()
+  await page.locator('[data-testid^="ff-packaging-create-row-select-"]').first().click()
 
   await Promise.all([
     page.waitForResponse(
@@ -386,7 +392,10 @@ test('FF packaging: block complete when honest sign codes missing', async ({ pag
   await page.getByTestId('ff-packaging-create-open').click()
   await page.getByTestId('ff-packaging-create-warehouse').click()
   await page.getByRole('option', { name: 'WH CZ Block' }).click()
+  await page.getByTestId('ff-packaging-create-location').click()
+  await page.getByRole('option', { name: 'Сортировка' }).click()
   await expect(page.getByTestId('ff-packaging-create-row')).toBeVisible()
+  await page.locator('[data-testid^="ff-packaging-create-row-select-"]').first().click()
 
   await Promise.all([
     page.waitForResponse(
@@ -407,15 +416,16 @@ test('FF packaging: block complete when honest sign codes missing', async ({ pag
   await expect(page.getByTestId('ff-packaging-line-marking-incomplete')).toBeVisible()
   await expect(page.getByText('напечатано 0 / нужно 1')).toBeVisible()
 
+  await page.getByTestId('ff-packaging-scanner-input').fill(sku)
   await Promise.all([
     page.waitForResponse(
       (r) =>
         r.request().method() === 'POST' &&
-        r.url().includes('/pack') &&
+        r.url().includes('/scan') &&
         r.status() >= 200 &&
         r.status() < 300,
     ),
-    page.getByTestId('ff-packaging-pack-btn').click(),
+    page.getByTestId('ff-packaging-scan-submit').click(),
   ])
 
   await expect(page.getByTestId('ff-packaging-marking-incomplete-warning')).toBeVisible()

@@ -3,9 +3,12 @@ from __future__ import annotations
 import uuid
 from dataclasses import dataclass
 from datetime import UTC, date, datetime
+from zoneinfo import ZoneInfo
 
 from sqlalchemy import case, func, select
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import selectinload
 
 from app.models.fbs_order import FbsOrderReservation
 from app.models.inventory_balance import InventoryBalance
@@ -13,6 +16,8 @@ from app.models.product import Product
 from app.models.stock_direction import StockDirection, StockMonthlySnapshot
 from app.models.storage_location import StorageLocation
 from app.services.fbs_stock_publish_service import schedule_seller_stock_publish
+
+MSK = ZoneInfo("Europe/Moscow")
 
 
 class StockDirectionError(Exception):
@@ -40,6 +45,10 @@ class StockDistribution:
 
 def normalize_snapshot_month(value: date) -> date:
     return date(value.year, value.month, 1)
+
+
+def current_snapshot_month() -> date:
+    return normalize_snapshot_month(datetime.now(MSK).date())
 
 
 def _clean_name(value: str) -> str:
@@ -430,11 +439,13 @@ async def list_monthly_snapshots(
     snapshot_month = normalize_snapshot_month(month)
     stmt = (
         select(StockMonthlySnapshot)
+        .join(Product, Product.id == StockMonthlySnapshot.product_id)
+        .options(selectinload(StockMonthlySnapshot.product))
         .where(
             StockMonthlySnapshot.tenant_id == tenant_id,
             StockMonthlySnapshot.snapshot_month == snapshot_month,
         )
-        .order_by(StockMonthlySnapshot.product_id)
+        .order_by(Product.sku_code)
     )
     return list((await session.execute(stmt)).scalars().all())
 
@@ -445,6 +456,12 @@ async def take_monthly_snapshot(
     month: date,
 ) -> list[StockMonthlySnapshot]:
     snapshot_month = normalize_snapshot_month(month)
+    existing_snapshots = await list_monthly_snapshots(session, tenant_id, snapshot_month)
+    if existing_snapshots:
+        return existing_snapshots
+    if snapshot_month != current_snapshot_month():
+        raise StockDirectionError("monthly_snapshot_historical_empty")
+
     products = list(
         (
             await session.execute(
@@ -452,31 +469,29 @@ async def take_monthly_snapshot(
             )
         ).scalars()
     )
+    if not products:
+        raise StockDirectionError("monthly_snapshot_empty")
     distributions = await distributions_by_product(session, tenant_id, products)
-    existing = {
-        row.product_id: row
-        for row in await list_monthly_snapshots(session, tenant_id, snapshot_month)
-    }
     snapshots: list[StockMonthlySnapshot] = []
     for product_id in products:
         dist = distributions[product_id]
-        row = existing.get(product_id)
-        if row is None:
-            row = StockMonthlySnapshot(
-                tenant_id=tenant_id,
-                product_id=product_id,
-                snapshot_month=snapshot_month,
-                quantity_total=dist.quantity_total,
-                quantity_fbs=dist.quantity_fbs,
-                quantity_reserved=dist.quantity_reserved,
-                quantity_free_fbo=dist.quantity_free_fbo,
-            )
-            session.add(row)
-        else:
-            row.quantity_total = dist.quantity_total
-            row.quantity_fbs = dist.quantity_fbs
-            row.quantity_reserved = dist.quantity_reserved
-            row.quantity_free_fbo = dist.quantity_free_fbo
+        row = StockMonthlySnapshot(
+            tenant_id=tenant_id,
+            product_id=product_id,
+            snapshot_month=snapshot_month,
+            quantity_total=dist.quantity_total,
+            quantity_fbs=dist.quantity_fbs,
+            quantity_reserved=dist.quantity_reserved,
+            quantity_free_fbo=dist.quantity_free_fbo,
+        )
+        session.add(row)
         snapshots.append(row)
-    await session.commit()
+    try:
+        await session.commit()
+    except IntegrityError:
+        await session.rollback()
+        persisted = await list_monthly_snapshots(session, tenant_id, snapshot_month)
+        if persisted:
+            return persisted
+        raise
     return await list_monthly_snapshots(session, tenant_id, snapshot_month)

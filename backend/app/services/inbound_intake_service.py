@@ -620,6 +620,7 @@ async def add_or_increment_received_product(
     *,
     product_id: uuid.UUID,
     actual_qty: int = 1,
+    allow_manual_product: bool = False,
 ) -> InboundIntakeLine:
     if actual_qty < 1:
         raise InboundIntakeError("invalid_qty")
@@ -646,7 +647,6 @@ async def add_or_increment_received_product(
         req.seller_id = product.seller_id
     elif product.seller_id != req.seller_id:
         raise InboundIntakeError("product_seller_mismatch")
-
     line = next((ln for ln in req.lines if ln.product_id == product_id), None)
     if line is None:
         line = InboundIntakeLine(

@@ -88,6 +88,29 @@ const MARKETPLACE_OPTIONS = [
   { value: 'ozon', label: 'Ozon' },
 ] as const
 
+function humanSellerStaffError(message: string): string {
+  if (message.includes('Этот сотрудник уже добавлен') || message.includes('email_taken')) {
+    return 'Этот сотрудник уже добавлен'
+  }
+  if (message.includes('Нет доступа') || message.includes('forbidden') || message.includes('seller_not_linked')) {
+    return 'Нет доступа к сотрудникам'
+  }
+  if (
+    message.includes('Сотрудник не найден') ||
+    message.includes('not_seller_user') ||
+    message.includes('user_not_found')
+  ) {
+    return 'Сотрудник не найден'
+  }
+  if (message.includes('owner_protected')) {
+    return 'Нельзя снять последний полный доступ к кабинету'
+  }
+  if (message.includes('self_update_forbidden')) {
+    return 'Нельзя изменить собственный доступ'
+  }
+  return message || 'Не удалось сохранить. Попробуйте еще раз'
+}
+
 export function SellerSettingsScreen({
   token,
   authHeaders,
@@ -187,7 +210,7 @@ export function SellerSettingsScreen({
       headers: { ...authHeaders(token) },
     })
     if (!res.ok) {
-      throw new Error(await readApiErrorMessage(res))
+      throw new Error(humanSellerStaffError(await readApiErrorMessage(res)))
     }
     setStaffRows((await res.json()) as SellerStaffAccountRow[])
   }
@@ -361,16 +384,14 @@ export function SellerSettingsScreen({
         body: JSON.stringify({ email, permissions: staffCreatePerms }),
       })
       if (!res.ok) {
-        setStaffError(await readApiErrorMessage(res))
+        setStaffError(humanSellerStaffError(await readApiErrorMessage(res)))
         return
       }
       form.reset()
       setStaffCreatePerms(DEFAULT_STAFF_PERMISSIONS)
       await loadStaffRows()
       await onStaffChanged?.()
-      setStaffOk(
-        `Сотрудник ${email} добавлен. Первый вход — с пустым паролем, затем сотрудник задаст новый пароль.`,
-      )
+      setStaffOk('Сотрудник добавлен')
     } catch (e) {
       setStaffError(e instanceof Error ? e.message : 'Не удалось добавить сотрудника.')
     } finally {
@@ -400,13 +421,13 @@ export function SellerSettingsScreen({
         body: JSON.stringify(next),
       })
       if (!res.ok) {
-        setStaffError(await readApiErrorMessage(res))
+        setStaffError(humanSellerStaffError(await readApiErrorMessage(res)))
         return
       }
       const updated = (await res.json()) as SellerStaffAccountRow
       setStaffRows((prev) => prev.map((r) => (r.id === updated.id ? updated : r)))
       await onStaffChanged?.()
-      setStaffOk(`${row.email}: права сохранены.`)
+      setStaffOk('Права сохранены')
     } catch (e) {
       setStaffError(e instanceof Error ? e.message : 'Не удалось сохранить права.')
     } finally {

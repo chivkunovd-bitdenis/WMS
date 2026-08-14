@@ -92,9 +92,11 @@ test('seller creates, edits and deletes stock directions with compact FBS public
   await page.getByTestId('nav-seller-products').click()
   await expect(page.getByTestId('seller-products-table')).toBeVisible()
   const tableHead = page.getByTestId('seller-products-table').locator('thead')
-  await expect(tableHead).toContainText('WB / ШК')
+  await expect(tableHead).toContainText('Артикул WB')
+  await expect(tableHead).not.toContainText('WB / ШК')
   await expect(tableHead).toContainText('FBS-пул')
   await expect(tableHead).toContainText('Публикация WB')
+  await expect(tableHead).not.toContainText('Действия')
   await expect(tableHead).not.toContainText(/WB nm|nmID|nm_id/)
   await expect(page.getByTestId('seller-fbs-sync-panel')).toContainText('Публикация FBS в WB')
   await expect(page.getByTestId('seller-fbs-sync-panel')).not.toContainText('Включить всем')
@@ -109,7 +111,10 @@ test('seller creates, edits and deletes stock directions with compact FBS public
   await expect(row.getByTestId(`seller-stock-distribution-${productId}`)).toContainText(
     'FBS 0 шт',
   )
-  await expect(row.getByTestId('seller-stock-free-fbo')).toHaveText('10')
+  await expect(row.getByTestId('seller-stock-in-storage')).toHaveText('В ячейках 10')
+  await expect(row.getByTestId('seller-stock-on-hand')).toHaveText('На ФФ 10')
+  await expect(row.getByTestId('seller-stock-free-fbo')).toHaveText('Свободный FBO 10')
+  await expect(row.getByTestId(`seller-stock-directions-toggle-${productId}`)).toHaveText('Пул')
   await expect(row.getByTestId(`seller-fbs-status-${productId}`)).toContainText(
     'Нет FBS',
   )
@@ -167,7 +172,7 @@ test('seller creates, edits and deletes stock directions with compact FBS public
   await expect(row.getByTestId(`seller-stock-distribution-${productId}`)).toContainText(
     'FBS 3 шт',
   )
-  await expect(row.getByTestId('seller-stock-free-fbo')).toHaveText('7')
+  await expect(row.getByTestId('seller-stock-free-fbo')).toHaveText('Свободный FBO 7')
   await expect(row.getByTestId(`seller-fbs-status-${productId}`)).toContainText(
     'Проверяем WB',
   )
@@ -195,7 +200,7 @@ test('seller creates, edits and deletes stock directions with compact FBS public
   }, productId)
   expect(publicationGeometry.fbsCellText).not.toContain('Лимит')
   expect(publicationGeometry.fbsLimitControls).toBe(0)
-  expect(publicationGeometry.rowHeight).toBeLessThanOrEqual(96)
+  expect(publicationGeometry.rowHeight).toBeLessThanOrEqual(72)
   expect(publicationGeometry.documentScrollWidth).toBeLessThanOrEqual(
     publicationGeometry.viewportWidth + 1,
   )
@@ -230,7 +235,7 @@ test('seller creates, edits and deletes stock directions with compact FBS public
   await expect(row.getByTestId(`seller-stock-distribution-${productId}`)).toContainText(
     'резервы 2 шт',
   )
-  await expect(row.getByTestId('seller-stock-free-fbo')).toHaveText('5')
+  await expect(row.getByTestId('seller-stock-free-fbo')).toHaveText('Свободный FBO 5')
   await expect(panel).toContainText('FBS-пул')
   await expect(panel).toContainText('Резерв/набор')
   await expect(panel.locator('[data-testid^="seller-stock-direction-row-"]')).toHaveCount(2)
@@ -259,7 +264,7 @@ test('seller creates, edits and deletes stock directions with compact FBS public
   await expect(row.getByTestId(`seller-stock-distribution-${productId}`)).toContainText(
     'резервы 4 шт',
   )
-  await expect(row.getByTestId('seller-stock-free-fbo')).toHaveText('3')
+  await expect(row.getByTestId('seller-stock-free-fbo')).toHaveText('Свободный FBO 3')
 
   await page.getByTestId(`seller-stock-direction-edit-${reserveDirectionId}`).click()
   await page.getByTestId(`seller-stock-direction-fbs-${productId}`).click()
@@ -281,7 +286,7 @@ test('seller creates, edits and deletes stock directions with compact FBS public
   await expect(row.getByTestId(`seller-stock-distribution-${productId}`)).toContainText(
     'резервы 0 шт',
   )
-  await expect(row.getByTestId('seller-stock-free-fbo')).toHaveText('3')
+  await expect(row.getByTestId('seller-stock-free-fbo')).toHaveText('Свободный FBO 3')
 
   await page.getByTestId(`seller-stock-direction-name-${productId}`).fill('Слишком много')
   await page.getByTestId(`seller-stock-direction-quantity-${productId}`).fill('4')
@@ -334,5 +339,5 @@ test('seller creates, edits and deletes stock directions with compact FBS public
   await expect(row.getByTestId(`seller-stock-distribution-${productId}`)).toContainText(
     'FBS 4 шт',
   )
-  await expect(row.getByTestId('seller-stock-free-fbo')).toHaveText('6')
+  await expect(row.getByTestId('seller-stock-free-fbo')).toHaveText('Свободный FBO 6')
 })
