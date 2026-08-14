@@ -1409,7 +1409,7 @@ async def test_fbs_order_without_local_stock_is_selectable(
             _wb_order_row(
                 order_id=800801,
                 created_at=datetime.now(UTC).isoformat(),
-                warehouse_id=UNKNOWN_WB_WAREHOUSE,
+                warehouse_id=WB_WAREHOUSE_A,
             ),
         ],
     )
