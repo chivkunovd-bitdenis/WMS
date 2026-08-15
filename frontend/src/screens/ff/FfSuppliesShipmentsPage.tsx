@@ -186,6 +186,8 @@ type UnifiedRow = {
 function statusRu(status: string): string {
   if (status === 'draft') return 'Черновик'
   if (status === 'confirmed') return 'Утверждено'
+  if (status === 'approved') return 'Утверждено'
+  if (status === 'rejected') return 'Отклонено'
   if (status === 'collecting') return 'На сборке'
   if (status === 'shipped') return 'Отгружено'
   if (status === 'submitted') return 'Запланировано'
@@ -197,11 +199,20 @@ function statusRu(status: string): string {
   return status
 }
 
+function docStatusRu(kind: DocKind, status: string): string {
+  if (kind === 'discrepancy_act' && status === 'confirmed') return 'Передан на FF'
+  return statusRu(status)
+}
+
 function kindRu(kind: DocKind): string {
   if (kind === 'inbound') return 'Приёмка'
   if (kind === 'outbound') return 'Отгрузка'
   if (kind === 'marketplace_unload') return 'Отгрузка на МП'
   return 'Расхождение'
+}
+
+function formatSignedQty(value: number): string {
+  return value > 0 ? `+${value}` : String(value)
 }
 
 const mpUnloadSteps: { value: MpUnloadTab; label: string; testId: string }[] = [
@@ -1457,6 +1468,33 @@ export function FfSuppliesShipmentsPage({
     }
   }
 
+  const resolveDiscrepancyAct = async (action: 'approve' | 'reject') => {
+    if (!token || !authHeaders || docModal !== 'discrepancy_act' || !docModalId) {
+      return
+    }
+    setModalBusy(true)
+    setModalError(null)
+    try {
+      const res = await fetch(
+        apiUrl(`/operations/discrepancy-acts/${docModalId}/${action}`),
+        {
+          method: 'POST',
+          headers: authHeaders,
+        },
+      )
+      if (!res.ok) {
+        setModalError(await readApiErrorMessage(res))
+        return
+      }
+      await loadDocDetail()
+      await onRefreshFfSupplyExtras()
+    } catch (e) {
+      setModalError(e instanceof Error ? e.message : 'Не удалось обработать акт.')
+    } finally {
+      setModalBusy(false)
+    }
+  }
+
   const deleteDocLine = async (lineId: string) => {
     if (!token || !authHeaders || !docModal || !docModalId) {
       return
@@ -1490,8 +1528,12 @@ export function FfSuppliesShipmentsPage({
       return
     }
     const q = Number(lineQty)
-    if (!Number.isInteger(q) || q < 1) {
-      setModalError('Укажите целое количество ≥ 1.')
+    if (!Number.isInteger(q) || (docModal === 'discrepancy_act' ? q === 0 : q < 1)) {
+      setModalError(
+        docModal === 'discrepancy_act'
+          ? 'Укажите целое расхождение: положительное или отрицательное.'
+          : 'Укажите целое количество ≥ 1.',
+      )
       return
     }
     setModalBusy(true)
@@ -2138,7 +2180,7 @@ export function FfSuppliesShipmentsPage({
                   {row.createdAt ? formatDateTimeLocal(row.createdAt) : '—'}
                 </TableCell>
                 <TableCell>
-                  {statusRu(row.status)}
+                  {docStatusRu(row.kind, row.status)}
                   {row.ffModified ? (
                     <Chip
                       size="small"
@@ -2828,7 +2870,7 @@ export function FfSuppliesShipmentsPage({
           ) : null}
           {divergeDetail ? (
             <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
-              {statusRu(divergeDetail.status)}
+              {docStatusRu('discrepancy_act', divergeDetail.status)}
               {divergeDetail.inbound_intake_request_id
                 ? ` · приёмка ${divergeDetail.inbound_intake_request_id.slice(0, 8)}…`
                 : ''}
@@ -2840,7 +2882,7 @@ export function FfSuppliesShipmentsPage({
               <TableRow>
                 <FfProductTableHeadCells showPrint={false} />
                 <TableCell>Строка приёмки</TableCell>
-                <TableCell align="right">План</TableCell>
+                <TableCell align="right">Расхождение</TableCell>
                 {draftDoc ? <TableCell align="right" width={56} /> : null}
               </TableRow>
             </TableHead>
@@ -2876,7 +2918,7 @@ export function FfSuppliesShipmentsPage({
                           ? `${ln.inbound_intake_line_id.slice(0, 8)}…`
                           : '—'}
                       </TableCell>
-                      <TableCell align="right">{ln.quantity}</TableCell>
+                      <TableCell align="right">{formatSignedQty(ln.quantity)}</TableCell>
                       {draftDoc ? (
                         <TableCell align="right">
                           <Tooltip title="Удалить строку">
@@ -2952,9 +2994,9 @@ export function FfSuppliesShipmentsPage({
               </FormControl>
               <TextField
                 size="small"
-                label="Количество"
+                label="Расхождение"
                 type="number"
-                slotProps={{ htmlInput: { min: 1 } }}
+                slotProps={{ htmlInput: { step: 1 } }}
                 value={lineQty}
                 onChange={(e) => setLineQty(e.target.value)}
                 data-testid="ff-supplies-line-qty"
@@ -3058,8 +3100,30 @@ export function FfSuppliesShipmentsPage({
                 onClick={() => void submitDoc()}
                 data-testid="ff-supplies-doc-submit"
               >
-                Утвердить заявку
+                Передать на FF
               </Button>
+            ) : null}
+            {docModal === 'discrepancy_act' && divergeDetail?.status === 'confirmed' ? (
+              <>
+                <Button
+                  variant="contained"
+                  color="primary"
+                  disabled={modalBusy}
+                  onClick={() => void resolveDiscrepancyAct('approve')}
+                  data-testid="ff-discrepancy-act-approve"
+                >
+                  Утвердить акт
+                </Button>
+                <Button
+                  variant="outlined"
+                  color="error"
+                  disabled={modalBusy}
+                  onClick={() => void resolveDiscrepancyAct('reject')}
+                  data-testid="ff-discrepancy-act-reject"
+                >
+                  Отклонить
+                </Button>
+              </>
             ) : null}
           </Stack>
           <Button onClick={closeDocModal} data-testid="ff-supplies-doc-close">

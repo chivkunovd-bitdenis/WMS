@@ -2452,9 +2452,7 @@ export default function App() {
       }
       const created = (await res.json()) as { id: string }
       await refreshDiscrepancyActList(token)
-      setFfSuppliesNotice(
-        'Акт расхождения создан (черновик). Связь с приёмкой и строки — на следующем этапе.',
-      )
+      setFfSuppliesNotice('Акт расхождения создан (черновик). Добавьте строки и передайте на FF.')
       return created
     } catch (e) {
       setOpsError(
