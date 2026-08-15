@@ -2874,7 +2874,6 @@ export default function App() {
                   token={token}
                   authHeaders={authHeaders}
                   sellers={sellers}
-                  onSellersChanged={() => refreshSellers(token)}
                   canManageCatalog={isFulfillmentAdmin}
                 />
               ) : (

@@ -1,24 +1,13 @@
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import {
   Alert,
   Badge,
   Box,
   Button,
-  Checkbox,
-  Chip,
   CircularProgress,
-  Dialog,
-  DialogActions,
-  DialogContent,
-  DialogTitle,
-  FormControl,
-  FormControlLabel,
   IconButton,
-  InputLabel,
-  MenuItem,
   Paper,
-  Select,
   Stack,
   Table,
   TableBody,
@@ -26,8 +15,6 @@ import {
   TableContainer,
   TableHead,
   TableRow,
-  TableSortLabel,
-  TextField,
   Tooltip,
   Typography,
 } from '@mui/material'
@@ -39,14 +26,12 @@ import { ProductBarcodeCell } from '../../components/ProductBarcodeCell'
 import { ProductBarcodePrintButton } from '../../components/ProductBarcodePrintButton'
 import { FfProductMarkingPrintProvider } from '../../components/FfProductMarkingPrintProvider'
 import { readApiErrorMessage } from '../../utils/readApiErrorMessage'
-import { printPackagingInstructions } from '../../utils/printPackagingInstructions'
 import {
   catalogRowToDisplayMeta,
   resolveProductPrimaryBarcode,
 } from '../../types/wbProductCatalog'
 import { FfManualProductCreateDialog } from '../ff/FfManualProductCreateDialog'
 import { FfProductTzImportDialog } from '../ff/FfProductTzImportDialog'
-import { FfSellerCreateDialog } from '../ff/FfSellerCreateDialog'
 
 type SellerRow = { id: string; name: string }
 
@@ -69,30 +54,13 @@ type FfCatalogRow = {
   requires_honest_sign: boolean
   has_packaging_instructions: boolean
   marking_available_count?: number
-  is_manual?: boolean
 }
 
 type Props = {
   token: string
   authHeaders: (t: string) => Record<string, string>
   sellers: SellerRow[]
-  onSellersChanged?: () => void | Promise<void>
   canManageCatalog?: boolean
-}
-
-function rowMatchesSearch(row: FfCatalogRow, query: string): boolean {
-  const needle = query.trim().toLowerCase()
-  if (!needle) return true
-  return (
-    row.name.toLowerCase().includes(needle) ||
-    row.sku_code.toLowerCase().includes(needle) ||
-    (row.wb_vendor_code?.toLowerCase().includes(needle) ?? false) ||
-    (row.wb_nm_id != null && String(row.wb_nm_id).includes(needle)) ||
-    (row.wb_size?.toLowerCase().includes(needle) ?? false) ||
-    (row.wb_color?.toLowerCase().includes(needle) ?? false) ||
-    (row.wb_primary_barcode?.toLowerCase().includes(needle) ?? false) ||
-    row.wb_barcodes.some((b) => b.toLowerCase().includes(needle))
-  )
 }
 
 function humanFfCatalogError(message: string): string {
@@ -123,32 +91,22 @@ export function FfProductsCatalogScreen({
   token,
   authHeaders,
   sellers,
-  onSellersChanged,
   canManageCatalog = false,
 }: Props) {
   const navigate = useNavigate()
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
-  const [selectedSellerId, setSelectedSellerId] = useState<string>('__all__')
-  const [searchQuery, setSearchQuery] = useState('')
   const [catalog, setCatalog] = useState<FfCatalogRow[]>([])
-  const [sortDir, setSortDir] = useState<'asc' | 'desc'>('asc')
-  const [editProduct, setEditProduct] = useState<FfCatalogRow | null>(null)
-  const [editText, setEditText] = useState('')
-  const [editRequiresHonestSign, setEditRequiresHonestSign] = useState(false)
-  const [editBusy, setEditBusy] = useState(false)
+  const [dialogSellers, setDialogSellers] = useState<SellerRow[]>(sellers)
   const [createOpen, setCreateOpen] = useState(false)
   const [importOpen, setImportOpen] = useState(false)
-  const [sellerCreateOpen, setSellerCreateOpen] = useState(false)
   const [importNotice, setImportNotice] = useState<string | null>(null)
 
   const load = useCallback(async () => {
     setError(null)
     setBusy(true)
     try {
-      const sellerFilter = canManageCatalog && selectedSellerId !== '__all__' ? selectedSellerId : null
-      const qs = sellerFilter ? `?seller_id=${encodeURIComponent(sellerFilter)}` : ''
-      const res = await fetch(apiUrl(`/products/ff-catalog${qs}`), {
+      const res = await fetch(apiUrl('/products/ff-catalog'), {
         headers: { ...authHeaders(token) },
       })
       if (!res.ok) {
@@ -160,75 +118,49 @@ export function FfProductsCatalogScreen({
     } finally {
       setBusy(false)
     }
-  }, [authHeaders, canManageCatalog, selectedSellerId, token])
+  }, [authHeaders, token])
 
   useEffect(() => {
     void load()
   }, [load])
 
-  const rows = useMemo(() => {
-    if (!canManageCatalog || selectedSellerId === '__all__') {
-      return catalog
+  useEffect(() => {
+    if (sellers.length > 0) {
+      setDialogSellers(sellers)
     }
-    return catalog.filter((r) => r.seller_id === selectedSellerId)
-  }, [canManageCatalog, catalog, selectedSellerId])
+  }, [sellers])
 
-  const filteredRows = useMemo(
-    () => rows.filter((r) => rowMatchesSearch(r, searchQuery)),
-    [rows, searchQuery],
-  )
-
-  const sortedRows = useMemo(() => {
-    const dir = sortDir === 'asc' ? 1 : -1
-    return [...filteredRows].sort((a, b) => {
-      const byName = a.name.localeCompare(b.name) * dir
-      if (byName !== 0) return byName
-      return a.sku_code.localeCompare(b.sku_code) * dir
-    })
-  }, [filteredRows, sortDir])
-
-  function openPackagingEdit(p: FfCatalogRow) {
-    setEditProduct(p)
-    setEditText(p.packaging_instructions ?? '')
-    setEditRequiresHonestSign(Boolean(p.requires_honest_sign))
-  }
-
-  function printPackagingTz() {
-    if (!editProduct) return
-    printPackagingInstructions({
-      sku_code: editProduct.sku_code,
-      product_name: editProduct.name,
-      seller_name: editProduct.seller_name,
-      instructions: editText,
-      requires_honest_sign: editRequiresHonestSign,
-    })
-  }
-
-  async function savePackagingInstructions() {
-    if (!editProduct) return
-    setEditBusy(true)
-    setError(null)
+  const loadDialogSellers = useCallback(async (): Promise<SellerRow[]> => {
+    if (!canManageCatalog) return []
     try {
-      const res = await fetch(apiUrl(`/products/${editProduct.id}/packaging-instructions`), {
-        method: 'PATCH',
-        headers: { ...authHeaders(token), 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          packaging_instructions: editText.trim() || null,
-          requires_honest_sign: editRequiresHonestSign,
-        }),
+      const res = await fetch(apiUrl('/sellers'), {
+        headers: { ...authHeaders(token) },
       })
       if (!res.ok) {
-        setError(humanFfCatalogError(await readApiErrorMessage(res)))
-        return
+        throw new Error(humanFfCatalogError(await readApiErrorMessage(res)))
       }
-      setEditProduct(null)
-      await load()
+      const rows = (await res.json()) as SellerRow[]
+      setDialogSellers(rows)
+      return rows
     } catch (e) {
-      setError(e instanceof Error ? e.message : 'Не удалось сохранить ТЗ.')
-    } finally {
-      setEditBusy(false)
+      setError(e instanceof Error ? e.message : 'Не удалось загрузить селлеров.')
+      return []
     }
-  }
+  }, [authHeaders, canManageCatalog, token])
+
+  useEffect(() => {
+    void loadDialogSellers()
+  }, [loadDialogSellers])
+
+  const openCreateDialog = useCallback(async () => {
+    await loadDialogSellers()
+    setCreateOpen(true)
+  }, [loadDialogSellers])
+
+  const openImportDialog = useCallback(async () => {
+    await loadDialogSellers()
+    setImportOpen(true)
+  }, [loadDialogSellers])
 
   return (
     <FfProductMarkingPrintProvider token={token}>
@@ -267,74 +199,33 @@ export function FfProductsCatalogScreen({
         <Paper
           variant="outlined"
           sx={{ p: 2, mb: 2, maxWidth: '100%', overflowX: 'hidden' }}
-          data-testid="ff-products-filters"
+          data-testid="ff-products-actions"
         >
-          <Stack spacing={2}>
+          <Stack
+            direction={{ xs: 'column', sm: 'row' }}
+            spacing={1}
+            sx={{ justifyContent: 'flex-end', alignItems: { sm: 'center' } }}
+          >
+            {busy ? <CircularProgress size={18} data-testid="ff-products-loading" /> : null}
             {canManageCatalog ? (
-              <Stack
-                direction={{ xs: 'column', sm: 'row' }}
-                spacing={1}
-                sx={{ justifyContent: 'flex-end' }}
-              >
-                <Button
-                  variant="outlined"
-                  onClick={() => setSellerCreateOpen(true)}
-                  data-testid="ff-products-create-seller"
-                >
-                  Создать селлера
-                </Button>
+              <>
                 <Button
                   variant="contained"
                   startIcon={<DownloadOutlinedIcon />}
-                  onClick={() => setImportOpen(true)}
+                  onClick={() => void openImportDialog()}
                   data-testid="ff-products-import-tz"
                 >
                   Загрузить Excel
                 </Button>
                 <Button
                   variant="outlined"
-                  onClick={() => setCreateOpen(true)}
+                  onClick={() => void openCreateDialog()}
                   data-testid="ff-products-create"
                 >
                   Создать товар
                 </Button>
-              </Stack>
+              </>
             ) : null}
-            <TextField
-              fullWidth
-              size="small"
-              label="Поиск"
-              placeholder="Название, артикул, SKU, ШК, WB/nmId или размер"
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              slotProps={{ htmlInput: { 'data-testid': 'ff-products-search' } }}
-            />
-            <Stack
-              direction={{ xs: 'column', sm: 'row' }}
-              spacing={2}
-              sx={{ alignItems: { sm: 'center' } }}
-            >
-              {canManageCatalog ? (
-                <FormControl size="small" sx={{ minWidth: 260 }}>
-                  <InputLabel id="ff-products-seller-label">Селлер</InputLabel>
-                  <Select
-                    labelId="ff-products-seller-label"
-                    label="Селлер"
-                    value={selectedSellerId}
-                    onChange={(e) => setSelectedSellerId(String(e.target.value))}
-                    data-testid="ff-products-seller-filter"
-                  >
-                    <MenuItem value="__all__">Все</MenuItem>
-                    {sellers.map((s) => (
-                      <MenuItem key={s.id} value={s.id}>
-                        {s.name}
-                      </MenuItem>
-                    ))}
-                  </Select>
-                </FormControl>
-              ) : null}
-              {busy ? <CircularProgress size={18} data-testid="ff-products-loading" /> : null}
-            </Stack>
           </Stack>
         </Paper>
 
@@ -379,16 +270,7 @@ export function FfProductsCatalogScreen({
             <TableHead>
               <TableRow>
                 <TableCell>Фото</TableCell>
-                <TableCell>
-                  <TableSortLabel
-                    active
-                    direction={sortDir}
-                    onClick={() => setSortDir((d) => (d === 'asc' ? 'desc' : 'asc'))}
-                    data-testid="ff-products-sort-name"
-                  >
-                    Название
-                  </TableSortLabel>
-                </TableCell>
+                <TableCell>Название</TableCell>
                 <TableCell>Артикул селлера</TableCell>
                 <TableCell>SKU</TableCell>
                 <TableCell>ШК</TableCell>
@@ -400,7 +282,7 @@ export function FfProductsCatalogScreen({
               </TableRow>
             </TableHead>
             <TableBody>
-              {sortedRows.map((p) => {
+              {catalog.map((p) => {
                 const displayMeta = catalogRowToDisplayMeta(p)
                 const barcode = resolveProductPrimaryBarcode(displayMeta)
                 const markingCount = p.marking_available_count ?? 0
@@ -410,29 +292,20 @@ export function FfProductsCatalogScreen({
                       <ProductPhotoThumb src={p.wb_primary_image_url} />
                     </TableCell>
                     <TableCell>
-                      <Stack direction="row" spacing={0.75} sx={{ alignItems: 'center', minWidth: 0 }}>
-                        <Typography
-                          component="span"
-                          variant="body2"
-                          sx={{
-                            minWidth: 0,
-                            display: '-webkit-box',
-                            WebkitLineClamp: 2,
-                            WebkitBoxOrient: 'vertical',
-                            overflow: 'hidden',
-                          }}
-                        >
-                          {p.name}
-                        </Typography>
-                        {p.is_manual ? (
-                          <Chip
-                            size="small"
-                            label="Вручную"
-                            variant="outlined"
-                            data-testid={`ff-product-manual-${p.id}`}
-                          />
-                        ) : null}
-                      </Stack>
+                      <Typography
+                        component="span"
+                        variant="body2"
+                        title={p.name}
+                        sx={{
+                          minWidth: 0,
+                          display: 'block',
+                          overflow: 'hidden',
+                          textOverflow: 'ellipsis',
+                          whiteSpace: 'nowrap',
+                        }}
+                      >
+                        {p.name}
+                      </Typography>
                     </TableCell>
                     <TableCell>
                       <Typography variant="body2" noWrap>
@@ -485,16 +358,6 @@ export function FfProductsCatalogScreen({
                         >
                           {p.has_packaging_instructions ? 'Заполнено' : 'Нет ТЗ'}
                         </Typography>
-                        {canManageCatalog ? (
-                          <Button
-                            size="small"
-                            onClick={() => openPackagingEdit(p)}
-                            data-testid={`ff-packaging-edit-${p.id}`}
-                            sx={{ maxWidth: '100%', minWidth: 0, px: 0 }}
-                          >
-                            ТЗ
-                          </Button>
-                        ) : null}
                       </Stack>
                     </TableCell>
                     <TableCell align="center">
@@ -540,18 +403,10 @@ export function FfProductsCatalogScreen({
                   </TableRow>
                 )
               })}
-              {sortedRows.length === 0 && !busy ? (
+              {catalog.length === 0 && !busy ? (
                 <TableRow>
                   <TableCell colSpan={10}>
-                    {searchQuery.trim() ? (
-                      <Typography
-                        variant="body2"
-                        color="text.secondary"
-                        data-testid="ff-products-search-empty"
-                      >
-                        Ничего не найдено по запросу «{searchQuery.trim()}».
-                      </Typography>
-                    ) : canManageCatalog ? (
+                    {canManageCatalog ? (
                       <Typography variant="body2" color="text.secondary" data-testid="ff-products-empty">
                         В каталоге пока нет товаров. Скачайте шаблон, загрузите Excel или создайте
                         один товар вручную.
@@ -574,8 +429,7 @@ export function FfProductsCatalogScreen({
               open={createOpen}
               token={token}
               authHeaders={authHeaders}
-              sellers={sellers}
-              defaultSellerId={selectedSellerId !== '__all__' ? selectedSellerId : null}
+              sellers={dialogSellers}
               onClose={() => setCreateOpen(false)}
               onCreated={async () => {
                 setImportNotice('Товар создан.')
@@ -585,82 +439,15 @@ export function FfProductsCatalogScreen({
             <FfProductTzImportDialog
               open={importOpen}
               token={token}
-              sellers={sellers}
-              defaultSellerId={selectedSellerId !== '__all__' ? selectedSellerId : null}
+              sellers={dialogSellers}
               onClose={() => setImportOpen(false)}
               onApplied={async (message) => {
                 setImportNotice(message)
                 await load()
               }}
             />
-            <FfSellerCreateDialog
-              open={sellerCreateOpen}
-              token={token}
-              authHeaders={authHeaders}
-              onClose={() => setSellerCreateOpen(false)}
-              onCreated={async (created) => {
-                await onSellersChanged?.()
-                setSelectedSellerId(created.id)
-                setImportNotice(`Селлер «${created.name}» создан и доступен для создания товаров.`)
-              }}
-            />
           </>
         ) : null}
-
-        <Dialog
-          open={editProduct !== null}
-          onClose={() => setEditProduct(null)}
-          fullWidth
-          maxWidth="sm"
-          data-testid="ff-packaging-dialog"
-        >
-          <DialogTitle>ТЗ на упаковку</DialogTitle>
-          <DialogContent>
-            <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
-              {editProduct?.sku_code} · {editProduct?.name}
-            </Typography>
-            <FormControlLabel
-              control={
-                <Checkbox
-                  checked={editRequiresHonestSign}
-                  onChange={(e) => setEditRequiresHonestSign(e.target.checked)}
-                  data-testid="ff-requires-honest-sign"
-                />
-              }
-              label="Нужен Честный знак при упаковке"
-            />
-            <TextField
-              fullWidth
-              multiline
-              minRows={4}
-              label="Инструкция для склада"
-              value={editText}
-              onChange={(e) => setEditText(e.target.value)}
-              slotProps={{ htmlInput: { 'data-testid': 'ff-packaging-text' } }}
-            />
-          </DialogContent>
-          <DialogActions>
-            <Button onClick={() => setEditProduct(null)} disabled={editBusy}>
-              Отмена
-            </Button>
-            <Button
-              variant="outlined"
-              disabled={editBusy || !editProduct}
-              onClick={printPackagingTz}
-              data-testid="ff-packaging-print"
-            >
-              Печать
-            </Button>
-            <Button
-              variant="contained"
-              disabled={editBusy}
-              onClick={() => void savePackagingInstructions()}
-              data-testid="ff-packaging-save"
-            >
-              Сохранить
-            </Button>
-          </DialogActions>
-        </Dialog>
       </Box>
     </FfProductMarkingPrintProvider>
   )

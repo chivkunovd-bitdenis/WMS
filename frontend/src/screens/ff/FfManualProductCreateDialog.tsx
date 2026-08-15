@@ -3,13 +3,11 @@ import type { FormEvent } from 'react'
 import {
   Alert,
   Button,
-  Checkbox,
   Dialog,
   DialogActions,
   DialogContent,
   DialogTitle,
   FormControl,
-  FormControlLabel,
   InputLabel,
   MenuItem,
   Select,
@@ -59,10 +57,6 @@ export function FfManualProductCreateDialog({
   const [barcode, setBarcode] = useState('')
   const [vendor, setVendor] = useState('')
   const [tz, setTz] = useState('')
-  const [lengthMm, setLengthMm] = useState('')
-  const [widthMm, setWidthMm] = useState('')
-  const [heightMm, setHeightMm] = useState('')
-  const [requiresHonestSign, setRequiresHonestSign] = useState(false)
   const [createdProduct, setCreatedProduct] = useState<CreatedProduct | null>(null)
 
   useEffect(() => {
@@ -83,10 +77,6 @@ export function FfManualProductCreateDialog({
     setBarcode('')
     setVendor('')
     setTz('')
-    setLengthMm('')
-    setWidthMm('')
-    setHeightMm('')
-    setRequiresHonestSign(false)
   }
 
   function handleClose() {
@@ -117,15 +107,11 @@ export function FfManualProductCreateDialog({
           name: trimmedName,
           sku_code: trimmedSku,
           seller_id: sellerId,
-          requires_honest_sign: requiresHonestSign,
         }
         if (size.trim()) body.wb_size = size.trim()
         if (barcode.trim()) body.wb_barcode = barcode.trim()
         if (vendor.trim()) body.wb_vendor_code = vendor.trim()
         if (tz.trim()) body.packaging_instructions = tz.trim()
-        if (lengthMm.trim()) body.length_mm = Number(lengthMm)
-        if (widthMm.trim()) body.width_mm = Number(widthMm)
-        if (heightMm.trim()) body.height_mm = Number(heightMm)
 
         const res = await fetch(apiUrl('/products'), {
           method: 'POST',
@@ -227,45 +213,6 @@ export function FfManualProductCreateDialog({
               onChange={(e) => setTz(e.target.value)}
               slotProps={{ htmlInput: { 'data-testid': 'ff-manual-product-tz' } }}
             />
-            <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2}>
-              <TextField
-                size="small"
-                label="Длина, мм (необяз.)"
-                type="number"
-                value={lengthMm}
-                onChange={(e) => setLengthMm(e.target.value)}
-                fullWidth
-                slotProps={{ htmlInput: { 'data-testid': 'ff-manual-product-length', min: 1 } }}
-              />
-              <TextField
-                size="small"
-                label="Ширина, мм (необяз.)"
-                type="number"
-                value={widthMm}
-                onChange={(e) => setWidthMm(e.target.value)}
-                fullWidth
-                slotProps={{ htmlInput: { 'data-testid': 'ff-manual-product-width', min: 1 } }}
-              />
-              <TextField
-                size="small"
-                label="Высота, мм (необяз.)"
-                type="number"
-                value={heightMm}
-                onChange={(e) => setHeightMm(e.target.value)}
-                fullWidth
-                slotProps={{ htmlInput: { 'data-testid': 'ff-manual-product-height', min: 1 } }}
-              />
-            </Stack>
-            <FormControlLabel
-              control={
-                <Checkbox
-                  checked={requiresHonestSign}
-                  onChange={(e) => setRequiresHonestSign(e.target.checked)}
-                  data-testid="ff-manual-product-cz"
-                />
-              }
-              label="Нужен Честный знак"
-            />
           </Stack>
         </DialogContent>
         <DialogActions>
@@ -273,7 +220,7 @@ export function FfManualProductCreateDialog({
             Отмена
           </Button>
           <Button type="submit" variant="contained" disabled={busy} data-testid="ff-manual-product-submit">
-            {createdProduct == null ? 'Создать' : 'Добавить в приёмку'}
+            Создать
           </Button>
         </DialogActions>
       </form>
