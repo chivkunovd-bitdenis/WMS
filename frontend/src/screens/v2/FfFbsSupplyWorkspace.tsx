@@ -985,6 +985,7 @@ export function FfFbsSupplyWorkspace({
                     spacing={1}
                     sx={{ alignItems: 'center' }}
                     data-testid="cal-02-fbs-shipment-date-control"
+                    data-task-id="CAL-02"
                   >
                     <TextField
                       label="Дата отгрузки"
@@ -998,6 +999,7 @@ export function FfFbsSupplyWorkspace({
                         htmlInput: { 'data-testid': 'cal-02-fbs-shipment-date' },
                       }}
                       sx={{ width: 176 }}
+                      data-task-id="CAL-02"
                     />
                     <Button
                       size="small"
@@ -1005,6 +1007,7 @@ export function FfFbsSupplyWorkspace({
                       onClick={() => void savePlannedShipmentDate()}
                       disabled={busy || plannedShipmentDateDraft === (workspace.supply.planned_shipment_date ?? '')}
                       data-testid="cal-02-fbs-shipment-date-save"
+                      data-task-id="CAL-02"
                     >
                       Сохранить
                     </Button>
@@ -1021,6 +1024,7 @@ export function FfFbsSupplyWorkspace({
                         }}
                         disabled={busy}
                         data-testid="cal-02-fbs-shipment-date-clear"
+                        data-task-id="CAL-02"
                       >
                         Очистить
                       </Button>

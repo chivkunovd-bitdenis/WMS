@@ -441,11 +441,11 @@ export function FfSettingsScreen({
             </Stack>
           </Box>
 
-          <Box sx={{ mt: 3, pt: 2, borderTop: '1px solid', borderColor: 'divider' }} data-testid="cal-03-fbs-cutoff-section">
-            <Typography variant="subtitle2" gutterBottom>
+          <Box sx={{ mt: 3, pt: 2, borderTop: '1px solid', borderColor: 'divider' }} data-testid="cal-03-fbs-cutoff-section" data-task-id="CAL-03">
+            <Typography variant="subtitle2" gutterBottom data-task-id="CAL-03">
               Время отсечки FBS
             </Typography>
-            <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1} sx={{ alignItems: { sm: 'center' } }}>
+            <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1} sx={{ alignItems: { sm: 'center' } }} data-task-id="CAL-03">
               <TextField
                 type="time"
                 size="small"
@@ -458,12 +458,14 @@ export function FfSettingsScreen({
                   htmlInput: { 'data-testid': 'cal-03-fbs-cutoff-time' },
                 }}
                 sx={{ width: { xs: '100%', sm: 180 } }}
+                data-task-id="CAL-03"
               />
               <Button
                 variant="outlined"
                 onClick={() => void onFbsCutoffSave()}
                 disabled={fbsCutoffBusy || fbsCutoff === fbsCutoffSaved}
                 data-testid="cal-03-fbs-cutoff-save"
+                data-task-id="CAL-03"
               >
                 Сохранить
               </Button>
@@ -475,6 +477,7 @@ export function FfSettingsScreen({
                 }}
                 disabled={fbsCutoffBusy || !fbsCutoff}
                 data-testid="cal-03-fbs-cutoff-clear"
+                data-task-id="CAL-03"
               >
                 Очистить
               </Button>
