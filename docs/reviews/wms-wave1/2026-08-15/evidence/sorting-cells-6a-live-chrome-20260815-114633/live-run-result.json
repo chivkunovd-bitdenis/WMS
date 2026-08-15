@@ -1,0 +1,200 @@
+{
+  "verdict": "PRODUCT_BROWSER_APPROVED",
+  "timestamp": "2026-08-15T09:04:35.634Z",
+  "browser": "External visible Google Chrome 151.0.7922.138 via raw CDP on 127.0.0.1:9231; macOS Accessibility UI scripting disabled, no Playwright/headless/API-only for screen actions",
+  "frontend": "http://127.0.0.1:5195",
+  "api": "http://127.0.0.1:18125",
+  "fixture": {
+    "email": "live-sorting-1786784645886@example.com",
+    "warehouse": "livewh1786784645886",
+    "locA": "LIVE-A-01",
+    "locB": "LIVE-B-01",
+    "sku": "LIVE-SKU-1786784645886",
+    "request_id": "c6060f1c-f551-4b2e-9c21-7e2f1a237006"
+  },
+  "checks": {
+    "emptyState": "Нет приёмок в сортировке — всё разложено по ячейкам.",
+    "viewportBeforeFixture": {
+      "width": 1280,
+      "height": 900
+    },
+    "queueColumns": [
+      "№ документа",
+      "Селлер",
+      "Состав",
+      "Короба",
+      "Осталось, шт",
+      "Статус"
+    ],
+    "queueRowText": "Поставка № 000001\t—\t1 поз. · от 1 ед.\t0 коробов\t2\t\nВ сортировке",
+    "saveButtonCount": 0,
+    "applyVisible": true,
+    "initialProduct": {
+      "accepted": "2",
+      "distributed": "0",
+      "remaining": "2",
+      "active": "Ячейка не выбрана"
+    },
+    "emptyScan": {
+      "message": "Отсканируйте ячейку или товар.",
+      "focused": true
+    },
+    "productBeforeCell": {
+      "error": "Сначала отсканируйте ячейку, потом товар.",
+      "focused": true
+    },
+    "unknownScan": {
+      "error": "Такой товар или ячейка не найдены в этой приёмке.",
+      "focused": true
+    },
+    "cellScan": {
+      "chip": "Ячейка LIVE-A-01",
+      "message": "Активная ячейка: LIVE-A-01.",
+      "focused": true
+    },
+    "firstProductScan": {
+      "distributed": "1",
+      "remaining": "1",
+      "message": "Скан принят: Live Sorting Product → LIVE-A-01; разложено 1, осталось 1.",
+      "focused": true
+    },
+    "secondProductScan": {
+      "distributed": "2",
+      "remaining": "0",
+      "focused": true
+    },
+    "reloadReadback": {
+      "distributed": "2",
+      "remaining": "0",
+      "active": "Ячейка не выбрана",
+      "saveCount": 0
+    },
+    "applyPanelResult": {
+      "posted": "Оприходовано — весь товар разложен по ячейкам хранения.",
+      "bodyHasPosted": true,
+      "allDone": "Всё принятое разложено по ячейкам хранения."
+    },
+    "applyResult": "Нет приёмок в сортировке — всё разложено по ячейкам.",
+    "apiReadback": {
+      "distributionRows": [
+        {
+          "code": "LIVE-A-01",
+          "qty": 2
+        }
+      ],
+      "status": "done",
+      "distribution_completed_at": "2026-08-15T09:04:25.459107"
+    },
+    "catalogVisible": {
+      "warehousesPanel": true,
+      "locationsPanel": true,
+      "warehouseRows": 1,
+      "locationRows": 2
+    },
+    "deleteWarning": {
+      "warning": "В ячейке лежит 2 шт. Выберите, куда перенести товар перед удалением адреса.",
+      "balances": "Товар\tШт\nLIVE-SKU-1786784645886 · Live Sorting Product\t2",
+      "moveSorting": true,
+      "moveUnallocated": true
+    }
+  },
+  "sixAMap": [
+    [
+      "Список /app/ff/sorting и пустое состояние",
+      "SORT-01, GLOBAL-01",
+      "оставить"
+    ],
+    [
+      "Колонки списка: N документа, Селлер, Состав, Короба, Осталось, Статус",
+      "SORT-01, GLOBAL-01/02",
+      "оставить"
+    ],
+    [
+      "Подпись зоны сортировки как служебного буфера",
+      "SORT-01, SORT-03",
+      "оставить"
+    ],
+    [
+      "Scanner input ячейка/товар",
+      "SORT-01",
+      "оставить"
+    ],
+    [
+      "Chip активной ячейки",
+      "SORT-01",
+      "оставить"
+    ],
+    [
+      "Кнопка Скан",
+      "SORT-01",
+      "оставить"
+    ],
+    [
+      "Сообщения успеха/ошибки/пустого скана",
+      "SORT-01, GLOBAL-01",
+      "оставить"
+    ],
+    [
+      "Chip Осталось разложить",
+      "SORT-01",
+      "оставить"
+    ],
+    [
+      "Кнопка Применить раскладку",
+      "SORT-02",
+      "оставить"
+    ],
+    [
+      "Кнопка Сохранить",
+      "нет, конфликт SORT-02",
+      "удалена; в live UI отсутствует"
+    ],
+    [
+      "Карточка товара: товар, принято, разложено, осталось",
+      "SORT-01/02",
+      "оставить"
+    ],
+    [
+      "Строка ячейки: источник, ячейка, шт, удалить loose-row",
+      "SORT-01",
+      "оставить"
+    ],
+    [
+      "+ ячейка",
+      "SORT-01",
+      "оставить"
+    ],
+    [
+      "Справочник Склады: создать, название, код, rename/delete",
+      "SORT-03",
+      "оставить"
+    ],
+    [
+      "Справочник Ячейки: создать, код, штрихкод, печать, rename/delete",
+      "SORT-03, SORT-01",
+      "оставить"
+    ],
+    [
+      "Safe-delete warning и перенос остатка",
+      "SORT-03",
+      "оставить"
+    ]
+  ],
+  "screenshots": [
+    "01-empty-sorting-1280.png",
+    "02-sorting-queue-1280.png",
+    "03-sorting-panel-before-scan.png",
+    "04-active-cell-after-scan.png",
+    "05-product-scan-plus-one-focus.png",
+    "06-reload-readback.png",
+    "07-apply-posted-done.png",
+    "08-apply-success-empty.png",
+    "09-catalog-warehouses-cells.png",
+    "10-location-delete-stock-warning.png"
+  ],
+  "findings": {
+    "stop": [],
+    "brake": [],
+    "tail": []
+  }
+}
