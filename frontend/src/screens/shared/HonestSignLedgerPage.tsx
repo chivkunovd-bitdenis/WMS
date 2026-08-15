@@ -33,13 +33,15 @@ type LedgerRow = {
   id: string
   created_at: string
   event_type: string
-  cis_masked: string
+  cis_code: string | null
+  cis_masked: string | null
   pool_title: string | null
   product_name: string | null
   product_sku: string | null
   seller_name: string | null
   document_number: string | null
   actor_email: string | null
+  source_process_label: string | null
 }
 
 type Props = {
@@ -358,19 +360,20 @@ export function HonestSignLedgerPage({
               <TableCell>Пул / товар</TableCell>
               <TableCell>Селлер</TableCell>
               <TableCell>Документ</TableCell>
+              <TableCell>Источник</TableCell>
               <TableCell>Пользователь</TableCell>
             </TableRow>
           </TableHead>
           <TableBody>
             {busy ? (
               <TableRow>
-                <TableCell colSpan={7}>
+                <TableCell colSpan={8}>
                   <Skeleton height={32} />
                 </TableCell>
               </TableRow>
             ) : rows.length === 0 ? (
               <TableRow>
-                <TableCell colSpan={7}>
+                <TableCell colSpan={8}>
                   <Typography variant="body2" color="text.secondary">
                     События не найдены.
                   </Typography>
@@ -383,13 +386,16 @@ export function HonestSignLedgerPage({
                   <TableCell>
                     <Chip size="small" label={ledgerEventLabel(row.event_type)} />
                   </TableCell>
-                  <TableCell>{row.cis_masked}</TableCell>
+                  <TableCell sx={{ wordBreak: 'break-all' }}>
+                    {row.cis_code ?? row.cis_masked ?? '—'}
+                  </TableCell>
                   <TableCell>
                     {row.pool_title ?? '—'}
                     {row.product_sku ? ` / ${row.product_sku}` : ''}
                   </TableCell>
                   <TableCell>{row.seller_name ?? '—'}</TableCell>
                   <TableCell>{row.document_number ?? '—'}</TableCell>
+                  <TableCell>{row.source_process_label ?? '—'}</TableCell>
                   <TableCell>{row.actor_email ?? '—'}</TableCell>
                 </TableRow>
               ))
