@@ -238,6 +238,9 @@ test('fulfillment admin sees shipment calendar and supplies-shipments page', asy
   await page.getByTestId('ff-mp-boxes-summary').click();
   await expect(page.getByTestId('ff-mp-boxes')).toBeVisible();
 
+  // TC-NEW-CAL-01 — calendar navigation starts from the shell after closing the MP document dialog.
+  await page.getByTestId('ff-supplies-doc-close').click();
+  await expect(page.getByTestId('ff-supplies-doc-dialog')).toBeHidden();
   await page.getByTestId('nav-dashboard').click();
   await expect(page.getByTestId('cal-01-title')).toContainText('Календарь отгрузок');
 });
