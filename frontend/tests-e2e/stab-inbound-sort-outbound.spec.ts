@@ -102,6 +102,9 @@ test('stab inbound sort outbound — receive, see sorting, ship from buffer with
 
   for (let i = 0; i < LOOSE_QTY; i++) {
     await scanInboundReceiving(page, seed.sku);
+    await expect(page.getByTestId('ff-inbound-line-actual-display').first()).toHaveText(
+      String(BOX2_QTY + i + 1),
+    );
   }
   await expect(page.getByTestId('ff-inbound-line-actual-display').first()).toHaveText(
     String(EXPECTED_QTY),
@@ -158,6 +161,8 @@ test('stab inbound sort outbound — receive, see sorting, ship from buffer with
     page.locator('[data-doc-kind="marketplace_unload"]').first().click(),
   ]);
   await expect(page.getByTestId('ff-supplies-doc-dialog')).toBeVisible();
+  await page.getByRole('tab', { name: 'Короба' }).click();
+  await expect(page.getByTestId('ff-mp-box-batch-create')).toBeVisible();
 
   await Promise.all([
     waitForPostOk(page, `/api/operations/marketplace-unload-requests/${mid}/boxes/batch`),

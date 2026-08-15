@@ -52,6 +52,11 @@ test('inbound receiving v2 — scan, manual edit, finish with discrepancy', asyn
   await page.keyboard.press('Enter');
   await expect(page.getByTestId('ff-inbound-doc-root')).toBeVisible();
   await expect(page.getByTestId('ff-inbound-doc-root').getByRole('tab', { name: /упаковка/i })).toHaveCount(0);
+  await expandInboundPackages(page);
+  await expect(page.getByText('Короба ещё не созданы.')).toHaveCount(0);
+  await expect(page.getByText('Грузоместа ещё не созданы.')).toHaveCount(0);
+  await expect(page.getByTestId('ff-inbound-add-to-box')).toBeVisible();
+  await expect(page.getByTestId('ff-inbound-create-cargo-places')).toBeVisible();
   await expect(page.getByTestId('ff-inbound-compact-summary')).toContainText('Box Seller');
   await expect(page.getByTestId('ff-inbound-received-summary')).toContainText('0 из 3');
   await expect(page.getByTestId('ff-inbound-boxes-summary')).toContainText('0 из 1');

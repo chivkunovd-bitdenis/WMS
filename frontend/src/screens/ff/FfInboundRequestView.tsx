@@ -2349,11 +2349,6 @@ export function FfInboundRequestView({
                     <Typography variant="body2" sx={{ fontWeight: 700 }}>
                       Короба
                     </Typography>
-                    {boxes.length === 0 ? (
-                      <Typography variant="body2" color="text.secondary">
-                        Короба ещё не созданы.
-                      </Typography>
-                    ) : null}
                     {boxes.map((box) => {
                       const visibleLines = box.lines.filter((ln) => ln.quantity > 0)
                       return (
@@ -2439,11 +2434,6 @@ export function FfInboundRequestView({
                     <Typography variant="body2" sx={{ fontWeight: 700 }}>
                       Грузоместа
                     </Typography>
-                    {cargoPlaces.length === 0 ? (
-                      <Typography variant="body2" color="text.secondary">
-                        Грузоместа ещё не созданы.
-                      </Typography>
-                    ) : null}
                     {cargoPlaces.map((place) => (
                       <Paper
                         key={place.id}
