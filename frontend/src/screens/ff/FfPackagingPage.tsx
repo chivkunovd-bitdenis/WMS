@@ -74,6 +74,7 @@ export type PackagingTaskLine = {
   qty_packed_in_task: number
   qty_done: number
   qty_marking_printed: number
+  qty_product_label_printed: number
   marking_available_count: number
   is_complete: boolean
 }
@@ -319,6 +320,23 @@ export function FfPackagingTaskPanel({
     }
   }
 
+  const markProductLabelPrinted = async (ln: PackagingTaskLine) => {
+    const quantity = Math.max(1, ln.qty_need_pack || ln.qty_done || 1)
+    const res = await fetch(
+      apiUrl(`/operations/packaging-tasks/${task.id}/lines/${ln.id}/product-label-printed`),
+      {
+        method: 'POST',
+        headers: { ...authHeaders, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ quantity }),
+      },
+    )
+    if (res.ok) {
+      onUpdated((await res.json()) as PackagingTask)
+      return
+    }
+    setError(await readApiErrorMessage(res))
+  }
+
   const openLinePrint = (ln: PackagingTaskLine, opts?: { reprint?: boolean }) => {
     openPrint(
       {
@@ -335,7 +353,9 @@ export function FfPackagingTaskPanel({
         productLabel: productLabelForLine(ln),
         packagingInstructions: ln.packaging_instructions,
         onPrinted: () => {
-          void refreshTask()
+          void markProductLabelPrinted(ln).finally(() => {
+            void refreshTask()
+          })
         },
       },
       { reprint: opts?.reprint },
@@ -800,6 +820,14 @@ export function FfPackagingTaskPanel({
                 const markingProgressIncomplete = isLineMarkingProgressIncomplete(ln)
                 const hasInstructions = Boolean(ln.packaging_instructions?.trim())
                 const barcodeReady = Boolean(barcode?.trim())
+                const productLabelNeed = Math.max(ln.qty_need_pack, ln.qty_done)
+                const productLabelPrinted = Math.min(
+                  ln.qty_product_label_printed ?? 0,
+                  productLabelNeed,
+                )
+                const barcodeStatusLabel = barcodeReady
+                  ? `напечатано ${productLabelPrinted}/${productLabelNeed}`
+                  : 'нет ШК'
                 return (
                   <TableRow
                     key={ln.id}
@@ -850,9 +878,9 @@ export function FfPackagingTaskPanel({
                     <TableCell>
                       <Chip
                         size="small"
-                        color={barcodeReady ? 'default' : 'warning'}
+                        color={barcodeReady && productLabelPrinted > 0 ? 'success' : 'warning'}
                         variant="outlined"
-                        label={barcodeReady ? 'печать доступна' : 'нет ШК'}
+                        label={barcodeStatusLabel}
                         data-testid={`ff-packaging-barcode-status-${ln.id}`}
                       />
                     </TableCell>

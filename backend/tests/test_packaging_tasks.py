@@ -183,6 +183,18 @@ async def test_packaging_task_manual_convert(async_client: AsyncClient) -> None:
     assert task["document_number"].endswith("-1")
     line_id = task["lines"][0]["id"]
     assert task["lines"][0]["qty_suggested_packed"] == 0
+    assert task["lines"][0]["qty_product_label_printed"] == 0
+
+    label_printed = await async_client.post(
+        f"/operations/packaging-tasks/{task_id}/lines/{line_id}/product-label-printed",
+        headers=h,
+        json={"quantity": 2},
+    )
+    assert label_printed.status_code == 200, label_printed.text
+    printed_line = label_printed.json()["lines"][0]
+    assert printed_line["qty_product_label_printed"] == 2
+    assert label_printed.json()["events"][-1]["action"] == "product_label_print"
+    assert label_printed.json()["events"][-1]["quantity"] == 2
 
     pack = await async_client.post(
         f"/operations/packaging-tasks/{task_id}/lines/{line_id}/pack",

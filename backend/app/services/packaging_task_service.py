@@ -21,6 +21,7 @@ from app.models.packaging_task import (
     PACKAGING_EVENT_CANCEL,
     PACKAGING_EVENT_COMPLETE,
     PACKAGING_EVENT_MANUAL_PACK,
+    PACKAGING_EVENT_PRODUCT_LABEL_PRINT,
     PACKAGING_EVENT_SCAN_PACK,
     PACKAGING_EVENT_UNDO_LAST,
     STATUS_CANCELLED,
@@ -927,6 +928,40 @@ async def record_pack_scan(
         acting_user_id=acting_user_id,
         action=PACKAGING_EVENT_SCAN_PACK,
     )
+
+
+async def mark_product_label_printed(
+    session: AsyncSession,
+    tenant_id: uuid.UUID,
+    task_id: uuid.UUID,
+    line_id: uuid.UUID,
+    *,
+    quantity: int,
+    acting_user_id: uuid.UUID | None = None,
+) -> PackagingTask:
+    if quantity < 1:
+        raise PackagingTaskServiceError("invalid_qty")
+    task = await get_task(session, tenant_id, task_id)
+    if task is None:
+        raise PackagingTaskServiceError("not_found")
+    if task.status == STATUS_CANCELLED:
+        raise PackagingTaskServiceError("bad_status")
+    line = next((ln for ln in task.lines if ln.id == line_id), None)
+    if line is None:
+        raise PackagingTaskServiceError("line_not_found")
+    await _add_task_event(
+        session,
+        task,
+        action=PACKAGING_EVENT_PRODUCT_LABEL_PRINT,
+        quantity=quantity,
+        line=line,
+        acting_user_id=acting_user_id,
+    )
+    _touch_task(task)
+    await session.commit()
+    loaded = await get_task(session, tenant_id, task_id)
+    assert loaded is not None
+    return loaded
 
 
 async def undo_last_pack_action(
