@@ -7,13 +7,19 @@ import {
   type ReactNode,
 } from 'react'
 import { Link as RouterLink, useLocation, useNavigate, useParams } from 'react-router-dom'
-import { MoreVertOutlined, PrintOutlined, UndoOutlined } from '@mui/icons-material'
+import {
+  ArticleOutlined,
+  MoreVertOutlined,
+  PrintOutlined,
+  UndoOutlined,
+} from '@mui/icons-material'
 import {
   Alert,
   Avatar,
   Badge,
   Box,
   Button,
+  Chip,
   Checkbox,
   Dialog,
   DialogActions,
@@ -37,6 +43,7 @@ import {
   Tab,
   Tabs,
   TextField,
+  Tooltip,
   Typography,
 } from '@mui/material'
 import { useWbProductCatalog } from '../../hooks/useWbProductCatalog'
@@ -67,6 +74,7 @@ export type PackagingTaskLine = {
   qty_packed_in_task: number
   qty_done: number
   qty_marking_printed: number
+  qty_product_label_printed: number
   marking_available_count: number
   is_complete: boolean
 }
@@ -264,6 +272,7 @@ export function FfPackagingTaskPanel({
   const [lineMenuLine, setLineMenuLine] = useState<PackagingTaskLine | null>(null)
   const [scannerValue, setScannerValue] = useState('')
   const [scannerFeedback, setScannerFeedback] = useState<string | null>(null)
+  const [focusedLineId, setFocusedLineId] = useState<string | null>(null)
   const [manualQtyByLine, setManualQtyByLine] = useState<Record<string, string>>({})
   const [manualErrorByLine, setManualErrorByLine] = useState<Record<string, string>>({})
   const [undoConfirmEvent, setUndoConfirmEvent] = useState<PackagingTaskEvent | null>(null)
@@ -296,7 +305,7 @@ export function FfPackagingTaskPanel({
       event.reversed_at === null,
   )
   const lastReversibleEvent = reversibleEvents[reversibleEvents.length - 1] ?? null
-  const canUndo = taskEditable && reversibleEvents.length > 0 && !printOnly
+  const canUndo = taskEditable && reversibleEvents.length > 0 && !printOnly && !isMpUnloadTask
 
   useEffect(() => {
     if (taskEditable && !printOnly) {
@@ -309,6 +318,23 @@ export function FfPackagingTaskPanel({
     if (res.ok) {
       onUpdated((await res.json()) as PackagingTask)
     }
+  }
+
+  const markProductLabelPrinted = async (ln: PackagingTaskLine) => {
+    const quantity = Math.max(1, ln.qty_need_pack || ln.qty_done || 1)
+    const res = await fetch(
+      apiUrl(`/operations/packaging-tasks/${task.id}/lines/${ln.id}/product-label-printed`),
+      {
+        method: 'POST',
+        headers: { ...authHeaders, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ quantity }),
+      },
+    )
+    if (res.ok) {
+      onUpdated((await res.json()) as PackagingTask)
+      return
+    }
+    setError(await readApiErrorMessage(res))
   }
 
   const openLinePrint = (ln: PackagingTaskLine, opts?: { reprint?: boolean }) => {
@@ -327,7 +353,9 @@ export function FfPackagingTaskPanel({
         productLabel: productLabelForLine(ln),
         packagingInstructions: ln.packaging_instructions,
         onPrinted: () => {
-          void refreshTask()
+          void markProductLabelPrinted(ln).finally(() => {
+            void refreshTask()
+          })
         },
       },
       { reprint: opts?.reprint },
@@ -382,8 +410,25 @@ export function FfPackagingTaskPanel({
   const submitScanner = async () => {
     const barcode = scannerValue.trim()
     if (!barcode) {
-      setError('Отсканируйте ШК товара или введите количество больше 0')
+      setError('Отсканируйте ШК товара.')
       scannerRef.current?.focus()
+      return
+    }
+    if (isMpUnloadTask) {
+      const matchingLine = task.lines.find((ln) => {
+        const lineBarcode = lineBarcodeForScan(ln)
+        return barcode === lineBarcode || barcode === ln.sku_code
+      })
+      if (!matchingLine) {
+        setError('ШК не найден в этом задании. Проверьте товар и выбранную отгрузку.')
+        scannerRef.current?.focus()
+        return
+      }
+      setFocusedLineId(matchingLine.id)
+      setScannerValue('')
+      setError(null)
+      setScannerFeedback(`Строка найдена: ${matchingLine.product_name}`)
+      window.setTimeout(() => scannerRef.current?.focus(), 0)
       return
     }
     const packedBefore = new Map(task.lines.map((ln) => [ln.id, ln.qty_packed_in_task]))
@@ -704,7 +749,7 @@ export function FfPackagingTaskPanel({
           <Stack direction={{ xs: 'column', md: 'row' }} spacing={1.5} sx={{ alignItems: { xs: 'stretch', md: 'flex-start' } }}>
             <TextField
               inputRef={scannerRef}
-              label="Сканируйте ШК товара"
+              label={isMpUnloadTask ? 'Сканируйте ШК товара для поиска строки' : 'Сканируйте ШК товара'}
               value={scannerValue}
               onChange={(e) => setScannerValue(e.target.value)}
               onKeyDown={(e) => {
@@ -728,21 +773,23 @@ export function FfPackagingTaskPanel({
               disabled={busy}
               onClick={() => void submitScanner()}
               data-testid="ff-packaging-scan-submit"
-              sx={{ minWidth: 120 }}
+              sx={{ minWidth: isMpUnloadTask ? 140 : 120 }}
             >
-              +1
+              {isMpUnloadTask ? 'Найти строку' : '+1'}
             </Button>
-            <Button
-              variant="outlined"
-              color="inherit"
-              startIcon={<UndoOutlined fontSize="small" />}
-              disabled={busy || !canUndo}
-              onClick={requestUndoLast}
-              data-testid="ff-packaging-undo-last"
-              sx={{ minWidth: 190 }}
-            >
-              Отменить последнее
-            </Button>
+            {isMpUnloadTask ? null : (
+              <Button
+                variant="outlined"
+                color="inherit"
+                startIcon={<UndoOutlined fontSize="small" />}
+                disabled={busy || !canUndo}
+                onClick={requestUndoLast}
+                data-testid="ff-packaging-undo-last"
+                sx={{ minWidth: 190 }}
+              >
+                Отменить последнее
+              </Button>
+            )}
           </Stack>
           {scannerFeedback ? (
             <Alert severity="success" sx={{ mt: 1.5 }} data-testid="ff-packaging-scan-feedback">
@@ -751,151 +798,278 @@ export function FfPackagingTaskPanel({
           ) : null}
         </Paper>
       ) : null}
-      <Stack spacing={1.5} data-testid="ff-packaging-lines-compact">
-        {task.lines.map((ln) => {
-          const displayMeta = productDisplayMetaFromCatalog(ln.product_id, ln, catalogById)
-          const barcode = lineBarcodeForScan(ln)
-          const remaining = lineRemaining(ln)
-          const markingProgressIncomplete = isLineMarkingProgressIncomplete(ln)
-          const manualError = manualErrorByLine[ln.id]
-          return (
-            <Paper
-              key={ln.id}
-              variant="outlined"
-              data-testid={markingProgressIncomplete ? 'ff-packaging-line-marking-incomplete' : 'ff-packaging-line'}
-              sx={{ p: 1.5, bgcolor: markingProgressIncomplete ? 'warning.light' : 'background.paper' }}
-            >
-              <Box
-                sx={{
-                  display: 'grid',
-                  gridTemplateColumns: { xs: '1fr', md: 'minmax(300px, 1fr) minmax(220px, 0.7fr) minmax(260px, 0.8fr)' },
-                  gap: 1.5,
-                  alignItems: 'center',
-                }}
-              >
-                <Stack direction="row" spacing={1.25} sx={{ minWidth: 0, alignItems: 'center' }}>
-                  <Avatar
-                    variant="rounded"
-                    src={displayMeta.wb_primary_image_url ?? undefined}
-                    alt={displayMeta.product_name}
-                    sx={{ width: 56, height: 56, flex: '0 0 auto' }}
-                  />
-                  <Box sx={{ minWidth: 0 }}>
-                    <Typography variant="body2" sx={{ fontWeight: 700, overflowWrap: 'anywhere' }} data-testid="ff-packaging-compact-product-name">
-                      {displayMeta.product_name}
-                    </Typography>
-                    <Typography variant="caption" color="text.secondary" sx={{ display: 'block', overflowWrap: 'anywhere' }}>
-                      SKU: {displayMeta.sku_code} · ШК: {barcode}
-                    </Typography>
-                    <Typography variant="caption" color="text.secondary" sx={{ display: 'block', overflowWrap: 'anywhere' }}>
-                      Селлер: {ln.seller_name ?? displayMeta.seller_name ?? '—'} · Ячейка: {locationLabel(ln.storage_location_code)}
-                    </Typography>
-                  </Box>
-                </Stack>
-                <Stack spacing={0.5} sx={{ minWidth: 0 }}>
-                  <Typography variant="body2" sx={{ fontWeight: 700 }} data-testid={`ff-packaging-line-progress-${ln.id}`}>
-                    Готово {ln.qty_done} / Осталось {remaining} / Всего {ln.qty_total}
-                  </Typography>
-                  <Typography variant="caption" color="text.secondary" sx={{ overflowWrap: 'anywhere' }} data-testid="ff-packaging-instructions">
-                    ТЗ: {ln.packaging_instructions?.trim() || 'не задано'}
-                  </Typography>
-                  {ln.requires_honest_sign ? (
-                    <Typography variant="caption" color={markingProgressIncomplete ? 'warning.dark' : 'success.main'} data-testid={`ff-packaging-marking-progress-${ln.id}`}>
-                      ЧЗ: напечатано {ln.qty_marking_printed} / нужно {ln.qty_need_pack}; в пуле {ln.marking_available_count}
-                    </Typography>
-                  ) : (
-                    <Typography variant="caption" color="text.secondary">ЧЗ не требуется</Typography>
-                  )}
-                </Stack>
-                <Stack spacing={1} sx={{ alignItems: { xs: 'stretch', md: 'flex-end' } }}>
-                  {taskEditable && !printOnly ? (
-                    <Stack direction="row" spacing={0.75} sx={{ justifyContent: { xs: 'flex-start', md: 'flex-end' }, flexWrap: 'wrap' }}>
-                      <TextField
+      {isMpUnloadTask ? (
+        <TableContainer component={Paper} variant="outlined" data-testid="ff-packaging-lines-table">
+          <Table size="small" sx={{ tableLayout: 'fixed', width: '100%' }}>
+            <TableHead>
+              <TableRow>
+                <TableCell sx={{ width: '30%' }}>Товар / SKU</TableCell>
+                <TableCell sx={{ width: '18%' }}>ШК</TableCell>
+                <TableCell align="center" sx={{ width: 64 }}>ТЗ</TableCell>
+                <TableCell sx={{ width: '16%' }}>ЧЗ</TableCell>
+                <TableCell sx={{ width: '16%' }}>ШК печати</TableCell>
+                <TableCell align="right" sx={{ width: 120 }}>Упаковано</TableCell>
+                <TableCell align="right" sx={{ width: 96 }}>Печать</TableCell>
+              </TableRow>
+            </TableHead>
+            <TableBody>
+              {task.lines.map((ln) => {
+                const displayMeta = productDisplayMetaFromCatalog(ln.product_id, ln, catalogById)
+                const barcode = lineBarcodeForScan(ln)
+                const remaining = lineRemaining(ln)
+                const markingProgressIncomplete = isLineMarkingProgressIncomplete(ln)
+                const hasInstructions = Boolean(ln.packaging_instructions?.trim())
+                const barcodeReady = Boolean(barcode?.trim())
+                const productLabelNeed = Math.max(ln.qty_need_pack, ln.qty_done)
+                const productLabelPrinted = Math.min(
+                  ln.qty_product_label_printed ?? 0,
+                  productLabelNeed,
+                )
+                const barcodeStatusLabel = barcodeReady
+                  ? `напечатано ${productLabelPrinted}/${productLabelNeed}`
+                  : 'нет ШК'
+                return (
+                  <TableRow
+                    key={ln.id}
+                    data-testid={markingProgressIncomplete ? 'ff-packaging-line-marking-incomplete' : 'ff-packaging-line'}
+                    selected={focusedLineId === ln.id}
+                    sx={markingProgressIncomplete ? { bgcolor: 'warning.light' } : undefined}
+                  >
+                    <TableCell sx={{ overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                      <Typography variant="body2" sx={{ fontWeight: 700 }} noWrap data-testid="ff-packaging-compact-product-name">
+                        {displayMeta.product_name}
+                      </Typography>
+                      <Typography variant="caption" color="text.secondary" noWrap>
+                        SKU: {displayMeta.sku_code}
+                      </Typography>
+                    </TableCell>
+                    <TableCell sx={{ overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                      <Typography variant="body2" noWrap data-testid={`ff-packaging-line-barcode-${ln.id}`}>
+                        {barcode || '—'}
+                      </Typography>
+                    </TableCell>
+                    <TableCell align="center">
+                      <Tooltip title={hasInstructions ? ln.packaging_instructions : 'ТЗ не задано'}>
+                        <span>
+                          <IconButton
+                            size="small"
+                            disabled={!hasInstructions}
+                            data-testid={`ff-packaging-line-tz-${ln.id}`}
+                            aria-label={hasInstructions ? 'Показать ТЗ упаковки' : 'ТЗ упаковки не задано'}
+                          >
+                            <ArticleOutlined fontSize="small" color={hasInstructions ? 'primary' : 'disabled'} />
+                          </IconButton>
+                        </span>
+                      </Tooltip>
+                    </TableCell>
+                    <TableCell>
+                      {ln.requires_honest_sign ? (
+                        <Chip
+                          size="small"
+                          color={markingProgressIncomplete ? 'warning' : 'success'}
+                          variant={markingProgressIncomplete ? 'outlined' : 'filled'}
+                          label={`${ln.qty_marking_printed}/${ln.qty_need_pack}`}
+                          data-testid={`ff-packaging-marking-progress-${ln.id}`}
+                        />
+                      ) : (
+                        <Chip size="small" variant="outlined" label="не требуется" />
+                      )}
+                    </TableCell>
+                    <TableCell>
+                      <Chip
                         size="small"
-                        label="+N"
-                        value={manualQtyByLine[ln.id] ?? ''}
-                        error={Boolean(manualError)}
-                        helperText={manualError || ' '}
-                        onChange={(e) => {
-                          setManualQtyByLine((prev) => ({ ...prev, [ln.id]: e.target.value }))
-                          setManualErrorByLine((prev) => ({ ...prev, [ln.id]: '' }))
-                        }}
-                        disabled={busy || remaining < 1}
-                        slotProps={{
-                          htmlInput: {
-                            inputMode: 'numeric',
-                            'data-testid': `ff-packaging-manual-qty-${ln.id}`,
-                          },
-                        }}
-                        sx={{ width: 92 }}
+                        color={barcodeReady && productLabelPrinted > 0 ? 'success' : 'warning'}
+                        variant="outlined"
+                        label={barcodeStatusLabel}
+                        data-testid={`ff-packaging-barcode-status-${ln.id}`}
                       />
-                      <Button
-                        size="small"
-                        variant="outlined"
-                        disabled={busy || remaining < 1}
-                        onClick={() => void submitManualQty(ln)}
-                        data-testid="ff-packaging-pack-btn"
-                        sx={{ minWidth: 64, alignSelf: 'flex-start' }}
-                      >
-                        +N
-                      </Button>
-                    </Stack>
-                  ) : null}
-                  <Stack direction="row" spacing={0.5} sx={{ justifyContent: { xs: 'flex-start', md: 'flex-end' }, flexWrap: 'wrap' }}>
-                    {!hidePrintActions && (alwaysShowPrintAction || printOnly || ln.requires_honest_sign || isMpUnloadTask) ? (
-                      <IconButton
-                        size="small"
-                        aria-label={`Печать товара ${displayMeta.product_name}`}
-                        onClick={() => openLinePrint(ln)}
-                        data-testid={`ff-packaging-line-print-${ln.id}`}
-                      >
-                        <PrintOutlined fontSize="small" />
-                      </IconButton>
-                    ) : null}
-                    {!hidePrintActions && ln.requires_honest_sign && !isMpUnloadTask && ln.qty_need_pack > 0 && ln.qty_marking_printed < 1 ? (
-                      <Button
-                        size="small"
-                        variant="outlined"
-                        disabled={busy || ln.marking_available_count < 1}
-                        onClick={() => openLinePrint(ln)}
-                        data-testid="ff-packaging-print-marking"
-                      >
-                        Печать ЧЗ
-                      </Button>
-                    ) : null}
-                    {lineHasOverflowActions(ln) ? (
-                      <IconButton
-                        size="small"
-                        aria-label="Дополнительные действия"
-                        disabled={busy}
-                        onClick={(e) => openLineMenu(e, ln)}
-                        data-testid={`ff-packaging-line-menu-btn-${ln.id}`}
-                      >
-                        <MoreVertOutlined fontSize="small" />
-                      </IconButton>
-                    ) : null}
-                    {!isMpUnloadTask && ln.qty_confirmed_packed < ln.qty_suggested_packed ? (
-                      <Button
-                        size="small"
-                        disabled={busy || !taskEditable || ln.qty_suggested_packed < 1}
-                        onClick={() => void confirmPacked(ln.id)}
-                        data-testid="ff-packaging-confirm-shelf"
-                      >
-                        С полки
-                      </Button>
-                    ) : null}
-                    {renderLineActions?.(ln)}
+                    </TableCell>
+                    <TableCell align="right" data-testid={`ff-packaging-line-progress-${ln.id}`}>
+                      {ln.qty_done}/{ln.qty_total}
+                      {remaining > 0 ? (
+                        <Typography variant="caption" color="text.secondary" sx={{ display: 'block' }}>
+                          осталось {remaining}
+                        </Typography>
+                      ) : null}
+                    </TableCell>
+                    <TableCell align="right">
+                      {!hidePrintActions ? (
+                        <IconButton
+                          size="small"
+                          aria-label={`Печать товара ${displayMeta.product_name}`}
+                          onClick={() => openLinePrint(ln)}
+                          data-testid={`ff-packaging-line-print-${ln.id}`}
+                          disabled={!barcodeReady && !ln.requires_honest_sign}
+                        >
+                          <PrintOutlined fontSize="small" />
+                        </IconButton>
+                      ) : null}
+                      {lineHasOverflowActions(ln) ? (
+                        <IconButton
+                          size="small"
+                          aria-label="Дополнительные действия"
+                          disabled={busy}
+                          onClick={(e) => openLineMenu(e, ln)}
+                          data-testid={`ff-packaging-line-menu-btn-${ln.id}`}
+                        >
+                          <MoreVertOutlined fontSize="small" />
+                        </IconButton>
+                      ) : null}
+                      {renderLineActions?.(ln)}
+                    </TableCell>
+                  </TableRow>
+                )
+              })}
+            </TableBody>
+          </Table>
+        </TableContainer>
+      ) : (
+        <Stack spacing={1.5} data-testid="ff-packaging-lines-compact">
+          {task.lines.map((ln) => {
+            const displayMeta = productDisplayMetaFromCatalog(ln.product_id, ln, catalogById)
+            const barcode = lineBarcodeForScan(ln)
+            const remaining = lineRemaining(ln)
+            const markingProgressIncomplete = isLineMarkingProgressIncomplete(ln)
+            const manualError = manualErrorByLine[ln.id]
+            return (
+              <Paper
+                key={ln.id}
+                variant="outlined"
+                data-testid={markingProgressIncomplete ? 'ff-packaging-line-marking-incomplete' : 'ff-packaging-line'}
+                sx={{ p: 1.5, bgcolor: markingProgressIncomplete ? 'warning.light' : 'background.paper' }}
+              >
+                <Box
+                  sx={{
+                    display: 'grid',
+                    gridTemplateColumns: { xs: '1fr', md: 'minmax(300px, 1fr) minmax(220px, 0.7fr) minmax(260px, 0.8fr)' },
+                    gap: 1.5,
+                    alignItems: 'center',
+                  }}
+                >
+                  <Stack direction="row" spacing={1.25} sx={{ minWidth: 0, alignItems: 'center' }}>
+                    <Avatar
+                      variant="rounded"
+                      src={displayMeta.wb_primary_image_url ?? undefined}
+                      alt={displayMeta.product_name}
+                      sx={{ width: 56, height: 56, flex: '0 0 auto' }}
+                    />
+                    <Box sx={{ minWidth: 0 }}>
+                      <Typography variant="body2" sx={{ fontWeight: 700, overflowWrap: 'anywhere' }} data-testid="ff-packaging-compact-product-name">
+                        {displayMeta.product_name}
+                      </Typography>
+                      <Typography variant="caption" color="text.secondary" sx={{ display: 'block', overflowWrap: 'anywhere' }}>
+                        SKU: {displayMeta.sku_code} · ШК: {barcode}
+                      </Typography>
+                      <Typography variant="caption" color="text.secondary" sx={{ display: 'block', overflowWrap: 'anywhere' }}>
+                        Селлер: {ln.seller_name ?? displayMeta.seller_name ?? '—'} · Ячейка: {locationLabel(ln.storage_location_code)}
+                      </Typography>
+                    </Box>
                   </Stack>
-                </Stack>
-              </Box>
-            </Paper>
-          )
-        })}
-      </Stack>
+                  <Stack spacing={0.5} sx={{ minWidth: 0 }}>
+                    <Typography variant="body2" sx={{ fontWeight: 700 }} data-testid={`ff-packaging-line-progress-${ln.id}`}>
+                      Готово {ln.qty_done} / Осталось {remaining} / Всего {ln.qty_total}
+                    </Typography>
+                    <Typography variant="caption" color="text.secondary" sx={{ overflowWrap: 'anywhere' }} data-testid="ff-packaging-instructions">
+                      ТЗ: {ln.packaging_instructions?.trim() || 'не задано'}
+                    </Typography>
+                    {ln.requires_honest_sign ? (
+                      <Typography variant="caption" color={markingProgressIncomplete ? 'warning.dark' : 'success.main'} data-testid={`ff-packaging-marking-progress-${ln.id}`}>
+                        ЧЗ: напечатано {ln.qty_marking_printed} / нужно {ln.qty_need_pack}; в пуле {ln.marking_available_count}
+                      </Typography>
+                    ) : (
+                      <Typography variant="caption" color="text.secondary">ЧЗ не требуется</Typography>
+                    )}
+                  </Stack>
+                  <Stack spacing={1} sx={{ alignItems: { xs: 'stretch', md: 'flex-end' } }}>
+                    {taskEditable && !printOnly ? (
+                      <Stack direction="row" spacing={0.75} sx={{ justifyContent: { xs: 'flex-start', md: 'flex-end' }, flexWrap: 'wrap' }}>
+                        <TextField
+                          size="small"
+                          label="+N"
+                          value={manualQtyByLine[ln.id] ?? ''}
+                          error={Boolean(manualError)}
+                          helperText={manualError || ' '}
+                          onChange={(e) => {
+                            setManualQtyByLine((prev) => ({ ...prev, [ln.id]: e.target.value }))
+                            setManualErrorByLine((prev) => ({ ...prev, [ln.id]: '' }))
+                          }}
+                          disabled={busy || remaining < 1}
+                          slotProps={{
+                            htmlInput: {
+                              inputMode: 'numeric',
+                              'data-testid': `ff-packaging-manual-qty-${ln.id}`,
+                            },
+                          }}
+                          sx={{ width: 92 }}
+                        />
+                        <Button
+                          size="small"
+                          variant="outlined"
+                          disabled={busy || remaining < 1}
+                          onClick={() => void submitManualQty(ln)}
+                          data-testid="ff-packaging-pack-btn"
+                          sx={{ minWidth: 64, alignSelf: 'flex-start' }}
+                        >
+                          +N
+                        </Button>
+                      </Stack>
+                    ) : null}
+                    <Stack direction="row" spacing={0.5} sx={{ justifyContent: { xs: 'flex-start', md: 'flex-end' }, flexWrap: 'wrap' }}>
+                      {!hidePrintActions && (alwaysShowPrintAction || printOnly || ln.requires_honest_sign) ? (
+                        <IconButton
+                          size="small"
+                          aria-label={`Печать товара ${displayMeta.product_name}`}
+                          onClick={() => openLinePrint(ln)}
+                          data-testid={`ff-packaging-line-print-${ln.id}`}
+                        >
+                          <PrintOutlined fontSize="small" />
+                        </IconButton>
+                      ) : null}
+                      {!hidePrintActions && ln.requires_honest_sign && ln.qty_need_pack > 0 && ln.qty_marking_printed < 1 ? (
+                        <Button
+                          size="small"
+                          variant="outlined"
+                          disabled={busy || ln.marking_available_count < 1}
+                          onClick={() => openLinePrint(ln)}
+                          data-testid="ff-packaging-print-marking"
+                        >
+                          Печать ЧЗ
+                        </Button>
+                      ) : null}
+                      {lineHasOverflowActions(ln) ? (
+                        <IconButton
+                          size="small"
+                          aria-label="Дополнительные действия"
+                          disabled={busy}
+                          onClick={(e) => openLineMenu(e, ln)}
+                          data-testid={`ff-packaging-line-menu-btn-${ln.id}`}
+                        >
+                          <MoreVertOutlined fontSize="small" />
+                        </IconButton>
+                      ) : null}
+                      {ln.qty_confirmed_packed < ln.qty_suggested_packed ? (
+                        <Button
+                          size="small"
+                          disabled={busy || !taskEditable || ln.qty_suggested_packed < 1}
+                          onClick={() => void confirmPacked(ln.id)}
+                          data-testid="ff-packaging-confirm-shelf"
+                        >
+                          С полки
+                        </Button>
+                      ) : null}
+                      {renderLineActions?.(ln)}
+                    </Stack>
+                  </Stack>
+                </Box>
+              </Paper>
+            )
+          })}
+        </Stack>
+      )}
       {taskEditable ? (
         <Paper variant="outlined" sx={{ p: 2 }} data-testid="ff-packaging-complete-panel">
           <Stack spacing={1.5}>
-            {hasIncompleteMarking ? (
+            {hasIncompleteMarking && !isMpUnloadTask ? (
               <Alert severity="warning" data-testid="ff-packaging-marking-incomplete-warning">
                 {MARKING_NOT_DONE_MESSAGE}
                 {incompleteMarkingLines.map((ln) => (
@@ -910,6 +1084,11 @@ export function FfPackagingTaskPanel({
                   </Typography>
                 ))}
               </Alert>
+            ) : null}
+            {isMpUnloadTask && (hasIncompletePacking || hasIncompleteMarking) ? (
+              <Typography variant="body2" color="text.secondary" data-testid="ff-packaging-complete-blocker">
+                Завершение станет доступно после печати обязательных ЧЗ/ШК и распределения товара по коробам.
+              </Typography>
             ) : null}
             <Button
               variant="contained"

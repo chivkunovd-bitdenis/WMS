@@ -188,7 +188,7 @@ test('FF marketplace unload: tabs switch without losing document context', async
   const baseIn = `${e2eApi}/operations/inbound-intake-requests`
   const inbound = await page.request.post(baseIn, {
     headers: auth,
-    data: JSON.stringify({ warehouse_id: whId }),
+    data: JSON.stringify({ warehouse_id: whId, planned_box_count: 1 }),
   })
   const inboundId = String(((await inbound.json()) as { id: string }).id)
   const locLineRes = await page.request.post(`${baseIn}/${inboundId}/lines`, {
@@ -206,7 +206,7 @@ test('FF marketplace unload: tabs switch without losing document context', async
 
   const inboundSort = await page.request.post(baseIn, {
     headers: auth,
-    data: JSON.stringify({ warehouse_id: whId }),
+    data: JSON.stringify({ warehouse_id: whId, planned_box_count: 1 }),
   })
   const sortInboundId = String(((await inboundSort.json()) as { id: string }).id)
   const sortLineRes = await page.request.post(`${baseIn}/${sortInboundId}/lines`, {
@@ -239,26 +239,29 @@ test('FF marketplace unload: tabs switch without losing document context', async
     data: JSON.stringify({ planned_shipment_date: '2026-06-01' }),
   })
 
-  const pkgRes = await page.request.get(
-    `${e2eApi}/operations/packaging-tasks/by-unload/${mid}`,
-    { headers: auth },
+  const boxRes = await page.request.post(
+    `${e2eApi}/operations/marketplace-unload-requests/${mid}/boxes/batch`,
+    {
+      headers: auth,
+      data: JSON.stringify({ count: 1, box_preset: '60_40_40' }),
+    },
   )
+  expect(boxRes.ok(), await boxRes.text()).toBeTruthy()
+  const boxId = String(((await boxRes.json()) as { id: string }[])[0].id)
+  const boxLineRes = await page.request.post(
+    `${e2eApi}/operations/marketplace-unload-requests/${mid}/boxes/${boxId}/manual-line`,
+    {
+      headers: auth,
+      data: JSON.stringify({ product_id: productId, storage_location_id: locId, quantity: 2 }),
+    },
+  )
+  expect(boxLineRes.ok(), await boxLineRes.text()).toBeTruthy()
+
+  const pkgRes = await page.request.get(`${e2eApi}/operations/packaging-tasks/by-unload/${mid}`, {
+    headers: auth,
+  })
   expect(pkgRes.ok()).toBeTruthy()
-  const pkgBody = (await pkgRes.json()) as {
-    id: string
-    lines: { id: string; qty_need_pack: number }[]
-  }
-  const pkgLine = pkgBody.lines[0]
-  expect(pkgLine?.id).toBeTruthy()
-  if (pkgLine && pkgLine.qty_need_pack > 0) {
-    await page.request.post(
-      `${e2eApi}/operations/packaging-tasks/${pkgBody.id}/lines/${pkgLine.id}/pack`,
-      {
-        headers: auth,
-        data: JSON.stringify({ quantity: pkgLine.qty_need_pack }),
-      },
-    )
-  }
+  const pkgBody = (await pkgRes.json()) as { id: string }
   const pkgComplete = await page.request.post(
     `${e2eApi}/operations/packaging-tasks/${pkgBody.id}/complete`,
     { headers: auth, data: JSON.stringify({ acknowledge_all_packed: false }) },
@@ -278,13 +281,13 @@ test('FF marketplace unload: tabs switch without losing document context', async
   )
   await expect(page.getByTestId('ff-supplies-doc-dialog')).not.toContainText(unloadDocumentNumber)
   await expect(page.getByTestId('ff-mp-tab-products')).toBeVisible()
-  await expect(page.getByTestId('ff-mp-tab-picking')).toBeVisible()
   await expect(page.getByTestId('ff-mp-tab-packaging')).toBeVisible()
-  await expect(page.getByTestId('ff-mp-tab-boxes')).toBeVisible()
-  await expect(page.getByTestId('ff-mp-tab-final')).toBeVisible()
+  await expect(page.getByTestId('ff-mp-tab-picking')).toHaveCount(0)
+  await expect(page.getByTestId('ff-mp-tab-boxes')).toHaveCount(0)
+  await expect(page.getByTestId('ff-mp-tab-final')).toHaveCount(0)
   await expect(page.getByTestId('ff-mp-boxes')).toHaveCount(0)
   await expectMpTabSelected(page, 'ff-mp-tab-products')
-  await expect(page.getByTestId('ff-mp-next-step')).toContainText('Подбор')
+  await expect(page.getByTestId('ff-mp-next-step')).toContainText('Упаковка')
   await expect(page.getByTestId('ff-mp-ship')).toHaveCount(0)
 
   await expect(page.getByTestId('ff-mp-shipment-summary')).toBeVisible()
@@ -297,24 +300,15 @@ test('FF marketplace unload: tabs switch without losing document context', async
   )
   await expect(page.getByTestId('ff-mp-shipment-summary-packed')).toHaveText('2/2')
 
-  await page.getByTestId('ff-mp-tab-picking').click()
-  await expect(page.getByTestId('ff-mp-tab-picking-panel')).toBeVisible()
-  await expectMpTabSelected(page, 'ff-mp-tab-picking')
-
   await page.getByTestId('ff-mp-tab-packaging').click()
   await expect(page.getByTestId('ff-mp-tab-packaging-panel')).toBeVisible()
   await expectMpTabSelected(page, 'ff-mp-tab-packaging')
   await expect(page.getByTestId('ff-mp-packaging-continue')).toHaveCount(0)
-  await expect(page.getByTestId('ff-packaging-task-status')).toHaveCount(0)
-  await expect(page.getByTestId('ff-mp-boxes')).toHaveCount(0)
-
-  await page.getByTestId('ff-mp-tab-boxes').click()
+  await expect(page.getByTestId('ff-packaging-task-status')).toBeVisible()
+  await expect(page.getByTestId('ff-mp-boxes')).not.toBeVisible()
+  await page.getByTestId('ff-mp-boxes-summary').click()
   await expect(page.getByTestId('ff-mp-boxes')).toBeVisible()
-  await expectMpTabSelected(page, 'ff-mp-tab-boxes')
-  await expect(page.getByTestId('ff-mp-ship')).toHaveCount(0)
-  await page.getByTestId('ff-mp-tab-final').click()
-  await expect(page.getByTestId('ff-mp-tab-final-panel')).toBeVisible()
-  await expect(page.getByTestId('ff-mp-ship')).toBeDisabled()
+  await expect(page.getByTestId('ff-mp-ship')).toBeEnabled()
   await page.getByTestId('ff-mp-tab-products').click()
   await expect(page.getByTestId('ff-supplies-doc-lines')).toBeVisible()
   await expectMpTabSelected(page, 'ff-mp-tab-products')
@@ -409,7 +403,7 @@ test('FF marketplace unload: no packaging progress banner on draft', async ({ pa
   const baseIn = `${e2eApi}/operations/inbound-intake-requests`
   const inbound = await page.request.post(baseIn, {
     headers: auth,
-    data: JSON.stringify({ warehouse_id: whId }),
+    data: JSON.stringify({ warehouse_id: whId, planned_box_count: 1 }),
   })
   const inboundId = String(((await inbound.json()) as { id: string }).id)
   const locLineRes = await page.request.post(`${baseIn}/${inboundId}/lines`, {
@@ -427,7 +421,7 @@ test('FF marketplace unload: no packaging progress banner on draft', async ({ pa
 
   const inboundSort = await page.request.post(baseIn, {
     headers: auth,
-    data: JSON.stringify({ warehouse_id: whId }),
+    data: JSON.stringify({ warehouse_id: whId, planned_box_count: 1 }),
   })
   const sortInboundId = String(((await inboundSort.json()) as { id: string }).id)
   const sortLineRes = await page.request.post(`${baseIn}/${sortInboundId}/lines`, {
@@ -474,8 +468,8 @@ test('FF marketplace unload: no packaging progress banner on draft', async ({ pa
   await expect(page.getByTestId('ff-mp-shipment-summary-planned')).toHaveText('2')
   await expect(page.getByTestId('ff-mp-shipment-summary-packed')).toHaveText('—')
   await expect(page.getByTestId('ff-mp-tab-packaging')).toBeDisabled()
-  await expect(page.getByTestId('ff-mp-tab-boxes')).toBeDisabled()
-  await expect(page.getByTestId('ff-mp-tab-final')).toBeDisabled()
+  await expect(page.getByTestId('ff-mp-tab-boxes')).toHaveCount(0)
+  await expect(page.getByTestId('ff-mp-tab-final')).toHaveCount(0)
 })
 
 // TC-NEW-MP-015 — MP-020: главный scan на «Товарах» не принимает штрихкод товара.
@@ -565,7 +559,7 @@ test('FF marketplace unload: main scan rejects product barcode', async ({ page }
   const baseIn = `${e2eApi}/operations/inbound-intake-requests`
   const inbound = await page.request.post(baseIn, {
     headers: auth,
-    data: JSON.stringify({ warehouse_id: whId }),
+    data: JSON.stringify({ warehouse_id: whId, planned_box_count: 1 }),
   })
   const inboundId = String(((await inbound.json()) as { id: string }).id)
   const locLineRes = await page.request.post(`${baseIn}/${inboundId}/lines`, {
@@ -583,7 +577,7 @@ test('FF marketplace unload: main scan rejects product barcode', async ({ page }
 
   const inboundSort = await page.request.post(baseIn, {
     headers: auth,
-    data: JSON.stringify({ warehouse_id: whId }),
+    data: JSON.stringify({ warehouse_id: whId, planned_box_count: 1 }),
   })
   const sortInboundId = String(((await inboundSort.json()) as { id: string }).id)
   const sortLineRes = await page.request.post(`${baseIn}/${sortInboundId}/lines`, {
@@ -626,7 +620,8 @@ test('FF marketplace unload: main scan rejects product barcode', async ({ page }
   await expect(page.getByTestId('ff-supplies-doc-dialog')).toBeVisible()
   await expectMpTabSelected(page, 'ff-mp-tab-products')
 
-  await page.getByTestId('ff-mp-tab-boxes').click()
+  await page.getByTestId('ff-mp-tab-packaging').click()
+  await page.getByTestId('ff-mp-boxes-summary').click()
   await Promise.all([
     waitForPostOk(page, `/api/operations/marketplace-unload-requests/${mid}/boxes/batch`),
     page.getByTestId('ff-mp-box-batch-create').click(),
@@ -725,7 +720,7 @@ test('TC-NEW-OUT-FE-02: shipment table columns no early red', async ({ page }) =
   const baseIn = `${e2eApi}/operations/inbound-intake-requests`
   const inbound = await page.request.post(baseIn, {
     headers: auth,
-    data: JSON.stringify({ warehouse_id: whId }),
+    data: JSON.stringify({ warehouse_id: whId, planned_box_count: 1 }),
   })
   const inboundId = String(((await inbound.json()) as { id: string }).id)
   const lineRes = await page.request.post(`${baseIn}/${inboundId}/lines`, {
@@ -789,9 +784,10 @@ test('TC-NEW-OUT-FE-02: shipment table columns no early red', async ({ page }) =
   await expect(page.getByTestId(`ff-mp-line-picked-${mpLineId}`)).toHaveText('0')
   await expect(page.getByTestId(`ff-mp-line-remaining-${mpLineId}`)).toHaveText('2')
   await expect(page.getByTestId('ff-mp-print-actions')).toHaveCount(0)
-  await page.getByTestId('ff-mp-tab-boxes').click()
+  await page.getByTestId('ff-mp-tab-packaging').click()
+  await page.getByTestId('ff-mp-boxes-summary').click()
   await expect(page.getByTestId('ff-mp-boxes')).toBeVisible()
-  await page.getByTestId('ff-mp-tab-final').click()
-  await expect(page.getByTestId('ff-mp-print-actions')).toBeVisible()
+  await expect(page.getByTestId('ff-mp-tab-final')).toHaveCount(0)
+  await expect(page.getByTestId('ff-mp-print-actions')).toHaveCount(0)
   await expect(page.getByTestId('ff-mp-ship')).toBeDisabled()
 })

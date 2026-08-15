@@ -632,7 +632,7 @@ Distinct from **operational outbound** (S08) and **seller supply/inbound** (S06)
 - **Actor:** fulfillment admin.
 - **Given:** seller **submitted** MP unload with lines and WB warehouse.
 - **When:** opens document, sets planned shipment date, **Confirm** (footer).
-- **Then:** status **confirmed**; **linked packaging task** created; boxes/collect UI on **Products** tab enabled; **Shipped** disabled until packaging done and boxes filled.
+- **Then:** status **confirmed**; **linked packaging task** created; **Packaging** tab enabled; boxes/collect UI lives under the **Boxes** accordion inside **Packaging**; **Shipped** disabled until packaging done and boxes filled.
 - **Negative:** seller role cannot call confirm.
 
 ### TC-NEW-MP-11 Boxes only after confirmed; ship after packaging
@@ -641,7 +641,7 @@ Distinct from **operational outbound** (S08) and **seller supply/inbound** (S06)
 - **Given:** MP unload **draft** or **submitted** with lines.
 - **When:** attempts create box / collect.
 - **Then:** rejected (`not_editable` / `bad_status`).
-- **When:** after **confirm**, creates open batch boxes, fills via modal **before** packaging complete.
+- **When:** after **confirm**, opens **Packaging → Boxes**, creates open batch boxes, fills via modal **before** packaging complete.
 - **Then:** box add succeeds (no packaging gate); **Shipped** still disabled.
 - **When:** completes packaging task, full distribution in boxes, clicks **Shipped**.
 - **Then:** status **shipped**; stock reduced.
@@ -651,7 +651,7 @@ Distinct from **operational outbound** (S08) and **seller supply/inbound** (S06)
 
 - **Actor:** seller + FF admin (e2e).
 - **Given:** seller **Plan**; FF **Confirm** with date.
-- **When:** FF batch-creates 2+ boxes, fills plan via box modal **without** completing packaging; then completes packaging; then **Shipped** from footer.
+- **When:** FF opens **Packaging → Boxes**, batch-creates 2+ boxes, fills plan via box modal **without** completing packaging; then completes packaging; then **Shipped** from footer.
 - **Then:** status **shipped**; `ff-mp-collect-summary-remaining` = 0.
 - **Negative:** **Shipped** enabled before packaging complete → must fail (MP-033).
 

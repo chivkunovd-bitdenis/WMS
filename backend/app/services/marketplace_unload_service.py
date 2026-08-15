@@ -79,8 +79,9 @@ if TYPE_CHECKING:
 
 
 class MarketplaceUnloadError(Exception):
-    def __init__(self, code: str) -> None:
+    def __init__(self, code: str, detail: dict[str, object] | None = None) -> None:
         self.code = code
+        self.detail = detail
         super().__init__(code)
 
 
@@ -469,6 +470,8 @@ async def _assert_available_for_unload_quantity(
     quantity: int,
     *,
     exclude_request_id: uuid.UUID | None = None,
+    product_name: str | None = None,
+    sku_code: str | None = None,
 ) -> None:
     availability = await _available_product_availability_in_warehouse(
         session,
@@ -480,7 +483,28 @@ async def _assert_available_for_unload_quantity(
     if availability.available >= quantity:
         return
     code = "insufficient_free_fbo" if availability.uses_free_fbo_pool else "insufficient_available"
-    raise MarketplaceUnloadError(code)
+    product_label = product_name or sku_code or str(product_id)
+    suffix = f" ({sku_code})" if sku_code and sku_code != product_name else ""
+    prefix = (
+        "Недостаточно свободного FBO остатка"
+        if availability.uses_free_fbo_pool
+        else "Недостаточно доступного остатка"
+    )
+    raise MarketplaceUnloadError(
+        code,
+        {
+            "code": code,
+            "product_id": str(product_id),
+            "product_name": product_name,
+            "sku_code": sku_code,
+            "available": availability.available,
+            "attempted": quantity,
+            "message": (
+                f"{prefix}: {product_label}{suffix}. "
+                f"Доступно {availability.available} шт, пытаются {quantity} шт."
+            ),
+        },
+    )
 
 
 async def list_available_products(
@@ -635,6 +659,8 @@ async def add_line(
         product_id,
         quantity,
         exclude_request_id=req.id if req.status in RESERVE_STATUSES else None,
+        product_name=prod.name,
+        sku_code=prod.sku_code,
     )
     line = MarketplaceUnloadLine(
         request_id=req.id,
@@ -674,13 +700,25 @@ async def replace_lines(
             continue
         normalized[product_id] = normalized.get(product_id, 0) + qty
 
+    products: dict[uuid.UUID, Product] = {}
+    for product_id in normalized:
+        prod = await session.get(Product, product_id)
+        if prod is None or prod.tenant_id != tenant_id:
+            raise MarketplaceUnloadError("product_not_found")
+        if req.seller_id is not None and prod.seller_id != req.seller_id:
+            raise MarketplaceUnloadError("product_seller_mismatch")
+        products[product_id] = prod
+
     for product_id, qty in normalized.items():
+        prod = products[product_id]
         await _assert_available_for_unload_quantity(
             session,
             tenant_id,
             req.warehouse_id,
             product_id,
             qty,
+            product_name=prod.name,
+            sku_code=prod.sku_code,
         )
 
     for ln in list(req.lines):
@@ -688,11 +726,6 @@ async def replace_lines(
     await session.flush()
 
     for product_id, qty in normalized.items():
-        prod = await session.get(Product, product_id)
-        if prod is None or prod.tenant_id != tenant_id:
-            raise MarketplaceUnloadError("product_not_found")
-        if req.seller_id is not None and prod.seller_id != req.seller_id:
-            raise MarketplaceUnloadError("product_seller_mismatch")
         session.add(
             MarketplaceUnloadLine(
                 request_id=req.id,

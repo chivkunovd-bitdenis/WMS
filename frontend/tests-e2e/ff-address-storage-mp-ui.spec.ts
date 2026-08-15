@@ -92,7 +92,7 @@ test('address storage off hides cell UI on marketplace unload', async ({ page })
   const baseIn = `${e2eApi}/operations/inbound-intake-requests`
   const inbound = await page.request.post(baseIn, {
     headers: auth,
-    data: JSON.stringify({ warehouse_id: whId }),
+    data: JSON.stringify({ warehouse_id: whId, planned_box_count: 1 }),
   })
   const inboundId = String(((await inbound.json()) as { id: string }).id)
   await page.request.post(`${baseIn}/${inboundId}/lines`, {
@@ -123,7 +123,7 @@ test('address storage off hides cell UI on marketplace unload', async ({ page })
 
   const inboundSort = await page.request.post(baseIn, {
     headers: auth,
-    data: JSON.stringify({ warehouse_id: whId }),
+    data: JSON.stringify({ warehouse_id: whId, planned_box_count: 1 }),
   })
   const sortInboundId = String(((await inboundSort.json()) as { id: string }).id)
   await page.request.post(`${baseIn}/${sortInboundId}/lines`, {
@@ -205,7 +205,8 @@ test('address storage off hides cell UI on marketplace unload', async ({ page })
     page.locator('[data-doc-kind="marketplace_unload"]').first().click(),
   ])
   await expect(page.getByTestId('ff-supplies-doc-dialog')).toBeVisible()
-  await page.getByTestId('ff-mp-tab-boxes').click()
+  await page.getByTestId('ff-mp-tab-packaging').click()
+  await page.getByTestId('ff-mp-boxes-summary').click()
   await expect(page.getByTestId('ff-mp-boxes')).toBeVisible()
   await expect(page.getByTestId('ff-mp-active-location')).toHaveCount(0)
   await expect(page.getByTestId('ff-mp-start-picking')).toHaveCount(0)

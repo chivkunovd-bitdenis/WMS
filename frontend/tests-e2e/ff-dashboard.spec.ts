@@ -32,6 +32,212 @@ test('fulfillment admin sees shipment calendar and supplies-shipments page', asy
   await expect(page.getByTestId('cal-01-weekday')).toHaveCount(7);
   await expect(await page.locator('[data-testid^="cal-01-day-"]').count()).toBeGreaterThan(27);
 
+  const token = await page.evaluate(() => localStorage.getItem('wms_token_ff'));
+  expect(token).toBeTruthy();
+  const e2eApi = process.env.E2E_API_ORIGIN ?? 'http://127.0.0.1:18000';
+  const whRes = await page.request.post(`${e2eApi}/warehouses`, {
+    headers: {
+      Authorization: `Bearer ${token}`,
+      'Content-Type': 'application/json',
+    },
+    data: JSON.stringify({
+      name: 'E2E FF Dash',
+      code: `e2e-ff-${Date.now()}`,
+    }),
+  });
+  if (!whRes.ok()) {
+    throw new Error(`warehouse create failed: ${whRes.status()} ${await whRes.text()}`);
+  }
+
+  const sellerRes = await page.request.post(`${e2eApi}/sellers`, {
+    headers: {
+      Authorization: `Bearer ${token}`,
+      'Content-Type': 'application/json',
+    },
+    data: JSON.stringify({ name: 'E2E FF seller' }),
+  });
+  if (!sellerRes.ok()) {
+    throw new Error(`seller create failed: ${sellerRes.status()} ${await sellerRes.text()}`);
+  }
+  const sellerId = (await sellerRes.json()) as { id: string };
+  const tokRes = await page.request.patch(
+    `${e2eApi}/integrations/wildberries/sellers/${sellerId.id}/tokens`,
+    {
+      headers: {
+        Authorization: `Bearer ${token}`,
+        'Content-Type': 'application/json',
+      },
+      data: JSON.stringify({
+        content_api_token: 'e2e-content',
+        supplies_api_token: 'e2e-ff-supplies-token',
+      }),
+    },
+  );
+  if (!tokRes.ok()) {
+    throw new Error(`wb supplies token patch failed: ${tokRes.status()} ${await tokRes.text()}`);
+  }
+  const jobRes = await page.request.post(`${e2eApi}/operations/background-jobs`, {
+    headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+    data: JSON.stringify({ job_type: 'wildberries_cards_sync', seller_id: sellerId.id }),
+  });
+  const jobId = String(((await jobRes.json()) as { id: string }).id);
+  await expect
+    .poll(async () => {
+      const jr = await page.request.get(`${e2eApi}/operations/background-jobs/${jobId}`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      return (await jr.json()) as { status: string };
+    })
+    .toMatchObject({ status: 'done' });
+
+  const prRes = await page.request.post(`${e2eApi}/products`, {
+    headers: {
+      Authorization: `Bearer ${token}`,
+      'Content-Type': 'application/json',
+    },
+    data: JSON.stringify({
+      name: 'E2E FF product',
+      sku_code: `e2e-ff-sku-${Date.now()}`,
+      length_mm: 1,
+      width_mm: 1,
+      height_mm: 1,
+      seller_id: sellerId.id,
+    }),
+  });
+  if (!prRes.ok()) {
+    throw new Error(`product create failed: ${prRes.status()} ${await prRes.text()}`);
+  }
+  const productJson = (await prRes.json()) as { id: string; sku_code: string };
+  const productId = String(productJson.id);
+  const barcode = 'E2E-MOCK-BARCODE';
+  await page.request.post(
+    `${e2eApi}/integrations/wildberries/sellers/${sellerId.id}/link-product`,
+    {
+      headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+      data: JSON.stringify({ product_id: productId, nm_id: 424242 }),
+    },
+  );
+  await page.request.patch(`${e2eApi}/products/${productId}/packaging-instructions`, {
+    headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+    data: JSON.stringify({ packaging_instructions: 'E2E: пакет + стикер WB' }),
+  });
+  const whId = String(((await whRes.json()) as { id: string }).id);
+  const baseIn = `${e2eApi}/operations/inbound-intake-requests`;
+  const inbound = await page.request.post(baseIn, {
+    headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+    data: JSON.stringify({ warehouse_id: whId, planned_box_count: 1 }),
+  });
+  if (!inbound.ok()) {
+    throw new Error(`inbound create failed: ${inbound.status()} ${await inbound.text()}`);
+  }
+  const inboundId = String(((await inbound.json()) as { id: string }).id);
+  const inboundLine = await page.request.post(`${baseIn}/${inboundId}/lines`, {
+    headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+    data: JSON.stringify({ product_id: productId, expected_qty: 5 }),
+  });
+  if (!inboundLine.ok()) {
+    throw new Error(`inbound line failed: ${inboundLine.status()} ${await inboundLine.text()}`);
+  }
+  await page.request.post(`${baseIn}/${inboundId}/submit`, { headers: { Authorization: `Bearer ${token}` } });
+  const { beginInboundReceivingWithBoxes, fulfillInboundViaBoxScans } = await import('./inbound-boxes-helpers');
+  const { boxes: inboundBoxes } = await beginInboundReceivingWithBoxes(
+    page.request,
+    { Authorization: `Bearer ${token}` },
+    inboundId,
+    { boxCount: 1 },
+  );
+  await fulfillInboundViaBoxScans(
+    page.request,
+    { Authorization: `Bearer ${token}` },
+    inboundId,
+    inboundBoxes,
+    barcode,
+    [5],
+  );
+  await page.request.post(`${baseIn}/${inboundId}/verify`, { headers: { Authorization: `Bearer ${token}` } });
+
+  await page.reload();
+  await expect(page.getByTestId('dashboard')).toBeVisible();
+
+  await page.getByTestId('nav-ff-mp-shipments').click();
+  await expect(page.getByTestId('ff-mp-shipments-page')).toBeVisible();
+  await expect(page.getByTestId('ff-create-mp-shipment')).toBeVisible();
+  await page.getByTestId('ff-create-mp-shipment').click();
+  await expect(page.getByTestId('ff-supplies-info-notice')).toBeVisible();
+  // Creating a document opens it immediately; close before interacting with the list.
+  if (await page.getByTestId('ff-supplies-doc-dialog').isVisible().catch(() => false)) {
+    await page.getByTestId('ff-supplies-doc-close').click();
+    await expect(page.getByTestId('ff-supplies-doc-dialog')).toBeHidden();
+  }
+  await Promise.all([
+    waitForGetOk(page, '/api/operations/marketplace-unload-requests/'),
+    page.locator('[data-doc-kind="marketplace_unload"]').first().click(),
+  ]);
+  await expect(page.getByTestId('ff-supplies-doc-dialog')).toBeVisible();
+
+  await expect(page.getByTestId('ff-mp-add-products-panel')).toBeVisible();
+  await expect(page.getByTestId('ff-mp-add-products')).toBeVisible();
+  await expect(page.getByTestId('ff-supplies-line-product')).not.toBeVisible();
+
+  await page.getByTestId('ff-mp-add-products').click();
+  await expect(page.getByTestId('ff-mp-picker')).toBeVisible();
+  await page.getByTestId('ff-mp-picker-search').fill(productJson.sku_code);
+  const sortingPickerRow = page
+    .getByTestId('ff-mp-picker-row')
+    .filter({ hasText: productJson.sku_code });
+  await expect(sortingPickerRow).toBeVisible();
+  await expect(sortingPickerRow).toContainText('5');
+  await page.getByTestId('ff-mp-picker-qty').first().fill('5');
+  await Promise.all([
+    waitForPostOk(
+      page,
+      '/api/operations/marketplace-unload-requests',
+      (u) => u.includes('/lines') && !u.includes('/submit'),
+    ),
+    page.getByTestId('ff-mp-picker-apply').click(),
+  ]);
+  await expect(page.getByTestId('ff-supplies-doc-lines')).toContainText('E2E FF product');
+
+  const wbSelect = page.getByTestId('ff-mp-wb-warehouse-select');
+  const wbLabel = (await wbSelect.textContent()) ?? '';
+  if (!wbLabel.includes('E2E WB склад')) {
+    await wbSelect.click();
+    await Promise.all([
+      page.waitForResponse(
+        (r) =>
+          r.request().method() === 'PATCH' &&
+          r.url().includes('/operations/marketplace-unload-requests/') &&
+          r.status() >= 200 &&
+          r.status() < 300,
+      ),
+      page.getByRole('option', { name: /E2E WB склад/ }).click(),
+    ]);
+  }
+  await Promise.all([
+    page.waitForResponse(
+      (r) =>
+        r.request().method() === 'PATCH' &&
+        r.url().includes('/operations/marketplace-unload-requests/') &&
+        r.status() >= 200 &&
+        r.status() < 300,
+    ),
+    (async () => {
+      const dateField = page.getByTestId('ff-mp-planned-date');
+      await dateField.getByRole('spinbutton', { name: 'Day' }).fill('15');
+      await dateField.getByRole('spinbutton', { name: 'Month' }).fill('06');
+      await dateField.getByRole('spinbutton', { name: 'Year' }).fill('2026');
+      await dateField.getByRole('spinbutton', { name: 'Year' }).blur();
+    })(),
+  ]);
+  await Promise.all([
+    waitForPostOk(page, '/api/operations/marketplace-unload-requests', (u) => u.includes('/confirm')),
+    page.getByTestId('ff-supplies-doc-submit').click(),
+  ]);
+  await expect(page.getByTestId('ff-supplies-doc-dialog')).toContainText('Утверждено');
+  await page.getByTestId('ff-mp-tab-packaging').click();
+  await page.getByTestId('ff-mp-boxes-summary').click();
+  await expect(page.getByTestId('ff-mp-boxes')).toBeVisible();
+
   await page.getByTestId('nav-dashboard').click();
   await expect(page.getByTestId('cal-01-title')).toContainText('Календарь отгрузок');
 });

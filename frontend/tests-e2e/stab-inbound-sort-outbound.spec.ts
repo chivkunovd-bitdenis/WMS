@@ -161,7 +161,8 @@ test('stab inbound sort outbound — receive, see sorting, ship from buffer with
     page.locator('[data-doc-kind="marketplace_unload"]').first().click(),
   ]);
   await expect(page.getByTestId('ff-supplies-doc-dialog')).toBeVisible();
-  await page.getByRole('tab', { name: 'Короба' }).click();
+  await page.getByTestId('ff-mp-tab-packaging').click();
+  await page.getByTestId('ff-mp-boxes-summary').click();
   await expect(page.getByTestId('ff-mp-box-batch-create')).toBeVisible();
 
   await Promise.all([

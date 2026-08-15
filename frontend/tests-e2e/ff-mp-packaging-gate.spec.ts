@@ -91,7 +91,7 @@ test('FF marketplace unload: box create enabled before packaging done', async ({
   const baseIn = `${e2eApi}/operations/inbound-intake-requests`
   const inbound = await page.request.post(baseIn, {
     headers: auth,
-    data: JSON.stringify({ warehouse_id: whId }),
+    data: JSON.stringify({ warehouse_id: whId, planned_box_count: 1 }),
   })
   const inboundId = String(((await inbound.json()) as { id: string }).id)
   await page.request.post(`${baseIn}/${inboundId}/lines`, {
@@ -146,9 +146,10 @@ test('FF marketplace unload: box create enabled before packaging done', async ({
   await expect(page.getByTestId('ff-supplies-doc-dialog')).toBeVisible()
   await expect(page.getByTestId('ff-mp-packaging-gate-alert')).toHaveCount(0)
   await expect(page.getByTestId('ff-mp-shipment-summary')).toBeVisible()
-  await page.getByTestId('ff-mp-tab-boxes').click()
+  await page.getByTestId('ff-mp-tab-packaging').click()
+  await page.getByTestId('ff-mp-boxes-summary').click()
   await expect(page.getByTestId('ff-mp-box-batch-create')).toBeEnabled()
 
-  await page.getByTestId('ff-mp-tab-final').click()
+  await expect(page.getByTestId('ff-mp-tab-final')).toHaveCount(0)
   await expect(page.getByTestId('ff-mp-ship')).toBeDisabled()
 })
