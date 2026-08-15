@@ -350,7 +350,8 @@ export function WbProductPickerDialog({
                 return
               }
               e.preventDefault()
-              const rawSearch = (e.target as HTMLInputElement).value || pickerSearch
+              const input = e.currentTarget.querySelector('input')
+              const rawSearch = input?.value || (e.target as HTMLInputElement).value || pickerSearch
               const productId = resolveProductIdByBarcode(catalog, rawSearch)
               const targetId =
                 productId ?? (filteredPickerRows.length === 1 ? filteredPickerRows[0]!.id : null)
