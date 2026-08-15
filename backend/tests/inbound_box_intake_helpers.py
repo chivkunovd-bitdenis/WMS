@@ -82,6 +82,12 @@ async def post_primary_accept(
     create_boxes: bool = True,
 ) -> Response:
     """Begin receiving without legacy primary-accept API (IN-BE-03)."""
+    got = await async_client.get(f"{base}/{request_id}", headers=headers)
+    assert got.status_code == 200, got.text
+    if got.json()["status"] == "draft":
+        await set_planned_boxes(async_client, base, request_id, headers)
+        submit = await async_client.post(f"{base}/{request_id}/submit", headers=headers)
+        assert submit.status_code == 200, submit.text
     await _begin_receiving_via_api(async_client, base, request_id, headers)
     if create_boxes and actual_box_count > 0:
         await _create_closed_boxes_for_request(
