@@ -29,6 +29,7 @@ type Props = {
 type Preview = { asset: FbsPrintAsset; objectUrl: string }
 
 function assetLabel(asset: FbsPrintAsset): string {
+  if (asset.kind === 'box_qr') return 'Печать QR короба WMS'
   if (asset.kind === 'cargo_place_qr') return 'Печать QR грузоместа WB'
   if (asset.kind === 'supply_qr') return 'Печать QR поставки WB'
   return 'Печать стикера заказа WB'
@@ -171,9 +172,11 @@ export function FbsPrintPreviewDialog({
                 <Box component="img" src={objectUrl} alt={assetLabel(asset)} sx={{ width: '100%', aspectRatio: '58 / 40', objectFit: 'contain', bgcolor: '#fff', my: 1.5 }} />
                 <Stack direction="row" spacing={1}>
                   {previews.length > 1 ? <Button startIcon={<PrintOutlinedIcon />} onClick={() => print([{ asset, objectUrl }])} data-task-id="FBS-10">Печать только этого</Button> : null}
-                  <Button disabled={Boolean(asset.applied_at) || applyingId === asset.id} onClick={() => void apply(asset)} data-task-id="FBS-09">
-                    {asset.applied_at ? 'Уже нанесён' : 'Подтвердить нанесение'}
-                  </Button>
+                  {asset.kind !== 'box_qr' ? (
+                    <Button disabled={Boolean(asset.applied_at) || applyingId === asset.id} onClick={() => void apply(asset)} data-task-id="FBS-09">
+                      {asset.applied_at ? 'Уже нанесён' : 'Подтвердить нанесение'}
+                    </Button>
+                  ) : null}
                 </Stack>
               </Paper>
             ))}

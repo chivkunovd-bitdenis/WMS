@@ -66,6 +66,7 @@ import {
   undoFbsPick,
   type FbsOrderPrintTapeRequest,
   type FbsPickLocation,
+  type FbsPrintAsset,
   type FbsPrintBatch,
   type FbsWorkspace,
 } from './fbsApi'
@@ -147,6 +148,18 @@ function productLabelFromOrder(order: FbsWorkspace['orders'][number]): ProductTh
     wb_size: order.product.size,
     barcode: order.product.barcode ?? '',
   }
+}
+
+async function renderBoxQrDataUrl(value: string): Promise<string> {
+  const bwipjs = await import('bwip-js')
+  const canvas = document.createElement('canvas')
+  bwipjs.toCanvas(canvas, {
+    bcid: 'qrcode',
+    text: value,
+    scale: 5,
+    includetext: false,
+  })
+  return canvas.toDataURL('image/png')
 }
 
 function Metric({ label, value }: { label: string; value: string }) {
@@ -407,6 +420,39 @@ export function FfFbsSupplyWorkspace({
       return
     }
     setPrintPreviewOpen(true)
+  }
+
+  const openBoxQrPreview = async (box: FbsWorkspace['boxes'][number]) => {
+    setBusy(true)
+    setError(null)
+    try {
+      const asset: FbsPrintAsset = {
+        id: `box-qr-${box.id}`,
+        kind: 'box_qr',
+        status: 'ready',
+        content_type: 'image/png',
+        width_mm: 58,
+        height_mm: 40,
+        preview_url: await renderBoxQrDataUrl(box.barcode),
+        download_url: null,
+        checksum: null,
+        applied_at: null,
+        error: null,
+      }
+      setPrintBatch({
+        requested: 1,
+        ready: 1,
+        missing: 0,
+        failed: 0,
+        assets: [asset],
+        order_errors: [],
+      })
+      setPrintPreviewOpen(true)
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : 'QR короба не подготовлен.')
+    } finally {
+      setBusy(false)
+    }
   }
 
   const createBoxes = async () => {
@@ -1355,16 +1401,21 @@ export function FfFbsSupplyWorkspace({
                             </Typography>
                           </Box>
                           <Stack direction="row" spacing={1} sx={{ alignItems: 'center' }}>
-                            {workspace.supply.delivery_type === 'pvz' ? (
-                              <Button
-                                size="small"
-                                disabled={busy}
-                                onClick={() => box.qr_asset?.preview_url ? openAssetPreview([box.qr_asset]) : void retryBoxQr(box.id)}
-                                data-task-id="FBS-09"
-                              >
-                                QR
-                              </Button>
-                            ) : null}
+                            <Button
+                              size="small"
+                              disabled={busy}
+                              onClick={() => {
+                                if (workspace.supply.delivery_type === 'pvz') {
+                                  if (box.qr_asset?.preview_url) openAssetPreview([box.qr_asset])
+                                  else void retryBoxQr(box.id)
+                                  return
+                                }
+                                void openBoxQrPreview(box)
+                              }}
+                              data-task-id="FBS-09"
+                            >
+                              QR
+                            </Button>
                             <Button
                               size="small"
                               disabled={!stageIsCurrent || !packagingEditable || busy || box.without_distribution}

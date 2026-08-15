@@ -341,6 +341,10 @@ test('fbs workspace: boxes without distribution sends durable mode', async ({ pa
   expect(createBody?.count).toBe(2)
   await expect(page.getByText('Без распределения · коробов 1')).toBeVisible()
   await expect(page.getByRole('button', { name: 'Добавить товары' })).toBeDisabled()
+  await page.getByRole('button', { name: 'QR' }).click()
+  const preview = page.getByRole('dialog', { name: 'Проверка перед печатью' })
+  await expect(preview).toContainText('Печать QR короба WMS')
+  await expect(preview.getByTestId('fbs-print-preview-copies')).toBeVisible()
 })
 
 // TC-NEW-FBS-10/FBS-09 — one print preview shows the asset and copy count before printing.

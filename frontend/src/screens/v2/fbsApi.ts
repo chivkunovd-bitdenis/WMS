@@ -297,7 +297,7 @@ export type FbsPickLocation = {
 
 export type FbsPrintAsset = {
   id: string
-  kind: 'order_sticker' | 'cargo_place_qr' | 'supply_qr'
+  kind: 'order_sticker' | 'cargo_place_qr' | 'supply_qr' | 'box_qr'
   status: 'requesting' | 'ready' | 'error'
   content_type: string | null
   width_mm: number | null
@@ -476,7 +476,7 @@ export function createFbsIdempotencyKey(): string {
 }
 
 export function resolveFbsAssetUrl(path: string): string {
-  return /^https?:\/\//i.test(path) ? path : apiUrl(path)
+  return /^(https?:|data:)/i.test(path) ? path : apiUrl(path)
 }
 
 export async function fetchFbsWorklist(
