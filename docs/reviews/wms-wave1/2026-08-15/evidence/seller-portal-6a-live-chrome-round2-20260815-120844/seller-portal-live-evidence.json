@@ -1,0 +1,160 @@
+{
+  "commit": "f92f9d4cbeb72348aa374b8ce2e213cfdfc49c04",
+  "round": "round2",
+  "browser": "External visible Google Chrome via CDP",
+  "browserVersion": "Chrome/151.0.7922.138",
+  "webOrigin": "http://127.0.0.1:5183",
+  "suffix": "live-1786785614878",
+  "adminEmail": "seller-portal-live-1786785614878@example.com",
+  "sellerEmail": "seller-portal-seller-live-1786785614878@example.com",
+  "returnRequestId": "b3b833f8-9090-416c-adbb-d4889c64c344",
+  "linkedProductId": "1ed3c4fd-26fa-440b-b708-7f77ad71b75c",
+  "secondProductId": "47593382-94c1-4ba5-88c1-8ee287cb30b8",
+  "checks": {
+    "rec02SeparateReturnButtonVisible": true,
+    "operationTypeSwitchOnDocumentsAbsent": true,
+    "returnFormTitle": "Новая заявка на возврат",
+    "returnOperationReadonlyText": "Тип: Возврат",
+    "operationTypeInputAbsentInForm": true,
+    "pickerCategoryControlVisible": true,
+    "pickerSelectAllVisible": true,
+    "pickerBulkQtyVisible": true,
+    "sel04ScanBarcodeQtyAfterEnter": "1",
+    "pickerQtyValuesAfterScanSelectAllBulk": [
+      "4",
+      "4"
+    ],
+    "rec08ClientGuardVisible": true,
+    "sel02WaybillInputValue": "WB-LIVE-live-1786785614878",
+    "sel05StandardProductBarcodeDialogVisible": true,
+    "sel05ChestnyZnakDialogAbsent": true,
+    "cal04SellerCalendarShowsOwnToday": true,
+    "cal04CalendarIncludesWaybill": false,
+    "ffQueueSeparateReturnCreateButtonVisible": true,
+    "sel03ReadonlyHintVisible": true,
+    "removedFactSummaryAbsent": true,
+    "removedProblemSummaryTextAbsent": true,
+    "removedTotalSummaryTextAbsent": true,
+    "readonlyEditButtonsAbsent": {
+      "addProducts": 0,
+      "submitWarehouse": 0,
+      "saveDraft": 0,
+      "deleteLine": 0
+    },
+    "sellerFactHeaderTexts": [
+      "Товар",
+      "Заявлено",
+      "Принято",
+      "Итог",
+      ""
+    ],
+    "sellerFactRowBackgroundColors": {
+      "match": "rgba(46, 125, 50, 0.08)",
+      "shortage": "rgba(211, 47, 47, 0.08)",
+      "added": "rgba(211, 47, 47, 0.08)"
+    },
+    "rec13RedRowsVisible": true,
+    "rec13GreenMatchedRowsVisible": true
+  },
+  "findings": [],
+  "artifacts": [
+    "screenshots/01-seller-documents-actions-calendar-empty.png",
+    "screenshots/02-return-draft-form-operation-readonly.png",
+    "screenshots/03-picker-scan-select-all-bulk.png",
+    "screenshots/04-rec08-empty-boxes-submit-guard.png",
+    "screenshots/05-standard-product-barcode-print-dialog.png",
+    "screenshots/06-submitted-return-calendar-waybill.png",
+    "screenshots/07-ff-return-receiving-card.png",
+    "screenshots/08-ff-red-green-and-added-line-before-complete.png",
+    "screenshots/09-ff-discrepancy-dialog-return.png",
+    "screenshots/10-seller-return-fact-card-readonly-no-summary-blocks.png"
+  ],
+  "elementMap": [
+    [
+      "Блок Документы + подпись",
+      "REC-02/CAL-04/GLOBAL-02",
+      "оставить"
+    ],
+    [
+      "Кнопка Создать заявку на поставку",
+      "SEL-01..05/REC-08",
+      "оставить"
+    ],
+    [
+      "Кнопка Создать заявку на возврат",
+      "REC-02",
+      "оставить"
+    ],
+    [
+      "Блок Сегодня / Завтра",
+      "CAL-04",
+      "оставить"
+    ],
+    [
+      "Фильтр Тип документа",
+      "REC-02/GLOBAL-02",
+      "оставить"
+    ],
+    [
+      "Фильтр Сортировка",
+      "GLOBAL-02",
+      "оставить"
+    ],
+    [
+      "Колонки списка Тип/Дата/Накладная/Статус/Строк/Действия",
+      "REC-02/SEL-02/GLOBAL-01/02",
+      "оставить"
+    ],
+    [
+      "Форма возврата: дата/грузоместа/накладная/status chip/тип",
+      "CAL-04/REC-08/SEL-02/SEL-03/REC-02",
+      "оставить"
+    ],
+    [
+      "Кнопки Добавить товары/Сохранить/Закрыть/Передать на склад",
+      "SEL-01/SEL-04/REC-08/GLOBAL-02",
+      "оставить"
+    ],
+    [
+      "Picker: поиск/категории/Выбрать все/Проставить всем/таблица/qty",
+      "SEL-01/SEL-04",
+      "оставить"
+    ],
+    [
+      "Кнопка печати ШК в строке + ProductBarcodePrintDialog",
+      "SEL-05",
+      "оставить"
+    ],
+    [
+      "Синяя readonly-плашка Приёмку взял в работу склад",
+      "SEL-03",
+      "оставить"
+    ],
+    [
+      "Fact-card meta операция/status/склад",
+      "REC-02/SEL-03/GLOBAL-01",
+      "оставить"
+    ],
+    [
+      "Fact-card колонки Товар/Заявлено/Принято/Итог/Детали",
+      "REC-13/REC-14",
+      "оставить"
+    ],
+    [
+      "Красные строки расхождений и Итог Недостача/Излишек",
+      "REC-13/REC-14",
+      "оставить"
+    ],
+    [
+      "Зелёная подсветка совпавших строк",
+      "REC-13",
+      "оставить"
+    ],
+    [
+      "Блоки Итог приемки / Что не так",
+      "GLOBAL-02/REC-13",
+      "удалены, оставить отсутствующими"
+    ]
+  ],
+  "status": "SCREEN_APPROVED"
+}
