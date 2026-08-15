@@ -500,7 +500,7 @@ export async function scanInboundReceiving(page: Page, barcode: string): Promise
     waitForPostOk(page, INBOUND_API, (u) => u.includes('/receiving/scan')),
     (async () => {
       await page.getByTestId('ff-inbound-doc-root').click({ position: { x: 8, y: 8 } });
-      await page.keyboard.type(barcode, { delay: 1 });
+      await page.keyboard.type(barcode);
       await page.keyboard.press('Enter');
     })(),
   ]);

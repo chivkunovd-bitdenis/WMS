@@ -1,0 +1,280 @@
+{
+  "startedAt": "2026-08-15T09:25:14.931Z",
+  "browser": {
+    "Browser": "Chrome/151.0.7922.138",
+    "Protocol-Version": "1.3",
+    "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/151.0.0.0 Safari/537.36",
+    "V8-Version": "15.1.206.17",
+    "WebKit-Version": "537.36 (@41fa82442390a4d4456c78f2d69a832d5720cb27)",
+    "webSocketDebuggerUrl": "ws://127.0.0.1:9227/devtools/browser/73b5cdb7-160e-4144-ba51-a29316704e1a"
+  },
+  "seed": {
+    "suffix": "live-rec-1786785914933",
+    "sellerId": "aed016e2-d251-473d-919d-a04daaebd5ee",
+    "warehouseId": "c2ba6632-e6a9-4a3a-bdf0-16a75981be75",
+    "productPlanSku": "PLAN-1786785914933",
+    "productExtraSku": "EXTRA-1786785914933"
+  },
+  "checks": [
+    {
+      "id": "REC-03-api-seller-draft-blocked",
+      "status": "pass",
+      "detail": "seller-created draft returns not_submitted before handoff"
+    },
+    {
+      "id": "REC-03-ui-seller-draft-no-start",
+      "status": "pass",
+      "detail": "Seller-created draft has no FF start before handoff"
+    },
+    {
+      "id": "REC-03-ui-seller-handoff-starts",
+      "status": "pass",
+      "detail": "seller-created starts only after seller handoff and FF start"
+    },
+    {
+      "id": "REC-03-ui-ff-direct-receiving",
+      "status": "pass",
+      "detail": "FF-created document starts without seller handoff"
+    },
+    {
+      "id": "REC-04-no-visible-scanner-block",
+      "status": "pass",
+      "detail": "No visible scanner block"
+    },
+    {
+      "id": "REC-05-add-product-main-action",
+      "status": "pass",
+      "detail": "Top action is “Добавить товар”"
+    },
+    {
+      "id": "REC-04-scan-plus-one",
+      "status": "pass",
+      "detail": "Known scan increments 0 -> 1 -> 2"
+    },
+    {
+      "id": "REC-05-added-product-row",
+      "status": "pass",
+      "detail": "Added catalog product appears as discrepancy line"
+    },
+    {
+      "id": "REC-15-dimensions-weight-volume-visible",
+      "status": "pass",
+      "detail": "Line and totals show dimensions, liters and weight"
+    },
+    {
+      "id": "REC-09-packages-collapsed-default",
+      "status": "pass",
+      "detail": "Packages accordion collapsed by default"
+    },
+    {
+      "id": "REC-09-boxes-cargo-places",
+      "status": "pass",
+      "detail": "Boxes and cargo places are separate under accordion"
+    },
+    {
+      "id": "REC-13-14-row-colors-no-summary-no-distribution",
+      "status": "pass",
+      "detail": "Green/red rows visible, no extra summary chips/blocks and no document distribution panel"
+    },
+    {
+      "id": "REC-07-approve-reject-statuses",
+      "status": "pass",
+      "detail": "Discrepancy act statuses change to approved/rejected"
+    },
+    {
+      "id": "REC-07-approve-stock-movement",
+      "status": "pass",
+      "detail": "Inventory summary changed after approving discrepancy act"
+    },
+    {
+      "id": "6a-hidden-Дата приёмки (план)",
+      "status": "pass",
+      "detail": "Дата приёмки (план) not visible"
+    },
+    {
+      "id": "6a-hidden-Печать накладной",
+      "status": "pass",
+      "detail": "Печать накладной not visible"
+    },
+    {
+      "id": "6a-hidden-Загрузить по накладной",
+      "status": "pass",
+      "detail": "Загрузить по накладной not visible"
+    },
+    {
+      "id": "6a-hidden-Распределить по ячейкам",
+      "status": "pass",
+      "detail": "Распределить по ячейкам not visible"
+    },
+    {
+      "id": "6a-hidden-Итог приемки",
+      "status": "pass",
+      "detail": "Итог приемки not visible"
+    },
+    {
+      "id": "6a-hidden-Что не так",
+      "status": "pass",
+      "detail": "Что не так not visible"
+    },
+    {
+      "id": "6a-hidden-Сканер штрихкода",
+      "status": "pass",
+      "detail": "Сканер штрихкода not visible"
+    }
+  ],
+  "screenshots": [
+    {
+      "file": "01-ff-queue-seller-draft-and-ff-draft.png",
+      "note": "FF queue before seller handoff and FF direct start"
+    },
+    {
+      "file": "02-seller-draft-before-handoff-no-start.png",
+      "note": "Seller-created draft before handoff has no FF start action"
+    },
+    {
+      "file": "03-seller-draft-submit-to-warehouse.png",
+      "note": "Seller-created draft handoff in seller portal"
+    },
+    {
+      "file": "04-seller-created-after-handoff-ff-start.png",
+      "note": "Seller-created document after handoff can be started by FF"
+    },
+    {
+      "file": "05-ff-created-draft-direct-start.png",
+      "note": "FF-created draft direct start"
+    },
+    {
+      "file": "06-ff-created-receiving-scanner-first.png",
+      "note": "FF-created document receiving"
+    },
+    {
+      "file": "07-scan-known-barcode-plus-one-green-row.png",
+      "note": "Known scan increments +1 and row turns green"
+    },
+    {
+      "file": "08-unknown-barcode-offers-add-product.png",
+      "note": "Unknown scan offers add product"
+    },
+    {
+      "file": "09-added-product-red-row-dimensions-totals.png",
+      "note": "Added product row, dimensions and totals"
+    },
+    {
+      "file": "10-product-barcode-print-dialog.png",
+      "note": "Row product barcode print dialog"
+    },
+    {
+      "file": "11-packages-expanded-actions-no-import.png",
+      "note": "Boxes/cargo actions, no invoice import"
+    },
+    {
+      "file": "12-box-and-cargo-place-rows-with-print-actions.png",
+      "note": "Box and cargo place rows with print actions"
+    },
+    {
+      "file": "13-complete-receiving-discrepancy-dialog.png",
+      "note": "Completion discrepancy dialog"
+    },
+    {
+      "file": "14-after-complete-sorting-no-distribution-in-doc.png",
+      "note": "After completion sorting alert, no distribution table in document"
+    },
+    {
+      "file": "15-discrepancy-acts-confirmed-approve-reject-visible.png",
+      "note": "Confirmed discrepancy acts with approve/reject"
+    },
+    {
+      "file": "16-discrepancy-acts-approved-rejected-statuses.png",
+      "note": "Approved and rejected act statuses"
+    }
+  ],
+  "findings": [],
+  "apiEvidence": {
+    "sellerDraftBeginBeforeSubmit": {
+      "status": 409,
+      "body": {
+        "detail": "not_submitted"
+      }
+    },
+    "balanceBeforeActApprove": [
+      {
+        "product_id": "a5b8f909-941f-4ecc-aeee-2a6d95cc51b1",
+        "sku_code": "EXTRA-1786785914933",
+        "product_name": "Live Extra Product",
+        "seller_id": null,
+        "seller_name": null,
+        "packaging_instructions": null,
+        "requires_honest_sign": false,
+        "quantity": 1,
+        "quantity_unpacked": 1,
+        "quantity_packed": 0,
+        "quantity_in_sorting": 1,
+        "quantity_in_storage": 0,
+        "reserved": 0,
+        "available": 0,
+        "quantity_fbs": 0,
+        "quantity_reserved_directions": 0,
+        "quantity_free_fbo": 1
+      },
+      {
+        "product_id": "5703d070-f362-4395-ab00-0a3015396c43",
+        "sku_code": "PLAN-1786785914933",
+        "product_name": "Live Plan Product",
+        "seller_id": null,
+        "seller_name": null,
+        "packaging_instructions": null,
+        "requires_honest_sign": false,
+        "quantity": 2,
+        "quantity_unpacked": 2,
+        "quantity_packed": 0,
+        "quantity_in_sorting": 2,
+        "quantity_in_storage": 0,
+        "reserved": 0,
+        "available": 0,
+        "quantity_fbs": 0,
+        "quantity_reserved_directions": 0,
+        "quantity_free_fbo": 2
+      }
+    ],
+    "balanceAfterActApprove": [
+      {
+        "product_id": "a5b8f909-941f-4ecc-aeee-2a6d95cc51b1",
+        "sku_code": "EXTRA-1786785914933",
+        "product_name": "Live Extra Product",
+        "seller_id": null,
+        "seller_name": null,
+        "packaging_instructions": null,
+        "requires_honest_sign": false,
+        "quantity": 1,
+        "quantity_unpacked": 1,
+        "quantity_packed": 0,
+        "quantity_in_sorting": 1,
+        "quantity_in_storage": 0,
+        "reserved": 0,
+        "available": 0,
+        "quantity_fbs": 0,
+        "quantity_reserved_directions": 0,
+        "quantity_free_fbo": 1
+      },
+      {
+        "product_id": "5703d070-f362-4395-ab00-0a3015396c43",
+        "sku_code": "PLAN-1786785914933",
+        "product_name": "Live Plan Product",
+        "seller_id": null,
+        "seller_name": null,
+        "packaging_instructions": null,
+        "requires_honest_sign": false,
+        "quantity": 3,
+        "quantity_unpacked": 3,
+        "quantity_packed": 0,
+        "quantity_in_sorting": 3,
+        "quantity_in_storage": 0,
+        "reserved": 0,
+        "available": 0,
+        "quantity_fbs": 0,
+        "quantity_reserved_directions": 0,
+        "quantity_free_fbo": 3
+      }
+    ]
+  }
+}
