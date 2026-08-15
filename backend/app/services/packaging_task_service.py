@@ -644,10 +644,13 @@ async def sync_mp_task_packed_from_boxes(
             func.coalesce(func.sum(MarketplaceUnloadBoxLine.quantity), 0),
         )
         .join(MarketplaceUnloadBox, MarketplaceUnloadBox.id == MarketplaceUnloadBoxLine.box_id)
+        .join(
+            MarketplaceUnloadRequest,
+            MarketplaceUnloadRequest.id == MarketplaceUnloadBox.request_id,
+        )
         .where(
             MarketplaceUnloadBox.request_id == task.marketplace_unload_request_id,
-            MarketplaceUnloadBox.tenant_id == tenant_id,
-            MarketplaceUnloadBoxLine.tenant_id == tenant_id,
+            MarketplaceUnloadRequest.tenant_id == tenant_id,
         )
         .group_by(MarketplaceUnloadBoxLine.product_id)
     )

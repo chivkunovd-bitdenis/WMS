@@ -7,11 +7,11 @@ import {
   fulfillInboundViaBoxScans,
 } from './inbound-boxes-helpers';
 
-// TC-NEW-MP-PROCESS-PRINT-001 — единый лист отгрузки MP/FBO без FBS order QR.
+// TC-NEW-MP-PROCESS-PRINT-001 — MP/FBO packaging line keeps compact TZ/print controls without FBS order QR.
 // Given: отгрузка на МП с товаром, у которого заполнено ТЗ на упаковку.
-// When: оператор открывает шаг «Печать/финал» и жмёт единственную печать.
-// Then: формируется лист отгрузки с фото/товаром/ШК/количеством/инструкциями/Факт; FBS order QR отсутствует.
-test('FF marketplace unload: final step prints compact shipment sheet without FBS order QR', async ({
+// When: оператор открывает вкладку «Упаковка».
+// Then: строка упаковки компактная, содержит ТЗ/печать, а legacy FBS/final print отсутствует.
+test('FF marketplace unload: packaging table keeps TZ print controls without FBS order QR', async ({
   page,
 }) => {
   const suffix = String(Date.now());
@@ -152,53 +152,20 @@ test('FF marketplace unload: final step prints compact shipment sheet without FB
   await expect(docDialog).toContainText('424242', { timeout: 15000 });
   await expect(page.getByTestId('ff-mp-process-tabs')).toBeVisible();
   await expect(page.getByTestId('ff-mp-tab-products')).toBeVisible();
-  await expect(page.getByTestId('ff-mp-tab-picking')).toBeVisible();
   await expect(page.getByTestId('ff-mp-tab-packaging')).toBeVisible();
-  await expect(page.getByTestId('ff-mp-tab-boxes')).toBeVisible();
-  await expect(page.getByTestId('ff-mp-tab-final')).toBeVisible();
+  await expect(page.getByTestId('ff-mp-tab-picking')).toHaveCount(0);
+  await expect(page.getByTestId('ff-mp-tab-boxes')).toHaveCount(0);
+  await expect(page.getByTestId('ff-mp-tab-final')).toHaveCount(0);
   await expect(docDialog).not.toContainText(/QR заказа WB|WB-заказ|FBS supply|order sticker/i);
   await expect(docDialog.locator('[data-testid="fbs-order-qr-label"]')).toHaveCount(0);
 
-  await page.getByTestId('ff-mp-tab-final').click();
-  await expect(page.getByTestId('ff-mp-tab-final-panel')).toBeVisible();
-
-  const printActions = page.getByTestId('ff-mp-print-actions');
-  await printActions.scrollIntoViewIfNeeded();
-  await expect(printActions).toBeVisible({ timeout: 15000 });
-  await expect(printActions.getByTestId('ff-mp-print-shipment-sheet')).toBeVisible();
-  await expect(printActions.getByTestId('ff-mp-print-waybill')).toHaveCount(0);
-  await expect(printActions.getByTestId('ff-mp-print-tz')).toHaveCount(0);
-
-  await page.evaluate(() => {
-    (window as unknown as { __WMS_CAPTURE_PRINT_HTML__?: boolean }).__WMS_CAPTURE_PRINT_HTML__ = true;
-  });
-  await page.getByTestId('ff-mp-print-shipment-sheet').click();
-
-  await expect
-    .poll(async () =>
-      page.evaluate(
-        () =>
-          (window as unknown as { __WMS_LAST_PRINT_HTML__?: string }).__WMS_LAST_PRINT_HTML__ ?? '',
-      ),
-    )
-    .toContain('data-testid="tz-sheet-card"');
-
-  const html = await page.evaluate(
-    () => (window as unknown as { __WMS_LAST_PRINT_HTML__?: string }).__WMS_LAST_PRINT_HTML__ ?? '',
-  );
-  expect(html).toContain('Лист отгрузки');
-  expect(html).toContain('Отгрузка на МП');
-  expect(html).toContain('TZ Seller');
-  expect(html).toContain('W');
-  expect(html).toContain('Факт');
-  expect(html).toContain('E2E: сложить в пакет и наклеить стикер WB');
-  expect(html).toContain('Носки хлопок');
-  expect(html).toContain('data-testid="shipment-sheet-barcode"');
-  expect(html).toContain('data-testid="shipment-sheet-fact"');
-  expect(html).toContain('size: A4');
-  expect(html).not.toContain('size: A4 landscape');
-  expect(html).toContain('data-testid="tz-sheet-qty"');
-  expect(html).toContain('data-testid="tz-sheet-qty">2</td>');
-  expect(html).not.toContain('data-testid="fbs-order-qr-label"');
-  expect(html).not.toContain('QR заказа WB');
+  await page.getByTestId('ff-mp-tab-packaging').click();
+  await expect(page.getByTestId('ff-packaging-lines-table')).toBeVisible();
+  await expect(page.getByTestId('ff-packaging-compact-product-name')).toContainText('Носки хлопок');
+  await expect(page.locator('[data-testid^="ff-packaging-line-tz-"]').first()).toBeVisible();
+  await expect(page.locator('[data-testid^="ff-packaging-barcode-status-"]').first()).toBeVisible();
+  const linePrint = page.locator('[data-testid^="ff-packaging-line-print-"]').first();
+  await expect(linePrint).toBeVisible();
+  await expect(linePrint).toBeEnabled();
+  await expect(page.getByTestId('ff-mp-print-actions')).toHaveCount(0);
 });

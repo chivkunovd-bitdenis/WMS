@@ -413,8 +413,11 @@ test('MP unload full flow: parallel boxes then packaging then ship', async ({ pa
   expect(confirmedAfter.status).toBe('confirmed')
   expect(confirmedAfter.lines.map((ln) => ln.id)).toEqual([confirmedLineId])
 
-  // TC-NEW-F15-CONFIRMED-BOX-WORK — confirmed MP unload keeps box creation/filling UI but hides destructive controls.
-  await page.getByTestId('ff-mp-tab-boxes').click()
+  // TC-NEW-F15-CONFIRMED-BOX-WORK — confirmed MP unload keeps box creation/filling UI inside Packaging but hides destructive controls.
+  await page.getByTestId('ff-mp-tab-packaging').click()
+  await expect(page.getByTestId('ff-mp-tab-packaging-panel')).toBeVisible()
+  await expect(page.getByTestId('ff-packaging-task-panel')).toBeVisible()
+  await page.getByTestId('ff-mp-boxes-summary').click()
   await expect(page.getByTestId('ff-mp-boxes')).toBeVisible()
   await expectMpBoxOperationalControlsEnabled(page)
   await expectMpBoxDestructiveControlsHidden(page)
@@ -450,22 +453,9 @@ test('MP unload full flow: parallel boxes then packaging then ship', async ({ pa
   await expect(page.getByTestId(`ff-mp-box-print-${detail.boxes[0].id}`)).toBeEnabled()
   await expect(page.getByTestId('ff-mp-shipment-summary-distributed')).toHaveText(String(PLAN_QTY))
   await expect(page.getByTestId('ff-mp-shipment-summary-remaining')).toHaveText('0')
-  await expect(page.getByTestId('ff-mp-next-step')).toBeVisible()
-
-  await page.getByTestId('ff-mp-tab-packaging').click()
-  await expect(page.getByTestId('ff-mp-tab-packaging-panel')).toBeVisible()
-  await expect(page.getByTestId('ff-packaging-task-panel')).toBeVisible()
-  await page.getByTestId(/^ff-packaging-manual-qty-/).fill(String(PLAN_QTY))
-  await Promise.all([
-    page.waitForResponse(
-      (r) =>
-        r.request().method() === 'POST' &&
-        r.url().includes('/pack') &&
-        r.status() >= 200 &&
-        r.status() < 300,
-    ),
-    page.getByTestId('ff-packaging-pack-btn').click(),
-  ])
+  await expect(page.getByTestId('ff-mp-next-step')).toHaveCount(0)
+  await expect(page.getByTestId(/^ff-packaging-manual-qty-/)).toHaveCount(0)
+  await expect(page.getByTestId('ff-packaging-pack-btn')).toHaveCount(0)
   await Promise.all([
     page.waitForResponse(
       (r) =>
@@ -478,7 +468,7 @@ test('MP unload full flow: parallel boxes then packaging then ship', async ({ pa
   ])
   await expect(page.getByTestId('ff-mp-shipment-summary-packed')).toHaveText(`${PLAN_QTY}/${PLAN_QTY}`)
 
-  await page.getByTestId('ff-mp-tab-final').click()
+  await expect(page.getByTestId('ff-mp-tab-final')).toHaveCount(0)
   await expect(page.getByTestId('ff-mp-ship')).toBeEnabled()
   await Promise.all([
     waitForPostOk(page, `/api/operations/marketplace-unload-requests/${requestId}/ship`),
@@ -486,9 +476,9 @@ test('MP unload full flow: parallel boxes then packaging then ship', async ({ pa
   ])
   await expect(page.getByTestId('ff-supplies-doc-dialog')).toContainText('Отгружено')
 
-  // TC-NEW-F15-SHIPPED-NO-BOX-MUTATIONS — shipped MP/FBO document keeps print actions but hides mutating box/line controls.
-  await expect(page.getByTestId('ff-mp-print-shipment-sheet')).toBeEnabled()
-  await page.getByTestId('ff-mp-tab-boxes').click()
+  // TC-NEW-F15-SHIPPED-NO-BOX-MUTATIONS — shipped MP/FBO document keeps box print actions but hides mutating box/line controls.
+  await expect(page.getByTestId('ff-mp-print-shipment-sheet')).toHaveCount(0)
+  await expect(page.getByTestId('ff-mp-boxes')).toBeVisible()
   await expect(page.getByTestId('ff-mp-boxes')).toBeVisible()
   await expectMpBoxOperationalControlsHidden(page)
   await expectMpBoxDestructiveControlsHidden(

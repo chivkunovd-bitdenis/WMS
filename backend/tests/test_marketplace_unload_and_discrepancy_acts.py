@@ -173,6 +173,13 @@ async def _finish_unload_packaging(
     h: dict[str, str],
     unload_id: str,
 ) -> None:
+    detail = await async_client.get(
+        f"/operations/marketplace-unload-requests/{unload_id}",
+        headers=h,
+    )
+    assert detail.status_code == 200, detail.text
+    unload = detail.json()
+
     pkg = await async_client.get(
         f"/operations/packaging-tasks/by-unload/{unload_id}",
         headers=h,
@@ -183,15 +190,53 @@ async def _finish_unload_packaging(
         task = (
             await async_client.get(f"/operations/packaging-tasks/{task['id']}", headers=h)
         ).json()
-    line_id = task["lines"][0]["id"]
-    need = task["lines"][0]["qty_need_pack"]
-    if need > 0:
-        pack = await async_client.post(
-            f"/operations/packaging-tasks/{task['id']}/lines/{line_id}/pack",
+    needs = [
+        (line["product_id"], int(line["qty_need_pack"]))
+        for line in task["lines"]
+        if int(line["qty_need_pack"]) > 0
+    ]
+    if needs:
+        box = await async_client.post(
+            f"/operations/marketplace-unload-requests/{unload_id}/boxes/batch",
             headers=h,
-            json={"quantity": need},
+            json={"count": 1, "box_preset": "60_40_40"},
         )
-        assert pack.status_code == 200, pack.text
+        assert box.status_code == 201, box.text
+        box_id = box.json()[0]["id"]
+        locations = (
+            await async_client.get(
+                f"/warehouses/{unload['warehouse_id']}/locations",
+                headers=h,
+            )
+        ).json()
+        for product_id, need in needs:
+            payload: dict[str, object] = {"product_id": product_id, "quantity": need}
+            add = await async_client.post(
+                f"/operations/marketplace-unload-requests/{unload_id}/boxes/{box_id}/manual-line",
+                headers=h,
+                json=payload,
+            )
+            if add.status_code != 200:
+                for loc in locations:
+                    add = await async_client.post(
+                        f"/operations/marketplace-unload-requests/{unload_id}/boxes/{box_id}/manual-line",
+                        headers=h,
+                        json={**payload, "storage_location_id": loc["id"]},
+                    )
+                    if add.status_code == 200:
+                        break
+            assert add.status_code == 200, add.text
+        close = await async_client.post(
+            f"/operations/marketplace-unload-requests/{unload_id}/boxes/{box_id}/close",
+            headers=h,
+        )
+        assert close.status_code == 200, close.text
+        pkg = await async_client.get(
+            f"/operations/packaging-tasks/by-unload/{unload_id}",
+            headers=h,
+        )
+        assert pkg.status_code == 200, pkg.text
+        task = pkg.json()
     complete = await async_client.post(
         f"/operations/packaging-tasks/{task['id']}/complete",
         headers=h,
@@ -425,7 +470,11 @@ async def test_marketplace_unload_add_line_and_detail(
         json={"product_id": pid_no_stock, "quantity": 1},
     )
     assert no_stock_ln.status_code == 422
-    assert no_stock_ln.json()["detail"] == "insufficient_available"
+    no_stock_detail = no_stock_ln.json()["detail"]
+    assert no_stock_detail["code"] == "insufficient_available"
+    assert no_stock_detail["product_name"] == "No stock"
+    assert no_stock_detail["available"] == 0
+    assert no_stock_detail["attempted"] == 1
 
     ln = await async_client.post(
         f"/operations/marketplace-unload-requests/{mid}/lines",

@@ -231,6 +231,7 @@ test('fulfillment admin sees week calendar and supplies-shipments page', async (
     page.getByTestId('ff-supplies-doc-submit').click(),
   ]);
   await expect(page.getByTestId('ff-supplies-doc-dialog')).toContainText('Утверждено');
-  await page.getByTestId('ff-mp-tab-boxes').click();
+  await page.getByTestId('ff-mp-tab-packaging').click();
+  await page.getByTestId('ff-mp-boxes-summary').click();
   await expect(page.getByTestId('ff-mp-boxes')).toBeVisible();
 });

@@ -178,7 +178,8 @@ test('FF marketplace unload: box add-products modal respects plan limit', async 
     page.locator('[data-doc-kind="marketplace_unload"]').first().click(),
   ])
   await expect(page.getByTestId('ff-supplies-doc-dialog')).toBeVisible()
-  await page.getByTestId('ff-mp-tab-boxes').click()
+  await page.getByTestId('ff-mp-tab-packaging').click()
+  await page.getByTestId('ff-mp-boxes-summary').click()
   await expect(page.getByTestId('ff-mp-boxes')).toBeVisible()
 
   await page.getByTestId('ff-mp-box-batch-count').locator('input').fill('3')
@@ -407,7 +408,8 @@ test('FF marketplace unload: two single-box batch creates both allow add product
     page.locator('[data-doc-kind="marketplace_unload"]').first().click(),
   ])
   await expect(page.getByTestId('ff-supplies-doc-dialog')).toBeVisible()
-  await page.getByTestId('ff-mp-tab-boxes').click()
+  await page.getByTestId('ff-mp-tab-packaging').click()
+  await page.getByTestId('ff-mp-boxes-summary').click()
   await expect(page.getByTestId('ff-mp-boxes')).toBeVisible()
   await expect(page.getByTestId('ff-mp-box-batch-create')).toBeEnabled()
 
@@ -585,6 +587,8 @@ test('FF marketplace unload: box modal manual location and product scan', async 
   ])
   await expect(page.getByTestId('ff-supplies-doc-dialog')).toBeVisible()
 
+  await page.getByTestId('ff-mp-tab-packaging').click()
+  await page.getByTestId('ff-mp-boxes-summary').click()
   await Promise.all([
     waitForPostOk(page, `/api/operations/marketplace-unload-requests/${mid}/boxes/batch`),
     page.getByTestId('ff-mp-box-batch-create').click(),
@@ -758,6 +762,8 @@ test('FF marketplace unload: sorting buffer pick without cell selection', async 
   ])
   await expect(page.getByTestId('ff-supplies-doc-dialog')).toBeVisible()
 
+  await page.getByTestId('ff-mp-tab-packaging').click()
+  await page.getByTestId('ff-mp-boxes-summary').click()
   await Promise.all([
     waitForPostOk(page, `/api/operations/marketplace-unload-requests/${mid}/boxes/batch`),
     page.getByTestId('ff-mp-box-batch-create').click(),

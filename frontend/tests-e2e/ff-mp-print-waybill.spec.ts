@@ -4,8 +4,8 @@ import { waitForGetOk, waitForPostOk } from './api-waits';
 import { openFulfillmentRegistration } from './auth-flow';
 import {beginInboundReceivingWithBoxes,  fulfillInboundViaBoxScans } from './inbound-boxes-helpers';
 
-// TC-NEW-G13-001 — единый печатный лист отгрузки на МП (US-G-13).
-test('FF prints marketplace unload shipment sheet from final step', async ({ page }) => {
+// TC-NEW-G13-001 — MP/FBO no longer exposes the legacy final waybill step.
+test('FF marketplace unload keeps packaging print controls without final waybill step', async ({ page }) => {
   const email = `e2e-wb-${Date.now()}@example.com`;
   const password = 'password123';
   const e2eApi = process.env.E2E_API_ORIGIN ?? 'http://127.0.0.1:18000';
@@ -131,9 +131,9 @@ test('FF prints marketplace unload shipment sheet from final step', async ({ pag
   await page.getByTestId('ff-docs-row').first().click();
   await expect(page.getByTestId('ff-supplies-doc-dialog')).toBeVisible();
   await expect(page.getByTestId('ff-supplies-doc-lines')).toContainText(sku);
-  await page.getByTestId('ff-mp-tab-final').click();
-  const printBtn = page.getByTestId('ff-mp-print-shipment-sheet');
-  await expect(printBtn).toBeVisible();
-  await expect(printBtn).toBeEnabled();
-  await printBtn.click();
+  await expect(page.getByTestId('ff-mp-tab-final')).toHaveCount(0);
+  await expect(page.getByTestId('ff-mp-print-shipment-sheet')).toHaveCount(0);
+  await page.getByTestId('ff-mp-tab-packaging').click();
+  await expect(page.getByTestId('ff-packaging-lines-table')).toBeVisible();
+  await expect(page.locator('[data-testid^="ff-packaging-line-print-"]').first()).toBeEnabled();
 });

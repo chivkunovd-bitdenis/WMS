@@ -815,6 +815,7 @@ export function FfSuppliesShipmentsPage({
       }
       setScanBarcode('')
       await loadDocDetail()
+      await loadPackagingTask()
       await onRefreshFfSupplyExtras()
     } catch (e) {
       setModalError(
@@ -856,6 +857,7 @@ export function FfSuppliesShipmentsPage({
       if (attachRes.ok) {
         setScanBarcode('')
         await loadDocDetail()
+        await loadPackagingTask()
         await onRefreshFfSupplyExtras()
         return 'ok'
       }
@@ -992,6 +994,7 @@ export function FfSuppliesShipmentsPage({
         return
       }
       await loadDocDetail()
+      await loadPackagingTask()
       await onRefreshFfSupplyExtras()
     } catch (e) {
       setModalError(e instanceof Error ? e.message : 'Не удалось скопировать короб.')
@@ -1023,6 +1026,7 @@ export function FfSuppliesShipmentsPage({
         return
       }
       await loadDocDetail()
+      await loadPackagingTask()
       await onRefreshFfSupplyExtras()
     } catch (e) {
       setModalError(e instanceof Error ? e.message : 'Не удалось удалить короб.')
@@ -3095,6 +3099,7 @@ export function FfSuppliesShipmentsPage({
           warehouseStockByProductId={mpStockByProductId}
           onUpdated={async () => {
             await loadDocDetail()
+            await loadPackagingTask()
             await onRefreshFfSupplyExtras()
           }}
           onAddSuccess={(quantity) =>
@@ -3114,6 +3119,7 @@ export function FfSuppliesShipmentsPage({
           onApplied={async (message) => {
             setBoxAddSuccessMsg(message)
             await loadDocDetail()
+            await loadPackagingTask()
             await onRefreshFfSupplyExtras()
           }}
         />
