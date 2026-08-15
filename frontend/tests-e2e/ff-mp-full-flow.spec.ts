@@ -3,7 +3,6 @@ import { test, expect, type Page } from '@playwright/test'
 import { waitForGetOk, waitForPostOk } from './api-waits'
 import { loginAsSeller, openFulfillmentRegistration } from './auth-flow'
 import { beginInboundReceivingWithBoxes, fulfillInboundViaBoxScans } from './inbound-boxes-helpers'
-import { setWmsDateField } from './wms-date-field-helpers'
 
 const PLAN_QTY = 4
 const QTY_PER_BOX = 2
@@ -78,6 +77,15 @@ async function expectMpBoxDestructiveControlsHidden(
     await expect(page.getByTestId(`ff-mp-box-menu-${boxId}`)).toHaveCount(0)
     await expect(page.getByTestId(`ff-mp-box-delete-${boxId}`)).toHaveCount(0)
   }
+}
+
+async function setSellerMpPlannedDate(page: Page, isoDate: string): Promise<void> {
+  const [yearStr, monthStr, dayStr] = isoDate.split('-')
+  const dateField = page.getByTestId('seller-mp-planned-date')
+  await dateField.getByRole('spinbutton', { name: 'Day' }).fill(dayStr)
+  await dateField.getByRole('spinbutton', { name: 'Month' }).fill(monthStr)
+  await dateField.getByRole('spinbutton', { name: 'Year' }).fill(yearStr)
+  await dateField.getByRole('spinbutton', { name: 'Year' }).blur()
 }
 
 // TC-NEW-MP-FULL-001 — MP-032: seller plan → FF confirm → boxes ∥ packaging → ship from footer.
@@ -295,7 +303,7 @@ test('MP unload full flow: parallel boxes then packaging then ship', async ({ pa
         r.status() >= 200 &&
         r.status() < 300,
     ),
-    setWmsDateField(page, 'seller-mp-planned-date', '2026-06-15'),
+    setSellerMpPlannedDate(page, '2026-06-15'),
   ])
 
   await page.getByTestId('seller-mp-add-products').click()
