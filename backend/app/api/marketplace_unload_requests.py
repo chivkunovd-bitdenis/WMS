@@ -184,6 +184,7 @@ class MarketplaceUnloadRequestSummaryOut(BaseModel):
     warehouse_name: str
     status: str
     line_count: int = Field(default=0, ge=0)
+    goods_qty_total: int = Field(default=0, ge=0)
     seller_id: str | None = None
     seller_name: str | None = None
     wb_mp_warehouse_id: int | None = None
@@ -382,6 +383,7 @@ def _summary_out(
         warehouse_name=warehouse_name,
         status=r.status,
         line_count=len(r.lines),
+        goods_qty_total=sum(int(ln.quantity) for ln in r.lines),
         seller_id=str(r.seller_id) if r.seller_id is not None else None,
         seller_name=seller_name,
         wb_mp_warehouse_id=int(r.wb_mp_warehouse_id) if r.wb_mp_warehouse_id is not None else None,

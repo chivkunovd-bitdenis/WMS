@@ -47,21 +47,9 @@ test.describe('US-B-01 seller inbound draft — fields and actions', () => {
 
     const plannedBoxes = page.getByTestId('seller-inbound-planned-boxes');
     await plannedBoxes.fill('0');
-    await plannedBoxes.blur();
-    await expect(page.getByTestId('seller-inbound-draft-error')).toContainText('коробов');
-
-    await plannedBoxes.fill('6');
-    await Promise.all([
-      waitForPatchOk(page, INBOUND_API, (u) => !u.includes('/lines')),
-      plannedBoxes.blur(),
-    ]);
-    await expect(plannedBoxes).toHaveValue('6');
 
     const tomorrow = new Date(Date.now() + 86400000).toISOString().slice(0, 10);
-    await Promise.all([
-      waitForPatchOk(page, INBOUND_API, (u) => !u.includes('/lines')),
-      setWmsDateField(page, 'seller-inbound-planned-date', tomorrow),
-    ]);
+    await setWmsDateField(page, 'seller-inbound-planned-date', tomorrow);
 
     await page.getByTestId('seller-inbound-add-products').click();
     await expect(page.getByTestId('seller-inbound-picker')).toBeVisible();
@@ -79,6 +67,16 @@ test.describe('US-B-01 seller inbound draft — fields and actions', () => {
     ]);
     await expect(page.getByTestId('seller-inbound-line-row')).toHaveCount(1);
     await expect(submitBtn).toBeEnabled();
+    await submitBtn.click();
+    await expect(page.getByTestId('seller-inbound-draft-error')).toContainText('Укажите количество грузомест');
+
+    await plannedBoxes.fill('6');
+    await Promise.all([
+      waitForPatchOk(page, INBOUND_API, (u) => !u.includes('/lines')),
+      page.getByTestId('seller-inbound-save-draft').click(),
+    ]);
+    await expect(page.getByTestId('seller-inbound-draft-ok')).toContainText('Заявка сохранена');
+    await expect(plannedBoxes).toHaveValue('6');
 
     const lineQty = page.getByTestId('seller-inbound-line-qty').first();
     await lineQty.fill('9');
@@ -87,7 +85,7 @@ test.describe('US-B-01 seller inbound draft — fields and actions', () => {
       lineQty.blur(),
     ]);
 
-    await page.getByTestId('seller-inbound-save-draft').click();
+    await page.getByTestId('seller-inbound-close').click();
     await expect(page.getByTestId('seller-documents-table')).toBeVisible();
 
     await page.getByTestId('seller-documents-row').first().click();
@@ -221,7 +219,6 @@ test.describe('US-B-01 seller first-time login path', () => {
     await waitForPostOk(page, INBOUND_API, (u) => !u.includes('/lines') && !u.includes('/submit'));
 
     await page.getByTestId('seller-inbound-planned-boxes').fill('2');
-    await page.getByTestId('seller-inbound-planned-boxes').blur();
     await page.getByTestId('seller-inbound-add-products').click();
     await page.getByTestId('seller-inbound-picker-search').fill(seed.sku);
     await page.getByTestId('seller-inbound-picker-qty').first().fill('1');

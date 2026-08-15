@@ -23,7 +23,7 @@ test('stab inbound sort outbound — receive, see sorting, ship from buffer with
   const e2eApi = process.env.E2E_API_ORIGIN ?? 'http://127.0.0.1:18000';
   const seed = await seedFfSellerInbound(page, `stab-e2e-${Date.now()}`);
   await apiCreateSubmittedInbound(page.request, seed, {
-    plannedBoxes: 0,
+    plannedBoxes: 1,
     expectedQty: EXPECTED_QTY,
   });
 

@@ -1,13 +1,16 @@
 import { useEffect, useMemo, useState, type ReactNode } from 'react'
 import {
   Box,
+  Alert,
   Button,
+  Checkbox,
   Dialog,
   DialogActions,
   DialogContent,
   DialogTitle,
   FormControl,
   InputLabel,
+  ListItemText,
   MenuItem,
   Select,
   Stack,
@@ -143,14 +146,22 @@ export function WbProductPickerDialog({
   onApply,
 }: Props) {
   const [pickerSearch, setPickerSearch] = useState('')
-  const [pickerCategory, setPickerCategory] = useState('__all__')
+  const [pickerCategories, setPickerCategories] = useState<string[]>([])
   const [pickerQtyByProduct, setPickerQtyByProduct] = useState<Record<string, number>>({})
+  const [selectedProductIds, setSelectedProductIds] = useState<Set<string>>(() => new Set())
+  const [bulkQty, setBulkQty] = useState('')
+  const [pickerError, setPickerError] = useState<string | null>(null)
+  const [lastScannedProductId, setLastScannedProductId] = useState<string | null>(null)
 
   useEffect(() => {
     if (!open) {
       setPickerSearch('')
-      setPickerCategory('__all__')
+      setPickerCategories([])
       setPickerQtyByProduct({})
+      setSelectedProductIds(new Set())
+      setBulkQty('')
+      setPickerError(null)
+      setLastScannedProductId(null)
     }
   }, [open])
 
@@ -166,12 +177,99 @@ export function WbProductPickerDialog({
 
   const categories = useMemo(() => wbCategories(catalog), [catalog])
   const filteredPickerRows = useMemo(
-    () => filterCatalogRows(catalog, pickerSearch, pickerCategory, filterRow),
-    [catalog, filterRow, pickerCategory, pickerSearch],
+    () => {
+      if (!catalog) {
+        return []
+      }
+      const bySearch = filterCatalogRows(catalog, pickerSearch, '__all__', filterRow)
+      const byCategory = pickerCategories.length === 0 ? bySearch : bySearch.filter((row) => {
+        const category = row.wb_subject_name?.trim()
+        return Boolean(category && pickerCategories.includes(category))
+      })
+      if (!lastScannedProductId) {
+        return byCategory
+      }
+      return [...byCategory].sort((a, b) => {
+        if (a.id === lastScannedProductId) return -1
+        if (b.id === lastScannedProductId) return 1
+        return 0
+      })
+    },
+    [catalog, filterRow, lastScannedProductId, pickerCategories, pickerSearch],
   )
 
   const setPickerQty = (productId: string, qty: number) => {
     setPickerQtyByProduct((prev) => ({ ...prev, [productId]: qty }))
+    setSelectedProductIds((prev) => {
+      const next = new Set(prev)
+      if (Number.isFinite(qty) && qty > 0) {
+        next.add(productId)
+      }
+      return next
+    })
+  }
+
+  const incrementPickerQty = (productId: string) => {
+    setPickerQtyByProduct((prev) => ({ ...prev, [productId]: (prev[productId] ?? 0) + 1 }))
+    setSelectedProductIds((prev) => {
+      const next = new Set(prev)
+      next.add(productId)
+      return next
+    })
+  }
+
+  const toggleSelected = (productId: string, checked: boolean) => {
+    setSelectedProductIds((prev) => {
+      const next = new Set(prev)
+      if (checked) {
+        next.add(productId)
+        setPickerQtyByProduct((qtyPrev) => ({
+          ...qtyPrev,
+          [productId]: qtyPrev[productId] && qtyPrev[productId] > 0 ? qtyPrev[productId]! : 1,
+        }))
+      } else {
+        next.delete(productId)
+      }
+      return next
+    })
+  }
+
+  const selectCurrentRows = () => {
+    const selectable = filteredPickerRows.filter((row) => !disabledProductIds.has(row.id))
+    setSelectedProductIds((prev) => {
+      const next = new Set(prev)
+      for (const row of selectable) {
+        next.add(row.id)
+      }
+      return next
+    })
+    setPickerQtyByProduct((prev) => {
+      const next = { ...prev }
+      for (const row of selectable) {
+        if (!next[row.id] || next[row.id] < 1) {
+          next[row.id] = 1
+        }
+      }
+      return next
+    })
+  }
+
+  const applyBulkQty = () => {
+    const n = Math.floor(Number(bulkQty))
+    if (!Number.isFinite(n) || n < 1) {
+      setPickerError('Укажите количество для отмеченных строк.')
+      return
+    }
+    setPickerQtyByProduct((prev) => {
+      const next = { ...prev }
+      for (const productId of selectedProductIds) {
+        if (!disabledProductIds.has(productId)) {
+          next[productId] = n
+        }
+      }
+      return next
+    })
+    setPickerError(null)
   }
 
   const handleClose = () => {
@@ -182,7 +280,14 @@ export function WbProductPickerDialog({
   }
 
   const handleApply = async () => {
-    await onApply(pickerQtyByProduct)
+    const selections: Record<string, number> = {}
+    for (const productId of selectedProductIds) {
+      const qty = pickerQtyByProduct[productId] ?? 0
+      if (qty > 0 && !disabledProductIds.has(productId)) {
+        selections[productId] = qty
+      }
+    }
+    await onApply(selections)
   }
 
   const productColCount = variant === 'ff' ? 7 : 6
@@ -195,20 +300,30 @@ export function WbProductPickerDialog({
     const available = getAvailable?.(r.id) ?? 0
     return (
       <TableCell align="right" sx={{ minWidth: 120 }}>
-        <TextField
-          type="number"
-          size="small"
-          disabled={inDraft || busy}
-          value={qty || ''}
-          onChange={(e) => setPickerQty(r.id, Number(e.target.value))}
-          slotProps={{
-            htmlInput: {
-              min: 0,
-              ...(showAvailableColumn ? { max: available } : {}),
-              'data-testid': `${testIdPrefix}-qty`,
-            },
-          }}
-        />
+        <Stack direction="row" spacing={0.5} sx={{ alignItems: 'center', justifyContent: 'flex-end' }}>
+          <Checkbox
+            size="small"
+            checked={selectedProductIds.has(r.id)}
+            disabled={inDraft || busy}
+            onChange={(_, checked) => toggleSelected(r.id, checked)}
+            data-testid={`${testIdPrefix}-select-row`}
+          />
+          <TextField
+            type="number"
+            size="small"
+            disabled={inDraft || busy}
+            value={qty || ''}
+            onChange={(e) => setPickerQty(r.id, Number(e.target.value))}
+            sx={{ width: 86 }}
+            slotProps={{
+              htmlInput: {
+                min: 0,
+                ...(showAvailableColumn ? { max: available } : {}),
+                'data-testid': `${testIdPrefix}-qty`,
+              },
+            }}
+          />
+        </Stack>
       </TableCell>
     )
   }
@@ -225,45 +340,92 @@ export function WbProductPickerDialog({
       <DialogTitle>Выбор товаров</DialogTitle>
       <DialogContent dividers>
         <Stack spacing={2} sx={{ mb: 2 }}>
+          {pickerError ? (
+            <Alert severity="warning" data-testid={`${testIdPrefix}-error`}>
+              {pickerError}
+            </Alert>
+          ) : null}
           <TextField
             label="Поиск (артикул, ШК, артикул WB, название, артикул продавца)"
             value={pickerSearch}
-            onChange={(e) => setPickerSearch(e.target.value)}
+            onChange={(e) => {
+              setPickerSearch(e.target.value)
+              setPickerError(null)
+            }}
             onKeyDown={(e) => {
               if (e.key !== 'Enter' || !catalog) {
                 return
               }
               e.preventDefault()
-              const productId = resolveProductIdByBarcode(catalog, pickerSearch)
+              const input = e.currentTarget.querySelector('input')
+              const rawSearch = input?.value || (e.target as HTMLInputElement).value || pickerSearch
+              const productId = resolveProductIdByBarcode(catalog, rawSearch)
               const targetId =
                 productId ?? (filteredPickerRows.length === 1 ? filteredPickerRows[0]!.id : null)
               if (!targetId || disabledProductIds.has(targetId)) {
+                setPickerError('Товар с таким штрихкодом не найден в каталоге')
                 return
               }
-              setPickerQty(targetId, (pickerQtyByProduct[targetId] ?? 0) + 1)
+              incrementPickerQty(targetId)
+              setLastScannedProductId(targetId)
               setPickerSearch('')
+              setPickerError(null)
             }}
             size="small"
             fullWidth
             slotProps={{ htmlInput: { 'data-testid': `${testIdPrefix}-search` } }}
           />
-          <FormControl size="small" sx={{ minWidth: 260 }}>
-            <InputLabel id={`${testIdPrefix}-cat-label`}>Категория (WB)</InputLabel>
-            <Select
-              labelId={`${testIdPrefix}-cat-label`}
-              label="Категория (WB)"
-              value={pickerCategory}
-              onChange={(e) => setPickerCategory(e.target.value)}
-              data-testid={`${testIdPrefix}-category`}
+          <Stack direction={{ xs: 'column', md: 'row' }} spacing={1.5} sx={{ alignItems: { md: 'center' } }}>
+            <FormControl size="small" sx={{ minWidth: 260 }}>
+              <InputLabel id={`${testIdPrefix}-cat-label`}>Категории WB</InputLabel>
+              <Select
+                multiple
+                labelId={`${testIdPrefix}-cat-label`}
+                label="Категории WB"
+                value={pickerCategories}
+                onChange={(e) => {
+                  const value = e.target.value
+                  setPickerCategories(typeof value === 'string' ? value.split(',') : value)
+                }}
+                renderValue={(selected) =>
+                  selected.length === 0 ? 'Все категории' : `${selected.length} категорий`
+                }
+                data-testid={`${testIdPrefix}-category`}
+              >
+                {categories.map((c) => (
+                  <MenuItem key={c} value={c}>
+                    <Checkbox checked={pickerCategories.includes(c)} size="small" />
+                    <ListItemText primary={c} />
+                  </MenuItem>
+                ))}
+              </Select>
+            </FormControl>
+            <Button
+              variant="outlined"
+              onClick={selectCurrentRows}
+              disabled={busy || filteredPickerRows.every((row) => disabledProductIds.has(row.id))}
+              data-testid={`${testIdPrefix}-select-all`}
             >
-              <MenuItem value="__all__">Все</MenuItem>
-              {categories.map((c) => (
-                <MenuItem key={c} value={c}>
-                  {c}
-                </MenuItem>
-              ))}
-            </Select>
-          </FormControl>
+              Выбрать все
+            </Button>
+            <TextField
+              label="Проставить всем"
+              type="number"
+              size="small"
+              value={bulkQty}
+              onChange={(e) => setBulkQty(e.target.value)}
+              sx={{ width: 160 }}
+              slotProps={{ htmlInput: { min: 1, 'data-testid': `${testIdPrefix}-bulk-qty` } }}
+            />
+            <Button
+              variant="outlined"
+              onClick={applyBulkQty}
+              disabled={busy || selectedProductIds.size === 0}
+              data-testid={`${testIdPrefix}-bulk-apply`}
+            >
+              Проставить
+            </Button>
+          </Stack>
         </Stack>
         <TableContainer sx={{ width: '100%', overflowX: 'hidden' }}>
           <Table

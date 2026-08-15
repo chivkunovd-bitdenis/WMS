@@ -21,8 +21,6 @@ import {
   TableContainer,
   TableHead,
   TableRow,
-  ToggleButton,
-  ToggleButtonGroup,
   Typography,
 } from '@mui/material'
 import { apiUrl } from '../../api'
@@ -40,16 +38,25 @@ const UNKNOWN_DOCUMENT_STATUS_LABEL = 'Статус уточняется'
 
 type InboundSummaryRow = {
   id: string
+  waybill_number?: string | null
+  warehouse_id: string
+  warehouse_name?: string | null
   status: string
   operation_type?: string | null
   line_count: number
+  goods_qty_total?: number
   planned_delivery_date: string | null
+  planned_box_count?: number | null
 }
 
 type MpUnloadSummaryRow = {
   id: string
+  warehouse_id?: string
+  warehouse_name?: string | null
   status: string
   line_count: number
+  goods_qty_total?: number
+  planned_shipment_date?: string | null
   created_at?: string
 }
 
@@ -79,9 +86,16 @@ type DocumentRow = {
   type: DocType
   id: string
   date: string | null
+  waybill_number?: string | null
+  warehouse_name?: string | null
   status: string
   operation_type?: InboundOperationType
   line_count: number
+  goods_qty_total: number
+}
+
+type CalendarRow = DocumentRow & {
+  label: string
 }
 
 type Props = {
@@ -115,7 +129,6 @@ export function SellerDocumentsScreen({
 }: Props) {
   const navigate = useNavigate()
   const [type, setType] = useState<DocumentFilterType>('all')
-  const [createOperationType, setCreateOperationType] = useState<InboundOperationType>('inbound')
   const [sort, setSort] = useState<'date_desc' | 'date_asc'>('date_desc')
   const [mpDialogId, setMpDialogId] = useState<string | null>(null)
   const [deleteBusyKey, setDeleteBusyKey] = useState<string | null>(null)
@@ -129,16 +142,21 @@ export function SellerDocumentsScreen({
         type: 'inbound' as const,
         id: r.id,
         date: r.planned_delivery_date,
+        waybill_number: r.waybill_number ?? null,
+        warehouse_name: r.warehouse_name ?? null,
         status: r.status,
         operation_type: normalizeInboundOperationType(r.operation_type),
         line_count: r.line_count,
+        goods_qty_total: r.goods_qty_total ?? 0,
       })),
       ...mpUnloadSummaries.map((r) => ({
         type: 'mp_unload' as const,
         id: r.id,
-        date: r.created_at?.slice(0, 10) ?? null,
+        date: r.planned_shipment_date ?? r.created_at?.slice(0, 10) ?? null,
+        warehouse_name: r.warehouse_name ?? null,
         status: r.status,
         line_count: r.line_count,
+        goods_qty_total: r.goods_qty_total ?? 0,
       })),
     ]
     const filtered =
@@ -157,6 +175,100 @@ export function SellerDocumentsScreen({
       return ad.localeCompare(bd) * sign
     })
   }, [inboundSummaries, mpUnloadSummaries, sort, type])
+
+  const shipmentCalendar = useMemo(() => {
+    const today = new Date()
+    const todayIso = today.toISOString().slice(0, 10)
+    const tomorrow = new Date(today)
+    tomorrow.setDate(today.getDate() + 1)
+    const tomorrowIso = tomorrow.toISOString().slice(0, 10)
+    const sourceRows: CalendarRow[] = [
+      ...inboundSummaries.map((r) => ({
+        type: 'inbound' as const,
+        id: r.id,
+        date: r.planned_delivery_date,
+        waybill_number: r.waybill_number ?? null,
+        warehouse_name: r.warehouse_name ?? null,
+        status: r.status,
+        operation_type: normalizeInboundOperationType(r.operation_type),
+        line_count: r.line_count,
+        goods_qty_total: r.goods_qty_total ?? 0,
+        label: inboundOperationTypeLabel(normalizeInboundOperationType(r.operation_type)),
+      })),
+      ...mpUnloadSummaries.map((r) => ({
+        type: 'mp_unload' as const,
+        id: r.id,
+        date: r.planned_shipment_date ?? null,
+        warehouse_name: r.warehouse_name ?? null,
+        status: r.status,
+        line_count: r.line_count,
+        goods_qty_total: r.goods_qty_total ?? 0,
+        label: 'Отгрузка на МП',
+      })),
+    ]
+    const byDate = (iso: string) =>
+      sourceRows
+        .filter((row) => row.date === iso)
+        .sort((a, b) => a.label.localeCompare(b.label) || a.id.localeCompare(b.id))
+    return {
+      today: byDate(todayIso),
+      tomorrow: byDate(tomorrowIso),
+    }
+  }, [inboundSummaries, mpUnloadSummaries])
+
+  function openDocument(row: DocumentRow): void {
+    if (row.type === 'inbound') {
+      navigate(`../inbound/${row.id}`)
+    } else if (row.type === 'mp_unload') {
+      setMpDialogId(row.id)
+    }
+  }
+
+  function renderCalendarColumn(title: string, items: CalendarRow[]) {
+    return (
+      <Box sx={{ flex: '1 1 280px', minWidth: 0 }} data-testid={`seller-shipments-${title === 'Сегодня' ? 'today' : 'tomorrow'}`}>
+        <Typography variant="subtitle2" sx={{ mb: 1 }}>
+          {title}
+        </Typography>
+        {items.length === 0 ? (
+          <Typography variant="body2" color="text.secondary">
+            Нет документов с плановой датой.
+          </Typography>
+        ) : (
+          <Stack spacing={0.75}>
+            {items.map((item) => (
+              <Button
+                key={`${item.type}:${item.id}`}
+                variant="outlined"
+                color="inherit"
+                onClick={() => openDocument(item)}
+                data-testid="seller-shipments-row"
+                sx={{
+                  justifyContent: 'space-between',
+                  gap: 1,
+                  textAlign: 'left',
+                  textTransform: 'none',
+                  alignItems: 'flex-start',
+                }}
+              >
+                <Box sx={{ minWidth: 0 }}>
+                  <Typography variant="body2" sx={{ fontWeight: 700 }}>
+                    {item.label}
+                  </Typography>
+                  <Typography variant="caption" color="text.secondary" sx={{ display: 'block' }}>
+                    {item.warehouse_name ?? 'Склад ФФ'} · {item.line_count} строк · {item.goods_qty_total} шт
+                  </Typography>
+                </Box>
+                <Typography variant="caption" color="text.secondary" sx={{ flex: '0 0 auto' }}>
+                  {sellerDocumentStatusRu(item.status, item.type)}
+                </Typography>
+              </Button>
+            ))}
+          </Stack>
+        )}
+      </Box>
+    )
+  }
 
   async function deleteDraftDocument(row: DocumentRow): Promise<void> {
     if (!token || row.status !== 'draft') {
@@ -238,42 +350,23 @@ export function SellerDocumentsScreen({
           >
             Создать акт расхождений
           </Button>
-          <ToggleButtonGroup
-            exclusive
-            size="small"
-            value={createOperationType}
-            onChange={(_event, next: InboundOperationType | null) => {
-              if (next) {
-                setCreateOperationType(next)
-              }
-            }}
-            aria-label="Тип заявки"
-            data-testid="seller-inbound-operation-toggle"
-            sx={{ alignSelf: { xs: 'stretch', sm: 'auto' } }}
-          >
-            <ToggleButton
-              value="inbound"
-              disabled={busy}
-              data-testid="seller-inbound-operation-supply"
-            >
-              Поставка
-            </ToggleButton>
-            <ToggleButton
-              value="return"
-              disabled={busy}
-              data-testid="seller-inbound-operation-return"
-            >
-              Возврат
-            </ToggleButton>
-          </ToggleButtonGroup>
           <Button
             variant="contained"
             data-testid="seller-create-inbound"
             disabled={busy}
-            onClick={() => navigate(`../inbound/new?operation=${createOperationType}`)}
+            onClick={() => navigate('../inbound/new?operation=inbound')}
             sx={{ alignSelf: { xs: 'stretch', sm: 'auto' } }}
           >
-            {createOperationType === 'return' ? 'Создать возврат' : 'Создать заявку на поставку'}
+            Создать заявку на поставку
+          </Button>
+          <Button
+            variant="contained"
+            data-testid="seller-create-return"
+            disabled={busy}
+            onClick={() => navigate('../inbound/new?operation=return')}
+            sx={{ alignSelf: { xs: 'stretch', sm: 'auto' } }}
+          >
+            Создать заявку на возврат
           </Button>
           <Button
             variant="contained"
@@ -292,6 +385,27 @@ export function SellerDocumentsScreen({
           >
             Создать отгрузку на МП
           </Button>
+        </Stack>
+      </Paper>
+
+      <Paper variant="outlined" sx={{ p: 2, mb: 2 }} data-testid="seller-shipments-calendar">
+        <Stack spacing={1.5}>
+          <Box>
+            <Typography variant="subtitle1">Сегодня / Завтра</Typography>
+            <Typography variant="body2" color="text.secondary">
+              Только ваши документы с плановой датой отгрузки или приёмки.
+            </Typography>
+          </Box>
+          {shipmentCalendar.today.length === 0 && shipmentCalendar.tomorrow.length === 0 ? (
+            <Alert severity="info" data-testid="seller-shipments-empty">
+              На сегодня и завтра нет ваших документов с плановой датой.
+            </Alert>
+          ) : (
+            <Stack direction={{ xs: 'column', md: 'row' }} spacing={2}>
+              {renderCalendarColumn('Сегодня', shipmentCalendar.today)}
+              {renderCalendarColumn('Завтра', shipmentCalendar.tomorrow)}
+            </Stack>
+          )}
         </Stack>
       </Paper>
 
@@ -335,6 +449,7 @@ export function SellerDocumentsScreen({
             <TableRow>
               <TableCell>Тип</TableCell>
               <TableCell>Дата</TableCell>
+              <TableCell>Накладная</TableCell>
               <TableCell>Статус</TableCell>
               <TableCell align="right">Строк</TableCell>
               <TableCell align="right">Действия</TableCell>
@@ -353,11 +468,7 @@ export function SellerDocumentsScreen({
                   cursor: r.type === 'inbound' || r.type === 'mp_unload' ? 'pointer' : 'default',
                 }}
                 onClick={() => {
-                  if (r.type === 'inbound') {
-                    navigate(`../inbound/${r.id}`)
-                  } else if (r.type === 'mp_unload') {
-                    setMpDialogId(r.id)
-                  }
+                  openDocument(r)
                 }}
               >
                 <TableCell>
@@ -368,6 +479,9 @@ export function SellerDocumentsScreen({
                       : 'Акт расхождений'}
                 </TableCell>
                 <TableCell sx={{ color: 'text.secondary' }}>{r.date ?? '—'}</TableCell>
+                <TableCell sx={{ color: r.waybill_number ? 'text.primary' : 'text.secondary' }}>
+                  {r.waybill_number ?? '—'}
+                </TableCell>
                 <TableCell>{sellerDocumentStatusRu(r.status, r.type)}</TableCell>
                 <TableCell align="right">{r.line_count}</TableCell>
                 <TableCell align="right">
@@ -397,7 +511,7 @@ export function SellerDocumentsScreen({
             ))}
             {rows.length === 0 ? (
               <TableRow>
-                <TableCell colSpan={5}>
+                <TableCell colSpan={6}>
                   <Typography variant="body2" color="text.secondary">
                     Пока нет документов.
                   </Typography>

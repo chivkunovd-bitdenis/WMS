@@ -6,6 +6,7 @@ import time
 
 import pytest
 from httpx import AsyncClient
+from inbound_box_intake_helpers import set_planned_boxes
 
 
 async def _admin_headers(async_client: AsyncClient, suffix: str) -> dict[str, str]:
@@ -77,6 +78,7 @@ async def _submitted_request(
     )
     assert ln.status_code == 201, ln.text
 
+    await set_planned_boxes(async_client, base, rid, ah)
     sub = await async_client.post(f"{base}/{rid}/submit", headers=ah)
     assert sub.status_code == 200, sub.text
     assert sub.json()["status"] == "submitted"

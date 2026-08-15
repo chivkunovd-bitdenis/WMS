@@ -26,6 +26,7 @@ import {
   inboundQueueUnitsLabel,
   type InboundSummaryRef,
 } from './inboundReceivingHelpers'
+import type { InboundOperationType } from '../../utils/inboundOperationType'
 
 export type InboundWorkspace = 'reception' | 'sorting'
 
@@ -33,7 +34,7 @@ type Props = {
   workspace: InboundWorkspace
   rows: InboundQueueRow[]
   onOpen: (id: string) => void
-  onCreateDraft?: () => void | Promise<void>
+  onCreateDraft?: (operationType: InboundOperationType) => void | Promise<void>
   creatingDraft?: boolean
 }
 
@@ -78,14 +79,23 @@ export function FfInboundQueuePage({
       <PageHeader title={title} description={subtitle} />
 
       {workspace === 'reception' && onCreateDraft ? (
-        <Stack direction="row" sx={{ mb: 2, justifyContent: 'flex-end' }}>
+        <Stack direction="row" spacing={1} sx={{ mb: 2, justifyContent: 'flex-end' }}>
           <Button
             variant="contained"
             disabled={creatingDraft}
-            onClick={() => void onCreateDraft()}
+            onClick={() => void onCreateDraft('inbound')}
             data-testid="ff-inbound-create"
           >
             Создать приёмку
+          </Button>
+          <Button
+            variant="contained"
+            color="secondary"
+            disabled={creatingDraft}
+            onClick={() => void onCreateDraft('return')}
+            data-testid="ff-inbound-create-return"
+          >
+            Создать возврат
           </Button>
         </Stack>
       ) : null}
@@ -137,7 +147,18 @@ export function FfInboundQueuePage({
                     data-request-id={row.id}
                   >
                     <TableCell data-testid="ff-inbound-queue-document">
-                      {inboundQueueDocumentLabel(summary)}
+                      <Stack spacing={0.25}>
+                        <Typography variant="body2">{inboundQueueDocumentLabel(summary)}</Typography>
+                        {summary.waybill_number?.trim() ? (
+                          <Typography
+                            variant="caption"
+                            color="text.secondary"
+                            data-testid="ff-inbound-queue-waybill-number"
+                          >
+                            Накладная: {summary.waybill_number.trim()}
+                          </Typography>
+                        ) : null}
+                      </Stack>
                     </TableCell>
                     <TableCell>{row.seller_name ?? '—'}</TableCell>
                     <TableCell data-testid="ff-inbound-queue-composition">

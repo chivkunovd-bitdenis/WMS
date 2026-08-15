@@ -150,6 +150,7 @@ test('admin creates seller user; seller sees filtered catalog and inbound', asyn
     page.getByTestId('seller-inbound-picker-apply').click(),
   ]);
   await expect(page.getByTestId('seller-inbound-line-row')).toHaveCount(1);
+  await page.getByTestId('seller-inbound-planned-boxes').fill('2');
   await Promise.all([
     waitForPostOk(page, baseIn, (u) => u.includes('/submit')),
     page.getByTestId('seller-inbound-submit-warehouse').click(),

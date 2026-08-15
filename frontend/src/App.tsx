@@ -53,6 +53,7 @@ import {
   resolveFfPermissions,
 } from './utils/ffPermissions'
 import { setSeparateMarkingPrintEnabled } from './utils/separateMarkingPrint'
+import type { InboundOperationType } from './utils/inboundOperationType'
 
 type WarehouseRow = { id: string; name: string; code: string }
 type LocationRow = { id: string; code: string; warehouse_id: string; barcode: string }
@@ -2578,7 +2579,9 @@ export default function App() {
     refreshMarketplaceUnloadList,
   ])
 
-  const onCreateFfInboundDraft = useCallback(async (): Promise<{ id: string } | null> => {
+  const onCreateFfInboundDraft = useCallback(async (
+    operationType: InboundOperationType = 'inbound',
+  ): Promise<{ id: string } | null> => {
     if (!token) {
       return null
     }
@@ -2597,7 +2600,7 @@ export default function App() {
           ...authHeaders(token),
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({ warehouse_id: wid }),
+        body: JSON.stringify({ warehouse_id: wid, operation_type: operationType }),
       })
       if (!res.ok) {
         setOpsError(await readApiErrorMessage(res))
@@ -2607,7 +2610,13 @@ export default function App() {
       await refreshInboundList(token)
       return created
     } catch (e) {
-      setOpsError(e instanceof Error ? e.message : 'Не удалось создать приёмку.')
+      setOpsError(
+        e instanceof Error
+          ? e.message
+          : operationType === 'return'
+            ? 'Не удалось создать возврат.'
+            : 'Не удалось создать приёмку.',
+      )
       return null
     } finally {
       setOpsBusy(false)
@@ -2823,8 +2832,8 @@ export default function App() {
                   workspace="reception"
                   rows={inboundSummaries}
                   creatingDraft={opsBusy}
-                  onCreateDraft={async () => {
-                    const created = await onCreateFfInboundDraft()
+                  onCreateDraft={async (operationType) => {
+                    const created = await onCreateFfInboundDraft(operationType)
                     if (!created?.id) {
                       return
                     }

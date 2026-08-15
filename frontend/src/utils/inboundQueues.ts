@@ -8,6 +8,7 @@ export type InboundQueueRow = {
   id: string
   status: string
   operation_type?: string | null
+  waybill_number?: string | null
   line_count: number
   planned_delivery_date: string | null
   seller_name?: string | null

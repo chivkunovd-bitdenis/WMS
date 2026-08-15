@@ -4,6 +4,7 @@ import time
 
 import pytest
 from httpx import AsyncClient
+from inbound_box_intake_helpers import set_planned_boxes
 
 
 async def _register_admin(async_client: AsyncClient) -> tuple[dict[str, str], str]:
@@ -114,6 +115,7 @@ async def test_staff_with_reception_permission_can_create_and_submit_inbound_dra
     assert patched.status_code == 200, patched.text
     assert patched.json()["expected_qty"] == 3
 
+    await set_planned_boxes(async_client, base, rid, staff_h)
     submitted = await async_client.post(f"{base}/{rid}/submit", headers=staff_h)
     assert submitted.status_code == 200, submitted.text
     assert submitted.json()["status"] == "submitted"

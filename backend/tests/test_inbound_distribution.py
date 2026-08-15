@@ -6,7 +6,11 @@ from datetime import UTC, datetime
 
 import pytest
 from httpx import AsyncClient
-from inbound_box_intake_helpers import fulfill_inbound_via_box_scans, post_primary_accept
+from inbound_box_intake_helpers import (
+    fulfill_inbound_via_box_scans,
+    post_primary_accept,
+    set_planned_boxes,
+)
 
 from app.db.session import SessionLocal
 from app.models.inbound_intake import InboundIntakeRequest
@@ -72,7 +76,9 @@ async def test_inbound_distribution_lines_validate_limits_and_lock(
     )
     assert ln.status_code == 201, ln.text
 
-    await async_client.post(f"{base}/{rid}/submit", headers=ah)
+    await set_planned_boxes(async_client, base, rid, ah)
+    submit = await async_client.post(f"{base}/{rid}/submit", headers=ah)
+    assert submit.status_code == 200, submit.text
     prim = await post_primary_accept(async_client, base, rid, ah)
     assert prim.status_code == 200, prim.text
     assert prim.json()["status"] == "receiving"
@@ -228,7 +234,9 @@ async def test_resync_sorting_stock_idempotent(async_client: AsyncClient) -> Non
         headers=ah,
         json={"product_id": pid, "expected_qty": 5},
     )
-    await async_client.post(f"{base}/{rid}/submit", headers=ah)
+    await set_planned_boxes(async_client, base, rid, ah)
+    submit = await async_client.post(f"{base}/{rid}/submit", headers=ah)
+    assert submit.status_code == 200, submit.text
     await post_primary_accept(async_client, base, rid, ah)
     await fulfill_inbound_via_box_scans(async_client, ah, rid, sku, 5)
     ver = await async_client.post(f"{base}/{rid}/verify", headers=ah)
@@ -285,7 +293,9 @@ async def test_empty_distribution_complete_rejected(async_client: AsyncClient) -
     await async_client.post(
         f"{base}/{rid}/lines", headers=ah, json={"product_id": pid, "expected_qty": 3}
     )
-    await async_client.post(f"{base}/{rid}/submit", headers=ah)
+    await set_planned_boxes(async_client, base, rid, ah)
+    submit = await async_client.post(f"{base}/{rid}/submit", headers=ah)
+    assert submit.status_code == 200, submit.text
     await post_primary_accept(async_client, base, rid, ah)
     await fulfill_inbound_via_box_scans(async_client, ah, rid, sku, 3)
     await async_client.post(f"{base}/{rid}/verify", headers=ah)
@@ -557,7 +567,9 @@ async def test_distribution_reopen_after_stuck_lock(async_client: AsyncClient) -
     await async_client.post(
         f"{base}/{rid}/lines", headers=ah, json={"product_id": pid, "expected_qty": 2}
     )
-    await async_client.post(f"{base}/{rid}/submit", headers=ah)
+    await set_planned_boxes(async_client, base, rid, ah)
+    submit = await async_client.post(f"{base}/{rid}/submit", headers=ah)
+    assert submit.status_code == 200, submit.text
     await post_primary_accept(async_client, base, rid, ah)
     await fulfill_inbound_via_box_scans(async_client, ah, rid, sku, 2)
     await async_client.post(f"{base}/{rid}/verify", headers=ah)

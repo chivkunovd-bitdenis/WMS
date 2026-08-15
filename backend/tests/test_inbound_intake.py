@@ -49,6 +49,21 @@ async def _mark_product_wb_linked(product_id: str, *, nm_id: int) -> None:
         await session.commit()
 
 
+async def _set_planned_boxes(
+    async_client: AsyncClient,
+    base: str,
+    request_id: str,
+    headers: dict[str, str],
+    count: int = 1,
+) -> None:
+    res = await async_client.patch(
+        f"{base}/{request_id}",
+        headers=headers,
+        json={"planned_box_count": count},
+    )
+    assert res.status_code == 200, res.text
+
+
 @pytest.mark.asyncio
 async def test_inbound_intake_flow_post_all(async_client: AsyncClient) -> None:
     suffix = str(int(time.time() * 1000))
@@ -130,6 +145,7 @@ async def test_inbound_intake_flow_post_all(async_client: AsyncClient) -> None:
     assert ln.json()["storage_location_id"] == lid
     line_id = ln.json()["id"]
 
+    await _set_planned_boxes(async_client, base, rid, sh)
     sub = await async_client.post(f"{base}/{rid}/submit", headers=sh)
     assert sub.status_code == 200, sub.text
     assert sub.json()["status"] == "submitted"
@@ -250,6 +266,7 @@ async def test_inbound_partial_receive_then_complete(async_client: AsyncClient) 
         json={"product_id": pid, "expected_qty": 10, "storage_location_id": lid},
     )
     line_id = ln.json()["id"]
+    await _set_planned_boxes(async_client, base, rid, sh)
     await async_client.post(f"{base}/{rid}/submit", headers=sh)
     await post_primary_accept(async_client, base, rid, ah)
     await fulfill_inbound_via_box_scans(async_client, ah, rid, sku, 10)
@@ -334,6 +351,7 @@ async def test_inbound_patch_storage_after_line_create(async_client: AsyncClient
     assert patched.status_code == 200, patched.text
     assert patched.json()["storage_location_id"] == lid
 
+    await _set_planned_boxes(async_client, base, rid, h)
     await async_client.post(f"{base}/{rid}/submit", headers=h)
     await post_primary_accept(async_client, base, rid, h)
     await fulfill_inbound_via_box_scans(async_client, h, rid, sku, 2)
@@ -388,6 +406,7 @@ async def test_inbound_post_missing_storage_on_line(async_client: AsyncClient) -
         headers=h,
         json={"product_id": pid, "expected_qty": 1},
     )
+    await _set_planned_boxes(async_client, base, rid, h)
     await async_client.post(f"{base}/{rid}/submit", headers=h)
     await post_primary_accept(async_client, base, rid, h)
     await fulfill_inbound_via_box_scans(async_client, h, rid, sku, 1)
@@ -721,6 +740,7 @@ async def test_inbound_receiving_scan_accepts_planned_local_product_without_wb_i
         json={"product_id": planned.json()["id"], "expected_qty": 3},
     )
     assert add.status_code == 201, add.text
+    await _set_planned_boxes(async_client, base, rid, sh)
     sub = await async_client.post(f"{base}/{rid}/submit", headers=sh)
     assert sub.status_code == 200, sub.text
 
@@ -809,6 +829,7 @@ async def test_inbound_receiving_accepts_seller_catalog_product_in_regular_intak
         json={"product_id": planned.json()["id"], "expected_qty": 2},
     )
     assert add.status_code == 201, add.text
+    await _set_planned_boxes(async_client, base, rid, sh)
     sub = await async_client.post(f"{base}/{rid}/submit", headers=sh)
     assert sub.status_code == 200, sub.text
 
@@ -893,6 +914,7 @@ async def test_inbound_receiving_accepts_seller_catalog_product_as_discrepancy(
         json={"product_id": planned.json()["id"], "expected_qty": 1},
     )
     assert add.status_code == 201, add.text
+    await _set_planned_boxes(async_client, base, rid, sh)
     sub = await async_client.post(f"{base}/{rid}/submit", headers=sh)
     assert sub.status_code == 200, sub.text
 
@@ -969,6 +991,7 @@ async def test_inbound_receiving_lines_accepts_same_seller_catalog_product(
         json={"product_id": planned.json()["id"], "expected_qty": 1},
     )
     assert add.status_code == 201, add.text
+    await _set_planned_boxes(async_client, base, rid, sh)
     sub = await async_client.post(f"{base}/{rid}/submit", headers=sh)
     assert sub.status_code == 200, sub.text
 
@@ -1046,6 +1069,7 @@ async def test_inbound_receiving_lines_accepts_local_same_seller_catalog_product
         json={"product_id": planned.json()["id"], "expected_qty": 1},
     )
     assert add.status_code == 201, add.text
+    await _set_planned_boxes(async_client, base, rid, sh)
     sub = await async_client.post(f"{base}/{rid}/submit", headers=sh)
     assert sub.status_code == 200, sub.text
 
@@ -1136,6 +1160,7 @@ async def test_inbound_receiving_lines_rejects_foreign_seller_product(
         json={"product_id": planned.json()["id"], "expected_qty": 1},
     )
     assert add.status_code == 201, add.text
+    await _set_planned_boxes(async_client, base, rid, sh)
     sub = await async_client.post(f"{base}/{rid}/submit", headers=sh)
     assert sub.status_code == 200, sub.text
 

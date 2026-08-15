@@ -10,6 +10,8 @@ const API_DETAIL_MESSAGES_RU: Record<string, string> = {
   qty_exceeds_accepted: 'Нельзя разложить больше, чем принято по заявке.',
   qty_exceeds_box_remaining: 'В коробе осталось меньше указанного количества.',
   submit_empty: 'Добавьте хотя бы одну строку в заявку.',
+  planned_boxes_missing: 'Укажите количество грузомест.',
+  invalid_planned_box_count: 'Укажите количество грузомест.',
   distribution_incomplete:
     'Распределите всё принятое количество по ячейкам перед завершением — иначе товар не попадёт на склад.',
   distribution_not_completed: 'Распределение ещё не зафиксировано.',

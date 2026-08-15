@@ -269,7 +269,7 @@ test('inbound receiving v2 — mobile receiving table keeps max identifiers insi
 test('inbound receiving v2 — multiple boxes stay independent', async ({ page }) => {
   const seed = await seedFfSellerInbound(page, `rcv-box-${Date.now()}`);
   await apiCreateSubmittedInbound(page.request, seed, {
-    plannedBoxes: 0,
+    plannedBoxes: 3,
     expectedQty: 2,
   });
 
@@ -327,7 +327,7 @@ test('inbound receiving v2 — multiple boxes stay independent', async ({ page }
 // TC-NEW-IN-03 — чужой штрихкод в общую приёмку → тост-ошибка.
 test('inbound receiving v2 — foreign barcode shows toast error', async ({ page }) => {
   const seed = await seedFfSellerInbound(page, `rcv-foreign-${Date.now()}`);
-  await apiCreateSubmittedInbound(page.request, seed, { plannedBoxes: 0, expectedQty: 2 });
+  await apiCreateSubmittedInbound(page.request, seed, { plannedBoxes: 1, expectedQty: 2 });
 
   await loginFfAdmin(page, seed.adminEmail, seed.password);
   await page.getByTestId('nav-ff-reception').click();
@@ -416,6 +416,11 @@ test('inbound receiving v2 — return accepts seller catalog discrepancy and dim
     data: { product_id: seed.productId, expected_qty: 1 },
   });
   expect(addPlannedLine.ok()).toBeTruthy();
+  const setPlannedBoxes = await page.request.patch(`${INBOUND_API}/${requestId}`, {
+    headers: sellerHeaders,
+    data: { planned_box_count: 1 },
+  });
+  expect(setPlannedBoxes.ok()).toBeTruthy();
   const submitReturn = await page.request.post(`${INBOUND_API}/${requestId}/submit`, {
     headers: sellerHeaders,
   });
@@ -567,6 +572,11 @@ test('inbound receiving v2 — return autoprint fails closed when scanned line h
     data: { product_id: seed.productId, expected_qty: 1 },
   });
   expect(addPlannedLine.ok()).toBeTruthy();
+  const setPlannedBoxes = await page.request.patch(`${INBOUND_API}/${requestId}`, {
+    headers: sellerHeaders,
+    data: { planned_box_count: 1 },
+  });
+  expect(setPlannedBoxes.ok()).toBeTruthy();
   const submitReturn = await page.request.post(`${INBOUND_API}/${requestId}/submit`, {
     headers: sellerHeaders,
   });
@@ -688,11 +698,10 @@ test('inbound receiving v2 — seller sees conducted factual card after FF short
   await expect(page.getByTestId('seller-inbound-summary-status')).toContainText('В сортировке');
   await expect(page.getByTestId('seller-inbound-summary-operation')).toContainText('Поставка');
   await expect(page.getByTestId('seller-inbound-summary-warehouse')).toContainText('WH');
-  await expect(page.getByTestId('seller-inbound-summary-boxes')).toContainText('план 2');
-  await expect(page.getByTestId('seller-inbound-summary-boxes')).toContainText('факт 0');
-  await expect(page.getByTestId('seller-inbound-summary-discrepancy')).toContainText('Есть расхождения');
-  await expect(page.getByTestId('seller-inbound-summary-units')).toContainText('Заявлено 3');
-  await expect(page.getByTestId('seller-inbound-summary-units')).toContainText('принято 3');
+  await expect(page.getByTestId('seller-inbound-fact-summary')).toHaveCount(0);
+  await expect(page.getByText('Итог приемки')).toHaveCount(0);
+  await expect(page.getByText('Что не так')).toHaveCount(0);
+  await expect(page.getByTestId('seller-inbound-summary-boxes')).toHaveCount(0);
 
   const sellerFactLayout = await page.getByTestId('seller-inbound-lines-table').evaluate((table) => {
     const headCells = Array.from(table.querySelectorAll('thead th'));
@@ -795,7 +804,7 @@ test('inbound receiving v2 — active receiving creates manual product as FF-add
   const seed = await seedFfSellerInbound(page, suffix);
   const adminHeaders = { Authorization: `Bearer ${seed.token}` };
   const requestId = await apiCreateSubmittedInbound(page.request, seed, {
-    plannedBoxes: 0,
+    plannedBoxes: 1,
     expectedQty: 1,
   });
   await beginInboundReceiving(page.request, adminHeaders, requestId);
@@ -839,7 +848,7 @@ test('inbound receiving v2 — manual product attach failure retries without dup
   const seed = await seedFfSellerInbound(page, suffix);
   const adminHeaders = { Authorization: `Bearer ${seed.token}` };
   const requestId = await apiCreateSubmittedInbound(page.request, seed, {
-    plannedBoxes: 0,
+    plannedBoxes: 1,
     expectedQty: 1,
   });
   await beginInboundReceiving(page.request, adminHeaders, requestId);
@@ -939,7 +948,7 @@ test('inbound receiving v2 — manual product attach success closes when detail 
   const seed = await seedFfSellerInbound(page, suffix);
   const adminHeaders = { Authorization: `Bearer ${seed.token}` };
   const requestId = await apiCreateSubmittedInbound(page.request, seed, {
-    plannedBoxes: 0,
+    plannedBoxes: 1,
     expectedQty: 1,
   });
   await beginInboundReceiving(page.request, adminHeaders, requestId);
@@ -1026,7 +1035,7 @@ test('inbound receiving v2 — manual product attach success closes when detail 
 test('inbound receiving v2 — manual edit with box saves loose not total', async ({ page }) => {
   const seed = await seedFfSellerInbound(page, `rcv-mix-${Date.now()}`);
   await apiCreateSubmittedInbound(page.request, seed, {
-    plannedBoxes: 0,
+    plannedBoxes: 1,
     expectedQty: 10,
   });
 
