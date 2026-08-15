@@ -602,6 +602,8 @@ async def create_inbound_request(
     session: Annotated[AsyncSession, Depends(get_db)],
     effective_seller_id: Annotated[uuid.UUID | None, Depends(get_effective_seller_id)],
 ) -> InboundIntakeRequestOut:
+    owning_seller_id: uuid.UUID | None
+    created_by_seller_id: uuid.UUID | None
     if user.role == FULFILLMENT_SELLER:
         if effective_seller_id is None:
             raise HTTPException(
