@@ -298,6 +298,9 @@ export function FfPackagingTaskPanel({
   const panelTotals = taskTotals(task)
   const taskEditable = task.status !== 'done' && task.status !== 'cancelled'
   const isMpUnloadTask = Boolean(task.marketplace_unload_request_id)
+  const pickResyncWarningText = isMpUnloadTask
+    ? 'Состав коробов изменился. Количества в задании пересчитаны; уже упакованное в задании сохранено — проверьте строки.'
+    : 'Подбор по ячейкам изменился. Количества в задании пересчитаны; уже упакованное в задании сохранено — проверьте строки.'
   const orderedEvents = (task.events ?? []).slice().sort(comparePackagingEventsAsc)
   const reversibleEvents = orderedEvents.filter(
     (event) =>
@@ -711,8 +714,7 @@ export function FfPackagingTaskPanel({
       ) : null}
       {task.pick_resync_warning ? (
         <Alert severity="warning" data-testid="ff-packaging-pick-resync-warning">
-          Подбор по ячейкам изменился. Количества в задании пересчитаны; уже упакованное в
-          задании сохранено — проверьте строки.
+          {pickResyncWarningText}
         </Alert>
       ) : null}
       <Paper variant="outlined" sx={{ p: 2 }} data-testid="ff-packaging-work-context">
