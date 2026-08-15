@@ -1,0 +1,58 @@
+{
+  "started_at": "2026-08-15T08:13:41.648Z",
+  "mode": "visible external Google Chrome via CDP Input/DevTools partial readback after fix",
+  "browser": "Chrome/151.0.7922.138 (Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/151.0.0.0 Safari/537.36)",
+  "actions": [
+    {
+      "action": "real_cdp_click",
+      "label": "tab delivery",
+      "kind": "tab",
+      "value": "В доставке",
+      "box": {
+        "x": 546.63671875,
+        "y": 275.046875,
+        "w": 117.8671875,
+        "h": 48,
+        "text": "В доставке"
+      },
+      "at": "2026-08-15T08:13:46.440Z"
+    },
+    {
+      "action": "screenshot",
+      "file": "/Users/deniscivkunov/Projects/WMS/.worktrees/wave1-fbs-new-orders-20260814/tasks/wms-wave1-fbs-new-orders-20260814/live-browser-review-20260815/screenshots/96-product-round2-partial-after-fix-delivery-row.png",
+      "at": "2026-08-15T08:13:47.614Z"
+    },
+    {
+      "action": "real_cdp_click",
+      "label": "open partial supply row 880001",
+      "kind": "row",
+      "value": "WB №880001",
+      "box": {
+        "x": 770,
+        "y": 572.65625,
+        "w": 970,
+        "h": 223.46875,
+        "text": "Бомбер мужской утепленный графитовый с очень длинным названием модели Limited Edition 2026 Заказ WB №880001 Артикул: BOMBER-LIVE-02981000 · WB 9901001 ШК: 460LIVE02981000001 · Размер: XL Tall ИП Очень"
+      },
+      "at": "2026-08-15T08:13:47.776Z"
+    },
+    {
+      "action": "screenshot",
+      "file": "/Users/deniscivkunov/Projects/WMS/.worktrees/wave1-fbs-new-orders-20260814/tasks/wms-wave1-fbs-new-orders-20260814/live-browser-review-20260815/screenshots/97-product-round2-partial-after-fix-warning-workspace.png",
+      "at": "2026-08-15T08:13:48.522Z"
+    }
+  ],
+  "observations": [
+    {
+      "label": "partial_warning_workspace_readback_after_fix",
+      "value": {
+        "url": "http://127.0.0.1:5186/app/ff/fbs",
+        "partialText": "WB подтвердил только часть заказов\n\nВошли в поставку: №880001\n\nНе вошли: №880002 — Брак при приёмке маркетплейсом.",
+        "workspaceText": "FBS 15.08.2026\n\nИП Очень Длинный Селлер Северо-Западный Склад 2026 · № WB WB-GI-MOCK-1\n\nСклад WMS\n\nОсновной WMS склад с длинным названием Москва-Север\n\nМаршрут\n\nСклад / СЦ\n\n2 из 2 подготовлено к отгрузке\nСдать в Wildberries до 16.08.2026, 07:51:02\nСостав ✓\nПодбор ✓\nУпаковка и маркировка ✓\nКороба\nWB подтвердил только часть заказов\n\nВошли в поставку: №880001\n\nНе вошли: №880002 — Брак при приёмке маркетплейсом.\n\nКороба · Склад / СЦ\n\nРаспределено 0 из 2 шт · осталось 2\n\nКоробов\nКоробов\nДобавить короба\nПоставка передана, QR получить не удалось\nПолучить QR повторно"
+      },
+      "at": "2026-08-15T08:13:48.524Z"
+    }
+  ],
+  "failures": [],
+  "completed_at": "2026-08-15T08:13:48.524Z"
+}
