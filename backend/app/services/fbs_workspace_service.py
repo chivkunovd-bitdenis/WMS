@@ -145,6 +145,11 @@ async def get_supply_workspace(
                 "name": supply.warehouse.name if supply.warehouse else "Склад не найден",
             },
             "planned_destination": _planned_destination(supply),
+            "planned_shipment_date": (
+                supply.planned_shipment_date.isoformat()
+                if supply.planned_shipment_date is not None
+                else None
+            ),
             "nearest_deadline_at": nearest_deadline.isoformat(),
             "packaging_task_id": (
                 str(supply.packaging_task_id) if supply.packaging_task_id else None

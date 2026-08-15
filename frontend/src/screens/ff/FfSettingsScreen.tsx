@@ -53,6 +53,7 @@ type Props = {
   addressStorageEnabled?: boolean
   onAddressStorageChange?: (enabled: boolean) => void
   separateMarkingPrintEnabled?: boolean
+  fbsShipmentCutoffTime?: string | null
 }
 
 function humanStaffError(message: string): string {
@@ -89,6 +90,7 @@ export function FfSettingsScreen({
   addressStorageEnabled = true,
   onAddressStorageChange,
   separateMarkingPrintEnabled = false,
+  fbsShipmentCutoffTime = null,
 }: Props) {
   const [rows, setRows] = useState<StaffAccountRow[]>([])
   const [billingMonth, setBillingMonth] = useState(currentBillingMonth)
@@ -102,6 +104,9 @@ export function FfSettingsScreen({
   } | null>(null)
   const [separatePrint, setSeparatePrint] = useState(separateMarkingPrintEnabled)
   const [separatePrintBusy, setSeparatePrintBusy] = useState(false)
+  const [fbsCutoff, setFbsCutoff] = useState(fbsShipmentCutoffTime ?? '')
+  const [fbsCutoffSaved, setFbsCutoffSaved] = useState(fbsShipmentCutoffTime ?? '')
+  const [fbsCutoffBusy, setFbsCutoffBusy] = useState(false)
   const [permBusyId, setPermBusyId] = useState<string | null>(null)
   const [rateBusyId, setRateBusyId] = useState<string | null>(null)
   const [rateDrafts, setRateDrafts] = useState<Record<string, string>>({})
@@ -146,6 +151,11 @@ export function FfSettingsScreen({
   useEffect(() => {
     setSeparatePrint(separateMarkingPrintEnabled)
   }, [separateMarkingPrintEnabled])
+
+  useEffect(() => {
+    setFbsCutoff(fbsShipmentCutoffTime ?? '')
+    setFbsCutoffSaved(fbsShipmentCutoffTime ?? '')
+  }, [fbsShipmentCutoffTime])
 
   useEffect(() => {
     if (!highlightRowId) {
@@ -338,6 +348,34 @@ export function FfSettingsScreen({
     }
   }
 
+  async function onFbsCutoffSave(nextValue = fbsCutoff) {
+    if (!token || !isFulfillmentAdmin) {
+      return
+    }
+    const normalized = nextValue.trim()
+    setFbsCutoffBusy(true)
+    setError(null)
+    try {
+      const res = await fetch(apiUrl('/tenant/settings'), {
+        method: 'PATCH',
+        headers: { ...authHeaders(token), 'Content-Type': 'application/json' },
+        body: JSON.stringify({ fbs_shipment_cutoff_time: normalized || null }),
+      })
+      if (!res.ok) {
+        setError(await readApiErrorMessage(res))
+        return
+      }
+      const data = (await res.json()) as { fbs_shipment_cutoff_time: string | null }
+      setFbsCutoff(data.fbs_shipment_cutoff_time ?? '')
+      setFbsCutoffSaved(data.fbs_shipment_cutoff_time ?? '')
+      setSuccess(data.fbs_shipment_cutoff_time ? 'Время отсечки FBS сохранено' : 'Время отсечки FBS очищено')
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Не удалось сохранить время отсечки FBS.')
+    } finally {
+      setFbsCutoffBusy(false)
+    }
+  }
+
   return (
     <Box data-testid="ff-settings-screen">
       <Typography variant="h5" gutterBottom>
@@ -400,6 +438,47 @@ export function FfSettingsScreen({
                 label="Раздельная печать ЧЗ и ШК ВБ"
               />
               {separatePrintBusy ? <CircularProgress size={20} /> : null}
+            </Stack>
+          </Box>
+
+          <Box sx={{ mt: 3, pt: 2, borderTop: '1px solid', borderColor: 'divider' }} data-testid="cal-03-fbs-cutoff-section">
+            <Typography variant="subtitle2" gutterBottom>
+              Время отсечки FBS
+            </Typography>
+            <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1} sx={{ alignItems: { sm: 'center' } }}>
+              <TextField
+                type="time"
+                size="small"
+                label="Время отсечки FBS"
+                value={fbsCutoff}
+                onChange={(event) => setFbsCutoff(event.target.value)}
+                disabled={fbsCutoffBusy}
+                slotProps={{
+                  inputLabel: { shrink: true },
+                  htmlInput: { 'data-testid': 'cal-03-fbs-cutoff-time' },
+                }}
+                sx={{ width: { xs: '100%', sm: 180 } }}
+              />
+              <Button
+                variant="outlined"
+                onClick={() => void onFbsCutoffSave()}
+                disabled={fbsCutoffBusy || fbsCutoff === fbsCutoffSaved}
+                data-testid="cal-03-fbs-cutoff-save"
+              >
+                Сохранить
+              </Button>
+              <Button
+                variant="text"
+                onClick={() => {
+                  setFbsCutoff('')
+                  void onFbsCutoffSave('')
+                }}
+                disabled={fbsCutoffBusy || !fbsCutoff}
+                data-testid="cal-03-fbs-cutoff-clear"
+              >
+                Очистить
+              </Button>
+              {fbsCutoffBusy ? <CircularProgress size={20} /> : null}
             </Stack>
           </Box>
         </Paper>

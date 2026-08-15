@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from datetime import time
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException, status
@@ -20,11 +21,13 @@ router = APIRouter(prefix="/tenant", tags=["tenant"])
 class TenantSettingsOut(BaseModel):
     address_storage_enabled: bool
     separate_marking_print_enabled: bool
+    fbs_shipment_cutoff_time: str | None = None
 
 
 class TenantSettingsPatch(BaseModel):
     address_storage_enabled: bool | None = None
     separate_marking_print_enabled: bool | None = None
+    fbs_shipment_cutoff_time: time | None = None
 
 
 @router.get("/settings", response_model=TenantSettingsOut)
@@ -48,7 +51,12 @@ async def patch_tenant_settings(
     user: Annotated[User, Depends(require_fulfillment_admin)],
     session: Annotated[AsyncSession, Depends(get_db)],
 ) -> TenantSettingsOut:
-    if body.address_storage_enabled is None and body.separate_marking_print_enabled is None:
+    fields = body.model_fields_set
+    if (
+        body.address_storage_enabled is None
+        and body.separate_marking_print_enabled is None
+        and "fbs_shipment_cutoff_time" not in fields
+    ):
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
             detail="no_fields_to_update",
@@ -59,6 +67,8 @@ async def patch_tenant_settings(
             user.tenant_id,
             address_storage_enabled=body.address_storage_enabled,
             separate_marking_print_enabled=body.separate_marking_print_enabled,
+            fbs_shipment_cutoff_time=body.fbs_shipment_cutoff_time,
+            set_fbs_shipment_cutoff_time="fbs_shipment_cutoff_time" in fields,
         )
     except LookupError:
         raise HTTPException(

@@ -3,10 +3,10 @@ import { test, expect } from '@playwright/test';
 import { waitForGetOk, waitForPostOk } from './api-waits';
 import { openFulfillmentRegistration } from './auth-flow';
 
-// TC-S15-003 — FF дашборд: недельный календарь; отгрузка ФФ→МП из раздела «Отгрузки на МП».
+// TC-NEW-CAL-01 — FF календарь отгрузок: основной экран показывает сетку дней без dashboard-таблиц.
 // TC-NEW-MP-AVAIL-02 — товар только в «Сортировке» виден FF в подборе MP.
 // Given: админ ФФ, склад и товар в API; When: создаёт отгрузку на МП и открывает строку; Then: диалог документа виден (negative: без склада — ошибка вместо успеха).
-test('fulfillment admin sees week calendar and supplies-shipments page', async ({ page }) => {
+test('fulfillment admin sees shipment calendar and supplies-shipments page', async ({ page }) => {
   const email = `e2e-ff-dash-${Date.now()}@example.com`;
   const password = 'password123';
 
@@ -25,9 +25,10 @@ test('fulfillment admin sees week calendar and supplies-shipments page', async (
   ]);
 
   await expect(page.getByTestId('dashboard')).toBeVisible();
+  await expect(page.getByTestId('cal-01-title')).toContainText('Календарь отгрузок');
   await expect(page.getByTestId('ff-week-calendar')).toBeVisible();
-  await expect(page.getByTestId('ff-dashboard-inbound-block')).toBeVisible();
-  await expect(page.getByTestId('ff-dashboard-outbound-block')).toBeVisible();
+  await expect(page.getByTestId('ff-dashboard-inbound-block')).toHaveCount(0);
+  await expect(page.getByTestId('ff-dashboard-outbound-block')).toHaveCount(0);
 
   const token = await page.evaluate(() => localStorage.getItem('wms_token_ff'));
   expect(token).toBeTruthy();
@@ -155,6 +156,7 @@ test('fulfillment admin sees week calendar and supplies-shipments page', async (
 
   await page.reload();
   await expect(page.getByTestId('dashboard')).toBeVisible();
+  await expect(page.getByTestId('cal-01-grid')).toBeVisible();
 
   await page.getByTestId('nav-ff-mp-shipments').click();
   await expect(page.getByTestId('ff-mp-shipments-page')).toBeVisible();

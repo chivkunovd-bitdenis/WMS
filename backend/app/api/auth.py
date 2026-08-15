@@ -101,6 +101,7 @@ class UserMeResponse(BaseModel):
     seller_permissions: SellerPermissionsOut | None = None
     address_storage_enabled: bool = True
     separate_marking_print_enabled: bool = False
+    fbs_shipment_cutoff_time: str | None = None
 
 
 class SwitchSellerBody(BaseModel):
@@ -362,6 +363,11 @@ async def me(
         seller_permissions=seller_permissions,
         address_storage_enabled=tenant.address_storage_enabled,
         separate_marking_print_enabled=tenant.separate_marking_print_enabled,
+        fbs_shipment_cutoff_time=(
+            tenant.fbs_shipment_cutoff_time.strftime("%H:%M")
+            if tenant.fbs_shipment_cutoff_time is not None
+            else None
+        ),
     )
 
 

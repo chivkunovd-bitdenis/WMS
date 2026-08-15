@@ -62,6 +62,7 @@ import {
   selectFbsManualPickLocation,
   startFbsSupplyWork,
   undoFbsPick,
+  updateFbsSupplyPlannedShipmentDate,
   type FbsOrderPrintTapeRequest,
   type FbsPickLocation,
   type FbsPrintBatch,
@@ -194,6 +195,7 @@ export function FfFbsSupplyWorkspace({
   const [reprintMenu, setReprintMenu] = useState<{ orderId: string; anchorEl: HTMLElement } | null>(null)
   const [kizOpen, setKizOpen] = useState(false)
   const [kizUndoOrderId, setKizUndoOrderId] = useState<string | null>(null)
+  const [plannedShipmentDateDraft, setPlannedShipmentDateDraft] = useState('')
   const { openPrint, dialog: markingPrintDialog } = useMarkingCodePrint()
 
   const load = useCallback(
@@ -239,6 +241,10 @@ export function FfFbsSupplyWorkspace({
   useEffect(() => {
     setNotice(null)
   }, [workspace?.stage])
+
+  useEffect(() => {
+    setPlannedShipmentDateDraft(workspace?.supply.planned_shipment_date ?? '')
+  }, [workspace?.supply.planned_shipment_date])
 
   useEffect(() => {
     if (!open || !supplyId || !['picking', 'boxes'].includes(stage)) return
@@ -290,6 +296,16 @@ export function FfFbsSupplyWorkspace({
     } finally {
       setBusy(false)
     }
+  }
+
+  const savePlannedShipmentDate = async () => {
+    if (!workspace) return
+    const raw = plannedShipmentDateDraft.trim()
+    const next = await run(
+      () => updateFbsSupplyPlannedShipmentDate(token, authHeaders, workspace.supply.id, raw || null),
+      raw ? 'Дата отгрузки сохранена.' : 'Дата отгрузки очищена.',
+    )
+    if (next) setPlannedShipmentDateDraft(next.supply.planned_shipment_date ?? '')
   }
 
   const scanLocation = async () => {
@@ -964,6 +980,52 @@ export function FfFbsSupplyWorkspace({
                 <Stack direction="row" spacing={3} sx={{ flexWrap: 'wrap' }} useFlexGap>
                   <Metric label="Склад WMS" value={workspace.supply.wms_warehouse.name} />
                   <Metric label="Маршрут" value={workspace.supply.delivery_type === 'pvz' ? 'ПВЗ' : 'Склад / СЦ'} />
+                  <Stack
+                    direction="row"
+                    spacing={1}
+                    sx={{ alignItems: 'center' }}
+                    data-testid="cal-02-fbs-shipment-date-control"
+                  >
+                    <TextField
+                      label="Дата отгрузки"
+                      type="date"
+                      size="small"
+                      value={plannedShipmentDateDraft}
+                      onChange={(event) => setPlannedShipmentDateDraft(event.target.value)}
+                      disabled={busy}
+                      slotProps={{
+                        inputLabel: { shrink: true },
+                        htmlInput: { 'data-testid': 'cal-02-fbs-shipment-date' },
+                      }}
+                      sx={{ width: 176 }}
+                    />
+                    <Button
+                      size="small"
+                      variant="outlined"
+                      onClick={() => void savePlannedShipmentDate()}
+                      disabled={busy || plannedShipmentDateDraft === (workspace.supply.planned_shipment_date ?? '')}
+                      data-testid="cal-02-fbs-shipment-date-save"
+                    >
+                      Сохранить
+                    </Button>
+                    {workspace.supply.planned_shipment_date ? (
+                      <Button
+                        size="small"
+                        variant="text"
+                        onClick={() => {
+                          setPlannedShipmentDateDraft('')
+                          void run(
+                            () => updateFbsSupplyPlannedShipmentDate(token, authHeaders, workspace.supply.id, null),
+                            'Дата отгрузки очищена.',
+                          )
+                        }}
+                        disabled={busy}
+                        data-testid="cal-02-fbs-shipment-date-clear"
+                      >
+                        Очистить
+                      </Button>
+                    ) : null}
+                  </Stack>
                 </Stack>
               ) : null}
             </Stack>
