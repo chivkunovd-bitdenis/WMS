@@ -53,13 +53,12 @@ async function expectSellerInboundShell(page: Page, requestId: string): Promise<
   expect(new URL(page.url()).pathname).toBe(`/seller/inbound/${requestId}`);
 }
 
-async function expectSellerLoginShellWithFfToken(page: Page): Promise<void> {
-  await expect(page).toHaveTitle('WMS · Селлер');
-  await expect(page.getByRole('heading', { name: 'WMS · Портал селлера' })).toBeVisible();
-  await expect(page.getByTestId('login-form')).toBeVisible();
+async function expectSellerAccessDeniedWithFfToken(page: Page): Promise<void> {
+  await expect(page.getByTestId('ff-access-denied')).toContainText('Нет доступа к этому разделу.');
+  await expect(page.getByRole('heading', { name: 'WMS · Портал селлера' })).toHaveCount(0);
+  await expect(page.getByTestId('login-form')).toHaveCount(0);
   await expect(page.getByTestId('app-frame')).toHaveCount(0);
   await expect(page.getByTestId('app-topbar')).toHaveCount(0);
-  await expect(page.getByTestId('ff-access-denied')).toHaveCount(0);
   await expect(page.getByTestId('logout')).toHaveCount(0);
   await expect(page.getByTestId('nav-seller-products')).toHaveCount(0);
   await expect(page.getByTestId('seller-products-table')).toHaveCount(0);
@@ -68,9 +67,9 @@ async function expectSellerLoginShellWithFfToken(page: Page): Promise<void> {
     .toBeTruthy();
 }
 
-async function expectSellerLoginOnSellerProductsWithFfToken(page: Page): Promise<void> {
+async function expectAccessDeniedOnSellerProductsWithFfToken(page: Page): Promise<void> {
   await page.goto('/seller/products');
-  await expectSellerLoginShellWithFfToken(page);
+  await expectSellerAccessDeniedWithFfToken(page);
 }
 
 async function createFulfillmentStaffToken(
@@ -105,8 +104,8 @@ async function storeFulfillmentTokenOnly(page: Page, token: string): Promise<voi
   }, token);
 }
 
-// TC-NEW-AUTH-03 — seller deep route stays in seller portal even when only FF token exists.
-test('FF admin and staff opening /seller/products see seller login, not FF shell', async ({
+// R02/F14 — FF admin and staff direct seller routes get human denied instead of seller data.
+test('FF admin and staff opening /seller/products see human access denied', async ({
   page,
 }) => {
   const suffix = String(Date.now());
@@ -127,11 +126,11 @@ test('FF admin and staff opening /seller/products see seller login, not FF shell
   const adminToken = String(((await registerRes.json()) as { access_token: string }).access_token);
   await storeFulfillmentTokenOnly(page, adminToken);
 
-  await expectSellerLoginOnSellerProductsWithFfToken(page);
+  await expectAccessDeniedOnSellerProductsWithFfToken(page);
   await page.goto('/');
   await expect(page.getByTestId('app-frame')).toBeVisible();
   await clientRouteTo(page, '/seller/products');
-  await expectSellerLoginShellWithFfToken(page);
+  await expectSellerAccessDeniedWithFfToken(page);
 
   await page.goto('/seller/');
   await expect(page).toHaveTitle('WMS · Селлер');
@@ -145,7 +144,7 @@ test('FF admin and staff opening /seller/products see seller login, not FF shell
     password,
   );
   await storeFulfillmentTokenOnly(page, staffToken);
-  await expectSellerLoginOnSellerProductsWithFfToken(page);
+  await expectAccessDeniedOnSellerProductsWithFfToken(page);
 });
 
 // TC-NEW-AUTH-02 — FF и seller: два токена в localStorage, refresh не выбивает другой портал.

@@ -257,11 +257,11 @@ export function SellerApp({ navigationBasePath = '' }: SellerAppProps) {
       const hasFulfillmentToken = Boolean(getStoredToken('fulfillment'))
       if (hasFulfillmentToken && location.pathname !== '/') {
         return (
-          <Box sx={{ p: 3 }} data-testid="ff-access-denied">
-            <Typography variant="h5" gutterBottom>
+          <Box sx={{ p: 3 }} data-testid="ff-access-denied" data-task-id="R02-F14">
+            <Typography variant="h5" gutterBottom data-task-id="R02-F14">
               Нет доступа
             </Typography>
-            <Typography>Нет доступа к этому разделу.</Typography>
+            <Typography data-task-id="R02-F14">Нет доступа к этому разделу.</Typography>
           </Box>
         )
       }
