@@ -39,7 +39,6 @@ type PreviewRow = {
   name: string
   sku_code: string
   packaging_instructions: string | null
-  declared_quantity: number | null
   action: 'create' | 'update' | 'skip' | 'error'
   product_id: string | null
   error_code: string | null
@@ -65,8 +64,6 @@ type ApplyResponse = {
   updated_count: number
   skipped_count: number
   product_ids: string[]
-  added_quantity: number
-  movement_count: number
   already_applied: boolean
 }
 
@@ -260,13 +257,9 @@ export function FfProductTzImportDialog({
       if (!applyRequests.current.isLatest(applyRequestId)) {
         return
       }
-      const quantityMessage =
-        body.added_quantity > 0
-          ? `, учтено количество: ${body.added_quantity}`
-          : ''
       const msg = body.already_applied
         ? 'Этот файл уже применён. Повторных изменений не внесено.'
-        : `Создано: ${body.created_count}, обновлено: ${body.updated_count}, пропущено: ${body.skipped_count}${quantityMessage}`
+        : `Создано: ${body.created_count}, обновлено: ${body.updated_count}, пропущено: ${body.skipped_count}`
       await onApplied(msg)
       if (!applyRequests.current.isLatest(applyRequestId)) {
         return
@@ -391,7 +384,6 @@ export function FfProductTzImportDialog({
                     <TableCell>ШК</TableCell>
                     <TableCell>WB/nmId</TableCell>
                     <TableCell>Размер</TableCell>
-                    <TableCell align="right">Кол-во</TableCell>
                     <TableCell>Действие</TableCell>
                     <TableCell>ТЗ</TableCell>
                     <TableCell>Причина</TableCell>
@@ -407,7 +399,6 @@ export function FfProductTzImportDialog({
                       <TableCell>{r.barcode ?? '—'}</TableCell>
                       <TableCell>{r.wb_nm_id ?? '—'}</TableCell>
                       <TableCell>{r.size ?? '—'}</TableCell>
-                      <TableCell align="right">{r.declared_quantity ?? '—'}</TableCell>
                       <TableCell>{actionLabel(r.action)}</TableCell>
                       <TableCell sx={{ maxWidth: 220 }}>
                         {r.packaging_instructions

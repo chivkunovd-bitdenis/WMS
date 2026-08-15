@@ -112,7 +112,7 @@ def test_only_named_import_unique_error_is_idempotency_conflict() -> None:
 
 
 @pytest.mark.asyncio
-async def test_concurrent_same_file_adds_stock_once(
+async def test_concurrent_same_file_applies_catalog_once(
     async_client: AsyncClient,
 ) -> None:
     headers, seller_id, warehouse_id = await _scope(async_client, "concurrent")
@@ -137,13 +137,14 @@ async def test_concurrent_same_file_adds_stock_once(
     assert second.status_code == 200, second.text
     bodies = [first.json(), second.json()]
     assert sorted(body["already_applied"] for body in bodies) == [False, True]
-    assert sum(body["added_quantity"] for body in bodies) == 3
+    assert sum(body["created_count"] for body in bodies) == 1
+    assert sum(body["added_quantity"] for body in bodies) == 0
     balances = await async_client.get(
         "/operations/inventory-balances/summary",
         headers=headers,
         params={"warehouse_id": warehouse_id},
     )
-    assert sum(row["quantity_in_sorting"] for row in balances.json()) == 3
+    assert balances.json() == []
 
 
 @pytest.mark.asyncio

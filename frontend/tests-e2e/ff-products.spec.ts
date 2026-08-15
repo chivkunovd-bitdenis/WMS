@@ -174,78 +174,6 @@ test('ff products: catalog separates product fields and hides stock columns', as
   await expect(page.getByTestId('ff-product-row').first().locator('td').nth(0)).toBeVisible()
 })
 
-// TC-NEW-PKG-04 — FF редактирует ТЗ упаковки в каталоге товаров.
-test('ff products: edit packaging instructions in catalog', async ({ page }) => {
-  const email = `e2e-ff-pkg-tz-${Date.now()}@example.com`
-  const password = 'password123'
-
-  await page.goto('/')
-  await openFulfillmentRegistration(page)
-  await page.getByTestId('register-form').getByLabel('Организация').fill('E2E FF TZ')
-  await page.getByTestId('register-form').getByLabel('Email администратора').fill(email)
-  await page.getByTestId('register-form').getByLabel('Пароль').fill(password)
-  await Promise.all([
-    waitForPostOk(page, '/api/auth/register'),
-    waitForGetOk(page, '/api/auth/me'),
-    page.getByTestId('register-form').getByRole('button', { name: 'Создать аккаунт' }).click(),
-  ])
-
-  const regToken = (await page.evaluate(() => localStorage.getItem('wms_token_ff'))) ?? ''
-  const h = { Authorization: `Bearer ${regToken}`, 'Content-Type': 'application/json' }
-  const e2eApi = process.env.E2E_API_ORIGIN ?? 'http://127.0.0.1:18000'
-  const sku = `SKU-TZ-${Date.now()}`
-
-  const wh = await page.request.post(`${e2eApi}/warehouses`, {
-    headers: h,
-    data: JSON.stringify({ name: 'WH', code: `wh-tz-${Date.now()}` }),
-  })
-  const whId = String(((await wh.json()) as { id: string }).id)
-  const pr = await page.request.post(`${e2eApi}/products`, {
-    headers: h,
-    data: JSON.stringify({ name: 'TZ Product', sku_code: sku, length_mm: 1, width_mm: 1, height_mm: 1 }),
-  })
-  const productId = String(((await pr.json()) as { id: string }).id)
-
-  const baseIn = `${e2eApi}/operations/inbound-intake-requests`
-  const inbound = await page.request.post(baseIn, {
-    headers: h,
-    data: JSON.stringify({ warehouse_id: whId }),
-  })
-  const inboundId = String(((await inbound.json()) as { id: string }).id)
-  await page.request.post(`${baseIn}/${inboundId}/lines`, {
-    headers: h,
-    data: JSON.stringify({ product_id: productId, expected_qty: 1 }),
-  })
-  await page.request.post(`${baseIn}/${inboundId}/submit`, { headers: h })
-  const inboundBox = await page.request.post(`${baseIn}/${inboundId}/boxes`, { headers: h })
-  const inboundBoxBody = (await inboundBox.json()) as { id: string; internal_barcode: string }
-  const { fulfillInboundViaBoxScans } = await import('./inbound-boxes-helpers')
-  await fulfillInboundViaBoxScans(page.request, h, inboundId, [inboundBoxBody], sku, [1])
-  await page.request.post(`${baseIn}/${inboundId}/verify`, { headers: h })
-  await page.request.post(`${baseIn}/${inboundId}/post`, { headers: h })
-
-  await page.reload()
-  await page.getByTestId('nav-ff-products').click()
-  await expect(page.getByTestId('ff-products-list')).toBeVisible()
-  await expect(page.getByTestId(`ff-packaging-status-${productId}`)).toContainText('Нет ТЗ')
-
-  await page.getByTestId(`ff-packaging-edit-${productId}`).click()
-  await expect(page.getByTestId('ff-packaging-dialog')).toBeVisible()
-  await expect(page.getByTestId('ff-packaging-print')).toBeVisible()
-  await page.getByTestId('ff-packaging-text').fill('E2E: пакет + бирка')
-  await Promise.all([
-    page.waitForResponse(
-      (r) =>
-        r.request().method() === 'PATCH' &&
-        r.url().includes('/packaging-instructions') &&
-        r.status() >= 200 &&
-        r.status() < 300,
-    ),
-    page.getByTestId('ff-packaging-save').click(),
-  ])
-  await expect(page.getByTestId(`ff-packaging-status-${productId}`)).toContainText('Заполнено')
-})
-
 // TC-CAT-03 — строка каталога ведёт в карточку кодов маркировки одной иконкой.
 // Given: у товара есть доступные КМ; When: FF admin открывает каталог;
 // Then: перед печатью ШК видна иконка кодов со счётчиком и клик ведёт в карточку товара ЧЗ.
@@ -322,10 +250,9 @@ test('ff products: marking icon shows count and opens honest sign product card',
   await expect(page.getByTestId('ff-honest-sign-product-page')).toBeVisible()
 })
 
-// TC-NEW-MAN-01 — FF создаёт товар вручную; бейдж «Вручную» пока нет карточки WB.
-// Given: FF admin и селлер; When: «Создать товар» без габаритов;
-// Then: товар в каталоге с «Вручную», поиск по ШК. Бейдж снимается после WB sync/link по тому же ШК.
-test('ff products: manual create shows manual badge', async ({ page }) => {
+// TC-CAT-04 — FF создаёт один товар вручную как вспомогательный путь каталога.
+// Given: FF admin и селлер; When: «Создать товар»; Then: товар появляется в каталоге, поиск по ШК работает.
+test('ff products: manual create adds a catalog product', async ({ page }) => {
   const email = `e2e-ff-manual-${Date.now()}@example.com`
   const password = 'password123'
 
@@ -368,22 +295,19 @@ test('ff products: manual create shows manual badge', async ({ page }) => {
   ])
 
   await expect(page.getByTestId('ff-products-table')).toContainText(sku)
-  const row = page.getByTestId('ff-product-row').filter({ hasText: sku })
-  await expect(row.getByText('Вручную')).toBeVisible()
   await page.getByTestId('ff-products-search').fill(barcode)
   await expect(page.getByTestId('ff-product-row')).toHaveCount(1)
   void seller
 })
 
 // TC-CAT-04 — массовый путь каталога: скачать шаблон → загрузить Excel → preview → apply.
-// TC-NEW-MAN-02 — FF загружает Excel ТЗ: preview → apply → товары с ТЗ и бейджем.
-// TC-NEW-PRODUCT-TZ-01 — если текущий импорт получает количество, apply учитывает его без расширения UI каталога.
+// TC-NEW-MAN-02 — FF загружает Excel ТЗ: preview → apply → товары с ТЗ.
 // TC-NEW-PRODUCT-TZ-02 — повтор файла защищён backend-идемпотентностью (API regression test).
 // TC-NEW-TZ-STOCK-002 — во время apply нельзя сменить селлера/файл или закрыть диалог через Cancel/ESC.
 // Given: FF admin, селлер, xlsx с названием, артикулом, SKU, ШК, WB/nmId, размером и объединённым ТЗ;
 // When: «Загрузить Excel» и Применить;
 // Then: импорт находит нужный лист по структуре колонок (имя листа не важно), товары в каталоге,
-// ТЗ заполнено, бейдж «Вручную».
+// ТЗ заполнено.
 test('ff products: import tz xlsx creates catalog products with packaging', async ({ page }) => {
   const email = `e2e-ff-tz-imp-${Date.now()}@example.com`
   const password = 'password123'
@@ -402,12 +326,6 @@ test('ff products: import tz xlsx creates catalog products with packaging', asyn
   const regToken = (await page.evaluate(() => localStorage.getItem('wms_token_ff'))) ?? ''
   const h = { Authorization: `Bearer ${regToken}` }
   await page.request.post('/api/sellers', { headers: h, data: { name: 'TZ Seller' } })
-  const warehouse = await page.request.post('/api/warehouses', {
-    headers: h,
-    data: { name: 'TZ Warehouse', code: `tz-wh-${Date.now()}` },
-  })
-  expect(warehouse.ok()).toBeTruthy()
-  const warehouseId = String(((await warehouse.json()) as { id: string }).id)
 
   // Build minimal xlsx in browser via API seed is easier: use backend fixture through request
   // with a tiny zip-based xlsx generated by Node Buffer — use page.evaluate + fetch to apply
@@ -424,17 +342,18 @@ from openpyxl import Workbook
 wb = Workbook()
 ws = wb.active
 ws.title = "Мой произвольный лист"
-ws.append(["Название товара","Артикул продавца","SKU","Штрихкод","WB/nmId","Размер","ТЗ упаковки","Кол/во, заявленное клиентом"])
-ws.append(["E2E Clean Title","E2E-ART","E2E-ART-46","2039000000001",123456789,46,None,40])
-ws.append(["E2E Clean Title","E2E-ART","E2E-ART-48","2039000000002",123456789,48,None,2])
+ws.append(["Название товара","Артикул продавца","SKU","Штрихкод","WB/nmId","Размер","ТЗ упаковки"])
+ws.append(["E2E Clean Title","E2E-ART","E2E-ART-46","2039000000001",123456789,46,None])
+ws.append(["E2E Clean Title","E2E-ART","E2E-ART-48","2039000000002",123456789,48,None])
 ws["G2"] = "E2E merged TZ"
 ws.merge_cells("G2:G3")
 wb.save(${JSON.stringify(xlsxPath)})
 bad = Workbook()
 bad_ws = bad.active
-bad_ws.title = "Ошибочное количество"
-bad_ws.append(["Название товара","Артикул продавца","SKU","Штрихкод","WB/nmId","Размер","ТЗ упаковки","Кол/во, заявленное клиентом"])
-bad_ws.append(["E2E Bad Title","E2E-BAD","E2E-BAD-46","2039000000099",123456780,46,"TZ",-1])
+bad_ws.title = "Ошибочный дубль"
+bad_ws.append(["Название товара","Артикул продавца","SKU","Штрихкод","WB/nmId","Размер","ТЗ упаковки"])
+bad_ws.append(["E2E Bad Title","E2E-BAD","E2E-BAD-46","2039000000099",123456780,46,"TZ"])
+bad_ws.append(["E2E Bad Title 2","E2E-BAD","E2E-BAD-48","2039000000099",123456780,48,"TZ"])
 bad.save(${JSON.stringify(badXlsxPath)})
 `
   execFileSync('python3', ['-c', py], { stdio: 'pipe' })
@@ -459,7 +378,6 @@ bad.save(${JSON.stringify(badXlsxPath)})
   await expect(page.getByTestId('ff-tz-import-preview-table')).toContainText('E2E-ART-46')
   await expect(page.getByTestId('ff-tz-import-preview-table')).toContainText('123456789')
   await expect(page.getByTestId('ff-tz-import-preview-table')).toContainText('создать')
-  await expect(page.getByTestId('ff-tz-import-preview-table')).toContainText('40')
 
   let releaseApply!: () => void
   const holdApply = new Promise<void>((resolve) => {
@@ -491,7 +409,7 @@ bad.save(${JSON.stringify(badXlsxPath)})
 
   await expect(page.getByTestId('ff-products-import-notice')).toBeVisible()
   await expect(page.getByTestId('ff-products-import-notice')).toContainText(
-    'учтено количество: 42',
+    'Создано: 2, обновлено: 0, пропущено: 0',
   )
   await expect(page.getByTestId('ff-products-table')).toContainText('E2E Clean Title')
   await expect(page.getByTestId('ff-products-table')).toContainText('E2E-ART')
@@ -499,14 +417,6 @@ bad.save(${JSON.stringify(badXlsxPath)})
   await expect(page.getByTestId('ff-product-row')).toHaveCount(2)
   await page.getByTestId('ff-products-search').fill('2039000000001')
   await expect(page.getByTestId('ff-product-row')).toHaveCount(1)
-  const balances = await page.request.get('/api/operations/inventory-balances/summary', {
-    headers: h,
-    params: { warehouse_id: warehouseId },
-  })
-  const importedTotal = (
-    (await balances.json()) as { quantity_in_sorting: number }[]
-  ).reduce((total, row) => total + row.quantity_in_sorting, 0)
-  expect(importedTotal).toBe(42)
 
   await page.getByTestId('ff-products-import-tz').click()
   await page.getByTestId('ff-tz-import-seller').click()
@@ -517,68 +427,7 @@ bad.save(${JSON.stringify(badXlsxPath)})
     .setInputFiles(badXlsxPath)
   await expect(page.getByTestId('ff-tz-import-summary')).toContainText('ошибок 1')
   await expect(page.getByTestId('ff-tz-import-preview-table')).toContainText(
-    'Количество не может быть отрицательным',
+    'Дубликат штрихкода в файле',
   )
   await expect(page.getByTestId('ff-tz-import-apply')).toBeDisabled()
-})
-
-// TC-NEW-SELLER-01 — FF создаёт селлера прямо из каталога товаров (только название, без входа/почты).
-// Given: FF admin на экране «Каталог»; When: жмёт «Создать селлера», вводит название, сохраняет;
-// Then: диалог закрывается, показывается уведомление, новый селлер сразу виден в фильтре по селлеру
-// и в выпадающем списке при создании товара — без перезагрузки страницы.
-// Negative: пустое название не отправляется, показывается ошибка валидации.
-test('ff products: create seller from catalog and use it right away for a product', async ({ page }) => {
-  const email = `e2e-ff-seller-create-${Date.now()}@example.com`
-  const password = 'password123'
-  const sellerName = `E2E New Seller ${Date.now()}`
-
-  await page.goto('/')
-  await openFulfillmentRegistration(page)
-  await page.getByTestId('register-form').getByLabel('Организация').fill('E2E FF Seller Create')
-  await page.getByTestId('register-form').getByLabel('Email администратора').fill(email)
-  await page.getByTestId('register-form').getByLabel('Пароль').fill(password)
-  await Promise.all([
-    waitForPostOk(page, '/api/auth/register'),
-    waitForGetOk(page, '/api/auth/me'),
-    page.getByTestId('register-form').getByRole('button', { name: 'Создать аккаунт' }).click(),
-  ])
-
-  await expect(page.getByTestId('dashboard')).toBeVisible()
-  await page.getByTestId('nav-ff-products').click()
-  await expect(page.getByTestId('ff-products-list')).toBeVisible()
-
-  // Negative: empty name is rejected without an API call.
-  await page.getByTestId('ff-products-create-seller').click()
-  await expect(page.getByTestId('ff-seller-create-dialog')).toBeVisible()
-  await page.getByTestId('ff-seller-create-submit').click()
-  await expect(page.getByTestId('ff-seller-create-error')).toContainText('Укажите название')
-
-  // Happy path: just a name, no email/login required.
-  await page.getByTestId('ff-seller-create-name').fill(sellerName)
-  await Promise.all([
-    waitForPostOk(page, '/api/sellers'),
-    page.getByTestId('ff-seller-create-submit').click(),
-  ])
-  await expect(page.getByTestId('ff-seller-create-dialog')).toBeHidden()
-  await expect(page.getByTestId('ff-products-import-notice')).toContainText(sellerName)
-
-  // Available immediately in the catalog seller filter (no reload).
-  await page.getByTestId('ff-products-seller-filter').click()
-  await expect(page.getByRole('listbox').getByText(sellerName, { exact: true })).toBeVisible()
-  await page.keyboard.press('Escape')
-
-  // Available immediately when creating a product (same seller list, same "just a seller" entity).
-  await page.getByTestId('ff-products-create').click()
-  await expect(page.getByTestId('ff-manual-product-dialog')).toBeVisible()
-  await page.getByTestId('ff-manual-product-seller').click()
-  await page.getByRole('listbox').getByText(sellerName, { exact: true }).click()
-  const sku = `SELLER-E2E-${Date.now()}`
-  await page.getByTestId('ff-manual-product-name').fill('Товар нового селлера')
-  await page.getByTestId('ff-manual-product-sku').fill(sku)
-  await Promise.all([
-    waitForPostOk(page, '/api/products'),
-    page.getByTestId('ff-manual-product-submit').click(),
-  ])
-  await expect(page.getByTestId('ff-manual-product-dialog')).toBeHidden()
-  await expect(page.getByTestId('ff-products-table')).toContainText(sku)
 })

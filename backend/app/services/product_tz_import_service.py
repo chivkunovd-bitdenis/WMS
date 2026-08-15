@@ -16,18 +16,14 @@ from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.models.inventory_movement import MOVEMENT_TYPE_PRODUCT_TZ_IMPORT
 from app.models.product import Product
 from app.models.product_tz_import import ProductTzImport
 from app.models.seller import Seller
-from app.services import inventory_service
 from app.services.catalog_service import (
     CatalogError,
     create_product,
-    list_warehouses,
     update_packaging_instructions,
 )
-from app.services.sorting_location_service import get_or_create_sorting_location
 from app.services.wb_card_enrichment import WbSizeVariant, sku_code_for_wb_variant
 
 _BARCODE_RE = re.compile(r"^\d{8,32}$")
@@ -55,8 +51,6 @@ HEADER_ALIASES: dict[str, str] = {
     "тз упаковки": "tz",
     "пожелания/инструкция по обработке, упаковке и фасовке": "tz",
     "пожелания/инструкция по обработке упаковке и фасовке": "tz",
-    "кол/во, заявленное клиентом": "declared_quantity",
-    "количество": "declared_quantity",
 }
 
 _EXPAND_FIELDS = (
@@ -180,29 +174,6 @@ def _as_barcode(value: object) -> str | None:
     return None
 
 
-def _parse_declared_quantity(value: object) -> tuple[int | None, str | None]:
-    if value is None:
-        return 0, None
-    if isinstance(value, str):
-        if not value.strip():
-            return 0, None
-        return None, "Количество должно быть целым неотрицательным числом."
-    if isinstance(value, bool):
-        return None, "Количество не может быть логическим значением."
-    if isinstance(value, int):
-        if value >= 0:
-            return value, None
-        return None, "Количество не может быть отрицательным."
-    if isinstance(value, float):
-        if not value.is_integer():
-            return None, "Количество должно быть целым числом."
-        quantity = int(value)
-        if quantity >= 0:
-            return quantity, None
-        return None, "Количество не может быть отрицательным."
-    return None, "Количество должно быть целым неотрицательным числом."
-
-
 def _parse_wb_nm_id(value: object) -> tuple[int | None, str | None]:
     text = _cell_str(value)
     if text is None:
@@ -226,7 +197,6 @@ def build_product_tz_template_xlsx() -> bytes:
             "WB/nmId",
             "Размер",
             "ТЗ упаковки",
-            "Количество",
         ]
     )
     ws.append(
@@ -238,7 +208,6 @@ def build_product_tz_template_xlsx() -> bytes:
             "123456789",
             "46",
             "Проверить пакет и наклеить товарный ШК",
-            0,
         ]
     )
     widths = {
@@ -249,7 +218,6 @@ def build_product_tz_template_xlsx() -> bytes:
         "E": 16,
         "F": 12,
         "G": 42,
-        "H": 14,
     }
     for column, width in widths.items():
         ws.column_dimensions[column].width = width
@@ -379,11 +347,7 @@ def parse_product_tz_xlsx(content: bytes, *, filename: str) -> tuple[str, list[d
             barcode_raw = expanded.get("barcode", {}).get(r)
             label_raw = expanded.get("label_barcode", {}).get(r)
             tz = expanded.get("tz", {}).get(r)
-            quantity_col = cols.get("declared_quantity")
-            quantity_raw = ws.cell(r, quantity_col).value if quantity_col is not None else None
-            declared_quantity, quantity_error = _parse_declared_quantity(quantity_raw)
             wb_nm_id, wb_nm_id_error = _parse_wb_nm_id(wb_nm_id_raw)
-            # Quantity-only cells are workbook totals, not product rows.
             has_product_cells = any(
                 (product_name, vendor, sku_raw, wb_nm_id_raw, size, barcode_raw, label_raw, tz)
             )
@@ -401,8 +365,7 @@ def parse_product_tz_xlsx(content: bytes, *, filename: str) -> tuple[str, list[d
                     "size": size,
                     "barcode": barcode,
                     "packaging_instructions": tz,
-                    "declared_quantity": declared_quantity,
-                    "declared_quantity_error": quantity_error,
+                    "declared_quantity": None,
                 }
             )
         if not rows:
@@ -517,38 +480,9 @@ async def build_product_tz_preview(
         declared_quantity = (
             declared_quantity_raw if isinstance(declared_quantity_raw, int) else None
         )
-        quantity_error_raw = raw.get("declared_quantity_error")
-        quantity_error = quantity_error_raw if isinstance(quantity_error_raw, str) else None
         wb_nm_id_error_raw = raw.get("wb_nm_id_error")
         wb_nm_id_error = wb_nm_id_error_raw if isinstance(wb_nm_id_error_raw, str) else None
         name = _display_name(product_name, vendor)
-
-        if quantity_error is not None:
-            error_count += 1
-            errors.append(
-                ProductTzRowError(
-                    row=row_no,
-                    barcode=barcode,
-                    code="invalid_declared_quantity",
-                    message=quantity_error,
-                )
-            )
-            previews.append(
-                _error_preview(
-                    row_no=row_no,
-                    wb_nm_id=wb_nm_id,
-                    vendor=vendor,
-                    size=size,
-                    barcode=barcode,
-                    name=name,
-                    sku="",
-                    tz=tz,
-                    code="invalid_declared_quantity",
-                    msg=quantity_error,
-                    declared_quantity=None,
-                )
-            )
-            continue
 
         if wb_nm_id_error is not None:
             error_count += 1
@@ -799,33 +733,16 @@ async def apply_product_tz_import(
             f"В файле есть ошибки строк ({preview.summary.error_count}).",
         )
 
-    warehouse_id: uuid.UUID | None = None
-    sorting_location_id: uuid.UUID | None = None
-    if preview.summary.declared_total > 0:
-        warehouses = await list_warehouses(session, tenant_id)
-        if not warehouses:
-            raise ProductTzImportError(
-                "warehouse_required",
-                "Для добавления остатков создайте единственный склад ФФ.",
-            )
-        if len(warehouses) != 1:
-            raise ProductTzImportError(
-                "warehouse_ambiguous",
-                "Для добавления остатков у ФФ должен быть ровно один склад.",
-            )
-        warehouse_id = warehouses[0].id
-
     file_sha256 = hashlib.sha256(content).hexdigest()
-    warehouse_scope = str(warehouse_id) if warehouse_id is not None else _NO_WAREHOUSE_SCOPE
     import_record = ProductTzImport(
         tenant_id=tenant_id,
         seller_id=seller_id,
-        warehouse_id=warehouse_id,
-        warehouse_scope=warehouse_scope,
+        warehouse_id=None,
+        warehouse_scope=_NO_WAREHOUSE_SCOPE,
         import_type=_IMPORT_TYPE,
         file_sha256=file_sha256,
         filename=filename[:512],
-        declared_total=preview.summary.declared_total,
+        declared_total=0,
         movement_count=0,
     )
     try:
@@ -847,14 +764,8 @@ async def apply_product_tz_import(
             added_quantity=0,
             movement_count=0,
             already_applied=True,
-            warehouse_id=warehouse_id,
+            warehouse_id=None,
         )
-
-    if warehouse_id is not None:
-        sorting_location = await get_or_create_sorting_location(
-            session, tenant_id, warehouse_id
-        )
-        sorting_location_id = sorting_location.id
 
     created = 0
     updated = 0
@@ -894,18 +805,6 @@ async def apply_product_tz_import(
                         await session.flush()
                     product_ids.append(existing.id)
                     updated += 1
-                    if (row.declared_quantity or 0) > 0:
-                        assert sorting_location_id is not None
-                        await inventory_service.record_movement_and_adjust_balance(
-                            session,
-                            tenant_id=tenant_id,
-                            product_id=existing.id,
-                            storage_location_id=sorting_location_id,
-                            quantity_delta=row.declared_quantity or 0,
-                            movement_type=MOVEMENT_TYPE_PRODUCT_TZ_IMPORT,
-                        )
-                        added_quantity += row.declared_quantity or 0
-                        movement_count += 1
                 continue
             if row.action == "create":
                 if not row.barcode:
@@ -932,18 +831,6 @@ async def apply_product_tz_import(
                             p.wb_nm_id = row.wb_nm_id
                         product_ids.append(p.id)
                         created += 1
-                        if (row.declared_quantity or 0) > 0:
-                            assert sorting_location_id is not None
-                            await inventory_service.record_movement_and_adjust_balance(
-                                session,
-                                tenant_id=tenant_id,
-                                product_id=p.id,
-                                storage_location_id=sorting_location_id,
-                                quantity_delta=row.declared_quantity or 0,
-                                movement_type=MOVEMENT_TYPE_PRODUCT_TZ_IMPORT,
-                            )
-                            added_quantity += row.declared_quantity or 0
-                            movement_count += 1
                 except IntegrityError as exc:
                     err = str(getattr(exc, "orig", exc)).lower()
                     code = (
@@ -981,5 +868,5 @@ async def apply_product_tz_import(
         added_quantity=added_quantity,
         movement_count=movement_count,
         already_applied=False,
-        warehouse_id=warehouse_id,
+        warehouse_id=None,
     )
