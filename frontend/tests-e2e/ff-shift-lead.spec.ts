@@ -62,9 +62,10 @@ test('shift_lead permission shows reprints nav and grants queue API', async ({ p
 
   await page.getByTestId('nav-ff-settings').click()
   const staffRowAfter = page.getByTestId('ff-staff-row').filter({ hasText: staffEmail })
+  // STAB-REPRINTS-FE-01/F14: compact «Отгрузки» access grants mp_shipments, packaging and shift_lead together.
   await Promise.all([
     waitForPatchOk(page, `/api/auth/staff-accounts/${staffId}/permissions`),
-    staffRowAfter.getByTestId(`ff-staff-perm-${staffId}-shift_lead`).click(),
+    staffRowAfter.getByTestId(`ff-staff-access-${staffId}-shipments`).click(),
   ])
 
   await page.getByTestId('logout').click()
