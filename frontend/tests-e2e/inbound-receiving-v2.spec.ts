@@ -60,7 +60,7 @@ test('inbound receiving v2 — scan, manual edit, finish with discrepancy', asyn
   await expect(page.getByTestId('ff-inbound-compact-summary')).toContainText('Box Seller');
   await expect(page.getByTestId('ff-inbound-received-summary')).toContainText('0 из 3');
   await expect(page.getByTestId('ff-inbound-boxes-summary')).toContainText('0 из 1');
-  await expect(page.getByTestId('ff-inbound-discrepancy-summary')).toContainText('Расхождения');
+  await expect(page.getByTestId('ff-inbound-discrepancy-summary')).toHaveCount(0);
   const tableLayout = await page.getByTestId('ff-inbound-lines-table').evaluate((table) => {
     const container = table.closest('.MuiTableContainer-root');
     const headCells = Array.from(table.querySelectorAll('thead th'));

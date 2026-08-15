@@ -156,6 +156,18 @@ function discrepancyActStatusRu(status: string): string {
   return status
 }
 
+function discrepancyActTitle(createdAt: string): string {
+  const date = new Date(createdAt)
+  if (Number.isNaN(date.getTime())) return 'Акт расхождения'
+  return `Акт от ${new Intl.DateTimeFormat('ru-RU', {
+    day: '2-digit',
+    month: '2-digit',
+    year: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+  }).format(date)}`
+}
+
 function signedQty(value: number): string {
   return value > 0 ? `+${value}` : String(value)
 }
@@ -1873,18 +1885,6 @@ export function FfInboundRequestView({
                 <Typography variant="body2" color="text.secondary" data-testid="ff-inbound-weight-summary">
                   Вес: <strong>{receivingTotals.totalWeightKg.toFixed(2)} кг</strong>
                 </Typography>
-                <Typography
-                  variant="body2"
-                  color={receivingTotals.hasAnyDiscrepancy ? 'warning.dark' : 'success.dark'}
-                  data-testid="ff-inbound-discrepancy-summary"
-                >
-                  Расхождения:{' '}
-                  <strong>
-                    {receivingTotals.hasAnyDiscrepancy
-                      ? `${receivingTotals.lineDiscrepancyCount}${receivingTotals.hasBoxDiscrepancy ? ' + короба' : ''}`
-                      : 'нет'}
-                  </strong>
-                </Typography>
               </Stack>
             </Stack>
 
@@ -2423,7 +2423,7 @@ export function FfInboundRequestView({
                     >
                       <Stack direction="row" spacing={1} sx={{ alignItems: 'center', flexWrap: 'wrap' }}>
                         <Typography variant="body2" sx={{ fontWeight: 700 }}>
-                          Акт {act.id.slice(0, 8)}…
+                          {discrepancyActTitle(act.created_at)}
                         </Typography>
                         <Chip
                           size="small"
