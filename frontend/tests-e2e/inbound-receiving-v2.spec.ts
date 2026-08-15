@@ -698,11 +698,10 @@ test('inbound receiving v2 — seller sees conducted factual card after FF short
   await expect(page.getByTestId('seller-inbound-summary-status')).toContainText('В сортировке');
   await expect(page.getByTestId('seller-inbound-summary-operation')).toContainText('Поставка');
   await expect(page.getByTestId('seller-inbound-summary-warehouse')).toContainText('WH');
-  await expect(page.getByTestId('seller-inbound-summary-boxes')).toContainText('план 2');
-  await expect(page.getByTestId('seller-inbound-summary-boxes')).toContainText('факт 0');
-  await expect(page.getByTestId('seller-inbound-summary-discrepancy')).toContainText('Есть расхождения');
-  await expect(page.getByTestId('seller-inbound-summary-units')).toContainText('Заявлено 3');
-  await expect(page.getByTestId('seller-inbound-summary-units')).toContainText('принято 3');
+  await expect(page.getByTestId('seller-inbound-fact-summary')).toHaveCount(0);
+  await expect(page.getByText('Итог приемки')).toHaveCount(0);
+  await expect(page.getByText('Что не так')).toHaveCount(0);
+  await expect(page.getByTestId('seller-inbound-summary-boxes')).toHaveCount(0);
 
   const sellerFactLayout = await page.getByTestId('seller-inbound-lines-table').evaluate((table) => {
     const headCells = Array.from(table.querySelectorAll('thead th'));

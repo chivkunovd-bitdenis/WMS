@@ -146,18 +146,6 @@ function discrepancyText(delta: number): string {
   return `Недостача ${Math.abs(delta)}`
 }
 
-function ruProductCount(count: number): string {
-  const mod10 = count % 10
-  const mod100 = count % 100
-  if (mod10 === 1 && mod100 !== 11) {
-    return `${count} товар`
-  }
-  if (mod10 >= 2 && mod10 <= 4 && (mod100 < 12 || mod100 > 14)) {
-    return `${count} товара`
-  }
-  return `${count} товаров`
-}
-
 function sellerFactLinePriority(line: InboundLine): number {
   const delta = lineActualQty(line) - line.expected_qty
   if (line.added_by_fulfillment) return 0
@@ -719,33 +707,6 @@ export function SellerInboundDraftScreen({
     }
   }, [detail])
 
-  const factProblemParts = useMemo(() => {
-    if (!detail || !factSummary?.hasDiscrepancy) {
-      return []
-    }
-    const parts: Array<{ key: string; text: string; testId?: string }> = []
-    if (factSummary.shortageQty > 0) {
-      parts.push({ key: 'shortage', text: `Недостача ${factSummary.shortageQty}` })
-    }
-    if (factSummary.overageQty > 0) {
-      parts.push({ key: 'overage', text: `Излишек ${factSummary.overageQty}` })
-    }
-    if (factSummary.addedByFfCount > 0) {
-      parts.push({
-        key: 'added',
-        text: `Добавлено ФФ: ${ruProductCount(factSummary.addedByFfCount)}`,
-      })
-    }
-    if (factSummary.boxDiscrepancy) {
-      parts.push({
-        key: 'boxes',
-        text: `Короба: план ${detail.planned_box_count ?? '—'} · факт ${factSummary.actualBoxCount}`,
-        testId: 'seller-inbound-summary-boxes',
-      })
-    }
-    return parts
-  }, [detail, factSummary])
-
   const factLineRows = useMemo(() => {
     if (!detail) {
       return []
@@ -1221,90 +1182,6 @@ export function SellerInboundDraftScreen({
               </Typography>
             </Tooltip>
           </Stack>
-
-          {factSummary?.hasFactRows ? (
-            <Stack
-              direction={{ xs: 'column', md: 'row' }}
-              spacing={1.5}
-              sx={{ mb: 2, minWidth: 0 }}
-              data-testid="seller-inbound-fact-summary"
-            >
-              <Box
-                sx={{
-                  flex: '1 1 320px',
-                  border: '1px solid',
-                  borderColor: 'divider',
-                  borderRadius: 1,
-                  px: 1.5,
-                  py: 1.25,
-                  minWidth: 0,
-                }}
-                data-testid="seller-inbound-summary-result"
-              >
-                <Typography variant="subtitle2">Итог приемки</Typography>
-                <Typography
-                  variant="body2"
-                  color="text.secondary"
-                  data-testid="seller-inbound-summary-units"
-                  sx={{ mt: 0.25 }}
-                >
-                  Заявлено {factSummary.expectedQty} · принято {factSummary.actualQty}
-                </Typography>
-                <Typography
-                  variant="body1"
-                  sx={{ mt: 0.75, fontWeight: 700 }}
-                  color={factSummary.hasDiscrepancy ? 'error.main' : 'success.main'}
-                  data-testid="seller-inbound-summary-discrepancy"
-                >
-                  {factSummary.hasDiscrepancy ? 'Есть расхождения' : 'Без расхождений'}
-                </Typography>
-              </Box>
-              <Box
-                sx={{
-                  flex: '1 1 320px',
-                  border: '1px solid',
-                  borderColor: 'divider',
-                  borderRadius: 1,
-                  px: 1.5,
-                  py: 1.25,
-                  minWidth: 0,
-                }}
-                data-testid="seller-inbound-problem-summary"
-              >
-                <Typography variant="subtitle2">Что не так</Typography>
-                {factSummary.hasDiscrepancy ? (
-                  <Stack direction="row" spacing={0.75} useFlexGap sx={{ mt: 0.75, flexWrap: 'wrap' }}>
-                    {factProblemParts.map((part, index) => (
-                      <Fragment key={part.key}>
-                        {index > 0 ? (
-                          <Typography variant="body2" color="text.secondary">
-                            ·
-                          </Typography>
-                        ) : null}
-                        <Typography
-                          variant="body2"
-                          sx={{ fontWeight: 700 }}
-                          color={part.key === 'boxes' ? 'text.primary' : 'error.main'}
-                          data-testid={part.testId}
-                        >
-                          {part.text}
-                        </Typography>
-                      </Fragment>
-                    ))}
-                  </Stack>
-                ) : (
-                  <Typography
-                    variant="body2"
-                    color="text.secondary"
-                    sx={{ mt: 0.75 }}
-                    data-testid="seller-inbound-problem-clear"
-                  >
-                    ФФ принял заявленное количество
-                  </Typography>
-                )}
-              </Box>
-            </Stack>
-          ) : null}
 
           {!factSummary?.hasFactRows ? (
             <Box

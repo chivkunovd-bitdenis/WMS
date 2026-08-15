@@ -115,15 +115,9 @@ async function expectDiscrepancyFactCardReadBack(
   await expect(page.getByTestId('seller-inbound-save-draft')).toHaveCount(0);
   await expect(page.getByTestId('seller-inbound-line-delete')).toHaveCount(0);
 
-  await expect(page.getByTestId('seller-inbound-summary-result')).toContainText('Итог приемки');
-  await expect(page.getByTestId('seller-inbound-summary-units')).toContainText('Заявлено 3');
-  await expect(page.getByTestId('seller-inbound-summary-units')).toContainText('принято 3');
-  await expect(page.getByTestId('seller-inbound-summary-discrepancy')).toContainText('Есть расхождения');
-  await expect(page.getByTestId('seller-inbound-problem-summary')).toContainText('Что не так');
-  await expect(page.getByTestId('seller-inbound-problem-summary')).toContainText('Недостача 1');
-  await expect(page.getByTestId('seller-inbound-problem-summary')).toContainText('Излишек 1');
-  await expect(page.getByTestId('seller-inbound-problem-summary')).toContainText('Добавлено ФФ: 1 товар');
-  await expect(page.getByTestId('seller-inbound-fact-summary').locator(':scope > div')).toHaveCount(2);
+  await expect(page.getByTestId('seller-inbound-fact-summary')).toHaveCount(0);
+  await expect(page.getByText('Итог приемки')).toHaveCount(0);
+  await expect(page.getByText('Что не так')).toHaveCount(0);
   for (const header of OLD_REPORT_COLUMN_HEADERS) {
     await expect(page.getByRole('columnheader', { name: header })).toHaveCount(0);
   }
@@ -167,13 +161,9 @@ async function expectCleanFactCardReadBack(
 ): Promise<void> {
   await expectSellerShellOnInbound(page, requestId);
   await expect(page.getByTestId('seller-inbound-fact-card')).toBeVisible();
-  await expect(page.getByTestId('seller-inbound-summary-discrepancy')).toHaveText('Без расхождений');
-  await expect(page.getByTestId('seller-inbound-summary-units')).toContainText('Заявлено 2');
-  await expect(page.getByTestId('seller-inbound-summary-units')).toContainText('принято 2');
-  await expect(page.getByTestId('seller-inbound-problem-clear')).toHaveText('ФФ принял заявленное количество');
-  await expect(page.getByTestId('seller-inbound-problem-summary')).not.toContainText('Недостача');
-  await expect(page.getByTestId('seller-inbound-problem-summary')).not.toContainText('Излишек');
-  await expect(page.getByTestId('seller-inbound-problem-summary')).not.toContainText('Добавлено ФФ');
+  await expect(page.getByTestId('seller-inbound-fact-summary')).toHaveCount(0);
+  await expect(page.getByText('Итог приемки')).toHaveCount(0);
+  await expect(page.getByText('Что не так')).toHaveCount(0);
   await expect(page.getByTestId('seller-inbound-summary-boxes')).toHaveCount(0);
   await expect(page.getByTestId('seller-inbound-line-added-by-ff')).toHaveCount(0);
 
