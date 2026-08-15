@@ -363,6 +363,7 @@ async def test_rec03_seller_created_requires_submit_but_ff_created_receives_dire
     still_draft = await async_client.get(f"{base}/{seller_doc_id}", headers=ah)
     assert still_draft.json()["status"] == "draft"
 
+    await _set_planned_boxes(async_client, base, seller_doc_id, sh)
     submitted = await async_client.post(f"{base}/{seller_doc_id}/submit", headers=sh)
     assert submitted.status_code == 200, submitted.text
     assert submitted.json()["status"] == "submitted"
