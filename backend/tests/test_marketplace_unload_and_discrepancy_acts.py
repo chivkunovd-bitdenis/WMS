@@ -172,6 +172,8 @@ async def _finish_unload_packaging(
     async_client: AsyncClient,
     h: dict[str, str],
     unload_id: str,
+    *,
+    auto_collect: bool = True,
 ) -> None:
     detail = await async_client.get(
         f"/operations/marketplace-unload-requests/{unload_id}",
@@ -195,7 +197,7 @@ async def _finish_unload_packaging(
         for line in task["lines"]
         if int(line["qty_need_pack"]) > 0
     ]
-    if needs:
+    if auto_collect and needs:
         box = await async_client.post(
             f"/operations/marketplace-unload-requests/{unload_id}/boxes/batch",
             headers=h,
@@ -1231,8 +1233,6 @@ async def test_marketplace_unload_ship_deducts_stock_by_pick_and_scan(
     assert ship_blocked.status_code == 422
     assert ship_blocked.json()["detail"] == "packaging_not_done"
 
-    await _finish_unload_packaging(async_client, h, mid)
-
     loc = await async_client.get(f"/warehouses/{wid}/locations", headers=h)
     loc_barcode = next(x for x in loc.json() if x["id"] == loc_id)["barcode"]
 
@@ -1259,6 +1259,8 @@ async def test_marketplace_unload_ship_deducts_stock_by_pick_and_scan(
             json={"barcode": E2E_BARCODE, "storage_location_id": loc_id},
         )
         assert prod_scan.status_code == 200, prod_scan.text
+
+    await _finish_unload_packaging(async_client, h, mid, auto_collect=False)
 
     detail = await async_client.get(f"/operations/marketplace-unload-requests/{mid}", headers=h)
     assert detail.json()["lines"][0]["picked_qty"] == 3
@@ -1358,8 +1360,6 @@ async def test_marketplace_unload_ship_no_double_inventory_movement(
     await _patch_mp_planned_date(async_client, h, mid)
     await _patch_packaging_instructions(async_client, h, pid)
     await async_client.post(f"/operations/marketplace-unload-requests/{mid}/submit", headers=h)
-    await _finish_unload_packaging(async_client, h, mid)
-
     box = await async_client.post(
         f"/operations/marketplace-unload-requests/{mid}/boxes",
         headers=h,
@@ -1371,6 +1371,7 @@ async def test_marketplace_unload_ship_no_double_inventory_movement(
         headers=h,
         json={"product_id": pid, "storage_location_id": loc_id, "quantity": 2},
     )
+    await _finish_unload_packaging(async_client, h, mid, auto_collect=False)
 
     mov_before_ship = await async_client.get("/operations/inventory-movements", headers=h)
     mp_moves_before = [
@@ -1460,7 +1461,6 @@ async def test_marketplace_unload_concurrent_collect_same_location(
     await _patch_mp_planned_date(async_client, h, mid)
     await _patch_packaging_instructions(async_client, h, pid)
     await async_client.post(f"/operations/marketplace-unload-requests/{mid}/submit", headers=h)
-    await _finish_unload_packaging(async_client, h, mid)
 
     box = await async_client.post(
         f"/operations/marketplace-unload-requests/{mid}/boxes",
@@ -1560,8 +1560,6 @@ async def test_marketplace_unload_ship_deletes_empty_boxes(
     await _patch_mp_planned_date(async_client, h, mid)
     await _patch_packaging_instructions(async_client, h, pid)
     await async_client.post(f"/operations/marketplace-unload-requests/{mid}/submit", headers=h)
-    await _finish_unload_packaging(async_client, h, mid)
-
     filled = await async_client.post(
         f"/operations/marketplace-unload-requests/{mid}/boxes",
         headers=h,
@@ -1588,6 +1586,8 @@ async def test_marketplace_unload_ship_deletes_empty_boxes(
     )
     assert empty.status_code == 201, empty.text
     empty_id = empty.json()["id"]
+
+    await _finish_unload_packaging(async_client, h, mid, auto_collect=False)
 
     ship = await async_client.post(
         f"/operations/marketplace-unload-requests/{mid}/ship",
@@ -1663,8 +1663,6 @@ async def test_marketplace_unload_ship_blocked_when_distribution_incomplete(
     await _patch_mp_planned_date(async_client, h, mid)
     await _patch_packaging_instructions(async_client, h, pid)
     await async_client.post(f"/operations/marketplace-unload-requests/{mid}/submit", headers=h)
-    await _finish_unload_packaging(async_client, h, mid)
-
     loc = await async_client.get(f"/warehouses/{wid}/locations", headers=h)
     loc_barcode = next(x for x in loc.json() if x["id"] == loc_id)["barcode"]
 
@@ -1689,6 +1687,18 @@ async def test_marketplace_unload_ship_blocked_when_distribution_incomplete(
         json={"barcode": E2E_BARCODE, "storage_location_id": loc_id},
     )
     assert prod_scan.status_code == 200, prod_scan.text
+
+    pkg = await async_client.get(
+        f"/operations/packaging-tasks/by-unload/{mid}",
+        headers=h,
+    )
+    assert pkg.status_code == 200, pkg.text
+    complete = await async_client.post(
+        f"/operations/packaging-tasks/{pkg.json()['id']}/complete",
+        headers=h,
+        json={"acknowledge_all_packed": False},
+    )
+    assert complete.status_code == 200, complete.text
 
     ship = await async_client.post(
         f"/operations/marketplace-unload-requests/{mid}/ship",
@@ -1895,7 +1905,6 @@ async def test_marketplace_unload_pick_allocations_admin_only(
     )
     await _patch_mp_planned_date(async_client, ah, mid)
     await async_client.post(f"/operations/marketplace-unload-requests/{mid}/submit", headers=ah)
-    await _finish_unload_packaging(async_client, ah, mid)
     box = await async_client.post(
         f"/operations/marketplace-unload-requests/{mid}/boxes",
         headers=ah,
@@ -2163,7 +2172,6 @@ async def test_marketplace_unload_create_boxes_batch(
         f"/operations/marketplace-unload-requests/{mid}/submit", headers=ah
     )
     assert sub.status_code == 200, sub.text
-    await _finish_unload_packaging(async_client, ah, mid)
 
     invalid_count = await async_client.post(
         f"/operations/marketplace-unload-requests/{mid}/boxes/batch",
@@ -2258,7 +2266,6 @@ async def test_marketplace_unload_create_boxes_batch_one_by_one(
     )
     await _patch_mp_planned_date(async_client, ah, mid)
     await async_client.post(f"/operations/marketplace-unload-requests/{mid}/submit", headers=ah)
-    await _finish_unload_packaging(async_client, ah, mid)
 
     first = await async_client.post(
         f"/operations/marketplace-unload-requests/{mid}/boxes/batch",
@@ -2465,7 +2472,6 @@ async def test_marketplace_unload_box_remove_copy_delete(
     await async_client.post(
         f"/operations/marketplace-unload-requests/{mid}/submit", headers=ah
     )
-    await _finish_unload_packaging(async_client, ah, mid)
 
     box = await async_client.post(
         f"/operations/marketplace-unload-requests/{mid}/boxes",
@@ -2727,7 +2733,6 @@ async def test_marketplace_unload_ship_rejects_empty_boxes_only(
     )
     await _patch_mp_planned_date(async_client, ah, mid)
     await async_client.post(f"/operations/marketplace-unload-requests/{mid}/submit", headers=ah)
-    await _finish_unload_packaging(async_client, ah, mid)
 
     batch = await async_client.post(
         f"/operations/marketplace-unload-requests/{mid}/boxes/batch",
@@ -2737,12 +2742,25 @@ async def test_marketplace_unload_ship_rejects_empty_boxes_only(
     assert batch.status_code == 201, batch.text
     assert all(b["lines"] == [] for b in batch.json())
 
+    pkg = await async_client.get(
+        f"/operations/packaging-tasks/by-unload/{mid}",
+        headers=ah,
+    )
+    assert pkg.status_code == 200, pkg.text
+    complete = await async_client.post(
+        f"/operations/packaging-tasks/{pkg.json()['id']}/complete",
+        headers=ah,
+        json={"acknowledge_all_packed": False},
+    )
+    assert complete.status_code == 422
+    assert complete.json()["detail"] == "packaging_incomplete"
+
     ship = await async_client.post(
         f"/operations/marketplace-unload-requests/{mid}/ship",
         headers=ah,
     )
     assert ship.status_code == 422
-    assert ship.json()["detail"] == "distribution_incomplete"
+    assert ship.json()["detail"] == "packaging_not_done"
 
 
 @pytest.mark.asyncio
@@ -2816,7 +2834,6 @@ async def test_marketplace_unload_cancel_partial_distribution_restores_inventory
         f"/operations/marketplace-unload-requests/{mid}/submit", headers=ah
     )
     assert sub.status_code == 200, sub.text
-    await _finish_unload_packaging(async_client, ah, mid)
 
     box = await async_client.post(
         f"/operations/marketplace-unload-requests/{mid}/boxes",
