@@ -8,9 +8,6 @@ import { openFulfillmentRegistration } from './auth-flow'
 
 type FbsWorklistFixture = Record<string, unknown>
 
-const EXTERNAL_WB_SUPPLY_HINT =
-  'Поставку создали в кабинете Wildberries, а в WMS она не привязана. Открыть её здесь нельзя.'
-
 function order(id: string, over: Partial<FbsWorklistFixture> = {}): FbsWorklistFixture {
   return {
     id,
@@ -56,6 +53,28 @@ function worklist(items: FbsWorklistFixture[], warehouseOptions: FbsWorklistFixt
     server_now: new Date().toISOString(),
     warehouse_options: warehouseOptions,
   }
+}
+
+function supplyRow(id: string, over: Partial<FbsWorklistFixture> = {}): FbsWorklistFixture {
+  return {
+    id,
+    wb_supply_id: `WB-GI-${id}`,
+    name: `Поставка ${id}`,
+    status: 'assembling',
+    seller: { id: 's-1', name: 'Селлер Один' },
+    wb_warehouse: { id: 501001, name: 'WB Подольск' },
+    wms_warehouse: { id: 'w-1', name: 'Основной склад' },
+    orders_count: 2,
+    units_count: 2,
+    boxes_count: 1,
+    shipment_at: new Date(Date.now() + 100 * 3600 * 1000).toISOString(),
+    can_add_orders: true,
+    ...over,
+  }
+}
+
+function supplyWorklist(items: FbsWorklistFixture[]) {
+  return { items, server_now: new Date().toISOString() }
 }
 
 function workspace(items: FbsWorklistFixture[]) {
@@ -127,6 +146,14 @@ test('fbs orders: list, tabs and empty state', async ({ page }) => {
           : worklist([])
     await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(body) })
   })
+  await page.route('**/operations/fbs-supplies/worklist**', async (route) => {
+    if (route.request().method() !== 'GET') return route.fallback()
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify(supplyWorklist([])),
+    })
+  })
 
   await page.getByTestId('nav-ff-fbs').click()
   await expect(page.getByTestId('fbs-orders-screen')).toBeVisible()
@@ -134,7 +161,7 @@ test('fbs orders: list, tabs and empty state', async ({ page }) => {
   await expect(page.getByTestId('fbs-order-2')).toBeVisible()
 
   await page.getByRole('tab', { name: 'В работе' }).click()
-  await expect(page.getByText('Заказов в этой группе нет')).toBeVisible()
+  await expect(page.getByText('Поставок в работе нет')).toBeVisible()
 
   await page.getByRole('tab', { name: 'В доставке' }).click()
   await expect(page.getByTestId('fbs-order-3')).toBeVisible()
@@ -188,8 +215,8 @@ test('fbs orders: filter by seller', async ({ page }) => {
   await expect(page.getByTestId('fbs-order-2')).toHaveCount(0)
 })
 
-// TC-NEW-FBS-EXTERNAL-SUPPLY — active WB-confirmed orders without local supply stay visible, explained and locked.
-test('fbs orders: active row without local supply explains why it cannot open', async ({ page }) => {
+// TC-NEW-FBS-EXTERNAL-SUPPLY — WB-confirmed orders without local supply are explained outside the supply table.
+test('fbs orders: active supplies table explains external WB supply without local card', async ({ page }) => {
   await registerFf(page, 'external-supply')
 
   const localOrder = order('1', {
@@ -210,6 +237,14 @@ test('fbs orders: active row without local supply explains why it cannot open', 
     const body = statusGroup === 'active' ? worklist([localOrder, externalOrder]) : worklist([])
     await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(body) })
   })
+  await page.route('**/operations/fbs-supplies/worklist**', async (route) => {
+    if (route.request().method() !== 'GET') return route.fallback()
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify(supplyWorklist([supplyRow('sup-1')])),
+    })
+  })
   await page.route('**/operations/fbs-supplies/sup-1/workspace', async (route) => {
     workspaceRequests += 1
     await route.fulfill({
@@ -222,22 +257,61 @@ test('fbs orders: active row without local supply explains why it cannot open', 
   await page.getByTestId('nav-ff-fbs').click()
   await page.getByRole('tab', { name: 'В работе' }).click()
 
-  await expect(page.getByTestId('fbs-order-1')).toBeVisible()
-  await expect(page.getByTestId('fbs-order-2')).toBeVisible()
-  await expect(page.getByTestId('fbs-order-2-external-supply')).toHaveText('Поставка создана в WB')
+  await expect(page.getByTestId('fbs-18-supplies-table')).toBeVisible()
+  await expect(page.getByTestId('fbs-18-supply-sup-1')).toBeVisible()
+  await expect(page.getByTestId('fbs-06-external-supply-explanation')).toContainText('локальной карточки поставки в WMS нет')
 
-  await page.getByTestId('fbs-order-2').hover()
-  await expect(page.getByText(EXTERNAL_WB_SUPPLY_HINT)).toBeVisible()
-
-  await page.getByTestId('fbs-order-2').click({ force: true })
+  await expect(page.getByTestId('fbs-order-2')).toHaveCount(0)
   await expect(page.getByTestId('fbs-workspace')).toHaveCount(0)
   expect(workspaceRequests).toBe(0)
 
-  await page.mouse.move(0, 0)
-  await expect(page.getByText(EXTERNAL_WB_SUPPLY_HINT)).toHaveCount(0)
-  await page.getByTestId('fbs-order-1').click()
+  await page.getByTestId('fbs-18-supply-sup-1').click()
   await expect(page.getByTestId('fbs-workspace')).toBeVisible()
   expect(workspaceRequests).toBe(1)
+})
+
+// TC-NEW-FBS-05-001 — selected new orders can be added to a compatible existing supply.
+test('fbs orders: add selected new orders to existing supply', async ({ page }) => {
+  await registerFf(page, 'add-existing')
+  const selectedOrders = [order('1'), order('2')]
+  let addBody: FbsWorklistFixture | null = null
+
+  await page.route('**/operations/fbs-orders/worklist**', async (route) => {
+    if (route.request().method() !== 'GET') return route.fallback()
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify(worklist(selectedOrders)),
+    })
+  })
+  await page.route('**/operations/fbs-supplies/worklist**', async (route) => {
+    if (route.request().method() !== 'GET') return route.fallback()
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify(supplyWorklist([supplyRow('sup-1')])),
+    })
+  })
+  await page.route('**/operations/fbs-supplies/sup-1/orders/batch', async (route) => {
+    addBody = route.request().postDataJSON() as FbsWorklistFixture
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify(workspace(selectedOrders.map((item) => ({ ...item, supply_id: 'sup-1' })))),
+    })
+  })
+
+  await page.getByTestId('nav-ff-fbs').click()
+  await page.getByTestId('fbs-order-1').getByRole('checkbox').click()
+  await page.getByTestId('fbs-order-2').getByRole('checkbox').click()
+  await page.getByTestId('fbs-05-add-existing-open').click()
+  await page.getByTestId('fbs-05-existing-supply-select').click()
+  await page.getByRole('option', { name: /Поставка sup-1/ }).click()
+  await page.getByTestId('fbs-05-add-existing-submit').click()
+
+  await expect(page.getByTestId('fbs-workspace')).toBeVisible()
+  expect(addBody?.order_ids).toEqual(['1', '2'])
+  expect(addBody?.idempotency_key).toEqual(expect.any(String))
 })
 
 // TC-S17-025 — new-tab worklist is filtered by seller warehouse via API.
