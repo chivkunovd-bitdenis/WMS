@@ -1040,7 +1040,7 @@ export function FfFbsSupplyWorkspace({
     })
   }, [workspace, stage])
 
-  const partialRejectionAlert = workspace?.partial_rejection ? (
+  const partialRejectionAlert = workspace?.partial_rejection?.rejected_orders?.length ? (
     <Alert severity="warning" sx={{ mb: 2 }} data-testid="fbs-partial-rejection">
       <Typography variant="subtitle2">
         WB подтвердил только часть заказов

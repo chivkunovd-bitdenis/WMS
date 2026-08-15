@@ -788,8 +788,8 @@ export function FfFbsOrdersScreen({ token, authHeaders, sellers, isAdmin = false
               </TableCell>
               {statusGroup === 'new' ? (
                 <>
-                  <TableCell sx={{ minWidth: 300 }}>Товар</TableCell>
-                  <TableCell sx={{ minWidth: 180 }}>Заказ и сканирование</TableCell>
+                  <TableCell sx={{ minWidth: 260 }}>Товар</TableCell>
+                  <TableCell sx={{ minWidth: 300 }}>Заказ и сканирование</TableCell>
                   <TableCell sx={{ minWidth: 170 }}>Селлер</TableCell>
                   <TableCell sx={{ minWidth: 220 }}>Склад селлера / WB</TableCell>
                   <TableCell sx={{ minWidth: 130 }}>Создан WB</TableCell>
@@ -880,17 +880,17 @@ export function FfFbsOrdersScreen({ token, authHeaders, sellers, isAdmin = false
                         <Typography variant="body2" sx={{ fontWeight: 700 }}>
                           WB №{order.wb_order_id}
                         </Typography>
-                        <Typography variant="caption" color="text.secondary" noWrap sx={{ display: 'block', maxWidth: 190 }}>
+                        <Typography variant="caption" color="text.secondary" noWrap sx={{ display: 'block', maxWidth: 300 }}>
                           ШК: {order.product.barcode ?? '—'}
                         </Typography>
                         {order.product.sku ? (
                           <Tooltip title={order.product.sku}>
-                            <Typography variant="caption" color="text.secondary" noWrap sx={{ display: 'block', maxWidth: 190 }}>
+                            <Typography variant="caption" color="text.secondary" noWrap sx={{ display: 'block', maxWidth: 300 }}>
                               SKU {order.product.sku}
                             </Typography>
                           </Tooltip>
                         ) : order.product.seller_article ? (
-                          <Typography variant="caption" color="text.secondary" noWrap sx={{ display: 'block', maxWidth: 190 }}>
+                          <Typography variant="caption" color="text.secondary" noWrap sx={{ display: 'block', maxWidth: 300 }}>
                             Артикул: {order.product.seller_article}
                           </Typography>
                         ) : null}

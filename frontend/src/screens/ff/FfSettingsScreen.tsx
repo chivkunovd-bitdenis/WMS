@@ -442,6 +442,7 @@ export function FfSettingsScreen({
           </Box>
 
           <Box sx={{ mt: 3, pt: 2, borderTop: '1px solid', borderColor: 'divider' }} data-testid="cal-03-fbs-cutoff-section" data-task-id="CAL-03">
+            {/* GLOBAL-02: заголовок секции несёт название, поле ниже подписано просто «Время» */}
             <Typography variant="subtitle2" gutterBottom data-task-id="CAL-03">
               Время отсечки FBS
             </Typography>
@@ -449,7 +450,7 @@ export function FfSettingsScreen({
               <TextField
                 type="time"
                 size="small"
-                label="Время отсечки FBS"
+                label="Время"
                 value={fbsCutoff}
                 onChange={(event) => setFbsCutoff(event.target.value)}
                 disabled={fbsCutoffBusy}

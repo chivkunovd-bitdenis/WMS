@@ -232,7 +232,7 @@ export function FfProductsCatalogScreen({
         <TableContainer
           component={Paper}
           variant="outlined"
-          sx={{ width: '100%', maxWidth: '100%', minWidth: 0, overflowX: 'hidden' }}
+          sx={{ width: '100%', maxWidth: '100%', minWidth: 0, overflowX: 'auto' }}
           data-testid="ff-products-list"
         >
           <Table
@@ -240,7 +240,7 @@ export function FfProductsCatalogScreen({
             size="small"
             data-testid="ff-products-table"
             sx={{
-              width: '100%',
+              minWidth: 1180,
               tableLayout: 'fixed',
               '& .MuiTableCell-root': {
                 px: 1,
@@ -256,16 +256,16 @@ export function FfProductsCatalogScreen({
             }}
           >
             <colgroup>
-              <col style={{ width: '6%' }} />
-              <col style={{ width: '20%' }} />
-              <col style={{ width: '12%' }} />
-              <col style={{ width: '12%' }} />
-              <col style={{ width: '13%' }} />
-              <col style={{ width: '9%' }} />
-              <col style={{ width: '7%' }} />
-              <col style={{ width: '11%' }} />
-              <col style={{ width: '6%' }} />
-              <col style={{ width: '4%' }} />
+              <col style={{ width: 56 }} />
+              <col style={{ width: 240 }} />
+              <col style={{ width: 130 }} />
+              <col style={{ width: 130 }} />
+              <col style={{ width: 150 }} />
+              <col style={{ width: 100 }} />
+              <col style={{ width: 76 }} />
+              <col style={{ width: 140 }} />
+              <col style={{ width: 92 }} />
+              <col style={{ width: 96 }} />
             </colgroup>
             <TableHead>
               <TableRow>
@@ -298,10 +298,11 @@ export function FfProductsCatalogScreen({
                         title={p.name}
                         sx={{
                           minWidth: 0,
-                          display: 'block',
+                          display: '-webkit-box',
+                          WebkitBoxOrient: 'vertical',
+                          WebkitLineClamp: 2,
                           overflow: 'hidden',
-                          textOverflow: 'ellipsis',
-                          whiteSpace: 'nowrap',
+                          lineHeight: 1.25,
                         }}
                       >
                         {p.name}
@@ -363,11 +364,7 @@ export function FfProductsCatalogScreen({
                     <TableCell align="center">
                       <Stack direction="row" spacing={0.25} sx={{ justifyContent: 'center' }}>
                         <Tooltip
-                          title={
-                            canManageCatalog
-                              ? `Коды маркировки: ${markingCount}`
-                              : `Коды маркировки: ${markingCount}`
-                          }
+                          title={`Коды маркировки: ${markingCount}`}
                         >
                           <span>
                             <IconButton

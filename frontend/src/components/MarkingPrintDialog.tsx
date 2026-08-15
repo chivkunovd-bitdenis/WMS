@@ -18,6 +18,7 @@ import {
   Typography,
 } from '@mui/material'
 import { apiUrl } from '../api'
+import { plural } from '../utils/plural'
 import {
   MARKING_PRINT_PRESETS,
   blockLabel,
@@ -1230,7 +1231,7 @@ export function MarkingPrintDialog({ open, reprint, ctx, busy, onBusyChange, onC
                     sx={{ mb: 0.5, display: 'block' }}
                     data-testid="marking-print-preview-tape-count"
                   >
-                    Лента на одну единицу · {tapeOrder.length} блоков · {previewTapeCount} блоков на 3 ед.
+                    Лента на одну единицу · {tapeOrder.length} {plural(tapeOrder.length, ['блок', 'блока', 'блоков'])} · {previewTapeCount} {plural(previewTapeCount, ['блок', 'блока', 'блоков'])} на 3 ед.
                   </Typography>
                   <Stack
                     direction="row"
@@ -1376,7 +1377,7 @@ export function MarkingPrintDialog({ open, reprint, ctx, busy, onBusyChange, onC
 
             {!effectiveReprint && requiresHonestSign && !separateMode && canPrintCount > 0 ? (
               <Typography variant="body2" data-testid="marking-print-will-print">
-                К печати: {canPrintCount} ед. · {totalTapeCount} блоков в ленте
+                К печати: {canPrintCount} ед. · {totalTapeCount} {plural(totalTapeCount, ['блок', 'блока', 'блоков'])} в ленте
               </Typography>
             ) : null}
 

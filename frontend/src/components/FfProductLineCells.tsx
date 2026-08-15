@@ -18,11 +18,11 @@ export function FfProductTableHeadCells({ showPrint = true, nameLabel = 'Наи�
   return (
     <>
       <TableCell sx={{ width: 56 }}>Фото</TableCell>
-      <TableCell sx={{ width: 190, pl: 2 }}>Артикул</TableCell>
-      <TableCell sx={{ width: 220 }}>ШК</TableCell>
-      <TableCell sx={{ width: 140 }}>Артикул продавца</TableCell>
-      <TableCell sx={{ width: 120, pr: 2 }}>Артикул WB</TableCell>
-      <TableCell sx={{ pl: 2, minWidth: 180 }}>{nameLabel}</TableCell>
+      <TableCell sx={{ width: 150, pl: 2 }}>Артикул</TableCell>
+      <TableCell sx={{ width: 170 }}>ШК</TableCell>
+      <TableCell sx={{ width: 120 }}>Артикул продавца</TableCell>
+      <TableCell sx={{ width: 100, pr: 2 }}>Артикул WB</TableCell>
+      <TableCell sx={{ pl: 2, minWidth: 240 }}>{nameLabel}</TableCell>
       {showPrint ? (
         <TableCell align="center" sx={{ width: 56, pr: 1 }} />
       ) : null}
@@ -72,13 +72,13 @@ export function FfProductLineCells({
         />
       </TableCell>
       <TableCell
-        sx={{ whiteSpace: 'nowrap', pl: 2 }}
+        sx={{ whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', pl: 2 }}
         title={meta.sku_code}
         data-testid={lineTestIdPrefix ? `${lineTestIdPrefix}-sku` : undefined}
       >
         {meta.sku_code}
       </TableCell>
-      <TableCell sx={{ maxWidth: 220 }}>
+      <TableCell sx={{ maxWidth: 170 }}>
         <ProductBarcodeCell
           barcode={barcode}
           wb_size={meta.wb_size}
@@ -96,7 +96,7 @@ export function FfProductLineCells({
       <TableCell
         sx={{
           pl: 2,
-          minWidth: 180,
+          minWidth: 240,
           whiteSpace: 'normal',
           wordBreak: 'break-word',
           overflow: 'hidden',

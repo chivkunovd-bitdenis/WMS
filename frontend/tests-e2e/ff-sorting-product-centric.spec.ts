@@ -357,7 +357,6 @@ test('ff sorting scanner-first: cell barcode then product scans apply distributi
     page.waitForResponse((r) => r.request().method() === 'POST' && r.url().includes('/distribution-scan') && r.ok()),
     scanInput.press('Enter'),
   ]);
-  await expect(page.getByTestId('ff-sorting-active-location')).toContainText('SCAN-A-01');
   await expect(page.getByTestId('ff-sorting-scan-message')).toContainText('Активная ячейка: SCAN-A-01');
   await expect(scanInput).toBeFocused();
 

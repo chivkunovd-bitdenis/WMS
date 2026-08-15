@@ -217,6 +217,24 @@ function comparePackagingEventsAsc(a: PackagingTaskEvent, b: PackagingTaskEvent)
   return a.event_sequence - b.event_sequence
 }
 
+/** События без количества. manual_pack и undo_last собираются ниже — им нужно число. */
+const PACKAGING_EVENT_LABELS: Record<string, string> = {
+  scan_pack: '+1 скан',
+  product_label_print: 'Печать этикетки товара',
+  cancel: 'Задание отменено',
+  complete: 'Задание выполнено',
+}
+
+function packagingEventLabel(action: string, quantity: number): string {
+  if (action === 'manual_pack') {
+    return `+${quantity} вручную`
+  }
+  if (action === 'undo_last') {
+    return `Отмена ${quantity} шт`
+  }
+  return PACKAGING_EVENT_LABELS[action] ?? action
+}
+
 /** Mirrors backend assert_packaging_line_marking_done (qty_done vs qty_marking_printed). */
 function isLineMarkingIncomplete(ln: PackagingTaskLine): boolean {
   if (!ln.requires_honest_sign) {
@@ -1102,6 +1120,7 @@ export function FfPackagingTaskPanel({
               }
               onClick={() => void completeTask()}
               data-testid="ff-packaging-complete"
+              sx={{ alignSelf: 'flex-start' }}
             >
               Завершить упаковку
             </Button>
@@ -1116,18 +1135,7 @@ export function FfPackagingTaskPanel({
             </Typography>
             {orderedEvents.slice().reverse().slice(0, 8).map((event) => (
               <Typography key={event.id} variant="body2" color="text.secondary" sx={{ overflowWrap: 'anywhere' }}>
-                {event.action === 'scan_pack'
-                  ? '+1 скан'
-                  : event.action === 'manual_pack'
-                    ? `+${event.quantity} вручную`
-                    : event.action === 'undo_last'
-                      ? `Отмена ${event.quantity} шт`
-                      : event.action === 'complete'
-                        ? 'Задание выполнено'
-                        : event.action === 'cancel'
-                          ? 'Задание отменено'
-                          : event.action}{' '}
-                · {event.product_name ?? 'задание'} · {event.created_by_user_email ?? 'оператор'} ·{' '}
+                {packagingEventLabel(event.action, event.quantity)} · {event.product_name ?? 'задание'} · {event.created_by_user_email ?? 'оператор'} ·{' '}
                 {new Date(event.created_at).toLocaleString('ru-RU')}
               </Typography>
             ))}

@@ -200,7 +200,7 @@ export function AuthedAppLayout({
       >
         <Toolbar />
         <Box sx={{ p: 1, display: 'flex', flexDirection: 'column', height: 'calc(100% - 64px)' }}>
-          <List dense aria-label="Разделы ФФ" sx={{ display: 'flex', flexDirection: 'column', flex: 1 }}>
+          <List dense aria-label="Разделы ФФ">
             {can('reception') ? (
               <>
                 <ListItemButton component={NavLink} to={`${base}/reception`} data-testid="nav-ff-reception" data-task-id="NAV-01">
@@ -256,12 +256,14 @@ export function AuthedAppLayout({
                 <ListItemText primary="Честный знак" />
               </ListItemButton>
             ) : null}
+          </List>
+          {/* NAV-01: календарь и настройки прижаты к низу, но список выше остаётся плотным */}
+          <List dense aria-label="Разделы ФФ, нижние" sx={{ mt: 'auto' }}>
             <ListItemButton
               component={NavLink}
               to={`${base}/dashboard`}
               data-testid="nav-dashboard"
               data-task-id="NAV-01"
-              sx={{ mt: 'auto' }}
             >
               <ListItemText primary="Календарь отгрузок" />
             </ListItemButton>

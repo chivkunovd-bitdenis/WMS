@@ -822,13 +822,6 @@ export function FfInboundSortingPanel({
                 },
               }}
             />
-            <Chip
-              size="small"
-              color={activeLocationId == null ? 'default' : 'info'}
-              label={activeLocationId == null ? 'Ячейка не выбрана' : `Ячейка ${activeLocationCode}`}
-              data-testid="ff-sorting-active-location"
-              sx={{ alignSelf: { xs: 'flex-start', md: 'center' } }}
-            />
             <Button
               type="submit"
               variant="outlined"
@@ -840,16 +833,20 @@ export function FfInboundSortingPanel({
               Скан
             </Button>
           </Stack>
-          {scanMessage ? (
-            <Typography
-              variant="caption"
-              color="text.secondary"
-              sx={{ display: 'block', mt: 0.75 }}
-              data-testid="ff-sorting-scan-message"
-            >
-              {scanMessage}
-            </Typography>
-          ) : null}
+          {/* SORT-01: одна подпись на оба состояния — до скана ячейки и после.
+              Раньше рядом висел ещё чип с тем же смыслом, он убран как дубль. */}
+          <Typography
+            variant="caption"
+            color="text.secondary"
+            sx={{ display: 'block', mt: 0.75 }}
+            data-testid="ff-sorting-scan-message"
+          >
+            {scanMessage
+              ? scanMessage
+              : activeLocationId == null
+                ? 'Ячейка не выбрана — отсканируйте ячейку.'
+                : `Активная ячейка: ${activeLocationCode}.`}
+          </Typography>
         </Box>
       ) : null}
 

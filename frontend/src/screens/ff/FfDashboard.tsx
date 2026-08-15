@@ -13,6 +13,7 @@ import ChevronLeftIcon from '@mui/icons-material/ChevronLeft'
 import ChevronRightIcon from '@mui/icons-material/ChevronRight'
 import { apiUrl } from '../../api'
 import { readApiErrorMessage } from '../../utils/readApiErrorMessage'
+import { plural } from '../../utils/plural'
 
 export type FfInboundSummary = {
   id: string
@@ -356,7 +357,7 @@ export function FfDashboard({
                         {row.direction}
                       </Typography>
                       <Typography variant="caption" color="text.secondary" sx={{ display: 'block', lineHeight: 1.2 }} data-task-id="CAL-01">
-                        {row.boxesCount} коробов · {row.shipmentType}
+                        {row.boxesCount} {plural(row.boxesCount, ['короб', 'короба', 'коробов'])} · {row.shipmentType}
                       </Typography>
                     </Box>
                   ))}

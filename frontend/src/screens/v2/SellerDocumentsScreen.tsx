@@ -26,6 +26,7 @@ import {
 import { apiUrl } from '../../api'
 import { SellerMarketplaceUnloadDialog } from '../../components/SellerMarketplaceUnloadDialog'
 import { readApiErrorMessage } from '../../utils/readApiErrorMessage'
+import { plural } from '../../utils/plural'
 import {
   inboundOperationTypeLabel,
   normalizeInboundOperationType,
@@ -256,7 +257,7 @@ export function SellerDocumentsScreen({
                     {item.label}
                   </Typography>
                   <Typography variant="caption" color="text.secondary" sx={{ display: 'block' }}>
-                    {item.warehouse_name ?? 'Склад ФФ'} · {item.line_count} строк · {item.goods_qty_total} шт
+                    {item.warehouse_name ?? 'Склад ФФ'} · {item.line_count} {plural(item.line_count, ['строка', 'строки', 'строк'])} · {item.goods_qty_total} шт
                   </Typography>
                 </Box>
                 <Typography variant="caption" color="text.secondary" sx={{ flex: '0 0 auto' }}>
@@ -360,7 +361,7 @@ export function SellerDocumentsScreen({
             Создать заявку на поставку
           </Button>
           <Button
-            variant="contained"
+            variant="outlined"
             data-testid="seller-create-return"
             disabled={busy}
             onClick={() => navigate('../inbound/new?operation=return')}
@@ -369,7 +370,7 @@ export function SellerDocumentsScreen({
             Создать заявку на возврат
           </Button>
           <Button
-            variant="contained"
+            variant="outlined"
             color="secondary"
             data-testid="seller-create-mp-unload"
             disabled={busy || !warehouseId}
