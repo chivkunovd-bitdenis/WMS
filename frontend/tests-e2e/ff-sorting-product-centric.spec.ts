@@ -354,6 +354,16 @@ test('ff sorting scanner-first: cell barcode then product scans apply distributi
   ]);
   await expect(page.getByTestId('ff-sorting-active-location')).toContainText('SCAN-A-01');
   await expect(page.getByTestId('ff-sorting-scan-message')).toContainText('Активная ячейка: SCAN-A-01');
+  await expect(scanInput).toBeFocused();
+
+  await scanInput.fill(`UNKNOWN-SORT-${Date.now()}`);
+  await Promise.all([
+    page.waitForResponse((r) => r.request().method() === 'POST' && r.url().includes('/distribution-scan')),
+    scanInput.press('Enter'),
+  ]);
+  await expect(page.getByTestId('ff-sorting-error')).toContainText('Такой товар или ячейка не найдены');
+  await expect(scanInput).toHaveValue('');
+  await expect(scanInput).toBeFocused();
 
   for (const expected of ['разложено 1, осталось 1', 'разложено 2, осталось 0']) {
     await scanInput.fill(sku);

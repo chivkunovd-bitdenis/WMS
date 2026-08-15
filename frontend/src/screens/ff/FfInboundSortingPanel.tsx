@@ -629,11 +629,28 @@ export function FfInboundSortingPanel({
     }
   }
 
-  const focusScanner = () => {
-    window.setTimeout(() => {
-      scanInputRef.current?.focus()
-    }, 0)
-  }
+  const editable = !completed
+  const distributionReady = distributionLoaded
+
+  const focusScanner = useCallback(() => {
+    let attempts = 0
+    const focus = () => {
+      const input = scanInputRef.current
+      input?.focus()
+      attempts += 1
+      if (input != null && document.activeElement !== input && attempts < 8) {
+        window.setTimeout(focus, 50)
+      }
+    }
+    window.setTimeout(focus, 0)
+  }, [])
+
+  useEffect(() => {
+    if (!editable || !distributionReady || locations.length === 0 || busy || scanBusy) {
+      return
+    }
+    focusScanner()
+  }, [busy, distributionReady, editable, focusScanner, locations.length, scanBusy])
 
   const scanDistribution = async (event?: FormEvent<HTMLFormElement>) => {
     event?.preventDefault()
@@ -665,6 +682,7 @@ export function FfInboundSortingPanel({
       )
       if (!res.ok) {
         setError(sortingErrorMessageRu(await readApiErrorMessage(res)))
+        setScanValue('')
         return
       }
       const result = (await res.json()) as DistributionScanOut
@@ -765,9 +783,6 @@ export function FfInboundSortingPanel({
     )
   }
 
-  const editable = !completed
-  const distributionReady = distributionLoaded
-
   return (
     <FfProductMarkingPrintProvider token={token}>
       <Box data-testid="ff-sorting-panel" sx={{ width: '100%', minWidth: 0 }}>
@@ -812,6 +827,7 @@ export function FfInboundSortingPanel({
               value={scanValue}
               onChange={(event) => setScanValue(event.target.value)}
               size="small"
+              autoFocus={editable && distributionReady && locations.length > 0}
               fullWidth
               autoComplete="off"
               placeholder={activeLocationId == null ? 'Скан ячейки' : 'Скан товара'}
