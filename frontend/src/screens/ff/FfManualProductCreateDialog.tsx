@@ -57,6 +57,9 @@ export function FfManualProductCreateDialog({
   const [barcode, setBarcode] = useState('')
   const [vendor, setVendor] = useState('')
   const [tz, setTz] = useState('')
+  const [lengthMm, setLengthMm] = useState('')
+  const [widthMm, setWidthMm] = useState('')
+  const [heightMm, setHeightMm] = useState('')
   const [createdProduct, setCreatedProduct] = useState<CreatedProduct | null>(null)
 
   useEffect(() => {
@@ -77,6 +80,9 @@ export function FfManualProductCreateDialog({
     setBarcode('')
     setVendor('')
     setTz('')
+    setLengthMm('')
+    setWidthMm('')
+    setHeightMm('')
   }
 
   function handleClose() {
@@ -112,6 +118,9 @@ export function FfManualProductCreateDialog({
         if (barcode.trim()) body.wb_barcode = barcode.trim()
         if (vendor.trim()) body.wb_vendor_code = vendor.trim()
         if (tz.trim()) body.packaging_instructions = tz.trim()
+        if (lengthMm.trim()) body.length_mm = Math.floor(Number(lengthMm))
+        if (widthMm.trim()) body.width_mm = Math.floor(Number(widthMm))
+        if (heightMm.trim()) body.height_mm = Math.floor(Number(heightMm))
 
         const res = await fetch(apiUrl('/products'), {
           method: 'POST',
@@ -204,6 +213,35 @@ export function FfManualProductCreateDialog({
                 slotProps={{ htmlInput: { 'data-testid': 'ff-manual-product-barcode' } }}
               />
             </Stack>
+            <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2}>
+              <TextField
+                size="small"
+                type="number"
+                label="Длина, мм"
+                value={lengthMm}
+                onChange={(e) => setLengthMm(e.target.value)}
+                fullWidth
+                slotProps={{ htmlInput: { min: 1, 'data-testid': 'ff-manual-product-length' } }}
+              />
+              <TextField
+                size="small"
+                type="number"
+                label="Ширина, мм"
+                value={widthMm}
+                onChange={(e) => setWidthMm(e.target.value)}
+                fullWidth
+                slotProps={{ htmlInput: { min: 1, 'data-testid': 'ff-manual-product-width' } }}
+              />
+              <TextField
+                size="small"
+                type="number"
+                label="Высота, мм"
+                value={heightMm}
+                onChange={(e) => setHeightMm(e.target.value)}
+                fullWidth
+                slotProps={{ htmlInput: { min: 1, 'data-testid': 'ff-manual-product-height' } }}
+              />
+            </Stack>
             <TextField
               size="small"
               label="ТЗ упаковки"
@@ -220,7 +258,7 @@ export function FfManualProductCreateDialog({
             Отмена
           </Button>
           <Button type="submit" variant="contained" disabled={busy} data-testid="ff-manual-product-submit">
-            Создать
+            {createdProduct == null ? 'Создать' : 'Добавить в приёмку'}
           </Button>
         </DialogActions>
       </form>
