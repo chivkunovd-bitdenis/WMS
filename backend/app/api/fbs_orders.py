@@ -89,6 +89,7 @@ class FbsWorklistMetadataStateOut(BaseModel):
     kind: str
     status: str
     reason: str | None
+    source: str | None = None
 
 
 class FbsWorklistMetadataOut(BaseModel):

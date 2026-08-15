@@ -1260,6 +1260,11 @@ async def test_fbs_kiz_commit_success_creates_records_event_and_counter(
         with_packaging=True,
     )
     assert order.packaging_task_line_id is not None
+    async with SessionLocal() as session:
+        db_order = await session.get(FbsOrder, order.order_id)
+        assert db_order is not None
+        db_order.required_meta_json = [MARKING_KIND_SGTIN]
+        await session.commit()
     sent = _patch_wb_acceptance(monkeypatch)
     value = _cis("SUCCESS001")
 
@@ -1328,6 +1333,18 @@ async def test_fbs_kiz_commit_success_creates_records_event_and_counter(
         line = await session.get(PackagingTaskLine, order.packaging_task_line_id)
         assert line is not None
         assert line.qty_marking_external == 1
+
+    workspace = await async_client.get(
+        f"/operations/fbs-supplies/{supply_id}/workspace",
+        headers=headers,
+    )
+    assert workspace.status_code == 200, workspace.text
+    workspace_order = next(
+        item
+        for item in workspace.json()["orders"]
+        if item["id"] == str(order.order_id)
+    )
+    assert workspace_order["metadata"]["states"][0]["source"] == "operator"
 
 
 @pytest.mark.asyncio
