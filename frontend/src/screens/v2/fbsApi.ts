@@ -297,7 +297,7 @@ export type FbsPickLocation = {
 
 export type FbsPrintAsset = {
   id: string
-  kind: 'order_sticker' | 'cargo_place_qr' | 'supply_qr'
+  kind: 'order_sticker' | 'cargo_place_qr' | 'supply_qr' | 'box_qr'
   status: 'requesting' | 'ready' | 'error'
   content_type: string | null
   width_mm: number | null
@@ -371,6 +371,7 @@ export type FbsPackingBox = {
   trbx_id: string | null
   wb_trbx_id: string | null
   qr_asset: FbsPrintAsset | null
+  without_distribution: boolean
 }
 
 export type FbsCargoPlaceDraft = {
@@ -475,7 +476,7 @@ export function createFbsIdempotencyKey(): string {
 }
 
 export function resolveFbsAssetUrl(path: string): string {
-  return /^https?:\/\//i.test(path) ? path : apiUrl(path)
+  return /^(https?:|data:)/i.test(path) ? path : apiUrl(path)
 }
 
 export async function fetchFbsWorklist(
@@ -654,7 +655,7 @@ export async function createFbsPackingBoxes(
   token: string,
   ah: AuthHeaders,
   supplyId: string,
-  body: { count: number; idempotency_key: string },
+  body: { count: number; idempotency_key: string; without_distribution?: boolean },
 ): Promise<FbsWorkspace> {
   return jsonOrThrow<FbsWorkspace>(
     await fetch(apiUrl(`/operations/fbs-supplies/${supplyId}/boxes`), {

@@ -360,6 +360,7 @@ class FbsCargoPlaceListOut(BaseModel):
 class FbsPackingBoxCreateBody(BaseModel):
     count: int = Field(ge=1, le=100)
     idempotency_key: str = Field(min_length=1, max_length=128)
+    without_distribution: bool = False
 
 
 class FbsPackingBoxAssignOrdersBody(BaseModel):
@@ -378,6 +379,7 @@ class FbsPackingBoxOut(BaseModel):
     trbx_id: str | None
     wb_trbx_id: str | None
     qr_asset: FbsWorkspacePrintAssetOut | None
+    without_distribution: bool = False
 
 
 class FbsDeliveryCheckOut(BaseModel):
@@ -647,6 +649,7 @@ def _raise_from_packing_box_service(exc: packing_box_svc.FbsPackingBoxError) -> 
         "order_not_in_supply",
         "empty_order_set",
         "missing_idempotency_key",
+        "box_without_distribution",
     }:
         raise_fbs_http(status.HTTP_400_BAD_REQUEST, exc.code)
     if exc.code in {"supply_not_editable", "box_cargo_place_unresolved"}:
@@ -1057,6 +1060,7 @@ async def create_fbs_packing_boxes(
                 body.idempotency_key,
                 http_client,
                 actor_user_id=user.id,
+                without_distribution=body.without_distribution,
             )
         except packing_box_svc.FbsPackingBoxError as exc:
             _raise_from_packing_box_service(exc)

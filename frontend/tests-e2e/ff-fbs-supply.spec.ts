@@ -296,3 +296,106 @@ test('fbs workspace: scan location then product', async ({ page }) => {
 
   await expect(page.getByText('Товар подобран. Прогресс синхронизирован для всех операторов.')).toBeVisible()
 })
+
+// TC-NEW-FBS-12 — boxes can be created in "without distribution" mode.
+test('fbs workspace: boxes without distribution sends durable mode', async ({ page }) => {
+  await registerFf(page, 'boxes-no-distribution')
+  const packedOrder = order('1', {
+    status: 'packed',
+    supply_id: 'sup-1',
+    pick: { status: 'picked', location_code: 'A-01', picked_at: new Date().toISOString() },
+    pack: { status: 'packed', packed_at: new Date().toISOString() },
+  })
+  await mockWorklist(page, [packedOrder])
+  let currentWorkspace = workspace({ stage: 'handoff_prep', status: 'packed', orders: [packedOrder] })
+  let createBody: JsonObject | null = null
+
+  await page.route('**/operations/fbs-supplies/sup-1/workspace', (route) => json(route, currentWorkspace))
+  await page.route('**/operations/fbs-supplies/sup-1/boxes', async (route) => {
+    createBody = route.request().postDataJSON() as JsonObject
+    currentWorkspace = {
+      ...currentWorkspace,
+      stage: 'delivery',
+      boxes: [{
+        id: 'box-1',
+        box_number: 1,
+        barcode: 'FBS-MOCK-001',
+        assigned_order_ids: [],
+        trbx_id: null,
+        wb_trbx_id: null,
+        qr_asset: null,
+        without_distribution: true,
+      }],
+    }
+    await json(route, currentWorkspace, 201)
+  })
+
+  await page.getByTestId('nav-ff-fbs').click()
+  await page.getByTestId('fbs-order-1').click()
+  await expect(page.getByTestId('fbs-boxes')).toBeVisible()
+  await page.getByTestId('fbs-boxes-without-distribution').check()
+  await page.getByLabel('Коробов').fill('2')
+  await page.getByRole('button', { name: 'Добавить короба' }).click()
+
+  expect(createBody?.without_distribution).toBe(true)
+  expect(createBody?.count).toBe(2)
+  await expect(page.getByText('Без распределения · коробов 1')).toBeVisible()
+  await expect(page.getByRole('button', { name: 'Добавить товары' })).toBeDisabled()
+  await page.getByRole('button', { name: 'QR' }).click()
+  const preview = page.getByRole('dialog', { name: 'Проверка перед печатью' })
+  await expect(preview).toContainText('Печать QR короба WMS')
+  await expect(preview.getByTestId('fbs-print-preview-copies')).toBeVisible()
+})
+
+// TC-NEW-FBS-10/FBS-09 — one print preview shows the asset and copy count before printing.
+test('fbs workspace: supply QR preview has copies control', async ({ page }) => {
+  await registerFf(page, 'qr-preview')
+  const packedOrder = order('1', {
+    status: 'packed',
+    supply_id: 'sup-1',
+    pick: { status: 'picked', location_code: 'A-01', picked_at: new Date().toISOString() },
+    pack: { status: 'packed', packed_at: new Date().toISOString() },
+  })
+  await mockWorklist(page, [packedOrder])
+  const currentWorkspace = {
+    ...workspace({ stage: 'tracking', status: 'in_delivery', orders: [packedOrder] }),
+    supply: {
+      ...(workspace({ stage: 'tracking', status: 'in_delivery', orders: [packedOrder] }).supply as JsonObject),
+      barcode_asset: {
+        id: 'asset-supply-qr',
+        kind: 'supply_qr',
+        status: 'ready',
+        content_type: 'image/png',
+        width_mm: 58,
+        height_mm: 40,
+        preview_url: '/operations/fbs-print-assets/asset-supply-qr/content',
+        download_url: '/operations/fbs-print-assets/asset-supply-qr/content',
+        checksum: 'sha256:mock',
+        applied_at: null,
+        error: null,
+      },
+    },
+  }
+  await page.route('**/operations/fbs-supplies/sup-1/workspace', (route) => json(route, currentWorkspace))
+  await page.route('**/operations/fbs-print-assets/asset-supply-qr/content', async (route) => {
+    await route.fulfill({
+      status: 200,
+      contentType: 'image/png',
+      body: Buffer.from(
+        'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAFgwJ/l9sZ3wAAAABJRU5ErkJggg==',
+        'base64',
+      ),
+    })
+  })
+
+  await page.getByTestId('nav-ff-fbs').click()
+  await page.getByRole('tab', { name: 'В доставке' }).click()
+  await page.getByTestId('fbs-order-1').click()
+  await page.getByRole('button', { name: 'Печать QR поставки' }).click()
+
+  const dialog = page.getByRole('dialog', { name: 'Проверка перед печатью' })
+  await expect(dialog).toBeVisible()
+  await expect(dialog.getByTestId('fbs-print-preview-copies')).toBeVisible()
+  await dialog.getByLabel('Копий каждого макета').fill('3')
+  await expect(dialog.getByLabel('Копий каждого макета')).toHaveValue('3')
+})
