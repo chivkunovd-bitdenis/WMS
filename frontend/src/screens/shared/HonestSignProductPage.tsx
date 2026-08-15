@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { Link as RouterLink, useParams } from 'react-router-dom'
+import { Link as RouterLink, useNavigate, useParams } from 'react-router-dom'
 import {
   Alert,
   Box,
@@ -96,6 +96,7 @@ export function HonestSignProductPage({
   routeBase = '/app/ff',
 }: Props) {
   const { productId } = useParams<{ productId: string }>()
+  const navigate = useNavigate()
 
   const [overview, setOverview] = useState<MarkingOverview | null>(null)
   const [codes, setCodes] = useState<ProductCode[]>([])
@@ -355,6 +356,9 @@ export function HonestSignProductPage({
   }
 
   const product = overview?.product
+  const openPool = (poolId: string) => {
+    navigate(`${routeBase}/honest-sign/pool/${poolId}`)
+  }
 
   return (
     <Stack spacing={2} data-testid={`${testIdPrefix}-page`}>
@@ -517,9 +521,15 @@ export function HonestSignProductPage({
                           <TableRow
                             key={pool.pool_id}
                             hover
-                            component={RouterLink}
-                            to={`${routeBase}/honest-sign/pool/${pool.pool_id}`}
                             sx={{ textDecoration: 'none', cursor: 'pointer' }}
+                            role="button"
+                            tabIndex={0}
+                            onClick={() => openPool(pool.pool_id)}
+                            onKeyDown={(e) => {
+                              if (e.key === 'Enter' || e.key === ' ') {
+                                openPool(pool.pool_id)
+                              }
+                            }}
                             data-testid={`${testIdPrefix}-personal-pool-${pool.pool_id}`}
                           >
                             <TableCell>{pool.title}</TableCell>
@@ -558,9 +568,15 @@ export function HonestSignProductPage({
                           <TableRow
                             key={basket.pool_id}
                             hover
-                            component={RouterLink}
-                            to={`${routeBase}/honest-sign/pool/${basket.pool_id}`}
                             sx={{ textDecoration: 'none', cursor: 'pointer' }}
+                            role="button"
+                            tabIndex={0}
+                            onClick={() => openPool(basket.pool_id)}
+                            onKeyDown={(e) => {
+                              if (e.key === 'Enter' || e.key === ' ') {
+                                openPool(basket.pool_id)
+                              }
+                            }}
                             data-testid={`${testIdPrefix}-shared-basket-${basket.pool_id}`}
                           >
                             <TableCell>{basket.title}</TableCell>
