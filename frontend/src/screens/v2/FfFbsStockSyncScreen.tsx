@@ -441,7 +441,7 @@ export function FfFbsStockSyncScreen({ token, authHeaders, sellers }: Props) {
           row?.wbId ?? null,
         )
         if (isSyncJob(result)) {
-          setFeedback(`Синхронизация поставлена в очередь (задача ${result.id})`)
+          setFeedback('Синхронизация поставлена в очередь')
         } else {
           setFeedback(
             `Синхронизация: складов ${result.bindings_processed}, товаров ${result.products_targeted}, подтверждено ${result.products_confirmed}, ошибок ${result.errors}`,
