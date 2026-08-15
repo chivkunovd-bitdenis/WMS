@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from 'react'
-import { Navigate, Route, Routes } from 'react-router-dom'
-import { Alert } from '@mui/material'
-import { apiUrl } from '../../api'
+import { Navigate, Route, Routes, useLocation } from 'react-router-dom'
+import { Alert, Box, Typography } from '@mui/material'
+import { apiUrl, getStoredToken } from '../../api'
 import { useAuth } from '../../hooks/useAuth'
 import { readApiErrorMessage } from '../../utils/readApiErrorMessage'
 import {
@@ -38,6 +38,7 @@ type SellerAppProps = {
 }
 
 export function SellerApp({ navigationBasePath = '' }: SellerAppProps) {
+  const location = useLocation()
   const {
     token,
     me,
@@ -253,6 +254,17 @@ export function SellerApp({ navigationBasePath = '' }: SellerAppProps) {
 
   const rootElement = (() => {
     if (!token) {
+      const hasFulfillmentToken = Boolean(getStoredToken('fulfillment'))
+      if (hasFulfillmentToken && location.pathname !== '/') {
+        return (
+          <Box sx={{ p: 3 }} data-testid="ff-access-denied">
+            <Typography variant="h5" gutterBottom>
+              Нет доступа
+            </Typography>
+            <Typography>Нет доступа к этому разделу.</Typography>
+          </Box>
+        )
+      }
       return (
         <PublicAuthScreen
           variant="seller"
