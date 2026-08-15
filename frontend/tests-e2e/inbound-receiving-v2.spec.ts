@@ -343,7 +343,7 @@ test('inbound receiving v2 — multiple boxes stay independent', async ({ page }
 test('inbound receiving v2 — foreign barcode shows toast error', async ({ page }) => {
   const seed = await seedFfSellerInbound(page, `rcv-foreign-${Date.now()}`);
   const unknownBarcode = 'UNKNOWN-BARCODE-999';
-  await apiCreateSubmittedInbound(page.request, seed, { plannedBoxes: 0, expectedQty: 2 });
+  await apiCreateSubmittedInbound(page.request, seed, { plannedBoxes: 1, expectedQty: 2 });
 
   await loginFfAdmin(page, seed.adminEmail, seed.password);
   await page.getByTestId('nav-ff-reception').click();
@@ -817,7 +817,7 @@ test('inbound receiving v2 — active receiving offers only seller catalog add',
   const seed = await seedFfSellerInbound(page, suffix);
   const adminHeaders = { Authorization: `Bearer ${seed.token}` };
   const requestId = await apiCreateSubmittedInbound(page.request, seed, {
-    plannedBoxes: 0,
+    plannedBoxes: 1,
     expectedQty: 1,
   });
   await beginInboundReceiving(page.request, adminHeaders, requestId);

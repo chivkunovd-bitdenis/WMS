@@ -298,6 +298,10 @@ export function WbProductPickerDialog({
     testIdPrefix === 'ff-inbound-picker'
       ? `${testIdPrefix}-scan-error`
       : `${testIdPrefix}-error`
+  const notFoundMessage =
+    testIdPrefix === 'seller-inbound-picker'
+      ? 'Товар с таким штрихкодом не найден в каталоге'
+      : 'Товар не найден в каталоге селлера'
 
   const qtyCell = (r: WbProductPickerCatalogRow, inDraft: boolean) => {
     const qty = pickerQtyByProduct[r.id] ?? 0
@@ -367,7 +371,7 @@ export function WbProductPickerDialog({
               const targetId =
                 productId ?? (filteredPickerRows.length === 1 ? filteredPickerRows[0]!.id : null)
               if (!targetId) {
-                setPickerError('Товар не найден в каталоге селлера')
+                setPickerError(notFoundMessage)
                 return
               }
               if (disabledProductIds.has(targetId)) {

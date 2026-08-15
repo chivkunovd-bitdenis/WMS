@@ -100,12 +100,21 @@ test('ff verify posts to sorting zone; sorting queue and product columns', async
     headers: { ...h, 'Content-Type': 'application/json' },
     data: { product_id: pid, expected_qty: 4 },
   });
+  await page.request.patch(`${base}/${rid}`, {
+    headers: { ...h, 'Content-Type': 'application/json' },
+    data: { planned_box_count: 1 },
+  });
   await page.request.post(`${base}/${rid}/submit`, { headers: h });
 
   await page.goto('/app/ff/reception');
   await expect(page.getByTestId('ff-reception-page')).toBeVisible();
   await page.getByTestId('ff-inbound-queue-row').first().click();
   await expect(page.getByTestId('ff-doc-dialog')).toBeVisible();
+  await Promise.all([
+    waitForPostOk(page, base, (u) => u.includes('/begin-receiving')),
+    page.getByTestId('ff-inbound-submit-warehouse').click(),
+  ]);
+  await expect(page.getByTestId('ff-inbound-status-chip')).toContainText('Приёмка');
 
   await expandInboundPackages(page);
   await page.getByTestId('ff-inbound-add-to-box').click();
