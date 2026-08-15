@@ -43,7 +43,10 @@ from app.models.fbs_supply import (
     FbsSupply,
 )
 from app.models.fbs_trbx import FbsTrbx
+from app.models.inventory_balance import InventoryBalance
+from app.models.storage_location import StorageLocation
 from app.models.tenant_wb_mp_warehouse import TenantWbMpWarehouse
+from app.services import tenant_settings_service as tenant_settings_svc
 from app.services.fbs_packing_box_service import get_boxes_for_workspace
 from app.services.fbs_tracking_service import (
     build_partial_rejection_summary,
@@ -52,7 +55,10 @@ from app.services.fbs_tracking_service import (
 )
 from app.services.fbs_worklist_service import build_worklist_items, print_asset_content_url
 from app.services.marking_code_service import count_available_for_products_batch
-from app.services.sorting_location_service import get_or_create_sorting_location
+from app.services.sorting_location_service import (
+    SORTING_LOCATION_CODE,
+    get_or_create_sorting_location,
+)
 
 
 class FbsWorkspaceError(Exception):
@@ -99,6 +105,9 @@ async def get_supply_workspace(
     boxes = await _build_boxes(session, tenant_id, supply_id)
     marking_pool = await _build_marking_pool(session, tenant_id, orders)
     progress = _compute_progress(orders)
+    picking_auto_passed_reason = await _picking_auto_passed_reason(
+        session, tenant_id, supply, orders
+    )
     unassigned_packed_order_ids = _unassigned_packed_order_ids(orders, boxes)
     stage = _compute_stage(
         supply,
@@ -170,9 +179,48 @@ async def get_supply_workspace(
         ),
         "tracking_summary": tracking_summary,
         "partial_rejection": partial_rejection,
+        "picking_auto_passed_reason": picking_auto_passed_reason,
         "wb_sync_stale": wb_sync_stale,
         "server_now": server_now.isoformat(),
     }
+
+
+async def _picking_auto_passed_reason(
+    session: AsyncSession,
+    tenant_id: uuid.UUID,
+    supply: FbsSupply,
+    orders: list[FbsOrder],
+) -> str | None:
+    if not orders:
+        return None
+    address_enabled = await tenant_settings_svc.is_address_storage_enabled(session, tenant_id)
+    if not address_enabled:
+        return (
+            "Адресное хранение выключено: подбор отмечен пройденным, "
+            "можно переходить к упаковке."
+        )
+    product_ids = {order.product_id for order in orders if order.product_id is not None}
+    if not product_ids:
+        return None
+    regular_location = await session.scalar(
+        select(StorageLocation.id)
+        .join(InventoryBalance, InventoryBalance.storage_location_id == StorageLocation.id)
+        .where(
+            StorageLocation.tenant_id == tenant_id,
+            StorageLocation.warehouse_id == supply.warehouse_id,
+            StorageLocation.code != SORTING_LOCATION_CODE,
+            InventoryBalance.tenant_id == tenant_id,
+            InventoryBalance.product_id.in_(product_ids),
+            InventoryBalance.quantity_unpacked > 0,
+        )
+        .limit(1)
+    )
+    if regular_location is None:
+        return (
+            "Товар не распределён по адресным ячейкам: подбор отмечен пройденным, "
+            "можно переходить к упаковке."
+        )
+    return None
 
 
 async def _inject_order_pick_fallback(

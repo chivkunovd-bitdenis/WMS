@@ -1100,6 +1100,158 @@ async def test_from_orders_partial_readback_binds_only_confirmed_orders(
 
 
 @pytest.mark.asyncio
+async def test_supply_worklist_groups_active_orders_by_supply(
+    async_client: AsyncClient,
+    enable_wb_marketplace_supplies_mock: None,
+) -> None:
+    """TC-NEW-FBS-18-001: active FBS tab returns one row per supply."""
+    headers, suffix = await _register_ff_admin(async_client)
+    me = await async_client.get("/auth/me", headers=headers)
+    tenant_id = uuid.UUID(me.json()["tenant_id"])
+    seller_id, warehouse_id, location_id = await _setup_seller_with_token(
+        async_client, headers, suffix
+    )
+    product = await _create_product(
+        async_client, headers, seller_id, sku=f"worklist-{suffix[-6:]}"
+    )
+    order_ids = [
+        await _create_ready_order(
+            tenant_id,
+            uuid.UUID(seller_id),
+            uuid.UUID(warehouse_id),
+            uuid.UUID(location_id),
+            product,
+            order_id=859301 + idx,
+        )
+        for idx in range(2)
+    ]
+    create = await async_client.post(
+        "/operations/fbs-supplies/from-orders",
+        headers=headers,
+        json={
+            "name": "Grouped active supply",
+            "order_ids": [str(oid) for oid in order_ids],
+            "planned_delivery_type": "warehouse_sc",
+            "idempotency_key": str(uuid.uuid4()),
+        },
+    )
+    assert create.status_code == 201, create.text
+
+    worklist = await async_client.get(
+        "/operations/fbs-supplies/worklist?status_group=active",
+        headers=headers,
+    )
+    assert worklist.status_code == 200, worklist.text
+    rows = worklist.json()["items"]
+    assert len(rows) == 1
+    assert rows[0]["name"] == "Grouped active supply"
+    assert rows[0]["orders_count"] == 2
+    assert rows[0]["units_count"] == 2
+    assert rows[0]["shipment_at"] is not None
+
+
+@pytest.mark.asyncio
+async def test_existing_supply_add_orders_partial_readback_binds_only_confirmed(
+    async_client: AsyncClient,
+    enable_wb_marketplace_supplies_mock: None,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """TC-NEW-FBS-05-001: existing supply add reports partial WB confirmation."""
+    headers, suffix = await _register_ff_admin(async_client)
+    me = await async_client.get("/auth/me", headers=headers)
+    tenant_id = uuid.UUID(me.json()["tenant_id"])
+    seller_id, warehouse_id, location_id = await _setup_seller_with_token(
+        async_client, headers, suffix
+    )
+    product = await _create_product(
+        async_client, headers, seller_id, sku=f"existing-{suffix[-6:]}"
+    )
+    initial_order = await _create_ready_order(
+        tenant_id,
+        uuid.UUID(seller_id),
+        uuid.UUID(warehouse_id),
+        uuid.UUID(location_id),
+        product,
+        order_id=859401,
+    )
+    add_order_ids = [
+        await _create_ready_order(
+            tenant_id,
+            uuid.UUID(seller_id),
+            uuid.UUID(warehouse_id),
+            uuid.UUID(location_id),
+            product,
+            order_id=859402 + idx,
+        )
+        for idx in range(2)
+    ]
+    create = await async_client.post(
+        "/operations/fbs-supplies/from-orders",
+        headers=headers,
+        json={
+            "name": "Existing add target",
+            "order_ids": [str(initial_order)],
+            "planned_delivery_type": "warehouse_sc",
+            "idempotency_key": str(uuid.uuid4()),
+        },
+    )
+    assert create.status_code == 201, create.text
+    supply_id = create.json()["supply"]["id"]
+
+    async def fake_batch_add(
+        client: object,
+        *,
+        api_token: str,
+        supply_id: str,
+        order_ids: list[int],
+        marketplace_api_base: str | None = None,
+    ) -> None:
+        assert order_ids == [859402, 859403]
+
+    async def fake_reconcile_supply_orders(
+        client: object,
+        *,
+        api_token: str,
+        wb_supply_id: str,
+        expected_wb_order_ids: set[int],
+    ) -> tuple[str, set[int]]:
+        assert expected_wb_order_ids == {859401, 859402, 859403}
+        return WB_OPERATION_STATE_PENDING_CONFIRMATION, {859401, 859402}
+
+    monkeypatch.setattr(
+        "app.services.fbs_supply_service.add_orders_to_marketplace_supply",
+        fake_batch_add,
+    )
+    monkeypatch.setattr(
+        "app.services.fbs_supply_service.reconcile_supply_orders",
+        fake_reconcile_supply_orders,
+    )
+
+    resp = await async_client.post(
+        f"/operations/fbs-supplies/{supply_id}/orders/batch",
+        headers=headers,
+        json={
+            "order_ids": [str(oid) for oid in add_order_ids],
+            "idempotency_key": str(uuid.uuid4()),
+        },
+    )
+    assert resp.status_code == 200, resp.text
+    body = resp.json()
+    assert [row["wb_order_id"] for row in body["orders"]] == [859401, 859402]
+    assert body["partial_rejection"]["accepted_orders"][0]["wb_order_id"] == 859402
+    assert body["partial_rejection"]["rejected_orders"][0]["wb_order_id"] == 859403
+
+    async with SessionLocal() as session:
+        accepted = await session.get(FbsOrder, add_order_ids[0])
+        rejected = await session.get(FbsOrder, add_order_ids[1])
+        assert accepted is not None
+        assert rejected is not None
+        assert str(accepted.supply_id) == supply_id
+        assert rejected.supply_id is None
+        assert rejected.status == FBS_ORDER_STATUS_NEW
+
+
+@pytest.mark.asyncio
 async def test_start_work_idempotent_packaging_task(
     async_client: AsyncClient,
     enable_wb_marketplace_supplies_mock: None,
