@@ -53,9 +53,8 @@ test('inbound receiving v2 — scan, manual edit, finish with discrepancy', asyn
   await page.getByTestId('nav-ff-reception').click();
   await expect(page.getByTestId('ff-inbound-queue-document').first()).toContainText('№');
   await expect(page.getByTestId('ff-inbound-queue-row').first()).toContainText('Box Seller');
-  await expect(page.getByTestId('ff-inbound-queue-composition').first()).toContainText('1 поз.');
-  await expect(page.getByTestId('ff-inbound-queue-composition').first()).toContainText('ед.');
-  await expect(page.getByTestId('ff-inbound-queue-boxes').first()).toContainText('0 из 1');
+  await expect(page.getByTestId('ff-inbound-queue-composition').first()).toContainText('0 из 1 коробов');
+  await expect(page.getByTestId('ff-inbound-queue-composition').first()).toContainText('3 ед.');
   await expect(page.getByTestId('ff-inbound-queue-status').first()).toContainText('Передано');
   await page.getByTestId('ff-inbound-queue-row').first().focus();
   await page.keyboard.press('Enter');
@@ -166,7 +165,7 @@ test('inbound receiving v2 — ordinary receiving hides return autoprint switch'
   await page.getByTestId('nav-ff-reception').click();
   await page.locator(`[data-testid="ff-inbound-queue-row"][data-request-id="${requestId}"]`).click();
   await expect(page.getByTestId('ff-inbound-doc-root')).toBeVisible();
-  await expect(page.getByTestId('ff-inbound-operation-type')).toContainText('Поставка');
+  await expect(page.getByTestId('ff-inbound-operation-type')).toContainText('Приёмка');
   await expect(page.getByTestId('ff-inbound-return-autoprint')).toHaveCount(0);
 });
 

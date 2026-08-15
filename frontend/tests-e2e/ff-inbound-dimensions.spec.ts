@@ -20,7 +20,7 @@ test('FF inbound receiving shows saved product dimensions and volume', async ({ 
   await openFfInboundDoc(page, seed, { skipLogin: true });
 
   await expect(page.getByTestId('ff-inbound-doc-root')).toBeVisible();
-  await expect(page.getByTestId('ff-inbound-operation-type')).toContainText('Поставка');
+  await expect(page.getByTestId('ff-inbound-operation-type')).toContainText('Приёмка');
   await expect(page.getByTestId('ff-inbound-return-autoprint')).toHaveCount(0);
 
   const productRow = page

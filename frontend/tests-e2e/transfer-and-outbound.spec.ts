@@ -7,6 +7,7 @@ import {
   waitForOutboundShipOk,
 } from './api-waits';
 import { openFulfillmentRegistration } from './auth-flow';
+import { setInboundPlannedBoxes } from './inbound-boxes-helpers';
 
 // TC-S07-001, TC-S08-001 — перемещение остатка и отгрузка (UI).
 test('stock transfer and outbound shipment — UI', async ({ page }) => {
@@ -52,10 +53,12 @@ test('stock transfer and outbound shipment — UI', async ({ page }) => {
 
   const baseIn = '/api/operations/inbound-intake-requests';
   await page.goto('/app/ops/inbound');
-  await Promise.all([
+  const [createRes] = await Promise.all([
     waitForPostOk(page, baseIn, (u) => !u.includes('/lines') && !u.includes('/submit')),
     page.getByTestId('inbound-create-submit').click(),
   ]);
+  const inboundId = String(((await createRes.json()) as { id: string }).id);
+  await setInboundPlannedBoxes(page.request, h, inboundId, 1);
   await page.getByTestId('inbound-line-product').selectOption({ label: `${sku} — Товар` });
   await page.getByTestId('inbound-line-qty').fill('10');
   await page.getByTestId('inbound-line-location').selectOption({ label: 'FROM-01' });

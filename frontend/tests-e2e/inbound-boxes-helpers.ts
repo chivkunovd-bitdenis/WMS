@@ -246,6 +246,21 @@ export type InboundRequestJson = {
   planned_box_count?: number | null;
 };
 
+export async function setInboundPlannedBoxes(
+  req: APIRequestContext,
+  headers: { Authorization: string },
+  rid: string,
+  plannedBoxes = 1,
+): Promise<void> {
+  const res = await req.patch(`${INBOUND_API}/${rid}`, {
+    headers: { ...headers, 'Content-Type': 'application/json' },
+    data: { planned_box_count: plannedBoxes },
+  });
+  if (!res.ok()) {
+    throw new Error(`set planned boxes: ${res.status()} ${await res.text()}`);
+  }
+}
+
 /** Begin receiving on a submitted inbound (replaces legacy primary-accept). */
 export async function beginInboundReceiving(
   req: APIRequestContext,
@@ -260,17 +275,12 @@ export async function beginInboundReceiving(
   let body = (await got.json()) as InboundRequestJson;
   if (body.status === 'draft') {
     if (body.lines.length > 0 && (body.planned_box_count == null || body.planned_box_count < 1)) {
-      const planned = await req.patch(base, {
-        headers: { ...adminHeaders, 'Content-Type': 'application/json' },
-        data: { planned_box_count: 1 },
-      });
-      if (planned.ok()) {
-        got = await req.get(base, { headers: adminHeaders });
-        if (!got.ok()) {
-          throw new Error(`inbound get after planned boxes: ${got.status()} ${await got.text()}`);
-        }
-        body = (await got.json()) as InboundRequestJson;
+      await setInboundPlannedBoxes(req, adminHeaders, rid, 1);
+      got = await req.get(base, { headers: adminHeaders });
+      if (!got.ok()) {
+        throw new Error(`inbound get after planned boxes: ${got.status()} ${await got.text()}`);
       }
+      body = (await got.json()) as InboundRequestJson;
     }
     const submit = await req.post(`${base}/submit`, { headers: adminHeaders });
     if (submit.ok()) {

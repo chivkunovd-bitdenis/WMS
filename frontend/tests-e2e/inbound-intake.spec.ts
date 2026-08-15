@@ -7,6 +7,7 @@ import {
   waitForPostOk,
 } from './api-waits';
 import { openFulfillmentRegistration } from './auth-flow';
+import { setInboundPlannedBoxes } from './inbound-boxes-helpers';
 
 // TC-S06-001, TC-S06-002, TC-S06-004 — черновик приёмки, строка, submit (UI + API).
 test('create inbound request, add line, submit — UI and API', async ({ page }) => {
@@ -61,6 +62,8 @@ test('create inbound request, add line, submit — UI and API', async ({ page })
     page.getByTestId('inbound-create-submit').click(),
   ]);
   expect(createRes.ok()).toBeTruthy();
+  const requestId = String(((await createRes.json()) as { id: string }).id);
+  await setInboundPlannedBoxes(page.request, h, requestId, 1);
   await expect(page.getByTestId('operations-error')).toHaveCount(0);
   await expect(page.getByTestId('inbound-detail-status')).toContainText('draft');
   await expect(page.getByTestId('inbound-detail-planned-date')).toBeVisible();
