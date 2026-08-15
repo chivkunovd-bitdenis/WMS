@@ -2,7 +2,7 @@ import { test, expect } from '@playwright/test';
 
 import { waitForGetOk, waitForPostOk } from './api-waits';
 import { openFulfillmentRegistration } from './auth-flow';
-import { INBOUND_API, loginFfAdmin } from './inbound-boxes-helpers';
+import { INBOUND_API, beginInboundReceiving, loginFfAdmin } from './inbound-boxes-helpers';
 
 // TC-NEW-PRINT-01 — единый диалог печати (MarkingPrintDialog) в сортировке после приёмки.
 test('ff sorting opens unified marking print dialog for product line', async ({ page }) => {
@@ -84,6 +84,7 @@ test('ff sorting opens unified marking print dialog for product line', async ({ 
     data: { product_id: productId, expected_qty: 2 },
   });
   await page.request.post(`${INBOUND_API}/${rid}/submit`, { headers: h });
+  await beginInboundReceiving(page.request, h, rid);
 
   const barcode = 'E2E-MOCK-BARCODE';
   for (let i = 0; i < 2; i++) {

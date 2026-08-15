@@ -3,6 +3,7 @@ import type { APIRequestContext, Page } from '@playwright/test'
 
 import { waitForGetOk, waitForPostOk } from './api-waits'
 import { openFulfillmentRegistration } from './auth-flow'
+import { beginInboundReceiving } from './inbound-boxes-helpers'
 
 const MP_SELLER_NAME_TABS = 'Tabs Seller'
 const MP_SELLER_NAME_DRAFT_PKG = 'Draft Pkg Seller'
@@ -71,6 +72,7 @@ async function postInboundLineToSorting(
   lineId: string,
   qty: number,
 ): Promise<void> {
+  await beginInboundReceiving(req, auth, inboundId)
   const patchActual = await req.patch(`${baseIn}/${inboundId}/lines/${lineId}/actual`, {
     headers: { ...auth, 'Content-Type': 'application/json' },
     data: JSON.stringify({ actual_qty: qty }),
@@ -88,6 +90,7 @@ async function postInboundLineToStorage(
   lineId: string,
   qty: number,
 ): Promise<void> {
+  await beginInboundReceiving(req, auth, inboundId)
   const patchActual = await req.patch(`${baseIn}/${inboundId}/lines/${lineId}/actual`, {
     headers: { ...auth, 'Content-Type': 'application/json' },
     data: JSON.stringify({ actual_qty: qty }),
@@ -292,19 +295,15 @@ test('FF marketplace unload: tabs switch without losing document context', async
 
   await expect(page.getByTestId('ff-mp-shipment-summary')).toBeVisible()
   await expect(page.getByTestId('ff-mp-shipment-summary-planned')).toHaveText('2')
-  await expect(page.getByTestId('ff-mp-shipment-summary-distributed')).toHaveText('0')
-  await expect(page.getByTestId('ff-mp-shipment-summary-remaining')).toHaveText('2')
-  await expect(page.getByTestId('ff-mp-shipment-summary-remaining')).toHaveCSS(
-    'color',
-    'rgb(237, 108, 2)',
-  )
+  await expect(page.getByTestId('ff-mp-shipment-summary-distributed')).toHaveText('2')
+  await expect(page.getByTestId('ff-mp-shipment-summary-remaining')).toHaveText('0')
   await expect(page.getByTestId('ff-mp-shipment-summary-packed')).toHaveText('2/2')
 
   await page.getByTestId('ff-mp-tab-packaging').click()
   await expect(page.getByTestId('ff-mp-tab-packaging-panel')).toBeVisible()
   await expectMpTabSelected(page, 'ff-mp-tab-packaging')
   await expect(page.getByTestId('ff-mp-packaging-continue')).toHaveCount(0)
-  await expect(page.getByTestId('ff-packaging-task-status')).toBeVisible()
+  await expect(page.getByTestId('ff-mp-tab-packaging-panel')).toContainText('Готово 2 / Осталось 0')
   await expect(page.getByTestId('ff-mp-boxes')).not.toBeVisible()
   await page.getByTestId('ff-mp-boxes-summary').click()
   await expect(page.getByTestId('ff-mp-boxes')).toBeVisible()

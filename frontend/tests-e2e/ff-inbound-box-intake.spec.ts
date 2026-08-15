@@ -188,7 +188,8 @@ test('STAB-IN-FE-03 box add modal product row and target box qty', async ({ page
     },
   );
 
-  await apiCreateSubmittedInbound(page.request, seed, { plannedBoxes: 1, expectedQty: 4 });
+  const rid = await apiCreateSubmittedInbound(page.request, seed, { plannedBoxes: 1, expectedQty: 4 });
+  await beginInboundReceiving(page.request, { Authorization: `Bearer ${seed.token}` }, rid);
 
   await loginFfAdmin(page, seed.adminEmail, seed.password);
   await page.getByTestId('nav-ff-reception').click();

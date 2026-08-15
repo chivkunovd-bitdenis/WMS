@@ -253,12 +253,43 @@ export async function beginInboundReceiving(
   rid: string,
 ): Promise<void> {
   const base = `${INBOUND_API}/${rid}`;
-  const got = await req.get(base, { headers: adminHeaders });
+  let got = await req.get(base, { headers: adminHeaders });
   if (!got.ok()) {
     throw new Error(`inbound get: ${got.status()} ${await got.text()}`);
   }
-  const body = (await got.json()) as InboundRequestJson;
-  if (body.status !== 'draft' && body.status !== 'submitted') {
+  let body = (await got.json()) as InboundRequestJson;
+  if (body.status === 'draft') {
+    if (body.lines.length > 0 && (body.planned_box_count == null || body.planned_box_count < 1)) {
+      const planned = await req.patch(base, {
+        headers: { ...adminHeaders, 'Content-Type': 'application/json' },
+        data: { planned_box_count: 1 },
+      });
+      if (planned.ok()) {
+        got = await req.get(base, { headers: adminHeaders });
+        if (!got.ok()) {
+          throw new Error(`inbound get after planned boxes: ${got.status()} ${await got.text()}`);
+        }
+        body = (await got.json()) as InboundRequestJson;
+      }
+    }
+    const submit = await req.post(`${base}/submit`, { headers: adminHeaders });
+    if (submit.ok()) {
+      got = await req.get(base, { headers: adminHeaders });
+      if (!got.ok()) {
+        throw new Error(`inbound get after submit: ${got.status()} ${await got.text()}`);
+      }
+      body = (await got.json()) as InboundRequestJson;
+    } else {
+      const beginDraft = await req.post(`${base}/begin-receiving`, { headers: adminHeaders });
+      if (!beginDraft.ok()) {
+        throw new Error(
+          `submit draft: ${submit.status()} ${await submit.text()}; begin receiving: ${beginDraft.status()} ${await beginDraft.text()}`,
+        );
+      }
+      return;
+    }
+  }
+  if (body.status !== 'submitted') {
     return;
   }
   const begin = await req.post(`${base}/begin-receiving`, { headers: adminHeaders });

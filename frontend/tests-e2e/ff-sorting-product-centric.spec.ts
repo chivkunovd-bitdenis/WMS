@@ -2,6 +2,7 @@ import { test, expect, type Locator, type Page } from '@playwright/test';
 
 import { waitForGetOk, waitForPostOk } from './api-waits';
 import { openFulfillmentRegistration } from './auth-flow';
+import { beginInboundReceiving } from './inbound-boxes-helpers';
 
 async function sortingRowByIdentity(
   card: Locator,
@@ -75,6 +76,7 @@ test('ff sorting product-centric: loose and box sources apply with one final act
     data: { product_id: pid, expected_qty: 10 },
   });
   await page.request.post(`${base}/${rid}/submit`, { headers: h });
+  await beginInboundReceiving(page.request, h, rid);
 
   const doc = await page.request.get(`${base}/${rid}`, { headers: h });
   expect(doc.ok()).toBeTruthy();
@@ -206,6 +208,7 @@ test('ff sorting: failed distribution-lines load shows error and blocks apply', 
     data: { product_id: pid, expected_qty: 5 },
   });
   await page.request.post(`${base}/${rid}/submit`, { headers: h });
+  await beginInboundReceiving(page.request, h, rid);
 
   const doc = await page.request.get(`${base}/${rid}`, { headers: h });
   expect(doc.ok()).toBeTruthy();
@@ -335,7 +338,7 @@ test('ff sorting scanner-first: cell barcode then product scans apply distributi
   });
   const lineId = ((await line.json()) as { id: string }).id;
   await page.request.post(`${base}/${rid}/submit`, { headers: h });
-  await page.request.post(`${base}/${rid}/primary-accept`, { headers: h });
+  await beginInboundReceiving(page.request, h, rid);
   await page.request.patch(`${base}/${rid}/lines/${lineId}/actual`, {
     headers: { ...h, 'Content-Type': 'application/json' },
     data: { actual_qty: 2 },
@@ -436,7 +439,7 @@ test('ff sorting: unsaved manual correction asks before close', async ({ page })
   });
   const lineId = ((await line.json()) as { id: string }).id;
   await page.request.post(`${base}/${rid}/submit`, { headers: h });
-  await page.request.post(`${base}/${rid}/primary-accept`, { headers: h });
+  await beginInboundReceiving(page.request, h, rid);
   await page.request.patch(`${base}/${rid}/lines/${lineId}/actual`, {
     headers: { ...h, 'Content-Type': 'application/json' },
     data: { actual_qty: 1 },
@@ -511,7 +514,7 @@ test('ff cells: rename and safe-delete location with balance', async ({ page }) 
   });
   const lineId = ((await line.json()) as { id: string }).id;
   await page.request.post(`${base}/${rid}/submit`, { headers: h });
-  await page.request.post(`${base}/${rid}/primary-accept`, { headers: h });
+  await beginInboundReceiving(page.request, h, rid);
   await page.request.patch(`${base}/${rid}/lines/${lineId}/actual`, {
     headers: { ...h, 'Content-Type': 'application/json' },
     data: { actual_qty: 2 },

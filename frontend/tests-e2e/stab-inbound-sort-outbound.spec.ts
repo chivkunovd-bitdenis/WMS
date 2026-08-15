@@ -4,6 +4,7 @@ import { waitForGetOk, waitForPostOk } from './api-waits';
 import {
   INBOUND_API,
   apiCreateSubmittedInbound,
+  beginInboundReceiving,
   expandInboundPackages,
   loginFfAdmin,
   scanInboundReceiving,
@@ -24,7 +25,7 @@ test('stab inbound sort outbound — receive, see sorting, ship from buffer with
 
   const e2eApi = process.env.E2E_API_ORIGIN ?? 'http://127.0.0.1:18000';
   const seed = await seedFfSellerInbound(page, `stab-e2e-${Date.now()}`);
-  await apiCreateSubmittedInbound(page.request, seed, {
+  const inboundId = await apiCreateSubmittedInbound(page.request, seed, {
     plannedBoxes: 1,
     expectedQty: EXPECTED_QTY,
   });
@@ -33,6 +34,7 @@ test('stab inbound sort outbound — receive, see sorting, ship from buffer with
     Authorization: `Bearer ${seed.token}`,
     'Content-Type': 'application/json',
   };
+  await beginInboundReceiving(page.request, auth, inboundId);
 
   await page.request.patch(
     `${e2eApi}/integrations/wildberries/sellers/${seed.sellerId}/tokens`,
@@ -111,9 +113,11 @@ test('stab inbound sort outbound — receive, see sorting, ship from buffer with
   );
   await expect(page.getByTestId('ff-inbound-verify-complete')).toBeEnabled();
 
+  await page.getByTestId('ff-inbound-verify-complete').click();
+  await expect(page.getByTestId('ff-inbound-discrepancy-dialog')).toBeVisible();
   await Promise.all([
     waitForPostOk(page, INBOUND_API, (u) => u.includes('/complete-receiving')),
-    page.getByTestId('ff-inbound-verify-complete').click(),
+    page.getByTestId('ff-inbound-discrepancy-confirm').click(),
   ]);
   await expect(page.getByTestId('ff-inbound-status-chip')).toContainText('В сортировке');
 
