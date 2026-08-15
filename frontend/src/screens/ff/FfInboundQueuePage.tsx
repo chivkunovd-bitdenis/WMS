@@ -24,6 +24,10 @@ import {
   inboundQueueBoxesLabel,
   inboundQueueDocumentLabel,
   inboundQueueUnitsLabel,
+  inboundStatusRu,
+  isDoneStatus,
+  isReceivingStatus,
+  isSortingStatus,
   type InboundSummaryRef,
 } from './inboundReceivingHelpers'
 import type { InboundOperationType } from '../../utils/inboundOperationType'
@@ -38,22 +42,15 @@ type Props = {
   creatingDraft?: boolean
 }
 
-function statusLabel(status: string, workspace: InboundWorkspace): string {
-  if (workspace === 'sorting' && (status === 'verified' || status === 'sorting')) return 'В сортировке'
-  if (status === 'draft') return 'Черновик'
-  if (status === 'submitted') return 'Передано'
-  if (status === 'primary_accepted') return 'Принято первично'
-  if (status === 'verifying') return 'Пересчёт'
-  if (status === 'receiving') return 'В работе'
-  if (status === 'done') return 'Проведён'
-  return status
-}
-
-function statusColor(status: string): 'default' | 'info' | 'success' | 'warning' {
-  if (status === 'done') return 'success'
-  if (status === 'sorting' || status === 'verified') return 'warning'
-  if (status === 'receiving' || status === 'primary_accepted' || status === 'verifying') return 'info'
-  return 'default'
+function statusColor(
+  status: string,
+): 'default' | 'primary' | 'secondary' | 'success' | 'warning' | 'info' {
+  if (status === 'draft') return 'default'
+  if (status === 'submitted') return 'info'
+  if (isReceivingStatus(status)) return 'warning'
+  if (isSortingStatus(status)) return 'secondary'
+  if (isDoneStatus(status)) return 'success'
+  return 'primary'
 }
 
 export function FfInboundQueuePage({
@@ -175,7 +172,7 @@ export function FfInboundQueuePage({
                     <TableCell>
                       <Chip
                         size="small"
-                        label={statusLabel(row.status, workspace)}
+                        label={inboundStatusRu(row.status)}
                         color={statusColor(row.status)}
                         data-testid="ff-inbound-queue-status"
                       />

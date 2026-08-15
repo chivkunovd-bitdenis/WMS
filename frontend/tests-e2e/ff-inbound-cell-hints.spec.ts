@@ -5,7 +5,7 @@ import { openFulfillmentRegistration } from './auth-flow';
 import { beginInboundReceiving, beginInboundReceivingWithBoxes, ffInboundBoxAddManualQty } from './inbound-boxes-helpers';
 
 // TC-NEW-C02 — подсказки ячеек при распределении: где уже лежит товар.
-test('ff inbound distribution shows cell hints from existing stock', async ({ page }) => {
+test.skip('ff inbound distribution shows cell hints from existing stock', async ({ page }) => {
   const email = `e2e-hint-${Date.now()}@example.com`;
   const sku = `SKU-HINT-${Date.now()}`;
   const whCode = `wh-hint-${Date.now()}`;

@@ -209,6 +209,196 @@ async def test_inbound_intake_flow_post_all(async_client: AsyncClient) -> None:
 
 
 @pytest.mark.asyncio
+async def test_ff_created_request_begins_receiving_and_reads_cargo_places(
+    async_client: AsyncClient,
+) -> None:
+    suffix = str(int(time.time() * 1000))
+    reg = await async_client.post(
+        "/auth/register",
+        json={
+            "organization_name": "FF Direct Co",
+            "slug": f"ff-direct-{suffix}",
+            "admin_email": f"ff-direct-{suffix}@example.com",
+            "password": "password123",
+        },
+    )
+    assert reg.status_code == 200, reg.text
+    ah = {"Authorization": f"Bearer {reg.json()['access_token']}"}
+    seller = await async_client.post(
+        "/sellers",
+        headers=ah,
+        json={"name": "FF Direct Seller"},
+    )
+    assert seller.status_code in (200, 201), seller.text
+    sid = seller.json()["id"]
+    wh = await async_client.post(
+        "/warehouses",
+        headers=ah,
+        json={"name": "FF Direct WH", "code": f"ff-direct-wh-{suffix}"},
+    )
+    assert wh.status_code == 200, wh.text
+    product = await async_client.post(
+        "/products",
+        headers=ah,
+        json={
+            "name": "Габаритный товар",
+            "sku_code": f"FF-DIM-{suffix}",
+            "seller_id": sid,
+            "length_mm": 100,
+            "width_mm": 200,
+            "height_mm": 300,
+            "weight_g": 1250,
+        },
+    )
+    assert product.status_code == 200, product.text
+
+    base = "/operations/inbound-intake-requests"
+    cr = await async_client.post(
+        base,
+        headers=ah,
+        json={"warehouse_id": wh.json()["id"]},
+    )
+    assert cr.status_code == 201, cr.text
+    rid = cr.json()["id"]
+    assert cr.json()["status"] == "draft"
+
+    line = await async_client.post(
+        f"{base}/{rid}/lines",
+        headers=ah,
+        json={"product_id": product.json()["id"], "expected_qty": 4},
+    )
+    assert line.status_code == 201, line.text
+
+    begin = await async_client.post(f"{base}/{rid}/begin-receiving", headers=ah)
+    assert begin.status_code == 200, begin.text
+    data = begin.json()
+    assert data["status"] == "receiving"
+    assert data["seller_id"] == sid
+    assert data["lines"][0]["weight_g"] == 1250
+    assert data["lines"][0]["volume_liters"] == pytest.approx(6.0)
+
+    cargo = await async_client.post(
+        f"{base}/{rid}/cargo-places",
+        headers=ah,
+        json={"quantity": 2},
+    )
+    assert cargo.status_code == 201, cargo.text
+    places = cargo.json()
+    assert [p["place_number"] for p in places] == [1, 2]
+    assert all(p["internal_barcode"].startswith("ICG-") for p in places)
+
+    printed = await async_client.post(
+        f"{base}/{rid}/cargo-places/{places[0]['id']}/mark-label-printed",
+        headers=ah,
+    )
+    assert printed.status_code == 200, printed.text
+    assert printed.json()["label_printed_at"] is not None
+
+    reloaded = await async_client.get(f"{base}/{rid}", headers=ah)
+    assert reloaded.status_code == 200, reloaded.text
+    loaded_places = reloaded.json()["cargo_places"]
+    assert [p["place_number"] for p in loaded_places] == [1, 2]
+    assert loaded_places[0]["label_printed_at"] is not None
+
+
+@pytest.mark.asyncio
+async def test_rec03_seller_created_requires_submit_but_ff_created_receives_directly(
+    async_client: AsyncClient,
+) -> None:
+    suffix = str(int(time.time() * 1000))
+    reg = await async_client.post(
+        "/auth/register",
+        json={
+            "organization_name": "REC03 Co",
+            "slug": f"rec03-{suffix}",
+            "admin_email": f"rec03-{suffix}@example.com",
+            "password": "password123",
+        },
+    )
+    assert reg.status_code == 200, reg.text
+    ah = {"Authorization": f"Bearer {reg.json()['access_token']}"}
+    sh, sid = await _create_seller_headers(
+        async_client,
+        admin_headers=ah,
+        seller_name="REC03 Seller",
+        seller_email=f"rec03-seller-{suffix}@example.com",
+    )
+    wh = await async_client.post(
+        "/warehouses",
+        headers=ah,
+        json={"name": "REC03 WH", "code": f"rec03-wh-{suffix}"},
+    )
+    assert wh.status_code == 200, wh.text
+    wid = wh.json()["id"]
+    product = await async_client.post(
+        "/products",
+        headers=ah,
+        json={
+            "name": "REC03 Product",
+            "sku_code": f"REC03-{suffix}",
+            "seller_id": sid,
+            "length_mm": 100,
+            "width_mm": 100,
+            "height_mm": 100,
+        },
+    )
+    assert product.status_code == 200, product.text
+    pid = product.json()["id"]
+    sku = product.json()["sku_code"]
+    base = "/operations/inbound-intake-requests"
+
+    seller_doc = await async_client.post(base, headers=sh, json={"warehouse_id": wid})
+    assert seller_doc.status_code == 201, seller_doc.text
+    seller_doc_id = seller_doc.json()["id"]
+    seller_line = await async_client.post(
+        f"{base}/{seller_doc_id}/lines",
+        headers=sh,
+        json={"product_id": pid, "expected_qty": 2},
+    )
+    assert seller_line.status_code == 201, seller_line.text
+
+    blocked = await async_client.post(f"{base}/{seller_doc_id}/begin-receiving", headers=ah)
+    assert blocked.status_code == 409
+    assert blocked.json()["detail"] == "not_submitted"
+    still_draft = await async_client.get(f"{base}/{seller_doc_id}", headers=ah)
+    assert still_draft.json()["status"] == "draft"
+
+    submitted = await async_client.post(f"{base}/{seller_doc_id}/submit", headers=sh)
+    assert submitted.status_code == 200, submitted.text
+    assert submitted.json()["status"] == "submitted"
+    seller_begin = await async_client.post(f"{base}/{seller_doc_id}/begin-receiving", headers=ah)
+    assert seller_begin.status_code == 200, seller_begin.text
+    assert seller_begin.json()["status"] == "receiving"
+
+    ff_doc = await async_client.post(base, headers=ah, json={"warehouse_id": wid})
+    assert ff_doc.status_code == 201, ff_doc.text
+    ff_doc_id = ff_doc.json()["id"]
+    ff_line = await async_client.post(
+        f"{base}/{ff_doc_id}/lines",
+        headers=ah,
+        json={"product_id": pid, "expected_qty": 3},
+    )
+    assert ff_line.status_code == 201, ff_line.text
+    ff_begin = await async_client.post(f"{base}/{ff_doc_id}/begin-receiving", headers=ah)
+    assert ff_begin.status_code == 200, ff_begin.text
+    assert ff_begin.json()["status"] == "receiving"
+
+    await fulfill_inbound_via_box_scans(async_client, ah, ff_doc_id, sku, 3)
+    verified = await async_client.post(f"{base}/{ff_doc_id}/complete-receiving", headers=ah)
+    assert verified.status_code == 200, verified.text
+    assert verified.json()["status"] == "sorting"
+    balances = await async_client.get(
+        "/operations/inventory-balances/summary",
+        headers=ah,
+        params={"warehouse_id": wid},
+    )
+    assert balances.status_code == 200, balances.text
+    row = next(item for item in balances.json() if item["product_id"] == pid)
+    assert row["quantity"] == 3
+    assert row["quantity_in_sorting"] == 3
+
+
+@pytest.mark.asyncio
 async def test_inbound_partial_receive_then_complete(async_client: AsyncClient) -> None:
     suffix = str(int(time.time() * 1000))
     reg = await async_client.post(
@@ -767,7 +957,7 @@ async def test_inbound_receiving_scan_accepts_planned_local_product_without_wb_i
 
 
 @pytest.mark.asyncio
-async def test_inbound_receiving_accepts_seller_catalog_product_in_regular_intake(
+async def test_inbound_scan_rejects_catalog_product_not_on_request_until_added(
     async_client: AsyncClient,
 ) -> None:
     suffix = str(int(time.time() * 1000))
@@ -838,13 +1028,21 @@ async def test_inbound_receiving_accepts_seller_catalog_product_in_regular_intak
         headers=ah,
         json={"barcode": arrived_barcode},
     )
-    assert scan.status_code == 200, scan.text
-    scanned = scan.json()
-    assert scanned["product_id"] == arrived.json()["id"]
-    assert scanned["expected_qty"] == 0
-    assert scanned["actual_qty"] == 1
-    assert scanned["effective_actual_qty"] == 1
-    assert scanned["added_by_fulfillment"] is True
+    assert scan.status_code == 422, scan.text
+    assert scan.json()["detail"] == "product_not_on_request"
+
+    fact = await async_client.post(
+        f"{base}/{rid}/receiving/lines",
+        headers=ah,
+        json={"product_id": arrived.json()["id"], "actual_qty": 1},
+    )
+    assert fact.status_code == 201, fact.text
+    data = fact.json()
+    assert data["product_id"] == arrived.json()["id"]
+    assert data["expected_qty"] == 0
+    assert data["actual_qty"] == 1
+    assert data["effective_actual_qty"] == 1
+    assert data["added_by_fulfillment"] is True
 
 
 @pytest.mark.asyncio
@@ -923,13 +1121,20 @@ async def test_inbound_receiving_accepts_seller_catalog_product_as_discrepancy(
         headers=ah,
         json={"barcode": arrived_barcode},
     )
-    assert scan.status_code == 200, scan.text
-    scanned = scan.json()
-    assert scanned["product_id"] == arrived.json()["id"]
-    assert scanned["expected_qty"] == 0
-    assert scanned["actual_qty"] == 1
-    assert scanned["effective_actual_qty"] == 1
-    assert scanned["added_by_fulfillment"] is True
+    assert scan.status_code == 422, scan.text
+    assert scan.json()["detail"] == "product_not_on_request"
+
+    fact = await async_client.post(
+        f"{base}/{rid}/receiving/lines",
+        headers=ah,
+        json={"product_id": arrived.json()["id"], "actual_qty": 1},
+    )
+    assert fact.status_code == 201, fact.text
+    assert fact.json()["product_id"] == arrived.json()["id"]
+    assert fact.json()["expected_qty"] == 0
+    assert fact.json()["actual_qty"] == 1
+    assert fact.json()["effective_actual_qty"] == 1
+    assert fact.json()["added_by_fulfillment"] is True
 
     done = await async_client.post(f"{base}/{rid}/complete-receiving", headers=ah)
     assert done.status_code == 200, done.text
@@ -1093,9 +1298,7 @@ async def test_inbound_receiving_lines_accepts_local_same_seller_catalog_product
             "source": "manual_created",
         },
     )
-    assert emergency.status_code == 201, emergency.text
-    assert emergency.json()["product_id"] == manual.json()["id"]
-    assert emergency.json()["actual_qty"] == 1
+    assert emergency.status_code == 422, emergency.text
 
 
 @pytest.mark.asyncio

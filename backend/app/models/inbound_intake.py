@@ -50,6 +50,12 @@ class InboundIntakeRequest(Base):
         nullable=True,
         index=True,
     )
+    created_by_seller_id: Mapped[uuid.UUID | None] = mapped_column(
+        Uuid(as_uuid=True),
+        ForeignKey("sellers.id", ondelete="SET NULL"),
+        nullable=True,
+        index=True,
+    )
     status: Mapped[str] = mapped_column(String(32), nullable=False)
     operation_type: Mapped[str] = mapped_column(
         String(32), nullable=False, default="inbound", server_default="inbound"
@@ -83,7 +89,10 @@ class InboundIntakeRequest(Base):
     warehouse: Mapped[Warehouse] = relationship(
         "Warehouse", back_populates="inbound_intake_requests"
     )
-    seller: Mapped[Seller | None] = relationship("Seller")
+    seller: Mapped[Seller | None] = relationship("Seller", foreign_keys=[seller_id])
+    created_by_seller: Mapped[Seller | None] = relationship(
+        "Seller", foreign_keys=[created_by_seller_id]
+    )
     lines: Mapped[list[InboundIntakeLine]] = relationship(
         "InboundIntakeLine",
         back_populates="request",
@@ -99,6 +108,54 @@ class InboundIntakeRequest(Base):
         back_populates="request",
         cascade="all, delete-orphan",
         order_by="InboundIntakeBox.box_number",
+    )
+    cargo_places: Mapped[list[InboundIntakeCargoPlace]] = relationship(
+        "InboundIntakeCargoPlace",
+        back_populates="request",
+        cascade="all, delete-orphan",
+        order_by="InboundIntakeCargoPlace.place_number",
+    )
+
+
+class InboundIntakeCargoPlace(Base):
+    """Physical cargo place, such as a pallet or bag, without mandatory item details."""
+
+    __tablename__ = "inbound_intake_cargo_places"
+    __table_args__ = (
+        UniqueConstraint(
+            "request_id",
+            "place_number",
+            name="uq_inbound_intake_cargo_place_req_num",
+        ),
+        UniqueConstraint(
+            "tenant_id",
+            "internal_barcode",
+            name="uq_inbound_intake_cargo_place_tenant_barcode",
+        ),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(
+        Uuid(as_uuid=True), primary_key=True, default=uuid.uuid4
+    )
+    tenant_id: Mapped[uuid.UUID] = mapped_column(
+        Uuid(as_uuid=True), ForeignKey("tenants.id", ondelete="CASCADE"), index=True
+    )
+    request_id: Mapped[uuid.UUID] = mapped_column(
+        Uuid(as_uuid=True),
+        ForeignKey("inbound_intake_requests.id", ondelete="CASCADE"),
+        index=True,
+    )
+    place_number: Mapped[int] = mapped_column(Integer, nullable=False)
+    internal_barcode: Mapped[str] = mapped_column(String(64), nullable=False)
+    label_printed_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
+    )
+
+    request: Mapped[InboundIntakeRequest] = relationship(
+        "InboundIntakeRequest", back_populates="cargo_places"
     )
 
 

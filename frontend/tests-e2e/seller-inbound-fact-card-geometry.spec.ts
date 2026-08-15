@@ -212,7 +212,7 @@ test('seller inbound fact-card keeps a compact working discrepancy card at 1280p
   const addedProductId = await createFfAddedProduct(page, seed, addedSku);
   const addedLine = await page.request.post(`${INBOUND_API}/${requestId}/receiving/lines`, {
     headers: { ...adminHeaders, 'Content-Type': 'application/json' },
-    data: { product_id: addedProductId, actual_qty: 1, source: 'manual_created' },
+    data: { product_id: addedProductId, actual_qty: 1, source: 'seller_catalog' },
   });
   expect(addedLine.ok()).toBeTruthy();
 

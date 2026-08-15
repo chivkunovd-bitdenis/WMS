@@ -2,6 +2,7 @@ import { test, expect } from '@playwright/test';
 
 import { waitForGetOk, waitForPostOk } from './api-waits';
 import { openFulfillmentRegistration } from './auth-flow';
+import { expandInboundPackages } from './inbound-boxes-helpers';
 
 // TC-NEW-FF-INBOUND-001 — ФФ создаёт черновик приёмки из очереди приёмки и сразу открывает документ.
 test('ff reception can create inbound draft and open it', async ({ page }) => {
@@ -106,6 +107,7 @@ test('ff verify posts to sorting zone; sorting queue and product columns', async
   await page.getByTestId('ff-inbound-queue-row').first().click();
   await expect(page.getByTestId('ff-doc-dialog')).toBeVisible();
 
+  await expandInboundPackages(page);
   await page.getByTestId('ff-inbound-add-to-box').click();
   await page.getByTestId('ff-inbound-box-row').first().getByRole('button', { name: 'Наполнить' }).click();
   await expect(page.getByTestId('ff-inbound-box-add-dialog')).toBeVisible();

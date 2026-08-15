@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState, type ReactNode } from 'react'
 import {
-  Box,
   Alert,
+  Box,
   Button,
   Checkbox,
   Dialog,
@@ -60,6 +60,7 @@ type Props = {
   testIdPrefix: string
   qtyColumnLabel: string
   applyLabel?: string
+  initialSearch?: string
   variant?: PickerVariant
   inDraftMessage?: string
   emptyMessage?: string
@@ -133,6 +134,7 @@ export function WbProductPickerDialog({
   testIdPrefix,
   qtyColumnLabel,
   applyLabel = 'Добавить в заявку',
+  initialSearch = '',
   variant = 'seller',
   inDraftMessage = 'Товар уже добавлен в заявку',
   emptyMessage,
@@ -154,16 +156,14 @@ export function WbProductPickerDialog({
   const [lastScannedProductId, setLastScannedProductId] = useState<string | null>(null)
 
   useEffect(() => {
-    if (!open) {
-      setPickerSearch('')
-      setPickerCategories([])
-      setPickerQtyByProduct({})
-      setSelectedProductIds(new Set())
-      setBulkQty('')
-      setPickerError(null)
-      setLastScannedProductId(null)
-    }
-  }, [open])
+    setPickerSearch(open ? initialSearch : '')
+    setPickerCategories([])
+    setPickerQtyByProduct({})
+    setSelectedProductIds(new Set())
+    setBulkQty('')
+    setPickerError(null)
+    setLastScannedProductId(null)
+  }, [initialSearch, open])
 
   const catalogById = useMemo(() => {
     const m = new Map<string, WbProductCatalogRow>()
@@ -294,6 +294,10 @@ export function WbProductPickerDialog({
   const trailingColCount =
     (showAvailableColumn ? 1 : 0) + (renderTrailingHeadCells ? 1 : 0) + 1
   const totalColCount = productColCount + trailingColCount
+  const pickerErrorTestId =
+    testIdPrefix === 'ff-inbound-picker'
+      ? `${testIdPrefix}-scan-error`
+      : `${testIdPrefix}-error`
 
   const qtyCell = (r: WbProductPickerCatalogRow, inDraft: boolean) => {
     const qty = pickerQtyByProduct[r.id] ?? 0
@@ -341,7 +345,7 @@ export function WbProductPickerDialog({
       <DialogContent dividers>
         <Stack spacing={2} sx={{ mb: 2 }}>
           {pickerError ? (
-            <Alert severity="warning" data-testid={`${testIdPrefix}-error`}>
+            <Alert severity="warning" data-testid={pickerErrorTestId}>
               {pickerError}
             </Alert>
           ) : null}
@@ -362,8 +366,12 @@ export function WbProductPickerDialog({
               const productId = resolveProductIdByBarcode(catalog, rawSearch)
               const targetId =
                 productId ?? (filteredPickerRows.length === 1 ? filteredPickerRows[0]!.id : null)
-              if (!targetId || disabledProductIds.has(targetId)) {
-                setPickerError('Товар с таким штрихкодом не найден в каталоге')
+              if (!targetId) {
+                setPickerError('Товар не найден в каталоге селлера')
+                return
+              }
+              if (disabledProductIds.has(targetId)) {
+                setPickerError(inDraftMessage)
                 return
               }
               incrementPickerQty(targetId)

@@ -141,20 +141,32 @@ async def test_catalog_flow(async_client: AsyncClient) -> None:
             "length_mm": 100,
             "width_mm": 200,
             "height_mm": 300,
+            "weight_g": 750,
         },
     )
     assert pr.status_code == 200, pr.text
     data = pr.json()
     assert data["sku_code"] == "SKU-1"
     assert data["volume_liters"] == pytest.approx(6.0)
+    assert data["weight_g"] == 750
 
     dims = await async_client.patch(
         f"/products/{data['id']}/dimensions",
         headers=h,
-        json={"length_mm": 100, "width_mm": 100, "height_mm": 100},
+        json={"length_mm": 100, "width_mm": 100, "height_mm": 100, "weight_g": 900},
     )
     assert dims.status_code == 200, dims.text
     assert dims.json()["volume_liters"] == pytest.approx(1.0)
+    assert dims.json()["weight_g"] == 900
+
+    weight_only = await async_client.patch(
+        f"/products/{data['id']}/dimensions",
+        headers=h,
+        json={"weight_g": 950},
+    )
+    assert weight_only.status_code == 200, weight_only.text
+    assert weight_only.json()["volume_liters"] == pytest.approx(1.0)
+    assert weight_only.json()["weight_g"] == 950
 
     plist = await async_client.get("/products", headers=h)
     assert plist.status_code == 200
