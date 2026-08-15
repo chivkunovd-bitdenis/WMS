@@ -258,7 +258,7 @@ export async function beginInboundReceiving(
     throw new Error(`inbound get: ${got.status()} ${await got.text()}`);
   }
   const body = (await got.json()) as InboundRequestJson;
-  if (body.status !== 'submitted') {
+  if (body.status !== 'draft' && body.status !== 'submitted') {
     return;
   }
   const begin = await req.post(`${base}/begin-receiving`, { headers: adminHeaders });

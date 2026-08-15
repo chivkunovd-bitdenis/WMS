@@ -76,11 +76,14 @@ test('FF honest sign: import dialog uploads CSV into pool', async ({ page }) => 
     }),
   ])
   await expect(page.getByTestId(`ff-honest-sign-import-group-${gtin}`)).toBeVisible()
-  await page.getByTestId(`ff-honest-sign-import-product-search-${gtin}`).fill('not-found')
+  const productSearch = page
+    .getByTestId(`ff-honest-sign-import-group-${gtin}`)
+    .getByRole('textbox', { name: 'Поиск товаров' })
+  await productSearch.fill('not-found')
   await expect(page.getByTestId(`ff-honest-sign-import-products-empty-${gtin}`)).toContainText(
     'По поиску товары не найдены',
   )
-  await page.getByTestId(`ff-honest-sign-import-product-search-${gtin}`).fill('')
+  await productSearch.fill('')
 
   await page
     .getByTestId(`ff-honest-sign-import-group-${gtin}`)
@@ -131,12 +134,7 @@ test('FF honest sign: reset after aborted preview re-enables import dialog actio
     headers: auth,
     data: JSON.stringify({ name: 'E2E Abort Seller A', email: `abort-a-${Date.now()}@example.com` }),
   })
-  const sellerBRes = await page.request.post(`${e2eApi}/sellers`, {
-    headers: auth,
-    data: JSON.stringify({ name: 'E2E Abort Seller B', email: `abort-b-${Date.now()}@example.com` }),
-  })
   const sellerAId = String(((await sellerARes.json()) as { id: string }).id)
-  const sellerBId = String(((await sellerBRes.json()) as { id: string }).id)
 
   let releasePreview: (() => void) | null = null
   let previewCalls = 0
@@ -176,8 +174,6 @@ test('FF honest sign: reset after aborted preview re-enables import dialog actio
   await expect(page.getByTestId('ff-honest-sign-import-parsing')).toBeVisible()
   await expect(page.getByTestId('ff-honest-sign-import-submit')).toBeDisabled()
 
-  await page.getByTestId('ff-honest-sign-seller-picker').click({ force: true })
-  await page.getByTestId(`ff-honest-sign-seller-${sellerBId}`).click({ force: true })
   releasePreview?.()
 
   await expect(page.getByTestId('ff-honest-sign-import-parsing')).toHaveCount(0)

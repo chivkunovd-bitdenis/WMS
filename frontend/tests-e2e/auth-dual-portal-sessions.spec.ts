@@ -19,6 +19,12 @@ async function createSubmittedSellerInbound(
   expect(created.ok()).toBeTruthy();
   const requestId = String(((await created.json()) as { id: string }).id);
 
+  const planned = await page.request.patch(`${INBOUND_API}/${requestId}`, {
+    headers: sellerHeaders,
+    data: { planned_box_count: 1 },
+  });
+  expect(planned.ok()).toBeTruthy();
+
   const line = await page.request.post(`${INBOUND_API}/${requestId}/lines`, {
     headers: { ...sellerHeaders, 'Content-Type': 'application/json' },
     data: { product_id: productId, expected_qty: 1 },

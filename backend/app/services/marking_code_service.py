@@ -1351,6 +1351,9 @@ async def list_inventory(
     for pool_id, product_id in pool_links:
         linked_count[pool_id] = linked_count.get(pool_id, 0) + 1
         pools_by_product.setdefault(product_id, []).append(pool_id)
+    unlinked_available += sum(
+        count for pool_id, count in available_by_pool.items() if linked_count.get(pool_id, 0) == 0
+    )
 
     shared_pool_ids = {pid for pid, cnt in linked_count.items() if cnt >= 2}
     pool_meta: dict[uuid.UUID, MarkingPool] = {}
