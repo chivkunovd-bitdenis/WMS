@@ -949,6 +949,7 @@ async def add_orders_to_fbs_supply(
                 supply_id,
                 body.order_ids,
                 idempotency_key=body.idempotency_key,
+                actor_user_id=user.id,
                 http_client=http_client,
             )
         except supply_svc.FbsSupplyError as exc:

@@ -1342,6 +1342,7 @@ async def add_orders_to_existing_supply(
     order_ids: list[uuid.UUID],
     *,
     idempotency_key: str,
+    actor_user_id: uuid.UUID | None = None,
     http_client: httpx.AsyncClient,
 ) -> dict[str, Any]:
     if not idempotency_key.strip():
@@ -1438,9 +1439,14 @@ async def add_orders_to_existing_supply(
     if accepted_orders:
         supply.cargo_type = supply.cargo_type or accepted_orders[0].cargo_type
         await session.flush()
+        await session.refresh(supply, attribute_names=["orders"])
         await _sync_existing_packaging_task_for_added_orders(
             session, tenant_id, supply, accepted_orders
         )
+        if supply.status == FBS_SUPPLY_STATUS_ASSEMBLING:
+            await _auto_pass_picking_if_needed(
+                session, tenant_id, supply, actor_user_id=actor_user_id
+            )
     partial_summary = None
     if len(accepted_orders) != len(orders):
         partial_summary = _partial_from_orders_summary(

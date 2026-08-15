@@ -504,8 +504,10 @@ export function FfFbsOrdersScreen({ token, authHeaders, sellers, isAdmin = false
     setError(null)
   }
 
+  const hasNewSelection = statusGroup === 'new' && selected.size > 0
+
   return (
-    <Box data-testid="fbs-orders-screen" sx={{ pb: statusGroup === 'new' && selected.size ? 12 : 3 }}>
+    <Box data-testid="fbs-orders-screen" sx={{ pb: hasNewSelection ? 24 : 3 }}>
       <Stack
         direction={{ xs: 'column', sm: 'row' }}
         sx={{ justifyContent: 'space-between', gap: 2, mb: 1.5 }}
@@ -806,6 +808,7 @@ export function FfFbsOrdersScreen({ token, authHeaders, sellers, isAdmin = false
                   sx={{
                     verticalAlign: 'top',
                     cursor: order.supply_id ? 'pointer' : 'default',
+                    scrollMarginBottom: hasNewSelection ? '220px' : undefined,
                     '& > td': { py: 0.9 },
                     ...(highlighted
                       ? {
