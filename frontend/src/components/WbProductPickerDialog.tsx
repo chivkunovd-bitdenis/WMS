@@ -58,6 +58,7 @@ type Props = {
   testIdPrefix: string
   qtyColumnLabel: string
   applyLabel?: string
+  initialSearch?: string
   variant?: PickerVariant
   inDraftMessage?: string
   emptyMessage?: string
@@ -131,6 +132,7 @@ export function WbProductPickerDialog({
   testIdPrefix,
   qtyColumnLabel,
   applyLabel = 'Добавить в заявку',
+  initialSearch = '',
   variant = 'seller',
   inDraftMessage = 'Товар уже добавлен в заявку',
   emptyMessage,
@@ -149,13 +151,11 @@ export function WbProductPickerDialog({
   const [pickerError, setPickerError] = useState<string | null>(null)
 
   useEffect(() => {
-    if (!open) {
-      setPickerSearch('')
-      setPickerCategory('__all__')
-      setPickerQtyByProduct({})
-      setPickerError(null)
-    }
-  }, [open])
+    setPickerSearch(open ? initialSearch : '')
+    setPickerCategory('__all__')
+    setPickerQtyByProduct({})
+    setPickerError(null)
+  }, [initialSearch, open])
 
   const catalogById = useMemo(() => {
     const m = new Map<string, WbProductCatalogRow>()

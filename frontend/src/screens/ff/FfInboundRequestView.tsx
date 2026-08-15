@@ -358,6 +358,7 @@ export function FfInboundRequestView({
   const [cellHintsByProductId, setCellHintsByProductId] = useState<Record<string, CellLocationHint[]>>({})
 
   const [pickerOpen, setPickerOpen] = useState(false)
+  const [pickerInitialSearch, setPickerInitialSearch] = useState('')
   const [dimensionsLine, setDimensionsLine] = useState<InboundLine | null>(null)
   const [dimensionDraft, setDimensionDraft] = useState({ length: '', width: '', height: '', weight: '' })
   const [dimensionError, setDimensionError] = useState<string | null>(null)
@@ -368,6 +369,7 @@ export function FfInboundRequestView({
   const [boxAddDialogBoxId, setBoxAddDialogBoxId] = useState<string | null>(null)
   const [finishConfirmOpen, setFinishConfirmOpen] = useState(false)
   const [scanToastError, setScanToastError] = useState<string | null>(null)
+  const [scanAddBarcode, setScanAddBarcode] = useState<string | null>(null)
   const [importSuccessMsg, setImportSuccessMsg] = useState<string | null>(null)
   const [boxImportOpen, setBoxImportOpen] = useState(false)
   const [packagesExpanded, setPackagesExpanded] = useState(false)
@@ -1209,8 +1211,9 @@ export function FfInboundRequestView({
     }
   }
 
-  const openPicker = async () => {
+  const openPicker = async (initialSearch = '') => {
     setError(null)
+    setPickerInitialSearch(initialSearch)
     try {
       if (catalog == null) {
         await loadCatalog()
@@ -1235,6 +1238,7 @@ export function FfInboundRequestView({
       }
       const productId = resolveProductIdByBarcode(cat, code)
       if (!productId) {
+        setPickerInitialSearch(code)
         setError('Товар не найден в каталоге селлера. Добавление нового товара будет отдельной задачей.')
         return
       }
@@ -1467,9 +1471,16 @@ export function FfInboundRequestView({
         },
       )
       if (!res.ok) {
-        setScanToastError(scanErrorMessageRu(await readApiErrorMessage(res)))
+        const errorCode = await readApiErrorMessage(res)
+        setScanToastError(scanErrorMessageRu(errorCode))
+        setScanAddBarcode(
+          errorCode === 'product_not_on_request' || errorCode === 'barcode_unknown'
+            ? code
+            : null,
+        )
         return
       }
+      setScanAddBarcode(null)
       const scannedLine = (await res.json()) as InboundLine
       if (isReturnOperation && returnAutoPrint) {
         printReturnBarcodeForLine(scannedLine)
@@ -3063,6 +3074,7 @@ export function FfInboundRequestView({
         testIdPrefix="ff-inbound-picker"
         variant="ff"
         qtyColumnLabel={detail?.status === 'draft' ? 'Кол-во в заявку' : 'Факт'}
+        initialSearch={pickerInitialSearch}
         applyLabel={detail?.status === 'draft' ? 'Добавить в заявку' : 'Добавить товар'}
         emptyMessage="В каталоге селлера нет товаров по этому поиску."
         onClose={() => setPickerOpen(false)}
@@ -3236,13 +3248,36 @@ export function FfInboundRequestView({
       <Snackbar
         open={scanToastError !== null}
         autoHideDuration={3500}
-        onClose={() => setScanToastError(null)}
+        onClose={() => {
+          setScanToastError(null)
+          setScanAddBarcode(null)
+        }}
         anchorOrigin={{ vertical: 'bottom', horizontal: 'center' }}
       >
         <Alert
           severity="error"
           variant="filled"
-          onClose={() => setScanToastError(null)}
+          onClose={() => {
+            setScanToastError(null)
+            setScanAddBarcode(null)
+          }}
+          action={
+            scanAddBarcode ? (
+              <Button
+                color="inherit"
+                size="small"
+                onClick={() => {
+                  const barcode = scanAddBarcode
+                  setScanToastError(null)
+                  setScanAddBarcode(null)
+                  void openPicker(barcode)
+                }}
+                data-testid="ff-inbound-scan-add-product"
+              >
+                Добавить товар
+              </Button>
+            ) : undefined
+          }
           data-testid="ff-inbound-scan-error-snackbar"
           sx={{ width: '100%' }}
         >

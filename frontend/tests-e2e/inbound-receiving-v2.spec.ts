@@ -325,12 +325,14 @@ test('inbound receiving v2 — multiple boxes stay independent', async ({ page }
 // TC-NEW-IN-03 — чужой штрихкод в общую приёмку → тост-ошибка.
 test('inbound receiving v2 — foreign barcode shows toast error', async ({ page }) => {
   const seed = await seedFfSellerInbound(page, `rcv-foreign-${Date.now()}`);
+  const unknownBarcode = 'UNKNOWN-BARCODE-999';
   await apiCreateSubmittedInbound(page.request, seed, { plannedBoxes: 0, expectedQty: 2 });
 
   await loginFfAdmin(page, seed.adminEmail, seed.password);
   await page.getByTestId('nav-ff-reception').click();
   await page.getByTestId('ff-inbound-queue-table').locator('tbody tr').first().click();
   await expect(page.getByTestId('ff-inbound-doc-root')).toBeVisible();
+  await expect(page.getByText('Сканер штрихкода')).toHaveCount(0);
 
   await Promise.all([
     page.waitForResponse(
@@ -341,13 +343,16 @@ test('inbound receiving v2 — foreign barcode shows toast error', async ({ page
     ),
     (async () => {
       await page.getByTestId('ff-inbound-doc-root').click({ position: { x: 8, y: 8 } });
-      await page.keyboard.type('UNKNOWN-BARCODE-999', { delay: 1 });
+      await page.keyboard.type(unknownBarcode, { delay: 1 });
       await page.keyboard.press('Enter');
     })(),
   ]);
   await expect(page.getByTestId('ff-inbound-scan-error-snackbar')).toContainText(
     'Добавить товар',
   );
+  await page.getByTestId('ff-inbound-scan-add-product').click();
+  await expect(page.getByTestId('ff-inbound-picker')).toBeVisible();
+  await expect(page.getByTestId('ff-inbound-picker-search')).toHaveValue(unknownBarcode);
 });
 
 // TC-NEW-IN-05 — возврат: скан товара селлера вне заявки создаёт красное расхождение, габариты сохраняются из строки.
