@@ -1,6 +1,7 @@
 # Деплой на сервер (prod)
 
-Канонический путь: **git pull + docker compose** на сервере. Секреты только в `.env` на сервере.
+Канонический путь: **git fetch + проверка ствола + docker compose** на сервере.
+Секреты только в `.env` на сервере.
 
 ## Требования
 
@@ -39,9 +40,14 @@ cd /opt/wms
 ./scripts/deploy/prod-update.sh
 ```
 
+По умолчанию скрипт деплоит `origin/etalon` и перед сборкой проверяет, что выбранный
+commit уже содержится в разрешённом стволе (`WMS_DEPLOY_TRUNK_REF`, по умолчанию
+`origin/etalon`). Деплой произвольной рабочей ветки блокируется. Для аварийного
+изменения ветка сначала вливается в ствол, после этого запускается деплой.
+
 ## CI / CD (GitHub Actions)
 
-### CI — каждый PR и push в `main`
+### CI — PR и ручной запуск
 
 Workflow `.github/workflows/ci.yml`:
 
@@ -49,12 +55,12 @@ Workflow `.github/workflows/ci.yml`:
 - `frontend`: build, Playwright e2e (85+ сценариев)
 - PR: Test coverage + TC-ID в e2e
 
-### CD — автодеплой после зелёного CI на `main`
+### CD — ручной деплой только из ствола
 
 Workflow `.github/workflows/deploy.yml`:
 
-1. Триггер: push в `main` **после** успешного CI, либо вручную (*Actions → Deploy Production → Run workflow*).
-2. SSH на сервер → `./scripts/deploy/prod-update.sh` (`git pull` + `docker compose up -d --build` + миграции через celery_worker + WB re-sync).
+1. Триггер: только вручную (*Actions → Deploy Production → Run workflow*) после явного решения о выкатке.
+2. SSH на сервер → `./scripts/deploy/prod-update.sh` (`git fetch` + checkout разрешённой ветки + deploy guard + `docker compose up -d --build` + миграции через celery_worker + WB re-sync).
 3. Smoke: HTTP 200 на `/`, `/seller/`, `/api/health`.
 
 **Secrets** (Settings → Secrets and variables → Actions):
@@ -68,8 +74,6 @@ Workflow `.github/workflows/deploy.yml`:
 | `DEPLOY_HTTP_PORT` | `8088` |
 
 Ключ `github-actions-wms-deploy` — в `authorized_keys` на сервере. Ротация: новый ключ → secret → pubkey на сервере.
-
-Зелёный CI на `main` — **обязательное** условие перед автодеплоем (deploy ждёт `workflow_run` CI).
 
 ## Проверка после деплоя
 

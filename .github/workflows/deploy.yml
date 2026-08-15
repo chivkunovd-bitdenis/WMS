@@ -1,9 +1,8 @@
 name: Deploy Production
 
-# Push to main → deploy immediately (~1–2 min). No CI gate.
+# Manual production deploy only. The server script refuses commits that are
+# not already contained in the configured trunk (default: origin/etalon).
 on:
-  push:
-    branches: [main]
   workflow_dispatch:
 
 concurrency:
@@ -15,7 +14,7 @@ jobs:
     runs-on: ubuntu-latest
     environment: production
     steps:
-      - name: Deploy on server (git pull + docker compose)
+      - name: Deploy on server (trunk guard + docker compose)
         uses: appleboy/ssh-action@v1.2.0
         with:
           host: ${{ secrets.DEPLOY_SSH_HOST }}
@@ -26,10 +25,6 @@ jobs:
           script: |
             set -euo pipefail
             cd "${WMS_REPO_DIR:-/opt/wms}"
-            git config --global --add safe.directory "${WMS_REPO_DIR:-/opt/wms}"
-            git fetch origin
-            git checkout main
-            git reset --hard origin/main
             ./scripts/deploy/prod-update.sh
 
       - name: Smoke check (HTTP 200)

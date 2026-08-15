@@ -8,12 +8,45 @@ cd "$REPO_DIR"
 # Deploy SSH user may differ from repo owner (git 2.35+ safe.directory).
 git config --global --add safe.directory "$REPO_DIR"
 
-echo "==> git pull"
-git fetch origin
-git checkout main
-if ! git pull --ff-only origin main; then
-  echo "WARN: pull blocked by local changes; resetting to origin/main"
-  git reset --hard origin/main
+DEPLOY_REMOTE="${WMS_DEPLOY_REMOTE:-origin}"
+DEPLOY_BRANCH="${WMS_DEPLOY_BRANCH:-etalon}"
+DEPLOY_TRUNK_REF="${WMS_DEPLOY_TRUNK_REF:-${DEPLOY_REMOTE}/etalon}"
+DEPLOY_TARGET_REF="${DEPLOY_REMOTE}/${DEPLOY_BRANCH}"
+
+echo "==> git fetch"
+git fetch --prune "$DEPLOY_REMOTE"
+
+if ! git rev-parse --verify --quiet "${DEPLOY_TRUNK_REF}^{commit}" >/dev/null; then
+  echo "ERROR: deploy trunk ref '${DEPLOY_TRUNK_REF}' was not found." >&2
+  echo "       Production deploy is allowed only from the configured trunk." >&2
+  exit 1
+fi
+
+if ! git rev-parse --verify --quiet "${DEPLOY_TARGET_REF}^{commit}" >/dev/null; then
+  echo "ERROR: deploy target ref '${DEPLOY_TARGET_REF}' was not found." >&2
+  exit 1
+fi
+
+echo "==> checkout deploy branch"
+git checkout -B "$DEPLOY_BRANCH" "$DEPLOY_TARGET_REF"
+
+DEPLOY_SHA="$(git rev-parse HEAD)"
+TRUNK_SHA="$(git rev-parse "$DEPLOY_TRUNK_REF")"
+
+echo "==> deploy guard"
+echo "    target: ${DEPLOY_BRANCH} @ ${DEPLOY_SHA:0:12}"
+echo "    trunk:  ${DEPLOY_TRUNK_REF} @ ${TRUNK_SHA:0:12}"
+
+if ! git merge-base --is-ancestor "$DEPLOY_SHA" "$TRUNK_SHA"; then
+  echo "ERROR: refusing production deploy from '${DEPLOY_BRANCH}'." >&2
+  echo "       Commit ${DEPLOY_SHA} is not contained in trunk '${DEPLOY_TRUNK_REF}'." >&2
+  echo "       Merge the change into trunk first, then deploy the trunk commit." >&2
+  exit 1
+fi
+
+if [[ "${WMS_DEPLOY_GUARD_ONLY:-0}" == "1" ]]; then
+  echo "Deploy guard passed; WMS_DEPLOY_GUARD_ONLY=1, stopping before build."
+  exit 0
 fi
 
 COMPOSE=(docker compose -f docker-compose.prod.yml)
