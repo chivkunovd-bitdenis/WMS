@@ -181,7 +181,7 @@ async function expectCleanFactCardReadBack(
     };
   });
   expect(geometry.headerTexts).toEqual(['Товар', 'Заявлено', 'Принято', 'Итог', '']);
-  expect(geometry.rowBackground).not.toBe('rgba(211, 47, 47, 0.08)');
+  expect(geometry.rowBackground).toBe('rgba(46, 125, 50, 0.08)');
 }
 
 // TC-NEW-IN-07 — seller fact-card at 1280px shows outcome/problem summary, 5 working columns, FF-added marker, local details, and reload read-back.

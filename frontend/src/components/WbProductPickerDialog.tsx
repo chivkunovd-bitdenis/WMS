@@ -202,6 +202,15 @@ export function WbProductPickerDialog({
     })
   }
 
+  const incrementPickerQty = (productId: string) => {
+    setPickerQtyByProduct((prev) => ({ ...prev, [productId]: (prev[productId] ?? 0) + 1 }))
+    setSelectedProductIds((prev) => {
+      const next = new Set(prev)
+      next.add(productId)
+      return next
+    })
+  }
+
   const toggleSelected = (productId: string, checked: boolean) => {
     setSelectedProductIds((prev) => {
       const next = new Set(prev)
@@ -341,14 +350,15 @@ export function WbProductPickerDialog({
                 return
               }
               e.preventDefault()
-              const productId = resolveProductIdByBarcode(catalog, pickerSearch)
+              const rawSearch = (e.target as HTMLInputElement).value || pickerSearch
+              const productId = resolveProductIdByBarcode(catalog, rawSearch)
               const targetId =
                 productId ?? (filteredPickerRows.length === 1 ? filteredPickerRows[0]!.id : null)
               if (!targetId || disabledProductIds.has(targetId)) {
                 setPickerError('Товар с таким штрихкодом не найден в каталоге')
                 return
               }
-              setPickerQty(targetId, (pickerQtyByProduct[targetId] ?? 0) + 1)
+              incrementPickerQty(targetId)
               setPickerSearch('')
               setPickerError(null)
             }}

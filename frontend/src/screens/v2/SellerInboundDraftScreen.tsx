@@ -1260,7 +1260,7 @@ export function SellerInboundDraftScreen({
                           hover
                           data-testid="seller-inbound-line-row"
                           sx={{
-                            bgcolor: row.hasDiscrepancy ? 'rgba(211, 47, 47, 0.08)' : undefined,
+                            bgcolor: row.hasDiscrepancy ? 'rgba(211, 47, 47, 0.08)' : 'rgba(46, 125, 50, 0.08)',
                             '& td:first-of-type': { pl: 1 },
                             '& td:last-of-type': { pr: 0.5 },
                           }}
