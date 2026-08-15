@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import csv
+import io
 import json
 import uuid
 from datetime import UTC, datetime, timedelta
@@ -273,7 +275,7 @@ async def test_ledger_cis_mask_filter(async_client: AsyncClient) -> None:
 
 @pytest.mark.asyncio
 async def test_ledger_export_csv(async_client: AsyncClient) -> None:
-    h, seller_id, _, _, _ = await _seed_pool_with_codes(async_client)
+    h, seller_id, _, _, codes = await _seed_pool_with_codes(async_client)
     params = {"seller_id": seller_id, "event_type": "imported"}
 
     ledger = await async_client.get(
@@ -295,10 +297,27 @@ async def test_ledger_export_csv(async_client: AsyncClient) -> None:
     assert "attachment" in export.headers["content-disposition"]
     text = export.content.decode("utf-8-sig")
     lines = [line for line in text.strip().splitlines() if line]
-    assert lines[0].startswith("created_at,event_type,cis_masked")
+    rows = list(csv.DictReader(io.StringIO(text)))
+    assert lines[0].split(",") == [
+        "created_at",
+        "event_type",
+        "cis_code",
+        "cis_masked",
+        "pool_title",
+        "gtin",
+        "product_name",
+        "product_sku",
+        "seller_name",
+        "document_number",
+        "actor_email",
+        "source_process",
+    ]
     # CSV export keeps one row per raw event (not collapsed).
-    assert len(lines) - 1 == 4
-    assert all("imported" in line for line in lines[1:])
+    assert len(rows) == 4
+    assert {row["cis_code"] for row in rows} == set(codes)
+    assert all(row["event_type"] == "imported" for row in rows)
+    assert all(row["actor_email"] for row in rows)
+    assert all("Read pool" == row["pool_title"] for row in rows)
 
 
 @pytest.mark.asyncio
