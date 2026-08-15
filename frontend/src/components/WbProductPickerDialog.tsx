@@ -151,6 +151,7 @@ export function WbProductPickerDialog({
   const [selectedProductIds, setSelectedProductIds] = useState<Set<string>>(() => new Set())
   const [bulkQty, setBulkQty] = useState('')
   const [pickerError, setPickerError] = useState<string | null>(null)
+  const [lastScannedProductId, setLastScannedProductId] = useState<string | null>(null)
 
   useEffect(() => {
     if (!open) {
@@ -160,6 +161,7 @@ export function WbProductPickerDialog({
       setSelectedProductIds(new Set())
       setBulkQty('')
       setPickerError(null)
+      setLastScannedProductId(null)
     }
   }, [open])
 
@@ -180,15 +182,20 @@ export function WbProductPickerDialog({
         return []
       }
       const bySearch = filterCatalogRows(catalog, pickerSearch, '__all__', filterRow)
-      if (pickerCategories.length === 0) {
-        return bySearch
-      }
-      return bySearch.filter((row) => {
+      const byCategory = pickerCategories.length === 0 ? bySearch : bySearch.filter((row) => {
         const category = row.wb_subject_name?.trim()
         return Boolean(category && pickerCategories.includes(category))
       })
+      if (!lastScannedProductId) {
+        return byCategory
+      }
+      return [...byCategory].sort((a, b) => {
+        if (a.id === lastScannedProductId) return -1
+        if (b.id === lastScannedProductId) return 1
+        return 0
+      })
     },
-    [catalog, filterRow, pickerCategories, pickerSearch],
+    [catalog, filterRow, lastScannedProductId, pickerCategories, pickerSearch],
   )
 
   const setPickerQty = (productId: string, qty: number) => {
@@ -360,6 +367,7 @@ export function WbProductPickerDialog({
                 return
               }
               incrementPickerQty(targetId)
+              setLastScannedProductId(targetId)
               setPickerSearch('')
               setPickerError(null)
             }}
