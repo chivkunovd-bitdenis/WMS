@@ -175,13 +175,6 @@ async def _finish_unload_packaging(
     *,
     auto_collect: bool = True,
 ) -> None:
-    detail = await async_client.get(
-        f"/operations/marketplace-unload-requests/{unload_id}",
-        headers=h,
-    )
-    assert detail.status_code == 200, detail.text
-    unload = detail.json()
-
     pkg = await async_client.get(
         f"/operations/packaging-tasks/by-unload/{unload_id}",
         headers=h,
@@ -192,47 +185,18 @@ async def _finish_unload_packaging(
         task = (
             await async_client.get(f"/operations/packaging-tasks/{task['id']}", headers=h)
         ).json()
-    needs = [
-        (line["product_id"], int(line["qty_need_pack"]))
-        for line in task["lines"]
-        if int(line["qty_need_pack"]) > 0
-    ]
+    needs = [line for line in task["lines"] if int(line["qty_need_pack"]) > 0]
     if auto_collect and needs:
-        box = await async_client.post(
-            f"/operations/marketplace-unload-requests/{unload_id}/boxes/batch",
-            headers=h,
-            json={"count": 1, "box_preset": "60_40_40"},
-        )
-        assert box.status_code == 201, box.text
-        box_id = box.json()[0]["id"]
-        locations = (
-            await async_client.get(
-                f"/warehouses/{unload['warehouse_id']}/locations",
+        for line in task["lines"]:
+            need = int(line["qty_need_pack"])
+            if need < 1:
+                continue
+            pack = await async_client.post(
+                f"/operations/packaging-tasks/{task['id']}/lines/{line['id']}/pack",
                 headers=h,
+                json={"quantity": need},
             )
-        ).json()
-        for product_id, need in needs:
-            payload: dict[str, object] = {"product_id": product_id, "quantity": need}
-            add = await async_client.post(
-                f"/operations/marketplace-unload-requests/{unload_id}/boxes/{box_id}/manual-line",
-                headers=h,
-                json=payload,
-            )
-            if add.status_code != 200:
-                for loc in locations:
-                    add = await async_client.post(
-                        f"/operations/marketplace-unload-requests/{unload_id}/boxes/{box_id}/manual-line",
-                        headers=h,
-                        json={**payload, "storage_location_id": loc["id"]},
-                    )
-                    if add.status_code == 200:
-                        break
-            assert add.status_code == 200, add.text
-        close = await async_client.post(
-            f"/operations/marketplace-unload-requests/{unload_id}/boxes/{box_id}/close",
-            headers=h,
-        )
-        assert close.status_code == 200, close.text
+            assert pack.status_code == 200, pack.text
         pkg = await async_client.get(
             f"/operations/packaging-tasks/by-unload/{unload_id}",
             headers=h,

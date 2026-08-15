@@ -420,7 +420,7 @@ async def test_mp_availability_uses_free_fbo_after_directions_and_active_reserve
         json={"product_id": str(product_id), "quantity": 401},
     )
     assert too_much.status_code == 422
-    assert too_much.json()["detail"] == "insufficient_free_fbo"
+    assert too_much.json()["detail"]["code"] == "insufficient_free_fbo"
 
     ok = await async_client.post(
         f"/operations/marketplace-unload-requests/{unload_id}/lines",
