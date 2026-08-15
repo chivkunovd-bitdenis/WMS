@@ -2,11 +2,18 @@ from __future__ import annotations
 
 import uuid
 from datetime import time
+from typing import TypedDict
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.tenant import Tenant
 from app.services import inventory_service as inv_svc
+
+
+class TenantSettingsData(TypedDict):
+    address_storage_enabled: bool
+    separate_marking_print_enabled: bool
+    fbs_shipment_cutoff_time: str | None
 
 
 async def get_tenant(session: AsyncSession, tenant_id: uuid.UUID) -> Tenant:
@@ -27,7 +34,7 @@ async def is_address_storage_enabled(
 async def get_tenant_settings(
     session: AsyncSession,
     tenant_id: uuid.UUID,
-) -> dict[str, bool | str | None]:
+) -> TenantSettingsData:
     tenant = await get_tenant(session, tenant_id)
     return {
         "address_storage_enabled": tenant.address_storage_enabled,
@@ -48,7 +55,7 @@ async def update_tenant_settings(
     separate_marking_print_enabled: bool | None = None,
     fbs_shipment_cutoff_time: time | None = None,
     set_fbs_shipment_cutoff_time: bool = False,
-) -> dict[str, bool | str | None]:
+) -> TenantSettingsData:
     tenant = await get_tenant(session, tenant_id)
     if address_storage_enabled is not None:
         if tenant.address_storage_enabled and not address_storage_enabled:
