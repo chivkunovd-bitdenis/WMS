@@ -216,7 +216,13 @@ async def test_available_matches_mp_reserve_only_after_putaway(
         json={"lines": [{"product_id": pid, "quantity": 11}]},
     )
     assert over.status_code == 422
-    assert over.json()["detail"] == "insufficient_available"
+    over_detail = over.json()["detail"]
+    assert over_detail["code"] == "insufficient_available"
+    assert over_detail["product_name"] == "P"
+    assert over_detail["sku_code"] == sku
+    assert over_detail["available"] == 10
+    assert over_detail["attempted"] == 11
+    assert "Доступно 10 шт, пытаются 11 шт" in over_detail["message"]
 
     await async_client.put(
         f"/operations/marketplace-unload-requests/{mid}/lines",
