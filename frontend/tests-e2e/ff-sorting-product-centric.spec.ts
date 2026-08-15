@@ -1,4 +1,4 @@
-import { test, expect, type Locator } from '@playwright/test';
+import { test, expect, type Locator, type Page } from '@playwright/test';
 
 import { waitForGetOk, waitForPostOk } from './api-waits';
 import { openFulfillmentRegistration } from './auth-flow';
@@ -18,6 +18,11 @@ async function sortingRowByIdentity(
   throw new Error(
     `sorting row with source "${identity.sourceText}" and location "${identity.locationText}" not found`,
   );
+}
+
+async function selectSortingLocation(page: Page, row: Locator, name: RegExp): Promise<void> {
+  await row.getByTestId('ff-sorting-cell-location').getByRole('combobox').click();
+  await page.getByRole('option', { name }).click();
 }
 
 // TC-NEW-SORT-01 — mixed loose + box distribution survives save/reload with correct sources.
@@ -114,17 +119,16 @@ test('ff sorting product-centric: loose and box sources persist after save reloa
     .getByTestId('ff-sorting-cell-row')
     .filter({ has: page.getByTestId('ff-sorting-cell-source').filter({ hasText: 'Россыпь' }) })
     .first();
-  await looseRow.getByTestId('ff-sorting-cell-location').click();
-  await page.getByRole('option', { name: /LOOSE-1/ }).click();
+  await selectSortingLocation(page, looseRow, /LOOSE-1/);
   await looseRow.getByTestId('ff-sorting-cell-qty').fill('4');
 
   const boxRow = productCard
     .getByTestId('ff-sorting-cell-row')
     .filter({ has: page.getByTestId('ff-sorting-cell-source').filter({ hasText: 'Короб' }) })
     .first();
-  await boxRow.getByTestId('ff-sorting-cell-location').click();
-  await page.getByRole('option', { name: /BOX-1/ }).click();
+  await selectSortingLocation(page, boxRow, /BOX-1/);
   await expect(boxRow.getByTestId('ff-sorting-cell-qty')).toHaveValue('6');
+  await expect(page.getByTestId('ff-sorting-save')).toBeEnabled();
 
   await Promise.all([
     page.waitForResponse(
@@ -232,9 +236,9 @@ test('ff sorting: failed distribution-lines load shows error and blocks save', a
   const productCard = page.getByTestId('ff-sorting-product-card').first();
   await expect(productCard.getByTestId('ff-sorting-cell-row')).toHaveCount(1);
   const row = productCard.getByTestId('ff-sorting-cell-row').first();
-  await row.getByTestId('ff-sorting-cell-location').click();
-  await page.getByRole('option', { name: /CELL-A/ }).click();
+  await selectSortingLocation(page, row, /CELL-A/);
   await row.getByTestId('ff-sorting-cell-qty').fill('5');
+  await expect(page.getByTestId('ff-sorting-save')).toBeEnabled();
 
   await Promise.all([
     page.waitForResponse(
@@ -280,4 +284,277 @@ test('ff sorting: failed distribution-lines load shows error and blocks save', a
   );
   await page.getByTestId('ff-sorting-save').click({ force: true }).catch(() => undefined);
   await expect(putPromise).rejects.toThrow();
+});
+
+// TC-NEW-SORT-03 — scanner-first cell -> product -> +1, apply locks the document and closes the sorting balance.
+test('ff sorting scanner-first: cell barcode then product scans apply distribution', async ({ page }) => {
+  await page.setViewportSize({ width: 1280, height: 900 });
+  const email = `e2e-sort-scan-${Date.now()}@example.com`;
+  const sku = `SKU-SORT-SCAN-${Date.now()}`;
+  const whCode = `wh-sort-scan-${Date.now()}`;
+
+  await page.goto('/');
+  await openFulfillmentRegistration(page);
+  await page.getByTestId('register-form').getByLabel('Организация').fill('E2E Sort Scan');
+  await page.getByTestId('register-form').getByLabel('Email администратора').fill(email);
+  await page.getByTestId('register-form').getByLabel('Пароль').fill('password123');
+  const [regRes] = await Promise.all([
+    waitForPostOk(page, '/api/auth/register'),
+    waitForGetOk(page, '/api/auth/me'),
+    page.getByTestId('register-form').getByRole('button', { name: 'Создать аккаунт' }).click(),
+  ]);
+  const token = ((await regRes.json()) as { access_token: string }).access_token;
+  const h = { Authorization: `Bearer ${token}` };
+
+  const wh = await page.request.post('/api/warehouses', {
+    headers: h,
+    data: { name: 'Склад', code: whCode },
+  });
+  const wid = ((await wh.json()) as { id: string }).id;
+  const loc = await page.request.post(`/api/warehouses/${wid}/locations`, {
+    headers: h,
+    data: { code: 'SCAN-A-01' },
+  });
+  expect(loc.ok()).toBeTruthy();
+  const locBody = (await loc.json()) as { id: string; barcode: string };
+
+  const pr = await page.request.post('/api/products', {
+    headers: h,
+    data: { name: 'Сканируемый длинный товар для сортировки', sku_code: sku, length_mm: 10, width_mm: 10, height_mm: 10 },
+  });
+  const pid = ((await pr.json()) as { id: string }).id;
+
+  const base = '/api/operations/inbound-intake-requests';
+  const cr = await page.request.post(base, { headers: h, data: { warehouse_id: wid } });
+  const rid = ((await cr.json()) as { id: string }).id;
+  const line = await page.request.post(`${base}/${rid}/lines`, {
+    headers: { ...h, 'Content-Type': 'application/json' },
+    data: { product_id: pid, expected_qty: 2 },
+  });
+  const lineId = ((await line.json()) as { id: string }).id;
+  await page.request.post(`${base}/${rid}/submit`, { headers: h });
+  await page.request.post(`${base}/${rid}/primary-accept`, { headers: h });
+  await page.request.patch(`${base}/${rid}/lines/${lineId}/actual`, {
+    headers: { ...h, 'Content-Type': 'application/json' },
+    data: { actual_qty: 2 },
+  });
+  await page.request.post(`${base}/${rid}/complete-receiving`, { headers: h });
+
+  await page.goto('/app/ff/sorting');
+  await expect(page.getByTestId('ff-sorting-page')).toBeVisible();
+  await expect(page.getByTestId('ff-inbound-queue-status').first()).toContainText('В сортировке');
+  await page.getByTestId('ff-inbound-queue-row').first().click();
+  await expect(page.getByTestId('ff-sorting-panel')).toBeVisible();
+
+  const scanInput = page.getByTestId('ff-sorting-scan-input');
+  await scanInput.fill(locBody.barcode);
+  await Promise.all([
+    page.waitForResponse((r) => r.request().method() === 'POST' && r.url().includes('/distribution-scan') && r.ok()),
+    scanInput.press('Enter'),
+  ]);
+  await expect(page.getByTestId('ff-sorting-active-location')).toContainText('SCAN-A-01');
+  await expect(page.getByTestId('ff-sorting-scan-message')).toContainText('Активная ячейка: SCAN-A-01');
+  await expect(scanInput).toBeFocused();
+
+  await scanInput.fill(`UNKNOWN-SORT-${Date.now()}`);
+  await Promise.all([
+    page.waitForResponse((r) => r.request().method() === 'POST' && r.url().includes('/distribution-scan')),
+    scanInput.press('Enter'),
+  ]);
+  await expect(page.getByTestId('ff-sorting-error')).toContainText('Такой товар или ячейка не найдены');
+  await expect(scanInput).toHaveValue('');
+  await expect(scanInput).toBeFocused();
+
+  for (const expected of ['разложено 1, осталось 1', 'разложено 2, осталось 0']) {
+    await scanInput.fill(sku);
+    await Promise.all([
+      page.waitForResponse((r) => r.request().method() === 'POST' && r.url().includes('/distribution-scan') && r.ok()),
+      scanInput.press('Enter'),
+    ]);
+    await expect(page.getByTestId('ff-sorting-scan-message')).toContainText(expected);
+  }
+
+  const card = page.getByTestId('ff-sorting-product-card').first();
+  await expect(card.getByTestId('ff-sorting-product-distributed')).toHaveText('2');
+  await expect(card.getByTestId('ff-sorting-product-remaining')).toHaveText('0');
+
+  await Promise.all([
+    page.waitForResponse((r) => r.request().method() === 'POST' && r.url().includes('/distribution-complete') && r.ok()),
+    page.getByTestId('ff-sorting-apply').click(),
+  ]);
+  await expect(page.getByTestId('ff-sorting-posted-done')).toBeVisible();
+  await expect(page.getByTestId('ff-sorting-all-done')).toBeVisible();
+
+  const balances = await page.request.get('/api/operations/inventory-balances/summary', { headers: h });
+  const row = ((await balances.json()) as { product_id: string; quantity_in_sorting: number; quantity_in_storage: number }[])
+    .find((item) => item.product_id === pid);
+  expect(row).toMatchObject({ quantity_in_sorting: 0, quantity_in_storage: 2 });
+});
+
+// TC-NEW-SORT-04 — sorting draft close/cross asks before losing unsaved manual corrections.
+test('ff sorting: unsaved manual correction asks before close', async ({ page }) => {
+  const email = `e2e-sort-dirty-${Date.now()}@example.com`;
+  const sku = `SKU-SORT-DIRTY-${Date.now()}`;
+  const whCode = `wh-sort-dirty-${Date.now()}`;
+
+  await page.goto('/');
+  await openFulfillmentRegistration(page);
+  await page.getByTestId('register-form').getByLabel('Организация').fill('E2E Sort Dirty');
+  await page.getByTestId('register-form').getByLabel('Email администратора').fill(email);
+  await page.getByTestId('register-form').getByLabel('Пароль').fill('password123');
+  const [regRes] = await Promise.all([
+    waitForPostOk(page, '/api/auth/register'),
+    waitForGetOk(page, '/api/auth/me'),
+    page.getByTestId('register-form').getByRole('button', { name: 'Создать аккаунт' }).click(),
+  ]);
+  const token = ((await regRes.json()) as { access_token: string }).access_token;
+  const h = { Authorization: `Bearer ${token}` };
+
+  const wh = await page.request.post('/api/warehouses', {
+    headers: h,
+    data: { name: 'Склад', code: whCode },
+  });
+  const wid = ((await wh.json()) as { id: string }).id;
+  await page.request.post(`/api/warehouses/${wid}/locations`, {
+    headers: h,
+    data: { code: 'DIRTY-A-01' },
+  });
+  const pr = await page.request.post('/api/products', {
+    headers: h,
+    data: { name: 'Товар для черновика', sku_code: sku, length_mm: 10, width_mm: 10, height_mm: 10 },
+  });
+  const pid = ((await pr.json()) as { id: string }).id;
+
+  const base = '/api/operations/inbound-intake-requests';
+  const cr = await page.request.post(base, { headers: h, data: { warehouse_id: wid } });
+  const rid = ((await cr.json()) as { id: string }).id;
+  const line = await page.request.post(`${base}/${rid}/lines`, {
+    headers: { ...h, 'Content-Type': 'application/json' },
+    data: { product_id: pid, expected_qty: 1 },
+  });
+  const lineId = ((await line.json()) as { id: string }).id;
+  await page.request.post(`${base}/${rid}/submit`, { headers: h });
+  await page.request.post(`${base}/${rid}/primary-accept`, { headers: h });
+  await page.request.patch(`${base}/${rid}/lines/${lineId}/actual`, {
+    headers: { ...h, 'Content-Type': 'application/json' },
+    data: { actual_qty: 1 },
+  });
+  await page.request.post(`${base}/${rid}/complete-receiving`, { headers: h });
+
+  await page.goto('/app/ff/sorting');
+  await page.getByTestId('ff-inbound-queue-row').first().click();
+  await expect(page.getByTestId('ff-sorting-panel')).toBeVisible();
+  const row = page.getByTestId('ff-sorting-cell-row').first();
+  await selectSortingLocation(page, row, /DIRTY-A-01/);
+  await expect(page.getByTestId('ff-sorting-save')).toBeEnabled();
+
+  page.once('dialog', async (dialog) => {
+    expect(dialog.message()).toContain('Закрыть без сохранения?');
+    await dialog.dismiss();
+  });
+  await page.getByTestId('ff-doc-dialog-close').click();
+  await expect(page.getByTestId('ff-sorting-panel')).toBeVisible();
+
+  page.once('dialog', async (dialog) => {
+    expect(dialog.message()).toContain('Закрыть без сохранения?');
+    await dialog.accept();
+  });
+  await page.getByTestId('ff-doc-dialog-close').click();
+  await expect(page.getByTestId('ff-doc-dialog')).toBeHidden();
+});
+
+// TC-NEW-SORT-05 — warehouse/cell CRUD keeps stock safe when a location with balance is deleted.
+test('ff cells: rename and safe-delete location with balance', async ({ page }) => {
+  await page.setViewportSize({ width: 1280, height: 900 });
+  const email = `e2e-cells-crud-${Date.now()}@example.com`;
+  const sku = `SKU-CELL-CRUD-${Date.now()}`;
+  const whCode = `wh-cell-crud-${Date.now()}`;
+
+  await page.goto('/');
+  await openFulfillmentRegistration(page);
+  await page.getByTestId('register-form').getByLabel('Организация').fill('E2E Cells CRUD');
+  await page.getByTestId('register-form').getByLabel('Email администратора').fill(email);
+  await page.getByTestId('register-form').getByLabel('Пароль').fill('password123');
+  const [regRes] = await Promise.all([
+    waitForPostOk(page, '/api/auth/register'),
+    waitForGetOk(page, '/api/auth/me'),
+    page.getByTestId('register-form').getByRole('button', { name: 'Создать аккаунт' }).click(),
+  ]);
+  const token = ((await regRes.json()) as { access_token: string }).access_token;
+  const h = { Authorization: `Bearer ${token}` };
+
+  const wh = await page.request.post('/api/warehouses', {
+    headers: h,
+    data: { name: 'Склад CRUD', code: whCode },
+  });
+  const wid = ((await wh.json()) as { id: string }).id;
+  const loc = await page.request.post(`/api/warehouses/${wid}/locations`, {
+    headers: h,
+    data: { code: 'CRUD-A-01' },
+  });
+  const locId = ((await loc.json()) as { id: string }).id;
+  const pr = await page.request.post('/api/products', {
+    headers: h,
+    data: { name: 'Товар в удаляемой ячейке', sku_code: sku, length_mm: 10, width_mm: 10, height_mm: 10 },
+  });
+  const pid = ((await pr.json()) as { id: string }).id;
+
+  const base = '/api/operations/inbound-intake-requests';
+  const cr = await page.request.post(base, { headers: h, data: { warehouse_id: wid } });
+  const rid = ((await cr.json()) as { id: string }).id;
+  const line = await page.request.post(`${base}/${rid}/lines`, {
+    headers: { ...h, 'Content-Type': 'application/json' },
+    data: { product_id: pid, expected_qty: 2 },
+  });
+  const lineId = ((await line.json()) as { id: string }).id;
+  await page.request.post(`${base}/${rid}/submit`, { headers: h });
+  await page.request.post(`${base}/${rid}/primary-accept`, { headers: h });
+  await page.request.patch(`${base}/${rid}/lines/${lineId}/actual`, {
+    headers: { ...h, 'Content-Type': 'application/json' },
+    data: { actual_qty: 2 },
+  });
+  await page.request.post(`${base}/${rid}/complete-receiving`, { headers: h });
+  await page.request.put(`${base}/${rid}/distribution-lines`, {
+    headers: { ...h, 'Content-Type': 'application/json' },
+    data: [{ product_id: pid, storage_location_id: locId, quantity: 2 }],
+  });
+  await page.request.post(`${base}/${rid}/distribution-complete`, { headers: h });
+
+  await page.goto('/app/catalog');
+  await expect(page.getByTestId('warehouses-panel')).toBeVisible();
+  await page.getByTestId('warehouse-row').filter({ hasText: 'Склад CRUD' }).click();
+  await expect(page.getByTestId('location-table')).toContainText('CRUD-A-01');
+  await expect(page.getByTestId('location-table')).not.toContainText('__SORTING__');
+
+  const warehouseRow = page.getByTestId('warehouse-row').filter({ hasText: 'Склад CRUD' });
+  await warehouseRow.getByTestId('warehouse-rename').click();
+  await page.getByTestId('warehouse-rename-name').getByRole('textbox').fill('Склад CRUD renamed');
+  await Promise.all([
+    page.waitForResponse((r) => r.request().method() === 'PATCH' && r.url().includes('/warehouses/') && r.ok()),
+    page.getByTestId('warehouse-rename-submit').click(),
+  ]);
+  await expect(page.getByTestId('warehouse-table')).toContainText('Склад CRUD renamed');
+
+  const locationRow = page.getByTestId('location-row').filter({ hasText: 'CRUD-A-01' });
+  await locationRow.getByTestId('location-rename').click();
+  await page.getByTestId('location-rename-code').getByRole('textbox').fill('CRUD-A-02');
+  await Promise.all([
+    page.waitForResponse((r) => r.request().method() === 'PATCH' && r.url().includes('/locations/') && r.ok()),
+    page.getByTestId('location-rename-submit').click(),
+  ]);
+  await expect(page.getByTestId('location-table')).toContainText('CRUD-A-02');
+
+  await page.getByTestId('location-row').filter({ hasText: 'CRUD-A-02' }).getByTestId('location-delete').click();
+  await expect(page.getByTestId('location-delete-stock-warning')).toContainText('2 шт');
+  await expect(page.getByTestId('location-delete-balances')).toContainText(sku);
+  await Promise.all([
+    page.waitForResponse((r) => r.request().method() === 'DELETE' && r.url().includes('move_stock_to=unallocated') && r.status() === 204),
+    page.getByTestId('location-delete-move-unallocated').click(),
+  ]);
+  await expect(page.getByTestId('location-table')).not.toContainText('CRUD-A-02');
+
+  const balances = await page.request.get('/api/operations/inventory-balances/summary', { headers: h });
+  const row = ((await balances.json()) as { product_id: string; quantity_in_sorting: number; quantity_in_storage: number }[])
+    .find((item) => item.product_id === pid);
+  expect(row).toMatchObject({ quantity_in_sorting: 2, quantity_in_storage: 0 });
 });

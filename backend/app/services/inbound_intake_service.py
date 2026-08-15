@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import uuid
+from dataclasses import dataclass
 from datetime import UTC, date, datetime
 
 import sqlalchemy as sa
@@ -58,6 +59,14 @@ class InboundIntakeError(Exception):
     def __init__(self, code: str) -> None:
         self.code = code
         super().__init__(code)
+
+
+@dataclass(frozen=True)
+class DistributionScanResult:
+    kind: str
+    active_location: StorageLocation | None
+    product_id: uuid.UUID | None
+    rows: list[InboundIntakeDistributionLine]
 
 
 def _loose_qty(line: InboundIntakeLine) -> int:
@@ -1163,6 +1172,158 @@ async def list_distribution_lines(
     return list(res.scalars().all())
 
 
+async def scan_distribution_barcode(
+    session: AsyncSession,
+    tenant_id: uuid.UUID,
+    request_id: uuid.UUID,
+    *,
+    barcode: str,
+    active_storage_location_id: uuid.UUID | None,
+) -> DistributionScanResult:
+    raw = barcode.strip()
+    if not raw:
+        raise InboundIntakeError("barcode_empty")
+    req = await get_request(session, tenant_id, request_id)
+    if req is None:
+        raise InboundIntakeError("request_not_found")
+    if req.distribution_completed_at is not None:
+        raise InboundIntakeError("distribution_completed")
+    if req.status != STATUS_SORTING:
+        raise InboundIntakeError("not_distributable")
+
+    loc_stmt = select(StorageLocation).where(
+        StorageLocation.tenant_id == tenant_id,
+        StorageLocation.warehouse_id == req.warehouse_id,
+        StorageLocation.deleted_at.is_(None),
+        sa.or_(
+            StorageLocation.barcode == raw,
+            StorageLocation.code == raw,
+            StorageLocation.code == raw.upper(),
+        ),
+    )
+    loc_res = await session.execute(loc_stmt)
+    scanned_loc = loc_res.scalar_one_or_none()
+    if scanned_loc is not None:
+        if sorting_loc_svc.is_sorting_location(scanned_loc):
+            raise InboundIntakeError("sorting_location_reserved")
+        return DistributionScanResult(
+            kind="location",
+            active_location=scanned_loc,
+            product_id=None,
+            rows=await list_distribution_lines(session, tenant_id, request_id),
+        )
+
+    idx = await _request_barcode_index(
+        session,
+        tenant_id,
+        req,
+        include_seller_catalog=False,
+    )
+    product_id = idx.get(raw) or idx.get(raw.upper())
+    if product_id is None:
+        raise InboundIntakeError("scan_not_found")
+    if active_storage_location_id is None:
+        raise InboundIntakeError("active_location_required")
+
+    active_loc = await get_storage_location_in_warehouse(
+        session, tenant_id, req.warehouse_id, active_storage_location_id
+    )
+    if active_loc is None:
+        raise InboundIntakeError("location_not_found")
+    if sorting_loc_svc.is_sorting_location(active_loc):
+        raise InboundIntakeError("sorting_location_reserved")
+
+    line = next((ln for ln in req.lines if ln.product_id == product_id), None)
+    if line is None:
+        raise InboundIntakeError("product_not_on_request")
+    accepted = _accepted_qty_for_line(line)
+    if accepted <= 0:
+        raise InboundIntakeError("product_not_accepted")
+
+    stmt = select(InboundIntakeDistributionLine).where(
+        InboundIntakeDistributionLine.request_id == request_id
+    )
+    res = await session.execute(stmt)
+    rows = list(res.scalars().all())
+
+    current_total = sum(int(r.quantity) for r in rows if r.product_id == product_id)
+    next_total = max(int(line.posted_qty), current_total) + 1
+    if next_total > accepted:
+        raise InboundIntakeError("qty_exceeds_accepted")
+
+    sorting_loc = await sorting_loc_svc.get_or_create_sorting_location(
+        session, tenant_id, req.warehouse_id
+    )
+    available = await inv_svc.available_quantity_at_location(
+        session,
+        tenant_id,
+        product_id,
+        sorting_loc.id,
+    )
+    if available < max(0, next_total - int(line.posted_qty)):
+        raise InboundIntakeError("insufficient_sorting_stock")
+
+    used_loose = sum(
+        int(r.quantity)
+        for r in rows
+        if r.product_id == product_id and r.box_id is None
+    )
+    used_by_box_product: dict[tuple[uuid.UUID, uuid.UUID], int] = {}
+    for r in rows:
+        if r.box_id is None:
+            continue
+        key = (r.box_id, r.product_id)
+        used_by_box_product[key] = used_by_box_product.get(key, 0) + int(r.quantity)
+
+    source_box_id: uuid.UUID | None = None
+    loose_capacity = _loose_pool_for_product(req, product_id, accepted)
+    if used_loose >= loose_capacity:
+        source_box_id = None
+        for box in req.boxes:
+            for bl in box.lines:
+                if bl.product_id != product_id:
+                    continue
+                key = (box.id, product_id)
+                if used_by_box_product.get(key, 0) < box_line_remaining_qty(bl):
+                    source_box_id = box.id
+                    break
+            if source_box_id is not None:
+                break
+        if source_box_id is None:
+            raise InboundIntakeError("qty_exceeds_accepted")
+
+    existing = next(
+        (
+            r
+            for r in rows
+            if r.product_id == product_id
+            and r.storage_location_id == active_loc.id
+            and r.box_id == source_box_id
+        ),
+        None,
+    )
+    if existing is None:
+        session.add(
+            InboundIntakeDistributionLine(
+                request_id=request_id,
+                product_id=product_id,
+                storage_location_id=active_loc.id,
+                quantity=1,
+                box_id=source_box_id,
+            )
+        )
+    else:
+        existing.quantity += 1
+
+    await session.commit()
+    return DistributionScanResult(
+        kind="product",
+        active_location=active_loc,
+        product_id=product_id,
+        rows=await list_distribution_lines(session, tenant_id, request_id),
+    )
+
+
 async def replace_distribution_lines(
     session: AsyncSession,
     tenant_id: uuid.UUID,
@@ -1304,7 +1465,11 @@ async def complete_distribution(
                 raise InboundIntakeError("qty_exceeds_accepted")
             sum_loose_by_product[r.product_id] = next_loose_sum
         target_loc = await session.get(StorageLocation, r.storage_location_id)
-        if target_loc is None or target_loc.tenant_id != tenant_id:
+        if (
+            target_loc is None
+            or target_loc.tenant_id != tenant_id
+            or target_loc.deleted_at is not None
+        ):
             raise InboundIntakeError("location_not_found")
         if sorting_loc_svc.is_sorting_location(target_loc):
             raise InboundIntakeError("sorting_location_reserved")
@@ -1312,6 +1477,10 @@ async def complete_distribution(
         line = lines_by_product[r.product_id]
         if max(line.posted_qty, sum_by_product[r.product_id]) > accepted:
             raise InboundIntakeError("qty_exceeds_accepted")
+
+    for product_id, accepted in accepted_by_product.items():
+        if accepted > 0 and sum_by_product.get(product_id, 0) < accepted:
+            raise InboundIntakeError("distribution_incomplete")
 
     distributed_before_by_product: dict[uuid.UUID, int] = {}
     for r in rows:
@@ -1330,15 +1499,21 @@ async def complete_distribution(
             quantity_to_post = min(quantity_to_post, box_line_remaining_qty(bl))
             if quantity_to_post < 1:
                 continue
-        await inv_svc.apply_putaway_from_sorting(
-            session,
-            tenant_id,
-            from_storage_location_id=sorting_loc.id,
-            to_storage_location_id=r.storage_location_id,
-            product_id=r.product_id,
-            quantity=quantity_to_post,
-            inbound_intake_line_id=line.id,
-        )
+        try:
+            await inv_svc.apply_putaway_from_sorting(
+                session,
+                tenant_id,
+                from_storage_location_id=sorting_loc.id,
+                to_storage_location_id=r.storage_location_id,
+                product_id=r.product_id,
+                quantity=quantity_to_post,
+                inbound_intake_line_id=line.id,
+            )
+        except ValueError as exc:
+            await session.rollback()
+            if "insufficient stock" in str(exc):
+                raise InboundIntakeError("insufficient_sorting_stock") from exc
+            raise InboundIntakeError("location_not_found") from exc
         line.posted_qty += quantity_to_post
         if r.box_id is not None:
             bl = box_lines_by_key[(r.box_id, r.product_id)]

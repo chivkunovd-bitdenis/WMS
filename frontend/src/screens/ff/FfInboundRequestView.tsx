@@ -276,6 +276,7 @@ type Props = {
   workspace?: InboundRequestWorkspace
   sellers?: SellerRow[]
   onClose: () => void
+  onDirtyChange?: (dirty: boolean) => void
   addressStorageEnabled?: boolean
 }
 
@@ -286,6 +287,7 @@ export function FfInboundRequestView({
   workspace = 'full',
   sellers = [],
   onClose,
+  onDirtyChange,
   addressStorageEnabled = true,
 }: Props) {
   const authHeaders = useMemo(() => ({ Authorization: `Bearer ${token}` }), [token])
@@ -328,6 +330,13 @@ export function FfInboundRequestView({
   const receivingScanInputRef = useRef<HTMLInputElement | null>(null)
 
   const sortingView = workspace === 'sorting'
+
+  useEffect(() => {
+    if (!sortingView) {
+      onDirtyChange?.(false)
+    }
+    return () => onDirtyChange?.(false)
+  }, [onDirtyChange, sortingView])
   const receptionClosed =
     detail != null && (isSortingStatus(detail.status) || isDoneStatus(detail.status))
   const receivingActive =
@@ -1866,6 +1875,7 @@ export function FfInboundRequestView({
                 onReload={async () => {
                   await loadDetail()
                 }}
+                onDirtyChange={onDirtyChange}
               />
             </>
           ) : null}

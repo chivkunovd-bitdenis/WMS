@@ -1,0 +1,93 @@
+{
+  "screen": "Сортировка и ячейки",
+  "stage": "4/5 live product browser QA",
+  "browser": "Chrome/151.0.7922.138",
+  "url": "http://127.0.0.1:5189",
+  "width": 1400,
+  "role": "FF admin / warehouse sorting operator",
+  "control": "raw Chrome DevTools Protocol attached to visible external Google Chrome window; not Playwright, not headless",
+  "actions": [
+    "fixture via API: FF warehouse, cell, product, inbound sorting qty=2"
+  ],
+  "states": {
+    "empty": "Нет приёмок в сортировке — всё разложено по ячейкам.",
+    "outer_width": 1400,
+    "initial_focus": "ff-sorting-scan-input",
+    "focus_after_cell_scan": "ff-sorting-scan-input",
+    "error": "Такой товар или ячейка не найдены в этой приёмке.",
+    "value_after_error": "",
+    "focus_after_error_scan": "ff-sorting-scan-input",
+    "focus_after_product_scans": [
+      "ff-sorting-scan-input",
+      "ff-sorting-scan-input"
+    ],
+    "success_scan_message": "Скан принят: Очень длинное название товара для live sorting QA без переноса строки на 1280 → LIVE-A-01; разложено 2, осталось 0.",
+    "distributed": "2",
+    "remaining": "0",
+    "reload_queue_row": true,
+    "reload_distributed": "2",
+    "reload_active_location": "Ячейка не выбрана",
+    "apply_success": "Оприходовано — весь товар разложен по ячейкам хранения.",
+    "balance_after_apply": {
+      "product_id": "86c623e7-25dc-45ba-b383-b577e41dafbb",
+      "sku_code": "LIVE-SORT-PASS-SKU-1786778601468",
+      "product_name": "Очень длинное название товара для live sorting QA без переноса строки на 1280",
+      "seller_id": null,
+      "seller_name": null,
+      "packaging_instructions": null,
+      "requires_honest_sign": false,
+      "quantity": 2,
+      "quantity_unpacked": 2,
+      "quantity_packed": 0,
+      "quantity_in_sorting": 0,
+      "quantity_in_storage": 2,
+      "reserved": 0,
+      "available": 2,
+      "quantity_fbs": 0,
+      "quantity_reserved_directions": 0,
+      "quantity_free_fbo": 2
+    },
+    "delete_warning": "В ячейке лежит 2 шт. Выберите, куда перенести товар перед удалением адреса.",
+    "delete_balances": "Товар\tШт\nLIVE-SORT-PASS-SKU-1786778601468 · Очень длинное название товара для live sorting QA без переноса строки на 1280\t2",
+    "balance_after_delete": {
+      "product_id": "86c623e7-25dc-45ba-b383-b577e41dafbb",
+      "sku_code": "LIVE-SORT-PASS-SKU-1786778601468",
+      "product_name": "Очень длинное название товара для live sorting QA без переноса строки на 1280",
+      "seller_id": null,
+      "seller_name": null,
+      "packaging_instructions": null,
+      "requires_honest_sign": false,
+      "quantity": 2,
+      "quantity_unpacked": 2,
+      "quantity_packed": 0,
+      "quantity_in_sorting": 2,
+      "quantity_in_storage": 0,
+      "reserved": 0,
+      "available": 0,
+      "quantity_fbs": 0,
+      "quantity_reserved_directions": 0,
+      "quantity_free_fbo": 2
+    },
+    "final_focus_ok": true
+  },
+  "findings": {
+    "stop": [],
+    "brake": [],
+    "tail": []
+  },
+  "verdict": "SCREEN_APPROVED",
+  "round": 1,
+  "artifacts": [
+    "/Users/deniscivkunov/Projects/WMS/.worktrees/wave1-sorting-cells-20260814/docs/reviews/wave1-sorting-cells/live-browser-qa-20260815-final-pass/01-empty-sorting-1400.png",
+    "/Users/deniscivkunov/Projects/WMS/.worktrees/wave1-sorting-cells-20260814/docs/reviews/wave1-sorting-cells/live-browser-qa-20260815-final-pass/02-sorting-queue-with-row-1400.png",
+    "/Users/deniscivkunov/Projects/WMS/.worktrees/wave1-sorting-cells-20260814/docs/reviews/wave1-sorting-cells/live-browser-qa-20260815-final-pass/03-sorting-panel-autofocus-1400.png",
+    "/Users/deniscivkunov/Projects/WMS/.worktrees/wave1-sorting-cells-20260814/docs/reviews/wave1-sorting-cells/live-browser-qa-20260815-final-pass/04-cell-scan-active-location-1400.png",
+    "/Users/deniscivkunov/Projects/WMS/.worktrees/wave1-sorting-cells-20260814/docs/reviews/wave1-sorting-cells/live-browser-qa-20260815-final-pass/05-unknown-scan-error-focus-1400.png",
+    "/Users/deniscivkunov/Projects/WMS/.worktrees/wave1-sorting-cells-20260814/docs/reviews/wave1-sorting-cells/live-browser-qa-20260815-final-pass/06-product-scans-plus-two-1400.png",
+    "/Users/deniscivkunov/Projects/WMS/.worktrees/wave1-sorting-cells-20260814/docs/reviews/wave1-sorting-cells/live-browser-qa-20260815-final-pass/07-reload-readback-distribution-1400.png",
+    "/Users/deniscivkunov/Projects/WMS/.worktrees/wave1-sorting-cells-20260814/docs/reviews/wave1-sorting-cells/live-browser-qa-20260815-final-pass/08-apply-success-1400.png",
+    "/Users/deniscivkunov/Projects/WMS/.worktrees/wave1-sorting-cells-20260814/docs/reviews/wave1-sorting-cells/live-browser-qa-20260815-final-pass/09-delete-cell-stock-warning-1400.png",
+    "/Users/deniscivkunov/Projects/WMS/.worktrees/wave1-sorting-cells-20260814/docs/reviews/wave1-sorting-cells/live-browser-qa-20260815-final-pass/10-delete-cell-readback-1400.png",
+    "/Users/deniscivkunov/Projects/WMS/.worktrees/wave1-sorting-cells-20260814/docs/reviews/wave1-sorting-cells/live-browser-qa-20260815-final-pass/live-browser-log.json"
+  ]
+}

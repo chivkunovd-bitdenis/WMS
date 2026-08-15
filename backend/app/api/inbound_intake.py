@@ -118,6 +118,11 @@ class InboundReceivingScanBody(BaseModel):
     barcode: str = Field(min_length=1, max_length=128)
 
 
+class InboundDistributionScanBody(BaseModel):
+    barcode: str = Field(min_length=1, max_length=128)
+    active_storage_location_id: uuid.UUID | None = None
+
+
 class InboundReceivingLineBody(BaseModel):
     product_id: uuid.UUID
     actual_qty: int = Field(default=1, ge=1, le=1_000_000_000)
@@ -296,6 +301,7 @@ def _map_inbound_svc_err(exc: InboundIntakeError) -> HTTPException:
         return HTTPException(status_code=status.HTTP_409_CONFLICT, detail=code)
     if code in (
         "barcode_empty",
+        "active_location_required",
         "invalid_qty",
         "invalid_planned_box_count",
         "submit_empty",
@@ -325,6 +331,7 @@ def _map_inbound_svc_err(exc: InboundIntakeError) -> HTTPException:
             detail=code,
         )
     if code in (
+        "scan_not_found",
         "warehouse_not_found",
         "seller_not_found",
         "product_not_found",
@@ -460,6 +467,14 @@ class InboundDistributionLineOut(BaseModel):
     box_id: str | None = None
     box_number: int | None = None
     box_internal_barcode: str | None = None
+
+
+class InboundDistributionScanOut(BaseModel):
+    kind: Literal["location", "product"]
+    active_storage_location_id: str | None = None
+    active_storage_location_code: str | None = None
+    product_id: str | None = None
+    lines: list[InboundDistributionLineOut] = Field(default_factory=list)
 
 
 def _dist_out(
@@ -1709,6 +1724,50 @@ async def list_distribution_lines(
     return out
 
 
+@router.post(
+    "/{request_id}/distribution-scan",
+    response_model=InboundDistributionScanOut,
+)
+async def scan_distribution_barcode(
+    request_id: uuid.UUID,
+    body: InboundDistributionScanBody,
+    user: Annotated[User, Depends(require_reception_access)],
+    session: Annotated[AsyncSession, Depends(get_db)],
+) -> InboundDistributionScanOut:
+    try:
+        result = await svc.scan_distribution_barcode(
+            session,
+            user.tenant_id,
+            request_id,
+            barcode=body.barcode,
+            active_storage_location_id=body.active_storage_location_id,
+        )
+    except InboundIntakeError as exc:
+        raise _map_inbound_svc_err(exc) from None
+
+    out: list[InboundDistributionLineOut] = []
+    for r in result.rows:
+        loc = await session.get(StorageLocation, r.storage_location_id)
+        if loc is None:
+            continue
+        box = await session.get(InboundIntakeBox, r.box_id) if r.box_id is not None else None
+        out.append(_dist_out(r, loc, box))
+
+    kind: Literal["location", "product"]
+    kind = "location" if result.kind == "location" else "product"
+    return InboundDistributionScanOut(
+        kind=kind,
+        active_storage_location_id=str(result.active_location.id)
+        if result.active_location is not None
+        else None,
+        active_storage_location_code=result.active_location.code
+        if result.active_location is not None
+        else None,
+        product_id=str(result.product_id) if result.product_id is not None else None,
+        lines=out,
+    )
+
+
 @router.put(
     "/{request_id}/distribution-lines",
     response_model=list[InboundDistributionLineOut],
@@ -1807,6 +1866,7 @@ async def complete_distribution(
             "product_not_on_request",
             "product_not_accepted",
             "distribution_incomplete",
+            "insufficient_sorting_stock",
         ):
             raise HTTPException(
                 status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
