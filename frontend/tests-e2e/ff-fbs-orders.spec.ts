@@ -365,9 +365,11 @@ test('fbs orders: search keeps list, selected drawer stays stable and Excel down
   await expect(page.getByTestId('fbs-selection-bar')).toContainText('Выбрано заказов: 1')
 
   await page.getByLabel('Поиск: заказ, товар, категория, артикул, ШК, SKU, цвет, размер').fill('бомбер')
-  await expect(page.getByTestId('fbs-search-result')).toContainText('Найдено совпадений: 1')
   await expect(page.getByTestId('fbs-order-1')).toBeVisible()
   await expect(page.getByTestId('fbs-order-2')).toBeVisible()
+  await expect
+    .poll(async () => page.getByTestId('fbs-order-1').evaluate((node) => getComputedStyle(node).backgroundColor))
+    .toBe('rgba(255, 214, 102, 0.24)')
   await expect(page.getByTestId('fbs-selection-bar')).toContainText('Выбрано заказов: 1')
 
   await page.getByTestId('fbs-selected-open').click()

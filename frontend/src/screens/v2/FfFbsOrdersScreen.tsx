@@ -411,9 +411,6 @@ export function FfFbsOrdersScreen({ token, authHeaders, sellers, isAdmin = false
             <Inventory2OutlinedIcon color="primary" />
             <Typography variant="h5">Заказы FBS</Typography>
           </Stack>
-          <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5 }}>
-            Соберите совместимые заказы в поставку и проведите её до подтверждённой передачи WB.
-          </Typography>
         </Box>
         <Stack direction="row" spacing={1.25} sx={{ alignItems: 'flex-start' }}>
           <Button
@@ -574,12 +571,6 @@ export function FfFbsOrdersScreen({ token, authHeaders, sellers, isAdmin = false
         </Alert>
       ) : null}
 
-      {statusGroup === 'new' && searchTerm && matchingOrders.length > 0 ? (
-        <Alert severity="info" sx={{ mt: 2 }} data-testid="fbs-search-result">
-          Найдено совпадений: {matchingOrders.length}. Список не скрыт, первая найденная строка подсвечена.
-        </Alert>
-      ) : null}
-
       <TableContainer component={Paper} variant="outlined" sx={{ mt: 2, maxHeight: 'calc(100vh - 330px)' }}>
         <Table stickyHeader size="small" data-testid="fbs-worklist-table">
           <TableHead>
@@ -617,9 +608,6 @@ export function FfFbsOrdersScreen({ token, authHeaders, sellers, isAdmin = false
               const blocked = order.selection_blockers.length > 0
               const localSupplyMissing = statusGroup !== 'new' && !order.supply_id
               const highlighted = statusGroup === 'new' && searchTerm && matchingIds.has(order.id)
-              const productDetail = [order.product.category, order.product.color, order.product.size]
-                .filter(Boolean)
-                .join(' · ')
               const row = (
                 <TableRow
                   key={order.id}
@@ -675,11 +663,6 @@ export function FfFbsOrdersScreen({ token, authHeaders, sellers, isAdmin = false
                                 {order.product.id ? order.product.name : 'Товар не сопоставлен'}
                               </Typography>
                             </Tooltip>
-                            {productDetail ? (
-                              <Typography variant="caption" color="text.secondary" noWrap sx={{ display: 'block', maxWidth: 320 }}>
-                                {productDetail}
-                              </Typography>
-                            ) : null}
                             {blocked ? (
                               <Stack sx={{ mt: 0.75 }} spacing={0.25}>
                                 {order.selection_blockers.map((blocker) => (
