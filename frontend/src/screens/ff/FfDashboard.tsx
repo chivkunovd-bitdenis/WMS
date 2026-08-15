@@ -112,7 +112,6 @@ function monthGrid(anchor: Date): Date[] {
 const dayLabels = ['Пн', 'Вт', 'Ср', 'Чт', 'Пт', 'Сб', 'Вс']
 
 export function FfDashboard({
-  me,
   token,
   authHeaders,
   inboundSummaries: _inboundSummaries,
@@ -232,9 +231,6 @@ export function FfDashboard({
           <Box data-testid="cal-01-title-block" data-task-id="CAL-01">
             <Typography variant="h5" component="h1" sx={{ fontWeight: 800 }} data-testid="cal-01-title" data-task-id="CAL-01">
               Календарь отгрузок
-            </Typography>
-            <Typography variant="body2" color="text.secondary" data-testid="cal-01-org-name" data-task-id="CAL-01">
-              {me.organization_name}
             </Typography>
           </Box>
           <Stack direction="row" spacing={1} sx={{ alignItems: 'center' }} data-testid="cal-01-month-controls" data-task-id="CAL-01">
