@@ -11,6 +11,7 @@ import {
   DialogTitle,
   Paper,
   Stack,
+  TextField,
   Typography,
 } from '@mui/material'
 import PrintOutlinedIcon from '@mui/icons-material/PrintOutlined'
@@ -45,6 +46,7 @@ export function FbsPrintPreviewDialog({
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [applyingId, setApplyingId] = useState<string | null>(null)
+  const [copies, setCopies] = useState(1)
 
   const readyAssets = useMemo(
     () => batch?.assets.filter((asset) => asset.status === 'ready' && asset.preview_url) ?? [],
@@ -86,11 +88,16 @@ export function FbsPrintPreviewDialog({
     }
   }, [open, readyAssets, token, authHeaders])
 
+  useEffect(() => {
+    if (open) setCopies(1)
+  }, [open, batch])
+
   const print = (items: Preview[]) => {
     if (items.length === 0) {
       setError('Нет готовых изображений — окно печати не открыто.')
       return
     }
+    const safeCopies = Math.max(1, Math.min(99, copies))
     const popup = window.open('', '_blank')
     if (!popup) {
       setError('Браузер заблокировал окно печати. Разрешите всплывающие окна для WMS.')
@@ -98,9 +105,11 @@ export function FbsPrintPreviewDialog({
     }
     popup.opener = null
     const pages = items
-      .map(
-        ({ objectUrl, asset }) =>
-          `<section class="label"><img src="${objectUrl}" alt="${assetLabel(asset)}"></section>`,
+      .flatMap(({ objectUrl, asset }) =>
+        Array.from(
+          { length: safeCopies },
+          () => `<section class="label"><img src="${objectUrl}" alt="${assetLabel(asset)}"></section>`,
+        ),
       )
       .join('')
     popup.document.write(`<!doctype html><html><head><meta charset="utf-8"><title>Печать WB</title><style>@page{size:58mm 40mm;margin:0}html,body{margin:0;padding:0}.label{width:58mm;height:40mm;display:flex;align-items:center;justify-content:center;break-after:page;page-break-after:always;overflow:hidden}.label:last-child{break-after:auto;page-break-after:auto}.label img{width:58mm;height:40mm;object-fit:contain;image-rendering:auto}</style></head><body>${pages}<script>Promise.all(Array.from(document.images).map(function(img){return img.complete?Promise.resolve():new Promise(function(resolve){img.onload=resolve;img.onerror=resolve})})).then(function(){window.focus();window.print()})</script></body></html>`)
@@ -129,6 +138,17 @@ export function FbsPrintPreviewDialog({
             {batch?.missing ? <Chip label={`Не получено ${batch.missing}`} color="warning" /> : null}
             {batch?.failed ? <Chip label={`Ошибок ${batch.failed}`} color="error" /> : null}
           </Stack>
+          <TextField
+            size="small"
+            type="number"
+            label="Копий каждого макета"
+            value={copies}
+            onChange={(event) => setCopies(Math.max(1, Math.min(99, Number(event.target.value) || 1)))}
+            slotProps={{ htmlInput: { min: 1, max: 99 } }}
+            sx={{ width: 220 }}
+            data-testid="fbs-print-preview-copies"
+            data-task-id="FBS-10"
+          />
           {error ? <Alert severity="error">{error}</Alert> : null}
           {batch?.order_errors.map((item) => (
             <Alert key={item.order_id} severity="error">
@@ -150,8 +170,8 @@ export function FbsPrintPreviewDialog({
                 <Typography variant="subtitle2">{assetLabel(asset)}</Typography>
                 <Box component="img" src={objectUrl} alt={assetLabel(asset)} sx={{ width: '100%', aspectRatio: '58 / 40', objectFit: 'contain', bgcolor: '#fff', my: 1.5 }} />
                 <Stack direction="row" spacing={1}>
-                  {previews.length > 1 ? <Button startIcon={<PrintOutlinedIcon />} onClick={() => print([{ asset, objectUrl }])}>Печать только этого</Button> : null}
-                  <Button disabled={Boolean(asset.applied_at) || applyingId === asset.id} onClick={() => void apply(asset)}>
+                  {previews.length > 1 ? <Button startIcon={<PrintOutlinedIcon />} onClick={() => print([{ asset, objectUrl }])} data-task-id="FBS-10">Печать только этого</Button> : null}
+                  <Button disabled={Boolean(asset.applied_at) || applyingId === asset.id} onClick={() => void apply(asset)} data-task-id="FBS-09">
                     {asset.applied_at ? 'Уже нанесён' : 'Подтвердить нанесение'}
                   </Button>
                 </Stack>
@@ -162,7 +182,7 @@ export function FbsPrintPreviewDialog({
       </DialogContent>
       <DialogActions>
         <Button onClick={onClose} disabled={loading || Boolean(applyingId)}>Закрыть</Button>
-        <Button variant="contained" startIcon={<PrintOutlinedIcon />} disabled={previews.length === 0 || loading} onClick={() => print(previews)}>
+        <Button variant="contained" startIcon={<PrintOutlinedIcon />} disabled={previews.length === 0 || loading} onClick={() => print(previews)} data-task-id="FBS-10">
           {previews.length === 1 ? 'Печать' : 'Печать всех готовых'}
         </Button>
       </DialogActions>

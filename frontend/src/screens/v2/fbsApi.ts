@@ -371,6 +371,7 @@ export type FbsPackingBox = {
   trbx_id: string | null
   wb_trbx_id: string | null
   qr_asset: FbsPrintAsset | null
+  without_distribution: boolean
 }
 
 export type FbsCargoPlaceDraft = {
@@ -654,7 +655,7 @@ export async function createFbsPackingBoxes(
   token: string,
   ah: AuthHeaders,
   supplyId: string,
-  body: { count: number; idempotency_key: string },
+  body: { count: number; idempotency_key: string; without_distribution?: boolean },
 ): Promise<FbsWorkspace> {
   return jsonOrThrow<FbsWorkspace>(
     await fetch(apiUrl(`/operations/fbs-supplies/${supplyId}/boxes`), {
