@@ -25,6 +25,10 @@ function order(id: string, over: Partial<FbsWorklistFixture> = {}): FbsWorklistF
       seller_article: `ART-${id}`,
       wb_article: 1000 + Number(id.replace(/\D/g, '') || '1'),
       barcode: `200000${id}`,
+      sku: `SKU-${id}`,
+      chrt_id: 7000 + Number(id.replace(/\D/g, '') || '1'),
+      category: 'Бомберы',
+      color: null,
       size: null,
     },
     inventory: { available_unpacked: 3, locations: [{ id: 'loc-1', code: 'A-01', available_unpacked: 3 }] },
@@ -250,8 +254,8 @@ test('fbs orders: filter new orders by warehouse', async ({ page }) => {
   const sellerId = ((await sellerResponse.json()) as { seller_id: string }).seller_id
 
   const warehouseOptions = [
-    { id: '501001', name: 'WB 501001', wb_warehouse: { id: 501001, name: 'WB 501001' } },
-    { id: '501002', name: 'WB 501002', wb_warehouse: { id: 501002, name: 'WB 501002' } },
+    { id: '501001', name: 'WB Подольск', wb_warehouse: { id: 501001, name: 'WB Подольск' } },
+    { id: '501002', name: 'WB Казань', wb_warehouse: { id: 501002, name: 'WB Казань' } },
   ]
   const orderOne = order('1', {
     wms_warehouse: { id: 'w-1', name: 'WH Юг' },
@@ -287,12 +291,94 @@ test('fbs orders: filter new orders by warehouse', async ({ page }) => {
   await expect(page.getByTestId('fbs-order-1')).toBeVisible()
   await expect(page.getByTestId('fbs-order-2')).toBeVisible()
 
+  await page.getByRole('combobox', { name: 'Склад селлера / WB' }).click()
+  await page.getByRole('option', { name: 'WB Казань' }).click()
+  await expect(page.getByTestId('fbs-order-2')).toBeVisible()
+  await expect(page.getByTestId('fbs-order-1')).toHaveCount(0)
+  expect(lastWbWarehouseId).toBe('501002')
+
+  await page.getByRole('combobox', { name: 'Склад селлера / WB' }).click()
+  await page.getByRole('option', { name: 'Все склады' }).click()
+  await expect(page.getByTestId('fbs-order-1')).toBeVisible()
+  await expect(page.getByTestId('fbs-order-2')).toBeVisible()
+
   await page.getByRole('combobox', { name: 'Селлер', exact: true }).click()
   await page.getByRole('option', { name: 'ИП Иванова' }).click()
-  await page.getByRole('combobox', { name: 'Склад селлера' }).click()
+  await page.getByRole('combobox', { name: 'Склад селлера / WB' }).click()
   await page.getByRole('option', { name: 'Казань' }).click()
 
   await expect(page.getByTestId('fbs-order-2')).toBeVisible()
   await expect(page.getByTestId('fbs-order-1')).toHaveCount(0)
   expect(lastWbWarehouseId).toBe('501002')
+})
+
+// TC-NEW-FBS-SEARCH-001 / TC-NEW-FBS-SELECT-001 / TC-NEW-FBS-EXPORT-001 —
+// search highlights without filtering, selection survives search and Excel exports the chosen set.
+test('fbs orders: search keeps list, selected drawer stays stable and Excel downloads', async ({ page }) => {
+  await registerFf(page, 'search-select-export')
+
+  const bomberOrder = order('1', {
+    product: {
+      id: 'p-1',
+      name: 'Бомбер графитовый',
+      image_url: null,
+      seller_article: 'BOMBER-1',
+      wb_article: 700001,
+      barcode: 'BOMBER-BAR',
+      sku: 'BOMBER-SKU',
+      chrt_id: 771,
+      category: 'Бомберы',
+      color: 'графит',
+      size: 'L',
+    },
+  })
+  const tshirtOrder = order('2', {
+    product: {
+      id: 'p-2',
+      name: 'Футболка белая',
+      image_url: null,
+      seller_article: 'TSHIRT-2',
+      wb_article: 700002,
+      barcode: 'TSHIRT-BAR',
+      sku: 'TSHIRT-SKU',
+      chrt_id: 772,
+      category: 'Футболки',
+      color: 'белый',
+      size: 'M',
+    },
+  })
+
+  await page.route('**/operations/fbs-orders/worklist**', async (route) => {
+    if (route.request().method() !== 'GET') return route.fallback()
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify(worklist([bomberOrder, tshirtOrder])),
+    })
+  })
+
+  await page.getByTestId('nav-ff-fbs').click()
+  await expect(page.getByTestId('fbs-order-1')).toBeVisible()
+  await expect(page.getByTestId('fbs-order-2')).toBeVisible()
+
+  await page.getByTestId('fbs-order-2').getByRole('checkbox').click()
+  await expect(page.getByTestId('fbs-selection-bar')).toContainText('Выбрано заказов: 1')
+
+  await page.getByLabel('Поиск: заказ, товар, категория, артикул, ШК, SKU, цвет, размер').fill('бомбер')
+  await expect(page.getByTestId('fbs-order-1')).toBeVisible()
+  await expect(page.getByTestId('fbs-order-2')).toBeVisible()
+  await expect
+    .poll(async () => page.getByTestId('fbs-order-1').evaluate((node) => getComputedStyle(node).backgroundColor))
+    .toBe('rgba(255, 214, 102, 0.24)')
+  await expect(page.getByTestId('fbs-selection-bar')).toContainText('Выбрано заказов: 1')
+
+  await page.getByTestId('fbs-selected-open').click()
+  await expect(page.getByTestId('fbs-selected-list')).toContainText('WB №2')
+  await expect(page.getByTestId('fbs-selected-list')).toContainText('Футболка белая')
+  await page.getByRole('button', { name: 'Закрыть' }).click()
+
+  const downloadPromise = page.waitForEvent('download')
+  await page.getByTestId('fbs-orders-download-excel').click()
+  const download = await downloadPromise
+  expect(download.suggestedFilename()).toMatch(/fbs-new-orders-\d{4}-\d{2}-\d{2}\.xls/)
 })

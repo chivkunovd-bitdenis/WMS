@@ -925,6 +925,17 @@ async def test_from_orders_add_failure_persists_wb_supply_reference(
             response_body='{"message":"order 859101 is not allowed in this supply"}',
         )
 
+    async def fake_empty_reconcile_supply_orders(
+        client: object,
+        *,
+        api_token: str,
+        wb_supply_id: str,
+        expected_wb_order_ids: set[int],
+    ) -> tuple[str, set[int]]:
+        assert wb_supply_id == "WB-GI-FAILED-ADD"
+        assert expected_wb_order_ids == {859101}
+        return WB_OPERATION_STATE_PENDING_CONFIRMATION, set()
+
     monkeypatch.setattr(
         "app.services.fbs_supply_service.create_marketplace_supply",
         fake_create_supply,
@@ -932,6 +943,10 @@ async def test_from_orders_add_failure_persists_wb_supply_reference(
     monkeypatch.setattr(
         "app.services.fbs_supply_service.add_orders_to_marketplace_supply",
         fail_batch_add,
+    )
+    monkeypatch.setattr(
+        "app.services.fbs_supply_service.reconcile_supply_orders",
+        fake_empty_reconcile_supply_orders,
     )
 
     resp = await async_client.post(
@@ -974,6 +989,114 @@ async def test_from_orders_add_failure_persists_wb_supply_reference(
         assert op.error_context_json["wb_response_body"] == (
             '{"message":"order 859101 is not allowed in this supply"}'
         )
+
+
+@pytest.mark.asyncio
+async def test_from_orders_partial_readback_binds_only_confirmed_orders(
+    async_client: AsyncClient,
+    enable_wb_marketplace_supplies_mock: None,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """TC-NEW-FBS-PARTIAL-001: WB read-back splits accepted and rejected orders."""
+    headers, suffix = await _register_ff_admin(async_client)
+    me = await async_client.get("/auth/me", headers=headers)
+    tenant_id = uuid.UUID(me.json()["tenant_id"])
+    seller_id, warehouse_id, location_id = await _setup_seller_with_token(
+        async_client, headers, suffix
+    )
+    product = await _create_product(
+        async_client, headers, seller_id, sku=f"partial-{suffix[-6:]}"
+    )
+    order_ids = [
+        await _create_ready_order(
+            tenant_id,
+            uuid.UUID(seller_id),
+            uuid.UUID(warehouse_id),
+            uuid.UUID(location_id),
+            product,
+            order_id=859201 + idx,
+        )
+        for idx in range(2)
+    ]
+    idem_key = str(uuid.uuid4())
+
+    async def fake_create_supply(
+        client: object,
+        *,
+        api_token: str,
+        name: str,
+        marketplace_api_base: str | None = None,
+    ) -> dict[str, str]:
+        return {"id": "WB-GI-PARTIAL"}
+
+    async def fake_batch_add(
+        client: object,
+        *,
+        api_token: str,
+        supply_id: str,
+        order_ids: list[int],
+        marketplace_api_base: str | None = None,
+    ) -> None:
+        assert supply_id == "WB-GI-PARTIAL"
+        assert order_ids == [859201, 859202]
+
+    async def fake_reconcile_supply_orders(
+        client: object,
+        *,
+        api_token: str,
+        wb_supply_id: str,
+        expected_wb_order_ids: set[int],
+    ) -> tuple[str, set[int]]:
+        assert wb_supply_id == "WB-GI-PARTIAL"
+        assert expected_wb_order_ids == {859201, 859202}
+        return WB_OPERATION_STATE_PENDING_CONFIRMATION, {859201}
+
+    monkeypatch.setattr(
+        "app.services.fbs_supply_service.create_marketplace_supply",
+        fake_create_supply,
+    )
+    monkeypatch.setattr(
+        "app.services.fbs_supply_service.add_orders_to_marketplace_supply",
+        fake_batch_add,
+    )
+    monkeypatch.setattr(
+        "app.services.fbs_supply_service.reconcile_supply_orders",
+        fake_reconcile_supply_orders,
+    )
+
+    resp = await async_client.post(
+        "/operations/fbs-supplies/from-orders",
+        headers=headers,
+        json={
+            "name": "Partial supply",
+            "order_ids": [str(oid) for oid in order_ids],
+            "planned_delivery_type": "warehouse_sc",
+            "idempotency_key": idem_key,
+        },
+    )
+    assert resp.status_code == 201, resp.text
+    body = resp.json()
+    partial = body["partial_rejection"]
+    assert [row["wb_order_id"] for row in partial["accepted_orders"]] == [859201]
+    assert [row["wb_order_id"] for row in partial["rejected_orders"]] == [859202]
+    assert [row["wb_order_id"] for row in body["orders"]] == [859201]
+
+    async with SessionLocal() as session:
+        accepted = await session.get(FbsOrder, order_ids[0])
+        rejected = await session.get(FbsOrder, order_ids[1])
+        assert accepted is not None
+        assert rejected is not None
+        assert accepted.supply_id is not None
+        assert accepted.status == FBS_ORDER_STATUS_IN_SUPPLY
+        assert rejected.supply_id is None
+        assert rejected.status == FBS_ORDER_STATUS_NEW
+        op = await session.scalar(
+            select(FbsWbOperation).where(FbsWbOperation.idempotency_key == idem_key)
+        )
+        assert op is not None
+        assert op.state == WB_OPERATION_STATE_CONFIRMED
+        assert op.response_summary_json is not None
+        assert op.response_summary_json["partial_confirmation"] is True
 
 
 @pytest.mark.asyncio

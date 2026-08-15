@@ -1,0 +1,511 @@
+{
+  "started_at": "2026-08-15T08:25:38.213Z",
+  "order": "023",
+  "mode": "visible external Google Chrome via CDP Input/DevTools, not headless, not Playwright acceptance",
+  "browser": "Chrome/151.0.7922.138 (Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/151.0.0.0 Safari/537.36)",
+  "url": "http://127.0.0.1:5186/app/ff/fbs",
+  "actions": [
+    {
+      "action": "screenshot",
+      "file": "/Users/deniscivkunov/Projects/WMS/.worktrees/wave1-fbs-new-orders-20260814/tasks/wms-wave1-fbs-new-orders-20260814/live-browser-review-20260815/screenshots/98-order023-round2-compact-initial.png",
+      "at": "2026-08-15T08:25:42.159Z"
+    },
+    {
+      "action": "fill",
+      "label": "live search bomber",
+      "selector": "[data-testid=\"fbs-worklist-search\"] input",
+      "value": "бомбер",
+      "at": "2026-08-15T08:25:42.427Z"
+    },
+    {
+      "action": "screenshot",
+      "file": "/Users/deniscivkunov/Projects/WMS/.worktrees/wave1-fbs-new-orders-20260814/tasks/wms-wave1-fbs-new-orders-20260814/live-browser-review-20260815/screenshots/99-order023-round2-live-search.png",
+      "at": "2026-08-15T08:25:43.093Z"
+    },
+    {
+      "action": "fill",
+      "label": "live search no match",
+      "selector": "[data-testid=\"fbs-worklist-search\"] input",
+      "value": "нет-такого-SKU-999",
+      "at": "2026-08-15T08:25:43.270Z"
+    },
+    {
+      "action": "screenshot",
+      "file": "/Users/deniscivkunov/Projects/WMS/.worktrees/wave1-fbs-new-orders-20260814/tasks/wms-wave1-fbs-new-orders-20260814/live-browser-review-20260815/screenshots/100-order023-round2-live-search-no-match.png",
+      "at": "2026-08-15T08:25:43.951Z"
+    }
+  ],
+  "observations": [
+    {
+      "label": "order023_round2_compact_initial",
+      "value": {
+        "url": "http://127.0.0.1:5186/app/ff/fbs",
+        "innerWidth": 1280,
+        "innerHeight": 783,
+        "rowCount": 3,
+        "rowHeights": [
+          107,
+          107,
+          107
+        ],
+        "maxRowHeight": 107,
+        "rows": [
+          {
+            "testid": "fbs-order-18d961ce-87eb-45d1-83a4-d140c7a15e84",
+            "height": 107,
+            "top": 411,
+            "text": "Кроссовки беговые демисезонные темно-синие Кроссовки · темно-синий · 43 WB №880003 ШК: 460LIVE02981000003 SKU SHOES-NAVY-02981000 ИП Очень Длинный Селлер Северо-Западный Склад 2026 WB Казань Зеленодольск WMS: Резервный WMS склад Казань 14.08.26, 20:05 В сборке: 15 ч 20 мин",
+            "checked": false,
+            "bg": "rgba(0, 0, 0, 0)"
+          },
+          {
+            "testid": "fbs-order-881cba56-07b0-4f26-b043-a7977792f282",
+            "height": 107,
+            "top": 519,
+            "text": "Футболка базовая белая хлопок премиум Футболки · белый · M WB №880002 ШК: 460LIVE02981000002 SKU TSHIRT-WHITE-02981000 ИП Очень Длинный Селлер Северо-Западный Склад 2026 WB Москва Коледино - склад селлера северный длинный WMS: Основной WMS склад с длинным названием Москва-Север 15.08.26, 02:47 В сборке: 8 ч 38 мин",
+            "checked": false,
+            "bg": "rgba(0, 0, 0, 0)"
+          },
+          {
+            "testid": "fbs-order-a641f2ea-28cb-46df-9ae8-f5b370d2c2b1",
+            "height": 107,
+            "top": 626,
+            "text": "Бомбер мужской утепленный графитовый с очень длинным названием модели Limited Edition 2026 Бомберы · графитовый · XL Tall WB №880001 ШК: 460LIVE02981000001 SKU BOMBER-LONG-SKU-02981000-GRAPHITE-LIMITED-EDITION-2026 ИП Очень Длинный Селлер Северо-Западный Склад 2026 WB Москва Коледино - склад селлера северный длинный WMS: Основной WMS склад с длинным названием Москва-Север 15.08.26, 05:34 В сборке: 5 ч 51 мин",
+            "checked": false,
+            "bg": "rgba(0, 0, 0, 0)"
+          }
+        ],
+        "tableHeader": "Товар Заказ и сканирование Селлер Склад селлера / WB Создан WB",
+        "tableTextSample": "Товар Заказ и сканирование Селлер Склад селлера / WB Создан WB Кроссовки беговые демисезонные темно-синие Кроссовки · темно-синий · 43 WB №880003 ШК: 460LIVE02981000003 SKU SHOES-NAVY-02981000 ИП Очень Длинный Селлер Северо-Западный Склад 2026 WB Казань Зеленодольск WMS: Резервный WMS склад Казань 14.08.26, 20:05 В сборке: 15 ч 20 мин Футболка базовая белая хлопок премиум Футболки · белый · M WB №880002 ШК: 460LIVE02981000002 SKU TSHIRT-WHITE-02981000 ИП Очень Длинный Селлер Северо-Западный Склад 2026 WB Москва Коледино - склад селлера северный длинный WMS: Основной WMS склад с длинным названием Москва-Север 15.08.26, 02:47 В сборке: 8 ч 38 мин Бомбер мужской утепленный графитовый с очень длинным названием модели Limited Edition 2026 Бомберы · графитовый · XL Tall WB №880001 ШК: 460LIVE02981000001 SKU BOMBER-LONG-SKU-02981000-GRAPHITE-LIMITED-EDITION-2026 ИП Очень Длинный Селлер Северо-Западный Склад 2026 WB Москва Коледино - склад селлера северный длинный WMS: Основной WMS склад с длинным названием Москва-Север 15.08.26, 05:34 В сборке: 5 ч 51 мин",
+        "visibleOldPassport": false,
+        "hasFindButton": false,
+        "hasMainSync": true,
+        "buttons": [
+          {
+            "text": "0",
+            "width": 43,
+            "height": 43,
+            "bg": "rgba(0, 0, 0, 0)",
+            "color": "rgb(15, 23, 42)",
+            "border": "rgb(15, 23, 42)"
+          },
+          {
+            "text": "Выйти",
+            "width": 67,
+            "height": 34,
+            "bg": "rgba(0, 0, 0, 0)",
+            "color": "rgb(91, 33, 182)",
+            "border": "rgba(91, 33, 182, 0.5)"
+          },
+          {
+            "text": "Обновить",
+            "width": 105,
+            "height": 34,
+            "bg": "rgba(0, 0, 0, 0)",
+            "color": "rgb(91, 33, 182)",
+            "border": "rgb(91, 33, 182)"
+          },
+          {
+            "text": "Забрать заказы из WB",
+            "width": 231,
+            "height": 40,
+            "bg": "rgb(91, 33, 182)",
+            "color": "rgb(255, 255, 255)",
+            "border": "rgb(255, 255, 255)"
+          },
+          {
+            "text": "Заказы",
+            "width": 90,
+            "height": 48,
+            "bg": "rgba(0, 0, 0, 0)",
+            "color": "rgb(91, 33, 182)",
+            "border": "rgb(91, 33, 182)"
+          },
+          {
+            "text": "Остатки WB",
+            "width": 126,
+            "height": 48,
+            "bg": "rgba(0, 0, 0, 0)",
+            "color": "rgb(71, 85, 105)",
+            "border": "rgb(71, 85, 105)"
+          },
+          {
+            "text": "Новые",
+            "width": 90,
+            "height": 48,
+            "bg": "rgba(0, 0, 0, 0)",
+            "color": "rgb(91, 33, 182)",
+            "border": "rgb(91, 33, 182)"
+          },
+          {
+            "text": "В работе",
+            "width": 101,
+            "height": 48,
+            "bg": "rgba(0, 0, 0, 0)",
+            "color": "rgb(71, 85, 105)",
+            "border": "rgb(71, 85, 105)"
+          },
+          {
+            "text": "В доставке",
+            "width": 118,
+            "height": 48,
+            "bg": "rgba(0, 0, 0, 0)",
+            "color": "rgb(71, 85, 105)",
+            "border": "rgb(71, 85, 105)"
+          },
+          {
+            "text": "Завершённые",
+            "width": 142,
+            "height": 48,
+            "bg": "rgba(0, 0, 0, 0)",
+            "color": "rgb(71, 85, 105)",
+            "border": "rgb(71, 85, 105)"
+          },
+          {
+            "text": "Скачать Excel",
+            "width": 170,
+            "height": 43,
+            "bg": "rgba(0, 0, 0, 0)",
+            "color": "rgb(91, 33, 182)",
+            "border": "rgba(91, 33, 182, 0.5)"
+          }
+        ],
+        "searchResult": "",
+        "notice": "",
+        "photos": [
+          {
+            "srcPrefix": "data:image/svg+xml;utf8,<svg xmlns=\"http://ww",
+            "naturalWidth": 120,
+            "complete": true
+          },
+          {
+            "srcPrefix": "data:image/svg+xml;utf8,<svg xmlns=\"http://ww",
+            "naturalWidth": 120,
+            "complete": true
+          },
+          {
+            "srcPrefix": "data:image/svg+xml;utf8,<svg xmlns=\"http://ww",
+            "naturalWidth": 120,
+            "complete": true
+          }
+        ]
+      },
+      "at": "2026-08-15T08:25:42.252Z"
+    },
+    {
+      "label": "order023_round2_live_search_no_button",
+      "value": {
+        "url": "http://127.0.0.1:5186/app/ff/fbs",
+        "innerWidth": 1280,
+        "innerHeight": 783,
+        "rowCount": 3,
+        "rowHeights": [
+          107,
+          107,
+          107
+        ],
+        "maxRowHeight": 107,
+        "rows": [
+          {
+            "testid": "fbs-order-18d961ce-87eb-45d1-83a4-d140c7a15e84",
+            "height": 107,
+            "top": 412,
+            "text": "Кроссовки беговые демисезонные темно-синие Кроссовки · темно-синий · 43 WB №880003 ШК: 460LIVE02981000003 SKU SHOES-NAVY-02981000 ИП Очень Длинный Селлер Северо-Западный Склад 2026 WB Казань Зеленодольск WMS: Резервный WMS склад Казань 14.08.26, 20:05 В сборке: 15 ч 20 мин",
+            "checked": false,
+            "bg": "rgba(0, 0, 0, 0)"
+          },
+          {
+            "testid": "fbs-order-881cba56-07b0-4f26-b043-a7977792f282",
+            "height": 107,
+            "top": 520,
+            "text": "Футболка базовая белая хлопок премиум Футболки · белый · M WB №880002 ШК: 460LIVE02981000002 SKU TSHIRT-WHITE-02981000 ИП Очень Длинный Селлер Северо-Западный Склад 2026 WB Москва Коледино - склад селлера северный длинный WMS: Основной WMS склад с длинным названием Москва-Север 15.08.26, 02:47 В сборке: 8 ч 38 мин",
+            "checked": false,
+            "bg": "rgba(0, 0, 0, 0)"
+          },
+          {
+            "testid": "fbs-order-a641f2ea-28cb-46df-9ae8-f5b370d2c2b1",
+            "height": 107,
+            "top": 627,
+            "text": "Бомбер мужской утепленный графитовый с очень длинным названием модели Limited Edition 2026 Бомберы · графитовый · XL Tall WB №880001 ШК: 460LIVE02981000001 SKU BOMBER-LONG-SKU-02981000-GRAPHITE-LIMITED-EDITION-2026 ИП Очень Длинный Селлер Северо-Западный Склад 2026 WB Москва Коледино - склад селлера северный длинный WMS: Основной WMS склад с длинным названием Москва-Север 15.08.26, 05:34 В сборке: 5 ч 51 мин",
+            "checked": false,
+            "bg": "rgba(255, 214, 102, 0.24)"
+          }
+        ],
+        "tableHeader": "Товар Заказ и сканирование Селлер Склад селлера / WB Создан WB",
+        "tableTextSample": "Товар Заказ и сканирование Селлер Склад селлера / WB Создан WB Кроссовки беговые демисезонные темно-синие Кроссовки · темно-синий · 43 WB №880003 ШК: 460LIVE02981000003 SKU SHOES-NAVY-02981000 ИП Очень Длинный Селлер Северо-Западный Склад 2026 WB Казань Зеленодольск WMS: Резервный WMS склад Казань 14.08.26, 20:05 В сборке: 15 ч 20 мин Футболка базовая белая хлопок премиум Футболки · белый · M WB №880002 ШК: 460LIVE02981000002 SKU TSHIRT-WHITE-02981000 ИП Очень Длинный Селлер Северо-Западный Склад 2026 WB Москва Коледино - склад селлера северный длинный WMS: Основной WMS склад с длинным названием Москва-Север 15.08.26, 02:47 В сборке: 8 ч 38 мин Бомбер мужской утепленный графитовый с очень длинным названием модели Limited Edition 2026 Бомберы · графитовый · XL Tall WB №880001 ШК: 460LIVE02981000001 SKU BOMBER-LONG-SKU-02981000-GRAPHITE-LIMITED-EDITION-2026 ИП Очень Длинный Селлер Северо-Западный Склад 2026 WB Москва Коледино - склад селлера северный длинный WMS: Основной WMS склад с длинным названием Москва-Север 15.08.26, 05:34 В сборке: 5 ч 51 мин",
+        "visibleOldPassport": false,
+        "hasFindButton": false,
+        "hasMainSync": true,
+        "buttons": [
+          {
+            "text": "0",
+            "width": 43,
+            "height": 43,
+            "bg": "rgba(0, 0, 0, 0)",
+            "color": "rgb(15, 23, 42)",
+            "border": "rgb(15, 23, 42)"
+          },
+          {
+            "text": "Выйти",
+            "width": 67,
+            "height": 34,
+            "bg": "rgba(0, 0, 0, 0)",
+            "color": "rgb(91, 33, 182)",
+            "border": "rgba(91, 33, 182, 0.5)"
+          },
+          {
+            "text": "Обновить",
+            "width": 105,
+            "height": 34,
+            "bg": "rgba(0, 0, 0, 0)",
+            "color": "rgb(91, 33, 182)",
+            "border": "rgb(91, 33, 182)"
+          },
+          {
+            "text": "Забрать заказы из WB",
+            "width": 231,
+            "height": 40,
+            "bg": "rgb(91, 33, 182)",
+            "color": "rgb(255, 255, 255)",
+            "border": "rgb(255, 255, 255)"
+          },
+          {
+            "text": "Заказы",
+            "width": 90,
+            "height": 48,
+            "bg": "rgba(0, 0, 0, 0)",
+            "color": "rgb(91, 33, 182)",
+            "border": "rgb(91, 33, 182)"
+          },
+          {
+            "text": "Остатки WB",
+            "width": 126,
+            "height": 48,
+            "bg": "rgba(0, 0, 0, 0)",
+            "color": "rgb(71, 85, 105)",
+            "border": "rgb(71, 85, 105)"
+          },
+          {
+            "text": "Новые",
+            "width": 90,
+            "height": 48,
+            "bg": "rgba(0, 0, 0, 0)",
+            "color": "rgb(91, 33, 182)",
+            "border": "rgb(91, 33, 182)"
+          },
+          {
+            "text": "В работе",
+            "width": 101,
+            "height": 48,
+            "bg": "rgba(0, 0, 0, 0)",
+            "color": "rgb(71, 85, 105)",
+            "border": "rgb(71, 85, 105)"
+          },
+          {
+            "text": "В доставке",
+            "width": 118,
+            "height": 48,
+            "bg": "rgba(0, 0, 0, 0)",
+            "color": "rgb(71, 85, 105)",
+            "border": "rgb(71, 85, 105)"
+          },
+          {
+            "text": "Завершённые",
+            "width": 142,
+            "height": 48,
+            "bg": "rgba(0, 0, 0, 0)",
+            "color": "rgb(71, 85, 105)",
+            "border": "rgb(71, 85, 105)"
+          },
+          {
+            "text": "Скачать Excel",
+            "width": 170,
+            "height": 43,
+            "bg": "rgba(0, 0, 0, 0)",
+            "color": "rgb(91, 33, 182)",
+            "border": "rgba(91, 33, 182, 0.5)"
+          }
+        ],
+        "searchResult": "Найдено совпадений: 1. Список не скрыт, первая найденная строка подсвечена.",
+        "notice": "",
+        "photos": [
+          {
+            "srcPrefix": "data:image/svg+xml;utf8,<svg xmlns=\"http://ww",
+            "naturalWidth": 120,
+            "complete": true
+          },
+          {
+            "srcPrefix": "data:image/svg+xml;utf8,<svg xmlns=\"http://ww",
+            "naturalWidth": 120,
+            "complete": true
+          },
+          {
+            "srcPrefix": "data:image/svg+xml;utf8,<svg xmlns=\"http://ww",
+            "naturalWidth": 120,
+            "complete": true
+          }
+        ]
+      },
+      "at": "2026-08-15T08:25:43.096Z"
+    },
+    {
+      "label": "order023_round2_live_search_no_match_keeps_list",
+      "value": {
+        "url": "http://127.0.0.1:5186/app/ff/fbs",
+        "innerWidth": 1280,
+        "innerHeight": 783,
+        "rowCount": 3,
+        "rowHeights": [
+          107,
+          107,
+          107
+        ],
+        "maxRowHeight": 107,
+        "rows": [
+          {
+            "testid": "fbs-order-18d961ce-87eb-45d1-83a4-d140c7a15e84",
+            "height": 107,
+            "top": 478,
+            "text": "Кроссовки беговые демисезонные темно-синие Кроссовки · темно-синий · 43 WB №880003 ШК: 460LIVE02981000003 SKU SHOES-NAVY-02981000 ИП Очень Длинный Селлер Северо-Западный Склад 2026 WB Казань Зеленодольск WMS: Резервный WMS склад Казань 14.08.26, 20:05 В сборке: 15 ч 20 мин",
+            "checked": false,
+            "bg": "rgba(0, 0, 0, 0)"
+          },
+          {
+            "testid": "fbs-order-881cba56-07b0-4f26-b043-a7977792f282",
+            "height": 107,
+            "top": 585,
+            "text": "Футболка базовая белая хлопок премиум Футболки · белый · M WB №880002 ШК: 460LIVE02981000002 SKU TSHIRT-WHITE-02981000 ИП Очень Длинный Селлер Северо-Западный Склад 2026 WB Москва Коледино - склад селлера северный длинный WMS: Основной WMS склад с длинным названием Москва-Север 15.08.26, 02:47 В сборке: 8 ч 38 мин",
+            "checked": false,
+            "bg": "rgba(0, 0, 0, 0)"
+          },
+          {
+            "testid": "fbs-order-a641f2ea-28cb-46df-9ae8-f5b370d2c2b1",
+            "height": 107,
+            "top": 692,
+            "text": "Бомбер мужской утепленный графитовый с очень длинным названием модели Limited Edition 2026 Бомберы · графитовый · XL Tall WB №880001 ШК: 460LIVE02981000001 SKU BOMBER-LONG-SKU-02981000-GRAPHITE-LIMITED-EDITION-2026 ИП Очень Длинный Селлер Северо-Западный Склад 2026 WB Москва Коледино - склад селлера северный длинный WMS: Основной WMS склад с длинным названием Москва-Север 15.08.26, 05:34 В сборке: 5 ч 51 мин",
+            "checked": false,
+            "bg": "rgba(0, 0, 0, 0)"
+          }
+        ],
+        "tableHeader": "Товар Заказ и сканирование Селлер Склад селлера / WB Создан WB",
+        "tableTextSample": "Товар Заказ и сканирование Селлер Склад селлера / WB Создан WB Кроссовки беговые демисезонные темно-синие Кроссовки · темно-синий · 43 WB №880003 ШК: 460LIVE02981000003 SKU SHOES-NAVY-02981000 ИП Очень Длинный Селлер Северо-Западный Склад 2026 WB Казань Зеленодольск WMS: Резервный WMS склад Казань 14.08.26, 20:05 В сборке: 15 ч 20 мин Футболка базовая белая хлопок премиум Футболки · белый · M WB №880002 ШК: 460LIVE02981000002 SKU TSHIRT-WHITE-02981000 ИП Очень Длинный Селлер Северо-Западный Склад 2026 WB Москва Коледино - склад селлера северный длинный WMS: Основной WMS склад с длинным названием Москва-Север 15.08.26, 02:47 В сборке: 8 ч 38 мин Бомбер мужской утепленный графитовый с очень длинным названием модели Limited Edition 2026 Бомберы · графитовый · XL Tall WB №880001 ШК: 460LIVE02981000001 SKU BOMBER-LONG-SKU-02981000-GRAPHITE-LIMITED-EDITION-2026 ИП Очень Длинный Селлер Северо-Западный Склад 2026 WB Москва Коледино - склад селлера северный длинный WMS: Основной WMS склад с длинным названием Москва-Север 15.08.26, 05:34 В сборке: 5 ч 51 мин",
+        "visibleOldPassport": false,
+        "hasFindButton": false,
+        "hasMainSync": true,
+        "buttons": [
+          {
+            "text": "0",
+            "width": 43,
+            "height": 43,
+            "bg": "rgba(0, 0, 0, 0)",
+            "color": "rgb(15, 23, 42)",
+            "border": "rgb(15, 23, 42)"
+          },
+          {
+            "text": "Выйти",
+            "width": 67,
+            "height": 34,
+            "bg": "rgba(0, 0, 0, 0)",
+            "color": "rgb(91, 33, 182)",
+            "border": "rgba(91, 33, 182, 0.5)"
+          },
+          {
+            "text": "Обновить",
+            "width": 105,
+            "height": 34,
+            "bg": "rgba(0, 0, 0, 0)",
+            "color": "rgb(91, 33, 182)",
+            "border": "rgb(91, 33, 182)"
+          },
+          {
+            "text": "Забрать заказы из WB",
+            "width": 231,
+            "height": 40,
+            "bg": "rgb(91, 33, 182)",
+            "color": "rgb(255, 255, 255)",
+            "border": "rgb(255, 255, 255)"
+          },
+          {
+            "text": "Заказы",
+            "width": 90,
+            "height": 48,
+            "bg": "rgba(0, 0, 0, 0)",
+            "color": "rgb(91, 33, 182)",
+            "border": "rgb(91, 33, 182)"
+          },
+          {
+            "text": "Остатки WB",
+            "width": 126,
+            "height": 48,
+            "bg": "rgba(0, 0, 0, 0)",
+            "color": "rgb(71, 85, 105)",
+            "border": "rgb(71, 85, 105)"
+          },
+          {
+            "text": "Новые",
+            "width": 90,
+            "height": 48,
+            "bg": "rgba(0, 0, 0, 0)",
+            "color": "rgb(91, 33, 182)",
+            "border": "rgb(91, 33, 182)"
+          },
+          {
+            "text": "В работе",
+            "width": 101,
+            "height": 48,
+            "bg": "rgba(0, 0, 0, 0)",
+            "color": "rgb(71, 85, 105)",
+            "border": "rgb(71, 85, 105)"
+          },
+          {
+            "text": "В доставке",
+            "width": 118,
+            "height": 48,
+            "bg": "rgba(0, 0, 0, 0)",
+            "color": "rgb(71, 85, 105)",
+            "border": "rgb(71, 85, 105)"
+          },
+          {
+            "text": "Завершённые",
+            "width": 142,
+            "height": 48,
+            "bg": "rgba(0, 0, 0, 0)",
+            "color": "rgb(71, 85, 105)",
+            "border": "rgb(71, 85, 105)"
+          },
+          {
+            "text": "Скачать Excel",
+            "width": 170,
+            "height": 43,
+            "bg": "rgba(0, 0, 0, 0)",
+            "color": "rgb(91, 33, 182)",
+            "border": "rgba(91, 33, 182, 0.5)"
+          }
+        ],
+        "searchResult": "",
+        "notice": "Совпадений не найдено, список не изменён.",
+        "photos": [
+          {
+            "srcPrefix": "data:image/svg+xml;utf8,<svg xmlns=\"http://ww",
+            "naturalWidth": 120,
+            "complete": true
+          },
+          {
+            "srcPrefix": "data:image/svg+xml;utf8,<svg xmlns=\"http://ww",
+            "naturalWidth": 120,
+            "complete": true
+          },
+          {
+            "srcPrefix": "data:image/svg+xml;utf8,<svg xmlns=\"http://ww",
+            "naturalWidth": 120,
+            "complete": true
+          }
+        ]
+      },
+      "at": "2026-08-15T08:25:43.954Z"
+    }
+  ],
+  "findings": [],
+  "failures": [],
+  "completed_at": "2026-08-15T08:25:43.954Z"
+}

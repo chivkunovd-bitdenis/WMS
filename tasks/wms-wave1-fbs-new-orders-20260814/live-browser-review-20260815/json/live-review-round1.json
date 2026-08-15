@@ -1,0 +1,16 @@
+{
+  "started_at": "2026-08-15T08:01:24.516Z",
+  "browser": "Chrome/151.0.7922.138 (Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/151.0.0.0 Safari/537.36)",
+  "mode": "visible external Google Chrome via CDP DevTools, not Playwright, not headless",
+  "url": "http://127.0.0.1:5186/",
+  "actions": [],
+  "observations": [],
+  "failures": [
+    {
+      "bucket": "round1_failure",
+      "reason": "Error: Uncaught\n    at evalIn ([stdin]:82:35)\n    at async click ([stdin]:106:15)\n    at async main ([stdin]:223:7)",
+      "at": "2026-08-15T08:01:27.503Z"
+    }
+  ],
+  "completed_at": "2026-08-15T08:01:27.503Z"
+}

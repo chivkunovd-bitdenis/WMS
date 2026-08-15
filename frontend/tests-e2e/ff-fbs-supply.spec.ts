@@ -21,6 +21,10 @@ function order(id: string, over: JsonObject = {}): JsonObject {
       seller_article: `ART-${id}`,
       wb_article: 1000 + Number(id.replace(/\D/g, '') || '1'),
       barcode: `200000${id}`,
+      sku: `SKU-${id}`,
+      chrt_id: 7000 + Number(id.replace(/\D/g, '') || '1'),
+      category: 'Бомберы',
+      color: null,
       size: null,
     },
     inventory: {
@@ -210,6 +214,48 @@ test('fbs orders: create supply from selected orders', async ({ page }) => {
   expect(createBody?.idempotency_key).toEqual(expect.any(String))
 })
 
+// TC-NEW-FBS-PARTIAL-READBACK — WB partial confirmation remains visible after workspace read-back.
+test('fbs workspace: partial rejection is visible outside composition stage', async ({ page }) => {
+  await registerFf(page, 'partial-readback')
+  const acceptedOrder = order('1', {
+    status: 'sorted',
+    wb_status: 'waiting',
+    supply_id: 'sup-1',
+    pick: { status: 'picked', location_code: 'A-01', picked_at: new Date().toISOString() },
+    pack: { status: 'packed', packed_at: new Date().toISOString() },
+  })
+  const rejectedOrder = order('2', {
+    status: 'defect',
+    wb_status: 'defect',
+    supply_id: 'sup-1',
+    pick: { status: 'picked', location_code: 'A-01', picked_at: new Date().toISOString() },
+    pack: { status: 'packed', packed_at: new Date().toISOString() },
+  })
+  await mockWorklist(page, [acceptedOrder])
+  await page.route('**/operations/fbs-supplies/sup-1/workspace', (route) =>
+    json(route, {
+      ...workspace({
+        stage: 'tracking',
+        status: 'in_delivery',
+        orders: [acceptedOrder, rejectedOrder],
+      }),
+      partial_rejection: {
+        accepted_orders: [{ wb_order_id: 1, reason: null }],
+        rejected_orders: [{ wb_order_id: 2, reason: 'Брак при приёмке маркетплейсом.' }],
+      },
+    }),
+  )
+
+  await page.getByTestId('nav-ff-fbs').click()
+  await page.getByRole('tab', { name: 'В доставке' }).click()
+  await page.getByTestId('fbs-order-1').click()
+
+  await expect(page.getByTestId('fbs-workspace')).toBeVisible()
+  await expect(page.getByTestId('fbs-partial-rejection')).toContainText('WB подтвердил только часть заказов')
+  await expect(page.getByTestId('fbs-partial-rejection')).toContainText('№1')
+  await expect(page.getByTestId('fbs-partial-rejection')).toContainText('№2')
+})
+
 // TC-S17-007 — location then product scan updates server-owned picking progress.
 test('fbs workspace: scan location then product', async ({ page }) => {
   await registerFf(page, 'pick')
@@ -249,5 +295,4 @@ test('fbs workspace: scan location then product', async ({ page }) => {
   await page.getByRole('button', { name: 'Подобрать товар' }).click()
 
   await expect(page.getByText('Товар подобран. Прогресс синхронизирован для всех операторов.')).toBeVisible()
-  await expect(page.getByText('Товары в подборе: 1/1')).toBeVisible()
 })

@@ -1,0 +1,58 @@
+{
+  "started_at": "2026-08-15T08:11:54.484Z",
+  "mode": "visible external Google Chrome via CDP Input/DevTools partial readback",
+  "browser": "Chrome/151.0.7922.138 (Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/151.0.0.0 Safari/537.36)",
+  "actions": [
+    {
+      "action": "real_cdp_click",
+      "label": "tab delivery",
+      "kind": "tab",
+      "value": "В доставке",
+      "box": {
+        "x": 546.63671875,
+        "y": 275.046875,
+        "w": 117.8671875,
+        "h": 48,
+        "text": "В доставке"
+      },
+      "at": "2026-08-15T08:11:54.742Z"
+    },
+    {
+      "action": "screenshot",
+      "file": "/Users/deniscivkunov/Projects/WMS/.worktrees/wave1-fbs-new-orders-20260814/tasks/wms-wave1-fbs-new-orders-20260814/live-browser-review-20260815/screenshots/94-product-round2-partial-delivery-row.png",
+      "at": "2026-08-15T08:11:55.667Z"
+    },
+    {
+      "action": "real_cdp_click",
+      "label": "open partial supply row 880001",
+      "kind": "row",
+      "value": "WB №880001",
+      "box": {
+        "x": 770,
+        "y": 622.171875,
+        "w": 970,
+        "h": 223.46875,
+        "text": "Бомбер мужской утепленный графитовый с очень длинным названием модели Limited Edition 2026 Заказ WB №880001 Артикул: BOMBER-LIVE-02981000 · WB 9901001 ШК: 460LIVE02981000001 · Размер: XL Tall ИП Очень"
+      },
+      "at": "2026-08-15T08:11:55.931Z"
+    }
+  ],
+  "observations": [
+    {
+      "label": "delivery_tab_partial_seed_row",
+      "value": {
+        "url": "http://127.0.0.1:5186/app/ff/fbs",
+        "body": "Короб ВМС\nfbs-live-review-02981000@example.com · администратор\n0\nВыйти\nДашборд\nОтгрузки\nFBS\nПриёмка\nСортировка\nУпаковка\nЯчейки\nСеллеры\nКаталог\nИнвентаризация\nЧестный знак\nНастройки\nЗаказы FBS\n\nСоберите совместимые заказы в поставку и проведите её до подтверждённой передачи WB.\n\nОбновить данные\nЗабрать заказы из WB\nЗаказы\nОстатки WB\nНовые\nВ работе\nВ доставке\nЗавершённые\nСеллер\nВсе селлеры\nСеллер\nПоиск: заказ, товар, категория, артикул, ШК, SKU, цвет, размер\nПоиск: заказ, товар, категория, артикул, ШК, SKU, цвет, размер\nНайти\nСовпадений не найдено, список не изменён.\n\tТовар\tСеллер\tСклад селлера / WB\tСоздан WB\tСтатус\n\t\nБомбер мужской утепленный графитовый с очень длинным названием модели Limited Edition 2026\nЗаказ WB №880001\nАртикул: BOMBER-LIVE-02981000 · WB 9901001\nШК: 460LIVE02981000001 · Размер: XL Tall\n\t\n\nИП Очень Длинный Селлер Северо-Западный Склад 2026\n\n\t\n\nWB Москва Коледино - склад селлера северный длинный\n\nWMS: Основной WMS склад с длинным названием Москва-Север\t\n\n15.08.26, 05:34\n\nВ сборке: 5 ч 37 мин\t\nОтсортирован"
+      },
+      "at": "2026-08-15T08:11:55.670Z"
+    }
+  ],
+  "failures": [
+    {
+      "bucket": "product_round2_partial_failure",
+      "reason": "Error: Timeout workspace partial warning; last=false\n    at wait ([stdin]:10:232)\n    at async [stdin]:17:71",
+      "at": "2026-08-15T08:12:11.525Z"
+    }
+  ],
+  "completed_at": "2026-08-15T08:12:11.525Z"
+}

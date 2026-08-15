@@ -1,0 +1,934 @@
+{
+  "started_at": "2026-08-15T08:08:51.346Z",
+  "mode": "visible external Google Chrome via CDP Input/DevTools, not Playwright, not headless",
+  "browser": "Chrome/151.0.7922.138 (Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/151.0.0.0 Safari/537.36)",
+  "url": "http://127.0.0.1:5186/",
+  "actions": [
+    {
+      "action": "screenshot",
+      "file": "/Users/deniscivkunov/Projects/WMS/.worktrees/wave1-fbs-new-orders-20260814/tasks/wms-wave1-fbs-new-orders-20260814/live-browser-review-20260815/screenshots/82-product-round1-new-orders-initial-long-data-photos.png",
+      "at": "2026-08-15T08:08:54.312Z"
+    },
+    {
+      "action": "real_cdp_click",
+      "label": "checkbox WB 880002",
+      "kind": "row-checkbox",
+      "value": "WB №880002",
+      "box": {
+        "x": 314.5,
+        "y": 508.375,
+        "w": 27,
+        "h": 27,
+        "text": ""
+      },
+      "at": "2026-08-15T08:08:59.397Z"
+    },
+    {
+      "action": "screenshot",
+      "file": "/Users/deniscivkunov/Projects/WMS/.worktrees/wave1-fbs-new-orders-20260814/tasks/wms-wave1-fbs-new-orders-20260814/live-browser-review-20260815/screenshots/83-product-round1-selection-one-before-filters.png",
+      "at": "2026-08-15T08:09:00.373Z"
+    },
+    {
+      "action": "real_cdp_click",
+      "label": "warehouse select",
+      "kind": "selector",
+      "value": "[data-testid=\"fbs-worklist-warehouse\"]",
+      "box": {
+        "x": 643,
+        "y": 337.484375,
+        "w": 260,
+        "h": 42.875,
+        "text": "Все склады Склад селлера / WB"
+      },
+      "at": "2026-08-15T08:09:05.414Z"
+    },
+    {
+      "action": "real_cdp_click",
+      "label": "warehouse option Kazan",
+      "kind": "option",
+      "value": "Казань",
+      "box": {
+        "x": 642.83984375,
+        "y": 425.5,
+        "w": 531.6796875,
+        "h": 39,
+        "text": "WB Казань Зеленодольск"
+      },
+      "at": "2026-08-15T08:09:10.989Z"
+    },
+    {
+      "action": "screenshot",
+      "file": "/Users/deniscivkunov/Projects/WMS/.worktrees/wave1-fbs-new-orders-20260814/tasks/wms-wave1-fbs-new-orders-20260814/live-browser-review-20260815/screenshots/84-product-round1-warehouse-filter-selection-persists.png",
+      "at": "2026-08-15T08:09:11.617Z"
+    },
+    {
+      "action": "real_cdp_click",
+      "label": "warehouse select reset",
+      "kind": "selector",
+      "value": "[data-testid=\"fbs-worklist-warehouse\"]",
+      "box": {
+        "x": 643,
+        "y": 337.484375,
+        "w": 260,
+        "h": 42.875,
+        "text": "WB Казань Зеленодольск Склад селлера / WB"
+      },
+      "at": "2026-08-15T08:09:16.639Z"
+    },
+    {
+      "action": "real_cdp_click",
+      "label": "warehouse option all",
+      "kind": "option",
+      "value": "Все склады",
+      "box": {
+        "x": 642.83984375,
+        "y": 386.5,
+        "w": 531.6796875,
+        "h": 39,
+        "text": "Все склады"
+      },
+      "at": "2026-08-15T08:09:22.194Z"
+    },
+    {
+      "action": "real_cdp_click",
+      "label": "tab active",
+      "kind": "tab",
+      "value": "В работе",
+      "box": {
+        "x": 437.3515625,
+        "y": 275.046875,
+        "w": 100.703125,
+        "h": 48,
+        "text": "В работе"
+      },
+      "at": "2026-08-15T08:09:27.778Z"
+    },
+    {
+      "action": "screenshot",
+      "file": "/Users/deniscivkunov/Projects/WMS/.worktrees/wave1-fbs-new-orders-20260814/tasks/wms-wave1-fbs-new-orders-20260814/live-browser-review-20260815/screenshots/85-product-round1-tab-switch-selection-persists.png",
+      "at": "2026-08-15T08:09:28.396Z"
+    },
+    {
+      "action": "real_cdp_click",
+      "label": "tab new",
+      "kind": "tab",
+      "value": "Новые",
+      "box": {
+        "x": 342,
+        "y": 275.046875,
+        "w": 90,
+        "h": 48,
+        "text": "Новые"
+      },
+      "at": "2026-08-15T08:09:33.493Z"
+    },
+    {
+      "action": "fill",
+      "label": "search bomber",
+      "selector": "[data-testid=\"fbs-worklist-search\"] input",
+      "value": "бомбер",
+      "at": "2026-08-15T08:09:34.002Z"
+    },
+    {
+      "action": "real_cdp_click",
+      "label": "button:Найти",
+      "kind": "button",
+      "value": "Найти",
+      "box": {
+        "x": 992,
+        "y": 337.484375,
+        "w": 130,
+        "h": 42.875,
+        "text": "Найти"
+      },
+      "at": "2026-08-15T08:09:39.322Z"
+    },
+    {
+      "action": "screenshot",
+      "file": "/Users/deniscivkunov/Projects/WMS/.worktrees/wave1-fbs-new-orders-20260814/tasks/wms-wave1-fbs-new-orders-20260814/live-browser-review-20260815/screenshots/86-product-round1-search-highlight-keeps-list.png",
+      "at": "2026-08-15T08:09:40.466Z"
+    },
+    {
+      "action": "real_cdp_click",
+      "label": "open selected drawer",
+      "kind": "selector",
+      "value": "[data-testid=\"fbs-selected-open\"]",
+      "box": {
+        "x": 750.65625,
+        "y": 712.6328125,
+        "w": 182.984375,
+        "h": 39.5625,
+        "text": "Показать выбранные"
+      },
+      "at": "2026-08-15T08:09:45.552Z"
+    },
+    {
+      "action": "screenshot",
+      "file": "/Users/deniscivkunov/Projects/WMS/.worktrees/wave1-fbs-new-orders-20260814/tasks/wms-wave1-fbs-new-orders-20260814/live-browser-review-20260815/screenshots/87-product-round1-selected-drawer-after-search.png",
+      "at": "2026-08-15T08:09:46.191Z"
+    },
+    {
+      "action": "real_cdp_click",
+      "label": "button:Закрыть",
+      "kind": "button",
+      "value": "Закрыть",
+      "box": {
+        "x": 1032.80078125,
+        "y": 491.7578125,
+        "w": 98.3984375,
+        "h": 39.5625,
+        "text": "Закрыть"
+      },
+      "at": "2026-08-15T08:09:51.304Z"
+    },
+    {
+      "action": "real_cdp_click",
+      "label": "checkbox WB 880001",
+      "kind": "row-checkbox",
+      "value": "WB №880001",
+      "box": {
+        "x": 314.5,
+        "y": 436.5,
+        "w": 27,
+        "h": 27,
+        "text": ""
+      },
+      "at": "2026-08-15T08:09:56.957Z"
+    },
+    {
+      "action": "screenshot",
+      "file": "/Users/deniscivkunov/Projects/WMS/.worktrees/wave1-fbs-new-orders-20260814/tasks/wms-wave1-fbs-new-orders-20260814/live-browser-review-20260815/screenshots/88-product-round1-two-selected-before-excel.png",
+      "at": "2026-08-15T08:09:57.804Z"
+    },
+    {
+      "action": "real_cdp_click",
+      "label": "download excel current selected",
+      "kind": "selector",
+      "value": "[data-testid=\"fbs-orders-download-excel\"]",
+      "box": {
+        "x": 1154,
+        "y": 337.484375,
+        "w": 170,
+        "h": 42.875,
+        "text": "Скачать Excel"
+      },
+      "at": "2026-08-15T08:10:02.912Z"
+    },
+    {
+      "action": "real_cdp_click",
+      "label": "button:Сформировать поставку",
+      "kind": "button",
+      "value": "Сформировать поставку",
+      "box": {
+        "x": 1114.64453125,
+        "y": 712.6328125,
+        "w": 248.7109375,
+        "h": 45.53125,
+        "text": "Сформировать поставку"
+      },
+      "at": "2026-08-15T08:10:08.486Z"
+    },
+    {
+      "action": "screenshot",
+      "file": "/Users/deniscivkunov/Projects/WMS/.worktrees/wave1-fbs-new-orders-20260814/tasks/wms-wave1-fbs-new-orders-20260814/live-browser-review-20260815/screenshots/89-product-round1-create-supply-preflight.png",
+      "at": "2026-08-15T08:10:09.122Z"
+    },
+    {
+      "action": "real_cdp_click",
+      "label": "create supply submit",
+      "kind": "selector",
+      "value": "[data-testid=\"fbs-create-submit\"]",
+      "box": {
+        "x": 970.20703125,
+        "y": 639.1640625,
+        "w": 191.5859375,
+        "h": 45.53125,
+        "text": "Создать поставку"
+      },
+      "at": "2026-08-15T08:10:14.173Z"
+    },
+    {
+      "action": "screenshot",
+      "file": "/Users/deniscivkunov/Projects/WMS/.worktrees/wave1-fbs-new-orders-20260814/tasks/wms-wave1-fbs-new-orders-20260814/live-browser-review-20260815/screenshots/90-product-round1-create-success-workspace-readback.png",
+      "at": "2026-08-15T08:10:15.015Z"
+    },
+    {
+      "action": "real_cdp_click",
+      "label": "workspace close",
+      "kind": "selector",
+      "value": "[data-testid=\"fbs-workspace\"] button[aria-label=\"Закрыть\"]",
+      "box": {
+        "x": 1206.5,
+        "y": 69.5,
+        "w": 43,
+        "h": 43,
+        "text": ""
+      },
+      "at": "2026-08-15T08:10:20.121Z"
+    },
+    {
+      "action": "screenshot",
+      "file": "/Users/deniscivkunov/Projects/WMS/.worktrees/wave1-fbs-new-orders-20260814/tasks/wms-wave1-fbs-new-orders-20260814/live-browser-review-20260815/screenshots/91-product-round1-reload-readback-created-orders-removed.png",
+      "at": "2026-08-15T08:10:23.667Z"
+    },
+    {
+      "action": "real_cdp_click",
+      "label": "seller select",
+      "kind": "selector",
+      "value": "[aria-labelledby=\"fbs-worklist-seller-label\"]",
+      "box": {
+        "x": 416,
+        "y": 337.484375,
+        "w": 230,
+        "h": 42.875,
+        "text": "Все селлеры"
+      },
+      "at": "2026-08-15T08:10:28.745Z"
+    },
+    {
+      "action": "real_cdp_click",
+      "label": "seller option empty",
+      "kind": "option",
+      "value": "ООО Пустой",
+      "box": {
+        "x": 416.4765625,
+        "y": 464.5,
+        "w": 534.953125,
+        "h": 39,
+        "text": "ООО Пустой Селлер Без Заказов"
+      },
+      "at": "2026-08-15T08:10:34.321Z"
+    },
+    {
+      "action": "screenshot",
+      "file": "/Users/deniscivkunov/Projects/WMS/.worktrees/wave1-fbs-new-orders-20260814/tasks/wms-wave1-fbs-new-orders-20260814/live-browser-review-20260815/screenshots/92-product-round1-empty-seller-state.png",
+      "at": "2026-08-15T08:10:34.942Z"
+    },
+    {
+      "action": "real_cdp_click",
+      "label": "seller select reset",
+      "kind": "selector",
+      "value": "[aria-labelledby=\"fbs-worklist-seller-label\"]",
+      "box": {
+        "x": 416,
+        "y": 337.484375,
+        "w": 230,
+        "h": 42.875,
+        "text": "ООО Пустой Селлер Без Заказов"
+      },
+      "at": "2026-08-15T08:10:38.326Z"
+    },
+    {
+      "action": "real_cdp_click",
+      "label": "seller option all",
+      "kind": "option",
+      "value": "Все селлеры",
+      "box": {
+        "x": 416.4765625,
+        "y": 386.5,
+        "w": 534.953125,
+        "h": 39,
+        "text": "Все селлеры"
+      },
+      "at": "2026-08-15T08:10:39.029Z"
+    },
+    {
+      "action": "fill",
+      "label": "search no-match",
+      "selector": "[data-testid=\"fbs-worklist-search\"] input",
+      "value": "нет-такого-SKU-999",
+      "at": "2026-08-15T08:10:39.748Z"
+    },
+    {
+      "action": "real_cdp_click",
+      "label": "button:Найти no-match",
+      "kind": "button",
+      "value": "Найти",
+      "box": {
+        "x": 992,
+        "y": 337.484375,
+        "w": 130,
+        "h": 42.875,
+        "text": "Найти"
+      },
+      "at": "2026-08-15T08:10:40.168Z"
+    },
+    {
+      "action": "screenshot",
+      "file": "/Users/deniscivkunov/Projects/WMS/.worktrees/wave1-fbs-new-orders-20260814/tasks/wms-wave1-fbs-new-orders-20260814/live-browser-review-20260815/screenshots/93-product-round1-search-no-match-error-state-keeps-list.png",
+      "at": "2026-08-15T08:10:41.180Z"
+    }
+  ],
+  "observations": [
+    {
+      "label": "new_orders_initial_long_data_photos_headers",
+      "value": {
+        "url": "http://127.0.0.1:5186/app/ff/fbs",
+        "innerWidth": 1280,
+        "innerHeight": 783,
+        "rowsCount": 3,
+        "rows": [
+          {
+            "testid": "fbs-order-18d961ce-87eb-45d1-83a4-d140c7a15e84",
+            "text": "Кроссовки беговые демисезонные темно-синие Кроссовки · темно-синий · 43 WB №880003 Артикул: SHOES-LIVE-02981000 · WB/nmId 9901003 ШК: 460LIVE02981000003 SKU SHOES-NAVY-02981000 · chrtId 770003 ИП Очень Длинный Селлер Северо-Западный Склад 2026 WB Казань Зеленодольск WMS: Резервный WMS склад Казань 14.08.26, 20:05 В сборке: 15 ч 3 мин",
+            "checked": false,
+            "disabled": false,
+            "bg": "rgba(0, 0, 0, 0)",
+            "top": 461
+          },
+          {
+            "testid": "fbs-order-881cba56-07b0-4f26-b043-a7977792f282",
+            "text": "Футболка базовая белая хлопок премиум Футболки · белый · M WB №880002 Артикул: TSHIRT-LIVE-02981000 · WB/nmId 9901002 ШК: 460LIVE02981000002 SKU TSHIRT-WHITE-02981000 · chrtId 770002 ИП Очень Длинный Селлер Северо-Западный Склад 2026 WB Москва Коледино - склад селлера северный длинный WMS: Основной WMS склад с длинным названием Москва-Север 15.08.26, 02:47 В сборке: 8 ч 21 мин",
+            "checked": false,
+            "disabled": false,
+            "bg": "rgba(0, 0, 0, 0)",
+            "top": 631
+          },
+          {
+            "testid": "fbs-order-a641f2ea-28cb-46df-9ae8-f5b370d2c2b1",
+            "text": "Бомбер мужской утепленный графитовый с очень длинным названием модели Limited Edition 2026 Бомберы · графитовый · XL Tall WB №880001 Артикул: BOMBER-LIVE-02981000 · WB/nmId 9901001 ШК: 460LIVE02981000001 SKU BOMBER-LONG-SKU-02981000-GRAPHITE-LIMITED-EDITION-2026 · chrtId 770001 ИП Очень Длинный Селлер Северо-Западный Склад 2026 WB Москва Коледино - склад селлера северный длинный WMS: Основной WMS склад с длинным названием Москва-Север 15.08.26, 05:34 В сборке: 5 ч 34 мин",
+            "checked": false,
+            "disabled": false,
+            "bg": "rgba(0, 0, 0, 0)",
+            "top": 873
+          }
+        ],
+        "selectionBar": "",
+        "notice": "",
+        "searchResult": "",
+        "emptyVisible": false,
+        "noMatchVisible": false,
+        "hasOldRouteText": false,
+        "hasWarehouseHeader": true,
+        "hasCreatedWbHeader": true,
+        "photos": [
+          {
+            "srcPrefix": "data:image/svg+xml;utf8,<svg xmlns=\"http://ww",
+            "naturalWidth": 120,
+            "complete": true
+          },
+          {
+            "srcPrefix": "data:image/svg+xml;utf8,<svg xmlns=\"http://ww",
+            "naturalWidth": 120,
+            "complete": true
+          },
+          {
+            "srcPrefix": "data:image/svg+xml;utf8,<svg xmlns=\"http://ww",
+            "naturalWidth": 120,
+            "complete": true
+          }
+        ],
+        "bodyTextSample": "Товар Заказ и идентификаторы Селлер Склад селлера / WB Создан WB Кроссовки беговые демисезонные темно-синие Кроссовки · темно-синий · 43 WB №880003 Артикул: SHOES-LIVE-02981000 · WB/nmId 9901003 ШК: 460LIVE02981000003 SKU SHOES-NAVY-02981000 · chrtId 770003 ИП Очень Длинный Селлер Северо-Западный Склад 2026 WB Казань Зеленодольск WMS: Резервный WMS склад Казань 14.08.26, 20:05 В сборке: 15 ч 3 мин Футболка базовая белая хлопок премиум Футболки · белый · M WB №880002 Артикул: TSHIRT-LIVE-02981000 · WB/nmId 9901002 ШК: 460LIVE02981000002 SKU TSHIRT-WHITE-02981000 · chrtId 770002 ИП Очень Длинный Селлер Северо-Западный Склад 2026 WB Москва Коледино - склад селлера северный длинный WMS: Основной WMS склад с длинным названием Москва-Север 15.08.26, 02:47 В сборке: 8 ч 21 мин Бомбер мужской утепленный графитовый с очень длинным названием модели Limited Edition 2026 Бомберы · графитовый · XL Tall WB №880001 Артикул: BOMBER-LIVE-02981000 · WB/nmId 9901001 ШК: 460LIVE02981000001 SKU BOMBER-LONG-SKU-02981000-GRAPHITE-LIMITED-EDITION-2026 · chrtId 770001 ИП Очень Длинный Селлер Северо-Западный Склад 2026 WB Москва Коледино - склад селлера северный длинный WMS: Основной WMS склад с длинным названием Москва-Север 15.08.26, 05:34 В сборке: 5 ч 34 мин"
+      },
+      "at": "2026-08-15T08:08:54.316Z"
+    },
+    {
+      "label": "selection_one_before_filters",
+      "value": {
+        "url": "http://127.0.0.1:5186/app/ff/fbs",
+        "innerWidth": 1280,
+        "innerHeight": 783,
+        "rowsCount": 3,
+        "rows": [
+          {
+            "testid": "fbs-order-18d961ce-87eb-45d1-83a4-d140c7a15e84",
+            "text": "Кроссовки беговые демисезонные темно-синие Кроссовки · темно-синий · 43 WB №880003 Артикул: SHOES-LIVE-02981000 · WB/nmId 9901003 ШК: 460LIVE02981000003 SKU SHOES-NAVY-02981000 · chrtId 770003 ИП Очень Длинный Селлер Северо-Западный Склад 2026 WB Казань Зеленодольск WMS: Резервный WMS склад Казань 14.08.26, 20:05 В сборке: 15 ч 3 мин",
+            "checked": false,
+            "disabled": false,
+            "bg": "rgba(0, 0, 0, 0)",
+            "top": 325
+          },
+          {
+            "testid": "fbs-order-881cba56-07b0-4f26-b043-a7977792f282",
+            "text": "Футболка базовая белая хлопок премиум Футболки · белый · M WB №880002 Артикул: TSHIRT-LIVE-02981000 · WB/nmId 9901002 ШК: 460LIVE02981000002 SKU TSHIRT-WHITE-02981000 · chrtId 770002 ИП Очень Длинный Селлер Северо-Западный Склад 2026 WB Москва Коледино - склад селлера северный длинный WMS: Основной WMS склад с длинным названием Москва-Север 15.08.26, 02:47 В сборке: 8 ч 21 мин",
+            "checked": true,
+            "disabled": false,
+            "bg": "rgba(91, 33, 182, 0.12)",
+            "top": 495
+          },
+          {
+            "testid": "fbs-order-a641f2ea-28cb-46df-9ae8-f5b370d2c2b1",
+            "text": "Бомбер мужской утепленный графитовый с очень длинным названием модели Limited Edition 2026 Бомберы · графитовый · XL Tall WB №880001 Артикул: BOMBER-LIVE-02981000 · WB/nmId 9901001 ШК: 460LIVE02981000001 SKU BOMBER-LONG-SKU-02981000-GRAPHITE-LIMITED-EDITION-2026 · chrtId 770001 ИП Очень Длинный Селлер Северо-Западный Склад 2026 WB Москва Коледино - склад селлера северный длинный WMS: Основной WMS склад с длинным названием Москва-Север 15.08.26, 05:34 В сборке: 5 ч 34 мин",
+            "checked": false,
+            "disabled": false,
+            "bg": "rgba(0, 0, 0, 0)",
+            "top": 737
+          }
+        ],
+        "selectionBar": "Выбрано заказов: 1 Следующий шаг — серверная проверка селлера, складов и состава. Показать выбранные Снять выбор Сформировать поставку",
+        "notice": "",
+        "searchResult": "",
+        "emptyVisible": false,
+        "noMatchVisible": false,
+        "hasOldRouteText": false,
+        "hasWarehouseHeader": true,
+        "hasCreatedWbHeader": true,
+        "photos": [
+          {
+            "srcPrefix": "data:image/svg+xml;utf8,<svg xmlns=\"http://ww",
+            "naturalWidth": 120,
+            "complete": true
+          },
+          {
+            "srcPrefix": "data:image/svg+xml;utf8,<svg xmlns=\"http://ww",
+            "naturalWidth": 120,
+            "complete": true
+          },
+          {
+            "srcPrefix": "data:image/svg+xml;utf8,<svg xmlns=\"http://ww",
+            "naturalWidth": 120,
+            "complete": true
+          }
+        ],
+        "bodyTextSample": "Товар Заказ и идентификаторы Селлер Склад селлера / WB Создан WB Кроссовки беговые демисезонные темно-синие Кроссовки · темно-синий · 43 WB №880003 Артикул: SHOES-LIVE-02981000 · WB/nmId 9901003 ШК: 460LIVE02981000003 SKU SHOES-NAVY-02981000 · chrtId 770003 ИП Очень Длинный Селлер Северо-Западный Склад 2026 WB Казань Зеленодольск WMS: Резервный WMS склад Казань 14.08.26, 20:05 В сборке: 15 ч 3 мин Футболка базовая белая хлопок премиум Футболки · белый · M WB №880002 Артикул: TSHIRT-LIVE-02981000 · WB/nmId 9901002 ШК: 460LIVE02981000002 SKU TSHIRT-WHITE-02981000 · chrtId 770002 ИП Очень Длинный Селлер Северо-Западный Склад 2026 WB Москва Коледино - склад селлера северный длинный WMS: Основной WMS склад с длинным названием Москва-Север 15.08.26, 02:47 В сборке: 8 ч 21 мин Бомбер мужской утепленный графитовый с очень длинным названием модели Limited Edition 2026 Бомберы · графитовый · XL Tall WB №880001 Артикул: BOMBER-LIVE-02981000 · WB/nmId 9901001 ШК: 460LIVE02981000001 SKU BOMBER-LONG-SKU-02981000-GRAPHITE-LIMITED-EDITION-2026 · chrtId 770001 ИП Очень Длинный Селлер Северо-Западный Склад 2026 WB Москва Коледино - склад селлера северный длинный WMS: Основной WMS склад с длинным названием Москва-Север 15.08.26, 05:34 В сборке: 5 ч 34 мин"
+      },
+      "at": "2026-08-15T08:09:00.375Z"
+    },
+    {
+      "label": "warehouse_filter_kazan_selection_persists",
+      "value": {
+        "url": "http://127.0.0.1:5186/app/ff/fbs",
+        "innerWidth": 1280,
+        "innerHeight": 783,
+        "rowsCount": 1,
+        "rows": [
+          {
+            "testid": "fbs-order-18d961ce-87eb-45d1-83a4-d140c7a15e84",
+            "text": "Кроссовки беговые демисезонные темно-синие Кроссовки · темно-синий · 43 WB №880003 Артикул: SHOES-LIVE-02981000 · WB/nmId 9901003 ШК: 460LIVE02981000003 SKU SHOES-NAVY-02981000 · chrtId 770003 ИП Очень Длинный Селлер Северо-Западный Склад 2026 WB Казань Зеленодольск WMS: Резервный WMS склад Казань 14.08.26, 20:05 В сборке: 15 ч 4 мин",
+            "checked": false,
+            "disabled": false,
+            "bg": "rgba(0, 0, 0, 0)",
+            "top": 461
+          }
+        ],
+        "selectionBar": "Выбрано заказов: 1 Следующий шаг — серверная проверка селлера, складов и состава. Показать выбранные Снять выбор Сформировать поставку",
+        "notice": "",
+        "searchResult": "",
+        "emptyVisible": false,
+        "noMatchVisible": false,
+        "hasOldRouteText": false,
+        "hasWarehouseHeader": true,
+        "hasCreatedWbHeader": true,
+        "photos": [
+          {
+            "srcPrefix": "data:image/svg+xml;utf8,<svg xmlns=\"http://ww",
+            "naturalWidth": 120,
+            "complete": true
+          }
+        ],
+        "bodyTextSample": "Товар Заказ и идентификаторы Селлер Склад селлера / WB Создан WB Кроссовки беговые демисезонные темно-синие Кроссовки · темно-синий · 43 WB №880003 Артикул: SHOES-LIVE-02981000 · WB/nmId 9901003 ШК: 460LIVE02981000003 SKU SHOES-NAVY-02981000 · chrtId 770003 ИП Очень Длинный Селлер Северо-Западный Склад 2026 WB Казань Зеленодольск WMS: Резервный WMS склад Казань 14.08.26, 20:05 В сборке: 15 ч 4 мин"
+      },
+      "at": "2026-08-15T08:09:11.619Z"
+    },
+    {
+      "label": "tab_switch_active_selection_persists",
+      "value": {
+        "url": "http://127.0.0.1:5186/app/ff/fbs",
+        "innerWidth": 1280,
+        "innerHeight": 783,
+        "rowsCount": 0,
+        "rows": [],
+        "selectionBar": "Выбрано заказов: 1 Следующий шаг — серверная проверка селлера, складов и состава. Показать выбранные Снять выбор Сформировать поставку",
+        "notice": "",
+        "searchResult": "",
+        "emptyVisible": true,
+        "noMatchVisible": false,
+        "hasOldRouteText": false,
+        "hasWarehouseHeader": true,
+        "hasCreatedWbHeader": true,
+        "photos": [],
+        "bodyTextSample": "Товар Селлер Склад селлера / WB Создан WB Статус Заказов в этой группе нет Измените фильтры или обновите синхронизацию с WB."
+      },
+      "at": "2026-08-15T08:09:28.397Z"
+    },
+    {
+      "label": "tab_return_new_selection_persists",
+      "value": {
+        "url": "http://127.0.0.1:5186/app/ff/fbs",
+        "innerWidth": 1280,
+        "innerHeight": 783,
+        "rowsCount": 3,
+        "rows": [
+          {
+            "testid": "fbs-order-18d961ce-87eb-45d1-83a4-d140c7a15e84",
+            "text": "Кроссовки беговые демисезонные темно-синие Кроссовки · темно-синий · 43 WB №880003 Артикул: SHOES-LIVE-02981000 · WB/nmId 9901003 ШК: 460LIVE02981000003 SKU SHOES-NAVY-02981000 · chrtId 770003 ИП Очень Длинный Селлер Северо-Западный Склад 2026 WB Казань Зеленодольск WMS: Резервный WMS склад Казань 14.08.26, 20:05 В сборке: 15 ч 4 мин",
+            "checked": false,
+            "disabled": false,
+            "bg": "rgba(0, 0, 0, 0)",
+            "top": 461
+          },
+          {
+            "testid": "fbs-order-881cba56-07b0-4f26-b043-a7977792f282",
+            "text": "Футболка базовая белая хлопок премиум Футболки · белый · M WB №880002 Артикул: TSHIRT-LIVE-02981000 · WB/nmId 9901002 ШК: 460LIVE02981000002 SKU TSHIRT-WHITE-02981000 · chrtId 770002 ИП Очень Длинный Селлер Северо-Западный Склад 2026 WB Москва Коледино - склад селлера северный длинный WMS: Основной WMS склад с длинным названием Москва-Север 15.08.26, 02:47 В сборке: 8 ч 22 мин",
+            "checked": true,
+            "disabled": false,
+            "bg": "rgba(91, 33, 182, 0.08)",
+            "top": 631
+          },
+          {
+            "testid": "fbs-order-a641f2ea-28cb-46df-9ae8-f5b370d2c2b1",
+            "text": "Бомбер мужской утепленный графитовый с очень длинным названием модели Limited Edition 2026 Бомберы · графитовый · XL Tall WB №880001 Артикул: BOMBER-LIVE-02981000 · WB/nmId 9901001 ШК: 460LIVE02981000001 SKU BOMBER-LONG-SKU-02981000-GRAPHITE-LIMITED-EDITION-2026 · chrtId 770001 ИП Очень Длинный Селлер Северо-Западный Склад 2026 WB Москва Коледино - склад селлера северный длинный WMS: Основной WMS склад с длинным названием Москва-Север 15.08.26, 05:34 В сборке: 5 ч 35 мин",
+            "checked": false,
+            "disabled": false,
+            "bg": "rgba(0, 0, 0, 0)",
+            "top": 873
+          }
+        ],
+        "selectionBar": "Выбрано заказов: 1 Следующий шаг — серверная проверка селлера, складов и состава. Показать выбранные Снять выбор Сформировать поставку",
+        "notice": "",
+        "searchResult": "",
+        "emptyVisible": false,
+        "noMatchVisible": false,
+        "hasOldRouteText": false,
+        "hasWarehouseHeader": true,
+        "hasCreatedWbHeader": true,
+        "photos": [
+          {
+            "srcPrefix": "data:image/svg+xml;utf8,<svg xmlns=\"http://ww",
+            "naturalWidth": 120,
+            "complete": true
+          },
+          {
+            "srcPrefix": "data:image/svg+xml;utf8,<svg xmlns=\"http://ww",
+            "naturalWidth": 120,
+            "complete": true
+          },
+          {
+            "srcPrefix": "data:image/svg+xml;utf8,<svg xmlns=\"http://ww",
+            "naturalWidth": 120,
+            "complete": true
+          }
+        ],
+        "bodyTextSample": "Товар Заказ и идентификаторы Селлер Склад селлера / WB Создан WB Кроссовки беговые демисезонные темно-синие Кроссовки · темно-синий · 43 WB №880003 Артикул: SHOES-LIVE-02981000 · WB/nmId 9901003 ШК: 460LIVE02981000003 SKU SHOES-NAVY-02981000 · chrtId 770003 ИП Очень Длинный Селлер Северо-Западный Склад 2026 WB Казань Зеленодольск WMS: Резервный WMS склад Казань 14.08.26, 20:05 В сборке: 15 ч 4 мин Футболка базовая белая хлопок премиум Футболки · белый · M WB №880002 Артикул: TSHIRT-LIVE-02981000 · WB/nmId 9901002 ШК: 460LIVE02981000002 SKU TSHIRT-WHITE-02981000 · chrtId 770002 ИП Очень Длинный Селлер Северо-Западный Склад 2026 WB Москва Коледино - склад селлера северный длинный WMS: Основной WMS склад с длинным названием Москва-Север 15.08.26, 02:47 В сборке: 8 ч 22 мин Бомбер мужской утепленный графитовый с очень длинным названием модели Limited Edition 2026 Бомберы · графитовый · XL Tall WB №880001 Артикул: BOMBER-LIVE-02981000 · WB/nmId 9901001 ШК: 460LIVE02981000001 SKU BOMBER-LONG-SKU-02981000-GRAPHITE-LIMITED-EDITION-2026 · chrtId 770001 ИП Очень Длинный Селлер Северо-Западный Склад 2026 WB Москва Коледино - склад селлера северный длинный WMS: Основной WMS склад с длинным названием Москва-Север 15.08.26, 05:34 В сборке: 5 ч 35 мин"
+      },
+      "at": "2026-08-15T08:09:33.946Z"
+    },
+    {
+      "label": "search_bomber_highlight_keeps_all_rows_selection_persists",
+      "value": {
+        "url": "http://127.0.0.1:5186/app/ff/fbs",
+        "innerWidth": 1280,
+        "innerHeight": 783,
+        "rowsCount": 3,
+        "rows": [
+          {
+            "testid": "fbs-order-18d961ce-87eb-45d1-83a4-d140c7a15e84",
+            "text": "Кроссовки беговые демисезонные темно-синие Кроссовки · темно-синий · 43 WB №880003 Артикул: SHOES-LIVE-02981000 · WB/nmId 9901003 ШК: 460LIVE02981000003 SKU SHOES-NAVY-02981000 · chrtId 770003 ИП Очень Длинный Селлер Северо-Западный Склад 2026 WB Казань Зеленодольск WMS: Резервный WMS склад Казань 14.08.26, 20:05 В сборке: 15 ч 4 мин",
+            "checked": false,
+            "disabled": false,
+            "bg": "rgba(0, 0, 0, 0)",
+            "top": 7
+          },
+          {
+            "testid": "fbs-order-881cba56-07b0-4f26-b043-a7977792f282",
+            "text": "Футболка базовая белая хлопок премиум Футболки · белый · M WB №880002 Артикул: TSHIRT-LIVE-02981000 · WB/nmId 9901002 ШК: 460LIVE02981000002 SKU TSHIRT-WHITE-02981000 · chrtId 770002 ИП Очень Длинный Селлер Северо-Западный Склад 2026 WB Москва Коледино - склад селлера северный длинный WMS: Основной WMS склад с длинным названием Москва-Север 15.08.26, 02:47 В сборке: 8 ч 22 мин",
+            "checked": true,
+            "disabled": false,
+            "bg": "rgba(91, 33, 182, 0.12)",
+            "top": 177
+          },
+          {
+            "testid": "fbs-order-a641f2ea-28cb-46df-9ae8-f5b370d2c2b1",
+            "text": "Бомбер мужской утепленный графитовый с очень длинным названием модели Limited Edition 2026 Бомберы · графитовый · XL Tall WB №880001 Артикул: BOMBER-LIVE-02981000 · WB/nmId 9901001 ШК: 460LIVE02981000001 SKU BOMBER-LONG-SKU-02981000-GRAPHITE-LIMITED-EDITION-2026 · chrtId 770001 ИП Очень Длинный Селлер Северо-Западный Склад 2026 WB Москва Коледино - склад селлера северный длинный WMS: Основной WMS склад с длинным названием Москва-Север 15.08.26, 05:34 В сборке: 5 ч 35 мин",
+            "checked": false,
+            "disabled": false,
+            "bg": "rgba(255, 214, 102, 0.24)",
+            "top": 420
+          }
+        ],
+        "selectionBar": "Выбрано заказов: 1 Следующий шаг — серверная проверка селлера, складов и состава. Показать выбранные Снять выбор Сформировать поставку",
+        "notice": "",
+        "searchResult": "Найдено совпадений: 1. Список не скрыт, первая найденная строка подсвечена.",
+        "emptyVisible": false,
+        "noMatchVisible": false,
+        "hasOldRouteText": false,
+        "hasWarehouseHeader": true,
+        "hasCreatedWbHeader": true,
+        "photos": [
+          {
+            "srcPrefix": "data:image/svg+xml;utf8,<svg xmlns=\"http://ww",
+            "naturalWidth": 120,
+            "complete": true
+          },
+          {
+            "srcPrefix": "data:image/svg+xml;utf8,<svg xmlns=\"http://ww",
+            "naturalWidth": 120,
+            "complete": true
+          },
+          {
+            "srcPrefix": "data:image/svg+xml;utf8,<svg xmlns=\"http://ww",
+            "naturalWidth": 120,
+            "complete": true
+          }
+        ],
+        "bodyTextSample": "Товар Заказ и идентификаторы Селлер Склад селлера / WB Создан WB Кроссовки беговые демисезонные темно-синие Кроссовки · темно-синий · 43 WB №880003 Артикул: SHOES-LIVE-02981000 · WB/nmId 9901003 ШК: 460LIVE02981000003 SKU SHOES-NAVY-02981000 · chrtId 770003 ИП Очень Длинный Селлер Северо-Западный Склад 2026 WB Казань Зеленодольск WMS: Резервный WMS склад Казань 14.08.26, 20:05 В сборке: 15 ч 4 мин Футболка базовая белая хлопок премиум Футболки · белый · M WB №880002 Артикул: TSHIRT-LIVE-02981000 · WB/nmId 9901002 ШК: 460LIVE02981000002 SKU TSHIRT-WHITE-02981000 · chrtId 770002 ИП Очень Длинный Селлер Северо-Западный Склад 2026 WB Москва Коледино - склад селлера северный длинный WMS: Основной WMS склад с длинным названием Москва-Север 15.08.26, 02:47 В сборке: 8 ч 22 мин Бомбер мужской утепленный графитовый с очень длинным названием модели Limited Edition 2026 Бомберы · графитовый · XL Tall WB №880001 Артикул: BOMBER-LIVE-02981000 · WB/nmId 9901001 ШК: 460LIVE02981000001 SKU BOMBER-LONG-SKU-02981000-GRAPHITE-LIMITED-EDITION-2026 · chrtId 770001 ИП Очень Длинный Селлер Северо-Западный Склад 2026 WB Москва Коледино - склад селлера северный длинный WMS: Основной WMS склад с длинным названием Москва-Север 15.08.26, 05:34 В сборке: 5 ч 35 мин"
+      },
+      "at": "2026-08-15T08:09:40.469Z"
+    },
+    {
+      "label": "selected_drawer_after_search",
+      "value": {
+        "url": "http://127.0.0.1:5186/app/ff/fbs",
+        "innerWidth": 1280,
+        "innerHeight": 783,
+        "rowsCount": 3,
+        "rows": [
+          {
+            "testid": "fbs-order-18d961ce-87eb-45d1-83a4-d140c7a15e84",
+            "text": "Кроссовки беговые демисезонные темно-синие Кроссовки · темно-синий · 43 WB №880003 Артикул: SHOES-LIVE-02981000 · WB/nmId 9901003 ШК: 460LIVE02981000003 SKU SHOES-NAVY-02981000 · chrtId 770003 ИП Очень Длинный Селлер Северо-Западный Склад 2026 WB Казань Зеленодольск WMS: Резервный WMS склад Казань 14.08.26, 20:05 В сборке: 15 ч 4 мин",
+            "checked": false,
+            "disabled": false,
+            "bg": "rgba(0, 0, 0, 0)",
+            "top": 7
+          },
+          {
+            "testid": "fbs-order-881cba56-07b0-4f26-b043-a7977792f282",
+            "text": "Футболка базовая белая хлопок премиум Футболки · белый · M WB №880002 Артикул: TSHIRT-LIVE-02981000 · WB/nmId 9901002 ШК: 460LIVE02981000002 SKU TSHIRT-WHITE-02981000 · chrtId 770002 ИП Очень Длинный Селлер Северо-Западный Склад 2026 WB Москва Коледино - склад селлера северный длинный WMS: Основной WMS склад с длинным названием Москва-Север 15.08.26, 02:47 В сборке: 8 ч 22 мин",
+            "checked": true,
+            "disabled": false,
+            "bg": "rgba(91, 33, 182, 0.08)",
+            "top": 177
+          },
+          {
+            "testid": "fbs-order-a641f2ea-28cb-46df-9ae8-f5b370d2c2b1",
+            "text": "Бомбер мужской утепленный графитовый с очень длинным названием модели Limited Edition 2026 Бомберы · графитовый · XL Tall WB №880001 Артикул: BOMBER-LIVE-02981000 · WB/nmId 9901001 ШК: 460LIVE02981000001 SKU BOMBER-LONG-SKU-02981000-GRAPHITE-LIMITED-EDITION-2026 · chrtId 770001 ИП Очень Длинный Селлер Северо-Западный Склад 2026 WB Москва Коледино - склад селлера северный длинный WMS: Основной WMS склад с длинным названием Москва-Север 15.08.26, 05:34 В сборке: 5 ч 35 мин",
+            "checked": false,
+            "disabled": false,
+            "bg": "rgba(255, 214, 102, 0.24)",
+            "top": 420
+          }
+        ],
+        "selectionBar": "Выбрано заказов: 1 Следующий шаг — серверная проверка селлера, складов и состава. Показать выбранные Снять выбор Сформировать поставку",
+        "notice": "",
+        "searchResult": "Найдено совпадений: 1. Список не скрыт, первая найденная строка подсвечена.",
+        "emptyVisible": false,
+        "noMatchVisible": false,
+        "hasOldRouteText": false,
+        "hasWarehouseHeader": true,
+        "hasCreatedWbHeader": true,
+        "photos": [
+          {
+            "srcPrefix": "data:image/svg+xml;utf8,<svg xmlns=\"http://ww",
+            "naturalWidth": 120,
+            "complete": true
+          },
+          {
+            "srcPrefix": "data:image/svg+xml;utf8,<svg xmlns=\"http://ww",
+            "naturalWidth": 120,
+            "complete": true
+          },
+          {
+            "srcPrefix": "data:image/svg+xml;utf8,<svg xmlns=\"http://ww",
+            "naturalWidth": 120,
+            "complete": true
+          }
+        ],
+        "bodyTextSample": "Товар Заказ и идентификаторы Селлер Склад селлера / WB Создан WB Кроссовки беговые демисезонные темно-синие Кроссовки · темно-синий · 43 WB №880003 Артикул: SHOES-LIVE-02981000 · WB/nmId 9901003 ШК: 460LIVE02981000003 SKU SHOES-NAVY-02981000 · chrtId 770003 ИП Очень Длинный Селлер Северо-Западный Склад 2026 WB Казань Зеленодольск WMS: Резервный WMS склад Казань 14.08.26, 20:05 В сборке: 15 ч 4 мин Футболка базовая белая хлопок премиум Футболки · белый · M WB №880002 Артикул: TSHIRT-LIVE-02981000 · WB/nmId 9901002 ШК: 460LIVE02981000002 SKU TSHIRT-WHITE-02981000 · chrtId 770002 ИП Очень Длинный Селлер Северо-Западный Склад 2026 WB Москва Коледино - склад селлера северный длинный WMS: Основной WMS склад с длинным названием Москва-Север 15.08.26, 02:47 В сборке: 8 ч 22 мин Бомбер мужской утепленный графитовый с очень длинным названием модели Limited Edition 2026 Бомберы · графитовый · XL Tall WB №880001 Артикул: BOMBER-LIVE-02981000 · WB/nmId 9901001 ШК: 460LIVE02981000001 SKU BOMBER-LONG-SKU-02981000-GRAPHITE-LIMITED-EDITION-2026 · chrtId 770001 ИП Очень Длинный Селлер Северо-Западный Склад 2026 WB Москва Коледино - склад селлера северный длинный WMS: Основной WMS склад с длинным названием Москва-Север 15.08.26, 05:34 В сборке: 5 ч 35 мин"
+      },
+      "at": "2026-08-15T08:09:46.195Z"
+    },
+    {
+      "label": "two_compatible_orders_selected",
+      "value": {
+        "url": "http://127.0.0.1:5186/app/ff/fbs",
+        "innerWidth": 1280,
+        "innerHeight": 783,
+        "rowsCount": 3,
+        "rows": [
+          {
+            "testid": "fbs-order-18d961ce-87eb-45d1-83a4-d140c7a15e84",
+            "text": "Кроссовки беговые демисезонные темно-синие Кроссовки · темно-синий · 43 WB №880003 Артикул: SHOES-LIVE-02981000 · WB/nmId 9901003 ШК: 460LIVE02981000003 SKU SHOES-NAVY-02981000 · chrtId 770003 ИП Очень Длинный Селлер Северо-Западный Склад 2026 WB Казань Зеленодольск WMS: Резервный WMS склад Казань 14.08.26, 20:05 В сборке: 15 ч 4 мин",
+            "checked": false,
+            "disabled": false,
+            "bg": "rgba(0, 0, 0, 0)",
+            "top": 10
+          },
+          {
+            "testid": "fbs-order-881cba56-07b0-4f26-b043-a7977792f282",
+            "text": "Футболка базовая белая хлопок премиум Футболки · белый · M WB №880002 Артикул: TSHIRT-LIVE-02981000 · WB/nmId 9901002 ШК: 460LIVE02981000002 SKU TSHIRT-WHITE-02981000 · chrtId 770002 ИП Очень Длинный Селлер Северо-Западный Склад 2026 WB Москва Коледино - склад селлера северный длинный WMS: Основной WMS склад с длинным названием Москва-Север 15.08.26, 02:47 В сборке: 8 ч 22 мин",
+            "checked": true,
+            "disabled": false,
+            "bg": "rgba(91, 33, 182, 0.08)",
+            "top": 180
+          },
+          {
+            "testid": "fbs-order-a641f2ea-28cb-46df-9ae8-f5b370d2c2b1",
+            "text": "Бомбер мужской утепленный графитовый с очень длинным названием модели Limited Edition 2026 Бомберы · графитовый · XL Tall WB №880001 Артикул: BOMBER-LIVE-02981000 · WB/nmId 9901001 ШК: 460LIVE02981000001 SKU BOMBER-LONG-SKU-02981000-GRAPHITE-LIMITED-EDITION-2026 · chrtId 770001 ИП Очень Длинный Селлер Северо-Западный Склад 2026 WB Москва Коледино - склад селлера северный длинный WMS: Основной WMS склад с длинным названием Москва-Север 15.08.26, 05:34 В сборке: 5 ч 35 мин",
+            "checked": true,
+            "disabled": false,
+            "bg": "rgba(91, 33, 182, 0.12)",
+            "top": 423
+          }
+        ],
+        "selectionBar": "Выбрано заказов: 2 Следующий шаг — серверная проверка селлера, складов и состава. Показать выбранные Снять выбор Сформировать поставку",
+        "notice": "",
+        "searchResult": "Найдено совпадений: 1. Список не скрыт, первая найденная строка подсвечена.",
+        "emptyVisible": false,
+        "noMatchVisible": false,
+        "hasOldRouteText": false,
+        "hasWarehouseHeader": true,
+        "hasCreatedWbHeader": true,
+        "photos": [
+          {
+            "srcPrefix": "data:image/svg+xml;utf8,<svg xmlns=\"http://ww",
+            "naturalWidth": 120,
+            "complete": true
+          },
+          {
+            "srcPrefix": "data:image/svg+xml;utf8,<svg xmlns=\"http://ww",
+            "naturalWidth": 120,
+            "complete": true
+          },
+          {
+            "srcPrefix": "data:image/svg+xml;utf8,<svg xmlns=\"http://ww",
+            "naturalWidth": 120,
+            "complete": true
+          }
+        ],
+        "bodyTextSample": "Товар Заказ и идентификаторы Селлер Склад селлера / WB Создан WB Кроссовки беговые демисезонные темно-синие Кроссовки · темно-синий · 43 WB №880003 Артикул: SHOES-LIVE-02981000 · WB/nmId 9901003 ШК: 460LIVE02981000003 SKU SHOES-NAVY-02981000 · chrtId 770003 ИП Очень Длинный Селлер Северо-Западный Склад 2026 WB Казань Зеленодольск WMS: Резервный WMS склад Казань 14.08.26, 20:05 В сборке: 15 ч 4 мин Футболка базовая белая хлопок премиум Футболки · белый · M WB №880002 Артикул: TSHIRT-LIVE-02981000 · WB/nmId 9901002 ШК: 460LIVE02981000002 SKU TSHIRT-WHITE-02981000 · chrtId 770002 ИП Очень Длинный Селлер Северо-Западный Склад 2026 WB Москва Коледино - склад селлера северный длинный WMS: Основной WMS склад с длинным названием Москва-Север 15.08.26, 02:47 В сборке: 8 ч 22 мин Бомбер мужской утепленный графитовый с очень длинным названием модели Limited Edition 2026 Бомберы · графитовый · XL Tall WB №880001 Артикул: BOMBER-LIVE-02981000 · WB/nmId 9901001 ШК: 460LIVE02981000001 SKU BOMBER-LONG-SKU-02981000-GRAPHITE-LIMITED-EDITION-2026 · chrtId 770001 ИП Очень Длинный Селлер Северо-Западный Склад 2026 WB Москва Коледино - склад селлера северный длинный WMS: Основной WMS склад с длинным названием Москва-Север 15.08.26, 05:34 В сборке: 5 ч 35 мин"
+      },
+      "at": "2026-08-15T08:09:57.809Z"
+    },
+    {
+      "label": "excel_download_selected_rows",
+      "value": {
+        "downloaded": [
+          "/Users/deniscivkunov/Projects/WMS/.worktrees/wave1-fbs-new-orders-20260814/tasks/wms-wave1-fbs-new-orders-20260814/live-browser-review-20260815/downloads/fbs-new-orders-2026-08-15.xls"
+        ],
+        "notice": "Выгружено заказов: 2."
+      },
+      "at": "2026-08-15T08:10:03.364Z"
+    },
+    {
+      "label": "create_supply_success_workspace_readback_two_orders",
+      "value": {
+        "url": "http://127.0.0.1:5186/app/ff/fbs",
+        "innerWidth": 1280,
+        "innerHeight": 783,
+        "rowsCount": 1,
+        "rows": [
+          {
+            "testid": "fbs-order-18d961ce-87eb-45d1-83a4-d140c7a15e84",
+            "text": "Кроссовки беговые демисезонные темно-синие Кроссовки · темно-синий · 43 WB №880003 Артикул: SHOES-LIVE-02981000 · WB/nmId 9901003 ШК: 460LIVE02981000003 SKU SHOES-NAVY-02981000 · chrtId 770003 ИП Очень Длинный Селлер Северо-Западный Склад 2026 WB Казань Зеленодольск WMS: Резервный WMS склад Казань 14.08.26, 20:05 В сборке: 15 ч 5 мин",
+            "checked": false,
+            "disabled": false,
+            "bg": "rgba(0, 0, 0, 0)",
+            "top": 527
+          }
+        ],
+        "selectionBar": "",
+        "notice": "Выгружено заказов: 2.",
+        "searchResult": "",
+        "emptyVisible": false,
+        "noMatchVisible": false,
+        "hasOldRouteText": false,
+        "hasWarehouseHeader": true,
+        "hasCreatedWbHeader": true,
+        "photos": [
+          {
+            "srcPrefix": "data:image/svg+xml;utf8,<svg xmlns=\"http://ww",
+            "naturalWidth": 120,
+            "complete": true
+          }
+        ],
+        "bodyTextSample": "Товар Заказ и идентификаторы Селлер Склад селлера / WB Создан WB Кроссовки беговые демисезонные темно-синие Кроссовки · темно-синий · 43 WB №880003 Артикул: SHOES-LIVE-02981000 · WB/nmId 9901003 ШК: 460LIVE02981000003 SKU SHOES-NAVY-02981000 · chrtId 770003 ИП Очень Длинный Селлер Северо-Западный Склад 2026 WB Казань Зеленодольск WMS: Резервный WMS склад Казань 14.08.26, 20:05 В сборке: 15 ч 5 мин"
+      },
+      "at": "2026-08-15T08:10:15.017Z"
+    },
+    {
+      "label": "reload_readback_after_create_only_remaining_new_order",
+      "value": {
+        "url": "http://127.0.0.1:5186/app/ff/fbs",
+        "innerWidth": 1280,
+        "innerHeight": 783,
+        "rowsCount": 1,
+        "rows": [
+          {
+            "testid": "fbs-order-18d961ce-87eb-45d1-83a4-d140c7a15e84",
+            "text": "Кроссовки беговые демисезонные темно-синие Кроссовки · темно-синий · 43 WB №880003 Артикул: SHOES-LIVE-02981000 · WB/nmId 9901003 ШК: 460LIVE02981000003 SKU SHOES-NAVY-02981000 · chrtId 770003 ИП Очень Длинный Селлер Северо-Западный Склад 2026 WB Казань Зеленодольск WMS: Резервный WMS склад Казань 14.08.26, 20:05 В сборке: 15 ч 5 мин",
+            "checked": false,
+            "disabled": false,
+            "bg": "rgba(0, 0, 0, 0)",
+            "top": 461
+          }
+        ],
+        "selectionBar": "",
+        "notice": "",
+        "searchResult": "",
+        "emptyVisible": false,
+        "noMatchVisible": false,
+        "hasOldRouteText": false,
+        "hasWarehouseHeader": true,
+        "hasCreatedWbHeader": true,
+        "photos": [
+          {
+            "srcPrefix": "data:image/svg+xml;utf8,<svg xmlns=\"http://ww",
+            "naturalWidth": 120,
+            "complete": true
+          }
+        ],
+        "bodyTextSample": "Товар Заказ и идентификаторы Селлер Склад селлера / WB Создан WB Кроссовки беговые демисезонные темно-синие Кроссовки · темно-синий · 43 WB №880003 Артикул: SHOES-LIVE-02981000 · WB/nmId 9901003 ШК: 460LIVE02981000003 SKU SHOES-NAVY-02981000 · chrtId 770003 ИП Очень Длинный Селлер Северо-Западный Склад 2026 WB Казань Зеленодольск WMS: Резервный WMS склад Казань 14.08.26, 20:05 В сборке: 15 ч 5 мин"
+      },
+      "at": "2026-08-15T08:10:23.676Z"
+    },
+    {
+      "label": "empty_seller_state",
+      "value": {
+        "url": "http://127.0.0.1:5186/app/ff/fbs",
+        "innerWidth": 1280,
+        "innerHeight": 783,
+        "rowsCount": 0,
+        "rows": [],
+        "selectionBar": "",
+        "notice": "",
+        "searchResult": "",
+        "emptyVisible": true,
+        "noMatchVisible": false,
+        "hasOldRouteText": false,
+        "hasWarehouseHeader": true,
+        "hasCreatedWbHeader": true,
+        "photos": [],
+        "bodyTextSample": "Товар Заказ и идентификаторы Селлер Склад селлера / WB Создан WB Заказов в этой группе нет Измените фильтры или обновите синхронизацию с WB."
+      },
+      "at": "2026-08-15T08:10:34.943Z"
+    },
+    {
+      "label": "search_no_match_error_state_keeps_visible_list",
+      "value": {
+        "url": "http://127.0.0.1:5186/app/ff/fbs",
+        "innerWidth": 1280,
+        "innerHeight": 783,
+        "rowsCount": 1,
+        "rows": [
+          {
+            "testid": "fbs-order-18d961ce-87eb-45d1-83a4-d140c7a15e84",
+            "text": "Кроссовки беговые демисезонные темно-синие Кроссовки · темно-синий · 43 WB №880003 Артикул: SHOES-LIVE-02981000 · WB/nmId 9901003 ШК: 460LIVE02981000003 SKU SHOES-NAVY-02981000 · chrtId 770003 ИП Очень Длинный Селлер Северо-Западный Склад 2026 WB Казань Зеленодольск WMS: Резервный WMS склад Казань 14.08.26, 20:05 В сборке: 15 ч 5 мин",
+            "checked": false,
+            "disabled": false,
+            "bg": "rgba(0, 0, 0, 0)",
+            "top": 527
+          }
+        ],
+        "selectionBar": "",
+        "notice": "Совпадений не найдено, список не изменён.",
+        "searchResult": "",
+        "emptyVisible": false,
+        "noMatchVisible": true,
+        "hasOldRouteText": false,
+        "hasWarehouseHeader": true,
+        "hasCreatedWbHeader": true,
+        "photos": [
+          {
+            "srcPrefix": "data:image/svg+xml;utf8,<svg xmlns=\"http://ww",
+            "naturalWidth": 120,
+            "complete": true
+          }
+        ],
+        "bodyTextSample": "Товар Заказ и идентификаторы Селлер Склад селлера / WB Создан WB Кроссовки беговые демисезонные темно-синие Кроссовки · темно-синий · 43 WB №880003 Артикул: SHOES-LIVE-02981000 · WB/nmId 9901003 ШК: 460LIVE02981000003 SKU SHOES-NAVY-02981000 · chrtId 770003 ИП Очень Длинный Селлер Северо-Западный Склад 2026 WB Казань Зеленодольск WMS: Резервный WMS склад Казань 14.08.26, 20:05 В сборке: 15 ч 5 мин"
+      },
+      "at": "2026-08-15T08:10:41.184Z"
+    }
+  ],
+  "failures": [],
+  "completed_at": "2026-08-15T08:10:41.184Z"
+}

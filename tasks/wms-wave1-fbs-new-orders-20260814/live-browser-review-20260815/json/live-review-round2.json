@@ -1,0 +1,16 @@
+{
+  "started_at": "2026-08-15T08:03:20.984Z",
+  "mode": "visible external Google Chrome via CDP DevTools, not Playwright, not headless",
+  "browser": "Chrome/151.0.7922.138 (Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/151.0.0.0 Safari/537.36)",
+  "url": "http://127.0.0.1:5186/",
+  "actions": [],
+  "observations": [],
+  "failures": [
+    {
+      "bucket": "round2_failure",
+      "reason": "Error: ReferenceError: id is not defined\n    at eval (eval at <anonymous> (:1:26), <anonymous>:1:46)\n    at <anonymous>:1:55\n    at <anonymous>:1:608\n    at ev ([stdin]:14:348)\n    at async clickEval ([stdin]:17:58)\n    at async [stdin]:26:86",
+      "at": "2026-08-15T08:03:27.521Z"
+    }
+  ],
+  "completed_at": "2026-08-15T08:03:27.521Z"
+}
