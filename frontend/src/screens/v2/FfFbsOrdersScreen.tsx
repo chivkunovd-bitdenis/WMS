@@ -33,7 +33,7 @@ import DownloadOutlinedIcon from '@mui/icons-material/DownloadOutlined'
 import Inventory2OutlinedIcon from '@mui/icons-material/Inventory2Outlined'
 import RefreshOutlinedIcon from '@mui/icons-material/RefreshOutlined'
 import SearchOutlinedIcon from '@mui/icons-material/SearchOutlined'
-import { DeadlinePill, FbsStatusChip } from '../../components/fbs/FbsChips'
+import { FbsStatusChip } from '../../components/fbs/FbsChips'
 import { ProductPhotoThumb } from '../../components/ProductPhotoThumb'
 import { FbsSupplyCreateDialog } from './FbsSupplyCreateDialog'
 import { FfFbsSectionNav } from './FfFbsSectionNav'
@@ -600,8 +600,8 @@ export function FfFbsOrdersScreen({ token, authHeaders, sellers, isAdmin = false
                 <>
                   <TableCell sx={{ minWidth: 270 }}>Товар</TableCell>
                   <TableCell sx={{ minWidth: 125 }}>Селлер</TableCell>
-                  <TableCell sx={{ minWidth: 125 }}>Маршрут сдачи</TableCell>
-                  <TableCell sx={{ minWidth: 105 }}>Отгрузить до</TableCell>
+                  <TableCell sx={{ minWidth: 150 }}>Склад селлера / WB</TableCell>
+                  <TableCell sx={{ minWidth: 150 }}>Создан WB</TableCell>
                   <TableCell sx={{ minWidth: 130 }}>Статус</TableCell>
                 </>
               )}
@@ -757,15 +757,18 @@ export function FfFbsOrdersScreen({ token, authHeaders, sellers, isAdmin = false
                         <Typography variant="body2">{order.seller.name ?? '—'}</Typography>
                       </TableCell>
                       <TableCell>
-                        <Chip size="small" variant="outlined" label={order.can_pvz ? 'ПВЗ' : 'Склад / СЦ'} />
-                        {order.buyer_type === 'legal' ? <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 0.5 }}>Юридическое лицо</Typography> : null}
+                        <Typography variant="body2" sx={{ fontWeight: 650 }}>
+                          {order.wb_warehouse.name || `WB ${order.wb_warehouse.id}`}
+                        </Typography>
+                        <Typography variant="caption" color="text.secondary">
+                          WMS: {order.wms_warehouse.name}
+                        </Typography>
                       </TableCell>
                       <TableCell>
-                        <DeadlinePill
-                          deadlineAt={order.deadline_at}
-                          serverNow={serverNow}
-                          cancelled={order.status === 'cancelled'}
-                        />
+                        <Typography variant="body2">{formatDateTime(order.created_at_wb)}</Typography>
+                        <Typography variant="caption" color="text.secondary">
+                          В сборке: {elapsedSince(order.created_at_wb, serverNow)}
+                        </Typography>
                       </TableCell>
                       <TableCell>
                         <FbsStatusChip status={order.status} />
