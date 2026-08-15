@@ -12,11 +12,14 @@ from sqlalchemy import func, select
 from app.core.settings import settings
 from app.db.session import SessionLocal
 from app.models.fbs_order import (
+    CHECK_STATUS_NEW,
     FBS_ORDER_STATUS_IN_DELIVERY,
     FBS_ORDER_STATUS_IN_SUPPLY,
     FBS_ORDER_STATUS_NEW,
+    META_STATUS_PENDING,
     PICK_STATUS_PICKED,
     FbsOrder,
+    FbsOrderMarking,
     FbsOrderReservation,
 )
 from app.models.fbs_order_pick import FbsOrderPick
@@ -784,12 +787,18 @@ async def test_fbs_supply_promoted_after_marking_when_honest_sign_required(
     )
     assert supply_mid.json()["status"] == FBS_SUPPLY_STATUS_ASSEMBLING
 
-    mark = await async_client.put(
-        f"/operations/fbs-orders/{order_id}/markings/sgtin",
-        headers=headers,
-        json={"value": "01CIS-PACKINT-TEST"},
-    )
-    assert mark.status_code == 200, mark.text
+    async with SessionLocal() as session:
+        session.add(
+            FbsOrderMarking(
+                order_id=order_id,
+                tenant_id=tenant_id,
+                kind="sgtin",
+                value="01CIS-PACKINT-TEST",
+                check_status=CHECK_STATUS_NEW,
+                meta_status=META_STATUS_PENDING,
+            )
+        )
+        await session.commit()
 
     from app.services.wildberries_fbs_client import MarketplaceOrderMetaRow
 

@@ -158,6 +158,9 @@ class PackagingTaskLine(Base):
     qty_confirmed_packed: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     qty_packed_in_task: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     qty_marking_printed: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    qty_marking_external: Mapped[int] = mapped_column(
+        Integer, nullable=False, default=0, server_default="0"
+    )
     marketplace_unload_line_id: Mapped[uuid.UUID | None] = mapped_column(
         Uuid(as_uuid=True),
         ForeignKey("marketplace_unload_lines.id", ondelete="SET NULL"),

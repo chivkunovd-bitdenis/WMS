@@ -336,6 +336,37 @@ async def test_order_print_tape_assigns_codes_to_requested_orders(
         capture_wb_meta_put,
     )
 
+    from app.services.wildberries_fbs_client import MarketplaceOrderMetaRow
+
+    async def fake_meta_batch(
+        client: object,
+        *,
+        api_token: str,
+        order_ids: list[int],
+        marketplace_api_base: str | None = None,
+    ) -> list[MarketplaceOrderMetaRow]:
+        del client, api_token, marketplace_api_base
+        wb_order_id = order_ids[0]
+        value = next(value for order_id, _, value in wb_meta_puts if order_id == wb_order_id)
+        return [
+            MarketplaceOrderMetaRow(
+                order_id=wb_order_id,
+                meta={
+                    "sgtins": [
+                        {
+                            "value": value,
+                            "checkStatus": "checking",
+                        }
+                    ]
+                },
+            )
+        ]
+
+    monkeypatch.setattr(
+        "app.services.fbs_marking_service.fetch_marketplace_orders_meta_batch",
+        fake_meta_batch,
+    )
+
     async def fake_marketplace_token(*_args: object, **_kwargs: object) -> str:
         return "wb-marketplace-token"
 

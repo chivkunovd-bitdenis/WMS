@@ -9,6 +9,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.deps import require_packaging_access
 from app.db.session import get_db
+from app.models.fbs_order import MARKING_KIND_SGTIN, current_order_marking
 from app.models.packaging_task import PackagingTask, PackagingTaskLine
 from app.models.user import User
 from app.services import marking_code_service as mc_svc
@@ -261,8 +262,13 @@ def _fulfilled_order_out(order: object) -> FulfilledOrderOut:
 
     assert isinstance(order, FbsOrder)
     marking_status: str | None = None
-    if order.markings:
-        marking_status = order.markings[0].meta_status
+    marking = current_order_marking(
+        list(order.markings),
+        MARKING_KIND_SGTIN,
+        include_rejected=True,
+    )
+    if marking is not None:
+        marking_status = marking.meta_status
     return FulfilledOrderOut(
         id=str(order.id),
         wb_order_id=int(order.wb_order_id),

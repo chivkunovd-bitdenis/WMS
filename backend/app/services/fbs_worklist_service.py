@@ -29,6 +29,7 @@ from app.models.fbs_order import (
     MAPPING_STATUS_MISSING,
     FbsOrder,
     FbsOrderMarking,
+    current_order_marking,
 )
 from app.models.fbs_order_pick import FbsOrderPick
 from app.models.fbs_print_asset import (
@@ -734,10 +735,9 @@ def _build_metadata(
 ) -> dict[str, Any]:
     required = list(order.required_meta_json or [])
     optional = list(order.optional_meta_json or [])
-    by_kind = {m.kind: m for m in markings}
     states: list[dict[str, Any]] = []
     for kind in required + optional:
-        mark = by_kind.get(kind)
+        mark = current_order_marking(markings, kind, include_rejected=True)
         if mark is not None:
             states.append(
                 {

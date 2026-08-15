@@ -30,12 +30,23 @@ DEPRECATED_PATHS = (
     "/operations/fbs-supplies/{supply_id}/trbx/stickers",
 )
 
+REMOVED_FBS_PATHS = (
+    "/operations/fbs-orders/{order_id}/metadata/scan",
+    "/operations/fbs-orders/{order_id}/markings/{kind}",
+)
+
 
 def test_fbs_openapi_generation_includes_contract_paths() -> None:
     schema = create_app().openapi()
     paths = schema["paths"]
     for path in REQUIRED_FBS_PATHS:
         assert path in paths, f"missing FBS contract path: {path}"
+
+
+def test_removed_fbs_marking_paths_are_absent() -> None:
+    paths = create_app().openapi()["paths"]
+    for path in REMOVED_FBS_PATHS:
+        assert path not in paths, f"removed FBS marking path is still exposed: {path}"
 
 
 def test_deprecated_print_compatibility_marked_in_openapi() -> None:

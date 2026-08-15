@@ -25,6 +25,7 @@ from app.models.fbs_order import (
     FBS_ORDER_STATUS_PACKED,
     MARKING_KIND_SGTIN,
     FbsOrder,
+    current_order_marking,
 )
 from app.models.fbs_supply import (
     FBS_DELIVERY_TYPE_PVZ,
@@ -298,7 +299,7 @@ async def _get_supply_read(
 
 
 def _order_has_sgtin_marking(order: FbsOrder) -> bool:
-    return any(marking.kind == MARKING_KIND_SGTIN for marking in order.markings)
+    return current_order_marking(list(order.markings), MARKING_KIND_SGTIN) is not None
 
 
 async def _sync_supply_orders_from_wb(

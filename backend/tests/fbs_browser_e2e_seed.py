@@ -114,6 +114,7 @@ async def _main() -> None:
             for route, chrt_id, barcode in (
                 ("warehouse_sc", 111001, "2000000000011"),
                 ("pvz", 111005, "2000000000015"),
+                ("kiz", 111002, "2000000000012"),
             ):
                 created[route] = []
                 for index in range(2):

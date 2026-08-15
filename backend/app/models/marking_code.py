@@ -253,6 +253,9 @@ class MarkingCode(Base):
         index=True,
     )
     cis_code: Mapped[str] = mapped_column(String(512), nullable=False)
+    source: Mapped[str] = mapped_column(
+        String(16), nullable=False, default="pool", server_default="pool"
+    )
     gtin: Mapped[str | None] = mapped_column(String(32), nullable=True)
     label_artifact_pdf: Mapped[bytes | None] = mapped_column(LargeBinary, nullable=True)
     serial: Mapped[str | None] = mapped_column(String(128), nullable=True)

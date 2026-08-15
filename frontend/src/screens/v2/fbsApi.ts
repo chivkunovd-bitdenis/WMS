@@ -162,6 +162,7 @@ export type FbsOrderMetadata = {
       | 'rejected'
       | 'replacement_required'
     reason: string | null
+    source?: 'pool' | 'operator'
   }>
   delivery_allowed: boolean
   last_checked_at: string | null
@@ -738,21 +739,6 @@ export async function fetchFbsOrderMetadata(
   )
 }
 
-export async function scanFbsOrderMetadata(
-  token: string,
-  ah: AuthHeaders,
-  orderId: string,
-  body: { kind: string; raw_value: string; idempotency_key: string },
-): Promise<FbsOrderMetadata> {
-  return jsonOrThrow<FbsOrderMetadata>(
-    await fetch(apiUrl(`/operations/fbs-orders/${orderId}/metadata/scan`), {
-      method: 'POST',
-      headers: jsonHeaders(token, ah),
-      body: JSON.stringify(body),
-    }),
-  )
-}
-
 export async function fetchFbsPrintBatch(
   token: string,
   ah: AuthHeaders,
@@ -1025,48 +1011,93 @@ export async function fetchFbsTrbxStickers(
 // Маркировка в WB привязана к ЗАКАЗУ, а не к артикулу — ручки backend/app/api/fbs_marking.py
 // под /operations/fbs-orders/{order_id}/markings...
 
-export type FbsMarkingKind = 'sgtin' | 'uin' | 'imei' | 'gtin'
+// ── Внесение чужих КИЗ по стикеру ────────────────────────────────────────────
+// backend/app/api/fbs_kiz.py — спека tasks/fbs-kiz-manual-binding/TASK.md §5.
+// Сопоставление идёт ТОЛЬКО по стикеру: QR даёт заказ, КИЗ вешается на этот заказ.
 
-export const MARKING_KIND_LABEL: Record<FbsMarkingKind, string> = {
-  sgtin: 'КИЗ (SGTIN)',
-  uin: 'УИН',
-  imei: 'IMEI',
-  gtin: 'GTIN',
-}
-
-export type FbsOrderMarking = {
-  id: string
+export type FbsKizLookup = {
   order_id: string
-  kind: string
-  value: string
-  check_status: string // new | checking | ok | error | no_check
-  marking_code_id: string | null
+  wb_order_id: number
+  product: {
+    name: string
+    image_url: string | null
+    barcode: string | null
+    seller_article: string | null
+  }
+  current_kiz: { masked: string; meta_status: string; from_pool: boolean } | null
+  needs_confirmation: boolean
+  can_bind: boolean
+  block_reason: string | null
 }
 
-export async function getFbsOrderMarkings(
+export type FbsKizPair = { order_id: string; value: string; confirmed: boolean }
+
+export type FbsKizValidateResult = {
+  ok: boolean
+  hints: string[]
+}
+
+export type FbsKizCommitResult = {
+  order_id: string
+  status: 'ok' | 'error'
+  code: string | null
+  message: string | null
+}
+
+export async function lookupFbsOrderBySticker(
   token: string,
   ah: (t: string) => Record<string, string>,
-  orderId: string,
-): Promise<FbsOrderMarking[]> {
-  const res = await fetch(apiUrl(`/operations/fbs-orders/${orderId}/markings`), {
+  supplyId: string,
+  sticker: string,
+): Promise<FbsKizLookup> {
+  const query = new URLSearchParams({ supply_id: supplyId, sticker })
+  const res = await fetch(apiUrl(`/operations/fbs-orders/kiz/lookup?${query.toString()}`), {
     headers: { ...ah(token) },
   })
-  return jsonOrThrow<FbsOrderMarking[]>(res)
+  return jsonOrThrow<FbsKizLookup>(res)
 }
 
-export async function putFbsOrderMarking(
+export async function validateFbsKiz(
   token: string,
   ah: (t: string) => Record<string, string>,
   orderId: string,
-  kind: FbsMarkingKind,
   value: string,
-): Promise<FbsOrderMarking> {
-  const res = await fetch(apiUrl(`/operations/fbs-orders/${orderId}/markings/${kind}`), {
-    method: 'PUT',
+): Promise<FbsKizValidateResult> {
+  const res = await fetch(apiUrl('/operations/fbs-orders/kiz/validate'), {
+    method: 'POST',
     headers: { ...ah(token), 'Content-Type': 'application/json' },
-    body: JSON.stringify({ value }),
+    body: JSON.stringify({ order_id: orderId, value }),
   })
-  return jsonOrThrow<FbsOrderMarking>(res)
+  return jsonOrThrow<FbsKizValidateResult>(res)
+}
+
+export async function commitFbsKiz(
+  token: string,
+  ah: (t: string) => Record<string, string>,
+  pairs: FbsKizPair[],
+  idempotencyKey: string,
+): Promise<FbsKizCommitResult[]> {
+  const res = await fetch(apiUrl('/operations/fbs-orders/kiz/commit'), {
+    method: 'POST',
+    headers: { ...ah(token), 'Content-Type': 'application/json' },
+    body: JSON.stringify({ pairs, idempotency_key: idempotencyKey }),
+  })
+  return jsonOrThrow<FbsKizCommitResult[]>(res)
+}
+
+export async function deleteFbsOrderKiz(
+  token: string,
+  ah: (t: string) => Record<string, string>,
+  orderId: string,
+): Promise<void> {
+  const res = await fetch(apiUrl(`/operations/fbs-orders/${orderId}/kiz`), {
+    method: 'DELETE',
+    headers: { ...ah(token) },
+  })
+  // Успех приходит пустым 204 — разбирать в нём JSON нечего, иначе отмена,
+  // которая на самом деле прошла, показывается оператору ошибкой.
+  if (res.ok) return
+  await jsonOrThrow<{ ok: boolean }>(res)
 }
 
 // ── Привязки складов WB ↔ WMS + синхронизация остатков ───────────────────────
