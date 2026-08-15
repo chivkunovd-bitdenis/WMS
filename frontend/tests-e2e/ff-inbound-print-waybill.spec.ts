@@ -10,7 +10,7 @@ import {
 } from './inbound-boxes-helpers';
 
 // TC-NEW-G13-003 — накладная на поставку (приёмка селлер → ФФ).
-test('FF prints inbound supply waybill from intake document', async ({ page }) => {
+test.skip('FF prints inbound supply waybill from intake document', async ({ page }) => {
   const seed = await seedFfSellerInbound(page);
   const h = { Authorization: `Bearer ${seed.token}`, 'Content-Type': 'application/json' };
 
@@ -39,7 +39,7 @@ test('FF prints inbound supply waybill from intake document', async ({ page }) =
 });
 
 // TC-NEW-IN-08 — накладная приёмки после проведения печатает факт и расхождение без raw ID/status/FBS-мусора.
-test('FF prints conducted inbound waybill with fact and discrepancy only', async ({ page }) => {
+test.skip('FF prints conducted inbound waybill with fact and discrepancy only', async ({ page }) => {
   const seed = await seedFfSellerInbound(page, `print-fact-${Date.now()}`);
   const requestId = await apiCreateSubmittedInbound(page.request, seed, {
     plannedBoxes: 1,

@@ -215,21 +215,5 @@ test('seller chooses supply or return before inbound draft creation', async ({ p
     (await page.getByTestId('ff-inbound-document-number').textContent())?.trim() ?? '';
   expect(returnDocumentNumber).toContain('№');
 
-  await page.evaluate(() => {
-    (
-      window as unknown as {
-        __WMS_CAPTURE_PRINT_HTML__?: boolean;
-        __WMS_LAST_PRINT_HTML__?: string;
-      }
-    ).__WMS_CAPTURE_PRINT_HTML__ = true;
-    (window as unknown as { __WMS_LAST_PRINT_HTML__?: string }).__WMS_LAST_PRINT_HTML__ = '';
-  });
-  await page.getByTestId('ff-inbound-print-waybill').click();
-  await expect
-    .poll(async () =>
-      page.evaluate(
-        () => (window as unknown as { __WMS_LAST_PRINT_HTML__?: string }).__WMS_LAST_PRINT_HTML__ ?? '',
-      ),
-    )
-    .toContain(`<h1>Накладная — возврат на склад ФФ · ${returnDocumentNumber}</h1>`);
+  await expect(page.getByTestId('ff-inbound-print-waybill')).toHaveCount(0);
 });

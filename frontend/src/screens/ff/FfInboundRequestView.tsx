@@ -398,6 +398,10 @@ export function FfInboundRequestView({
   const loadDetailSeq = useRef(0)
 
   const sortingView = workspace === 'sorting'
+  const plannedDateFieldEnabled = false
+  const waybillPrintEnabled = false
+  const boxImportEnabled = false
+  const documentDistributionEnabled = false
   const receptionClosed =
     detail != null && (isSortingStatus(detail.status) || isDoneStatus(detail.status))
   const receivingActive =
@@ -1894,21 +1898,23 @@ export function FfInboundRequestView({
               useFlexGap
               sx={{ alignItems: 'center', flexWrap: 'wrap' }}
             >
-              <WmsDateField
-                label="Дата приёмки (план)"
-                value={plannedDateDraft || null}
-                onChange={(iso) => {
-                  const next = iso ?? ''
-                  setPlannedDateDraft(next)
-                  if ((next || '') !== (detail.planned_delivery_date ?? '')) {
-                    void patchPlannedDate(next)
-                  }
-                }}
-                disabled={draftLocked || busy}
-                required
-                testId="ff-inbound-planned-date"
-                slotProps={{ textField: { fullWidth: false, sx: { minWidth: 220 } } }}
-              />
+              {plannedDateFieldEnabled ? (
+                <WmsDateField
+                  label="Дата приёмки (план)"
+                  value={plannedDateDraft || null}
+                  onChange={(iso) => {
+                    const next = iso ?? ''
+                    setPlannedDateDraft(next)
+                    if ((next || '') !== (detail.planned_delivery_date ?? '')) {
+                      void patchPlannedDate(next)
+                    }
+                  }}
+                  disabled={draftLocked || busy}
+                  required
+                  testId="ff-inbound-planned-date"
+                  slotProps={{ textField: { fullWidth: false, sx: { minWidth: 220 } } }}
+                />
+              ) : null}
               <Chip
                 label={inboundStatusRu(detail.status)}
                 color={inboundStatusChipColor(detail.status)}
@@ -1967,7 +1973,8 @@ export function FfInboundRequestView({
                 </Button>
               ) : null}
 
-              {isFulfillmentAdmin &&
+              {documentDistributionEnabled &&
+              isFulfillmentAdmin &&
               addressStorageEnabled &&
               isSortingStatus(detail.status) &&
               workspace === 'full' ? (
@@ -2019,7 +2026,7 @@ export function FfInboundRequestView({
                 </Button>
               ) : null}
 
-              {detail.lines.length > 0 ? (
+              {waybillPrintEnabled && detail.lines.length > 0 ? (
                 <Button
                   variant="outlined"
                   startIcon={<PrintOutlined />}
@@ -2536,14 +2543,16 @@ export function FfInboundRequestView({
                     >
                       Создать грузоместа
                     </Button>
-                    <Button
-                      variant="outlined"
-                      disabled={busy || !receivingActive}
-                      onClick={() => setBoxImportOpen(true)}
-                      data-testid="ff-inbound-import-boxes"
-                    >
-                      Загрузить по накладной
-                    </Button>
+                    {boxImportEnabled ? (
+                      <Button
+                        variant="outlined"
+                        disabled={busy || !receivingActive}
+                        onClick={() => setBoxImportOpen(true)}
+                        data-testid="ff-inbound-import-boxes"
+                      >
+                        Загрузить по накладной
+                      </Button>
+                    ) : null}
                     <Button
                       variant="outlined"
                       disabled={busy || boxes.length === 0}
@@ -2697,7 +2706,10 @@ export function FfInboundRequestView({
                 </Alert>
               ) : null}
 
-              {addressStorageEnabled && isSortingStatus(detail.status) && workspace === 'full' ? (
+              {documentDistributionEnabled &&
+              addressStorageEnabled &&
+              isSortingStatus(detail.status) &&
+              workspace === 'full' ? (
                 <Paper variant="outlined" sx={{ p: 2 }} data-testid="ff-inbound-admin-distribution">
                   <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1} sx={{ alignItems: { sm: 'center' } }}>
                     <Box sx={{ flexGrow: 1 }}>
@@ -3187,7 +3199,7 @@ export function FfInboundRequestView({
         </Alert>
       </Snackbar>
 
-      {boxImportOpen ? (
+      {boxImportEnabled && boxImportOpen ? (
         <BoxImportDialog
           open={boxImportOpen}
           token={token}

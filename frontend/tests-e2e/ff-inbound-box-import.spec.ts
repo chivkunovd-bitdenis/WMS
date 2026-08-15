@@ -13,7 +13,7 @@ import {
 } from './inbound-boxes-helpers';
 
 // TC-NEW-BOX-001 — xlsx «Штрих-код комбайн» → preview → apply → короба на приёмке.
-test.describe('FF inbound box import from xlsx', () => {
+test.describe.skip('FF inbound box import from xlsx', () => {
   test('TC-NEW-BOX-001 happy path creates boxes from combain xlsx', async ({ page }) => {
     const seed = await seedFfSellerInbound(page);
     const xlsxPath = tempCombainXlsx([
