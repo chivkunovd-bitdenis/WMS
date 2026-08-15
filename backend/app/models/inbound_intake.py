@@ -50,6 +50,12 @@ class InboundIntakeRequest(Base):
         nullable=True,
         index=True,
     )
+    created_by_seller_id: Mapped[uuid.UUID | None] = mapped_column(
+        Uuid(as_uuid=True),
+        ForeignKey("sellers.id", ondelete="SET NULL"),
+        nullable=True,
+        index=True,
+    )
     status: Mapped[str] = mapped_column(String(32), nullable=False)
     operation_type: Mapped[str] = mapped_column(
         String(32), nullable=False, default="inbound", server_default="inbound"
@@ -82,7 +88,10 @@ class InboundIntakeRequest(Base):
     warehouse: Mapped[Warehouse] = relationship(
         "Warehouse", back_populates="inbound_intake_requests"
     )
-    seller: Mapped[Seller | None] = relationship("Seller")
+    seller: Mapped[Seller | None] = relationship("Seller", foreign_keys=[seller_id])
+    created_by_seller: Mapped[Seller | None] = relationship(
+        "Seller", foreign_keys=[created_by_seller_id]
+    )
     lines: Mapped[list[InboundIntakeLine]] = relationship(
         "InboundIntakeLine",
         back_populates="request",

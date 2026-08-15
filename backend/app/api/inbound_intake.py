@@ -565,14 +565,17 @@ async def create_inbound_request(
                 detail="seller_not_linked",
             )
         owning_seller_id = effective_seller_id
+        created_by_seller_id = effective_seller_id
     else:
         owning_seller_id = None
+        created_by_seller_id = None
     try:
         r = await svc.create_request(
             session,
             user.tenant_id,
             warehouse_id=body.warehouse_id,
             seller_id=owning_seller_id,
+            created_by_seller_id=created_by_seller_id,
             planned_delivery_date=body.planned_delivery_date,
             operation_type=body.operation_type,
         )

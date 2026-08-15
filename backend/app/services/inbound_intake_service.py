@@ -129,6 +129,7 @@ async def create_request(
     *,
     warehouse_id: uuid.UUID,
     seller_id: uuid.UUID | None = None,
+    created_by_seller_id: uuid.UUID | None = None,
     planned_delivery_date: date | None = None,
     operation_type: str = OPERATION_TYPE_INBOUND,
 ) -> InboundIntakeRequest:
@@ -142,12 +143,15 @@ async def create_request(
         sl = await session.get(Seller, seller_id)
         if sl is None or sl.tenant_id != tenant_id:
             raise InboundIntakeError("seller_not_found")
+    if created_by_seller_id is not None and created_by_seller_id != seller_id:
+        raise InboundIntakeError("seller_not_found")
     req = InboundIntakeRequest(
         tenant_id=tenant_id,
         warehouse_id=warehouse_id,
         status=STATUS_DRAFT,
         operation_type=normalized_operation_type,
         seller_id=seller_id,
+        created_by_seller_id=created_by_seller_id,
         planned_delivery_date=planned_delivery_date,
         planned_box_count=None,
     )
@@ -545,6 +549,8 @@ async def begin_receiving(
     if req is None:
         raise InboundIntakeError("request_not_found")
     if req.status == STATUS_DRAFT:
+        if req.created_by_seller_id is not None:
+            raise InboundIntakeError("not_submitted")
         if len(req.lines) == 0:
             raise InboundIntakeError("submit_empty")
         req.status = STATUS_RECEIVING
