@@ -8,6 +8,8 @@ import { seedHonestSignProductFirstInventory, selectHonestSignSeller } from './f
 // TC-NEW-API01-001 — inventory personal_available + shared_baskets (UI regression).
 // TC-NEW-API01-002 — marking-overview personal vs shared (UI regression).
 // TC-NEW-POOL01-001 — shared pool badge «Общая корзина · на N товаров» (UI regression).
+// TC-NEW-CZ-01 — CZ-01: printed ledger row exposes full CIS, actor, source, and document context.
+// TC-NEW-CZ-02 — CZ-02/CZ-03: product card shows Codes and Ledger together; full ledger page button is gone.
 test('FF honest sign product-first: list, product card, shared basket pool', async ({ page }) => {
   test.setTimeout(180_000)
   const email = `e2e-hs-pf-${Date.now()}@example.com`
@@ -43,6 +45,11 @@ test('FF honest sign product-first: list, product card, shared basket pool', asy
     sellerId,
     skuPrefix,
   )
+  const productInstructions = await page.request.patch(`${e2eApi}/products/${productX.id}/packaging-instructions`, {
+    headers: auth,
+    data: JSON.stringify({ requires_honest_sign: true, packaging_instructions: 'ЧЗ' }),
+  })
+  expect(productInstructions.ok()).toBeTruthy()
 
   // Step 1 — /honest-sign: product X personal 100 + basket chip; KPI without double-count.
   await page.getByTestId('nav-ff-honest-sign').click()
@@ -86,6 +93,27 @@ test('FF honest sign product-first: list, product card, shared basket pool', asy
   )
   await expect(page.getByTestId(`ff-honest-sign-product-shared-basket-${sharedPoolId}`)).toBeVisible()
   await expect(page.getByTestId(`ff-honest-sign-product-shared-basket-${sharedPoolId}`)).toContainText('Shared B')
+  await expect(page.getByTestId('ff-honest-sign-product-codes')).toBeVisible()
+  await expect(page.getByTestId('ff-honest-sign-product-ledger')).toBeVisible()
+  await expect(page.getByTestId('ff-honest-sign-product-ledger-open-full')).toHaveCount(0)
+
+  const printed = await page.request.post(`${e2eApi}/operations/marking-codes/products/${productX.id}/print`, {
+    headers: auth,
+    data: JSON.stringify({ quantity: 11, duplicate_copies: 1 }),
+  })
+  expect(printed.ok()).toBeTruthy()
+  const printedBody = (await printed.json()) as { codes: string[] }
+  const printedCis = printedBody.codes[0]
+
+  await page.reload()
+  await expect(page.getByTestId('ff-honest-sign-product-codes')).toContainText(printedCis)
+  await expect(page.getByTestId('ff-honest-sign-product-codes')).toContainText('Напечатан')
+  await expect(page.getByTestId('ff-honest-sign-product-ledger')).toBeVisible()
+  await expect(page.getByTestId('ff-honest-sign-product-ledger')).toContainText('Каталог')
+  await expect(page.getByTestId('ff-honest-sign-product-ledger')).toContainText(email)
+  await expect(page.getByTestId('ff-honest-sign-product-ledger-show-more')).toBeVisible()
+  await page.getByTestId('ff-honest-sign-product-ledger-show-more').click()
+  await expect(page.getByTestId('ff-honest-sign-product-ledger')).toContainText(printedCis)
 
   // Step 3 — click basket B → pool card with shared badge.
   await page.getByTestId(`ff-honest-sign-product-shared-basket-${sharedPoolId}`).click()
