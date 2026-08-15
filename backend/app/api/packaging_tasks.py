@@ -5,12 +5,14 @@ from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from pydantic import BaseModel, Field, StrictInt
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.deps import require_packaging_access
 from app.db.session import get_db
 from app.models.fbs_order import MARKING_KIND_SGTIN, current_order_marking
 from app.models.packaging_task import PackagingTask, PackagingTaskLine
+from app.models.seller import Seller
 from app.models.user import User
 from app.services import marking_code_service as mc_svc
 from app.services import packaging_task_service as pkg_svc
@@ -125,14 +127,20 @@ class PackagingTaskOut(BaseModel):
     events: list[PackagingTaskEventOut] = Field(default_factory=list)
 
 
-def _line_out(ln: PackagingTaskLine, *, marking_available: int = 0) -> PackagingTaskLineOut:
+def _line_out(
+    ln: PackagingTaskLine,
+    *,
+    seller_names: dict[uuid.UUID, str],
+    marking_available: int = 0,
+) -> PackagingTaskLineOut:
     p = ln.product
     loc = ln.storage_location
+    seller_name = seller_names.get(p.seller_id) if p.seller_id else None
     return PackagingTaskLineOut(
         id=str(ln.id),
         product_id=str(ln.product_id),
         seller_id=str(p.seller_id) if p.seller_id else None,
-        seller_name=p.seller.name if p.seller else None,
+        seller_name=seller_name,
         sku_code=p.sku_code,
         product_name=p.name,
         storage_location_id=str(ln.storage_location_id),
@@ -184,6 +192,18 @@ async def _task_out(
     if loaded is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="not_found")
     task = loaded
+    seller_ids = {ln.product.seller_id for ln in task.lines if ln.product.seller_id}
+    seller_names: dict[uuid.UUID, str] = {}
+    if seller_ids:
+        seller_rows = (
+            await session.execute(
+                select(Seller.id, Seller.name).where(
+                    Seller.tenant_id == tenant_id,
+                    Seller.id.in_(seller_ids),
+                )
+            )
+        ).all()
+        seller_names = {seller_id: name for seller_id, name in seller_rows}
     line_outs: list[PackagingTaskLineOut] = []
     for ln in task.lines:
         available = 0
@@ -191,11 +211,18 @@ async def _task_out(
             available = await mc_svc.count_available_for_product(
                 session, tenant_id, ln.product_id
             )
-        line_outs.append(_line_out(ln, marking_available=available))
-    sellers = {
-        (ln.product.seller_id, ln.product.seller.name if ln.product.seller else None)
-        for ln in task.lines
-    }
+        line_outs.append(
+            _line_out(ln, seller_names=seller_names, marking_available=available)
+        )
+    sellers: set[tuple[uuid.UUID | None, str | None]] = set()
+    for ln in task.lines:
+        line_seller_id = ln.product.seller_id
+        sellers.add(
+            (
+                line_seller_id,
+                seller_names.get(line_seller_id) if line_seller_id else None,
+            )
+        )
     seller_id: str | None = None
     seller_name: str | None = None
     if len(sellers) == 1:
