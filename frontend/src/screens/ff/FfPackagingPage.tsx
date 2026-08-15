@@ -19,6 +19,7 @@ import {
   Badge,
   Box,
   Button,
+  Chip,
   Checkbox,
   Dialog,
   DialogActions,
@@ -42,6 +43,7 @@ import {
   Tab,
   Tabs,
   TextField,
+  Tooltip,
   Typography,
 } from '@mui/material'
 import { useWbProductCatalog } from '../../hooks/useWbProductCatalog'

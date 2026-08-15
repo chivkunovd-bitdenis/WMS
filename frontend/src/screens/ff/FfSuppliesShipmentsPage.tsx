@@ -1725,8 +1725,6 @@ export function FfSuppliesShipmentsPage({
     }
   }, [unloadDetail, docModal])
 
-  const mpShipped = docModal === 'marketplace_unload' && unloadDetail?.status === 'shipped'
-  const mpAfterConfirm = mpExecutionPhase || mpShipped
   const mpStepEnabled = useCallback(
     (step: MpUnloadTab) => {
       if (!unloadDetail || docModal !== 'marketplace_unload') {
