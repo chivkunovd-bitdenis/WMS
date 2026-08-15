@@ -32,7 +32,11 @@ class FbsPackingBoxError(Exception):
 @dataclass(frozen=True)
 class DeliveryBoxReadiness:
     has_physical_boxes: bool
+    without_distribution: bool
     unassigned_packed_order_ids: frozenset[uuid.UUID]
+
+
+WITHOUT_DISTRIBUTION_KEY_PREFIX = "no-distribution:"
 
 
 async def get_delivery_box_readiness(
@@ -42,19 +46,20 @@ async def get_delivery_box_readiness(
     orders: list[FbsOrder],
 ) -> DeliveryBoxReadiness:
     """Return the durable box membership gate used by preflight and delivery."""
-    physical_box_ids = list(
+    boxes = list(
         (
             await session.scalars(
-                select(FbsPackingBox.id).where(
+                select(FbsPackingBox).where(
                     FbsPackingBox.tenant_id == tenant_id,
                     FbsPackingBox.supply_id == supply_id,
                 )
             )
         ).all()
     )
+    without_distribution = _boxes_without_distribution(boxes)
     packed_order_ids = {order.id for order in orders if order.pack_status == PACK_STATUS_PACKED}
-    if not packed_order_ids:
-        return DeliveryBoxReadiness(bool(physical_box_ids), frozenset())
+    if not packed_order_ids or without_distribution:
+        return DeliveryBoxReadiness(bool(boxes), without_distribution, frozenset())
     assigned_order_ids = set(
         (
             await session.scalars(
@@ -69,7 +74,8 @@ async def get_delivery_box_readiness(
         ).all()
     )
     return DeliveryBoxReadiness(
-        has_physical_boxes=bool(physical_box_ids),
+        has_physical_boxes=bool(boxes),
+        without_distribution=without_distribution,
         unassigned_packed_order_ids=frozenset(packed_order_ids - assigned_order_ids),
     )
 
@@ -83,14 +89,18 @@ async def create_boxes(
     http_client: httpx.AsyncClient | None = None,
     *,
     actor_user_id: uuid.UUID | None = None,
+    without_distribution: bool = False,
 ) -> list[FbsPackingBox]:
     if not idempotency_key.strip():
         raise FbsPackingBoxError("missing_idempotency_key")
     supply = await _get_supply(session, tenant_id, supply_id)
     _assert_supply_mutable(supply)
-    boxes = await _boxes_by_creation_key(session, tenant_id, supply_id, idempotency_key)
+    stored_key = _stored_creation_key(idempotency_key, without_distribution=without_distribution)
+    boxes = await _boxes_by_creation_key(session, tenant_id, supply_id, stored_key)
     if boxes:
         if len(boxes) != count:
+            raise FbsPackingBoxError("idempotency_key_reused")
+        if _boxes_without_distribution(boxes) != without_distribution:
             raise FbsPackingBoxError("idempotency_key_reused")
     else:
         max_number = await session.scalar(
@@ -111,7 +121,7 @@ async def create_boxes(
                 supply_id=supply_id,
                 warehouse_box=warehouse_box,
                 box_number=number,
-                creation_idempotency_key=idempotency_key,
+                creation_idempotency_key=stored_key,
             )
             session.add(box)
             boxes.append(box)
@@ -142,6 +152,8 @@ async def assign_orders(
     actor_user_id: uuid.UUID | None,
 ) -> None:
     box = await _get_box(session, tenant_id, supply_id, box_id)
+    if _box_without_distribution(box):
+        raise FbsPackingBoxError("box_without_distribution")
     if not order_ids:
         raise FbsPackingBoxError("empty_order_set")
     unique_ids = list(dict.fromkeys(order_ids))
@@ -292,9 +304,29 @@ async def get_boxes_for_workspace(
             "trbx_id": str(box.trbx_id) if box.trbx_id else None,
             "wb_trbx_id": box.trbx.wb_trbx_id if box.trbx else None,
             "qr_asset": None,
+            "without_distribution": _box_without_distribution(box),
         }
         for box in boxes
     ]
+
+
+def _stored_creation_key(idempotency_key: str, *, without_distribution: bool) -> str:
+    key = idempotency_key.strip()
+    if not without_distribution:
+        return key
+    max_raw_len = 128 - len(WITHOUT_DISTRIBUTION_KEY_PREFIX)
+    return f"{WITHOUT_DISTRIBUTION_KEY_PREFIX}{key[:max_raw_len]}"
+
+
+def _box_without_distribution(box: FbsPackingBox) -> bool:
+    return bool(
+        box.creation_idempotency_key
+        and box.creation_idempotency_key.startswith(WITHOUT_DISTRIBUTION_KEY_PREFIX)
+    )
+
+
+def _boxes_without_distribution(boxes: list[FbsPackingBox]) -> bool:
+    return bool(boxes) and any(_box_without_distribution(box) for box in boxes)
 
 
 async def _link_or_create_pvz_cargo_places(

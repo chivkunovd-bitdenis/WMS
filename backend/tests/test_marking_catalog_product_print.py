@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 import uuid
 
 import pytest
@@ -235,7 +236,9 @@ async def test_catalog_print_records_printed_event(async_client: AsyncClient) ->
         json={"quantity": 1},
     )
     assert resp.status_code == 200, resp.text
-    code_id = uuid.UUID(resp.json()["printed_codes"][0]["id"])
+    printed_body = resp.json()
+    code_id = uuid.UUID(printed_body["printed_codes"][0]["id"])
+    cis_code = printed_body["codes"][0]
 
     async with SessionLocal() as session:
         events = (
@@ -243,4 +246,15 @@ async def test_catalog_print_records_printed_event(async_client: AsyncClient) ->
                 select(MarkingCodeEvent).where(MarkingCodeEvent.code_id == code_id)
             )
         ).scalars().all()
-        assert any(e.event_type == "printed" for e in events)
+        printed_events = [e for e in events if e.event_type == "printed"]
+        assert printed_events
+        assert json.loads(printed_events[0].meta_json or "{}")["source_process"] == "catalog"
+
+    ledger = await async_client.get(
+        f"/operations/marking-codes/ledger?product_id={product_id}&limit=10",
+        headers=headers,
+    )
+    assert ledger.status_code == 200, ledger.text
+    row = next(r for r in ledger.json()["rows"] if r["event_type"] == "printed")
+    assert row["cis_code"] == cis_code
+    assert row["source_process_label"] == "Каталог"

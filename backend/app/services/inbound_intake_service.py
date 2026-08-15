@@ -195,7 +195,7 @@ async def list_requests(
         select(InboundIntakeRequest)
         .where(InboundIntakeRequest.tenant_id == tenant_id)
         .options(
-            selectinload(InboundIntakeRequest.lines),
+            selectinload(InboundIntakeRequest.lines).selectinload(InboundIntakeLine.product),
             selectinload(InboundIntakeRequest.seller),
             selectinload(InboundIntakeRequest.warehouse),
             selectinload(InboundIntakeRequest.boxes),

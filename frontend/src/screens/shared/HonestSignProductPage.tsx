@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { Link as RouterLink, useParams, useSearchParams } from 'react-router-dom'
+import { Link as RouterLink, useNavigate, useParams } from 'react-router-dom'
 import {
   Alert,
   Box,
@@ -10,8 +10,6 @@ import {
   Paper,
   Skeleton,
   Stack,
-  Tab,
-  Tabs,
   Table,
   TableBody,
   TableCell,
@@ -26,7 +24,6 @@ import ChevronRightOutlined from '@mui/icons-material/ChevronRightOutlined'
 import { apiUrl } from '../../api'
 import { PageHeader } from '../../ui/PageHeader'
 import { codeStatusLabel, ledgerEventLabel } from '../../utils/markingStatus'
-import { maskCisCode } from '../../utils/printMarkingCodeLabel'
 import { readApiErrorMessage } from '../../utils/readApiErrorMessage'
 
 type MarkingOverviewProduct = {
@@ -70,13 +67,13 @@ type LedgerRow = {
   id: string
   created_at: string
   event_type: string
-  cis_masked: string
+  cis_code: string | null
+  cis_masked: string | null
   document_number: string | null
   actor_email: string | null
+  source_process_label: string | null
   aggregated_count?: number | null
 }
-
-type TabKey = 'codes' | 'ledger'
 
 type PoolThresholdDetail = {
   low_stock_threshold: number | null
@@ -85,7 +82,7 @@ type PoolThresholdDetail = {
 
 const STATUS_OPTIONS = ['', 'available', 'reserved', 'printed', 'applied', 'defective', 'void']
 
-const LEDGER_PREVIEW_LIMIT = 5
+const LEDGER_PAGE_LIMIT = 10
 
 type Props = {
   token: string
@@ -99,15 +96,15 @@ export function HonestSignProductPage({
   routeBase = '/app/ff',
 }: Props) {
   const { productId } = useParams<{ productId: string }>()
-  const [searchParams, setSearchParams] = useSearchParams()
-  const tabParam = searchParams.get('tab')
-  const tab: TabKey | null = tabParam === 'codes' || tabParam === 'ledger' ? tabParam : null
+  const navigate = useNavigate()
 
   const [overview, setOverview] = useState<MarkingOverview | null>(null)
   const [codes, setCodes] = useState<ProductCode[]>([])
   const [ledger, setLedger] = useState<LedgerRow[]>([])
+  const [ledgerTotal, setLedgerTotal] = useState(0)
   const [busy, setBusy] = useState(false)
   const [codesBusy, setCodesBusy] = useState(false)
+  const [ledgerBusy, setLedgerBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [statusFilter, setStatusFilter] = useState('')
   const [lowThreshold, setLowThreshold] = useState('')
@@ -178,27 +175,32 @@ export function HonestSignProductPage({
     }
   }, [authHeaders, productId])
 
-  const loadLedger = useCallback(async () => {
+  const loadLedger = useCallback(async (offset = 0, append = false) => {
     if (!productId) {
       return
     }
     ledgerAbortRef.current?.abort()
     const ac = new AbortController()
     ledgerAbortRef.current = ac
+    setLedgerBusy(true)
     try {
+      const params = new URLSearchParams({
+        product_id: productId,
+        limit: String(LEDGER_PAGE_LIMIT),
+        offset: String(offset),
+      })
       const res = await fetch(
-        apiUrl(
-          `/operations/marking-codes/ledger?product_id=${encodeURIComponent(productId)}&limit=${LEDGER_PREVIEW_LIMIT}`,
-        ),
+        apiUrl(`/operations/marking-codes/ledger?${params.toString()}`),
         { headers: authHeaders, signal: ac.signal },
       )
       if (ac.signal.aborted) {
         return
       }
       if (res.ok) {
-        const data = (await res.json()) as { rows: LedgerRow[] }
+        const data = (await res.json()) as { rows: LedgerRow[]; total: number }
         if (!ac.signal.aborted) {
-          setLedger(data.rows)
+          setLedger((prev) => (append ? [...prev, ...data.rows] : data.rows))
+          setLedgerTotal(data.total)
         }
       }
     } catch (err) {
@@ -206,6 +208,10 @@ export function HonestSignProductPage({
         return
       }
       throw err
+    } finally {
+      if (!ac.signal.aborted) {
+        setLedgerBusy(false)
+      }
     }
   }, [authHeaders, productId])
 
@@ -214,16 +220,12 @@ export function HonestSignProductPage({
   }, [loadOverview])
 
   useEffect(() => {
-    if (tab === 'codes') {
-      void loadCodes()
-    }
-    if (tab === 'ledger') {
-      void loadLedger()
-    }
+    void loadCodes()
+    void loadLedger()
     return () => {
       ledgerAbortRef.current?.abort()
     }
-  }, [tab, loadCodes, loadLedger])
+  }, [loadCodes, loadLedger])
 
   const filteredCodes = useMemo(() => {
     if (!statusFilter) {
@@ -349,15 +351,14 @@ export function HonestSignProductPage({
     void loadThreshold(thresholdPool.pool_id)
   }, [loadThreshold, thresholdPool])
 
-  const setTab = (next: TabKey | null) => {
-    setSearchParams(next ? { tab: next } : {})
-  }
-
   if (!productId) {
     return null
   }
 
   const product = overview?.product
+  const openPool = (poolId: string) => {
+    navigate(`${routeBase}/honest-sign/pool/${poolId}`)
+  }
 
   return (
     <Stack spacing={2} data-testid={`${testIdPrefix}-page`}>
@@ -520,9 +521,15 @@ export function HonestSignProductPage({
                           <TableRow
                             key={pool.pool_id}
                             hover
-                            component={RouterLink}
-                            to={`${routeBase}/honest-sign/pool/${pool.pool_id}`}
                             sx={{ textDecoration: 'none', cursor: 'pointer' }}
+                            role="button"
+                            tabIndex={0}
+                            onClick={() => openPool(pool.pool_id)}
+                            onKeyDown={(e) => {
+                              if (e.key === 'Enter' || e.key === ' ') {
+                                openPool(pool.pool_id)
+                              }
+                            }}
                             data-testid={`${testIdPrefix}-personal-pool-${pool.pool_id}`}
                           >
                             <TableCell>{pool.title}</TableCell>
@@ -561,9 +568,15 @@ export function HonestSignProductPage({
                           <TableRow
                             key={basket.pool_id}
                             hover
-                            component={RouterLink}
-                            to={`${routeBase}/honest-sign/pool/${basket.pool_id}`}
                             sx={{ textDecoration: 'none', cursor: 'pointer' }}
+                            role="button"
+                            tabIndex={0}
+                            onClick={() => openPool(basket.pool_id)}
+                            onKeyDown={(e) => {
+                              if (e.key === 'Enter' || e.key === ' ') {
+                                openPool(basket.pool_id)
+                              }
+                            }}
                             data-testid={`${testIdPrefix}-shared-basket-${basket.pool_id}`}
                           >
                             <TableCell>{basket.title}</TableCell>
@@ -587,17 +600,15 @@ export function HonestSignProductPage({
         </Stack>
       ) : null}
 
-      <Tabs
-        value={tab ?? false}
-        onChange={(_, v: TabKey) => setTab(v)}
-        data-testid={`${testIdPrefix}-tabs`}
-      >
-        <Tab label="Коды" value="codes" data-testid={`${testIdPrefix}-tab-codes`} />
-        <Tab label="Лента" value="ledger" data-testid={`${testIdPrefix}-tab-ledger`} />
-      </Tabs>
-
-      {tab === 'codes' ? (
-        <Stack spacing={1.5} data-testid={`${testIdPrefix}-codes`}>
+      <Stack spacing={1.5} data-testid={`${testIdPrefix}-codes`} data-task-id="CZ-02">
+        <Stack
+          direction={{ xs: 'column', sm: 'row' }}
+          spacing={1}
+          sx={{ alignItems: { sm: 'center' }, justifyContent: 'space-between' }}
+        >
+          <Typography variant="subtitle1" data-testid={`${testIdPrefix}-codes-heading`}>
+            Коды
+          </Typography>
           <TextField
             select
             size="small"
@@ -614,134 +625,157 @@ export function HonestSignProductPage({
               </MenuItem>
             ))}
           </TextField>
-          {statusFilter && codes.length > 0 ? (
-            <Typography
-              variant="body2"
-              color="text.secondary"
-              data-testid={`${testIdPrefix}-codes-count`}
-            >
-              Показано {filteredCodes.length} из {codes.length}
-            </Typography>
-          ) : codes.length > 0 ? (
-            <Typography
-              variant="body2"
-              color="text.secondary"
-              data-testid={`${testIdPrefix}-codes-count`}
-            >
-              {codes.length} КМ
-            </Typography>
-          ) : null}
-          <TableContainer component={Paper} variant="outlined">
-            <Table size="small" sx={{ tableLayout: 'fixed' }}>
-              <TableHead>
-                <TableRow>
-                  <TableCell>КМ</TableCell>
-                  <TableCell>Статус</TableCell>
-                  <TableCell>Дата</TableCell>
-                </TableRow>
-              </TableHead>
-              <TableBody>
-                {codesBusy ? (
-                  <TableRow>
-                    <TableCell colSpan={3}>
-                      <Skeleton height={32} />
-                    </TableCell>
-                  </TableRow>
-                ) : filteredCodes.length === 0 ? (
-                  <TableRow>
-                    <TableCell colSpan={3}>
-                      <Typography variant="body2" color="text.secondary">
-                        Коды не найдены.
-                      </Typography>
-                    </TableCell>
-                  </TableRow>
-                ) : (
-                  filteredCodes.map((c) => (
-                    <TableRow key={c.id} data-testid={`${testIdPrefix}-code-row-${c.id}`}>
-                      <TableCell>{maskCisCode(c.cis_code)}</TableCell>
-                      <TableCell>
-                        <Chip size="small" label={codeStatusLabel(c.status)} />
-                      </TableCell>
-                      <TableCell>{new Date(c.created_at).toLocaleString('ru-RU')}</TableCell>
-                    </TableRow>
-                  ))
-                )}
-              </TableBody>
-            </Table>
-          </TableContainer>
         </Stack>
-      ) : null}
-
-      {tab === 'ledger' ? (
-        <Stack spacing={1.5} data-testid={`${testIdPrefix}-ledger`}>
-          <Stack
-            direction={{ xs: 'column', sm: 'row' }}
-            spacing={1}
-            sx={{ alignItems: { sm: 'center' }, justifyContent: 'space-between' }}
+        {statusFilter && codes.length > 0 ? (
+          <Typography
+            variant="body2"
+            color="text.secondary"
+            data-testid={`${testIdPrefix}-codes-count`}
           >
-            <Typography variant="subtitle2">
-              Последние {LEDGER_PREVIEW_LIMIT} событий
-            </Typography>
+            Показано {filteredCodes.length} из {codes.length}
+          </Typography>
+        ) : codes.length > 0 ? (
+          <Typography
+            variant="body2"
+            color="text.secondary"
+            data-testid={`${testIdPrefix}-codes-count`}
+          >
+            {codes.length} КМ
+          </Typography>
+        ) : null}
+        <TableContainer component={Paper} variant="outlined">
+          <Table size="small" sx={{ tableLayout: 'fixed' }}>
+            <TableHead>
+              <TableRow>
+                <TableCell>КМ/CIS</TableCell>
+                <TableCell>Статус</TableCell>
+                <TableCell>Дата</TableCell>
+              </TableRow>
+            </TableHead>
+            <TableBody>
+              {codesBusy ? (
+                <TableRow>
+                  <TableCell colSpan={3}>
+                    <Skeleton height={32} />
+                  </TableCell>
+                </TableRow>
+              ) : filteredCodes.length === 0 ? (
+                <TableRow>
+                  <TableCell colSpan={3}>
+                    <Typography variant="body2" color="text.secondary">
+                      Коды не найдены.
+                    </Typography>
+                  </TableCell>
+                </TableRow>
+              ) : (
+                filteredCodes.map((c) => (
+                  <TableRow key={c.id} data-testid={`${testIdPrefix}-code-row-${c.id}`}>
+                    <TableCell sx={{ wordBreak: 'break-all' }}>{c.cis_code}</TableCell>
+                    <TableCell>
+                      <Chip size="small" label={codeStatusLabel(c.status)} />
+                    </TableCell>
+                    <TableCell>{new Date(c.created_at).toLocaleString('ru-RU')}</TableCell>
+                  </TableRow>
+                ))
+              )}
+            </TableBody>
+          </Table>
+        </TableContainer>
+      </Stack>
+
+      <Stack spacing={1.5} data-testid={`${testIdPrefix}-ledger`} data-task-id="CZ-02 CZ-03">
+        <Stack
+          direction={{ xs: 'column', sm: 'row' }}
+          spacing={1}
+          sx={{ alignItems: { sm: 'center' }, justifyContent: 'space-between' }}
+        >
+          <Typography variant="subtitle1" data-testid={`${testIdPrefix}-ledger-heading`}>
+            Лента
+          </Typography>
+          <Typography
+            variant="body2"
+            color="text.secondary"
+            data-testid={`${testIdPrefix}-ledger-count`}
+          >
+            Показано {ledger.length} из {ledgerTotal}
+          </Typography>
+        </Stack>
+        <TableContainer component={Paper} variant="outlined">
+          <Table size="small" sx={{ tableLayout: 'fixed' }}>
+            <TableHead>
+              <TableRow>
+                <TableCell>Время</TableCell>
+                <TableCell>Событие</TableCell>
+                <TableCell>КМ/CIS</TableCell>
+                <TableCell>Сотрудник</TableCell>
+                <TableCell>Источник</TableCell>
+                <TableCell>Документ</TableCell>
+              </TableRow>
+            </TableHead>
+            <TableBody>
+              {ledgerBusy && ledger.length === 0 ? (
+                <TableRow>
+                  <TableCell colSpan={6}>
+                    <Skeleton height={32} />
+                  </TableCell>
+                </TableRow>
+              ) : ledger.length === 0 ? (
+                <TableRow>
+                  <TableCell colSpan={6}>
+                    <Typography variant="body2" color="text.secondary">
+                      Событий пока нет.
+                    </Typography>
+                  </TableCell>
+                </TableRow>
+              ) : (
+                ledger.map((row) => {
+                  const isAggregatedImport =
+                    row.event_type === 'imported' &&
+                    row.aggregated_count != null &&
+                    row.aggregated_count > 0
+                  return (
+                    <TableRow key={row.id} data-testid={`${testIdPrefix}-ledger-row-${row.id}`}>
+                      <TableCell>{new Date(row.created_at).toLocaleString('ru-RU')}</TableCell>
+                      <TableCell>
+                        {isAggregatedImport ? (
+                          <Typography
+                            variant="body2"
+                            data-testid={`${testIdPrefix}-ledger-import-summary`}
+                          >
+                            Загружено {row.aggregated_count}
+                          </Typography>
+                        ) : (
+                          <Chip size="small" label={ledgerEventLabel(row.event_type)} />
+                        )}
+                      </TableCell>
+                      <TableCell sx={{ wordBreak: 'break-all' }}>
+                        {isAggregatedImport ? '—' : row.cis_code ?? row.cis_masked ?? '—'}
+                      </TableCell>
+                      <TableCell>{row.actor_email ?? '—'}</TableCell>
+                      <TableCell>{row.source_process_label ?? '—'}</TableCell>
+                      <TableCell>{row.document_number ?? '—'}</TableCell>
+                    </TableRow>
+                  )
+                })
+              )}
+            </TableBody>
+          </Table>
+        </TableContainer>
+        {ledger.length < ledgerTotal ? (
+          <Box>
             <Button
-              component={RouterLink}
-              to={`${routeBase}/honest-sign/ledger?product_id=${encodeURIComponent(productId)}`}
               variant="outlined"
               size="small"
-              data-testid={`${testIdPrefix}-ledger-open-full`}
+              disabled={ledgerBusy}
+              onClick={() => void loadLedger(ledger.length, true)}
+              data-testid={`${testIdPrefix}-ledger-show-more`}
+              data-task-id="CZ-03"
             >
-              Вся лента товара
+              Показать ещё
             </Button>
-          </Stack>
-          <TableContainer component={Paper} variant="outlined">
-            <Table size="small" sx={{ tableLayout: 'fixed' }}>
-              <TableHead>
-                <TableRow>
-                  <TableCell>Время</TableCell>
-                  <TableCell>Событие</TableCell>
-                  <TableCell>КМ</TableCell>
-                </TableRow>
-              </TableHead>
-              <TableBody>
-                {ledger.length === 0 ? (
-                  <TableRow>
-                    <TableCell colSpan={3}>
-                      <Typography variant="body2" color="text.secondary">
-                        Событий пока нет.
-                      </Typography>
-                    </TableCell>
-                  </TableRow>
-                ) : (
-                  ledger.map((row) => {
-                    const isAggregatedImport =
-                      row.event_type === 'imported' &&
-                      row.aggregated_count != null &&
-                      row.aggregated_count > 0
-                    return (
-                      <TableRow key={row.id} data-testid={`${testIdPrefix}-ledger-row-${row.id}`}>
-                        <TableCell>{new Date(row.created_at).toLocaleString('ru-RU')}</TableCell>
-                        <TableCell>
-                          {isAggregatedImport ? (
-                            <Typography
-                              variant="body2"
-                              data-testid={`${testIdPrefix}-ledger-import-summary`}
-                            >
-                              Загружено {row.aggregated_count}
-                              {row.document_number ? `, ${row.document_number}` : ''}
-                            </Typography>
-                          ) : (
-                            <Chip size="small" label={ledgerEventLabel(row.event_type)} />
-                          )}
-                        </TableCell>
-                        <TableCell>{isAggregatedImport ? '—' : row.cis_masked}</TableCell>
-                      </TableRow>
-                    )
-                  })
-                )}
-              </TableBody>
-            </Table>
-          </TableContainer>
-        </Stack>
-      ) : null}
+          </Box>
+        ) : null}
+      </Stack>
     </Stack>
   )
 }

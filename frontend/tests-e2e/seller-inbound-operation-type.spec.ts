@@ -271,14 +271,20 @@ test('seller chooses supply or return before inbound draft creation', async ({ p
   await loginFfAdmin(page, seed.adminEmail, seed.password);
   await page.getByTestId('nav-ff-reception').click();
   await expect(page.getByTestId('ff-inbound-create-return')).toContainText('Создать возврат');
+  await page.getByTestId('ff-inbound-create-return').click();
+  await expect(page.getByTestId('ff-inbound-create-dialog')).toBeVisible();
+  await page.getByTestId('ff-inbound-create-seller').click();
+  await page.getByRole('option', { name: `Box Seller ${seed.suffix}` }).click();
   const [ffCreateReturn] = await Promise.all([
     waitForPostOk(page, INBOUND_API, (u) => !u.includes('/lines') && !u.includes('/submit')),
-    page.getByTestId('ff-inbound-create-return').click(),
+    page.getByTestId('ff-inbound-create-confirm').click(),
   ]);
   const ffCreateReturnBody = JSON.parse(ffCreateReturn.request().postData() ?? '{}') as {
     operation_type?: string;
+    seller_id?: string;
   };
   expect(ffCreateReturnBody.operation_type).toBe('return');
+  expect(ffCreateReturnBody.seller_id).toBe(seed.sellerId);
   await expect(page.getByTestId('ff-inbound-doc-root')).toBeVisible();
   await expect(page.getByTestId('ff-inbound-operation-type')).toContainText('Возврат');
   await page.getByTestId('ff-doc-dialog-close').click();

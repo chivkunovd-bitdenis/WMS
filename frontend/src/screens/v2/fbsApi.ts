@@ -87,6 +87,7 @@ export type FbsSupply = {
   barcode_file: string | null // base64 PNG QR поставки
   document_number: string | null
   display_number: string | null
+  planned_shipment_date: string | null
   created_at_wb: string | null
   delivered_at: string | null
   created_at: string
@@ -297,7 +298,7 @@ export type FbsSupplyWorklistItem = {
   orders_count: number
   units_count: number
   boxes_count: number
-  shipment_at: string | null
+  planned_shipment_date: string | null
   can_add_orders: boolean
 }
 
@@ -322,7 +323,7 @@ export type FbsPickLocation = {
 
 export type FbsPrintAsset = {
   id: string
-  kind: 'order_sticker' | 'cargo_place_qr' | 'supply_qr'
+  kind: 'order_sticker' | 'cargo_place_qr' | 'supply_qr' | 'box_qr'
   status: 'requesting' | 'ready' | 'error'
   content_type: string | null
   width_mm: number | null
@@ -396,6 +397,7 @@ export type FbsPackingBox = {
   trbx_id: string | null
   wb_trbx_id: string | null
   qr_asset: FbsPrintAsset | null
+  without_distribution: boolean
 }
 
 export type FbsCargoPlaceDraft = {
@@ -457,6 +459,7 @@ export type FbsWorkspace = {
     wb_warehouse: { id: number; name: string | null }
     wms_warehouse: { id: string; name: string }
     planned_destination: { office_id: number; name: string; zone: string } | null
+    planned_shipment_date: string | null
     nearest_deadline_at: string
     packaging_task_id: string | null
     barcode_asset: FbsPrintAsset | null
@@ -501,7 +504,7 @@ export function createFbsIdempotencyKey(): string {
 }
 
 export function resolveFbsAssetUrl(path: string): string {
-  return /^https?:\/\//i.test(path) ? path : apiUrl(path)
+  return /^(https?:|data:)/i.test(path) ? path : apiUrl(path)
 }
 
 export async function fetchFbsWorklist(
@@ -595,6 +598,21 @@ export async function fetchFbsWorkspace(
   return jsonOrThrow<FbsWorkspace>(
     await fetch(apiUrl(`/operations/fbs-supplies/${id}/workspace`), {
       headers: { ...ah(token) },
+    }),
+  )
+}
+
+export async function updateFbsSupplyPlannedShipmentDate(
+  token: string,
+  ah: AuthHeaders,
+  id: string,
+  planned_shipment_date: string | null,
+): Promise<FbsWorkspace> {
+  return jsonOrThrow<FbsWorkspace>(
+    await fetch(apiUrl(`/operations/fbs-supplies/${id}/planned-shipment-date`), {
+      method: 'PATCH',
+      headers: jsonHeaders(token, ah),
+      body: JSON.stringify({ planned_shipment_date }),
     }),
   )
 }
@@ -710,7 +728,7 @@ export async function createFbsPackingBoxes(
   token: string,
   ah: AuthHeaders,
   supplyId: string,
-  body: { count: number; idempotency_key: string },
+  body: { count: number; idempotency_key: string; without_distribution?: boolean },
 ): Promise<FbsWorkspace> {
   return jsonOrThrow<FbsWorkspace>(
     await fetch(apiUrl(`/operations/fbs-supplies/${supplyId}/boxes`), {

@@ -375,6 +375,7 @@ async def _print_or_reprint_order_code(
                 document_number=line.task.document_number if line.task else None,
                 packaging_task=line,
                 copies=mc_svc.cz_copies_from_layout(layout),
+                source_process=mc_svc.MARKING_SOURCE_PACKING_FBS_PRINT,
             )
         return mc_svc.PrintMarkingCodesResult(
             packaging_task_line_id=line.id,

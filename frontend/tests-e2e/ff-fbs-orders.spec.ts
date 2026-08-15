@@ -67,7 +67,7 @@ function supplyRow(id: string, over: Partial<FbsWorklistFixture> = {}): FbsWorkl
     orders_count: 2,
     units_count: 2,
     boxes_count: 1,
-    shipment_at: new Date(Date.now() + 100 * 3600 * 1000).toISOString(),
+    planned_shipment_date: '2026-08-16',
     can_add_orders: true,
     ...over,
   }

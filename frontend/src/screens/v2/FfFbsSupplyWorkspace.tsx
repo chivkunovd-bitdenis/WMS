@@ -10,6 +10,7 @@ import {
   DialogContent,
   DialogTitle,
   Divider,
+  FormControlLabel,
   IconButton,
   LinearProgress,
   Menu,
@@ -65,8 +66,10 @@ import {
   selectFbsManualPickLocation,
   startFbsSupplyWork,
   undoFbsPick,
+  updateFbsSupplyPlannedShipmentDate,
   type FbsOrderPrintTapeRequest,
   type FbsPickLocation,
+  type FbsPrintAsset,
   type FbsPrintBatch,
   type FbsWorkspace,
   type FbsWorklistOrder,
@@ -151,6 +154,18 @@ function productLabelFromOrder(order: FbsWorkspace['orders'][number]): ProductTh
   }
 }
 
+async function renderBoxQrDataUrl(value: string): Promise<string> {
+  const bwipjs = await import('bwip-js')
+  const canvas = document.createElement('canvas')
+  bwipjs.toCanvas(canvas, {
+    bcid: 'qrcode',
+    text: value,
+    scale: 5,
+    includetext: false,
+  })
+  return canvas.toDataURL('image/png')
+}
+
 function Metric({ label, value }: { label: string; value: string }) {
   return (
     <Box>
@@ -185,6 +200,7 @@ export function FfFbsSupplyWorkspace({
   const [packagingTask, setPackagingTask] = useState<PackagingTask | null>(null)
   const [manualPickLocationRows, setManualPickLocationRows] = useState<Record<string, string[]>>({})
   const [boxCount, setBoxCount] = useState('1')
+  const [boxesWithoutDistribution, setBoxesWithoutDistribution] = useState(false)
   const [boxAssignTarget, setBoxAssignTarget] = useState<string | null>(null)
   const [boxProductSearch, setBoxProductSearch] = useState('')
   const [boxProductQty, setBoxProductQty] = useState<Record<string, string>>({})
@@ -202,6 +218,7 @@ export function FfFbsSupplyWorkspace({
   const [addableOrders, setAddableOrders] = useState<FbsWorklistOrder[]>([])
   const [addableSelected, setAddableSelected] = useState<Set<string>>(() => new Set())
   const [addOrdersBusy, setAddOrdersBusy] = useState(false)
+  const [plannedShipmentDateDraft, setPlannedShipmentDateDraft] = useState('')
   const { openPrint, dialog: markingPrintDialog } = useMarkingCodePrint()
 
   const load = useCallback(
@@ -232,6 +249,7 @@ export function FfFbsSupplyWorkspace({
     setPickLocation(null)
     setManualPickLocationRows({})
     setBoxCount('1')
+    setBoxesWithoutDistribution(false)
     setBoxAssignTarget(null)
     setBoxProductSearch('')
     setBoxProductQty({})
@@ -250,6 +268,10 @@ export function FfFbsSupplyWorkspace({
   useEffect(() => {
     setNotice(null)
   }, [workspace?.stage])
+
+  useEffect(() => {
+    setPlannedShipmentDateDraft(workspace?.supply.planned_shipment_date ?? '')
+  }, [workspace?.supply.planned_shipment_date])
 
   useEffect(() => {
     if (!open || !supplyId || !['picking', 'boxes'].includes(stage)) return
@@ -344,6 +366,16 @@ export function FfFbsSupplyWorkspace({
     } finally {
       setAddOrdersBusy(false)
     }
+  }
+
+  const savePlannedShipmentDate = async () => {
+    if (!workspace) return
+    const raw = plannedShipmentDateDraft.trim()
+    const next = await run(
+      () => updateFbsSupplyPlannedShipmentDate(token, authHeaders, workspace.supply.id, raw || null),
+      raw ? 'Дата отгрузки сохранена.' : 'Дата отгрузки очищена.',
+    )
+    if (next) setPlannedShipmentDateDraft(next.supply.planned_shipment_date ?? '')
   }
 
   const scanLocation = async () => {
@@ -459,15 +491,53 @@ export function FfFbsSupplyWorkspace({
     setPrintPreviewOpen(true)
   }
 
+  const openBoxQrPreview = async (box: FbsWorkspace['boxes'][number]) => {
+    setBusy(true)
+    setError(null)
+    try {
+      const asset: FbsPrintAsset = {
+        id: `box-qr-${box.id}`,
+        kind: 'box_qr',
+        status: 'ready',
+        content_type: 'image/png',
+        width_mm: 58,
+        height_mm: 40,
+        preview_url: await renderBoxQrDataUrl(box.barcode),
+        download_url: null,
+        checksum: null,
+        applied_at: null,
+        error: null,
+      }
+      setPrintBatch({
+        requested: 1,
+        ready: 1,
+        missing: 0,
+        failed: 0,
+        assets: [asset],
+        order_errors: [],
+      })
+      setPrintPreviewOpen(true)
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : 'QR короба не подготовлен.')
+    } finally {
+      setBusy(false)
+    }
+  }
+
   const createBoxes = async () => {
     if (!workspace) return
     const count = Math.min(100, Math.max(1, Number(boxCount) || 1))
-    const key = persistentOperationKey(workspace.supply.id, 'box-create', String(count))
+    const boxMode = boxesWithoutDistribution ? 'no-distribution' : 'distribution'
+    const key = persistentOperationKey(workspace.supply.id, 'box-create', `${boxMode}:${count}`)
     const next = await run(
-      () => createFbsPackingBoxes(token, authHeaders, workspace.supply.id, { count, idempotency_key: key }),
+      () => createFbsPackingBoxes(token, authHeaders, workspace.supply.id, {
+        count,
+        idempotency_key: key,
+        without_distribution: boxesWithoutDistribution,
+      }),
       '',
     )
-    if (next) clearPersistentOperationKey(workspace.supply.id, 'box-create', String(count))
+    if (next) clearPersistentOperationKey(workspace.supply.id, 'box-create', `${boxMode}:${count}`)
   }
 
   const assignBoxOrders = async () => {
@@ -912,6 +982,7 @@ export function FfFbsSupplyWorkspace({
   const boxMenuBox = workspace?.boxes.find((box) => box.id === boxMenu?.boxId) ?? null
   const boxMenuAssignedCount = boxMenuBox?.assigned_order_ids.length ?? 0
   const boxRouteLabel = workspace?.supply.delivery_type === 'pvz' ? 'ПВЗ' : 'Склад / СЦ'
+  const hasNoDistributionBoxes = Boolean(workspace?.boxes.some((box) => box.without_distribution))
   const boxDistributedCount = assignedBoxOrderIds.size
   const boxTotalCount = workspace?.progress.total ?? 0
   const boxRemainingCount = Math.max(0, boxTotalCount - boxDistributedCount)
@@ -1018,6 +1089,56 @@ export function FfFbsSupplyWorkspace({
                 <Stack direction="row" spacing={3} sx={{ flexWrap: 'wrap' }} useFlexGap>
                   <Metric label="Склад WMS" value={workspace.supply.wms_warehouse.name} />
                   <Metric label="Маршрут" value={workspace.supply.delivery_type === 'pvz' ? 'ПВЗ' : 'Склад / СЦ'} />
+                  <Stack
+                    direction="row"
+                    spacing={1}
+                    sx={{ alignItems: 'center' }}
+                    data-testid="cal-02-fbs-shipment-date-control"
+                    data-task-id="CAL-02"
+                  >
+                    <TextField
+                      label="Дата отгрузки"
+                      type="date"
+                      size="small"
+                      value={plannedShipmentDateDraft}
+                      onChange={(event) => setPlannedShipmentDateDraft(event.target.value)}
+                      disabled={busy}
+                      slotProps={{
+                        inputLabel: { shrink: true },
+                        htmlInput: { 'data-testid': 'cal-02-fbs-shipment-date' },
+                      }}
+                      sx={{ width: 176 }}
+                      data-task-id="CAL-02"
+                    />
+                    <Button
+                      size="small"
+                      variant="outlined"
+                      onClick={() => void savePlannedShipmentDate()}
+                      disabled={busy || plannedShipmentDateDraft === (workspace.supply.planned_shipment_date ?? '')}
+                      data-testid="cal-02-fbs-shipment-date-save"
+                      data-task-id="CAL-02"
+                    >
+                      Сохранить
+                    </Button>
+                    {workspace.supply.planned_shipment_date ? (
+                      <Button
+                        size="small"
+                        variant="text"
+                        onClick={() => {
+                          setPlannedShipmentDateDraft('')
+                          void run(
+                            () => updateFbsSupplyPlannedShipmentDate(token, authHeaders, workspace.supply.id, null),
+                            'Дата отгрузки очищена.',
+                          )
+                        }}
+                        disabled={busy}
+                        data-testid="cal-02-fbs-shipment-date-clear"
+                        data-task-id="CAL-02"
+                      >
+                        Очистить
+                      </Button>
+                    ) : null}
+                  </Stack>
                 </Stack>
               ) : null}
             </Stack>
@@ -1258,7 +1379,14 @@ export function FfFbsSupplyWorkspace({
                             </Button>
                           </span>
                         </Tooltip>
-                        <Button disabled={!packagingEditable || busy || unprintedPackingOrders.length === 0} onClick={() => openBulkOrderMarkingPrint(unprintedPackingOrders)}>
+                        <Button
+                          disabled={!packagingEditable || busy || packingOrders.length === 0}
+                          onClick={() => openBulkOrderMarkingPrint(
+                            unprintedPackingOrders.length > 0 ? unprintedPackingOrders : packingOrders,
+                            unprintedPackingOrders.length === 0,
+                          )}
+                          data-task-id="FBS-21"
+                        >
                           Печать всего
                         </Button>
                         <Button variant="contained" disabled={!packagingEditable || busy} onClick={() => void packEverything()}>
@@ -1312,17 +1440,18 @@ export function FfFbsSupplyWorkspace({
                             <Button size="small" variant="outlined" disabled={!line} onClick={() => line && setTzLine(line)}>
                               ТЗ
                             </Button>
-                            <Button size="small" variant="outlined" disabled={!packagingEditable || busy} onClick={() => void requestPrintBatch([order.id])}>
+                            <Button size="small" variant="outlined" disabled={!packagingEditable || busy} onClick={() => void requestPrintBatch([order.id])} data-task-id="FBS-09">
                               QR
                             </Button>
-                            <IconButton size="small" disabled={!packagingEditable || busy || !line} onClick={() => line && openOrderMarkingPrint(order, line)} aria-label="Печать ЧЗ и ШК">
+                            <IconButton size="small" disabled={!packagingEditable || busy || !line} onClick={() => line && openOrderMarkingPrint(order, line)} aria-label="Печать ЧЗ и ШК" data-task-id="FBS-10">
                               <PrintOutlinedIcon fontSize="small" />
                             </IconButton>
                             <IconButton
                               size="small"
                               disabled={!packagingEditable || busy || !line}
                               onClick={(event: MouseEvent<HTMLElement>) => setReprintMenu({ orderId: order.id, anchorEl: event.currentTarget })}
-                              aria-label="Перепечатка"
+                              aria-label="Перепечатать"
+                              data-task-id="FBS-11"
                             >
                               <MoreVertOutlinedIcon fontSize="small" />
                             </IconButton>
@@ -1346,12 +1475,27 @@ export function FfFbsSupplyWorkspace({
                     <Box>
                       <Typography variant="h6">Короба · {boxRouteLabel}</Typography>
                       <Typography variant="body2" color="text.secondary">
-                        Распределено {boxDistributedCount} из {boxTotalCount} шт · осталось {boxRemainingCount}
+                        {hasNoDistributionBoxes
+                          ? `Без распределения · коробов ${workspace.boxes.length}`
+                          : `Распределено ${boxDistributedCount} из ${boxTotalCount} шт · осталось ${boxRemainingCount}`}
                       </Typography>
                     </Box>
-                    <Stack direction="row" spacing={1} sx={{ alignItems: 'center' }}>
-                      <TextField label="Коробов" value={boxCount} size="small" type="number" disabled={!stageIsCurrent || !packagingEditable} onChange={(e) => setBoxCount(e.target.value)} slotProps={{ htmlInput: { min: 1, max: 100 } }} sx={{ width: 104 }} />
-                      <Button variant="contained" disabled={!stageIsCurrent || !packagingEditable || !Number(boxCount)} onClick={() => void createBoxes()}>Добавить короба</Button>
+                    <Stack direction="row" spacing={1} sx={{ alignItems: 'center', flexWrap: 'wrap' }} useFlexGap>
+                      <FormControlLabel
+                        control={(
+                          <Checkbox
+                            checked={boxesWithoutDistribution}
+                            onChange={(event) => setBoxesWithoutDistribution(event.target.checked)}
+                            disabled={!stageIsCurrent || !packagingEditable || workspace.boxes.length > 0}
+                            data-testid="fbs-boxes-without-distribution"
+                            data-task-id="FBS-12"
+                          />
+                        )}
+                        label="Без распределения"
+                        data-task-id="FBS-12"
+                      />
+                      <TextField label="Коробов" value={boxCount} size="small" type="number" disabled={!stageIsCurrent || !packagingEditable} onChange={(e) => setBoxCount(e.target.value)} slotProps={{ htmlInput: { min: 1, max: 100 } }} sx={{ width: 104 }} data-task-id="FBS-12" />
+                      <Button variant="contained" disabled={!stageIsCurrent || !packagingEditable || !Number(boxCount)} onClick={() => void createBoxes()} data-task-id="FBS-12">Добавить короба</Button>
                     </Stack>
                   </Stack>
                 </Box>
@@ -1397,23 +1541,30 @@ export function FfFbsSupplyWorkspace({
                             </Typography>
                           </Box>
                           <Stack direction="row" spacing={1} sx={{ alignItems: 'center' }}>
-                            {workspace.supply.delivery_type === 'pvz' ? (
-                              <Button
-                                size="small"
-                                disabled={busy}
-                                onClick={() => box.qr_asset?.preview_url ? openAssetPreview([box.qr_asset]) : void retryBoxQr(box.id)}
-                              >
-                                QR
-                              </Button>
-                            ) : null}
                             <Button
                               size="small"
-                              disabled={!stageIsCurrent || !packagingEditable || busy}
+                              disabled={busy}
+                              onClick={() => {
+                                if (workspace.supply.delivery_type === 'pvz') {
+                                  if (box.qr_asset?.preview_url) openAssetPreview([box.qr_asset])
+                                  else void retryBoxQr(box.id)
+                                  return
+                                }
+                                void openBoxQrPreview(box)
+                              }}
+                              data-task-id="FBS-09"
+                            >
+                              QR
+                            </Button>
+                            <Button
+                              size="small"
+                              disabled={!stageIsCurrent || !packagingEditable || busy || box.without_distribution}
                               onClick={() => {
                                 setBoxAssignTarget(box.id)
                                 setBoxProductSearch('')
                                 setBoxProductQty({})
                               }}
+                              data-task-id="FBS-12"
                             >
                               Добавить товары
                             </Button>
@@ -1476,6 +1627,7 @@ export function FfFbsSupplyWorkspace({
                       size="large"
                       startIcon={<PrintOutlinedIcon />}
                       onClick={() => openAssetPreview([supplyQrAsset])}
+                      data-task-id="FBS-09"
                     >
                       Печать QR поставки
                     </Button>
@@ -1623,8 +1775,9 @@ export function FfFbsSupplyWorkspace({
             if (reprintOrder && reprintLine) openOrderMarkingPrint(reprintOrder, reprintLine, true)
             setReprintMenu(null)
           }}
+          data-task-id="FBS-11"
         >
-          Перепечатка
+          Перепечатать
         </MenuItem>
         {reprintOrder && hasOperatorKiz(reprintOrder) ? (
           <MenuItem

@@ -7,8 +7,9 @@ import logging
 import uuid
 from collections import defaultdict
 from dataclasses import dataclass
-from datetime import UTC, datetime
+from datetime import UTC, date, datetime, time, timedelta
 from typing import Any
+from zoneinfo import ZoneInfo
 
 import httpx
 from sqlalchemy import func, select
@@ -47,6 +48,7 @@ from app.models.fbs_wb_operation import (
     WB_OPERATION_STATE_PENDING_CONFIRMATION,
 )
 from app.models.packaging_task import PackagingTask, PackagingTaskLine
+from app.models.tenant import Tenant
 from app.models.tenant_wb_mp_warehouse import TenantWbMpWarehouse
 from app.services import sorting_location_service as sorting_loc_svc
 from app.services import tenant_settings_service as tenant_settings_svc
@@ -95,6 +97,7 @@ from app.services.wildberries_fbs_client import split_marketplace_order_id_batch
 logger = logging.getLogger(__name__)
 
 _VALID_DELIVERY_TYPES = {FBS_DELIVERY_TYPE_WAREHOUSE_SC, FBS_DELIVERY_TYPE_PVZ}
+_MOSCOW_TZ = ZoneInfo("Europe/Moscow")
 
 
 class FbsSupplyError(Exception):
@@ -221,6 +224,35 @@ def _issue_context(validation: SupplyPreflightResult) -> dict[str, Any]:
     reasons = sorted({issue.code for issue in validation.issues})
     order_ids = sorted({str(issue.order_id) for issue in validation.issues})
     return {"order_ids": order_ids, "reasons": reasons}
+
+
+def _auto_planned_date_for_order(
+    created_at_wb: datetime,
+    cutoff: time,
+) -> date:
+    created = created_at_wb
+    if created.tzinfo is None:
+        created = created.replace(tzinfo=UTC)
+    local_created = created.astimezone(_MOSCOW_TZ)
+    planned = local_created.date()
+    if local_created.time().replace(tzinfo=None) > cutoff:
+        planned += timedelta(days=1)
+    return planned
+
+
+async def planned_shipment_date_for_orders(
+    session: AsyncSession,
+    tenant_id: uuid.UUID,
+    orders: list[FbsOrder],
+) -> date | None:
+    tenant = await session.get(Tenant, tenant_id)
+    if tenant is None or tenant.fbs_shipment_cutoff_time is None or not orders:
+        return None
+    planned_dates = [
+        _auto_planned_date_for_order(order.created_at_wb, tenant.fbs_shipment_cutoff_time)
+        for order in orders
+    ]
+    return max(planned_dates)
 
 
 def _from_orders_wb_context(
@@ -541,6 +573,11 @@ async def create_supply_from_orders(
             dest_name = name_raw if isinstance(name_raw, str) else None
             zone_raw = planned_destination.get("zone")
             dest_zone = zone_raw if isinstance(zone_raw, str) else None
+        planned_shipment_date = await planned_shipment_date_for_orders(
+            session,
+            tenant_id,
+            orders,
+        )
 
         supply = FbsSupply(
             tenant_id=tenant_id,
@@ -556,6 +593,7 @@ async def create_supply_from_orders(
             planned_destination_office_id=wb_office_id,
             planned_destination_name=dest_name,
             planned_destination_zone=dest_zone,
+            planned_shipment_date=planned_shipment_date,
         )
         session.add(supply)
         await session.flush()
@@ -1190,7 +1228,6 @@ async def list_supply_worklist(
             if first_order and first_order.wb_warehouse_id
             else 0
         )
-        nearest_deadline = min((order.deadline_at for order in orders), default=None)
         items.append(
             {
                 "id": str(supply.id),
@@ -1212,12 +1249,33 @@ async def list_supply_worklist(
                 "orders_count": len(orders),
                 "units_count": len(orders),
                 "boxes_count": boxes_by_supply.get(supply.id, 0),
-                "shipment_at": nearest_deadline.isoformat() if nearest_deadline else None,
+                "planned_shipment_date": (
+                    supply.planned_shipment_date.isoformat()
+                    if supply.planned_shipment_date is not None
+                    else None
+                ),
                 "can_add_orders": supply.status
                 in {FBS_SUPPLY_STATUS_DRAFT, FBS_SUPPLY_STATUS_ASSEMBLING},
             }
         )
     return {"items": items, "server_now": datetime.now(tz=UTC).isoformat()}
+
+
+async def update_planned_shipment_date(
+    session: AsyncSession,
+    tenant_id: uuid.UUID,
+    supply_id: uuid.UUID,
+    *,
+    planned_shipment_date: date | None,
+) -> FbsSupply:
+    supply = await _get_supply(session, tenant_id, supply_id, with_orders=True)
+    if supply is None:
+        raise FbsSupplyError("supply_not_found")
+    supply.planned_shipment_date = planned_shipment_date
+    await session.commit()
+    await session.refresh(supply)
+    await session.refresh(supply, attribute_names=["orders"])
+    return supply
 
 
 async def add_order_to_supply(

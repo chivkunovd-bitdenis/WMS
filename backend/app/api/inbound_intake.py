@@ -55,6 +55,7 @@ router = APIRouter(
 
 class InboundIntakeRequestCreate(BaseModel):
     warehouse_id: uuid.UUID
+    seller_id: uuid.UUID | None = None
     planned_delivery_date: date | None = None
     waybill_number: str | None = Field(default=None, max_length=128)
     operation_type: str = Field(default=svc.OPERATION_TYPE_INBOUND, max_length=32)
@@ -198,6 +199,7 @@ class InboundIntakeRequestSummaryOut(BaseModel):
     has_discrepancy: bool = False
     seller_id: str | None = None
     seller_name: str | None = None
+    product_names: list[str] = Field(default_factory=list)
     created_by_seller_id: str | None = None
     created_at: str
     sorting_remaining_qty: int = 0
@@ -576,6 +578,13 @@ async def list_inbound_requests(
             has_discrepancy=bool(r.has_discrepancy),
             seller_id=str(r.seller_id) if r.seller_id is not None else None,
             seller_name=r.seller.name if r.seller is not None else None,
+            product_names=[
+                term
+                for ln in r.lines
+                if ln.product is not None
+                for term in (ln.product.name, ln.product.sku_code)
+                if term
+            ],
             created_by_seller_id=str(r.created_by_seller_id)
             if r.created_by_seller_id is not None
             else None,
@@ -593,6 +602,8 @@ async def create_inbound_request(
     session: Annotated[AsyncSession, Depends(get_db)],
     effective_seller_id: Annotated[uuid.UUID | None, Depends(get_effective_seller_id)],
 ) -> InboundIntakeRequestOut:
+    owning_seller_id: uuid.UUID | None
+    created_by_seller_id: uuid.UUID | None
     if user.role == FULFILLMENT_SELLER:
         if effective_seller_id is None:
             raise HTTPException(
@@ -602,7 +613,7 @@ async def create_inbound_request(
         owning_seller_id = effective_seller_id
         created_by_seller_id = effective_seller_id
     else:
-        owning_seller_id = None
+        owning_seller_id = body.seller_id
         created_by_seller_id = None
     try:
         r = await svc.create_request(
