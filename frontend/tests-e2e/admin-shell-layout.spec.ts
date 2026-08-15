@@ -66,6 +66,7 @@ test('admin shell: single app root, nav, dashboard and main sections visible', a
   ]);
   await expect(page.getByText('Время отсечки FBS очищено')).toBeVisible();
 
-  await page.goto('/app/ops');
-  await expect(page.getByTestId('inbound-requests-table')).toBeVisible();
+  await page.getByTestId('nav-ff-reception').click();
+  await expect(page).toHaveURL(/\/app\/ff\/reception$/);
+  await expect(page.getByTestId('ff-inbound-create')).toBeVisible();
 });

@@ -2775,7 +2775,7 @@ export default function App() {
                   navigate(`${base}/ff/mp-shipments`)
                 }}
                 onOpenFbsSupply={(id) => {
-                  navigate(`${base}/ff/fbs?supply_id=${id}`)
+                  navigate(`${base}/fbs?supply_id=${id}`)
                 }}
               />
             }
