@@ -40,6 +40,7 @@ export type Me = {
   seller_permissions?: SellerPermissions | null
   address_storage_enabled?: boolean
   separate_marking_print_enabled?: boolean
+  fbs_shipment_cutoff_time?: string | null
 }
 
 export type AuthPortal = 'fulfillment' | 'seller'

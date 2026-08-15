@@ -370,6 +370,7 @@ def _compute_preflight_version(
     *,
     cargo_qr_ready: bool,
     has_physical_boxes: bool,
+    without_distribution: bool,
     unassigned_packed_order_ids: frozenset[uuid.UUID],
 ) -> str:
     parts = [
@@ -378,6 +379,7 @@ def _compute_preflight_version(
         supply.delivery_type,
         str(cargo_qr_ready),
         str(has_physical_boxes),
+        str(without_distribution),
         *(str(order_id) for order_id in sorted(unassigned_packed_order_ids)),
     ]
     for order in sorted(orders, key=lambda item: item.id):
@@ -399,6 +401,7 @@ def _build_delivery_checks(
     *,
     cargo_qr_ready: bool,
     has_physical_boxes: bool = True,
+    without_distribution: bool = False,
     unassigned_packed_order_ids: frozenset[uuid.UUID] = frozenset(),
 ) -> list[DeliveryCheck]:
     checks: list[DeliveryCheck] = []
@@ -540,15 +543,24 @@ def _build_delivery_checks(
                 ok=False,
             )
         )
-    for order_id in sorted(unassigned_packed_order_ids):
+    if without_distribution and has_physical_boxes:
         checks.append(
             DeliveryCheck(
-                code="packed_order_unassigned",
-                message="Упакованный заказ не назначен в физический короб.",
-                ok=False,
-                order_id=order_id,
+                code="boxes_without_distribution",
+                message="Короба созданы без распределения товаров.",  # noqa: RUF001
+                ok=True,
             )
         )
+    else:
+        for order_id in sorted(unassigned_packed_order_ids):
+            checks.append(
+                DeliveryCheck(
+                    code="packed_order_unassigned",
+                    message="Упакованный заказ не назначен в физический короб.",
+                    ok=False,
+                    order_id=order_id,
+                )
+            )
 
     return checks
 
@@ -597,6 +609,7 @@ async def _sync_and_validate_deliver(
             orders,
             cargo_qr_ready=cargo_qr_ready,
             has_physical_boxes=box_readiness.has_physical_boxes,
+            without_distribution=box_readiness.without_distribution,
             unassigned_packed_order_ids=box_readiness.unassigned_packed_order_ids,
         )
         if current_version != confirmed_preflight_version:
@@ -614,6 +627,7 @@ async def _sync_and_validate_deliver(
         orders,
         cargo_qr_ready=cargo_qr_ready,
         has_physical_boxes=box_readiness.has_physical_boxes,
+        without_distribution=box_readiness.without_distribution,
         unassigned_packed_order_ids=box_readiness.unassigned_packed_order_ids,
     )
     _validate_checks_pass(checks)
@@ -663,6 +677,7 @@ async def preflight_delivery(
         orders,
         cargo_qr_ready=cargo_qr_ready,
         has_physical_boxes=box_readiness.has_physical_boxes,
+        without_distribution=box_readiness.without_distribution,
         unassigned_packed_order_ids=box_readiness.unassigned_packed_order_ids,
     )
     checked_at = datetime.now(UTC)
@@ -671,6 +686,7 @@ async def preflight_delivery(
         orders,
         cargo_qr_ready=cargo_qr_ready,
         has_physical_boxes=box_readiness.has_physical_boxes,
+        without_distribution=box_readiness.without_distribution,
         unassigned_packed_order_ids=box_readiness.unassigned_packed_order_ids,
     )
     can_deliver = all(check.ok for check in checks)

@@ -1,19 +1,18 @@
-import { useMemo, useState } from 'react'
-import type { ReactNode } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import {
+  Alert,
   Box,
+  CircularProgress,
+  IconButton,
   Paper,
   Stack,
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableRow,
   Typography,
 } from '@mui/material'
 import { alpha } from '@mui/material/styles'
-import { DashboardCard } from '../../components/DashboardCard'
-import { FfWeekCalendar } from './FfWeekCalendar'
+import ChevronLeftIcon from '@mui/icons-material/ChevronLeft'
+import ChevronRightIcon from '@mui/icons-material/ChevronRight'
+import { apiUrl } from '../../api'
+import { readApiErrorMessage } from '../../utils/readApiErrorMessage'
 
 export type FfInboundSummary = {
   id: string
@@ -44,288 +43,328 @@ type Me = {
   seller_name?: string | null
 }
 
+type FbsCalendarRow = {
+  id: string
+  date: string
+  direction: string
+  boxes_count: number
+  shipment_type: 'FBS'
+  title: string
+}
+
+type ShipmentCalendarRow = {
+  id: string
+  date: string
+  direction: string
+  boxesCount: number
+  shipmentType: 'FBS' | 'FBO' | 'MP'
+  title: string
+  source: 'fbs' | 'fbo' | 'mp'
+}
+
 type Props = {
   me: Me
+  token: string
+  authHeaders: (token: string) => Record<string, string>
   isFulfillmentAdmin: boolean
   inboundSummaries: FfInboundSummary[]
   outboundSummaries: FfOutboundSummary[]
   onOpenInbound: (id: string) => void
   onOpenOutbound: (id: string) => void
+  onOpenMarketplaceUnload: (id: string) => void
+  onOpenFbsSupply: (id: string) => void
   mpUnloadSummaries?: FfOutboundSummary[]
 }
 
-function outboundPlanDate(row: FfOutboundSummary): string | null {
-  if (row.planned_shipment_date) {
-    return row.planned_shipment_date
-  }
-  if (row.created_at) {
-    return row.created_at.slice(0, 10)
-  }
-  return null
+function addDays(d: Date, n: number): Date {
+  const x = new Date(d)
+  x.setDate(x.getDate() + n)
+  return x
 }
 
-function FfDashboardSection({
-  title,
-  subtitle,
-  testId,
-  children,
-}: {
-  title: string
-  subtitle: string
-  testId?: string
-  children: ReactNode
-}) {
-  return (
-    <Paper
-      elevation={0}
-      data-testid={testId}
-      sx={(theme) => ({
-        overflow: 'hidden',
-        border: `1px solid ${alpha(theme.palette.primary.main, 0.22)}`,
-        borderRadius: 2,
-        boxShadow: `0 4px 18px ${alpha(theme.palette.common.black, 0.07)}, 0 1px 3px ${alpha(theme.palette.common.black, 0.05)}`,
-      })}
-    >
-      <Box
-        sx={(theme) => ({
-          px: 2.5,
-          py: 2,
-          borderBottom: `1px solid ${alpha(theme.palette.divider, 0.9)}`,
-          background: `linear-gradient(118deg, ${alpha(theme.palette.primary.main, 0.14)} 0%, ${alpha(theme.palette.primary.light, 0.22)} 42%, ${alpha(theme.palette.primary.main, 0.07)} 100%)`,
-        })}
-      >
-        <Typography
-          variant="h6"
-          component="h2"
-          sx={{
-            fontWeight: 800,
-            color: 'text.primary',
-            letterSpacing: '-0.02em',
-            textShadow: '0 1px 0 rgba(255,255,255,0.45)',
-          }}
-        >
-          {title}
-        </Typography>
-        <Typography
-          variant="body2"
-          sx={{
-            mt: 0.75,
-            color: 'text.secondary',
-            fontWeight: 500,
-            lineHeight: 1.45,
-            maxWidth: 720,
-          }}
-        >
-          {subtitle}
-        </Typography>
-      </Box>
-      <Box sx={{ px: 2, py: 2, bgcolor: 'background.paper' }}>{children}</Box>
-    </Paper>
-  )
+function fmtKey(d: Date): string {
+  const y = d.getFullYear()
+  const m = String(d.getMonth() + 1).padStart(2, '0')
+  const day = String(d.getDate()).padStart(2, '0')
+  return `${y}-${m}-${day}`
 }
+
+function monthLabel(d: Date): string {
+  return d.toLocaleDateString('ru-RU', { month: 'long', year: 'numeric' })
+}
+
+function monthGrid(anchor: Date): Date[] {
+  const first = new Date(anchor.getFullYear(), anchor.getMonth(), 1)
+  const firstDay = first.getDay()
+  const startOffset = firstDay === 0 ? -6 : 1 - firstDay
+  const start = addDays(first, startOffset)
+  const last = new Date(anchor.getFullYear(), anchor.getMonth() + 1, 0)
+  const lastDay = last.getDay()
+  const endOffset = lastDay === 0 ? 0 : 7 - lastDay
+  const end = addDays(last, endOffset)
+  const days: Date[] = []
+  for (let d = start; d <= end; d = addDays(d, 1)) {
+    days.push(d)
+  }
+  return days
+}
+
+const dayLabels = ['Пн', 'Вт', 'Ср', 'Чт', 'Пт', 'Сб', 'Вс']
 
 export function FfDashboard({
-  me,
-  isFulfillmentAdmin,
-  inboundSummaries,
+  token,
+  authHeaders,
+  inboundSummaries: _inboundSummaries,
   outboundSummaries,
   mpUnloadSummaries = [],
-  onOpenInbound,
   onOpenOutbound,
+  onOpenMarketplaceUnload,
+  onOpenFbsSupply,
 }: Props) {
-  const [weekOffset, setWeekOffset] = useState(0)
+  const [monthOffset, setMonthOffset] = useState(0)
+  const [fbsRows, setFbsRows] = useState<FbsCalendarRow[]>([])
+  const [fbsBusy, setFbsBusy] = useState(false)
+  const [fbsError, setFbsError] = useState<string | null>(null)
 
-  const inboundNotDraft = useMemo(
-    () => inboundSummaries.filter((r) => r.status !== 'draft'),
-    [inboundSummaries],
-  )
+  const visibleMonth = useMemo(() => {
+    const now = new Date()
+    return new Date(now.getFullYear(), now.getMonth() + monthOffset, 1)
+  }, [monthOffset])
+  const days = useMemo(() => monthGrid(visibleMonth), [visibleMonth])
+  const rangeStart = fmtKey(days[0]!)
+  const rangeEnd = fmtKey(days[days.length - 1]!)
 
-  const plannedInbound = useMemo(
-    () => inboundNotDraft.filter((r) => Boolean(r.planned_delivery_date)),
-    [inboundNotDraft],
-  )
-
-  const plannedOutbound = useMemo(
-    () =>
-      mpUnloadSummaries.length > 0
-        ? mpUnloadSummaries.filter((r) => r.status === 'submitted')
-        : outboundSummaries.filter((r) => r.status === 'submitted'),
-    [mpUnloadSummaries, outboundSummaries],
-  )
-
-  const inboundBars = useMemo(() => {
-    return plannedInbound
-      .filter((r) => r.planned_delivery_date)
-      .map((r) => ({
-        id: r.id,
-        dateKey: r.planned_delivery_date!,
-        label: `${r.seller_name ?? 'Селлер'} · ${r.line_count} стр.`,
-      }))
-  }, [plannedInbound])
-
-  const outboundBars = useMemo(() => {
-    return plannedOutbound
-      .map((r) => {
-        const dk = outboundPlanDate(r)
-        if (!dk) {
-          return null
+  useEffect(() => {
+    let cancelled = false
+    setFbsBusy(true)
+    setFbsError(null)
+    void fetch(apiUrl(`/operations/fbs-supplies/calendar?start_date=${rangeStart}&end_date=${rangeEnd}`), {
+      headers: authHeaders(token),
+    })
+      .then(async (res) => {
+        if (!res.ok) {
+          throw new Error(await readApiErrorMessage(res))
         }
-        return {
-          id: r.id,
-          dateKey: dk,
-          label: `${r.warehouse_name ?? 'Склад'} · ${r.goods_qty_total ?? r.line_count} шт.`,
+        return (await res.json()) as FbsCalendarRow[]
+      })
+      .then((rows) => {
+        if (!cancelled) setFbsRows(rows)
+      })
+      .catch((err: unknown) => {
+        if (!cancelled) {
+          setFbsRows([])
+          setFbsError(err instanceof Error ? err.message : 'Не удалось загрузить календарь FBS.')
         }
       })
-      .filter((x): x is NonNullable<typeof x> => x !== null)
-  }, [plannedOutbound])
+      .finally(() => {
+        if (!cancelled) setFbsBusy(false)
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [authHeaders, rangeEnd, rangeStart, token])
+
+  const shipmentRows = useMemo<ShipmentCalendarRow[]>(() => {
+    const fbs = fbsRows.map((row) => ({
+      id: row.id,
+      date: row.date,
+      direction: row.direction,
+      boxesCount: row.boxes_count,
+      shipmentType: 'FBS' as const,
+      title: row.title,
+      source: 'fbs' as const,
+    }))
+    const mp = mpUnloadSummaries
+      .filter((row) => row.status === 'submitted' && row.planned_shipment_date)
+      .map((row) => ({
+        id: row.id,
+        date: row.planned_shipment_date!,
+        direction: row.warehouse_name ?? 'Направление не указано',
+        boxesCount: row.goods_qty_total ?? row.line_count,
+        shipmentType: 'MP' as const,
+        title: row.marketplace_label ?? 'Маркетплейс',
+        source: 'mp' as const,
+      }))
+    const fbo = outboundSummaries
+      .filter((row) => row.status === 'submitted' && row.planned_shipment_date)
+      .map((row) => ({
+        id: row.id,
+        date: row.planned_shipment_date!,
+        direction: row.warehouse_name ?? 'Направление не указано',
+        boxesCount: row.goods_qty_total ?? row.line_count,
+        shipmentType: 'FBO' as const,
+        title: row.marketplace_label ?? 'FBO',
+        source: 'fbo' as const,
+      }))
+    return [...fbs, ...mp, ...fbo].sort((a, b) => {
+      if (a.date !== b.date) return a.date.localeCompare(b.date)
+      return `${a.shipmentType}-${a.direction}`.localeCompare(`${b.shipmentType}-${b.direction}`)
+    })
+  }, [fbsRows, mpUnloadSummaries, outboundSummaries])
+
+  const rowsByDay = useMemo(() => {
+    const map = new Map<string, ShipmentCalendarRow[]>()
+    for (const row of shipmentRows) {
+      const rows = map.get(row.date) ?? []
+      rows.push(row)
+      map.set(row.date, rows)
+    }
+    return map
+  }, [shipmentRows])
+
+  const openRow = (row: ShipmentCalendarRow) => {
+    if (row.source === 'fbs') {
+      onOpenFbsSupply(row.id)
+      return
+    }
+    if (row.source === 'mp') {
+      onOpenMarketplaceUnload(row.id)
+      return
+    }
+    onOpenOutbound(row.id)
+  }
 
   return (
-    <Stack spacing={3} data-testid="dashboard">
-      <Paper
-        elevation={0}
-        sx={(theme) => ({
-          p: 2.5,
-          border: `1px solid ${alpha(theme.palette.primary.main, 0.2)}`,
-          borderRadius: 2,
-          boxShadow: `0 2px 14px ${alpha(theme.palette.common.black, 0.06)}`,
-          background: `linear-gradient(135deg, ${theme.palette.background.paper} 0%, ${alpha(theme.palette.primary.main, 0.04)} 100%)`,
-        })}
-      >
-        <Typography
-          variant="h5"
-          component="h1"
-          sx={{
-            fontWeight: 800,
-            color: 'text.primary',
-            letterSpacing: '-0.025em',
-          }}
-        >
-          Дашборд ФФ
-        </Typography>
-        <Typography
-          variant="body2"
-          sx={{ mt: 1, color: 'text.secondary', fontWeight: 600 }}
-          data-testid="org-name"
-        >
-          {me.organization_name}
-        </Typography>
-        <Typography variant="body2" sx={{ mt: 1, color: 'text.secondary', fontWeight: 500, lineHeight: 1.5 }}>
-          Приёмка от селлеров и отгрузки фулфилмента на маркетплейс — план по датам.
-        </Typography>
+    <Stack spacing={2.5} data-testid="dashboard" data-task-id="CAL-01">
+      <Paper variant="outlined" sx={{ p: 2 }} data-testid="cal-01-screen-title" data-task-id="CAL-01">
+        <Stack direction={{ xs: 'column', sm: 'row' }} sx={{ justifyContent: 'space-between', gap: 1.5 }}>
+          <Box data-testid="cal-01-title-block" data-task-id="CAL-01">
+            <Typography variant="h5" component="h1" sx={{ fontWeight: 800 }} data-testid="cal-01-title" data-task-id="CAL-01">
+              Календарь отгрузок
+            </Typography>
+          </Box>
+          <Stack direction="row" spacing={1} sx={{ alignItems: 'center' }} data-testid="cal-01-month-controls" data-task-id="CAL-01">
+            <IconButton
+              size="small"
+              aria-label="Предыдущий месяц"
+              onClick={() => setMonthOffset((current) => current - 1)}
+              data-testid="cal-01-prev-month"
+              data-task-id="CAL-01"
+            >
+              <ChevronLeftIcon fontSize="small" />
+            </IconButton>
+            <Typography sx={{ minWidth: 180, textAlign: 'center', fontWeight: 750 }} data-testid="cal-01-month-label" data-task-id="CAL-01">
+              {monthLabel(visibleMonth)}
+            </Typography>
+            <IconButton
+              size="small"
+              aria-label="Следующий месяц"
+              onClick={() => setMonthOffset((current) => current + 1)}
+              data-testid="cal-01-next-month"
+              data-task-id="CAL-01"
+            >
+              <ChevronRightIcon fontSize="small" />
+            </IconButton>
+          </Stack>
+        </Stack>
       </Paper>
 
-      <FfDashboardSection
-        testId="ff-dashboard-inbound-block"
-        title="Приёмка (от селлеров)"
-        subtitle="Заявки после выхода из черновика. Если плановая дата приёмки не задана — показываем дату создания."
-      >
-        <Table size="small">
-          <TableHead>
-            <TableRow>
-              <TableCell>Дата привоза</TableCell>
-              <TableCell align="right">Строк</TableCell>
-              <TableCell>Селлер</TableCell>
-            </TableRow>
-          </TableHead>
-          <TableBody>
-            {inboundNotDraft.length === 0 ? (
-              <TableRow>
-                <TableCell colSpan={3}>
-                  <Typography variant="body2" color="text.secondary">
-                    Нет заявок в плане
-                  </Typography>
-                </TableCell>
-              </TableRow>
-            ) : (
-              inboundNotDraft.map((row) => (
-                <TableRow
-                  key={row.id}
-                  hover
-                  sx={{ cursor: 'pointer' }}
-                  onClick={() => onOpenInbound(row.id)}
-                  data-testid="ff-dash-inbound-row"
-                >
-                  <TableCell>
-                    {row.planned_delivery_date ??
-                      (row.created_at ? row.created_at.slice(0, 10) : '—')}
-                  </TableCell>
-                  <TableCell align="right">{row.line_count}</TableCell>
-                  <TableCell>{row.seller_name ?? '—'}</TableCell>
-                </TableRow>
-              ))
-            )}
-          </TableBody>
-        </Table>
-      </FfDashboardSection>
+      {fbsError ? (
+        <Alert severity="warning" data-testid="cal-01-fbs-load-error" data-task-id="CAL-01">
+          {fbsError}
+        </Alert>
+      ) : null}
 
-      <FfDashboardSection
-        testId="ff-dashboard-outbound-block"
-        title="Запланированные отгрузки на склад МП"
-        subtitle="Статус «submitted» (запланировано к отгрузке), плановая дата отвоза."
-      >
-        <Table size="small">
-          <TableHead>
-            <TableRow>
-              <TableCell>Дата отвоза</TableCell>
-              <TableCell>Склад</TableCell>
-              <TableCell>Маркетплейс</TableCell>
-              <TableCell align="right">Товаров (шт.)</TableCell>
-            </TableRow>
-          </TableHead>
-          <TableBody>
-            {plannedOutbound.length === 0 ? (
-              <TableRow>
-                <TableCell colSpan={4}>
-                  <Typography variant="body2" color="text.secondary">
-                    Нет отгрузок в плане
-                  </Typography>
-                </TableCell>
-              </TableRow>
-            ) : (
-              plannedOutbound.map((row) => (
-                <TableRow
-                  key={row.id}
-                  hover
-                  sx={{ cursor: 'pointer' }}
-                  onClick={() => onOpenOutbound(row.id)}
-                  data-testid="ff-dash-outbound-row"
-                >
-                  <TableCell>{outboundPlanDate(row) ?? '—'}</TableCell>
-                  <TableCell>{row.warehouse_name ?? '—'}</TableCell>
-                  <TableCell>{row.marketplace_label ?? 'Wildberries'}</TableCell>
-                  <TableCell align="right">
-                    {row.goods_qty_total ?? row.line_count}
-                  </TableCell>
-                </TableRow>
-              ))
-            )}
-          </TableBody>
-        </Table>
-      </FfDashboardSection>
-
-      <FfWeekCalendar
-        weekOffset={weekOffset}
-        onWeekOffsetChange={setWeekOffset}
-        inboundBars={inboundBars}
-        outboundBars={outboundBars}
-        onInboundBarClick={onOpenInbound}
-        onOutboundBarClick={onOpenOutbound}
-      />
-
-      {isFulfillmentAdmin ? (
-        <Paper
-          elevation={0}
-          data-testid="ff-dashboard-admin-card"
+      <Paper variant="outlined" sx={{ overflow: 'hidden' }} data-testid="ff-week-calendar" data-task-id="CAL-01">
+        <Box
           sx={(theme) => ({
-            p: 2,
-            border: `1px solid ${alpha(theme.palette.primary.main, 0.2)}`,
-            borderRadius: 2,
-            boxShadow: `0 4px 18px ${alpha(theme.palette.common.black, 0.07)}`,
-            bgcolor: 'background.paper',
+            display: 'grid',
+            gridTemplateColumns: 'repeat(7, minmax(0, 1fr))',
+            borderBottom: `1px solid ${theme.palette.divider}`,
           })}
+          data-testid="cal-01-weekdays"
+          data-task-id="CAL-01"
         >
-          <DashboardCard me={me} isFulfillmentAdmin={isFulfillmentAdmin} embedded />
-        </Paper>
+          {dayLabels.map((label) => (
+            <Box key={label} sx={{ px: 1.25, py: 1, bgcolor: 'action.hover' }} data-testid="cal-01-weekday" data-task-id="CAL-01">
+              <Typography variant="caption" sx={{ fontWeight: 750 }} data-task-id="CAL-01">
+                {label}
+              </Typography>
+            </Box>
+          ))}
+        </Box>
+        <Box
+          sx={{
+            display: 'grid',
+            gridTemplateColumns: 'repeat(7, minmax(0, 1fr))',
+          }}
+          data-testid="cal-01-grid"
+          data-task-id="CAL-01"
+        >
+          {days.map((day) => {
+            const key = fmtKey(day)
+            const dayRows = rowsByDay.get(key) ?? []
+            const outsideMonth = day.getMonth() !== visibleMonth.getMonth()
+            return (
+              <Box
+                key={key}
+                sx={(theme) => ({
+                  minHeight: 132,
+                  p: 1,
+                  borderRight: `1px solid ${theme.palette.divider}`,
+                  borderBottom: `1px solid ${theme.palette.divider}`,
+                  bgcolor: outsideMonth ? alpha(theme.palette.action.hover, 0.35) : 'background.paper',
+                })}
+                data-testid={`cal-01-day-${key}`}
+                data-task-id="CAL-01"
+              >
+                <Typography
+                  variant="subtitle2"
+                  sx={{ mb: 0.75, fontWeight: 800, color: outsideMonth ? 'text.disabled' : 'text.primary' }}
+                  data-testid="cal-01-day-number"
+                  data-task-id="CAL-01"
+                >
+                  {day.getDate()}
+                </Typography>
+                <Stack spacing={0.5} data-testid={`cal-01-day-rows-${key}`} data-task-id="CAL-01">
+                  {dayRows.map((row) => (
+                    <Box
+                      key={`${row.source}-${row.id}`}
+                      role="button"
+                      tabIndex={0}
+                      onClick={() => openRow(row)}
+                      onKeyDown={(event) => {
+                        if (event.key === 'Enter' || event.key === ' ') {
+                          event.preventDefault()
+                          openRow(row)
+                        }
+                      }}
+                      sx={(theme) => ({
+                        px: 0.75,
+                        py: 0.5,
+                        border: `1px solid ${alpha(theme.palette.primary.main, 0.18)}`,
+                        borderRadius: 1,
+                        cursor: 'pointer',
+                        bgcolor: row.shipmentType === 'FBS' ? alpha(theme.palette.success.main, 0.1) : alpha(theme.palette.info.main, 0.1),
+                        '&:hover': { bgcolor: alpha(theme.palette.primary.main, 0.12) },
+                      })}
+                      data-testid="cal-01-shipment-row"
+                      data-task-id="CAL-01"
+                      data-shipment-id={row.id}
+                      data-shipment-type={row.shipmentType}
+                    >
+                      <Typography variant="caption" sx={{ display: 'block', fontWeight: 750, lineHeight: 1.2 }} data-task-id="CAL-01">
+                        {row.direction}
+                      </Typography>
+                      <Typography variant="caption" color="text.secondary" sx={{ display: 'block', lineHeight: 1.2 }} data-task-id="CAL-01">
+                        {row.boxesCount} коробов · {row.shipmentType}
+                      </Typography>
+                    </Box>
+                  ))}
+                </Stack>
+              </Box>
+            )
+          })}
+        </Box>
+      </Paper>
+
+      {fbsBusy ? (
+        <Stack direction="row" spacing={1} sx={{ alignItems: 'center' }} data-testid="cal-01-loading" data-task-id="CAL-01">
+          <CircularProgress size={18} />
+          <Typography variant="body2" color="text.secondary" data-task-id="CAL-01">
+            Обновляем календарь
+          </Typography>
+        </Stack>
       ) : null}
     </Stack>
   )

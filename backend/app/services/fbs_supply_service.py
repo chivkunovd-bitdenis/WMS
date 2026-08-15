@@ -7,11 +7,12 @@ import logging
 import uuid
 from collections import defaultdict
 from dataclasses import dataclass
-from datetime import UTC, datetime
+from datetime import UTC, date, datetime, time, timedelta
 from typing import Any
+from zoneinfo import ZoneInfo
 
 import httpx
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
@@ -20,14 +21,25 @@ from app.models.fbs_order import (
     FBS_ORDER_STATUS_ASSEMBLING,
     FBS_ORDER_STATUS_IN_SUPPLY,
     FBS_ORDER_STATUS_NEW,
+    PICK_STATUS_PENDING,
+    PICK_STATUS_PICKED,
     FbsOrder,
 )
+from app.models.fbs_order_pick import (
+    PICK_EVENT_PICKED,
+    FbsOrderPick,
+    FbsOrderPickEvent,
+)
+from app.models.fbs_packing_box import FbsPackingBox
 from app.models.fbs_supply import (
     FBS_DELIVERY_TYPE_PVZ,
     FBS_DELIVERY_TYPE_WAREHOUSE_SC,
     FBS_SUPPLY_SOURCE_WMS,
     FBS_SUPPLY_STATUS_ASSEMBLING,
+    FBS_SUPPLY_STATUS_DONE,
     FBS_SUPPLY_STATUS_DRAFT,
+    FBS_SUPPLY_STATUS_IN_DELIVERY,
+    FBS_SUPPLY_STATUS_PACKED,
     FbsSupply,
 )
 from app.models.fbs_wb_operation import (
@@ -35,6 +47,11 @@ from app.models.fbs_wb_operation import (
     WB_OPERATION_STATE_FAILED,
     WB_OPERATION_STATE_PENDING_CONFIRMATION,
 )
+from app.models.packaging_task import PackagingTask, PackagingTaskLine
+from app.models.tenant import Tenant
+from app.models.tenant_wb_mp_warehouse import TenantWbMpWarehouse
+from app.services import sorting_location_service as sorting_loc_svc
+from app.services import tenant_settings_service as tenant_settings_svc
 from app.services.catalog_service import get_warehouse
 from app.services.fbs_packaging_integration_service import create_packaging_task_for_supply
 from app.services.fbs_print_asset_storage import decode_png_payload
@@ -80,6 +97,7 @@ from app.services.wildberries_fbs_client import split_marketplace_order_id_batch
 logger = logging.getLogger(__name__)
 
 _VALID_DELIVERY_TYPES = {FBS_DELIVERY_TYPE_WAREHOUSE_SC, FBS_DELIVERY_TYPE_PVZ}
+_MOSCOW_TZ = ZoneInfo("Europe/Moscow")
 
 
 class FbsSupplyError(Exception):
@@ -208,6 +226,35 @@ def _issue_context(validation: SupplyPreflightResult) -> dict[str, Any]:
     return {"order_ids": order_ids, "reasons": reasons}
 
 
+def _auto_planned_date_for_order(
+    created_at_wb: datetime,
+    cutoff: time,
+) -> date:
+    created = created_at_wb
+    if created.tzinfo is None:
+        created = created.replace(tzinfo=UTC)
+    local_created = created.astimezone(_MOSCOW_TZ)
+    planned = local_created.date()
+    if local_created.time().replace(tzinfo=None) > cutoff:
+        planned += timedelta(days=1)
+    return planned
+
+
+async def planned_shipment_date_for_orders(
+    session: AsyncSession,
+    tenant_id: uuid.UUID,
+    orders: list[FbsOrder],
+) -> date | None:
+    tenant = await session.get(Tenant, tenant_id)
+    if tenant is None or tenant.fbs_shipment_cutoff_time is None or not orders:
+        return None
+    planned_dates = [
+        _auto_planned_date_for_order(order.created_at_wb, tenant.fbs_shipment_cutoff_time)
+        for order in orders
+    ]
+    return max(planned_dates)
+
+
 def _from_orders_wb_context(
     summary: Any,
     orders: list[FbsOrder],
@@ -263,6 +310,50 @@ async def _bind_orders_to_supply(
         order.status = FBS_ORDER_STATUS_IN_SUPPLY
     if orders:
         supply.cargo_type = orders[0].cargo_type
+    await session.flush()
+
+
+async def _sync_existing_packaging_task_for_added_orders(
+    session: AsyncSession,
+    tenant_id: uuid.UUID,
+    supply: FbsSupply,
+    orders: list[FbsOrder],
+) -> None:
+    if supply.packaging_task_id is None or not orders:
+        return
+    task = await session.scalar(
+        select(PackagingTask)
+        .options(selectinload(PackagingTask.lines))
+        .where(PackagingTask.id == supply.packaging_task_id)
+    )
+    if task is None:
+        return
+    sorting_loc = await sorting_loc_svc.get_or_create_sorting_location(
+        session, tenant_id, supply.warehouse_id
+    )
+    existing_lines = {
+        line.product_id: line
+        for line in task.lines
+        if line.product_id is not None
+    }
+    qty_by_product: dict[uuid.UUID, int] = defaultdict(int)
+    for order in orders:
+        if order.product_id is not None:
+            qty_by_product[order.product_id] += 1
+    for product_id, qty in qty_by_product.items():
+        line = existing_lines.get(product_id)
+        if line is not None:
+            line.qty_total = int(line.qty_total) + qty
+            continue
+        session.add(
+            PackagingTaskLine(
+                task_id=task.id,
+                product_id=product_id,
+                storage_location_id=sorting_loc.id,
+                qty_total=qty,
+                qty_suggested_packed=0,
+            )
+        )
     await session.flush()
 
 
@@ -482,6 +573,11 @@ async def create_supply_from_orders(
             dest_name = name_raw if isinstance(name_raw, str) else None
             zone_raw = planned_destination.get("zone")
             dest_zone = zone_raw if isinstance(zone_raw, str) else None
+        planned_shipment_date = await planned_shipment_date_for_orders(
+            session,
+            tenant_id,
+            orders,
+        )
 
         supply = FbsSupply(
             tenant_id=tenant_id,
@@ -497,6 +593,7 @@ async def create_supply_from_orders(
             planned_destination_office_id=wb_office_id,
             planned_destination_name=dest_name,
             planned_destination_zone=dest_zone,
+            planned_shipment_date=planned_shipment_date,
         )
         session.add(supply)
         await session.flush()
@@ -844,11 +941,101 @@ async def _resume_from_orders_operation(
     )
 
 
+async def _has_regular_pick_distribution(
+    session: AsyncSession,
+    tenant_id: uuid.UUID,
+    orders: list[FbsOrder],
+) -> bool:
+    from app.models.inventory_balance import InventoryBalance
+    from app.models.storage_location import StorageLocation
+
+    product_ids = {order.product_id for order in orders if order.product_id is not None}
+    warehouse_ids = {order.warehouse_id for order in orders if order.warehouse_id is not None}
+    if not product_ids or not warehouse_ids:
+        return False
+    found = await session.scalar(
+        select(InventoryBalance.id)
+        .join(StorageLocation, StorageLocation.id == InventoryBalance.storage_location_id)
+        .where(
+            InventoryBalance.tenant_id == tenant_id,
+            InventoryBalance.product_id.in_(product_ids),
+            InventoryBalance.quantity_unpacked > 0,
+            StorageLocation.tenant_id == tenant_id,
+            StorageLocation.warehouse_id.in_(warehouse_ids),
+            StorageLocation.code != sorting_loc_svc.SORTING_LOCATION_CODE,
+        )
+        .limit(1)
+    )
+    return found is not None
+
+
+async def _auto_pass_picking_if_needed(
+    session: AsyncSession,
+    tenant_id: uuid.UUID,
+    supply: FbsSupply,
+    *,
+    actor_user_id: uuid.UUID | None,
+) -> None:
+    address_enabled = await tenant_settings_svc.is_address_storage_enabled(session, tenant_id)
+    has_distribution = await _has_regular_pick_distribution(session, tenant_id, list(supply.orders))
+    if address_enabled and has_distribution:
+        return
+    sorting_loc = await sorting_loc_svc.get_or_create_sorting_location(
+        session, tenant_id, supply.warehouse_id
+    )
+    picked_at = datetime.now(tz=UTC)
+    for order in supply.orders:
+        if order.pick_status != PICK_STATUS_PENDING or order.product_id is None:
+            continue
+        idempotency_key = f"auto-pick:{supply.id}:{order.id}"
+        existing = await session.scalar(
+            select(FbsOrderPick.id).where(
+                FbsOrderPick.tenant_id == tenant_id,
+                FbsOrderPick.fbs_supply_id == supply.id,
+                FbsOrderPick.scan_idempotency_key == idempotency_key,
+            )
+        )
+        if existing is not None:
+            order.pick_status = PICK_STATUS_PICKED
+            order.picked_at = order.picked_at or picked_at
+            continue
+        pick = FbsOrderPick(
+            tenant_id=tenant_id,
+            fbs_order_id=order.id,
+            fbs_supply_id=supply.id,
+            source_storage_location_id=sorting_loc.id,
+            sorting_storage_location_id=sorting_loc.id,
+            product_id=order.product_id,
+            scanned_product_barcode=order.wb_barcode,
+            picked_by_user_id=actor_user_id,
+            picked_at=picked_at,
+            inventory_movement_id=None,
+            scan_idempotency_key=idempotency_key,
+        )
+        session.add(pick)
+        await session.flush()
+        session.add(
+            FbsOrderPickEvent(
+                pick_id=pick.id,
+                event_type=PICK_EVENT_PICKED,
+                actor_user_id=actor_user_id,
+                idempotency_key=idempotency_key,
+                source_storage_location_id=sorting_loc.id,
+                sorting_storage_location_id=sorting_loc.id,
+                inventory_movement_id=None,
+            )
+        )
+        order.pick_status = PICK_STATUS_PICKED
+        order.picked_at = picked_at
+    await session.flush()
+
+
 async def start_supply_work(
     session: AsyncSession,
     tenant_id: uuid.UUID,
     supply_id: uuid.UUID,
     *,
+    actor_user_id: uuid.UUID | None = None,
     http_client: httpx.AsyncClient | None = None,
 ) -> dict[str, Any]:
     supply = await _get_supply(session, tenant_id, supply_id, with_orders=True)
@@ -863,6 +1050,9 @@ async def start_supply_work(
             if order.status == FBS_ORDER_STATUS_IN_SUPPLY:
                 order.status = FBS_ORDER_STATUS_ASSEMBLING
         await session.flush()
+    await _auto_pass_picking_if_needed(
+        session, tenant_id, supply, actor_user_id=actor_user_id
+    )
     if http_client is not None:
         await _request_order_stickers_for_picking(session, tenant_id, supply, http_client)
     return await get_supply_workspace(session, tenant_id, supply_id)
@@ -966,6 +1156,128 @@ async def get_supply(
     return supply
 
 
+async def list_supply_worklist(
+    session: AsyncSession,
+    tenant_id: uuid.UUID,
+    *,
+    seller_id: uuid.UUID | None = None,
+    status_group: str = "active",
+    limit: int = 100,
+) -> dict[str, Any]:
+    status_map = {
+        "active": {
+            FBS_SUPPLY_STATUS_DRAFT,
+            FBS_SUPPLY_STATUS_ASSEMBLING,
+            FBS_SUPPLY_STATUS_PACKED,
+        },
+        "delivery": {FBS_SUPPLY_STATUS_IN_DELIVERY},
+        "done": {FBS_SUPPLY_STATUS_DONE},
+    }
+    statuses = status_map.get(status_group)
+    if statuses is None:
+        raise FbsSupplyError("invalid_status_group", http_status=400)
+    stmt = (
+        select(FbsSupply)
+        .options(
+            selectinload(FbsSupply.seller),
+            selectinload(FbsSupply.warehouse),
+            selectinload(FbsSupply.orders),
+        )
+        .where(FbsSupply.tenant_id == tenant_id, FbsSupply.status.in_(statuses))
+        .order_by(FbsSupply.updated_at.desc(), FbsSupply.id.desc())
+        .limit(limit)
+    )
+    if seller_id is not None:
+        stmt = stmt.where(FbsSupply.seller_id == seller_id)
+    supplies = list((await session.execute(stmt)).scalars().all())
+    if not supplies:
+        return {"items": [], "server_now": datetime.now(tz=UTC).isoformat()}
+
+    supply_ids = [supply.id for supply in supplies]
+    box_rows = await session.execute(
+        select(FbsPackingBox.supply_id, func.count(FbsPackingBox.id))
+        .where(
+            FbsPackingBox.tenant_id == tenant_id,
+            FbsPackingBox.supply_id.in_(supply_ids),
+        )
+        .group_by(FbsPackingBox.supply_id)
+    )
+    boxes_by_supply = {supply_id: int(count) for supply_id, count in box_rows.all()}
+    wb_ids = {
+        int(order.wb_warehouse_id)
+        for supply in supplies
+        for order in supply.orders
+        if order.wb_warehouse_id is not None
+    }
+    wb_names: dict[int, str | None] = {}
+    if wb_ids:
+        wb_rows = await session.execute(
+            select(TenantWbMpWarehouse).where(
+                TenantWbMpWarehouse.tenant_id == tenant_id,
+                TenantWbMpWarehouse.wb_warehouse_id.in_(wb_ids),
+            )
+        )
+        wb_names = {int(row.wb_warehouse_id): row.name for row in wb_rows.scalars().all()}
+
+    items: list[dict[str, Any]] = []
+    for supply in supplies:
+        orders = list(supply.orders)
+        first_order = orders[0] if orders else None
+        wb_id = (
+            int(first_order.wb_warehouse_id)
+            if first_order and first_order.wb_warehouse_id
+            else 0
+        )
+        items.append(
+            {
+                "id": str(supply.id),
+                "wb_supply_id": supply.wb_supply_id,
+                "name": supply.display_number or supply.name,
+                "status": supply.status,
+                "seller": {
+                    "id": str(supply.seller_id),
+                    "name": supply.seller.name if supply.seller else "Селлер не найден",
+                },
+                "wb_warehouse": {
+                    "id": wb_id,
+                    "name": wb_names.get(wb_id) if wb_id else None,
+                },
+                "wms_warehouse": {
+                    "id": str(supply.warehouse_id),
+                    "name": supply.warehouse.name if supply.warehouse else "Склад не найден",
+                },
+                "orders_count": len(orders),
+                "units_count": len(orders),
+                "boxes_count": boxes_by_supply.get(supply.id, 0),
+                "planned_shipment_date": (
+                    supply.planned_shipment_date.isoformat()
+                    if supply.planned_shipment_date is not None
+                    else None
+                ),
+                "can_add_orders": supply.status
+                in {FBS_SUPPLY_STATUS_DRAFT, FBS_SUPPLY_STATUS_ASSEMBLING},
+            }
+        )
+    return {"items": items, "server_now": datetime.now(tz=UTC).isoformat()}
+
+
+async def update_planned_shipment_date(
+    session: AsyncSession,
+    tenant_id: uuid.UUID,
+    supply_id: uuid.UUID,
+    *,
+    planned_shipment_date: date | None,
+) -> FbsSupply:
+    supply = await _get_supply(session, tenant_id, supply_id, with_orders=True)
+    if supply is None:
+        raise FbsSupplyError("supply_not_found")
+    supply.planned_shipment_date = planned_shipment_date
+    await session.commit()
+    await session.refresh(supply)
+    await session.refresh(supply, attribute_names=["orders"])
+    return supply
+
+
 async def add_order_to_supply(
     session: AsyncSession,
     tenant_id: uuid.UUID,
@@ -1030,6 +1342,179 @@ async def add_order_to_supply(
     await session.flush()
     await session.refresh(supply, attribute_names=["orders"])
     return supply
+
+
+def _supply_existing_wb_warehouse_id(supply: FbsSupply) -> int | None:
+    for order in supply.orders:
+        if order.wb_warehouse_id is not None:
+            return int(order.wb_warehouse_id)
+    return None
+
+
+def _existing_supply_issues(
+    supply: FbsSupply,
+    orders: list[FbsOrder],
+) -> list[dict[str, Any]]:
+    issues: list[dict[str, Any]] = []
+    existing_wb_wh = _supply_existing_wb_warehouse_id(supply)
+    for order in orders:
+        if order.seller_id != supply.seller_id:
+            issues.append(
+                {
+                    "order_id": str(order.id),
+                    "code": "different_seller",
+                    "message": "Заказ принадлежит другому селлеру.",
+                }
+            )
+        if order.warehouse_id != supply.warehouse_id:
+            issues.append(
+                {
+                    "order_id": str(order.id),
+                    "code": "different_wms_warehouse",
+                    "message": "Заказ относится к другому WMS-складу.",
+                }
+            )
+        if existing_wb_wh is not None and int(order.wb_warehouse_id or 0) != existing_wb_wh:
+            issues.append(
+                {
+                    "order_id": str(order.id),
+                    "code": "different_wb_warehouse",
+                    "message": "Заказ относится к другому складу WB.",
+                }
+            )
+        if supply.cargo_type and order.cargo_type and order.cargo_type != supply.cargo_type:
+            issues.append(
+                {
+                    "order_id": str(order.id),
+                    "code": "different_cargo_type",
+                    "message": "Тип груза не совпадает с поставкой.",
+                }
+            )
+    return issues
+
+
+async def add_orders_to_existing_supply(
+    session: AsyncSession,
+    tenant_id: uuid.UUID,
+    supply_id: uuid.UUID,
+    order_ids: list[uuid.UUID],
+    *,
+    idempotency_key: str,
+    actor_user_id: uuid.UUID | None = None,
+    http_client: httpx.AsyncClient,
+) -> dict[str, Any]:
+    if not idempotency_key.strip():
+        raise FbsSupplyError("missing_idempotency_key", http_status=400)
+    if not order_ids:
+        raise FbsSupplyError("empty_order_set", http_status=400)
+    supply = await _get_supply(session, tenant_id, supply_id, with_orders=True)
+    if supply is None:
+        raise FbsSupplyError("supply_not_found")
+    if supply.status not in {FBS_SUPPLY_STATUS_DRAFT, FBS_SUPPLY_STATUS_ASSEMBLING}:
+        raise FbsSupplyError(
+            "supply_not_editable",
+            message="В эту поставку уже нельзя добавлять заказы.",
+            http_status=409,
+        )
+    try:
+        validation = await validate_supply_composition(
+            session,
+            tenant_id,
+            order_ids,
+            planned_delivery_type=supply.delivery_type,
+            for_update=True,
+        )
+    except FbsSupplyValidationError as exc:
+        raise FbsSupplyError(exc.code) from exc
+    issues = list(preflight_to_dict(validation)["issues"])
+    orders = list(validation.orders)
+    issues.extend(_existing_supply_issues(supply, orders))
+    if issues:
+        raise FbsSupplyError(
+            "order_incompatible",
+            message="Не все выбранные заказы подходят к этой поставке.",
+            context={"issues": issues},
+            http_status=409,
+        )
+
+    token = await _require_marketplace_token(session, tenant_id, supply.seller_id)
+    requested_wb_order_ids = [int(order.wb_order_id) for order in orders]
+    existing_wb_order_ids = {int(order.wb_order_id) for order in supply.orders}
+    async with wb_seller_lock(session, supply.seller_id, wait_timeout_sec=15.0) as wb_lock_acquired:
+        if not wb_lock_acquired:
+            raise FbsSupplyError(
+                "operation_in_progress",
+                message="WB-синхронизация по селлеру ещё идёт — повторите через несколько секунд.",
+                retryable=True,
+                http_status=503,
+            )
+        try:
+            await _execute_wb_batch_add(
+                http_client,
+                api_token=token,
+                wb_supply_id=supply.wb_supply_id,
+                wb_order_ids=requested_wb_order_ids,
+            )
+        except WildberriesClientError as exc:
+            if exc.code != "transport_error":
+                error = _fbs_supply_error_from_wb(
+                    exc,
+                    tenant_id=tenant_id,
+                    seller_id=supply.seller_id,
+                    local_entity_id=supply.id,
+                    wb_supply_id=supply.wb_supply_id,
+                    event="fbs existing supply WB add-orders failed",
+                    retryable=False,
+                    http_status=502,
+                    extra_context={"wb_order_ids": requested_wb_order_ids},
+                )
+                raise error from exc
+        state, confirmed = await reconcile_supply_orders(
+            http_client,
+            api_token=token,
+            wb_supply_id=supply.wb_supply_id,
+            expected_wb_order_ids=existing_wb_order_ids.union(requested_wb_order_ids),
+        )
+    accepted_orders = [
+        order for order in orders if int(order.wb_order_id) in confirmed
+    ]
+    if not accepted_orders and state != WB_OPERATION_STATE_CONFIRMED:
+        raise FbsSupplyError(
+            "wb_pending_confirmation",
+            message="WB не подтвердил добавление заказов — повторите операцию.",
+            context={"wb_supply_id": supply.wb_supply_id, "supply_id": str(supply.id)},
+            retryable=True,
+            http_status=504,
+        )
+    status_after_bind = (
+        FBS_ORDER_STATUS_ASSEMBLING
+        if supply.status == FBS_SUPPLY_STATUS_ASSEMBLING
+        else FBS_ORDER_STATUS_IN_SUPPLY
+    )
+    for order in accepted_orders:
+        order.supply_id = supply.id
+        order.status = status_after_bind
+    if accepted_orders:
+        supply.cargo_type = supply.cargo_type or accepted_orders[0].cargo_type
+        await session.flush()
+        await session.refresh(supply, attribute_names=["orders"])
+        await _sync_existing_packaging_task_for_added_orders(
+            session, tenant_id, supply, accepted_orders
+        )
+        if supply.status == FBS_SUPPLY_STATUS_ASSEMBLING:
+            await _auto_pass_picking_if_needed(
+                session, tenant_id, supply, actor_user_id=actor_user_id
+            )
+    partial_summary = None
+    if len(accepted_orders) != len(orders):
+        partial_summary = _partial_from_orders_summary(
+            orders,
+            confirmed_wb_order_ids={int(order.wb_order_id) for order in accepted_orders},
+        )
+    workspace = await get_supply_workspace(session, tenant_id, supply.id)
+    if partial_summary is not None:
+        workspace["partial_rejection"] = partial_summary
+    return workspace
 
 
 async def get_picking_list(

@@ -657,6 +657,76 @@ async def test_inbound_duplicate_line_while_draft(async_client: AsyncClient) -> 
 
 
 @pytest.mark.asyncio
+async def test_ff_created_inbound_summary_keeps_seller_and_product_terms(
+    async_client: AsyncClient,
+) -> None:
+    suffix = str(int(time.time() * 1000))
+    reg = await async_client.post(
+        "/auth/register",
+        json={
+            "organization_name": "FF Selected Seller",
+            "slug": f"ff-selected-seller-{suffix}",
+            "admin_email": f"ff-selected-seller-{suffix}@example.com",
+            "password": "password123",
+        },
+    )
+    assert reg.status_code == 200, reg.text
+    h = {"Authorization": f"Bearer {reg.json()['access_token']}"}
+
+    wh = await async_client.post(
+        "/warehouses",
+        headers=h,
+        json={"name": "W", "code": f"ffsel-{suffix}"},
+    )
+    assert wh.status_code == 200, wh.text
+    wid = wh.json()["id"]
+    seller = await async_client.post(
+        "/sellers",
+        headers=h,
+        json={"name": f"Seller Selected {suffix}"},
+    )
+    assert seller.status_code in (200, 201), seller.text
+    sid = seller.json()["id"]
+    product = await async_client.post(
+        "/products",
+        headers=h,
+        json={
+            "name": f"Searchable Product {suffix}",
+            "sku_code": f"SEARCH-SKU-{suffix}",
+            "seller_id": sid,
+            "length_mm": 1,
+            "width_mm": 1,
+            "height_mm": 1,
+        },
+    )
+    assert product.status_code == 200, product.text
+
+    base = "/operations/inbound-intake-requests"
+    created = await async_client.post(
+        base,
+        headers=h,
+        json={"warehouse_id": wid, "seller_id": sid},
+    )
+    assert created.status_code == 201, created.text
+    assert created.json()["seller_id"] == sid
+    rid = created.json()["id"]
+    line = await async_client.post(
+        f"{base}/{rid}/lines",
+        headers=h,
+        json={"product_id": product.json()["id"], "expected_qty": 3},
+    )
+    assert line.status_code == 201, line.text
+
+    listed = await async_client.get(base, headers=h)
+    assert listed.status_code == 200, listed.text
+    row = next(r for r in listed.json() if r["id"] == rid)
+    assert row["seller_id"] == sid
+    assert row["seller_name"] == f"Seller Selected {suffix}"
+    assert f"Searchable Product {suffix}" in row["product_names"]
+    assert f"SEARCH-SKU-{suffix}" in row["product_names"]
+
+
+@pytest.mark.asyncio
 async def test_inbound_requires_auth(async_client: AsyncClient) -> None:
     r = await async_client.get("/operations/inbound-intake-requests")
     assert r.status_code == 401

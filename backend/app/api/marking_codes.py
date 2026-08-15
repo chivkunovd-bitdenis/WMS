@@ -317,6 +317,7 @@ class LedgerEventOut(BaseModel):
     id: str
     created_at: str
     event_type: str
+    cis_code: str | None = None
     cis_masked: str | None = None
     pool_title: str | None
     gtin: str | None
@@ -325,6 +326,8 @@ class LedgerEventOut(BaseModel):
     seller_name: str | None
     document_number: str | None
     actor_email: str | None
+    source_process: str | None = None
+    source_process_label: str | None = None
     aggregated_count: int | None = None
 
 
@@ -955,6 +958,7 @@ async def list_marking_ledger(
                 id=str(r.id),
                 created_at=r.created_at.isoformat(),
                 event_type=r.event_type,
+                cis_code=r.cis_code,
                 cis_masked=r.cis_masked,
                 pool_title=r.pool_title,
                 gtin=r.gtin,
@@ -963,6 +967,8 @@ async def list_marking_ledger(
                 seller_name=r.seller_name,
                 document_number=r.document_number,
                 actor_email=r.actor_email,
+                source_process=r.source_process,
+                source_process_label=r.source_process_label,
                 aggregated_count=r.aggregated_count,
             )
             for r in page.rows
@@ -1614,6 +1620,7 @@ class MarkingDefectOut(BaseModel):
     request_id: str
     code_id: str
     status: str
+    code_status: str
 
 
 @router.get(
@@ -1661,6 +1668,7 @@ async def report_marking_code_defect(
         request_id=str(req.id),
         code_id=str(req.code_id),
         status=req.status,
+        code_status="defective",
     )
 
 

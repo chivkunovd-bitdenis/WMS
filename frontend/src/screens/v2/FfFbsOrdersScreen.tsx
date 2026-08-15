@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useLocation } from 'react-router-dom'
 import {
   Alert,
   Box,
@@ -39,11 +40,16 @@ import { ProductPhotoThumb } from '../../components/ProductPhotoThumb'
 import { FbsSupplyCreateDialog } from './FbsSupplyCreateDialog'
 import { FfFbsSectionNav } from './FfFbsSectionNav'
 import { FfFbsSupplyWorkspace } from './FfFbsSupplyWorkspace'
+import { ordersWord } from './fbsUx'
 import {
   fetchFbsSellerWarehouses,
+  fetchFbsSupplyWorklist,
   fetchFbsWorklist,
+  addFbsOrdersToSupply,
+  createFbsIdempotencyKey,
   runFbsOrdersSync,
   syncFbsOrderStatuses,
+  type FbsSupplyWorklistItem,
   type FbsWorklistOrder,
   type FbsWorklistWarehouseOption,
   type FbsWorkspace,
@@ -134,6 +140,28 @@ function formatDateTime(value: string): string {
   })
 }
 
+function formatNullableDateTime(value: string | null): string {
+  return value ? formatDateTime(value) : '—'
+}
+
+function supplyStatusLabel(status: string): string {
+  const labels: Record<string, string> = {
+    draft: 'Состав',
+    assembling: 'В работе',
+    packed: 'Готова к сдаче',
+    in_delivery: 'В доставке',
+    done: 'Завершена',
+  }
+  return labels[status] ?? 'Статус уточняется'
+}
+
+function supplyStatusColor(status: string): 'default' | 'primary' | 'success' | 'warning' {
+  if (status === 'done') return 'success'
+  if (status === 'in_delivery') return 'primary'
+  if (status === 'draft' || status === 'assembling' || status === 'packed') return 'warning'
+  return 'default'
+}
+
 function elapsedSince(value: string, serverNow: string | null): string {
   const start = new Date(value).getTime()
   const end = serverNow ? new Date(serverNow).getTime() : Date.now()
@@ -192,12 +220,15 @@ function downloadOrdersExcel(rows: FbsWorklistOrder[]): void {
 }
 
 export function FfFbsOrdersScreen({ token, authHeaders, sellers, isAdmin = false }: Props) {
+  const location = useLocation()
   const [statusGroup, setStatusGroup] = useState<(typeof TABS)[number]['key']>('new')
   const [sellerId, setSellerId] = useState('__all__')
   const [wbWarehouseId, setWbWarehouseId] = useState('__all__')
   const [search, setSearch] = useState('')
   const [activeSearch, setActiveSearch] = useState('')
   const [orders, setOrders] = useState<FbsWorklistOrder[]>([])
+  const [activeSupplies, setActiveSupplies] = useState<FbsSupplyWorklistItem[]>([])
+  const [externalActiveOrders, setExternalActiveOrders] = useState<FbsWorklistOrder[]>([])
   const [warehouseOptions, setWarehouseOptions] = useState<FbsWorklistWarehouseOption[]>([])
   const [sellerWarehouseNames, setSellerWarehouseNames] = useState<Record<string, string>>({})
   const [serverNow, setServerNow] = useState<string | null>(null)
@@ -210,15 +241,36 @@ export function FfFbsOrdersScreen({ token, authHeaders, sellers, isAdmin = false
   const [syncing, setSyncing] = useState(false)
   const [syncNote, setSyncNote] = useState<string | null>(null)
   const [createOpen, setCreateOpen] = useState(false)
+  const [addExistingOpen, setAddExistingOpen] = useState(false)
+  const [addExistingSupplyId, setAddExistingSupplyId] = useState('')
+  const [addingExisting, setAddingExisting] = useState(false)
   const [workspaceOpen, setWorkspaceOpen] = useState(false)
   const [workspaceId, setWorkspaceId] = useState<string | null>(null)
   const [workspaceSeed, setWorkspaceSeed] = useState<FbsWorkspace | null>(null)
   const rowRefs = useRef<Record<string, HTMLTableRowElement | null>>({})
+  const openedSupplyFromQuery = useRef<string | null>(null)
 
   const load = useCallback(async () => {
     setBusy(true)
     setError(null)
     try {
+      if (statusGroup === 'active') {
+        const params = {
+          seller_id: sellerId === '__all__' ? null : sellerId,
+          status_group: 'active',
+          limit: 500,
+        }
+        const [suppliesPage, ordersPage] = await Promise.all([
+          fetchFbsSupplyWorklist(token, authHeaders, params),
+          fetchFbsWorklist(token, authHeaders, params),
+        ])
+        setActiveSupplies(suppliesPage.items)
+        setExternalActiveOrders(ordersPage.items.filter((order) => !order.supply_id))
+        setOrders([])
+        setWarehouseOptions([])
+        setServerNow(suppliesPage.server_now)
+        return
+      }
       const page = await fetchFbsWorklist(token, authHeaders, {
         seller_id: sellerId === '__all__' ? null : sellerId,
         status_group: statusGroup,
@@ -226,6 +278,8 @@ export function FfFbsOrdersScreen({ token, authHeaders, sellers, isAdmin = false
         limit: 500,
       })
       setOrders(page.items)
+      setActiveSupplies([])
+      setExternalActiveOrders([])
       setSelectedCache((current) => {
         const next = new Map(current)
         page.items.forEach((order) => next.set(order.id, order))
@@ -323,6 +377,22 @@ export function FfFbsOrdersScreen({ token, authHeaders, sellers, isAdmin = false
     [selected, selectedCache],
   )
   const selectedOrderIds = useMemo(() => [...selected], [selected])
+  const compatibleExistingSupplies = useMemo(() => {
+    if (selectedOrders.length === 0) return []
+    const first = selectedOrders[0]
+    const sameSelection = selectedOrders.every(
+      (order) =>
+        order.seller.id === first.seller.id &&
+        Number(order.wb_warehouse.id) === Number(first.wb_warehouse.id),
+    )
+    if (!sameSelection) return []
+    return activeSupplies.filter(
+      (supply) =>
+        supply.can_add_orders &&
+        supply.seller.id === first.seller.id &&
+        Number(supply.wb_warehouse.id) === Number(first.wb_warehouse.id),
+    )
+  }, [activeSupplies, selectedOrders])
   const selectionBlockers = useMemo(
     () => selectedOrders.flatMap((order) => order.selection_blockers.map((blocker) => ({ order, blocker }))),
     [selectedOrders],
@@ -341,6 +411,43 @@ export function FfFbsOrdersScreen({ token, authHeaders, sellers, isAdmin = false
     [matchingOrders],
   )
   const exportRows = selected.size > 0 ? selectedOrders : searchTerm ? matchingOrders : orders
+
+  const addSelectedToExistingSupply = async () => {
+    if (!addExistingSupplyId || selectedOrderIds.length === 0) return
+    setAddingExisting(true)
+    setError(null)
+    try {
+      const workspace = await addFbsOrdersToSupply(token, authHeaders, addExistingSupplyId, {
+        order_ids: selectedOrderIds,
+        idempotency_key: createFbsIdempotencyKey(),
+      })
+      setAddExistingOpen(false)
+      setAddExistingSupplyId('')
+      setSelected(new Set())
+      openWorkspace(workspace.supply.id, workspace)
+      await load()
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : 'Не удалось добавить заказы в поставку.')
+    } finally {
+      setAddingExisting(false)
+    }
+  }
+
+  const openAddExistingDialog = async () => {
+    setError(null)
+    try {
+      const page = await fetchFbsSupplyWorklist(token, authHeaders, {
+        seller_id: sellerId === '__all__' ? selectedOrders[0]?.seller.id ?? null : sellerId,
+        status_group: 'active',
+        limit: 500,
+      })
+      setActiveSupplies(page.items)
+      setAddExistingSupplyId('')
+      setAddExistingOpen(true)
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : 'Не удалось загрузить поставки в работе.')
+    }
+  }
 
   useEffect(() => {
     if (!searchTerm || matchingOrders.length === 0) return
@@ -400,8 +507,18 @@ export function FfFbsOrdersScreen({ token, authHeaders, sellers, isAdmin = false
     setError(null)
   }
 
+  const hasNewSelection = statusGroup === 'new' && selected.size > 0
+
+  useEffect(() => {
+    const supplyId = new URLSearchParams(location.search).get('supply_id')
+    if (!supplyId || openedSupplyFromQuery.current === supplyId) return
+    openedSupplyFromQuery.current = supplyId
+    setStatusGroup('active')
+    openWorkspace(supplyId)
+  }, [location.search])
+
   return (
-    <Box data-testid="fbs-orders-screen" sx={{ pb: selected.size ? 12 : 3 }}>
+    <Box data-testid="fbs-orders-screen" sx={{ pb: hasNewSelection ? 24 : 3 }}>
       <Stack
         direction={{ xs: 'column', sm: 'row' }}
         sx={{ justifyContent: 'space-between', gap: 2, mb: 1.5 }}
@@ -571,6 +688,91 @@ export function FfFbsOrdersScreen({ token, authHeaders, sellers, isAdmin = false
         </Alert>
       ) : null}
 
+      {statusGroup === 'active' && externalActiveOrders.length > 0 ? (
+        <Alert severity="info" sx={{ mt: 2 }} data-testid="fbs-06-external-supply-explanation">
+          {externalActiveOrders.length} {ordersWord(externalActiveOrders.length)} уже находятся в WB-поставках, но локальной карточки поставки в WMS нет. Они скрыты из «Новых» и не открываются как поставка здесь.
+        </Alert>
+      ) : null}
+
+      {statusGroup === 'active' ? (
+        <TableContainer component={Paper} variant="outlined" sx={{ mt: 2, maxHeight: 'calc(100vh - 330px)' }}>
+          <Table stickyHeader size="small" data-testid="fbs-18-supplies-table">
+            <TableHead>
+              <TableRow>
+                <TableCell sx={{ minWidth: 240 }}>Номер / название поставки</TableCell>
+                <TableCell sx={{ minWidth: 160 }}>Селлер</TableCell>
+                <TableCell sx={{ minWidth: 220 }}>Склад</TableCell>
+                <TableCell sx={{ minWidth: 130 }}>Заказы / единицы</TableCell>
+                <TableCell sx={{ minWidth: 90 }}>Короба</TableCell>
+                <TableCell sx={{ minWidth: 140 }}>Статус</TableCell>
+                <TableCell sx={{ minWidth: 150 }}>Дата отгрузки</TableCell>
+              </TableRow>
+            </TableHead>
+            <TableBody>
+              {activeSupplies.map((supply) => (
+                <TableRow
+                  key={supply.id}
+                  hover
+                  onClick={() => openWorkspace(supply.id)}
+                  sx={{ cursor: 'pointer', '& > td': { py: 1 } }}
+                  data-testid={`fbs-18-supply-${supply.id}`}
+                >
+                  <TableCell>
+                    <Typography variant="body2" sx={{ fontWeight: 750 }}>
+                      {supply.name}
+                    </Typography>
+                    <Typography variant="caption" color="text.secondary">
+                      WB №{supply.wb_supply_id}
+                    </Typography>
+                  </TableCell>
+                  <TableCell>{supply.seller.name}</TableCell>
+                  <TableCell>
+                    <Typography variant="body2" sx={{ fontWeight: 650 }}>
+                      {supply.wb_warehouse.name || `WB ${supply.wb_warehouse.id}`}
+                    </Typography>
+                    <Typography variant="caption" color="text.secondary">
+                      WMS: {supply.wms_warehouse.name}
+                    </Typography>
+                  </TableCell>
+                  <TableCell>{supply.orders_count} / {supply.units_count}</TableCell>
+                  <TableCell>{supply.boxes_count}</TableCell>
+                  <TableCell>
+                    <Chip
+                      size="small"
+                      variant="outlined"
+                      color={supplyStatusColor(supply.status)}
+                      label={supplyStatusLabel(supply.status)}
+                      data-testid="fbs-18-supply-status"
+                    />
+                  </TableCell>
+                  <TableCell>{formatNullableDateTime(supply.planned_shipment_date)}</TableCell>
+                </TableRow>
+              ))}
+              {!busy && activeSupplies.length === 0 ? (
+                <TableRow>
+                  <TableCell colSpan={7}>
+                    <Box sx={{ py: 8, textAlign: 'center' }}>
+                      <Inventory2OutlinedIcon sx={{ fontSize: 42, color: 'text.disabled' }} />
+                      <Typography variant="subtitle1" sx={{ mt: 1 }}>
+                        Поставок в работе нет
+                      </Typography>
+                      <Typography variant="body2" color="text.secondary">
+                        Создайте поставку на вкладке «Новые» или обновите список.
+                      </Typography>
+                    </Box>
+                  </TableCell>
+                </TableRow>
+              ) : null}
+            </TableBody>
+          </Table>
+          {busy ? (
+            <Stack direction="row" spacing={1} sx={{ alignItems: 'center', justifyContent: 'center', py: 2 }}>
+              <CircularProgress size={20} />
+              <Typography variant="body2">Обновляем поставки…</Typography>
+            </Stack>
+          ) : null}
+        </TableContainer>
+      ) : (
       <TableContainer component={Paper} variant="outlined" sx={{ mt: 2, maxHeight: 'calc(100vh - 330px)' }}>
         <Table stickyHeader size="small" data-testid="fbs-worklist-table">
           <TableHead>
@@ -617,6 +819,7 @@ export function FfFbsOrdersScreen({ token, authHeaders, sellers, isAdmin = false
                   sx={{
                     verticalAlign: 'top',
                     cursor: order.supply_id ? 'pointer' : 'default',
+                    scrollMarginBottom: hasNewSelection ? '220px' : undefined,
                     '& > td': { py: 0.9 },
                     ...(highlighted
                       ? {
@@ -816,8 +1019,9 @@ export function FfFbsOrdersScreen({ token, authHeaders, sellers, isAdmin = false
           </Stack>
         ) : null}
       </TableContainer>
+      )}
 
-      {selected.size ? (
+      {statusGroup === 'new' && selected.size ? (
         <Paper
           elevation={8}
           sx={{
@@ -846,6 +1050,15 @@ export function FfFbsOrdersScreen({ token, authHeaders, sellers, isAdmin = false
               Показать выбранные
             </Button>
             <Button onClick={() => setSelected(new Set())}>Снять выбор</Button>
+            <Button
+              variant="outlined"
+              size="large"
+              disabled={selectionBlockers.length > 0 || selectedOrders.length !== selected.size}
+              onClick={() => void openAddExistingDialog()}
+              data-testid="fbs-05-add-existing-open"
+            >
+              Добавить в существующую поставку
+            </Button>
             <Button
               variant="contained"
               size="large"
@@ -902,6 +1115,52 @@ export function FfFbsOrdersScreen({ token, authHeaders, sellers, isAdmin = false
         <DialogActions>
           <Button onClick={() => setSelected(new Set())}>Снять всё</Button>
           <Button variant="contained" onClick={() => setSelectedOpen(false)}>Закрыть</Button>
+        </DialogActions>
+      </Dialog>
+
+      <Dialog open={addExistingOpen} onClose={addingExisting ? undefined : () => setAddExistingOpen(false)} fullWidth maxWidth="md">
+        <DialogTitle>Добавить в существующую поставку</DialogTitle>
+        <DialogContent dividers>
+          <Stack spacing={2}>
+            <Typography variant="body2" color="text.secondary">
+              Выбрано {selectedOrders.length} {ordersWord(selectedOrders.length)}. WMS покажет только поставки того же селлера, WB-склада и допустимого статуса.
+            </Typography>
+            {compatibleExistingSupplies.length === 0 ? (
+              <Alert severity="info" data-testid="fbs-05-no-compatible-supply">
+                Совместимых поставок в работе нет. Создайте новую поставку или выберите заказы другого селлера/склада.
+              </Alert>
+            ) : (
+              <FormControl fullWidth>
+                <InputLabel id="fbs-05-existing-supply-label">Поставка</InputLabel>
+                <Select
+                  labelId="fbs-05-existing-supply-label"
+                  label="Поставка"
+                  value={addExistingSupplyId}
+                  onChange={(event) => setAddExistingSupplyId(String(event.target.value))}
+                  data-testid="fbs-05-existing-supply-select"
+                >
+                  {compatibleExistingSupplies.map((supply) => (
+                    <MenuItem key={supply.id} value={supply.id}>
+                      {supply.name} · {supply.seller.name} · {supply.wb_warehouse.name || `WB ${supply.wb_warehouse.id}`} · {supplyStatusLabel(supply.status)}
+                    </MenuItem>
+                  ))}
+                </Select>
+              </FormControl>
+            )}
+          </Stack>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setAddExistingOpen(false)} disabled={addingExisting}>
+            Отмена
+          </Button>
+          <Button
+            variant="contained"
+            disabled={!addExistingSupplyId || addingExisting}
+            onClick={() => void addSelectedToExistingSupply()}
+            data-testid="fbs-05-add-existing-submit"
+          >
+            Добавить заказы
+          </Button>
         </DialogActions>
       </Dialog>
 

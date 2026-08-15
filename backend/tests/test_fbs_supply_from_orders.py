@@ -90,13 +90,13 @@ def _wb_order_row(
     is_legal: bool = False,
     cargo_type: int = 1,
     can_pvz: bool = True,
+    created_at: datetime | None = None,
 ) -> dict[str, Any]:
-    now = datetime.now(tz=UTC)
-    created_at = (now - timedelta(hours=1)).isoformat().replace("+00:00", "Z")
+    created_at_value = created_at or (datetime.now(tz=UTC) - timedelta(hours=1))
     return {
         "id": order_id,
         "rid": f"rid-{order_id}",
-        "createdAt": created_at,
+        "createdAt": created_at_value.isoformat().replace("+00:00", "Z"),
         "nmId": 900001,
         "chrtId": 555,
         "article": article,
@@ -122,6 +122,7 @@ async def _create_ready_order(
     is_legal: bool = False,
     cargo_type: int = 1,
     can_pvz: bool = True,
+    created_at: datetime | None = None,
 ) -> uuid.UUID:
     async with SessionLocal() as session:
         await seed_fbs_warehouse_binding(
@@ -150,6 +151,7 @@ async def _create_ready_order(
                 is_legal=is_legal,
                 cargo_type=cargo_type,
                 can_pvz=can_pvz,
+                created_at=created_at,
             ),
         )
         order.product_id = product.id
@@ -516,6 +518,98 @@ async def test_tc06_atomic_from_orders_workspace(
     assert workspace["supply"]["wb_supply_id"].startswith("WB-GI-MOCK-")
     assert len(workspace["orders"]) == 2
     assert all(o["status"] == FBS_ORDER_STATUS_IN_SUPPLY for o in workspace["orders"])
+
+
+@pytest.mark.asyncio
+async def test_fbs_cutoff_autoplans_supply_manual_date_and_calendar(
+    async_client: AsyncClient,
+    enable_wb_marketplace_supplies_mock: None,
+) -> None:
+    headers, suffix = await _register_ff_admin(async_client)
+    me = await async_client.get("/auth/me", headers=headers)
+    tenant_id = uuid.UUID(me.json()["tenant_id"])
+    seller_id, warehouse_id, location_id = await _setup_seller_with_token(
+        async_client, headers, suffix
+    )
+    product = await _create_product(async_client, headers, seller_id, sku=f"cal-{suffix[-6:]}")
+
+    settings = await async_client.patch(
+        "/tenant/settings",
+        headers=headers,
+        json={"fbs_shipment_cutoff_time": "16:00"},
+    )
+    assert settings.status_code == 200, settings.text
+    assert settings.json()["fbs_shipment_cutoff_time"] == "16:00"
+
+    before_cutoff_order = await _create_ready_order(
+        tenant_id,
+        uuid.UUID(seller_id),
+        uuid.UUID(warehouse_id),
+        uuid.UUID(location_id),
+        product,
+        order_id=856101,
+        created_at=datetime(2026, 8, 15, 11, 30, tzinfo=UTC),
+    )
+    before = await async_client.post(
+        "/operations/fbs-supplies/from-orders",
+        headers=headers,
+        json={
+            "name": "Before cutoff",
+            "order_ids": [str(before_cutoff_order)],
+            "planned_delivery_type": "warehouse_sc",
+            "idempotency_key": str(uuid.uuid4()),
+        },
+    )
+    assert before.status_code == 201, before.text
+    assert before.json()["supply"]["planned_shipment_date"] == "2026-08-15"
+
+    after_cutoff_order = await _create_ready_order(
+        tenant_id,
+        uuid.UUID(seller_id),
+        uuid.UUID(warehouse_id),
+        uuid.UUID(location_id),
+        product,
+        order_id=856102,
+        created_at=datetime(2026, 8, 15, 14, 30, tzinfo=UTC),
+    )
+    after = await async_client.post(
+        "/operations/fbs-supplies/from-orders",
+        headers=headers,
+        json={
+            "name": "After cutoff",
+            "order_ids": [str(after_cutoff_order)],
+            "planned_delivery_type": "warehouse_sc",
+            "idempotency_key": str(uuid.uuid4()),
+        },
+    )
+    assert after.status_code == 201, after.text
+    after_supply_id = after.json()["supply"]["id"]
+    assert after.json()["supply"]["planned_shipment_date"] == "2026-08-16"
+
+    moved = await async_client.patch(
+        f"/operations/fbs-supplies/{after_supply_id}/planned-shipment-date",
+        headers=headers,
+        json={"planned_shipment_date": "2026-08-17"},
+    )
+    assert moved.status_code == 200, moved.text
+    assert moved.json()["supply"]["planned_shipment_date"] == "2026-08-17"
+
+    calendar = await async_client.get(
+        "/operations/fbs-supplies/calendar?start_date=2026-08-17&end_date=2026-08-17",
+        headers=headers,
+    )
+    assert calendar.status_code == 200, calendar.text
+    rows = calendar.json()
+    assert rows == [
+        {
+            "id": after_supply_id,
+            "date": "2026-08-17",
+            "direction": "WH",
+            "boxes_count": 1,
+            "shipment_type": "FBS",
+            "title": "After cutoff",
+        }
+    ]
 
 
 @pytest.mark.asyncio
@@ -1097,6 +1191,158 @@ async def test_from_orders_partial_readback_binds_only_confirmed_orders(
         assert op.state == WB_OPERATION_STATE_CONFIRMED
         assert op.response_summary_json is not None
         assert op.response_summary_json["partial_confirmation"] is True
+
+
+@pytest.mark.asyncio
+async def test_supply_worklist_groups_active_orders_by_supply(
+    async_client: AsyncClient,
+    enable_wb_marketplace_supplies_mock: None,
+) -> None:
+    """TC-NEW-FBS-18-001: active FBS tab returns one row per supply."""
+    headers, suffix = await _register_ff_admin(async_client)
+    me = await async_client.get("/auth/me", headers=headers)
+    tenant_id = uuid.UUID(me.json()["tenant_id"])
+    seller_id, warehouse_id, location_id = await _setup_seller_with_token(
+        async_client, headers, suffix
+    )
+    product = await _create_product(
+        async_client, headers, seller_id, sku=f"worklist-{suffix[-6:]}"
+    )
+    order_ids = [
+        await _create_ready_order(
+            tenant_id,
+            uuid.UUID(seller_id),
+            uuid.UUID(warehouse_id),
+            uuid.UUID(location_id),
+            product,
+            order_id=859301 + idx,
+        )
+        for idx in range(2)
+    ]
+    create = await async_client.post(
+        "/operations/fbs-supplies/from-orders",
+        headers=headers,
+        json={
+            "name": "Grouped active supply",
+            "order_ids": [str(oid) for oid in order_ids],
+            "planned_delivery_type": "warehouse_sc",
+            "idempotency_key": str(uuid.uuid4()),
+        },
+    )
+    assert create.status_code == 201, create.text
+
+    worklist = await async_client.get(
+        "/operations/fbs-supplies/worklist?status_group=active",
+        headers=headers,
+    )
+    assert worklist.status_code == 200, worklist.text
+    rows = worklist.json()["items"]
+    assert len(rows) == 1
+    assert rows[0]["name"] == "Grouped active supply"
+    assert rows[0]["orders_count"] == 2
+    assert rows[0]["units_count"] == 2
+    assert rows[0]["planned_shipment_date"] is None
+
+
+@pytest.mark.asyncio
+async def test_existing_supply_add_orders_partial_readback_binds_only_confirmed(
+    async_client: AsyncClient,
+    enable_wb_marketplace_supplies_mock: None,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """TC-NEW-FBS-05-001: existing supply add reports partial WB confirmation."""
+    headers, suffix = await _register_ff_admin(async_client)
+    me = await async_client.get("/auth/me", headers=headers)
+    tenant_id = uuid.UUID(me.json()["tenant_id"])
+    seller_id, warehouse_id, location_id = await _setup_seller_with_token(
+        async_client, headers, suffix
+    )
+    product = await _create_product(
+        async_client, headers, seller_id, sku=f"existing-{suffix[-6:]}"
+    )
+    initial_order = await _create_ready_order(
+        tenant_id,
+        uuid.UUID(seller_id),
+        uuid.UUID(warehouse_id),
+        uuid.UUID(location_id),
+        product,
+        order_id=859401,
+    )
+    add_order_ids = [
+        await _create_ready_order(
+            tenant_id,
+            uuid.UUID(seller_id),
+            uuid.UUID(warehouse_id),
+            uuid.UUID(location_id),
+            product,
+            order_id=859402 + idx,
+        )
+        for idx in range(2)
+    ]
+    create = await async_client.post(
+        "/operations/fbs-supplies/from-orders",
+        headers=headers,
+        json={
+            "name": "Existing add target",
+            "order_ids": [str(initial_order)],
+            "planned_delivery_type": "warehouse_sc",
+            "idempotency_key": str(uuid.uuid4()),
+        },
+    )
+    assert create.status_code == 201, create.text
+    supply_id = create.json()["supply"]["id"]
+
+    async def fake_batch_add(
+        client: object,
+        *,
+        api_token: str,
+        supply_id: str,
+        order_ids: list[int],
+        marketplace_api_base: str | None = None,
+    ) -> None:
+        assert order_ids == [859402, 859403]
+
+    async def fake_reconcile_supply_orders(
+        client: object,
+        *,
+        api_token: str,
+        wb_supply_id: str,
+        expected_wb_order_ids: set[int],
+    ) -> tuple[str, set[int]]:
+        assert expected_wb_order_ids == {859401, 859402, 859403}
+        return WB_OPERATION_STATE_PENDING_CONFIRMATION, {859401, 859402}
+
+    monkeypatch.setattr(
+        "app.services.fbs_supply_service.add_orders_to_marketplace_supply",
+        fake_batch_add,
+    )
+    monkeypatch.setattr(
+        "app.services.fbs_supply_service.reconcile_supply_orders",
+        fake_reconcile_supply_orders,
+    )
+
+    resp = await async_client.post(
+        f"/operations/fbs-supplies/{supply_id}/orders/batch",
+        headers=headers,
+        json={
+            "order_ids": [str(oid) for oid in add_order_ids],
+            "idempotency_key": str(uuid.uuid4()),
+        },
+    )
+    assert resp.status_code == 200, resp.text
+    body = resp.json()
+    assert [row["wb_order_id"] for row in body["orders"]] == [859401, 859402]
+    assert body["partial_rejection"]["accepted_orders"][0]["wb_order_id"] == 859402
+    assert body["partial_rejection"]["rejected_orders"][0]["wb_order_id"] == 859403
+
+    async with SessionLocal() as session:
+        accepted = await session.get(FbsOrder, add_order_ids[0])
+        rejected = await session.get(FbsOrder, add_order_ids[1])
+        assert accepted is not None
+        assert rejected is not None
+        assert str(accepted.supply_id) == supply_id
+        assert rejected.supply_id is None
+        assert rejected.status == FBS_ORDER_STATUS_NEW
 
 
 @pytest.mark.asyncio

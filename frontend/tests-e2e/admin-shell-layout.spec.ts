@@ -4,7 +4,8 @@ import { waitForGetOk, waitForPostOk } from './api-waits';
 import { openFulfillmentRegistration } from './auth-flow';
 
 // TC-S15-001 — навигация по разделам после входа (целостность shell: один корень, ключевые области).
-// TC-S15-003 — дашборд ФФ: недельный календарь; в сайдбаре «Приёмка» и «Отгрузки на МП».
+// TC-NEW-NAV-01 — FF меню: Приёмка на FF и Сортировка сверху, Календарь отгрузок и Настройки снизу, без видимой Инвентаризации.
+// TC-NEW-CAL-03 — настройки FF: опциональное время отсечки FBS сохраняется и очищается.
 // TC-S02-001 — успешный вход в контекст сессии с видимым дашбордом.
 test('admin shell: single app root, nav, dashboard and main sections visible', async ({ page }) => {
   const email = `e2e-shell-${Date.now()}@example.com`;
@@ -35,6 +36,13 @@ test('admin shell: single app root, nav, dashboard and main sections visible', a
   await expect(page.getByTestId('nav-ff-mp-shipments')).toBeVisible();
   await expect(page.getByTestId('nav-catalog')).toBeVisible();
   await expect(page.getByTestId('nav-sellers')).toBeVisible();
+  await expect(page.getByTestId('nav-dashboard')).toContainText('Календарь отгрузок');
+  await expect(page.getByTestId('app-sidebar')).not.toContainText('Инвентаризация');
+  const navLabels = await page.locator('[data-task-id="NAV-01"]').allTextContents();
+  expect(navLabels.indexOf('Приёмка на FF')).toBeLessThan(navLabels.indexOf('Сортировка'));
+  expect(navLabels.indexOf('Сортировка')).toBeLessThan(navLabels.indexOf('FBS'));
+  expect(navLabels.indexOf('Календарь отгрузок')).toBeGreaterThan(navLabels.indexOf('Честный знак'));
+  expect(navLabels.indexOf('Настройки')).toBeGreaterThan(navLabels.indexOf('Календарь отгрузок'));
 
   await page.getByTestId('nav-sellers').click();
   await expect(page).toHaveURL(/\/app\/ff\/sellers$/);
@@ -44,6 +52,21 @@ test('admin shell: single app root, nav, dashboard and main sections visible', a
   await expect(page).toHaveURL(/\/app\/catalog$/);
   await expect(page.getByTestId('catalog-section')).toBeVisible();
 
-  await page.goto('/app/ops');
-  await expect(page.getByTestId('inbound-requests-table')).toBeVisible();
+  await page.getByTestId('nav-ff-settings').click();
+  await expect(page.getByTestId('cal-03-fbs-cutoff-section')).toBeVisible();
+  await page.getByTestId('cal-03-fbs-cutoff-time').fill('16:00');
+  await Promise.all([
+    page.waitForResponse((r) => r.request().method() === 'PATCH' && r.url().includes('/api/tenant/settings') && r.ok()),
+    page.getByTestId('cal-03-fbs-cutoff-save').click(),
+  ]);
+  await expect(page.getByText('Время отсечки FBS сохранено')).toBeVisible();
+  await Promise.all([
+    page.waitForResponse((r) => r.request().method() === 'PATCH' && r.url().includes('/api/tenant/settings') && r.ok()),
+    page.getByTestId('cal-03-fbs-cutoff-clear').click(),
+  ]);
+  await expect(page.getByText('Время отсечки FBS очищено')).toBeVisible();
+
+  await page.getByTestId('nav-ff-reception').click();
+  await expect(page).toHaveURL(/\/app\/ff\/reception$/);
+  await expect(page.getByTestId('ff-inbound-create')).toBeVisible();
 });

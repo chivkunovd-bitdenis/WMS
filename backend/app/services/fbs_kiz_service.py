@@ -820,6 +820,7 @@ async def _void_existing_sgtin_marking_locally(
             actor=actor_user_id,
             packaging_task=line,
             reason=reason,
+            source_process=marking_code_svc.MARKING_SOURCE_PACKING_FBS_PRINT,
         )
         if code.source == _EXTERNAL_FBS_MARKING_SOURCE and line is not None:
             line.qty_marking_external = max(0, int(line.qty_marking_external) - 1)
@@ -956,6 +957,7 @@ async def _commit_one_kiz_pair(
         actor=actor_user_id,
         document_number=line_ref.document_number,
         packaging_task=line_ref.line,
+        source_process=marking_code_svc.MARKING_SOURCE_PACKING_FBS_PRINT,
     )
     marking = FbsOrderMarking(
         order_id=order.id,

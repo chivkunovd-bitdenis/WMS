@@ -1,4 +1,4 @@
-import { inboundOperationTypeLabel } from '../../utils/inboundOperationType'
+import { inboundOperationTypeReceptionLabel } from '../../utils/inboundOperationType'
 
 export type InboundBoxLineRef = {
   product_id: string
@@ -170,7 +170,7 @@ export function scanErrorMessageRu(code: string): string {
 }
 
 export function inboundQueueDocumentLabel(row: InboundSummaryRef): string {
-  const operationLabel = inboundOperationTypeLabel(row.operation_type)
+  const operationLabel = inboundOperationTypeReceptionLabel(row.operation_type)
   const preferred = row.display_number ?? row.public_number ?? row.human_number
   if (preferred?.trim()) return `${operationLabel} № ${preferred.trim().replace(/^№\s*/, '')}`
   if (row.document_number?.trim()) return `${operationLabel} № ${row.document_number.trim()}`
@@ -190,7 +190,7 @@ export function inboundQueueUnitsLabel(row: InboundSummaryRef): string {
 export function inboundQueueBoxesLabel(row: InboundSummaryRef): string {
   const actual = row.actual_box_count ?? 0
   if (row.planned_box_count == null) return `${actual} коробов`
-  return `${actual} из ${row.planned_box_count}`
+  return `${actual} из ${row.planned_box_count} коробов`
 }
 
 export function buildInboundReceivingTotals(

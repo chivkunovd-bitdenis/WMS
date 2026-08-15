@@ -112,3 +112,19 @@ def test_deliver_requires_physical_boxes_and_packed_order_assignments() -> None:
     failed = {check.code: check for check in checks if not check.ok}
     assert failed["physical_boxes_required"].order_id is None
     assert failed["packed_order_unassigned"].order_id == order_id
+
+
+def test_deliver_allows_boxes_without_distribution() -> None:
+    order_id = uuid.uuid4()
+    checks = _build_delivery_checks(
+        _mock_supply(),
+        [_mock_order(FBS_ORDER_STATUS_PACKED, order_id=order_id)],
+        cargo_qr_ready=True,
+        has_physical_boxes=True,
+        without_distribution=True,
+        unassigned_packed_order_ids=frozenset({order_id}),
+    )
+    _validate_checks_pass(checks)
+    codes = {check.code for check in checks}
+    assert "boxes_without_distribution" in codes
+    assert "packed_order_unassigned" not in codes
