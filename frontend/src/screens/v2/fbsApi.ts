@@ -282,6 +282,31 @@ export type FbsSupplyCreateFromOrdersRequest = {
   idempotency_key: string
 }
 
+export type FbsSupplyAddOrdersRequest = {
+  order_ids: string[]
+  idempotency_key: string
+}
+
+export type FbsSupplyWorklistItem = {
+  id: string
+  wb_supply_id: string
+  name: string
+  status: string
+  seller: { id: string; name: string }
+  wb_warehouse: { id: number; name: string | null }
+  wms_warehouse: { id: string; name: string }
+  orders_count: number
+  units_count: number
+  boxes_count: number
+  planned_shipment_date: string | null
+  can_add_orders: boolean
+}
+
+export type FbsSupplyWorklistPage = {
+  items: FbsSupplyWorklistItem[]
+  server_now: string
+}
+
 export type FbsPickLocation = {
   id: string
   code: string
@@ -464,6 +489,7 @@ export type FbsWorkspace = {
   server_now: string
   tracking_summary?: FbsTrackingSummary | null
   partial_rejection?: FbsPartialRejection | null
+  picking_auto_passed_reason?: string | null
   wb_sync_stale?: boolean
 }
 
@@ -527,6 +553,36 @@ export async function createFbsSupplyFromOrders(
 ): Promise<FbsWorkspace> {
   return jsonOrThrow<FbsWorkspace>(
     await fetch(apiUrl('/operations/fbs-supplies/from-orders'), {
+      method: 'POST',
+      headers: jsonHeaders(token, ah),
+      body: JSON.stringify(body),
+    }),
+  )
+}
+
+export async function fetchFbsSupplyWorklist(
+  token: string,
+  ah: AuthHeaders,
+  params: { seller_id?: string | null; status_group?: string | null; limit?: number } = {},
+): Promise<FbsSupplyWorklistPage> {
+  const qs = new URLSearchParams({ limit: String(params.limit ?? 100) })
+  if (params.seller_id) qs.set('seller_id', params.seller_id)
+  if (params.status_group) qs.set('status_group', params.status_group)
+  return jsonOrThrow<FbsSupplyWorklistPage>(
+    await fetch(apiUrl(`/operations/fbs-supplies/worklist?${qs.toString()}`), {
+      headers: { ...ah(token) },
+    }),
+  )
+}
+
+export async function addFbsOrdersToSupply(
+  token: string,
+  ah: AuthHeaders,
+  supplyId: string,
+  body: FbsSupplyAddOrdersRequest,
+): Promise<FbsWorkspace> {
+  return jsonOrThrow<FbsWorkspace>(
+    await fetch(apiUrl(`/operations/fbs-supplies/${supplyId}/orders/batch`), {
       method: 'POST',
       headers: jsonHeaders(token, ah),
       body: JSON.stringify(body),

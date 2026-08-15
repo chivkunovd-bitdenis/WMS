@@ -45,6 +45,7 @@ import { buildFbsPickingListPrintHtml, ordersWord } from './fbsUx'
 import {
   confirmFbsPrintApplied,
   confirmFbsManualPick,
+  addFbsOrdersToSupply,
   assignFbsPackingBoxOrders,
   clearFbsPackingBox,
   createFbsPackingBoxes,
@@ -54,6 +55,7 @@ import {
   deliverFbsSupply,
   FbsApiError,
   fetchFbsPrintBatch,
+  fetchFbsWorklist,
   fetchFbsWorkspace,
   printFbsOrderTape,
   removeFbsPackingBoxOrder,
@@ -70,6 +72,7 @@ import {
   type FbsPrintAsset,
   type FbsPrintBatch,
   type FbsWorkspace,
+  type FbsWorklistOrder,
 } from './fbsApi'
 
 type Props = {
@@ -211,6 +214,10 @@ export function FfFbsSupplyWorkspace({
   const [reprintMenu, setReprintMenu] = useState<{ orderId: string; anchorEl: HTMLElement } | null>(null)
   const [kizOpen, setKizOpen] = useState(false)
   const [kizUndoOrderId, setKizUndoOrderId] = useState<string | null>(null)
+  const [addOrdersOpen, setAddOrdersOpen] = useState(false)
+  const [addableOrders, setAddableOrders] = useState<FbsWorklistOrder[]>([])
+  const [addableSelected, setAddableSelected] = useState<Set<string>>(() => new Set())
+  const [addOrdersBusy, setAddOrdersBusy] = useState(false)
   const [plannedShipmentDateDraft, setPlannedShipmentDateDraft] = useState('')
   const { openPrint, dialog: markingPrintDialog } = useMarkingCodePrint()
 
@@ -252,6 +259,9 @@ export function FfFbsSupplyWorkspace({
     setUndoOrderId(null)
     setTzLine(null)
     setReprintMenu(null)
+    setAddOrdersOpen(false)
+    setAddableOrders([])
+    setAddableSelected(new Set())
     if (!initialWorkspace) void load()
   }, [open, supplyId, initialWorkspace, load])
 
@@ -312,6 +322,49 @@ export function FfFbsSupplyWorkspace({
       return null
     } finally {
       setBusy(false)
+    }
+  }
+
+  const openAddOrders = async () => {
+    if (!workspace) return
+    setAddOrdersOpen(true)
+    setAddOrdersBusy(true)
+    setAddableSelected(new Set())
+    setError(null)
+    try {
+      const page = await fetchFbsWorklist(token, authHeaders, {
+        seller_id: workspace.supply.seller.id,
+        status_group: 'new',
+        wb_warehouse_id: String(workspace.supply.wb_warehouse.id),
+        limit: 500,
+      })
+      setAddableOrders(page.items.filter((order) => order.selection_blockers.length === 0))
+    } catch (cause) {
+      setAddableOrders([])
+      setError(cause instanceof Error ? cause.message : 'Не удалось загрузить новые заказы для поставки.')
+    } finally {
+      setAddOrdersBusy(false)
+    }
+  }
+
+  const addOrdersToCurrentSupply = async () => {
+    if (!workspace || addableSelected.size === 0) return
+    setAddOrdersBusy(true)
+    setError(null)
+    try {
+      const next = await addFbsOrdersToSupply(token, authHeaders, workspace.supply.id, {
+        order_ids: [...addableSelected],
+        idempotency_key: createFbsIdempotencyKey(),
+      })
+      setWorkspace(next)
+      setStage(visualStage(next.stage))
+      setAddOrdersOpen(false)
+      setAddableSelected(new Set())
+      setNotice('Заказы добавлены в поставку.')
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : 'Не удалось добавить заказы в поставку.')
+    } finally {
+      setAddOrdersBusy(false)
     }
   }
 
@@ -1126,6 +1179,11 @@ export function FfFbsSupplyWorkspace({
         <Box sx={{ p: { xs: 1.5, md: 2.5 }, minHeight: '100%' }}>
           {error ? <Alert severity="error" sx={{ mb: 2 }} action={retryAction ? <Button color="inherit" size="small" onClick={retryAction}>Повторить</Button> : undefined}>{error}</Alert> : null}
           {notice ? <Alert severity="success" sx={{ mb: 2 }}>{notice}</Alert> : null}
+          {workspace?.picking_auto_passed_reason ? (
+            <Alert severity="info" sx={{ mb: 2 }} data-testid="fbs-20-picking-auto-passed">
+              {workspace.picking_auto_passed_reason}
+            </Alert>
+          ) : null}
           {stageIsCurrent && stageBlockers.length ? (
             <Alert severity="warning" sx={{ mb: 2 }}>
               <Typography variant="subtitle2">Что нужно исправить</Typography>
@@ -1155,9 +1213,19 @@ export function FfFbsSupplyWorkspace({
                       {workspace.orders.length} {ordersWord(workspace.orders.length)} в поставке
                     </Typography>
                   </Box>
-                  <Button variant="outlined" startIcon={<PrintOutlinedIcon />} onClick={printPickingList} data-testid="fbs-pick-list-print">
-                    Печать листа подбора
-                  </Button>
+                  <Stack direction="row" spacing={1}>
+                    <Button
+                      variant="outlined"
+                      onClick={() => void openAddOrders()}
+                      disabled={!['draft', 'assembling'].includes(workspace.supply.status)}
+                      data-testid="fbs-05-workspace-add-orders"
+                    >
+                      Добавить заказы
+                    </Button>
+                    <Button variant="outlined" startIcon={<PrintOutlinedIcon />} onClick={printPickingList} data-testid="fbs-pick-list-print">
+                      Печать листа подбора
+                    </Button>
+                  </Stack>
                 </Stack>
                 <Divider sx={{ my: 2 }} />
                 <Table size="small">
@@ -1177,9 +1245,15 @@ export function FfFbsSupplyWorkspace({
                 </Table>
               </Paper>
               <Stack direction="row" sx={{ justifyContent: 'flex-end' }}>
-                <Button variant="contained" size="large" disabled={!stageIsCurrent} onClick={() => void run(() => startFbsSupplyWork(token, authHeaders, workspace.supply.id), 'Задание создано. Можно начинать подбор.')}>
-                  Начать работу с поставкой
-                </Button>
+                {workspace.supply.status === 'draft' && stageIsCurrent ? (
+                  <Button variant="contained" size="large" onClick={() => void run(() => startFbsSupplyWork(token, authHeaders, workspace.supply.id), 'Задание создано. Можно переходить к следующему этапу.')}>
+                    Начать работу с поставкой
+                  </Button>
+                ) : (
+                  <Alert severity="info" data-testid="fbs-20-next-step-hint">
+                    Поставка уже начата. Следующий шаг: {STAGES.find((item) => item.key === currentStage)?.label ?? 'откройте текущий этап'}.
+                  </Alert>
+                )}
               </Stack>
             </Stack>
           ) : null}
@@ -1590,6 +1664,69 @@ export function FfFbsSupplyWorkspace({
         onClose={() => setPrintPreviewOpen(false)}
         onApplied={(asset) => confirmPrintApplied(asset.id)}
       />
+      <Dialog open={addOrdersOpen} onClose={addOrdersBusy ? undefined : () => setAddOrdersOpen(false)} maxWidth="md" fullWidth>
+        <DialogTitle>Добавить заказы в поставку</DialogTitle>
+        <DialogContent dividers>
+          <Stack spacing={1.5}>
+            {addOrdersBusy ? (
+              <Stack direction="row" spacing={1.5} sx={{ alignItems: 'center', py: 2 }}>
+                <CircularProgress size={20} />
+                <Typography variant="body2">Загружаем совместимые новые заказы…</Typography>
+              </Stack>
+            ) : addableOrders.length === 0 ? (
+              <Alert severity="info" data-testid="fbs-05-workspace-no-addable">
+                Новых заказов того же селлера и WB-склада нет.
+              </Alert>
+            ) : (
+              <Table size="small" data-testid="fbs-05-workspace-add-orders-table">
+                <TableHead>
+                  <TableRow>
+                    <TableCell padding="checkbox" />
+                    <TableCell>Заказ WB</TableCell>
+                    <TableCell>Товар</TableCell>
+                    <TableCell>Склад</TableCell>
+                  </TableRow>
+                </TableHead>
+                <TableBody>
+                  {addableOrders.map((order) => (
+                    <TableRow key={order.id} hover>
+                      <TableCell padding="checkbox">
+                        <Checkbox
+                          checked={addableSelected.has(order.id)}
+                          onChange={(_, checked) => {
+                            setAddableSelected((current) => {
+                              const next = new Set(current)
+                              if (checked) next.add(order.id)
+                              else next.delete(order.id)
+                              return next
+                            })
+                          }}
+                        />
+                      </TableCell>
+                      <TableCell>№{order.wb_order_id}</TableCell>
+                      <TableCell>{order.product.name}</TableCell>
+                      <TableCell>{order.wb_warehouse.name || `WB ${order.wb_warehouse.id}`}</TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            )}
+          </Stack>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setAddOrdersOpen(false)} disabled={addOrdersBusy}>
+            Отмена
+          </Button>
+          <Button
+            variant="contained"
+            disabled={addOrdersBusy || addableSelected.size === 0}
+            onClick={() => void addOrdersToCurrentSupply()}
+            data-testid="fbs-05-workspace-add-orders-submit"
+          >
+            Добавить заказы
+          </Button>
+        </DialogActions>
+      </Dialog>
       {markingPrintDialog}
       {workspace ? (
         <FbsKizScanDialog

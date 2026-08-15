@@ -56,6 +56,11 @@ class FbsSupplyFromOrdersBody(BaseModel):
     idempotency_key: str = Field(min_length=1, max_length=128)
 
 
+class FbsSupplyAddOrdersBody(BaseModel):
+    order_ids: list[uuid.UUID] = Field(min_length=1, max_length=100)
+    idempotency_key: str = Field(min_length=1, max_length=128)
+
+
 class FbsSupplyPreflightIssueOut(BaseModel):
     order_id: str
     code: str
@@ -128,6 +133,26 @@ class FbsSupplyOut(BaseModel):
     created_at: str
     updated_at: str
     orders: list[FbsSupplyOrderOut] | None = None
+
+
+class FbsSupplyWorklistItemOut(BaseModel):
+    id: str
+    wb_supply_id: str
+    name: str
+    status: str
+    seller: dict[str, str]
+    wb_warehouse: dict[str, str | int | None]
+    wms_warehouse: dict[str, str]
+    orders_count: int
+    units_count: int
+    boxes_count: int
+    planned_shipment_date: str | None
+    can_add_orders: bool
+
+
+class FbsSupplyWorklistOut(BaseModel):
+    items: list[FbsSupplyWorklistItemOut]
+    server_now: str
 
 
 class FbsPickingListItemOut(BaseModel):
@@ -449,6 +474,7 @@ class FbsWorkspaceOut(BaseModel):
     last_wb_sync_at: str | None
     tracking_summary: dict[str, object] | None = None
     partial_rejection: dict[str, object] | None = None
+    picking_auto_passed_reason: str | None = None
     wb_sync_stale: bool = False
     server_now: str
 
@@ -756,6 +782,7 @@ def _raise_from_service(exc: supply_svc.FbsSupplyError) -> None:
             "empty_order_set",
             "missing_idempotency_key",
             "supply_empty",
+            "invalid_status_group",
         }
     ):
         raise HTTPException(status_code=exc.http_status, detail=detail)
@@ -960,6 +987,52 @@ async def start_fbs_supply_work(
                 session,
                 user.tenant_id,
                 supply_id,
+                actor_user_id=user.id,
+                http_client=http_client,
+            )
+        except supply_svc.FbsSupplyError as exc:
+            _raise_from_service(exc)
+    await session.commit()
+    return FbsWorkspaceOut.model_validate(workspace)
+
+
+@router.get("/worklist", response_model=FbsSupplyWorklistOut)
+async def get_fbs_supplies_worklist(
+    user: Annotated[User, Depends(require_fbs_operator_access)],
+    session: Annotated[AsyncSession, Depends(get_db)],
+    seller_id: Annotated[uuid.UUID | None, Query()] = None,
+    status_group: Annotated[str, Query()] = "active",
+    limit: Annotated[int, Query(ge=1, le=500)] = 100,
+) -> FbsSupplyWorklistOut:
+    try:
+        payload = await supply_svc.list_supply_worklist(
+            session,
+            user.tenant_id,
+            seller_id=seller_id,
+            status_group=status_group,
+            limit=limit,
+        )
+    except supply_svc.FbsSupplyError as exc:
+        _raise_from_service(exc)
+    return FbsSupplyWorklistOut.model_validate(payload)
+
+
+@router.post("/{supply_id}/orders/batch", response_model=FbsWorkspaceOut)
+async def add_orders_to_fbs_supply(
+    supply_id: uuid.UUID,
+    body: FbsSupplyAddOrdersBody,
+    user: Annotated[User, Depends(require_fbs_operator_access)],
+    session: Annotated[AsyncSession, Depends(get_db)],
+) -> FbsWorkspaceOut:
+    async with httpx.AsyncClient() as http_client:
+        try:
+            workspace = await supply_svc.add_orders_to_existing_supply(
+                session,
+                user.tenant_id,
+                supply_id,
+                body.order_ids,
+                idempotency_key=body.idempotency_key,
+                actor_user_id=user.id,
                 http_client=http_client,
             )
         except supply_svc.FbsSupplyError as exc:
