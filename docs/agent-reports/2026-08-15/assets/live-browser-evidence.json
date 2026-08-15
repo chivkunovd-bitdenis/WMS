@@ -1,0 +1,63 @@
+{
+  "browser": {
+    "Browser": "Chrome/151.0.7922.138",
+    "Protocol-Version": "1.3",
+    "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/151.0.0.0 Safari/537.36",
+    "V8-Version": "15.1.206.17",
+    "WebKit-Version": "537.36 (@41fa82442390a4d4456c78f2d69a832d5720cb27)",
+    "webSocketDebuggerUrl": "ws://127.0.0.1:9223/devtools/browser/62ed77b0-cd27-49bc-9a98-767d873d1774"
+  },
+  "admin": {
+    "calendarText": "Календарь отгрузок\n\nавгуст 2026 г.\n\nПн\nВт\nСр\nЧт\nПт\nСб\nВс\n27\n28\n29\n30\n31\n1\n2\n3\n4\n5\n6\n7\n8\n9\n10\n11\n12\n13\n14\n15\nМосква / Коледино\n1 коробов · FBS\n16\nМосква / Коледино\n1 коробов · FBS\n17\n18\n19\n20\n21\n22\n23\n24\n25\n26\n27\n28\n29\n30\n31\n1\n2\n3\n4\n5\n6",
+    "navLabels": [
+      "Приёмка на FF",
+      "Сортировка",
+      "FBS",
+      "Отгрузки",
+      "Упаковка",
+      "Ячейки",
+      "Селлеры",
+      "Каталог",
+      "Честный знак",
+      "Календарь отгрузок",
+      "Настройки"
+    ],
+    "calendarRows": [
+      {
+        "text": "Москва / Коледино\n1 коробов · FBS",
+        "type": "FBS",
+        "id": "aff20c73-b09c-449b-bfd4-f3033404605a",
+        "day": "cal-01-day-rows-2026-08-15"
+      },
+      {
+        "text": "Москва / Коледино\n1 коробов · FBS",
+        "type": "FBS",
+        "id": "579bc53c-9a71-4707-acce-b1d89e03ad30",
+        "day": "cal-01-day-rows-2026-08-16"
+      }
+    ],
+    "afterWorkspaceText": "CAL After cutoff\n\nCAL Seller 1165214000 · № WB WB-GI-MOCK-2\n\nСклад WMS\n\nМосква / Коледино\n\nМаршрут\n\nСклад / СЦ\n\nДата отгрузки\nДата отгрузки\nСохранить\nОчистить\n0 из 1 подготовлено к отгрузке\nСдать в Wildberries до 20.08.2026, 14:30:00\nСостав\nПодбор\nУпаковка и маркировка\nКороба\nСостав поставки\n\n1 заказ в поставке\n\nПечать листа подбора\nФото\tЗаказ WB\tТовар и идентификаторы\tКоличество\tМаркировка\tПодбор\n\n\t№857214000\t\n\nProduct cal-accept-1165214000\n\nАртикул: ART-001 · ШК: BAR-cal-accept-1165214000\n\t1 шт.\tНе требуется\tОжидает\nНачать работу с поставкой",
+    "afterWorkspaceDate": "2026-08-16",
+    "cutoffBefore": "16:00",
+    "cutoffAfterSave": "16:30"
+  },
+  "seller": {
+    "shipmentsText": "Сегодня / Завтра\n\nТолько ваши документы с плановой датой отгрузки или приёмки.\n\nСегодня\n\nПоставка\n\nМосква / Коледино · 1 строк · 2 шт\nЧерновик\nЗавтра\n\nПоставка\n\nМосква / Коледино · 1 строк · 4 шт\nЧерновик",
+    "rows": [
+      "Поставка\n\nМосква / Коледино · 1 строк · 2 шт\nЧерновик",
+      "Поставка\n\nМосква / Коледино · 1 строк · 4 шт\nЧерновик"
+    ]
+  },
+  "audit": {
+    "visibleTaskIds": [],
+    "bodySample": "Короб ВМС\n\nПортал селлера\n\ncal-accept-seller-1165214000@example.com · Селлер\n0\nВыйти\nДокументы\nТовары\nЧестный знак\nНастройки\nДокументы\n\nПоставки на ФФ и отгрузки на маркетплейс\n\nСоздать акт расхождений\nСоздать заявку на поставку\nСоздать заявку на возврат\nСоздать отгрузку на МП\nСегодня / Завтра\n\nТолько ваши документы с плановой датой отгрузки или приёмки.\n\nСегодня\n\nПоставка\n\nМосква / Коледино · 1 строк · 2 шт\nЧерновик\nЗавтра\n\nПоставка\n\nМосква / Коледино · 1 строк · 4 шт\nЧерновик\nТип документа\nВсе\nТип документа\nСортировка\nДата (новые сверху)\nСортировка\nТип\tДата\tНакладная\tСтатус\tСтрок\tДействия\nПоставка\t2026-08-16\tCAL-2026-08-16\tЧерновик\t1\tУдалить\nПоставка\t2026-08-15\tCAL-2026-08-15\tЧерновик\t1\tУдалить"
+  },
+  "screenshots": [
+    "/Users/deniscivkunov/Projects/WMS/.worktrees/wave2-shipment-calendar-20260815/docs/agent-reports/2026-08-15/assets/01-ff-calendar-grid-fbs-rows.png",
+    "/Users/deniscivkunov/Projects/WMS/.worktrees/wave2-shipment-calendar-20260815/docs/agent-reports/2026-08-15/assets/02-fbs-workspace-after-cutoff-date.png",
+    "/Users/deniscivkunov/Projects/WMS/.worktrees/wave2-shipment-calendar-20260815/docs/agent-reports/2026-08-15/assets/03-ff-settings-fbs-cutoff-visible.png",
+    "/Users/deniscivkunov/Projects/WMS/.worktrees/wave2-shipment-calendar-20260815/docs/agent-reports/2026-08-15/assets/04-ff-settings-fbs-cutoff-saved.png",
+    "/Users/deniscivkunov/Projects/WMS/.worktrees/wave2-shipment-calendar-20260815/docs/agent-reports/2026-08-15/assets/05-ff-nav-order-dashboard-bottom.png",
+    "/Users/deniscivkunov/Projects/WMS/.worktrees/wave2-shipment-calendar-20260815/docs/agent-reports/2026-08-15/assets/06-seller-today-tomorrow-section.png"
+  ]
+}
