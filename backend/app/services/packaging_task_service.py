@@ -11,6 +11,8 @@ from sqlalchemy.orm import selectinload
 
 from app.models.inventory_balance import InventoryBalance
 from app.models.marketplace_unload import (
+    MarketplaceUnloadBox,
+    MarketplaceUnloadBoxLine,
     MarketplaceUnloadLine,
     MarketplaceUnloadPickAllocation,
     MarketplaceUnloadRequest,
@@ -125,6 +127,12 @@ async def progress_for_unload(
     if sync_from_pick:
         synced = await sync_lines_from_pick_allocations(session, tenant_id, task)
         task = synced.task
+    if _is_mp_unload_task(task):
+        await sync_mp_task_packed_from_boxes(session, tenant_id, task)
+        await session.commit()
+        loaded = await get_task(session, tenant_id, task.id)
+        assert loaded is not None
+        task = loaded
     return task_progress(task)
 
 
@@ -623,6 +631,42 @@ async def sync_lines_from_pick_allocations(
     return SyncPickResult(task=loaded, pick_changed_with_progress=pick_changed_with_progress)
 
 
+async def sync_mp_task_packed_from_boxes(
+    session: AsyncSession,
+    tenant_id: uuid.UUID,
+    task: PackagingTask,
+) -> PackagingTask:
+    if task.marketplace_unload_request_id is None:
+        return task
+    stmt = (
+        select(
+            MarketplaceUnloadBoxLine.product_id,
+            func.coalesce(func.sum(MarketplaceUnloadBoxLine.quantity), 0),
+        )
+        .join(MarketplaceUnloadBox, MarketplaceUnloadBox.id == MarketplaceUnloadBoxLine.box_id)
+        .where(
+            MarketplaceUnloadBox.request_id == task.marketplace_unload_request_id,
+            MarketplaceUnloadBox.tenant_id == tenant_id,
+            MarketplaceUnloadBoxLine.tenant_id == tenant_id,
+        )
+        .group_by(MarketplaceUnloadBoxLine.product_id)
+    )
+    boxed_by_product = {
+        product_id: int(quantity or 0)
+        for product_id, quantity in (await session.execute(stmt)).all()
+    }
+    changed = False
+    for line in task.lines:
+        boxed = boxed_by_product.get(line.product_id, 0)
+        target = min(qty_need_pack(line), boxed)
+        if int(line.qty_packed_in_task) != target:
+            line.qty_packed_in_task = target
+            changed = True
+    if changed:
+        _touch_task(task)
+    return task
+
+
 async def ensure_task_for_unload(
     session: AsyncSession,
     tenant_id: uuid.UUID,
@@ -1045,6 +1089,9 @@ async def complete_task(
     fbs_supply = await get_supply_for_packaging_task(session, tenant_id, task_id)
     if acknowledge_all_packed and fbs_supply is not None:
         raise PackagingTaskServiceError("fbs_acknowledge_not_allowed")
+
+    if _is_mp_unload_task(task):
+        await sync_mp_task_packed_from_boxes(session, tenant_id, task)
 
     if not is_task_complete(task):
         raise PackagingTaskServiceError("packaging_incomplete")

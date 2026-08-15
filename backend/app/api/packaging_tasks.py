@@ -360,6 +360,9 @@ async def get_packaging_task_for_unload(
     task = await pkg_svc.get_task_for_unload(session, user.tenant_id, unload_id)
     if task is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="not_found")
+    synced = await pkg_svc.sync_lines_from_pick_allocations(session, user.tenant_id, task)
+    task = await pkg_svc.sync_mp_task_packed_from_boxes(session, user.tenant_id, synced.task)
+    await session.commit()
     return await _task_out(
         session,
         user.tenant_id,
@@ -382,7 +385,10 @@ async def get_packaging_task(
         synced = await pkg_svc.sync_lines_from_pick_allocations(
             session, user.tenant_id, task
         )
-        task = synced.task
+        task = await pkg_svc.sync_mp_task_packed_from_boxes(
+            session, user.tenant_id, synced.task
+        )
+        await session.commit()
         pick_warning = task.pick_resync_warning
     return await _task_out(session, user.tenant_id, task, pick_resync_warning=pick_warning)
 
