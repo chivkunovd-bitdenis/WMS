@@ -72,6 +72,17 @@ Before picking an issue, read **[docs/MVP_DECISIONS_RU.md](docs/MVP_DECISIONS_RU
 
 Epic map for splitting work: **[docs/BACKLOG_EPICS_RU.md](docs/BACKLOG_EPICS_RU.md)**.
 
+## Обязательный gate-протокол для WMS-фичей
+
+Для любой WMS-фичи, рефакторинга складского процесса или UI/UX-изменения сначала
+прочитай **[docs/WMS_FEATURE_GATE_PROTOCOL_RU.md](docs/WMS_FEATURE_GATE_PROTOCOL_RU.md)**.
+
+Этот протокол строже общего autopilot loop: одна фича проходит изолированных
+агентов в порядке BA -> Product / UX -> Atomic Dev -> Code Review -> Browser
+Product QA. Разработка запрещена, пока product agent не дал явный OK именно по
+этой фиче. Нельзя смешивать несколько фичей в один dev-проход и нельзя
+объявлять фичу готовой без живого browser product QA.
+
 ## UI (портал FF)
 
 Новые и правимые экраны фулфилмента — **единый MUI-дизайн** (без legacy `Card`/`Input` из `frontend/src/ui` в основной области). Эталон: `FfProductsCatalogScreen.tsx`. Правила: **[docs/UI_DESIGN_SYSTEM_RU.md](docs/UI_DESIGN_SYSTEM_RU.md)**.
