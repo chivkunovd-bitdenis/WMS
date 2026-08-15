@@ -1,7 +1,7 @@
 """Track seller-created inbound requests.
 
-Revision ID: 20260814_0084
-Revises: 20260814_0083
+Revision ID: 20260814_0085
+Revises: 20260814_0084
 Create Date: 2026-08-14
 """
 
@@ -13,8 +13,8 @@ import sqlalchemy as sa
 
 from alembic import op
 
-revision: str = "20260814_0084"
-down_revision: str | Sequence[str] | None = "20260814_0083"
+revision: str = "20260814_0085"
+down_revision: str | Sequence[str] | None = "20260814_0084"
 branch_labels: str | Sequence[str] | None = None
 depends_on: str | Sequence[str] | None = None
 
