@@ -95,7 +95,8 @@ test('MP unload full flow: parallel boxes then packaging then ship', async ({ pa
   const adminEmail = `e2e-mp-full-${Date.now()}@example.com`
   const sellerEmail = `e2e-mp-full-sl-${Date.now()}@example.com`
   const password = 'password123'
-  const e2eApi = process.env.E2E_API_ORIGIN ?? 'http://127.0.0.1:18000'
+  const e2eApi =
+    process.env.E2E_API_ORIGIN ?? `http://127.0.0.1:${process.env.E2E_API_PORT ?? 18000}`
   const barcode = 'E2E-MOCK-BARCODE'
   const sku = `SKU-FULL-${Date.now()}`
 

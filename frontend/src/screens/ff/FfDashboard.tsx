@@ -233,7 +233,12 @@ export function FfDashboard({
             <Typography variant="h5" component="h1" sx={{ fontWeight: 800 }} data-testid="cal-01-title" data-task-id="CAL-01">
               Календарь отгрузок
             </Typography>
-            <Typography variant="body2" color="text.secondary" data-testid="org-name">
+            <Typography
+              variant="body2"
+              color="text.secondary"
+              data-testid="org-name"
+              data-task-id="TC-S01-001"
+            >
               {me.organization_name}
             </Typography>
           </Box>

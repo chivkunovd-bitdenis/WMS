@@ -34,7 +34,8 @@ test('fulfillment admin sees shipment calendar and supplies-shipments page', asy
 
   const token = await page.evaluate(() => localStorage.getItem('wms_token_ff'));
   expect(token).toBeTruthy();
-  const e2eApi = process.env.E2E_API_ORIGIN ?? 'http://127.0.0.1:18000';
+  const e2eApi =
+    process.env.E2E_API_ORIGIN ?? `http://127.0.0.1:${process.env.E2E_API_PORT ?? 18000}`;
   const whRes = await page.request.post(`${e2eApi}/warehouses`, {
     headers: {
       Authorization: `Bearer ${token}`,
