@@ -76,7 +76,37 @@ Evidence:
   - `tasks/wms-wave1-fbs-new-orders-20260814/live-browser-review-20260815/screenshots/99-order023-round2-live-search.png`
   - `tasks/wms-wave1-fbs-new-orders-20260814/live-browser-review-20260815/screenshots/100-order023-round2-live-search-no-match.png`
 
-Round 2 buckets: Stop 0, Slowdown 0, Tail 0.
+Round 2 buckets: Stop 0, Slowdown 5 closed, Tail 0.
+
+Closed slowdown findings:
+- `Заказ и идентификаторы` had become a product passport with 6 identifiers; the visible row now keeps only working identifiers: `WB №`, `ШК`, `SKU` or article fallback.
+- Product names wrapped and inflated rows; product name is one visible line with tooltip for the full value.
+- `Обновить данные` and `Забрать заказы из WB` looked like equal primary actions; `Обновить` is now secondary and WB import is the single primary action.
+- Separate `Найти` button made search a two-step action; search is live.
+- Row height was inflated by identifier/detail noise; live 1280px review shows 107px rows after cleanup.
+
+## PRODUCT_BROWSER_VERDICT / ORDER 024
+
+Result: accepted for `FBS -> Новые` after the 6a audit addendum. The review found 5 slowdowns and all 5 are closed in the current screen round; open findings are zero.
+
+6a tail checks:
+- Positive search-match alert `Найдено совпадений...` is absent. FBS-15 is covered by highlight plus scroll/list preservation, not by an extra banner.
+- Default visible product detail line `category · color · size` is absent from rows. These fields remain available for search/export data under FBS-14/FBS-17, but are not printed as default row noise.
+- `Показать выбранные` is kept under FBS-16: persistent selection must remain inspectable when filters/search/tabs hide rows. It was verified in the visible Chrome selection evidence.
+
+Evidence:
+- JSON: `tasks/wms-wave1-fbs-new-orders-20260814/live-browser-review-20260815/json/live-review-product-round2-order024-6a.json`
+- Selection JSON: `tasks/wms-wave1-fbs-new-orders-20260814/live-browser-review-20260815/json/live-review-product-round2-order024-selection.json`
+- Screenshots:
+  - `tasks/wms-wave1-fbs-new-orders-20260814/live-browser-review-20260815/screenshots/101-order023-6a-compact-initial.png`
+  - `tasks/wms-wave1-fbs-new-orders-20260814/live-browser-review-20260815/screenshots/102-order023-6a-live-search-highlight.png`
+  - `tasks/wms-wave1-fbs-new-orders-20260814/live-browser-review-20260815/screenshots/103-order023-6a-no-match-keeps-list.png`
+  - `tasks/wms-wave1-fbs-new-orders-20260814/live-browser-review-20260815/screenshots/104-order023-6a-selection-bar.png`
+  - `tasks/wms-wave1-fbs-new-orders-20260814/live-browser-review-20260815/screenshots/105-order023-6a-selected-dialog.png`
+  - `tasks/wms-wave1-fbs-new-orders-20260814/live-browser-review-20260815/screenshots/106-order023-6a-refresh-readback.png`
+  - `tasks/wms-wave1-fbs-new-orders-20260814/live-browser-review-20260815/screenshots/107-order023-6a-wb-sync-result.png`
+
+ORDER 024 buckets: Stop 0, Slowdown 5 closed / 0 open, Tail 0 open.
 
 ## Tests
 
@@ -98,6 +128,10 @@ After ORDER 023 compact-worklist fix:
 - `cd frontend && npm run build`: passed.
 - `E2E_API_PORT=18132 E2E_WEB_PORT=5189 E2E_DB_FILE=e2e-fbs-orders-18132.db npm run test:e2e -- tests-e2e/ff-fbs-orders.spec.ts`: 5 passed in 36.4s.
 
+After ORDER 024 6a addendum:
+- `cd frontend && npm run build`: passed.
+- `E2E_API_PORT=18134 E2E_WEB_PORT=5191 E2E_DB_FILE=e2e-fbs-orders-18134.db npx playwright test tests-e2e/ff-fbs-orders.spec.ts`: 5 passed in 58.9s.
+
 Known outside-target full e2e state from the interrupted earlier full run:
 - `npm run test:e2e`: 96 passed, 13 failed, 1 interrupted, 32 did not run.
 - The failures were outside the FBS new-orders target.
@@ -106,9 +140,11 @@ Known outside-target full e2e state from the interrupted earlier full run:
 
 Stop: 0.
 
-Slowdown: 0.
+Slowdown: 5, all closed and rechecked in ORDER 024.
 
 Tail: 1, fixed and rechecked in Round 2.
+
+Open findings after ORDER 024: Stop 0, Slowdown 0, Tail 0.
 
 ## Scope Guard
 
