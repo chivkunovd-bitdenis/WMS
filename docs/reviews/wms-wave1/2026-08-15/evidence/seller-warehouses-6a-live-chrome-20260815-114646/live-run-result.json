@@ -1,0 +1,109 @@
+{
+  "commit": "d24cf0ed627ff6be0b947f9424b9c4476364545d",
+  "url": "http://127.0.0.1:51831/app/ff/fbs/stock-sync",
+  "api": "http://127.0.0.1:18131",
+  "browser": "Visible Google Chrome launched by macOS open with --remote-debugging-port=9223 and a temporary profile; controlled through CDP connected to the visible external browser window. Screenshots are viewport captures from that CDP-connected visible tab.",
+  "sellerNoTokenId": "af2c691c-cb42-4b02-9ea6-00d8289996fe",
+  "sellerId": "f8269fb8-bf04-4c1b-9f5f-523b68b8f543",
+  "warehouseId": "930ff7fb-3162-450d-8776-2f7759799a2f",
+  "earlierScreenshotsPresent": {
+    "registration": true,
+    "noTokenNoWms": true,
+    "wbUnmappedNoWms": true
+  },
+  "steps": [
+    {
+      "name": "Mapping saves and read-back shows publication off by default",
+      "ok": true,
+      "details": {
+        "warehouseId": "930ff7fb-3162-450d-8776-2f7759799a2f"
+      },
+      "url": "http://127.0.0.1:51831/app/ff/fbs/stock-sync",
+      "textSample": "Короб ВМС\nlive-6a-1786783706157@example.com · администратор\n0\nВыйти\nДашборд\nОтгрузки\nFBS\nПриёмка\nСортировка\nУпаковка\nЯчейки\nСеллеры\nКаталог\nИнвентаризация\nЧестный знак\nНастройки\nFBS\n\nСклады селлера WB, сопоставление с физическими складами WMS и публикация остатков.\n\nЗаказы\nОстатки WB\nСклад WB сопоставлен со складом WMS\nСеллер\nLive Seller WH\nСеллер\nОбновить\nВыгрузить остатки по включённым складам\nСклад WB\tГород\tАдрес\tСостояние\tСклад WMS\tFBS остаток\tПубликация\tПоследнее подтверждение\tДействия\n\n\nE2E Seller Warehouse\n\nWB ID 501001\tMoscow\tE2E Seller WH Address\tактивен в WB\t\nСклад WMS\nLive Physical FBS Warehouse (live-fbs-1786783874670)\nСклад WMS\n\t0 шт\t\nготов к публикации\nне запускалась\n\t—\t\nВыгрузить\nСтатус\nОтключить"
+    },
+    {
+      "name": "Publication toggle saves enabled state",
+      "ok": true,
+      "details": {},
+      "url": "http://127.0.0.1:51831/app/ff/fbs/stock-sync",
+      "textSample": "Короб ВМС\nlive-6a-1786783706157@example.com · администратор\n0\nВыйти\nДашборд\nОтгрузки\nFBS\nПриёмка\nСортировка\nУпаковка\nЯчейки\nСеллеры\nКаталог\nИнвентаризация\nЧестный знак\nНастройки\nFBS\n\nСклады селлера WB, сопоставление с физическими складами WMS и публикация остатков.\n\nЗаказы\nОстатки WB\nПубликация включена\nСеллер\nLive Seller WH\nСеллер\nОбновить\nВыгрузить остатки по включённым складам\nСклад WB\tГород\tАдрес\tСостояние\tСклад WMS\tFBS остаток\tПубликация\tПоследнее подтверждение\tДействия\n\n\nE2E Seller Warehouse\n\nWB ID 501001\tMoscow\tE2E Seller WH Address\tактивен в WB\t\nСклад WMS\nLive Physical FBS Warehouse (live-fbs-1786783874670)\nСклад WMS\n\t0 шт\t\nпубликация включена\nне запускалась\n\t—\t\nВыгрузить\nСтатус\nОтключить"
+    },
+    {
+      "name": "Reload/read-back keeps mapped warehouse and publication enabled",
+      "ok": true,
+      "details": {},
+      "url": "http://127.0.0.1:51831/app/ff/fbs/stock-sync",
+      "textSample": "Короб ВМС\nlive-6a-1786783706157@example.com · администратор\n0\nВыйти\nДашборд\nОтгрузки\nFBS\nПриёмка\nСортировка\nУпаковка\nЯчейки\nСеллеры\nКаталог\nИнвентаризация\nЧестный знак\nНастройки\nFBS\n\nСклады селлера WB, сопоставление с физическими складами WMS и публикация остатков.\n\nЗаказы\nОстатки WB\nСеллер\nLive Seller WH\nСеллер\nОбновить\nВыгрузить остатки по включённым складам\nСклад WB\tГород\tАдрес\tСостояние\tСклад WMS\tFBS остаток\tПубликация\tПоследнее подтверждение\tДействия\n\n\nE2E Seller Warehouse\n\nWB ID 501001\tMoscow\tE2E Seller WH Address\tактивен в WB\t\nСклад WMS\nLive Physical FBS Warehouse (live-fbs-1786783874670)\nСклад WMS\n\t0 шт\t\nпубликация включена\nне запускалась\n\t—\t\nВыгрузить\nСтатус\nОтключить"
+    },
+    {
+      "name": "Sync action feedback has no technical job id",
+      "ok": true,
+      "details": {
+        "feedback": "Синхронизация: складов 1, товаров 0, подтверждено 0, ошибок 0"
+      },
+      "url": "http://127.0.0.1:51831/app/ff/fbs/stock-sync",
+      "textSample": "Короб ВМС\nlive-6a-1786783706157@example.com · администратор\n0\nВыйти\nДашборд\nОтгрузки\nFBS\nПриёмка\nСортировка\nУпаковка\nЯчейки\nСеллеры\nКаталог\nИнвентаризация\nЧестный знак\nНастройки\nFBS\n\nСклады селлера WB, сопоставление с физическими складами WMS и публикация остатков.\n\nЗаказы\nОстатки WB\nСинхронизация: складов 1, товаров 0, подтверждено 0, ошибок 0\nСеллер\nLive Seller WH\nСеллер\nОбновить\nВыгрузить остатки по включённым складам\nСклад WB\tГород\tАдрес\tСостояние\tСклад WMS\tFBS остаток\tПубликация\tПоследнее подтверждение\tДействия\n\n\nE2E Seller Warehouse\n\nWB ID 501001\tMoscow\tE2E Seller WH Address\tактивен в WB\t\nСклад WMS\nLive Physical FBS Warehouse (live-fbs-1786783874670)\nСклад WMS\n\t0 шт\t\nпубликация включена\nПодтверждено\n\t15.08.2026, 08:52:26\t\nВыгрузить\nСтатус\nОтключить"
+    },
+    {
+      "name": "Status panel opens and empty state is human readable",
+      "ok": true,
+      "details": {
+        "statusText": "Статус синхронизации — WB 501001\n\nСтатус сопоставления:\n\nПодтверждено\nТовар Wildberries\tК публикации\tПодтверждено WB\tСтатус\tОшибка\n\n\nНет позиций синхронизации\n\nВ выгрузку попадают только товары, у которых включена продажа по FBS.\nЗакрыть"
+      },
+      "url": "http://127.0.0.1:51831/app/ff/fbs/stock-sync",
+      "textSample": "Короб ВМС\nlive-6a-1786783706157@example.com · администратор\n0\nВыйти\nДашборд\nОтгрузки\nFBS\nПриёмка\nСортировка\nУпаковка\nЯчейки\nСеллеры\nКаталог\nИнвентаризация\nЧестный знак\nНастройки\nFBS\n\nСклады селлера WB, сопоставление с физическими складами WMS и публикация остатков.\n\nЗаказы\nОстатки WB\nСинхронизация: складов 1, товаров 0, подтверждено 0, ошибок 0\nСеллер\nLive Seller WH\nСеллер\nОбновить\nВыгрузить остатки по включённым складам\nСклад WB\tГород\tАдрес\tСостояние\tСклад WMS\tFBS остаток\tПубликация\tПоследнее подтверждение\tДействия\n\n\nE2E Seller Warehouse\n\nWB ID 501001\tMoscow\tE2E Seller WH Address\tактивен в WB\t\nСклад WMS\nLive Physical FBS Warehouse (live-fbs-1786783874670)\nСклад WMS\n\t0 шт\t\nпубликация включена\nПодтверждено\n\t15.08.2026, 08:52:26\t\nВыгрузить\nСтатус\nОтключить\nСтатус синхронизации — WB 501001\n\nСтатус сопоставления:\n\nПодтверждено\nТовар Wildberries\tК публикации\tПодтверждено WB\tСтатус\tОшибка\n\n\nНет позиций синхронизации\n\nВ выгрузку попадают только товары, у которых включена продажа по FBS.\nЗакрыть"
+    },
+    {
+      "name": "Disable confirmation deactivates binding and read-back shows unmapped",
+      "ok": true,
+      "details": {},
+      "url": "http://127.0.0.1:51831/app/ff/fbs/stock-sync",
+      "textSample": "Короб ВМС\nlive-6a-1786783706157@example.com · администратор\n0\nВыйти\nДашборд\nОтгрузки\nFBS\nПриёмка\nСортировка\nУпаковка\nЯчейки\nСеллеры\nКаталог\nИнвентаризация\nЧестный знак\nНастройки\nFBS\n\nСклады селлера WB, сопоставление с физическими складами WMS и публикация остатков.\n\nЗаказы\nОстатки WB\nСопоставление отключено\nСеллер\nLive Seller WH\nСеллер\nОбновить\nВыгрузить остатки по включённым складам\nСклад WB\tГород\tАдрес\tСостояние\tСклад WMS\tFBS остаток\tПубликация\tПоследнее подтверждение\tДействия\n\n\nE2E Seller Warehouse\n\nWB ID 501001\tMoscow\tE2E Seller WH Address\tактивен в WB\t\nСклад WMS\n​\nСклад WMS\n\t—\t\nсклад не сопоставлен\nПодтверждено\n\t15.08.2026, 08:52:26\t\nВыгрузить\nСтатус\nОтключить"
+    },
+    {
+      "name": "Final screen has no raw technical UI text checked by 6a audit",
+      "ok": true,
+      "details": {
+        "rawTechnicalVisible": false
+      },
+      "url": "http://127.0.0.1:51831/app/ff/fbs/stock-sync",
+      "textSample": "Короб ВМС\nlive-6a-1786783706157@example.com · администратор\n0\nВыйти\nДашборд\nОтгрузки\nFBS\nПриёмка\nСортировка\nУпаковка\nЯчейки\nСеллеры\nКаталог\nИнвентаризация\nЧестный знак\nНастройки\nFBS\n\nСклады селлера WB, сопоставление с физическими складами WMS и публикация остатков.\n\nЗаказы\nОстатки WB\nСопоставление отключено\nСеллер\nLive Seller WH\nСеллер\nОбновить\nВыгрузить остатки по включённым складам\nСклад WB\tГород\tАдрес\tСостояние\tСклад WMS\tFBS остаток\tПубликация\tПоследнее подтверждение\tДействия\n\n\nE2E Seller Warehouse\n\nWB ID 501001\tMoscow\tE2E Seller WH Address\tактивен в WB\t\nСклад WMS\n​\nСклад WMS\n\t—\t\nсклад не сопоставлен\nПодтверждено\n\t15.08.2026, 08:52:26\t\nВыгрузить\nСтатус\nОтключить"
+    }
+  ],
+  "screenshots": {
+    "mappedSyncOff": {
+      "viewport": "/Users/deniscivkunov/Projects/WMS/.worktrees/wave1-seller-warehouses-20260814/docs/reviews/wms-wave1/2026-08-15/evidence/seller-warehouses-6a-live-chrome-20260815-114646/screenshots/05-mapped-publication-off.png"
+    },
+    "publicationOn": {
+      "viewport": "/Users/deniscivkunov/Projects/WMS/.worktrees/wave1-seller-warehouses-20260814/docs/reviews/wms-wave1/2026-08-15/evidence/seller-warehouses-6a-live-chrome-20260815-114646/screenshots/06-publication-enabled.png"
+    },
+    "reload": {
+      "viewport": "/Users/deniscivkunov/Projects/WMS/.worktrees/wave1-seller-warehouses-20260814/docs/reviews/wms-wave1/2026-08-15/evidence/seller-warehouses-6a-live-chrome-20260815-114646/screenshots/07-reload-readback-publication-enabled.png"
+    },
+    "syncFeedback": {
+      "viewport": "/Users/deniscivkunov/Projects/WMS/.worktrees/wave1-seller-warehouses-20260814/docs/reviews/wms-wave1/2026-08-15/evidence/seller-warehouses-6a-live-chrome-20260815-114646/screenshots/08-sync-feedback-no-technical-job-id.png"
+    },
+    "status": {
+      "viewport": "/Users/deniscivkunov/Projects/WMS/.worktrees/wave1-seller-warehouses-20260814/docs/reviews/wms-wave1/2026-08-15/evidence/seller-warehouses-6a-live-chrome-20260815-114646/screenshots/09-status-panel-empty.png"
+    },
+    "disableDialog": {
+      "viewport": "/Users/deniscivkunov/Projects/WMS/.worktrees/wave1-seller-warehouses-20260814/docs/reviews/wms-wave1/2026-08-15/evidence/seller-warehouses-6a-live-chrome-20260815-114646/screenshots/10-disable-confirmation-dialog.png"
+    },
+    "disabled": {
+      "viewport": "/Users/deniscivkunov/Projects/WMS/.worktrees/wave1-seller-warehouses-20260814/docs/reviews/wms-wave1/2026-08-15/evidence/seller-warehouses-6a-live-chrome-20260815-114646/screenshots/11-disabled-readback.png"
+    }
+  },
+  "verdict": "FIXES_REQUIRED",
+  "findings": {
+    "stop": [],
+    "tormoz": [
+      {
+        "id": "T1",
+        "task_id": "GLOBAL-02",
+        "summary": "Table is wider than the visible 1280px viewport; right columns/actions require horizontal scroll.",
+        "impact": "Operation is possible, but scanning and row actions are slower for the operator."
+      }
+    ],
+    "tail": []
+  }
+}

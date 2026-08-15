@@ -441,7 +441,7 @@ export function FfFbsStockSyncScreen({ token, authHeaders, sellers }: Props) {
           row?.wbId ?? null,
         )
         if (isSyncJob(result)) {
-          setFeedback(`Синхронизация поставлена в очередь (задача ${result.id})`)
+          setFeedback('Синхронизация поставлена в очередь')
         } else {
           setFeedback(
             `Синхронизация: складов ${result.bindings_processed}, товаров ${result.products_targeted}, подтверждено ${result.products_confirmed}, ошибок ${result.errors}`,
@@ -563,25 +563,38 @@ export function FfFbsStockSyncScreen({ token, authHeaders, sellers }: Props) {
         </Stack>
       </Paper>
 
-      <TableContainer component={Paper} variant="outlined" data-testid="fbs-stock-bindings-list">
-        <Table size="small">
+      <TableContainer
+        component={Paper}
+        variant="outlined"
+        data-testid="fbs-stock-bindings-list"
+        sx={{ overflowX: 'hidden' }}
+      >
+        <Table
+          size="small"
+          sx={{
+            tableLayout: 'fixed',
+            width: '100%',
+            '& th, & td': {
+              px: 1,
+              py: 1.25,
+              verticalAlign: 'top',
+            },
+          }}
+        >
           <TableHead>
             <TableRow>
-              <TableCell>Склад WB</TableCell>
-              <TableCell>Город</TableCell>
-              <TableCell>Адрес</TableCell>
-              <TableCell>Состояние</TableCell>
-              <TableCell>Склад WMS</TableCell>
-              <TableCell>FBS остаток</TableCell>
-              <TableCell>Публикация</TableCell>
-              <TableCell>Последнее подтверждение</TableCell>
-              <TableCell align="right">Действия</TableCell>
+              <TableCell sx={{ width: '25%' }}>Склад WB</TableCell>
+              <TableCell sx={{ width: '28%' }}>Склад WMS</TableCell>
+              <TableCell align="right" sx={{ width: '8%' }}>FBS</TableCell>
+              <TableCell sx={{ width: '19%' }}>Публикация</TableCell>
+              <TableCell sx={{ width: '11%' }}>Подтверждение</TableCell>
+              <TableCell align="right" sx={{ width: '9%' }}>Действия</TableCell>
             </TableRow>
           </TableHead>
           <TableBody>
             {rows.length === 0 ? (
               <TableRow>
-                <TableCell colSpan={9}>
+                <TableCell colSpan={6}>
                   <Box sx={{ py: 3, textAlign: 'center' }} data-testid="fbs-stock-bindings-empty">
                     <Typography color="text.secondary">
                       Склады WB не загружены: подключите токен WB Marketplace или обновите список.
@@ -596,14 +609,22 @@ export function FfFbsStockSyncScreen({ token, authHeaders, sellers }: Props) {
                     <Typography variant="body2" sx={{ fontWeight: 650 }}>
                       {row.name}
                     </Typography>
-                    <Typography variant="caption" color="text.secondary">
-                      WB ID {row.wbId}
-                    </Typography>
+                    <Stack spacing={0.25} sx={{ mt: 0.25 }}>
+                      <Typography variant="caption" color="text.secondary">
+                        WB ID {row.wbId}
+                      </Typography>
+                      <Typography variant="caption" color="text.secondary">
+                        {row.city}
+                      </Typography>
+                      <Typography variant="caption" color="text.secondary">
+                        {row.address || 'адрес не указан'}
+                      </Typography>
+                      <Typography variant="caption" color="text.secondary">
+                        {row.wbStatus}
+                      </Typography>
+                    </Stack>
                   </TableCell>
-                  <TableCell>{row.city}</TableCell>
-                  <TableCell>{row.address || 'адрес не указан'}</TableCell>
-                  <TableCell>{row.wbStatus}</TableCell>
-                  <TableCell sx={{ minWidth: 230 }}>
+                  <TableCell>
                     <FormControl size="small" fullWidth>
                       <InputLabel id={`fbs-stock-wms-label-${row.wbId}`}>Склад WMS</InputLabel>
                       <Select
@@ -613,6 +634,13 @@ export function FfFbsStockSyncScreen({ token, authHeaders, sellers }: Props) {
                         onChange={(e) => void handleBind(row, e.target.value)}
                         disabled={savingWbId === row.wbId || physicalWarehouses.length === 0}
                         data-testid="fbs-stock-row-wms-select"
+                        sx={{
+                          '& .MuiSelect-select': {
+                            overflow: 'hidden',
+                            textOverflow: 'ellipsis',
+                            whiteSpace: 'nowrap',
+                          },
+                        }}
                       >
                         <MenuItem value="">склад не сопоставлен</MenuItem>
                         {physicalWarehouses.map((w) => (
@@ -628,7 +656,7 @@ export function FfFbsStockSyncScreen({ token, authHeaders, sellers }: Props) {
                       </Typography>
                     ) : null}
                   </TableCell>
-                  <TableCell data-testid="fbs-stock-total">
+                  <TableCell align="right" data-testid="fbs-stock-total">
                     {formatFbsStockTotal(row.fbsStockTotal)}
                   </TableCell>
                   <TableCell>
@@ -639,8 +667,15 @@ export function FfFbsStockSyncScreen({ token, authHeaders, sellers }: Props) {
                         color={bindingColor(row)}
                         label={bindingText(row)}
                         data-testid="fbs-stock-binding-state"
+                        sx={{
+                          maxWidth: '100%',
+                          '& .MuiChip-label': {
+                            overflow: 'hidden',
+                            textOverflow: 'ellipsis',
+                          },
+                        }}
                       />
-                      <Stack direction="row" spacing={1} sx={{ alignItems: 'center' }}>
+                      <Stack direction="row" spacing={0.5} sx={{ alignItems: 'center', minWidth: 0 }}>
                         <Switch
                           size="small"
                           checked={row.stockSyncEnabled}
@@ -659,12 +694,13 @@ export function FfFbsStockSyncScreen({ token, authHeaders, sellers }: Props) {
                   </TableCell>
                   <TableCell>{formatDt(row.lastSyncAt)}</TableCell>
                   <TableCell align="right">
-                    <Stack direction="row" spacing={1} sx={{ justifyContent: 'flex-end' }}>
+                    <Stack spacing={0.25} sx={{ alignItems: 'flex-end' }}>
                       <Button
                         size="small"
                         onClick={() => void handleSync(row)}
                         disabled={busy || !row.isMapped || !row.stockSyncEnabled}
                         data-testid="fbs-stock-sync-one"
+                        sx={{ minWidth: 0, px: 0.75 }}
                       >
                         Выгрузить
                       </Button>
@@ -673,6 +709,7 @@ export function FfFbsStockSyncScreen({ token, authHeaders, sellers }: Props) {
                         onClick={() => void openStatus(row)}
                         disabled={!row.binding}
                         data-testid="fbs-stock-status-btn"
+                        sx={{ minWidth: 0, px: 0.75 }}
                       >
                         Статус
                       </Button>
@@ -682,6 +719,7 @@ export function FfFbsStockSyncScreen({ token, authHeaders, sellers }: Props) {
                         onClick={() => setPendingDisable(row)}
                         disabled={!row.binding?.is_active || savingWbId === row.wbId}
                         data-testid="fbs-stock-disable-binding"
+                        sx={{ minWidth: 0, px: 0.75 }}
                       >
                         Отключить
                       </Button>
