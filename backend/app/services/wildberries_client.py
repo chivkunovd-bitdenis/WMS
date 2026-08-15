@@ -579,11 +579,16 @@ async def fetch_marketplace_seller_warehouses(
     try:
         response = await client.get(url, headers=headers, timeout=60.0)
     except httpx.HTTPError as exc:
-        raise WildberriesClientError("transport_error") from exc
+        raise WildberriesClientError(
+            "transport_error",
+            endpoint=MARKETPLACE_SELLER_WAREHOUSES_PATH,
+        ) from exc
     if response.status_code >= 400:
         raise WildberriesClientError(
             "upstream_error",
             status_code=response.status_code,
+            endpoint=MARKETPLACE_SELLER_WAREHOUSES_PATH,
+            response_body=_wb_response_text(response),
         )
     data = response.json()
     if isinstance(data, list):
@@ -606,11 +611,16 @@ async def fetch_marketplace_seller_offices(
     try:
         response = await client.get(url, headers=headers, timeout=60.0)
     except httpx.HTTPError as exc:
-        raise WildberriesClientError("transport_error") from exc
+        raise WildberriesClientError(
+            "transport_error",
+            endpoint=MARKETPLACE_SELLER_OFFICES_PATH,
+        ) from exc
     if response.status_code >= 400:
         raise WildberriesClientError(
             "upstream_error",
             status_code=response.status_code,
+            endpoint=MARKETPLACE_SELLER_OFFICES_PATH,
+            response_body=_wb_response_text(response),
         )
     data = response.json()
     if isinstance(data, list):

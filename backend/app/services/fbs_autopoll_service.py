@@ -17,9 +17,11 @@ from app.models.fbs_supply import FBS_SUPPLY_STATUS_ASSEMBLING, FbsSupply
 from app.models.fbs_warehouse_binding import FbsWarehouseBinding
 from app.models.seller import Seller
 from app.models.seller_wildberries_credentials import SellerWildberriesCredentials
+from app.models.warehouse import Warehouse
 from app.services.fbs_cancellation_service import FbsCancellationError, sync_seller_order_statuses
 from app.services.fbs_stock_sync_service import FbsStockSyncError, sync_binding_stocks
 from app.services.fbs_tracking_service import FbsTrackingError, sync_in_delivery_supplies
+from app.services.fbs_warehouse_binding_service import is_auto_fbs_wms_warehouse
 from app.services.fbs_wb_seller_lock_service import wb_seller_lock
 from app.services.wb_marketplace_orders_service import (
     WbMarketplaceOrdersError,
@@ -86,18 +88,21 @@ async def list_active_stock_sync_bindings(
     wb_warehouse_id: int | None = None,
 ) -> list[FbsWarehouseBinding]:
     stmt = (
-        select(FbsWarehouseBinding)
+        select(FbsWarehouseBinding, Warehouse)
+        .join(Warehouse, Warehouse.id == FbsWarehouseBinding.wms_warehouse_id)
         .where(
             FbsWarehouseBinding.tenant_id == tenant_id,
             FbsWarehouseBinding.seller_id == seller_id,
             FbsWarehouseBinding.is_active.is_(True),
             FbsWarehouseBinding.stock_sync_enabled.is_(True),
+            Warehouse.tenant_id == tenant_id,
         )
         .order_by(FbsWarehouseBinding.wb_warehouse_id.asc())
     )
     if wb_warehouse_id is not None:
         stmt = stmt.where(FbsWarehouseBinding.wb_warehouse_id == wb_warehouse_id)
-    return list((await session.execute(stmt)).scalars().all())
+    rows = list((await session.execute(stmt)).all())
+    return [binding for binding, warehouse in rows if not is_auto_fbs_wms_warehouse(warehouse)]
 
 
 async def sync_seller_stocks(
