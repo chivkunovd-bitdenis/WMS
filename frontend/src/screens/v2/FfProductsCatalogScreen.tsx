@@ -97,6 +97,7 @@ export function FfProductsCatalogScreen({
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [catalog, setCatalog] = useState<FfCatalogRow[]>([])
+  const [dialogSellers, setDialogSellers] = useState<SellerRow[]>(sellers)
   const [createOpen, setCreateOpen] = useState(false)
   const [importOpen, setImportOpen] = useState(false)
   const [importNotice, setImportNotice] = useState<string | null>(null)
@@ -122,6 +123,31 @@ export function FfProductsCatalogScreen({
   useEffect(() => {
     void load()
   }, [load])
+
+  useEffect(() => {
+    if (sellers.length > 0) {
+      setDialogSellers(sellers)
+    }
+  }, [sellers])
+
+  const loadDialogSellers = useCallback(async () => {
+    if (!canManageCatalog) return
+    try {
+      const res = await fetch(apiUrl('/sellers'), {
+        headers: { ...authHeaders(token) },
+      })
+      if (!res.ok) {
+        throw new Error(humanFfCatalogError(await readApiErrorMessage(res)))
+      }
+      setDialogSellers((await res.json()) as SellerRow[])
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Не удалось загрузить селлеров.')
+    }
+  }, [authHeaders, canManageCatalog, token])
+
+  useEffect(() => {
+    void loadDialogSellers()
+  }, [loadDialogSellers])
 
   return (
     <FfProductMarkingPrintProvider token={token}>
@@ -390,7 +416,7 @@ export function FfProductsCatalogScreen({
               open={createOpen}
               token={token}
               authHeaders={authHeaders}
-              sellers={sellers}
+              sellers={dialogSellers}
               onClose={() => setCreateOpen(false)}
               onCreated={async () => {
                 setImportNotice('Товар создан.')
@@ -400,7 +426,7 @@ export function FfProductsCatalogScreen({
             <FfProductTzImportDialog
               open={importOpen}
               token={token}
-              sellers={sellers}
+              sellers={dialogSellers}
               onClose={() => setImportOpen(false)}
               onApplied={async (message) => {
                 setImportNotice(message)
