@@ -12,6 +12,7 @@ import {
   DialogTitle,
   FormControl,
   InputLabel,
+  InputAdornment,
   MenuItem,
   Paper,
   Select,
@@ -66,6 +67,7 @@ const TABS = [
 
 const EXTERNAL_WB_SUPPLY_HINT =
   'Поставку создали в кабинете Wildberries, а в WMS она не привязана. Открыть её здесь нельзя.'
+const SEARCH_NO_MATCH_NOTICE = 'Совпадений не найдено, список не изменён.'
 
 function MissingText({ children }: { children: string }) {
   return (
@@ -345,6 +347,18 @@ export function FfFbsOrdersScreen({ token, authHeaders, sellers, isAdmin = false
     rowRefs.current[matchingOrders[0].id]?.scrollIntoView({ block: 'center' })
   }, [matchingOrders, searchTerm])
 
+  useEffect(() => {
+    if (!searchTerm || statusGroup !== 'new' || orders.length === 0) {
+      if (notice === SEARCH_NO_MATCH_NOTICE) setNotice(null)
+      return
+    }
+    if (matchingOrders.length === 0) {
+      if (notice !== SEARCH_NO_MATCH_NOTICE) setNotice(SEARCH_NO_MATCH_NOTICE)
+      return
+    }
+    if (notice === SEARCH_NO_MATCH_NOTICE) setNotice(null)
+  }, [matchingOrders.length, notice, orders.length, searchTerm, statusGroup])
+
   const toggle = (order: FbsWorklistOrder) => {
     setSelected((current) => {
       const next = new Set(current)
@@ -368,20 +382,6 @@ export function FfFbsOrdersScreen({ token, authHeaders, sellers, isAdmin = false
       })
       return next
     })
-  }
-
-  const applySearch = () => {
-    const term = search.trim()
-    const normalized = normalizeSearch(term)
-    const matches = normalized
-      ? orders.filter((order) => orderSearchText(order).includes(normalized))
-      : []
-    setActiveSearch(term)
-    if (normalized && matches.length === 0) {
-      setNotice('Совпадений не найдено, список не изменён.')
-    } else {
-      setNotice(null)
-    }
   }
 
   const downloadExcel = () => {
@@ -417,12 +417,13 @@ export function FfFbsOrdersScreen({ token, authHeaders, sellers, isAdmin = false
         </Box>
         <Stack direction="row" spacing={1.25} sx={{ alignItems: 'flex-start' }}>
           <Button
-            variant="outlined"
+            variant="text"
+            size="small"
             startIcon={<RefreshOutlinedIcon />}
             onClick={() => void load()}
             disabled={busy || syncing}
           >
-            Обновить данные
+            Обновить
           </Button>
           {isAdmin ? (
             <Button
@@ -512,20 +513,24 @@ export function FfFbsOrdersScreen({ token, authHeaders, sellers, isAdmin = false
             fullWidth
             label="Поиск: заказ, товар, категория, артикул, ШК, SKU, цвет, размер"
             value={search}
-            onChange={(event) => setSearch(event.target.value)}
+            onChange={(event) => {
+              setSearch(event.target.value)
+              setActiveSearch(event.target.value.trim())
+            }}
             onKeyDown={(event) => {
-              if (event.key === 'Enter') applySearch()
+              if (event.key === 'Enter') setActiveSearch(search.trim())
             }}
             data-testid="fbs-worklist-search"
+            slotProps={{
+              input: {
+                startAdornment: (
+                  <InputAdornment position="start">
+                    <SearchOutlinedIcon fontSize="small" />
+                  </InputAdornment>
+                ),
+              },
+            }}
           />
-          <Button
-            variant="contained"
-            startIcon={<SearchOutlinedIcon />}
-            onClick={applySearch}
-            sx={{ minWidth: 130 }}
-          >
-            Найти
-          </Button>
           {statusGroup === 'new' ? (
             <Button
               variant="outlined"
@@ -591,10 +596,10 @@ export function FfFbsOrdersScreen({ token, authHeaders, sellers, isAdmin = false
               {statusGroup === 'new' ? (
                 <>
                   <TableCell sx={{ minWidth: 300 }}>Товар</TableCell>
-                  <TableCell sx={{ minWidth: 220 }}>Заказ и идентификаторы</TableCell>
-                  <TableCell sx={{ minWidth: 125 }}>Селлер</TableCell>
-                  <TableCell sx={{ minWidth: 150 }}>Склад селлера / WB</TableCell>
-                  <TableCell sx={{ minWidth: 150 }}>Создан WB</TableCell>
+                  <TableCell sx={{ minWidth: 180 }}>Заказ и сканирование</TableCell>
+                  <TableCell sx={{ minWidth: 170 }}>Селлер</TableCell>
+                  <TableCell sx={{ minWidth: 220 }}>Склад селлера / WB</TableCell>
+                  <TableCell sx={{ minWidth: 130 }}>Создан WB</TableCell>
                 </>
               ) : (
                 <>
@@ -615,10 +620,6 @@ export function FfFbsOrdersScreen({ token, authHeaders, sellers, isAdmin = false
               const productDetail = [order.product.category, order.product.color, order.product.size]
                 .filter(Boolean)
                 .join(' · ')
-              const skuLine = [
-                order.product.sku ? `SKU ${order.product.sku}` : null,
-                order.product.chrt_id ? `chrtId ${order.product.chrt_id}` : null,
-              ].filter(Boolean).join(' · ')
               const row = (
                 <TableRow
                   key={order.id}
@@ -628,6 +629,7 @@ export function FfFbsOrdersScreen({ token, authHeaders, sellers, isAdmin = false
                   sx={{
                     verticalAlign: 'top',
                     cursor: order.supply_id ? 'pointer' : 'default',
+                    '& > td': { py: 0.9 },
                     ...(highlighted
                       ? {
                           bgcolor: 'rgba(255, 214, 102, 0.24)',
@@ -663,16 +665,18 @@ export function FfFbsOrdersScreen({ token, authHeaders, sellers, isAdmin = false
                           <ProductPhotoThumb
                             src={order.product.image_url}
                             alt={order.product.name}
-                            size={56}
+                            size={44}
                             previewSize={280}
                             testId={`fbs-product-photo-${order.id}`}
                           />
                           <Box sx={{ minWidth: 0 }}>
-                            <Typography variant="subtitle2" sx={{ lineHeight: 1.25 }}>
-                              {order.product.id ? order.product.name : 'Товар не сопоставлен'}
-                            </Typography>
+                            <Tooltip title={order.product.id ? order.product.name : 'Товар не сопоставлен'}>
+                              <Typography variant="subtitle2" noWrap sx={{ lineHeight: 1.25, maxWidth: 320 }}>
+                                {order.product.id ? order.product.name : 'Товар не сопоставлен'}
+                              </Typography>
+                            </Tooltip>
                             {productDetail ? (
-                              <Typography variant="caption" color="text.secondary" sx={{ display: 'block' }}>
+                              <Typography variant="caption" color="text.secondary" noWrap sx={{ display: 'block', maxWidth: 320 }}>
                                 {productDetail}
                               </Typography>
                             ) : null}
@@ -690,21 +694,25 @@ export function FfFbsOrdersScreen({ token, authHeaders, sellers, isAdmin = false
                         <Typography variant="body2" sx={{ fontWeight: 700 }}>
                           WB №{order.wb_order_id}
                         </Typography>
-                        <Typography variant="caption" color="text.secondary" sx={{ display: 'block' }}>
-                          Артикул: {order.product.seller_article ?? '—'}
-                          {order.product.wb_article ? ` · WB/nmId ${order.product.wb_article}` : ''}
-                        </Typography>
-                        <Typography variant="caption" color="text.secondary" sx={{ display: 'block' }}>
+                        <Typography variant="caption" color="text.secondary" noWrap sx={{ display: 'block', maxWidth: 190 }}>
                           ШК: {order.product.barcode ?? '—'}
                         </Typography>
-                        {skuLine ? (
-                          <Typography variant="caption" color="text.secondary" sx={{ display: 'block' }}>
-                            {skuLine}
+                        {order.product.sku ? (
+                          <Tooltip title={order.product.sku}>
+                            <Typography variant="caption" color="text.secondary" noWrap sx={{ display: 'block', maxWidth: 190 }}>
+                              SKU {order.product.sku}
+                            </Typography>
+                          </Tooltip>
+                        ) : order.product.seller_article ? (
+                          <Typography variant="caption" color="text.secondary" noWrap sx={{ display: 'block', maxWidth: 190 }}>
+                            Артикул: {order.product.seller_article}
                           </Typography>
                         ) : null}
                       </TableCell>
                       <TableCell>
-                        <Typography variant="body2">{order.seller.name ?? '—'}</Typography>
+                        <Tooltip title={order.seller.name ?? '—'}>
+                          <Typography variant="body2" noWrap sx={{ maxWidth: 190 }}>{order.seller.name ?? '—'}</Typography>
+                        </Tooltip>
                         {order.buyer_type === 'legal' ? (
                           <Typography variant="caption" color="text.secondary">
                             Юридическое лицо
@@ -712,10 +720,12 @@ export function FfFbsOrdersScreen({ token, authHeaders, sellers, isAdmin = false
                         ) : null}
                       </TableCell>
                       <TableCell>
-                        <Typography variant="body2" sx={{ fontWeight: 650 }}>
-                          {order.wb_warehouse.name || `WB ${order.wb_warehouse.id}`}
-                        </Typography>
-                        <Typography variant="caption" color="text.secondary">
+                        <Tooltip title={order.wb_warehouse.name || `WB ${order.wb_warehouse.id}`}>
+                          <Typography variant="body2" noWrap sx={{ fontWeight: 650, maxWidth: 240 }}>
+                            {order.wb_warehouse.name || `WB ${order.wb_warehouse.id}`}
+                          </Typography>
+                        </Tooltip>
+                        <Typography variant="caption" color="text.secondary" noWrap sx={{ display: 'block', maxWidth: 240 }}>
                           WMS: {order.wms_warehouse.name}
                         </Typography>
                       </TableCell>
