@@ -188,7 +188,7 @@ test('FF marketplace unload: tabs switch without losing document context', async
   const baseIn = `${e2eApi}/operations/inbound-intake-requests`
   const inbound = await page.request.post(baseIn, {
     headers: auth,
-    data: JSON.stringify({ warehouse_id: whId }),
+    data: JSON.stringify({ warehouse_id: whId, planned_box_count: 1 }),
   })
   const inboundId = String(((await inbound.json()) as { id: string }).id)
   const locLineRes = await page.request.post(`${baseIn}/${inboundId}/lines`, {
@@ -206,7 +206,7 @@ test('FF marketplace unload: tabs switch without losing document context', async
 
   const inboundSort = await page.request.post(baseIn, {
     headers: auth,
-    data: JSON.stringify({ warehouse_id: whId }),
+    data: JSON.stringify({ warehouse_id: whId, planned_box_count: 1 }),
   })
   const sortInboundId = String(((await inboundSort.json()) as { id: string }).id)
   const sortLineRes = await page.request.post(`${baseIn}/${sortInboundId}/lines`, {
@@ -403,7 +403,7 @@ test('FF marketplace unload: no packaging progress banner on draft', async ({ pa
   const baseIn = `${e2eApi}/operations/inbound-intake-requests`
   const inbound = await page.request.post(baseIn, {
     headers: auth,
-    data: JSON.stringify({ warehouse_id: whId }),
+    data: JSON.stringify({ warehouse_id: whId, planned_box_count: 1 }),
   })
   const inboundId = String(((await inbound.json()) as { id: string }).id)
   const locLineRes = await page.request.post(`${baseIn}/${inboundId}/lines`, {
@@ -421,7 +421,7 @@ test('FF marketplace unload: no packaging progress banner on draft', async ({ pa
 
   const inboundSort = await page.request.post(baseIn, {
     headers: auth,
-    data: JSON.stringify({ warehouse_id: whId }),
+    data: JSON.stringify({ warehouse_id: whId, planned_box_count: 1 }),
   })
   const sortInboundId = String(((await inboundSort.json()) as { id: string }).id)
   const sortLineRes = await page.request.post(`${baseIn}/${sortInboundId}/lines`, {
@@ -559,7 +559,7 @@ test('FF marketplace unload: main scan rejects product barcode', async ({ page }
   const baseIn = `${e2eApi}/operations/inbound-intake-requests`
   const inbound = await page.request.post(baseIn, {
     headers: auth,
-    data: JSON.stringify({ warehouse_id: whId }),
+    data: JSON.stringify({ warehouse_id: whId, planned_box_count: 1 }),
   })
   const inboundId = String(((await inbound.json()) as { id: string }).id)
   const locLineRes = await page.request.post(`${baseIn}/${inboundId}/lines`, {
@@ -577,7 +577,7 @@ test('FF marketplace unload: main scan rejects product barcode', async ({ page }
 
   const inboundSort = await page.request.post(baseIn, {
     headers: auth,
-    data: JSON.stringify({ warehouse_id: whId }),
+    data: JSON.stringify({ warehouse_id: whId, planned_box_count: 1 }),
   })
   const sortInboundId = String(((await inboundSort.json()) as { id: string }).id)
   const sortLineRes = await page.request.post(`${baseIn}/${sortInboundId}/lines`, {
@@ -720,7 +720,7 @@ test('TC-NEW-OUT-FE-02: shipment table columns no early red', async ({ page }) =
   const baseIn = `${e2eApi}/operations/inbound-intake-requests`
   const inbound = await page.request.post(baseIn, {
     headers: auth,
-    data: JSON.stringify({ warehouse_id: whId }),
+    data: JSON.stringify({ warehouse_id: whId, planned_box_count: 1 }),
   })
   const inboundId = String(((await inbound.json()) as { id: string }).id)
   const lineRes = await page.request.post(`${baseIn}/${inboundId}/lines`, {

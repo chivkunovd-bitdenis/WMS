@@ -91,7 +91,7 @@ test('FF marketplace unload: box add-products modal respects plan limit', async 
   const baseIn = `${e2eApi}/operations/inbound-intake-requests`
   const inbound = await page.request.post(baseIn, {
     headers: auth,
-    data: JSON.stringify({ warehouse_id: whId }),
+    data: JSON.stringify({ warehouse_id: whId, planned_box_count: 1 }),
   })
   const inboundId = String(((await inbound.json()) as { id: string }).id)
   await page.request.post(`${baseIn}/${inboundId}/lines`, {
@@ -110,7 +110,7 @@ test('FF marketplace unload: box add-products modal respects plan limit', async 
 
   const inboundSort = await page.request.post(baseIn, {
     headers: auth,
-    data: JSON.stringify({ warehouse_id: whId }),
+    data: JSON.stringify({ warehouse_id: whId, planned_box_count: 1 }),
   })
   const sortInboundId = String(((await inboundSort.json()) as { id: string }).id)
   await page.request.post(`${baseIn}/${sortInboundId}/lines`, {
@@ -311,7 +311,7 @@ test('FF marketplace unload: two single-box batch creates both allow add product
   const baseIn = `${e2eApi}/operations/inbound-intake-requests`
   const inbound = await page.request.post(baseIn, {
     headers: auth,
-    data: JSON.stringify({ warehouse_id: whId }),
+    data: JSON.stringify({ warehouse_id: whId, planned_box_count: 1 }),
   })
   const inboundId = String(((await inbound.json()) as { id: string }).id)
   await page.request.post(`${baseIn}/${inboundId}/lines`, {
@@ -330,7 +330,7 @@ test('FF marketplace unload: two single-box batch creates both allow add product
 
   const inboundSort = await page.request.post(baseIn, {
     headers: auth,
-    data: JSON.stringify({ warehouse_id: whId }),
+    data: JSON.stringify({ warehouse_id: whId, planned_box_count: 1 }),
   })
   const sortInboundId = String(((await inboundSort.json()) as { id: string }).id)
   await page.request.post(`${baseIn}/${sortInboundId}/lines`, {
@@ -524,7 +524,7 @@ test('FF marketplace unload: box modal manual location and product scan', async 
   const baseIn = `${e2eApi}/operations/inbound-intake-requests`
   const inbound = await page.request.post(baseIn, {
     headers: auth,
-    data: JSON.stringify({ warehouse_id: whId }),
+    data: JSON.stringify({ warehouse_id: whId, planned_box_count: 1 }),
   })
   const inboundId = String(((await inbound.json()) as { id: string }).id)
   await page.request.post(`${baseIn}/${inboundId}/lines`, {
@@ -698,7 +698,7 @@ test('FF marketplace unload: sorting buffer pick without cell selection', async 
   const baseIn = `${e2eApi}/operations/inbound-intake-requests`
   const inbound = await page.request.post(baseIn, {
     headers: auth,
-    data: JSON.stringify({ warehouse_id: whId }),
+    data: JSON.stringify({ warehouse_id: whId, planned_box_count: 1 }),
   })
   const inboundId = String(((await inbound.json()) as { id: string }).id)
   await page.request.post(`${baseIn}/${inboundId}/lines`, {

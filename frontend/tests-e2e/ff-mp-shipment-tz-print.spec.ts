@@ -97,7 +97,7 @@ test('FF marketplace unload: packaging table keeps TZ print controls without FBS
   const baseIn = `${e2eApi}/operations/inbound-intake-requests`;
   const inbound = await page.request.post(baseIn, {
     headers: auth,
-    data: JSON.stringify({ warehouse_id: whId }),
+    data: JSON.stringify({ warehouse_id: whId, planned_box_count: 1 }),
   });
   const inboundId = String(((await inbound.json()) as { id: string }).id);
   await page.request.post(`${baseIn}/${inboundId}/lines`, {

@@ -122,7 +122,7 @@ test('fulfillment admin sees week calendar and supplies-shipments page', async (
   const baseIn = `${e2eApi}/operations/inbound-intake-requests`;
   const inbound = await page.request.post(baseIn, {
     headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
-    data: JSON.stringify({ warehouse_id: whId }),
+    data: JSON.stringify({ warehouse_id: whId, planned_box_count: 1 }),
   });
   if (!inbound.ok()) {
     throw new Error(`inbound create failed: ${inbound.status()} ${await inbound.text()}`);

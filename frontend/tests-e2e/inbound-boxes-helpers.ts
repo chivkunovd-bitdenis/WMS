@@ -261,16 +261,9 @@ export async function beginInboundReceiving(
   if (body.status !== 'submitted') {
     return;
   }
-  const lineId = body.lines[0]?.id;
-  if (!lineId) {
-    throw new Error('inbound has no lines');
-  }
-  const patch = await req.patch(`${base}/lines/${lineId}/actual`, {
-    headers: { ...adminHeaders, 'Content-Type': 'application/json' },
-    data: { actual_qty: 0 },
-  });
-  if (!patch.ok()) {
-    throw new Error(`begin receiving: ${patch.status()} ${await patch.text()}`);
+  const begin = await req.post(`${base}/begin-receiving`, { headers: adminHeaders });
+  if (!begin.ok()) {
+    throw new Error(`begin receiving: ${begin.status()} ${await begin.text()}`);
   }
 }
 
