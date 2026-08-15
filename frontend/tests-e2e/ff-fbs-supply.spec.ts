@@ -72,6 +72,7 @@ function workspace({
       wb_warehouse: { id: 501001, name: 'WB Подольск' },
       wms_warehouse: { id: 'w-1', name: 'Основной склад' },
       planned_destination: null,
+      planned_shipment_date: null,
       nearest_deadline_at: new Date(Date.now() + 100 * 3600 * 1000).toISOString(),
       packaging_task_id: null,
       barcode_asset: null,
@@ -176,6 +177,7 @@ test('fbs orders: create supply from selected orders', async ({ page }) => {
   const selectedOrders = [order('1'), order('2')]
   await mockWorklist(page, selectedOrders)
   let createBody: JsonObject | null = null
+  let plannedDateBody: JsonObject | null = null
 
   await page.route('**/operations/fbs-supplies/preflight', (route) =>
     json(route, {
@@ -199,6 +201,13 @@ test('fbs orders: create supply from selected orders', async ({ page }) => {
     createBody = route.request().postDataJSON() as JsonObject
     await json(route, workspace({ orders: selectedOrders.map((item) => ({ ...item, supply_id: 'sup-1' })) }), 201)
   })
+  await page.route('**/operations/fbs-supplies/sup-1/planned-shipment-date', async (route) => {
+    plannedDateBody = route.request().postDataJSON() as JsonObject
+    const body = plannedDateBody as { planned_shipment_date?: string | null }
+    const next = workspace({ orders: selectedOrders.map((item) => ({ ...item, supply_id: 'sup-1' })) })
+    ;(next.supply as JsonObject).planned_shipment_date = body.planned_shipment_date ?? null
+    await json(route, next)
+  })
 
   await page.getByTestId('nav-ff-fbs').click()
   await page.getByTestId('fbs-order-1').getByRole('checkbox').click()
@@ -210,8 +219,13 @@ test('fbs orders: create supply from selected orders', async ({ page }) => {
   await page.getByTestId('fbs-create-submit').click()
 
   await expect(page.getByTestId('fbs-workspace')).toBeVisible()
+  await expect(page.getByTestId('cal-02-fbs-shipment-date')).toBeVisible()
+  await page.getByTestId('cal-02-fbs-shipment-date').fill('2026-08-17')
+  await page.getByTestId('cal-02-fbs-shipment-date-save').click()
+  await expect(page.getByText('Дата отгрузки сохранена.')).toBeVisible()
   expect(createBody?.order_ids).toEqual(['1', '2'])
   expect(createBody?.idempotency_key).toEqual(expect.any(String))
+  expect(plannedDateBody).toEqual({ planned_shipment_date: '2026-08-17' })
 })
 
 // TC-NEW-FBS-PARTIAL-READBACK — WB partial confirmation remains visible after workspace read-back.

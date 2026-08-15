@@ -2770,6 +2770,8 @@ export default function App() {
             element={
               <FfDashboard
                 me={me}
+                token={token}
+                authHeaders={authHeaders}
                 isFulfillmentAdmin={isFulfillmentAdmin}
                 inboundSummaries={inboundSummaries}
                 outboundSummaries={outboundSummaries}
@@ -2793,8 +2795,17 @@ export default function App() {
                   setFfDocModal('inbound')
                 }}
                 onOpenOutbound={(id) => {
+                  setPendingMpUnloadId(null)
+                  setSelectedInboundId(null)
+                  setSelectedOutboundId(id)
+                  setFfDocModal('outbound')
+                }}
+                onOpenMarketplaceUnload={(id) => {
                   setPendingMpUnloadId(id)
                   navigate(`${base}/ff/mp-shipments`)
+                }}
+                onOpenFbsSupply={(id) => {
+                  navigate(`${base}/fbs?supply_id=${id}`)
                 }}
               />
             }
@@ -3091,6 +3102,7 @@ export default function App() {
                     void reloadMe()
                   }}
                   separateMarkingPrintEnabled={me.separate_marking_print_enabled === true}
+                  fbsShipmentCutoffTime={me.fbs_shipment_cutoff_time ?? null}
                 />
               ) : (
                 ffAccessDenied

@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useLocation } from 'react-router-dom'
 import {
   Alert,
   Box,
@@ -192,6 +193,7 @@ function downloadOrdersExcel(rows: FbsWorklistOrder[]): void {
 }
 
 export function FfFbsOrdersScreen({ token, authHeaders, sellers, isAdmin = false }: Props) {
+  const location = useLocation()
   const [statusGroup, setStatusGroup] = useState<(typeof TABS)[number]['key']>('new')
   const [sellerId, setSellerId] = useState('__all__')
   const [wbWarehouseId, setWbWarehouseId] = useState('__all__')
@@ -214,6 +216,7 @@ export function FfFbsOrdersScreen({ token, authHeaders, sellers, isAdmin = false
   const [workspaceId, setWorkspaceId] = useState<string | null>(null)
   const [workspaceSeed, setWorkspaceSeed] = useState<FbsWorkspace | null>(null)
   const rowRefs = useRef<Record<string, HTMLTableRowElement | null>>({})
+  const openedSupplyFromQuery = useRef<string | null>(null)
 
   const load = useCallback(async () => {
     setBusy(true)
@@ -399,6 +402,14 @@ export function FfFbsOrdersScreen({ token, authHeaders, sellers, isAdmin = false
     setWorkspaceOpen(true)
     setError(null)
   }
+
+  useEffect(() => {
+    const supplyId = new URLSearchParams(location.search).get('supply_id')
+    if (!supplyId || openedSupplyFromQuery.current === supplyId) return
+    openedSupplyFromQuery.current = supplyId
+    setStatusGroup('active')
+    openWorkspace(supplyId)
+  }, [location.search])
 
   return (
     <Box data-testid="fbs-orders-screen" sx={{ pb: selected.size ? 12 : 3 }}>

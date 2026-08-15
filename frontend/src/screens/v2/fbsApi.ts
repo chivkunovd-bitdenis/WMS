@@ -87,6 +87,7 @@ export type FbsSupply = {
   barcode_file: string | null // base64 PNG QR поставки
   document_number: string | null
   display_number: string | null
+  planned_shipment_date: string | null
   created_at_wb: string | null
   delivered_at: string | null
   created_at: string
@@ -433,6 +434,7 @@ export type FbsWorkspace = {
     wb_warehouse: { id: number; name: string | null }
     wms_warehouse: { id: string; name: string }
     planned_destination: { office_id: number; name: string; zone: string } | null
+    planned_shipment_date: string | null
     nearest_deadline_at: string
     packaging_task_id: string | null
     barcode_asset: FbsPrintAsset | null
@@ -540,6 +542,21 @@ export async function fetchFbsWorkspace(
   return jsonOrThrow<FbsWorkspace>(
     await fetch(apiUrl(`/operations/fbs-supplies/${id}/workspace`), {
       headers: { ...ah(token) },
+    }),
+  )
+}
+
+export async function updateFbsSupplyPlannedShipmentDate(
+  token: string,
+  ah: AuthHeaders,
+  id: string,
+  planned_shipment_date: string | null,
+): Promise<FbsWorkspace> {
+  return jsonOrThrow<FbsWorkspace>(
+    await fetch(apiUrl(`/operations/fbs-supplies/${id}/planned-shipment-date`), {
+      method: 'PATCH',
+      headers: jsonHeaders(token, ah),
+      body: JSON.stringify({ planned_shipment_date }),
     }),
   )
 }
