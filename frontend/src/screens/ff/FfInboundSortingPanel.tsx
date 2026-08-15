@@ -275,7 +275,7 @@ export function FfInboundSortingPanel({
   const [activeLocationId, setActiveLocationId] = useState<string | null>(null)
   const [activeLocationCode, setActiveLocationCode] = useState<string | null>(null)
   const [highlightedProductId, setHighlightedProductId] = useState<string | null>(null)
-  const [dirty, setDirty] = useState(false)
+  const [, setDirty] = useState(false)
   const scanInputRef = useRef<HTMLInputElement | null>(null)
   const distributionLoadSeq = useRef(0)
   const distributionEditSeq = useRef(0)
@@ -715,22 +715,6 @@ export function FfInboundSortingPanel({
     }
   }
 
-  const saveDistribution = async () => {
-    if (!distributionReady) {
-      return
-    }
-    if (hasValidationError) {
-      setError('Превышено принятое количество — уменьшите количество в строках.')
-      return
-    }
-    setBusy(true)
-    try {
-      await persistDistribution()
-    } finally {
-      setBusy(false)
-    }
-  }
-
   const applyDistribution = async () => {
     if (!distributionReady) {
       return
@@ -880,27 +864,15 @@ export function FfInboundSortingPanel({
           data-testid="ff-sorting-remaining-total"
         />
         {editable ? (
-          <>
-            <Button
-              variant="contained"
-              size="small"
-              disabled={busy || hasValidationError || sortingRemainingQty <= 0 || !distributionReady}
-              onClick={() => void applyDistribution()}
-              data-testid="ff-sorting-apply"
-            >
-              Применить раскладку
-            </Button>
-            <Button
-              variant="text"
-              color="inherit"
-              size="small"
-              disabled={busy || hasValidationError || !distributionReady || !dirty}
-              onClick={() => void saveDistribution()}
-              data-testid="ff-sorting-save"
-            >
-              Сохранить
-            </Button>
-          </>
+          <Button
+            variant="contained"
+            size="small"
+            disabled={busy || hasValidationError || sortingRemainingQty <= 0 || !distributionReady}
+            onClick={() => void applyDistribution()}
+            data-testid="ff-sorting-apply"
+          >
+            Применить раскладку
+          </Button>
         ) : null}
       </Stack>
 
