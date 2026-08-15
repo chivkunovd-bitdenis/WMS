@@ -946,7 +946,8 @@ export function FfFbsSupplyWorkspace({
 
   const orderPrintDone = useCallback(
     (order: FbsWorkspace['orders'][number]) =>
-      STICKER_PRINTED_STATUSES.includes(order.sticker.status) && isOrderMarkingReady(order),
+      (Boolean(order.sticker.applied_at) || STICKER_PRINTED_STATUSES.includes(order.sticker.status)) &&
+      isOrderMarkingReady(order),
     [],
   )
 
