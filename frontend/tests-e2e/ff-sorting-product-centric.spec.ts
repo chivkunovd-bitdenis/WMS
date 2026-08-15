@@ -25,8 +25,8 @@ async function selectSortingLocation(page: Page, row: Locator, name: RegExp): Pr
   await page.getByRole('option', { name }).click();
 }
 
-// TC-NEW-SORT-01 — mixed loose + box distribution survives save/reload with correct sources.
-test('ff sorting product-centric: loose and box sources persist after save reload', async ({ page }) => {
+// TC-NEW-SORT-01 — mixed loose + box distribution has one final action and applies correct sources.
+test('ff sorting product-centric: loose and box sources apply with one final action', async ({ page }) => {
   const email = `e2e-sort-mix-${Date.now()}@example.com`;
   const sku = `SKU-SORT-MIX-${Date.now()}`;
   const whCode = `wh-sort-mix-${Date.now()}`;
@@ -128,44 +128,40 @@ test('ff sorting product-centric: loose and box sources persist after save reloa
     .first();
   await selectSortingLocation(page, boxRow, /BOX-1/);
   await expect(boxRow.getByTestId('ff-sorting-cell-qty')).toHaveValue('6');
-  await expect(page.getByTestId('ff-sorting-save')).toBeEnabled();
+  await expect(looseRow.getByTestId('ff-sorting-cell-source')).toContainText('Россыпь');
+  await expect(boxRow.getByTestId('ff-sorting-cell-source')).toContainText('Короб');
+  await expect(page.getByTestId('ff-sorting-save')).toHaveCount(0);
+  await expect(page.getByTestId('ff-sorting-apply')).toBeEnabled();
 
   await Promise.all([
     page.waitForResponse(
       (r) => r.request().method() === 'PUT' && r.url().includes('/distribution-lines') && r.ok(),
     ),
-    page.getByTestId('ff-sorting-save').click(),
+    page.waitForResponse(
+      (r) => r.request().method() === 'POST' && r.url().includes('/distribution-complete') && r.ok(),
+    ),
+    page.getByTestId('ff-sorting-apply').click(),
   ]);
 
   await page.reload();
-  await expect(page.getByTestId('ff-sorting-page')).toBeVisible();
-  const [reloadDistributionRes] = await Promise.all([
-    page.waitForResponse(
-      (r) => r.request().method() === 'GET' && r.url().includes('/distribution-lines') && r.ok(),
-    ),
-    page.getByTestId('ff-inbound-queue-row').first().click(),
-  ]);
-  expect(reloadDistributionRes.ok()).toBeTruthy();
-  await expect(page.getByTestId('ff-sorting-panel')).toBeVisible();
-  const reloadedCard = page.getByTestId('ff-sorting-product-card').first();
-  await expect(reloadedCard.getByTestId('ff-sorting-cell-row')).toHaveCount(2);
+  await expect(page.getByTestId('ff-inbound-queue-empty')).toContainText('Нет приёмок в сортировке');
 
-  looseRow = await sortingRowByIdentity(reloadedCard, {
-    sourceText: 'Россыпь',
-    locationText: 'LOOSE-1',
-  });
-  const reloadedBoxRow = await sortingRowByIdentity(reloadedCard, {
-    sourceText: `Короб №${box.box_number}`,
-    locationText: 'BOX-1',
-  });
-  await expect(looseRow.getByTestId('ff-sorting-cell-qty')).toHaveValue('4');
-  await expect(reloadedBoxRow.getByTestId('ff-sorting-cell-qty')).toHaveValue('6');
-  await expect(looseRow.getByTestId('ff-sorting-cell-source')).toContainText('Россыпь');
-  await expect(reloadedBoxRow.getByTestId('ff-sorting-cell-source')).toContainText('Короб');
+  const distributionReadback = await page.request.get(`${base}/${rid}/distribution-lines`, { headers: h });
+  expect(distributionReadback.ok()).toBeTruthy();
+  const distributionRows = (await distributionReadback.json()) as {
+    storage_location_code: string;
+    quantity: number;
+  }[];
+  expect(distributionRows).toEqual(
+    expect.arrayContaining([
+      expect.objectContaining({ storage_location_code: 'LOOSE-1', quantity: 4 }),
+      expect.objectContaining({ storage_location_code: 'BOX-1', quantity: 6 }),
+    ]),
+  );
 });
 
-// TC-REV-SORT-FE-02 — failed GET distribution-lines keeps last-known-good and blocks save/apply.
-test('ff sorting: failed distribution-lines load shows error and blocks save', async ({ page }) => {
+// TC-REV-SORT-FE-02 — failed GET distribution-lines shows error and blocks apply.
+test('ff sorting: failed distribution-lines load shows error and blocks apply', async ({ page }) => {
   const email = `e2e-sort-fail-${Date.now()}@example.com`;
   const sku = `SKU-SORT-FAIL-${Date.now()}`;
   const whCode = `wh-sort-fail-${Date.now()}`;
@@ -194,6 +190,7 @@ test('ff sorting: failed distribution-lines load shows error and blocks save', a
     data: { code: 'CELL-A' },
   });
   expect(loc.ok()).toBeTruthy();
+  const locBody = (await loc.json()) as { id: string };
 
   const pr = await page.request.post('/api/products', {
     headers: h,
@@ -238,16 +235,21 @@ test('ff sorting: failed distribution-lines load shows error and blocks save', a
   const row = productCard.getByTestId('ff-sorting-cell-row').first();
   await selectSortingLocation(page, row, /CELL-A/);
   await row.getByTestId('ff-sorting-cell-qty').fill('5');
-  await expect(page.getByTestId('ff-sorting-save')).toBeEnabled();
+  await expect(page.getByTestId('ff-sorting-save')).toHaveCount(0);
 
-  await Promise.all([
-    page.waitForResponse(
-      (r) => r.request().method() === 'PUT' && r.url().includes('/distribution-lines') && r.ok(),
-    ),
-    page.getByTestId('ff-sorting-save').click(),
-  ]);
-  await expect(productCard.getByTestId('ff-sorting-cell-row')).toHaveCount(1);
-  await expect(row.getByTestId('ff-sorting-cell-qty')).toHaveValue('5');
+  const seedDistribution = await page.request.put(`${base}/${rid}/distribution-lines`, {
+    headers: { ...h, 'Content-Type': 'application/json' },
+    data: [
+      {
+        box_id: null,
+        product_id: pid,
+        storage_location_id: locBody.id,
+        quantity: 5,
+      },
+    ],
+  });
+  expect(seedDistribution.ok()).toBeTruthy();
+  await page.goto('/app/ff/sorting');
 
   await page.route('**/distribution-lines', async (route) => {
     if (route.request().method() === 'GET') {
@@ -275,14 +277,14 @@ test('ff sorting: failed distribution-lines load shows error and blocks save', a
 
   await expect(page.getByTestId('ff-sorting-distribution-load-error')).toBeVisible();
   await expect(page.getByTestId('ff-sorting-distribution-retry')).toBeVisible();
-  await expect(page.getByTestId('ff-sorting-save')).toBeDisabled();
+  await expect(page.getByTestId('ff-sorting-save')).toHaveCount(0);
   await expect(page.getByTestId('ff-sorting-apply')).toBeDisabled();
 
   const putPromise = page.waitForRequest(
     (req) => req.method() === 'PUT' && req.url().includes('/distribution-lines'),
     { timeout: 1500 },
   );
-  await page.getByTestId('ff-sorting-save').click({ force: true }).catch(() => undefined);
+  await page.getByTestId('ff-sorting-apply').click({ force: true }).catch(() => undefined);
   await expect(putPromise).rejects.toThrow();
 });
 
@@ -446,7 +448,8 @@ test('ff sorting: unsaved manual correction asks before close', async ({ page })
   await expect(page.getByTestId('ff-sorting-panel')).toBeVisible();
   const row = page.getByTestId('ff-sorting-cell-row').first();
   await selectSortingLocation(page, row, /DIRTY-A-01/);
-  await expect(page.getByTestId('ff-sorting-save')).toBeEnabled();
+  await expect(page.getByTestId('ff-sorting-save')).toHaveCount(0);
+  await expect(page.getByTestId('ff-sorting-apply')).toBeEnabled();
 
   page.once('dialog', async (dialog) => {
     expect(dialog.message()).toContain('Закрыть без сохранения?');
