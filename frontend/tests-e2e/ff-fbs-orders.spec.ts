@@ -254,8 +254,8 @@ test('fbs orders: filter new orders by warehouse', async ({ page }) => {
   const sellerId = ((await sellerResponse.json()) as { seller_id: string }).seller_id
 
   const warehouseOptions = [
-    { id: '501001', name: 'WB 501001', wb_warehouse: { id: 501001, name: 'WB 501001' } },
-    { id: '501002', name: 'WB 501002', wb_warehouse: { id: 501002, name: 'WB 501002' } },
+    { id: '501001', name: 'WB Подольск', wb_warehouse: { id: 501001, name: 'WB Подольск' } },
+    { id: '501002', name: 'WB Казань', wb_warehouse: { id: 501002, name: 'WB Казань' } },
   ]
   const orderOne = order('1', {
     wms_warehouse: { id: 'w-1', name: 'WH Юг' },
@@ -291,9 +291,20 @@ test('fbs orders: filter new orders by warehouse', async ({ page }) => {
   await expect(page.getByTestId('fbs-order-1')).toBeVisible()
   await expect(page.getByTestId('fbs-order-2')).toBeVisible()
 
+  await page.getByRole('combobox', { name: 'Склад селлера / WB' }).click()
+  await page.getByRole('option', { name: 'WB Казань' }).click()
+  await expect(page.getByTestId('fbs-order-2')).toBeVisible()
+  await expect(page.getByTestId('fbs-order-1')).toHaveCount(0)
+  expect(lastWbWarehouseId).toBe('501002')
+
+  await page.getByRole('combobox', { name: 'Склад селлера / WB' }).click()
+  await page.getByRole('option', { name: 'Все склады' }).click()
+  await expect(page.getByTestId('fbs-order-1')).toBeVisible()
+  await expect(page.getByTestId('fbs-order-2')).toBeVisible()
+
   await page.getByRole('combobox', { name: 'Селлер', exact: true }).click()
   await page.getByRole('option', { name: 'ИП Иванова' }).click()
-  await page.getByRole('combobox', { name: 'Склад селлера' }).click()
+  await page.getByRole('combobox', { name: 'Склад селлера / WB' }).click()
   await page.getByRole('option', { name: 'Казань' }).click()
 
   await expect(page.getByTestId('fbs-order-2')).toBeVisible()

@@ -97,7 +97,7 @@ function warehouseOptionLabel(
   option: FbsWorklistWarehouseOption,
   sellerWarehouseNames: Record<string, string>,
 ) {
-  return sellerWarehouseNames[option.id] || `WB ${option.wb_warehouse.id}`
+  return sellerWarehouseNames[option.id] || option.name || option.wb_warehouse.name || `WB ${option.wb_warehouse.id}`
 }
 
 function normalizeSearch(value: string): string {
@@ -483,12 +483,12 @@ export function FfFbsOrdersScreen({ token, authHeaders, sellers, isAdmin = false
               ))}
             </Select>
           </FormControl>
-          {statusGroup === 'new' && sellerId !== '__all__' ? (
+          {statusGroup === 'new' ? (
             <FormControl sx={{ minWidth: 260 }}>
-              <InputLabel id="fbs-worklist-warehouse-label">Склад селлера</InputLabel>
+              <InputLabel id="fbs-worklist-warehouse-label">Склад селлера / WB</InputLabel>
               <Select
                 labelId="fbs-worklist-warehouse-label"
-                label="Склад селлера"
+                label="Склад селлера / WB"
                 value={wbWarehouseId}
                 onChange={(event) => {
                   setWbWarehouseId(String(event.target.value))
@@ -593,7 +593,7 @@ export function FfFbsOrdersScreen({ token, authHeaders, sellers, isAdmin = false
                   <TableCell sx={{ minWidth: 300 }}>Товар</TableCell>
                   <TableCell sx={{ minWidth: 220 }}>Заказ и идентификаторы</TableCell>
                   <TableCell sx={{ minWidth: 125 }}>Селлер</TableCell>
-                  <TableCell sx={{ minWidth: 150 }}>Склад WB</TableCell>
+                  <TableCell sx={{ minWidth: 150 }}>Склад селлера / WB</TableCell>
                   <TableCell sx={{ minWidth: 150 }}>Создан WB</TableCell>
                 </>
               ) : (
