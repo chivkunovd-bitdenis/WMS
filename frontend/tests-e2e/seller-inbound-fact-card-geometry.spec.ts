@@ -252,7 +252,7 @@ test('seller inbound fact-card shows clean acceptance without problem noise', as
   const suffix = `f05-clean-${Date.now()}`;
   const seed = await seedFfSellerInbound(page, suffix);
   const requestId = await apiCreateSubmittedInbound(page.request, seed, {
-    plannedBoxes: 0,
+    plannedBoxes: 1,
     expectedQty: 2,
   });
   const adminHeaders = { Authorization: `Bearer ${seed.token}` };

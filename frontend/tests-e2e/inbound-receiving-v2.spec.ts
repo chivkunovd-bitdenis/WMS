@@ -269,7 +269,7 @@ test('inbound receiving v2 — mobile receiving table keeps max identifiers insi
 test('inbound receiving v2 — multiple boxes stay independent', async ({ page }) => {
   const seed = await seedFfSellerInbound(page, `rcv-box-${Date.now()}`);
   await apiCreateSubmittedInbound(page.request, seed, {
-    plannedBoxes: 0,
+    plannedBoxes: 3,
     expectedQty: 2,
   });
 
@@ -327,7 +327,7 @@ test('inbound receiving v2 — multiple boxes stay independent', async ({ page }
 // TC-NEW-IN-03 — чужой штрихкод в общую приёмку → тост-ошибка.
 test('inbound receiving v2 — foreign barcode shows toast error', async ({ page }) => {
   const seed = await seedFfSellerInbound(page, `rcv-foreign-${Date.now()}`);
-  await apiCreateSubmittedInbound(page.request, seed, { plannedBoxes: 0, expectedQty: 2 });
+  await apiCreateSubmittedInbound(page.request, seed, { plannedBoxes: 1, expectedQty: 2 });
 
   await loginFfAdmin(page, seed.adminEmail, seed.password);
   await page.getByTestId('nav-ff-reception').click();
@@ -805,7 +805,7 @@ test('inbound receiving v2 — active receiving creates manual product as FF-add
   const seed = await seedFfSellerInbound(page, suffix);
   const adminHeaders = { Authorization: `Bearer ${seed.token}` };
   const requestId = await apiCreateSubmittedInbound(page.request, seed, {
-    plannedBoxes: 0,
+    plannedBoxes: 1,
     expectedQty: 1,
   });
   await beginInboundReceiving(page.request, adminHeaders, requestId);
@@ -849,7 +849,7 @@ test('inbound receiving v2 — manual product attach failure retries without dup
   const seed = await seedFfSellerInbound(page, suffix);
   const adminHeaders = { Authorization: `Bearer ${seed.token}` };
   const requestId = await apiCreateSubmittedInbound(page.request, seed, {
-    plannedBoxes: 0,
+    plannedBoxes: 1,
     expectedQty: 1,
   });
   await beginInboundReceiving(page.request, adminHeaders, requestId);
@@ -949,7 +949,7 @@ test('inbound receiving v2 — manual product attach success closes when detail 
   const seed = await seedFfSellerInbound(page, suffix);
   const adminHeaders = { Authorization: `Bearer ${seed.token}` };
   const requestId = await apiCreateSubmittedInbound(page.request, seed, {
-    plannedBoxes: 0,
+    plannedBoxes: 1,
     expectedQty: 1,
   });
   await beginInboundReceiving(page.request, adminHeaders, requestId);
@@ -1036,7 +1036,7 @@ test('inbound receiving v2 — manual product attach success closes when detail 
 test('inbound receiving v2 — manual edit with box saves loose not total', async ({ page }) => {
   const seed = await seedFfSellerInbound(page, `rcv-mix-${Date.now()}`);
   await apiCreateSubmittedInbound(page.request, seed, {
-    plannedBoxes: 0,
+    plannedBoxes: 1,
     expectedQty: 10,
   });
 
