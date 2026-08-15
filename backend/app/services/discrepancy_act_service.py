@@ -9,11 +9,16 @@ from sqlalchemy.orm import selectinload
 
 from app.models.discrepancy_act import DiscrepancyAct, DiscrepancyActLine
 from app.models.inbound_intake import InboundIntakeLine, InboundIntakeRequest
+from app.models.inventory_movement import MOVEMENT_TYPE_DISCREPANCY_ACT
 from app.models.product import Product
 from app.models.seller import Seller
+from app.services import inventory_service as inv_svc
+from app.services import sorting_location_service as sorting_loc_svc
 
 STATUS_DRAFT = "draft"
 STATUS_CONFIRMED = "confirmed"
+STATUS_APPROVED = "approved"
+STATUS_REJECTED = "rejected"
 
 
 class DiscrepancyActError(Exception):
@@ -100,6 +105,8 @@ async def add_line(
         raise DiscrepancyActError("not_found")
     if act.status != STATUS_DRAFT:
         raise DiscrepancyActError("not_editable")
+    if quantity == 0:
+        raise DiscrepancyActError("invalid_quantity")
     prod = await session.get(Product, product_id)
     if prod is None or prod.tenant_id != tenant_id:
         raise DiscrepancyActError("product_not_found")
@@ -137,7 +144,71 @@ async def submit_act(
         raise DiscrepancyActError("not_found")
     if act.status != STATUS_DRAFT:
         raise DiscrepancyActError("bad_status")
+    if not act.lines:
+        raise DiscrepancyActError("empty_act")
     act.status = STATUS_CONFIRMED
+    await session.commit()
+    r2 = await get_act(session, tenant_id, act_id)
+    assert r2 is not None
+    return r2
+
+
+async def approve_act(
+    session: AsyncSession,
+    tenant_id: uuid.UUID,
+    act_id: uuid.UUID,
+) -> DiscrepancyAct:
+    act = await get_act(session, tenant_id, act_id)
+    if act is None:
+        raise DiscrepancyActError("not_found")
+    if act.status != STATUS_CONFIRMED:
+        raise DiscrepancyActError("bad_status")
+    if act.inbound_intake_request is None:
+        raise DiscrepancyActError("inbound_link_required")
+    if not act.lines:
+        raise DiscrepancyActError("empty_act")
+
+    sorting_loc = await sorting_loc_svc.get_or_create_sorting_location(
+        session,
+        tenant_id,
+        act.inbound_intake_request.warehouse_id,
+    )
+    for line in act.lines:
+        if line.quantity == 0:
+            raise DiscrepancyActError("invalid_quantity")
+        try:
+            await inv_svc.record_movement_and_adjust_balance(
+                session,
+                tenant_id=tenant_id,
+                product_id=line.product_id,
+                storage_location_id=sorting_loc.id,
+                quantity_delta=line.quantity,
+                movement_type=MOVEMENT_TYPE_DISCREPANCY_ACT,
+                inbound_intake_line_id=line.inbound_intake_line_id,
+            )
+        except ValueError as exc:
+            if str(exc) == "insufficient stock":
+                await session.rollback()
+                raise DiscrepancyActError("insufficient_stock") from exc
+            raise
+    act.status = STATUS_APPROVED
+    await session.commit()
+    r2 = await get_act(session, tenant_id, act_id)
+    assert r2 is not None
+    return r2
+
+
+async def reject_act(
+    session: AsyncSession,
+    tenant_id: uuid.UUID,
+    act_id: uuid.UUID,
+) -> DiscrepancyAct:
+    act = await get_act(session, tenant_id, act_id)
+    if act is None:
+        raise DiscrepancyActError("not_found")
+    if act.status != STATUS_CONFIRMED:
+        raise DiscrepancyActError("bad_status")
+    act.status = STATUS_REJECTED
     await session.commit()
     r2 = await get_act(session, tenant_id, act_id)
     assert r2 is not None

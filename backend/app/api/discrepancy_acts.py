@@ -4,7 +4,7 @@ import uuid
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException, status
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.deps import require_fulfillment_admin
@@ -28,8 +28,15 @@ class DiscrepancyActCreate(BaseModel):
 
 class DiscrepancyActLineCreate(BaseModel):
     product_id: uuid.UUID
-    quantity: int = Field(ge=1, le=1_000_000_000)
+    quantity: int = Field(ge=-1_000_000_000, le=1_000_000_000)
     inbound_intake_line_id: uuid.UUID | None = None
+
+    @field_validator("quantity")
+    @classmethod
+    def quantity_must_be_non_zero(cls, value: int) -> int:
+        if value == 0:
+            raise ValueError("quantity_must_be_non_zero")
+        return value
 
 
 class DiscrepancyActLineOut(BaseModel):
@@ -110,6 +117,13 @@ def _map_da_err(exc: DiscrepancyActError) -> HTTPException:
         return HTTPException(status_code=status.HTTP_409_CONFLICT, detail="not_editable")
     if exc.code == "bad_status":
         return HTTPException(status_code=status.HTTP_409_CONFLICT, detail="bad_status")
+    if exc.code == "empty_act":
+        return HTTPException(status_code=status.HTTP_409_CONFLICT, detail="empty_act")
+    if exc.code == "insufficient_stock":
+        return HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="insufficient_stock",
+        )
     if exc.code == "line_not_found":
         return HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="line_not_found")
     if exc.code == "product_not_found":
@@ -119,7 +133,7 @@ def _map_da_err(exc: DiscrepancyActError) -> HTTPException:
         )
     if exc.code == "duplicate_line":
         return HTTPException(status_code=status.HTTP_409_CONFLICT, detail="duplicate_line")
-    if exc.code in ("inbound_link_required", "product_mismatch"):
+    if exc.code in ("inbound_link_required", "product_mismatch", "invalid_quantity"):
         return HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
             detail=exc.code,
@@ -156,6 +170,44 @@ async def get_discrepancy_act(
     r = await svc.get_act(session, user.tenant_id, act_id)
     if r is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="not_found")
+    return _detail_out(
+        r,
+        seller_name=r.seller.name if r.seller is not None else None,
+    )
+
+
+@router.post(
+    "/{act_id}/approve",
+    response_model=DiscrepancyActDetailOut,
+)
+async def approve_discrepancy_act(
+    act_id: uuid.UUID,
+    user: Annotated[User, Depends(require_fulfillment_admin)],
+    session: Annotated[AsyncSession, Depends(get_db)],
+) -> DiscrepancyActDetailOut:
+    try:
+        r = await svc.approve_act(session, user.tenant_id, act_id)
+    except DiscrepancyActError as exc:
+        raise _map_da_err(exc) from None
+    return _detail_out(
+        r,
+        seller_name=r.seller.name if r.seller is not None else None,
+    )
+
+
+@router.post(
+    "/{act_id}/reject",
+    response_model=DiscrepancyActDetailOut,
+)
+async def reject_discrepancy_act(
+    act_id: uuid.UUID,
+    user: Annotated[User, Depends(require_fulfillment_admin)],
+    session: Annotated[AsyncSession, Depends(get_db)],
+) -> DiscrepancyActDetailOut:
+    try:
+        r = await svc.reject_act(session, user.tenant_id, act_id)
+    except DiscrepancyActError as exc:
+        raise _map_da_err(exc) from None
     return _detail_out(
         r,
         seller_name=r.seller.name if r.seller is not None else None,

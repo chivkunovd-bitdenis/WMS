@@ -892,6 +892,206 @@ async def test_discrepancy_act_submit_and_inbound_line_rules(async_client: Async
 
 
 @pytest.mark.asyncio
+async def test_discrepancy_act_approve_reject_moves_sorting_stock(
+    async_client: AsyncClient,
+) -> None:
+    suffix = str(int(time.time() * 1000))
+    reg = await async_client.post(
+        "/auth/register",
+        json={
+            "organization_name": "DaApprove Co",
+            "slug": f"daapp-{suffix}",
+            "admin_email": f"daapp-{suffix}@example.com",
+            "password": "password123",
+        },
+    )
+    assert reg.status_code == 200, reg.text
+    token = str(reg.json()["access_token"])
+    h = {"Authorization": f"Bearer {token}"}
+    wh = await async_client.post(
+        "/warehouses",
+        headers=h,
+        json={"name": "W", "code": f"wda-{suffix}"},
+    )
+    assert wh.status_code == 200, wh.text
+    wid = wh.json()["id"]
+    pr = await async_client.post(
+        "/products",
+        headers=h,
+        json={
+            "name": "P",
+            "sku_code": f"SDA-{suffix}",
+            "length_mm": 1,
+            "width_mm": 1,
+            "height_mm": 1,
+        },
+    )
+    assert pr.status_code == 200, pr.text
+    pid = pr.json()["id"]
+
+    base_in = "/operations/inbound-intake-requests"
+    inbound = await async_client.post(base_in, headers=h, json={"warehouse_id": wid})
+    assert inbound.status_code == 201, inbound.text
+    rid = inbound.json()["id"]
+    in_ln = await async_client.post(
+        f"{base_in}/{rid}/lines",
+        headers=h,
+        json={"product_id": pid, "expected_qty": 5},
+    )
+    assert in_ln.status_code == 201, in_ln.text
+    inbound_line_id = in_ln.json()["id"]
+    await async_client.post(f"{base_in}/{rid}/submit", headers=h)
+    await post_primary_accept(async_client, base_in, rid, h)
+    await fulfill_inbound_via_box_scans(async_client, h, rid, pr.json()["sku_code"], 5)
+    verified = await async_client.post(f"{base_in}/{rid}/verify", headers=h)
+    assert verified.status_code == 200, verified.text
+
+    bal0 = await async_client.get(
+        "/operations/inventory-balances/summary",
+        headers=h,
+        params={"warehouse_id": wid},
+    )
+    assert bal0.status_code == 200, bal0.text
+    assert next(row for row in bal0.json() if row["product_id"] == pid)["quantity"] == 5
+
+    plus = await async_client.post(
+        "/operations/discrepancy-acts",
+        headers=h,
+        json={"inbound_intake_request_id": rid},
+    )
+    aid_plus = plus.json()["id"]
+    plus_line = await async_client.post(
+        f"/operations/discrepancy-acts/{aid_plus}/lines",
+        headers=h,
+        json={
+            "product_id": pid,
+            "quantity": 2,
+            "inbound_intake_line_id": inbound_line_id,
+        },
+    )
+    assert plus_line.status_code == 201, plus_line.text
+    submitted = await async_client.post(
+        f"/operations/discrepancy-acts/{aid_plus}/submit",
+        headers=h,
+    )
+    assert submitted.status_code == 200, submitted.text
+    approved = await async_client.post(
+        f"/operations/discrepancy-acts/{aid_plus}/approve",
+        headers=h,
+    )
+    assert approved.status_code == 200, approved.text
+    assert approved.json()["status"] == "approved"
+
+    bal1 = await async_client.get(
+        "/operations/inventory-balances/summary",
+        headers=h,
+        params={"warehouse_id": wid},
+    )
+    assert next(row for row in bal1.json() if row["product_id"] == pid)["quantity"] == 7
+    approve_again = await async_client.post(
+        f"/operations/discrepancy-acts/{aid_plus}/approve",
+        headers=h,
+    )
+    assert approve_again.status_code == 409
+    assert approve_again.json()["detail"] == "bad_status"
+
+    minus = await async_client.post(
+        "/operations/discrepancy-acts",
+        headers=h,
+        json={"inbound_intake_request_id": rid},
+    )
+    aid_minus = minus.json()["id"]
+    minus_line = await async_client.post(
+        f"/operations/discrepancy-acts/{aid_minus}/lines",
+        headers=h,
+        json={
+            "product_id": pid,
+            "quantity": -3,
+            "inbound_intake_line_id": inbound_line_id,
+        },
+    )
+    assert minus_line.status_code == 201, minus_line.text
+    await async_client.post(f"/operations/discrepancy-acts/{aid_minus}/submit", headers=h)
+    minus_approved = await async_client.post(
+        f"/operations/discrepancy-acts/{aid_minus}/approve",
+        headers=h,
+    )
+    assert minus_approved.status_code == 200, minus_approved.text
+    assert minus_approved.json()["status"] == "approved"
+
+    bal2 = await async_client.get(
+        "/operations/inventory-balances/summary",
+        headers=h,
+        params={"warehouse_id": wid},
+    )
+    assert next(row for row in bal2.json() if row["product_id"] == pid)["quantity"] == 4
+
+    rejected = await async_client.post(
+        "/operations/discrepancy-acts",
+        headers=h,
+        json={"inbound_intake_request_id": rid},
+    )
+    aid_rejected = rejected.json()["id"]
+    reject_line = await async_client.post(
+        f"/operations/discrepancy-acts/{aid_rejected}/lines",
+        headers=h,
+        json={
+            "product_id": pid,
+            "quantity": 3,
+            "inbound_intake_line_id": inbound_line_id,
+        },
+    )
+    assert reject_line.status_code == 201, reject_line.text
+    await async_client.post(f"/operations/discrepancy-acts/{aid_rejected}/submit", headers=h)
+    reject = await async_client.post(
+        f"/operations/discrepancy-acts/{aid_rejected}/reject",
+        headers=h,
+    )
+    assert reject.status_code == 200, reject.text
+    assert reject.json()["status"] == "rejected"
+
+    bal3 = await async_client.get(
+        "/operations/inventory-balances/summary",
+        headers=h,
+        params={"warehouse_id": wid},
+    )
+    assert next(row for row in bal3.json() if row["product_id"] == pid)["quantity"] == 4
+
+    too_much = await async_client.post(
+        "/operations/discrepancy-acts",
+        headers=h,
+        json={"inbound_intake_request_id": rid},
+    )
+    aid_too_much = too_much.json()["id"]
+    too_much_line = await async_client.post(
+        f"/operations/discrepancy-acts/{aid_too_much}/lines",
+        headers=h,
+        json={
+            "product_id": pid,
+            "quantity": -5,
+            "inbound_intake_line_id": inbound_line_id,
+        },
+    )
+    assert too_much_line.status_code == 201, too_much_line.text
+    await async_client.post(f"/operations/discrepancy-acts/{aid_too_much}/submit", headers=h)
+    blocked = await async_client.post(
+        f"/operations/discrepancy-acts/{aid_too_much}/approve",
+        headers=h,
+    )
+    assert blocked.status_code == 409
+    assert blocked.json()["detail"] == "insufficient_stock"
+
+    movements = await async_client.get("/operations/inventory-movements", headers=h)
+    assert movements.status_code == 200, movements.text
+    da_movements = [
+        row
+        for row in movements.json()
+        if row["product_id"] == pid and row["movement_type"] == "discrepancy_act"
+    ]
+    assert sorted(row["quantity_delta"] for row in da_movements) == [-3, 2]
+
+
+@pytest.mark.asyncio
 async def test_marketplace_unload_ship_deducts_stock_by_pick_and_scan(
     async_client: AsyncClient, monkeypatch: pytest.MonkeyPatch
 ) -> None:
