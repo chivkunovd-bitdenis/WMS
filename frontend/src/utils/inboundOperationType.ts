@@ -7,3 +7,7 @@ export function normalizeInboundOperationType(value: unknown): InboundOperationT
 export function inboundOperationTypeLabel(value: unknown): 'Поставка' | 'Возврат' {
   return normalizeInboundOperationType(value) === 'return' ? 'Возврат' : 'Поставка'
 }
+
+export function inboundOperationTypeReceptionLabel(value: unknown): 'Приёмка' | 'Возврат' {
+  return normalizeInboundOperationType(value) === 'return' ? 'Возврат' : 'Приёмка'
+}
