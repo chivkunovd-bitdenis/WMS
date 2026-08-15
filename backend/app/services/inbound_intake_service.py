@@ -517,6 +517,8 @@ async def submit_request(
         raise InboundIntakeError("not_draft")
     if len(req.lines) == 0:
         raise InboundIntakeError("submit_empty")
+    if req.planned_box_count is None or req.planned_box_count < 1:
+        raise InboundIntakeError("planned_boxes_missing")
     req.status = STATUS_SUBMITTED
     req.submitted_at = datetime.now(UTC)
     await session.commit()

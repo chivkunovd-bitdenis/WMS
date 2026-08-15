@@ -4,7 +4,11 @@ import uuid
 
 import pytest
 from httpx import AsyncClient
-from inbound_box_intake_helpers import fulfill_inbound_via_box_scans, post_primary_accept
+from inbound_box_intake_helpers import (
+    fulfill_inbound_via_box_scans,
+    post_primary_accept,
+    set_planned_boxes,
+)
 from test_marketplace_unload_and_discrepancy_acts import _seller_wb_mp_warehouse
 
 from app.models.packaging_task import STATUS_DONE, STATUS_IN_PROGRESS
@@ -56,7 +60,9 @@ async def _inventory_at_location(
         },
     )
     assert line.status_code == 201, line.text
-    await async_client.post(f"{base_in}/{rid}/submit", headers=h)
+    await set_planned_boxes(async_client, base_in, rid, h)
+    submit = await async_client.post(f"{base_in}/{rid}/submit", headers=h)
+    assert submit.status_code == 200, submit.text
     await post_primary_accept(async_client, base_in, rid, h)
     sku = line.json()["sku_code"]
     await fulfill_inbound_via_box_scans(async_client, h, rid, sku, qty)
@@ -85,7 +91,9 @@ async def _inventory_in_sorting_zone(
         json={"product_id": product_id, "expected_qty": qty},
     )
     assert line.status_code == 201, line.text
-    await async_client.post(f"{base_in}/{rid}/submit", headers=h)
+    await set_planned_boxes(async_client, base_in, rid, h)
+    submit = await async_client.post(f"{base_in}/{rid}/submit", headers=h)
+    assert submit.status_code == 200, submit.text
     await post_primary_accept(async_client, base_in, rid, h)
     sku = line.json()["sku_code"]
     await fulfill_inbound_via_box_scans(async_client, h, rid, sku, qty)

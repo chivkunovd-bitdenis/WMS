@@ -148,6 +148,23 @@ async def test_seller_inbound_draft_visible_and_own_product_line_only(
     assert ok_line.status_code == 201, ok_line.text
     line_id = ok_line.json()["id"]
 
+    submit_without_boxes = await async_client.post(
+        f"/operations/inbound-intake-requests/{rid}/submit",
+        headers=sh,
+    )
+    assert submit_without_boxes.status_code == 422
+    assert submit_without_boxes.json()["detail"] == "planned_boxes_missing"
+
+    patch_zero_boxes = await async_client.patch(
+        f"/operations/inbound-intake-requests/{rid}",
+        headers=sh,
+        json={"planned_box_count": 0},
+    )
+    assert patch_zero_boxes.status_code == 422
+    zero_detail = patch_zero_boxes.json()["detail"]
+    assert isinstance(zero_detail, list)
+    assert zero_detail[0]["loc"][-1] == "planned_box_count"
+
     patch_meta = await async_client.patch(
         f"/operations/inbound-intake-requests/{rid}",
         headers=sh,

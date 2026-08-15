@@ -416,6 +416,11 @@ test('inbound receiving v2 — return accepts seller catalog discrepancy and dim
     data: { product_id: seed.productId, expected_qty: 1 },
   });
   expect(addPlannedLine.ok()).toBeTruthy();
+  const setPlannedBoxes = await page.request.patch(`${INBOUND_API}/${requestId}`, {
+    headers: sellerHeaders,
+    data: { planned_box_count: 1 },
+  });
+  expect(setPlannedBoxes.ok()).toBeTruthy();
   const submitReturn = await page.request.post(`${INBOUND_API}/${requestId}/submit`, {
     headers: sellerHeaders,
   });
@@ -567,6 +572,11 @@ test('inbound receiving v2 — return autoprint fails closed when scanned line h
     data: { product_id: seed.productId, expected_qty: 1 },
   });
   expect(addPlannedLine.ok()).toBeTruthy();
+  const setPlannedBoxes = await page.request.patch(`${INBOUND_API}/${requestId}`, {
+    headers: sellerHeaders,
+    data: { planned_box_count: 1 },
+  });
+  expect(setPlannedBoxes.ok()).toBeTruthy();
   const submitReturn = await page.request.post(`${INBOUND_API}/${requestId}/submit`, {
     headers: sellerHeaders,
   });

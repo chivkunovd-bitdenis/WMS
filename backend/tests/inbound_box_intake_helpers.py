@@ -57,6 +57,21 @@ async def _create_closed_boxes_for_request(
         await session.commit()
 
 
+async def set_planned_boxes(
+    async_client: AsyncClient,
+    base: str,
+    request_id: str,
+    headers: dict[str, str],
+    count: int = 1,
+) -> None:
+    patch = await async_client.patch(
+        f"{base}/{request_id}",
+        headers=headers,
+        json={"planned_box_count": count},
+    )
+    assert patch.status_code == 200, patch.text
+
+
 async def post_primary_accept(
     async_client: AsyncClient,
     base: str,

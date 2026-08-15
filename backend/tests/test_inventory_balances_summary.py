@@ -4,7 +4,11 @@ import time
 
 import pytest
 from httpx import AsyncClient
-from inbound_box_intake_helpers import fulfill_inbound_via_box_scans, post_primary_accept
+from inbound_box_intake_helpers import (
+    fulfill_inbound_via_box_scans,
+    post_primary_accept,
+    set_planned_boxes,
+)
 
 
 @pytest.mark.asyncio
@@ -84,7 +88,9 @@ async def test_inventory_balances_summary_seller_scope(async_client: AsyncClient
                 "storage_location_id": storage_location_id,
             },
         )
-        await async_client.post(f"{base}/{rid}/submit", headers=h)
+        await set_planned_boxes(async_client, base, rid, h)
+        submit = await async_client.post(f"{base}/{rid}/submit", headers=h)
+        assert submit.status_code == 200, submit.text
         await post_primary_accept(async_client, base, rid, h)
         await fulfill_inbound_via_box_scans(async_client, h, rid, product_sku, qty)
         await async_client.post(f"{base}/{rid}/verify", headers=h)
@@ -173,7 +179,9 @@ async def test_available_matches_mp_reserve_only_after_putaway(
             "storage_location_id": lid,
         },
     )
-    await async_client.post(f"{base}/{rid}/submit", headers=ah)
+    await set_planned_boxes(async_client, base, rid, ah)
+    submit = await async_client.post(f"{base}/{rid}/submit", headers=ah)
+    assert submit.status_code == 200, submit.text
     await post_primary_accept(async_client, base, rid, ah)
     await fulfill_inbound_via_box_scans(async_client, ah, rid, sku, 10)
     await async_client.post(f"{base}/{rid}/verify", headers=ah)
@@ -254,4 +262,3 @@ async def test_available_matches_mp_reserve_only_after_putaway(
     assert row_r["reserved"] == 4
     assert row_r["available"] == 6
     assert row_r["quantity"] - row_r["reserved"] == 6
-

@@ -30,10 +30,50 @@ test('seller chooses supply or return before inbound draft creation', async ({ p
     },
   });
   expect(returnProduct.ok()).toBeTruthy();
+  const todayIso = new Date().toISOString().slice(0, 10);
+  const otherSeller = await page.request.post('/api/sellers', {
+    headers: { Authorization: `Bearer ${seed.token}` },
+    data: { name: `F18 Other Seller ${seed.suffix}` },
+  });
+  expect(otherSeller.ok()).toBeTruthy();
+  const otherSellerId = String(((await otherSeller.json()) as { id: string }).id);
+  const otherProduct = await page.request.post('/api/products', {
+    headers: { Authorization: `Bearer ${seed.token}` },
+    data: {
+      name: `F18 Other Hidden Product ${seed.suffix}`,
+      sku_code: `f18-other-hidden-${seed.suffix}`,
+      wb_barcode: `f18-other-hidden-barcode-${seed.suffix}`,
+      seller_id: otherSellerId,
+      length_mm: 100,
+      width_mm: 80,
+      height_mm: 40,
+    },
+  });
+  expect(otherProduct.ok()).toBeTruthy();
+  const hiddenWaybill = `HIDDEN-${seed.suffix}`;
+  const hiddenInbound = await page.request.post(INBOUND_API, {
+    headers: { Authorization: `Bearer ${seed.token}` },
+    data: {
+      warehouse_id: seed.warehouseId,
+      planned_delivery_date: todayIso,
+      waybill_number: hiddenWaybill,
+    },
+  });
+  expect(hiddenInbound.ok()).toBeTruthy();
+  const hiddenInboundId = String(((await hiddenInbound.json()) as { id: string }).id);
+  const hiddenLine = await page.request.post(`${INBOUND_API}/${hiddenInboundId}/lines`, {
+    headers: { Authorization: `Bearer ${seed.token}` },
+    data: { product_id: String(((await otherProduct.json()) as { id: string }).id), expected_qty: 7 },
+  });
+  expect(hiddenLine.ok()).toBeTruthy();
 
   await loginSellerPortal(page, seed.sellerEmail, seed.password);
   await page.getByTestId('nav-seller-documents').click();
   await expect(page.getByTestId('seller-documents-table')).toBeVisible();
+  await expect(page.getByTestId('seller-documents-list')).not.toContainText(hiddenWaybill);
+  await expect(page.getByTestId('seller-shipments-empty')).toContainText(
+    'На сегодня и завтра нет ваших документов с плановой датой',
+  );
   await expect(page.getByTestId('seller-create-inbound')).toContainText('Создать заявку на поставку');
   await expect(page.getByTestId('seller-create-return')).toContainText('Создать заявку на возврат');
 
@@ -55,6 +95,8 @@ test('seller chooses supply or return before inbound draft creation', async ({ p
   await expect(page.getByTestId('seller-inbound-draft-ok')).toContainText('Заявка сохранена');
   await page.getByTestId('seller-inbound-close').click();
   await expect(page.getByTestId('seller-documents-table')).toBeVisible();
+  await expect(page.getByTestId('seller-shipments-today')).toContainText('Поставка');
+  await expect(page.getByTestId('seller-shipments-calendar')).not.toContainText(hiddenWaybill);
 
   const [returnCreate] = await Promise.all([
     waitForPostOk(page, INBOUND_API, (u) => !u.includes('/lines') && !u.includes('/submit')),
@@ -227,6 +269,20 @@ test('seller chooses supply or return before inbound draft creation', async ({ p
   await expect(returnRow).toHaveCount(0);
 
   await loginFfAdmin(page, seed.adminEmail, seed.password);
+  await page.getByTestId('nav-ff-reception').click();
+  await expect(page.getByTestId('ff-inbound-create-return')).toContainText('Создать возврат');
+  const [ffCreateReturn] = await Promise.all([
+    waitForPostOk(page, INBOUND_API, (u) => !u.includes('/lines') && !u.includes('/submit')),
+    page.getByTestId('ff-inbound-create-return').click(),
+  ]);
+  const ffCreateReturnBody = JSON.parse(ffCreateReturn.request().postData() ?? '{}') as {
+    operation_type?: string;
+  };
+  expect(ffCreateReturnBody.operation_type).toBe('return');
+  await expect(page.getByTestId('ff-inbound-doc-root')).toBeVisible();
+  await expect(page.getByTestId('ff-inbound-operation-type')).toContainText('Возврат');
+  await page.getByTestId('ff-doc-dialog-close').click();
+  await expect(page.getByTestId('ff-doc-dialog')).toHaveCount(0);
   await page.getByTestId('nav-ff-reception').click();
   const ffReturnRow = page.locator(
     `[data-testid="ff-inbound-queue-row"][data-request-id="${returnDraft.id}"]`,

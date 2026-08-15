@@ -72,6 +72,13 @@ async def _mixed_sorting_request(
             product_id=product_id,
             expected_qty=loose_qty + box_qty,
         )
+        await svc.patch_request_draft(
+            session,
+            tenant_id,
+            request_id,
+            planned_box_count=1,
+            planned_box_count_set=True,
+        )
         await svc.submit_request(session, tenant_id, request_id)
         await svc.begin_receiving(session, tenant_id, request_id)
         req_loaded = await svc.get_request(session, tenant_id, request_id)
@@ -128,6 +135,13 @@ async def test_complete_receiving_exposes_sorting_remaining_qty(
             request_id,
             product_id=product_id,
             expected_qty=4,
+        )
+        await svc.patch_request_draft(
+            session,
+            tenant_id,
+            request_id,
+            planned_box_count=1,
+            planned_box_count_set=True,
         )
         await svc.submit_request(session, tenant_id, request_id)
         await svc.begin_receiving(session, tenant_id, request_id)

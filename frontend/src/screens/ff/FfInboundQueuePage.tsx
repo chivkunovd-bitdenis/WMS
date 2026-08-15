@@ -26,6 +26,7 @@ import {
   inboundQueueUnitsLabel,
   type InboundSummaryRef,
 } from './inboundReceivingHelpers'
+import type { InboundOperationType } from '../../utils/inboundOperationType'
 
 export type InboundWorkspace = 'reception' | 'sorting'
 
@@ -33,7 +34,7 @@ type Props = {
   workspace: InboundWorkspace
   rows: InboundQueueRow[]
   onOpen: (id: string) => void
-  onCreateDraft?: () => void | Promise<void>
+  onCreateDraft?: (operationType: InboundOperationType) => void | Promise<void>
   creatingDraft?: boolean
 }
 
@@ -69,14 +70,23 @@ export function FfInboundQueuePage({
       <PageHeader title={title} description={subtitle} />
 
       {workspace === 'reception' && onCreateDraft ? (
-        <Stack direction="row" sx={{ mb: 2, justifyContent: 'flex-end' }}>
+        <Stack direction="row" spacing={1} sx={{ mb: 2, justifyContent: 'flex-end' }}>
           <Button
             variant="contained"
             disabled={creatingDraft}
-            onClick={() => void onCreateDraft()}
+            onClick={() => void onCreateDraft('inbound')}
             data-testid="ff-inbound-create"
           >
             Создать приёмку
+          </Button>
+          <Button
+            variant="contained"
+            color="secondary"
+            disabled={creatingDraft}
+            onClick={() => void onCreateDraft('return')}
+            data-testid="ff-inbound-create-return"
+          >
+            Создать возврат
           </Button>
         </Stack>
       ) : null}

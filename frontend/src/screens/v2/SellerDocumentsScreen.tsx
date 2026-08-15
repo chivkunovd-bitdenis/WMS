@@ -393,12 +393,12 @@ export function SellerDocumentsScreen({
           <Box>
             <Typography variant="subtitle1">Сегодня / Завтра</Typography>
             <Typography variant="body2" color="text.secondary">
-              По плановой дате документов селлера. Отсечка рейса не настроена.
+              Только ваши документы с плановой датой отгрузки или приёмки.
             </Typography>
           </Box>
           {shipmentCalendar.today.length === 0 && shipmentCalendar.tomorrow.length === 0 ? (
             <Alert severity="info" data-testid="seller-shipments-empty">
-              На сегодня и завтра нет документов с плановой датой. Календарь рейсов фулфилмента не настроен.
+              На сегодня и завтра нет ваших документов с плановой датой.
             </Alert>
           ) : (
             <Stack direction={{ xs: 'column', md: 'row' }} spacing={2}>

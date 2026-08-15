@@ -8,6 +8,7 @@ import uuid
 
 import pytest
 from httpx import AsyncClient
+from inbound_box_intake_helpers import set_planned_boxes
 from openpyxl import Workbook  # type: ignore[import-untyped]
 
 from app.db.session import SessionLocal
@@ -95,6 +96,9 @@ async def _submitted_request_with_barcode(
     )
     assert ln.status_code == 201, ln.text
 
+    await set_planned_boxes(
+        async_client, "/operations/inbound-intake-requests", rid, ah
+    )
     sub = await async_client.post(
         f"/operations/inbound-intake-requests/{rid}/submit",
         headers=ah,
