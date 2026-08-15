@@ -659,10 +659,14 @@ async def sync_mp_task_packed_from_boxes(
         product_id: int(quantity or 0)
         for product_id, quantity in (await session.execute(stmt)).all()
     }
+    if not boxed_by_product:
+        return task
     changed = False
     for line in task.lines:
-        boxed = boxed_by_product.get(line.product_id, 0)
-        target = min(qty_need_pack(line), boxed)
+        boxed = boxed_by_product.get(line.product_id)
+        if boxed is None:
+            continue
+        target = min(int(line.qty_total) - int(line.qty_confirmed_packed), boxed)
         if int(line.qty_packed_in_task) != target:
             line.qty_packed_in_task = target
             changed = True
