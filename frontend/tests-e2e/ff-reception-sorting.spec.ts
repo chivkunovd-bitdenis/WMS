@@ -199,7 +199,7 @@ test('ff reception list has filters search sorting and row state colors', async 
   await expect(redRow).toHaveAttribute('data-row-discrepancy', 'mismatch');
   await expect(greenRow).toHaveAttribute('data-row-discrepancy', 'matched');
   await expect(freshRow).toHaveAttribute('data-row-status', 'submitted');
-  await expect(freshRow.getByTestId('ff-inbound-queue-composition')).toContainText('1 из 1');
+  await expect(freshRow.getByTestId('ff-inbound-queue-composition')).toContainText('0 из 1 коробов');
   await expect(freshRow.getByTestId('ff-inbound-queue-composition')).toContainText('7 ед.');
 
   await page.getByTestId('ff-inbound-search').fill(`REC-RED-${suffix}`);

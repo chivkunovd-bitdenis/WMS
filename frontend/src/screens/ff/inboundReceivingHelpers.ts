@@ -190,7 +190,7 @@ export function inboundQueueUnitsLabel(row: InboundSummaryRef): string {
 export function inboundQueueBoxesLabel(row: InboundSummaryRef): string {
   const actual = row.actual_box_count ?? 0
   if (row.planned_box_count == null) return `${actual} коробов`
-  return `${actual} из ${row.planned_box_count}`
+  return `${actual} из ${row.planned_box_count} коробов`
 }
 
 export function buildInboundReceivingTotals(
