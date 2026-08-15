@@ -221,7 +221,7 @@ export function AuthedAppLayout({
             {can('reception') ? (
               <>
                 <ListItemButton component={NavLink} to={`${base}/reception`} data-testid="nav-ff-reception">
-                  <ListItemText primary="Приёмка" />
+                  <ListItemText primary="Приёмка на FF" />
                 </ListItemButton>
                 <ListItemButton component={NavLink} to={`${base}/sorting`} data-testid="nav-ff-sorting">
                   <ListItemText primary="Сортировка" />

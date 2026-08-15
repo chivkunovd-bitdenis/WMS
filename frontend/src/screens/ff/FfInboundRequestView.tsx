@@ -54,7 +54,7 @@ import {
 import { printBarcodeLabel } from '../../utils/printBarcodeLabel'
 import { printInboundSupplyWaybill } from '../../utils/printShipmentWaybill'
 import { readApiErrorMessage } from '../../utils/readApiErrorMessage'
-import { inboundOperationTypeLabel } from '../../utils/inboundOperationType'
+import { inboundOperationTypeReceptionLabel } from '../../utils/inboundOperationType'
 import { FfInboundBoxAddDialog } from './FfInboundBoxAddDialog'
 import { FfInboundSortingPanel } from './FfInboundSortingPanel'
 import { BoxImportDialog } from '../../components/BoxImportDialog'
@@ -419,7 +419,7 @@ export function FfInboundRequestView({
   const waitingForFfStart = detail?.status === 'submitted'
   const sellerCreatedDraft = detail?.status === 'draft' && detail.created_by_seller_id != null
   const isReturnOperation = detail?.operation_type === 'return'
-  const operationTypeLabel = inboundOperationTypeLabel(detail?.operation_type)
+  const operationTypeLabel = inboundOperationTypeReceptionLabel(detail?.operation_type)
   const showInboundLinesTable = !sortingView || receptionClosed
 
   // Глобальный скан: панель приёмки видна и диалог короба не открыт

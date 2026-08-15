@@ -80,10 +80,19 @@ type InboundSummaryRow = {
   warehouse_id: string
   status: string
   operation_type?: string | null
+  document_number?: string | null
+  display_number?: string | null
+  waybill_number?: string | null
   line_count: number
+  goods_qty_total?: number | null
+  planned_box_count?: number | null
+  actual_box_count?: number | null
+  boxes_discrepancy?: boolean
+  has_discrepancy?: boolean
   planned_delivery_date: string | null
   seller_id?: string | null
   seller_name?: string | null
+  product_names?: string[]
   created_by_seller_id?: string | null
   created_at?: string
   sorting_remaining_qty?: number
@@ -272,6 +281,8 @@ export default function App() {
   const [inboundSummaries, setInboundSummaries] = useState<InboundSummaryRow[]>(
     [],
   )
+  const [inboundListLoading, setInboundListLoading] = useState(false)
+  const [inboundListError, setInboundListError] = useState<string | null>(null)
   const [selectedInboundId, setSelectedInboundId] = useState<string | null>(
     null,
   )
@@ -468,13 +479,23 @@ export default function App() {
 
   const refreshInboundList = useCallback(
     async (t: string) => {
-      const res = await fetch(apiUrl('/operations/inbound-intake-requests'), {
-        headers: authHeaders(t),
-      })
-      if (!res.ok) {
-        throw new Error(await readApiErrorMessage(res))
+      setInboundListLoading(true)
+      setInboundListError(null)
+      try {
+        const res = await fetch(apiUrl('/operations/inbound-intake-requests'), {
+          headers: authHeaders(t),
+        })
+        if (!res.ok) {
+          throw new Error(await readApiErrorMessage(res))
+        }
+        setInboundSummaries((await res.json()) as InboundSummaryRow[])
+      } catch (e) {
+        const message = e instanceof Error ? e.message : 'Не удалось загрузить приёмки.'
+        setInboundListError(message)
+        throw e
+      } finally {
+        setInboundListLoading(false)
       }
-      setInboundSummaries((await res.json()) as InboundSummaryRow[])
     },
     [authHeaders],
   )
@@ -2584,7 +2605,8 @@ export default function App() {
   ])
 
   const onCreateFfInboundDraft = useCallback(async (
-    operationType: InboundOperationType = 'inbound',
+    operationType: InboundOperationType,
+    sellerId: string,
   ): Promise<{ id: string } | null> => {
     if (!token) {
       return null
@@ -2592,6 +2614,10 @@ export default function App() {
     const wid = selectedWarehouseId ?? warehouses[0]?.id ?? null
     if (!wid) {
       setOpsError('Склад ФФ не найден.')
+      return null
+    }
+    if (!sellerId) {
+      setOpsError('Выберите селлера для документа.')
       return null
     }
     setFfSuppliesNotice(null)
@@ -2604,7 +2630,11 @@ export default function App() {
           ...authHeaders(token),
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({ warehouse_id: wid, operation_type: operationType }),
+        body: JSON.stringify({
+          warehouse_id: wid,
+          operation_type: operationType,
+          seller_id: sellerId,
+        }),
       })
       if (!res.ok) {
         setOpsError(await readApiErrorMessage(res))
@@ -2834,8 +2864,16 @@ export default function App() {
                   workspace="reception"
                   rows={inboundSummaries}
                   creatingDraft={opsBusy}
-                  onCreateDraft={async (operationType) => {
-                    const created = await onCreateFfInboundDraft(operationType)
+                  sellers={sellers.map((s) => ({ id: s.id, name: s.name }))}
+                  loading={inboundListLoading}
+                  error={inboundListError}
+                  onRetry={async () => {
+                    if (token) {
+                      await refreshInboundList(token)
+                    }
+                  }}
+                  onCreateDraft={async (operationType, sellerId) => {
+                    const created = await onCreateFfInboundDraft(operationType, sellerId)
                     if (!created?.id) {
                       return
                     }
