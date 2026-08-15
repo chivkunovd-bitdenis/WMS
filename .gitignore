@@ -34,6 +34,8 @@ backend/tests/wms_pytest_data_*/
 backend/var/wms-data/
 backend/dev.db
 backend/dev-local.db
+backend/live*.db
+backend/*live*.db
 backend/alembic_autogen.db
 
 # IDE
