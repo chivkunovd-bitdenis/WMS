@@ -414,12 +414,13 @@ export function FfProductsCatalogScreen({
                         <Typography
                           component="span"
                           variant="body2"
+                          title={p.name}
                           sx={{
                             minWidth: 0,
-                            display: '-webkit-box',
-                            WebkitLineClamp: 2,
-                            WebkitBoxOrient: 'vertical',
+                            flex: '1 1 auto',
                             overflow: 'hidden',
+                            textOverflow: 'ellipsis',
+                            whiteSpace: 'nowrap',
                           }}
                         >
                           {p.name}
