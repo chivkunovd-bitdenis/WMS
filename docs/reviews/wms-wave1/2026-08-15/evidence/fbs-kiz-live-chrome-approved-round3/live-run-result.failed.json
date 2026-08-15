@@ -1,0 +1,34 @@
+{
+  "started_at": "2026-08-15T07:55:15.955Z",
+  "seed": {
+    "email": "live-kiz-pass-1786779741815687000@example.com",
+    "password": "password123",
+    "supplyId": "925d3673-f355-4ecc-ae9d-eb1e90ff26c7",
+    "supplyName": "Live KIZ pass supply 687000",
+    "orders": [
+      {
+        "id": "3d19a544-f44f-4c24-af33-e415c5b3e773",
+        "wb_order_id": 920000000,
+        "sticker": "WB0920000000",
+        "kiz": "010460043993125321E2EKIZ100001"
+      },
+      {
+        "id": "4d6e59c6-2d93-4042-8e2f-2db8c5ca9a53",
+        "wb_order_id": 920000001,
+        "sticker": "WB0920000001",
+        "kiz": "010460043993125321E2EKIZ100002"
+      }
+    ]
+  },
+  "browser": "external Google Chrome 151 visible window via CDP on port 19354",
+  "steps": [
+    {
+      "name": "login-dashboard",
+      "screenshot": "/Users/deniscivkunov/Projects/WMS/.worktrees/integration-wave0-20260814/docs/reviews/wms-wave1/2026-08-15/evidence/fbs-kiz-live-chrome-approved-round3/01-login-dashboard.png",
+      "at": "2026-08-15T07:55:24.985Z",
+      "url": "http://127.0.0.1:51861/app/ff/dashboard"
+    }
+  ],
+  "error": "Error: expect(locator).toBeVisible() failed\n\nLocator: getByText('Live KIZ pass supply 687000')\nExpected: visible\nTimeout: 20000ms\nError: element(s) not found\n\nCall log:\n  - Expect \"to.be.visible\" with timeout 20000ms\n  - waiting for getByText('Live KIZ pass supply 687000')\n\n    at Proxy.<anonymous> (/Users/deniscivkunov/Projects/WMS/.worktrees/integration-wave0-20260814/frontend/node_modules/playwright/lib/matchers/expect.js:213:24)\n    at main ([stdin]:73:49)",
+  "finished_at": "2026-08-15T07:55:46.701Z"
+}

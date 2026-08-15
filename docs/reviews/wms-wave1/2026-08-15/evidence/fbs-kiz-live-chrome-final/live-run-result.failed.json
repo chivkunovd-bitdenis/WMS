@@ -1,0 +1,57 @@
+{
+  "started_at": "2026-08-15T07:39:49.898Z",
+  "seed": {
+    "email": "live-kiz-1786779290666130000@example.com",
+    "password": "password123",
+    "supplyId": "835cc833-7820-4a85-95ea-883580fa96b4",
+    "orders": [
+      {
+        "id": "b767691d-ae48-402e-bdcf-577479f89bb5",
+        "wb_order_id": 910000000,
+        "sticker": "WB0910000000",
+        "kiz": "010460043993125321E2EKIZ000001"
+      },
+      {
+        "id": "ed593756-cc49-44dd-983f-2f92fa32bade",
+        "wb_order_id": 910000001,
+        "sticker": "WB0910000001",
+        "kiz": "010460043993125321E2EKIZ000002"
+      }
+    ]
+  },
+  "browser": "external Google Chrome 151 visible window via CDP",
+  "steps": [
+    {
+      "name": "dashboard",
+      "screenshot": "/Users/deniscivkunov/Projects/WMS/.worktrees/integration-wave0-20260814/docs/reviews/wms-wave1/2026-08-15/evidence/fbs-kiz-live-chrome-final/01-dashboard.png",
+      "at": "2026-08-15T07:39:52.561Z",
+      "url": "http://127.0.0.1:51861/app/ff/dashboard"
+    },
+    {
+      "name": "fbs-active-list",
+      "screenshot": "/Users/deniscivkunov/Projects/WMS/.worktrees/integration-wave0-20260814/docs/reviews/wms-wave1/2026-08-15/evidence/fbs-kiz-live-chrome-final/02-fbs-active-list.png",
+      "at": "2026-08-15T07:39:52.998Z",
+      "url": "http://127.0.0.1:51861/app/ff/fbs"
+    },
+    {
+      "name": "workspace-before-kiz",
+      "screenshot": "/Users/deniscivkunov/Projects/WMS/.worktrees/integration-wave0-20260814/docs/reviews/wms-wave1/2026-08-15/evidence/fbs-kiz-live-chrome-final/03-workspace-before-kiz.png",
+      "at": "2026-08-15T07:39:53.404Z",
+      "url": "http://127.0.0.1:51861/app/ff/fbs"
+    },
+    {
+      "name": "kiz-dialog-open",
+      "screenshot": "/Users/deniscivkunov/Projects/WMS/.worktrees/integration-wave0-20260814/docs/reviews/wms-wave1/2026-08-15/evidence/fbs-kiz-live-chrome-final/04-kiz-dialog-open.png",
+      "at": "2026-08-15T07:39:53.621Z",
+      "url": "http://127.0.0.1:51861/app/ff/fbs"
+    },
+    {
+      "name": "two-kiz-pairs",
+      "screenshot": "/Users/deniscivkunov/Projects/WMS/.worktrees/integration-wave0-20260814/docs/reviews/wms-wave1/2026-08-15/evidence/fbs-kiz-live-chrome-final/05-two-kiz-pairs.png",
+      "at": "2026-08-15T07:39:54.506Z",
+      "url": "http://127.0.0.1:51861/app/ff/fbs"
+    }
+  ],
+  "error": "Error: expect(locator).toHaveCount(expected) failed\n\nLocator:  getByTestId('fbs-kiz-dialog').getByText('✓')\nExpected: 2\nReceived: 0\nTimeout:  15000ms\n\nCall log:\n  - Expect \"to.have.count\" with timeout 15000ms\n  - waiting for getByTestId('fbs-kiz-dialog').getByText('✓')\n    19 × locator resolved to 0 elements\n       - unexpected value \"0\"\n\n    at Proxy.<anonymous> (/Users/deniscivkunov/Projects/WMS/.worktrees/integration-wave0-20260814/frontend/node_modules/playwright/lib/matchers/expect.js:213:24)\n    at main ([stdin]:70:39)",
+  "finished_at": "2026-08-15T07:40:09.651Z"
+}

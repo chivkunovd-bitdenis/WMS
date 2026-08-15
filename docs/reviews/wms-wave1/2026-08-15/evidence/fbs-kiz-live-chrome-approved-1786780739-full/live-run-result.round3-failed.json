@@ -1,0 +1,44 @@
+{
+  "continued_at": "2026-08-15T08:13:59.003Z",
+  "seed": {
+    "run": "1786780739",
+    "email": "live-kiz-pass-1786779741815687000@example.com",
+    "password": "password123",
+    "supplyId": "76b2baa2-6aa8-4f9d-9669-04e47ff9b4b0",
+    "supplyName": "Live KIZ full browser supply 1786780739",
+    "orders": [
+      {
+        "id": "d2b312bb-6127-43aa-915d-4f65ee64d323",
+        "wb_order_id": 930000000,
+        "sticker": "930000000 930000001",
+        "kiz": "010460043993125321E2EKIZFULL000001",
+        "index": 0
+      },
+      {
+        "id": "f3befb25-3ec5-41a7-8234-2df4a226e125",
+        "wb_order_id": 930000001,
+        "sticker": "930000001 930000002",
+        "kiz": "010460043993125321E2EKIZFULL000002",
+        "index": 1
+      }
+    ]
+  },
+  "browser": "external Google Chrome 151 visible window via CDP on port 19354",
+  "steps": [],
+  "console": [
+    {
+      "type": "error",
+      "text": "Failed to load resource: the server responded with a status of 401 (Unauthorized)",
+      "at": "2026-08-15T08:14:02.641Z",
+      "url": "http://127.0.0.1:51861/app/ff/fbs"
+    },
+    {
+      "type": "error",
+      "text": "Failed to load resource: the server responded with a status of 401 (Unauthorized)",
+      "at": "2026-08-15T08:14:02.642Z",
+      "url": "http://127.0.0.1:51861/app/ff/fbs"
+    }
+  ],
+  "error": "Error: expect(locator).toBeVisible() failed\n\nLocator: getByTestId('dashboard')\nExpected: visible\nTimeout: 20000ms\nError: element(s) not found\n\nCall log:\n  - Expect \"to.be.visible\" with timeout 20000ms\n  - waiting for getByTestId('dashboard')\n\n    at Proxy.<anonymous> (/Users/deniscivkunov/Projects/WMS/.worktrees/integration-wave0-20260814/frontend/node_modules/playwright/lib/matchers/expect.js:213:24)\n    at ensureLogin (file:///Users/deniscivkunov/Projects/WMS/.worktrees/integration-wave0-20260814/[eval1]:54:49)\n    at async file:///Users/deniscivkunov/Projects/WMS/.worktrees/integration-wave0-20260814/[eval1]:94:3",
+  "finished_at": "2026-08-15T08:14:25.079Z"
+}

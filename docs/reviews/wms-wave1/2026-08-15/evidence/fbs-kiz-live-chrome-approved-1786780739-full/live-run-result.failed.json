@@ -1,0 +1,89 @@
+{
+  "started_at": "2026-08-15T08:02:03.820Z",
+  "seed": {
+    "run": "1786780739",
+    "email": "live-kiz-pass-1786779741815687000@example.com",
+    "password": "password123",
+    "supplyId": "76b2baa2-6aa8-4f9d-9669-04e47ff9b4b0",
+    "supplyName": "Live KIZ full browser supply 1786780739",
+    "orders": [
+      {
+        "id": "d2b312bb-6127-43aa-915d-4f65ee64d323",
+        "wb_order_id": 930000000,
+        "sticker": "WB0930000000",
+        "kiz": "010460043993125321E2EKIZFULL000001"
+      },
+      {
+        "id": "f3befb25-3ec5-41a7-8234-2df4a226e125",
+        "wb_order_id": 930000001,
+        "sticker": "WB0930000001",
+        "kiz": "010460043993125321E2EKIZFULL000002"
+      }
+    ]
+  },
+  "browser": "external Google Chrome 151 visible window via CDP on port 19354",
+  "steps": [
+    {
+      "name": "login-dashboard",
+      "screenshot": "/Users/deniscivkunov/Projects/WMS/.worktrees/integration-wave0-20260814/docs/reviews/wms-wave1/2026-08-15/evidence/fbs-kiz-live-chrome-approved-1786780739-full/01-login-dashboard.png",
+      "at": "2026-08-15T08:02:15.170Z",
+      "url": "http://127.0.0.1:51861/app/ff/dashboard"
+    },
+    {
+      "name": "active-worklist-fresh-orders",
+      "screenshot": "/Users/deniscivkunov/Projects/WMS/.worktrees/integration-wave0-20260814/docs/reviews/wms-wave1/2026-08-15/evidence/fbs-kiz-live-chrome-approved-1786780739-full/02-active-worklist-fresh-orders.png",
+      "at": "2026-08-15T08:02:18.731Z",
+      "url": "http://127.0.0.1:51861/app/ff/fbs"
+    },
+    {
+      "name": "workspace-before-print-and-kiz",
+      "screenshot": "/Users/deniscivkunov/Projects/WMS/.worktrees/integration-wave0-20260814/docs/reviews/wms-wave1/2026-08-15/evidence/fbs-kiz-live-chrome-approved-1786780739-full/03-workspace-before-print-and-kiz.png",
+      "at": "2026-08-15T08:02:21.425Z",
+      "url": "http://127.0.0.1:51861/app/ff/fbs"
+    },
+    {
+      "name": "print-preview-visible",
+      "screenshot": "/Users/deniscivkunov/Projects/WMS/.worktrees/integration-wave0-20260814/docs/reviews/wms-wave1/2026-08-15/evidence/fbs-kiz-live-chrome-approved-1786780739-full/04-print-preview-visible.png",
+      "at": "2026-08-15T08:02:22.925Z",
+      "url": "http://127.0.0.1:51861/app/ff/fbs"
+    },
+    {
+      "name": "qr-applied-1",
+      "screenshot": "/Users/deniscivkunov/Projects/WMS/.worktrees/integration-wave0-20260814/docs/reviews/wms-wave1/2026-08-15/evidence/fbs-kiz-live-chrome-approved-1786780739-full/05-qr-applied-1.png",
+      "at": "2026-08-15T08:02:24.273Z",
+      "url": "http://127.0.0.1:51861/app/ff/fbs"
+    },
+    {
+      "name": "print-preview-visible",
+      "screenshot": "/Users/deniscivkunov/Projects/WMS/.worktrees/integration-wave0-20260814/docs/reviews/wms-wave1/2026-08-15/evidence/fbs-kiz-live-chrome-approved-1786780739-full/06-print-preview-visible.png",
+      "at": "2026-08-15T08:02:26.141Z",
+      "url": "http://127.0.0.1:51861/app/ff/fbs"
+    },
+    {
+      "name": "qr-applied-2",
+      "screenshot": "/Users/deniscivkunov/Projects/WMS/.worktrees/integration-wave0-20260814/docs/reviews/wms-wave1/2026-08-15/evidence/fbs-kiz-live-chrome-approved-1786780739-full/07-qr-applied-2.png",
+      "at": "2026-08-15T08:02:27.727Z",
+      "url": "http://127.0.0.1:51861/app/ff/fbs"
+    },
+    {
+      "name": "after-qr-before-kiz-zero-of-two",
+      "screenshot": "/Users/deniscivkunov/Projects/WMS/.worktrees/integration-wave0-20260814/docs/reviews/wms-wave1/2026-08-15/evidence/fbs-kiz-live-chrome-approved-1786780739-full/08-after-qr-before-kiz-zero-of-two.png",
+      "at": "2026-08-15T08:02:28.150Z",
+      "url": "http://127.0.0.1:51861/app/ff/fbs"
+    },
+    {
+      "name": "kiz-dialog-open",
+      "screenshot": "/Users/deniscivkunov/Projects/WMS/.worktrees/integration-wave0-20260814/docs/reviews/wms-wave1/2026-08-15/evidence/fbs-kiz-live-chrome-approved-1786780739-full/09-kiz-dialog-open.png",
+      "at": "2026-08-15T08:02:28.973Z",
+      "url": "http://127.0.0.1:51861/app/ff/fbs"
+    },
+    {
+      "name": "console-error",
+      "text": "Failed to load resource: the server responded with a status of 404 (Not Found)",
+      "at": "2026-08-15T08:02:29.304Z",
+      "url": "http://127.0.0.1:51861/app/ff/fbs"
+    }
+  ],
+  "error": "Error: expect(locator).toBeVisible() failed\n\nLocator: getByTestId('fbs-kiz-dialog').getByText('№ 930000000')\nExpected: visible\nTimeout: 20000ms\nError: element(s) not found\n\nCall log:\n  - Expect \"to.be.visible\" with timeout 20000ms\n  - waiting for getByTestId('fbs-kiz-dialog').getByText('№ 930000000')\n\n    at Proxy.<anonymous> (/Users/deniscivkunov/Projects/WMS/.worktrees/integration-wave0-20260814/frontend/node_modules/playwright/lib/matchers/expect.js:213:24)\n    at main ([stdin]:91:62)",
+  "finished_at": "2026-08-15T08:02:49.240Z"
+}
