@@ -1,0 +1,464 @@
+{
+  "status": "SCREEN_APPROVED",
+  "checkpoint_commit": "51e946f",
+  "browser": {
+    "method": "external visible Google Chrome controlled through CDP DevTools",
+    "version": "Chrome/151.0.7922.138",
+    "cdp": "http://127.0.0.1:19563",
+    "headless": false,
+    "web": "http://127.0.0.1:52962"
+  },
+  "scenario": {
+    "email": "live-catalog-6a-1786786918532@example.com",
+    "sellerName": "Live Catalog Seller 1786786918532",
+    "manualSku": "LIVE-MAN-1786786918532",
+    "manualBarcode": "2046786918532"
+  },
+  "buckets": {
+    "stop": 0,
+    "slowdown_open": 0,
+    "slowdown_closed_in_rework": 8,
+    "tail": 1
+  },
+  "checks": [
+    {
+      "id": "empty_state_visible",
+      "ok": true,
+      "detail": {
+        "emptyText": "Короб ВМС\nlive-catalog-6a-1786786918532@example.com · администратор\n0\nВыйти\nДашборд\nОтгрузки\nFBS\nПриёмка\nСортировка\nУпаковка\nЯчейки\nСеллеры\nКаталог\nЧестный знак\nНастройки\nКаталог\n\nКарточки товаров селлеров: название, артикулы, ШК, размер и ТЗ упаковки.\n\nЗагрузить Excel\nСоздать товар\nФото\tНазвание\tАртикул селлера\tSKU\tШК\tWB/nmId\tРазмер\tСеллер\tТЗ\t\n\n\nВ каталоге пока нет товаров. Скачайте шаблон, загрузите Excel или создайте один товар вручную."
+      }
+    },
+    {
+      "id": "inventory_nav_hidden",
+      "ok": true,
+      "detail": {}
+    },
+    {
+      "id": "seller_create_absent",
+      "ok": true,
+      "detail": {}
+    },
+    {
+      "id": "search_filter_sort_absent",
+      "ok": true,
+      "detail": {}
+    },
+    {
+      "id": "inventory_route_redirects_to_catalog",
+      "ok": true,
+      "detail": {}
+    },
+    {
+      "id": "manual_product_visible",
+      "ok": true,
+      "detail": {
+        "rowText": "\t\nПальто утепленное женское демисезонное длинное с капюшоном и поясом цвет глубокий изумруд коллекция Северный ветер 2026 без дублей артикула размера и штрихкода\n\t\n\nVENDOR-1786786918532\n\n\t\n\nLIVE-MAN-1786786918532\n\n\t\n2046786918532\n\t\n\n—\n\n\t\n\n46\n\n\t\n\nLive Catalog Seller 1786786918532\n\n\t\n\nЗаполнено\n\n\t",
+        "nameText": "Пальто утепленное женское демисезонное длинное с капюшоном и поясом цвет глубокий изумруд коллекция Северный ветер 2026 без дублей артикула размера и штрихкода",
+        "nameRect": {
+          "width": 178,
+          "height": 22.515625
+        },
+        "nameLineHeight": 22.5225,
+        "rowHeight": 61.015625,
+        "columns": [
+          "",
+          "Пальто утепленное женское демисезонное длинное с капюшоном и поясом цвет глубокий изумруд коллекция Северный ветер 2026 без дублей артикула размера и штрихкода",
+          "VENDOR-1786786918532",
+          "LIVE-MAN-1786786918532",
+          "2046786918532",
+          "—",
+          "46",
+          "Live Catalog Seller 1786786918532",
+          "Заполнено",
+          ""
+        ]
+      }
+    },
+    {
+      "id": "clean_name_no_duplicate_sku_vendor_size_barcode",
+      "ok": true,
+      "detail": {
+        "rowText": "\t\nПальто утепленное женское демисезонное длинное с капюшоном и поясом цвет глубокий изумруд коллекция Северный ветер 2026 без дублей артикула размера и штрихкода\n\t\n\nVENDOR-1786786918532\n\n\t\n\nLIVE-MAN-1786786918532\n\n\t\n2046786918532\n\t\n\n—\n\n\t\n\n46\n\n\t\n\nLive Catalog Seller 1786786918532\n\n\t\n\nЗаполнено\n\n\t",
+        "nameText": "Пальто утепленное женское демисезонное длинное с капюшоном и поясом цвет глубокий изумруд коллекция Северный ветер 2026 без дублей артикула размера и штрихкода",
+        "nameRect": {
+          "width": 178,
+          "height": 22.515625
+        },
+        "nameLineHeight": 22.5225,
+        "rowHeight": 61.015625,
+        "columns": [
+          "",
+          "Пальто утепленное женское демисезонное длинное с капюшоном и поясом цвет глубокий изумруд коллекция Северный ветер 2026 без дублей артикула размера и штрихкода",
+          "VENDOR-1786786918532",
+          "LIVE-MAN-1786786918532",
+          "2046786918532",
+          "—",
+          "46",
+          "Live Catalog Seller 1786786918532",
+          "Заполнено",
+          ""
+        ]
+      }
+    },
+    {
+      "id": "name_single_line_long_data",
+      "ok": true,
+      "detail": {
+        "rowText": "\t\nПальто утепленное женское демисезонное длинное с капюшоном и поясом цвет глубокий изумруд коллекция Северный ветер 2026 без дублей артикула размера и штрихкода\n\t\n\nVENDOR-1786786918532\n\n\t\n\nLIVE-MAN-1786786918532\n\n\t\n2046786918532\n\t\n\n—\n\n\t\n\n46\n\n\t\n\nLive Catalog Seller 1786786918532\n\n\t\n\nЗаполнено\n\n\t",
+        "nameText": "Пальто утепленное женское демисезонное длинное с капюшоном и поясом цвет глубокий изумруд коллекция Северный ветер 2026 без дублей артикула размера и штрихкода",
+        "nameRect": {
+          "width": 178,
+          "height": 22.515625
+        },
+        "nameLineHeight": 22.5225,
+        "rowHeight": 61.015625,
+        "columns": [
+          "",
+          "Пальто утепленное женское демисезонное длинное с капюшоном и поясом цвет глубокий изумруд коллекция Северный ветер 2026 без дублей артикула размера и штрихкода",
+          "VENDOR-1786786918532",
+          "LIVE-MAN-1786786918532",
+          "2046786918532",
+          "—",
+          "46",
+          "Live Catalog Seller 1786786918532",
+          "Заполнено",
+          ""
+        ]
+      }
+    },
+    {
+      "id": "manual_chip_absent",
+      "ok": true,
+      "detail": {
+        "rowText": "\t\nПальто утепленное женское демисезонное длинное с капюшоном и поясом цвет глубокий изумруд коллекция Северный ветер 2026 без дублей артикула размера и штрихкода\n\t\n\nVENDOR-1786786918532\n\n\t\n\nLIVE-MAN-1786786918532\n\n\t\n2046786918532\n\t\n\n—\n\n\t\n\n46\n\n\t\n\nLive Catalog Seller 1786786918532\n\n\t\n\nЗаполнено\n\n\t",
+        "nameText": "Пальто утепленное женское демисезонное длинное с капюшоном и поясом цвет глубокий изумруд коллекция Северный ветер 2026 без дублей артикула размера и штрихкода",
+        "nameRect": {
+          "width": 178,
+          "height": 22.515625
+        },
+        "nameLineHeight": 22.5225,
+        "rowHeight": 61.015625,
+        "columns": [
+          "",
+          "Пальто утепленное женское демисезонное длинное с капюшоном и поясом цвет глубокий изумруд коллекция Северный ветер 2026 без дублей артикула размера и штрихкода",
+          "VENDOR-1786786918532",
+          "LIVE-MAN-1786786918532",
+          "2046786918532",
+          "—",
+          "46",
+          "Live Catalog Seller 1786786918532",
+          "Заполнено",
+          ""
+        ]
+      }
+    },
+    {
+      "id": "manual_product_api_readback",
+      "ok": true,
+      "detail": {
+        "id": "1bdbbbee-402d-4173-8e75-91d3fc14072d",
+        "seller_id": "fecaa358-ad06-417e-9609-5221de63b218",
+        "seller_name": "Live Catalog Seller 1786786918532",
+        "name": "Пальто утепленное женское демисезонное длинное с капюшоном и поясом цвет глубокий изумруд коллекция Северный ветер 2026 без дублей артикула размера и штрихкода",
+        "sku_code": "LIVE-MAN-1786786918532",
+        "wb_nm_id": null,
+        "wb_vendor_code": "VENDOR-1786786918532",
+        "wb_subject_name": null,
+        "wb_primary_image_url": null,
+        "wb_barcodes": [
+          "2046786918532"
+        ],
+        "wb_primary_barcode": "2046786918532",
+        "wb_size": "46",
+        "wb_color": null,
+        "wb_brand": null,
+        "wb_composition": null,
+        "packaging_instructions": "Пакет, стикер, контроль шва",
+        "requires_honest_sign": false,
+        "fbs_stock_sync_enabled": false,
+        "fbs_stock_limit": null,
+        "fbs_published_amount": null,
+        "fbs_sync_status": null,
+        "has_packaging_instructions": true,
+        "marking_available_count": 0,
+        "is_manual": true
+      }
+    },
+    {
+      "id": "chz_icon_gray_zero_without_text_chip",
+      "ok": true,
+      "detail": {
+        "aria": "Коды маркировки LIVE-MAN-1786786918532: 0",
+        "text": "",
+        "color": "rgba(0, 0, 0, 0.26)",
+        "disabled": false
+      }
+    },
+    {
+      "id": "chz_icon_yellow_count_two",
+      "ok": true,
+      "detail": {
+        "aria": "Коды маркировки LIVE-MAN-1786786918532: 2",
+        "text": "2",
+        "color": "rgb(237, 108, 2)",
+        "disabled": false
+      }
+    },
+    {
+      "id": "chz_text_chip_still_absent",
+      "ok": true,
+      "detail": {
+        "rowText": "\t\nПальто утепленное женское демисезонное длинное с капюшоном и поясом цвет глубокий изумруд коллекция Северный ветер 2026 без дублей артикула размера и штрихкода\n\t\n\nVENDOR-1786786918532\n\n\t\n\nLIVE-MAN-1786786918532\n\n\t\n2046786918532\n\t\n\n—\n\n\t\n\n46\n\n\t\n\nLive Catalog Seller 1786786918532\n\n\t\n\nЗаполнено\n\n\t\n2",
+        "nameText": "Пальто утепленное женское демисезонное длинное с капюшоном и поясом цвет глубокий изумруд коллекция Северный ветер 2026 без дублей артикула размера и штрихкода",
+        "nameRect": {
+          "width": 178,
+          "height": 22.515625
+        },
+        "nameLineHeight": 22.5225,
+        "rowHeight": 61.015625,
+        "columns": [
+          "",
+          "Пальто утепленное женское демисезонное длинное с капюшоном и поясом цвет глубокий изумруд коллекция Северный ветер 2026 без дублей артикула размера и штрихкода",
+          "VENDOR-1786786918532",
+          "LIVE-MAN-1786786918532",
+          "2046786918532",
+          "—",
+          "46",
+          "Live Catalog Seller 1786786918532",
+          "Заполнено",
+          "2"
+        ]
+      }
+    },
+    {
+      "id": "chz_icon_opens_product_codes_page",
+      "ok": true,
+      "detail": {}
+    },
+    {
+      "id": "excel_template_downloaded_without_quantity",
+      "ok": true,
+      "detail": {
+        "template": "/Users/deniscivkunov/Projects/WMS/.worktrees/wave1-catalog-20260814/docs/reviews/wms-wave1/2026-08-15/evidence/catalog-6a-live-chrome-20260815-115619/downloads/wms-product-catalog-template.xlsx",
+        "headers": [
+          "Название товара",
+          "Артикул продавца",
+          "SKU",
+          "Штрихкод",
+          "WB/nmId",
+          "Размер",
+          "ТЗ упаковки"
+        ]
+      }
+    },
+    {
+      "id": "excel_preview_good_no_quantity_column",
+      "ok": true,
+      "detail": {
+        "previewText": "Короб ВМС\nlive-catalog-6a-1786786918532@example.com · администратор\n0\nВыйти\nДашборд\nОтгрузки\nFBS\nПриёмка\nСортировка\nУпаковка\nЯчейки\nСеллеры\nКаталог\nЧестный знак\nНастройки\nКаталог\n\nКарточки товаров селлеров: название, артикулы, ШК, размер и ТЗ упаковки.\n\nЗагрузить Excel\nСоздать товар\nФото\tНазвание\tАртикул селлера\tSKU\tШК\tWB/nmId\tРазмер\tСеллер\tТЗ\t\n\n\t\nПальто утепленное женское демисезонное длинное с капюшоном и поясом цвет глубокий изумруд коллекция Северный ветер 2026 без дублей артикула размера и штрихкода\n\t\n\nVENDOR-1786786918532\n\n\t\n\nLIVE-MAN-1786786918532\n\n\t\n2046786918532\n\t\n\n—\n\n\t\n\n46\n\n\t\n\nLive Catalog Seller 1786786918532\n\n\t\n\nЗаполнено\n\n\t\n2\nЗагрузить товары из Excel\nСеллер *\nLive Catalog Seller 1786786918532\nСеллер *\nСкачать шаблон\nВыбрать .xlsx\n\nФайл: catalog-good.xlsx\n\nЛист «Каталог»: создать 2, обновить 0, пропустить 0, ошибок 0\n\nСтрока\tНазвание\tАртикул селлера\tSKU\tШК\tWB/nmId\tРазмер\tДействие\tТЗ\tПричина\n2\tКуртка мембранная мужская штормовая с проклеенными швами цвет графит коллекция Северный ветер 2026\tLIVE-EXCEL-A\tLIVE-EXCEL-A-50\t2039100000011\t987654321\t50\tсоздать\tПакет, стикер, не сгибать\t—\n3\tБрюки утепленные женские прогулочные цвет темный индиго коллекция Северный ветер 2026\tLIVE-EXCEL-B\tLIVE-EXCEL-B-44\t2039100000012\t987654322\t44\tсоздать\tПакет, контроль молнии\t—\nОтмена\nПрименить"
+      }
+    },
+    {
+      "id": "excel_products_persist_after_reload",
+      "ok": true,
+      "detail": {
+        "count": 3
+      }
+    },
+    {
+      "id": "excel_error_duplicate_visible_apply_disabled",
+      "ok": true,
+      "detail": {
+        "badText": "Короб ВМС\nlive-catalog-6a-1786786918532@example.com · администратор\n0\nВыйти\nДашборд\nОтгрузки\nFBS\nПриёмка\nСортировка\nУпаковка\nЯчейки\nСеллеры\nКаталог\nЧестный знак\nНастройки\nКаталог\n\nКарточки товаров селлеров: название, артикулы, ШК, размер и ТЗ упаковки.\n\nЗагрузить Excel\nСоздать товар\nФото\tНазвание\tАртикул селлера\tSKU\tШК\tWB/nmId\tРазмер\tСеллер\tТЗ\t\n\n\t\nКуртка мембранная мужская штормовая с проклеенными швами цвет графит коллекция Северный ветер 2026\n\t\n\nLIVE-EXCEL-A\n\n\t\n\nLIVE-EXCEL-A-50\n\n\t\n2039100000011\n\t\n\n987654321\n\n\t\n\n50\n\n\t\n\nLive Catalog Seller 1786786918532\n\n\t\n\nЗаполнено\n\n\t\n0\n\n\n\t\nБрюки утепленные женские прогулочные цвет темный индиго коллекция Северный ветер 2026\n\t\n\nLIVE-EXCEL-B\n\n\t\n\nLIVE-EXCEL-B-44\n\n\t\n2039100000012\n\t\n\n987654322\n\n\t\n\n44\n\n\t\n\nLive Catalog Seller 1786786918532\n\n\t\n\nЗаполнено\n\n\t\n0\n\n\n\t\nПальто утепленное женское демисезонное длинное с капюшоном и поясом цвет глубокий изумруд коллекция Северный ветер 2026 без дублей артикула размера и штрихкода\n\t\n\nVENDOR-1786786918532\n\n\t\n\nLIVE-MAN-1786786918532\n\n\t\n2046786918532\n\t\n\n—\n\n\t\n\n46\n\n\t\n\nLive Catalog Seller 1786786918532\n\n\t\n\nЗаполнено\n\n\t\n2\nЗагрузить товары из Excel\nСеллер *\nLive Catalog Seller 1786786918532\nСеллер *\nСкачать шаблон\nВыбрать .xlsx\n\nФайл: catalog-bad-duplicate.xlsx\n\nЛист «Ошибки»: создать 1, обновить 0, пропустить 0, ошибок 1\n\nИгнорировать строки с ошибками\nСтрока\tНазвание\tАртикул селлера\tSKU\tШК\tWB/nmId\tРазмер\tДействие\tТЗ\tПричина\n2\tДубль штрихкода первый\tLIVE-BAD-A\tLIVE-BAD-A-46\t2039100000099\t987654399\t46\tсоздать\tTZ\t—\n3\tДубль штрихкода второй\tLIVE-BAD-B\t—\t2039100000099\t987654398\t48\tошибка\tTZ\tДубликат штрихкода в файле.\nОтмена\nПрименить"
+      }
+    }
+  ],
+  "screenshots": [
+    "/Users/deniscivkunov/Projects/WMS/.worktrees/wave1-catalog-20260814/docs/reviews/wms-wave1/2026-08-15/evidence/catalog-6a-live-chrome-20260815-115619/01-empty-catalog.png",
+    "/Users/deniscivkunov/Projects/WMS/.worktrees/wave1-catalog-20260814/docs/reviews/wms-wave1/2026-08-15/evidence/catalog-6a-live-chrome-20260815-115619/02-manual-create-filled.png",
+    "/Users/deniscivkunov/Projects/WMS/.worktrees/wave1-catalog-20260814/docs/reviews/wms-wave1/2026-08-15/evidence/catalog-6a-live-chrome-20260815-115619/03-manual-product-row.png",
+    "/Users/deniscivkunov/Projects/WMS/.worktrees/wave1-catalog-20260814/docs/reviews/wms-wave1/2026-08-15/evidence/catalog-6a-live-chrome-20260815-115619/04-chz-yellow-count-two.png",
+    "/Users/deniscivkunov/Projects/WMS/.worktrees/wave1-catalog-20260814/docs/reviews/wms-wave1/2026-08-15/evidence/catalog-6a-live-chrome-20260815-115619/05-chz-product-page-opened-tail.png",
+    "/Users/deniscivkunov/Projects/WMS/.worktrees/wave1-catalog-20260814/docs/reviews/wms-wave1/2026-08-15/evidence/catalog-6a-live-chrome-20260815-115619/06-excel-preview-good.png",
+    "/Users/deniscivkunov/Projects/WMS/.worktrees/wave1-catalog-20260814/docs/reviews/wms-wave1/2026-08-15/evidence/catalog-6a-live-chrome-20260815-115619/07-excel-apply-success.png",
+    "/Users/deniscivkunov/Projects/WMS/.worktrees/wave1-catalog-20260814/docs/reviews/wms-wave1/2026-08-15/evidence/catalog-6a-live-chrome-20260815-115619/08-excel-products-after-reload.png",
+    "/Users/deniscivkunov/Projects/WMS/.worktrees/wave1-catalog-20260814/docs/reviews/wms-wave1/2026-08-15/evidence/catalog-6a-live-chrome-20260815-115619/09-excel-preview-duplicate-error.png"
+  ],
+  "consoleEvents": [
+    {
+      "type": "debug",
+      "args": [
+        "[vite] connecting..."
+      ]
+    },
+    {
+      "type": "debug",
+      "args": [
+        "[vite] connected."
+      ]
+    },
+    {
+      "type": "info",
+      "args": [
+        "%cDownload the React DevTools for a better development experience: https://react.dev/link/react-devtools",
+        "font-weight:bold"
+      ]
+    },
+    {
+      "type": "debug",
+      "args": [
+        "[vite] connecting..."
+      ]
+    },
+    {
+      "type": "debug",
+      "args": [
+        "[vite] connected."
+      ]
+    },
+    {
+      "type": "info",
+      "args": [
+        "%cDownload the React DevTools for a better development experience: https://react.dev/link/react-devtools",
+        "font-weight:bold"
+      ]
+    },
+    {
+      "type": "debug",
+      "args": [
+        "[vite] connecting..."
+      ]
+    },
+    {
+      "type": "debug",
+      "args": [
+        "[vite] connected."
+      ]
+    },
+    {
+      "type": "info",
+      "args": [
+        "%cDownload the React DevTools for a better development experience: https://react.dev/link/react-devtools",
+        "font-weight:bold"
+      ]
+    },
+    {
+      "type": "debug",
+      "args": [
+        "[vite] connecting..."
+      ]
+    },
+    {
+      "type": "debug",
+      "args": [
+        "[vite] connected."
+      ]
+    },
+    {
+      "type": "info",
+      "args": [
+        "%cDownload the React DevTools for a better development experience: https://react.dev/link/react-devtools",
+        "font-weight:bold"
+      ]
+    },
+    {
+      "type": "debug",
+      "args": [
+        "[vite] connecting..."
+      ]
+    },
+    {
+      "type": "debug",
+      "args": [
+        "[vite] connected."
+      ]
+    },
+    {
+      "type": "info",
+      "args": [
+        "%cDownload the React DevTools for a better development experience: https://react.dev/link/react-devtools",
+        "font-weight:bold"
+      ]
+    },
+    {
+      "type": "error",
+      "args": [
+        "In HTML, %s cannot be a child of <%s>.%s\nThis will cause a hydration error.%s",
+        "<td>",
+        "a",
+        "",
+        "\n\n  ...\n    <MuiTableContainer-root ref={null} as={{...}} className=\"MuiTableCo...\" ownerState={{...}} variant=\"outlined\">\n      <Insertion>\n      <Paper className=\"MuiTableCo...\" variant=\"outlined\">\n        <MuiPaper-root as=\"div\" ownerState={{...}} className=\"MuiPaper-r...\" ref={null} style={{}}>\n          <Insertion>\n          <div className=\"MuiPaper-r...\" style={{}}>\n            <Table size=\"small\" sx={{...}}>\n              <MuiTable-root as=\"table\" role={null} ref={null} className=\"MuiTable-root\" ownerState={{size:\"small\", ...}} ...>\n                <Insertion>\n                <table role={null} className=\"MuiTable-r...\">\n                  <TableHead>\n                  <TableBody>\n                    <MuiTableBody-root className=\"MuiTableBo...\" as=\"tbody\" ref={null} role={null} ...>\n                      <Insertion>\n                      <tbody className=\"MuiTableBo...\" role={null}>\n                        <TableRow hover={true} component={{...}} to=\"/app/ff/ho...\" sx={{...}} ...>\n                          <MuiTableRow-root as={{...}} ref={null} className=\"MuiTableRo...\" role=\"row\" ...>\n                            <Insertion>\n                            <LinkWithRef className=\"MuiTableRo...\" role=\"row\" to=\"/app/ff/ho...\" ...>\n>                             <a\n>                               className=\"MuiTableRow-root MuiTableRow-hover css-2qon4t-MuiTableRow-root\"\n>                               role=\"row\"\n>                               data-testid=\"ff-honest-sign-product-personal-pool-e6a1a66c-186e-4007-926a-870c51cdad86\"\n>                               href=\"/app/ff/honest-sign/pool/e6a1a66c-186e-4007-926a-870c51cdad86\"\n>                               onClick={function handleClick}\n>                               ref={function}\n>                               target={undefined}\n>                               data-discover=\"true\"\n>                             >\n                                <TableCell>\n                                  <MuiTableCell-root as=\"td\" ref={null} className=\"MuiTableCe...\" aria-sort={null} ...>\n                                    <Insertion>\n>                                   <td\n>                                     className=\"MuiTableCell-root MuiTableCell-body MuiTableCell-sizeSmall css-125bja...\"\n>                                     aria-sort={null}\n>                                     scope={undefined}\n>                                   >\n                                ...\n"
+      ]
+    },
+    {
+      "type": "error",
+      "args": [
+        "<%s> cannot contain a nested %s.\nSee this log for the ancestor stack trace.",
+        "a",
+        "<td>"
+      ]
+    },
+    {
+      "type": "error",
+      "args": [
+        "In HTML, %s cannot be a child of <%s>.%s\nThis will cause a hydration error.%s",
+        "<a>",
+        "tbody",
+        "",
+        "\n\n  ...\n    <Box data-testid=\"ff-honest-...\">\n      <Styled(div) as=\"div\" ref={null} className=\"MuiBox-root\" theme={{...}} data-testid=\"ff-honest-...\">\n        <Insertion>\n        <div className=\"MuiBox-roo...\" data-testid=\"ff-honest-...\">\n          <Typography>\n          <TableContainer component={{...}} variant=\"outlined\">\n            <MuiTableContainer-root ref={null} as={{...}} className=\"MuiTableCo...\" ownerState={{...}} variant=\"outlined\">\n              <Insertion>\n              <Paper className=\"MuiTableCo...\" variant=\"outlined\">\n                <MuiPaper-root as=\"div\" ownerState={{...}} className=\"MuiPaper-r...\" ref={null} style={{}}>\n                  <Insertion>\n                  <div className=\"MuiPaper-r...\" style={{}}>\n                    <Table size=\"small\" sx={{...}}>\n                      <MuiTable-root as=\"table\" role={null} ref={null} className=\"MuiTable-root\" ...>\n                        <Insertion>\n                        <table role={null} className=\"MuiTable-r...\">\n                          <TableHead>\n                          <TableBody>\n                            <MuiTableBody-root className=\"MuiTableBo...\" as=\"tbody\" ref={null} role={null} ...>\n                              <Insertion>\n>                             <tbody className=\"MuiTableBody-root css-gmh7jj-MuiTableBody-root\" role={null}>\n                                <TableRow hover={true} component={{...}} to=\"/app/ff/ho...\" sx={{...}} ...>\n                                  <MuiTableRow-root as={{...}} ref={null} className=\"MuiTableRo...\" role=\"row\" ...>\n                                    <Insertion>\n                                    <LinkWithRef className=\"MuiTableRo...\" role=\"row\" to=\"/app/ff/ho...\" ...>\n>                                     <a\n>                                       className=\"MuiTableRow-root MuiTableRow-hover css-2qon4t-MuiTableRow-root\"\n>                                       role=\"row\"\n>                                       data-testid=\"ff-honest-sign-product-personal-pool-e6a1a66c-186e-4007-926a-870c...\"\n>                                       href=\"/app/ff/honest-sign/pool/e6a1a66c-186e-4007-926a-870c51cdad86\"\n>                                       onClick={function handleClick}\n>                                       ref={function}\n>                                       target={undefined}\n>                                       data-discover=\"true\"\n>                                     >\n"
+      ]
+    },
+    {
+      "type": "error",
+      "args": [
+        "<%s> cannot contain a nested %s.\nSee this log for the ancestor stack trace.",
+        "tbody",
+        "<a>"
+      ]
+    },
+    {
+      "type": "debug",
+      "args": [
+        "[vite] connecting..."
+      ]
+    },
+    {
+      "type": "debug",
+      "args": [
+        "[vite] connected."
+      ]
+    },
+    {
+      "type": "info",
+      "args": [
+        "%cDownload the React DevTools for a better development experience: https://react.dev/link/react-devtools",
+        "font-weight:bold"
+      ]
+    },
+    {
+      "type": "debug",
+      "args": [
+        "[vite] connecting..."
+      ]
+    },
+    {
+      "type": "debug",
+      "args": [
+        "[vite] connected."
+      ]
+    },
+    {
+      "type": "info",
+      "args": [
+        "%cDownload the React DevTools for a better development experience: https://react.dev/link/react-devtools",
+        "font-weight:bold"
+      ]
+    }
+  ],
+  "artifacts": {
+    "goodXlsx": "/Users/deniscivkunov/Projects/WMS/.worktrees/wave1-catalog-20260814/docs/reviews/wms-wave1/2026-08-15/evidence/catalog-6a-live-chrome-20260815-115619/catalog-good.xlsx",
+    "badXlsx": "/Users/deniscivkunov/Projects/WMS/.worktrees/wave1-catalog-20260814/docs/reviews/wms-wave1/2026-08-15/evidence/catalog-6a-live-chrome-20260815-115619/catalog-bad-duplicate.xlsx",
+    "template": "/Users/deniscivkunov/Projects/WMS/.worktrees/wave1-catalog-20260814/docs/reviews/wms-wave1/2026-08-15/evidence/catalog-6a-live-chrome-20260815-115619/downloads/wms-product-catalog-template.xlsx",
+    "downloads": "/Users/deniscivkunov/Projects/WMS/.worktrees/wave1-catalog-20260814/docs/reviews/wms-wave1/2026-08-15/evidence/catalog-6a-live-chrome-20260815-115619/downloads"
+  }
+}
