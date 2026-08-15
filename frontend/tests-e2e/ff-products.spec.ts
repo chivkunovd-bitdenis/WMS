@@ -81,7 +81,7 @@ test('ff products: catalog separates product fields and hides stock columns', as
     seller_id: sellerA.id,
   })
 
-  // Reload so App re-fetches sellers list for the filter dropdown.
+  // Reload so App re-fetches sellers list for the catalog dialogs.
   await page.reload()
   await expect(page.getByTestId('dashboard')).toBeVisible()
 
@@ -111,55 +111,14 @@ test('ff products: catalog separates product fields and hides stock columns', as
   await expect(page.getByTestId('ff-products-table')).not.toContainText('В ячейках')
   await expect(page.getByTestId('ff-products-table')).not.toContainText('Технический резерв')
   await expect(page.getByTestId('ff-products-available-formula')).toHaveCount(0)
-
-  // Filter by seller A
-  await page.getByTestId('ff-products-seller-filter').click()
-  const sellerListbox = page.getByRole('listbox')
-  await expect(sellerListbox).toBeVisible()
-  await sellerListbox.getByText('E2E Seller A', { exact: true }).click()
-  await expect(page.getByTestId('ff-product-row')).toHaveCount(2)
-  await expect(page.getByTestId('ff-products-table')).toContainText(skuA)
-  await expect(page.getByTestId('ff-products-table')).toContainText(skuPrivate)
-
-  // Switch to All
-  await page.getByTestId('ff-products-seller-filter').click()
-  await expect(sellerListbox).toBeVisible()
-  await sellerListbox.getByText('Все', { exact: true }).click()
+  await expect(page.getByTestId('ff-products-seller-filter')).toHaveCount(0)
+  await expect(page.getByTestId('ff-products-search')).toHaveCount(0)
+  await expect(page.getByTestId('ff-products-sort-name')).toHaveCount(0)
+  await expect(page.getByText('Вручную', { exact: true })).toHaveCount(0)
   await expect(page.getByTestId('ff-product-row')).toHaveCount(3)
-
-  // TC-NEW-002 — поиск по артикулу (SKU) и названию
-  await page.getByTestId('ff-products-search').fill('Private only')
-  await expect(page.getByTestId('ff-product-row')).toHaveCount(1)
-  await expect(page.getByTestId('ff-products-table')).toContainText(skuPrivate)
-
-  await page.getByTestId('ff-products-search').fill(skuA)
-  await expect(page.getByTestId('ff-product-row')).toHaveCount(1)
-  await expect(page.getByTestId('ff-products-table')).toContainText('Alpha product')
-
-  await page.getByTestId('ff-products-search').fill('ART-A')
-  await expect(page.getByTestId('ff-product-row')).toHaveCount(1)
   await expect(page.getByTestId('ff-products-table')).toContainText(skuA)
-
-  await page.getByTestId('ff-products-search').fill(barcodeA)
-  await expect(page.getByTestId('ff-product-row')).toHaveCount(1)
-  await expect(page.getByTestId('ff-products-table')).toContainText('Alpha product')
-
-  await page.getByTestId('ff-products-search').fill('46')
-  await expect(page.getByTestId('ff-product-row')).toHaveCount(1)
-  await expect(page.getByTestId('ff-products-table')).toContainText('ART-A')
-
-  await page.getByTestId('ff-products-search').fill('zzz-no-match-xyz')
-  await expect(page.getByTestId('ff-product-row')).toHaveCount(0)
-  await expect(page.getByTestId('ff-products-search-empty')).toBeVisible()
-
-  await page.getByTestId('ff-products-search').fill('')
-  await expect(page.getByTestId('ff-product-row')).toHaveCount(3)
-
-  // Sort by name asc: Alpha first
-  await page.getByTestId('ff-products-sort-name').click()
-  await page.getByTestId('ff-products-sort-name').click()
-  const firstNameAfterName = await page.getByTestId('ff-product-row').first().locator('td').nth(1).innerText()
-  expect(firstNameAfterName).toContain('Alpha')
+  await expect(page.getByTestId('ff-products-table')).toContainText(skuB)
+  await expect(page.getByTestId('ff-products-table')).toContainText(skuPrivate)
 
   const alphaRow = page.getByTestId('ff-product-row').filter({ hasText: skuA })
   await expect(alphaRow.locator('td').nth(1)).toContainText('Alpha product')
@@ -251,7 +210,7 @@ test('ff products: marking icon shows count and opens honest sign product card',
 })
 
 // TC-CAT-04 — FF создаёт один товар вручную как вспомогательный путь каталога.
-// Given: FF admin и селлер; When: «Создать товар»; Then: товар появляется в каталоге, поиск по ШК работает.
+// Given: FF admin и селлер; When: «Создать товар»; Then: товар появляется в каталоге без отдельного chip происхождения.
 test('ff products: manual create adds a catalog product', async ({ page }) => {
   const email = `e2e-ff-manual-${Date.now()}@example.com`
   const password = 'password123'
@@ -295,8 +254,9 @@ test('ff products: manual create adds a catalog product', async ({ page }) => {
   ])
 
   await expect(page.getByTestId('ff-products-table')).toContainText(sku)
-  await page.getByTestId('ff-products-search').fill(barcode)
-  await expect(page.getByTestId('ff-product-row')).toHaveCount(1)
+  const createdRow = page.getByTestId('ff-product-row').filter({ hasText: sku })
+  await expect(createdRow).toContainText(barcode)
+  await expect(createdRow.getByText('Вручную', { exact: true })).toHaveCount(0)
   void seller
 })
 
@@ -415,8 +375,7 @@ bad.save(${JSON.stringify(badXlsxPath)})
   await expect(page.getByTestId('ff-products-table')).toContainText('E2E-ART')
   await expect(page.getByTestId('ff-products-table')).toContainText('123456789')
   await expect(page.getByTestId('ff-product-row')).toHaveCount(2)
-  await page.getByTestId('ff-products-search').fill('2039000000001')
-  await expect(page.getByTestId('ff-product-row')).toHaveCount(1)
+  await expect(page.getByTestId('ff-products-table')).toContainText('2039000000001')
 
   await page.getByTestId('ff-products-import-tz').click()
   await page.getByTestId('ff-tz-import-seller').click()

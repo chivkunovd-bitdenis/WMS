@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import {
   Alert,
@@ -6,12 +6,8 @@ import {
   Box,
   Button,
   CircularProgress,
-  FormControl,
   IconButton,
-  InputLabel,
-  MenuItem,
   Paper,
-  Select,
   Stack,
   Table,
   TableBody,
@@ -19,8 +15,6 @@ import {
   TableContainer,
   TableHead,
   TableRow,
-  TableSortLabel,
-  TextField,
   Tooltip,
   Typography,
 } from '@mui/material'
@@ -69,21 +63,6 @@ type Props = {
   canManageCatalog?: boolean
 }
 
-function rowMatchesSearch(row: FfCatalogRow, query: string): boolean {
-  const needle = query.trim().toLowerCase()
-  if (!needle) return true
-  return (
-    row.name.toLowerCase().includes(needle) ||
-    row.sku_code.toLowerCase().includes(needle) ||
-    (row.wb_vendor_code?.toLowerCase().includes(needle) ?? false) ||
-    (row.wb_nm_id != null && String(row.wb_nm_id).includes(needle)) ||
-    (row.wb_size?.toLowerCase().includes(needle) ?? false) ||
-    (row.wb_color?.toLowerCase().includes(needle) ?? false) ||
-    (row.wb_primary_barcode?.toLowerCase().includes(needle) ?? false) ||
-    row.wb_barcodes.some((b) => b.toLowerCase().includes(needle))
-  )
-}
-
 function humanFfCatalogError(message: string): string {
   const normalized = message.trim()
   const lower = normalized.toLowerCase()
@@ -117,10 +96,7 @@ export function FfProductsCatalogScreen({
   const navigate = useNavigate()
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
-  const [selectedSellerId, setSelectedSellerId] = useState<string>('__all__')
-  const [searchQuery, setSearchQuery] = useState('')
   const [catalog, setCatalog] = useState<FfCatalogRow[]>([])
-  const [sortDir, setSortDir] = useState<'asc' | 'desc'>('asc')
   const [createOpen, setCreateOpen] = useState(false)
   const [importOpen, setImportOpen] = useState(false)
   const [importNotice, setImportNotice] = useState<string | null>(null)
@@ -129,9 +105,7 @@ export function FfProductsCatalogScreen({
     setError(null)
     setBusy(true)
     try {
-      const sellerFilter = canManageCatalog && selectedSellerId !== '__all__' ? selectedSellerId : null
-      const qs = sellerFilter ? `?seller_id=${encodeURIComponent(sellerFilter)}` : ''
-      const res = await fetch(apiUrl(`/products/ff-catalog${qs}`), {
+      const res = await fetch(apiUrl('/products/ff-catalog'), {
         headers: { ...authHeaders(token) },
       })
       if (!res.ok) {
@@ -143,32 +117,11 @@ export function FfProductsCatalogScreen({
     } finally {
       setBusy(false)
     }
-  }, [authHeaders, canManageCatalog, selectedSellerId, token])
+  }, [authHeaders, token])
 
   useEffect(() => {
     void load()
   }, [load])
-
-  const rows = useMemo(() => {
-    if (!canManageCatalog || selectedSellerId === '__all__') {
-      return catalog
-    }
-    return catalog.filter((r) => r.seller_id === selectedSellerId)
-  }, [canManageCatalog, catalog, selectedSellerId])
-
-  const filteredRows = useMemo(
-    () => rows.filter((r) => rowMatchesSearch(r, searchQuery)),
-    [rows, searchQuery],
-  )
-
-  const sortedRows = useMemo(() => {
-    const dir = sortDir === 'asc' ? 1 : -1
-    return [...filteredRows].sort((a, b) => {
-      const byName = a.name.localeCompare(b.name) * dir
-      if (byName !== 0) return byName
-      return a.sku_code.localeCompare(b.sku_code) * dir
-    })
-  }, [filteredRows, sortDir])
 
   return (
     <FfProductMarkingPrintProvider token={token}>
@@ -207,15 +160,16 @@ export function FfProductsCatalogScreen({
         <Paper
           variant="outlined"
           sx={{ p: 2, mb: 2, maxWidth: '100%', overflowX: 'hidden' }}
-          data-testid="ff-products-filters"
+          data-testid="ff-products-actions"
         >
-          <Stack spacing={2}>
+          <Stack
+            direction={{ xs: 'column', sm: 'row' }}
+            spacing={1}
+            sx={{ justifyContent: 'flex-end', alignItems: { sm: 'center' } }}
+          >
+            {busy ? <CircularProgress size={18} data-testid="ff-products-loading" /> : null}
             {canManageCatalog ? (
-              <Stack
-                direction={{ xs: 'column', sm: 'row' }}
-                spacing={1}
-                sx={{ justifyContent: 'flex-end' }}
-              >
+              <>
                 <Button
                   variant="contained"
                   startIcon={<DownloadOutlinedIcon />}
@@ -231,43 +185,8 @@ export function FfProductsCatalogScreen({
                 >
                   Создать товар
                 </Button>
-              </Stack>
+              </>
             ) : null}
-            <TextField
-              fullWidth
-              size="small"
-              label="Поиск"
-              placeholder="Название, артикул, SKU, ШК, WB/nmId или размер"
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              slotProps={{ htmlInput: { 'data-testid': 'ff-products-search' } }}
-            />
-            <Stack
-              direction={{ xs: 'column', sm: 'row' }}
-              spacing={2}
-              sx={{ alignItems: { sm: 'center' } }}
-            >
-              {canManageCatalog ? (
-                <FormControl size="small" sx={{ minWidth: 260 }}>
-                  <InputLabel id="ff-products-seller-label">Селлер</InputLabel>
-                  <Select
-                    labelId="ff-products-seller-label"
-                    label="Селлер"
-                    value={selectedSellerId}
-                    onChange={(e) => setSelectedSellerId(String(e.target.value))}
-                    data-testid="ff-products-seller-filter"
-                  >
-                    <MenuItem value="__all__">Все</MenuItem>
-                    {sellers.map((s) => (
-                      <MenuItem key={s.id} value={s.id}>
-                        {s.name}
-                      </MenuItem>
-                    ))}
-                  </Select>
-                </FormControl>
-              ) : null}
-              {busy ? <CircularProgress size={18} data-testid="ff-products-loading" /> : null}
-            </Stack>
           </Stack>
         </Paper>
 
@@ -312,16 +231,7 @@ export function FfProductsCatalogScreen({
             <TableHead>
               <TableRow>
                 <TableCell>Фото</TableCell>
-                <TableCell>
-                  <TableSortLabel
-                    active
-                    direction={sortDir}
-                    onClick={() => setSortDir((d) => (d === 'asc' ? 'desc' : 'asc'))}
-                    data-testid="ff-products-sort-name"
-                  >
-                    Название
-                  </TableSortLabel>
-                </TableCell>
+                <TableCell>Название</TableCell>
                 <TableCell>Артикул селлера</TableCell>
                 <TableCell>SKU</TableCell>
                 <TableCell>ШК</TableCell>
@@ -333,7 +243,7 @@ export function FfProductsCatalogScreen({
               </TableRow>
             </TableHead>
             <TableBody>
-              {sortedRows.map((p) => {
+              {catalog.map((p) => {
                 const displayMeta = catalogRowToDisplayMeta(p)
                 const barcode = resolveProductPrimaryBarcode(displayMeta)
                 const markingCount = p.marking_available_count ?? 0
@@ -454,18 +364,10 @@ export function FfProductsCatalogScreen({
                   </TableRow>
                 )
               })}
-              {sortedRows.length === 0 && !busy ? (
+              {catalog.length === 0 && !busy ? (
                 <TableRow>
                   <TableCell colSpan={10}>
-                    {searchQuery.trim() ? (
-                      <Typography
-                        variant="body2"
-                        color="text.secondary"
-                        data-testid="ff-products-search-empty"
-                      >
-                        Ничего не найдено по запросу «{searchQuery.trim()}».
-                      </Typography>
-                    ) : canManageCatalog ? (
+                    {canManageCatalog ? (
                       <Typography variant="body2" color="text.secondary" data-testid="ff-products-empty">
                         В каталоге пока нет товаров. Скачайте шаблон, загрузите Excel или создайте
                         один товар вручную.
@@ -489,7 +391,6 @@ export function FfProductsCatalogScreen({
               token={token}
               authHeaders={authHeaders}
               sellers={sellers}
-              defaultSellerId={selectedSellerId !== '__all__' ? selectedSellerId : null}
               onClose={() => setCreateOpen(false)}
               onCreated={async () => {
                 setImportNotice('Товар создан.')
@@ -500,7 +401,6 @@ export function FfProductsCatalogScreen({
               open={importOpen}
               token={token}
               sellers={sellers}
-              defaultSellerId={selectedSellerId !== '__all__' ? selectedSellerId : null}
               onClose={() => setImportOpen(false)}
               onApplied={async (message) => {
                 setImportNotice(message)
