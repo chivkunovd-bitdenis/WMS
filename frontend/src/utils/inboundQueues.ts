@@ -10,6 +10,7 @@ export type InboundQueueRow = {
   operation_type?: string | null
   line_count: number
   planned_delivery_date: string | null
+  created_by_seller_id?: string | null
   seller_name?: string | null
   created_at?: string
   sorting_remaining_qty?: number

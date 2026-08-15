@@ -32,6 +32,15 @@ async function lastCapturedPrintHtml(page: Page): Promise<string> {
   });
 }
 
+async function startFfReceivingFromSubmitted(page: Page): Promise<void> {
+  await expect(page.getByTestId('ff-inbound-status-chip')).toContainText('Передано на склад');
+  await Promise.all([
+    waitForPostOk(page, INBOUND_API, (u) => u.includes('/begin-receiving')),
+    page.getByTestId('ff-inbound-submit-warehouse').click(),
+  ]);
+  await expect(page.getByTestId('ff-inbound-status-chip')).toContainText('Приёмка');
+}
+
 // TC-NEW-IN-01 — очередь с человеческой идентичностью, скан в приёмку, ручная правка, завершение с модалкой расхождений.
 test('inbound receiving v2 — scan, manual edit, finish with discrepancy', async ({ page }) => {
   const seed = await seedFfSellerInbound(page, `rcv-${Date.now()}`);
@@ -51,6 +60,7 @@ test('inbound receiving v2 — scan, manual edit, finish with discrepancy', asyn
   await page.getByTestId('ff-inbound-queue-row').first().focus();
   await page.keyboard.press('Enter');
   await expect(page.getByTestId('ff-inbound-doc-root')).toBeVisible();
+  await startFfReceivingFromSubmitted(page);
   await expect(page.getByTestId('ff-inbound-doc-root').getByRole('tab', { name: /упаковка/i })).toHaveCount(0);
   await expect(page.getByTestId('ff-inbound-planned-date')).toHaveCount(0);
   await expect(page.getByTestId('ff-inbound-print-waybill')).toHaveCount(0);
@@ -218,6 +228,7 @@ test('inbound receiving v2 — mobile receiving table keeps max identifiers insi
   await page.getByTestId('nav-ff-reception').click();
   await page.locator(`[data-testid="ff-inbound-queue-row"][data-request-id="${requestId}"]`).click();
   await expect(page.getByTestId('ff-inbound-doc-root')).toBeVisible();
+  await startFfReceivingFromSubmitted(page);
   await page.setViewportSize({ width: 390, height: 844 });
 
   const linesTable = page.getByTestId('ff-inbound-lines-table');
@@ -283,6 +294,7 @@ test('inbound receiving v2 — multiple boxes stay independent', async ({ page }
   await loginFfAdmin(page, seed.adminEmail, seed.password);
   await page.getByTestId('nav-ff-reception').click();
   await page.getByTestId('ff-inbound-queue-table').locator('tbody tr').first().click();
+  await startFfReceivingFromSubmitted(page);
   await expandInboundPackages(page);
 
   for (let i = 0; i < 3; i++) {
@@ -337,6 +349,7 @@ test('inbound receiving v2 — foreign barcode shows toast error', async ({ page
   await page.getByTestId('nav-ff-reception').click();
   await page.getByTestId('ff-inbound-queue-table').locator('tbody tr').first().click();
   await expect(page.getByTestId('ff-inbound-doc-root')).toBeVisible();
+  await startFfReceivingFromSubmitted(page);
   await expect(page.getByText('Сканер штрихкода')).toHaveCount(0);
 
   await Promise.all([
@@ -427,6 +440,7 @@ test('inbound receiving v2 — return accepts seller catalog discrepancy and dim
   await page.getByTestId('nav-ff-reception').click();
   await page.locator(`[data-testid="ff-inbound-queue-row"][data-request-id="${requestId}"]`).click();
   await expect(page.getByTestId('ff-inbound-doc-root')).toBeVisible();
+  await startFfReceivingFromSubmitted(page);
   await expect(page.getByTestId('ff-inbound-operation-type')).toContainText('Возврат');
   await expect(page.getByTestId('ff-inbound-return-autoprint')).toBeVisible();
   await expect(page.getByTestId('ff-inbound-receiving-create-manual-product')).toHaveCount(0);
@@ -575,6 +589,7 @@ test('inbound receiving v2 — return autoprint fails closed when scanned line h
   await page.getByTestId('nav-ff-reception').click();
   await page.locator(`[data-testid="ff-inbound-queue-row"][data-request-id="${requestId}"]`).click();
   await expect(page.getByTestId('ff-inbound-doc-root')).toBeVisible();
+  await startFfReceivingFromSubmitted(page);
   await expect(page.getByTestId('ff-inbound-return-autoprint')).toBeVisible();
   await page.getByTestId('ff-inbound-return-autoprint').click();
   await armPrintCapture(page);
@@ -633,6 +648,7 @@ test('inbound receiving v2 — seller sees conducted factual card after FF short
   await page.getByTestId('nav-ff-reception').click();
   await page.getByTestId('ff-inbound-queue-table').locator('tbody tr').first().click();
   await expect(page.getByTestId('ff-inbound-doc-root')).toBeVisible();
+  await startFfReceivingFromSubmitted(page);
 
   await page.getByTestId('ff-inbound-line-manual-edit').first().click();
   await page.getByTestId('ff-inbound-line-actual').fill('2');
@@ -824,6 +840,7 @@ test('inbound receiving v2 — manual edit with box saves loose not total', asyn
   await loginFfAdmin(page, seed.adminEmail, seed.password);
   await page.getByTestId('nav-ff-reception').click();
   await page.getByTestId('ff-inbound-queue-table').locator('tbody tr').first().click();
+  await startFfReceivingFromSubmitted(page);
   await expandInboundPackages(page);
 
   await page.getByTestId('ff-inbound-add-to-box').click();

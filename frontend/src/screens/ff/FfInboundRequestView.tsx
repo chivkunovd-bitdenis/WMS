@@ -271,6 +271,7 @@ type InboundDetail = {
   has_discrepancy: boolean
   seller_id?: string | null
   seller_name?: string | null
+  created_by_seller_id?: string | null
   created_at?: string | null
   distribution_completed_at: string | null
   sorting_remaining_qty?: number
@@ -404,9 +405,9 @@ export function FfInboundRequestView({
   const documentDistributionEnabled = false
   const receptionClosed =
     detail != null && (isSortingStatus(detail.status) || isDoneStatus(detail.status))
-  const receivingActive =
-    detail != null &&
-    (detail.status === 'submitted' || isReceivingStatus(detail.status))
+  const receivingActive = detail != null && isReceivingStatus(detail.status)
+  const waitingForFfStart = detail?.status === 'submitted'
+  const sellerCreatedDraft = detail?.status === 'draft' && detail.created_by_seller_id != null
   const isReturnOperation = detail?.operation_type === 'return'
   const operationTypeLabel = inboundOperationTypeLabel(detail?.operation_type)
   const showInboundLinesTable = !sortingView || receptionClosed
@@ -1998,20 +1999,34 @@ export function FfInboundRequestView({
                   >
                     Добавить товар
                   </Button>
-                  <Button
-                    variant="contained"
-                    color="secondary"
-                    disabled={busy || detail.lines.length === 0}
-                    onClick={() =>
-                      isFulfillmentAdmin
-                        ? void beginReceiving()
-                        : void submitToWarehouse()
-                    }
-                    data-testid="ff-inbound-submit-warehouse"
-                  >
-                    {isFulfillmentAdmin ? 'Начать приёмку' : 'Передать на склад'}
-                  </Button>
+                  {isFulfillmentAdmin && sellerCreatedDraft ? null : (
+                    <Button
+                      variant="contained"
+                      color="secondary"
+                      disabled={busy || detail.lines.length === 0}
+                      onClick={() =>
+                        isFulfillmentAdmin
+                          ? void beginReceiving()
+                          : void submitToWarehouse()
+                      }
+                      data-testid="ff-inbound-submit-warehouse"
+                    >
+                      {isFulfillmentAdmin ? 'Начать приёмку' : 'Передать на склад'}
+                    </Button>
+                  )}
                 </>
+              ) : null}
+
+              {isFulfillmentAdmin && workspace !== 'sorting' && waitingForFfStart ? (
+                <Button
+                  variant="contained"
+                  color="secondary"
+                  disabled={busy || detail.lines.length === 0}
+                  onClick={() => void beginReceiving()}
+                  data-testid="ff-inbound-submit-warehouse"
+                >
+                  Начать приёмку
+                </Button>
               ) : null}
 
               {canReopenReceiving ? (

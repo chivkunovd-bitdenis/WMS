@@ -84,6 +84,7 @@ type InboundSummaryRow = {
   planned_delivery_date: string | null
   seller_id?: string | null
   seller_name?: string | null
+  created_by_seller_id?: string | null
   created_at?: string
   sorting_remaining_qty?: number
 }
@@ -125,6 +126,9 @@ type InboundDetailRow = {
   actual_box_count?: number | null
   boxes_discrepancy?: boolean
   has_discrepancy?: boolean
+  seller_id?: string | null
+  seller_name?: string | null
+  created_by_seller_id?: string | null
   boxes?: InboundBoxRow[]
   lines: InboundLineRow[]
 }
