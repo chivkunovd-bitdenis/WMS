@@ -130,8 +130,8 @@ export function FfProductsCatalogScreen({
     }
   }, [sellers])
 
-  const loadDialogSellers = useCallback(async () => {
-    if (!canManageCatalog) return
+  const loadDialogSellers = useCallback(async (): Promise<SellerRow[]> => {
+    if (!canManageCatalog) return []
     try {
       const res = await fetch(apiUrl('/sellers'), {
         headers: { ...authHeaders(token) },
@@ -139,14 +139,27 @@ export function FfProductsCatalogScreen({
       if (!res.ok) {
         throw new Error(humanFfCatalogError(await readApiErrorMessage(res)))
       }
-      setDialogSellers((await res.json()) as SellerRow[])
+      const rows = (await res.json()) as SellerRow[]
+      setDialogSellers(rows)
+      return rows
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Не удалось загрузить селлеров.')
+      return []
     }
   }, [authHeaders, canManageCatalog, token])
 
   useEffect(() => {
     void loadDialogSellers()
+  }, [loadDialogSellers])
+
+  const openCreateDialog = useCallback(async () => {
+    await loadDialogSellers()
+    setCreateOpen(true)
+  }, [loadDialogSellers])
+
+  const openImportDialog = useCallback(async () => {
+    await loadDialogSellers()
+    setImportOpen(true)
   }, [loadDialogSellers])
 
   return (
@@ -199,14 +212,14 @@ export function FfProductsCatalogScreen({
                 <Button
                   variant="contained"
                   startIcon={<DownloadOutlinedIcon />}
-                  onClick={() => setImportOpen(true)}
+                  onClick={() => void openImportDialog()}
                   data-testid="ff-products-import-tz"
                 >
                   Загрузить Excel
                 </Button>
                 <Button
                   variant="outlined"
-                  onClick={() => setCreateOpen(true)}
+                  onClick={() => void openCreateDialog()}
                   data-testid="ff-products-create"
                 >
                   Создать товар
