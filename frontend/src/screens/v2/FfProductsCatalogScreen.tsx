@@ -196,38 +196,35 @@ export function FfProductsCatalogScreen({
           </Alert>
         ) : null}
 
-        <Paper
-          variant="outlined"
-          sx={{ p: 2, mb: 2, maxWidth: '100%', overflowX: 'hidden' }}
+        {/* GLOBAL-02: две кнопки не нуждаются в отдельной карточке во всю ширину —
+            рамка вокруг пустоты только раздувает экран. Действия идут прямо над таблицей. */}
+        <Stack
+          direction={{ xs: 'column', sm: 'row' }}
+          spacing={1}
+          sx={{ mb: 2, maxWidth: '100%', justifyContent: 'flex-end', alignItems: { sm: 'center' } }}
           data-testid="ff-products-actions"
         >
-          <Stack
-            direction={{ xs: 'column', sm: 'row' }}
-            spacing={1}
-            sx={{ justifyContent: 'flex-end', alignItems: { sm: 'center' } }}
-          >
-            {busy ? <CircularProgress size={18} data-testid="ff-products-loading" /> : null}
-            {canManageCatalog ? (
-              <>
-                <Button
-                  variant="contained"
-                  startIcon={<DownloadOutlinedIcon />}
-                  onClick={() => void openImportDialog()}
-                  data-testid="ff-products-import-tz"
-                >
-                  Загрузить Excel
-                </Button>
-                <Button
-                  variant="outlined"
-                  onClick={() => void openCreateDialog()}
-                  data-testid="ff-products-create"
-                >
-                  Создать товар
-                </Button>
-              </>
-            ) : null}
-          </Stack>
-        </Paper>
+          {busy ? <CircularProgress size={18} data-testid="ff-products-loading" /> : null}
+          {canManageCatalog ? (
+            <>
+              <Button
+                variant="contained"
+                startIcon={<DownloadOutlinedIcon />}
+                onClick={() => void openImportDialog()}
+                data-testid="ff-products-import-tz"
+              >
+                Загрузить Excel
+              </Button>
+              <Button
+                variant="outlined"
+                onClick={() => void openCreateDialog()}
+                data-testid="ff-products-create"
+              >
+                Создать товар
+              </Button>
+            </>
+          ) : null}
+        </Stack>
 
         <TableContainer
           component={Paper}

@@ -104,6 +104,7 @@ class MarkingInventoryRowOut(BaseModel):
 class MarkingInventoryOut(BaseModel):
     rows: list[MarkingInventoryRowOut]
     unlinked_available_count: int
+    defective_count: int
 
 
 class MarkingOverviewProductOut(BaseModel):
@@ -1114,6 +1115,7 @@ async def get_marking_inventory(
             for r in result.rows
         ],
         unlinked_available_count=result.unlinked_available_count,
+        defective_count=result.defective_count,
     )
 
 
