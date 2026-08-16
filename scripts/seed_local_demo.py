@@ -280,6 +280,12 @@ def main() -> int:
             "storage_location_id": loc_id,
         },
     ).raise_for_status()
+    # REC-08: количество грузомест обязательно перед подачей заявки.
+    client.patch(
+        f"/operations/inbound-intake-requests/{in1_id}",
+        headers=h,
+        json={"planned_box_count": 1},
+    ).raise_for_status()
     client.post(f"/operations/inbound-intake-requests/{in1_id}/submit", headers=h).raise_for_status()
     post_inbound_lines(
         client,
@@ -303,6 +309,12 @@ def main() -> int:
             "expected_qty": 2,
             "storage_location_id": loc_id,
         },
+    ).raise_for_status()
+    # REC-08: количество грузомест обязательно перед подачей заявки.
+    client.patch(
+        f"/operations/inbound-intake-requests/{in2_id}",
+        headers=h,
+        json={"planned_box_count": 1},
     ).raise_for_status()
     client.post(f"/operations/inbound-intake-requests/{in2_id}/submit", headers=h).raise_for_status()
 

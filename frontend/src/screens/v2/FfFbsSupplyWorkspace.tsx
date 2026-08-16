@@ -989,6 +989,7 @@ export function FfFbsSupplyWorkspace({
   const boxRemainingCount = Math.max(0, boxTotalCount - boxDistributedCount)
   const supplyQrAsset = workspace?.supply.barcode_asset ?? null
   const needsSupplyQr = workspace?.supply.delivery_type === 'warehouse_sc'
+  const isPvzDelivery = workspace?.supply.delivery_type === 'pvz'
   const boxAssignRows = useMemo(() => {
     const grouped = new Map<string, {
       key: string
@@ -1651,6 +1652,12 @@ export function FfFbsSupplyWorkspace({
                   )}
                 >
                   Поставка передана, QR получить не удалось
+                </Alert>
+              ) : null}
+              {deliveryConfirmed && isPvzDelivery ? (
+                <Alert severity="info" data-testid="fbs-supply-qr-pvz" data-task-id="FBS-09">
+                  Для сдачи в ПВЗ Wildberries не выдаёт QR поставки — сдавайте по QR коробов.
+                  Кнопка «QR» есть в строке каждого короба выше.
                 </Alert>
               ) : null}
             </Stack>
