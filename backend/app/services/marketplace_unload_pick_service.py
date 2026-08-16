@@ -6,7 +6,7 @@ import uuid
 from dataclasses import dataclass
 from typing import Literal
 
-from sqlalchemy import or_, select
+from sqlalchemy import case, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
@@ -115,13 +115,24 @@ async def find_location_by_barcode(
     raw = barcode.strip()
     if not raw:
         return None
-    stmt = select(StorageLocation).where(
-        StorageLocation.tenant_id == tenant_id,
-        StorageLocation.warehouse_id == warehouse_id,
-        or_(StorageLocation.barcode == raw, StorageLocation.code == raw),
+    # Ячейку можно и отсканировать, и набрать кодом руками. Ограничения БД допускают,
+    # что одна строка окажется штрихкодом одной ячейки и кодом другой на том же складе
+    # (uq_storage_locations_wh_code — код уникален по складу, а
+    # uq_storage_locations_tenant_barcode — штрихкод по организации). Раньше такой ввод
+    # возвращал две строки и ронял подбор через scalar_one_or_none(). Побеждает штрихкод:
+    # сканер важнее клавиатуры (SORT-01).
+    stmt = (
+        select(StorageLocation)
+        .where(
+            StorageLocation.tenant_id == tenant_id,
+            StorageLocation.warehouse_id == warehouse_id,
+            or_(StorageLocation.barcode == raw, StorageLocation.code == raw),
+        )
+        .order_by(case((StorageLocation.barcode == raw, 0), else_=1))
+        .limit(1)
     )
     res = await session.execute(stmt)
-    return res.scalar_one_or_none()
+    return res.scalars().first()
 
 
 async def get_pick_options(

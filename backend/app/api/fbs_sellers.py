@@ -118,7 +118,12 @@ def _raise_from_binding_service(exc: binding_svc.FbsWarehouseBindingError) -> No
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=detail)
     if exc.code in {"invalid_wb_warehouse_id", "invalid_quantity"}:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=detail)
-    if exc.code in {"wms_warehouse_already_bound", "active_fbs_reservations", "pool_quota_exceeded"}:
+    if exc.code in {
+        "wms_warehouse_already_bound",
+        "wb_warehouse_already_bound",
+        "active_fbs_reservations",
+        "pool_quota_exceeded",
+    }:
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=detail)
     raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=detail)
 
