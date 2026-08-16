@@ -66,9 +66,12 @@ STATUS_GROUP_MAP: dict[str, frozenset[str]] = {
         }
     ),
     "delivery": frozenset({FBS_ORDER_STATUS_IN_DELIVERY, FBS_ORDER_STATUS_SORTED}),
-    "done": frozenset(
-        {FBS_ORDER_STATUS_DONE, FBS_ORDER_STATUS_CANCELLED, FBS_ORDER_STATUS_DEFECT}
-    ),
+    "done": frozenset({FBS_ORDER_STATUS_DONE}),
+    # Решение пользователя 16.08 («сделай как в WB — отменённые заказы») + FBS-06
+    # («убирает из "Новых" либо показывает в корректной вкладке»): отменённые и брак
+    # раньше сваливались в "done" вместе с реально завершёнными — отвал был не виден.
+    # Теперь у них своя группа, как отдельная вкладка «Отменённые» в кабинете WB.
+    "cancelled": frozenset({FBS_ORDER_STATUS_CANCELLED, FBS_ORDER_STATUS_DEFECT}),
 }
 
 MISSING_WMS_WAREHOUSE = "Склад не привязан"

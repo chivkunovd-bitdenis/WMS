@@ -30,15 +30,18 @@ import { readApiErrorMessage } from '../../utils/readApiErrorMessage'
 import { FfFbsSectionNav } from './FfFbsSectionNav'
 import {
   disableFbsWarehouseBinding,
+  fetchFbsBindingStockPool,
   fetchFbsSellerOffices,
   fetchFbsSellerWarehouses,
   fetchFbsStockSyncStatus,
   fetchFbsWarehouseBindings,
+  setFbsBindingStockPoolQuantity,
   STOCK_SYNC_STATUS_LABEL,
   triggerFbsStockSync,
   upsertFbsWarehouseBinding,
   type FbsSellerOffice,
   type FbsSellerWarehouse,
+  type FbsStockPoolProduct,
   type FbsStockSyncStatus,
   type FbsStockSyncStatusItem,
   type FbsWarehouseBinding,
@@ -69,6 +72,7 @@ type SellerWarehouseView = {
   lastSyncStatus: string | null
   lastSyncAt: string | null
   lastErrorCode: string | null
+  allocatedPoolTotal: number
 }
 
 const STATUS_COLOR: Record<string, ChipProps['color']> = {
@@ -123,6 +127,10 @@ function stockErrorText(code: string | null): string | null {
     product_mapping_missing: 'Не найден товар для выгрузки',
     wb_token_read_only_401:
       'Ключ WB создан «только на чтение». Нужен ключ с правом публикации остатков.',
+    unsafe_zero_blocked:
+      'Остаток не опубликован: защита не даёт обнулить остаток в кабинете продавца. Проверьте наличие товара на складе и запустите синхронизацию заново.',
+    unsafe_stock_unknown:
+      'Остаток не опубликован: не удалось надёжно посчитать доступное количество для этого товара.',
   }
   return labels[code] ?? 'Синхронизация завершилась с ошибкой'
 }
@@ -169,6 +177,14 @@ export function FfFbsStockSyncScreen({ token, authHeaders, sellers }: Props) {
   const [statusData, setStatusData] = useState<FbsStockSyncStatus | null>(null)
   const [statusWbId, setStatusWbId] = useState<number | null>(null)
   const [pendingDisable, setPendingDisable] = useState<SellerWarehouseView | null>(null)
+
+  const [poolOpen, setPoolOpen] = useState(false)
+  const [poolLoading, setPoolLoading] = useState(false)
+  const [poolRow, setPoolRow] = useState<SellerWarehouseView | null>(null)
+  const [poolItems, setPoolItems] = useState<FbsStockPoolProduct[]>([])
+  const [poolDrafts, setPoolDrafts] = useState<Record<string, string>>({})
+  const [poolSavingProductId, setPoolSavingProductId] = useState<string | null>(null)
+  const [poolError, setPoolError] = useState<string | null>(null)
 
   const wmsById = useMemo(() => {
     const m = new Map<string, WmsWarehouseRow>()
@@ -235,6 +251,7 @@ export function FfFbsStockSyncScreen({ token, authHeaders, sellers }: Props) {
           lastSyncStatus: binding?.last_sync_status ?? null,
           lastSyncAt: binding?.last_sync_at ?? null,
           lastErrorCode: binding?.last_error_code ?? null,
+          allocatedPoolTotal: binding?.allocated_pool_total ?? 0,
         }
       })
   }, [
@@ -482,6 +499,65 @@ export function FfFbsStockSyncScreen({ token, authHeaders, sellers }: Props) {
     [authHeaders, selectedSellerId, token],
   )
 
+  const openPool = useCallback(
+    async (row: SellerWarehouseView) => {
+      if (!row.binding || !selectedSellerId) return
+      setPoolRow(row)
+      setPoolOpen(true)
+      setPoolError(null)
+      setPoolItems([])
+      setPoolLoading(true)
+      try {
+        const items = await fetchFbsBindingStockPool(token, authHeaders, selectedSellerId, row.wbId)
+        setPoolItems(items)
+        setPoolDrafts(
+          Object.fromEntries(items.map((it) => [it.product_id, String(it.allocated_this_binding)])),
+        )
+      } catch (e) {
+        setPoolError(e instanceof Error ? e.message : 'Не удалось загрузить распределение пула')
+      } finally {
+        setPoolLoading(false)
+      }
+    },
+    [authHeaders, selectedSellerId, token],
+  )
+
+  const handleSavePoolQuantity = useCallback(
+    async (item: FbsStockPoolProduct) => {
+      if (!poolRow || !selectedSellerId) return
+      const draft = poolDrafts[item.product_id] ?? ''
+      const quantity = Number(draft)
+      if (!Number.isFinite(quantity) || quantity < 0 || !Number.isInteger(quantity)) {
+        setPoolError('Количество должно быть целым числом не меньше нуля')
+        return
+      }
+      setPoolError(null)
+      setPoolSavingProductId(item.product_id)
+      try {
+        await setFbsBindingStockPoolQuantity(
+          token,
+          authHeaders,
+          selectedSellerId,
+          poolRow.wbId,
+          item.product_id,
+          quantity,
+        )
+        setFeedback('Распределение пула сохранено')
+        const items = await fetchFbsBindingStockPool(token, authHeaders, selectedSellerId, poolRow.wbId)
+        setPoolItems(items)
+        setPoolDrafts(
+          Object.fromEntries(items.map((it) => [it.product_id, String(it.allocated_this_binding)])),
+        )
+        await loadSellerWarehouseData()
+      } catch (e) {
+        setPoolError(e instanceof Error ? e.message : 'Не удалось сохранить распределение')
+      } finally {
+        setPoolSavingProductId(null)
+      }
+    },
+    [authHeaders, loadSellerWarehouseData, poolDrafts, poolRow, selectedSellerId, token],
+  )
+
   return (
     <Box data-testid="fbs-stock-sync-screen">
       <Typography variant="h5" gutterBottom>
@@ -685,6 +761,9 @@ export function FfFbsStockSyncScreen({ token, authHeaders, sellers }: Props) {
                         />
                         <StockSyncStatusChip status={row.lastSyncStatus} />
                       </Stack>
+                      <Typography variant="caption" color="text.secondary">
+                        Разложено: {row.allocatedPoolTotal} шт
+                      </Typography>
                       {row.lastErrorCode ? (
                         <Typography variant="caption" color="error">
                           {stockErrorText(row.lastErrorCode)}
@@ -703,6 +782,15 @@ export function FfFbsStockSyncScreen({ token, authHeaders, sellers }: Props) {
                         sx={{ minWidth: 0, px: 0.75 }}
                       >
                         Выгрузить
+                      </Button>
+                      <Button
+                        size="small"
+                        onClick={() => void openPool(row)}
+                        disabled={!row.binding}
+                        data-testid="fbs-stock-pool-btn"
+                        sx={{ minWidth: 0, px: 0.75 }}
+                      >
+                        Пул
                       </Button>
                       <Button
                         size="small"
@@ -824,6 +912,90 @@ export function FfFbsStockSyncScreen({ token, authHeaders, sellers }: Props) {
         </DialogContent>
         <DialogActions>
           <Button onClick={() => setStatusOpen(false)}>Закрыть</Button>
+        </DialogActions>
+      </Dialog>
+
+      <Dialog
+        open={poolOpen}
+        onClose={() => setPoolOpen(false)}
+        maxWidth="md"
+        fullWidth
+        data-testid="fbs-stock-pool-panel"
+      >
+        <DialogTitle>Распределение пула — {poolRow?.name ?? ''} (WB {poolRow?.wbId ?? '—'})</DialogTitle>
+        <DialogContent>
+          {poolError ? (
+            <Alert severity="error" sx={{ mb: 2 }} onClose={() => setPoolError(null)}>
+              {poolError}
+            </Alert>
+          ) : null}
+          {poolLoading ? (
+            <Box sx={{ py: 4, textAlign: 'center' }}>
+              <CircularProgress />
+            </Box>
+          ) : (
+            <Table size="small">
+              <TableHead>
+                <TableRow>
+                  <TableCell>Товар</TableCell>
+                  <TableCell align="right">Пул товара</TableCell>
+                  <TableCell align="right">На других складах</TableCell>
+                  <TableCell align="right">На этом складе</TableCell>
+                  <TableCell align="right">Сохранить</TableCell>
+                </TableRow>
+              </TableHead>
+              <TableBody>
+                {poolItems.length === 0 ? (
+                  <TableRow>
+                    <TableCell colSpan={5}>
+                      <Typography color="text.secondary">
+                        Нет товаров с включённой продажей по FBS у этого селлера
+                      </Typography>
+                    </TableCell>
+                  </TableRow>
+                ) : (
+                  poolItems.map((item) => (
+                    <TableRow key={item.product_id} data-testid="fbs-stock-pool-row">
+                      <TableCell>
+                        <Typography variant="body2">{item.name}</Typography>
+                        <Typography variant="caption" color="text.secondary">
+                          {item.sku_code}
+                        </Typography>
+                      </TableCell>
+                      <TableCell align="right">{item.pool_limit}</TableCell>
+                      <TableCell align="right">{item.allocated_elsewhere}</TableCell>
+                      <TableCell align="right" sx={{ width: 140 }}>
+                        <input
+                          type="number"
+                          min={0}
+                          max={item.available_for_this_binding}
+                          value={poolDrafts[item.product_id] ?? ''}
+                          onChange={(e) =>
+                            setPoolDrafts((prev) => ({ ...prev, [item.product_id]: e.target.value }))
+                          }
+                          style={{ width: '100%', textAlign: 'right' }}
+                          data-testid="fbs-stock-pool-input"
+                        />
+                      </TableCell>
+                      <TableCell align="right">
+                        <Button
+                          size="small"
+                          onClick={() => void handleSavePoolQuantity(item)}
+                          disabled={poolSavingProductId === item.product_id}
+                          data-testid="fbs-stock-pool-save"
+                        >
+                          Сохранить
+                        </Button>
+                      </TableCell>
+                    </TableRow>
+                  ))
+                )}
+              </TableBody>
+            </Table>
+          )}
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setPoolOpen(false)}>Закрыть</Button>
         </DialogActions>
       </Dialog>
     </Box>

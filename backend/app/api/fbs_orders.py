@@ -239,10 +239,9 @@ async def start_fbs_orders_sync(
 ) -> FbsOrderSyncOut:
     seller = await session.get(Seller, body.seller_id)
     if seller is None or seller.tenant_id != user.tenant_id:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="seller_not_found",
-        )
+        # КРИТ-2 (HANDOFF-POLISH.md, пул 1, п.3): используем словарь fbs_errors.py вместо
+        # сырой строки в detail — фронт получает {code, message} и показывает человеческий текст.
+        raise_fbs_http(status.HTTP_404_NOT_FOUND, "seller_not_found")
     payload: dict[str, Any] = {"seller_id": str(body.seller_id)}
     job = await job_svc.create_pending_job(
         session,

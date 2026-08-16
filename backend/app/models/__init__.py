@@ -4,6 +4,7 @@ from app.models.background_job import BackgroundJob
 from app.models.base import Base
 from app.models.discrepancy_act import DiscrepancyAct, DiscrepancyActLine
 from app.models.document_sequence import DocumentDisplaySequence, DocumentSequence
+from app.models.fbs_binding_stock_pool import FbsBindingStockPool
 from app.models.fbs_order import FbsOrder, FbsOrderMarking, FbsOrderReservation
 from app.models.fbs_order_pick import FbsOrderPick, FbsOrderPickEvent
 from app.models.fbs_packaging_fulfillment import FbsPackagingFulfillment
@@ -71,6 +72,7 @@ __all__ = [
     "DiscrepancyActLine",
     "DocumentDisplaySequence",
     "DocumentSequence",
+    "FbsBindingStockPool",
     "FbsOrder",
     "FbsOrderMarking",
     "FbsOrderPick",

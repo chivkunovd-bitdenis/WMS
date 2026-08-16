@@ -1572,10 +1572,6 @@ async def complete_distribution(
         if max(line.posted_qty, sum_by_product[r.product_id]) > accepted:
             raise InboundIntakeError("qty_exceeds_accepted")
 
-    for product_id, accepted in accepted_by_product.items():
-        if accepted > 0 and sum_by_product.get(product_id, 0) < accepted:
-            raise InboundIntakeError("distribution_incomplete")
-
     distributed_before_by_product: dict[uuid.UUID, int] = {}
     for r in rows:
         line = lines_by_product[r.product_id]

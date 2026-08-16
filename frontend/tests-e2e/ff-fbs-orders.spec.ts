@@ -139,20 +139,20 @@ test('fbs orders: list, tabs and empty state', async ({ page }) => {
     const statusGroup = new URL(route.request().url()).searchParams.get('status_group')
     const body = statusGroup === 'new'
       ? worklist([order('1'), order('2')])
-      : statusGroup === 'delivery'
-        ? worklist([order('3', { status: 'in_delivery', supply_id: 'sup-3' })])
-        : statusGroup === 'done'
-          ? worklist([order('4', { status: 'done', supply_id: 'sup-4' })])
-          : worklist([])
+      : statusGroup === 'cancelled'
+        ? worklist([order('5', { status: 'cancelled', wb_status: 'canceled' })])
+        : worklist([])
     await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(body) })
   })
   await page.route('**/operations/fbs-supplies/worklist**', async (route) => {
     if (route.request().method() !== 'GET') return route.fallback()
-    await route.fulfill({
-      status: 200,
-      contentType: 'application/json',
-      body: JSON.stringify(supplyWorklist([])),
-    })
+    const statusGroup = new URL(route.request().url()).searchParams.get('status_group')
+    const body = statusGroup === 'delivery'
+      ? supplyWorklist([supplyRow('sup-3', { status: 'in_delivery' })])
+      : statusGroup === 'done'
+        ? supplyWorklist([supplyRow('sup-4', { status: 'done' })])
+        : supplyWorklist([])
+    await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(body) })
   })
 
   await page.getByTestId('nav-ff-fbs').click()
@@ -164,10 +164,13 @@ test('fbs orders: list, tabs and empty state', async ({ page }) => {
   await expect(page.getByText('Поставок в работе нет')).toBeVisible()
 
   await page.getByRole('tab', { name: 'В доставке' }).click()
-  await expect(page.getByTestId('fbs-order-3')).toBeVisible()
+  await expect(page.getByTestId('fbs-18-supply-sup-3')).toBeVisible()
 
   await page.getByRole('tab', { name: 'Завершённые' }).click()
-  await expect(page.getByTestId('fbs-order-4')).toBeVisible()
+  await expect(page.getByTestId('fbs-18-supply-sup-4')).toBeVisible()
+
+  await page.getByRole('tab', { name: 'Отменённые' }).click()
+  await expect(page.getByTestId('fbs-order-5')).toBeVisible()
 })
 
 // TC-FBS-FE-002 — seller_id передаётся в canonical worklist и меняет строки ответа.

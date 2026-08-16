@@ -31,7 +31,10 @@ test('admin saves WB tokens, syncs cards and supplies, links SKU', async ({ page
 
   await page.goto('/app/integrations/wb');
   await expect(page.getByTestId('wildberries-integration-section')).toBeVisible();
-  await expect(page.getByTestId('wb-token-flags')).toContainText('нет токена');
+  // Один ключ WB на всё — статус теперь одна строка, а не три отдельные
+  // (Контент/Поставки/Маркетплейс). До сохранения ключа она говорит, что
+  // ключа нет вообще.
+  await expect(page.getByTestId('wb-token-flags')).toContainText('Ключ WB не сохранён');
 
   await page.getByTestId('wb-content-token').fill('e2e-placeholder-wb-token');
   await Promise.all([
@@ -40,14 +43,21 @@ test('admin saves WB tokens, syncs cards and supplies, links SKU', async ({ page
     ),
     page.getByTestId('wb-save-tokens').click(),
   ]);
-  await expect(page.getByTestId('wb-token-flags')).toContainText('Контент API: токен есть');
+  // Ключ сохранён через админский PATCH (без живой проверки прав), поэтому
+  // marketplace_scope_ok остаётся null — строка честно говорит, что право
+  // «Маркетплейс» ещё не проверялось, а не выдаёт это за поломку или за успех.
+  await expect(page.getByTestId('wb-token-flags')).toContainText(
+    'Ключ WB сохранён, но право «Маркетплейс» для него ещё не проверялось.',
+  );
 
   await page.getByTestId('wb-supplies-token').fill('e2e-placeholder-wb-supplies');
   await Promise.all([
     waitForPatchOk(page, '/api/integrations/wildberries/sellers', (u) => u.includes('/tokens')),
     page.getByTestId('wb-save-tokens').click(),
   ]);
-  await expect(page.getByTestId('wb-token-flags')).toContainText('Поставки API: токен есть');
+  await expect(page.getByTestId('wb-token-flags')).toContainText(
+    'Ключ WB сохранён, но право «Маркетплейс» для него ещё не проверялось.',
+  );
 
   await Promise.all([
     waitForPostOk(page, '/api/operations/background-jobs'),

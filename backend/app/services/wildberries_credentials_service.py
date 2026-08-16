@@ -38,18 +38,26 @@ async def _seller_in_tenant(
 
 async def get_public_token_status(
     session: AsyncSession, tenant_id: uuid.UUID, seller_id: uuid.UUID
-) -> tuple[bool, bool, bool, datetime | None] | None:
-    """(has_content, has_supplies, has_marketplace, updated_at) or None if seller not in tenant."""
+) -> tuple[bool, bool, bool, datetime | None, bool | None] | None:
+    """(has_content, has_supplies, has_marketplace, updated_at, marketplace_scope_ok)
+    or None if seller not in tenant.
+
+    marketplace_scope_ok is the result of the last live check of the Marketplace API
+    scope for the stored key: True/False once checked at least once via the seller
+    self-service flow, or None if never checked (e.g. an admin set the tokens
+    directly without going through validation).
+    """
     if await _seller_in_tenant(session, tenant_id, seller_id) is None:
         return None
     row = await session.get(SellerWildberriesCredentials, seller_id)
     if row is None:
-        return False, False, False, None
+        return False, False, False, None, None
     return (
         bool(row.content_token_encrypted),
         bool(row.supplies_token_encrypted),
         bool(row.marketplace_token_encrypted),
         row.updated_at,
+        row.marketplace_scope_ok,
     )
 
 
@@ -61,12 +69,29 @@ async def patch_seller_tokens(
     content_api_token: TokenPatchValue,
     supplies_api_token: TokenPatchValue,
     marketplace_api_token: TokenPatchValue = SKIP,
+    marketplace_scope_ok: bool | _SkipSentinel = SKIP,
 ) -> SellerWildberriesCredentials | None:
     """
     content_api_token / supplies_api_token / marketplace_api_token:
     - ``SKIP``: do not change field
     - ``None``: clear stored token
     - non-empty ``str``: replace with encrypted value
+
+    marketplace_scope_ok:
+    - ``SKIP``: do not change the last known Marketplace-scope check result
+    - ``True`` / ``False``: record the outcome of a live scope check just performed
+      for the current key (also stamps ``marketplace_scope_checked_at``)
+
+    One WB key is meant to cover everything for a seller: content, products, FBS
+    orders, supplies and stock. The seller is only ever asked for a single key. When
+    ``marketplace_api_token`` is left as ``SKIP`` and a content token is being set
+    while the marketplace field is still empty (first-ever save), that same content
+    key is copied into the marketplace field too, so it starts working everywhere
+    right away. An already-populated marketplace field is never silently overwritten
+    this way — a prior bug destroyed a working marketplace key exactly by doing that
+    unconditionally. Callers that perform a live scope check should instead record
+    the real outcome via ``marketplace_scope_ok`` so the UI can honestly tell the
+    seller when their key currently lacks Marketplace rights.
     """
     if await _seller_in_tenant(session, tenant_id, seller_id) is None:
         return None
@@ -75,6 +100,7 @@ async def patch_seller_tokens(
         content_api_token is SKIP
         and supplies_api_token is SKIP
         and marketplace_api_token is SKIP
+        and marketplace_scope_ok is SKIP
     ):
         raise WildberriesCredentialsError("empty_patch")
 
@@ -108,14 +134,38 @@ async def patch_seller_tokens(
     if marketplace_api_token is not SKIP:
         if marketplace_api_token is None:
             row.marketplace_token_encrypted = None
+            if marketplace_scope_ok is SKIP:
+                # Ключ стёрт вручную — прошлый результат проверки права
+                # "Маркетплейс" больше не имеет смысла, сбрасываем в неизвестное.
+                row.marketplace_scope_ok = None
+                row.marketplace_scope_checked_at = None
         else:
             assert isinstance(marketplace_api_token, str)
             stripped = marketplace_api_token.strip()
             if not stripped:
                 raise WildberriesCredentialsError("token_empty")
             row.marketplace_token_encrypted = encrypt_secret(stripped)
-    elif content_api_token is not SKIP:
+    elif (
+        content_api_token is not SKIP
+        and row.marketplace_token_encrypted is None
+        and marketplace_scope_ok is not False
+    ):
+        # Один ключ на всё: при первом сохранении (поле маркетплейс-токена ещё
+        # пустое) новый контентный ключ подставляется и туда, чтобы заказы FBS
+        # заработали без отдельного маркетплейс-ключа. Если поле уже заполнено —
+        # не трогаем: не заменяем рабочий ключ ключом, чья проверка права
+        # "Маркетплейс" могла провалиться (см. marketplace_scope_ok).
+        #
+        # Исключение: если вызывающий код в этом же вызове передал
+        # marketplace_scope_ok=False, значит он только что живой проверкой
+        # убедился, что у этого конкретного ключа права "Маркетплейс" нет —
+        # копировать его в поле маркетплейс-токена нельзя, это выдало бы
+        # заведомо нерабочий ключ за годный.
         row.marketplace_token_encrypted = row.content_token_encrypted
+
+    if marketplace_scope_ok is not SKIP:
+        row.marketplace_scope_ok = marketplace_scope_ok
+        row.marketplace_scope_checked_at = now
 
     row.updated_at = now
     await session.commit()

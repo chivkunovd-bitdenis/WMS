@@ -221,6 +221,7 @@ function looseDraftQty(rows: CellDraftRow[]): number {
 function sumDraftQty(rows: CellDraftRow[]): number {
   let sum = 0
   for (const r of rows) {
+    if (!r.storage_location_id) continue
     const q = Math.floor(Number(r.quantity))
     if (Number.isFinite(q) && q > 0) {
       sum += q
@@ -586,11 +587,6 @@ export function FfInboundSortingPanel({
     return false
   }, [draftSumByProductId, productStates])
 
-  const firstIncompleteProduct = useMemo(
-    () => productStates.find((p) => (remainingByProductId.get(p.product_id) ?? 0) > 0) ?? null,
-    [productStates, remainingByProductId],
-  )
-
   const buildPayload = () => {
     const payload: {
       box_id: string | null
@@ -732,12 +728,6 @@ export function FfInboundSortingPanel({
     }
     if (hasValidationError) {
       setError('Превышено принятое количество — исправьте строки перед применением.')
-      return
-    }
-    if (firstIncompleteProduct != null) {
-      setError(
-        `По товару ${firstIncompleteProduct.product_name} осталось разложить ${remainingByProductId.get(firstIncompleteProduct.product_id) ?? 0} шт.`,
-      )
       return
     }
     setBusy(true)

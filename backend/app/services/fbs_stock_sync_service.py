@@ -15,6 +15,7 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.settings import settings
+from app.models.fbs_binding_stock_pool import FbsBindingStockPool
 from app.models.fbs_stock_sync_item import (
     STOCK_SYNC_STATUS_CONFIRMED,
     STOCK_SYNC_STATUS_CONFLICT,
@@ -25,8 +26,6 @@ from app.models.fbs_stock_sync_item import (
 from app.models.fbs_warehouse_binding import FbsWarehouseBinding
 from app.models.product import Product
 from app.models.seller import Seller
-from app.services import stock_direction_service
-from app.services.fbs_stock_availability_service import fbs_available_qty_by_product
 from app.services.wildberries_client import (
     MARKETPLACE_STOCKS_PATH,
     MarketplaceStockAmount,
@@ -53,7 +52,6 @@ ERROR_BINDING_MISMATCH = "binding_mismatch"
 ERROR_SELLER_NOT_FOUND = "seller_not_found"
 ERROR_UNSAFE_STOCK_UNKNOWN = "unsafe_stock_unknown"
 ERROR_UNSAFE_ZERO_BLOCKED = "unsafe_zero_blocked"
-ERROR_AMBIGUOUS_WAREHOUSE_SCOPE = "ambiguous_warehouse_scope"
 
 
 class StockSyncRateLimiter(Protocol):
@@ -100,6 +98,7 @@ class _PublishTarget:
     chrt_id: int
     amount: int
     product_id: uuid.UUID | None
+    is_explicit_zero: bool = False
 
 
 @dataclass(frozen=True, slots=True)
@@ -194,13 +193,29 @@ async def _load_existing_sync_items(
     return {item.chrt_id: item for item in res.scalars().all()}
 
 
+async def _load_pool_quantities(
+    session: AsyncSession,
+    binding_id: uuid.UUID,
+) -> dict[uuid.UUID, int]:
+    """Ручное распределение пула FBS по этой привязке — источник истины, синк только читает."""
+    stmt = select(FbsBindingStockPool.product_id, FbsBindingStockPool.quantity).where(
+        FbsBindingStockPool.binding_id == binding_id
+    )
+    res = await session.execute(stmt)
+    return {row.product_id: row.quantity for row in res.all()}
+
+
 def _build_publish_plan(
     products: list[Product],
-    availability: dict[uuid.UUID, int],
+    pool_quantities: dict[uuid.UUID, int],
     existing_items: dict[int, FbsStockSyncItem],
     product_block_errors: dict[uuid.UUID, str] | None = None,
 ) -> tuple[list[_PublishTarget], list[_BlockedTarget], list[uuid.UUID], set[int]]:
-    """Return safe publish targets, blocked targets, missing chrt ids, and conflicts."""
+    """Return safe publish targets, blocked targets, missing chrt ids, and conflicts.
+
+    Pool quantities are read from fbs_binding_stock_pools for this binding.
+    If a product is not in the pool, it is not blocked — simply skipped.
+    """
     skipped_missing: list[uuid.UUID] = []
     block_errors = product_block_errors or {}
     chrt_to_products: dict[int, list[Product]] = {}
@@ -228,55 +243,25 @@ def _build_publish_plan(
                 )
             )
             continue
-        if product.id not in availability:
-            blocked_targets.append(
-                _BlockedTarget(
-                    chrt_id=chrt_id,
-                    product_id=product.id,
-                    error_code=ERROR_UNSAFE_STOCK_UNKNOWN,
-                )
-            )
+        if product.id not in pool_quantities:
+            # Нет строки распределения в fbs_binding_stock_pools для этой привязки —
+            # это НЕ ошибка, просто админ ещё не выделил количество на этот склад.
+            # Товар просто не попадает в targets, никакого blocked_targets/error_code.
             continue
-        amount = int(availability[product.id])
+        amount = int(pool_quantities[product.id])
         amount = max(amount, 0)
-        if product.fbs_stock_limit is not None:
-            amount = min(amount, max(int(product.fbs_stock_limit), 0))
-        if amount == 0:
-            blocked_targets.append(
-                _BlockedTarget(
-                    chrt_id=chrt_id,
-                    product_id=product.id,
-                    error_code=ERROR_UNSAFE_ZERO_BLOCKED,
-                )
-            )
-            continue
+        # Строка в fbs_binding_stock_pools пишется только через
+        # fbs_warehouse_binding_service.set_binding_stock_pool_quantity — само её наличие
+        # доказывает осознанное действие администратора, включая amount == 0.
         targets_by_chrt[chrt_id] = _PublishTarget(
             chrt_id=chrt_id,
             amount=amount,
             product_id=product.id,
+            is_explicit_zero=(amount == 0),
         )
 
     _ = existing_items
     return list(targets_by_chrt.values()), blocked_targets, skipped_missing, conflict_chrts
-
-
-async def _seller_has_ambiguous_stock_sync_scope(
-    session: AsyncSession,
-    tenant_id: uuid.UUID,
-    seller_id: uuid.UUID,
-) -> bool:
-    stmt = (
-        select(FbsWarehouseBinding.id)
-        .where(
-            FbsWarehouseBinding.tenant_id == tenant_id,
-            FbsWarehouseBinding.seller_id == seller_id,
-            FbsWarehouseBinding.is_active.is_(True),
-            FbsWarehouseBinding.stock_sync_enabled.is_(True),
-        )
-        .limit(2)
-    )
-    rows = list((await session.execute(stmt)).scalars().all())
-    return len(rows) > 1
 
 
 async def _upsert_pending_items(
@@ -609,34 +594,29 @@ async def sync_binding_stocks(
             return FbsStockSyncResult(errors=1, error_code=exc.code)
 
         products = await _load_seller_products(session, tenant_id, seller_id)
-        product_ids = [p.id for p in products if p.wb_chrt_id is not None]
-        availability = await fbs_available_qty_by_product(
-            session,
-            tenant_id,
-            binding.wms_warehouse_id,
-            product_ids,
-        )
-        direction_map = await stock_direction_service.direction_totals_by_product(
-            session, tenant_id, product_ids
-        )
-        availability = {
-            product_id: amount
-            for product_id, amount in availability.items()
-            if direction_map.get(product_id) is not None
-            and direction_map[product_id].has_any
-        }
+        pool_quantities = await _load_pool_quantities(session, binding.id)
         product_block_errors: dict[uuid.UUID, str] = {}
-        if await _seller_has_ambiguous_stock_sync_scope(session, tenant_id, seller_id):
-            product_block_errors = {
-                product_id: ERROR_AMBIGUOUS_WAREHOUSE_SCOPE
-                for product_id, directions in direction_map.items()
-                if directions.fbs > 0
-            }
         existing_items = await _load_existing_sync_items(session, binding.id)
 
         targets, blocked_targets, skipped_missing, conflict_chrts = _build_publish_plan(
-            products, availability, existing_items, product_block_errors
+            products, pool_quantities, existing_items, product_block_errors
         )
+
+        # Zero guard: protect against zero amount without is_explicit_zero flag
+        # (should not happen with current code, but defends against future regressions)
+        safe_targets: list[_PublishTarget] = []
+        zero_guard_blocked: list[_BlockedTarget] = []
+        for t in targets:
+            if t.amount == 0 and not t.is_explicit_zero:
+                zero_guard_blocked.append(
+                    _BlockedTarget(chrt_id=t.chrt_id, product_id=t.product_id, error_code=ERROR_UNSAFE_ZERO_BLOCKED)
+                )
+                continue
+            safe_targets.append(t)
+        targets = safe_targets
+        if zero_guard_blocked:
+            blocked_targets = blocked_targets + zero_guard_blocked
+
         result.skipped_missing_chrt_id = skipped_missing
 
         chrt_to_product_ids: dict[int, list[uuid.UUID]] = {}
@@ -706,3 +686,168 @@ async def sync_binding_stocks(
         binding.lease_until = None
 
     return result
+
+
+async def publish_explicit_zero_for_binding(
+    session: AsyncSession,
+    tenant_id: uuid.UUID,
+    seller_id: uuid.UUID,
+    binding: FbsWarehouseBinding,
+    http_client: httpx.AsyncClient,
+    *,
+    rate_limiter: StockSyncRateLimiter | None = None,
+    marketplace_api_base: str | None = None,
+) -> FbsStockSyncResult:
+    """Explicitly publish zero for every chrt_id currently tracked on this binding.
+
+    Called once when stock_sync_enabled is switched from True to False (operator
+    deliberately turns publication off) — WB must not keep selling against a stale
+    positive number forever. This is a DELIBERATE zero (operator action), not the
+    "unsafe zero" the regular sync path protects against, so it bypasses the
+    stock_sync_enabled early-return in sync_binding_stocks entirely.
+    """
+    limiter = rate_limiter or AsyncStockSyncRateLimiter()
+    binding_id = binding.id
+
+    if binding.tenant_id != tenant_id or binding.seller_id != seller_id:
+        raise FbsStockSyncError(ERROR_BINDING_MISMATCH)
+    if await _seller_in_tenant(session, tenant_id, seller_id) is None:
+        raise FbsStockSyncError(ERROR_SELLER_NOT_FOUND)
+
+    if not await _try_acquire_lease(session, binding):
+        return FbsStockSyncResult(skipped_busy=True, error_code=ERROR_SYNC_BUSY)
+
+    result = FbsStockSyncResult()
+    try:
+        try:
+            api_token = await _resolve_marketplace_api_token(session, tenant_id, seller_id)
+        except FbsStockSyncError as exc:
+            binding.last_sync_status = STOCK_SYNC_STATUS_ERROR
+            binding.last_sync_at = _utcnow()
+            binding.last_error_code = exc.code
+            await session.commit()
+            return FbsStockSyncResult(errors=1, error_code=exc.code)
+
+        existing_items = await _load_existing_sync_items(session, binding.id)
+        if not existing_items:
+            result.bindings_processed = 1
+            return result
+
+        targets = [
+            _PublishTarget(
+                chrt_id=chrt_id,
+                amount=0,
+                product_id=item.product_id,
+                is_explicit_zero=True,
+            )
+            for chrt_id, item in existing_items.items()
+        ]
+
+        # Mark pending immediately so the screen shows "not yet confirmed" while
+        # the WB round-trip is in flight.
+        for item in existing_items.values():
+            item.last_target_amount = 0
+            item.status = STOCK_SYNC_STATUS_PENDING
+            item.last_error_code = None
+        await session.commit()
+
+        confirmed, errors, publish_error_code = await _publish_batches(
+            session,
+            binding=binding,
+            targets=targets,
+            sync_items=existing_items,
+            http_client=http_client,
+            api_token=api_token,
+            rate_limiter=limiter,
+            marketplace_api_base=marketplace_api_base,
+        )
+
+        result.bindings_processed = 1
+        result.products_targeted = len(targets)
+        result.products_confirmed = confirmed
+        result.products_zeroed = confirmed
+        result.errors = errors
+
+        if errors > 0:
+            binding.last_sync_status = STOCK_SYNC_STATUS_ERROR
+            binding.last_error_code = publish_error_code
+        else:
+            binding.last_sync_status = STOCK_SYNC_STATUS_CONFIRMED
+            binding.last_error_code = None
+        binding.last_sync_at = _utcnow()
+        await session.commit()
+    finally:
+        transaction = session.get_transaction()
+        if transaction is not None:
+            await session.rollback()
+        await session.execute(
+            update(FbsWarehouseBinding)
+            .where(FbsWarehouseBinding.id == binding_id)
+            .values(lease_until=None)
+            .execution_options(synchronize_session=False)
+        )
+        await session.commit()
+        binding.lease_until = None
+
+    return result
+
+
+_ZERO_PUBLISH_BACKGROUND_TASKS: set[asyncio.Task[None]] = set()
+
+
+async def _run_explicit_zero_publish_fresh_session(
+    tenant_id: uuid.UUID,
+    seller_id: uuid.UUID,
+    binding_id: uuid.UUID,
+) -> None:
+    """Runs publish_explicit_zero_for_binding in its own session/http client — safe to
+    fire after the caller's request-scoped session has already closed."""
+    from app.db.session import SessionLocal
+
+    try:
+        async with SessionLocal() as session, httpx.AsyncClient() as http_client:
+            binding = await session.get(FbsWarehouseBinding, binding_id)
+            if binding is None:
+                return
+            await publish_explicit_zero_for_binding(
+                session, tenant_id, seller_id, binding, http_client
+            )
+    except Exception:
+        logger.exception(
+            "explicit zero publish failed for binding %s (seller %s, tenant %s)",
+            binding_id,
+            seller_id,
+            tenant_id,
+        )
+
+
+def schedule_explicit_zero_publish(
+    tenant_id: uuid.UUID,
+    seller_id: uuid.UUID,
+    binding_id: uuid.UUID,
+) -> None:
+    """Fire-and-forget explicit zero publish for one binding (operator turned the
+    stock-sync toggle off). Runs on the current running event loop — safe to call from
+    inside a FastAPI request handler, since the ASGI server process keeps that loop
+    alive after the response is sent."""
+    try:
+        loop = asyncio.get_running_loop()
+    except RuntimeError:
+        logger.warning(
+            "explicit zero publish skipped for binding %s: no running event loop",
+            binding_id,
+        )
+        return
+    task = loop.create_task(
+        _run_explicit_zero_publish_fresh_session(tenant_id, seller_id, binding_id)
+    )
+    _ZERO_PUBLISH_BACKGROUND_TASKS.add(task)
+    task.add_done_callback(_ZERO_PUBLISH_BACKGROUND_TASKS.discard)
+
+
+async def drain_zero_publish_background_tasks() -> None:
+    """Wait for in-process explicit-zero-publish tasks — call from test teardown so
+    assertions don't race a fire-and-forget task still in flight."""
+    while _ZERO_PUBLISH_BACKGROUND_TASKS:
+        tasks = tuple(_ZERO_PUBLISH_BACKGROUND_TASKS)
+        await asyncio.gather(*tasks, return_exceptions=True)

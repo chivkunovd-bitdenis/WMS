@@ -35,11 +35,9 @@ class FbsWarehouseBinding(Base):
             "wb_warehouse_id",
             name="uq_fbs_warehouse_bindings_seller_wb_warehouse",
         ),
-        UniqueConstraint(
-            "seller_id",
-            "wms_warehouse_id",
-            name="uq_fbs_warehouse_bindings_seller_wms_warehouse",
-        ),
+        # No uniqueness on (seller_id, wms_warehouse_id): one physical WMS
+        # warehouse now feeds every WB warehouse address for a seller
+        # (pool 1, item 5 of docs/agent-orders/HANDOFF-POLISH.md).
     )
 
     id: Mapped[uuid.UUID] = mapped_column(

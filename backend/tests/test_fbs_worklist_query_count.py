@@ -259,11 +259,7 @@ async def test_fbs_worklist_delivery_and_done_groups(async_client: AsyncClient) 
     assert sorted_delivery.status_code == 200, sorted_delivery.text
     assert [item["id"] for item in sorted_delivery.json()["items"]] == [str(order_id)]
 
-    for terminal_status in (
-        FBS_ORDER_STATUS_DONE,
-        FBS_ORDER_STATUS_CANCELLED,
-        FBS_ORDER_STATUS_DEFECT,
-    ):
+    for terminal_status in (FBS_ORDER_STATUS_DONE,):
         async with SessionLocal() as session:
             order = await session.get(FbsOrder, order_id)
             assert order is not None
@@ -277,6 +273,23 @@ async def test_fbs_worklist_delivery_and_done_groups(async_client: AsyncClient) 
         )
         assert done.status_code == 200, done.text
         assert [item["id"] for item in done.json()["items"]] == [str(order_id)]
+
+    # Отменённые и брак больше не попадают в "done" — своя группа "cancelled"
+    # (решение пользователя 16.08 + FBS-06).
+    for terminal_status in (FBS_ORDER_STATUS_CANCELLED, FBS_ORDER_STATUS_DEFECT):
+        async with SessionLocal() as session:
+            order = await session.get(FbsOrder, order_id)
+            assert order is not None
+            order.status = terminal_status
+            await session.commit()
+
+        cancelled = await async_client.get(
+            "/operations/fbs-orders/worklist",
+            headers=headers,
+            params={"seller_id": str(seller_id), "status_group": "cancelled"},
+        )
+        assert cancelled.status_code == 200, cancelled.text
+        assert [item["id"] for item in cancelled.json()["items"]] == [str(order_id)]
 
     async with SessionLocal() as session:
         order = await session.get(FbsOrder, order_id)

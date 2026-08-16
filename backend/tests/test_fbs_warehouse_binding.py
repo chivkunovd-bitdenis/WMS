@@ -4,7 +4,7 @@ TC-NEW-FBS-STOCK-003: binding CRUD maps WB warehouses to WMS warehouses.
 TC-NEW-FBS-STOCK-004: unmapped path is separate; bindings are explicit.
 TC-NEW-FBS-STOCK-014: admin binding API validates tenant/seller/warehouse.
 N1: cross-tenant isolation → 404 without leaking existence.
-N2: duplicate WMS warehouse for same seller → 409.
+N2: one WMS warehouse binds many WB warehouses for the same seller (pool 1, item 5).
 N3: WMS warehouse change blocked when active FBS reservations exist.
 N4: disable binding blocked when active FBS reservations exist.
 """
@@ -251,9 +251,13 @@ async def test_fbs_warehouse_binding_cross_tenant_404(async_client: AsyncClient)
     assert ok.status_code == 200
 
 
-# N2 — one WMS warehouse cannot bind to two WB warehouses for same seller
+# N2 — one WMS warehouse feeds many WB warehouses for the same seller
+# (pool 1, item 5 of HANDOFF-POLISH.md): the former 409
+# wms_warehouse_already_bound blocked live-order binding on staging.
 @pytest.mark.asyncio
-async def test_fbs_warehouse_binding_wms_conflict_409(async_client: AsyncClient) -> None:
+async def test_fbs_warehouse_binding_wms_shared_across_wb_warehouses(
+    async_client: AsyncClient,
+) -> None:
     headers, suffix = await _register_ff_admin(async_client)
     seller_id = await _create_seller(async_client, headers, suffix)
     wh_a = await _create_warehouse(async_client, headers, suffix, "a")
@@ -265,17 +269,18 @@ async def test_fbs_warehouse_binding_wms_conflict_409(async_client: AsyncClient)
     )
     assert first.status_code == 200
 
-    conflict = await async_client.put(
+    second = await async_client.put(
         _bindings_url(seller_id, 501002),
         headers=headers,
         json={"wms_warehouse_id": wh_a, "stock_sync_enabled": True},
     )
-    _assert_fbs_error(
-        conflict,
-        status_code=409,
-        code="wms_warehouse_already_bound",
-        message="WMS-склад уже привязан.",
-    )
+    assert second.status_code == 200, second.text
+    assert second.json()["wms_warehouse_id"] == wh_a
+
+    listed = await async_client.get(_bindings_url(seller_id), headers=headers)
+    by_wb = {row["wb_warehouse_id"]: row for row in listed.json()}
+    assert by_wb[501001]["wms_warehouse_id"] == wh_a
+    assert by_wb[501002]["wms_warehouse_id"] == wh_a
 
 
 # N3 — cannot change WMS warehouse while active FBS reservations exist

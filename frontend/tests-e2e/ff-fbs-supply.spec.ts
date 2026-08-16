@@ -129,6 +129,32 @@ async function mockWorklist(page: Page, items: JsonObject[]) {
   )
 }
 
+function supplyWorklistRow(id: string, over: JsonObject = {}): JsonObject {
+  return {
+    id,
+    wb_supply_id: `WB-GI-MOCK-${id}`,
+    name: 'Тестовая поставка',
+    status: 'assembling',
+    seller: { id: 's-1', name: 'Селлер Один' },
+    wb_warehouse: { id: 501001, name: 'WB Подольск' },
+    wms_warehouse: { id: 'w-1', name: 'Основной склад' },
+    orders_count: 1,
+    units_count: 1,
+    boxes_count: 0,
+    planned_shipment_date: null,
+    can_add_orders: false,
+    ...over,
+  }
+}
+
+async function mockSupplyWorklist(page: Page, items: JsonObject[]) {
+  await page.route('**/operations/fbs-supplies/worklist**', (route) =>
+    route.request().method() === 'GET'
+      ? json(route, { items, server_now: new Date().toISOString() })
+      : route.fallback(),
+  )
+}
+
 // TC-S17-019 / TC-S17-021 — fresh preflight and idempotent warehouse/SC delivery.
 test('fbs workspace: preflight and deliver', async ({ page }) => {
   await registerFf(page, 'deliver')
@@ -246,6 +272,7 @@ test('fbs workspace: partial rejection is visible outside composition stage', as
     pack: { status: 'packed', packed_at: new Date().toISOString() },
   })
   await mockWorklist(page, [acceptedOrder])
+  await mockSupplyWorklist(page, [supplyWorklistRow('sup-1', { status: 'in_delivery' })])
   await page.route('**/operations/fbs-supplies/sup-1/workspace', (route) =>
     json(route, {
       ...workspace({
@@ -262,7 +289,7 @@ test('fbs workspace: partial rejection is visible outside composition stage', as
 
   await page.getByTestId('nav-ff-fbs').click()
   await page.getByRole('tab', { name: 'В доставке' }).click()
-  await page.getByTestId('fbs-order-1').click()
+  await page.getByTestId('fbs-18-supply-sup-1').click()
 
   await expect(page.getByTestId('fbs-workspace')).toBeVisible()
   await expect(page.getByTestId('fbs-partial-rejection')).toContainText('WB подтвердил только часть заказов')
@@ -391,6 +418,7 @@ test('fbs workspace: supply QR preview has copies control', async ({ page }) => 
     },
   }
   await page.route('**/operations/fbs-supplies/sup-1/workspace', (route) => json(route, currentWorkspace))
+  await mockSupplyWorklist(page, [supplyWorklistRow('sup-1', { status: 'in_delivery' })])
   await page.route('**/operations/fbs-print-assets/asset-supply-qr/content', async (route) => {
     await route.fulfill({
       status: 200,
@@ -404,7 +432,7 @@ test('fbs workspace: supply QR preview has copies control', async ({ page }) => 
 
   await page.getByTestId('nav-ff-fbs').click()
   await page.getByRole('tab', { name: 'В доставке' }).click()
-  await page.getByTestId('fbs-order-1').click()
+  await page.getByTestId('fbs-18-supply-sup-1').click()
   await page.getByRole('button', { name: 'Печать QR поставки' }).click()
 
   const dialog = page.getByRole('dialog', { name: 'Проверка перед печатью' })

@@ -13,6 +13,7 @@ from datetime import UTC, datetime, timedelta
 
 import pytest
 import pytest_asyncio
+from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -115,8 +116,14 @@ async def test_binding_unique_seller_wb_warehouse(db_session: AsyncSession) -> N
 
 
 @pytest.mark.asyncio
-async def test_binding_unique_seller_wms_warehouse(db_session: AsyncSession) -> None:
-    """TC-NEW-FBS-STOCK-003: one WMS warehouse cannot map to two WB warehouses."""
+async def test_binding_allows_one_wms_warehouse_for_many_wb_warehouses(
+    db_session: AsyncSession,
+) -> None:
+    """Pool 1, item 5 (HANDOFF-POLISH.md): one physical WMS warehouse feeds
+    every WB warehouse address for a seller, so no DB uniqueness on
+    (seller_id, wms_warehouse_id) — the former constraint blocked live-order
+    binding on staging (PUT .../warehouse-bindings/1155120 -> 409
+    wms_warehouse_already_bound)."""
     tenant, seller, wh_a, _wh_b = await _seed_tenant_seller_warehouses(db_session)
     db_session.add(
         _binding(
@@ -136,9 +143,17 @@ async def test_binding_unique_seller_wms_warehouse(db_session: AsyncSession) -> 
             wms_warehouse_id=wh_a.id,
         )
     )
-    with pytest.raises(IntegrityError):
-        await db_session.commit()
-    await db_session.rollback()
+    await db_session.commit()
+
+    rows = (
+        await db_session.execute(
+            select(FbsWarehouseBinding).where(
+                FbsWarehouseBinding.seller_id == seller.id,
+            )
+        )
+    ).scalars().all()
+    assert {row.wb_warehouse_id for row in rows} == {501001, 501002}
+    assert all(row.wms_warehouse_id == wh_a.id for row in rows)
 
 
 @pytest.mark.asyncio

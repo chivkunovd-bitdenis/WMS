@@ -90,6 +90,7 @@ test('seller chooses supply or return before inbound draft creation', async ({ p
   await expect(page.getByRole('heading', { name: 'Новая заявка на поставку' })).toBeVisible();
   await expect(page.getByTestId('seller-inbound-operation-type')).toContainText('Поставка');
   await expect(page.getByTestId('seller-inbound-operation-toggle')).toHaveCount(0);
+  await expect(page.getByTestId('seller-inbound-document-number')).toContainText('№');
   await page.getByTestId('seller-inbound-planned-boxes').fill('1');
   await page.getByTestId('seller-inbound-save-draft').click();
   await expect(page.getByTestId('seller-inbound-draft-ok')).toContainText('Заявка сохранена');
@@ -237,7 +238,6 @@ test('seller chooses supply or return before inbound draft creation', async ({ p
   await page.getByTestId('ff-product-label-cancel').click();
   await expect(page.getByTestId('ff-product-label-print-dialog')).toHaveCount(0);
 
-  await page.getByTestId('seller-inbound-waybill-number').fill(`WAYBILL-${seed.suffix}`);
   await page.getByTestId('seller-inbound-planned-boxes').fill('0');
   await page.getByTestId('seller-inbound-submit-warehouse').click();
   await expect(page.getByTestId('seller-inbound-draft-error')).toContainText('Укажите количество грузомест');
@@ -255,7 +255,6 @@ test('seller chooses supply or return before inbound draft creation', async ({ p
   );
   await expect(supplyRow).toContainText('Поставка');
   await expect(returnRow).toContainText('Возврат');
-  await expect(returnRow).toContainText(`WAYBILL-${seed.suffix}`);
   await expect(returnRow).toHaveAttribute('data-doc-operation-type', 'return');
 
   await page.getByTestId('seller-documents-type').click();
@@ -294,13 +293,9 @@ test('seller chooses supply or return before inbound draft creation', async ({ p
     `[data-testid="ff-inbound-queue-row"][data-request-id="${returnDraft.id}"]`,
   );
   await expect(ffReturnRow.getByTestId('ff-inbound-queue-document')).toContainText('Возврат');
-  await expect(ffReturnRow.getByTestId('ff-inbound-queue-waybill-number')).toContainText(
-    `WAYBILL-${seed.suffix}`,
-  );
   await ffReturnRow.click();
   await expect(page.getByTestId('ff-inbound-doc-root')).toBeVisible();
   await expect(page.getByTestId('ff-inbound-operation-type')).toContainText('Возврат');
-  await expect(page.getByTestId('ff-inbound-waybill-number')).toContainText(`WAYBILL-${seed.suffix}`);
   const returnDocumentNumber =
     (await page.getByTestId('ff-inbound-document-number').textContent())?.trim() ?? '';
   expect(returnDocumentNumber).toContain('№');

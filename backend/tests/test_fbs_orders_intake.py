@@ -949,7 +949,10 @@ async def test_fbs_sync_job_fails_on_wb_client_error(
     assert start.status_code == 202
     body = await _wait_for_job(async_client, headers, start.json()["id"])
     assert body["status"] == "failed"
-    assert body["error_message"] == "wb_upstream_error_502"
+    # КРИТ-2 (HANDOFF-POLISH.md, пул 1, п.3): job.error_message теперь человеческий текст
+    # (exc.message), а не голый код "wb_upstream_error_502" — иначе оператор на экране
+    # видит шифр вместо причины ошибки.
+    assert body["error_message"] == "Wildberries отклонил операцию; проверьте детали ошибки в журнале."
 
 
 @pytest.mark.asyncio

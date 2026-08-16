@@ -1214,6 +1214,7 @@ export type FbsWarehouseBinding = {
   last_sync_status: string | null
   last_sync_at: string | null
   last_error_code: string | null
+  allocated_pool_total: number
 }
 
 export type FbsStockSyncResult = {
@@ -1300,6 +1301,59 @@ export async function disableFbsWarehouseBinding(
     { method: 'DELETE', headers: { ...ah(token) } },
   )
   return jsonOrThrow<FbsWarehouseBinding>(res)
+}
+
+export type FbsStockPoolProduct = {
+  product_id: string
+  sku_code: string
+  name: string
+  wb_chrt_id: number | null
+  pool_limit: number
+  allocated_this_binding: number
+  allocated_elsewhere: number
+  available_for_this_binding: number
+}
+
+export type FbsStockPoolSetResult = {
+  product_id: string
+  quantity: number
+  pool_limit: number
+  allocated_total: number
+  available: number
+}
+
+export async function fetchFbsBindingStockPool(
+  token: string,
+  ah: (t: string) => Record<string, string>,
+  sellerId: string,
+  wbWarehouseId: number,
+): Promise<FbsStockPoolProduct[]> {
+  const res = await fetch(
+    apiUrl(`${sellerBase(sellerId)}/warehouse-bindings/${wbWarehouseId}/stock-pool`),
+    { headers: { ...ah(token) } },
+  )
+  return jsonOrThrow<FbsStockPoolProduct[]>(res)
+}
+
+export async function setFbsBindingStockPoolQuantity(
+  token: string,
+  ah: (t: string) => Record<string, string>,
+  sellerId: string,
+  wbWarehouseId: number,
+  productId: string,
+  quantity: number,
+): Promise<FbsStockPoolSetResult> {
+  const res = await fetch(
+    apiUrl(
+      `${sellerBase(sellerId)}/warehouse-bindings/${wbWarehouseId}/stock-pool/${productId}`,
+    ),
+    {
+      method: 'PUT',
+      headers: { ...ah(token), 'Content-Type': 'application/json' },
+      body: JSON.stringify({ quantity }),
+    },
+  )
+  return jsonOrThrow<FbsStockPoolSetResult>(res)
 }
 
 export async function triggerFbsStockSync(
