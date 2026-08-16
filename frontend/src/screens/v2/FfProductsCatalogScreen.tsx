@@ -275,7 +275,17 @@ export function FfProductsCatalogScreen({
                 <TableCell>Размер</TableCell>
                 <TableCell>Селлер</TableCell>
                 <TableCell>ТЗ</TableCell>
-                <TableCell align="center" />
+                <TableCell
+                  align="center"
+                  sx={{
+                    position: 'sticky',
+                    right: 0,
+                    zIndex: 3,
+                    bgcolor: 'background.paper',
+                    borderLeft: '1px solid',
+                    borderLeftColor: 'divider',
+                  }}
+                />
               </TableRow>
             </TableHead>
             <TableBody>
@@ -358,7 +368,17 @@ export function FfProductsCatalogScreen({
                         </Typography>
                       </Stack>
                     </TableCell>
-                    <TableCell align="center">
+                    <TableCell
+                      align="center"
+                      sx={{
+                        position: 'sticky',
+                        right: 0,
+                        zIndex: 1,
+                        bgcolor: 'background.paper',
+                        borderLeft: '1px solid',
+                        borderLeftColor: 'divider',
+                      }}
+                    >
                       <Stack direction="row" spacing={0.25} sx={{ justifyContent: 'center' }}>
                         <Tooltip
                           title={`Коды маркировки: ${markingCount}`}
