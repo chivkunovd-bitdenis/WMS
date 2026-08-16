@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import {
   Alert,
   Box,
@@ -74,6 +74,12 @@ export function FfMpUnloadPickPanel({
   >({})
 
   const headerMap = useMemo(() => ({ ...authHeaders }), [authHeaders])
+  // Без Content-Type FastAPI не разбирает тело и отвечает
+  // «body: Input should be a valid dictionary…» — и скан, и ручное добавление падают.
+  const jsonHeaderMap = useMemo(
+    () => ({ ...authHeaders, 'Content-Type': 'application/json' }),
+    [authHeaders],
+  )
 
   const loadPickOptions = useCallback(
     async (opts?: { silent?: boolean }) => {
@@ -137,7 +143,7 @@ export function FfMpUnloadPickPanel({
         apiUrl(`/operations/marketplace-unload-requests/${requestId}/pick/scan`),
         {
           method: 'POST',
-          headers: headerMap,
+          headers: jsonHeaderMap,
           body: JSON.stringify(body),
         },
       )
@@ -168,7 +174,7 @@ export function FfMpUnloadPickPanel({
       setBusy(false)
       scanInputRef.current?.focus()
     }
-  }, [scanBarcode, activeLocationId, headerMap, requestId, onChanged, loadPickOptions])
+  }, [scanBarcode, activeLocationId, jsonHeaderMap, requestId, onChanged, loadPickOptions])
 
   const handleScanKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === 'Enter') {
@@ -198,7 +204,7 @@ export function FfMpUnloadPickPanel({
           apiUrl(`/operations/marketplace-unload-requests/${requestId}/pick/add`),
           {
             method: 'POST',
-            headers: headerMap,
+            headers: jsonHeaderMap,
             body: JSON.stringify(body),
           },
         )
@@ -217,7 +223,7 @@ export function FfMpUnloadPickPanel({
         setBusy(false)
       }
     },
-    [headerMap, requestId, onChanged, loadPickOptions],
+    [jsonHeaderMap, requestId, onChanged, loadPickOptions],
   )
 
   const isDisabled = disabled || busy || loading
@@ -316,7 +322,10 @@ export function FfMpUnloadPickPanel({
                   const hasLocations = product.locations.length > 0
 
                   return (
-                    <Box key={product.product_id}>
+                    // <div> между <tbody> и <tr> — невалидная разметка: браузер выбрасывает
+                    // строки из табличного контекста, и они теряют выравнивание по колонкам.
+                    // Нужен фрагмент, а не Box.
+                    <Fragment key={product.product_id}>
                       {/* Строка товара */}
                       <TableRow data-testid={`ff-mp-pick-row-${product.product_id}`}>
                         <TableCell>
@@ -409,7 +418,7 @@ export function FfMpUnloadPickPanel({
                           </TableCell>
                         </TableRow>
                       )}
-                    </Box>
+                    </Fragment>
                   )
                 })
               )}
