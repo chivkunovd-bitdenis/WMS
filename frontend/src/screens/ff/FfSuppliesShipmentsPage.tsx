@@ -504,16 +504,23 @@ export function FfSuppliesShipmentsPage({
           stockParams.set('seller_id', j.seller_id)
         }
         stockParams.set('exclude_request_id', j.id)
-        const stockRes = await fetch(
-          apiUrl(
-            `/operations/marketplace-unload-requests/available-products?${stockParams.toString()}`,
-          ),
-          { headers: authHeaders },
-        )
+        // Эндпоинт требует warehouse_id и seller_id: без seller_id он отвечает 422
+        // seller_id_required, а без warehouse_id в запрос уходит строка "null".
+        // У свежесозданной отгрузки этих полей может не быть — тогда не стучимся вовсе,
+        // иначе 422 превращается в «пустой список» и выглядит как отсутствие товара.
+        const stockRes =
+          j.warehouse_id && j.seller_id
+            ? await fetch(
+                apiUrl(
+                  `/operations/marketplace-unload-requests/available-products?${stockParams.toString()}`,
+                ),
+                { headers: authHeaders },
+              )
+            : null
         if (!docDetailRequests.current.isLatest(docDetailRequestId)) {
           return
         }
-        if (stockRes.ok) {
+        if (stockRes && stockRes.ok) {
           const stockRows = (await stockRes.json()) as {
             product_id: string
             sku_code: string
@@ -538,7 +545,9 @@ export function FfSuppliesShipmentsPage({
           // Отличить поломку от честного нуля было невозможно — теперь ошибка видна.
           setWarehouseAvailableProductPicklist([])
           setModalError(
-            `Не удалось получить остатки для отгрузки (${stockRes.status}). Список товаров может быть пустым не потому, что товара нет.`,
+            stockRes
+              ? `Не удалось получить остатки для отгрузки (${stockRes.status}). Список товаров может быть пустым не потому, что товара нет.`
+              : 'Список товаров не собрать: у отгрузки не заданы склад и селлер. Заполните их и откройте документ заново.',
           )
         }
         setDivergeDetail(null)
@@ -3084,7 +3093,14 @@ export function FfSuppliesShipmentsPage({
         availableColumnLabel="Доступно FBO"
         getAvailable={mpPickerGetAvailable}
         filterRow={mpPickerFilterRow}
-        emptyMessage="Нет свободного FBO остатка для отгрузки."
+        // Остаток ищется строго по складу документа: JOIN StorageLocation по warehouse_id.
+        // Пустой список чаще всего значит «отгрузка создана не на том складе», поэтому
+        // склад назван прямо в сообщении — иначе оператор упирается в тупик без подсказки.
+        emptyMessage={
+          unloadDetail?.warehouse_name
+            ? `На складе «${unloadDetail.warehouse_name}» нет свободного остатка по этому селлеру. Проверьте, тот ли склад указан в отгрузке.`
+            : 'Нет свободного остатка по этому селлеру на складе отгрузки.'
+        }
         onClose={() => setMpPickerOpen(false)}
         onApply={applyMpProductPicker}
       />
