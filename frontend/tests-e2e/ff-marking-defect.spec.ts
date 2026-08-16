@@ -147,7 +147,7 @@ test('FF packaging: defect button creates pending reprint request', async ({ pag
     page.getByTestId('ff-packaging-defect-marking').click(),
   ])
   const printedCodesBody = (await (await printedCodesWait).json()) as {
-    codes: { id: string; cis_masked: string }[]
+    codes: { id: string; cis_code: string; cis_masked: string }[]
   }
   expect(printedCodesBody.codes.length).toBeGreaterThanOrEqual(2)
   const secondPrintedCode = printedCodesBody.codes[1]
@@ -156,7 +156,9 @@ test('FF packaging: defect button creates pending reprint request', async ({ pag
   await expect(page.getByTestId('ff-packaging-defect-dialog')).toBeVisible()
   // T-B1 / PACK-05 — выбор не-первого КМ и причина брака.
   await page.getByTestId('ff-packaging-defect-code-select').click()
-  await page.getByRole('option', { name: secondPrintedCode.cis_masked }).click()
+  // Диалог брака показывает КМ целиком, а не маску: оператор подтверждает необратимое
+  // списание кода и обязан видеть, какой именно код списывает (CZ-01).
+  await page.getByRole('option', { name: secondPrintedCode.cis_code }).click()
   const defectReason = 'Порвана этикетка при наклейке'
   await page.getByTestId('ff-packaging-defect-reason').getByRole('textbox').fill(defectReason)
 

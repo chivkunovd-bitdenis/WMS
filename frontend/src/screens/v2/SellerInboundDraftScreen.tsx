@@ -835,7 +835,8 @@ export function SellerInboundDraftScreen({
           <Stack
             direction={{ xs: 'column', md: 'row' }}
             spacing={2}
-            sx={{ mb: 2, alignItems: { md: 'center' } }}
+            useFlexGap
+            sx={{ mb: 2, alignItems: { md: 'center' }, flexWrap: 'wrap' }}
           >
             <WmsDateField
               label="Дата поставки (план)"
@@ -855,6 +856,7 @@ export function SellerInboundDraftScreen({
               disabled={draftLocked || busy}
               value={plannedBoxCountDraft}
               onChange={(e) => setPlannedBoxCountDraft(e.target.value)}
+              sx={{ minWidth: 150 }}
               slotProps={{
                 htmlInput: {
                   min: 0,
@@ -868,6 +870,7 @@ export function SellerInboundDraftScreen({
               disabled={draftLocked || busy}
               value={waybillNumberDraft}
               onChange={(e) => setWaybillNumberDraft(e.target.value)}
+              sx={{ minWidth: 200 }}
               slotProps={{
                 htmlInput: {
                   maxLength: 128,
@@ -889,6 +892,7 @@ export function SellerInboundDraftScreen({
               disabled={draftLocked || busy}
               onClick={() => void openPicker()}
               data-testid="seller-inbound-add-products"
+              sx={{ whiteSpace: 'nowrap', flexShrink: 0 }}
             >
               Добавить товары
             </Button>
@@ -897,6 +901,7 @@ export function SellerInboundDraftScreen({
               disabled={busy}
               onClick={() => void saveDraftFields()}
               data-testid="seller-inbound-save-draft"
+              sx={{ whiteSpace: 'nowrap', flexShrink: 0 }}
             >
               Сохранить
             </Button>
@@ -905,6 +910,7 @@ export function SellerInboundDraftScreen({
               disabled={busy}
               onClick={closeDocument}
               data-testid="seller-inbound-close"
+              sx={{ whiteSpace: 'nowrap', flexShrink: 0 }}
             >
               Закрыть
             </Button>
@@ -915,6 +921,7 @@ export function SellerInboundDraftScreen({
                 disabled={draftLocked || busy || detail.lines.length === 0}
                 onClick={() => void submitToWarehouse()}
                 data-testid="seller-inbound-submit-warehouse"
+                sx={{ whiteSpace: 'nowrap', flexShrink: 0 }}
               >
                 Передать на склад
               </Button>

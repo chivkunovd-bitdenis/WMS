@@ -382,7 +382,7 @@ export function FfSettingsScreen({
         Настройки
       </Typography>
       <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
-        Сотрудники фулфилмента и доступ к рабочим разделам.
+        Склад, печать и сотрудники фулфилмента.
       </Typography>
 
       {isFulfillmentAdmin ? (
@@ -504,6 +504,10 @@ export function FfSettingsScreen({
               {success}
             </Alert>
           ) : null}
+
+          <Typography variant="subtitle2" gutterBottom data-testid="ff-settings-staff-heading">
+            Сотрудники
+          </Typography>
 
           <Stack spacing={2}>
             {isFulfillmentAdmin ? (

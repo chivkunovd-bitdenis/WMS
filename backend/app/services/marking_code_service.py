@@ -2876,6 +2876,7 @@ async def get_code_history(
 @dataclass(frozen=True)
 class PrintedCodeRow:
     id: uuid.UUID
+    cis_code: str
     cis_masked: str
     status: str
 
@@ -2919,7 +2920,12 @@ async def list_printed_codes_for_packaging_line(
     )
     codes = list((await session.execute(stmt)).scalars().all())
     return [
-        PrintedCodeRow(id=code.id, cis_masked=mask_cis_code(code.cis_code), status=code.status)
+        PrintedCodeRow(
+            id=code.id,
+            cis_code=code.cis_code,
+            cis_masked=mask_cis_code(code.cis_code),
+            status=code.status,
+        )
         for code in codes
     ]
 

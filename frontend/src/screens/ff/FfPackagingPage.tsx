@@ -133,6 +133,7 @@ type PackProgress = {
 
 type PrintedMarkingCode = {
   id: string
+  cis_code: string
   cis_masked: string
   status: string
 }
@@ -1239,8 +1240,12 @@ export function FfPackagingTaskPanel({
                 data-testid="ff-packaging-defect-code-select"
               >
                 {defectCodes.map((code) => (
-                  <MenuItem key={code.id} value={code.id}>
-                    {code.cis_masked}
+                  <MenuItem
+                    key={code.id}
+                    value={code.id}
+                    sx={{ fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace' }}
+                  >
+                    {code.cis_code}
                   </MenuItem>
                 ))}
               </Select>

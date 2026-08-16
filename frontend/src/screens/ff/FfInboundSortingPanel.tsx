@@ -526,6 +526,17 @@ export function FfInboundSortingPanel({
     return m
   }, [draftSumByProductId, productStates])
 
+  // Чип наверху и колонка «Осталось» в таблице должны говорить об одном и том же.
+  // `sortingRemainingQty` приходит из серверного состояния и не знает про строки,
+  // которые оператор уже вбил, но ещё не применил, — вычитаем их.
+  const draftAwareRemainingTotal = useMemo(() => {
+    let draftTotal = 0
+    for (const qty of draftSumByProductId.values()) {
+      draftTotal += qty
+    }
+    return Math.max(0, sortingRemainingQty - draftTotal)
+  }, [draftSumByProductId, sortingRemainingQty])
+
   const rowMaxQty = (productId: string, row: CellDraftRow): number => {
     const accepted = acceptedByProductId.get(productId) ?? 0
     const productRows = productStates.find((p) => p.product_id === productId)?.rows ?? []
@@ -855,8 +866,8 @@ export function FfInboundSortingPanel({
           Осталось разложить:
         </Typography>
         <Chip
-          label={`${sortingRemainingQty} шт`}
-          color={sortingRemainingQty > 0 ? 'warning' : 'success'}
+          label={`${draftAwareRemainingTotal} шт`}
+          color={draftAwareRemainingTotal > 0 ? 'warning' : 'success'}
           size="small"
           data-testid="ff-sorting-remaining-total"
         />

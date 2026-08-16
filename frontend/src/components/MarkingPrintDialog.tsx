@@ -455,10 +455,18 @@ export function MarkingPrintDialog({ open, reprint, ctx, busy, onBusyChange, onC
           : 0
       : totalWbLabels
 
-  const previewUnits = useMemo(() => buildTapePreviewUnits(layout, 3), [layout])
+  // Превью показывает фактическое количество к печати, но не больше трёх единиц,
+  // чтобы при печати полусотни лента не превращалась в простыню. Если единиц больше —
+  // подпись под превью честно говорит, что показаны первые три.
+  const previewUnitCount = Math.min(Math.max(canPrintCount, 1), 3)
+
+  const previewUnits = useMemo(
+    () => buildTapePreviewUnits(layout, previewUnitCount),
+    [layout, previewUnitCount],
+  )
   const previewTapeCount = useMemo(
-    () => countTapeBlocksFromTape(tapeOrder, 3),
-    [tapeOrder],
+    () => countTapeBlocksFromTape(tapeOrder, previewUnitCount),
+    [tapeOrder, previewUnitCount],
   )
   const totalTapeCount = useMemo(
     () => countTapeBlocksFromTape(tapeOrder, canPrintCount),
@@ -1231,7 +1239,10 @@ export function MarkingPrintDialog({ open, reprint, ctx, busy, onBusyChange, onC
                     sx={{ mb: 0.5, display: 'block' }}
                     data-testid="marking-print-preview-tape-count"
                   >
-                    Лента на одну единицу · {tapeOrder.length} {plural(tapeOrder.length, ['блок', 'блока', 'блоков'])} · {previewTapeCount} {plural(previewTapeCount, ['блок', 'блока', 'блоков'])} на 3 ед.
+                    Лента на одну единицу · {tapeOrder.length} {plural(tapeOrder.length, ['блок', 'блока', 'блоков'])}
+                    {canPrintCount > previewUnitCount
+                      ? ` · ниже показаны первые ${previewUnitCount} ед. из ${canPrintCount}`
+                      : ` · ниже вся лента: ${previewTapeCount} ${plural(previewTapeCount, ['блок', 'блока', 'блоков'])} на ${canPrintCount} ед.`}
                   </Typography>
                   <Stack
                     direction="row"

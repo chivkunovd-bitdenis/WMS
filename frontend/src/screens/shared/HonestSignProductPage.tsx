@@ -643,8 +643,8 @@ export function HonestSignProductPage({
             {codes.length} КМ
           </Typography>
         ) : null}
-        <TableContainer component={Paper} variant="outlined" sx={{ overflowX: 'auto' }}>
-          <Table size="small" sx={{ tableLayout: 'fixed' }}>
+        <TableContainer component={Paper} variant="outlined" sx={{ overflowX: 'auto', maxHeight: 420 }}>
+          <Table size="small" stickyHeader sx={{ tableLayout: 'fixed' }}>
             <TableHead>
               <TableRow>
                 <TableCell>КМ/CIS</TableCell>
