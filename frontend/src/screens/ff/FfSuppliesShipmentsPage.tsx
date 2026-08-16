@@ -534,7 +534,12 @@ export function FfSuppliesShipmentsPage({
               })),
           )
         } else {
+          // Раньше сбой запроса молча давал пустой список, и это выглядело как «нет остатка».
+          // Отличить поломку от честного нуля было невозможно — теперь ошибка видна.
           setWarehouseAvailableProductPicklist([])
+          setModalError(
+            `Не удалось получить остатки для отгрузки (${stockRes.status}). Список товаров может быть пустым не потому, что товара нет.`,
+          )
         }
         setDivergeDetail(null)
       } else {
@@ -2374,11 +2379,23 @@ export function FfSuppliesShipmentsPage({
                       Селлер: <strong>{unloadDetail.seller_name}</strong>
                     </Typography>
                   ) : null}
-                  {mpLineDraft && mpDraft ? (
+                  {mpLineDraft ? (
                     <Paper variant="outlined" sx={{ p: 1.5 }} data-testid="ff-mp-add-products-panel">
                       <Typography variant="subtitle2" sx={{ mb: 1.25 }}>
                         Добавление товаров
                       </Typography>
+                      {/* MPFBO-01: элемент не исчезает, а объясняет, почему недоступен —
+                          иначе оператор не понимает, потерял он кнопку или система сломалась. */}
+                      {!mpDraft ? (
+                        <Typography
+                          variant="body2"
+                          color="text.secondary"
+                          sx={{ mb: 1.25 }}
+                          data-testid="ff-mp-add-products-locked"
+                        >
+                          Состав можно менять только в черновике — план уже утверждён.
+                        </Typography>
+                      ) : null}
                       <Stack
                         direction={{ xs: 'column', sm: 'row' }}
                         spacing={1}
@@ -2407,7 +2424,7 @@ export function FfSuppliesShipmentsPage({
                           />
                           <Button
                             variant="outlined"
-                            disabled={modalBusy || !mpLineBarcodeScan.trim()}
+                            disabled={modalBusy || !mpDraft || !mpLineBarcodeScan.trim()}
                             onClick={() => void addMpLineByBarcode()}
                             data-testid="ff-mp-line-barcode-add"
                           >
@@ -2416,7 +2433,7 @@ export function FfSuppliesShipmentsPage({
                         </Stack>
                         <Button
                           variant="contained"
-                          disabled={modalBusy}
+                          disabled={modalBusy || !mpDraft}
                           onClick={() => void openMpProductPicker()}
                           data-testid="ff-mp-add-products"
                         >
