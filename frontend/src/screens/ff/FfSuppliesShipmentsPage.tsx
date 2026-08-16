@@ -41,6 +41,7 @@ import {
 } from '@mui/material'
 import { FfProductLineCells, FfProductTableHeadCells } from '../../components/FfProductLineCells'
 import { WbProductPickerDialog, type WbProductPickerCatalogRow } from '../../components/WbProductPickerDialog'
+import { FfMpUnloadPickPanel } from './FfMpUnloadPickPanel'
 import { useWbProductCatalog } from '../../hooks/useWbProductCatalog'
 import { apiUrl } from '../../api'
 import { WmsDateField } from '../../components/WmsDateField'
@@ -163,7 +164,7 @@ type DiscrepancyActDetail = {
 
 type DocKind = 'inbound' | 'outbound' | 'marketplace_unload' | 'discrepancy_act'
 
-type MpUnloadTab = 'plan' | 'packaging'
+type MpUnloadTab = 'plan' | 'pick' | 'packaging'
 
 /** Быстрые фильтры без операционной «Отгрузки» — только «Отгрузки на МП». */
 type QuickFilterKind = 'all' | 'inbound' | 'marketplace_unload' | 'discrepancy_act'
@@ -215,6 +216,10 @@ function formatSignedQty(value: number): string {
 
 const mpUnloadSteps: { value: MpUnloadTab; label: string; testId: string }[] = [
   { value: 'plan', label: 'Товары', testId: 'ff-mp-tab-products' },
+  // MPFBO-01: «Если план утверждён, вкладка "Подбор" должна становиться доступной».
+  // Шаг был потерян 28.06 в коммите 304abf2, когда поле скана ячейки/товара переподписали
+  // на короба; бэкенд подбора при этом остался рабочим.
+  { value: 'pick', label: 'Подбор', testId: 'ff-mp-tab-pick' },
   { value: 'packaging', label: 'Упаковка', testId: 'ff-mp-tab-packaging' },
 ]
 
@@ -1751,12 +1756,16 @@ export function FfSuppliesShipmentsPage({
       if (step === 'plan') {
         return true
       }
+      if (step === 'pick') {
+        // Подбор открывается после утверждения плана — так требует MPFBO-01.
+        return mpSubmitted || mpConfirmed || mpCollecting
+      }
       if (step === 'packaging') {
         return Boolean(unloadDetail.linked_packaging_task)
       }
       return false
     },
-    [docModal, unloadDetail],
+    [docModal, unloadDetail, mpSubmitted, mpConfirmed, mpCollecting],
   )
   const mpNextStep = useMemo(() => {
     const currentIdx = mpUnloadSteps.findIndex((step) => step.value === mpUnloadTab)
@@ -2593,6 +2602,17 @@ export function FfSuppliesShipmentsPage({
                     </Table>
                   ) : null}
                 </Stack>
+              ) : null}
+              {mpUnloadTab === 'pick' && unloadDetail && token && authHeaders ? (
+                <Box data-testid="ff-mp-tab-pick-panel">
+                  <FfMpUnloadPickPanel
+                    token={token}
+                    authHeaders={authHeaders}
+                    requestId={unloadDetail.id}
+                    disabled={modalBusy}
+                    onChanged={() => void loadDocDetail()}
+                  />
+                </Box>
               ) : null}
               {mpUnloadTab === 'packaging' ? (
                 <Box data-testid="ff-mp-tab-packaging-panel">

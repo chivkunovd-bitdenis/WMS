@@ -284,13 +284,17 @@ test('FF marketplace unload: tabs switch without losing document context', async
   )
   await expect(page.getByTestId('ff-supplies-doc-dialog')).not.toContainText(unloadDocumentNumber)
   await expect(page.getByTestId('ff-mp-tab-products')).toBeVisible()
+  // MPFBO-01: «Если план утверждён, вкладка "Подбор" должна становиться доступной».
+  // Раньше здесь стояло toHaveCount(0) на ff-mp-tab-picking — тест закреплял отсутствие
+  // шага подбора, потерянного 28.06 в коммите 304abf2. Требование говорит обратное.
+  await expect(page.getByTestId('ff-mp-tab-pick')).toBeVisible()
   await expect(page.getByTestId('ff-mp-tab-packaging')).toBeVisible()
-  await expect(page.getByTestId('ff-mp-tab-picking')).toHaveCount(0)
   await expect(page.getByTestId('ff-mp-tab-boxes')).toHaveCount(0)
   await expect(page.getByTestId('ff-mp-tab-final')).toHaveCount(0)
   await expect(page.getByTestId('ff-mp-boxes')).toHaveCount(0)
   await expectMpTabSelected(page, 'ff-mp-tab-products')
-  await expect(page.getByTestId('ff-mp-next-step')).toContainText('Упаковка')
+  // Следующий шаг после «Товары» — «Подбор», а не «Упаковка»: между ними появился этап.
+  await expect(page.getByTestId('ff-mp-next-step')).toContainText('Подбор')
   await expect(page.getByTestId('ff-mp-ship')).toHaveCount(0)
 
   await expect(page.getByTestId('ff-mp-shipment-summary')).toBeVisible()

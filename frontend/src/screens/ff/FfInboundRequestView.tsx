@@ -842,13 +842,6 @@ export function FfInboundRequestView({
     return m
   }, [detail])
 
-  const hasLineDiscrepancy = useMemo(() => {
-    if (!detail) return false
-    const boxes = detail.boxes ?? []
-    return detail.lines.some(
-      (ln) => effectiveActualQty(ln, boxes, detail.status) !== ln.expected_qty,
-    )
-  }, [detail])
 
   const distributableProducts = useMemo(() => {
     if (!detail) return []
@@ -2414,12 +2407,6 @@ export function FfInboundRequestView({
           {sortingView && !receptionClosed ? (
             <Alert severity="info" sx={{ mt: 2 }} data-testid="ff-inbound-sorting-wait-reception">
               Сначала завершите приёмку в разделе <strong>Приёмка</strong>.
-            </Alert>
-          ) : null}
-
-          {isFulfillmentAdmin && !sortingView && receivingActive && hasLineDiscrepancy ? (
-            <Alert severity="warning" sx={{ mt: 2 }} data-testid="ff-inbound-discrepancy-hint">
-              Есть расхождения с планом — при завершении потребуется подтверждение.
             </Alert>
           ) : null}
 

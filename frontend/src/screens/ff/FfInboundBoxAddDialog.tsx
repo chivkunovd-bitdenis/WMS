@@ -404,6 +404,14 @@ export function FfInboundBoxAddDialog({
         <Button onClick={() => void handleDismiss()} disabled={busy} data-testid="ff-inbound-box-add-dismiss">
           Скрыть окно
         </Button>
+        <Button
+          variant="contained"
+          onClick={() => void handleDismiss()}
+          disabled={busy}
+          data-testid="ff-inbound-box-add-done"
+        >
+          Готово
+        </Button>
       </DialogActions>
     </Dialog>
   )

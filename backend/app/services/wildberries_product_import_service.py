@@ -108,6 +108,26 @@ def _parse_title(card: dict[str, Any]) -> str | None:
     return None
 
 
+def _parse_dimensions_mm(item: dict) -> tuple[int | None, int | None, int | None]:
+    """Габариты из карточки WB. WB отдаёт сантиметры, храним миллиметры.
+
+    Возвращает (length_mm, width_mm, height_mm); None там, где WB не дал значения.
+    """
+    raw = item.get("dimensions")
+    if not isinstance(raw, dict):
+        return (None, None, None)
+
+    def one(key: str) -> int | None:
+        value = raw.get(key)
+        if isinstance(value, bool) or not isinstance(value, (int, float)):
+            return None
+        if value <= 0:
+            return None
+        return int(round(value * 10))
+
+    return (one("length"), one("width"), one("height"))
+
+
 async def _find_product_for_variant(
     session: AsyncSession,
     tenant_id: uuid.UUID,
@@ -163,8 +183,6 @@ async def upsert_products_from_wb_cards(
     tenant_id: uuid.UUID,
     seller_id: uuid.UUID,
     cards: list[object],
-    *,
-    default_dim_mm: int = 10,
 ) -> dict[str, int]:
     """
     Create/update Product rows for seller based on WB cards.
@@ -183,6 +201,7 @@ async def upsert_products_from_wb_cards(
         nm = _parse_nm_id(item)
         vendor = _parse_vendor_code(item)
         base_title = _parse_title(item) or (vendor or (f"WB {nm}" if nm else "WB товар"))
+        card_length_mm, card_width_mm, card_height_mm = _parse_dimensions_mm(item)
         variants = iter_size_variants_from_card(item)
         if not variants:
             skipped += 1
@@ -212,9 +231,9 @@ async def upsert_products_from_wb_cards(
                     wb_chrt_id=variant.chrt_id,
                     wb_barcode=variant.barcode,
                     wb_size=variant.size_label,
-                    length_mm=default_dim_mm,
-                    width_mm=default_dim_mm,
-                    height_mm=default_dim_mm,
+                    length_mm=card_length_mm,
+                    width_mm=card_width_mm,
+                    height_mm=card_height_mm,
                 )
                 session.add(p)
                 try:
@@ -244,6 +263,13 @@ async def upsert_products_from_wb_cards(
                 sku=sku,
                 variant=variant,
             )
+            # Fill empty dimension fields with values from WB card, but don't overwrite measured values
+            if p.length_mm is None and card_length_mm is not None:
+                p.length_mm = card_length_mm
+            if p.width_mm is None and card_width_mm is not None:
+                p.width_mm = card_width_mm
+            if p.height_mm is None and card_height_mm is not None:
+                p.height_mm = card_height_mm
             try:
                 await session.commit()
             except IntegrityError:
