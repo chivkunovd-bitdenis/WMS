@@ -899,7 +899,12 @@ export function FfPackagingTaskPanel({
                     <TableCell>
                       <Chip
                         size="small"
-                        color={barcodeReady && productLabelPrinted > 0 ? 'success' : 'warning'}
+                        // GLOBAL-02: оранжевый значит «мешает работать». Печать товарного ШК
+                        // завершение упаковки не блокирует, поэтому «напечатано 0/2» — это
+                        // нейтральный факт, а не тревога. Тревога только когда ШК вообще нет.
+                        color={
+                          !barcodeReady ? 'warning' : productLabelPrinted > 0 ? 'success' : 'default'
+                        }
                         variant="outlined"
                         label={barcodeStatusLabel}
                         data-testid={`ff-packaging-barcode-status-${ln.id}`}

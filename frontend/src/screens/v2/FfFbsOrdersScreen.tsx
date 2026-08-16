@@ -792,14 +792,14 @@ export function FfFbsOrdersScreen({ token, authHeaders, sellers, isAdmin = false
                   <TableCell sx={{ minWidth: 300 }}>Заказ и сканирование</TableCell>
                   <TableCell sx={{ minWidth: 170 }}>Селлер</TableCell>
                   <TableCell sx={{ minWidth: 220 }}>Склад селлера / WB</TableCell>
-                  <TableCell sx={{ minWidth: 130 }}>Создан WB</TableCell>
+                  <TableCell sx={{ minWidth: 130 }}>Создан WB / в сборке</TableCell>
                 </>
               ) : (
                 <>
                   <TableCell sx={{ minWidth: 270 }}>Товар</TableCell>
                   <TableCell sx={{ minWidth: 125 }}>Селлер</TableCell>
                   <TableCell sx={{ minWidth: 150 }}>Склад селлера / WB</TableCell>
-                  <TableCell sx={{ minWidth: 150 }}>Создан WB</TableCell>
+                  <TableCell sx={{ minWidth: 150 }}>Создан WB / в сборке</TableCell>
                   <TableCell sx={{ minWidth: 130 }}>Статус</TableCell>
                 </>
               )}
