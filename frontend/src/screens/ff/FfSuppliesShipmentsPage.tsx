@@ -2956,9 +2956,9 @@ export function FfSuppliesShipmentsPage({
                   }
                   onClick={() => void submitDoc()}
                   data-testid="ff-supplies-doc-submit"
-	                >
-		                  Утвердить
-	                </Button>
+                >
+                  Утвердить
+                </Button>
                 {mpSubmitted ? (
                   <Button
                     variant="outlined"
@@ -2972,35 +2972,35 @@ export function FfSuppliesShipmentsPage({
                 ) : null}
               </>
             ) : null}
-	            {docModal === 'marketplace_unload' && unloadDetail && mpExecutionPhase ? (
-	              <>
-		                {mpNextStep ? (
-		                  <Button
-		                    variant="contained"
-	                    color="primary"
-	                    endIcon={<ArrowForwardOutlined fontSize="small" />}
-	                    disabled={modalBusy}
-	                    onClick={() => setMpUnloadTab(mpNextStep)}
-	                    data-testid="ff-mp-next-step"
-		                  >
-		                    Далее: {mpUnloadStepLabel(mpNextStep)}
-		                  </Button>
-		                ) : (
-		                  <Button
-		                    variant="contained"
-		                    color="primary"
-		                    disabled={
-		                      modalBusy ||
-		                      (mpCollectSummary?.distributed ?? 0) < 1 ||
-		                      !mpPackagingComplete
-		                    }
-		                    onClick={() => requestShipMpUnload()}
-		                    data-testid="ff-mp-ship"
-		                  >
-		                    Завершить
-		                  </Button>
-		                )}
-	                {mpCancellable ? (
+            {docModal === 'marketplace_unload' && unloadDetail && mpExecutionPhase ? (
+              <>
+                {mpNextStep ? (
+                  <Button
+                    variant="contained"
+                    color="primary"
+                    endIcon={<ArrowForwardOutlined fontSize="small" />}
+                    disabled={modalBusy}
+                    onClick={() => setMpUnloadTab(mpNextStep)}
+                    data-testid="ff-mp-next-step"
+                  >
+                    Далее: {mpUnloadStepLabel(mpNextStep)}
+                  </Button>
+                ) : (
+                  <Button
+                    variant="contained"
+                    color="primary"
+                    disabled={
+                      modalBusy ||
+                      (mpCollectSummary?.distributed ?? 0) < 1 ||
+                      !mpPackagingComplete
+                    }
+                    onClick={() => requestShipMpUnload()}
+                    data-testid="ff-mp-ship"
+                  >
+                    Завершить
+                  </Button>
+                )}
+                {mpCancellable ? (
                   <Button
                     variant="outlined"
                     color="error"

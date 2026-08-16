@@ -550,30 +550,30 @@ export function FfSettingsScreen({
               >
                 <Table size="small" data-testid="ff-staff-table">
                   <TableHead>
-	                    <TableRow>
-	                      <TableCell sx={{ minWidth: 220 }}>Email</TableCell>
-	                      {FF_STAFF_ACCESS_BLOCKS.map((block) => (
-	                        <TableCell key={block.key} align="center" sx={{ minWidth: 116 }}>
+                    <TableRow>
+                      <TableCell sx={{ minWidth: 220 }}>Email</TableCell>
+                      {FF_STAFF_ACCESS_BLOCKS.map((block) => (
+                        <TableCell key={block.key} align="center" sx={{ minWidth: 116 }}>
                           <Typography variant="caption" sx={{ fontWeight: 600, lineHeight: 1.2 }}>
                             {block.label}
                           </Typography>
-	                        </TableCell>
-	                      ))}
-	                      {isFulfillmentAdmin ? (
-	                        <>
-	                          <TableCell align="right" sx={{ minWidth: 120 }}>
-	                            Ставка за ед., ₽
-	                          </TableCell>
-	                          <TableCell align="right" sx={{ minWidth: 110 }}>
-	                            Упаковано, шт
-	                          </TableCell>
-	                          <TableCell align="right" sx={{ minWidth: 110 }}>
-	                            Начислено, ₽
-	                          </TableCell>
-	                        </>
-	                      ) : null}
-	                    </TableRow>
-	                  </TableHead>
+                        </TableCell>
+                      ))}
+                      {isFulfillmentAdmin ? (
+                        <>
+                          <TableCell align="right" sx={{ minWidth: 120 }}>
+                            Ставка за ед., ₽
+                          </TableCell>
+                          <TableCell align="right" sx={{ minWidth: 110 }}>
+                            Упаковано, шт
+                          </TableCell>
+                          <TableCell align="right" sx={{ minWidth: 110 }}>
+                            Начислено, ₽
+                          </TableCell>
+                        </>
+                      ) : null}
+                    </TableRow>
+                  </TableHead>
                   <TableBody>
                     {rows.map((row) => {
                       const access = ffPermissionsToStaffAccess(row.permissions)
@@ -600,8 +600,8 @@ export function FfSettingsScreen({
                               {row.must_set_password ? 'ожидает первый вход' : 'сотрудник'}
                             </Typography>
                           </TableCell>
-	                          {FF_STAFF_ACCESS_BLOCKS.map((block) => (
-	                            <TableCell key={block.key} align="center" padding="checkbox">
+                          {FF_STAFF_ACCESS_BLOCKS.map((block) => (
+                            <TableCell key={block.key} align="center" padding="checkbox">
                               <Checkbox
                                 size="small"
                                 checked={access[block.key]}
@@ -618,57 +618,57 @@ export function FfSettingsScreen({
                                   void onTogglePermission(row, block.key, e.target.checked)
                                 }
                               />
-	                            </TableCell>
-	                          ))}
-	                          {isFulfillmentAdmin ? (
-	                            <>
-	                              <TableCell align="right">
-	                                <TextField
-	                                  size="small"
-	                                  type="number"
-	                                  inputMode="decimal"
-	                                  value={rateDrafts[row.id] ?? row.packaging_rate_rub ?? '0.00'}
-	                                  disabled={rateBusyId === row.id}
-	                                  onChange={(e) =>
-	                                    setRateDrafts((prev) => ({
-	                                      ...prev,
-	                                      [row.id]: e.target.value,
-	                                    }))
-	                                  }
-	                                  onBlur={() => {
-	                                    const draft = rateDrafts[row.id]
-	                                    if (draft !== undefined && draft !== row.packaging_rate_rub) {
-	                                      void savePackagingRate(row)
-	                                    }
-	                                  }}
-	                                  onKeyDown={(e) => {
-	                                    if (e.key === 'Enter') {
-	                                      e.preventDefault()
-	                                      void savePackagingRate(row)
-	                                    }
-	                                  }}
-	                                  slotProps={{
-	                                    htmlInput: {
-	                                      'data-testid': `ff-staff-rate-${row.id}`,
-	                                      min: 0,
-	                                      step: 0.01,
-	                                      style: { textAlign: 'right' },
-	                                    },
-	                                  }}
-	                                  sx={{ width: 108 }}
-	                                />
-	                              </TableCell>
-	                              <TableCell align="right" data-testid={`ff-staff-units-${row.id}`}>
-	                                {row.packaging_billing?.units_packed ?? 0}
-	                              </TableCell>
-	                              <TableCell align="right" data-testid={`ff-staff-earned-${row.id}`}>
-	                                {formatRubDisplay(row.packaging_billing?.earned_rub ?? '0')}
-	                              </TableCell>
-	                            </>
-	                          ) : null}
-	                        </TableRow>
-	                      )
-	                    })}
+                            </TableCell>
+                          ))}
+                          {isFulfillmentAdmin ? (
+                            <>
+                              <TableCell align="right">
+                                <TextField
+                                  size="small"
+                                  type="number"
+                                  inputMode="decimal"
+                                  value={rateDrafts[row.id] ?? row.packaging_rate_rub ?? '0.00'}
+                                  disabled={rateBusyId === row.id}
+                                  onChange={(e) =>
+                                    setRateDrafts((prev) => ({
+                                      ...prev,
+                                      [row.id]: e.target.value,
+                                    }))
+                                  }
+                                  onBlur={() => {
+                                    const draft = rateDrafts[row.id]
+                                    if (draft !== undefined && draft !== row.packaging_rate_rub) {
+                                      void savePackagingRate(row)
+                                    }
+                                  }}
+                                  onKeyDown={(e) => {
+                                    if (e.key === 'Enter') {
+                                      e.preventDefault()
+                                      void savePackagingRate(row)
+                                    }
+                                  }}
+                                  slotProps={{
+                                    htmlInput: {
+                                      'data-testid': `ff-staff-rate-${row.id}`,
+                                      min: 0,
+                                      step: 0.01,
+                                      style: { textAlign: 'right' },
+                                    },
+                                  }}
+                                  sx={{ width: 108 }}
+                                />
+                              </TableCell>
+                              <TableCell align="right" data-testid={`ff-staff-units-${row.id}`}>
+                                {row.packaging_billing?.units_packed ?? 0}
+                              </TableCell>
+                              <TableCell align="right" data-testid={`ff-staff-earned-${row.id}`}>
+                                {formatRubDisplay(row.packaging_billing?.earned_rub ?? '0')}
+                              </TableCell>
+                            </>
+                          ) : null}
+                        </TableRow>
+                      )
+                    })}
                   </TableBody>
                 </Table>
               </TableContainer>
@@ -731,26 +731,26 @@ export function FfSettingsScreen({
             >
               {permSavedNotice}
             </Alert>
-	          </Snackbar>
+          </Snackbar>
 
-	          <Snackbar
-	            open={rateSavedNotice !== null}
-	            autoHideDuration={2500}
-	            onClose={() => setRateSavedNotice(null)}
-	            anchorOrigin={{ vertical: 'bottom', horizontal: 'center' }}
-	          >
-	            <Alert
-	              severity="success"
-	              variant="filled"
-	              onClose={() => setRateSavedNotice(null)}
-	              data-testid="ff-staff-rate-saved"
-	              sx={{ width: '100%' }}
-	            >
-	              {rateSavedNotice}
-	            </Alert>
-	          </Snackbar>
-	        </Box>
-	      )}
+          <Snackbar
+            open={rateSavedNotice !== null}
+            autoHideDuration={2500}
+            onClose={() => setRateSavedNotice(null)}
+            anchorOrigin={{ vertical: 'bottom', horizontal: 'center' }}
+          >
+            <Alert
+              severity="success"
+              variant="filled"
+              onClose={() => setRateSavedNotice(null)}
+              data-testid="ff-staff-rate-saved"
+              sx={{ width: '100%' }}
+            >
+              {rateSavedNotice}
+            </Alert>
+          </Snackbar>
+        </Box>
+      )}
     </Box>
   )
 }
