@@ -93,7 +93,7 @@ test('FF packaging page: create from sorting and pack line', async ({ page }) =>
   await page.request.post(`${baseIn}/${inboundId}/verify`, { headers: auth });
   await page.request.post(`${baseIn}/${inboundId}/post`, { headers: auth });
 
-  await page.getByTestId('nav-ff-packaging').click();
+  await page.goto('/app/ff/packaging');
   await expect(page.getByTestId('ff-packaging-page')).toBeVisible();
   await expect.poll(
     async () => page.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth),
@@ -319,7 +319,7 @@ test('FF packaging page: create from storage cell', async ({ page }) => {
   await page.request.post(`${baseIn}/${inboundId}/verify`, { headers: auth });
   await page.request.post(`${baseIn}/${inboundId}/post`, { headers: auth });
 
-  await page.getByTestId('nav-ff-packaging').click();
+  await page.goto('/app/ff/packaging');
   await page.getByTestId('ff-packaging-create-open').click();
   await page.getByTestId('ff-packaging-create-warehouse').click();
   await page.getByRole('option', { name: 'WH' }).click();
@@ -402,7 +402,7 @@ test('FF packaging page: cancel manual task', async ({ page }) => {
   await page.request.post(`${baseIn}/${inboundId}/verify`, { headers: auth });
   await page.request.post(`${baseIn}/${inboundId}/post`, { headers: auth });
 
-  await page.getByTestId('nav-ff-packaging').click();
+  await page.goto('/app/ff/packaging');
   await page.getByTestId('ff-packaging-create-open').click();
   await page.getByTestId('ff-packaging-create-warehouse').click();
   await page.getByRole('option', { name: 'WH' }).click();

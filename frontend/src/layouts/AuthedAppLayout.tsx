@@ -226,11 +226,6 @@ export function AuthedAppLayout({
                 <ListItemText primary="Отгрузки" />
               </ListItemButton>
             ) : null}
-            {canPackaging ? (
-              <ListItemButton component={NavLink} to={`${base}/packaging`} data-testid="nav-ff-packaging" data-task-id="NAV-01">
-                <ListItemText primary="Упаковка" />
-              </ListItemButton>
-            ) : null}
             {canCatalogCells ? (
               <ListItemButton component={NavLink} to="/app/catalog" data-testid="nav-catalog" data-task-id="NAV-01">
                 <ListItemText primary={isAdmin ? 'Ячейки' : 'Каталог и ячейки'} />
@@ -257,7 +252,7 @@ export function AuthedAppLayout({
               </ListItemButton>
             ) : null}
           </List>
-          {/* NAV-01: календарь и настройки прижаты к низу, но список выше остаётся плотным */}
+          {/* NAV-01: календарь, настройки и упаковка прижаты к низу, но список выше остаётся плотным */}
           <List dense aria-label="Разделы ФФ, нижние" sx={{ mt: 'auto' }}>
             <ListItemButton
               component={NavLink}
@@ -270,6 +265,11 @@ export function AuthedAppLayout({
             {can('settings') || isAdmin ? (
               <ListItemButton component={NavLink} to={`${base}/settings`} data-testid="nav-ff-settings" data-task-id="NAV-01">
                 <ListItemText primary="Настройки" />
+              </ListItemButton>
+            ) : null}
+            {canPackaging ? (
+              <ListItemButton component={NavLink} to={`${base}/packaging`} data-testid="nav-ff-packaging" data-task-id="NAV-01">
+                <ListItemText primary="Упаковка" />
               </ListItemButton>
             ) : null}
           </List>

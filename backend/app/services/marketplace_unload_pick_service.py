@@ -6,7 +6,7 @@ import uuid
 from dataclasses import dataclass
 from typing import Literal
 
-from sqlalchemy import select
+from sqlalchemy import or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
@@ -118,7 +118,7 @@ async def find_location_by_barcode(
     stmt = select(StorageLocation).where(
         StorageLocation.tenant_id == tenant_id,
         StorageLocation.warehouse_id == warehouse_id,
-        StorageLocation.barcode == raw,
+        or_(StorageLocation.barcode == raw, StorageLocation.code == raw),
     )
     res = await session.execute(stmt)
     return res.scalar_one_or_none()
@@ -247,9 +247,9 @@ async def pick_scan(
 
     from app.services import marketplace_unload_collect_service as collect_svc
 
-    open_box = await collect_svc.get_open_box(session, request_id)
-    if open_box is None:
-        raise MarketplaceUnloadPickError("open_box_required")
+    open_box = await collect_svc.get_or_create_open_box(
+        session, tenant_id, request_id, req.warehouse_id
+    )
 
     if req.seller_id is None:
         raise MarketplaceUnloadPickError("seller_required")
@@ -292,9 +292,9 @@ async def save_pick_allocations(
 
     from app.services import marketplace_unload_collect_service as collect_svc
 
-    open_box = await collect_svc.get_open_box(session, request_id)
-    if open_box is None:
-        raise MarketplaceUnloadPickError("open_box_required")
+    open_box = await collect_svc.get_or_create_open_box(
+        session, tenant_id, request_id, req.warehouse_id
+    )
 
     merged: dict[tuple[uuid.UUID, uuid.UUID | None], int] = {}
     for row in rows:

@@ -62,6 +62,37 @@ async def get_open_box(
     return res.scalar_one_or_none()
 
 
+DEFAULT_PICK_BOX_PRESET = "60_40_40"
+
+
+async def get_or_create_open_box(
+    session: AsyncSession,
+    tenant_id: uuid.UUID,
+    request_id: uuid.UUID,
+    warehouse_id: uuid.UUID,
+) -> MarketplaceUnloadBox:
+    """Подбор больше не требует, чтобы оператор открывал короб вручную (итерация
+    2026-08-14, MP/FBO пункт 3): состав короба определяется на упаковке. Короб как
+    внутренний контейнер для подобранного количества создаётся прозрачно, если его
+    ещё нет."""
+    existing = await get_open_box(session, request_id)
+    if existing is not None:
+        return existing
+    from app.services import warehouse_box_service as wh_box_svc
+
+    wh_box = await wh_box_svc.create_warehouse_box(
+        session, tenant_id, warehouse_id=warehouse_id
+    )
+    box = MarketplaceUnloadBox(
+        request_id=request_id,
+        box_preset=DEFAULT_PICK_BOX_PRESET,
+        warehouse_box_id=wh_box.id,
+    )
+    session.add(box)
+    await session.flush()
+    return box
+
+
 async def _request_for_collect(
     session: AsyncSession, tenant_id: uuid.UUID, request_id: uuid.UUID
 ) -> MarketplaceUnloadRequest:
@@ -187,9 +218,7 @@ async def collect_into_box(
         if require_open_box and box.closed_at is not None:
             raise MarketplaceUnloadPickError("box_closed")
     else:
-        box = await get_open_box(session, request_id)
-        if box is None:
-            raise MarketplaceUnloadPickError("open_box_required")
+        box = await get_or_create_open_box(session, tenant_id, request_id, req.warehouse_id)
         box_id = box.id
 
     prod = await session.get(Product, product_id)

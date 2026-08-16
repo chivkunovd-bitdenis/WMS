@@ -93,7 +93,7 @@ test('FF packaging: marking print constructor shortage and pairs preview', async
   await page.request.post(`${baseIn}/${inboundId}/verify`, { headers: auth })
   await page.request.post(`${baseIn}/${inboundId}/post`, { headers: auth })
 
-  await page.getByTestId('nav-ff-packaging').click()
+  await page.goto('/app/ff/packaging')
   await page.getByTestId('ff-packaging-create-open').click()
   await page.getByTestId('ff-packaging-create-warehouse').click()
   await page.getByRole('option', { name: 'WH Short' }).click()

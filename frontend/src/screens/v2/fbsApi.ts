@@ -1407,6 +1407,9 @@ export type FbsOrdersSyncOutcome = {
   ordersReceived: number
   ordersCreated: number
   ordersUpserted: number
+  supplyLinkSkippedUnmappedWarehouse: number
+  supplyLinkSkippedUnmappedWarehouseSupplyIds: string[]
+  supplyLinkSkippedWarehouseMismatchOrders: number
 }
 
 export async function startFbsOrdersSync(
@@ -1440,6 +1443,12 @@ const JOB_FAILED_STATUSES = new Set(['failed'])
 function readCount(result: Record<string, unknown> | null, key: string): number {
   const value = result?.[key]
   return typeof value === 'number' ? value : 0
+}
+
+function readStringArray(result: Record<string, unknown> | null, key: string): string[] {
+  const value = result?.[key]
+  if (!Array.isArray(value)) return []
+  return value.every((item) => typeof item === 'string') ? value : []
 }
 
 /** Ждёт завершения фоновой задачи, опрашивая её раз в секунду. */
@@ -1479,6 +1488,9 @@ export async function runFbsOrdersSync(
     ordersReceived: readCount(job.result_json, 'orders_received'),
     ordersCreated: readCount(job.result_json, 'orders_created'),
     ordersUpserted: readCount(job.result_json, 'orders_upserted'),
+    supplyLinkSkippedUnmappedWarehouse: readCount(job.result_json, 'supply_link_skipped_unmapped_warehouse'),
+    supplyLinkSkippedUnmappedWarehouseSupplyIds: readStringArray(job.result_json, 'supply_link_skipped_unmapped_warehouse_supply_ids'),
+    supplyLinkSkippedWarehouseMismatchOrders: readCount(job.result_json, 'supply_link_skipped_warehouse_mismatch_orders'),
   }
 }
 

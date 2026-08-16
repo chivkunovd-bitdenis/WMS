@@ -987,6 +987,146 @@
         }
       }
     },
+    "/operations/fbs-sellers/{seller_id}/warehouse-bindings/{wb_warehouse_id}/stock-pool": {
+      "get": {
+        "tags": [
+          "operations"
+        ],
+        "summary": "List Fbs Binding Stock Pool",
+        "operationId": "list_fbs_binding_stock_pool_operations_fbs_sellers__seller_id__warehouse_bindings__wb_warehouse_id__stock_pool_get",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "seller_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Seller Id"
+            }
+          },
+          {
+            "name": "wb_warehouse_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "exclusiveMinimum": 0,
+              "title": "Wb Warehouse Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/FbsStockPoolProductOut"
+                  },
+                  "title": "Response List Fbs Binding Stock Pool Operations Fbs Sellers  Seller Id  Warehouse Bindings  Wb Warehouse Id  Stock Pool Get"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/operations/fbs-sellers/{seller_id}/warehouse-bindings/{wb_warehouse_id}/stock-pool/{product_id}": {
+      "put": {
+        "tags": [
+          "operations"
+        ],
+        "summary": "Set Fbs Binding Stock Pool Quantity",
+        "operationId": "set_fbs_binding_stock_pool_quantity_operations_fbs_sellers__seller_id__warehouse_bindings__wb_warehouse_id__stock_pool__product_id__put",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "seller_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Seller Id"
+            }
+          },
+          {
+            "name": "wb_warehouse_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "exclusiveMinimum": 0,
+              "title": "Wb Warehouse Id"
+            }
+          },
+          {
+            "name": "product_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Product Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/FbsStockPoolSetBody"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FbsStockPoolSetOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/operations/fbs-sellers/{seller_id}/stocks/sync": {
       "post": {
         "tags": [
@@ -6592,6 +6732,107 @@
         ],
         "title": "FbsStickersOut"
       },
+      "FbsStockPoolProductOut": {
+        "properties": {
+          "product_id": {
+            "type": "string",
+            "title": "Product Id"
+          },
+          "sku_code": {
+            "type": "string",
+            "title": "Sku Code"
+          },
+          "name": {
+            "type": "string",
+            "title": "Name"
+          },
+          "wb_chrt_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Wb Chrt Id"
+          },
+          "pool_limit": {
+            "type": "integer",
+            "title": "Pool Limit"
+          },
+          "allocated_this_binding": {
+            "type": "integer",
+            "title": "Allocated This Binding"
+          },
+          "allocated_elsewhere": {
+            "type": "integer",
+            "title": "Allocated Elsewhere"
+          },
+          "available_for_this_binding": {
+            "type": "integer",
+            "title": "Available For This Binding"
+          }
+        },
+        "type": "object",
+        "required": [
+          "product_id",
+          "sku_code",
+          "name",
+          "wb_chrt_id",
+          "pool_limit",
+          "allocated_this_binding",
+          "allocated_elsewhere",
+          "available_for_this_binding"
+        ],
+        "title": "FbsStockPoolProductOut"
+      },
+      "FbsStockPoolSetBody": {
+        "properties": {
+          "quantity": {
+            "type": "integer",
+            "title": "Quantity"
+          }
+        },
+        "type": "object",
+        "required": [
+          "quantity"
+        ],
+        "title": "FbsStockPoolSetBody"
+      },
+      "FbsStockPoolSetOut": {
+        "properties": {
+          "product_id": {
+            "type": "string",
+            "title": "Product Id"
+          },
+          "quantity": {
+            "type": "integer",
+            "title": "Quantity"
+          },
+          "pool_limit": {
+            "type": "integer",
+            "title": "Pool Limit"
+          },
+          "allocated_total": {
+            "type": "integer",
+            "title": "Allocated Total"
+          },
+          "available": {
+            "type": "integer",
+            "title": "Available"
+          }
+        },
+        "type": "object",
+        "required": [
+          "product_id",
+          "quantity",
+          "pool_limit",
+          "allocated_total",
+          "available"
+        ],
+        "title": "FbsStockPoolSetOut"
+      },
       "FbsStockSyncBody": {
         "properties": {
           "wb_warehouse_id": {
@@ -7849,6 +8090,11 @@
               }
             ],
             "title": "Last Error Code"
+          },
+          "allocated_pool_total": {
+            "type": "integer",
+            "title": "Allocated Pool Total",
+            "default": 0
           }
         },
         "type": "object",
@@ -12861,12 +13107,17 @@
           "unlinked_available_count": {
             "type": "integer",
             "title": "Unlinked Available Count"
+          },
+          "defective_count": {
+            "type": "integer",
+            "title": "Defective Count"
           }
         },
         "type": "object",
         "required": [
           "rows",
-          "unlinked_available_count"
+          "unlinked_available_count",
+          "defective_count"
         ],
         "title": "MarkingInventoryOut"
       },
@@ -15140,6 +15391,10 @@
             "type": "string",
             "title": "Id"
           },
+          "cis_code": {
+            "type": "string",
+            "title": "Cis Code"
+          },
           "cis_masked": {
             "type": "string",
             "title": "Cis Masked"
@@ -15152,6 +15407,7 @@
         "type": "object",
         "required": [
           "id",
+          "cis_code",
           "cis_masked",
           "status"
         ],
@@ -18199,6 +18455,17 @@
             "type": "boolean",
             "title": "Has Marketplace Token"
           },
+          "marketplace_scope_ok": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Marketplace Scope Ok"
+          },
           "updated_at": {
             "anyOf": [
               {
@@ -18217,6 +18484,7 @@
           "has_content_token",
           "has_supplies_token",
           "has_marketplace_token",
+          "marketplace_scope_ok",
           "updated_at"
         ],
         "title": "WildberriesSelfTokensOut"
@@ -18239,6 +18507,17 @@
             "type": "boolean",
             "title": "Has Marketplace Token"
           },
+          "marketplace_scope_ok": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Marketplace Scope Ok"
+          },
           "updated_at": {
             "anyOf": [
               {
@@ -18258,6 +18537,7 @@
           "has_content_token",
           "has_supplies_token",
           "has_marketplace_token",
+          "marketplace_scope_ok",
           "updated_at"
         ],
         "title": "WildberriesSellerTokensOut"

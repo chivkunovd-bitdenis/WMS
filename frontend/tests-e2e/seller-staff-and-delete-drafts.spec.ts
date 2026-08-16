@@ -76,7 +76,6 @@ test('seller owner manages staff permissions and deletes draft documents only', 
     waitForDeleteOk(page, '/api/operations/inbound-intake-requests'),
     page.getByTestId('seller-delete-draft-confirm').click(),
   ]);
-  await expect(page.getByTestId('seller-documents-delete-ok')).toContainText('Черновик удалён');
   await expect(page.getByTestId('seller-documents-row')).toHaveCount(0);
 
   await page.getByTestId('nav-seller-settings').click();

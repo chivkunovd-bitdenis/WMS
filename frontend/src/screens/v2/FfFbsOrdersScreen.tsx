@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { useLocation } from 'react-router-dom'
+import { useLocation, useNavigate } from 'react-router-dom'
 import {
   Alert,
   Box,
@@ -13,6 +13,7 @@ import {
   DialogTitle,
   FormControl,
   InputLabel,
+  Link,
   InputAdornment,
   MenuItem,
   Paper,
@@ -67,6 +68,7 @@ type Props = {
 
 const TABS = [
   { key: 'new', label: 'Новые' },
+  { key: 'expired', label: 'Просрочены' },
   { key: 'active', label: 'В работе' },
   { key: 'delivery', label: 'В доставке' },
   { key: 'done', label: 'Завершённые' },
@@ -108,6 +110,39 @@ function MissingText({ children }: { children: string }) {
       {children}
     </Typography>
   )
+}
+
+// BL-4 (16.08, FBS-02): блокер "склад WB не привязан" — не просто упрёк, а понятная
+// подсказка с действием. Привязка делается на соседней вкладке «Остатки WB» того же
+// раздела FBS, поэтому клик по подписи ведёт туда через тот же react-router, которым
+// пользуется FfFbsSectionNav.
+function BlockerLine({
+  blocker,
+  onGoToStockSync,
+}: {
+  blocker: { code: string; message: string }
+  onGoToStockSync: () => void
+}) {
+  if (blocker.code === 'warehouse_unmapped') {
+    return (
+      <Link
+        component="button"
+        type="button"
+        color="error"
+        underline="hover"
+        sx={{ fontWeight: 650, fontSize: '0.75rem', textAlign: 'left' }}
+        onClick={(event) => {
+          event.stopPropagation()
+          onGoToStockSync()
+        }}
+        data-testid="fbs-warehouse-unmapped-link"
+        data-task-id="FBS-02"
+      >
+        Склад WB не привязан — привязать на «Остатках WB»
+      </Link>
+    )
+  }
+  return <MissingText>{blocker.message}</MissingText>
 }
 
 function MetadataState({ order }: { order: FbsWorklistOrder }) {
@@ -257,6 +292,7 @@ function downloadOrdersExcel(rows: FbsWorklistOrder[]): void {
 
 export function FfFbsOrdersScreen({ token, authHeaders, sellers, isAdmin = false }: Props) {
   const location = useLocation()
+  const navigate = useNavigate()
   const [statusGroup, setStatusGroup] = useState<(typeof TABS)[number]['key']>('new')
   const [sellerId, setSellerId] = useState('__all__')
   const [wbWarehouseId, setWbWarehouseId] = useState('__all__')
@@ -278,6 +314,7 @@ export function FfFbsOrdersScreen({ token, authHeaders, sellers, isAdmin = false
   const [syncing, setSyncing] = useState(false)
   const [syncNote, setSyncNote] = useState<string | null>(null)
   const [syncError, setSyncError] = useState<string | null>(null)
+  const [syncWarning, setSyncWarning] = useState<string | null>(null)
   const [createOpen, setCreateOpen] = useState(false)
   const [addExistingOpen, setAddExistingOpen] = useState(false)
   const [addExistingSupplyId, setAddExistingSupplyId] = useState('')
@@ -409,9 +446,13 @@ export function FfFbsOrdersScreen({ token, authHeaders, sellers, isAdmin = false
     setError(null)
     setSyncNote(null)
     setSyncError(null)
+    setSyncWarning(null)
     let received = 0
     let created = 0
     let statusesUpdated = 0
+    let skippedUnmappedWarehouse = 0
+    let skippedMismatchOrders = 0
+    const skippedSupplyIds: string[] = []
     const failures: string[] = []
     for (const targetSellerId of syncTargets) {
       const sellerName = sellers.find((seller) => seller.id === targetSellerId)?.name ?? 'селлер'
@@ -419,6 +460,9 @@ export function FfFbsOrdersScreen({ token, authHeaders, sellers, isAdmin = false
         const outcome = await runFbsOrdersSync(token, authHeaders, targetSellerId)
         received += outcome.ordersReceived
         created += outcome.ordersCreated
+        skippedUnmappedWarehouse += outcome.supplyLinkSkippedUnmappedWarehouse
+        skippedMismatchOrders += outcome.supplyLinkSkippedWarehouseMismatchOrders
+        skippedSupplyIds.push(...outcome.supplyLinkSkippedUnmappedWarehouseSupplyIds)
       } catch (cause) {
         failures.push(`${sellerName}: ${cause instanceof Error ? cause.message : 'ошибка синхронизации'}`)
         continue
@@ -440,6 +484,25 @@ export function FfFbsOrdersScreen({ token, authHeaders, sellers, isAdmin = false
       setSyncNote(
         `WB отдал заказов: ${received}, из них новых: ${created}. Обновлено статусов: ${statusesUpdated}.`,
       )
+      // Предупреждение о пропущенных поставках из-за непривязанных складов.
+      if (skippedUnmappedWarehouse > 0) {
+        const displayedSupplyIds = skippedSupplyIds.slice(0, 5)
+        const displayedIds = displayedSupplyIds.join(', ')
+        const remaining = skippedSupplyIds.length - displayedSupplyIds.length
+        const supplyWord = plural(skippedUnmappedWarehouse, ['поставка', 'поставки', 'поставок'])
+        let supplyWarning = `Из кабинета WB не подхватилось ${skippedUnmappedWarehouse} ${supplyWord} — у их складов нет привязки к WMS. Номера: ${displayedIds}`
+        if (remaining > 0) {
+          supplyWarning += `, и ещё ${remaining}.`
+        } else {
+          supplyWarning += '.'
+        }
+        supplyWarning += ' Привязка делается на вкладке «Остатки WB».'
+        if (skippedMismatchOrders > 0) {
+          const orderWord = plural(skippedMismatchOrders, ['заказ', 'заказа', 'заказов'])
+          supplyWarning += ` Кроме того, ${skippedMismatchOrders} ${orderWord} не привязались к своим поставкам из-за несовпадения склада.`
+        }
+        setSyncWarning(supplyWarning)
+      }
     }
     await load()
   }, [syncTargets, sellers, token, authHeaders, load])
@@ -666,7 +729,9 @@ export function FfFbsOrdersScreen({ token, authHeaders, sellers, isAdmin = false
               key={tab.key}
               value={tab.key}
               label={tab.label}
-              data-task-id={tab.key === 'cancelled' ? 'FBS-06' : undefined}
+              data-task-id={
+                tab.key === 'cancelled' ? 'FBS-06' : tab.key === 'expired' ? 'FBS-03' : undefined
+              }
             />
           ))}
         </Tabs>
@@ -783,6 +848,18 @@ export function FfFbsOrdersScreen({ token, authHeaders, sellers, isAdmin = false
           data-task-id="FBS-07"
         >
           {syncError}
+        </Alert>
+      ) : null}
+
+      {syncWarning ? (
+        <Alert
+          severity="warning"
+          sx={{ mt: 2 }}
+          onClose={() => setSyncWarning(null)}
+          data-testid="fbs-orders-sync-warning"
+          data-task-id="FBS-07"
+        >
+          {syncWarning}
         </Alert>
       ) : null}
 
@@ -978,7 +1055,11 @@ export function FfFbsOrdersScreen({ token, authHeaders, sellers, isAdmin = false
                             {blocked ? (
                               <Stack sx={{ mt: 0.75 }} spacing={0.25}>
                                 {order.selection_blockers.map((blocker) => (
-                                  <MissingText key={blocker.code}>{blocker.message}</MissingText>
+                                  <BlockerLine
+                                    key={blocker.code}
+                                    blocker={blocker}
+                                    onGoToStockSync={() => navigate('/app/ff/fbs/stock-sync')}
+                                  />
                                 ))}
                               </Stack>
                             ) : null}
@@ -1078,6 +1159,15 @@ export function FfFbsOrdersScreen({ token, authHeaders, sellers, isAdmin = false
                       <TableCell>
                         <FbsStatusChip status={order.status} />
                         <Stack sx={{ mt: 0.75, alignItems: 'flex-start' }} spacing={0.75}>
+                          {statusGroup === 'expired' ? (
+                            <Chip
+                              size="small"
+                              color="error"
+                              label="Срок сборки истёк"
+                              data-testid={`fbs-order-${order.id}-expired`}
+                              data-task-id="FBS-03"
+                            />
+                          ) : null}
                           {localSupplyMissing ? (
                             <Tooltip title={EXTERNAL_WB_SUPPLY_HINT}>
                               <Chip
@@ -1200,7 +1290,11 @@ export function FfFbsOrdersScreen({ token, authHeaders, sellers, isAdmin = false
                       {order.selection_blockers.length ? (
                         <Stack sx={{ mt: 0.5 }} spacing={0.25}>
                           {order.selection_blockers.map((blocker) => (
-                            <MissingText key={blocker.code}>{blocker.message}</MissingText>
+                            <BlockerLine
+                              key={blocker.code}
+                              blocker={blocker}
+                              onGoToStockSync={() => navigate('/app/ff/fbs/stock-sync')}
+                            />
                           ))}
                         </Stack>
                       ) : null}

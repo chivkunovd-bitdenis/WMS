@@ -62,6 +62,7 @@ import {
   buildInboundDiscrepancyLines,
   buildInboundReceivingTotals,
   effectiveActualQty,
+  formatBoxesCountLabel,
   inboundStatusRu,
   integerQtyError,
   isDoneStatus,
@@ -1888,8 +1889,7 @@ export function FfInboundRequestView({
                 <Typography variant="body2" color="text.secondary" data-testid="ff-inbound-boxes-summary">
                   Короба:{' '}
                   <strong data-testid="ff-inbound-planned-boxes">
-                    {receivingTotals.actualBoxes}
-                    {receivingTotals.plannedBoxes != null ? ` из ${receivingTotals.plannedBoxes}` : ''}
+                    {formatBoxesCountLabel(receivingTotals.actualBoxes, receivingTotals.plannedBoxes)}
                   </strong>
                 </Typography>
                 <Typography variant="body2" color="text.secondary" data-testid="ff-inbound-volume-summary">
@@ -3423,8 +3423,7 @@ export function FfInboundRequestView({
               data-testid="ff-inbound-discrepancy-box-summary"
             >
               <Typography variant="body2" sx={{ fontWeight: 700 }}>
-                Короба: {receivingTotals.actualBoxes}
-                {receivingTotals.plannedBoxes != null ? ` из ${receivingTotals.plannedBoxes}` : ''}
+                Короба: {formatBoxesCountLabel(receivingTotals.actualBoxes, receivingTotals.plannedBoxes)}
               </Typography>
               {receivingTotals.hasBoxDiscrepancy ? (
                 <Typography variant="body2" color="warning.dark">

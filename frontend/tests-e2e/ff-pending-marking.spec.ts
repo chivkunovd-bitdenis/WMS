@@ -79,7 +79,7 @@ test('FF pending marking worklist row disappears after print', async ({ page }) 
   await page.request.post(`${baseIn}/${inboundId}/verify`, { headers: auth })
   await page.request.post(`${baseIn}/${inboundId}/post`, { headers: auth })
 
-  await page.getByTestId('nav-ff-packaging').click()
+  await page.goto('/app/ff/packaging')
   await page.getByTestId('ff-packaging-create-open').click()
   await page.getByTestId('ff-packaging-create-warehouse').click()
   await page.getByRole('option', { name: 'WH Pnd' }).click()
@@ -191,7 +191,7 @@ test('FF pending marking shows no-codes owner handoff and task link', async ({ p
   await page.request.post(`${baseIn}/${inboundId}/verify`, { headers: auth })
   await page.request.post(`${baseIn}/${inboundId}/post`, { headers: auth })
 
-  await page.getByTestId('nav-ff-packaging').click()
+  await page.goto('/app/ff/packaging')
   await page.getByTestId('ff-packaging-create-open').click()
   await page.getByTestId('ff-packaging-create-warehouse').click()
   await page.getByRole('option', { name: 'WH No Codes' }).click()
@@ -305,7 +305,7 @@ test('FF pending marking bulk print selected rows', async ({ page }) => {
     await page.request.post(`${baseIn}/${inboundId}/post`, { headers: auth })
   }
 
-  await page.getByTestId('nav-ff-packaging').click()
+  await page.goto('/app/ff/packaging')
   await page.getByTestId('ff-packaging-create-open').click()
   await page.getByTestId('ff-packaging-create-warehouse').click()
   await page.getByRole('option', { name: 'WH Bulk' }).click()

@@ -276,16 +276,20 @@ export function FfMpUnloadPickPanel({
         </Button>
       </Stack>
 
-      {/* Сообщение о скане */}
-      {scanMessage && (
-        <Typography
-          variant="caption"
-          data-testid="ff-mp-pick-cell-scan-message"
-          sx={{ display: 'block', mb: 1, color: 'success.main' }}
-        >
-          {scanMessage}
-        </Typography>
-      )}
+      {/* Строка состояния сканера — всегда на экране, как в сортировке (ff-sorting-scan-message) */}
+      <Typography
+        variant="caption"
+        color="text.secondary"
+        data-testid="ff-mp-pick-cell-scan-message"
+        data-task-id="MPFBO-01"
+        sx={{ display: 'block', mb: 1 }}
+      >
+        {scanMessage
+          ? scanMessage
+          : activeLocationCode
+            ? `Сканер активен — пикните ШК товара для ячейки ${activeLocationCode}.`
+            : 'Сканер активен — пикните ШК ячейки или товара.'}
+      </Typography>
 
       {/* Загрузка */}
       {loading ? (

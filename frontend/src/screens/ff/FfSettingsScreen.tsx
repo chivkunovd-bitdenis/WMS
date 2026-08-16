@@ -27,7 +27,6 @@ import {
   type FfPermissions,
   type FfStaffAccessKey,
 } from '../../utils/ffPermissions'
-import { setSeparateMarkingPrintEnabled } from '../../utils/separateMarkingPrint'
 
 type StaffPackagingBilling = {
   billing_month: string
@@ -89,7 +88,8 @@ export function FfSettingsScreen({
   canManageStaff,
   addressStorageEnabled = true,
   onAddressStorageChange,
-  separateMarkingPrintEnabled = false,
+  // separateMarkingPrintEnabled больше не используется здесь: переключатель
+  // «раздельная печать ЧЗ/ШК» переехал на форму печати (MarkingPrintDialog, FBS-10).
   fbsShipmentCutoffTime = null,
 }: Props) {
   const [rows, setRows] = useState<StaffAccountRow[]>([])
@@ -102,8 +102,6 @@ export function FfSettingsScreen({
     message: string
     testId: string
   } | null>(null)
-  const [separatePrint, setSeparatePrint] = useState(separateMarkingPrintEnabled)
-  const [separatePrintBusy, setSeparatePrintBusy] = useState(false)
   const [fbsCutoff, setFbsCutoff] = useState(fbsShipmentCutoffTime ?? '')
   const [fbsCutoffSaved, setFbsCutoffSaved] = useState(fbsShipmentCutoffTime ?? '')
   const [fbsCutoffBusy, setFbsCutoffBusy] = useState(false)
@@ -147,10 +145,6 @@ export function FfSettingsScreen({
   useEffect(() => {
     setAddressStorage(addressStorageEnabled)
   }, [addressStorageEnabled])
-
-  useEffect(() => {
-    setSeparatePrint(separateMarkingPrintEnabled)
-  }, [separateMarkingPrintEnabled])
 
   useEffect(() => {
     setFbsCutoff(fbsShipmentCutoffTime ?? '')
@@ -318,36 +312,6 @@ export function FfSettingsScreen({
     }
   }
 
-  async function onSeparatePrintToggle(checked: boolean) {
-    if (!token || !isFulfillmentAdmin) {
-      return
-    }
-    const previous = separatePrint
-    setSeparatePrint(checked)
-    setSeparatePrintBusy(true)
-    setError(null)
-    try {
-      const res = await fetch(apiUrl('/tenant/settings'), {
-        method: 'PATCH',
-        headers: { ...authHeaders(token), 'Content-Type': 'application/json' },
-        body: JSON.stringify({ separate_marking_print_enabled: checked }),
-      })
-      if (!res.ok) {
-        setSeparatePrint(previous)
-        setError(await readApiErrorMessage(res))
-        return
-      }
-      const data = (await res.json()) as { separate_marking_print_enabled: boolean }
-      setSeparatePrint(data.separate_marking_print_enabled)
-      setSeparateMarkingPrintEnabled(data.separate_marking_print_enabled)
-    } catch (err) {
-      setSeparatePrint(previous)
-      setError(err instanceof Error ? err.message : 'Не удалось сохранить настройку печати.')
-    } finally {
-      setSeparatePrintBusy(false)
-    }
-  }
-
   async function onFbsCutoffSave(nextValue = fbsCutoff) {
     if (!token || !isFulfillmentAdmin) {
       return
@@ -420,26 +384,6 @@ export function FfSettingsScreen({
             />
             {addressStorageBusy ? <CircularProgress size={20} /> : null}
           </Stack>
-
-          <Box sx={{ mt: 3, pt: 2, borderTop: '1px solid', borderColor: 'divider' }}>
-            <Typography variant="body2" color="text.secondary" sx={{ mb: 1.5 }}>
-              В модалках печати — отдельные кнопки для ЧЗ и ШК ВБ со своими размерами этикеток (для складов, где ЧЗ и ШК печатаются на разных лентах).
-            </Typography>
-            <Stack direction="row" spacing={1} sx={{ alignItems: 'center' }}>
-              <FormControlLabel
-                control={
-                  <Checkbox
-                    checked={separatePrint}
-                    disabled={separatePrintBusy}
-                    onChange={(e) => void onSeparatePrintToggle(e.target.checked)}
-                    data-testid="ff-settings-separate-marking-print"
-                  />
-                }
-                label="Раздельная печать ЧЗ и ШК ВБ"
-              />
-              {separatePrintBusy ? <CircularProgress size={20} /> : null}
-            </Stack>
-          </Box>
 
           <Box sx={{ mt: 3, pt: 2, borderTop: '1px solid', borderColor: 'divider' }} data-testid="cal-03-fbs-cutoff-section" data-task-id="CAL-03">
             {/* GLOBAL-02: заголовок секции несёт название, поле ниже подписано просто «Время» */}

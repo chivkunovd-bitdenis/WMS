@@ -232,6 +232,18 @@ export function buildInboundReceivingTotals(
   }
 }
 
+/**
+ * Formats the "Короба: X из Y" summary. When actual boxes exceed the planned
+ * count, "X из Y" reads as nonsense ("2 out of 1"), so switch to an explicit
+ * "created more than planned" phrasing instead of keeping the "из" wording.
+ */
+export function formatBoxesCountLabel(actualBoxes: number, plannedBoxes: number | null): string {
+  if (plannedBoxes == null) return `${actualBoxes}`
+  if (actualBoxes <= plannedBoxes) return `${actualBoxes} из ${plannedBoxes}`
+  const over = actualBoxes - plannedBoxes
+  return `${actualBoxes} (план ${plannedBoxes}, создано больше на ${over})`
+}
+
 export function buildInboundDiscrepancyLines(
   lines: InboundLineRef[],
   boxes: InboundBoxRef[],

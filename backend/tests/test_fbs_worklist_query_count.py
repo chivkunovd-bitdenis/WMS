@@ -312,6 +312,47 @@ async def test_fbs_worklist_delivery_and_done_groups(async_client: AsyncClient) 
 
 
 @pytest.mark.asyncio
+async def test_fbs_worklist_new_and_expired_groups_split_by_deadline(async_client: AsyncClient) -> None:
+    """BL-3/FBS-03: заказ с истёкшим сроком сборки уходит из "new" в "expired",
+    статус в БД (FBS_ORDER_STATUS_NEW) не меняется."""
+    headers, seller_id, _, _, _, order_ids = await _setup_ff_admin_with_stock(
+        async_client, order_count=2
+    )
+    fresh_id, expired_id = order_ids[0], order_ids[1]
+
+    async with SessionLocal() as session:
+        expired_order = await session.get(FbsOrder, expired_id)
+        assert expired_order is not None
+        expired_order.deadline_at = datetime.now(tz=UTC) - timedelta(hours=1)
+        await session.commit()
+
+    new_resp = await async_client.get(
+        "/operations/fbs-orders/worklist",
+        headers=headers,
+        params={"seller_id": str(seller_id), "status_group": "new"},
+    )
+    assert new_resp.status_code == 200, new_resp.text
+    assert {item["id"] for item in new_resp.json()["items"]} == {str(fresh_id)}
+
+    expired_resp = await async_client.get(
+        "/operations/fbs-orders/worklist",
+        headers=headers,
+        params={"seller_id": str(seller_id), "status_group": "expired"},
+    )
+    assert expired_resp.status_code == 200, expired_resp.text
+    expired_items = expired_resp.json()["items"]
+    assert {item["id"] for item in expired_items} == {str(expired_id)}
+    assert any(
+        blocker["code"] == "deadline_passed" for blocker in expired_items[0]["selection_blockers"]
+    )
+
+    async with SessionLocal() as session:
+        expired_order_check = await session.get(FbsOrder, expired_id)
+        assert expired_order_check is not None
+        assert expired_order_check.status == FBS_ORDER_STATUS_NEW
+
+
+@pytest.mark.asyncio
 async def test_fbs_worklist_filters_new_orders_by_warehouse(async_client: AsyncClient) -> None:
     """TC-S17-025: worklist filters new orders by seller warehouse."""
     (

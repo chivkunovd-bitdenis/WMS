@@ -43,6 +43,10 @@ class ConfirmPackedIn(BaseModel):
     quantity: StrictInt | None = Field(default=None, ge=0, le=1_000_000_000)
 
 
+class PrepackedExternalIn(BaseModel):
+    quantity: StrictInt = Field(ge=1, le=1_000_000_000)
+
+
 class PackProgressIn(BaseModel):
     quantity: StrictInt = Field(ge=1, le=1_000_000_000)
     order_id: uuid.UUID | None = None
@@ -92,6 +96,7 @@ class PackagingTaskLineOut(BaseModel):
     qty_packed_in_task: int
     qty_done: int
     qty_marking_printed: int
+    qty_marking_external: int
     qty_product_label_printed: int
     marking_available_count: int = 0
     is_complete: bool
@@ -164,6 +169,7 @@ def _line_out(
         qty_packed_in_task=int(ln.qty_packed_in_task),
         qty_done=pkg_svc.qty_done(ln),
         qty_marking_printed=int(ln.qty_marking_printed),
+        qty_marking_external=int(ln.qty_marking_external),
         qty_product_label_printed=product_label_printed,
         marking_available_count=marking_available,
         is_complete=pkg_svc.is_line_complete(ln),
@@ -451,6 +457,28 @@ async def confirm_packed_from_shelf(
             task_id,
             line_id,
             qty=body.quantity,
+            acting_user_id=user.id,
+        )
+    except pkg_svc.PackagingTaskServiceError as exc:
+        raise _http_from_pkg_error(exc) from exc
+    return await _task_out(session, user.tenant_id, task)
+
+
+@router.post("/{task_id}/lines/{line_id}/mark-prepacked", response_model=PackagingTaskOut)
+async def mark_line_prepacked_external(
+    task_id: uuid.UUID,
+    line_id: uuid.UUID,
+    body: PrepackedExternalIn,
+    user: Annotated[User, Depends(require_packaging_access)],
+    session: Annotated[AsyncSession, Depends(get_db)],
+) -> PackagingTaskOut:
+    try:
+        task = await pkg_svc.mark_line_prepacked_external(
+            session,
+            user.tenant_id,
+            task_id,
+            line_id,
+            body.quantity,
             acting_user_id=user.id,
         )
     except pkg_svc.PackagingTaskServiceError as exc:

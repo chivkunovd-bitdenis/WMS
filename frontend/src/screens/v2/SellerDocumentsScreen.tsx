@@ -21,6 +21,7 @@ import {
   TableContainer,
   TableHead,
   TableRow,
+  Tooltip,
   Typography,
 } from '@mui/material'
 import { apiUrl } from '../../api'
@@ -39,6 +40,8 @@ const UNKNOWN_DOCUMENT_STATUS_LABEL = 'Статус уточняется'
 
 type InboundSummaryRow = {
   id: string
+  document_number?: string | null
+  display_number?: string | null
   waybill_number?: string | null
   warehouse_id: string
   warehouse_name?: string | null
@@ -48,10 +51,13 @@ type InboundSummaryRow = {
   goods_qty_total?: number
   planned_delivery_date: string | null
   planned_box_count?: number | null
+  created_at?: string
 }
 
 type MpUnloadSummaryRow = {
   id: string
+  document_number?: string | null
+  display_number?: string | null
   warehouse_id?: string
   warehouse_name?: string | null
   status: string
@@ -87,7 +93,7 @@ type DocumentRow = {
   type: DocType
   id: string
   date: string | null
-  waybill_number?: string | null
+  displayNumber: string | null
   warehouse_name?: string | null
   status: string
   operation_type?: InboundOperationType
@@ -135,15 +141,14 @@ export function SellerDocumentsScreen({
   const [deleteBusyKey, setDeleteBusyKey] = useState<string | null>(null)
   const [deleteConfirmRow, setDeleteConfirmRow] = useState<DocumentRow | null>(null)
   const [deleteError, setDeleteError] = useState<string | null>(null)
-  const [deleteOk, setDeleteOk] = useState<string | null>(null)
 
   const rows = useMemo(() => {
     const all: DocumentRow[] = [
       ...inboundSummaries.map((r) => ({
         type: 'inbound' as const,
         id: r.id,
-        date: r.planned_delivery_date,
-        waybill_number: r.waybill_number ?? null,
+        date: r.planned_delivery_date ?? r.created_at?.slice(0, 10) ?? null,
+        displayNumber: r.display_number ?? r.document_number ?? null,
         warehouse_name: r.warehouse_name ?? null,
         status: r.status,
         operation_type: normalizeInboundOperationType(r.operation_type),
@@ -154,6 +159,7 @@ export function SellerDocumentsScreen({
         type: 'mp_unload' as const,
         id: r.id,
         date: r.planned_shipment_date ?? r.created_at?.slice(0, 10) ?? null,
+        displayNumber: r.display_number ?? r.document_number ?? null,
         warehouse_name: r.warehouse_name ?? null,
         status: r.status,
         line_count: r.line_count,
@@ -188,7 +194,7 @@ export function SellerDocumentsScreen({
         type: 'inbound' as const,
         id: r.id,
         date: r.planned_delivery_date,
-        waybill_number: r.waybill_number ?? null,
+        displayNumber: r.display_number ?? r.document_number ?? null,
         warehouse_name: r.warehouse_name ?? null,
         status: r.status,
         operation_type: normalizeInboundOperationType(r.operation_type),
@@ -200,6 +206,7 @@ export function SellerDocumentsScreen({
         type: 'mp_unload' as const,
         id: r.id,
         date: r.planned_shipment_date ?? null,
+        displayNumber: r.display_number ?? r.document_number ?? null,
         warehouse_name: r.warehouse_name ?? null,
         status: r.status,
         line_count: r.line_count,
@@ -287,7 +294,6 @@ export function SellerDocumentsScreen({
     }
     setDeleteBusyKey(key)
     setDeleteError(null)
-    setDeleteOk(null)
     try {
       const res = await fetch(apiUrl(path), {
         method: 'DELETE',
@@ -302,7 +308,6 @@ export function SellerDocumentsScreen({
       } else {
         await onRefreshMpUnloadList()
       }
-      setDeleteOk('Черновик удалён.')
     } catch (e) {
       setDeleteError(e instanceof Error ? e.message : 'Не удалось удалить черновик.')
     } finally {
@@ -311,7 +316,15 @@ export function SellerDocumentsScreen({
   }
 
   return (
-    <Box>
+    <Box
+      sx={{
+        minWidth: 0,
+        width: '100%',
+        maxWidth: 'calc(100vw - 288px)',
+        boxSizing: 'border-box',
+        overflowX: 'hidden',
+      }}
+    >
       <Typography variant="h5" gutterBottom>
         Документы
       </Typography>
@@ -329,28 +342,13 @@ export function SellerDocumentsScreen({
           {deleteError}
         </Alert>
       ) : null}
-      {deleteOk ? (
-        <Alert severity="success" sx={{ mb: 2 }} data-testid="seller-documents-delete-ok">
-          {deleteOk}
-        </Alert>
-      ) : null}
 
       <Paper variant="outlined" sx={{ p: 2, mb: 2 }} data-testid="seller-documents-actions">
         <Stack
           direction={{ xs: 'column', sm: 'row' }}
-          spacing={1.5}
-          sx={{ alignItems: { xs: 'stretch', sm: 'center' } }}
+          spacing={2}
+          sx={{ alignItems: { xs: 'stretch', sm: 'center' }, flexWrap: 'wrap', rowGap: 1.5 }}
         >
-          <Button
-            variant="outlined"
-            color="secondary"
-            data-testid="seller-create-correction"
-            disabled={busy}
-            onClick={onCreateCorrection}
-            sx={{ alignSelf: { xs: 'stretch', sm: 'auto' } }}
-          >
-            Создать акт расхождений
-          </Button>
           <Button
             variant="contained"
             data-testid="seller-create-inbound"
@@ -360,32 +358,56 @@ export function SellerDocumentsScreen({
           >
             Создать заявку на поставку
           </Button>
-          <Button
-            variant="outlined"
-            data-testid="seller-create-return"
-            disabled={busy}
-            onClick={() => navigate('../inbound/new?operation=return')}
-            sx={{ alignSelf: { xs: 'stretch', sm: 'auto' } }}
+          <Stack
+            direction={{ xs: 'column', sm: 'row' }}
+            spacing={0.5}
+            sx={{ alignItems: { xs: 'stretch', sm: 'center' }, flexWrap: 'wrap', rowGap: 0.5 }}
           >
-            Создать заявку на возврат
-          </Button>
-          <Button
-            variant="outlined"
-            color="secondary"
-            data-testid="seller-create-mp-unload"
-            disabled={busy || !warehouseId}
-            onClick={() => {
-              void (async () => {
-                const id = await onCreateMpUnload()
-                if (id) {
-                  setMpDialogId(id)
-                }
-              })()
-            }}
-            sx={{ alignSelf: { xs: 'stretch', sm: 'auto' } }}
-          >
-            Создать отгрузку на МП
-          </Button>
+            <Button
+              variant="text"
+              size="small"
+              color="inherit"
+              data-testid="seller-create-return"
+              disabled={busy}
+              onClick={() => navigate('../inbound/new?operation=return')}
+              sx={{ alignSelf: { xs: 'stretch', sm: 'auto' } }}
+            >
+              Создать заявку на возврат
+            </Button>
+            <Tooltip title={!busy && !warehouseId ? 'Нет доступного склада для отгрузки' : ''}>
+              <span style={{ alignSelf: 'stretch', display: 'flex' }}>
+                <Button
+                  variant="text"
+                  size="small"
+                  color="inherit"
+                  data-testid="seller-create-mp-unload"
+                  disabled={busy || !warehouseId}
+                  onClick={() => {
+                    void (async () => {
+                      const id = await onCreateMpUnload()
+                      if (id) {
+                        setMpDialogId(id)
+                      }
+                    })()
+                  }}
+                  sx={{ alignSelf: { xs: 'stretch', sm: 'auto' }, flex: { xs: 1, sm: 'initial' } }}
+                >
+                  Создать отгрузку на МП
+                </Button>
+              </span>
+            </Tooltip>
+            <Button
+              variant="text"
+              size="small"
+              color="inherit"
+              data-testid="seller-create-correction"
+              disabled={busy}
+              onClick={onCreateCorrection}
+              sx={{ alignSelf: { xs: 'stretch', sm: 'auto' } }}
+            >
+              Создать акт расхождений
+            </Button>
+          </Stack>
         </Stack>
       </Paper>
 
@@ -411,7 +433,7 @@ export function SellerDocumentsScreen({
       </Paper>
 
       <Paper variant="outlined" sx={{ p: 2, mb: 2 }} data-testid="seller-documents-filters">
-        <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2}>
+        <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2} sx={{ flexWrap: 'wrap', rowGap: 2 }}>
           <FormControl sx={{ minWidth: 220 }}>
             <InputLabel id="seller-documents-type-label">Тип документа</InputLabel>
             <Select
@@ -450,7 +472,7 @@ export function SellerDocumentsScreen({
             <TableRow>
               <TableCell>Тип</TableCell>
               <TableCell>Дата</TableCell>
-              <TableCell>Накладная</TableCell>
+              <TableCell>Документ</TableCell>
               <TableCell>Статус</TableCell>
               <TableCell align="right">Строк</TableCell>
               <TableCell align="right">Действия</TableCell>
@@ -480,8 +502,8 @@ export function SellerDocumentsScreen({
                       : 'Акт расхождений'}
                 </TableCell>
                 <TableCell sx={{ color: 'text.secondary' }}>{r.date ?? '—'}</TableCell>
-                <TableCell sx={{ color: r.waybill_number ? 'text.primary' : 'text.secondary' }}>
-                  {r.waybill_number ?? '—'}
+                <TableCell sx={{ color: r.displayNumber ? 'text.primary' : 'text.secondary' }}>
+                  {r.displayNumber ?? '—'}
                 </TableCell>
                 <TableCell>{sellerDocumentStatusRu(r.status, r.type)}</TableCell>
                 <TableCell align="right">{r.line_count}</TableCell>
@@ -496,17 +518,12 @@ export function SellerDocumentsScreen({
                       onClick={(e) => {
                         e.stopPropagation()
                         setDeleteError(null)
-                        setDeleteOk(null)
                         setDeleteConfirmRow(r)
                       }}
                     >
                       Удалить
                     </Button>
-                  ) : (
-                    <Typography variant="body2" color="text.disabled">
-                      —
-                    </Typography>
-                  )}
+                  ) : null}
                 </TableCell>
               </TableRow>
             ))}

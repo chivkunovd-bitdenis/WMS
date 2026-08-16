@@ -74,6 +74,7 @@ export type PackagingTaskLine = {
   qty_packed_in_task: number
   qty_done: number
   qty_marking_printed: number
+  qty_marking_external: number
   qty_product_label_printed: number
   marking_available_count: number
   is_complete: boolean
@@ -156,6 +157,9 @@ type TaskPanelProps = {
   printOnly?: boolean
   /** Embedded packing stage can keep physical packing free of print controls. */
   hidePrintActions?: boolean
+  /** Единое поле скана также принимает штрихкод готового короба (WHB-/INB-);
+      состоянием коробов владеет родитель, поэтому скан короба делегируется наверх. */
+  onBoxBarcodeScan?: (barcode: string) => void
   onClose?: () => void
   onUpdated: (task: PackagingTask) => void
 }
@@ -222,6 +226,7 @@ function comparePackagingEventsAsc(a: PackagingTaskEvent, b: PackagingTaskEvent)
 const PACKAGING_EVENT_LABELS: Record<string, string> = {
   scan_pack: '+1 скан',
   product_label_print: 'Печать этикетки товара',
+  prepacked_external: 'Пришло готовым (без печати)',
   cancel: 'Задание отменено',
   complete: 'Задание выполнено',
 }
@@ -236,18 +241,23 @@ function packagingEventLabel(action: string, quantity: number): string {
   return PACKAGING_EVENT_LABELS[action] ?? action
 }
 
-/** Mirrors backend assert_packaging_line_marking_done (qty_done vs qty_marking_printed). */
+/** Mirrors backend assert_packaging_line_marking_done: marked = printed + external. */
 function isLineMarkingIncomplete(ln: PackagingTaskLine): boolean {
   if (!ln.requires_honest_sign) {
     return false
   }
   const done = ln.qty_done
-  return done > 0 && ln.qty_marking_printed < done
+  const marked = ln.qty_marking_printed + (ln.qty_marking_external ?? 0)
+  return done > 0 && marked < done
 }
 
 /** Progress toward qty_need_pack — for ЧЗ column display and row highlight. */
 function isLineMarkingProgressIncomplete(ln: PackagingTaskLine): boolean {
-  return ln.requires_honest_sign && ln.qty_marking_printed < ln.qty_need_pack
+  if (!ln.requires_honest_sign) {
+    return false
+  }
+  const marked = ln.qty_marking_printed + (ln.qty_marking_external ?? 0)
+  return marked < ln.qty_need_pack
 }
 
 const MARKING_NOT_DONE_MESSAGE =
@@ -274,6 +284,7 @@ export function FfPackagingTaskPanel({
   renderLineActions,
   printOnly = false,
   hidePrintActions = false,
+  onBoxBarcodeScan,
   onClose,
   onUpdated,
 }: TaskPanelProps) {
@@ -402,6 +413,28 @@ export function FfPackagingTaskPanel({
     }
   }
 
+  const markPrepackedExternal = async (lineId: string, qty: number) => {
+    setBusy(true)
+    setError(null)
+    try {
+      const res = await fetch(
+        apiUrl(`/operations/packaging-tasks/${task.id}/lines/${lineId}/mark-prepacked`),
+        {
+          method: 'POST',
+          headers: authHeaders,
+          body: JSON.stringify({ quantity: qty }),
+        },
+      )
+      if (!res.ok) {
+        setError(await readPackagingApiErrorMessage(res))
+        return
+      }
+      onUpdated((await res.json()) as PackagingTask)
+    } finally {
+      setBusy(false)
+    }
+  }
+
   const packQty = async (lineId: string, qty: number) => {
     setBusy(true)
     setError(null)
@@ -437,6 +470,14 @@ export function FfPackagingTaskPanel({
       return
     }
     if (isMpUnloadTask) {
+      // Единое поле различает короб (WHB-/INB-) и товар по формату строки.
+      if (barcode.startsWith('WHB-') || barcode.startsWith('INB-')) {
+        setScannerValue('')
+        setError(null)
+        onBoxBarcodeScan?.(barcode)
+        window.setTimeout(() => scannerRef.current?.focus(), 0)
+        return
+      }
       const matchingLine = task.lines.find((ln) => {
         const lineBarcode = lineBarcodeForScan(ln)
         return barcode === lineBarcode || barcode === ln.sku_code
@@ -446,11 +487,19 @@ export function FfPackagingTaskPanel({
         scannerRef.current?.focus()
         return
       }
+      const remaining = lineRemaining(matchingLine)
+      if (remaining < 1) {
+        setFocusedLineId(matchingLine.id)
+        setScannerValue('')
+        setError(null)
+        setScannerFeedback(`По этому товару уже упаковано всё: ${matchingLine.product_name}`)
+        window.setTimeout(() => scannerRef.current?.focus(), 0)
+        return
+      }
       setFocusedLineId(matchingLine.id)
       setScannerValue('')
       setError(null)
-      setScannerFeedback(`Строка найдена: ${matchingLine.product_name}`)
-      window.setTimeout(() => scannerRef.current?.focus(), 0)
+      await packQty(matchingLine.id, 1)
       return
     }
     const packedBefore = new Map(task.lines.map((ln) => [ln.id, ln.qty_packed_in_task]))
@@ -694,10 +743,7 @@ export function FfPackagingTaskPanel({
       {hideDocumentHeader ? null : (
         <Stack direction="row" spacing={2} sx={{ alignItems: 'flex-start', flexWrap: 'wrap' }}>
           <Stack spacing={0.25} sx={{ minWidth: 0 }}>
-            <Typography variant="subtitle1" sx={{ fontWeight: 700, lineHeight: 1.2 }}>
-              Задание {displayDocumentNumber ?? '—'}
-            </Typography>
-            <Typography variant="body2" color="text.secondary" data-testid="ff-packaging-task-status">
+            <Typography variant="body2" sx={{ fontWeight: 700 }} data-testid="ff-packaging-task-status">
               {statusLabel(task.status)}
             </Typography>
             {displayDocumentNumber ? (
@@ -812,6 +858,16 @@ export function FfPackagingTaskPanel({
               </Button>
             )}
           </Stack>
+          <Typography
+            variant="caption"
+            color="text.secondary"
+            sx={{ display: 'block', mt: 1 }}
+            data-testid="ff-packaging-scan-status"
+          >
+            {isMpUnloadTask
+              ? 'Сканер активен — пикните ШК товара или короба (WHB-…).'
+              : 'Сканер активен — пикните ШК товара.'}
+          </Typography>
           {scannerFeedback ? (
             <Alert severity="success" sx={{ mt: 1.5 }} data-testid="ff-packaging-scan-feedback">
               {scannerFeedback}
@@ -889,7 +945,7 @@ export function FfPackagingTaskPanel({
                           size="small"
                           color={markingProgressIncomplete ? 'warning' : 'success'}
                           variant={markingProgressIncomplete ? 'outlined' : 'filled'}
-                          label={`${ln.qty_marking_printed}/${ln.qty_need_pack}`}
+                          label={`${ln.qty_marking_printed + (ln.qty_marking_external ?? 0)}/${ln.qty_need_pack}`}
                           data-testid={`ff-packaging-marking-progress-${ln.id}`}
                         />
                       ) : (
@@ -929,6 +985,39 @@ export function FfPackagingTaskPanel({
                         >
                           <PrintOutlined fontSize="small" />
                         </IconButton>
+                      ) : null}
+                      {taskEditable && remaining > 0 ? (
+                        <Tooltip title="Обычная упаковка: печать кода маркировки нужна отдельным шагом.">
+                          <span>
+                            <Button
+                              size="small"
+                              variant="outlined"
+                              disabled={busy}
+                              onClick={() => void packQty(ln.id, remaining)}
+                              data-testid={`ff-packaging-line-mark-packed-${ln.id}`}
+                              data-task-id="MPFBO-03"
+                              sx={{ minWidth: 0, ml: 0.5 }}
+                            >
+                              Упаковано
+                            </Button>
+                          </span>
+                        </Tooltip>
+                      ) : null}
+                      {taskEditable && remaining > 0 ? (
+                        <Tooltip title="Товар пришёл уже упакованным и промаркированным — печать не нужна.">
+                          <span>
+                            <Button
+                              size="small"
+                              disabled={busy}
+                              onClick={() => void markPrepackedExternal(ln.id, remaining)}
+                              data-testid={`ff-packaging-line-prepacked-${ln.id}`}
+                              data-task-id="MPFBO-03"
+                              sx={{ minWidth: 0, ml: 0.5 }}
+                            >
+                              Пришло готовым
+                            </Button>
+                          </span>
+                        </Tooltip>
                       ) : null}
                       {lineHasOverflowActions(ln) ? (
                         <IconButton

@@ -313,11 +313,11 @@ export function FfInboundSortingPanel({
 
   const boxNumberById = useMemo(() => {
     const m = new Map<string, number>()
-    for (const box of sortableBoxes) {
+    for (const box of boxes) {
       m.set(box.id, box.box_number)
     }
     return m
-  }, [sortableBoxes])
+  }, [boxes])
 
   const acceptedByProductId = useMemo(() => {
     const m = new Map<string, number>()

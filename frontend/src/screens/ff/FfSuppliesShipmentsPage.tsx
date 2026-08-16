@@ -333,6 +333,10 @@ export function FfSuppliesShipmentsPage({
   const [boxImportOpen, setBoxImportOpen] = useState(false)
   const mpTabInitForRef = useRef<string | null>(null)
   const docDetailRequests = useRef(createLatestRequestSequence())
+  // Пункт 2 итерации 2026-08-14: статус документа не должен меняться молча
+  // (например «Утверждено» → «На сборке» как побочный эффект скана/создания короба).
+  const prevMpStatusRef = useRef<{ id: string; status: string } | null>(null)
+  const [statusChangeMsg, setStatusChangeMsg] = useState<string | null>(null)
 
   const authHeaders = useMemo(
     () => (token ? { Authorization: `Bearer ${token}` } : null),
@@ -454,6 +458,11 @@ export function FfSuppliesShipmentsPage({
         if (!docDetailRequests.current.isLatest(docDetailRequestId)) {
           return
         }
+        const prevStatusInfo = prevMpStatusRef.current
+        if (prevStatusInfo && prevStatusInfo.id === j.id && prevStatusInfo.status !== j.status) {
+          setStatusChangeMsg(`Статус документа изменился: «${statusRu(prevStatusInfo.status)}» → «${statusRu(j.status)}».`)
+        }
+        prevMpStatusRef.current = { id: j.id, status: j.status }
         setUnloadDetail({
           id: j.id,
           document_number: j.document_number ?? null,
@@ -1778,6 +1787,16 @@ export function FfSuppliesShipmentsPage({
         .find((step) => mpStepEnabled(step.value))?.value ?? null
     )
   }, [mpStepEnabled, mpUnloadTab])
+  // Пункт 1: самый дальний разблокированный шаг документа — шаги до него помечаются
+  // галочкой в линейке, как «label ✓» у завершённых этапов в FfFbsSupplyWorkspace.
+  const mpCurrentStepIdx = useMemo(
+    () =>
+      mpUnloadSteps.reduce(
+        (maxIdx, step, idx) => (mpStepEnabled(step.value) ? idx : maxIdx),
+        0,
+      ),
+    [mpStepEnabled],
+  )
 
   useEffect(() => {
     if (!unloadDetail || docModal !== 'marketplace_unload') {
@@ -2380,10 +2399,12 @@ export function FfSuppliesShipmentsPage({
                 sx={{ borderBottom: 1, borderColor: 'divider', mb: 2 }}
                 data-testid="ff-mp-process-tabs"
               >
-                {mpUnloadSteps.map((step) => (
+                {mpUnloadSteps.map((step, stepIdx) => (
                   <Tab
                     key={step.value}
-                    label={step.label}
+                    // Пункт 1 итерации 2026-08-14: назад можно, вперёд нельзя — как в FBS
+                    // (frontend/src/screens/v2/FfFbsSupplyWorkspace.tsx, STAGES/currentStageIndex).
+                    label={stepIdx < mpCurrentStepIdx ? `${step.label} ✓` : step.label}
                     value={step.value}
                     disabled={!mpStepEnabled(step.value)}
                     data-testid={step.testId}
@@ -2627,6 +2648,9 @@ export function FfSuppliesShipmentsPage({
                       task={packagingTask}
                       hideDocumentHeader
                       compactLayout
+                      // Пункт 10 итерации 2026-08-14: единое поле скана на упаковке различает
+                      // короб и товар — скан короба делегируется существующему флоу привязки.
+                      onBoxBarcodeScan={requestAttachBoxScan}
                       onUpdated={(task) => {
                         setPackagingTask(task)
                         void loadDocDetail()
@@ -2656,12 +2680,9 @@ export function FfSuppliesShipmentsPage({
                     data-testid="ff-mp-boxes-accordion"
                   >
                     <AccordionSummary expandIcon={<ExpandMoreOutlined />} data-testid="ff-mp-boxes-summary">
-                      <Stack direction="row" spacing={1} sx={{ alignItems: 'center', flexWrap: 'wrap' }}>
-                        <Typography variant="subtitle2">Короба</Typography>
-                        <Typography variant="body2" color="text.secondary">
-                          {mpCollectSummary?.distributed ?? 0}/{mpCollectSummary?.planned ?? 0} шт
-                        </Typography>
-                      </Stack>
+                      {/* Пункт 12 итерации 2026-08-14: числа «распределено/план» уже есть в шапке
+                          (ff-mp-shipment-summary) — здесь не дублируем, только заголовок раздела. */}
+                      <Typography variant="subtitle2">Короба</Typography>
                     </AccordionSummary>
                     <AccordionDetails>
                       <Stack spacing={1.25} data-testid="ff-mp-boxes">
@@ -3191,6 +3212,23 @@ export function FfSuppliesShipmentsPage({
           sx={{ width: '100%' }}
         >
           {boxAddSuccessMsg}
+        </Alert>
+      </Snackbar>
+      {/* Пункт 2 итерации 2026-08-14: смена статуса документа больше не проходит молча. */}
+      <Snackbar
+        open={statusChangeMsg !== null}
+        autoHideDuration={4000}
+        onClose={() => setStatusChangeMsg(null)}
+        anchorOrigin={{ vertical: 'bottom', horizontal: 'center' }}
+      >
+        <Alert
+          severity="info"
+          variant="filled"
+          onClose={() => setStatusChangeMsg(null)}
+          data-testid="ff-mp-status-change-snackbar"
+          sx={{ width: '100%' }}
+        >
+          {statusChangeMsg}
         </Alert>
       </Snackbar>
       <Dialog

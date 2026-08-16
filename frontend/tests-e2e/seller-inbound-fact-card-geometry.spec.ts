@@ -95,7 +95,8 @@ async function expectDiscrepancyFactCardReadBack(
   // Same document form as the draft — not a compact report table.
   await expect(page.getByTestId('seller-inbound-draft-form')).toBeVisible();
   for (const header of UNIFIED_COLUMN_HEADERS) {
-    await expect(page.getByRole('columnheader', { name: header })).toBeVisible();
+    // exact: иначе «Артикул» совпадает ещё и с «Артикул продавца» / «Артикул WB».
+    await expect(page.getByRole('columnheader', { name: header, exact: true })).toBeVisible();
   }
   await expectUnifiedTableGeometry(page);
 
