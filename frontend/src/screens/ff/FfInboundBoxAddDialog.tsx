@@ -30,6 +30,7 @@ import {
   boxFillDialogContentSx,
   boxFillDialogPaperSx,
   boxFillQtyCellSx,
+  boxFillQtyHeadCellSx,
   boxFillTableScrollSx,
 } from './boxFillDialogLayout'
 import { scanErrorMessageRu } from './inboundReceivingHelpers'
@@ -289,7 +290,7 @@ export function FfInboundBoxAddDialog({
                   <TableCell align="right" sx={{ width: 80, whiteSpace: 'nowrap', px: 1 }}>
                     Заявлено
                   </TableCell>
-                  <TableCell align="right" sx={boxFillQtyCellSx}>
+                  <TableCell align="right" sx={boxFillQtyHeadCellSx}>
                     В коробе
                   </TableCell>
                 </TableRow>

@@ -39,10 +39,27 @@ export const boxFillProductCellSx: SxProps<Theme> = {
   },
 }
 
+// Колонка ввода количества прижата к правому краю: строка товара рисуется общим
+// FfProductLineCells на шесть колонок, и таблица шире диалога (maxWidth 960 на десктопе,
+// 720 на планшете) — без прилипания поле ввода уезжает за край горизонтальной прокрутки,
+// а это единственное, ради чего диалог открывают.
 export const boxFillQtyCellSx: SxProps<Theme> = {
   width: 88,
   minWidth: 88,
   whiteSpace: 'nowrap',
   px: 1,
   verticalAlign: 'top',
+  position: 'sticky',
+  right: 0,
+  zIndex: 1,
+  bgcolor: 'background.paper',
+  borderLeft: '1px solid',
+  borderLeftColor: 'divider',
+}
+
+// У шапки таблицы уже включён stickyHeader (прилипание сверху). Угловая ячейка прилипает
+// в обе стороны сразу, поэтому ей нужен z-index выше и тела строк, и обычной шапки.
+export const boxFillQtyHeadCellSx: SxProps<Theme> = {
+  ...(boxFillQtyCellSx as Record<string, unknown>),
+  zIndex: 3,
 }
