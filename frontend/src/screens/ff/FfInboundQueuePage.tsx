@@ -1,5 +1,4 @@
 import { useEffect, useMemo, useState } from 'react'
-import { alpha } from '@mui/material/styles'
 import {
   Alert,
   Box,
@@ -77,24 +76,15 @@ function sortValue(row: InboundQueueRow, key: SortKey): string {
   return row.display_number ?? row.document_number ?? row.waybill_number ?? ''
 }
 
-// Решение заказчика 17.08.2026: у строки один признак и один цвет — есть расхождение (да/нет).
-// Раньше цвет строки одновременно кодировал расхождение, «работа начата» и статус — это давало
-// две строки одного статуса разным цветом и спорило с чипом статуса рядом. Больше так не делаем:
-// зелёного нет, раскраски по статусу нет, красным помечается только реальное расхождение.
+// Решение заказчика 17.08.2026: подсветки строки нет вообще (ни заливки, ни полосы слева). Красным
+// помечается расхождение по количеству принятых штук (has_discrepancy) — только текст в колонке
+// «Состав». Расхождение по числу коробов не подсвечивается.
 function rowHasDiscrepancy(row: InboundQueueRow): boolean {
-  return row.has_discrepancy === true || row.boxes_discrepancy === true
+  return row.has_discrepancy === true
 }
 
-function rowSx(row: InboundQueueRow) {
-  if (!rowHasDiscrepancy(row)) return undefined
-  return {
-    borderLeft: '5px solid',
-    borderLeftColor: 'error.main',
-    bgcolor: (theme: import('@mui/material/styles').Theme) => alpha(theme.palette.error.main, 0.12),
-    '&:hover': {
-      bgcolor: (theme: import('@mui/material/styles').Theme) => alpha(theme.palette.error.main, 0.2),
-    },
-  }
+function compositionSx(row: InboundQueueRow) {
+  return rowHasDiscrepancy(row) ? { color: 'error.main' } : undefined
 }
 
 function formatDate(value?: string | null): string {
@@ -421,7 +411,6 @@ export function FfInboundQueuePage({
                     tabIndex={0}
                     sx={{
                       cursor: 'pointer',
-                      ...rowSx(row),
                       '&:focus-visible': {
                         outline: (theme) => `2px solid ${theme.palette.primary.main}`,
                         outlineOffset: -2,
@@ -459,7 +448,7 @@ export function FfInboundQueuePage({
                         <TableCell data-testid="ff-inbound-queue-date">
                           {formatDate(row.planned_delivery_date ?? row.created_at)}
                         </TableCell>
-                        <TableCell data-testid="ff-inbound-queue-composition">
+                        <TableCell data-testid="ff-inbound-queue-composition" sx={compositionSx(row)}>
                           {compositionLabel(summary)}
                         </TableCell>
                       </>
