@@ -77,66 +77,22 @@ function sortValue(row: InboundQueueRow, key: SortKey): string {
   return row.display_number ?? row.document_number ?? row.waybill_number ?? ''
 }
 
-function statusTone(row: InboundQueueRow): 'neutral' | 'new' | 'receiving' | 'sorting' | 'done' {
-  if (row.status === 'submitted') return 'new'
-  if (isReceivingStatus(row.status)) return 'receiving'
-  if (isSortingStatus(row.status)) return 'sorting'
-  if (isDoneStatus(row.status)) return 'done'
-  return 'neutral'
+// Решение заказчика 17.08.2026: у строки один признак и один цвет — есть расхождение (да/нет).
+// Раньше цвет строки одновременно кодировал расхождение, «работа начата» и статус — это давало
+// две строки одного статуса разным цветом и спорило с чипом статуса рядом. Больше так не делаем:
+// зелёного нет, раскраски по статусу нет, красным помечается только реальное расхождение.
+function rowHasDiscrepancy(row: InboundQueueRow): boolean {
+  return row.has_discrepancy === true || row.boxes_discrepancy === true
 }
 
 function rowSx(row: InboundQueueRow) {
-  const hasStarted =
-    isReceivingStatus(row.status) || isSortingStatus(row.status) || isDoneStatus(row.status)
-  if (row.has_discrepancy === true || row.boxes_discrepancy === true) {
-    return {
-      cursor: 'pointer',
-      borderLeft: '5px solid',
-      borderLeftColor: 'error.main',
-      bgcolor: (theme: import('@mui/material/styles').Theme) => alpha(theme.palette.error.main, 0.12),
-      '&:hover': {
-        bgcolor: (theme: import('@mui/material/styles').Theme) => alpha(theme.palette.error.main, 0.2),
-      },
-    }
-  }
-  if (hasStarted && row.has_discrepancy === false) {
-    return {
-      cursor: 'pointer',
-      borderLeft: '5px solid',
-      borderLeftColor: 'success.main',
-      bgcolor: (theme: import('@mui/material/styles').Theme) => alpha(theme.palette.success.main, 0.12),
-      '&:hover': {
-        bgcolor: (theme: import('@mui/material/styles').Theme) => alpha(theme.palette.success.main, 0.2),
-      },
-    }
-  }
-  const tone = statusTone(row)
-  const palette =
-    tone === 'new'
-      ? ('info' as const)
-      : tone === 'receiving'
-        ? ('warning' as const)
-        : tone === 'sorting'
-          ? ('secondary' as const)
-          : tone === 'done'
-            ? ('success' as const)
-            : null
-  if (palette == null) {
-    return {
-      cursor: 'pointer',
-      borderLeft: '5px solid',
-      borderLeftColor: 'divider',
-      bgcolor: 'background.paper',
-      '&:hover': { bgcolor: 'action.hover' },
-    }
-  }
+  if (!rowHasDiscrepancy(row)) return undefined
   return {
-    cursor: 'pointer',
     borderLeft: '5px solid',
-    borderLeftColor: `${palette}.main`,
-    bgcolor: (theme: import('@mui/material/styles').Theme) => alpha(theme.palette[palette].main, 0.12),
+    borderLeftColor: 'error.main',
+    bgcolor: (theme: import('@mui/material/styles').Theme) => alpha(theme.palette.error.main, 0.12),
     '&:hover': {
-      bgcolor: (theme: import('@mui/material/styles').Theme) => alpha(theme.palette[palette].main, 0.2),
+      bgcolor: (theme: import('@mui/material/styles').Theme) => alpha(theme.palette.error.main, 0.2),
     },
   }
 }
@@ -464,6 +420,7 @@ export function FfInboundQueuePage({
                     hover
                     tabIndex={0}
                     sx={{
+                      cursor: 'pointer',
                       ...rowSx(row),
                       '&:focus-visible': {
                         outline: (theme) => `2px solid ${theme.palette.primary.main}`,
@@ -480,13 +437,7 @@ export function FfInboundQueuePage({
                     data-testid="ff-inbound-queue-row"
                     data-request-id={row.id}
                     data-row-status={row.status}
-                    data-row-discrepancy={
-                      row.has_discrepancy === true || row.boxes_discrepancy === true
-                        ? 'mismatch'
-                        : isReceivingStatus(row.status) || isSortingStatus(row.status) || isDoneStatus(row.status)
-                          ? 'matched'
-                          : 'none'
-                    }
+                    data-row-discrepancy={rowHasDiscrepancy(row) ? 'yes' : 'no'}
                   >
                     {workspace === 'reception' ? (
                       <>
