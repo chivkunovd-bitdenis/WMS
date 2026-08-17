@@ -584,15 +584,19 @@
   .label-block.is-last.shrink-1.field-eac .lb-eac{width:24px;height:24px;}
   .label-block.is-last.shrink-2.field-eac .lb-eac{width:18px;height:18px;}
 
-  /* EAC corner overlay (does not participate in document flow / block budget) */
+  /* EAC corner overlay (does not participate in document flow / block budget).
+     Position (which of the four corners) is set via one of the .pos-* modifier classes below,
+     applied in JS from state.eacPlacement — see render(). */
   .eac-corner{
     position:absolute;
-    right:0;
-    bottom:0;
     width:30px;
     height:30px;
     z-index:3;
   }
+  .eac-corner.pos-tl{top:0;left:0;}
+  .eac-corner.pos-tr{top:0;right:0;}
+  .eac-corner.pos-bl{bottom:0;left:0;}
+  .eac-corner.pos-br{bottom:0;right:0;}
   .eac-corner .lb-eac{width:100%;height:100%;display:block;}
   .eac-corner.eac-collide{
     outline:2px solid var(--red);
@@ -615,17 +619,59 @@
     max-width:400px;
   }
 
-  /* EAC placement toggle (under the EAC checkbox row) */
+  /* EAC placement toggle (under the EAC checkbox row).
+     Four-corner picker (2×2 grid, arranged to match the actual corners on the label) plus a
+     separate full-width "own line" button below it — replaces the old two-way segmented toggle. */
   .eac-placement{
     margin-top:7px;
     display:none;
   }
   .eac-placement.visible{display:block;}
-  .eac-placement .segmented{border-color:var(--border);}
-  .eac-placement .segmented button{
-    padding:6px 5px;
-    font-size:11px;
+  .eac-corner-grid{
+    display:grid;
+    grid-template-columns:1fr 1fr;
+    gap:4px;
+    margin-bottom:4px;
   }
+  .eac-corner-btn{
+    border:1.5px solid var(--border-strong);
+    background:#fbfcfe;
+    border-radius:6px;
+    padding:6px 4px;
+    text-align:center;
+    font-size:10.5px;
+    font-weight:600;
+    color:var(--navy-800);
+    cursor:pointer;
+    transition:.12s;
+  }
+  .eac-corner-btn:hover{border-color:var(--blue-accent);}
+  .eac-corner-btn.active{
+    background:var(--navy-700);
+    border-color:var(--navy-700);
+    color:#fff;
+  }
+  .eac-line-btn{
+    display:block;
+    width:100%;
+    border:1.5px solid var(--border-strong);
+    background:#fbfcfe;
+    border-radius:6px;
+    padding:7px 6px;
+    font-size:11px;
+    font-weight:600;
+    color:var(--navy-800);
+    cursor:pointer;
+    transition:.12s;
+  }
+  .eac-line-btn:hover{border-color:var(--blue-accent);}
+  .eac-line-btn.active{
+    background:var(--navy-700);
+    border-color:var(--navy-700);
+    color:#fff;
+  }
+  .eac-line-btn.locked{cursor:not-allowed;color:var(--muted);}
+  .eac-line-btn.locked:hover{border-color:var(--border-strong);}
   .eac-note{
     margin-top:5px;
     font-size:11px;
@@ -1010,8 +1056,9 @@
     sizeKey: "58x40",
     demo: "normal",
     freeText: "",
-    eacPlacement: "corner", // "corner" = overlaid on free space, free of the block budget
-                              // "line"   = old behaviour, occupies its own block/line
+    eacPlacement: "br", // "tl" | "tr" | "bl" | "br" = overlaid on free space in that corner,
+                          // free of the block budget; "line" = old behaviour, occupies its own
+                          // block/line. Default stays "br" (bottom-right), same as before.
     textAlign: "left",       // "left" | "center" | "right" — весь текстовый блок целиком,
                               // штрихкод и цифры под ним в это не входят (см. CSS .barcode-digits)
     templateName: "Стандартный ШК-шаблон",
@@ -1105,19 +1152,34 @@
       eacWrap.className = "eac-placement";
       eacWrap.id = "eacPlacementWrap";
 
-      var eacSeg = document.createElement("div");
-      eacSeg.className = "segmented";
-      var btnCorner = document.createElement("button");
-      btnCorner.type = "button";
-      btnCorner.id = "btnEacCorner";
-      btnCorner.textContent = "В углу (бесплатно)";
+      // 2×2 grid of corner buttons, laid out in the same visual order as the corners
+      // they represent (top row = top of label, left column = left of label).
+      var eacGrid = document.createElement("div");
+      eacGrid.className = "eac-corner-grid";
+      var CORNER_BTN_LABELS = {
+        tl: "↖ Слева сверху",
+        tr: "↗ Справа сверху",
+        bl: "↙ Слева снизу",
+        br: "↘ Справа снизу"
+      };
+      ["tl", "tr", "bl", "br"].forEach(function(corner){
+        var b = document.createElement("button");
+        b.type = "button";
+        b.className = "eac-corner-btn";
+        b.id = "btnEac" + corner.toUpperCase();
+        b.textContent = CORNER_BTN_LABELS[corner];
+        b.addEventListener("click", function(){ setEacPlacement(corner); });
+        eacGrid.appendChild(b);
+      });
+      eacWrap.appendChild(eacGrid);
+
       var btnLineMode = document.createElement("button");
       btnLineMode.type = "button";
+      btnLineMode.className = "eac-line-btn";
       btnLineMode.id = "btnEacLine";
       btnLineMode.textContent = "Отдельной строкой";
-      eacSeg.appendChild(btnCorner);
-      eacSeg.appendChild(btnLineMode);
-      eacWrap.appendChild(eacSeg);
+      btnLineMode.addEventListener("click", function(){ setEacPlacement("line"); });
+      eacWrap.appendChild(btnLineMode);
 
       var eacNote = document.createElement("div");
       eacNote.className = "eac-note";
@@ -1125,9 +1187,6 @@
       eacWrap.appendChild(eacNote);
 
       body.appendChild(eacWrap);
-
-      btnCorner.addEventListener("click", function(){ setEacPlacement("corner"); });
-      btnLineMode.addEventListener("click", function(){ setEacPlacement("line"); });
     }
 
     row.appendChild(body);
@@ -1241,7 +1300,7 @@
     });
     var ftInput = document.getElementById("freeTextInput");
     if (ftInput) ftInput.classList.remove("visible");
-    state.eacPlacement = "corner";
+    state.eacPlacement = "br";
     document.getElementById("eacPlacementWrap").classList.remove("visible");
     syncEacButtons();
     setTextAlign("left"); // also calls render()
@@ -1252,10 +1311,14 @@
     return FIELD_DEFS.filter(function(f){ return f.group !== "missing"; }).map(function(f){ return f.key; });
   }
 
-  // EAC in "corner" placement overlays free space and never takes a block from the budget —
-  // this filters it out wherever we count blocks against CAPACITY.
+  // EAC in any corner placement (tl/tr/bl/br) overlays free space and never takes a block from
+  // the budget — only "line" placement does. This filters it out wherever we count blocks
+  // against CAPACITY.
+  function isEacCornerMode(){
+    return state.eacPlacement !== "line";
+  }
   function costsBudget(key){
-    return !(key === "eac" && state.eacPlacement === "corner");
+    return !(key === "eac" && isEacCornerMode());
   }
 
   function checkedOptionalCount(){
@@ -1264,9 +1327,9 @@
     return n;
   }
 
-  // Switching EAC from "corner" (free) to "line" (costs a block) can push the block count
-  // past CAPACITY if there's no free row left — the counter would then show "6 из 5" and the
-  // switch button needs to be locked, the same way a field checkbox locks when the cap is full.
+  // Switching EAC from a free corner (tl/tr/bl/br) to "line" (costs a block) can push the block
+  // count past CAPACITY if there's no free row left — the counter would then show "6 из 5" and
+  // the switch button needs to be locked, the same way a field checkbox locks when the cap is full.
   function eacLineWouldOverflow(){
     if (!state.checked.eac) return false;
     if (state.eacPlacement === "line") return false; // already there, nothing changes
@@ -1293,13 +1356,23 @@
     render();
   }
 
+  var CORNER_NOTE_NAMES = {
+    tl: "левом верхнем",
+    tr: "правом верхнем",
+    bl: "левом нижнем",
+    br: "правом нижнем"
+  };
+
   function syncEacButtons(){
-    document.getElementById("btnEacCorner").classList.toggle("active", state.eacPlacement === "corner");
+    ["tl", "tr", "bl", "br"].forEach(function(corner){
+      var btn = document.getElementById("btnEac" + corner.toUpperCase());
+      if (btn) btn.classList.toggle("active", state.eacPlacement === corner);
+    });
     document.getElementById("btnEacLine").classList.toggle("active", state.eacPlacement === "line");
     var note = document.getElementById("eacPlacementNote");
-    if (state.eacPlacement === "corner") {
+    if (isEacCornerMode()) {
       note.innerHTML = "Не входит в счётчик строк — накладывается на свободное поле в " +
-        "правом нижнем углу, отдельной строки не занимает.";
+        CORNER_NOTE_NAMES[state.eacPlacement] + " углу, отдельной строки не занимает.";
     } else {
       note.innerHTML = "Занимает отдельную строку и входит в счётчик строк — как остальные поля.";
     }
@@ -1399,11 +1472,11 @@
     contentEl.style.textAlign = state.textAlign;
 
     var order = optionalOrder();
-    // EAC in "corner" placement is rendered separately as an absolute overlay (see below),
+    // EAC in any corner placement is rendered separately as an absolute overlay (see below),
     // not as a block in the flow — so it's excluded here from both layout and the block count.
     var enabled = order.filter(function(k){
       if (!state.checked[k]) return false;
-      if (k === "eac" && state.eacPlacement === "corner") return false;
+      if (k === "eac" && isEacCornerMode()) return false;
       return true;
     });
 
@@ -1454,19 +1527,22 @@
     }
 
     // EAC corner overlay: rendered independently of the block flow, at its true minimum
-    // legible size (5mm), pinned to the label's bottom-right corner. We then check whether
-    // any actually-rendered text line visually reaches into its box — if so, the mockup must
+    // legible size (5mm), pinned to whichever corner the user picked (state.eacPlacement:
+    // tl/tr/bl/br). We then check whether the corner box visually overlaps something real —
+    // either a rendered text line, or (relevant mainly for the top corners, which sit right
+    // next to the wide barcode) the barcode block itself — using the same rectangle-overlap
+    // test for both, just applied to a different obstacle. If it overlaps, the mockup must
     // show that collision rather than hide it.
     var cornerBanner = document.getElementById("cornerCollisionBanner");
     cornerBanner.style.display = "none";
     var existingCorner = labelEl.querySelector(".eac-corner");
     if (existingCorner) existingCorner.parentNode.removeChild(existingCorner);
 
-    if (state.checked.eac && state.eacPlacement === "corner") {
+    if (state.checked.eac && isEacCornerMode()) {
       var eacHeightPx = EAC_MIN_HEIGHT_MM * SCALE;
       var eacWidthPx = eacHeightPx * EAC_ASPECT;
       var corner = document.createElement("div");
-      corner.className = "eac-corner";
+      corner.className = "eac-corner pos-" + state.eacPlacement;
       corner.style.width = eacWidthPx + "px";
       corner.style.height = eacHeightPx + "px";
       corner.title = "Знак ЕАС: минимальная высота по требованиям к маркировке — 5 мм, меньше знак нечитаем";
@@ -1474,22 +1550,41 @@
       labelEl.appendChild(corner);
 
       var eacRect = corner.getBoundingClientRect();
+      function overlapsEac(r){
+        return r.left < eacRect.right && r.right > eacRect.left && r.top < eacRect.bottom && r.bottom > eacRect.top;
+      }
+
       var collide = false;
-      var textEls = contentEl.querySelectorAll(".lb-text");
-      for (var ti = 0; ti < textEls.length && !collide; ti++) {
-        var range = document.createRange();
-        range.selectNodeContents(textEls[ti]);
-        var rects = range.getClientRects();
-        for (var ri = 0; ri < rects.length; ri++) {
-          var r = rects[ri];
-          if (r.left < eacRect.right && r.right > eacRect.left && r.top < eacRect.bottom && r.bottom > eacRect.top) {
-            collide = true;
-            break;
+      var collideWithBarcode = false;
+
+      // Same rectangle-overlap test as for text below, applied to the barcode block's own
+      // box first — this is the case that matters for the top-left/top-right corners, since
+      // the barcode is wide (52mm of the label's width) and sits right where those corners are.
+      var barcodeWrap = labelEl.querySelector(".label-barcode");
+      if (barcodeWrap && overlapsEac(barcodeWrap.getBoundingClientRect())) {
+        collide = true;
+        collideWithBarcode = true;
+      }
+
+      if (!collide) {
+        var textEls = contentEl.querySelectorAll(".lb-text");
+        for (var ti = 0; ti < textEls.length && !collide; ti++) {
+          var range = document.createRange();
+          range.selectNodeContents(textEls[ti]);
+          var rects = range.getClientRects();
+          for (var ri = 0; ri < rects.length; ri++) {
+            if (overlapsEac(rects[ri])) { collide = true; break; }
           }
         }
       }
+
       corner.classList.toggle("eac-collide", collide);
       cornerBanner.style.display = collide ? "flex" : "none";
+      if (collide) {
+        cornerBanner.textContent = collideWithBarcode
+          ? "⚠ Знак EAC в углу налезает на штрихкод — в этом углу на этом размере этикетки не хватает места, выберите другой угол или «Отдельной строкой»"
+          : "⚠ Текст наезжает на знак EAC в углу — сократите текст или уберите поле";
+      }
     }
 
     // counter + capacity lock

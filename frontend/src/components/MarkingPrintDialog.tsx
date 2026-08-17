@@ -949,7 +949,7 @@ export function MarkingPrintDialog({ open, reprint, ctx, busy, onBusyChange, onC
             onClose()
           }
         }}
-        maxWidth="sm"
+        maxWidth="md"
         fullWidth
         data-testid="marking-print-dialog"
       >

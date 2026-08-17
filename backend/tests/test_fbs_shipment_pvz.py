@@ -547,8 +547,17 @@ async def test_tc18_pvz_cargo_places_dimension_blockers(
     assert place["qr_asset"] is not None
 
 
+# Cargo places (trbx) used to be rejected outright for warehouse_sc supplies
+# with "wrong_delivery_type" — that was our own caution, not a WB rule.
+# Verified live on 2026-08-17 against WB-GI-265711836 (a real warehouse/SC
+# handoff, owner's own key): WB accepted POST .../trbx (201, real
+# WB-MP-... id), issued a real QR sticker via POST .../trbx/stickers (200,
+# PNG), and accepted the delete (204) — exactly like a pvz supply. Our
+# outgoing create_marketplace_supply_trbx request carries no delivery-type
+# flag either, so WB cannot even tell the two apart. So warehouse_sc now
+# creates cargo places the same way pvz does.
 @pytest.mark.asyncio
-async def test_fbs_pvz_create_trbx_ok_and_wrong_delivery_type(
+async def test_fbs_pvz_create_trbx_ok_and_warehouse_sc_create_trbx_ok(
     async_client: AsyncClient,
     enable_wb_marketplace_supplies_mock: None,
 ) -> None:
@@ -586,13 +595,24 @@ async def test_fbs_pvz_create_trbx_ok_and_wrong_delivery_type(
         name="SC supply",
         delivery_type="warehouse_sc",
     )
-    bad = await async_client.post(
+    sc_create = await async_client.post(
         f"/operations/fbs-supplies/{sc_supply['id']}/trbx",
         headers=headers,
         json={"count": 1},
     )
-    assert bad.status_code == 400
-    assert bad.json()["detail"]["code"] == "wrong_delivery_type"
+    assert sc_create.status_code == 201, sc_create.text
+    sc_body = sc_create.json()
+    assert len(sc_body["trbxes"]) == 1
+    assert sc_body["trbxes"][0]["wb_trbx_id"].startswith("MOCK-TRBX-")
+
+    sc_cargo_places = await async_client.get(
+        f"/operations/fbs-supplies/{sc_supply['id']}/cargo-places",
+        headers=headers,
+    )
+    assert sc_cargo_places.status_code == 200, sc_cargo_places.text
+    sc_places = sc_cargo_places.json()["cargo_places"]
+    assert len(sc_places) == 1
+    assert sc_places[0]["qr_asset"] is not None
 
 
 @pytest.mark.asyncio
@@ -1037,7 +1057,15 @@ async def test_pvz_delete_cargo_places_transport_reconciles_without_double_delet
         assert operation.state == WB_OPERATION_STATE_CONFIRMED
 
 
-# TC-NEW-FBS-PVZ-DELETE-003 — guards: unknown id, wrong route, post-deliver block
+# TC-NEW-FBS-PVZ-DELETE-003 — guards: unknown id, cross-supply id, post-deliver
+# block. warehouse_sc cargo-place delete used to be rejected outright with
+# "wrong_delivery_type"; that was our own caution, not a WB rule (see the
+# module docstring in fbs_shipment_pvz_service.py — verified live on
+# 2026-08-17 against WB-GI-265711836 that WB's DELETE .../trbx accepts a
+# warehouse/SC supply's cargo places, 204). Deleting a cargo place through a
+# supply it doesn't belong to is still rejected — as cargo_place_not_found,
+# the same 404 an unknown id gets — since membership, not delivery_type, is
+# what's actually being checked.
 @pytest.mark.asyncio
 async def test_pvz_delete_cargo_places_guards(
     async_client: AsyncClient,
@@ -1077,17 +1105,32 @@ async def test_pvz_delete_cargo_places_guards(
         warehouse_id,
         tenant_id,
         wb_order_ids=[971202],
-        supply_name="WH delete blocked",
+        supply_name="WH delete cross-supply",
         delivery_type="warehouse_sc",
     )
-    wh_delete = await _delete_cargo_places(
+    # pvz_supply's own cargo place does not belong to wh_supply — membership
+    # is still enforced, regardless of delivery_type.
+    cross_supply = await _delete_cargo_places(
         async_client,
         headers,
         wh_supply["id"],
         wb_trbx_ids=[wb_id],
     )
-    assert wh_delete.status_code == 400
-    assert wh_delete.json()["detail"]["code"] == "wrong_delivery_type"
+    assert cross_supply.status_code == 404
+    assert cross_supply.json()["detail"]["code"] == "cargo_place_not_found"
+
+    # warehouse_sc can create and delete its own cargo places just like pvz.
+    wh_create = await _create_cargo_places(async_client, headers, wh_supply["id"], count=1)
+    assert wh_create.status_code == 201, wh_create.text
+    wh_wb_id = wh_create.json()["cargo_places"][0]["wb_trbx_id"]
+    wh_delete = await _delete_cargo_places(
+        async_client,
+        headers,
+        wh_supply["id"],
+        wb_trbx_ids=[wh_wb_id],
+    )
+    assert wh_delete.status_code == 200, wh_delete.text
+    assert wh_delete.json()["cargo_places"] == []
 
     await _create_and_fill_physical_box(async_client, headers, pvz_supply["id"], order_ids)
     deliver = await _deliver_with_preflight(async_client, headers, pvz_supply["id"])

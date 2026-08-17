@@ -699,8 +699,9 @@ async def bind_packaging_box_to_trbx(
     trbx_id: uuid.UUID,
     packaging_box_id: uuid.UUID,
 ) -> FbsTrbx:
-    from app.models.fbs_supply import FBS_DELIVERY_TYPE_PVZ
-
+    # Binding a box to a WB cargo place (trbx) is not PVZ-specific: WB accepts
+    # cargo places for any delivery_type (see fbs_shipment_pvz_service module
+    # docstring), so a warehouse_sc supply may have trbxes to bind too.
     supply = await _load_supply(
         session,
         tenant_id,
@@ -710,8 +711,6 @@ async def bind_packaging_box_to_trbx(
     )
     if supply is None:
         raise FbsPackagingIntegrationError("supply_not_found")
-    if supply.delivery_type != FBS_DELIVERY_TYPE_PVZ:
-        raise FbsPackagingIntegrationError("wrong_delivery_type")
 
     trbx = next((row for row in supply.trbxes if row.id == trbx_id), None)
     if trbx is None:

@@ -258,6 +258,55 @@ function InboundProductLineCell({ meta, productId, printTestId }: InboundProduct
   )
 }
 
+type InboundBoxContentLineProps = {
+  meta: ProductLineDisplayMeta
+  quantity: number
+}
+
+/** Компактная строка товара в содержимом короба (фото, название, артикул+ШК, кол-во). */
+function InboundBoxContentLine({ meta, quantity }: InboundBoxContentLineProps) {
+  const barcode = formatProductBarcodeDisplay(meta)
+
+  return (
+    <Stack direction="row" spacing={1} sx={{ alignItems: 'center', minWidth: 0 }}>
+      <Box sx={{ flex: '0 0 32px', display: 'flex' }}>
+        <ProductPhotoThumb
+          src={meta.wb_primary_image_url}
+          alt={meta.product_name}
+          size={32}
+          testId="ff-inbound-box-line-photo"
+        />
+      </Box>
+      <Box sx={{ flex: '1 1 auto', minWidth: 0 }}>
+        <Typography
+          variant="body2"
+          sx={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}
+          title={meta.product_name}
+          data-testid="ff-inbound-box-line-name"
+        >
+          {meta.product_name}
+        </Typography>
+        <Typography
+          variant="caption"
+          color="text.secondary"
+          sx={{ display: 'block', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}
+          title={`${meta.sku_code} · ШК ${barcode}`}
+          data-testid="ff-inbound-box-line-sku"
+        >
+          {meta.sku_code} · ШК {barcode}
+        </Typography>
+      </Box>
+      <Typography
+        variant="body2"
+        sx={{ fontWeight: 700, flexShrink: 0, pl: 1 }}
+        data-testid="ff-inbound-box-line-qty"
+      >
+        {quantity}
+      </Typography>
+    </Stack>
+  )
+}
+
 type InboundDetail = {
   id: string
   document_number: string | null
@@ -2705,11 +2754,13 @@ export function FfInboundRequestView({
                             </Stack>
                           </Stack>
                           {visibleLines.length > 0 ? (
-                            <Stack spacing={0.25} sx={{ px: 1.25, py: 1, bgcolor: 'background.paper' }}>
+                            <Stack spacing={0.75} sx={{ px: 1.25, py: 1, bgcolor: 'background.paper' }}>
                               {visibleLines.map((ln) => (
-                                <Typography key={ln.id} variant="body2" color="text.secondary">
-                                  {ln.sku_code} · {ln.product_name}: {ln.quantity}
-                                </Typography>
+                                <InboundBoxContentLine
+                                  key={ln.id}
+                                  meta={productDisplayMetaFromCatalog(ln.product_id, ln, catalogById)}
+                                  quantity={ln.quantity}
+                                />
                               ))}
                             </Stack>
                           ) : (

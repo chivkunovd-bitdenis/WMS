@@ -1837,17 +1837,34 @@ export function FfSuppliesShipmentsPage({
     },
     [docModal, unloadDetail, mpSubmitted, mpConfirmed, mpCollecting],
   )
-  const mpNextStep = useMemo(() => {
+  // Соседний шаг вкладок, а не «следующий доступный» — иначе кнопка «Далее» молча
+  // перепрыгивает через заблокированный шаг вместо того, чтобы объяснить блокировку
+  // (см. mpStepBlockedReason ниже и требование по большим кнопкам переходов 2026-08-17).
+  const mpImmediateNextStep = useMemo(() => {
     const currentIdx = mpUnloadSteps.findIndex((step) => step.value === mpUnloadTab)
     if (currentIdx < 0) {
       return null
     }
-    return (
-      mpUnloadSteps
-        .slice(currentIdx + 1)
-        .find((step) => mpStepEnabled(step.value))?.value ?? null
-    )
-  }, [mpStepEnabled, mpUnloadTab])
+    return mpUnloadSteps[currentIdx + 1] ?? null
+  }, [mpUnloadTab])
+  const mpNextStepEnabled = mpImmediateNextStep ? mpStepEnabled(mpImmediateNextStep.value) : false
+  /** Тот же текст — и на disabled-вкладке при наведении, и под кнопкой «Далее». */
+  const mpStepBlockedReason = useCallback(
+    (step: MpUnloadTab): string => {
+      if (step === 'pick') {
+        return 'Утвердите план поставки, чтобы открыть подбор.'
+      }
+      if (step === 'packaging') {
+        const remaining = mpCollectSummary?.remaining ?? 0
+        if (remaining > 0) {
+          return `Подберите ещё ${remaining} шт., чтобы перейти к упаковке.`
+        }
+        return 'Задание на упаковку появится после утверждения плана поставки.'
+      }
+      return ''
+    },
+    [mpCollectSummary],
+  )
   // Дизайн-разбор 2026-08-16: галочка раньше означала «шаг разблокирован», а не
   // «шаг закончен» — на утверждённой отгрузке с планом 4 и подобрано 0 «Товары ✓»
   // и «Подбор ✓» стояли одновременно, хотя подбор ещё не начинался. Бригадир на
@@ -2489,7 +2506,7 @@ export function FfSuppliesShipmentsPage({
                   const done = mpStepDone(step.value)
                   const enabled = mpStepEnabled(step.value)
                   const label = done ? `${step.label} ✓` : enabled ? `${step.label} …` : step.label
-                  return (
+                  const tab = (
                     <Tab
                       key={step.value}
                       // Пункт 1 итерации 2026-08-14: назад можно, вперёд нельзя — как в FBS
@@ -2499,6 +2516,13 @@ export function FfSuppliesShipmentsPage({
                       disabled={!enabled}
                       data-testid={step.testId}
                     />
+                  )
+                  if (enabled) return tab
+                  // Disabled-таб MUI без обёртки <span> не показывает Tooltip.
+                  return (
+                    <Tooltip key={step.value} title={mpStepBlockedReason(step.value)}>
+                      <span>{tab}</span>
+                    </Tooltip>
                   )
                 })}
               </Tabs>
@@ -3107,6 +3131,7 @@ export function FfSuppliesShipmentsPage({
                 <Button
                   variant="contained"
                   color="secondary"
+                  size="large"
                   disabled={
                     modalBusy ||
                     !confirmDate.trim() ||
@@ -3133,21 +3158,51 @@ export function FfSuppliesShipmentsPage({
             ) : null}
             {docModal === 'marketplace_unload' && unloadDetail && mpExecutionPhase ? (
               <>
-                {mpNextStep ? (
-                  <Button
-                    variant="contained"
-                    color="primary"
-                    endIcon={<ArrowForwardOutlined fontSize="small" />}
-                    disabled={modalBusy}
-                    onClick={() => setMpUnloadTab(mpNextStep)}
-                    data-testid="ff-mp-next-step"
-                  >
-                    Далее: {mpUnloadStepLabel(mpNextStep)}
-                  </Button>
+                {mpImmediateNextStep ? (
+                  <Stack spacing={0.5} sx={{ alignItems: 'flex-start', maxWidth: 420 }}>
+                    {mpNextStepEnabled ? (
+                      <Button
+                        variant="contained"
+                        color="primary"
+                        size="large"
+                        endIcon={<ArrowForwardOutlined />}
+                        disabled={modalBusy}
+                        onClick={() => setMpUnloadTab(mpImmediateNextStep.value)}
+                        data-testid="ff-mp-next-step"
+                      >
+                        Далее: {mpUnloadStepLabel(mpImmediateNextStep.value)}
+                      </Button>
+                    ) : (
+                      <>
+                        <Tooltip title={mpStepBlockedReason(mpImmediateNextStep.value)}>
+                          <span>
+                            <Button
+                              variant="contained"
+                              color="primary"
+                              size="large"
+                              endIcon={<ArrowForwardOutlined />}
+                              disabled
+                              data-testid="ff-mp-next-step"
+                            >
+                              Далее: {mpUnloadStepLabel(mpImmediateNextStep.value)}
+                            </Button>
+                          </span>
+                        </Tooltip>
+                        <Typography
+                          variant="body2"
+                          color="text.secondary"
+                          data-testid="ff-mp-next-step-reason"
+                        >
+                          {mpStepBlockedReason(mpImmediateNextStep.value)}
+                        </Typography>
+                      </>
+                    )}
+                  </Stack>
                 ) : (
                   <Button
                     variant="contained"
                     color="primary"
+                    size="large"
                     disabled={
                       modalBusy ||
                       (mpCollectSummary?.distributed ?? 0) < 1 ||

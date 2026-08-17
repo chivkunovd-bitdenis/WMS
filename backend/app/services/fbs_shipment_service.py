@@ -727,8 +727,9 @@ async def _fetch_supply_qr_after_deliver(
     http_client: httpx.AsyncClient,
     token: str,
 ) -> None:
-    if supply.delivery_type != FBS_DELIVERY_TYPE_WAREHOUSE_SC:
-        return
+    # WB issues a supply QR (GET /api/v3/supplies/{id}/barcode) regardless of
+    # delivery_type — verified against the WB API for both warehouse_sc and pvz
+    # supplies on 2026-08-17. Do not re-add a delivery_type gate here.
     if supply.barcode_file and supply.barcode_asset_id:
         return
     try:
@@ -1070,8 +1071,6 @@ async def get_supply_barcode(
     supply = await _get_supply_read(session, tenant_id, supply_id)
     if supply is None:
         raise FbsShipmentError("supply_not_found")
-    if supply.delivery_type != FBS_DELIVERY_TYPE_WAREHOUSE_SC:
-        raise FbsShipmentError("wrong_delivery_type", http_status=409)
     if supply.status not in {FBS_SUPPLY_STATUS_IN_DELIVERY, FBS_SUPPLY_STATUS_DONE}:
         raise FbsShipmentError("supply_bad_status", http_status=409)
 
@@ -1109,12 +1108,10 @@ async def retry_supply_qr(
     supply_id: uuid.UUID,
     http_client: httpx.AsyncClient,
 ) -> FbsSupply:
-    """Safely fetch a missing warehouse/SC QR after WB delivery was confirmed."""
+    """Safely fetch a missing supply QR after WB delivery was confirmed (any delivery_type)."""
     supply = await _get_supply_for_update(session, tenant_id, supply_id, with_trbxes=True)
     if supply is None:
         raise FbsShipmentError("supply_not_found")
-    if supply.delivery_type != FBS_DELIVERY_TYPE_WAREHOUSE_SC:
-        raise FbsShipmentError("wrong_delivery_type", http_status=409)
     if supply.status not in {FBS_SUPPLY_STATUS_IN_DELIVERY, FBS_SUPPLY_STATUS_DONE}:
         raise FbsShipmentError("supply_bad_status", http_status=409)
 

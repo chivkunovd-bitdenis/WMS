@@ -2390,7 +2390,7 @@
         "tags": [
           "operations"
         ],
-        "summary": "Retry a PVZ box QR without creating a cargo place",
+        "summary": "Retry a box cargo-place QR without creating a new cargo place",
         "operationId": "retry_fbs_packing_box_qr_operations_fbs_supplies__supply_id__boxes__box_id__retry_qr_post",
         "security": [
           {
@@ -2893,7 +2893,7 @@
         "tags": [
           "operations"
         ],
-        "summary": "Delete selected PVZ cargo places",
+        "summary": "Delete selected cargo places",
         "description": "Removes selected WB cargo places while the supply is still being assembled. Calls WB DELETE /api/v3/supplies/{supplyId}/trbx, then drops local FbsTrbx rows and QR print assets. Retries reconcile via GET trbx list; absent requested IDs count as confirmed delete without re-deleting extras.",
         "operationId": "delete_fbs_cargo_places_operations_fbs_supplies__supply_id__cargo_places_delete",
         "security": [
@@ -3456,8 +3456,8 @@
         "tags": [
           "operations"
         ],
-        "summary": "Retry warehouse/SC supply QR after confirmed deliver",
-        "description": "Fetches the missing supply QR print asset only. Never re-invokes WB deliver. Allowed for warehouse_sc supplies in in_delivery or done; PVZ returns 409 wrong_delivery_type.",
+        "summary": "Retry supply QR after confirmed deliver",
+        "description": "Fetches the missing supply QR print asset only. Never re-invokes WB deliver. Allowed for any delivery_type (warehouse_sc or pvz) once the supply is in in_delivery or done — WB issues a supply QR for both.",
         "operationId": "retry_fbs_supply_qr_operations_fbs_supplies__supply_id__retry_supply_qr_post",
         "security": [
           {
@@ -3506,7 +3506,7 @@
           "operations"
         ],
         "summary": "Deprecated compatibility: supply QR binary",
-        "description": "Compatibility layer only. Prefer print-assets kind=supply_qr after deliver (warehouse/sc). Does not return barcode_file paths to the client.",
+        "description": "Compatibility layer only. Prefer print-assets kind=supply_qr after deliver (any delivery_type). Does not return barcode_file paths to the client.",
         "operationId": "get_fbs_supply_barcode_operations_fbs_supplies__supply_id__barcode_get",
         "deprecated": true,
         "security": [
@@ -13303,6 +13303,34 @@
         ],
         "title": "MarkingReprintRequestsOut"
       },
+      "MovementGroupOut": {
+        "properties": {
+          "key": {
+            "type": "string",
+            "title": "Key"
+          },
+          "label": {
+            "type": "string",
+            "title": "Label"
+          },
+          "in_qty": {
+            "type": "integer",
+            "title": "In Qty"
+          },
+          "out_qty": {
+            "type": "integer",
+            "title": "Out Qty"
+          }
+        },
+        "type": "object",
+        "required": [
+          "key",
+          "label",
+          "in_qty",
+          "out_qty"
+        ],
+        "title": "MovementGroupOut"
+      },
       "NotificationListOut": {
         "properties": {
           "items": {
@@ -14102,6 +14130,10 @@
             "type": "integer",
             "title": "Qty Marking Printed"
           },
+          "qty_marking_external": {
+            "type": "integer",
+            "title": "Qty Marking External"
+          },
           "qty_product_label_printed": {
             "type": "integer",
             "title": "Qty Product Label Printed"
@@ -14133,6 +14165,7 @@
           "qty_packed_in_task",
           "qty_done",
           "qty_marking_printed",
+          "qty_marking_external",
           "qty_product_label_printed",
           "is_complete"
         ],
@@ -14965,6 +14998,21 @@
         },
         "type": "object",
         "title": "PoolThresholdIn"
+      },
+      "PrepackedExternalIn": {
+        "properties": {
+          "quantity": {
+            "type": "integer",
+            "maximum": 1000000000.0,
+            "minimum": 1.0,
+            "title": "Quantity"
+          }
+        },
+        "type": "object",
+        "required": [
+          "quantity"
+        ],
+        "title": "PrepackedExternalIn"
       },
       "PrintAllLineOut": {
         "properties": {
@@ -15857,6 +15905,107 @@
         ],
         "title": "ProductMarkingOverviewOut"
       },
+      "ProductMovementSummaryRowOut": {
+        "properties": {
+          "product_id": {
+            "type": "string",
+            "title": "Product Id"
+          },
+          "sku_code": {
+            "type": "string",
+            "title": "Sku Code"
+          },
+          "product_name": {
+            "type": "string",
+            "title": "Product Name"
+          },
+          "wb_vendor_code": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Wb Vendor Code"
+          },
+          "wb_barcode": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Wb Barcode"
+          },
+          "photo_url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Photo Url"
+          },
+          "seller_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Seller Id"
+          },
+          "seller_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Seller Name"
+          },
+          "groups": {
+            "items": {
+              "$ref": "#/components/schemas/MovementGroupOut"
+            },
+            "type": "array",
+            "title": "Groups"
+          },
+          "total_in": {
+            "type": "integer",
+            "title": "Total In"
+          },
+          "total_out": {
+            "type": "integer",
+            "title": "Total Out"
+          },
+          "net": {
+            "type": "integer",
+            "title": "Net"
+          }
+        },
+        "type": "object",
+        "required": [
+          "product_id",
+          "sku_code",
+          "product_name",
+          "groups",
+          "total_in",
+          "total_out",
+          "net"
+        ],
+        "title": "ProductMovementSummaryRowOut"
+      },
       "ProductOut": {
         "properties": {
           "id": {
@@ -15980,6 +16129,28 @@
               }
             ],
             "title": "Wb Size"
+          },
+          "wb_country_of_origin": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Wb Country Of Origin"
+          },
+          "wb_shelf_life": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Wb Shelf Life"
           },
           "packaging_instructions": {
             "anyOf": [

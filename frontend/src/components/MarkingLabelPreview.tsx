@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { Box, Typography } from '@mui/material'
 import {
   buildMarkingTapeDocument,
@@ -15,8 +15,28 @@ import type { LabelSize } from '../utils/labelSize'
 import type { ProductLabelPrintOptions } from '../utils/productLabelText'
 
 const MM_TO_PX = 3.7795275591
-const PREVIEW_WIDTH_PX = 220
-const PREVIEW_MAX_HEIGHT_PX = 420
+/**
+ * Раньше ширина превью была зашита константой 220px (≈ натуральный размер 58мм
+ * этикетки на экране) — читать такую миниатюру тяжело. Теперь ширина считается
+ * от реально доступного места (ResizeObserver на обёртке), а эти границы лишь
+ * не дают превью схлопнуться в узкой модалке и не дают ему раздуться на весь
+ * широкий диалог сильнее, чем нужно для чтения одной этикетки.
+ */
+const PREVIEW_MIN_WIDTH_PX = 260
+const PREVIEW_MAX_WIDTH_PX = 480
+/** Ширина до первого измерения контейнера (ResizeObserver срабатывает после монтирования). */
+const PREVIEW_FALLBACK_WIDTH_PX = 320
+/**
+ * Потолок высоты превью. Раньше был 520px — уже это обрезало типичный дефолтный
+ * макет (58×40мм, 2 блока «ЧЗ на единицу» — обычное состояние формы при открытии)
+ * на ~140px снизу, и приходилось скроллить саму рамку превью, а не только диалог.
+ * 900px посчитан от факта: при максимальной ширине превью (480px, см. выше)
+ * 58×40 и 60×40 с типовыми 1–2 блоками умещаются с запасом (~640–670px), а вот
+ * по-настоящему крупные этикетки (70×120, длинные ленты из нескольких единиц)
+ * всё равно превышают и это — для них остаётся собственная прокрутка ниже,
+ * как и задумано: превью не сжимается до нечитаемости, а скроллится целиком.
+ */
+const PREVIEW_MAX_HEIGHT_PX = 900
 const MAX_PREVIEW_UNITS = 3
 
 /**
@@ -71,6 +91,28 @@ export function MarkingLabelPreview(props: Props) {
   const [html, setHtml] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
   const requestRef = useRef(0)
+  const containerRef = useRef<HTMLDivElement | null>(null)
+  const [containerWidthPx, setContainerWidthPx] = useState(PREVIEW_FALLBACK_WIDTH_PX)
+
+  // Ширина превью считается от реально доступного места в диалоге, а не зашита
+  // константой — так расширение самой модалки (или другой контейнер, например
+  // узкая ProductBarcodePrintDialog) сразу даёт крупнее/мельче превью.
+  useLayoutEffect(() => {
+    const el = containerRef.current
+    if (!el) return
+    const measure = () => {
+      const w = el.clientWidth
+      if (w > 0) setContainerWidthPx(w)
+    }
+    measure()
+    if (typeof ResizeObserver === 'undefined') {
+      window.addEventListener('resize', measure)
+      return () => window.removeEventListener('resize', measure)
+    }
+    const observer = new ResizeObserver(measure)
+    observer.observe(el)
+    return () => observer.disconnect()
+  }, [])
 
   const shown = Math.min(Math.max(1, Math.floor(unitsToShow) || 1), MAX_PREVIEW_UNITS)
   const total = Math.max(shown, Math.floor(totalUnits ?? shown) || shown)
@@ -137,13 +179,21 @@ export function MarkingLabelPreview(props: Props) {
     productPrintOptions?.includeSize,
   ])
 
+  const previewWidthPx = Math.min(
+    PREVIEW_MAX_WIDTH_PX,
+    Math.max(PREVIEW_MIN_WIDTH_PX, containerWidthPx),
+  )
   const nativeWidthPx = size.widthMm * MM_TO_PX
   const nativeHeightPx = size.heightMm * MM_TO_PX * sectionsCount
-  const scale = PREVIEW_WIDTH_PX / nativeWidthPx
+  const scale = previewWidthPx / nativeWidthPx
+  // Ширина никогда не режется под высоту — если этикетка после масштабирования
+  // по ширине всё равно не помещается в PREVIEW_MAX_HEIGHT_PX (например 70×120мм
+  // или несколько блоков на ленте), даём внутреннюю прокрутку вместо того, чтобы
+  // сжимать макет до нечитаемости.
   const scaledHeightPx = Math.min(nativeHeightPx * scale, PREVIEW_MAX_HEIGHT_PX)
 
   return (
-    <Box data-testid={testId}>
+    <Box data-testid={testId} ref={containerRef} sx={{ width: '100%' }}>
       {error ? (
         <Typography variant="caption" color="error">
           {error}
@@ -151,7 +201,8 @@ export function MarkingLabelPreview(props: Props) {
       ) : (
         <Box
           sx={{
-            width: PREVIEW_WIDTH_PX,
+            width: previewWidthPx,
+            maxWidth: '100%',
             height: scaledHeightPx,
             border: '1px solid',
             borderColor: 'divider',

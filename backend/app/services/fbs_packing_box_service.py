@@ -1,4 +1,7 @@
-"""Physical FBS boxes.  A box is local; only PVZ gets a linked WB cargo place."""
+"""Physical FBS boxes.  A box is local; when a WB HTTP client is supplied, it
+also gets a linked WB cargo place (trbx) — for any delivery_type, not only
+PVZ. See app/services/fbs_shipment_pvz_service.py module docstring for why
+the old PVZ-only restriction was dropped on 2026-08-17."""
 
 from __future__ import annotations
 
@@ -13,7 +16,6 @@ from sqlalchemy.orm import selectinload
 from app.models.fbs_order import PACK_STATUS_PACKED, FbsOrder
 from app.models.fbs_packing_box import FbsPackingBox, FbsPackingBoxItem
 from app.models.fbs_supply import (
-    FBS_DELIVERY_TYPE_PVZ,
     FBS_SUPPLY_STATUS_DONE,
     FBS_SUPPLY_STATUS_IN_DELIVERY,
     FbsSupply,
@@ -127,18 +129,19 @@ async def create_boxes(
             boxes.append(box)
         await session.flush()
 
-    if supply.delivery_type == FBS_DELIVERY_TYPE_PVZ:
-        if http_client is None:
-            raise FbsPackingBoxError("pvz_http_client_required")
-        await _link_or_create_pvz_cargo_places(
-            session,
-            tenant_id,
-            supply,
-            boxes,
-            idempotency_key,
-            http_client,
-            actor_user_id=actor_user_id,
-        )
+    # A cargo place is registered with WB for every box, regardless of
+    # delivery_type (see module docstring).
+    if http_client is None:
+        raise FbsPackingBoxError("pvz_http_client_required")
+    await _link_or_create_cargo_places(
+        session,
+        tenant_id,
+        supply,
+        boxes,
+        idempotency_key,
+        http_client,
+        actor_user_id=actor_user_id,
+    )
     return await _load_boxes(session, tenant_id, supply_id)
 
 
@@ -249,7 +252,7 @@ async def delete_box(
         raise FbsPackingBoxError("box_not_empty")
     supply = await _get_supply(session, tenant_id, supply_id)
     _assert_supply_mutable(supply)
-    if supply.delivery_type == FBS_DELIVERY_TYPE_PVZ and box.trbx is not None:
+    if box.trbx is not None:
         if http_client is None:
             raise FbsPackingBoxError("pvz_http_client_required")
         try:
@@ -277,9 +280,7 @@ async def retry_box_qr(
     http_client: httpx.AsyncClient,
 ) -> None:
     box = await _get_box(session, tenant_id, supply_id, box_id)
-    supply = await _get_supply(session, tenant_id, supply_id)
-    if supply.delivery_type != FBS_DELIVERY_TYPE_PVZ:
-        raise FbsPackingBoxError("wrong_delivery_type")
+    await _get_supply(session, tenant_id, supply_id)
     if box.trbx is None:
         raise FbsPackingBoxError("box_cargo_place_unresolved")
     try:
@@ -329,7 +330,7 @@ def _boxes_without_distribution(boxes: list[FbsPackingBox]) -> bool:
     return bool(boxes) and any(_box_without_distribution(box) for box in boxes)
 
 
-async def _link_or_create_pvz_cargo_places(
+async def _link_or_create_cargo_places(
     session: AsyncSession,
     tenant_id: uuid.UUID,
     supply: FbsSupply,

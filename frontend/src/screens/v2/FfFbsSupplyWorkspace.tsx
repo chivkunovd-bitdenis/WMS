@@ -991,8 +991,11 @@ export function FfFbsSupplyWorkspace({
   const boxTotalCount = workspace?.progress.total ?? 0
   const boxRemainingCount = Math.max(0, boxTotalCount - boxDistributedCount)
   const supplyQrAsset = workspace?.supply.barcode_asset ?? null
-  const needsSupplyQr = workspace?.supply.delivery_type === 'warehouse_sc'
-  const isPvzDelivery = workspace?.supply.delivery_type === 'pvz'
+  const needsSupplyQr = Boolean(workspace?.supply)
+  // A cargo-place QR is available per-box whenever WB registered a cargo
+  // place for that box — this is no longer PVZ-only (warehouse/SC boxes get
+  // one too), so branch on the box's own wb_trbx_id, not delivery_type.
+  const hasCargoPlaceBoxes = Boolean(workspace?.boxes.some((box) => box.wb_trbx_id))
   const boxAssignRows = useMemo(() => {
     const grouped = new Map<string, {
       key: string
@@ -1043,6 +1046,77 @@ export function FfFbsSupplyWorkspace({
       return next
     })
   }, [workspace, stage])
+
+  /** Почему нельзя перейти к следующему этапу — то же объяснение и для disabled-вкладки, и для кнопки «Далее». */
+  function stageBlockedExplanation(fromStage: StageKey): string {
+    if (fromStage === 'composition') {
+      return 'Начните работу с поставкой, чтобы перейти к подбору.'
+    }
+    if (fromStage === 'picking') {
+      const remaining = Math.max(0, total - (workspace?.progress.picked ?? 0))
+      return `Подберите ещё ${remaining} шт., чтобы перейти к упаковке.`
+    }
+    if (fromStage === 'packing') {
+      const remainingToPack = Math.max(0, total - (workspace?.progress.packed ?? 0))
+      const remainingToPrint = Math.max(0, packingOrders.length - printedOrdersCount)
+      const parts: string[] = []
+      if (remainingToPack > 0) parts.push(`упаковать ещё ${remainingToPack} шт.`)
+      if (remainingToPrint > 0) parts.push(`напечатать стикеры на ${remainingToPrint} шт.`)
+      if (parts.length === 0) return 'Завершите упаковку и печать стикеров, чтобы перейти к коробам.'
+      return `Нужно ${parts.join(' и ')}, чтобы перейти к коробам.`
+    }
+    return ''
+  }
+
+  /**
+   * Кнопка перехода к следующему этапу — крупная и заметная, ведёт туда же, куда клик по
+   * следующей вкладке, и разблокирована ровно тогда же (см. Tabs.onChange ниже). Когда
+   * следующий этап ещё недоступен, кнопка не пропадает, а объясняет, чего не хватает —
+   * это важнее самой кнопки.
+   */
+  function nextStageControl(fromStage: StageKey) {
+    const fromIndex = STAGES.findIndex((item) => item.key === fromStage)
+    const next = STAGES[fromIndex + 1]
+    if (!next) return null
+    const unlocked = fromIndex + 1 <= currentStageIndex
+    const reason = stageBlockedExplanation(fromStage)
+    const button = (
+      <Button
+        variant="contained"
+        size="large"
+        disabled={!unlocked || busy}
+        onClick={() => {
+          setStage(next.key)
+          setError(null)
+          setNotice(null)
+        }}
+        data-testid={`fbs-stage-next-${fromStage}`}
+      >
+        {`Далее: ${next.label} →`}
+      </Button>
+    )
+    return (
+      <Stack direction="row" sx={{ justifyContent: 'flex-end', mt: 1 }}>
+        <Stack spacing={0.75} sx={{ alignItems: 'flex-end', maxWidth: 480 }}>
+          {unlocked ? button : (
+            <Tooltip title={reason}>
+              <span>{button}</span>
+            </Tooltip>
+          )}
+          {!unlocked ? (
+            <Typography
+              variant="body2"
+              color="text.secondary"
+              sx={{ textAlign: 'right' }}
+              data-testid={`fbs-stage-next-${fromStage}-reason`}
+            >
+              {reason}
+            </Typography>
+          ) : null}
+        </Stack>
+      </Stack>
+    )
+  }
 
   const partialRejectionAlert = workspace?.partial_rejection?.rejected_orders?.length ? (
     <Alert severity="warning" sx={{ mb: 2 }} data-testid="fbs-partial-rejection">
@@ -1177,9 +1251,23 @@ export function FfFbsSupplyWorkspace({
         scrollButtons="auto"
         sx={{ px: 2, borderBottom: 1, borderColor: 'divider', bgcolor: 'rgba(91,33,182,.035)' }}
       >
-        {STAGES.map((item, index) => (
-          <Tab key={item.key} value={item.key} label={index < currentStageIndex ? `${item.label} ✓` : item.label} disabled={index > currentStageIndex} />
-        ))}
+        {STAGES.map((item, index) => {
+          const locked = index > currentStageIndex
+          const tab = (
+            <Tab
+              key={item.key}
+              value={item.key}
+              label={index < currentStageIndex ? `${item.label} ✓` : item.label}
+              disabled={locked}
+            />
+          )
+          if (!locked) return tab
+          return (
+            <Tooltip key={item.key} title={stageBlockedExplanation(currentStage)}>
+              <span>{tab}</span>
+            </Tooltip>
+          )
+        })}
       </Tabs>
 
       {busy ? <LinearProgress /> : null}
@@ -1252,17 +1340,15 @@ export function FfFbsSupplyWorkspace({
                   </TableBody>
                 </Table>
               </Paper>
-              <Stack direction="row" sx={{ justifyContent: 'flex-end' }}>
-                {workspace.supply.status === 'draft' && stageIsCurrent ? (
+              {workspace.supply.status === 'draft' && stageIsCurrent ? (
+                <Stack direction="row" sx={{ justifyContent: 'flex-end' }}>
                   <Button variant="contained" size="large" onClick={() => void run(() => startFbsSupplyWork(token, authHeaders, workspace.supply.id), 'Задание создано. Можно переходить к следующему этапу.')}>
                     Начать работу с поставкой
                   </Button>
-                ) : (
-                  <Alert severity="info" data-testid="fbs-20-next-step-hint">
-                    Поставка уже начата. Следующий шаг: {STAGES.find((item) => item.key === currentStage)?.label ?? 'откройте текущий этап'}.
-                  </Alert>
-                )}
-              </Stack>
+                </Stack>
+              ) : (
+                nextStageControl('composition')
+              )}
             </Stack>
           ) : null}
 
@@ -1363,6 +1449,7 @@ export function FfFbsSupplyWorkspace({
                   </Stack>
                 )}
               </Paper>
+              {nextStageControl('picking')}
             </Stack>
           ) : null}
 
@@ -1474,6 +1561,7 @@ export function FfFbsSupplyWorkspace({
               ) : (
                 <Alert severity="info">{workspace.supply.packaging_task_id ? 'Загружаем существующее задание упаковки…' : 'Сначала начните работу с поставкой — сервер создаст единственное задание упаковки.'}</Alert>
               )}
+              {nextStageControl('packing')}
             </Stack>
           ) : null}
 
@@ -1555,7 +1643,11 @@ export function FfFbsSupplyWorkspace({
                               size="small"
                               disabled={busy}
                               onClick={() => {
-                                if (workspace.supply.delivery_type === 'pvz') {
+                                // Real WB cargo-place QR whenever this box has one linked
+                                // (any delivery_type); otherwise fall back to the local
+                                // internal-barcode preview (e.g. boxes created before
+                                // cargo places were enabled for warehouse/SC).
+                                if (box.wb_trbx_id) {
                                   if (box.qr_asset?.preview_url) openAssetPreview([box.qr_asset])
                                   else void retryBoxQr(box.id)
                                   return
@@ -1668,10 +1760,10 @@ export function FfFbsSupplyWorkspace({
                   Поставка передана, QR получить не удалось
                 </Alert>
               ) : null}
-              {deliveryConfirmed && isPvzDelivery ? (
+              {deliveryConfirmed && hasCargoPlaceBoxes ? (
                 <Alert severity="info" data-testid="fbs-supply-qr-pvz" data-task-id="FBS-09">
-                  Для сдачи в ПВЗ Wildberries не выдаёт QR поставки — сдавайте по QR коробов.
-                  Кнопка «QR» есть в строке каждого короба выше.
+                  На каждый короб клеится свой QR грузоместа — кнопка «QR» есть в строке каждого короба выше.
+                  QR поставки печатается отдельно (см. блок выше) и едет вместе с грузом.
                 </Alert>
               ) : null}
             </Stack>

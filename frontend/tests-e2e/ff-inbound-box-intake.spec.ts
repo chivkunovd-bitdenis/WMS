@@ -31,9 +31,13 @@ test.describe('FF inbound box piece intake', () => {
     await expect(page.getByTestId('ff-inbound-document-technical-number')).toHaveCount(0);
 
     await ffInboundBoxAddManualQty(page, 3);
-    await expect(page.getByTestId('ff-inbound-box-row').first()).toContainText(': 3');
+    await expect(
+      page.getByTestId('ff-inbound-box-row').first().getByTestId('ff-inbound-box-line-qty'),
+    ).toHaveText('3');
     await ffInboundBoxAddManualQty(page, 2);
-    await expect(page.getByTestId('ff-inbound-box-row').nth(1)).toContainText(': 2');
+    await expect(
+      page.getByTestId('ff-inbound-box-row').nth(1).getByTestId('ff-inbound-box-line-qty'),
+    ).toHaveText('2');
 
     await expect(page.getByTestId('ff-inbound-line-actual-display').first()).toHaveText('5', {
       timeout: 15_000,

@@ -1,4 +1,7 @@
-"""Physical FBS box API — warehouse/SC stays local and assignments are exclusive."""
+"""Physical FBS box API — a box is local, but (since 2026-08-17) every box also
+gets a linked WB cargo place (trbx) + QR, for warehouse/SC exactly like PVZ.
+See the module docstring in app/services/fbs_shipment_pvz_service.py for why
+the old PVZ-only cargo-place restriction was dropped."""
 
 from __future__ import annotations
 
@@ -10,6 +13,7 @@ import pytest
 from httpx import AsyncClient
 from sqlalchemy import select
 
+from app.core.settings import settings
 from app.db.session import SessionLocal
 from app.models.fbs_order import PACK_STATUS_PACKED, FbsOrder
 from app.models.fbs_supply import FBS_DELIVERY_TYPE_WAREHOUSE_SC, FBS_SUPPLY_STATUS_PACKED
@@ -26,6 +30,11 @@ from tests.test_fbs_picking import (
 )
 
 
+@pytest.fixture
+def enable_wb_marketplace_supplies_mock(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(settings, "e2e_mock_wb_marketplace_supplies", True)
+
+
 async def _packed_supply(
     async_client: AsyncClient,
 ) -> tuple[dict[str, str], uuid.UUID, list[uuid.UUID]]:
@@ -33,6 +42,14 @@ async def _packed_supply(
     seller_id, warehouse_id, location_id = await _create_seller_and_warehouse(
         async_client, headers, suffix
     )
+    # Box creation now always registers a WB cargo place, so every caller of
+    # _packed_supply needs a marketplace token — see enable_wb_marketplace_supplies_mock.
+    token = await async_client.patch(
+        f"/integrations/wildberries/sellers/{seller_id}/tokens",
+        headers=headers,
+        json={"marketplace_api_token": "wb-marketplace-token"},
+    )
+    assert token.status_code == 200, token.text
     product_id = await _create_product(
         async_client,
         headers,
@@ -60,9 +77,14 @@ async def _packed_supply(
     return headers, supply_id, order_ids
 
 
+# Warehouse/SC boxes stay local (an internal barcode, not sent to WB as such)
+# but — like PVZ boxes — each one also gets its own WB cargo place (trbx) and
+# QR sticker once created; that used to be PVZ-only, dropped on 2026-08-17
+# (see module docstring).
 @pytest.mark.asyncio
-async def test_warehouse_boxes_are_local_and_orders_are_exclusive(
+async def test_warehouse_boxes_get_cargo_places_and_orders_are_exclusive(
     async_client: AsyncClient,
+    enable_wb_marketplace_supplies_mock: None,
 ) -> None:
     headers, supply_id, order_ids = await _packed_supply(async_client)
 
@@ -76,7 +98,8 @@ async def test_warehouse_boxes_are_local_and_orders_are_exclusive(
     assert len(boxes) == 2
     assert [box["box_number"] for box in boxes] == [1, 2]
     assert all(box["barcode"].startswith("FBS-") for box in boxes)
-    assert all(box["trbx_id"] is None and box["qr_asset"] is None for box in boxes)
+    assert all(box["trbx_id"] is not None and box["wb_trbx_id"] is not None for box in boxes)
+    assert all(box["qr_asset"] is not None for box in boxes)
 
     first = boxes[0]["id"]
     second = boxes[1]["id"]
@@ -135,6 +158,7 @@ async def test_warehouse_boxes_are_local_and_orders_are_exclusive(
 @pytest.mark.asyncio
 async def test_box_creation_key_is_idempotent_and_rejects_different_count(
     async_client: AsyncClient,
+    enable_wb_marketplace_supplies_mock: None,
 ) -> None:
     headers, supply_id, _ = await _packed_supply(async_client)
     url = f"/operations/fbs-supplies/{supply_id}/boxes"
@@ -158,6 +182,7 @@ async def test_box_creation_key_is_idempotent_and_rejects_different_count(
 @pytest.mark.asyncio
 async def test_without_distribution_boxes_do_not_accept_order_assignment(
     async_client: AsyncClient,
+    enable_wb_marketplace_supplies_mock: None,
 ) -> None:
     headers, supply_id, order_ids = await _packed_supply(async_client)
 
