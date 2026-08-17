@@ -413,7 +413,7 @@ def _request_out(
         if r.planned_delivery_date is not None
         else None,
         planned_box_count=r.planned_box_count,
-        actual_box_count=r.actual_box_count,
+        actual_box_count=len(boxes_out),
         boxes_discrepancy=bool(r.boxes_discrepancy),
         has_discrepancy=bool(r.has_discrepancy),
         seller_id=str(r.seller_id) if r.seller_id is not None else None,
@@ -573,7 +573,7 @@ async def list_inbound_requests(
             if r.planned_delivery_date is not None
             else None,
             planned_box_count=r.planned_box_count,
-            actual_box_count=r.actual_box_count,
+            actual_box_count=len(r.boxes),
             boxes_discrepancy=bool(r.boxes_discrepancy),
             has_discrepancy=bool(r.has_discrepancy),
             seller_id=str(r.seller_id) if r.seller_id is not None else None,

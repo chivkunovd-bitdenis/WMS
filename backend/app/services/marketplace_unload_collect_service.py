@@ -35,17 +35,29 @@ class CollectResult:
     picked_qty: int
 
 
+@dataclass(frozen=True)
+class PickAllocationResult:
+    allocation: MarketplaceUnloadPickAllocation
+    product: Product
+    picked_qty: int
+
+
 async def picked_qty_by_product(
     session: AsyncSession, request_id: uuid.UUID
 ) -> dict[uuid.UUID, int]:
+    """Источник истины — аллокации подбора (MarketplaceUnloadPickAllocation), а не
+    содержимое коробов. Подбор больше не создаёт и не трогает короба (решение
+    заказчика 2026-08-16: «автосоздавать короба не надо, и блокировать их тоже не
+    надо без коробов») — короб теперь исключительно явное действие оператора на
+    упаковке, поэтому «сколько подобрано» не может зависеть от того, лежит ли товар
+    физически в коробе."""
     stmt = (
         select(
-            MarketplaceUnloadBoxLine.product_id,
-            func.coalesce(func.sum(MarketplaceUnloadBoxLine.quantity), 0),
+            MarketplaceUnloadPickAllocation.product_id,
+            func.coalesce(func.sum(MarketplaceUnloadPickAllocation.quantity), 0),
         )
-        .join(MarketplaceUnloadBox, MarketplaceUnloadBoxLine.box_id == MarketplaceUnloadBox.id)
-        .where(MarketplaceUnloadBox.request_id == request_id)
-        .group_by(MarketplaceUnloadBoxLine.product_id)
+        .where(MarketplaceUnloadPickAllocation.request_id == request_id)
+        .group_by(MarketplaceUnloadPickAllocation.product_id)
     )
     res = await session.execute(stmt)
     return {row[0]: int(row[1]) for row in res.all()}
@@ -358,6 +370,143 @@ async def collect_into_box(
         box_line=line_loaded,
         allocation=alloc_loaded,
         picked_qty=picked.get(product_id, 0),
+    )
+
+
+async def record_pick_allocation(
+    session: AsyncSession,
+    tenant_id: uuid.UUID,
+    request_id: uuid.UUID,
+    *,
+    storage_location_id: uuid.UUID | None,
+    product_id: uuid.UUID,
+    quantity: int,
+    allow_over_plan: bool = False,
+) -> PickAllocationResult:
+    """Подбор двигает товар со склада в аллокацию подбора и НЕ трогает короба.
+
+    Решение заказчика 2026-08-16: «автосоздавать короба не надо, и блокировать их
+    тоже не надо без коробов». Раньше эта функция называлась collect_into_box и
+    попутно создавала/находила открытый короб и строку в нём — так на подборе
+    незаметно для оператора плодились короба (get_or_create_open_box). Короб теперь
+    заводится только явным действием на упаковке (кнопка «Создать короб» или
+    привязка готового короба сканом), а подбор — только storage → pick allocation.
+    """
+    if quantity < 1:
+        raise MarketplaceUnloadPickError("invalid_quantity")
+
+    req = await _request_for_collect(session, tenant_id, request_id)
+    if not await _product_in_shipment(session, req.id, product_id):
+        raise MarketplaceUnloadPickError("product_not_in_shipment")
+
+    prod = await session.get(Product, product_id)
+    if prod is None or prod.tenant_id != tenant_id:
+        raise MarketplaceUnloadPickError("product_not_found")
+    if req.seller_id is not None and prod.seller_id != req.seller_id:
+        raise MarketplaceUnloadPickError("product_seller_mismatch")
+
+    lock_stmt = (
+        select(MarketplaceUnloadRequest.id)
+        .where(
+            MarketplaceUnloadRequest.id == request_id,
+            MarketplaceUnloadRequest.tenant_id == tenant_id,
+        )
+        .with_for_update()
+    )
+    await session.execute(lock_stmt)
+
+    picked = await picked_qty_by_product(session, request_id)
+    plan_qty = next(
+        (int(ln.quantity) for ln in req.lines if ln.product_id == product_id),
+        0,
+    )
+    if not allow_over_plan and picked.get(product_id, 0) + quantity > plan_qty:
+        raise MarketplaceUnloadPickError("plan_limit_exceeded")
+
+    effective_location_id = await resolve_collect_storage_location(
+        session,
+        tenant_id,
+        req.warehouse_id,
+        product_id,
+        storage_location_id,
+        request_id=request_id,
+        increment_qty=quantity,
+    )
+
+    alloc_stmt = (
+        select(MarketplaceUnloadPickAllocation)
+        .where(
+            MarketplaceUnloadPickAllocation.request_id == request_id,
+            MarketplaceUnloadPickAllocation.product_id == product_id,
+            MarketplaceUnloadPickAllocation.storage_location_id == effective_location_id,
+        )
+        .with_for_update()
+    )
+    alloc_res = await session.execute(alloc_stmt)
+    alloc = alloc_res.scalar_one_or_none()
+    current_pick = int(alloc.quantity) if alloc is not None else 0
+    new_pick = current_pick + quantity
+
+    available = await inventory_service.available_at_location(
+        session, tenant_id, product_id, effective_location_id
+    )
+    if available < new_pick:
+        raise MarketplaceUnloadPickError("insufficient_available")
+
+    try:
+        await inventory_service.apply_marketplace_unload_pick(
+            session,
+            tenant_id=tenant_id,
+            product_id=product_id,
+            storage_location_id=effective_location_id,
+            quantity=quantity,
+            marketplace_unload_request_id=request_id,
+        )
+    except ValueError as exc:
+        if str(exc) == "insufficient stock":
+            raise MarketplaceUnloadPickError("insufficient_available") from exc
+        raise
+
+    await mu_svc.reduce_reservation_for_collect(
+        session, request_id, product_id, quantity
+    )
+
+    if alloc is None:
+        alloc = MarketplaceUnloadPickAllocation(
+            request_id=request_id,
+            product_id=product_id,
+            storage_location_id=effective_location_id,
+            quantity=new_pick,
+        )
+        session.add(alloc)
+    else:
+        alloc.quantity = new_pick
+
+    mu_svc.enter_collecting_if_needed(req)
+    await session.commit()
+
+    picked_after = await picked_qty_by_product(session, request_id)
+    stmt_alloc = (
+        select(MarketplaceUnloadPickAllocation)
+        .where(MarketplaceUnloadPickAllocation.id == alloc.id)
+        .options(
+            selectinload(MarketplaceUnloadPickAllocation.product),
+            selectinload(MarketplaceUnloadPickAllocation.storage_location),
+        )
+    )
+    res_alloc = await session.execute(stmt_alloc)
+    alloc_loaded = res_alloc.scalar_one()
+
+    from app.services import packaging_task_service as pkg_svc
+
+    pkg_task = await pkg_svc.get_task_for_unload(session, tenant_id, request_id)
+    if pkg_task is not None:
+        await pkg_svc.sync_lines_from_pick_allocations(session, tenant_id, pkg_task)
+
+    return PickAllocationResult(
+        allocation=alloc_loaded,
+        product=prod,
+        picked_qty=picked_after.get(product_id, 0),
     )
 
 

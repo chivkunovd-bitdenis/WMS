@@ -18,10 +18,10 @@ const UNIFIED_COLUMN_HEADERS = [
   'Артикул',
   'ШК',
   'Артикул продавца',
-  'Артикул WB',
   'Наименование',
   'Кол-во',
-  'Печать',
+  'Артикул WB',
+  'Действия',
 ] as const;
 
 async function createFfAddedProduct(
@@ -72,7 +72,7 @@ async function expectUnifiedTableGeometry(page: Page): Promise<void> {
   expect(geometry.headerTexts.slice(0, UNIFIED_COLUMN_HEADERS.length)).toEqual([
     ...UNIFIED_COLUMN_HEADERS,
   ]);
-  expect(geometry.headerCells).toBe(9);
+  expect(geometry.headerCells).toBe(8);
   expect(geometry.headerCells).toBe(geometry.bodyCells);
 }
 

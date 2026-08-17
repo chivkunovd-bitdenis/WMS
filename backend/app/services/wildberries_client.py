@@ -270,7 +270,21 @@ async def fetch_cards_list(
                     "nmID": 424242,
                     "vendorCode": "E2E-MOCK",
                     "brand": "E2E-MOCK-BRAND",
-                    "photos": [{"big": "https://example.com/e2e-mock-wb-product.jpg"}],
+                    # Self-contained 1x1 PNG (data: URI) — must actually decode as an image in
+                    # the browser: ProductPhotoThumb now probes the URL with a real Image() load
+                    # and hides the zoom-on-hover preview for anything that fails to load (see
+                    # frontend/src/components/ProductPhotoThumb.tsx). A dead external link like
+                    # the previous "https://example.com/..." placeholder 404s, which used to be
+                    # harmless (old code never checked load success) but now makes every e2e test
+                    # that hovers a product photo fail to see the enlarged preview.
+                    "photos": [
+                        {
+                            "big": (
+                                "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwC"
+                                "AAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII="
+                            )
+                        }
+                    ],
                     "sizes": [{"techSize": "L", "skus": ["E2E-MOCK-BARCODE"]}],
                     "characteristics": [
                         {"name": "Цвет", "value": ["коричневый"]},

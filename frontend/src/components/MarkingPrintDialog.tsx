@@ -11,7 +11,6 @@ import {
   DialogTitle,
   FormControlLabel,
   Paper,
-  Snackbar,
   Stack,
   TextField,
   ToggleButton,
@@ -195,7 +194,6 @@ export function MarkingPrintDialog({ open, reprint, ctx, busy, onBusyChange, onC
   const [catalogPrintQty, setCatalogPrintQty] = useState(1)
   const [wbBarcodeQty, setWbBarcodeQty] = useState(1)
   const [printDoubleWbBarcode, setPrintDoubleWbBarcode] = useState(false)
-  const [toast, setToast] = useState<string | null>(null)
   const [reprintCodes, setReprintCodes] = useState<PrintedCodeOption[]>([])
   const [selectedReprintCodeIds, setSelectedReprintCodeIds] = useState<string[]>([])
   const [reprintCodesLoading, setReprintCodesLoading] = useState(false)
@@ -229,9 +227,18 @@ export function MarkingPrintDialog({ open, reprint, ctx, busy, onBusyChange, onC
   const fbsTapeOrders = ctx?.fbsTape?.orders ?? []
   const fbsHonestSignOrders = fbsTapeOrders.filter((order) => order.requiresHonestSign)
   const isCatalogSource = ctx?.source === 'catalog'
-  const effectiveReprint = reprint || inlineReprint
+  /**
+   * Перепечатка существует только чтобы не жечь коды ЧЗ повторно (FBS-11) — у товара
+   * без ЧЗ печатать нечего повторно, там нет расходуемого пула. Поэтому режим
+   * повторной печати для таких товаров не включаем, даже если вызывающий экран
+   * попросил reprint:true — это тот же признак requiresHonestSign, что и у
+   * NON_HONEST_SIGN_LABEL_LAYOUT выше.
+   */
+  const effectiveReprint = (reprint || inlineReprint) && requiresHonestSign
   const markingAlreadyPrinted = (ctx?.qtyMarkingPrinted ?? 0) > 0
-  const canOpenInlineReprint = Boolean(ctx?.lineId && markingAlreadyPrinted && !fbsTapeMode)
+  const canOpenInlineReprint = Boolean(
+    ctx?.lineId && markingAlreadyPrinted && !fbsTapeMode && requiresHonestSign,
+  )
   const separateEnabled = separateModeChoice ?? (separateEnabledFromProfile ?? separateEnabledFromStore)
   /** Раздельный режим: только для товаров с ЧЗ и не для перепечатки (там печатается один ЧЗ). */
   const separateMode = separateEnabled && requiresHonestSign && !effectiveReprint && !fbsTapeMode
@@ -311,6 +318,17 @@ export function MarkingPrintDialog({ open, reprint, ctx, busy, onBusyChange, onC
     }
   }, [open, ctx?.token, requiresHonestSign, effectiveReprint, separateEnabledFromStore, fbsTapeMode])
 
+  /**
+   * ВАЖНО: этот эффект — единственное место, которое обнуляет состояние диалога
+   * между печатями. Сам диалог смонтирован постоянно (open только переключает
+   * видимость MUI <Dialog>, компонент MarkingPrintDialog не пересоздаётся), поэтому
+   * любой счётчик/флаг, заведённый через useState и не сброшенный здесь, протекает
+   * из прошлой печати в следующую — даже если это печать того же товара по другой
+   * строке упаковки. Если добавляешь новое поле состояния в этот компонент —
+   * впиши его сброс сюда же, иначе получишь тот же класс бага, что был здесь раньше
+   * (зависимость эффекта была точечной — ctx?.productId/ctx?.token — и не ловила
+   * смену lineId при том же товаре).
+   */
   useEffect(() => {
     if (!open || !ctx) {
       return
@@ -318,12 +336,16 @@ export function MarkingPrintDialog({ open, reprint, ctx, busy, onBusyChange, onC
     setError(null)
     setAllowPartial(false)
     setSeparateModeChoice(null)
-    setWbBarcodeQty(1)
+    // Этикетка ШК ВБ клеится на единицу товара: разумное первое значение — сколько
+    // единиц нужно напечатать/упаковать, а не жёсткая «1» (иначе оператор по умолчанию
+    // печатает одну этикетку на несколько единиц и должен сам это заметить).
+    const wbDefaultQty = ctx.source === 'catalog' ? 1 : Math.max(1, ctx.qtyNeedPack || 1)
+    setWbBarcodeQty(wbDefaultQty)
     setPrintDoubleWbBarcode(false)
     setCatalogPrintQty(1)
     setDragTapeIndex(null)
     setSepCzQty(2)
-    setSepWbQty(1)
+    setSepWbQty(wbDefaultQty)
     setSepCzDone(false)
     setSepWbDone(false)
     setCzLabelSize(resolveLabelSize(loadLabelSizeId('cz')))
@@ -370,7 +392,7 @@ export function MarkingPrintDialog({ open, reprint, ctx, busy, onBusyChange, onC
         setLayout(cloneLayout(defaultPreset.layout))
       }
     })()
-  }, [open, ctx?.productId, ctx?.token, requiresHonestSign])
+  }, [open, ctx, requiresHonestSign])
 
   const reprintLineId = fbsTapeMode ? undefined : ctx?.lineId
   const reprintToken = ctx?.token
@@ -933,7 +955,7 @@ export function MarkingPrintDialog({ open, reprint, ctx, busy, onBusyChange, onC
       >
         <DialogTitle>{dialogTitle}</DialogTitle>
         <DialogContent>
-          <Stack spacing={2} sx={{ pt: 0.5 }}>
+          <Stack spacing={3} sx={{ pt: 0.5 }}>
             {ctx ? (
               <Box data-testid="marking-print-header">
                 <Typography variant="subtitle2">{ctx.productName}</Typography>
@@ -1032,7 +1054,7 @@ export function MarkingPrintDialog({ open, reprint, ctx, busy, onBusyChange, onC
               </Typography>
             ) : null}
 
-            {shortage > 0 && !forceReprintOnConfirm ? (
+            {shortage > 0 && !forceReprintOnConfirm && !separateMode ? (
               <Alert severity="error" data-testid="marking-print-shortage-banner">
                 Не хватает {shortage} из {qtyNeed} КМ
               </Alert>
@@ -1050,7 +1072,7 @@ export function MarkingPrintDialog({ open, reprint, ctx, busy, onBusyChange, onC
               </Alert>
             ) : null}
 
-            {!effectiveReprint && !forceReprintOnConfirm && shortage > 0 ? (
+            {!effectiveReprint && !forceReprintOnConfirm && shortage > 0 && available > 0 ? (
               <FormControlLabel
                 control={
                   <Checkbox
@@ -1077,16 +1099,33 @@ export function MarkingPrintDialog({ open, reprint, ctx, busy, onBusyChange, onC
                   data-testid="marking-print-wb-qty"
                   sx={{ maxWidth: 280 }}
                 />
-                <FormControlLabel
-                  control={
-                    <Checkbox
-                      checked={printDoubleWbBarcode}
-                      onChange={(e) => setPrintDoubleWbBarcode(e.target.checked)}
-                      data-testid="marking-print-wb-double"
-                    />
-                  }
-                  label="Печатать 2 ШК"
-                />
+                <Box>
+                  <FormControlLabel
+                    control={
+                      <Checkbox
+                        checked={printDoubleWbBarcode}
+                        onChange={(e) => setPrintDoubleWbBarcode(e.target.checked)}
+                        data-testid="marking-print-wb-double"
+                      />
+                    }
+                    label="Печатать 2 ШК"
+                  />
+                  {printDoubleWbBarcode ? (
+                    <Typography variant="caption" color="text.secondary" sx={{ display: 'block', ml: 4 }}>
+                      × 2 к введённому количеству — итого {totalWbLabels} шт.
+                    </Typography>
+                  ) : null}
+                </Box>
+                <Box sx={{ mt: 1 }}>
+                  <MarkingLabelPreview
+                    variant="product"
+                    productLabel={ctx?.productLabel ?? null}
+                    size={nonCzPrintSize}
+                    unitsToShow={Math.max(1, totalWbLabels)}
+                    totalUnits={Math.max(1, totalWbLabels)}
+                    testId="marking-print-wb-only-preview"
+                  />
+                </Box>
               </>
             ) : null}
 
@@ -1110,7 +1149,7 @@ export function MarkingPrintDialog({ open, reprint, ctx, busy, onBusyChange, onC
 
                 <Paper
                   variant="outlined"
-                  sx={{ p: 2 }}
+                  sx={{ p: 2.5 }}
                   data-testid="marking-print-separate-cz"
                   data-task-id="FBS-10"
                 >
@@ -1165,6 +1204,28 @@ export function MarkingPrintDialog({ open, reprint, ctx, busy, onBusyChange, onC
                       {sepCzDone ? 'ЧЗ напечатаны ✓' : 'Печать ЧЗ'}
                     </Button>
                   </Stack>
+                  {canPrintCount > 0 ? (
+                    <Typography
+                      variant="caption"
+                      color="text.secondary"
+                      sx={{ mt: 0.75, display: 'block' }}
+                      data-testid="marking-print-sep-cz-total"
+                    >
+                      К печати: {sepCzTotal} ЧЗ ({canPrintCount} ед. × {Math.max(1, sepCzQty)})
+                    </Typography>
+                  ) : !canOpenInlineReprint && !sepCzDone ? (
+                    <Typography
+                      variant="caption"
+                      color="error"
+                      sx={{ mt: 0.75, display: 'block' }}
+                      data-testid="marking-print-sep-cz-disabled-reason"
+                      data-task-id="FBS-10"
+                    >
+                      {available < 1
+                        ? 'Печать ЧЗ недоступна: в пуле нет свободных кодов маркировки. Пополните пул или обратитесь к администратору.'
+                        : `Печать ЧЗ недоступна: нужно ${qtyNeed} КМ, в пуле доступно только ${available}. Включите «Печатать доступные» или пополните пул.`}
+                    </Typography>
+                  ) : null}
                   <Box sx={{ mt: 1.5 }}>
                     <MarkingLabelPreview
                       variant="tape"
@@ -1175,33 +1236,11 @@ export function MarkingPrintDialog({ open, reprint, ctx, busy, onBusyChange, onC
                       testId="marking-print-sep-cz-preview"
                     />
                   </Box>
-                  {canPrintCount > 0 ? (
-                    <Typography
-                      variant="caption"
-                      color="text.secondary"
-                      sx={{ mt: 0.5, display: 'block' }}
-                      data-testid="marking-print-sep-cz-total"
-                    >
-                      К печати: {sepCzTotal} ЧЗ ({canPrintCount} ед. × {Math.max(1, sepCzQty)})
-                    </Typography>
-                  ) : !canOpenInlineReprint && !sepCzDone ? (
-                    <Typography
-                      variant="caption"
-                      color="error"
-                      sx={{ mt: 0.5, display: 'block' }}
-                      data-testid="marking-print-sep-cz-disabled-reason"
-                      data-task-id="FBS-10"
-                    >
-                      {available < 1
-                        ? 'Печать ЧЗ недоступна: в пуле нет свободных кодов маркировки. Пополните пул или обратитесь к администратору.'
-                        : `Печать ЧЗ недоступна: нужно ${qtyNeed} КМ, в пуле доступно только ${available}. Включите «Печатать доступные» или пополните пул.`}
-                    </Typography>
-                  ) : null}
                 </Paper>
 
                 <Paper
                   variant="outlined"
-                  sx={{ p: 2 }}
+                  sx={{ p: 2.5 }}
                   data-testid="marking-print-separate-wb"
                   data-task-id="FBS-10"
                 >
@@ -1222,17 +1261,24 @@ export function MarkingPrintDialog({ open, reprint, ctx, busy, onBusyChange, onC
                       data-testid="marking-print-sep-wb-qty"
                       sx={{ width: 180 }}
                     />
-                    <FormControlLabel
-                      control={
-                        <Checkbox
-                          checked={printDoubleWbBarcode}
-                          onChange={(e) => setPrintDoubleWbBarcode(e.target.checked)}
-                          disabled={busy || sepWbDone}
-                          data-testid="marking-print-sep-wb-double"
-                        />
-                      }
-                      label="Печатать 2 ШК"
-                    />
+                    <Box>
+                      <FormControlLabel
+                        control={
+                          <Checkbox
+                            checked={printDoubleWbBarcode}
+                            onChange={(e) => setPrintDoubleWbBarcode(e.target.checked)}
+                            disabled={busy || sepWbDone}
+                            data-testid="marking-print-sep-wb-double"
+                          />
+                        }
+                        label="Печатать 2 ШК"
+                      />
+                      {printDoubleWbBarcode ? (
+                        <Typography variant="caption" color="text.secondary" sx={{ display: 'block', ml: 4 }}>
+                          × 2 к введённому количеству — итого {sepWbTotal} шт.
+                        </Typography>
+                      ) : null}
+                    </Box>
                     <LabelSizeSelect
                       value={wbLabelSize.id}
                       onChange={setWbLabelSize}
@@ -1250,6 +1296,17 @@ export function MarkingPrintDialog({ open, reprint, ctx, busy, onBusyChange, onC
                       {sepWbDone ? 'ШК напечатаны ✓' : 'Печать ШК ВБ'}
                     </Button>
                   </Stack>
+                  {sepWbTotal > 0 ? (
+                    <Typography
+                      variant="caption"
+                      color="text.secondary"
+                      sx={{ mt: 0.75, display: 'block' }}
+                      data-testid="marking-print-sep-wb-total"
+                    >
+                      К печати: {sepWbTotal} ШК ВБ
+                      {printDoubleWbBarcode ? ' (× 2)' : ''}
+                    </Typography>
+                  ) : null}
                   <Box sx={{ mt: 1.5 }}>
                     <MarkingLabelPreview
                       variant="product"
@@ -1260,17 +1317,6 @@ export function MarkingPrintDialog({ open, reprint, ctx, busy, onBusyChange, onC
                       testId="marking-print-sep-wb-preview"
                     />
                   </Box>
-                  {sepWbTotal > 0 ? (
-                    <Typography
-                      variant="caption"
-                      color="text.secondary"
-                      sx={{ mt: 0.5, display: 'block' }}
-                      data-testid="marking-print-sep-wb-total"
-                    >
-                      К печати: {sepWbTotal} ШК ВБ
-                      {printDoubleWbBarcode ? ' (× 2)' : ''}
-                    </Typography>
-                  ) : null}
                 </Paper>
               </>
             ) : null}
@@ -1473,7 +1519,7 @@ export function MarkingPrintDialog({ open, reprint, ctx, busy, onBusyChange, onC
 
             {!effectiveReprint && !requiresHonestSign && totalWbLabels > 0 ? (
               <Typography variant="body2" data-testid="marking-print-will-print">
-                К печати: {totalWbLabels} ШК ВБ
+                К печати: {totalWbLabels} ШК ВБ{printDoubleWbBarcode ? ' (× 2)' : ''}
               </Typography>
             ) : null}
 
@@ -1510,13 +1556,6 @@ export function MarkingPrintDialog({ open, reprint, ctx, busy, onBusyChange, onC
           )}
         </DialogActions>
       </Dialog>
-      <Snackbar
-        open={toast !== null}
-        autoHideDuration={4000}
-        onClose={() => setToast(null)}
-        message={toast ?? ''}
-        data-testid="marking-print-toast"
-      />
     </>
   )
 }

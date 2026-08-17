@@ -1,4 +1,5 @@
 import { inboundOperationTypeReceptionLabel } from '../../utils/inboundOperationType'
+import { plural } from '../../utils/plural'
 
 export type InboundBoxLineRef = {
   product_id: string
@@ -44,6 +45,7 @@ export type InboundReceivingTotals = {
   actualBoxes: number
   totalVolumeLiters: number
   totalWeightKg: number
+  hasKnownWeight: boolean
   lineDiscrepancyCount: number
   hasBoxDiscrepancy: boolean
   hasAnyDiscrepancy: boolean
@@ -188,9 +190,18 @@ export function inboundQueueUnitsLabel(row: InboundSummaryRef): string {
 }
 
 export function inboundQueueBoxesLabel(row: InboundSummaryRef): string {
-  const actual = row.actual_box_count ?? 0
-  if (row.planned_box_count == null) return `${actual} коробов`
-  return `${actual} из ${row.planned_box_count} коробов`
+  const actual = row.actual_box_count
+  const planned = row.planned_box_count
+  if (planned == null) {
+    if (actual == null) return 'нет данных'
+    return `${actual} ${plural(actual, ['короб', 'короба', 'коробов'])}`
+  }
+  if (actual == null) {
+    // Фактическое число коробов неизвестно — показываем только план понятной формулировкой
+    // ("3 короба"), а не "? из 3 коробов": знак вопроса читается как поломка экрана.
+    return `${planned} ${plural(planned, ['короб', 'короба', 'коробов'])}`
+  }
+  return `${actual} из ${planned} ${plural(planned, ['короба', 'коробов', 'коробов'])}`
 }
 
 export function buildInboundReceivingTotals(
@@ -203,6 +214,7 @@ export function buildInboundReceivingTotals(
   let acceptedQty = 0
   let totalVolumeLiters = 0
   let totalWeightKg = 0
+  let hasKnownWeight = false
   let lineDiscrepancyCount = 0
   for (const line of lines) {
     const expected = line.expected_qty ?? 0
@@ -213,6 +225,7 @@ export function buildInboundReceivingTotals(
       totalVolumeLiters += accepted * line.volume_liters
     }
     if (line.weight_g != null && Number.isFinite(line.weight_g)) {
+      hasKnownWeight = true
       totalWeightKg += (accepted * line.weight_g) / 1000
     }
     if (accepted !== expected) lineDiscrepancyCount += 1
@@ -226,6 +239,7 @@ export function buildInboundReceivingTotals(
     actualBoxes,
     totalVolumeLiters,
     totalWeightKg,
+    hasKnownWeight,
     lineDiscrepancyCount,
     hasBoxDiscrepancy,
     hasAnyDiscrepancy: lineDiscrepancyCount > 0 || hasBoxDiscrepancy,

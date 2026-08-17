@@ -19,7 +19,7 @@ export function FfProductTableHeadCells({ showPrint = true, nameLabel = 'Наи�
     <>
       <TableCell sx={{ width: 56 }}>Фото</TableCell>
       <TableCell sx={{ width: 150, pl: 2 }}>Артикул</TableCell>
-      <TableCell sx={{ width: 170 }}>ШК</TableCell>
+      <TableCell sx={{ width: 170 }}>ШК / Размер</TableCell>
       <TableCell sx={{ width: 120 }}>Артикул продавца</TableCell>
       <TableCell sx={{ width: 100, pr: 2 }}>Артикул WB</TableCell>
       <TableCell sx={{ pl: 2, minWidth: 240 }}>{nameLabel}</TableCell>
@@ -45,6 +45,8 @@ type CellsProps = {
   /** Если задан — иконка печати вызывает callback (упаковка / отгрузка). */
   onPrintClick?: () => void
   nameExtra?: ReactNode
+  /** Показывать состав ткани в ячейке ШК (по умолчанию скрыт — нужен только на этикетке). */
+  showComposition?: boolean
 }
 
 export function FfProductLineCells({
@@ -59,6 +61,7 @@ export function FfProductLineCells({
   markingAvailable,
   onPrintClick,
   nameExtra,
+  showComposition = false,
 }: CellsProps) {
   const barcode = resolveProductPrimaryBarcode(meta)
 
@@ -84,6 +87,7 @@ export function FfProductLineCells({
           wb_size={meta.wb_size}
           wb_composition={meta.wb_composition}
           testId="ff-product-line-barcode"
+          showComposition={showComposition}
         />
       </TableCell>
       <TableCell

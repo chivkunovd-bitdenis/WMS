@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import logging
 import uuid
 from datetime import UTC, datetime, timedelta
@@ -9,7 +10,7 @@ from typing import Any, cast
 
 import httpx
 from sqlalchemy import Select, and_, or_, select
-from sqlalchemy.exc import IntegrityError
+from sqlalchemy.exc import IntegrityError, OperationalError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.fbs_binding_stock_pool import FbsBindingStockPool
@@ -95,6 +96,10 @@ SYNC_STATUS_BATCH_SIZE = 500
 MAX_SYNC_STATUS_BATCHES = 20
 
 logger = logging.getLogger(__name__)
+
+# Повтор списания пула при занятой базе: рядом может писать фоновая публикация остатка.
+_POOL_DEBIT_ATTEMPTS = 3
+_POOL_DEBIT_RETRY_DELAY_SEC = 0.05
 
 
 class WbMarketplaceOrdersError(Exception):
@@ -572,41 +577,67 @@ async def _debit_stock_pool_for_order(
         return empty
 
     result = dict(empty)
-    try:
-        async with session.begin_nested():
-            pool_stmt = (
-                select(FbsBindingStockPool)
-                .where(
-                    FbsBindingStockPool.binding_id == binding_id,
-                    FbsBindingStockPool.product_id == order.product_id,
-                )
-                .with_for_update()
+    # Рядом может работать фоновая публикация остатка со своей сессией. На Postgres
+    # это расходится само, на файловом SQLite (тесты, локальный стенд) вторая сессия
+    # держит запись и мы получаем «database is locked». Списание — не тот повод,
+    # чтобы валить всю синхронизацию заказов, поэтому короткий повтор.
+    for attempt in range(_POOL_DEBIT_ATTEMPTS):
+        try:
+            return await _debit_stock_pool_once(
+                session, tenant_id, order, binding_id, empty
             )
-            pool_row = (await session.execute(pool_stmt)).scalar_one_or_none()
-            if pool_row is None:
+        except IntegrityError:
+            # Параллельный синк (ручная кнопка + автоопрос) успел списать первым;
+            # UNIQUE(order_id) в fbs_stock_pool_debits гарантирует это на уровне БД.
+            # Своя попытка откатывается до savepoint, заказ уже учтён.
+            return empty
+        except OperationalError:
+            if attempt + 1 >= _POOL_DEBIT_ATTEMPTS:
+                logger.warning(
+                    "stock pool debit skipped: seller=%s order=%s reason=db_locked",
+                    seller_id,
+                    order.id,
+                )
                 return empty
+            await asyncio.sleep(_POOL_DEBIT_RETRY_DELAY_SEC)
+    return empty
 
-            requested = 1  # один заказ WB marketplace = одна физическая единица
-            debited = min(requested, pool_row.quantity)
-            shortfall = requested - debited
-            pool_row.quantity -= debited
-            session.add(
-                FbsStockPoolDebit(
-                    tenant_id=tenant_id,
-                    pool_id=pool_row.id,
-                    order_id=order.id,
-                    quantity_debited=debited,
-                    quantity_shortfall=shortfall,
-                )
+
+async def _debit_stock_pool_once(
+    session: AsyncSession,
+    tenant_id: uuid.UUID,
+    order: FbsOrder,
+    binding_id: uuid.UUID,
+    empty: dict[str, int],
+) -> dict[str, int]:
+    async with session.begin_nested():
+        # Без FOR UPDATE намеренно. Идемпотентность списания держит уникальность
+        # order_id в fbs_stock_pool_debits, а гонку двух синхронизаций ловит
+        # перехват IntegrityError у вызывающего — блокировка строки тут ничего
+        # не добавляет, зато на SQLite приводит к «database is locked».
+        pool_stmt = select(FbsBindingStockPool).where(
+            FbsBindingStockPool.binding_id == binding_id,
+            FbsBindingStockPool.product_id == order.product_id,
+        )
+        pool_row = (await session.execute(pool_stmt)).scalar_one_or_none()
+        if pool_row is None:
+            return empty
+
+        requested = 1  # один заказ WB marketplace = одна физическая единица
+        debited = min(requested, pool_row.quantity)
+        shortfall = requested - debited
+        pool_row.quantity -= debited
+        session.add(
+            FbsStockPoolDebit(
+                tenant_id=tenant_id,
+                pool_id=pool_row.id,
+                order_id=order.id,
+                quantity_debited=debited,
+                quantity_shortfall=shortfall,
             )
-            await session.flush()
-            result = {"debited": debited, "shortfall": shortfall}
-    except IntegrityError:
-        # Параллельный синк (ручная кнопка + автоопрос) успел списать первым;
-        # UNIQUE(order_id) в fbs_stock_pool_debits гарантирует это на уровне
-        # БД. Своя попытка просто откатывается до savepoint, заказ уже учтён.
-        return empty
-    return result
+        )
+        await session.flush()
+        return {"debited": debited, "shortfall": shortfall}
 
 
 async def _move_new_order_to_external_processing(

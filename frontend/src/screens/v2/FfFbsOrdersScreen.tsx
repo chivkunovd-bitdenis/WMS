@@ -66,11 +66,13 @@ type Props = {
   isAdmin?: boolean
 }
 
+// Порядок вкладок — единственный источник истины для UI; заказчик 16.08 попросил
+// подвинуть «Просрочены» после «В доставке» (раньше стояла сразу за «Новыми»).
 const TABS = [
   { key: 'new', label: 'Новые' },
-  { key: 'expired', label: 'Просрочены' },
   { key: 'active', label: 'В работе' },
   { key: 'delivery', label: 'В доставке' },
+  { key: 'expired', label: 'Просрочены' },
   { key: 'done', label: 'Завершённые' },
   { key: 'cancelled', label: 'Отменённые' },
 ] as const
@@ -145,22 +147,24 @@ function BlockerLine({
   return <MissingText>{blocker.message}</MissingText>
 }
 
-function MetadataState({ order }: { order: FbsWorklistOrder }) {
+// GLOBAL-02: единственное состояние строки, которое реально мешает оператору
+// отгрузить заказ, — незакрытая маркировка Честным знаком. «Не хватает: N» с прошлого
+// стейджа заказчик прочитал как нехватку товара на складе — на деле это нехватка кодов
+// маркировки (order.metadata), поэтому подпись теперь называет вещь напрямую и красный
+// цвет держится только за тем, что действительно блокирует работу.
+type MetadataProblem = { label: string; color: 'error' }
+
+function metadataProblem(order: FbsWorklistOrder): MetadataProblem | null {
   if (order.metadata.required.length === 0) {
     return null
   }
   const rejected = order.metadata.states.some((state) =>
     ['rejected', 'replacement_required'].includes(state.status),
   )
+  if (rejected) return { label: 'Отклонено WB', color: 'error' }
   const missing = order.metadata.states.filter((state) => state.status === 'missing').length
-  return (
-    <Chip
-      size="small"
-      variant="outlined"
-      color={rejected ? 'error' : missing ? 'warning' : 'success'}
-      label={rejected ? 'Отклонено WB' : missing ? `Не хватает: ${missing}` : 'Готово'}
-    />
-  )
+  if (missing > 0) return { label: `Не хватает честных знаков: ${missing}`, color: 'error' }
+  return null
 }
 
 function warehouseOptionLabel(
@@ -325,6 +329,13 @@ export function FfFbsOrdersScreen({ token, authHeaders, sellers, isAdmin = false
   const rowRefs = useRef<Record<string, HTMLTableRowElement | null>>({})
   const openedSupplyFromQuery = useRef<string | null>(null)
   const loadingRef = useRef(false)
+  // Плавающая панель выбора (fbs-selection-bar) прибита к низу вьюпорта и накрывает
+  // собой последние строки таблицы — оператор кликал по чекбоксу второго заказа и
+  // попадал в панель (см. tests-e2e/ff-fbs-orders.spec.ts:277). Меряем реальную высоту
+  // панели и резервируем под неё место в TableContainer, а не поднимаем z-index/двигаем
+  // панель — так нижние строки остаются кликабельными при любой высоте панели.
+  const selectionBarRef = useRef<HTMLDivElement | null>(null)
+  const [selectionBarHeight, setSelectionBarHeight] = useState(0)
 
   const load = useCallback(async () => {
     // Задача 9 пула (HANDOFF-POLISH.md): поллинг не должен наслаиваться сам на себя —
@@ -645,6 +656,28 @@ export function FfFbsOrdersScreen({ token, authHeaders, sellers, isAdmin = false
   const hasNewSelection = statusGroup === 'new' && selected.size > 0
 
   useEffect(() => {
+    // Панель появляется/пропадает и меняет высоту (строка блокера длиннее, чем
+    // подсказка по умолчанию) — ResizeObserver ловит оба случая без завязки на
+    // конкретные брейкпоинты. Когда выбор снят, панель размонтируется и отступ
+    // под таблицей сразу убираем.
+    if (!hasNewSelection) {
+      setSelectionBarHeight(0)
+      return
+    }
+    const node = selectionBarRef.current
+    if (!node) return
+    const measure = () => setSelectionBarHeight(node.getBoundingClientRect().height)
+    measure()
+    if (typeof ResizeObserver === 'undefined') {
+      window.addEventListener('resize', measure)
+      return () => window.removeEventListener('resize', measure)
+    }
+    const observer = new ResizeObserver(measure)
+    observer.observe(node)
+    return () => observer.disconnect()
+  }, [hasNewSelection, selectionBlockers.length])
+
+  useEffect(() => {
     const supplyId = new URLSearchParams(location.search).get('supply_id')
     if (!supplyId || openedSupplyFromQuery.current === supplyId) return
     openedSupplyFromQuery.current = supplyId
@@ -885,13 +918,13 @@ export function FfFbsOrdersScreen({ token, authHeaders, sellers, isAdmin = false
           <Table stickyHeader size="small" data-testid="fbs-18-supplies-table">
             <TableHead>
               <TableRow>
-                <TableCell sx={{ minWidth: 240 }}>Номер / название поставки</TableCell>
-                <TableCell sx={{ minWidth: 160 }}>Селлер</TableCell>
-                <TableCell sx={{ minWidth: 220 }}>Склад</TableCell>
-                <TableCell sx={{ minWidth: 130 }}>Заказы / единицы</TableCell>
-                <TableCell sx={{ minWidth: 90 }}>Короба</TableCell>
-                <TableCell sx={{ minWidth: 140 }}>Статус</TableCell>
-                <TableCell sx={{ minWidth: 150 }}>Дата отгрузки</TableCell>
+                <TableCell sx={{ minWidth: 210 }}>Номер / название поставки</TableCell>
+                <TableCell sx={{ minWidth: 130 }}>Селлер</TableCell>
+                <TableCell sx={{ minWidth: 190 }}>Склад</TableCell>
+                <TableCell sx={{ minWidth: 95 }}>Заказы / единицы</TableCell>
+                <TableCell sx={{ minWidth: 64 }}>Короба</TableCell>
+                <TableCell sx={{ minWidth: 115 }}>Статус</TableCell>
+                <TableCell sx={{ minWidth: 135 }}>Дата отгрузки</TableCell>
               </TableRow>
             </TableHead>
             <TableBody>
@@ -959,7 +992,20 @@ export function FfFbsOrdersScreen({ token, authHeaders, sellers, isAdmin = false
           ) : null}
         </TableContainer>
       ) : (
-      <TableContainer component={Paper} variant="outlined" sx={{ mt: 2, maxHeight: 'calc(100vh - 330px)' }}>
+      <TableContainer
+        component={Paper}
+        variant="outlined"
+        sx={{
+          mt: 2,
+          // Резервируем под fbs-selection-bar её реальную высоту + отступ панели от
+          // низа вьюпорта (18px) + небольшой воздух, чтобы нижняя строка таблицы
+          // никогда не пряталась под панелью, а не «подрезалась» вплотную к ней.
+          maxHeight: hasNewSelection
+            ? `calc(100vh - 330px - ${selectionBarHeight + 30}px)`
+            : 'calc(100vh - 330px)',
+          transition: 'max-height 0.15s ease',
+        }}
+      >
         <Table stickyHeader size="small" data-testid="fbs-worklist-table">
           <TableHead>
             <TableRow>
@@ -974,11 +1020,11 @@ export function FfFbsOrdersScreen({ token, authHeaders, sellers, isAdmin = false
               </TableCell>
               {statusGroup === 'new' ? (
                 <>
-                  <TableCell sx={{ minWidth: 260 }}>Товар</TableCell>
-                  <TableCell sx={{ minWidth: 300 }}>Заказ и сканирование</TableCell>
-                  <TableCell sx={{ minWidth: 170 }}>Селлер</TableCell>
-                  <TableCell sx={{ minWidth: 220 }}>Склад селлера / WB</TableCell>
-                  <TableCell sx={{ minWidth: 130 }}>Создан WB / в сборке</TableCell>
+                  <TableCell sx={{ minWidth: 210 }}>Товар</TableCell>
+                  <TableCell sx={{ minWidth: 210 }}>Заказ и сканирование</TableCell>
+                  <TableCell sx={{ minWidth: 135 }}>Селлер</TableCell>
+                  <TableCell sx={{ minWidth: 180 }}>Склад селлера / WB</TableCell>
+                  <TableCell sx={{ minWidth: 140 }}>Создан WB / в сборке</TableCell>
                 </>
               ) : (
                 <>
@@ -996,6 +1042,7 @@ export function FfFbsOrdersScreen({ token, authHeaders, sellers, isAdmin = false
               const blocked = order.selection_blockers.length > 0
               const localSupplyMissing = statusGroup !== 'new' && !order.supply_id
               const highlighted = statusGroup === 'new' && searchTerm && matchingIds.has(order.id)
+              const metaFlag = metadataProblem(order)
               const row = (
                 <TableRow
                   key={order.id}
@@ -1048,7 +1095,7 @@ export function FfFbsOrdersScreen({ token, authHeaders, sellers, isAdmin = false
                           />
                           <Box sx={{ minWidth: 0 }}>
                             <Tooltip title={order.product.id ? order.product.name : 'Товар не сопоставлен'}>
-                              <Typography variant="subtitle2" noWrap sx={{ lineHeight: 1.25, maxWidth: 320 }}>
+                              <Typography variant="subtitle2" noWrap sx={{ lineHeight: 1.25, maxWidth: 150 }}>
                                 {order.product.id ? order.product.name : 'Товар не сопоставлен'}
                               </Typography>
                             </Tooltip>
@@ -1070,24 +1117,24 @@ export function FfFbsOrdersScreen({ token, authHeaders, sellers, isAdmin = false
                         <Typography variant="body2" sx={{ fontWeight: 700 }}>
                           WB №{order.wb_order_id}
                         </Typography>
-                        <Typography variant="caption" color="text.secondary" noWrap sx={{ display: 'block', maxWidth: 300 }}>
+                        <Typography variant="caption" color="text.secondary" noWrap sx={{ display: 'block', maxWidth: 170 }}>
                           ШК: {order.product.barcode ?? '—'}
                         </Typography>
                         {order.product.sku ? (
                           <Tooltip title={order.product.sku}>
-                            <Typography variant="caption" color="text.secondary" noWrap sx={{ display: 'block', maxWidth: 300 }}>
+                            <Typography variant="caption" color="text.secondary" noWrap sx={{ display: 'block', maxWidth: 170 }}>
                               SKU {order.product.sku}
                             </Typography>
                           </Tooltip>
                         ) : order.product.seller_article ? (
-                          <Typography variant="caption" color="text.secondary" noWrap sx={{ display: 'block', maxWidth: 300 }}>
+                          <Typography variant="caption" color="text.secondary" noWrap sx={{ display: 'block', maxWidth: 170 }}>
                             Артикул: {order.product.seller_article}
                           </Typography>
                         ) : null}
                       </TableCell>
                       <TableCell>
                         <Tooltip title={order.seller.name ?? '—'}>
-                          <Typography variant="body2" noWrap sx={{ maxWidth: 190 }}>{order.seller.name ?? '—'}</Typography>
+                          <Typography variant="body2" noWrap sx={{ maxWidth: 100 }}>{order.seller.name ?? '—'}</Typography>
                         </Tooltip>
                         {order.buyer_type === 'legal' ? (
                           <Typography variant="caption" color="text.secondary">
@@ -1097,11 +1144,11 @@ export function FfFbsOrdersScreen({ token, authHeaders, sellers, isAdmin = false
                       </TableCell>
                       <TableCell>
                         <Tooltip title={order.wb_warehouse.name || `WB ${order.wb_warehouse.id}`}>
-                          <Typography variant="body2" noWrap sx={{ fontWeight: 650, maxWidth: 240 }}>
+                          <Typography variant="body2" noWrap sx={{ fontWeight: 650, maxWidth: 145 }}>
                             {order.wb_warehouse.name || `WB ${order.wb_warehouse.id}`}
                           </Typography>
                         </Tooltip>
-                        <Typography variant="caption" color="text.secondary" noWrap sx={{ display: 'block', maxWidth: 240 }}>
+                        <Typography variant="caption" color="text.secondary" noWrap sx={{ display: 'block', maxWidth: 145 }}>
                           WMS: {order.wms_warehouse.name}
                         </Typography>
                       </TableCell>
@@ -1157,30 +1204,37 @@ export function FfFbsOrdersScreen({ token, authHeaders, sellers, isAdmin = false
                         </Typography>
                       </TableCell>
                       <TableCell>
-                        <FbsStatusChip status={order.status} />
-                        <Stack sx={{ mt: 0.75, alignItems: 'flex-start' }} spacing={0.75}>
-                          {statusGroup === 'expired' ? (
-                            <Chip
-                              size="small"
-                              color="error"
-                              label="Срок сборки истёк"
-                              data-testid={`fbs-order-${order.id}-expired`}
-                              data-task-id="FBS-03"
-                            />
-                          ) : null}
-                          {localSupplyMissing ? (
-                            <Tooltip title={EXTERNAL_WB_SUPPLY_HINT}>
-                              <Chip
-                                size="small"
-                                variant="outlined"
-                                color="warning"
-                                label="Поставка создана в WB"
-                                data-testid={`fbs-order-${order.id}-external-supply`}
-                              />
-                            </Tooltip>
-                          ) : null}
-                          <MetadataState order={order} />
-                        </Stack>
+                        {/* GLOBAL-02: одно главное состояние на строку. На «Просрочены»
+                            статус всегда «Новый» (см. STATUS_GROUP_MAP на бэкенде) — сам
+                            факт просрочки уже виден по вкладке, повторять его чипом не
+                            нужно, поэтому базовый статус-чип там не рисуем вовсе. Если
+                            маркировка отклонена/не хватает — это и есть главное состояние,
+                            оно важнее декоративного статуса. Всё остальное — обычным
+                            текстом ниже, без цвета. */}
+                        {statusGroup === 'expired' && metaFlag ? (
+                          <Chip
+                            size="small"
+                            color={metaFlag.color}
+                            label={metaFlag.label}
+                            data-testid={`fbs-order-${order.id}-marking-issue`}
+                          />
+                        ) : statusGroup !== 'expired' ? (
+                          // «Отменённые»: заказ уже закрыт, состояние маркировки для решения
+                          // не нужно — главное здесь то, чем закончился заказ (Отменён/Дефект).
+                          <FbsStatusChip status={order.status} />
+                        ) : null}
+                        {localSupplyMissing ? (
+                          <Tooltip title={EXTERNAL_WB_SUPPLY_HINT}>
+                            <Typography
+                              variant="caption"
+                              color="text.secondary"
+                              sx={{ display: 'block', mt: 0.75 }}
+                              data-testid={`fbs-order-${order.id}-external-supply`}
+                            >
+                              Поставка создана в WB, недоступна в WMS
+                            </Typography>
+                          </Tooltip>
+                        ) : null}
                       </TableCell>
                     </>
                   )}
@@ -1222,10 +1276,11 @@ export function FfFbsOrdersScreen({ token, authHeaders, sellers, isAdmin = false
 
       {statusGroup === 'new' && selected.size ? (
         <Paper
+          ref={selectionBarRef}
           elevation={8}
           sx={{
             position: 'fixed',
-            left: { xs: 12, md: 280 },
+            left: { xs: 12, md: 308 },
             right: 20,
             bottom: 18,
             zIndex: 1200,
@@ -1237,13 +1292,33 @@ export function FfFbsOrdersScreen({ token, authHeaders, sellers, isAdmin = false
           data-testid="fbs-selection-bar"
         >
           <Stack direction={{ xs: 'column', md: 'row' }} spacing={2} sx={{ alignItems: { md: 'center' } }}>
-            <Box sx={{ flex: 1 }}>
-              <Typography variant="subtitle2">Выбрано заказов: {selected.size}</Typography>
-              <Typography variant="caption" color={selectionBlockers.length ? 'error.main' : 'text.secondary'}>
-                {selectionBlockers.length
-                  ? selectionBlockers[0].blocker.message
-                  : 'Следующий шаг — серверная проверка селлера, складов и состава.'}
+            {/* minWidth:0 + noWrap — рядом четыре кнопки почти впритык по ширине panelю
+                (952px на 1280px экране), без этого текстовый блок ужимается флексом до
+                ширины одного слова и подпись переносится в 6-8 строк — панель раздувается
+                до 280px+ и перекрывает уже не только соседнюю строку, а половину таблицы.
+                Полный текст остаётся доступен по hover через Tooltip. */}
+            <Box sx={{ flex: 1, minWidth: 0 }}>
+              <Typography variant="subtitle2" noWrap>
+                Выбрано заказов: {selected.size}
               </Typography>
+              <Tooltip
+                title={
+                  selectionBlockers.length
+                    ? selectionBlockers[0].blocker.message
+                    : 'Следующий шаг — серверная проверка селлера, складов и состава.'
+                }
+              >
+                <Typography
+                  variant="caption"
+                  color={selectionBlockers.length ? 'error.main' : 'text.secondary'}
+                  noWrap
+                  sx={{ display: 'block' }}
+                >
+                  {selectionBlockers.length
+                    ? selectionBlockers[0].blocker.message
+                    : 'Следующий шаг — серверная проверка селлера, складов и состава.'}
+                </Typography>
+              </Tooltip>
             </Box>
             <Button onClick={() => setSelectedOpen(true)} data-testid="fbs-selected-open">
               Показать выбранные

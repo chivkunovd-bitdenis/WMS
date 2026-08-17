@@ -10,8 +10,10 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.models.product import Product
 from app.services.wb_card_enrichment import (
     WbSizeVariant,
+    country_of_origin_from_card,
     iter_size_variants_from_card,
     product_display_name,
+    shelf_life_from_card,
     sku_code_for_wb_variant,
 )
 
@@ -202,6 +204,8 @@ async def upsert_products_from_wb_cards(
         vendor = _parse_vendor_code(item)
         base_title = _parse_title(item) or (vendor or (f"WB {nm}" if nm else "WB товар"))
         card_length_mm, card_width_mm, card_height_mm = _parse_dimensions_mm(item)
+        card_country = country_of_origin_from_card(item)
+        card_shelf_life = shelf_life_from_card(item)
         variants = iter_size_variants_from_card(item)
         if not variants:
             skipped += 1
@@ -234,6 +238,8 @@ async def upsert_products_from_wb_cards(
                     length_mm=card_length_mm,
                     width_mm=card_width_mm,
                     height_mm=card_height_mm,
+                    wb_country_of_origin=card_country,
+                    wb_shelf_life=card_shelf_life,
                 )
                 session.add(p)
                 try:
@@ -270,6 +276,12 @@ async def upsert_products_from_wb_cards(
                 p.width_mm = card_width_mm
             if p.height_mm is None and card_height_mm is not None:
                 p.height_mm = card_height_mm
+            # Same rule for country of origin / shelf life: WB card fills the gap,
+            # never overwrites a value already present (e.g. entered by hand).
+            if p.wb_country_of_origin is None and card_country is not None:
+                p.wb_country_of_origin = card_country
+            if p.wb_shelf_life is None and card_shelf_life is not None:
+                p.wb_shelf_life = card_shelf_life
             try:
                 await session.commit()
             except IntegrityError:

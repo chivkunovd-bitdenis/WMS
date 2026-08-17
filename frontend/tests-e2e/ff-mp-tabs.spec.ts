@@ -307,7 +307,11 @@ test('FF marketplace unload: tabs switch without losing document context', async
   await expect(page.getByTestId('ff-mp-tab-packaging-panel')).toBeVisible()
   await expectMpTabSelected(page, 'ff-mp-tab-packaging')
   await expect(page.getByTestId('ff-mp-packaging-continue')).toHaveCount(0)
-  await expect(page.getByTestId('ff-mp-tab-packaging-panel')).toContainText('Готово 2 / Осталось 0')
+  // Блок «Прогресс» внутри панели упаковки убран как дубль (решение заказчика 2026-08-16) —
+  // те же «готово/осталось» показывает плашка отгрузки над вкладками, она видна на любой
+  // вкладке, включая «Упаковка».
+  await expect(page.getByTestId('ff-mp-shipment-summary-packed')).toHaveText('2/2')
+  await expect(page.getByTestId('ff-mp-shipment-summary-remaining')).toHaveText('0')
   await expect(page.getByTestId('ff-mp-boxes')).not.toBeVisible()
   await page.getByTestId('ff-mp-boxes-summary').click()
   await expect(page.getByTestId('ff-mp-boxes')).toBeVisible()

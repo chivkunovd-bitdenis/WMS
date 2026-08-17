@@ -35,6 +35,7 @@ import MoreVertOutlinedIcon from '@mui/icons-material/MoreVertOutlined'
 import PrintOutlinedIcon from '@mui/icons-material/PrintOutlined'
 import { apiUrl } from '../../api'
 import { ProductPhotoThumb } from '../../components/ProductPhotoThumb'
+import { DeadlinePill } from '../../components/fbs/FbsChips'
 import { type PackagingTask, type PackagingTaskLine } from '../ff/FfPackagingPage'
 import { useMarkingCodePrint } from '../../utils/useMarkingCodePrint'
 import { readApiErrorMessage } from '../../utils/readApiErrorMessage'
@@ -208,6 +209,7 @@ export function FfFbsSupplyWorkspace({
   const [expandedBoxIds, setExpandedBoxIds] = useState<Set<string>>(() => new Set())
   const [deliveryKey, setDeliveryKey] = useState(createFbsIdempotencyKey)
   const [deliverySubmitted, setDeliverySubmitted] = useState(false)
+  const [deliverConfirmOpen, setDeliverConfirmOpen] = useState(false)
   const [undoOrderId, setUndoOrderId] = useState<string | null>(null)
   const [retryAction, setRetryAction] = useState<(() => void) | null>(null)
   const [tzLine, setTzLine] = useState<PackagingTaskLine | null>(null)
@@ -301,7 +303,7 @@ export function FfFbsSupplyWorkspace({
     return () => {
       active = false
     }
-  }, [open, stage, workspace?.supply.packaging_task_id, token, authHeaders])
+  }, [open, stage, workspace?.supply.packaging_task_id, workspace?.orders.length, token, authHeaders])
 
   const run = async (operation: () => Promise<FbsWorkspace>, success: string) => {
     setBusy(true)
@@ -954,6 +956,7 @@ export function FfFbsSupplyWorkspace({
   const printedOrdersCount = packingOrders.filter(orderPrintDone).length
   const unprintedPackingOrders = packingOrders.filter((order) => !orderPrintDone(order))
   const markingShortOrderIds = new Set(workspace?.marking_pool?.orders_without_code ?? [])
+  const anyOrderNeedsHonestSign = packingOrders.some(requiresOrderHonestSign)
 
   const stageBlockers = useMemo(() => {
     if (stage === 'packing') {
@@ -1148,9 +1151,12 @@ export function FfFbsSupplyWorkspace({
               <LinearProgress variant="determinate" value={percent} sx={{ flex: 1, maxWidth: 480, height: 8, borderRadius: 4 }} />
               <Typography variant="caption" sx={{ fontWeight: 750 }}>{ready} из {total} подготовлено к отгрузке</Typography>
               {workspace ? (
-                <Typography variant="caption" color="text.secondary">
-                  Сдать в Wildberries до {new Date(workspace.supply.nearest_deadline_at).toLocaleString('ru-RU')}
-                </Typography>
+                <Stack direction="row" spacing={1} sx={{ alignItems: 'center' }}>
+                  <Typography variant="caption" color="text.secondary">
+                    Сдать в Wildberries до {new Date(workspace.supply.nearest_deadline_at).toLocaleString('ru-RU')}
+                  </Typography>
+                  <DeadlinePill deadlineAt={workspace.supply.nearest_deadline_at} serverNow={workspace.server_now} />
+                </Stack>
               ) : null}
             </Stack>
           </Box>
@@ -1374,13 +1380,15 @@ export function FfFbsSupplyWorkspace({
                         </Typography>
                       </Box>
                       <Stack direction="row" spacing={1}>
-                        <Tooltip title="Только если Честный знак уже наклеен селлером">
-                          <span>
-                            <Button disabled={!packagingEditable || busy} onClick={() => setKizOpen(true)} data-testid="fbs-kiz-open">
-                              Внести КИЗ
-                            </Button>
-                          </span>
-                        </Tooltip>
+                        {anyOrderNeedsHonestSign ? (
+                          <Tooltip title="Только если Честный знак уже наклеен селлером">
+                            <span>
+                              <Button disabled={!packagingEditable || busy} onClick={() => setKizOpen(true)} data-testid="fbs-kiz-open">
+                                Внести КИЗ
+                              </Button>
+                            </span>
+                          </Tooltip>
+                        ) : null}
                         <Button
                           disabled={!packagingEditable || busy || packingOrders.length === 0}
                           onClick={() => openBulkOrderMarkingPrint(
@@ -1610,7 +1618,13 @@ export function FfFbsSupplyWorkspace({
               </Paper>
               {!deliveryConfirmed ? (
                 <Stack direction="row" sx={{ justifyContent: 'flex-end' }}>
-                  <Button variant="contained" size="large" disabled={busy} onClick={() => void deliver()}>
+                  <Button
+                    variant="contained"
+                    size="large"
+                    disabled={busy}
+                    onClick={() => setDeliverConfirmOpen(true)}
+                    data-testid="fbs-deliver-open"
+                  >
                     Передать в WB
                   </Button>
                 </Stack>
@@ -1811,6 +1825,27 @@ export function FfFbsSupplyWorkspace({
         <DialogTitle>Отменить подбор?</DialogTitle>
         <DialogContent><Typography>Товар будет возвращён в исходную ячейку. Отменяйте только если в подборе действительно ошибка.</Typography></DialogContent>
         <DialogActions><Button onClick={() => setUndoOrderId(null)}>Не отменять</Button><Button color="error" variant="contained" onClick={() => { const orderId = undoOrderId; setUndoOrderId(null); if (orderId && workspace) void run(() => undoFbsPick(token, authHeaders, workspace.supply.id, orderId, createFbsIdempotencyKey()), 'Подбор отменён, остаток возвращён в исходную ячейку.') }}>Вернуть в ячейку</Button></DialogActions>
+      </Dialog>
+      <Dialog open={deliverConfirmOpen} onClose={() => setDeliverConfirmOpen(false)} maxWidth="xs" fullWidth>
+        <DialogTitle>Передать поставку в WB?</DialogTitle>
+        <DialogContent>
+          <Typography variant="body2">
+            После передачи поставку нельзя будет отменить или вернуть в работу. Убедитесь, что все короба готовы к отгрузке.
+          </Typography>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setDeliverConfirmOpen(false)}>Не передавать</Button>
+          <Button
+            variant="contained"
+            onClick={() => {
+              setDeliverConfirmOpen(false)
+              void deliver()
+            }}
+            data-testid="fbs-deliver-confirm"
+          >
+            Передать в WB
+          </Button>
+        </DialogActions>
       </Dialog>
       <Dialog open={Boolean(boxAssignTarget)} onClose={busy ? undefined : () => setBoxAssignTarget(null)} maxWidth="md" fullWidth>
         <DialogTitle>Добавить товары в короб {boxAssignName}</DialogTitle>

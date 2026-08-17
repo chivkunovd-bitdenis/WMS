@@ -1,3 +1,5 @@
+import type { LabelSize } from './labelSize'
+
 /** Print a CODE128 label (58×40 workflow — same iframe pattern as catalog cell labels). */
 function escapeHtml(text: string): string {
   return text
@@ -18,11 +20,20 @@ export function printBarcodeLabel(options: {
   title: string
   barcode: string
   barcodeDataUrl: string
+  /** Физический размер этикетки (см. utils/labelSize.ts). Без него — прежнее поведение (авто-размер листа браузера). */
+  labelSize?: LabelSize
 }): void {
-  const { title, barcode, barcodeDataUrl } = options
+  const { title, barcode, barcodeDataUrl, labelSize } = options
   const safeTitle = escapeHtml(title)
   const safeBarcode = escapeHtml(barcode)
   const safeBarcodeDataUrl = escapeHtml(barcodeDataUrl)
+  const pageStyle = labelSize
+    ? `@page { size: ${labelSize.widthMm}mm ${labelSize.heightMm}mm; margin: 0; }
+      html, body { width: ${labelSize.widthMm}mm; height: ${labelSize.heightMm}mm; }
+      .wrap { width: 100%; height: 100%; box-sizing: border-box; padding: 2mm; }
+      img { width: auto; max-width: 90%; max-height: 55%; }`
+    : `@page { margin: 10mm; }
+      img { width: 320px; height: auto; }`
   const html = `<!doctype html>
 <html>
   <head>
@@ -30,12 +41,11 @@ export function printBarcodeLabel(options: {
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>Print barcode</title>
     <style>
-      @page { margin: 10mm; }
       body { font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif; padding: 0; margin: 0; }
-      .wrap { display: grid; gap: 8px; justify-items: center; }
-      .title { font-size: 14px; font-weight: 700; }
-      .code { font-size: 12px; font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace; }
-      img { width: 320px; height: auto; }
+      .wrap { display: grid; gap: 8px; justify-items: center; align-content: center; }
+      .title { font-size: 14px; font-weight: 700; text-align: center; }
+      .code { font-size: 12px; font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace; text-align: center; word-break: break-all; }
+      ${pageStyle}
     </style>
   </head>
   <body>

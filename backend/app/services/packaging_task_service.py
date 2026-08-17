@@ -516,8 +516,7 @@ async def sync_lines_from_unload_plan(
             if ln.qty_packed_in_task == 0 and ln.qty_confirmed_packed == 0:
                 await session.delete(ln)
 
-    if pick_changed_with_progress:
-        task.pick_resync_warning = True
+    task.pick_resync_warning = pick_changed_with_progress
     if task.status == STATUS_DONE:
         plan_qty_after = {ul.product_id: int(ul.quantity) for ul in unload_lines}
         if plan_qty_after != plan_qty_before:
@@ -624,8 +623,7 @@ async def sync_lines_from_pick_allocations(
             if ln.qty_packed_in_task == 0 and ln.qty_confirmed_packed == 0:
                 await session.delete(ln)
 
-    if pick_changed_with_progress:
-        task.pick_resync_warning = True
+    task.pick_resync_warning = pick_changed_with_progress
     _touch_task(task)
     await session.commit()
     loaded = await get_task(session, tenant_id, task.id)

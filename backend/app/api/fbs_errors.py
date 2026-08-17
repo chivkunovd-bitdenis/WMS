@@ -114,6 +114,7 @@ FBS_ERROR_MESSAGES_RU: dict[str, str] = {
     "binding_not_found": "Привязка склада не найдена.",
     "invalid_wb_warehouse_id": "Некорректный ID склада WB.",
     "wms_warehouse_already_bound": "WMS-склад уже привязан.",
+    "wb_warehouse_already_bound": "Этот WB-склад уже привязан к другому складу WMS.",
     "active_fbs_reservations": "Есть активные FBS-резервы.",
     "packaging_box_already_bound": "Короб уже привязан к другому грузоместу.",
     "packaging_box_not_found": "Короб не найден в складе этой поставки.",

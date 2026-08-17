@@ -27,7 +27,6 @@ import {
 import { apiUrl } from '../../api'
 import { SellerMarketplaceUnloadDialog } from '../../components/SellerMarketplaceUnloadDialog'
 import { readApiErrorMessage } from '../../utils/readApiErrorMessage'
-import { plural } from '../../utils/plural'
 import {
   inboundOperationTypeLabel,
   normalizeInboundOperationType,
@@ -99,10 +98,6 @@ type DocumentRow = {
   operation_type?: InboundOperationType
   line_count: number
   goods_qty_total: number
-}
-
-type CalendarRow = DocumentRow & {
-  label: string
 }
 
 type Props = {
@@ -183,99 +178,12 @@ export function SellerDocumentsScreen({
     })
   }, [inboundSummaries, mpUnloadSummaries, sort, type])
 
-  const shipmentCalendar = useMemo(() => {
-    const today = new Date()
-    const todayIso = today.toISOString().slice(0, 10)
-    const tomorrow = new Date(today)
-    tomorrow.setDate(today.getDate() + 1)
-    const tomorrowIso = tomorrow.toISOString().slice(0, 10)
-    const sourceRows: CalendarRow[] = [
-      ...inboundSummaries.map((r) => ({
-        type: 'inbound' as const,
-        id: r.id,
-        date: r.planned_delivery_date,
-        displayNumber: r.display_number ?? r.document_number ?? null,
-        warehouse_name: r.warehouse_name ?? null,
-        status: r.status,
-        operation_type: normalizeInboundOperationType(r.operation_type),
-        line_count: r.line_count,
-        goods_qty_total: r.goods_qty_total ?? 0,
-        label: inboundOperationTypeLabel(normalizeInboundOperationType(r.operation_type)),
-      })),
-      ...mpUnloadSummaries.map((r) => ({
-        type: 'mp_unload' as const,
-        id: r.id,
-        date: r.planned_shipment_date ?? null,
-        displayNumber: r.display_number ?? r.document_number ?? null,
-        warehouse_name: r.warehouse_name ?? null,
-        status: r.status,
-        line_count: r.line_count,
-        goods_qty_total: r.goods_qty_total ?? 0,
-        label: 'Отгрузка на МП',
-      })),
-    ]
-    const byDate = (iso: string) =>
-      sourceRows
-        .filter((row) => row.date === iso)
-        .sort((a, b) => a.label.localeCompare(b.label) || a.id.localeCompare(b.id))
-    return {
-      today: byDate(todayIso),
-      tomorrow: byDate(tomorrowIso),
-    }
-  }, [inboundSummaries, mpUnloadSummaries])
-
   function openDocument(row: DocumentRow): void {
     if (row.type === 'inbound') {
       navigate(`../inbound/${row.id}`)
     } else if (row.type === 'mp_unload') {
       setMpDialogId(row.id)
     }
-  }
-
-  function renderCalendarColumn(title: string, items: CalendarRow[]) {
-    return (
-      <Box sx={{ flex: '1 1 280px', minWidth: 0 }} data-testid={`seller-shipments-${title === 'Сегодня' ? 'today' : 'tomorrow'}`}>
-        <Typography variant="subtitle2" sx={{ mb: 1 }}>
-          {title}
-        </Typography>
-        {items.length === 0 ? (
-          <Typography variant="body2" color="text.secondary">
-            Нет документов с плановой датой.
-          </Typography>
-        ) : (
-          <Stack spacing={0.75}>
-            {items.map((item) => (
-              <Button
-                key={`${item.type}:${item.id}`}
-                variant="outlined"
-                color="inherit"
-                onClick={() => openDocument(item)}
-                data-testid="seller-shipments-row"
-                sx={{
-                  justifyContent: 'space-between',
-                  gap: 1,
-                  textAlign: 'left',
-                  textTransform: 'none',
-                  alignItems: 'flex-start',
-                }}
-              >
-                <Box sx={{ minWidth: 0 }}>
-                  <Typography variant="body2" sx={{ fontWeight: 700 }}>
-                    {item.label}
-                  </Typography>
-                  <Typography variant="caption" color="text.secondary" sx={{ display: 'block' }}>
-                    {item.warehouse_name ?? 'Склад ФФ'} · {item.line_count} {plural(item.line_count, ['строка', 'строки', 'строк'])} · {item.goods_qty_total} шт
-                  </Typography>
-                </Box>
-                <Typography variant="caption" color="text.secondary" sx={{ flex: '0 0 auto' }}>
-                  {sellerDocumentStatusRu(item.status, item.type)}
-                </Typography>
-              </Button>
-            ))}
-          </Stack>
-        )}
-      </Box>
-    )
   }
 
   async function deleteDraftDocument(row: DocumentRow): Promise<void> {
@@ -408,27 +316,6 @@ export function SellerDocumentsScreen({
               Создать акт расхождений
             </Button>
           </Stack>
-        </Stack>
-      </Paper>
-
-      <Paper variant="outlined" sx={{ p: 2, mb: 2 }} data-testid="seller-shipments-calendar">
-        <Stack spacing={1.5}>
-          <Box>
-            <Typography variant="subtitle1">Сегодня / Завтра</Typography>
-            <Typography variant="body2" color="text.secondary">
-              Только ваши документы с плановой датой отгрузки или приёмки.
-            </Typography>
-          </Box>
-          {shipmentCalendar.today.length === 0 && shipmentCalendar.tomorrow.length === 0 ? (
-            <Alert severity="info" data-testid="seller-shipments-empty">
-              На сегодня и завтра нет ваших документов с плановой датой.
-            </Alert>
-          ) : (
-            <Stack direction={{ xs: 'column', md: 'row' }} spacing={2}>
-              {renderCalendarColumn('Сегодня', shipmentCalendar.today)}
-              {renderCalendarColumn('Завтра', shipmentCalendar.tomorrow)}
-            </Stack>
-          )}
         </Stack>
       </Paper>
 

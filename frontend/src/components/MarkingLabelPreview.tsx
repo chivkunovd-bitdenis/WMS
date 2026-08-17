@@ -12,6 +12,7 @@ import {
 import { renderBarcodeDataUrl } from '../utils/renderBarcodeDataUrl'
 import type { PrintLayout } from '../utils/printTemplate'
 import type { LabelSize } from '../utils/labelSize'
+import type { ProductLabelPrintOptions } from '../utils/productLabelText'
 
 const MM_TO_PX = 3.7795275591
 const PREVIEW_WIDTH_PX = 220
@@ -48,6 +49,8 @@ type ProductVariantProps = {
   size: LabelSize
   unitsToShow: number
   totalUnits?: number
+  /** Какие опциональные поля показывать (например, состав) — как при реальной печати. */
+  printOptions?: ProductLabelPrintOptions
   testId?: string
 }
 
@@ -81,6 +84,7 @@ export function MarkingLabelPreview(props: Props) {
   const sectionsCount = shown * blocksPerUnit
   const layoutKey = props.variant === 'product' ? 'product' : JSON.stringify(props.layout)
   const productLabel = props.productLabel ?? null
+  const productPrintOptions = props.variant === 'product' ? props.printOptions : undefined
 
   useEffect(() => {
     const myRequest = ++requestRef.current
@@ -98,7 +102,7 @@ export function MarkingLabelPreview(props: Props) {
               productLabel,
               shown,
               barcodeDataUrl,
-              undefined,
+              productPrintOptions,
               size,
             )
           }
@@ -122,7 +126,16 @@ export function MarkingLabelPreview(props: Props) {
     })()
     // layoutKey сериализует layout для tape-варианта; size/shown/productLabel — остальные входы макета.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [layoutKey, size.widthMm, size.heightMm, shown, productLabel?.barcode, productLabel?.product_name])
+  }, [
+    layoutKey,
+    size.widthMm,
+    size.heightMm,
+    shown,
+    productLabel?.barcode,
+    productLabel?.product_name,
+    productPrintOptions?.includeComposition,
+    productPrintOptions?.includeSize,
+  ])
 
   const nativeWidthPx = size.widthMm * MM_TO_PX
   const nativeHeightPx = size.heightMm * MM_TO_PX * sectionsCount

@@ -156,7 +156,7 @@ export function FbsStockAllocationDialog({
                               разложить по складам.{' '}
                               <MuiLink
                                 component={RouterLink}
-                                to={PRODUCT_CATALOG_PATH}
+                                to={`${PRODUCT_CATALOG_PATH}?fbs_limit=${item.product_id}`}
                                 target="_blank"
                                 rel="noopener"
                               >

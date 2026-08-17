@@ -1,9 +1,22 @@
-/** EAC mark for product thermal labels (stacked letters in frame, as on WB-style 58×40). */
-export const EAC_MARK_SVG = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 44 56" aria-hidden="true">
-  <rect x="1" y="1" width="42" height="54" fill="none" stroke="#111" stroke-width="2"/>
-  <text x="22" y="18" text-anchor="middle" font-family="Arial, Helvetica, sans-serif" font-size="14" font-weight="700" fill="#111">E</text>
-  <text x="22" y="34" text-anchor="middle" font-family="Arial, Helvetica, sans-serif" font-size="14" font-weight="700" fill="#111">A</text>
-  <text x="22" y="50" text-anchor="middle" font-family="Arial, Helvetica, sans-serif" font-size="14" font-weight="700" fill="#111">C</text>
+/**
+ * Единый знак обращения продукции на рынке ЕАЭС (EAC).
+ *
+ * Форма задана Решением Комиссии Таможенного союза от 15.07.2011 № 711: три
+ * стилизованные буквы E, A, C, вычерченные прямыми углами, одинаковой высоты,
+ * в один горизонтальный ряд, вписанные в квадрат. Рамки вокруг знака нет.
+ * Минимальная высота при печати — 5 мм, ниже знак нечитаем.
+ *
+ * Контуры сняты по координатам с эталонного изображения, а не набраны шрифтом:
+ * начертание знака нормировано и не совпадает с жирным Arial.
+ *
+ * Прежняя версия рисовала буквы столбиком в прямоугольной рамке — это был
+ * не знак EAC. Файл тогда нигде не использовался, поэтому в печать ошибка
+ * не ушла, но подключать его в таком виде было нельзя.
+ */
+export const EAC_MARK_SVG = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 55 55" aria-hidden="true">
+  <path fill="#111" d="M 5 5 L 5 50 L 15 50 L 15 45 L 10 45 L 10 30 L 15 30 L 15 25 L 10 25 L 10 10 L 15 10 L 15 5 Z"/>
+  <path fill="#111" d="M 20 5 L 20 50 L 25 50 L 25 30 L 30 30 L 30 50 L 35 50 L 35 5 L 20 5 Z M 25 10 L 30 10 L 30 25 L 25 25 L 25 10 Z"/>
+  <path fill="#111" d="M 40 5 L 40 50 L 50 50 L 50 45 L 45 45 L 45 10 L 50 10 L 50 5 L 40 5 Z"/>
 </svg>`
 
 export const EAC_MARK_DATA_URL = `data:image/svg+xml,${encodeURIComponent(EAC_MARK_SVG)}`

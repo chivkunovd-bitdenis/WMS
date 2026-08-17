@@ -730,7 +730,7 @@ export function SellerInboundDraftScreen({
                 setPlannedDateDraft(iso ?? '')
               }}
               disabled={!sellerCanEdit || busy}
-              required
+              required={sellerCanEdit}
               testId="seller-inbound-planned-date"
               slotProps={{ textField: { fullWidth: false, sx: { minWidth: 220 } } }}
             />
@@ -839,21 +839,20 @@ export function SellerInboundDraftScreen({
               sx={{
                 tableLayout: 'fixed',
                 width: '100%',
-                minWidth: 1096,
+                minWidth: 950,
                 '& th': { py: 1, lineHeight: 1.2, verticalAlign: 'bottom' },
                 '& td': { py: 1.25, verticalAlign: 'top' },
               }}
             >
               <colgroup>
                 <col style={{ width: 56 }} />
-                <col style={{ width: 132 }} />
-                <col style={{ width: 160 }} />
-                <col style={{ width: 128 }} />
-                <col style={{ width: 96 }} />
-                <col style={{ width: 272 }} />
-                <col style={{ width: 104 }} />
-                <col style={{ width: 56 }} />
-                <col style={{ width: 92 }} />
+                <col style={{ width: 105 }} />
+                <col style={{ width: 126 }} />
+                <col style={{ width: 100 }} />
+                <col style={{ width: 254 }} />
+                <col style={{ width: 94 }} />
+                <col style={{ width: 75 }} />
+                <col style={{ width: 140 }} />
               </colgroup>
               <TableHead>
                 <TableRow>
@@ -861,13 +860,24 @@ export function SellerInboundDraftScreen({
                   <TableCell sx={{ pl: 2 }}>Артикул</TableCell>
                   <TableCell>ШК</TableCell>
                   <TableCell>Артикул продавца</TableCell>
-                  <TableCell sx={{ pr: 2 }}>Артикул WB</TableCell>
                   <TableCell sx={{ pl: 2 }}>Наименование</TableCell>
                   <TableCell align="right">
                     Кол-во
                   </TableCell>
-                  <TableCell align="center">Печать</TableCell>
-                  <TableCell />
+                  <TableCell sx={{ pr: 2 }}>Артикул WB</TableCell>
+                  <TableCell
+                    align="center"
+                    sx={{
+                      position: 'sticky',
+                      right: 0,
+                      zIndex: 3,
+                      bgcolor: 'background.paper',
+                      borderLeft: '1px solid',
+                      borderLeftColor: 'divider',
+                    }}
+                  >
+                    Действия
+                  </TableCell>
                 </TableRow>
               </TableHead>
               <TableBody>
@@ -940,17 +950,6 @@ export function SellerInboundDraftScreen({
                       >
                         {cat?.wb_vendor_code ?? '—'}
                       </TableCell>
-                      <TableCell
-                        sx={{
-                          overflow: 'hidden',
-                          whiteSpace: 'nowrap',
-                          textOverflow: 'ellipsis',
-                          pr: 2,
-                        }}
-                        title={cat?.wb_nm_id ? String(cat.wb_nm_id) : undefined}
-                      >
-                        {cat?.wb_nm_id ?? '—'}
-                      </TableCell>
                       <TableCell sx={{ pl: 2, overflow: 'hidden' }}>
                         <Typography
                           variant="body2"
@@ -1022,40 +1021,61 @@ export function SellerInboundDraftScreen({
                           }}
                         />
                       </TableCell>
-                      <TableCell align="center">
-                        <Tooltip title="Печать товарного ШК">
-                          <span>
-                            <IconButton
-                              size="small"
-                              disabled={!printLineMeta.wb_primary_barcode}
-                              onClick={() => setPrintMeta(printLineMeta)}
-                              data-testid="seller-inbound-line-print-barcode"
-                              aria-label="Печать товарного ШК"
-                            >
-                              <PrintOutlined fontSize="small" />
-                            </IconButton>
-                          </span>
-                        </Tooltip>
+                      <TableCell
+                        sx={{
+                          overflow: 'hidden',
+                          whiteSpace: 'nowrap',
+                          textOverflow: 'ellipsis',
+                          pr: 2,
+                        }}
+                        title={cat?.wb_nm_id ? String(cat.wb_nm_id) : undefined}
+                      >
+                        {cat?.wb_nm_id ?? '—'}
                       </TableCell>
-                      <TableCell>
-                        {sellerCanEdit ? (
-                          <Button
-                            size="small"
-                            color="error"
-                            disabled={busy}
-                            onClick={() => void deleteLine(ln.id)}
-                            data-testid="seller-inbound-line-delete"
-                          >
-                            Удалить
-                          </Button>
-                        ) : null}
+                      <TableCell
+                        align="center"
+                        sx={{
+                          position: 'sticky',
+                          right: 0,
+                          zIndex: 1,
+                          bgcolor: 'background.paper',
+                          borderLeft: '1px solid',
+                          borderLeftColor: 'divider',
+                        }}
+                      >
+                        <Stack direction="row" spacing={0.5} sx={{ justifyContent: 'center' }}>
+                          <Tooltip title="Печать товарного ШК">
+                            <span>
+                              <IconButton
+                                size="small"
+                                disabled={!printLineMeta.wb_primary_barcode}
+                                onClick={() => setPrintMeta(printLineMeta)}
+                                data-testid="seller-inbound-line-print-barcode"
+                                aria-label="Печать товарного ШК"
+                              >
+                                <PrintOutlined fontSize="small" />
+                              </IconButton>
+                            </span>
+                          </Tooltip>
+                          {sellerCanEdit ? (
+                            <Button
+                              size="small"
+                              color="error"
+                              disabled={busy}
+                              onClick={() => void deleteLine(ln.id)}
+                              data-testid="seller-inbound-line-delete"
+                            >
+                              Удалить
+                            </Button>
+                          ) : null}
+                        </Stack>
                       </TableCell>
                     </TableRow>
                   )
                 })}
                 {detail.lines.length === 0 ? (
                   <TableRow>
-                    <TableCell colSpan={9}>
+                    <TableCell colSpan={8}>
                       <Typography variant="body2" color="text.secondary">
                         {sellerCanEdit
                           ? 'Добавьте товары кнопкой «Добавить товары».'

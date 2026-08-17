@@ -191,6 +191,9 @@ test('fbs workspace: preflight and deliver', async ({ page }) => {
   await expect(page.getByTestId('fbs-workspace')).toBeVisible()
   await expect(page.getByTestId('fbs-boxes')).toBeVisible()
   await page.getByRole('button', { name: 'Передать в WB' }).click()
+  const deliverConfirmDialog = page.getByRole('dialog', { name: 'Передать поставку в WB?' })
+  await expect(deliverConfirmDialog).toBeVisible()
+  await deliverConfirmDialog.getByRole('button', { name: 'Передать в WB' }).click()
 
   await expect(page.getByText('Поставка передана, QR получить не удалось')).toBeVisible()
   expect(deliverBody?.confirmed_preflight_version).toBeUndefined()

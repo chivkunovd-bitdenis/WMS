@@ -53,7 +53,7 @@ test('inbound receiving v2 — scan, manual edit, finish with discrepancy', asyn
   await page.getByTestId('nav-ff-reception').click();
   await expect(page.getByTestId('ff-inbound-queue-document').first()).toContainText('№');
   await expect(page.getByTestId('ff-inbound-queue-row').first()).toContainText('Box Seller');
-  await expect(page.getByTestId('ff-inbound-queue-composition').first()).toContainText('0 из 1 коробов');
+  await expect(page.getByTestId('ff-inbound-queue-composition').first()).toContainText('0 из 1 короба');
   await expect(page.getByTestId('ff-inbound-queue-composition').first()).toContainText('3 ед.');
   await expect(page.getByTestId('ff-inbound-queue-status').first()).toContainText('Передано');
   await page.getByTestId('ff-inbound-queue-row').first().focus();
@@ -730,14 +730,13 @@ test('inbound receiving v2 — seller sees conducted factual card after FF short
     'Артикул',
     'ШК',
     'Артикул продавца',
-    'Артикул WB',
     'Наименование',
     'Кол-во',
-    'Печать',
-    '',
+    'Артикул WB',
+    'Действия',
   ]);
   expect(sellerFactLayout.headerCells).toBe(sellerFactLayout.bodyCells);
-  expect(sellerFactLayout.headerCells).toBe(9);
+  expect(sellerFactLayout.headerCells).toBe(8);
 
   const sellerShortageRow = page.getByTestId('seller-inbound-line-row').filter({ hasText: seed.sku });
   await expect(sellerShortageRow).toBeVisible();

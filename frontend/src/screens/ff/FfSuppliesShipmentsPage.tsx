@@ -56,6 +56,8 @@ import {
 } from './FfPackagingPage'
 import { FfMarketplaceUnloadBoxAddDialog } from './FfMarketplaceUnloadBoxAddDialog'
 import { BoxImportDialog } from '../../components/BoxImportDialog'
+import { BoxLabelPrintDialog } from '../../components/BoxLabelPrintDialog'
+import type { LabelSize } from '../../utils/labelSize'
 import { formatHumanDocumentNumber } from './documentDisplay'
 import { formatDateTimeLocal } from '../../utils/formatDateTimeLocal'
 import { printBarcodeLabel } from '../../utils/printBarcodeLabel'
@@ -225,6 +227,13 @@ const mpUnloadSteps: { value: MpUnloadTab; label: string; testId: string }[] = [
 
 function mpUnloadStepLabel(step: MpUnloadTab): string {
   return mpUnloadSteps.find((item) => item.value === step)?.label ?? step
+}
+
+/** Человеческий размер короба вместо служебного кода пресета («60_40_40»). */
+function mpBoxPresetLabel(preset: string): string {
+  if (preset === '60_40_40') return '60×40×40 см'
+  if (preset === '30_20_30') return '30×20×30 см'
+  return preset
 }
 
 type ProductPick = { id: string; sku_code: string; name: string }
@@ -986,16 +995,29 @@ export function FfSuppliesShipmentsPage({
     setBoxMenuTargetId(null)
   }
 
-  const printBoxBarcode = (box: MarketplaceUnloadBox) => {
+  const [printBoxTarget, setPrintBoxTarget] = useState<MarketplaceUnloadBox | null>(null)
+
+  const requestPrintBoxBarcode = (box: MarketplaceUnloadBox) => {
     const barcode = box.internal_barcode?.trim()
     if (!barcode) {
       setModalError('У короба нет штрихкода.')
+      return
+    }
+    setPrintBoxTarget(box)
+  }
+
+  const confirmPrintBoxBarcode = (size: LabelSize) => {
+    const box = printBoxTarget
+    setPrintBoxTarget(null)
+    const barcode = box?.internal_barcode?.trim()
+    if (!box || !barcode) {
       return
     }
     printBarcodeLabel({
       title: 'Короб отгрузки',
       barcode,
       barcodeDataUrl: renderBarcodeDataUrl(barcode),
+      labelSize: size,
     })
   }
 
@@ -1176,11 +1198,6 @@ export function FfSuppliesShipmentsPage({
     overflowX: 'auto',
   }
 
-  const mpBoxTableSx = {
-    tableLayout: 'fixed',
-    width: '100%',
-  }
-
   const renderBoxActions = (box: MarketplaceUnloadBox) => {
     const totalQty = box.lines.reduce((sum, ln) => sum + ln.quantity, 0)
     return (
@@ -1214,7 +1231,7 @@ export function FfSuppliesShipmentsPage({
           aria-label="Печать ШК короба"
           data-testid={`ff-mp-box-print-${box.id}`}
           disabled={modalBusy || !box.internal_barcode}
-          onClick={() => printBoxBarcode(box)}
+          onClick={() => requestPrintBoxBarcode(box)}
         >
           <Typography variant="caption" sx={{ fontWeight: 700 }}>
             ШК
@@ -1256,63 +1273,107 @@ export function FfSuppliesShipmentsPage({
             <Typography variant="subtitle2" sx={{ fontWeight: 700, lineHeight: 1.25 }}>
               {boxLabel}
             </Typography>
+            {/* Дизайн-разбор 2026-08-16: раньше здесь была одна строка «60_40_40 ·
+                WHB-2A67351D829F» — служебный код пресета и штрихкод наравне, человек
+                это не читает и не называет вслух. Человеческий размер — основная
+                подпись, штрихкод — мелкая техническая строка ниже, для сверки со
+                сканером, а не для чтения. */}
             <Typography variant="body2" color="text.secondary" sx={{ minWidth: 0 }}>
-              {box.box_preset}
-              {boxBarcode ? ` · ${boxBarcode}` : ''}
+              {mpBoxPresetLabel(box.box_preset)}
               {!hasLines ? ' · готов к наполнению' : ''}
             </Typography>
+            {boxBarcode ? (
+              <Typography
+                variant="caption"
+                color="text.disabled"
+                sx={{ display: 'block', fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace' }}
+              >
+                {boxBarcode}
+              </Typography>
+            ) : null}
           </Box>
           {renderBoxActions(box)}
         </Box>
 
         {hasLines ? (
-          <Box sx={{ ...mpBoxBodySx, ...mpBoxTableWrapSx, mt: 0 }}>
-              <Table
-                size="small"
-                sx={mpBoxTableSx}
-                data-testid={tableTestId ?? `ff-mp-box-lines-${box.id}`}
+          <Box
+            sx={{ ...mpBoxBodySx, ...mpBoxTableWrapSx, mt: 0 }}
+            data-testid={tableTestId ?? `ff-mp-box-lines-${box.id}`}
+          >
+            <Box
+              sx={{
+                display: 'grid',
+                gridTemplateColumns: canUseMpBoxDestructiveControls
+                  ? '28% 1fr 104px 40px'
+                  : '28% 1fr 104px',
+                gap: 1,
+                borderBottom: 1,
+                borderColor: 'divider',
+              }}
+            >
+              <Typography variant="caption" sx={{ ...mpBoxTableHeadCellSx, borderBottom: 0 }}>
+                Артикул
+              </Typography>
+              <Typography variant="caption" sx={{ ...mpBoxTableHeadCellSx, borderBottom: 0 }}>
+                Товар
+              </Typography>
+              <Typography
+                variant="caption"
+                sx={{ ...mpBoxTableHeadCellSx, borderBottom: 0, textAlign: 'right' }}
               >
-                <TableHead>
-                  <TableRow>
-                    <TableCell sx={{ ...mpBoxTableHeadCellSx, width: '28%' }}>Артикул</TableCell>
-                    <TableCell sx={mpBoxTableHeadCellSx}>Товар</TableCell>
-                    <TableCell align="right" sx={{ ...mpBoxTableHeadCellSx, width: 104 }}>
-                      В коробе
-                    </TableCell>
-                    {canUseMpBoxDestructiveControls ? (
-                      <TableCell align="right" sx={{ ...mpBoxTableHeadCellSx, width: 64 }} />
-                    ) : null}
-                  </TableRow>
-                </TableHead>
-                <TableBody>
-                  {box.lines.map((ln) => (
-                    <TableRow key={ln.id}>
-                      <TableCell sx={{ overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                        {ln.sku_code}
-                      </TableCell>
-                      <TableCell sx={{ overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                        {ln.product_name}
-                      </TableCell>
-                      <TableCell align="right">{ln.quantity}</TableCell>
-                      {canUseMpBoxDestructiveControls ? (
-                        <TableCell align="right">
-                          <Tooltip title="Убрать из короба">
-                            <IconButton
-                              size="small"
-                              aria-label="Убрать из короба"
-                              data-testid={`ff-mp-box-line-remove-${ln.id}`}
-                              disabled={modalBusy}
-                              onClick={() => void removeBoxLine(box.id, ln.id)}
-                            >
-                              <DeleteOutlineOutlined fontSize="small" />
-                            </IconButton>
-                          </Tooltip>
-                        </TableCell>
-                      ) : null}
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
+                В коробе
+              </Typography>
+              {canUseMpBoxDestructiveControls ? <Box /> : null}
+            </Box>
+            {box.lines.map((ln) => (
+              <Box
+                key={ln.id}
+                sx={{
+                  display: 'grid',
+                  gridTemplateColumns: canUseMpBoxDestructiveControls
+                    ? '28% 1fr 104px 40px'
+                    : '28% 1fr 104px',
+                  gap: 1,
+                  alignItems: 'center',
+                  py: 0.5,
+                  borderBottom: 1,
+                  borderColor: 'divider',
+                  '&:last-of-type': { borderBottom: 0 },
+                }}
+              >
+                <Typography
+                  variant="body2"
+                  sx={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}
+                >
+                  {ln.sku_code}
+                </Typography>
+                <Typography
+                  variant="body2"
+                  title={ln.product_name}
+                  sx={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}
+                >
+                  {ln.product_name}
+                </Typography>
+                <Typography variant="body2" sx={{ textAlign: 'right' }}>
+                  {ln.quantity}
+                </Typography>
+                {canUseMpBoxDestructiveControls ? (
+                  <Box sx={{ textAlign: 'right' }}>
+                    <Tooltip title="Убрать из короба">
+                      <IconButton
+                        size="small"
+                        aria-label="Убрать из короба"
+                        data-testid={`ff-mp-box-line-remove-${ln.id}`}
+                        disabled={modalBusy}
+                        onClick={() => void removeBoxLine(box.id, ln.id)}
+                      >
+                        <DeleteOutlineOutlined fontSize="small" />
+                      </IconButton>
+                    </Tooltip>
+                  </Box>
+                ) : null}
+              </Box>
+            ))}
           </Box>
         ) : null}
       </Paper>
@@ -1787,15 +1848,32 @@ export function FfSuppliesShipmentsPage({
         .find((step) => mpStepEnabled(step.value))?.value ?? null
     )
   }, [mpStepEnabled, mpUnloadTab])
-  // Пункт 1: самый дальний разблокированный шаг документа — шаги до него помечаются
-  // галочкой в линейке, как «label ✓» у завершённых этапов в FfFbsSupplyWorkspace.
-  const mpCurrentStepIdx = useMemo(
-    () =>
-      mpUnloadSteps.reduce(
-        (maxIdx, step, idx) => (mpStepEnabled(step.value) ? idx : maxIdx),
-        0,
-      ),
-    [mpStepEnabled],
+  // Дизайн-разбор 2026-08-16: галочка раньше означала «шаг разблокирован», а не
+  // «шаг закончен» — на утверждённой отгрузке с планом 4 и подобрано 0 «Товары ✓»
+  // и «Подбор ✓» стояли одновременно, хотя подбор ещё не начинался. Бригадир на
+  // складе читает галочку однозначно: «этап закрыт, не проверяю». Здесь — факт
+  // завершения по каждому шагу отдельно, а не доступность перехода.
+  const mpStepDone = useCallback(
+    (step: MpUnloadTab): boolean => {
+      if (!unloadDetail || docModal !== 'marketplace_unload') {
+        return false
+      }
+      if (step === 'plan') {
+        // План закрыт, когда он больше не редактируется (черновик утверждён).
+        return mpSubmitted || mpConfirmed || mpCollecting
+      }
+      if (step === 'pick') {
+        // Подбор закончен, когда подбирать больше нечего — «осталось ноль».
+        const planned = mpCollectSummary?.planned ?? 0
+        const remaining = mpCollectSummary?.remaining ?? planned
+        return planned > 0 && remaining <= 0
+      }
+      if (step === 'packaging') {
+        return Boolean(unloadDetail.linked_packaging_task?.is_complete)
+      }
+      return false
+    },
+    [docModal, unloadDetail, mpSubmitted, mpConfirmed, mpCollecting, mpCollectSummary],
   )
 
   useEffect(() => {
@@ -2344,8 +2422,13 @@ export function FfSuppliesShipmentsPage({
                   </Typography>
                 </Box>
                 <Box>
+                  {/* Раньше подпись была «В коробах / распределено» — короб тут ни при чём:
+                      подбор с 2026-08-16 коробов не трогает вообще, это чистое количество
+                      подобранного со склада. Старая подпись рядом с «Упаковано» из другого
+                      знаменателя (сколько из уже подобранного упаковано) читалась как одно
+                      противоречивое число — развели подписями, что к чему относится. */}
                   <Typography variant="caption" color="text.secondary">
-                    В коробах / распределено
+                    Подобрано
                   </Typography>
                   <Typography
                     variant="body2"
@@ -2357,7 +2440,7 @@ export function FfSuppliesShipmentsPage({
                 </Box>
                 <Box>
                   <Typography variant="caption" color="text.secondary">
-                    Осталось
+                    Осталось подобрать
                   </Typography>
                   <Typography
                     variant="body2"
@@ -2372,7 +2455,7 @@ export function FfSuppliesShipmentsPage({
                 </Box>
                 <Box>
                   <Typography variant="caption" color="text.secondary">
-                    Упаковано
+                    Упаковано (из подобранного)
                   </Typography>
                   <Typography
                     variant="body2"
@@ -2399,17 +2482,25 @@ export function FfSuppliesShipmentsPage({
                 sx={{ borderBottom: 1, borderColor: 'divider', mb: 2 }}
                 data-testid="ff-mp-process-tabs"
               >
-                {mpUnloadSteps.map((step, stepIdx) => (
-                  <Tab
-                    key={step.value}
-                    // Пункт 1 итерации 2026-08-14: назад можно, вперёд нельзя — как в FBS
-                    // (frontend/src/screens/v2/FfFbsSupplyWorkspace.tsx, STAGES/currentStageIndex).
-                    label={stepIdx < mpCurrentStepIdx ? `${step.label} ✓` : step.label}
-                    value={step.value}
-                    disabled={!mpStepEnabled(step.value)}
-                    data-testid={step.testId}
-                  />
-                ))}
+                {mpUnloadSteps.map((step) => {
+                  // Три разных состояния шага не сжимаются в один суффикс:
+                  // ✓ — фактически закончен; … — доступен, но работа ещё идёт;
+                  // без значка и серым (disabled) — пока недоступен.
+                  const done = mpStepDone(step.value)
+                  const enabled = mpStepEnabled(step.value)
+                  const label = done ? `${step.label} ✓` : enabled ? `${step.label} …` : step.label
+                  return (
+                    <Tab
+                      key={step.value}
+                      // Пункт 1 итерации 2026-08-14: назад можно, вперёд нельзя — как в FBS
+                      // (frontend/src/screens/v2/FfFbsSupplyWorkspace.tsx, STAGES/currentStageIndex).
+                      label={label}
+                      value={step.value}
+                      disabled={!enabled}
+                      data-testid={step.testId}
+                    />
+                  )
+                })}
               </Tabs>
               {mpUnloadTab === 'plan' ? (
                 <Stack spacing={2} data-testid="ff-mp-tab-plan-panel">
@@ -2632,6 +2723,7 @@ export function FfSuppliesShipmentsPage({
                     requestId={unloadDetail.id}
                     disabled={modalBusy}
                     onChanged={() => void loadDocDetail()}
+                    catalogById={catalogById}
                   />
                 </Box>
               ) : null}
@@ -2812,7 +2904,7 @@ export function FfSuppliesShipmentsPage({
                           onClick={() => {
                             const box = boxMenuTargetId ? boxById.get(boxMenuTargetId) : null
                             if (box) {
-                              printBoxBarcode(box)
+                              requestPrintBoxBarcode(box)
                             }
                             closeBoxMenu()
                           }}
@@ -3006,7 +3098,7 @@ export function FfSuppliesShipmentsPage({
           ) : null}
         </DialogContent>
         <DialogActions
-          sx={{ flexWrap: 'wrap', gap: 1, justifyContent: 'space-between' }}
+          sx={{ flexWrap: 'wrap', gap: 1 }}
           data-testid="ff-mp-footer-bar"
         >
           <Stack direction="row" spacing={1} sx={{ flexWrap: 'wrap' }}>
@@ -3354,6 +3446,14 @@ export function FfSuppliesShipmentsPage({
           </Button>
         </DialogActions>
       </Dialog>
+      <BoxLabelPrintDialog
+        open={printBoxTarget !== null}
+        title="Печать штрихкода короба"
+        busy={modalBusy}
+        onClose={() => setPrintBoxTarget(null)}
+        onConfirm={confirmPrintBoxBarcode}
+        testId="ff-mp-box-print-dialog"
+      />
     </Box>
   )
 }

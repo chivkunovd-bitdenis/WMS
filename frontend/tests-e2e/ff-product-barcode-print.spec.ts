@@ -103,10 +103,10 @@ test('ff sorting opens unified marking print dialog for product line', async ({ 
   await page.getByTestId('ff-inbound-queue-row').first().click();
   await expect(page.getByTestId('ff-sorting-panel')).toBeVisible();
 
-  const linesTable = page.getByTestId('ff-inbound-lines-table');
-  await expect(linesTable).toBeVisible();
-  // Print may also appear on the lines table; primary path under test is the product card.
-
+  // На экране сортировки таблица «Состав приёмки» (ff-inbound-lines-table) намеренно
+  // скрыта — она дублировала интерактивные карточки FfInboundSortingPanel; решение
+  // подтверждено заказчиком 17.08.2026. Цель этого теста — единый диалог печати ШК
+  // с карточки товара, поэтому проверяем сразу карточку, а не таблицу.
   const productCard = page.getByTestId('ff-sorting-product-card').first();
   await productCard.getByRole('button', { name: 'Печать ШК товара' }).click();
   const dialog = page.getByTestId('marking-print-dialog');
@@ -133,5 +133,7 @@ test('ff sorting opens unified marking print dialog for product line', async ({ 
   const barcodeCell = productCard.getByTestId('ff-product-line-barcode');
   await expect(barcodeCell).toContainText('E2E-MOCK-BARCODE');
   await expect(barcodeCell).toContainText('Размер: L');
-  await expect(barcodeCell).toContainText('Состав:');
+  // Состав ткани в рабочей таблице больше не показывается — он нужен только на печатной
+  // этикетке (productLabelDetailLines), кладовщику на подборе/упаковке он не нужен.
+  await expect(barcodeCell).not.toContainText('Состав:');
 });

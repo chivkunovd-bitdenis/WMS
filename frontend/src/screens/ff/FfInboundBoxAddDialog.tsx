@@ -371,14 +371,11 @@ export function FfInboundBoxAddDialog({
         </Stack>
       </DialogContent>
       <DialogActions sx={{ flexShrink: 0 }}>
-        <Button onClick={() => void handleDismiss()} disabled={busy} data-testid="ff-inbound-box-add-dismiss">
-          Скрыть окно
-        </Button>
         <Button
           variant="contained"
           onClick={() => void handleDismiss()}
           disabled={busy}
-          data-testid="ff-inbound-box-add-done"
+          data-testid="ff-inbound-box-add-dismiss"
         >
           Готово
         </Button>

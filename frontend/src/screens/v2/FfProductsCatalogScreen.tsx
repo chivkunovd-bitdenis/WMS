@@ -1,11 +1,17 @@
-import { useCallback, useEffect, useState } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useCallback, useEffect, useRef, useState } from 'react'
+import { useNavigate, useSearchParams } from 'react-router-dom'
 import {
   Alert,
   Badge,
   Box,
   Button,
+  Checkbox,
   CircularProgress,
+  Dialog,
+  DialogActions,
+  DialogContent,
+  DialogTitle,
+  FormControlLabel,
   IconButton,
   Paper,
   Stack,
@@ -15,17 +21,20 @@ import {
   TableContainer,
   TableHead,
   TableRow,
+  TextField,
   Tooltip,
   Typography,
 } from '@mui/material'
 import DownloadOutlinedIcon from '@mui/icons-material/DownloadOutlined'
 import QrCode2OutlinedIcon from '@mui/icons-material/QrCode2Outlined'
+import Inventory2OutlinedIcon from '@mui/icons-material/Inventory2Outlined'
 import { apiUrl } from '../../api'
 import { ProductPhotoThumb } from '../../components/ProductPhotoThumb'
 import { ProductBarcodeCell } from '../../components/ProductBarcodeCell'
 import { ProductBarcodePrintButton } from '../../components/ProductBarcodePrintButton'
 import { FfProductMarkingPrintProvider } from '../../components/FfProductMarkingPrintProvider'
 import { readApiErrorMessage } from '../../utils/readApiErrorMessage'
+import { printPackagingInstructions } from '../../utils/printPackagingInstructions'
 import {
   catalogRowToDisplayMeta,
   resolveProductPrimaryBarcode,
@@ -54,6 +63,10 @@ type FfCatalogRow = {
   requires_honest_sign: boolean
   has_packaging_instructions: boolean
   marking_available_count?: number
+  fbs_stock_sync_enabled?: boolean
+  fbs_stock_limit?: number | null
+  fbs_published_amount?: number | null
+  fbs_sync_status?: string | null
 }
 
 type Props = {
@@ -94,6 +107,13 @@ export function FfProductsCatalogScreen({
   canManageCatalog = false,
 }: Props) {
   const navigate = useNavigate()
+  const [searchParams, setSearchParams] = useSearchParams()
+  // Ширины колонок ужаты так, чтобы таблица (954px) целиком помещалась в контейнер на
+  // 1280 (~970px) — тогда липкой колонке действий физически некуда сдвигаться, и она
+  // не перекрывает соседей вовсе (тот же приём, что и в SellerInboundDraftScreen).
+  // WB/nmId — служебный номенклатурный номер, который не ищут глазами, — сдвинут в
+  // конец списка колонок, к липкой границе, а не «Название» или артикулы.
+  const tableMinWidth = 954
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [catalog, setCatalog] = useState<FfCatalogRow[]>([])
@@ -101,6 +121,15 @@ export function FfProductsCatalogScreen({
   const [createOpen, setCreateOpen] = useState(false)
   const [importOpen, setImportOpen] = useState(false)
   const [importNotice, setImportNotice] = useState<string | null>(null)
+  const [fbsLimitProduct, setFbsLimitProduct] = useState<FfCatalogRow | null>(null)
+  const [fbsLimitDraft, setFbsLimitDraft] = useState('')
+  const [fbsLimitSaving, setFbsLimitSaving] = useState(false)
+  const [fbsLimitError, setFbsLimitError] = useState<string | null>(null)
+  const fbsLimitAutoOpenedRef = useRef<string | null>(null)
+  const [editProduct, setEditProduct] = useState<FfCatalogRow | null>(null)
+  const [editText, setEditText] = useState('')
+  const [editRequiresHonestSign, setEditRequiresHonestSign] = useState(false)
+  const [editBusy, setEditBusy] = useState(false)
 
   const load = useCallback(async () => {
     setError(null)
@@ -123,6 +152,69 @@ export function FfProductsCatalogScreen({
   useEffect(() => {
     void load()
   }, [load])
+
+  const openFbsLimitDialog = useCallback((product: FfCatalogRow) => {
+    setFbsLimitProduct(product)
+    setFbsLimitDraft(product.fbs_stock_limit != null ? String(product.fbs_stock_limit) : '')
+    setFbsLimitError(null)
+  }, [])
+
+  const closeFbsLimitDialog = useCallback(() => {
+    if (fbsLimitSaving) return
+    setFbsLimitProduct(null)
+    setFbsLimitError(null)
+  }, [fbsLimitSaving])
+
+  const saveFbsLimit = useCallback(async () => {
+    if (!fbsLimitProduct) return
+    const trimmed = fbsLimitDraft.trim()
+    let limitValue: number | null = null
+    if (trimmed) {
+      const parsed = Number(trimmed)
+      if (!Number.isInteger(parsed) || parsed < 0) {
+        setFbsLimitError('Введите целое число не меньше 0 или оставьте поле пустым.')
+        return
+      }
+      limitValue = parsed
+    }
+    setFbsLimitSaving(true)
+    setFbsLimitError(null)
+    try {
+      const res = await fetch(apiUrl(`/products/${fbsLimitProduct.id}/fbs-stock-sync`), {
+        method: 'PATCH',
+        headers: { ...authHeaders(token), 'Content-Type': 'application/json' },
+        body: JSON.stringify({ fbs_stock_limit: limitValue }),
+      })
+      if (!res.ok) {
+        throw new Error(humanFfCatalogError(await readApiErrorMessage(res)))
+      }
+      setImportNotice(
+        limitValue != null
+          ? `Остаток FBS для «${fbsLimitProduct.sku_code}» обновлён: ${limitValue} шт.`
+          : `Остаток FBS для «${fbsLimitProduct.sku_code}» сброшен.`,
+      )
+      setFbsLimitProduct(null)
+      await load()
+    } catch (e) {
+      setFbsLimitError(e instanceof Error ? e.message : 'Не удалось сохранить остаток FBS.')
+    } finally {
+      setFbsLimitSaving(false)
+    }
+  }, [authHeaders, fbsLimitDraft, fbsLimitProduct, load, token])
+
+  useEffect(() => {
+    const targetId = searchParams.get('fbs_limit')
+    if (!targetId || catalog.length === 0) return
+    if (fbsLimitAutoOpenedRef.current === targetId) return
+    const match = catalog.find((p) => p.id === targetId)
+    if (match) {
+      openFbsLimitDialog(match)
+    }
+    fbsLimitAutoOpenedRef.current = targetId
+    const next = new URLSearchParams(searchParams)
+    next.delete('fbs_limit')
+    setSearchParams(next, { replace: true })
+  }, [catalog, openFbsLimitDialog, searchParams, setSearchParams])
 
   useEffect(() => {
     if (sellers.length > 0) {
@@ -161,6 +253,49 @@ export function FfProductsCatalogScreen({
     await loadDialogSellers()
     setImportOpen(true)
   }, [loadDialogSellers])
+
+  function openPackagingEdit(p: FfCatalogRow) {
+    setEditProduct(p)
+    setEditText(p.packaging_instructions ?? '')
+    setEditRequiresHonestSign(Boolean(p.requires_honest_sign))
+  }
+
+  function printPackagingTz() {
+    if (!editProduct) return
+    printPackagingInstructions({
+      sku_code: editProduct.sku_code,
+      product_name: editProduct.name,
+      seller_name: editProduct.seller_name,
+      instructions: editText,
+      requires_honest_sign: editRequiresHonestSign,
+    })
+  }
+
+  async function savePackagingInstructions() {
+    if (!editProduct) return
+    setEditBusy(true)
+    setError(null)
+    try {
+      const res = await fetch(apiUrl(`/products/${editProduct.id}/packaging-instructions`), {
+        method: 'PATCH',
+        headers: { ...authHeaders(token), 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          packaging_instructions: editText.trim() || null,
+          requires_honest_sign: editRequiresHonestSign,
+        }),
+      })
+      if (!res.ok) {
+        setError(humanFfCatalogError(await readApiErrorMessage(res)))
+        return
+      }
+      setEditProduct(null)
+      await load()
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Не удалось сохранить ТЗ.')
+    } finally {
+      setEditBusy(false)
+    }
+  }
 
   return (
     <FfProductMarkingPrintProvider token={token}>
@@ -237,7 +372,7 @@ export function FfProductsCatalogScreen({
             size="small"
             data-testid="ff-products-table"
             sx={{
-              minWidth: 1180,
+              minWidth: tableMinWidth,
               tableLayout: 'fixed',
               '& .MuiTableCell-root': {
                 px: 1,
@@ -254,14 +389,14 @@ export function FfProductsCatalogScreen({
           >
             <colgroup>
               <col style={{ width: 56 }} />
-              <col style={{ width: 240 }} />
-              <col style={{ width: 130 }} />
-              <col style={{ width: 130 }} />
-              <col style={{ width: 150 }} />
-              <col style={{ width: 100 }} />
-              <col style={{ width: 76 }} />
               <col style={{ width: 140 }} />
-              <col style={{ width: 92 }} />
+              <col style={{ width: 119 }} />
+              <col style={{ width: 118 }} />
+              <col style={{ width: 112 }} />
+              <col style={{ width: 64 }} />
+              <col style={{ width: 75 }} />
+              <col style={{ width: 96 }} />
+              <col style={{ width: 78 }} />
               <col style={{ width: 96 }} />
             </colgroup>
             <TableHead>
@@ -271,10 +406,10 @@ export function FfProductsCatalogScreen({
                 <TableCell>Артикул селлера</TableCell>
                 <TableCell>SKU</TableCell>
                 <TableCell>ШК</TableCell>
-                <TableCell>WB/nmId</TableCell>
                 <TableCell>Размер</TableCell>
                 <TableCell>Селлер</TableCell>
                 <TableCell>ТЗ</TableCell>
+                <TableCell>WB/nmId</TableCell>
                 <TableCell
                   align="center"
                   sx={{
@@ -316,12 +451,12 @@ export function FfProductsCatalogScreen({
                       </Typography>
                     </TableCell>
                     <TableCell>
-                      <Typography variant="body2" noWrap>
+                      <Typography variant="body2" sx={{ wordBreak: 'break-word' }}>
                         {p.wb_vendor_code ?? '—'}
                       </Typography>
                     </TableCell>
                     <TableCell>
-                      <Typography variant="body2" sx={{ fontWeight: 600 }} noWrap>
+                      <Typography variant="body2" sx={{ fontWeight: 600, wordBreak: 'break-word' }}>
                         {p.sku_code}
                       </Typography>
                     </TableCell>
@@ -343,16 +478,14 @@ export function FfProductsCatalogScreen({
                     </TableCell>
                     <TableCell>
                       <Typography variant="body2" noWrap>
-                        {p.wb_nm_id ?? '—'}
-                      </Typography>
-                    </TableCell>
-                    <TableCell>
-                      <Typography variant="body2" noWrap>
                         {p.wb_size ?? '—'}
                       </Typography>
                     </TableCell>
                     <TableCell>
-                      <Typography variant="body2" noWrap>
+                      <Typography
+                        variant="body2"
+                        sx={{ wordBreak: 'break-word' }}
+                      >
                         {p.seller_name ?? '—'}
                       </Typography>
                     </TableCell>
@@ -366,7 +499,22 @@ export function FfProductsCatalogScreen({
                         >
                           {p.has_packaging_instructions ? 'Заполнено' : 'Нет ТЗ'}
                         </Typography>
+                        {canManageCatalog ? (
+                          <Button
+                            size="small"
+                            onClick={() => openPackagingEdit(p)}
+                            data-testid={`ff-packaging-edit-${p.id}`}
+                            sx={{ maxWidth: '100%', minWidth: 0, px: 0 }}
+                          >
+                            ТЗ
+                          </Button>
+                        ) : null}
                       </Stack>
+                    </TableCell>
+                    <TableCell>
+                      <Typography variant="body2" noWrap>
+                        {p.wb_nm_id ?? '—'}
+                      </Typography>
                     </TableCell>
                     <TableCell
                       align="center"
@@ -412,6 +560,28 @@ export function FfProductsCatalogScreen({
                           requiresHonestSign={p.requires_honest_sign}
                           markingAvailable={markingCount}
                         />
+                        <Tooltip
+                          title={
+                            p.fbs_stock_limit != null
+                              ? `Остаток FBS: ${p.fbs_stock_limit} шт`
+                              : 'Остаток FBS не задан'
+                          }
+                        >
+                          <span>
+                            <IconButton
+                              size="small"
+                              aria-label={`Остаток FBS ${p.sku_code}`}
+                              data-testid={`ff-catalog-fbs-limit-${p.id}`}
+                              disabled={!canManageCatalog}
+                              onClick={() => openFbsLimitDialog(p)}
+                            >
+                              <Inventory2OutlinedIcon
+                                fontSize="small"
+                                color={p.fbs_stock_limit != null ? 'primary' : 'disabled'}
+                              />
+                            </IconButton>
+                          </span>
+                        </Tooltip>
                       </Stack>
                     </TableCell>
                   </TableRow>
@@ -462,6 +632,112 @@ export function FfProductsCatalogScreen({
             />
           </>
         ) : null}
+
+        <Dialog
+          open={fbsLimitProduct != null}
+          onClose={closeFbsLimitDialog}
+          maxWidth="xs"
+          fullWidth
+          data-testid="ff-catalog-fbs-limit-dialog"
+        >
+          <DialogTitle>Остаток FBS</DialogTitle>
+          <DialogContent>
+            {fbsLimitProduct ? (
+              <Stack spacing={2} sx={{ pt: 1 }}>
+                <Typography variant="body2" color="text.secondary">
+                  {fbsLimitProduct.sku_code} · {fbsLimitProduct.name}
+                </Typography>
+                <Typography variant="body2" color="text.secondary">
+                  Максимальное количество этого товара, доступное для продажи по FBS. От
+                  этого числа делится остаток по складам WB на экране «Остатки WB».
+                </Typography>
+                {fbsLimitError ? (
+                  <Alert severity="error" data-testid="ff-catalog-fbs-limit-error">
+                    {fbsLimitError}
+                  </Alert>
+                ) : null}
+                <TextField
+                  label="Остаток FBS (шт)"
+                  type="number"
+                  value={fbsLimitDraft}
+                  onChange={(e) => setFbsLimitDraft(e.target.value)}
+                  placeholder="Не задан"
+                  slotProps={{ htmlInput: { min: 0, 'data-testid': 'ff-catalog-fbs-limit-input' } }}
+                  fullWidth
+                  disabled={fbsLimitSaving}
+                />
+              </Stack>
+            ) : null}
+          </DialogContent>
+          <DialogActions>
+            <Button onClick={closeFbsLimitDialog} disabled={fbsLimitSaving}>
+              Отмена
+            </Button>
+            <Button
+              variant="contained"
+              onClick={() => void saveFbsLimit()}
+              disabled={fbsLimitSaving}
+              data-testid="ff-catalog-fbs-limit-save"
+            >
+              {fbsLimitSaving ? 'Сохраняем…' : 'Сохранить'}
+            </Button>
+          </DialogActions>
+        </Dialog>
+
+        <Dialog
+          open={editProduct !== null}
+          onClose={() => setEditProduct(null)}
+          fullWidth
+          maxWidth="sm"
+          data-testid="ff-packaging-dialog"
+        >
+          <DialogTitle>ТЗ на упаковку</DialogTitle>
+          <DialogContent>
+            <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
+              {editProduct?.sku_code} · {editProduct?.name}
+            </Typography>
+            <FormControlLabel
+              control={
+                <Checkbox
+                  checked={editRequiresHonestSign}
+                  onChange={(e) => setEditRequiresHonestSign(e.target.checked)}
+                  data-testid="ff-requires-honest-sign"
+                />
+              }
+              label="Нужен Честный знак при упаковке"
+            />
+            <TextField
+              fullWidth
+              multiline
+              minRows={4}
+              label="Инструкция для склада"
+              value={editText}
+              onChange={(e) => setEditText(e.target.value)}
+              slotProps={{ htmlInput: { 'data-testid': 'ff-packaging-text' } }}
+            />
+          </DialogContent>
+          <DialogActions>
+            <Button onClick={() => setEditProduct(null)} disabled={editBusy}>
+              Отмена
+            </Button>
+            <Button
+              variant="outlined"
+              disabled={editBusy || !editProduct}
+              onClick={printPackagingTz}
+              data-testid="ff-packaging-print"
+            >
+              Печать
+            </Button>
+            <Button
+              variant="contained"
+              disabled={editBusy}
+              onClick={() => void savePackagingInstructions()}
+              data-testid="ff-packaging-save"
+            >
+              Сохранить
+            </Button>
+          </DialogActions>
+        </Dialog>
       </Box>
     </FfProductMarkingPrintProvider>
   )

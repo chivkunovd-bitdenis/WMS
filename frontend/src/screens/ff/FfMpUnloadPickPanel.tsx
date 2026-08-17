@@ -1,20 +1,27 @@
-import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import {
   Alert,
   Box,
   Button,
   Chip,
   CircularProgress,
+  Paper,
   Stack,
   Table,
   TableBody,
   TableCell,
+  TableContainer,
   TableHead,
   TableRow,
   TextField,
   Typography,
 } from '@mui/material'
+import { alpha } from '@mui/material/styles'
 import { apiUrl } from '../../api'
+import { FfProductLineCells, FfProductTableHeadCells } from '../../components/FfProductLineCells'
+import { storageLocationLabel } from '../../utils/inboundQueues'
+import { productDisplayMetaFromCatalog } from '../../types/wbProductCatalog'
+import type { WbProductCatalogRow } from '../../types/wbProductCatalog'
 import { readApiErrorMessage } from '../../utils/readApiErrorMessage'
 
 type PickOptionLocation = {
@@ -51,6 +58,8 @@ type Props = {
   requestId: string
   disabled?: boolean
   onChanged?: () => void
+  /** Каталог WB для фото/ШК/размера в строке товара — тот же, что уже грузит родительская страница. */
+  catalogById: Map<string, WbProductCatalogRow>
 }
 
 export function FfMpUnloadPickPanel({
@@ -59,6 +68,7 @@ export function FfMpUnloadPickPanel({
   requestId,
   disabled,
   onChanged,
+  catalogById,
 }: Props) {
   const scanInputRef = useRef<HTMLInputElement>(null)
   const [pickOptions, setPickOptions] = useState<PickOptionProduct[]>([])
@@ -158,10 +168,14 @@ export function FfMpUnloadPickPanel({
       if (scanRes.kind === 'location') {
         setActiveLocationId(scanRes.storage_location_id ?? null)
         setActiveLocationCode(scanRes.location_code ?? null)
-        setScanMessage(`Активная ячейка: ${scanRes.location_code}`)
+        setScanMessage(
+          `Активная ячейка: ${storageLocationLabel(scanRes.location_code ?? '')}`,
+        )
       } else {
         setScanMessage(
-          `Принято: ${scanRes.product_name} → ${scanRes.location_code ?? 'без ячейки'}`,
+          `Принято: ${scanRes.product_name} → ${
+            scanRes.location_code ? storageLocationLabel(scanRes.location_code) : 'без ячейки'
+          }`,
         )
       }
 
@@ -227,14 +241,15 @@ export function FfMpUnloadPickPanel({
   )
 
   const isDisabled = disabled || busy || loading
+  const activeLocationLabel = activeLocationCode ? storageLocationLabel(activeLocationCode) : null
 
   return (
     <Box>
       {/* Чип активной ячейки */}
-      {activeLocationCode ? (
+      {activeLocationLabel ? (
         <Chip
           color="info"
-          label={`Ячейка ${activeLocationCode}`}
+          label={`Ячейка ${activeLocationLabel}`}
           data-testid="ff-mp-pick-active-location"
           sx={{ mb: 1 }}
         />
@@ -286,8 +301,8 @@ export function FfMpUnloadPickPanel({
       >
         {scanMessage
           ? scanMessage
-          : activeLocationCode
-            ? `Сканер активен — пикните ШК товара для ячейки ${activeLocationCode}.`
+          : activeLocationLabel
+            ? `Сканер активен — пикните ШК товара для ячейки ${activeLocationLabel}.`
             : 'Сканер активен — пикните ШК ячейки или товара.'}
       </Typography>
 
@@ -299,136 +314,163 @@ export function FfMpUnloadPickPanel({
             Загрузка…
           </Typography>
         </Box>
+      ) : pickOptions.length === 0 ? (
+        <Alert severity="info" data-testid="ff-mp-pick-empty">
+          Нет товаров в плане отгрузки.
+        </Alert>
       ) : (
-        /* Таблица товаров */
-        <Box sx={{ overflowX: 'auto' }}>
-          <Table size="small" data-testid="ff-mp-pick-table">
-            <TableHead>
-              <TableRow sx={{ backgroundColor: 'action.hover' }}>
-                <TableCell>Товар</TableCell>
-                <TableCell align="right">План</TableCell>
-                <TableCell align="right">Подобрано</TableCell>
-                <TableCell align="right">Осталось</TableCell>
-              </TableRow>
-            </TableHead>
-            <TableBody>
-              {pickOptions.length === 0 ? (
-                <TableRow>
-                  <TableCell colSpan={4}>
-                    <Typography variant="body2" color="text.secondary">
-                      Нет товаров в плане отгрузки
-                    </Typography>
-                  </TableCell>
-                </TableRow>
-              ) : (
-                pickOptions.map((product) => {
-                  const remaining = Math.max(0, product.planned_qty - product.picked_qty)
-                  const hasLocations = product.locations.length > 0
+        /* Карточки товаров — тот же вид, что на раскладке при сортировке (FfInboundSortingPanel):
+           полноценная строка товара (фото/артикул/ШК/наименование) и под ней понятные строки
+           ячеек «Ячейка / Доступно / Шт», а не голый текст без заголовков. */
+        <Stack spacing={2} data-testid="ff-mp-pick-list">
+          {pickOptions.map((product) => {
+            const remaining = Math.max(0, product.planned_qty - product.picked_qty)
+            const hasLocations = product.locations.length > 0
+            const displayMeta = productDisplayMetaFromCatalog(
+              product.product_id,
+              product,
+              catalogById,
+            )
+            const done = remaining <= 0
 
-                  return (
-                    // <div> между <tbody> и <tr> — невалидная разметка: браузер выбрасывает
-                    // строки из табличного контекста, и они теряют выравнивание по колонкам.
-                    // Нужен фрагмент, а не Box.
-                    <Fragment key={product.product_id}>
-                      {/* Строка товара */}
+            return (
+              <Paper
+                key={product.product_id}
+                variant="outlined"
+                sx={{
+                  p: 2,
+                  minWidth: 0,
+                  ...(done
+                    ? { opacity: 0.85, bgcolor: (theme) => alpha(theme.palette.success.main, 0.06) }
+                    : null),
+                }}
+                data-testid="ff-mp-pick-product-card"
+                data-product-id={product.product_id}
+              >
+                <TableContainer sx={{ mb: 1.5, width: '100%', minWidth: 0 }}>
+                  <Table size="small">
+                    <TableHead>
+                      <TableRow>
+                        <FfProductTableHeadCells showPrint={false} />
+                        <TableCell align="right">План</TableCell>
+                        <TableCell align="right">Подобрано</TableCell>
+                        <TableCell align="right">Осталось</TableCell>
+                      </TableRow>
+                    </TableHead>
+                    <TableBody>
                       <TableRow data-testid={`ff-mp-pick-row-${product.product_id}`}>
-                        <TableCell>
-                          <Typography variant="body2">
-                            {product.product_name}
-                          </Typography>
-                          <Typography variant="caption" color="text.secondary">
-                            SKU: {product.sku_code}
-                          </Typography>
+                        <FfProductLineCells
+                          meta={displayMeta}
+                          showPrint={false}
+                          lineTestIdPrefix={`ff-mp-pick-product-${product.product_id}`}
+                        />
+                        <TableCell align="right" data-testid={`ff-mp-pick-plan-${product.product_id}`}>
+                          {product.planned_qty}
                         </TableCell>
-                        <TableCell align="right">{product.planned_qty}</TableCell>
-                        <TableCell align="right">{product.picked_qty}</TableCell>
+                        <TableCell align="right" data-testid={`ff-mp-pick-picked-${product.product_id}`}>
+                          {product.picked_qty}
+                        </TableCell>
                         <TableCell
                           align="right"
+                          data-testid={`ff-mp-pick-remaining-${product.product_id}`}
                           sx={remaining > 0 ? { color: 'warning.main' } : undefined}
                         >
                           {remaining}
                         </TableCell>
                       </TableRow>
+                    </TableBody>
+                  </Table>
+                </TableContainer>
 
-                      {/* Строки с ячейками */}
-                      {hasLocations ? (
-                        product.locations.map((location) => {
+                {hasLocations ? (
+                  <TableContainer sx={{ width: '100%', minWidth: 0 }}>
+                    <Table size="small" data-testid="ff-mp-pick-cell-rows">
+                      <TableHead>
+                        <TableRow>
+                          <TableCell sx={{ minWidth: 180 }}>Ячейка</TableCell>
+                          <TableCell align="right" sx={{ width: 100 }}>
+                            Доступно
+                          </TableCell>
+                          <TableCell align="right" sx={{ width: 110 }}>
+                            Шт
+                          </TableCell>
+                          <TableCell align="right" sx={{ width: 120 }} />
+                        </TableRow>
+                      </TableHead>
+                      <TableBody>
+                        {product.locations.map((location) => {
                           const qtyKey = `${product.product_id}-${location.storage_location_id}`
                           const qtyStr = manualQtyByProductLocation[qtyKey] ?? '1'
                           const qtyNum = Number(qtyStr)
-                          const qtyValid = Number.isInteger(qtyNum) && qtyNum >= 1 && qtyNum <= location.available
+                          const qtyValid =
+                            Number.isInteger(qtyNum) && qtyNum >= 1 && qtyNum <= location.available
 
                           return (
-                            <TableRow key={qtyKey}>
-                              <TableCell sx={{ paddingLeft: 4 }}>
-                                <Typography variant="body2">
-                                  {location.location_code}
-                                </Typography>
-                                <Typography variant="caption" color="text.secondary">
-                                  Доступно: {location.available}
+                            <TableRow key={qtyKey} data-testid="ff-mp-pick-cell-row">
+                              <TableCell>
+                                <Typography variant="body2" data-testid="ff-mp-pick-cell-code">
+                                  {storageLocationLabel(location.location_code)}
                                 </Typography>
                               </TableCell>
-                              <TableCell colSpan={2} />
+                              <TableCell align="right">{location.available}</TableCell>
                               <TableCell align="right">
-                                <Stack direction="row" spacing={1} sx={{ alignItems: 'center' }}>
-                                  <TextField
-                                    size="small"
-                                    type="number"
-                                    value={qtyStr}
-                                    onChange={(e) =>
-                                      setManualQtyByProductLocation((prev) => ({
-                                        ...prev,
-                                        [qtyKey]: e.target.value,
-                                      }))
-                                    }
-                                    slotProps={{
-                                      htmlInput: {
-                                        min: 1,
-                                        max: location.available,
-                                        'data-testid': `ff-mp-pick-qty-${product.product_id}-${location.storage_location_id}`,
-                                      },
-                                    }}
-                                    sx={{ width: 60 }}
-                                    disabled={isDisabled}
-                                  />
-                                  <Button
-                                    size="small"
-                                    variant="outlined"
-                                    disabled={
-                                      isDisabled || !qtyValid || location.available < 1
-                                    }
-                                    onClick={() =>
-                                      void addProduct(
-                                        product.product_id,
-                                        location.storage_location_id,
-                                        qtyNum,
-                                      )
-                                    }
-                                    data-testid={`ff-mp-pick-add-${product.product_id}-${location.storage_location_id}`}
-                                  >
-                                    Добавить
-                                  </Button>
-                                </Stack>
+                                <TextField
+                                  size="small"
+                                  type="number"
+                                  value={qtyStr}
+                                  onChange={(e) =>
+                                    setManualQtyByProductLocation((prev) => ({
+                                      ...prev,
+                                      [qtyKey]: e.target.value,
+                                    }))
+                                  }
+                                  slotProps={{
+                                    htmlInput: {
+                                      min: 1,
+                                      max: location.available,
+                                      'data-testid': `ff-mp-pick-qty-${product.product_id}-${location.storage_location_id}`,
+                                    },
+                                  }}
+                                  sx={{ width: 72 }}
+                                  disabled={isDisabled}
+                                />
+                              </TableCell>
+                              <TableCell align="right">
+                                <Button
+                                  size="small"
+                                  variant="outlined"
+                                  disabled={isDisabled || !qtyValid || location.available < 1}
+                                  onClick={() =>
+                                    void addProduct(
+                                      product.product_id,
+                                      location.storage_location_id,
+                                      qtyNum,
+                                    )
+                                  }
+                                  data-testid={`ff-mp-pick-add-${product.product_id}-${location.storage_location_id}`}
+                                >
+                                  Добавить
+                                </Button>
                               </TableCell>
                             </TableRow>
                           )
-                        })
-                      ) : (
-                        <TableRow>
-                          <TableCell sx={{ paddingLeft: 4 }} colSpan={4}>
-                            <Typography variant="caption" color="text.secondary">
-                              Нет остатка по ячейкам
-                            </Typography>
-                          </TableCell>
-                        </TableRow>
-                      )}
-                    </Fragment>
-                  )
-                })
-              )}
-            </TableBody>
-          </Table>
-        </Box>
+                        })}
+                      </TableBody>
+                    </Table>
+                  </TableContainer>
+                ) : (
+                  <Typography
+                    variant="caption"
+                    color="text.secondary"
+                    data-testid={`ff-mp-pick-no-stock-${product.product_id}`}
+                  >
+                    Нет остатка по ячейкам
+                  </Typography>
+                )}
+              </Paper>
+            )
+          })}
+        </Stack>
       )}
     </Box>
   )

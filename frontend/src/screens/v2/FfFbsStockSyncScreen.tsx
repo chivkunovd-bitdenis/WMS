@@ -749,7 +749,7 @@ export function FfFbsStockSyncScreen({ token, authHeaders, sellers }: Props) {
               <TableCell sx={{ width: '24%' }}>Склад WMS</TableCell>
               <TableCell align="right" sx={{ width: '8%' }}>Остаток WMS</TableCell>
               <TableCell sx={{ width: '25%' }}>Публикация</TableCell>
-              <TableCell sx={{ width: '7%' }}>Подтверждение</TableCell>
+              <TableCell sx={{ width: '7%' }}>Последняя синхронизация</TableCell>
               <TableCell align="right" sx={{ width: '18%' }}>Действия</TableCell>
             </TableRow>
           </TableHead>
@@ -772,9 +772,11 @@ export function FfFbsStockSyncScreen({ token, authHeaders, sellers }: Props) {
                 return (
                 <TableRow key={row.wbId} data-testid="fbs-stock-binding-row">
                   <TableCell sx={{ overflow: 'hidden' }}>
-                    <Typography variant="body2" noWrap sx={{ fontWeight: 650 }}>
-                      {row.name}
-                    </Typography>
+                    <Tooltip title={row.name}>
+                      <Typography variant="body2" noWrap sx={{ fontWeight: 650 }}>
+                        {row.name}
+                      </Typography>
+                    </Tooltip>
                     {row.city !== 'город не определён' ? (
                       <Typography variant="caption" color="text.secondary" noWrap sx={{ display: 'block' }}>
                         {row.city}
@@ -807,6 +809,19 @@ export function FfFbsStockSyncScreen({ token, authHeaders, sellers }: Props) {
                         onChange={(e) => void handleBind(row, e.target.value)}
                         disabled={savingWbId === row.wbId || physicalWarehouses.length === 0}
                         data-testid="fbs-stock-row-wms-select"
+                        renderValue={(value) => {
+                          const selectedWarehouse = wmsById.get(value as string)
+                          const label = selectedWarehouse
+                            ? `${selectedWarehouse.name} (${selectedWarehouse.code})`
+                            : 'склад не сопоставлен'
+                          return (
+                            <Tooltip title={label}>
+                              <Box component="span" sx={{ display: 'block', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                                {label}
+                              </Box>
+                            </Tooltip>
+                          )
+                        }}
                         sx={{
                           '& .MuiSelect-select': {
                             overflow: 'hidden',

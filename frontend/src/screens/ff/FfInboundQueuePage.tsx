@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
+import { alpha } from '@mui/material/styles'
 import {
   Alert,
   Box,
@@ -92,8 +93,10 @@ function rowSx(row: InboundQueueRow) {
       cursor: 'pointer',
       borderLeft: '5px solid',
       borderLeftColor: 'error.main',
-      bgcolor: 'error.lighter',
-      '&:hover': { bgcolor: 'error.light' },
+      bgcolor: (theme: import('@mui/material/styles').Theme) => alpha(theme.palette.error.main, 0.12),
+      '&:hover': {
+        bgcolor: (theme: import('@mui/material/styles').Theme) => alpha(theme.palette.error.main, 0.2),
+      },
     }
   }
   if (hasStarted && row.has_discrepancy === false) {
@@ -101,27 +104,40 @@ function rowSx(row: InboundQueueRow) {
       cursor: 'pointer',
       borderLeft: '5px solid',
       borderLeftColor: 'success.main',
-      bgcolor: 'success.lighter',
-      '&:hover': { bgcolor: 'success.light' },
+      bgcolor: (theme: import('@mui/material/styles').Theme) => alpha(theme.palette.success.main, 0.12),
+      '&:hover': {
+        bgcolor: (theme: import('@mui/material/styles').Theme) => alpha(theme.palette.success.main, 0.2),
+      },
     }
   }
   const tone = statusTone(row)
   const palette =
     tone === 'new'
-      ? 'info'
+      ? ('info' as const)
       : tone === 'receiving'
-        ? 'warning'
+        ? ('warning' as const)
         : tone === 'sorting'
-          ? 'secondary'
+          ? ('secondary' as const)
           : tone === 'done'
-            ? 'success'
-            : 'divider'
+            ? ('success' as const)
+            : null
+  if (palette == null) {
+    return {
+      cursor: 'pointer',
+      borderLeft: '5px solid',
+      borderLeftColor: 'divider',
+      bgcolor: 'background.paper',
+      '&:hover': { bgcolor: 'action.hover' },
+    }
+  }
   return {
     cursor: 'pointer',
     borderLeft: '5px solid',
-    borderLeftColor: palette === 'divider' ? 'divider' : `${palette}.main`,
-    bgcolor: palette === 'divider' ? 'background.paper' : `${palette}.lighter`,
-    '&:hover': { bgcolor: palette === 'divider' ? 'action.hover' : `${palette}.light` },
+    borderLeftColor: `${palette}.main`,
+    bgcolor: (theme: import('@mui/material/styles').Theme) => alpha(theme.palette[palette].main, 0.12),
+    '&:hover': {
+      bgcolor: (theme: import('@mui/material/styles').Theme) => alpha(theme.palette[palette].main, 0.2),
+    },
   }
 }
 

@@ -9,6 +9,7 @@ import {
   DialogTitle,
   Divider,
   IconButton,
+  InputAdornment,
   Link,
   Paper,
   Stack,
@@ -16,6 +17,7 @@ import {
   Typography,
 } from '@mui/material'
 import CloseIcon from '@mui/icons-material/Close'
+import QrCodeScannerOutlined from '@mui/icons-material/QrCodeScannerOutlined'
 import { ProductPhotoThumb } from '../../components/ProductPhotoThumb'
 import {
   commitFbsKiz,
@@ -126,8 +128,18 @@ export function FbsKizScanDialog({ token, authHeaders, supplyId, open, onClose, 
 
   // Сканер стреляет в активное поле. Пока запрос идёт, поле заблокировано и фокус
   // теряется — без возврата фокуса следующий выстрел уходит в никуда.
+  // С ретраями: если после focus() активный элемент — не наше поле, повторить попытку.
   const refocus = useCallback(() => {
-    window.setTimeout(() => inputRef.current?.focus(), 0)
+    let attempts = 0
+    const focus = () => {
+      const input = inputRef.current
+      input?.focus()
+      attempts += 1
+      if (input != null && document.activeElement !== input && attempts < 8) {
+        window.setTimeout(focus, 50)
+      }
+    }
+    window.setTimeout(focus, 0)
   }, [])
 
   useEffect(() => {
@@ -140,6 +152,14 @@ export function FbsKizScanDialog({ token, authHeaders, supplyId, open, onClose, 
     setHints([])
     setDebugOpen(false)
   }, [open])
+
+  // Фокус в поле при открытии диалога — важна надёжность, т.к. анимация открытия
+  // может помешать autoFocus пропсу на TextField.
+  useEffect(() => {
+    if (open) {
+      refocus()
+    }
+  }, [open, refocus])
 
   const scanSticker = useCallback(
     async (raw: string) => {
@@ -305,7 +325,23 @@ export function FbsKizScanDialog({ token, authHeaders, supplyId, open, onClose, 
               onKeyDown={onEnter}
               inputRef={inputRef}
               data-testid="fbs-kiz-input"
+              slotProps={{
+                input: {
+                  startAdornment: (
+                    <InputAdornment position="start">
+                      <QrCodeScannerOutlined fontSize="small" color="action" />
+                    </InputAdornment>
+                  ),
+                },
+              }}
+              sx={{ '& input': { fontFamily: 'monospace' } }}
             />
+
+            <Typography variant="caption" color="text.secondary" data-testid="fbs-kiz-scan-message">
+              {active
+                ? `Товар: ${active.product.name} № ${active.wb_order_id} — сканируйте Честный знак: код привяжется и уйдёт в WB.`
+                : 'Сканируйте QR стикера, затем сразу Честный знак — код привяжется у нас и уйдёт в WB.'}
+            </Typography>
 
             {hints.length > 0 ? (
               <Typography variant="caption" color="text.secondary">

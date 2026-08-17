@@ -169,7 +169,7 @@ async def upsert_binding(
         # uq_fbs_warehouse_bindings_seller_wb_warehouse, from a concurrent
         # duplicate PUT racing on the same brand-new wb_warehouse_id.
         await session.rollback()
-        raise FbsWarehouseBindingError("wms_warehouse_already_bound") from exc
+        raise FbsWarehouseBindingError("wb_warehouse_already_bound") from exc
     await session.refresh(row)
     return row
 
