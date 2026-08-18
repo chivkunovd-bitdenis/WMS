@@ -344,7 +344,6 @@ async def list_fbs_binding_stock_pool(
     products_stmt = select(Product).where(
         Product.tenant_id == user.tenant_id,
         Product.seller_id == seller_id,
-        Product.fbs_stock_sync_enabled.is_(True),
     ).order_by(Product.name.asc())
     products = list((await session.execute(products_stmt)).scalars().all())
     if not products:

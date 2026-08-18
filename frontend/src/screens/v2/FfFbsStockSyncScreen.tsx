@@ -55,7 +55,7 @@ import {
 
 type SellerRow = { id: string; name: string }
 type WmsWarehouseRow = { id: string; name: string; code: string }
-type InventoryBalanceSummaryRow = { quantity_fbs: number }
+type InventoryBalanceSummaryRow = { quantity: number }
 
 type Props = {
   token: string
@@ -186,15 +186,21 @@ function rowStateInfo(row: SellerWarehouseView): RowStateInfo {
   if (!row.binding || !row.binding.is_active || row.isTechnicalBinding) {
     return { label: 'склад не сопоставлен', color: 'warning' }
   }
+  if (!row.stockSyncEnabled) {
+    return {
+      label: 'публикация выключена',
+      color: 'default',
+      detail: row.lastErrorCode
+        ? stockErrorText(row.lastErrorCode) ?? 'Синхронизация завершилась с ошибкой'
+        : undefined,
+    }
+  }
   if (row.lastErrorCode) {
     return {
       label: 'ошибка публикации',
       color: 'error',
       detail: stockErrorText(row.lastErrorCode) ?? 'Синхронизация завершилась с ошибкой',
     }
-  }
-  if (!row.stockSyncEnabled) {
-    return { label: 'готов к публикации', color: 'default' }
   }
   if (row.lastSyncStatus === 'confirmed') {
     return { label: 'публикация включена', color: 'success', detail: 'Wildberries подтвердил остаток' }
@@ -211,6 +217,14 @@ function rowStateInfo(row: SellerWarehouseView): RowStateInfo {
       label: 'публикация включена',
       color: 'warning',
       detail: 'Wildberries вернул расхождение по остатку',
+    }
+  }
+  if (row.lastSyncStatus === 'nothing_to_publish') {
+    return {
+      label: 'нечего публиковать',
+      color: 'warning',
+      detail:
+        'Ни по одному товару не задано распределение остатка на этот склад — нажмите «Остатки» и укажите количество',
     }
   }
   return {
@@ -404,7 +418,7 @@ export function FfFbsStockSyncScreen({ token, authHeaders, sellers }: Props) {
           if (!res.ok) throw new Error(await readApiErrorMessage(res))
           const summary = (await res.json()) as InventoryBalanceSummaryRow[]
           const total = summary.reduce(
-            (sum, row) => sum + Math.max(0, Number(row.quantity_fbs) || 0),
+            (sum, row) => sum + Math.max(0, Number(row.quantity) || 0),
             0,
           )
           return [warehouseId, total] as const

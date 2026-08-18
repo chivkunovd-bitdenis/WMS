@@ -1,3 +1,4 @@
+import { useMemo, useState } from 'react'
 import { Link as RouterLink } from 'react-router-dom'
 import {
   Alert,
@@ -44,6 +45,15 @@ function isItemDirty(item: FbsStockPoolProduct, drafts: Record<string, string>):
   return draft !== undefined && draft !== String(item.allocated_this_binding)
 }
 
+function matchesSearch(item: FbsStockPoolProduct, query: string): boolean {
+  const needle = query.trim().toLowerCase()
+  if (!needle) return true
+  const haystack = [item.name, item.sku_code, item.wb_chrt_id != null ? String(item.wb_chrt_id) : '']
+    .join(' ')
+    .toLowerCase()
+  return haystack.includes(needle)
+}
+
 export function FbsStockAllocationDialog({
   open,
   loading,
@@ -59,6 +69,11 @@ export function FbsStockAllocationDialog({
   onClose,
 }: Props) {
   const hasChanges = items.some((item) => isItemDirty(item, drafts))
+  const [search, setSearch] = useState('')
+  const filteredItems = useMemo(
+    () => items.filter((item) => matchesSearch(item, search)),
+    [items, search],
+  )
 
   return (
     <Dialog open={open} onClose={onClose} maxWidth="md" fullWidth data-testid="fbs-stock-pool-panel">
@@ -85,13 +100,23 @@ export function FbsStockAllocationDialog({
             <CircularProgress />
           </Box>
         ) : (
-          <TableContainer>
-            <Table
+          <>
+            <TextField
               size="small"
-              sx={{
-                '& th, & td': { verticalAlign: 'top' },
-              }}
-            >
+              fullWidth
+              placeholder="Поиск по названию, артикулу или ШК"
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              sx={{ mb: 2 }}
+              data-testid="fbs-pool-search"
+            />
+            <TableContainer sx={{ maxHeight: 420 }}>
+              <Table
+                size="small"
+                sx={{
+                  '& th, & td': { verticalAlign: 'top' },
+                }}
+              >
               <TableHead>
                 <TableRow>
                   <TableCell>Товар</TableCell>
@@ -107,12 +132,18 @@ export function FbsStockAllocationDialog({
                   <TableRow>
                     <TableCell colSpan={4}>
                       <Typography color="text.secondary">
-                        Нет товаров с включённой продажей по FBS у этого селлера
+                        У этого селлера нет товаров
                       </Typography>
                     </TableCell>
                   </TableRow>
+                ) : filteredItems.length === 0 ? (
+                  <TableRow>
+                    <TableCell colSpan={4}>
+                      <Typography color="text.secondary">Ничего не найдено</Typography>
+                    </TableCell>
+                  </TableRow>
                 ) : (
-                  items.map((item) => {
+                  filteredItems.map((item) => {
                     const notConfigured = item.pool_limit <= 0
                     const dirty = isItemDirty(item, drafts)
                     return (
@@ -179,7 +210,8 @@ export function FbsStockAllocationDialog({
                 )}
               </TableBody>
             </Table>
-          </TableContainer>
+            </TableContainer>
+          </>
         )}
       </DialogContent>
       <DialogActions>

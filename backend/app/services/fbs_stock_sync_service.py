@@ -40,6 +40,11 @@ from app.services.wildberries_credentials_service import (
 
 logger = logging.getLogger(__name__)
 
+# `last_sync_status` is a free-form text column on FbsWarehouseBinding (no enum/migration
+# needed), so this status is defined locally rather than added to FBS_STOCK_SYNC_STATUSES,
+# which enumerates per-item sync statuses, not binding-level ones.
+STOCK_SYNC_STATUS_NOTHING_TO_PUBLISH = "nothing_to_publish"
+
 SYNC_LEASE_DURATION = timedelta(minutes=5)
 DEFAULT_RATE_INTERVAL_SECONDS = 0.2
 MAX_429_RETRY_AFTER_SECONDS = 60.0
@@ -667,6 +672,11 @@ async def sync_binding_stocks(
         elif result.conflicts > 0:
             binding.last_sync_status = STOCK_SYNC_STATUS_CONFLICT
             binding.last_error_code = ERROR_DUPLICATE_CHRT
+        elif not publish_targets:
+            # Nothing was actually sent to Wildberries (e.g. no distribution set for this
+            # binding yet) — do not report "confirmed", it would be misleading.
+            binding.last_sync_status = STOCK_SYNC_STATUS_NOTHING_TO_PUBLISH
+            binding.last_error_code = None
         else:
             binding.last_sync_status = STOCK_SYNC_STATUS_CONFIRMED
             binding.last_error_code = None

@@ -401,7 +401,10 @@ async def test_sync_skips_enabled_product_without_pool_allocation(
     assert item is None
 
     await db_session.refresh(ctx.binding)
-    assert ctx.binding.last_sync_status == STOCK_SYNC_STATUS_CONFIRMED
+    # Пустой план публикации — это НЕ успех: в Wildberries не ушло ни одной позиции.
+    # Раньше здесь стоял confirmed, и экран показывал «Wildberries подтвердил остаток»
+    # на выгрузке, которая ничего не отправила.
+    assert ctx.binding.last_sync_status == "nothing_to_publish"
     assert ctx.binding.last_error_code is None
 
 
